@@ -50,7 +50,7 @@
       "observed_status": null,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
         "rehearsal_root": null,
         "run_id": "a666-r4-receipt-prover-pathb-20260804-v3"
       }
@@ -62,7 +62,7 @@
       "observed_status": null,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
         "rehearsal_root": null,
         "run_id": "a666-r4-receipt-prover-pathb-20260804-v3"
       }
@@ -89,7 +89,7 @@
       "observed_status": null,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
         "rehearsal_root": null,
         "run_id": "a666-r4-receipt-prover-pathb-20260804-v3"
       }
@@ -108,11 +108,6 @@
       "ok": true
     },
     "candidate_proxy_validation": {
-      "expected": {
-        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
-        "rehearsal_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
-        "proxy_listen": "127.0.0.1:31021"
-      },
       "ok": true
     },
     "accepted_construction_fleet": {
@@ -155,7 +150,7 @@
       "observed_status": true,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
         "rehearsal_root": null,
         "run_id": null
       }
@@ -172,7 +167,7 @@
       "observed_status": true,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
         "rehearsal_root": null,
         "run_id": null
       }
@@ -207,19 +202,37 @@
     "pftl_validation": {
       "ok": true
     },
-    "d_runner": {
-      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/journey-runner-dry-run.json",
+    "v6_requalification": {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/pass1-v6-successor-requalification.json",
       "exists": true,
       "valid_json": true,
       "observed_status": null,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
+        "candidate_revision": null,
         "rehearsal_root": null,
         "run_id": null
       }
     },
-    "d_runner_validation": {
+    "v6_requalification_validation": {
+      "ok": true
+    },
+    "v6_candidate_repin": {
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/candidate-repin-23b9bff.json",
+      "exists": true,
+      "valid_json": true,
+      "observed_status": null,
+      "observed_reason": null,
+      "bindings": {
+        "candidate_revision": null,
+        "rehearsal_root": null,
+        "run_id": null
+      }
+    },
+    "v6_candidate_repin_validation": {
+      "ok": true
+    },
+    "v6_construction_validation": {
       "ok": true
     },
     "async_proof_slot": {
@@ -264,21 +277,6 @@
     "v3_async_validation": {
       "ok": true
     },
-    "official_runner_contract": {
-      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-classification-fast-loop.json",
-      "exists": true,
-      "valid_json": true,
-      "observed_status": null,
-      "observed_reason": null,
-      "bindings": {
-        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
-        "rehearsal_root": null,
-        "run_id": null
-      }
-    },
-    "official_runner_validation": {
-      "ok": true
-    },
     "setup_manifest": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/setup-endpoints-manifest.json",
       "exists": true,
@@ -294,7 +292,7 @@
     "setup_wallet_identity_validation": {
       "expected": {
         "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
-        "git_object": "68c5372bafe50b9c5a71ed3106f889a304821a0c",
+        "git_object": "880e5c32a10f43659b0fb21d0414ef0a544822b9",
         "package_json_sha256": "fe6209c5219a583e0f55f8ca0c93244e14ae569288ee46af910bbaa97e1989b3",
         "package_version": "0.1.2"
       },
@@ -303,36 +301,6 @@
         "package_json_sha256": "fe6209c5219a583e0f55f8ca0c93244e14ae569288ee46af910bbaa97e1989b3",
         "package_version": "0.1.2"
       },
-      "ok": true
-    },
-    "dynamic_readiness_binding": {
-      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-readiness-dynamic-binding.json",
-      "exists": true,
-      "valid_json": true,
-      "observed_status": null,
-      "observed_reason": null,
-      "bindings": {
-        "candidate_revision": null,
-        "rehearsal_root": null,
-        "run_id": null
-      }
-    },
-    "dynamic_readiness_binding_validation": {
-      "ok": true
-    },
-    "v5_wallet_requalification": {
-      "path": "{\"ok\":true}",
-      "exists": false,
-      "valid_json": false,
-      "observed_status": "absent",
-      "observed_reason": "evidence_absent",
-      "bindings": {
-        "candidate_revision": null,
-        "rehearsal_root": null,
-        "run_id": null
-      }
-    },
-    "v5_wallet_requalification_validation": {
       "ok": true
     },
     "official_input_contract": {
@@ -349,7 +317,7 @@
     },
     "official_input_contract_enforcement": {
       "ok": true,
-      "contract_sha256": "9de3b7f1904f56d5ed59760e7ad926bda40ef058d744428ed41e67d12d9d8948",
+      "contract_sha256": "92e40573b2a4eb6829c4cb93dbc25e221146a868eb4f58f6285510939ef8e45c",
       "accessor_count": 120,
       "extractor": {
         "ok": true,
@@ -2658,7 +2626,7 @@
       }
     },
     "stakehub_absence_validation": {
-      "ok": true
+      "ok": false
     },
     "pre_prove_binding": {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/pre-prove-binding-check.json",
@@ -2667,7 +2635,7 @@
       "observed_status": null,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
+        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
         "rehearsal_root": null,
         "run_id": null
       }
@@ -2699,7 +2667,9 @@
     },
     "stakehub_official_scan": {
       "command_succeeded": true,
-      "active_units": []
+      "active_units": [
+        "stakehub-private-swap-dashboard.service"
+      ]
     }
   },
   "proof_artifact_consumption_contract": {
@@ -2747,7 +2717,7 @@
     "status": "binding design; implementation readiness remains false"
   },
   "official_invocation_count": 0,
-  "official_run_id": "a666-r4-official-journey-pass1-20260805-v5",
+  "official_run_id": "a666-r4-official-journey-pass1-20260805-v6",
   "checks": [
     {
       "id": "docker_refire_prepared",
@@ -2821,7 +2791,7 @@
     },
     {
       "id": "stakehub_official_absent",
-      "ok": true,
+      "ok": false,
       "input": "stakehub_official_scan"
     },
     {
@@ -2841,8 +2811,10 @@
     }
   ],
   "check_count": 18,
-  "blocker_names": [],
-  "ready_to_fire": true,
+  "blocker_names": [
+    "stakehub_official_absent"
+  ],
+  "ready_to_fire": false,
   "ready_to_fire_computation": "all checks[].ok values must be true",
   "mutations_executed": false
 }

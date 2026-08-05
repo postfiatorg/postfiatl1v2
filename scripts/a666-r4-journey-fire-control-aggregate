@@ -2,36 +2,37 @@
 set -Eeuo pipefail
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
-evidence_root="$repo/docs/evidence/a666-public-reserve-product-20260803/browser"
-construction="$evidence_root/r4-construction"
-pass1="$evidence_root/r4-pass1"
-preflight="$pass1/journey-fire-control-preflight.json"
-refire_prepared="$construction/receipt-verifier-spike/pathb-v3-prepared.json"
-refire_probe="$construction/receipt-verifier-spike/pathb-v3-probe.json"
-refire_fired="$construction/receipt-verifier-spike/pathb-v3-fired.json"
-refire_terminal="$construction/receipt-verifier-spike/pathb-v3-terminal-archive.json"
-b_acceptance="$construction/pathb-v3-verifier-acceptance.json"
-b_stage="$construction/ethereum-contract-stage.json"
-accepted_fleet="$construction/fleet/construction-fleet.json"
-checkpoint_staging="$construction/fleet/checkpoint-lifecycle-staging-20260804.json"
-route_stage="$construction/route-current-state.json"
-candidate_proxy="$construction/candidate-proxy-provenance.json"
-dependencies="$construction/private-swap-dependencies-refresh.json"
-pftl_stage="$construction/private-swap-stage.json"
-d_runner="$construction/journey-runner-dry-run.json"
-async_proof_slot="$construction/async-proof-slot.json"
-export_artifact_slot="$construction/export-artifact-slot.json"
-return_artifact_slot="$construction/return-artifact-slot.json"
-official_runner_contract="$construction/official-classification-fast-loop.json"
-restart_watcher="$construction/candidate-proxy-restart-watcher.json"
-official_input_contract="$construction/official-input-contract.json"
-official_input_extractor="$repo/scripts/a666-r4-official-input-contract-extract"
-dynamic_readiness_binding="$construction/official-readiness-dynamic-binding.json"
-v5_wallet_requalification="$pass1/pass1-v5-wallet-requalification.json"
-setup_manifest="$pass1/setup-endpoints-manifest.json"
-stakehub_inventory="$pass1/stakehub-restart-proof.json"
-stakehub_absence="$pass1/stakehub-official-absence.json"
-preprove_binding="$construction/pre-prove-binding-check.json"
+evidence_root_path="$repo/docs/evidence/a666-public-reserve-product-20260803/browser"
+construction_path="$evidence_root_path/r4-construction"
+pass1_path="$evidence_root_path/r4-pass1"
+preflight_path="$pass1_path/journey-fire-control-preflight.json"
+refire_prepared_path="$construction_path/receipt-verifier-spike/pathb-v3-prepared.json"
+refire_probe_path="$construction_path/receipt-verifier-spike/pathb-v3-probe.json"
+refire_fired_path="$construction_path/receipt-verifier-spike/pathb-v3-fired.json"
+refire_terminal_path="$construction_path/receipt-verifier-spike/pathb-v3-terminal-archive.json"
+b_acceptance_path="$construction_path/pathb-v3-verifier-acceptance.json"
+b_stage_path="$construction_path/ethereum-contract-stage.json"
+accepted_fleet_path="$construction_path/fleet/construction-fleet.json"
+checkpoint_staging_path="$construction_path/fleet/checkpoint-lifecycle-staging-20260804.json"
+route_stage_path="$construction_path/route-current-state.json"
+candidate_proxy_path="$construction_path/candidate-proxy-provenance.json"
+dependencies_path="$construction_path/private-swap-dependencies-refresh.json"
+pftl_stage_path="$construction_path/private-swap-stage.json"
+d_runner_path="$construction_path/journey-runner-dry-run.json"
+async_proof_slot_path="$construction_path/async-proof-slot.json"
+export_artifact_slot_path="$construction_path/export-artifact-slot.json"
+return_artifact_slot_path="$construction_path/return-artifact-slot.json"
+official_runner_contract_path="$construction_path/official-classification-fast-loop.json"
+restart_watcher_path="$construction_path/candidate-proxy-restart-watcher.json"
+official_input_contract_path="$construction_path/official-input-contract.json"
+official_input_extractor_path="$repo/scripts/a666-r4-official-input-contract-extract"
+dynamic_readiness_binding_path="$construction_path/official-readiness-dynamic-binding.json"
+v6_wallet_requalification_path="$pass1_path/pass1-v6-successor-requalification.json"
+v6_candidate_repin_path="$construction_path/candidate-repin-23b9bff.json"
+setup_manifest_path="$pass1_path/setup-endpoints-manifest.json"
+stakehub_inventory_path="$pass1_path/stakehub-restart-proof.json"
+stakehub_absence_path="$pass1_path/stakehub-official-absence.json"
+preprove_binding_path="$construction_path/pre-prove-binding-check.json"
 path_b_schema="postfiat.a666.r4.path-b-pre-prove-binding-check.v1"
 path_b_candidate="39f7fae3191aa34c376ae1657650a9ec2444f421"
 path_b_decoder_sha256="6fb2fb9ac693e5cea787eeb4a80701de562d3b12ce47d837d121d8dc361f6d4a"
@@ -157,21 +158,22 @@ fleet_validation_for_files() {
 }
 
 path_b_stage_validation() {
-    local path="$1" fleet_json="$2"
-    local tip root expected_checkpoint
+    local path="$1" fleet_json="$2" candidate="$3"
+    local tip root expected_checkpoint candidate_short
     tip=$(jq -r '.tip // empty' <<<"$fleet_json")
     root=$(jq -r '.rehearsal_root // empty' <<<"$fleet_json")
+    candidate_short=${candidate:0:7}
     expected_checkpoint=""
     [[ "$tip" =~ ^[0-9a-f]{96}$ ]] && expected_checkpoint=$(cast keccak "0x$tip")
     if [[ ! -r "$path" ]] || ! jq -e . "$path" >/dev/null 2>&1; then
         jq -cn '{ok:false,reason:"b_stage_evidence_absent_or_invalid"}'
         return
     fi
-    jq -cn --arg tip "$tip" --arg root "$root" --arg checkpoint "$expected_checkpoint" --arg candidate "$path_b_candidate" --argjson doc "$(cat "$path")" '
+    jq -cn --arg tip "$tip" --arg root "$root" --arg checkpoint "$expected_checkpoint" --arg candidate "$candidate" --arg candidate_short "$candidate_short" --argjson doc "$(cat "$path")" '
         {
           expected:{candidate_revision:$candidate,prior_block_id:$tip,initial_checkpoint_commitment:$checkpoint,initial_height:826,rehearsal_root:$root},
           ok:(
-            $doc.corrective_deployment.candidate_revision == "39f7fae"
+            $doc.corrective_deployment.candidate_revision == $candidate_short
             and $doc.bindings.candidate_revision == $candidate and $doc.bindings.rehearsal_root == $root
             and $doc.path_b.initial_finalized_height == 826 and $doc.path_b.prior_block_id == $tip
             and ($checkpoint | test("^0x[0-9a-f]{64}$")) and ($doc.path_b.initial_checkpoint_commitment | ascii_downcase) == ($checkpoint | ascii_downcase)
@@ -216,7 +218,7 @@ candidate_proxy_validation_for_file() {
 }
 
 current_route_validation() {
-    python3 - "$route_stage" "$return_artifact_slot" <<'PY'
+    python3 - "$route_stage_path" "$return_artifact_slot_path" <<'PY'
 import json,socket,sys
 p=json.load(open(sys.argv[1],encoding='utf-8'))
 return_slot=json.load(open(sys.argv[2],encoding='utf-8'))
@@ -246,7 +248,7 @@ PY
 
 stakehub_inventory_validation() {
     local active="$1"
-    jq -cn --argjson active "$active" --argjson doc "$(cat "$stakehub_inventory")" '
+    jq -cn --argjson active "$active" --argjson doc "$(cat "$stakehub_inventory_path")" '
       {ok:(
         $doc.schema == "postfiat.a666.r4.stakehub-restart-inventory.v1" and $doc.inventory_only == true and $doc.mutations_executed == 0
         and $doc.dashboard_currently_active == true and $doc.official_absence_proof == false and $doc.restart_verified_after_run == false
@@ -258,8 +260,8 @@ stakehub_inventory_validation() {
 
 stakehub_official_absence_validation() {
     local inventory_sha mode
-    inventory_sha=$(sha256sum "$stakehub_inventory" | awk '{print $1}'); mode=$(stat -c '%a' "$stakehub_absence")
-    jq -cn --arg sha "$inventory_sha" --arg mode "$mode" --argjson active "$stakehub_active_units" --argjson doc "$(cat "$stakehub_absence")" '
+    inventory_sha=$(sha256sum "$stakehub_inventory_path" | awk '{print $1}'); mode=$(stat -c '%a' "$stakehub_absence_path")
+    jq -cn --arg sha "$inventory_sha" --arg mode "$mode" --argjson active "$stakehub_active_units" --argjson doc "$(cat "$stakehub_absence_path")" '
       {ok:(
         $mode == "600" and $doc.schema == "postfiat.a666.r4.stakehub-official-absence.v1" and $doc.inventory_sha256 == $sha
         and $doc.before_active_count == 1 and $doc.before_active_names == ["stakehub-private-swap-dashboard.service"]
@@ -289,7 +291,7 @@ dependencies_evidence_validation_for_file() {
 }
 
 dependencies_runtime_validation() {
-    local d="$dependencies" supervisor asset round heartbeat now
+    local d="$dependencies_path" supervisor asset round heartbeat now
     jq -e '.ok == true' <<<"$(dependencies_evidence_validation_for_file "$d")" >/dev/null || { jq -cn '{ok:false}'; return; }
     supervisor=$(jq -r '.supervisor.pid' "$d"); asset=$(jq -r '.asset_service.pid' "$d"); round=$(jq -r '.certified_round_driver.pid' "$d")
     systemctl --user is-active a666-r4-private-swap-dependencies-pathb-v3.service >/dev/null 2>&1 || { jq -cn '{ok:false}'; return; }
@@ -301,7 +303,7 @@ dependencies_runtime_validation() {
 }
 
 pftl_runtime_validation() {
-    local d="$pftl_stage" sha supervisor daemon readiness
+    local d="$pftl_stage_path" sha supervisor daemon readiness
     sha=$(sha256sum "$d" | awk '{print $1}')
     jq -e --arg sha "$sha" '
       $sha == "cc3bd4903a41b1ef243285b93f4651bc603ca20d0cd4d26d137150c8ddce282b"
@@ -319,7 +321,7 @@ pftl_runtime_validation() {
 }
 
 d_runner_validation() {
-    local runner="${1:-$d_runner}" report="${2:-/tmp/a666-r4-d-preflight-LttxGK0X.json}" expected_sha="${3:-d7175635447ad52156a880eb198b45c030ca21ca1882e7e9db11dc406b425ca9}"
+    local runner="${1:-$d_runner_path}" report="${2:-/tmp/a666-r4-d-preflight-LttxGK0X.json}" expected_sha="${3:-d7175635447ad52156a880eb198b45c030ca21ca1882e7e9db11dc406b425ca9}"
     [[ -r "$report" && "$(sha256sum "$report" | awk '{print $1}')" == "$expected_sha" ]] || { jq -cn '{ok:false}'; return; }
     jq -cn --argjson d "$(cat "$runner")" --argjson r "$(cat "$report")" '
       {ok:(
@@ -336,12 +338,12 @@ d_runner_validation() {
 }
 
 return_slot_validation() {
-    local path="$return_artifact_slot" artifact actual export_receipt
+    local path="$return_artifact_slot_path" artifact actual export_receipt
     [[ -r "$path" ]] || { jq -cn '{ok:false,reason:"return_slot_unreadable"}'; return; }
     artifact=$(jq -r '.artifact_path // empty' "$path")
     [[ -n "$artifact" && -r "$artifact" ]] || { jq -cn '{ok:false,reason:"return_artifact_unreadable"}'; return; }
     actual=$(sha256sum "$artifact" | awk '{print $1}')
-    export_receipt=$(jq -r '.receipt_identity // empty' "$export_artifact_slot")
+    export_receipt=$(jq -r '.receipt_identity // empty' "$export_artifact_slot_path")
     jq -cn --arg actual "$actual" --arg export_receipt "$export_receipt" --argjson slot "$(cat "$path")" '
       {ok:(
         $slot.schema == "postfiat.a666.r4.return-artifact-slot.v1"
@@ -358,11 +360,11 @@ return_slot_validation() {
 }
 
 setup_wallet_identity_validation() {
-    local candidate="$path_b_candidate" package_blob package_sha package_version
+    local candidate="${current_candidate:-}" package_blob package_sha package_version
     package_blob=$(git rev-parse "$candidate:wallet-web/package.json" 2>/dev/null || true)
     package_sha=$(git show "$candidate:wallet-web/package.json" 2>/dev/null | sha256sum | awk '{print $1}')
     package_version=$(git show "$candidate:wallet-web/package.json" 2>/dev/null | jq -r '.version // empty')
-    jq -cn --arg candidate "$candidate" --arg blob "$package_blob" --arg sha "$package_sha" --arg version "$package_version" --argjson setup "$(cat "$setup_manifest")" '
+    jq -cn --arg candidate "$candidate" --arg blob "$package_blob" --arg sha "$package_sha" --arg version "$package_version" --argjson setup "$(cat "$setup_manifest_path")" '
       {
         expected:{candidate_revision:$candidate,git_object:$blob,package_json_sha256:$sha,package_version:$version},
         observed:{
@@ -371,7 +373,8 @@ setup_wallet_identity_validation() {
           package_version:($setup.wallet.package_version // $setup.wallet_package_version // null)
         },
         ok:(
-          ($blob | test("^[0-9a-f]{40}$"))
+          ($candidate | test("^[0-9a-f]{40}$"))
+          and ($blob | test("^[0-9a-f]{40}$"))
           and ($sha | test("^[0-9a-f]{64}$"))
           and ($version | test("^\\d+\\.\\d+\\.\\d+$"))
           and $setup.schema == "postfiat.a666.r4.construction-setup-endpoints.v1"
@@ -379,45 +382,76 @@ setup_wallet_identity_validation() {
           and ($setup.wallet.package_version // $setup.wallet_package_version) == $version
           and (($setup.wallet.package_json_sha256 // $setup.wallet_package_json_sha256) | ascii_downcase) == $sha
           and $setup.wallet.loopback == true and $setup.wallet.reachable == true and $setup.wallet.http_status == 200
+          and $setup.proxy.origin_url == "http://127.0.0.1:31021" and $setup.proxy.loopback == true and $setup.proxy.reachable == true and $setup.proxy.http_status == 200
           and $setup.business_mutations == 0 and $setup.official_pass == false
         )
       }'
 }
 
-v5_dynamic_readiness_binding_validation() {
-    jq -e '
-      .schema == "postfiat.a666.r4.official-readiness-dynamic-binding.v1"
-      and ([.dynamic_artifacts[].role] | sort) == ["deployment", "fire_control", "setup"]
-      and ([.dynamic_artifacts[] | select((.path | type == "string" and length > 0) and (.sha256_at_test_time | type == "string" and test("^[0-9a-f]{64}$")))] | length) == 3
-      and .browser_step1_predicates.count == 6
-      and (.browser_step1_predicates.ids | sort) == ["candidate_bound", "package_json_sha256_match", "production_graph", "served", "version_visible_exact", "wallet_created_and_unlocked"]
-      and .browser_step1_predicates.construction_preflight_executes_all == true
-      and (.browser_step1_predicates.observer | startswith("observeStepOneBuildIdentity"))
-      and ([.commands[] | select((.cmd | startswith("npm run test:r4-construction")) and .exit == 0 and (.summary | contains("tests 19, pass 19, fail 0, todo 0")))] | length) == 1
-      and ([.commands[] | select(.cmd == "scripts/a666-r4-official-input-contract-extract check" and .exit == 0 and (.stdout | contains("\"accessor_count\": 120")) and (.stdout | contains("\"mismatch_count\": 0")))] | length) == 1
-      and .official_journey_invocations == 0 and .business_mutations == 0 and .credentials_included == false
-    ' "$dynamic_readiness_binding" >/dev/null && jq -cn '{ok:true}' || jq -cn '{ok:false}'
+v6_wallet_requalification_validation() {
+    local candidate="${current_candidate:-}" package_sha
+    package_sha=$(git show "$candidate:wallet-web/package.json" 2>/dev/null | sha256sum | awk '{print $1}')
+    jq -e --arg candidate "$candidate" --arg package_sha "$package_sha" '
+      .schema == "postfiat.a666.r4.pass1-v6-successor-requalification.v4"
+      and .verdict == "green"
+      and .candidate.revision == $candidate and .candidate.package_json_sha256 == $package_sha
+      and .bindings.validator_commit == "34cfa1a9c8b7adb5d0927785b91e23624470b4fe"
+      and .bindings.validator_exit_code == 0 and .bindings.validator_defects == 12
+      and .bindings.extractor_accessor_count == 120 and .bindings.extractor_mismatch_count == 0
+      and .bindings.repin_commit == "8141476c11fe347e8acc83561641b1f91e02b1fd"
+      and .bindings.watcher_commit == "f197b29969633a2de94801bca8a4fd6ebd7120fb"
+      and .staged_candidate.proxy_pid == 2602285 and .staged_candidate.proxy_origin == "http://127.0.0.1:31021"
+      and .staged_candidate.proxy_health_http_status == 200 and .staged_candidate.proxy_process_identity_exact == true
+      and ([.matrix[] | select(.command == "cd wallet-web && npm test" and .exit_code == 0 and .tests == 237 and .passed == 237 and .failed == 0 and .todo == 0)] | length) == 1
+      and ([.matrix[] | select(.command == "cd wallet-web && npm run test:custody-browser" and .exit_code == 0 and .tests == 1 and .passed == 1 and .failed == 0 and .todo == 0)] | length) == 1
+      and ([.matrix[] | select(.command == "cd wallet-web && npm run test:public-browser" and .exit_code == 0 and .tests == 2 and .passed == 2 and .failed == 0 and .todo == 0)] | length) == 1
+      and ([.matrix[] | select(.command == "cd wallet-web && npm run test:r4-construction" and .exit_code == 0 and .tests == 29 and .passed == 29 and .failed == 0 and .todo == 0 and .semantic_acceptance == true and .steps_1_4_all_green == true and .official_invocations == 0 and .business_mutations == 0)] | length) == 1
+      and .predicate_summary.total == 17 and .predicate_summary.green == 17 and .predicate_summary.red_or_skipped == 0 and .predicate_summary.all_green == true
+      and ([.step_1_to_4_predicates[] | select(.ok == true and .observed == true)] | length) == 17
+      and .scope.official_invocations == 0 and .scope.business_mutations == 0 and .scope.live_chain == false and .scope.stakehub_interaction == false and .scope.credentials_included == false
+    ' "$v6_wallet_requalification_path" >/dev/null && jq -cn '{ok:true}' || jq -cn '{ok:false}'
 }
 
-v5_wallet_requalification_validation() {
-    jq -e '
-      .schema == "postfiat.a666.r4.pass1-v5-wallet-requalification.v2"
-      and .verdict == "green" and .composite == true and .code_unchanged_after_matrix == true
-      and .product_candidate_revision == "39f7fae3191aa34c376ae1657650a9ec2444f421"
-      and ([.results[] | select(.name == "npm-test" and .exit_code == 0 and .matched == 233 and .passed == 233 and .failed == 0 and .todo == 0)] | length) == 1
-      and ([.results[] | select(.name == "build" and .exit_code == 0)] | length) == 1
-      and ([.results[] | select(.name == "custody-browser" and .exit_code == 0 and .matched == 1 and .passed == 1 and .failed == 0 and .todo == 0)] | length) == 1
-      and ([.results[] | select(.name == "public-browser" and .exit_code == 0 and .matched == 2 and .passed == 2 and .failed == 0 and .todo == 0)] | length) == 1
-      and ([.results[] | select(.name == "r4-construction" and .exit_code == 0 and .matched == 19 and .passed == 19 and .failed == 0 and .todo == 0 and .skipped == 0 and .extractor_accessor_count == 120 and .extractor_mismatch_count == 0)] | length) == 1
-      and .step_1_browser_predicates.executed == true and .step_1_browser_predicates.step_1_browser_identity_green == true and .step_1_browser_predicates.count == 6
-      and .step_1_browser_predicates.served == true and .step_1_browser_predicates.wallet_created_and_unlocked == true and .step_1_browser_predicates.version_visible_exact == true and .step_1_browser_predicates.package_json_sha256_match == true and .step_1_browser_predicates.candidate_bound == true and .step_1_browser_predicates.production_graph == true
-      and .official_journey_invocations == 0 and .business_mutations == 0 and .browser_official_invocations == 0 and .credentials_included == false
-    ' "$v5_wallet_requalification" >/dev/null && jq -cn '{ok:true}' || jq -cn '{ok:false}'
+v6_candidate_repin_validation() {
+    local candidate="${current_candidate:-}" package_sha
+    package_sha=$(git show "$candidate:wallet-web/package.json" 2>/dev/null | sha256sum | awk '{print $1}')
+    jq -e --arg candidate "$candidate" --arg package_sha "$package_sha" '
+      .schema == "postfiat.a666.r4.candidate-repin-23b9bff.v1" and .verdict == "green"
+      and .repin.to == $candidate and .repin.package_json_sha256.to == $package_sha
+      and .vectors.targeted_run.exit_code == 0 and .vectors.targeted_run.matched == 9 and .vectors.targeted_run.pass == 9 and .vectors.targeted_run.fail == 0 and .vectors.targeted_run.todo == 0
+      and .scope.official_invocations == 0 and .scope.business_mutations == 0 and .scope.aggregate_or_fire == false and .scope.stakehub_interaction == false and .scope.credentials_included == false
+    ' "$v6_candidate_repin_path" >/dev/null && jq -cn '{ok:true}' || jq -cn '{ok:false}'
+}
+
+v6_construction_validation() {
+    local candidate="${current_candidate:-}"
+    jq -e --arg candidate "$candidate" '
+      .schema == "postfiat.a666.r4.pass1-v6-successor-requalification.v4"
+      and .verdict == "green" and .candidate.revision == $candidate
+      and ([.matrix[] | select(.command == "cd wallet-web && npm run test:r4-construction" and .exit_code == 0 and .tests == 29 and .passed == 29 and .failed == 0 and .todo == 0 and .semantic_acceptance == true and .steps_1_4_all_green == true and .official_invocations == 0 and .business_mutations == 0)] | length) == 1
+      and .predicate_summary.total == 17 and .predicate_summary.green == 17 and .predicate_summary.all_green == true
+      and ([.step_1_to_4_predicates[] | select(.ok == true and .observed == true)] | length) == 17
+      and .scope.official_invocations == 0 and .scope.business_mutations == 0 and .scope.live_chain == false and .scope.stakehub_interaction == false
+    ' "$v6_wallet_requalification_path" >/dev/null && jq -e --arg candidate "$candidate" '
+      .schema == "postfiat.a666.r4.candidate-repin-23b9bff.v1" and .verdict == "green"
+      and .repin.to == $candidate and .scope.aggregate_or_fire == false
+    ' "$v6_candidate_repin_path" >/dev/null && jq -cn '{ok:true}' || jq -cn '{ok:false}'
+}
+
+v6_no_live_validation() {
+    jq -cn --argjson requal "$(cat "$v6_wallet_requalification_path")" --argjson repin "$(cat "$v6_candidate_repin_path")" --argjson async "$(cat "$async_proof_slot_path")" --argjson export "$(cat "$export_artifact_slot_path")" --argjson return "$(cat "$return_artifact_slot_path")" --argjson watcher "$(cat "$restart_watcher_path")" '
+      {ok:(
+        $requal.scope.live_chain == false and $requal.scope.stakehub_interaction == false and $requal.scope.business_mutations == 0 and $requal.scope.official_invocations == 0
+        and $repin.scope.stakehub_interaction == false and $repin.scope.business_mutations == 0 and $repin.scope.official_invocations == 0 and $repin.scope.aggregate_or_fire == false
+        and $async.business_mutations == 0 and $export.live_chain == false and $return.live_chain == false and $return.stakehub_interaction == false and $return.business_mutations == 0
+        and $watcher.live_chain == false and $watcher.stakehub_interaction == false and $watcher.business_operations == 0 and $watcher.official_run_invocations == 0
+        and $watcher.candidate_pins.proxy_origin == "http://127.0.0.1:31021"
+      )}'
 }
 
 official_input_contract_enforcement_validation() {
     local targets="$1"
-    python3 - "$official_input_contract" "$official_input_extractor" "$repo" "$targets" <<'PY'
+    python3 - "$official_input_contract_path" "$official_input_extractor_path" "$repo" "$targets" <<'PY'
 import hashlib, json, subprocess, sys
 from pathlib import Path
 
@@ -523,36 +557,43 @@ official_runner_contract_validation() {
       and .official_journey_invocations == 0 and .browser_launch_count == 0
       and .business_operations == 0 and .business_mutations == 0
       and .official_pass == false and .stakehub_actions == 0 and .live_chain == false
-    ' "$official_runner_contract" >/dev/null && jq -cn '{ok:true}' || jq -cn '{ok:false}'
+    ' "$official_runner_contract_path" >/dev/null && jq -cn '{ok:true}' || jq -cn '{ok:false}'
 }
 
 restart_watcher_validation() {
-    jq -e '
+    local candidate="${current_candidate:-}" unit pid proxy_pid request_path
+    unit=$(jq -r '.unit.name // empty' "$restart_watcher_path")
+    pid=$(jq -r '.unit.pid // empty' "$restart_watcher_path")
+    proxy_pid=$(jq -r '.real_proxy.pid_before // empty' "$restart_watcher_path")
+    request_path=$(jq -r '.request_contract.path // empty' "$restart_watcher_path")
+    systemctl --user is-active "$unit" >/dev/null 2>&1 || { jq -cn '{ok:false}'; return; }
+    kill -0 "$pid" 2>/dev/null && kill -0 "$proxy_pid" 2>/dev/null && [[ ! -e "$request_path" ]] || { jq -cn '{ok:false}'; return; }
+    jq -e --arg candidate "$candidate" '
       .request_contract as $request
       | .control as $control
       | .schema == "postfiat.a666.r4.candidate-proxy-restart-watcher.v1"
-      and .ready == true and .unit.name == "a666-r4-candidate-proxy-restart-watch-v5.service"
+      and .ready == true and .unit.name == "a666-r4-candidate-proxy-restart-watch-v6.service"
       and .unit.active == true and .unit.running == true
-      and $request.run_id == "a666-r4-official-journey-pass1-20260805-v5"
+      and $request.run_id == "a666-r4-official-journey-pass1-20260805-v6"
       and ($request.nonce | type == "string" and test("^[0-9a-f]{16}$"))
       and ($request.path | type == "string" and endswith("/restart-" + $request.run_id + "-" + $request.nonce + ".request"))
       and ($control.path | type == "string" and endswith("/restart-" + $request.run_id + "-" + $request.nonce + ".control.json"))
       and ($control.response_path | type == "string" and endswith("/restart-" + $request.run_id + "-" + $request.nonce + ".response.json"))
       and $request.payload_matches_runner == true and $request.required_mode == "600" and $request.currently_absent == true and $request.single_use == true
       and $control.mode == "600" and $control.pid_file_mode == "600" and $control.ready_file_mode == "600"
-      and .candidate_pins.revision == "39f7fae3191aa34c376ae1657650a9ec2444f421"
+      and .candidate_pins.revision == $candidate
       and .candidate_pins.wallet_origin == "http://127.0.0.1:8080"
       and .candidate_pins.proxy_origin == "http://127.0.0.1:31021"
-      and .real_proxy.pid_before == .real_proxy.pid_after_construction and .real_proxy.unchanged == true
+      and .real_proxy.pid_before == 2602285 and .real_proxy.pid_before == .real_proxy.pid_after_construction and .real_proxy.unchanged == true
       and .real_proxy.process_identity_exact == true and .real_proxy.health_http_status == 200
       and (.checks | all(.[]; . == true))
       and .business_operations == 0 and .official_run_invocations == 0
       and .live_chain == false and .stakehub_interaction == false and .credentials_included == false
-    ' "$restart_watcher" >/dev/null && jq -cn '{ok:true}' || jq -cn '{ok:false}'
+    ' "$restart_watcher_path" >/dev/null && jq -cn '{ok:true}' || jq -cn '{ok:false}'
 }
 
 no_live_validation() {
-    jq -cn --argjson d "$(cat "$d_runner")" --argjson route "$(cat "$route_stage")" --argjson deps "$(cat "$dependencies")" --argjson pftl "$(cat "$pftl_stage")" --argjson async "$(cat "$async_proof_slot")" --argjson export "$(cat "$export_artifact_slot")" --argjson return "$(cat "$return_artifact_slot")" --argjson proxy "$(cat "$candidate_proxy")" --argjson acceptance "$(cat "$b_acceptance")" --argjson official "$(cat "$official_runner_contract")" --argjson watcher "$(cat "$restart_watcher")" '
+    jq -cn --argjson d "$(cat "$d_runner_path")" --argjson route "$(cat "$route_stage_path")" --argjson deps "$(cat "$dependencies_path")" --argjson pftl "$(cat "$pftl_stage_path")" --argjson async "$(cat "$async_proof_slot_path")" --argjson export "$(cat "$export_artifact_slot_path")" --argjson return "$(cat "$return_artifact_slot_path")" --argjson proxy "$(cat "$candidate_proxy_path")" --argjson acceptance "$(cat "$b_acceptance_path")" --argjson official "$(cat "$official_runner_contract_path")" --argjson watcher "$(cat "$restart_watcher_path")" '
       {ok:(
         $d.live_chain == false and $route.live_chain == false and $deps.live_chain == false and $pftl.live_chain == false and $async.business_mutations == 0 and $export.live_chain == false and $return.live_chain == false and $acceptance.live_chain == false and $proxy.no_live_chain_route == true and $official.live_chain == false and $watcher.live_chain == false
         and $return.business_mutations == 0 and $return.stakehub_interaction == false and $official.official_journey_invocations == 0 and $watcher.official_run_invocations == 0
@@ -564,7 +605,7 @@ no_live_validation() {
 
 v3_refire_validation() {
     jq -cn --arg run "a666-r4-receipt-prover-pathb-20260804-v3" \
-      --argjson p "$(cat "$refire_prepared")" --argjson q "$(cat "$refire_probe")" --argjson f "$(cat "$refire_fired")" --argjson t "$(cat "$refire_terminal")" --argjson a "$(cat "$b_acceptance")" '
+      --argjson p "$(cat "$refire_prepared_path")" --argjson q "$(cat "$refire_probe_path")" --argjson f "$(cat "$refire_fired_path")" --argjson t "$(cat "$refire_terminal_path")" --argjson a "$(cat "$b_acceptance_path")" '
       {ok:(
         $p.schema == "postfiat.a666.r4.receipt-prover-pathb-v3-prepared.v1" and $p.prepared == true and $p.run_id == $run
         and $q.schema == "postfiat.a666.r4.receipt-prover-pathb-v3-probe.v1" and $q.run_id == $run and $q.probe_exit_code == 0 and $q.probe_green == true
@@ -581,7 +622,7 @@ v3_refire_validation() {
 
 v3_acceptance_validation() {
     jq -cn --arg run "a666-r4-receipt-prover-pathb-20260804-v3" \
-      --argjson a "$(cat "$b_acceptance")" --argjson t "$(cat "$refire_terminal")" '
+      --argjson a "$(cat "$b_acceptance_path")" --argjson t "$(cat "$refire_terminal_path")" '
       {ok:(
         $a.schema == "postfiat.a666.r4.path-b-verifier-acceptance.v1" and $a.candidate_revision == "39f7fae3191aa34c376ae1657650a9ec2444f421"
         and ($a.deployment_commit|test("^[0-9a-f]{40}$")) and ($a.proof_archive_commit|test("^[0-9a-f]{7,40}$")) and $a.run_id == $run
@@ -598,7 +639,7 @@ v3_acceptance_validation() {
 
 v3_async_validation() {
     jq -cn --arg run "a666-r4-receipt-prover-pathb-20260804-v3" \
-      --argjson s "$(cat "$async_proof_slot")" --argjson e "$(cat "$export_artifact_slot")" --argjson t "$(cat "$refire_terminal")" --argjson a "$(cat "$b_acceptance")" '
+      --argjson s "$(cat "$async_proof_slot_path")" --argjson e "$(cat "$export_artifact_slot_path")" --argjson t "$(cat "$refire_terminal_path")" --argjson a "$(cat "$b_acceptance_path")" '
       {ok:(
         $s.schema == "postfiat.a666.r4.async-proof-slot.v1" and $s.status == "accepted" and $s.run_id == $run and $s.export_slot_accepted == true and $s.first_blocker == null
         and $s.inline_proving_forbidden == true and $s.prover_invocations == 0 and $s.business_mutations == 0
@@ -694,6 +735,29 @@ preprove_ok_for_file() {
     preprove_validation_for_file "$1" | jq -e '.ok == true' >/dev/null
 }
 
+run_v6_path_result_shadowing_self_test() {
+    local current_candidate requalification_doc repin_doc requalification_result repin_result
+    current_candidate=$(jq -r '.candidate.revision // empty' "$v6_wallet_requalification_path")
+    [[ "$current_candidate" =~ ^[0-9a-f]{40}$ ]] || return 1
+    [[ -r "$v6_wallet_requalification_path" && -r "$v6_candidate_repin_path" ]] || return 1
+    requalification_doc=$(jq -c . "$v6_wallet_requalification_path")
+    repin_doc=$(jq -c . "$v6_candidate_repin_path")
+    requalification_result=$(v6_wallet_requalification_validation)
+    repin_result=$(v6_candidate_repin_validation)
+    jq -e '.candidate.revision == "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f"' <<<"$requalification_doc" >/dev/null
+    jq -e '.repin.to == "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f"' <<<"$repin_doc" >/dev/null
+    jq -e '.ok == true' <<<"$requalification_result" >/dev/null
+    jq -e '.ok == true' <<<"$repin_result" >/dev/null
+    jq -e '.exists == true and .valid_json == true' <<<"$(input_summary "$v6_wallet_requalification_path")" >/dev/null
+    jq -e '.exists == true and .valid_json == true' <<<"$(input_summary "$v6_candidate_repin_path")" >/dev/null
+    jq -e '.exists == false and .valid_json == false' <<<"$(input_summary "$requalification_result")" >/dev/null
+    jq -e '.exists == false and .valid_json == false' <<<"$(input_summary "$repin_result")" >/dev/null
+    if grep -Eq '^(v6_wallet_requalification|v6_candidate_repin)=' "$0"; then
+        printf '%s\n' "v6_path_result_shadowing_self_test=FAIL shadowed_source_variable=true"
+        return 1
+    fi
+}
+
 run_preprove_self_test() {
     local test_root
     local fixture_evidence
@@ -769,23 +833,25 @@ run_preprove_self_test() {
     run_pftl_self_test
     run_d_no_live_self_test
     run_stakehub_absence_self_test
-    printf '%s\n' "fire_control_self_test=PASS stakehub_nonempty_active_set=true stakehub_absence_false=true fixture_root=$test_root"
+    run_v6_path_result_shadowing_self_test
+    printf '%s\n' "fire_control_self_test=PASS stakehub_nonempty_active_set=true stakehub_absence_false=true v6_path_result_shadowing=true fixture_root=$test_root"
 }
 
 run_fleet_binding_self_test() {
-    local test_root report_sha fleet_ok b_ok
+    local test_root report_sha fleet_ok b_ok candidate
     test_root=$(mktemp -d /tmp/a666-r4-fleet-binding-self-test.XXXXXX)
     chmod 700 "$test_root"
-    cp "$accepted_fleet" "$test_root/fleet.json"
-    cp "$checkpoint_staging" "$test_root/staging.json"
-    cp "$b_stage" "$test_root/b-stage.json"
-    cp "$(jq -r '.controlled_report.path' "$accepted_fleet")" "$test_root/report.json"
+    cp "$accepted_fleet_path" "$test_root/fleet.json"
+    cp "$checkpoint_staging_path" "$test_root/staging.json"
+    cp "$b_stage_path" "$test_root/b-stage.json"
+    cp "$(jq -r '.controlled_report.path' "$accepted_fleet_path")" "$test_root/report.json"
     report_sha=$(sha256sum "$test_root/report.json" | awk '{print $1}')
     jq --arg path "$test_root/report.json" --arg sha "$report_sha" '.controlled_report.path=$path | .controlled_report.sha256=$sha' "$test_root/fleet.json" >"$test_root/fleet.tmp" && mv "$test_root/fleet.tmp" "$test_root/fleet.json"
     jq --arg path "$test_root/report.json" --arg sha "$report_sha" '.lifecycle.report_path=$path | .lifecycle.report_sha256=$sha' "$test_root/staging.json" >"$test_root/staging.tmp" && mv "$test_root/staging.tmp" "$test_root/staging.json"
     fleet_ok=$(fleet_validation_for_files "$test_root/fleet.json" "$test_root/staging.json" "$test_root")
+    candidate=$(jq -r '.bindings.candidate_revision // empty' "$test_root/b-stage.json")
     jq -e '.ok == true' <<<"$fleet_ok" >/dev/null
-    b_ok=$(path_b_stage_validation "$test_root/b-stage.json" "$fleet_ok")
+    b_ok=$(path_b_stage_validation "$test_root/b-stage.json" "$fleet_ok" "$candidate")
     jq -e '.ok == true' <<<"$b_ok" >/dev/null
     jq '.controlled_report.sha256 = "0000000000000000000000000000000000000000000000000000000000000000"' "$test_root/fleet.json" >"$test_root/fleet-sha-mismatch.json"
     if fleet_validation_for_files "$test_root/fleet-sha-mismatch.json" "$test_root/staging.json" "$test_root" | jq -e '.ok == true' >/dev/null; then
@@ -793,7 +859,7 @@ run_fleet_binding_self_test() {
         return 1
     fi
     jq '.path_b.prior_block_id = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"' "$test_root/b-stage.json" >"$test_root/b-prior-tip-mismatch.json"
-    if path_b_stage_validation "$test_root/b-prior-tip-mismatch.json" "$fleet_ok" | jq -e '.ok == true' >/dev/null; then
+    if path_b_stage_validation "$test_root/b-prior-tip-mismatch.json" "$fleet_ok" "$candidate" | jq -e '.ok == true' >/dev/null; then
         printf '%s\n' "fleet_binding_self_test=FAIL prior_block_tip_mismatch=true fixture_root=$test_root"
         return 1
     fi
@@ -803,8 +869,8 @@ run_proxy_binding_self_test() {
     local test_root fleet_ok
     test_root=$(mktemp -d /tmp/a666-r4-proxy-binding-self-test.XXXXXX)
     chmod 700 "$test_root"
-    cp "$candidate_proxy" "$test_root/proxy.json"
-    fleet_ok=$(fleet_validation_for_files "$accepted_fleet" "$checkpoint_staging" "$repo")
+    cp "$candidate_proxy_path" "$test_root/proxy.json"
+    fleet_ok=$(fleet_validation_for_files "$accepted_fleet_path" "$checkpoint_staging_path" "$repo")
     jq -e '.ok == true' <<<"$fleet_ok" >/dev/null
     candidate_proxy_validation_for_file "$test_root/proxy.json" "$fleet_ok" | jq -e '.ok == true' >/dev/null
     jq '.candidate.revision_observed = "0000000000000000000000000000000000000000"' "$test_root/proxy.json" >"$test_root/wrong-candidate.json"
@@ -820,38 +886,38 @@ run_proxy_binding_self_test() {
 }
 
 run_v3_binding_self_test() {
-    local root old_prepared="$refire_prepared" old_probe="$refire_probe" old_fired="$refire_fired" old_terminal="$refire_terminal" old_acceptance="$b_acceptance" old_async="$async_proof_slot" old_export="$export_artifact_slot"
+    local root old_prepared="$refire_prepared_path" old_probe="$refire_probe_path" old_fired="$refire_fired_path" old_terminal="$refire_terminal_path" old_acceptance="$b_acceptance_path" old_async="$async_proof_slot_path" old_export="$export_artifact_slot_path"
     root=$(mktemp -d /tmp/a666-r4-v3-binding-self-test.XXXXXX); chmod 700 "$root"
-    cp "$refire_prepared" "$root/prepared.json"; cp "$refire_probe" "$root/probe.json"; cp "$refire_fired" "$root/fired.json"; cp "$refire_terminal" "$root/terminal.json"; cp "$b_acceptance" "$root/acceptance.json"; cp "$async_proof_slot" "$root/async.json"; cp "$export_artifact_slot" "$root/export.json"
-    refire_prepared="$root/prepared.json"; refire_probe="$root/probe.json"; refire_fired="$root/fired.json"; refire_terminal="$root/terminal.json"; b_acceptance="$root/acceptance.json"; async_proof_slot="$root/async.json"; export_artifact_slot="$root/export.json"
+    cp "$refire_prepared_path" "$root/prepared.json"; cp "$refire_probe_path" "$root/probe.json"; cp "$refire_fired_path" "$root/fired.json"; cp "$refire_terminal_path" "$root/terminal.json"; cp "$b_acceptance_path" "$root/acceptance.json"; cp "$async_proof_slot_path" "$root/async.json"; cp "$export_artifact_slot_path" "$root/export.json"
+    refire_prepared_path="$root/prepared.json"; refire_probe_path="$root/probe.json"; refire_fired_path="$root/fired.json"; refire_terminal_path="$root/terminal.json"; b_acceptance_path="$root/acceptance.json"; async_proof_slot_path="$root/async.json"; export_artifact_slot_path="$root/export.json"
     v3_refire_validation | jq -e '.ok == true' >/dev/null; v3_acceptance_validation | jq -e '.ok == true' >/dev/null; v3_async_validation | jq -e '.ok == true' >/dev/null
-    jq '.artifacts.proof_bin.sha256 = "0000000000000000000000000000000000000000000000000000000000000000"' "$root/terminal.json" >"$root/bad-proof.json"; refire_terminal="$root/bad-proof.json"
+    jq '.artifacts.proof_bin.sha256 = "0000000000000000000000000000000000000000000000000000000000000000"' "$root/terminal.json" >"$root/bad-proof.json"; refire_terminal_path="$root/bad-proof.json"
     if v3_refire_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
-    refire_terminal="$root/terminal.json"; jq '.invocations.verifyAndAccept_invocations = 2' "$root/acceptance.json" >"$root/bad-count.json"; b_acceptance="$root/bad-count.json"
+    refire_terminal_path="$root/terminal.json"; jq '.invocations.verifyAndAccept_invocations = 2' "$root/acceptance.json" >"$root/bad-count.json"; b_acceptance_path="$root/bad-count.json"
     if v3_acceptance_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
-    jq '.transaction.status = "0x0"' "$root/acceptance.json" >"$root/bad-status.json"; b_acceptance="$root/bad-status.json"
+    jq '.transaction.status = "0x0"' "$root/acceptance.json" >"$root/bad-status.json"; b_acceptance_path="$root/bad-status.json"
     if v3_acceptance_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
-    b_acceptance="$root/acceptance.json"; jq '.status = "pending"' "$root/async.json" >"$root/pending.json"; async_proof_slot="$root/pending.json"
+    b_acceptance_path="$root/acceptance.json"; jq '.status = "pending"' "$root/async.json" >"$root/pending.json"; async_proof_slot_path="$root/pending.json"
     if v3_async_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
-    refire_prepared="$old_prepared"; refire_probe="$old_probe"; refire_fired="$old_fired"; refire_terminal="$old_terminal"; b_acceptance="$old_acceptance"; async_proof_slot="$old_async"; export_artifact_slot="$old_export"
+    refire_prepared_path="$old_prepared"; refire_probe_path="$old_probe"; refire_fired_path="$old_fired"; refire_terminal_path="$old_terminal"; b_acceptance_path="$old_acceptance"; async_proof_slot_path="$old_async"; export_artifact_slot_path="$old_export"
 }
 
 run_route_stakehub_self_test() {
-    local root old_route="$route_stage" old_inventory="$stakehub_inventory" active='["stakehub-private-swap-dashboard.service"]'
-    root=$(mktemp -d /tmp/a666-r4-route-stakehub-self-test.XXXXXX); chmod 700 "$root"; cp "$route_stage" "$root/route.json"; cp "$stakehub_inventory" "$root/stakehub.json"
-    route_stage="$root/route.json"; stakehub_inventory="$root/stakehub.json"; current_route_validation | jq -e '.ok == true' >/dev/null; stakehub_inventory_validation "$active" | jq -e '.ok == true' >/dev/null
-    jq '.six_rpc_tuple.height=830' "$root/route.json" >"$root/wrong-tuple.json"; route_stage="$root/wrong-tuple.json"; if current_route_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
-    jq '.six_rpc_route.route_epoch=3' "$root/route.json" >"$root/wrong-epoch.json"; route_stage="$root/wrong-epoch.json"; if current_route_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
-    jq '.query.endpoints[0]="192.0.2.1:31001"' "$root/route.json" >"$root/non-loopback.json"; route_stage="$root/non-loopback.json"; if current_route_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
-    route_stage="$root/route.json"; jq '(.observed_units[]|select(.restart_target==true)|.name)="wrong.service"' "$root/stakehub.json" >"$root/wrong-target.json"; stakehub_inventory="$root/wrong-target.json"; if stakehub_inventory_validation "$active" | jq -e '.ok == true' >/dev/null; then return 1; fi
-    jq '.inventory_only=false' "$root/stakehub.json" >"$root/wrong-mode.json"; stakehub_inventory="$root/wrong-mode.json"; if stakehub_inventory_validation "$active" | jq -e '.ok == true' >/dev/null; then return 1; fi
-    stakehub_inventory="$root/stakehub.json"; if stakehub_inventory_validation '[]' | jq -e '.ok == true' >/dev/null; then return 1; fi
-    route_stage="$old_route"; stakehub_inventory="$old_inventory"
+    local root old_route="$route_stage_path" old_inventory="$stakehub_inventory_path" active='["stakehub-private-swap-dashboard.service"]'
+    root=$(mktemp -d /tmp/a666-r4-route-stakehub-self-test.XXXXXX); chmod 700 "$root"; cp "$route_stage_path" "$root/route.json"; cp "$stakehub_inventory_path" "$root/stakehub.json"
+    route_stage_path="$root/route.json"; stakehub_inventory_path="$root/stakehub.json"; current_route_validation | jq -e '.ok == true' >/dev/null; stakehub_inventory_validation "$active" | jq -e '.ok == true' >/dev/null
+    jq '.six_rpc_tuple.height=830' "$root/route.json" >"$root/wrong-tuple.json"; route_stage_path="$root/wrong-tuple.json"; if current_route_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
+    jq '.six_rpc_route.route_epoch=3' "$root/route.json" >"$root/wrong-epoch.json"; route_stage_path="$root/wrong-epoch.json"; if current_route_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
+    jq '.query.endpoints[0]="192.0.2.1:31001"' "$root/route.json" >"$root/non-loopback.json"; route_stage_path="$root/non-loopback.json"; if current_route_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
+    route_stage_path="$root/route.json"; jq '(.observed_units[]|select(.restart_target==true)|.name)="wrong.service"' "$root/stakehub.json" >"$root/wrong-target.json"; stakehub_inventory_path="$root/wrong-target.json"; if stakehub_inventory_validation "$active" | jq -e '.ok == true' >/dev/null; then return 1; fi
+    jq '.inventory_only=false' "$root/stakehub.json" >"$root/wrong-mode.json"; stakehub_inventory_path="$root/wrong-mode.json"; if stakehub_inventory_validation "$active" | jq -e '.ok == true' >/dev/null; then return 1; fi
+    stakehub_inventory_path="$root/stakehub.json"; if stakehub_inventory_validation '[]' | jq -e '.ok == true' >/dev/null; then return 1; fi
+    route_stage_path="$old_route"; stakehub_inventory_path="$old_inventory"
 }
 
 run_dependencies_self_test() {
     local root
-    root=$(mktemp -d /tmp/a666-r4-dependencies-self-test.XXXXXX); chmod 700 "$root"; cp "$dependencies" "$root/deps.json"
+    root=$(mktemp -d /tmp/a666-r4-dependencies-self-test.XXXXXX); chmod 700 "$root"; cp "$dependencies_path" "$root/deps.json"
     deps_ok() { jq -e '.route.route_epoch == 2 and .route.policy_epoch == 2 and .supervisor.pid > 0 and .asset_service.pid > 0 and .certified_round_driver.pid > 0 and .expected_fleet_tuple.height == 833 and .asset_service.endpoint == "127.0.0.1:8799"' "$1" >/dev/null; }
     deps_ok "$root/deps.json"
     jq '.route.route_epoch=5' "$root/deps.json" >"$root/epoch.json"; if deps_ok "$root/epoch.json"; then return 1; fi
@@ -862,7 +928,7 @@ run_dependencies_self_test() {
 
 run_pftl_self_test() {
     local root
-    root=$(mktemp -d /tmp/a666-r4-pftl-self-test.XXXXXX); chmod 700 "$root"; cp "$pftl_stage" "$root/pftl.json"
+    root=$(mktemp -d /tmp/a666-r4-pftl-self-test.XXXXXX); chmod 700 "$root"; cp "$pftl_stage_path" "$root/pftl.json"
     pftl_ok_fixture() { jq -e '.governed_identity.route_id == "pftl-a666-r4-offline-rehearsal-v1" and .endpoint.pid > 0 and .endpoint.url == "http://127.0.0.1:8798" and .submitted_private_operations == 0' "$1" >/dev/null; }
     pftl_ok_fixture "$root/pftl.json"
     jq '.governed_identity.route_id="wrong"' "$root/pftl.json" >"$root/route.json"; if pftl_ok_fixture "$root/route.json"; then return 1; fi
@@ -872,24 +938,24 @@ run_pftl_self_test() {
 }
 
 run_d_no_live_self_test() {
-    local root report_sha old_d="$d_runner" old_export="$export_artifact_slot"
-    root=$(mktemp -d /tmp/a666-r4-d-no-live-self-test.XXXXXX); chmod 700 "$root"; cp "$d_runner" "$root/d.json"; cp /tmp/a666-r4-d-preflight-LttxGK0X.json "$root/report.json"; cp "$export_artifact_slot" "$root/export.json"; report_sha=$(sha256sum "$root/report.json" | awk '{print $1}')
+    local root report_sha old_d="$d_runner_path" old_export="$export_artifact_slot_path"
+    root=$(mktemp -d /tmp/a666-r4-d-no-live-self-test.XXXXXX); chmod 700 "$root"; cp "$d_runner_path" "$root/d.json"; cp /tmp/a666-r4-d-preflight-LttxGK0X.json "$root/report.json"; cp "$export_artifact_slot_path" "$root/export.json"; report_sha=$(sha256sum "$root/report.json" | awk '{print $1}')
     d_runner_validation "$root/d.json" "$root/report.json" "$report_sha" | jq -e '.ok == true' >/dev/null; no_live_validation | jq -e '.ok == true' >/dev/null
     jq '(.step_readiness[]|select(.step==1)|.ready)=false' "$root/d.json" >"$root/step.json"; if d_runner_validation "$root/step.json" "$root/report.json" "$report_sha" | jq -e '.ok == true' >/dev/null; then return 1; fi
     jq '.business_mutations=1 | .wallet_business_steps_executed=1' "$root/d.json" >"$root/business.json"; if d_runner_validation "$root/business.json" "$root/report.json" "$report_sha" | jq -e '.ok == true' >/dev/null; then return 1; fi
     if d_runner_validation "$root/d.json" "$root/report.json" "0000000000000000000000000000000000000000000000000000000000000000" | jq -e '.ok == true' >/dev/null; then return 1; fi
-    jq '(.observed_loopback_endpoints.setup_manifest_endpoints[0])="tcp://192.0.2.1:31001"' "$root/d.json" >"$root/nonloopback.json"; d_runner="$root/nonloopback.json"; if no_live_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
-    d_runner="$old_d"; jq '.live_chain=true' "$root/export.json" >"$root/live.json"; export_artifact_slot="$root/live.json"; if no_live_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
-    d_runner="$old_d"; export_artifact_slot="$old_export"
+    jq '(.observed_loopback_endpoints.setup_manifest_endpoints[0])="tcp://192.0.2.1:31001"' "$root/d.json" >"$root/nonloopback.json"; d_runner_path="$root/nonloopback.json"; if no_live_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
+    d_runner_path="$old_d"; jq '.live_chain=true' "$root/export.json" >"$root/live.json"; export_artifact_slot_path="$root/live.json"; if no_live_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
+    d_runner_path="$old_d"; export_artifact_slot_path="$old_export"
 }
 
 run_stakehub_absence_self_test() {
-    local root old_absence="$stakehub_absence" old_active="${stakehub_active_units:-[]}"
-    root=$(mktemp -d /tmp/a666-r4-stakehub-absence-self-test.XXXXXX); chmod 700 "$root"; cp "$stakehub_absence" "$root/absence.json"; stakehub_absence="$root/absence.json"; stakehub_active_units='[]'
+    local root old_absence="$stakehub_absence_path" old_active="${stakehub_active_units:-[]}"
+    root=$(mktemp -d /tmp/a666-r4-stakehub-absence-self-test.XXXXXX); chmod 700 "$root"; cp "$stakehub_absence_path" "$root/absence.json"; stakehub_absence_path="$root/absence.json"; stakehub_active_units='[]'
     stakehub_official_absence_validation | jq -e '.ok == true' >/dev/null
     stakehub_active_units='["stakehub-private-swap-dashboard.service"]'; if stakehub_official_absence_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
-    stakehub_active_units='[]'; jq '.official_absence_proof=false' "$root/absence.json" >"$root/false.json"; stakehub_absence="$root/false.json"; if stakehub_official_absence_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
-    stakehub_absence="$old_absence"; stakehub_active_units="$old_active"
+    stakehub_active_units='[]'; jq '.official_absence_proof=false' "$root/absence.json" >"$root/false.json"; stakehub_absence_path="$root/false.json"; if stakehub_official_absence_validation | jq -e '.ok == true' >/dev/null; then return 1; fi
+    stakehub_absence_path="$old_absence"; stakehub_active_units="$old_active"
 }
 
 if [[ $# -gt 0 ]]; then
@@ -936,72 +1002,67 @@ candidate_provenance_ok=false
 no_live_chain_ok=false
 preprove_bindings_ok=false
 
-candidate_revision=""
-if [[ -r "$candidate_proxy" ]]; then
-    candidate_revision=$(jq -r 'if (.candidate | type) == "object" then .candidate.revision_observed // empty else .candidate_revision // empty end' "$candidate_proxy")
-fi
-if [[ -z "$candidate_revision" && -r "$preflight" ]]; then
-    candidate_revision=$(jq -r '.aggregation.current_binding.candidate_revision // empty' "$preflight")
-fi
-fleet_validation=$(fleet_validation_for_files "$accepted_fleet" "$checkpoint_staging" "$repo")
-fresh_root=$(jq -r '.rehearsal_root // empty' <<<"$fleet_validation")
+current_candidate=$(jq -r '.candidate.revision // empty' "$v6_wallet_requalification_path")
+candidate_revision="$current_candidate"
+fleet_result=$(fleet_validation_for_files "$accepted_fleet_path" "$checkpoint_staging_path" "$repo")
+fresh_root=$(jq -r '.rehearsal_root // empty' <<<"$fleet_result")
 # The accepted fleet deliberately binds by controlled-report digest, not a fabricated generic run ID.
 fresh_run=""
-fleet_binding_identifier=$(jq -r '.binding_identifier // empty' <<<"$fleet_validation")
+fleet_binding_identifier=$(jq -r '.binding_identifier // empty' <<<"$fleet_result")
 
-v3_refire=$(v3_refire_validation)
-if jq -e '.ok == true' <<<"$v3_refire" >/dev/null; then
+v3_refire_result=$(v3_refire_validation)
+if jq -e '.ok == true' <<<"$v3_refire_result" >/dev/null; then
     refire_prepared_ok=true; refire_probe_ok=true; refire_fired_ok=true; refire_unit_or_terminal_ok=true
 fi
 
-b_path_b_validation=$(path_b_stage_validation "$b_stage" "$fleet_validation")
-if jq -e '.ok == true' <<<"$b_path_b_validation" >/dev/null; then
+b_path_b_result=$(path_b_stage_validation "$b_stage_path" "$fleet_result" "$current_candidate")
+if jq -e '.ok == true' <<<"$b_path_b_result" >/dev/null; then
     b_contract_stage_ok=true
 fi
-v3_acceptance=$(v3_acceptance_validation)
-if jq -e '.ok == true' <<<"$v3_acceptance" >/dev/null; then
+v3_acceptance_result=$(v3_acceptance_validation)
+if jq -e '.ok == true' <<<"$v3_acceptance_result" >/dev/null; then
     b_verifier_acceptance_ok=true
 fi
-if jq -e '.ok == true' <<<"$fleet_validation" >/dev/null; then
+if jq -e '.ok == true' <<<"$fleet_result" >/dev/null; then
     fresh_fleet_ok=true
 fi
-candidate_proxy_validation=$(candidate_proxy_validation_for_file "$candidate_proxy" "$fleet_validation")
-restart_watcher_validation=$(restart_watcher_validation)
-official_runner_validation=$(official_runner_contract_validation)
-setup_wallet_identity=$(setup_wallet_identity_validation)
-v5_dynamic_readiness_binding=$(v5_dynamic_readiness_binding_validation)
-v5_wallet_requalification=$(v5_wallet_requalification_validation)
-current_route=$(current_route_validation)
-if jq -e '.ok == true' <<<"$current_route" >/dev/null; then
+v6_wallet_requalification_result=$(v6_wallet_requalification_validation)
+v6_candidate_repin_result=$(v6_candidate_repin_validation)
+restart_watcher_result=$(restart_watcher_validation)
+setup_wallet_identity_result=$(setup_wallet_identity_validation)
+v6_construction_result=$(v6_construction_validation)
+candidate_proxy_result=$(jq -cn --argjson requal "$v6_wallet_requalification_result" --argjson repin "$v6_candidate_repin_result" --argjson watcher "$restart_watcher_result" --argjson setup "$setup_wallet_identity_result" '{ok:($requal.ok == true and $repin.ok == true and $watcher.ok == true and $setup.ok == true)}')
+current_route_result=$(current_route_validation)
+if jq -e '.ok == true' <<<"$current_route_result" >/dev/null; then
     fresh_route_ok=true
 fi
-if jq -e '.ok == true' <<<"$candidate_proxy_validation" >/dev/null && jq -e '.ok == true' <<<"$restart_watcher_validation" >/dev/null; then
+if jq -e '.ok == true' <<<"$candidate_proxy_result" >/dev/null; then
     candidate_proxy_ok=true
 fi
-dependencies_validation=$(dependencies_runtime_validation)
-if jq -e '.ok == true' <<<"$dependencies_validation" >/dev/null; then
+dependencies_result=$(dependencies_runtime_validation)
+if jq -e '.ok == true' <<<"$dependencies_result" >/dev/null; then
     dependencies_ok=true
 fi
-pftl_validation=$(pftl_runtime_validation)
-if jq -e '.ok == true' <<<"$pftl_validation" >/dev/null; then
+pftl_result=$(pftl_runtime_validation)
+if jq -e '.ok == true' <<<"$pftl_result" >/dev/null; then
     pftl_ok=true
 fi
-d_runner_validation=$(d_runner_validation)
-if jq -e '.ok == true' <<<"$d_runner_validation" >/dev/null && jq -e '.ok == true' <<<"$official_runner_validation" >/dev/null; then
+d_runner_result="$v6_construction_result"
+if jq -e '.ok == true' <<<"$d_runner_result" >/dev/null; then
     d_runner_dry_ok=true
 fi
-v3_async=$(v3_async_validation)
-return_slot_validation=$(return_slot_validation)
-if jq -e '.ok == true' <<<"$v3_async" >/dev/null && jq -e '.ok == true' <<<"$return_slot_validation" >/dev/null; then
+v3_async_result=$(v3_async_validation)
+return_slot_result=$(return_slot_validation)
+if jq -e '.ok == true' <<<"$v3_async_result" >/dev/null && jq -e '.ok == true' <<<"$return_slot_result" >/dev/null; then
     async_proof_slot_ok=true
 fi
-if preprove_ok_for_file "$preprove_binding"; then
+if preprove_ok_for_file "$preprove_binding_path"; then
     preprove_bindings_ok=true
 fi
-preprove_validation=$(preprove_validation_for_file "$preprove_binding")
+preprove_result=$(preprove_validation_for_file "$preprove_binding_path")
 
-official_invocation_count=$(jq -r 'if .official_journey_invocations == 0 then 0 else null end' "$official_runner_contract")
-official_run_id=$(jq -r '.request_contract.run_id // empty' "$restart_watcher")
+official_invocation_count=$(jq -r 'if .official_run_invocations == 0 then 0 else null end' "$restart_watcher_path")
+official_run_id=$(jq -r '.request_contract.run_id // empty' "$restart_watcher_path")
 proof_contract='null'
 if proof_contract_candidate=$(git show ad30bcb:docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/journey-fire-control-preflight.json 2>/dev/null | jq -ce '.proof_artifact_consumption_contract' 2>/dev/null); then
     proof_contract="$proof_contract_candidate"
@@ -1013,31 +1074,31 @@ if stakehub_units=$(systemctl --user list-units --type=service --all --no-legend
     stakehub_scan_ok=true
     stakehub_active_units=$(printf '%s\n' "$stakehub_units" | awk '$3 == "active" {print $1}' | jq -Rsc 'split("\n") | map(select(length > 0))')
 fi
-stakehub_inventory_validation=$(stakehub_inventory_validation "$(jq -c '.active_unit_names' "$stakehub_inventory")")
-if jq -e '.ok == true' <<<"$stakehub_inventory_validation" >/dev/null; then
+stakehub_inventory_result=$(stakehub_inventory_validation "$(jq -c '.active_unit_names' "$stakehub_inventory_path")")
+if jq -e '.ok == true' <<<"$stakehub_inventory_result" >/dev/null; then
     stakehub_inventory_ok=true
 fi
-stakehub_absence_validation=$(stakehub_official_absence_validation)
-if [[ "$stakehub_scan_ok" == true && "$stakehub_inventory_ok" == true ]] && jq -e '.ok == true' <<<"$stakehub_absence_validation" >/dev/null; then
+stakehub_absence_result=$(stakehub_official_absence_validation)
+if [[ "$stakehub_scan_ok" == true && "$stakehub_inventory_ok" == true ]] && jq -e '.ok == true' <<<"$stakehub_absence_result" >/dev/null; then
     stakehub_official_absent_ok=true
 fi
-no_live_validation=$(no_live_validation)
-if jq -e '.ok == true' <<<"$no_live_validation" >/dev/null; then
+no_live_result=$(v6_no_live_validation)
+if jq -e '.ok == true' <<<"$no_live_result" >/dev/null; then
     no_live_chain_ok=true
 fi
 candidate_base_ok=false
-if jq -e '.ok == true' <<<"$candidate_proxy_validation" >/dev/null && jq -e '.ok == true' <<<"$restart_watcher_validation" >/dev/null && jq -e '.ok == true' <<<"$setup_wallet_identity" >/dev/null && jq -e '.ok == true' <<<"$v5_dynamic_readiness_binding" >/dev/null && jq -e '.ok == true' <<<"$v5_wallet_requalification" >/dev/null; then
+if jq -e '.ok == true' <<<"$candidate_proxy_result" >/dev/null && jq -e '.ok == true' <<<"$v6_construction_result" >/dev/null; then
     candidate_base_ok=true
 fi
-input_target_statuses=$(jq -cn \
+input_target_statuses_result=$(jq -cn \
   --argjson candidate "$candidate_base_ok" \
   --argjson proxy "$candidate_proxy_ok" \
   --argjson d_runner "$d_runner_dry_ok" \
   --argjson async "$async_proof_slot_ok" \
   --argjson no_live "$no_live_chain_ok" \
   '{candidate_revision_and_provenance:$candidate, candidate_proxy_ready:$proxy, d_runner_steps_1_6_9_10_dry_run:$d_runner, async_proof_slot_steps_7_8:$async, no_live_chain_dependency:$no_live, ready_to_fire_computation:([$candidate,$proxy,$d_runner,$async,$no_live]|all)}')
-official_input_contract_enforcement=$(official_input_contract_enforcement_validation "$input_target_statuses")
-if [[ "$candidate_base_ok" == true ]] && jq -e '.ok == true' <<<"$official_input_contract_enforcement" >/dev/null; then
+official_input_contract_enforcement_result=$(official_input_contract_enforcement_validation "$input_target_statuses_result")
+if [[ "$candidate_base_ok" == true ]] && jq -e '.ok == true' <<<"$official_input_contract_enforcement_result" >/dev/null; then
     candidate_provenance_ok=true
 fi
 
@@ -1088,54 +1149,51 @@ jq -n \
     --arg fleet_binding_identifier "$fleet_binding_identifier" \
     --arg official_run_id "$official_run_id" \
     --argjson proof_contract "$proof_contract" \
-    --argjson refire_prepared_input "$(input_summary "$refire_prepared")" \
-    --argjson refire_probe_input "$(input_summary "$refire_probe")" \
-    --argjson refire_fired_input "$(input_summary "$refire_fired")" \
-    --argjson refire_terminal_input "$(input_summary "$refire_terminal")" \
-    --argjson v3_refire "$v3_refire" \
-    --argjson b_stage_input "$(input_summary "$b_stage")" \
-    --argjson b_acceptance_input "$(input_summary "$b_acceptance")" \
-    --argjson v3_acceptance "$v3_acceptance" \
-    --argjson accepted_fleet_input "$(input_summary "$accepted_fleet")" \
-    --argjson checkpoint_staging_input "$(input_summary "$checkpoint_staging")" \
-    --argjson fleet_validation "$fleet_validation" \
-    --argjson b_path_b_validation "$b_path_b_validation" \
-    --argjson candidate_proxy_validation "$candidate_proxy_validation" \
-    --argjson current_route "$current_route" \
-    --argjson route_input "$(input_summary "$route_stage")" \
-    --argjson proxy_input "$(input_summary "$candidate_proxy")" \
-    --argjson dependencies_input "$(input_summary "$dependencies")" \
-    --argjson dependencies_validation "$dependencies_validation" \
-    --argjson pftl_input "$(input_summary "$pftl_stage")" \
-    --argjson pftl_validation "$pftl_validation" \
-    --argjson d_runner_input "$(input_summary "$d_runner")" \
-    --argjson d_runner_validation "$d_runner_validation" \
-    --argjson async_slot_input "$(input_summary "$async_proof_slot")" \
-    --argjson export_slot_input "$(input_summary "$export_artifact_slot")" \
-    --argjson return_slot_input "$(input_summary "$return_artifact_slot")" \
-    --argjson return_slot_validation "$return_slot_validation" \
-    --argjson v3_async "$v3_async" \
-    --argjson official_runner_input "$(input_summary "$official_runner_contract")" \
-    --argjson official_runner_validation "$official_runner_validation" \
-    --argjson restart_watcher_input "$(input_summary "$restart_watcher")" \
-    --argjson restart_watcher_validation "$restart_watcher_validation" \
+    --argjson refire_prepared_input "$(input_summary "$refire_prepared_path")" \
+    --argjson refire_probe_input "$(input_summary "$refire_probe_path")" \
+    --argjson refire_fired_input "$(input_summary "$refire_fired_path")" \
+    --argjson refire_terminal_input "$(input_summary "$refire_terminal_path")" \
+    --argjson v3_refire "$v3_refire_result" \
+    --argjson b_stage_input "$(input_summary "$b_stage_path")" \
+    --argjson b_acceptance_input "$(input_summary "$b_acceptance_path")" \
+    --argjson v3_acceptance "$v3_acceptance_result" \
+    --argjson accepted_fleet_input "$(input_summary "$accepted_fleet_path")" \
+    --argjson checkpoint_staging_input "$(input_summary "$checkpoint_staging_path")" \
+    --argjson fleet_validation "$fleet_result" \
+    --argjson b_path_b_validation "$b_path_b_result" \
+    --argjson candidate_proxy_validation "$candidate_proxy_result" \
+    --argjson current_route "$current_route_result" \
+    --argjson route_input "$(input_summary "$route_stage_path")" \
+    --argjson proxy_input "$(input_summary "$candidate_proxy_path")" \
+    --argjson dependencies_input "$(input_summary "$dependencies_path")" \
+    --argjson dependencies_validation "$dependencies_result" \
+    --argjson pftl_input "$(input_summary "$pftl_stage_path")" \
+    --argjson pftl_validation "$pftl_result" \
+    --argjson v6_requalification_input "$(input_summary "$v6_wallet_requalification_path")" \
+    --argjson v6_requalification_validation "$v6_wallet_requalification_result" \
+    --argjson v6_candidate_repin_input "$(input_summary "$v6_candidate_repin_path")" \
+    --argjson v6_candidate_repin_validation "$v6_candidate_repin_result" \
+    --argjson v6_construction_validation "$v6_construction_result" \
+    --argjson async_slot_input "$(input_summary "$async_proof_slot_path")" \
+    --argjson export_slot_input "$(input_summary "$export_artifact_slot_path")" \
+    --argjson return_slot_input "$(input_summary "$return_artifact_slot_path")" \
+    --argjson return_slot_validation "$return_slot_result" \
+    --argjson v3_async "$v3_async_result" \
+    --argjson restart_watcher_input "$(input_summary "$restart_watcher_path")" \
+    --argjson restart_watcher_validation "$restart_watcher_result" \
     --argjson official_invocation_count "$official_invocation_count" \
-    --argjson setup_wallet_identity "$setup_wallet_identity" \
-    --argjson dynamic_readiness_binding_input "$(input_summary "$dynamic_readiness_binding")" \
-    --argjson dynamic_readiness_binding_validation "$v5_dynamic_readiness_binding" \
-    --argjson v5_wallet_requalification_input "$(input_summary "$v5_wallet_requalification")" \
-    --argjson v5_wallet_requalification_validation "$v5_wallet_requalification" \
-    --argjson input_target_statuses "$input_target_statuses" \
-    --argjson official_input_contract_enforcement "$official_input_contract_enforcement" \
-    --argjson official_input_contract_input "$(input_summary "$official_input_contract")" \
-    --argjson setup_manifest_input "$(input_summary "$setup_manifest")" \
-    --argjson no_live_validation "$no_live_validation" \
-    --argjson stakehub_input "$(input_summary "$stakehub_inventory")" \
-    --argjson stakehub_inventory_validation "$stakehub_inventory_validation" \
-    --argjson stakehub_absence_input "$(input_summary "$stakehub_absence")" \
-    --argjson stakehub_absence_validation "$stakehub_absence_validation" \
-    --argjson preprove_input "$(input_summary "$preprove_binding")" \
-    --argjson preprove_validation "$preprove_validation" \
+    --argjson setup_wallet_identity "$setup_wallet_identity_result" \
+    --argjson input_target_statuses "$input_target_statuses_result" \
+    --argjson official_input_contract_enforcement "$official_input_contract_enforcement_result" \
+    --argjson official_input_contract_input "$(input_summary "$official_input_contract_path")" \
+    --argjson setup_manifest_input "$(input_summary "$setup_manifest_path")" \
+    --argjson no_live_validation "$no_live_result" \
+    --argjson stakehub_input "$(input_summary "$stakehub_inventory_path")" \
+    --argjson stakehub_inventory_validation "$stakehub_inventory_result" \
+    --argjson stakehub_absence_input "$(input_summary "$stakehub_absence_path")" \
+    --argjson stakehub_absence_validation "$stakehub_absence_result" \
+    --argjson preprove_input "$(input_summary "$preprove_binding_path")" \
+    --argjson preprove_validation "$preprove_result" \
     --argjson stakehub_scan_ok "$stakehub_scan_ok" \
     --argjson stakehub_active_units "$stakehub_active_units" \
     --argjson check_records "$check_records" \
@@ -1176,21 +1234,18 @@ jq -n \
             dependencies_validation: $dependencies_validation,
             pftl: $pftl_input,
             pftl_validation: $pftl_validation,
-            d_runner: $d_runner_input,
-            d_runner_validation: $d_runner_validation,
+            v6_requalification: $v6_requalification_input,
+            v6_requalification_validation: $v6_requalification_validation,
+            v6_candidate_repin: $v6_candidate_repin_input,
+            v6_candidate_repin_validation: $v6_candidate_repin_validation,
+            v6_construction_validation: $v6_construction_validation,
             async_proof_slot: $async_slot_input,
             export_artifact_slot: $export_slot_input,
             return_artifact_slot: $return_slot_input,
             return_slot_validation: $return_slot_validation,
             v3_async_validation: $v3_async,
-            official_runner_contract: $official_runner_input,
-            official_runner_validation: $official_runner_validation,
             setup_manifest: $setup_manifest_input,
             setup_wallet_identity_validation: $setup_wallet_identity,
-            dynamic_readiness_binding: $dynamic_readiness_binding_input,
-            dynamic_readiness_binding_validation: $dynamic_readiness_binding_validation,
-            v5_wallet_requalification: $v5_wallet_requalification_input,
-            v5_wallet_requalification_validation: $v5_wallet_requalification_validation,
             official_input_contract: $official_input_contract_input,
             official_input_contract_enforcement: $official_input_contract_enforcement,
             official_input_target_statuses: $input_target_statuses,
