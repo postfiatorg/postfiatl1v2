@@ -284,7 +284,32 @@ Each step requires prior-step evidence plus principal confirmation:
 
 | Gate | R0 | R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10 |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| State | ✅ | ✅ | 12/12 ✅ | ✅ | 2/5 | 0/2 | 0/3 | 0/6 | 🔒 | 🔒 | 🔒 |
+| State | ✅ | ✅ | 12/12 ✅ | ✅ | 2/6 | 0/2 | 0/3 | 0/6 | 🔒 | 🔒 | 🔒 |
+
+## 2026-08-05 Control-truth addendum
+
+**Authority:** principal directive via supervising chain, 2026-08-05.
+
+**Decided control truths:**
+
+1. The route is the already-deployed literal A666 route
+   `pftl-a666-ethereum-wA666-usdc-v1`; it must never be relabeled as
+   `a651`.
+2. The objective is a real full E2E loop using LIVE StakeHub funds; Anvil and
+   synthetic assets are excluded.
+3. The principal is 10,000,000 atoms / 10.000000 USDC; the 530 USDC cap stays
+   unchanged and must never be raised or bypassed.
+4. Implementation and qualification proceed now. Live fire occurs later only
+   under per-leg HELD-packet approval. The end-state statement is not a per-leg
+   fire command.
+
+StakeHub remains a product; its five services and its funds are preserved.
+
+**Current next action:** Milestone A control truth + runner restoration is in
+progress this campaign. Live fire is deferred to per-leg HELD-packet approval.
+See `A666-DECISION-LIVE-DEMO-CONTROL-TRUTH-20260805.md`.
+
+**STALE — superseded by addendum 2026-08-05.** Prior tracker footer retained:
 
 Next action: restore the six-validator rehearsal environment from the signed
 checkpoint, prove StakeHub absence and exact R2 wallet revision, then execute
