@@ -1,7 +1,7 @@
 {
   "schema": "postfiat.a666.recovery.regression_manifest.v1",
   "status": "complete",
-  "generated_at_utc": "2026-08-04T23:40:47Z",
+  "generated_at_utc": "2026-08-05T00:17:02Z",
   "evidence_root": "docs/evidence/a666-public-reserve-product-20260803",
   "contracts": [
     "docs/plans/A666-PRODUCT-RECOVERY-AND-DEMO-RELAUNCH-SPEC-20260803.md#61-layer-a-targeted-regressions",
@@ -194,6 +194,96 @@
         "commit": "d78676ff200a9b73936b0d2209c95107bb820483",
         "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/stakehub-official-restart-proof-v4.json",
         "contract": "The consumed v3 failed step-1 official window was closed by exact dashboard restart inventory equality; no funds, data, keys, config, or software actions occurred."
+      },
+      "enforcement_status": "ci_enforced"
+    },
+    {
+      "id": "HARNESS-05",
+      "name": "official_step1_browser_predicate_not_preflighted",
+      "classification": "mode_asymmetric_browser_identity_observation",
+      "official_v4_failure": {
+        "commit": "0e2cce37a933ecb043dcd02f88751cac17b33535",
+        "run_id": "a666-r4-official-journey-pass1-20260804-v4",
+        "official_invocation_count": 1,
+        "failed_step": 1,
+        "root_causes": [
+          "Official step 1 waited for the sidebar package identity before browser-controlled wallet create/unlock made the sidebar visible.",
+          "Construction omitted the corresponding six DOM/document step-1 predicates.",
+          "The official-readiness fixture inlined historical artifact hashes and drifted after requalification."
+        ],
+        "root_cause_files": [
+          "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:886",
+          "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js"
+        ],
+        "failure_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/official-journey-pass1-v4-failure.json"
+      },
+      "red_first": {
+        "commit": "e10b6addab759e7478ad63069f9fd66818119fb5",
+        "contract": "A browser-controlled wallet must be created and unlocked before exact sidebar version observation, and construction must execute the same production step-1 observer.",
+        "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-step1-sidebar-choreography-red.json"
+      },
+      "shared_browser_observer": {
+        "commit": "49e4ce851f19f90445c70df84d071c6073b91205",
+        "function": "observeStepOneBuildIdentity",
+        "rule": "The unchanged shared observer is called once by construction and once by official execution, with identical six-predicate trace."
+      },
+      "first_passing_commit": "bfe07d24fb684c955b5ff72acac8c8ec3fcb6678",
+      "corrective_rules": [
+        "Construction browser preflight against the exact served build is mandatory before official fire.",
+        "The shared step-1 observer is unchanged between construction and official modes.",
+        "Official readiness binds fire-control, setup, and deployment by path, current content hash, and semantic checks at test time; historical hash literals are forbidden."
+      ],
+      "regressions": [
+        {
+          "id": "strict_sidebar_choreography_red_flip",
+          "first_passing_commit": "49e4ce851f19f90445c70df84d071c6073b91205",
+          "tests": [
+            "A666 R4 RED-FIRST official step 1 creates and unlocks the wallet before observing the production sidebar version (v4 0e2cce3)",
+            "A666 R4 RED-FIRST construction browser preflight executes the shared production step-1 observer"
+          ],
+          "red_command": "node --test --test-name-pattern='RED-FIRST (official step 1|construction browser preflight)' src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+          "red_result": "matched 2, todo 2, fail 0"
+        },
+        {
+          "id": "shared_six_step1_browser_predicates",
+          "first_passing_commit": "49e4ce851f19f90445c70df84d071c6073b91205",
+          "predicate_count": 6,
+          "predicates": [
+            "served",
+            "wallet_created_and_unlocked",
+            "version_visible_exact",
+            "package_json_sha256_match",
+            "candidate_bound",
+            "production_graph"
+          ],
+          "rule": "construction and official call observeStepOneBuildIdentity"
+        },
+        {
+          "id": "dynamic_path_content_semantic_official_readiness_binding",
+          "first_passing_commit": "bfe07d24fb684c955b5ff72acac8c8ec3fcb6678",
+          "command": "node --test --test-name-pattern \"official-readiness|inline historical|mode parity|structural guard|negatives|v3 build identity\"",
+          "result": "tests 19, matched 6, pass 6, fail 0, todo 0",
+          "rule": "all three readiness artifacts are read and hashed at test time; an inline 64-hex literal in the readiness test span is structurally rejected"
+        },
+        {
+          "id": "mandatory_exact_served_build_construction_browser_preflight",
+          "first_passing_commit": "bfe07d24fb684c955b5ff72acac8c8ec3fcb6678",
+          "command": "npm run test:r4-construction (preflight env block, pinned official setup manifest)",
+          "result": "tests 19, pass 19, fail 0, todo 0; all 6 step-1 checks green against the exact served build"
+        },
+        {
+          "id": "official_input_contract_120_accessor_check",
+          "first_passing_commit": "e39ef9ef50092192b1c77d071662f4354c7f6a9f",
+          "command": "scripts/a666-r4-official-input-contract-extract check",
+          "accessor_count": 120,
+          "mismatch_count": 0
+        }
+      ],
+      "dynamic_binding_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-readiness-dynamic-binding.json",
+      "restart_evidence": {
+        "commit": "3b3d82d59cd4e239c2e55136a2829e2e1f2eb76d",
+        "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/stakehub-official-restart-proof-v5.json",
+        "contract": "The consumed V4 failed step-1 official window was closed by exact dashboard restart inventory equality; no funds, data, keys, config, or software actions occurred."
       },
       "enforcement_status": "ci_enforced"
     }

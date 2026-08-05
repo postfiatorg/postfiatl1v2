@@ -1,54 +1,58 @@
 A666 recovery regression manifest traceability validation
-Validated source revision: 151649d1ed156949d35debec35ed22d303238cab
+Validated source revision: bfe07d24fb684c955b5ff72acac8c8ec3fcb6678
 
 Command: scripts/check-a666-recovery-regression-manifest
 Exit code: 0
-Wall-clock elapsed: 70ms
+Wall-clock elapsed: 69ms
 Execution scope: schema validation only; the 26 standalone Rust tests were not run.
 Terminal: A666 recovery manifest PASS: defects=11 regressions=11 browser_regressions=2 standalone_tests=26 run=false
 
 Command: scripts/a666-r4-official-input-contract-extract check
 Exit code: 0
-Wall-clock elapsed: 56ms
+Wall-clock elapsed: 61ms
 Execution scope: static extraction only; no browser, service, or official journey invocation.
 Terminal: {"ok": true, "accessor_count": 120, "mismatch_count": 0}.
 
 Manifest totals
 - Observed product/browser defect classes: 11
-- Harness defect classes: 4
-- Total named defect classes: 15
+- Harness defect classes: 5
+- Total named defect classes: 16
 - Rust standalone regression tests: 26
 - Browser regression rows: 2
 - Total manifest regression-test records: 28
 - Status: complete
 
-Retained harness class
-- HARNESS-03: fire_control_false_green_on_incomplete_official_runner_input_contract remains linked to V1/V2 failures and 120/120 fire-control enforcement.
+Retained harness classes
+- HARNESS-03 retains full official-runner input-contract enforcement traceability.
+- HARNESS-04 retains build-identity source-confusion and mode-symmetric registry traceability.
 
 New harness class
-- HARNESS-04: build_identity_validation_source_confusion.
-- Official V3 failure: d9871ce0a1e87a6ef1bd7f5892f86a3c4137cdd7; invocation 1 failed at step 1 because mutable WALLET_ROOT/package.json bytes were used instead of the setup-pinned candidate git object.
-- RED-first evidence: 66a7171585acb565d236219f044a35821b8757e3, v3-pinned-candidate-package-hash-red.json.
-- First structural passing commit: 9c851735889433b6f493463b0738b1cdaaf6a60e.
-- Restart evidence: d78676ff200a9b73936b0d2209c95107bb820483, stakehub-official-restart-proof-v4.json; exact dashboard inventory restart closed the consumed V3 failure window.
+- HARNESS-05: official_step1_browser_predicate_not_preflighted.
+- Official V4 failure: 0e2cce37a933ecb043dcd02f88751cac17b33535, invocation 1, step 1, timeout at the exact production sidebar package identity before create/unlock.
+- Root causes: sidebar observation preceded create/unlock; construction omitted the six DOM/document predicates; the readiness fixture embedded historical artifact hashes.
+- RED evidence: e10b6addab759e7478ad63069f9fd66818119fb5, official-step1-sidebar-choreography-red.json.
+- Shared observer: 49e4ce851f19f90445c70df84d071c6073b91205, observeStepOneBuildIdentity; one unchanged invocation in construction and one in official mode.
+- Dynamic binding / first final pass: bfe07d24fb684c955b5ff72acac8c8ec3fcb6678, official-readiness-dynamic-binding.json.
+- Restart evidence: 3b3d82d59cd4e239c2e55136a2829e2e1f2eb76d, stakehub-official-restart-proof-v5.json.
 
-Structural corrective rule
-All official validation predicates live in one pure registry and execute identically on normalized inputs before the mode branch. Construction and official traces must be identical. Candidate package identity comes only from argument-safe git show pinned-revision:wallet-web/package.json, never mutable worktree bytes.
+Corrective rules
+1. Construction browser preflight against the exact served build is mandatory before official fire.
+2. Construction and official call the same unchanged six-predicate step-1 observer after browser-controlled create/unlock.
+3. Official readiness resolves fire-control, setup, and deployment by path, current content hash, and semantic checks at test time. Historical hash literals are forbidden.
 
-Mapped regressions from 9c85173
-1. Strict RED-flip: A666 R4 v3 build identity hashes the pinned candidate package object, never worktree bytes (closes 66a7171/d9871ce).
-2. 18-predicate parity: construction and official execute the identical registry with identical id set, order, and results.
-3. Official-only guard: the registry executes exactly once before the mode branch; official pre-launch adds no validations.
-4. Exact V3 readiness non-vacuity: real V3 package version/hash pins pass and independently flipped pins refuse with zero official invocations.
-5. 120-accessor extractor: scripts/a666-r4-official-input-contract-extract check; e39ef9e introduced completeness and 9c85173 re-keyed file:package.json to the pinned git-object accessor.
+Mapped regressions
+- Strict RED flip: two sidebar choreography vectors convert from TODO to strict green.
+- Six browser predicates: served, wallet_created_and_unlocked, version_visible_exact, package_json_sha256_match, candidate_bound, production_graph.
+- Dynamic readiness binding: source-span negative rejects inline 64-hex literals and requires all three artifacts to be read and hashed at test time.
+- Mandatory construction browser preflight: npm run test:r4-construction with pinned official setup; tests 19, pass 19, fail 0, todo 0.
+- 120-accessor check: scripts/a666-r4-official-input-contract-extract check; accessor_count 120, mismatch_count 0.
 
-Recorded structural-fix commands and results
+Recorded structural-fix commands
 - node --check wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js: exit 0.
-- scripts/a666-r4-official-input-contract-extract check: exit 0; accessor_count 120; mismatch_count 0.
-- node --test --test-name-pattern "v3 build identity|mode parity|structural guard|negatives|official-readiness|official launch contract|input contract|fire-control input gate|RED-FIRST|two-mode" src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js: tests 12, pass 11, fail 0, todo 0, skipped 1 (environment-gated journey test).
-- npm run test:r4-construction under the documented preflight environment: tests 12, pass 12, fail 0, todo 0.
-- Per-command wall-clock values were not recorded in the committed structural-fix evidence; no runtime is invented here.
+- node --test --test-name-pattern "official-readiness|inline historical|mode parity|structural guard|negatives|v3 build identity": tests 19, matched 6, pass 6, fail 0, todo 0.
+- npm run test:r4-construction (preflight env block, pinned official setup manifest): tests 19, pass 19, fail 0, todo 0; step_1_browser_identity_green and all six step-1 checks green against the exact served build.
+- Per-command wall-clock values were not recorded in the committed V5 structural-fix evidence; no runtime is invented here.
 
 Final validation
-- Manifest schema validator: exit 0, 70ms.
-- Accessor extractor: exit 0, 56ms, 120 accessors, 0 mismatches.
+- Manifest schema validator: exit 0, 69ms.
+- Accessor extractor: exit 0, 61ms, 120 accessors, 0 mismatches.
