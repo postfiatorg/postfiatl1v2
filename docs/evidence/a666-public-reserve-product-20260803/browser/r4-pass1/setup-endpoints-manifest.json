@@ -1,8 +1,8 @@
 {
   "schema": "postfiat.a666.r4.construction-setup-endpoints.v1",
   "candidate": {
-    "revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
-    "worktree": "/tmp/a666-r4-successor-39f7fae",
+    "revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
+    "worktree": "/tmp/a666-r4-successor-23b9bff",
     "revision_exact": true,
     "tracked_clean": true
   },
@@ -59,7 +59,7 @@
     "reachable": true,
     "loopback": true,
     "package_version": "0.1.2",
-    "package_json_sha256": "6bd5869e589b9bec47e6e8cc6efe243e09f09ad78cc81d06e8751cd4a6d0f0fb"
+    "package_json_sha256": "fe6209c5219a583e0f55f8ca0c93244e14ae569288ee46af910bbaa97e1989b3"
   },
   "proxy": {
     "origin_url": "http://127.0.0.1:31021",

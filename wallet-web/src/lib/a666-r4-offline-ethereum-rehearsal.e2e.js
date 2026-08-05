@@ -22,7 +22,7 @@ import {
   pftlPrivateRecoveryKey,
 } from './pftl-private-primary.js';
 
-const CANDIDATE_REVISION = '39f7fae3191aa34c376ae1657650a9ec2444f421';
+const CANDIDATE_REVISION = '23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f';
 const ASYNC_PROOF_SLOT_SCHEMA = 'postfiat.a666.r4.async-proof-slot.v1';
 const ASYNC_PROOF_RUN_ID = 'a666-r4-receipt-prover-pathb-20260804-v3';
 const JOURNEY_ROUTE_ID = 'pftl-a666-r4-offline-rehearsal-v1';
@@ -1527,7 +1527,7 @@ test('A666 R4 v3 build identity hashes the pinned candidate package object, neve
   const setupPath = join(REPO_ROOT, 'docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/setup-endpoints-manifest.json');
   const setup = JSON.parse(await readFile(setupPath, 'utf8'));
   const candidateRevision = manifestCandidateRevision(setup);
-  assert.equal(candidateRevision, CANDIDATE_REVISION, 'setup must remain pinned to the v3 candidate revision');
+  assert.equal(candidateRevision, CANDIDATE_REVISION, 'setup must remain pinned to the successor candidate revision');
 
   const pinned = pinnedCandidatePackage(REPO_ROOT, candidateRevision);
   assert.equal(pinned.sha256, String(setup.wallet.package_json_sha256).trim().toLowerCase(),
@@ -2335,6 +2335,70 @@ test('A666 R4 construction official-readiness fixture binds current committed in
     assert.ok(flippedResult.failed.includes(id), `${id} must be the refusing predicate`);
     assert.equal(flippedResult.official_journey_invocations, 0);
   }
+});
+
+test('A666 R4 candidate repin negatives: stale 39 setup, any cross-manifest revision mismatch, and watcher divergence refuse; exact 23 passes', async () => {
+  const evRoot = join(REPO_ROOT, 'docs/evidence/a666-public-reserve-product-20260803/browser');
+  const [fireControl, setup, deployment, productionGraph] = await Promise.all([
+    readJson(join(evRoot, 'r4-pass1/journey-fire-control-preflight.json'), 'fire-control manifest'),
+    readJson(join(evRoot, 'r4-pass1/setup-endpoints-manifest.json'), 'setup manifest'),
+    readJson(join(evRoot, 'r4-construction/ethereum-contract-stage.json'), 'deployment manifest'),
+    verifyProductionGraph(),
+  ]);
+  const baseFixture = {
+    fireControl,
+    setup,
+    deployment,
+    productionGraph,
+    pinnedPackage: pinnedCandidatePackage(REPO_ROOT, CANDIDATE_REVISION),
+    fireControlSha256Pin: '',
+    fireControlSha256Actual: 'a'.repeat(64),
+    setupSha256Pin: '',
+    setupSha256Actual: 'b'.repeat(64),
+    deploymentSha256Pin: '',
+    deploymentSha256Actual: 'c'.repeat(64),
+    walletOrigin: 'http://127.0.0.1:8080/',
+    proxyOrigin: 'http://127.0.0.1:31021/',
+    asyncBudgetMs: null,
+    exportSlotPath: join(evRoot, 'r4-construction/export-artifact-slot.json'),
+    returnSlotPath: join(evRoot, 'r4-construction/return-artifact-slot.json'),
+    reportPathAvailable: true,
+  };
+  // Exact 23 baseline passes (hash pins blank: hash predicates are exercised
+  // by the readiness fixture test with live sha256File bindings).
+  for (const manifest of [fireControl, setup, deployment]) {
+    assert.equal(manifestCandidateRevision(manifest), CANDIDATE_REVISION,
+      'committed manifest must pin the exact successor candidate');
+  }
+
+  const STALE_39 = '39f7fae3191aa34c376ae1657650a9ec2444f421';
+  const mismatchCases = [
+    ['candidate_revision_setup', 'setup', 'old39 setup against new23 fire-control'],
+    ['candidate_revision_fire_control', 'fireControl', 'new23 setup against old39 fire-control'],
+    ['candidate_revision_deployment', 'deployment', 'old39 deployment against new23 runner'],
+  ];
+  for (const [predicateId, key, label] of mismatchCases) {
+    const flipped = structuredClone(baseFixture);
+    if (flipped[key].candidate) flipped[key].candidate.revision = STALE_39;
+    if (flipped[key].candidate_revision) flipped[key].candidate_revision = STALE_39;
+    if (flipped[key].aggregation?.current_binding?.candidate_revision) {
+      flipped[key].aggregation.current_binding.candidate_revision = STALE_39;
+    }
+    if (flipped[key].bindings?.candidate_revision) flipped[key].bindings.candidate_revision = STALE_39;
+    assert.equal(manifestCandidateRevision(flipped[key]), STALE_39, `${label}: fixture flip must take effect`);
+    const result = runValidationRegistry(normalizeValidationInputs('official', flipped));
+    assert.equal(result.ok, false, `${label} must refuse`);
+    assert.ok(result.failed.includes(predicateId), `${predicateId} must be the refusing predicate`);
+    assert.equal(result.official_journey_invocations, 0);
+  }
+
+  // Watcher binding: the deployed restart watcher must pin the identical
+  // successor revision or the runner/watcher pair is divergent.
+  const watcherSource = await readFile(join(REPO_ROOT, 'scripts/a666-r4-candidate-proxy-restart-watch'), 'utf8');
+  assert.ok(watcherSource.includes(`CANDIDATE_REVISION="${CANDIDATE_REVISION}"`),
+    'restart watcher must pin the exact successor candidate revision');
+  assert.equal(watcherSource.includes(`CANDIDATE_REVISION="${STALE_39}"`), false,
+    'restart watcher must not retain the stale 39 pin');
 });
 
 test('A666 R4 readiness fixture carries no inline historical artifact hash literals (structural negative)', async () => {

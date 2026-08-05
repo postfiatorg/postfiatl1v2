@@ -1,6 +1,6 @@
 {
   "schema": "postfiat.a666.r4.official-input-contract.v1",
-  "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+  "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
   "runner_path": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
   "extractor": "scripts/a666-r4-official-input-contract-extract",
   "completeness_rule": "extracted accessor id set must equal this contract's accessor id set 1:1; unlisted runner reads, stale entries, duplicates, and required entries lacking a validation predicate or fire-control target all fail",
@@ -481,7 +481,7 @@
       "accessor": "manifestCandidateRevision(fire_control).candidate.revision",
       "source": "fire_control manifest",
       "required": "always",
-      "validation_predicate": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+      "validation_predicate": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
       "consuming_steps": [
         "preflight",
         "pre-launch"
@@ -501,7 +501,7 @@
       "accessor": "manifestCandidateRevision(fire_control).candidate_revision",
       "source": "fire_control manifest",
       "required": "always",
-      "validation_predicate": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+      "validation_predicate": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
       "consuming_steps": [
         "preflight",
         "pre-launch"
@@ -521,7 +521,7 @@
       "accessor": "manifestCandidateRevision(fire_control).aggregation.current_binding.candidate_revision",
       "source": "fire_control manifest",
       "required": "always",
-      "validation_predicate": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+      "validation_predicate": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
       "consuming_steps": [
         "preflight",
         "pre-launch"
@@ -541,7 +541,7 @@
       "accessor": "manifestCandidateRevision(fire_control).bindings.candidate_revision",
       "source": "fire_control manifest",
       "required": "always",
-      "validation_predicate": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+      "validation_predicate": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
       "consuming_steps": [
         "preflight",
         "pre-launch"
@@ -561,7 +561,7 @@
       "accessor": "manifestCandidateRevision(setup).candidate.revision",
       "source": "setup manifest",
       "required": "always",
-      "validation_predicate": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+      "validation_predicate": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
       "consuming_steps": [
         "preflight",
         1,
@@ -590,7 +590,7 @@
       "accessor": "manifestCandidateRevision(setup).candidate_revision",
       "source": "setup manifest",
       "required": "always",
-      "validation_predicate": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+      "validation_predicate": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
       "consuming_steps": [
         "preflight",
         1,
@@ -619,7 +619,7 @@
       "accessor": "manifestCandidateRevision(setup).aggregation.current_binding.candidate_revision",
       "source": "setup manifest",
       "required": "always",
-      "validation_predicate": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+      "validation_predicate": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
       "consuming_steps": [
         "preflight",
         1,
@@ -648,7 +648,7 @@
       "accessor": "manifestCandidateRevision(setup).bindings.candidate_revision",
       "source": "setup manifest",
       "required": "always",
-      "validation_predicate": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+      "validation_predicate": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
       "consuming_steps": [
         "preflight",
         1,
@@ -677,7 +677,7 @@
       "accessor": "manifestCandidateRevision(deployment).candidate.revision",
       "source": "deployment manifest",
       "required": "always",
-      "validation_predicate": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+      "validation_predicate": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
       "consuming_steps": [
         "preflight",
         1,
@@ -706,7 +706,7 @@
       "accessor": "manifestCandidateRevision(deployment).candidate_revision",
       "source": "deployment manifest",
       "required": "always",
-      "validation_predicate": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+      "validation_predicate": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
       "consuming_steps": [
         "preflight",
         1,
@@ -735,7 +735,7 @@
       "accessor": "manifestCandidateRevision(deployment).aggregation.current_binding.candidate_revision",
       "source": "deployment manifest",
       "required": "always",
-      "validation_predicate": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+      "validation_predicate": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
       "consuming_steps": [
         "preflight",
         1,
@@ -764,7 +764,7 @@
       "accessor": "manifestCandidateRevision(deployment).bindings.candidate_revision",
       "source": "deployment manifest",
       "required": "always",
-      "validation_predicate": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+      "validation_predicate": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
       "consuming_steps": [
         "preflight",
         1,

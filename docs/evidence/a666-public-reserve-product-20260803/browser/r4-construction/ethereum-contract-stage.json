@@ -8,7 +8,7 @@
   ],
   "history_preserved": true,
   "proof_terminal_commit": "b067d8c",
-  "candidate_revision": "39f7fae"
+  "candidate_revision": "23b9bff"
  },
  "path_b": {
   "route_id": "pftl-a666-r4-offline-rehearsal-v1",
@@ -16,7 +16,7 @@
   "route_id_commitment_derivation": "keccak256(route-id UTF-8 bytes), derived in-script via cast keccak; never hand-entered",
   "prior_block_id": "63f81fb5f56acc0b9eddd0eaf068f65feaf1d28169035c9de096e4b7cd6888836aa85fedeaa25d1dd42d07a46e8a9369",
   "prior_block_source": "candidate node CLI status --data-dir /tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349/validator-2 --expect-height 826 (block_tip_hash, 96 hex)",
-  "fleet_preflight": "candidate 39f7fae; fleet supervisor 1933188 + 12/12 children live; six RPCs 31001/03/05/07/09/11 equal at height 826 tip 63f81fb5...; swap route inactive (8798/8799/31021 down)",
+  "fleet_preflight": "candidate 23b9bff; fleet supervisor 1933188 + 12/12 children live; six RPCs 31001/03/05/07/09/11 equal at height 826 tip 63f81fb5...; swap route inactive (8798/8799/31021 down)",
   "initial_checkpoint_commitment": "0x6fcf3e6ca571433715febb339dc4785cb6f4211e3a67a1a18371c567bf594462",
   "initial_checkpoint_derivation": "keccak256(height-826 block-id raw bytes), derived in-script via cast keccak; never hand-entered",
   "initial_finalized_height": 826,
@@ -56,7 +56,7 @@
    "guest_elf_sha256": "f85348688a463877f7e7f0539b7427a0af8847d3ef0eff2085db0c3746ad77a7",
    "embedded_at": "tools/pftl-uniswap-prover/src/main.rs:12-14 (include_bytes!)",
    "program_info_derivation": "pftl-uniswap-prover program-info on the embedded ELF yields vkey 0x003af40e... and elf_sha256 f8534868... (schema postfiat-pftl-uniswap-program-info-v1)",
-   "candidate_revision": "39f7fae"
+   "candidate_revision": "23b9bff"
   },
   "stale_origin_history": {
    "value": "0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9",
@@ -164,7 +164,7 @@
    ],
    "history_preserved": true,
    "proof_terminal_commit": "b067d8c",
-   "candidate_revision": "39f7fae"
+   "candidate_revision": "23b9bff"
   },
   "anvil": {
    "pid": 3196388,
@@ -197,7 +197,7 @@
     "guest_elf_sha256": "f85348688a463877f7e7f0539b7427a0af8847d3ef0eff2085db0c3746ad77a7",
     "embedded_at": "tools/pftl-uniswap-prover/src/main.rs:12-14 (include_bytes!)",
     "program_info_derivation": "pftl-uniswap-prover program-info on the embedded ELF yields vkey 0x003af40e... and elf_sha256 f8534868... (schema postfiat-pftl-uniswap-program-info-v1)",
-    "candidate_revision": "39f7fae"
+    "candidate_revision": "23b9bff"
    },
    "stale_origin_history": {
     "value": "0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9",
@@ -289,7 +289,7 @@
   "credentials_redacted": true
  },
  "bindings": {
-  "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+  "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
   "rehearsal_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
   "run_id": null,
   "run_id_status": "pending upstream fleet/fresh-restore.json binding (fire-control/fleet owner artifact, absent at this commit)"

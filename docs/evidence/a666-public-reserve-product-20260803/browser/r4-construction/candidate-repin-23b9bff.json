@@ -1,0 +1,73 @@
+{
+  "schema": "postfiat.a666.r4.candidate-repin-23b9bff.v1",
+  "recorded_at_utc": "2026-08-05T05:00:00Z",
+  "verdict": "green",
+  "repin": {
+    "from": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+    "to": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
+    "package_version": "0.1.2 (unchanged)",
+    "package_json_sha256": {
+      "from": "6bd5869e589b9bec47e6e8cc6efe243e09f09ad78cc81d06e8751cd4a6d0f0fb",
+      "to": "fe6209c5219a583e0f55f8ca0c93244e14ae569288ee46af910bbaa97e1989b3",
+      "source": "git show 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f:wallet-web/package.json"
+    }
+  },
+  "file_pin_table": {
+    "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js": "CANDIDATE_REVISION constant line 25 -> 23b9bff; stale 'v3 candidate revision' message corrected; repin negative-vector test added",
+    "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/setup-endpoints-manifest.json": "candidate.revision + worktree (/tmp/a666-r4-successor-23b9bff) + wallet.package_json_sha256 -> fe6209c5",
+    "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/journey-fire-control-preflight.json": "27 candidate_revision pins + 2 package_json_sha256 pins -> 23b9bff/fe6209c5; 0 stale remain",
+    "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/ethereum-contract-stage.json": "full and short candidate pins -> 23b9bff; 0 stale remain",
+    "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/setup-endpoints-manifest.json": "refresh SOURCE revision + worktree -> 23b9bff (future refresh cannot regress)",
+    "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-input-contract.json": "13 candidate revision literals -> 23b9bff; accessor set unchanged (120)",
+    "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-readiness-dynamic-binding.json": "dynamic artifact shas refreshed at repin time; wallet pins updated; hash-at-runtime semantics preserved",
+    "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-input-contract-extraction.json": "contract_sha256 -> 92e40573b2a4eb6829c4cb93dbc25e221146a868eb4f58f6285510939ef8e45c; candidate_revision recorded",
+    "scripts/a666-r4-setup-endpoints-manifest-refresh": "EXPECTED_REVISION -> 23b9bff, EXPECTED_PACKAGE_SHA256 -> fe6209c5, version 0.1.2 unchanged; fail-closed on stale source",
+    "scripts/a666-r4-candidate-proxy-restart-watch": "already pinned 23b9bff via f197b29; now covered by runner structural guard"
+  },
+  "vectors": {
+    "targeted_run": {
+      "command": "node --test --test-name-pattern \"readiness|repin|mode parity|input contract|build identity\" src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+      "exit_code": 0,
+      "matched": 9,
+      "pass": 9,
+      "fail": 0,
+      "todo": 0,
+      "log": "/tmp/repin-targeted.log",
+      "coverage": "old39-setup/new23-fire-control refuses candidate_revision_setup; fire-control mismatch refuses candidate_revision_fire_control; deployment mismatch refuses candidate_revision_deployment; exact-23 baseline passes; watcher pin structural guard; readiness fixture both modes; mode parity; input contract 1:1; build identity pinned-object hash"
+    },
+    "refresh_script_self_test": "setup_manifest_refresh_self_test=ok vectors=5 invalid_revision_rejected=true missing_version_rejected=true hash_mismatch_rejected=true unrelated_mutation_rejected=true idempotent=true (bash -n clean; no mutating execution)"
+  },
+  "extractor": { "accessor_count": 120, "mismatch_count": 0, "exit_code": 0 },
+  "construction": {
+    "runs": 1,
+    "retries": 0,
+    "command": "npm run test:r4-construction (permanent same-origin template; remaining committed manifest/slot env with repinned manifests)",
+    "origin_line": "r4_construction_origin=http://127.0.0.1:31021 wallet_proxy_same_origin=true",
+    "exit_code": 0,
+    "tests": 29,
+    "pass": 29,
+    "fail": 0,
+    "todo": 0,
+    "duration_ms": 6304.631366,
+    "tap_log": "/tmp/r4-construction-repin-23.log",
+    "journey_report": "/tmp/r4-construction-repin-23.json",
+    "step1_observed_candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
+    "predicate_table": {
+      "steps_1_4_display_all_green": true,
+      "step_1": "6/6 served, wallet_created_and_unlocked, version_visible_exact, package_json_sha256_match, candidate_bound, production_graph",
+      "step_2": "2/2 browser_address, rendered_wallet",
+      "step_3": "6/6 response_schema, packets_bounded, finalized_sources_six, both_proofs, nav_rendered, proof_rendered",
+      "step_4": "3/3 a666_visible, pfusdc_visible, finalized_marker",
+      "green": 17,
+      "total": 17
+    }
+  },
+  "scope": {
+    "official_invocations": 0,
+    "business_mutations": 0,
+    "product_edits": 0,
+    "aggregate_or_fire": false,
+    "stakehub_interaction": false,
+    "credentials_included": false
+  }
+}

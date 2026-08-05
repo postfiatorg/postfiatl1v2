@@ -1,10 +1,10 @@
 {
   "artifact": "a666-r4-official-input-contract-extraction",
-  "generated_utc": "2026-08-04",
+  "generated_utc": "2026-08-05",
   "extractor": "scripts/a666-r4-official-input-contract-extract",
   "runner": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
   "contract_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-input-contract.json",
-  "contract_sha256": "31d71ee2bdfe07f6d90c274111385cf7d2051f694b0b28ee08d9e5e462f8037d",
+  "contract_sha256": "92e40573b2a4eb6829c4cb93dbc25e221146a868eb4f58f6285510939ef8e45c",
   "accessor_total": 120,
   "counts_by_access_kind": {
     "endpoint_read": 2,
@@ -56,5 +56,6 @@
     "unmapped_count": 0,
     "candidate_provenance_requires_enforcement": true
   },
-  "notes": "Extraction is read-only and static. All 120 entries carry a fire-control enforcement class, producer binding, and validation target; the aggregate records per-entry current enforcement."
+  "notes": "Extraction is read-only and static. All 120 entries carry a fire-control enforcement class, producer binding, and validation target; the aggregate records per-entry current enforcement.",
+  "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f"
 }

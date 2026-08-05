@@ -12,7 +12,7 @@
       "accepted_fleet_binding": "full controlled_report sha256; generic run_id is not fabricated"
     },
     "current_binding": {
-      "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+      "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
       "rehearsal_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
       "run_id": null,
       "fleet_binding_identifier": "c2fb973f284d92cf3b866c4abe86aca237f8e4bd753cbf03075ab71702810cf2"
@@ -50,7 +50,7 @@
       "observed_status": null,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
         "rehearsal_root": null,
         "run_id": "a666-r4-receipt-prover-pathb-20260804-v3"
       }
@@ -62,7 +62,7 @@
       "observed_status": null,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
         "rehearsal_root": null,
         "run_id": "a666-r4-receipt-prover-pathb-20260804-v3"
       }
@@ -77,7 +77,7 @@
       "observed_status": null,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
         "rehearsal_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
         "run_id": null
       }
@@ -89,7 +89,7 @@
       "observed_status": null,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
         "rehearsal_root": null,
         "run_id": "a666-r4-receipt-prover-pathb-20260804-v3"
       }
@@ -99,7 +99,7 @@
     },
     "b_path_b_validation": {
       "expected": {
-        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
         "prior_block_id": "63f81fb5f56acc0b9eddd0eaf068f65feaf1d28169035c9de096e4b7cd6888836aa85fedeaa25d1dd42d07a46e8a9369",
         "initial_checkpoint_commitment": "0x6fcf3e6ca571433715febb339dc4785cb6f4211e3a67a1a18371c567bf594462",
         "initial_height": 826,
@@ -109,7 +109,7 @@
     },
     "candidate_proxy_validation": {
       "expected": {
-        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
         "rehearsal_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
         "proxy_listen": "127.0.0.1:31021"
       },
@@ -155,7 +155,7 @@
       "observed_status": true,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
         "rehearsal_root": null,
         "run_id": null
       }
@@ -172,7 +172,7 @@
       "observed_status": true,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
         "rehearsal_root": null,
         "run_id": null
       }
@@ -214,7 +214,7 @@
       "observed_status": null,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
         "rehearsal_root": null,
         "run_id": null
       }
@@ -271,7 +271,7 @@
       "observed_status": null,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
         "rehearsal_root": null,
         "run_id": null
       }
@@ -293,14 +293,14 @@
     },
     "setup_wallet_identity_validation": {
       "expected": {
-        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
         "git_object": "68c5372bafe50b9c5a71ed3106f889a304821a0c",
-        "package_json_sha256": "6bd5869e589b9bec47e6e8cc6efe243e09f09ad78cc81d06e8751cd4a6d0f0fb",
+        "package_json_sha256": "fe6209c5219a583e0f55f8ca0c93244e14ae569288ee46af910bbaa97e1989b3",
         "package_version": "0.1.2"
       },
       "observed": {
-        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
-        "package_json_sha256": "6bd5869e589b9bec47e6e8cc6efe243e09f09ad78cc81d06e8751cd4a6d0f0fb",
+        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
+        "package_json_sha256": "fe6209c5219a583e0f55f8ca0c93244e14ae569288ee46af910bbaa97e1989b3",
         "package_version": "0.1.2"
       },
       "ok": true
@@ -342,7 +342,7 @@
       "observed_status": null,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
         "rehearsal_root": null,
         "run_id": null
       }
@@ -795,7 +795,7 @@
         {
           "accessor_id": "manifest:fire_control.candidate.revision",
           "source": "fire_control manifest",
-          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "required_condition": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
@@ -812,7 +812,7 @@
         {
           "accessor_id": "manifest:fire_control.candidate_revision",
           "source": "fire_control manifest",
-          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "required_condition": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
@@ -829,7 +829,7 @@
         {
           "accessor_id": "manifest:fire_control.aggregation.current_binding.candidate_revision",
           "source": "fire_control manifest",
-          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "required_condition": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
@@ -846,7 +846,7 @@
         {
           "accessor_id": "manifest:fire_control.bindings.candidate_revision",
           "source": "fire_control manifest",
-          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "required_condition": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
@@ -863,7 +863,7 @@
         {
           "accessor_id": "manifest:setup.candidate.revision",
           "source": "setup manifest",
-          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "required_condition": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
@@ -889,7 +889,7 @@
         {
           "accessor_id": "manifest:setup.candidate_revision",
           "source": "setup manifest",
-          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "required_condition": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
@@ -915,7 +915,7 @@
         {
           "accessor_id": "manifest:setup.aggregation.current_binding.candidate_revision",
           "source": "setup manifest",
-          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "required_condition": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
@@ -941,7 +941,7 @@
         {
           "accessor_id": "manifest:setup.bindings.candidate_revision",
           "source": "setup manifest",
-          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "required_condition": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
@@ -967,7 +967,7 @@
         {
           "accessor_id": "manifest:deployment.candidate.revision",
           "source": "deployment manifest",
-          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "required_condition": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
@@ -993,7 +993,7 @@
         {
           "accessor_id": "manifest:deployment.candidate_revision",
           "source": "deployment manifest",
-          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "required_condition": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
@@ -1019,7 +1019,7 @@
         {
           "accessor_id": "manifest:deployment.aggregation.current_binding.candidate_revision",
           "source": "deployment manifest",
-          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "required_condition": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
@@ -1045,7 +1045,7 @@
         {
           "accessor_id": "manifest:deployment.bindings.candidate_revision",
           "source": "deployment manifest",
-          "required_condition": "equals 39f7fae3191aa34c376ae1657650a9ec2444f421 when present; exactly one candidate-revision path populated per manifest",
+          "required_condition": "equals 23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f when present; exactly one candidate-revision path populated per manifest",
           "observed_bound_status": {
             "classification": "prelaunch_external",
             "target_present": true,
@@ -2667,7 +2667,7 @@
       "observed_status": null,
       "observed_reason": null,
       "bindings": {
-        "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+        "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
         "rehearsal_root": null,
         "run_id": null
       }
