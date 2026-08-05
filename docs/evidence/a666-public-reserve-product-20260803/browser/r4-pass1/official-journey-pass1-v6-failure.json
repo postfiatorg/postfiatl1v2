@@ -1,0 +1,87 @@
+{
+  "schema": "postfiat.a666.r4.official-journey-pass1-failure.v1",
+  "recorded_at_utc": "2026-08-05T05:10:00Z",
+  "verdict": "failed",
+  "run_id": "a666-r4-official-journey-pass1-20260805-v6",
+  "run_classification": "official",
+  "candidate_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
+  "authorization": {
+    "fire_control_commit": "af466bc3c2399fb3ad875b7fee49f6f49814e2d6",
+    "fire_control_ready": true,
+    "fire_control_checks_green": 18,
+    "fire_control_checks_total": 18,
+    "stakehub_absence_commit": "c694d3b6cd382f065cacdde3ca8bf23583fcb542",
+    "watcher_commit": "f197b29969633a2de94801bca8a4fd6ebd7120fb"
+  },
+  "invocation": {
+    "count": 1,
+    "retries": 0,
+    "command": "cd wallet-web && POSTFIAT_R4_RUN_CLASSIFICATION=official [120-input committed contract environment] node --test --test-name-pattern '^A666 R4 offline Ethereum rehearsal drives the production rendered wallet journey$' src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+    "exit_code": 1,
+    "elapsed_seconds": 32.27,
+    "matched_tests": 1,
+    "passed": 0,
+    "failed": 1,
+    "skipped_nonmatching": 28,
+    "todo": 0
+  },
+  "input_hashes": {
+    "fire_control_sha256": "c6ae955b09a68f7a8de6bfc7770b75c295909bd7159e92514a4f83bf54255161",
+    "setup_manifest_sha256": "7e7b7ed9f2839704c6feb66b94d528a202db0329f3c47041280c1fcd8f7095b9",
+    "deployment_manifest_sha256": "c31622c2a00083d73af89d34219c14dc47783f51e240dd9a3a0ff34543b3e829"
+  },
+  "failure": {
+    "step": 5,
+    "label": "transparent issue/redeem",
+    "error_class": "Playwright TimeoutError",
+    "predicate": "Mint 1 A666 control must be enabled before click",
+    "exact_observation": "The production navcoin-market Mint 1 A666 button remained disabled for the full 30000ms action timeout.",
+    "source": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:1095",
+    "last_completed_step": 4,
+    "receipt_count": 0,
+    "stop_no_retry_applied": true
+  },
+  "steps": [
+    {"step": 1, "label": "build identity", "status": "completed_before_failure"},
+    {"step": 2, "label": "browser-controlled connect/create", "status": "completed_before_failure"},
+    {"step": 3, "label": "six sources/proofs/NAV", "status": "completed_before_failure"},
+    {"step": 4, "label": "A666+pfUSDC balances", "status": "completed_before_failure"},
+    {"step": 5, "label": "transparent issue/redeem", "status": "failed", "receipt_count": 0},
+    {"step": 6, "label": "private issue/redeem", "status": "not_attempted"},
+    {"step": 7, "label": "export", "status": "not_attempted"},
+    {"step": 8, "label": "return", "status": "not_attempted"},
+    {"step": 9, "label": "restart+reload recovery", "status": "not_attempted"},
+    {"step": 10, "label": "public receipt download", "status": "not_attempted"}
+  ],
+  "artifacts": {
+    "official_report_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/official-journey-pass1-v6-report.json",
+    "official_report_written": false,
+    "receipt_artifacts": [],
+    "downloaded_receipt_written": false,
+    "custody_evidence_written": false,
+    "watcher_request_path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260805-v6-1218053d452fc2a5.request",
+    "watcher_request_written": false,
+    "watcher_response_written": false,
+    "transcript_path": "/tmp/a666-r4-official-journey-pass1-v6.log",
+    "transcript_mode": "600",
+    "transcript_sha256": "d5f23b303871543a42d3ec18e11df6623e86b1e7593d707117b569c41674a2dd",
+    "runtime_metadata_path": "/tmp/a666-r4-official-journey-pass1-v6.meta",
+    "runtime_metadata_sha256": "9d7bcfa9b96bc130fb6cba73d9aea00070f6a354f576ef3b33e89b959649a6eb"
+  },
+  "custody_boundary": {
+    "transcript_forbidden_field_name_scan": "zero findings",
+    "server_side_spend_signing_observed": false,
+    "receipt_or_download_scan_completed": false,
+    "reason_not_completed": "failure occurred before private operations and public receipt download",
+    "custody_values_in_committed_evidence": false
+  },
+  "environment_freeze": {
+    "proxy_pid": 2602285,
+    "proxy_live_after_failure": true,
+    "proxy_health_http_status": 200,
+    "proxy_restart_requested": false,
+    "services_stopped": false,
+    "stakehub_action": false,
+    "live_chain": false
+  }
+}
