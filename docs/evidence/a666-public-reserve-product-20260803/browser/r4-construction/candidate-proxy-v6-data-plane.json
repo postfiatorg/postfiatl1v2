@@ -1,102 +1,144 @@
 {
-  "schema": "postfiat.a666.r4.candidate-proxy-v6-data-plane.v1",
+  "schema": "postfiat.a666.r4.candidate-proxy-v6-data-plane.v2",
+  "recorded_at_utc": "2026-08-05T01:32:26Z",
   "verdict": "red",
+  "first_blocker": {
+    "class": "construction_step_3_visibility_timeout",
+    "step": 3,
+    "exact_finding": "locator.waitFor: Timeout 30000ms exceeded.",
+    "downstream": "step 4 skipped: step 3 reserve-proof observation was not green in construction",
+    "retry_performed": false,
+    "assertion_weakened": false
+  },
   "candidate": {
-    "revision": "e1b71a1097768610d1a45c8d125e93e5d5e185e4",
-    "worktree": "/tmp/a666-r4-successor-e1b71a1",
-    "tracked_clean": true,
+    "revision": "e73690c472dd8f1fb5575766e0c45364b0810230",
+    "worktree": "/tmp/a666-r4-successor-e73690c",
+    "tracked_dirty_count": 0,
     "package_version": "0.1.2",
     "package_json_sha256": "fe6209c5219a583e0f55f8ca0c93244e14ae569288ee46af910bbaa97e1989b3"
   },
   "wallet_build": {
-    "command": "npm ci --ignore-scripts && npm run build",
+    "command": "cd /tmp/a666-r4-successor-e73690c/wallet-web && npm ci --ignore-scripts && npm run build",
     "exit_code": 0,
-    "runtime_ms": 2836,
+    "runtime_ms": 2527,
+    "module_count": 1805,
+    "dist_manifest_path": "/tmp/a666-r4-v6-e73690c-wallet-dist-sha256.json",
+    "dist_manifest_sha256": "9a4e788405468e3f700775c2e3439daa5d3442f72c7b8fab89fb5580e847016e",
     "assets": [
-      {"path": "index.html", "sha256": "3ab4dc377f6d4427802a0bf9aec347a56c95e3bffacdec6106e8f79f8da5d94a"},
-      {"path": "assets/index-BdqnjDXP.js", "sha256": "f8072e76573e07b1f61357ceced592098c6cb0c3f100848b74c41b9ec8e98c9b"},
-      {"path": "assets/index-ByxtZHcl.css", "sha256": "a0662f24f608d1dbb014a3a618d8b0857bd589fd87078538354574a8381e5264"},
-      {"path": "assets/postfiat_wallet_wasm_bg-BCMxG3_Q.wasm", "sha256": "affd340817788d45a313e60ec512493c6c56c3acbf81a4d4159636279ea0c882"}
-    ],
-    "runtime_hash_manifest": "/tmp/a666-r4-v6-wallet-dist-sha256.json",
-    "runtime_hash_manifest_sha256": "99a776adec0c2c9b2e6703d7180ac32d6c6de68a79975a558a4ed68f90e9cdf0"
+      {
+        "path": "assets/index-BdqnjDXP.js",
+        "sha256": "f8072e76573e07b1f61357ceced592098c6cb0c3f100848b74c41b9ec8e98c9b",
+        "served_sha256_matches": true
+      },
+      {
+        "path": "assets/index-ByxtZHcl.css",
+        "sha256": "a0662f24f608d1dbb014a3a618d8b0857bd589fd87078538354574a8381e5264",
+        "served_sha256_matches": true
+      },
+      {
+        "path": "assets/postfiat_wallet_wasm_bg-BCMxG3_Q.wasm",
+        "sha256": "affd340817788d45a313e60ec512493c6c56c3acbf81a4d4159636279ea0c882",
+        "served_sha256_matches": true
+      },
+      {
+        "path": "index.html",
+        "sha256": "3ab4dc377f6d4427802a0bf9aec347a56c95e3bffacdec6106e8f79f8da5d94a",
+        "served_sha256_matches": true
+      }
+    ]
   },
   "same_origin_stage": {
-    "command": "POSTFIAT_R4_CANDIDATE_REVISION=e1b71a1... POSTFIAT_R4_CANDIDATE_WORKTREE=/tmp/a666-r4-successor-e1b71a1 POSTFIAT_R4_WALLET_DIST_EVIDENCE=/tmp/a666-r4-v6-wallet-dist-sha256.json POSTFIAT_R4_CANDIDATE_PROXY_EVIDENCE=/tmp/a666-r4-v6-proxy-provenance.json scripts/a666-r4-candidate-proxy-stage --wait-rpc-seconds 30",
+    "command": "POSTFIAT_R4_CANDIDATE_REVISION=e73690c472dd8f1fb5575766e0c45364b0810230 POSTFIAT_R4_CANDIDATE_WORKTREE=/tmp/a666-r4-successor-e73690c POSTFIAT_R4_WALLET_DIST_EVIDENCE=/tmp/a666-r4-v6-e73690c-wallet-dist-sha256.json POSTFIAT_R4_CANDIDATE_PROXY_EVIDENCE=/tmp/a666-r4-v6-e73690c-proxy-provenance.json scripts/a666-r4-candidate-proxy-stage --wait-rpc-seconds 30",
     "exit_code": 0,
-    "runtime_ms": 3600,
+    "runtime_ms": 3177,
     "origin": "http://127.0.0.1:31021",
     "static_and_rpc_single_listener": true,
-    "proxy_pid": 2271419,
-    "proxy_health": true,
+    "old_proxy_pid": 2271419,
+    "old_proxy_stopped": true,
+    "new_proxy_pid": 2403097,
+    "new_proxy_live": true,
+    "healthz_http_status": 200,
     "process_identity_exact": true,
-    "wallet_proxy_tree_hash": "5919ae695d910cfbe3b41c9783ef79354784b4ee",
-    "wallet_proxy_server_sha256": "6aebb3576bde511ce99f8b69a36fe502d3ddffad23275c5761f380fd3675bf41",
+    "wallet_proxy_tree_hash": "6149e38e0d959bf14145843c1ed010b10690597a",
+    "wallet_proxy_server_sha256": "0458f721c06783f8f4095259b932e554426e3b35af77bce9a25405ebde434a26",
     "node_binary_sha256": "9339d1352969cbc449f4245e18c2f1b3763d5b896334335b5bfd894beff12c57",
     "six_rpc_loopback": true,
     "six_rpc_live": true,
     "six_rpc_live_equal": true,
-    "committed_height_826_tuple_stale": true,
-    "runtime_provenance_path": "/tmp/a666-r4-v6-proxy-provenance.json",
-    "runtime_provenance_sha256": "c9b504f02fbd13038889da093270218d534856357a37c8f3add96c238d9136fc"
+    "runtime_provenance_path": "/tmp/a666-r4-v6-e73690c-proxy-provenance.json",
+    "runtime_provenance_sha256": "5114f0cc25f5de1e4329724b6c9218e46b892d72a26e125977efa78149b4b6f2"
   },
-  "data_plane_probe": {
-    "command_class": "single read-only Playwright observation against same-origin successor wallet and WebSocket RPC",
-    "exit_code": 1,
-    "runtime_ms": 4298,
-    "runtime_report_path": "/tmp/a666-r4-v6-data-plane-probe.json",
-    "runtime_report_sha256": "c462f30c7a32340523d5962ddaf84211e37ad45b71300e3d271125cf9e6b059f",
+  "direct_browser_origin_read": {
+    "classification": "read_only_no_auth_same_origin_websocket",
+    "command_class": "Playwright page at http://127.0.0.1:31021 opened /rpc and issued navcoin_bridge_routes followed by nav_reserve_proof_status",
+    "exit_code": 0,
+    "runtime_ms": 846,
+    "request_method": "nav_reserve_proof_status",
+    "routes_request_id": "v6-direct-1",
+    "proof_request_id": "v6-direct-2",
+    "auth_or_origin_refusal": false,
+    "response_ok": true,
+    "schema": "postfiat.nav_reserve_proof_status.v1",
+    "found": true,
+    "packet_count": 2,
+    "finalized_packet_count": 2,
+    "finalized_source_counts": [6, 6],
+    "proof_identity_count": 2,
+    "runtime_report_path": "/tmp/a666-r4-v6-e73690c-direct-proof.json",
+    "runtime_report_sha256": "b08cbf9e23763d439f4cdd245f626300f74578dee5ce6b50bfb1d30d3371043f"
+  },
+  "construction_browser": {
+    "runner_revision": "293abbc4425a0dd96a7b57bddbb8a09de02e850f",
+    "command": "cd wallet-web && POSTFIAT_R4_PREFLIGHT_ONLY=1 POSTFIAT_R4_WALLET_ORIGIN=http://127.0.0.1:31021 POSTFIAT_R4_PROXY_ORIGIN=http://127.0.0.1:31021 npm run test:r4-construction with the committed fire-control/setup/deployment/export/return/async/proxy-control contract",
+    "exit_code": 0,
+    "runner_duration_ms": 32204.199475,
+    "tests": 22,
+    "passed": 22,
+    "failed": 0,
+    "todo": 0,
+    "official_pass": false,
     "official_invocations": 0,
-    "business_mutations": 0
+    "business_mutations": 0,
+    "step_1_ok": true,
+    "step_2_ok": true,
+    "step_3_ok": false,
+    "step_4_executed": false,
+    "steps_1_4_all_green": false,
+    "report_path": "/tmp/a666-r4-v6-e73690c-construction.json",
+    "report_sha256": "63bde55bedd27f34e8bf6bfc1af639ff28b738bd6dc58e825a35a8a38bbe2df5"
   },
-  "checks": {
-    "navcoin_bridge_routes": {
-      "ok": true,
-      "request_method": "navcoin_bridge_routes",
-      "request_id": "web-13",
-      "response_id": "web-13",
-      "schema": "postfiat-pftl-uniswap-routes-status-v2",
-      "route_count": 2,
-      "route_count_matches_array": true,
-      "required_route_fields_present": true,
-      "journey_route_id": "pftl-a666-r4-offline-rehearsal-v1",
-      "journey_route_live": true
-    },
-    "reserve_packets": {
+  "four_data_plane_gates": [
+    {
+      "id": "routes_schema_fields_live_journey_route",
       "ok": false,
-      "request_method": null,
-      "request_id": null,
-      "response_id": null,
-      "source_identity_count": 0,
-      "unique_source_identity_count": 0,
-      "proof_identity_count": 0,
-      "unique_proof_identity_count": 0,
-      "required": "exactly six unique sources and at least two unique packet/proof identities"
+      "construction_observation": "not evaluated because the shared step-3 visibility wait timed out before request correlation",
+      "direct_read_prerequisite": "journey route was found and supplied the asset_id used by the successful reserve-proof request"
     },
-    "browser_nav": {
+    {
+      "id": "request_bound_finalized_packets_source_count_6_two_proof_ids",
       "ok": false,
-      "verified_nav_visible": false,
-      "finalized_pftl_reserve_proof_match_visible": false,
-      "market_text_sha256": "6d41a213f7ee554186023e8a3837aeea837297686f962c69e3f0118302d30d4c"
+      "construction_observation": "not evaluated after the first step-3 wall",
+      "direct_read_prerequisite": "schema v1, two finalized packets, source counts [6,6], two proof identities"
     },
-    "browser_balances": {
+    {
+      "id": "verified_nav_and_finalized_reserve_proof_text_visible",
       "ok": false,
-      "a666_present": false,
-      "pfusdc_present": false,
-      "your_balances_finalized_visible": false,
-      "balance_row_count": 0,
-      "balance_rows_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      "construction_observation": "step 3 visibility timeout"
+    },
+    {
+      "id": "a666_pfusdc_rows_and_your_balances_finalized_visible",
+      "ok": false,
+      "construction_observation": "step 4 skipped after step 3 failed"
     }
-  },
-  "first_blocker": "nav_reserve_proof_status_request_not_observed",
-  "retry_performed": false,
-  "construction_steps_1_4": {
-    "executed": false,
-    "reason": "stopped on the first distinct RED data-plane check before a second browser execution"
-  },
-  "official_invocations": 0,
-  "business_mutations": 0,
-  "live_chain": false,
-  "stakehub_interaction": false,
-  "credentials_included": false
+  ],
+  "scope": {
+    "official_invocations": 0,
+    "business_mutations": 0,
+    "live_chain": false,
+    "stakehub_interaction": false,
+    "credentials_included": false,
+    "product_changes": 0,
+    "runner_changes": 0,
+    "manifest_changes": 0
+  }
 }
