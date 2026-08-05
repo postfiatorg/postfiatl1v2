@@ -1,7 +1,7 @@
 {
   "schema": "postfiat.a666.recovery.regression_manifest.v1",
   "status": "complete",
-  "generated_at_utc": "2026-08-05T00:17:02Z",
+  "generated_at_utc": "2026-08-05T00:58:44Z",
   "evidence_root": "docs/evidence/a666-public-reserve-product-20260803",
   "contracts": [
     "docs/plans/A666-PRODUCT-RECOVERY-AND-DEMO-RELAUNCH-SPEC-20260803.md#61-layer-a-targeted-regressions",
@@ -284,6 +284,86 @@
         "commit": "3b3d82d59cd4e239c2e55136a2829e2e1f2eb76d",
         "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/stakehub-official-restart-proof-v5.json",
         "contract": "The consumed V4 failed step-1 official window was closed by exact dashboard restart inventory equality; no funds, data, keys, config, or software actions occurred."
+      },
+      "enforcement_status": "ci_enforced"
+    },
+    {
+      "id": "HARNESS-06",
+      "name": "official_step3_market_surface_not_preflighted",
+      "classification": "mode_asymmetric_non_mutating_display_predicate",
+      "official_v5_failure": {
+        "commit": "20e0ee86a910ecfedd6ba8bd419f994695063e4d",
+        "run_id": "a666-r4-official-journey-pass1-20260805-v5",
+        "official_invocation_count": 1,
+        "failed_step": 3,
+        "root_cause": "Official step 3 relied on a machine-checkable Navcoin market surface absent from both NavcoinMarket render branches, while construction had not executed the same display predicate.",
+        "root_cause_files": [
+          "wallet-web/src/components/NavcoinMarket.jsx:9-20",
+          "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:772"
+        ],
+        "failure_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/official-journey-pass1-v5-failure.json"
+      },
+      "red_first": {
+        "commit": "e405a9ca9e6b14a5f8e3da9494dcbf787479fb39",
+        "contract": "Served candidate NAV Markets exposes one visible [data-testid=navcoin-market] container after shared browser-controlled identity choreography.",
+        "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/step3-navcoin-market-container-red.json"
+      },
+      "class_kill": {
+        "commit": "84fa197623c936c71b810bc5f73b01c9b2281722",
+        "rule": "Every non-mutating step 1-4 display predicate executes identically in construction and official modes; the construction outcome records a real display finding without mutation or official invocation.",
+        "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/step-1-4-shared-display-observer-coverage.json"
+      },
+      "product_fix": {
+        "commit": "e1b71a1097768610d1a45c8d125e93e5d5e185e4",
+        "rule": "NavcoinMarket exposes exactly one stable data-testid=navcoin-market DOM identity across its healthy MarketAdapter and fallback render branches.",
+        "source": "wallet-web/src/components/NavcoinMarket.jsx:9-20",
+        "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/navcoin-market-container-green.json"
+      },
+      "regressions": [
+        {
+          "id": "step3_navcoin_market_container_red_flip",
+          "first_passing_commit": "e1b71a1097768610d1a45c8d125e93e5d5e185e4",
+          "test": "A666 R4 RED-FIRST served candidate NAV Markets exposes visible navcoin market container",
+          "command": "POSTFIAT_R4_WALLET_ORIGIN=http://127.0.0.1:8199 node --test --test-name-pattern \"served candidate NAV Markets\" src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+          "result": "matched 1, pass 1, fail 0, todo 0"
+        },
+        {
+          "id": "shared_non_mutating_step1_to_4_display_predicates",
+          "first_passing_commit": "84fa197623c936c71b810bc5f73b01c9b2281722",
+          "predicate_table": {
+            "step_1": 6,
+            "step_2": 2,
+            "step_3": 4,
+            "step_4": 3,
+            "total_display_predicates": 15
+          },
+          "rule": "SHARED_DISPLAY_OBSERVERS rejects official-only display predicates, missing construction observers, and construction mutations."
+        },
+        {
+          "id": "construction_step3_container_presence",
+          "first_passing_commit": "e1b71a1097768610d1a45c8d125e93e5d5e185e4",
+          "command": "npm run test:r4-construction with the f4a70fe rerun_contract environment",
+          "result": "tests 21, pass 21, fail 0, todo 0; market container green; deeper reserve-proof frame finding preserved"
+        },
+        {
+          "id": "official_input_contract_120_accessor_check",
+          "first_passing_commit": "e39ef9ef50092192b1c77d071662f4354c7f6a9f",
+          "command": "scripts/a666-r4-official-input-contract-extract check",
+          "accessor_count": 120,
+          "mismatch_count": 0
+        }
+      ],
+      "non_blocking_follow_up": {
+        "id": "R7-reserve-proof-websocket-frame-request-binding",
+        "status": "planned_non_blocking_pass_2_follow_up",
+        "scope": "Reserve-proof acceptance must bind every WebSocket packet frame to its producing RPC method and request ID rather than accept any packet-shaped frame.",
+        "v6_blocking": false,
+        "rationale": "The stable market container class is fixed; the deeper reserve-proof transport-tightness work is intentionally tracked for pass #2/R7 and does not alter the V6 fire gate."
+      },
+      "restart_evidence": {
+        "commit": "3b9c4a93e016f77a5bfbd41219cf5a4210d5c519",
+        "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/stakehub-official-restart-proof-v6.json",
+        "contract": "The consumed V5 failed step-3 official window was closed by exact dashboard restart inventory equality; no funds, data, keys, config, or software actions occurred."
       },
       "enforcement_status": "ci_enforced"
     }

@@ -1,5 +1,5 @@
 A666 recovery regression manifest traceability validation
-Validated source revision: bfe07d24fb684c955b5ff72acac8c8ec3fcb6678
+Validated source revision: e1b71a1097768610d1a45c8d125e93e5d5e185e4
 
 Command: scripts/check-a666-recovery-regression-manifest
 Exit code: 0
@@ -9,50 +9,43 @@ Terminal: A666 recovery manifest PASS: defects=11 regressions=11 browser_regress
 
 Command: scripts/a666-r4-official-input-contract-extract check
 Exit code: 0
-Wall-clock elapsed: 61ms
+Wall-clock elapsed: 35ms
 Execution scope: static extraction only; no browser, service, or official journey invocation.
 Terminal: {"ok": true, "accessor_count": 120, "mismatch_count": 0}.
 
 Manifest totals
 - Observed product/browser defect classes: 11
-- Harness defect classes: 5
-- Total named defect classes: 16
+- Harness defect classes: 6
+- Total named defect classes: 17
 - Rust standalone regression tests: 26
 - Browser regression rows: 2
 - Total manifest regression-test records: 28
 - Status: complete
 
 Retained harness classes
-- HARNESS-03 retains full official-runner input-contract enforcement traceability.
-- HARNESS-04 retains build-identity source-confusion and mode-symmetric registry traceability.
+- HARNESS-03: official-runner input-contract completeness.
+- HARNESS-04: build-identity source confusion and mode-symmetric registry.
+- HARNESS-05: V4 step-1 browser predicate preflight.
 
-New harness class
-- HARNESS-05: official_step1_browser_predicate_not_preflighted.
-- Official V4 failure: 0e2cce37a933ecb043dcd02f88751cac17b33535, invocation 1, step 1, timeout at the exact production sidebar package identity before create/unlock.
-- Root causes: sidebar observation preceded create/unlock; construction omitted the six DOM/document predicates; the readiness fixture embedded historical artifact hashes.
-- RED evidence: e10b6addab759e7478ad63069f9fd66818119fb5, official-step1-sidebar-choreography-red.json.
-- Shared observer: 49e4ce851f19f90445c70df84d071c6073b91205, observeStepOneBuildIdentity; one unchanged invocation in construction and one in official mode.
-- Dynamic binding / first final pass: bfe07d24fb684c955b5ff72acac8c8ec3fcb6678, official-readiness-dynamic-binding.json.
-- Restart evidence: 3b3d82d59cd4e239c2e55136a2829e2e1f2eb76d, stakehub-official-restart-proof-v5.json.
-
-Corrective rules
-1. Construction browser preflight against the exact served build is mandatory before official fire.
-2. Construction and official call the same unchanged six-predicate step-1 observer after browser-controlled create/unlock.
-3. Official readiness resolves fire-control, setup, and deployment by path, current content hash, and semantic checks at test time. Historical hash literals are forbidden.
+New harness/product class
+- HARNESS-06: official_step3_market_surface_not_preflighted.
+- Official V5 RED: 20e0ee86a910ecfedd6ba8bd419f994695063e4d; invocation 1 failed at step 3 after steps 1-2, with zero receipts and zero business mutations.
+- Root cause: the machine-checkable market surface was absent from both NavcoinMarket render branches; construction did not previously execute the same display predicate.
+- RED-first: e405a9ca9e6b14a5f8e3da9494dcbf787479fb39, missing navcoin-market container.
+- Class-kill: 84fa197623c936c71b810bc5f73b01c9b2281722, every non-mutating step 1-4 display predicate executes through the same observer in construction and official modes.
+- Product fix: e1b71a1097768610d1a45c8d125e93e5d5e185e4, one stable data-testid=navcoin-market wrapper across healthy/fallback NavcoinMarket branches at NavcoinMarket.jsx:9-20.
+- Restart: 3b9c4a93e016f77a5bfbd41219cf5a4210d5c519, exact dashboard inventory restart after consumed V5 failure.
 
 Mapped regressions
-- Strict RED flip: two sidebar choreography vectors convert from TODO to strict green.
-- Six browser predicates: served, wallet_created_and_unlocked, version_visible_exact, package_json_sha256_match, candidate_bound, production_graph.
-- Dynamic readiness binding: source-span negative rejects inline 64-hex literals and requires all three artifacts to be read and hashed at test time.
-- Mandatory construction browser preflight: npm run test:r4-construction with pinned official setup; tests 19, pass 19, fail 0, todo 0.
-- 120-accessor check: scripts/a666-r4-official-input-contract-extract check; accessor_count 120, mismatch_count 0.
+1. RED-first market-container vector flips to strict green: matched 1, pass 1, fail 0, todo 0.
+2. SHARED_DISPLAY_OBSERVERS covers 15 non-mutating display predicates: step 1=6, step 2=2, step 3=4, step 4=3.
+3. Full construction suite after product fix: tests 21, pass 21, fail 0, todo 0; the container is green and the deeper reserve-proof frame finding remains recorded.
+4. Official input-contract extractor: 120 accessors, 0 mismatches.
 
-Recorded structural-fix commands
-- node --check wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js: exit 0.
-- node --test --test-name-pattern "official-readiness|inline historical|mode parity|structural guard|negatives|v3 build identity": tests 19, matched 6, pass 6, fail 0, todo 0.
-- npm run test:r4-construction (preflight env block, pinned official setup manifest): tests 19, pass 19, fail 0, todo 0; step_1_browser_identity_green and all six step-1 checks green against the exact served build.
-- Per-command wall-clock values were not recorded in the committed V5 structural-fix evidence; no runtime is invented here.
+Named non-blocking pass #2/R7 follow-up
+- R7-reserve-proof-websocket-frame-request-binding: bind every accepted reserve-proof WebSocket packet frame to its producing RPC method and request ID; packet shape alone is insufficient.
+- Status: planned, non-blocking; it does not gate V6 fire control.
 
 Final validation
 - Manifest schema validator: exit 0, 69ms.
-- Accessor extractor: exit 0, 61ms, 120 accessors, 0 mismatches.
+- Accessor extractor: exit 0, 35ms, 120 accessors, 0 mismatches.
