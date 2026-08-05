@@ -1562,6 +1562,36 @@ function normalizeValidationInputs(mode, fixture) {
   };
 }
 
+test('A666 R4 RED-FIRST served candidate NAV Markets exposes visible navcoin market container', {
+  todo: 'RED-first product vector: the existing candidate renders no visible [data-testid="navcoin-market"] after create/unlock and the production NAV Markets click. Convert to strict when App supplies the production render container.',
+}, async () => {
+  const walletOrigin = requiredLoopbackOrigin('POSTFIAT_R4_WALLET_ORIGIN', 'served candidate wallet origin');
+  const setup = await readJson(
+    join(REPO_ROOT, 'docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/setup-endpoints-manifest.json'),
+    'setup manifest',
+  );
+  const pinnedPackage = pinnedCandidatePackage(REPO_ROOT, CANDIDATE_REVISION);
+  const productionGraph = await verifyProductionGraph();
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    page.setDefaultTimeout(10_000);
+    await observeStepOneBuildIdentity({
+      page,
+      walletOrigin,
+      setup,
+      pinnedPackage,
+      productionGraph,
+      passphrase: 'a666-r4-step3-red-browser-vector',
+    });
+    await page.locator('.pf-sidebar .pf-nav').filter({ hasText: 'NAV Markets' }).click();
+    await page.locator('[data-testid="navcoin-market"]').waitFor({ state: 'visible', timeout: 5_000 });
+  } finally {
+    await browser.close();
+  }
+});
+
 test('A666 R4 mode parity: construction and official execute the identical 18-predicate registry with identical traces', () => {
   const fixture = syntheticValidationFixture();
   const construction = runValidationRegistry(normalizeValidationInputs('construction', fixture));
@@ -1659,6 +1689,21 @@ test('A666 R4 steps 1-4 display predicates are mode-shared: structural completen
   assert.ok(sharedDisplayCoverageProblems(mutationInConstruction)
     .some(problem => problem.includes('mutation/dependent step reachable in construction preflight')),
     'mutation step in construction must fail');
+
+  // Permanent guard: the browser-level product render vector survives the
+  // RED-to-GREEN transition. Its TODO marker may be removed; the vector,
+  // shared observer, production navigation click, and exact container wait may not.
+  const vectorName = 'A666 R4 RED-FIRST served candidate NAV Markets' + ' exposes visible navcoin market container';
+  const vectorStart = source.indexOf(`test('${vectorName}'`);
+  const vectorEnd = source.indexOf("\ntest('", vectorStart + 1);
+  assert.ok(vectorStart > -1 && vectorEnd > vectorStart,
+    'served-candidate navcoin-market browser vector must remain registered');
+  const vector = source.slice(vectorStart, vectorEnd);
+  assert.equal(/skip\s*:/.test(vector), false, 'served-candidate navcoin-market vector may not be skipped');
+  assert.ok(vector.includes('observeStepOneBuildIdentity({'), 'browser vector must reuse the shared step-1 observer');
+  assert.ok(vector.includes("hasText: 'NAV Markets'"), 'browser vector must click the production NAV Markets control');
+  assert.ok(vector.includes("page.locator('[data-testid=\"navcoin-market\"]')"),
+    'browser vector must require the exact production render container');
 });
 
 test('A666 R4 build identity negatives refuse before invocation: nonexistent revision/object, wrong hash/version, worktree divergence', async () => {

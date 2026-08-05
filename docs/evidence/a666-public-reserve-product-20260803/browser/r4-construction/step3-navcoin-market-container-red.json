@@ -1,0 +1,85 @@
+{
+  "schema": "postfiat.a666.r4.step3-navcoin-market-container-red.v1",
+  "red_first": true,
+  "candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+  "runner_base_commit": "84fa197",
+  "official_v5_failure_commit": "20e0ee86a910ecfedd6ba8bd419f994695063e4d",
+  "product_source_edited": false,
+  "browser_vector": {
+    "test_name": "A666 R4 RED-FIRST served candidate NAV Markets exposes visible navcoin market container",
+    "served_origin": "http://127.0.0.1:31021",
+    "behavior": [
+      "navigate to the served candidate build",
+      "run the shared observeStepOneBuildIdentity create/unlock choreography",
+      "click the production NAV Markets sidebar control",
+      "require visible [data-testid=navcoin-market]"
+    ],
+    "observations_hand_set": false,
+    "expected_fail_marker": "node:test todo",
+    "browser_launched": true,
+    "official_journey_invocations": 0,
+    "business_mutations": 0
+  },
+  "targeted_run": {
+    "command": "POSTFIAT_R4_WALLET_ORIGIN=http://127.0.0.1:31021 node --test --test-name-pattern='RED-FIRST served candidate NAV Markets exposes visible navcoin market container' src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+    "exit_code": 0,
+    "runtime_ms": 6617,
+    "runner_duration_ms": 6551.747908,
+    "matched": 1,
+    "passed": 0,
+    "failed": 0,
+    "todo": 1,
+    "skipped": 20,
+    "expected_failure": {
+      "class": "TimeoutError",
+      "message": "locator.waitFor timed out after 5000ms waiting for [data-testid=navcoin-market] to be visible",
+      "test_source": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:1565",
+      "failure_line": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:1589"
+    },
+    "output_path": "/tmp/a666-r4-step3-navcoin-market-container-red.log",
+    "output_sha256": "b5a75c2b4e2c39cb5caff97652c9461b130163f6687a417214e738f9baa71c3d"
+  },
+  "diagnosis_links": [
+    {
+      "source": "39f7fae3191aa34c376ae1657650a9ec2444f421:wallet-web/src/App.jsx:673-688",
+      "finding": "production market route mounts NavcoinMarket when tab is market"
+    },
+    {
+      "source": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:921-924",
+      "finding": "shared step-3 observer requires the visible navcoin-market container"
+    },
+    {
+      "source": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/official-journey-pass1-v5-failure.json:first_failure",
+      "finding": "official v5 failed on the same absent container after steps 1-2"
+    },
+    {
+      "source": "84fa197",
+      "finding": "steps 1-4 display observers and structural completeness were extracted across construction and official modes"
+    }
+  ],
+  "permanent_structural_guard": {
+    "test": "A666 R4 steps 1-4 display predicates are mode-shared: structural completeness guard with RED proof and negatives",
+    "requires_vector_registered": true,
+    "forbids_skip": true,
+    "requires_shared_step1_observer": true,
+    "requires_production_nav_click": true,
+    "requires_exact_container_wait": true,
+    "command_exit": 0,
+    "matched": 1,
+    "passed": 1,
+    "failed": 0,
+    "todo": 0
+  },
+  "validation": {
+    "node_check_exit": 0,
+    "extractor_command": "scripts/a666-r4-official-input-contract-extract check",
+    "extractor_exit": 0,
+    "extractor_accessor_count": 120,
+    "extractor_mismatch_count": 0
+  },
+  "official_journey_invocations": 0,
+  "business_mutations": 0,
+  "live_chain": false,
+  "stakehub_actions": 0,
+  "credentials_included": false
+}
