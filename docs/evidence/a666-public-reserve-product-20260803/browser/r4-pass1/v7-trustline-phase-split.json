@@ -1,0 +1,83 @@
+{
+  "schema": "postfiat.a666.r4.v7-trustline-phase-split.v1",
+  "script": "scripts/a666-r4-fresh-wallet-trustline-stage",
+  "phase_contract": {
+    "bare_stage": {
+      "behavior": "refuse",
+      "reason": "explicit_phase_choice_required_use_stage-holder_or_stage-issuer-auth"
+    },
+    "stage_holder": {
+      "operations": [
+        "holder_trust_set",
+        "holder_trust_set"
+      ],
+      "issuer_request_read_or_required": false,
+      "browser_submission_count_when_fired": 2
+    },
+    "stage_issuer_auth": {
+      "operations": [
+        "issuer_authorize_a666"
+      ],
+      "requires_mode": "0600",
+      "requires_direct_certified_ops_request_path": true,
+      "requires_existing_unauthorized_a666_line": true,
+      "holder_line_creation": false
+    }
+  },
+  "source_guard": {
+    "selector_owner_file": "wallet-web/src/components/Send.jsx",
+    "holder_builder_file": "wallet-web/src/lib/tx-builder.js",
+    "required_selectors": [
+      "add-asset",
+      "add-asset-id",
+      "add-asset-limit"
+    ],
+    "issuer_controls_rejected": true
+  },
+  "validation": {
+    "syntax": {
+      "command": "bash -n scripts/a666-r4-fresh-wallet-trustline-stage",
+      "exit_code": 0
+    },
+    "self_test": {
+      "command": "scripts/a666-r4-fresh-wallet-trustline-stage --self-test",
+      "exit_code": 0,
+      "elapsed_ms": 431,
+      "vectors": 29,
+      "negative_vectors": 20,
+      "holder_without_issuer_path": 1,
+      "issuer_missing_path_refusals": 1,
+      "issuer_mode_refusals": 1,
+      "holder_rejects_issuer_operations": 1,
+      "issuer_rejects_holder_operations": 1,
+      "bare_stage_refusal": 1,
+      "business_mutations": 0
+    },
+    "holder_preflight": {
+      "command": "POSTFIAT_R4_TRUSTLINE_CHECK_OUT=/tmp/a666-v7-phase-split-preflight.json scripts/a666-r4-fresh-wallet-trustline-stage check",
+      "exit_code": 0,
+      "elapsed_ms": 456,
+      "terminal_line": "trustline_stage_check=ok",
+      "height": 834,
+      "pft_balance": 74,
+      "sequence": 0,
+      "pfusdc_line_absent": true,
+      "a666_line_absent": true,
+      "source_guard_ready": true,
+      "ui_ready": true,
+      "fleet_six_way_equal": true,
+      "business_mutations": 0
+    }
+  },
+  "scope": {
+    "stage_holder_invocations": 0,
+    "stage_issuer_auth_invocations": 0,
+    "browser_add_asset_clicks": 0,
+    "wallet_submissions": 0,
+    "issuer_authorization_submissions": 0,
+    "stakehub_actions": 0,
+    "live_chain": false,
+    "credentials_accessed": false,
+    "business_mutations": 0
+  }
+}

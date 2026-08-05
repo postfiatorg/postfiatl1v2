@@ -120,12 +120,22 @@ PY
  echo "trustline_stage_check=ok output=$CHECK_OUT business_mutations=0"
 }
 
-stage(){
+holder_phase_request_access(){ [[ $# == 0 ]] || refuse holder_phase_must_not_receive_issuer_request; }
+issuer_phase_request_path(){
+ local request_path=${1:-}
+ [[ -n "$request_path" ]] || { refuse missing_issuer_authorization_request; return $?; }
+ mode "$request_path" 600 issuer_request
+}
+holder_phase_operations(){ [[ $# == 2 && $1 == holder_trust_set && $2 == holder_trust_set ]] || refuse holder_phase_operation_forbidden; }
+issuer_phase_operations(){ [[ $# == 1 && $1 == issuer_authorize_a666 ]] || refuse issuer_phase_operation_forbidden; }
+
+stage_holder(){
+ holder_phase_request_access
+ holder_phase_operations holder_trust_set holder_trust_set
  check; loopback "$(jq -r .origin "$CHECK_OUT")"
  add_asset_source_guard
-  absent "$(jq -r .assets.pfusdc.present_on_six "$CHECK_OUT")" "$(jq -r .assets.a666.present_on_six "$CHECK_OUT")"
-  issuer_request "$ISSUER_REQUEST"
-  local before supply_before pf a6 driver result after fee_sum seq_before seq_after pft_before pft_after
+ absent "$(jq -r .assets.pfusdc.present_on_six "$CHECK_OUT")" "$(jq -r .assets.a666.present_on_six "$CHECK_OUT")"
+ local before supply_before pf a6 driver result after fee_sum seq_before seq_after pft_before pft_after
   before=$(cat "$CHECK_OUT"); supply_before=$(jq -c .supply_baseline.tuple <<<"$before")
   seq_before=$(jq -r '.account.sequence_values|if length==1 then .[0] else error("sequence divergence") end' <<<"$before")
   pft_before=$(jq -r '.account.pft_balance_values|if length==1 then .[0] else error("balance divergence") end' <<<"$before")
@@ -149,6 +159,15 @@ MJS
   seq_after=$(jq -r '.account.sequence_values|if length==1 then .[0] else error("sequence divergence") end' <<<"$after");pft_after=$(jq -r '.account.pft_balance_values|if length==1 then .[0] else error("balance divergence") end' <<<"$after")
   [[ $seq_after -eq $((seq_before+2)) && $pft_after -eq $((pft_before-fee_sum)) ]]||refuse fee_or_sequence_delta
   jq -c '{finalized_receipts:.receipts,business_mutations:2}' <<<"$result"
+}
+
+stage_issuer_auth(){
+ issuer_phase_operations issuer_authorize_a666
+ check; loopback "$(jq -r .origin "$CHECK_OUT")"
+ jq -e '.assets.a666.present_on_six and (.assets.a666.authorized_on_six | not) and .assets.a666.unfrozen_on_six' "$CHECK_OUT" >/dev/null || refuse missing_existing_unauthorized_a666_line
+ issuer_phase_request_path "$ISSUER_REQUEST"
+ issuer_request "$ISSUER_REQUEST"
+ echo "trustline_stage_issuer_auth=ready business_mutations=0"
 }
 
 unlock_choreography_self_test(){
@@ -209,8 +228,18 @@ self_test(){
  t=$(mktemp -d /tmp/a666-r4-tl-selftest-XXXXXX); chmod 700 "$t"
  bad(){ n=$((n+1)); if "$@" >/dev/null 2>&1;then f=$((f+1));fi; }
  good(){ n=$((n+1)); if ! "$@" >/dev/null 2>&1;then f=$((f+1));fi; }
+ good_without_issuer(){ n=$((n+1)); if ! (unset ISSUER_REQUEST; "$@") >/dev/null 2>&1;then f=$((f+1));fi; }
  bad loopback https://example.invalid
  touch "$t/f";chmod 644 "$t/f";bad mode "$t/f" 600 ready
+ good_without_issuer holder_phase_request_access
+ bad issuer_phase_request_path ""
+ bad issuer_phase_request_path "$t/f"
+ chmod 600 "$t/f";good issuer_phase_request_path "$t/f"
+ good holder_phase_operations holder_trust_set holder_trust_set
+ bad holder_phase_operations issuer_authorize_a666 holder_trust_set
+ good issuer_phase_operations issuer_authorize_a666
+ bad issuer_phase_operations holder_trust_set
+ bad "$ROOT/scripts/a666-r4-fresh-wallet-trustline-stage" stage
  printf wrong >"$t/c";bad grep -q "$candidate" "$t/c"
   python3 -c 'import json,sys;json.dump({"address":"pf"+"0"*40},sys.stdout)' >"$t/raw";bad public_guard "$t/raw"
  good add_asset_source_guard "$app_path" "$send_path" "$builder_path"
@@ -231,8 +260,15 @@ self_test(){
  bad candidate_revisions_match "$candidate" "$candidate" "$candidate" "$other"
  good unlock_choreography_self_test
  good send_tab_choreography_self_test
- rm -rf "$t";[[ $f == 0 && $n == 20 ]]||refuse "self_test failures=$f vectors=$n"
- echo "trustline_stage_self_test=ok vectors=20 negative_vectors=15 candidate_mismatch_refusals=3 missing_send_selector_refusals=3 issuer_control_refusals=1 holder_builder_refusals=1 delayed_lock_vector=1 send_tab_vector=1 unlocks=1 navigations=1 business_mutations=0"
+ rm -rf "$t";[[ $f == 0 && $n == 29 ]]||refuse "self_test failures=$f vectors=$n"
+ echo "trustline_stage_self_test=ok vectors=29 negative_vectors=20 candidate_mismatch_refusals=3 missing_send_selector_refusals=3 issuer_control_refusals=1 holder_builder_refusals=1 holder_without_issuer_path=1 issuer_missing_path_refusals=1 issuer_mode_refusals=1 holder_rejects_issuer_operations=1 issuer_rejects_holder_operations=1 bare_stage_refusal=1 delayed_lock_vector=1 send_tab_vector=1 unlocks=1 navigations=1 business_mutations=0"
 }
 
-case ${1:-check} in check)check;;stage)stage;;--self-test)self_test;;*)refuse 'usage [check|stage|--self-test]';;esac
+case ${1:-check} in
+ check)check;;
+ stage)refuse 'explicit_phase_choice_required_use_stage-holder_or_stage-issuer-auth';;
+ stage-holder)stage_holder;;
+ stage-issuer-auth)stage_issuer_auth;;
+ --self-test)self_test;;
+ *)refuse 'usage [check|stage-holder|stage-issuer-auth|--self-test]';;
+esac
