@@ -1,0 +1,65 @@
+{
+  "schema": "postfiat.a666.r4.construction-same-origin-31021-green.v1",
+  "recorded_at_utc": "2026-08-05T04:30:00Z",
+  "verdict": "green",
+  "closes": [
+    "bba3632 (v6 construction semantic wall: selectOption timeout)",
+    "READ-ONLY DISPLAY WALL DIAGNOSIS A (proof_rendered + step-4 balances, both classified HARNESS)"
+  ],
+  "commits": {
+    "selector_helper": "c2cc32e",
+    "same_origin_template": "48c461b",
+    "display_balance_harness_fix": "92f640a"
+  },
+  "construction_run": {
+    "command": "npm run test:r4-construction (permanent template scripts/run-r4-construction; default single origin exported to both POSTFIAT_R4_WALLET_ORIGIN and POSTFIAT_R4_PROXY_ORIGIN)",
+    "origin_line": "r4_construction_origin=http://127.0.0.1:31021 wallet_proxy_same_origin=true",
+    "remaining_env": "committed rerun-contract manifest/slot env (fire-control/setup/deployment manifests + sha256 pins, export/return/async-proof slots, proxy restart request + pid file, fresh journey report path)",
+    "runs": 1,
+    "retries": 0,
+    "exit_code": 0,
+    "tests": 28,
+    "pass": 28,
+    "fail": 0,
+    "todo": 0,
+    "duration_ms": 6395.392551,
+    "tap_log": "/tmp/r4-construction-31021-fix2.log",
+    "journey_report": "/tmp/r4-construction-31021-fix2.json"
+  },
+  "predicate_table": {
+    "steps_1_4_display_all_green": true,
+    "step_1_build_identity": { "served": true, "wallet_created_and_unlocked": true, "version_visible_exact": true, "package_json_sha256_match": true, "candidate_bound": true, "production_graph": true },
+    "step_2_wallet_shell": { "browser_address": true, "rendered_wallet": true },
+    "step_3_reserve_proof": { "response_schema": true, "packets_bounded": true, "finalized_sources_six": true, "both_proofs": true, "nav_rendered": true, "proof_rendered": true },
+    "step_4_balances": { "a666_visible": true, "pfusdc_visible": true, "finalized_marker": true },
+    "green": 17,
+    "total": 17,
+    "note": "v6 table counted 15 predicates; current observer set totals 17 checks across steps 1-4, all green"
+  },
+  "reached": {
+    "request_id_bound_proof_response": true,
+    "proof_match_text_rendered": "matches finalized PFTL reserve proof",
+    "verified_nav_rendered": true,
+    "a666_balance_row": true,
+    "pfusdc_balance_row": true,
+    "your_balances_finalized_marker": true
+  },
+  "computed_checks": {
+    "steps_1_6_9_10_dry_run": true,
+    "async_proof_slot_steps_7_8": true,
+    "loopback_only": true,
+    "no_live_chain": true,
+    "zero_business_mutations": true
+  },
+  "scope": {
+    "official_invocations": 0,
+    "business_mutations": 0,
+    "wallet_business_steps_executed": 0,
+    "product_edits": 0,
+    "stakehub_interaction": false,
+    "live_chain": false,
+    "credentials_included": false,
+    "ready_to_fire_observed": true,
+    "official_fire_performed": false
+  }
+}
