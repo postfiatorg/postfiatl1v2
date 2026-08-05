@@ -1,0 +1,39 @@
+{
+  "schema": "postfiat.a666.r4.display-balance-harness-fix.v1",
+  "recorded_at_utc": "2026-08-05T04:20:00Z",
+  "verdict": "green",
+  "closes": {
+    "diagnosis": "READ-ONLY DISPLAY WALL DIAGNOSIS A: both red predicates classified HARNESS (no product defect, no staging data mismatch)",
+    "staged_data_proof": "route pricing_reserve_packet_hash == vault finalized_reserve_packet_hash == a7a7...a7a7 (read-only fleet probe); pricing_nav_epoch 8 == finalized_epoch 8; live_value_enabled/paused/invariant green"
+  },
+  "fixes": {
+    "proof_timing": {
+      "defect": "observeStepThreeReserveProof captured marketText before waitForReserveProofFrame (runner line 537 before 538), sampling the pre-refresh 'packet unavailable or mismatched' state deterministically",
+      "fix": "new waitForMarketText polls the market DOM for the exact 'matches finalized PFTL reserve proof' text AFTER the method/id-bound proof frame; timeout throws (fail-closed); pre-proof capture cannot satisfy",
+      "vectors": "A666 R4 step-3 observer requires the bound proof frame before the exact match text, and the post-proof DOM rerender: (a) match text present but proof response deferred => observer stays unsettled until frame delivered; (b) initial 'unavailable' text + proof frame + later rerender => observed; (c) never-rerendered text => rejected /market did not render exact text/"
+    },
+    "balance_labels": {
+      "defect": "marketBalances split row text at the first digit; digit-bearing symbol A666 parsed as label 'A', failing step 4 deterministically",
+      "fix": "rows read by DOM association (label span / value strong nodes); labels matched as exact known symbols case-insensitively; no first-digit parsing",
+      "vectors": "A666 R4 balance observer reads row labels by DOM association and recognizes digit-bearing symbols: A666/PFUSDC rows read whole with values; 'A66' rejected /A666 balance row is absent/; 'wA666 · MetaMask' alone rejected (wrong symbol); missing pfUSDC rejected"
+    }
+  },
+  "targeted_run": {
+    "command": "cd wallet-web && POSTFIAT_R4_WALLET_ORIGIN=http://127.0.0.1:31021 POSTFIAT_R4_PROXY_ORIGIN=http://127.0.0.1:31021 node --test --test-name-pattern \"observer|step-3 choreography|selection helper|DOM-IDENTITY\" src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+    "exit_code": 0,
+    "matched": 8,
+    "pass": 8,
+    "fail": 0,
+    "todo": 0
+  },
+  "gates": {
+    "node_check_exit": 0,
+    "extractor": { "accessor_count": 120, "mismatch_count": 0, "exit_code": 0 }
+  },
+  "scope": {
+    "product_edits": 0,
+    "official_invocations": 0,
+    "business_mutations": 0,
+    "credentials_included": false
+  }
+}

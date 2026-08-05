@@ -529,13 +529,28 @@ function reserveProofContract(request, response) {
   return { report, finalized, proofIdentities };
 }
 
+async function waitForMarketText(market, needle, timeoutMs = 30_000) {
+  // Poll the market DOM until the exact rendered text appears. Fail-closed:
+  // a timeout throws; a pre-data snapshot never satisfies the observation.
+  const deadline = Date.now() + timeoutMs;
+  let text = '';
+  while (Date.now() < deadline) {
+    text = ((await market.textContent()) || '').replace(/\s+/g, ' ');
+    if (text.includes(needle)) return text;
+    await new Promise(resolveWait => setTimeout(resolveWait, 100));
+  }
+  throw new Error(`market did not render exact text within budget: ${needle}`);
+}
+
 async function observeStepThreeReserveProof(page, rpcFrames) {
   // Shared step-3 choreography and predicates are identical in construction
-  // and official mode. Select the exact route, then accept only the method/id-
-  // bound reserve-proof response. Read-only; no mutation.
+  // and official mode. Select the exact route, accept only the method/id-
+  // bound reserve-proof response, then wait for the DOM rerender that the
+  // refreshed snapshot drives. Text captured before the bound proof frame
+  // can never satisfy the proof-rendered observation. Read-only; no mutation.
   const opened = await openPrimaryMarket(page, rpcFrames);
-  const marketText = (await opened.market.textContent() || '').replace(/\s+/g, ' ');
   const reserveResponse = await waitForReserveProofFrame(rpcFrames);
+  const marketText = await waitForMarketText(opened.market, 'matches finalized PFTL reserve proof');
   const proof = reserveProofContract(opened.proofRequest, reserveResponse);
   const packets = reserveResponse.result?.packets ?? reserveResponse.result?.result?.packets ?? [];
   const step = observedStep(3, {
@@ -1054,14 +1069,21 @@ async function waitForReserveProofFrame(rpcFrames) {
 }
 
 async function marketBalances(market) {
-  const rows = await market.locator('.navcoin-primary-balance').allTextContents();
-  const observed = Object.fromEntries(rows.map(row => {
-    const normalized = row.replace(/\s+/g, ' ').trim();
-    const split = normalized.search(/[0-9]/);
-    return [normalized.slice(0, split).trim(), normalized.slice(split).trim()];
-  }));
-  assert.ok(Object.keys(observed).some(key => /pfUSDC/i.test(key)));
-  assert.ok(Object.keys(observed).some(key => /A666/i.test(key)));
+  // Read each balance row by DOM association: the label span and the value
+  // strong are separate nodes. Labels are matched as exact known symbols
+  // (case-insensitive); digit-bearing symbols like A666 must never be split
+  // at their first digit.
+  const rows = await market.locator('.navcoin-primary-balance').all();
+  const observed = {};
+  for (const row of rows) {
+    const label = String(await row.locator('span').first().textContent() || '').replace(/\s+/g, ' ').trim();
+    const value = String(await row.locator('strong').first().textContent() || '').replace(/\s+/g, ' ').trim();
+    if (label) observed[label] = value;
+  }
+  assert.ok(Object.keys(observed).some(key => key.toLowerCase() === 'pfusdc'),
+    'pfUSDC balance row is absent');
+  assert.ok(Object.keys(observed).some(key => key.toLowerCase() === 'a666'),
+    'A666 balance row is absent');
   return observed;
 }
 
@@ -1849,7 +1871,7 @@ function reserveProofFixture() {
   return { request, response };
 }
 
-function stepThreePageFixture({ selectorVisible = true, selectedRoute = JOURNEY_ROUTE_ID, selectorDisabled = false } = {}) {
+function stepThreePageFixture({ selectorVisible = true, selectedRoute = JOURNEY_ROUTE_ID, selectorDisabled = false, deferProofResponse = false } = {}) {
   const routeAssetId = 'a'.repeat(96);
   const routesRequest = { id: 'web-1', method: 'navcoin_bridge_routes', params: {} };
   const routesResponse = {
@@ -1864,14 +1886,27 @@ function stepThreePageFixture({ selectorVisible = true, selectedRoute = JOURNEY_
   const calls = { selectOption: 0 };
   let currentValue = selectorDisabled ? selectedRoute : '';
   let proofPushed = false;
+  let deferredProofResponse = null;
   const pushProof = () => {
     if (proofPushed) return;
     proofPushed = true;
     const proof = reserveProofFixture();
     proof.request.params.asset_id = routeAssetId;
     traffic.sent.push(proof.request);
-    traffic.received.push(proof.response);
+    if (deferProofResponse) {
+      deferredProofResponse = proof.response;
+    } else {
+      traffic.received.push(proof.response);
+    }
   };
+  const deliverProofResponse = () => {
+    if (deferredProofResponse) {
+      traffic.received.push(deferredProofResponse);
+      deferredProofResponse = null;
+    }
+  };
+  let marketText = 'packet unavailable or mismatched Verified NAV';
+  const setMarketText = (text) => { marketText = text; };
   const selector = {
     async waitFor() {
       if (!selectorVisible) throw new Error('primary market adapter selector is absent');
@@ -1894,6 +1929,7 @@ function stepThreePageFixture({ selectorVisible = true, selectedRoute = JOURNEY_
   };
   const market = {
     async waitFor() {},
+    async textContent() { return marketText; },
     locator(name) {
       assert.equal(name, '#navcoin-market-select');
       return selector;
@@ -1908,8 +1944,82 @@ function stepThreePageFixture({ selectorVisible = true, selectedRoute = JOURNEY_
       return market;
     },
   };
-  return { page, traffic, selectorCalls: calls };
+  return { page, traffic, selectorCalls: calls, setMarketText, deliverProofResponse };
 }
+
+function balanceMarketFixture(rows) {
+  return {
+    locator(name) {
+      assert.equal(name, '.navcoin-primary-balance');
+      return {
+        async all() {
+          return rows.map(([label, value]) => ({
+            locator(part) {
+              return { first() { return { async textContent() { return part === 'span' ? label : value; } }; } };
+            },
+          }));
+        },
+      };
+    },
+  };
+}
+
+test('A666 R4 step-3 observer requires the bound proof frame before the exact match text, and the post-proof DOM rerender', async () => {
+  // RED-first record: construction sampled market text before the proof
+  // response/refresh landed, recording proof_rendered=false against a staged
+  // backend whose packet hashes match exactly (diagnosis A).
+  const ordered = stepThreePageFixture({ deferProofResponse: true });
+  ordered.setMarketText('RESERVE PACKET matches finalized PFTL reserve proof Verified NAV YOUR BALANCES finalized');
+  const pending = observeStepThreeReserveProof(ordered.page, ordered.traffic);
+  let settled = false;
+  pending.then(() => { settled = true; }, () => { settled = true; });
+  await new Promise(resolveWait => setTimeout(resolveWait, 300));
+  assert.equal(settled, false, 'match text alone cannot satisfy the observer before the bound proof frame');
+  ordered.deliverProofResponse();
+  const observed = await pending;
+  assert.equal(observed.step.checks.proof_rendered, true);
+  assert.match(observed.marketText, /matches finalized PFTL reserve proof/);
+
+  // Pre-proof text never satisfies: initial DOM says unavailable, the bound
+  // proof arrives, and only the later rerender completes the observation.
+  const rerender = stepThreePageFixture();
+  rerender.setMarketText('packet unavailable or mismatched Verified NAV');
+  const pendingRerender = observeStepThreeReserveProof(rerender.page, rerender.traffic);
+  await new Promise(resolveWait => setTimeout(resolveWait, 300));
+  rerender.setMarketText('RESERVE PACKET matches finalized PFTL reserve proof Verified NAV YOUR BALANCES finalized');
+  const rerendered = await pendingRerender;
+  assert.equal(rerendered.step.checks.proof_rendered, true);
+
+  // Fail-closed: text that never rerenders to the exact match is rejected.
+  const stale = stepThreePageFixture();
+  stale.setMarketText('packet unavailable or mismatched Verified NAV');
+  await assert.rejects(
+    waitForMarketText(stale.page.locator('[data-testid="navcoin-market"]'), 'matches finalized PFTL reserve proof', 400),
+    /market did not render exact text/,
+  );
+});
+
+test('A666 R4 balance observer reads row labels by DOM association and recognizes digit-bearing symbols', async () => {
+  // RED-first record: first-digit label splitting parsed the A666 row label
+  // as "A", failing step 4 deterministically (diagnosis A).
+  const observed = await marketBalances(balanceMarketFixture([
+    ['PFUSDC', '0'], ['A666', '1'], ['wA666 · MetaMask', '0'],
+  ]));
+  assert.equal(observed['A666'], '1', 'digit-bearing A666 label must be read whole');
+  assert.equal(observed['PFUSDC'], '0');
+  await assert.rejects(
+    marketBalances(balanceMarketFixture([['PFUSDC', '0'], ['A66', '5']])),
+    /A666 balance row is absent/,
+  );
+  await assert.rejects(
+    marketBalances(balanceMarketFixture([['PFUSDC', '0'], ['wA666 · MetaMask', '0']])),
+    /A666 balance row is absent/,
+  );
+  await assert.rejects(
+    marketBalances(balanceMarketFixture([['A666', '1']])),
+    /pfUSDC balance row is absent/,
+  );
+});
 
 function selectionHelperFixture({ disabled = false, options = [JOURNEY_ROUTE_ID], value = '' } = {}) {
   let currentValue = value;
