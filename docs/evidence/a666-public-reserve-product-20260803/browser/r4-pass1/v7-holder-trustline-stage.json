@@ -1,0 +1,60 @@
+{
+  "schema": "postfiat.a666.r4.v7-holder-trustline-stage.v1",
+  "recorded_at_utc": "2026-08-05T05:20:00Z",
+  "verdict": "red",
+  "stop_no_retry_applied": true,
+  "bindings": {
+    "trustline_stager_commit": "9e2bb26de4135f58093f1fe50494b7c87a5a64b2",
+    "successor_proxy_restage_commit": "75b3db3e2a2433f836b6ec340b0016efcef95d57",
+    "add_asset_product_test_commit": "11c142ff591a122a59a751d492ddef84e4d72091",
+    "required_candidate_revision": "1bc25ac7384de8837a14b8150863ea1bc0e883eb"
+  },
+  "check": {
+    "command": "scripts/a666-r4-fresh-wallet-trustline-stage check",
+    "exit_code": 0,
+    "elapsed_seconds": 0.34,
+    "reported_business_mutations": 0,
+    "address_sha256": "2f58eb97683596c676c06da165c3e8011ff9860827acb9b30355a2a83638f4a6",
+    "raw_address_included": false,
+    "loopback_endpoint_count": 6,
+    "six_way_tuple_equal": true,
+    "height": 833,
+    "both_trustlines_absent": true,
+    "supply_baseline_captured": true
+  },
+  "preconditions": {
+    "required_candidate_proxy_revision": "1bc25ac7384de8837a14b8150863ea1bc0e883eb",
+    "observed_live_proxy_revision": "1bc25ac7384de8837a14b8150863ea1bc0e883eb",
+    "stager_setup_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
+    "stager_reported_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
+    "candidate_binding_exact": false,
+    "fresh_sequence": 0,
+    "fresh_pft_balance_atoms": 0,
+    "sufficient_pft_for_two_fees_and_two_reserves": false,
+    "pfusdc_line_absent": true,
+    "a666_line_absent": true,
+    "first_blocker": "trustline_stager_candidate_binding_stale",
+    "secondary_blocker": "fresh_wallet_pft_balance_zero"
+  },
+  "execution": {
+    "stage_command_invocations": 0,
+    "holder_trustline_submissions": 0,
+    "issuer_authorization_submissions": 0,
+    "funding_submissions": 0,
+    "receipt_count": 0,
+    "business_mutations": 0,
+    "passphrase_read": false,
+    "seed_or_key_read": false
+  },
+  "required_rework": {
+    "stager_must_bind_successor_candidate": true,
+    "stager_must_fail_when_pft_reserve_and_quoted_fees_are_insufficient": true,
+    "stage_must_not_run_until_both_are_green": true
+  },
+  "scope": {
+    "live_chain": false,
+    "stakehub_interaction": false,
+    "credentials_included": false,
+    "environment_preserved": true
+  }
+}
