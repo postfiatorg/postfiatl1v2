@@ -442,8 +442,53 @@ async function verifyProductionGraph() {
   return checks;
 }
 
+async function observeStepOneBuildIdentity({
+  page, walletOrigin, setup, pinnedPackage, productionGraph, passphrase,
+  createWallet = createBrowserControlledWallet,
+}) {
+  const response = await page.goto(walletOrigin.href, { waitUntil: 'domcontentloaded' });
+  assert.equal(response?.status(), 200, 'candidate wallet origin must return HTTP 200');
+  const expectedVersion = String(setup.wallet?.package_version ?? setup.wallet_package_version ?? '');
+  assert.match(expectedVersion, /^\d+\.\d+\.\d+$/, 'setup manifest must pin the wallet package version');
+  const expectedPackageJsonSha256 = String(
+    setup.wallet?.package_json_sha256 ?? setup.wallet_package_json_sha256 ?? '',
+  ).trim().toLowerCase();
+  assert.match(expectedPackageJsonSha256, /^[0-9a-f]{64}$/,
+    'setup manifest must pin the wallet package.json sha256');
+  assert.equal(pinnedPackage.sha256, expectedPackageJsonSha256,
+    'setup manifest wallet package.json sha256 does not match the pinned candidate package object');
+  assert.equal(expectedVersion, pinnedPackage.version,
+    'setup manifest wallet package version does not match the pinned candidate package object');
+
+  const created = await createWallet(page, passphrase);
+  const versionNode = page.locator('.pf-sidebar').getByText(`v${expectedVersion}`, { exact: true });
+  await versionNode.waitFor({ state: 'visible' });
+  const visibleVersion = String(await versionNode.textContent() || '').trim();
+  assert.equal(visibleVersion, `v${expectedVersion}`, 'production sidebar package identity must match exactly');
+  const step = observedStep(1, {
+    label: 'build identity',
+    response_status: response.status(),
+    visible_version: visibleVersion,
+    expected_version: expectedVersion,
+    package_json_sha256: pinnedPackage.sha256,
+    expected_package_json_sha256: expectedPackageJsonSha256,
+    package_identity_source: `git show ${CANDIDATE_REVISION}:wallet-web/package.json`,
+    candidate_revision: CANDIDATE_REVISION,
+    production_import_graph: productionGraph,
+  }, {
+    served: response.status() === 200,
+    wallet_created_and_unlocked: Boolean(created?.address),
+    version_visible_exact: visibleVersion === `v${expectedVersion}`,
+    package_json_sha256_match: pinnedPackage.sha256 === expectedPackageJsonSha256,
+    candidate_bound: manifestCandidateRevision(setup) === CANDIDATE_REVISION,
+    production_graph: Object.values(productionGraph).every(Boolean),
+  });
+  assert.equal(step.ok, true, 'production step-1 browser identity predicates must all pass');
+  return { step, created };
+}
+
 async function runConstructionPreflight({
-  walletOrigin, proxyOrigin, fireControl, setup, deployment, productionGraph,
+  walletOrigin, proxyOrigin, fireControl, setup, deployment, productionGraph, pinnedPackage,
   fireControlPath, setupPath, deploymentPath,
   exportSlotPath, returnSlotPath, asyncProofSlotPath, proxyRestartPath, proxyPidPath, reportPath,
   manifestHashes: sharedManifestHashes, validationTrace,
@@ -462,6 +507,23 @@ async function runConstructionPreflight({
     walletServed = response.ok;
   } catch (error) {
     walletStatus = error.code || error.message;
+  }
+  let stepOneBrowser;
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    page.setDefaultTimeout(30_000);
+    stepOneBrowser = await observeStepOneBuildIdentity({
+      page,
+      walletOrigin,
+      setup,
+      pinnedPackage,
+      productionGraph,
+      passphrase: 'a666-r4-construction-step1',
+    });
+  } finally {
+    await browser.close();
   }
   let proxyStatus = null;
   let proxyReachable = false;
@@ -526,6 +588,7 @@ async function runConstructionPreflight({
   const hashesReady = manifestHashes.every(item => item.matches);
   const loopbackReady = loopbackManifests.every(item => item.valid);
   const buildReady = walletServed
+    && stepOneBrowser.step.ok
     && manifestCandidateRevision(setup) === CANDIDATE_REVISION
     && setupHash.matches
     && importGraphReady;
@@ -633,6 +696,8 @@ async function runConstructionPreflight({
     manifest_hashes: manifestHashes,
     loopback_manifests: loopbackManifests,
     production_import_graph: productionGraph,
+    step_1_browser_identity_green: stepOneBrowser.step.ok,
+    step_1_browser_observation: stepOneBrowser.step,
     artifact_slots: {
       export: {
         path: exportSlot.path,
@@ -844,7 +909,7 @@ test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet j
   if (preflightOnly) {
     const asyncProofSlotPath = requiredPath('POSTFIAT_R4_ASYNC_PROOF_SLOT');
     await runConstructionPreflight({
-      walletOrigin: origin, proxyOrigin, fireControl, setup, deployment, productionGraph,
+      walletOrigin: origin, proxyOrigin, fireControl, setup, deployment, productionGraph, pinnedPackage,
       fireControlPath, setupPath, deploymentPath,
       exportSlotPath, returnSlotPath, asyncProofSlotPath, proxyRestartPath, proxyPidPath, reportPath,
       manifestHashes: [fireControlHash, setupHash, deploymentHash],
@@ -866,44 +931,16 @@ test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet j
       try { rpcFrames.push(JSON.parse(event.payload)); } catch { /* non-JSON frames are irrelevant */ }
     }));
     page.setDefaultTimeout(30_000);
-    const response = await page.goto(origin.href, { waitUntil: 'domcontentloaded' });
-
-    const expectedVersion = String(setup.wallet?.package_version ?? setup.wallet_package_version ?? '');
-    assert.match(expectedVersion, /^\d+\.\d+\.\d+$/, 'setup manifest must pin the wallet package version');
-    const expectedPackageJsonSha256 = String(
-      setup.wallet?.package_json_sha256 ?? setup.wallet_package_json_sha256 ?? '',
-    ).trim().toLowerCase();
-    assert.match(expectedPackageJsonSha256, /^[0-9a-f]{64}$/,
-      'setup manifest must pin the wallet package.json sha256');
-    // Build identity is the pinned candidate git object; mutable worktree
-    // package bytes are never hashed for candidate identity (66a7171/d9871ce).
-    const packageJsonSha256 = pinnedPackage.sha256;
-    assert.equal(packageJsonSha256, expectedPackageJsonSha256,
-      'setup manifest wallet package.json sha256 does not match the pinned candidate package object');
-    assert.equal(expectedVersion, pinnedPackage.version,
-      'setup manifest wallet package version does not match the pinned candidate package object');
-    const versionNode = page.locator('.pf-sidebar').getByText(`v${expectedVersion}`, { exact: true });
-    await versionNode.waitFor({ state: 'visible' });
-    const visibleVersion = String(await versionNode.textContent() || '').trim();
-    results.push(observedStep(1, {
-      label: 'build identity',
-      response_status: response?.status(),
-      visible_version: visibleVersion,
-      expected_version: expectedVersion,
-      package_json_sha256: packageJsonSha256,
-      expected_package_json_sha256: expectedPackageJsonSha256,
-      package_identity_source: `git show ${CANDIDATE_REVISION}:wallet-web/package.json`,
-      candidate_revision: CANDIDATE_REVISION,
-      production_import_graph: productionGraph,
-    }, {
-      served: response?.status() === 200,
-      version_visible: visibleVersion.length > 0 && visibleVersion.includes(expectedVersion),
-      package_json_sha256_match: packageJsonSha256 === expectedPackageJsonSha256,
-      candidate_bound: manifestCandidateRevision(setup) === CANDIDATE_REVISION,
-      production_graph: Object.values(productionGraph).every(Boolean),
-    }));
-
-    const created = await createBrowserControlledWallet(page, passphrase);
+    const stepOneBrowser = await observeStepOneBuildIdentity({
+      page,
+      walletOrigin: origin,
+      setup,
+      pinnedPackage,
+      productionGraph,
+      passphrase,
+    });
+    results.push(stepOneBrowser.step);
+    const created = stepOneBrowser.created;
     seed = created.seed;
     results.push(observedStep(2, {
       label: 'browser-controlled connect/create',
@@ -1243,26 +1280,27 @@ test('A666 R4 v3 build identity hashes the pinned candidate package object, neve
     'no runner implementation path may hash mutable WALLET_ROOT/package.json for candidate identity');
 });
 
-test('A666 R4 RED-FIRST official step 1 creates and unlocks the wallet before observing the production sidebar version (v4 0e2cce3)', {
-  todo: 'RED-first choreography vector: current official step 1 waits for .pf-sidebar before createBrowserControlledWallet. Convert to a strict assertion with the green shared-observer fix.',
-}, async () => {
+test('A666 R4 step 1 creates and unlocks the wallet before observing the production sidebar version (closes v4 0e2cce3)', async () => {
   const source = await readFile(fileURLToPath(import.meta.url), 'utf8');
-  const officialStart = source.indexOf("assert.equal(runContract.mode, 'official');");
-  const stepTwoRecord = source.indexOf("label: 'browser-controlled connect/create'", officialStart);
-  assert.ok(officialStart > -1 && stepTwoRecord > officialStart,
-    'official step-1 source region must be present');
-  const officialStepOne = source.slice(officialStart, stepTwoRecord);
-  const createComplete = officialStepOne.indexOf('await createBrowserControlledWallet(page, passphrase)');
-  const sidebarVersionWait = officialStepOne.indexOf("page.locator('.pf-sidebar')");
-  assert.ok(createComplete > -1, 'official step 1 must complete browser-controlled wallet creation/unlock');
-  assert.ok(sidebarVersionWait > -1, 'official step 1 must observe the production sidebar identity');
+  const observerStart = source.indexOf('async function observeStepOneBuildIdentity(');
+  const observerEnd = source.indexOf('\nasync function runConstructionPreflight(', observerStart);
+  assert.ok(observerStart > -1 && observerEnd > observerStart, 'shared step-1 observer must be present');
+  const observer = source.slice(observerStart, observerEnd);
+  const createComplete = observer.indexOf('const created = await createWallet(page, passphrase)');
+  const sidebarVersionWait = observer.indexOf("page.locator('.pf-sidebar')");
+  assert.ok(createComplete > -1 && sidebarVersionWait > -1,
+    'shared observer must create/unlock and observe the production sidebar identity');
   assert.ok(createComplete < sidebarVersionWait,
-    'v4 0e2cce3 regression: createBrowserControlledWallet must complete before the exact .pf-sidebar v0.1.2 visibility wait');
+    'create/unlock must complete before the exact .pf-sidebar v0.1.2 visibility wait');
+
+  const officialStart = source.indexOf("assert.equal(runContract.mode, 'official');");
+  const officialEnd = source.indexOf("label: 'browser-controlled connect/create'", officialStart);
+  const officialStepOne = source.slice(officialStart, officialEnd);
+  assert.equal(officialStepOne.split('await observeStepOneBuildIdentity(').length - 1, 1,
+    'official execution must invoke the shared step-1 observer exactly once');
 });
 
-test('A666 R4 RED-FIRST construction browser preflight executes the shared production step-1 observer', {
-  todo: 'RED-first parity vector: construction preflight does not invoke the shared browser step-1 observer. Convert to a strict assertion when both modes use it.',
-}, async () => {
+test('A666 R4 construction browser preflight executes the shared production step-1 observer', async () => {
   const source = await readFile(fileURLToPath(import.meta.url), 'utf8');
   const implementation = source.slice(0, source.indexOf("test('A666 R4 offline Ethereum rehearsal"));
   assert.ok(/async function observeStepOneBuildIdentity\s*\(/.test(implementation),
@@ -1272,8 +1310,86 @@ test('A666 R4 RED-FIRST construction browser preflight executes the shared produ
   assert.ok(preflightStart > -1 && preflightEnd > preflightStart,
     'construction preflight source region must be present');
   const preflight = source.slice(preflightStart, preflightEnd);
-  assert.ok(preflight.includes('await observeStepOneBuildIdentity('),
-    'construction browser preflight must execute the same shared step-1 observer as official execution');
+  assert.equal(preflight.split('await observeStepOneBuildIdentity(').length - 1, 1,
+    'construction browser preflight must execute the same shared step-1 observer exactly once');
+  assert.ok(preflight.includes('await browser.close()'),
+    'construction browser context must close in finally');
+});
+
+function stepOneBehaviorFixture({ versionText = 'v0.1.2', unlocks = true, versionPresent = true } = {}) {
+  const state = { unlocked: false, official_journey_invocations: 0, business_mutations: 0 };
+  const versionNode = {
+    async waitFor() {
+      assert.equal(state.unlocked, true, 'sidebar identity checked before wallet unlock');
+      assert.equal(versionPresent, true, 'production sidebar version node absent');
+    },
+    async textContent() { return versionText; },
+  };
+  const page = {
+    async goto() { return { status: () => 200 }; },
+    locator(selector) {
+      assert.equal(selector, '.pf-sidebar');
+      return {
+        getByText(text, options) {
+          assert.equal(text, 'v0.1.2');
+          assert.deepEqual(options, { exact: true });
+          return versionNode;
+        },
+      };
+    },
+  };
+  const createWallet = async () => {
+    state.unlocked = unlocks;
+    return { address: 'pf' + '1'.repeat(40), seed: '' };
+  };
+  return { page, createWallet, state };
+}
+
+function stepOneFixtureInputs(vector) {
+  return {
+    ...vector,
+    walletOrigin: new URL('http://127.0.0.1:8080'),
+    setup: {
+      candidate_revision: CANDIDATE_REVISION,
+      wallet: { package_version: '0.1.2', package_json_sha256: 'd'.repeat(64) },
+    },
+    pinnedPackage: { revision: CANDIDATE_REVISION, version: '0.1.2', sha256: 'd'.repeat(64) },
+    productionGraph: { rendered_candidate_graph: true },
+    passphrase: 'deterministic-construction-passphrase',
+  };
+}
+
+test('A666 R4 step-1 construction refuses identity observation before wallet unlock with zero mutations', async () => {
+  const vector = stepOneBehaviorFixture({ unlocks: false });
+  await assert.rejects(observeStepOneBuildIdentity(stepOneFixtureInputs(vector)),
+    /sidebar identity checked before wallet unlock/);
+  assert.equal(vector.state.official_journey_invocations, 0);
+  assert.equal(vector.state.business_mutations, 0);
+});
+
+test('A666 R4 step-1 construction refuses an absent production sidebar version node with zero mutations', async () => {
+  const vector = stepOneBehaviorFixture({ versionPresent: false });
+  await assert.rejects(observeStepOneBuildIdentity(stepOneFixtureInputs(vector)),
+    /production sidebar version node absent/);
+  assert.equal(vector.state.official_journey_invocations, 0);
+  assert.equal(vector.state.business_mutations, 0);
+});
+
+test('A666 R4 step-1 construction refuses wrong exact production sidebar version text with zero mutations', async () => {
+  const vector = stepOneBehaviorFixture({ versionText: 'v9.9.9' });
+  await assert.rejects(observeStepOneBuildIdentity(stepOneFixtureInputs(vector)),
+    /production sidebar package identity must match exactly/);
+  assert.equal(vector.state.official_journey_invocations, 0);
+  assert.equal(vector.state.business_mutations, 0);
+});
+
+test('A666 R4 step-1 construction refuses when onboarding never completes with zero mutations', async () => {
+  const vector = stepOneBehaviorFixture();
+  vector.createWallet = async () => { throw new Error('wallet onboarding did not complete'); };
+  await assert.rejects(observeStepOneBuildIdentity(stepOneFixtureInputs(vector)),
+    /wallet onboarding did not complete/);
+  assert.equal(vector.state.official_journey_invocations, 0);
+  assert.equal(vector.state.business_mutations, 0);
 });
 
 function syntheticValidationFixture() {
@@ -1406,22 +1522,24 @@ test('A666 R4 build identity negatives refuse before invocation: nonexistent rev
   assert.equal(divergedResult.official_journey_invocations, 0);
 });
 
-test('A666 R4 construction official-readiness fixture proves the exact v3 official inputs before fire (no mutation)', async () => {
-  // The exact pass-1 v3 official inputs, by content hash from the v3
-  // failure record (d9871ce): fire-control e4b32973..., setup a73b957e...,
-  // deployment 24811b46....
+test('A666 R4 construction official-readiness fixture binds current committed inputs before fire (no mutation)', async () => {
   const evRoot = join(REPO_ROOT, 'docs/evidence/a666-public-reserve-product-20260803/browser');
-  const [fireControl, setup, deployment] = await Promise.all([
-    readJson(join(evRoot, 'r4-pass1/journey-fire-control-preflight.json'), 'fire-control manifest'),
-    readJson(join(evRoot, 'r4-pass1/setup-endpoints-manifest.json'), 'setup manifest'),
-    readJson(join(evRoot, 'r4-construction/ethereum-contract-stage.json'), 'deployment manifest'),
+  const paths = {
+    fireControl: join(evRoot, 'r4-pass1/journey-fire-control-preflight.json'),
+    setup: join(evRoot, 'r4-pass1/setup-endpoints-manifest.json'),
+    deployment: join(evRoot, 'r4-construction/ethereum-contract-stage.json'),
+  };
+  const [fireControl, setup, deployment, fireControlSha256, setupSha256, deploymentSha256] = await Promise.all([
+    readJson(paths.fireControl, 'fire-control manifest'),
+    readJson(paths.setup, 'setup manifest'),
+    readJson(paths.deployment, 'deployment manifest'),
+    sha256File(paths.fireControl),
+    sha256File(paths.setup),
+    sha256File(paths.deployment),
   ]);
-  assert.equal(await sha256File(join(evRoot, 'r4-pass1/journey-fire-control-preflight.json')),
-    'e4b3297356e0ec802e72a79dc533b42cee2994191a2d8b9d0f93135a04aed04e', 'fire-control input drifted from v3');
-  assert.equal(await sha256File(join(evRoot, 'r4-pass1/setup-endpoints-manifest.json')),
-    'a73b957e9f9f22e2f5c3915a3a3f702c589c733056facb93b7192f794ec50c49', 'setup input drifted from v3');
-  assert.equal(await sha256File(join(evRoot, 'r4-construction/ethereum-contract-stage.json')),
-    '24811b46b8dffbd9fbf0edaf2b0ce9b9545f7ad656d600abc259311274c09168', 'deployment input drifted from v3');
+  for (const hash of [fireControlSha256, setupSha256, deploymentSha256]) {
+    assert.match(hash, /^[0-9a-f]{64}$/, 'current committed input must have a SHA-256 binding');
+  }
   assert.equal(fireControl.ready_to_fire, true, 'readiness fixture requires computed GREEN fire control');
 
   const readinessFixture = {
@@ -1430,9 +1548,9 @@ test('A666 R4 construction official-readiness fixture proves the exact v3 offici
     deployment,
     productionGraph: { import_graph_ok: true },
     pinnedPackage: pinnedCandidatePackage(REPO_ROOT, CANDIDATE_REVISION),
-    fireControlSha256Pin: 'e4b3297356e0ec802e72a79dc533b42cee2994191a2d8b9d0f93135a04aed04e',
-    setupSha256Pin: 'a73b957e9f9f22e2f5c3915a3a3f702c589c733056facb93b7192f794ec50c49',
-    deploymentSha256Pin: '24811b46b8dffbd9fbf0edaf2b0ce9b9545f7ad656d600abc259311274c09168',
+    fireControlSha256Pin: fireControlSha256,
+    setupSha256Pin: setupSha256,
+    deploymentSha256Pin: deploymentSha256,
     walletOrigin: 'http://127.0.0.1:8080/',
     proxyOrigin: 'http://127.0.0.1:31021/',
     exportSlotPath: join(evRoot, 'r4-construction/export-artifact-slot.json'),
@@ -1448,7 +1566,7 @@ test('A666 R4 construction official-readiness fixture proves the exact v3 offici
   assert.equal(construction.official_journey_invocations, 0);
   assert.equal(construction.business_mutations, 0);
 
-  // Non-vacuity: the exact v3 step-1 inputs carry real wallet identity pins
+  // Non-vacuity: the current step-1 inputs carry real wallet identity pins
   // and the package-pin predicates bind them against the pinned git object.
   assert.match(String(setup.wallet.package_version), /^\d+\.\d+\.\d+$/, 'readiness fixture must carry the version pin');
   assert.match(String(setup.wallet.package_json_sha256), /^[0-9a-f]{64}$/, 'readiness fixture must carry the hash pin');
