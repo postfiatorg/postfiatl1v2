@@ -1,0 +1,102 @@
+{
+  "schema": "postfiat.a666.r4.candidate-proxy-v6-data-plane.v1",
+  "verdict": "red",
+  "candidate": {
+    "revision": "e1b71a1097768610d1a45c8d125e93e5d5e185e4",
+    "worktree": "/tmp/a666-r4-successor-e1b71a1",
+    "tracked_clean": true,
+    "package_version": "0.1.2",
+    "package_json_sha256": "fe6209c5219a583e0f55f8ca0c93244e14ae569288ee46af910bbaa97e1989b3"
+  },
+  "wallet_build": {
+    "command": "npm ci --ignore-scripts && npm run build",
+    "exit_code": 0,
+    "runtime_ms": 2836,
+    "assets": [
+      {"path": "index.html", "sha256": "3ab4dc377f6d4427802a0bf9aec347a56c95e3bffacdec6106e8f79f8da5d94a"},
+      {"path": "assets/index-BdqnjDXP.js", "sha256": "f8072e76573e07b1f61357ceced592098c6cb0c3f100848b74c41b9ec8e98c9b"},
+      {"path": "assets/index-ByxtZHcl.css", "sha256": "a0662f24f608d1dbb014a3a618d8b0857bd589fd87078538354574a8381e5264"},
+      {"path": "assets/postfiat_wallet_wasm_bg-BCMxG3_Q.wasm", "sha256": "affd340817788d45a313e60ec512493c6c56c3acbf81a4d4159636279ea0c882"}
+    ],
+    "runtime_hash_manifest": "/tmp/a666-r4-v6-wallet-dist-sha256.json",
+    "runtime_hash_manifest_sha256": "99a776adec0c2c9b2e6703d7180ac32d6c6de68a79975a558a4ed68f90e9cdf0"
+  },
+  "same_origin_stage": {
+    "command": "POSTFIAT_R4_CANDIDATE_REVISION=e1b71a1... POSTFIAT_R4_CANDIDATE_WORKTREE=/tmp/a666-r4-successor-e1b71a1 POSTFIAT_R4_WALLET_DIST_EVIDENCE=/tmp/a666-r4-v6-wallet-dist-sha256.json POSTFIAT_R4_CANDIDATE_PROXY_EVIDENCE=/tmp/a666-r4-v6-proxy-provenance.json scripts/a666-r4-candidate-proxy-stage --wait-rpc-seconds 30",
+    "exit_code": 0,
+    "runtime_ms": 3600,
+    "origin": "http://127.0.0.1:31021",
+    "static_and_rpc_single_listener": true,
+    "proxy_pid": 2271419,
+    "proxy_health": true,
+    "process_identity_exact": true,
+    "wallet_proxy_tree_hash": "5919ae695d910cfbe3b41c9783ef79354784b4ee",
+    "wallet_proxy_server_sha256": "6aebb3576bde511ce99f8b69a36fe502d3ddffad23275c5761f380fd3675bf41",
+    "node_binary_sha256": "9339d1352969cbc449f4245e18c2f1b3763d5b896334335b5bfd894beff12c57",
+    "six_rpc_loopback": true,
+    "six_rpc_live": true,
+    "six_rpc_live_equal": true,
+    "committed_height_826_tuple_stale": true,
+    "runtime_provenance_path": "/tmp/a666-r4-v6-proxy-provenance.json",
+    "runtime_provenance_sha256": "c9b504f02fbd13038889da093270218d534856357a37c8f3add96c238d9136fc"
+  },
+  "data_plane_probe": {
+    "command_class": "single read-only Playwright observation against same-origin successor wallet and WebSocket RPC",
+    "exit_code": 1,
+    "runtime_ms": 4298,
+    "runtime_report_path": "/tmp/a666-r4-v6-data-plane-probe.json",
+    "runtime_report_sha256": "c462f30c7a32340523d5962ddaf84211e37ad45b71300e3d271125cf9e6b059f",
+    "official_invocations": 0,
+    "business_mutations": 0
+  },
+  "checks": {
+    "navcoin_bridge_routes": {
+      "ok": true,
+      "request_method": "navcoin_bridge_routes",
+      "request_id": "web-13",
+      "response_id": "web-13",
+      "schema": "postfiat-pftl-uniswap-routes-status-v2",
+      "route_count": 2,
+      "route_count_matches_array": true,
+      "required_route_fields_present": true,
+      "journey_route_id": "pftl-a666-r4-offline-rehearsal-v1",
+      "journey_route_live": true
+    },
+    "reserve_packets": {
+      "ok": false,
+      "request_method": null,
+      "request_id": null,
+      "response_id": null,
+      "source_identity_count": 0,
+      "unique_source_identity_count": 0,
+      "proof_identity_count": 0,
+      "unique_proof_identity_count": 0,
+      "required": "exactly six unique sources and at least two unique packet/proof identities"
+    },
+    "browser_nav": {
+      "ok": false,
+      "verified_nav_visible": false,
+      "finalized_pftl_reserve_proof_match_visible": false,
+      "market_text_sha256": "6d41a213f7ee554186023e8a3837aeea837297686f962c69e3f0118302d30d4c"
+    },
+    "browser_balances": {
+      "ok": false,
+      "a666_present": false,
+      "pfusdc_present": false,
+      "your_balances_finalized_visible": false,
+      "balance_row_count": 0,
+      "balance_rows_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    }
+  },
+  "first_blocker": "nav_reserve_proof_status_request_not_observed",
+  "retry_performed": false,
+  "construction_steps_1_4": {
+    "executed": false,
+    "reason": "stopped on the first distinct RED data-plane check before a second browser execution"
+  },
+  "official_invocations": 0,
+  "business_mutations": 0,
+  "live_chain": false,
+  "stakehub_interaction": false,
+  "credentials_included": false
+}
