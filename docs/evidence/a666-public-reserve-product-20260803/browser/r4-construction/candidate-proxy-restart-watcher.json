@@ -2,15 +2,15 @@
   "schema": "postfiat.a666.r4.candidate-proxy-restart-watcher.v1",
   "ready": true,
   "unit": {
-    "name": "a666-r4-candidate-proxy-restart-watch-v4.service",
-    "pid": 1855374,
+    "name": "a666-r4-candidate-proxy-restart-watch-v5.service",
+    "pid": 2015980,
     "active": true,
     "running": true
   },
   "request_contract": {
-    "run_id": "a666-r4-official-journey-pass1-20260804-v4",
-    "nonce": "b56c7be8eb2c20c3",
-    "path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260804-v4-b56c7be8eb2c20c3.request",
+    "run_id": "a666-r4-official-journey-pass1-20260805-v5",
+    "nonce": "da9e081e97e72a07",
+    "path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260805-v5-da9e081e97e72a07.request",
     "payload_bytes_description": "restart followed by newline",
     "payload_matches_runner": true,
     "required_mode": "600",
@@ -19,9 +19,9 @@
     "single_use": true
   },
   "control": {
-    "path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260804-v4-b56c7be8eb2c20c3.control.json",
+    "path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260805-v5-da9e081e97e72a07.control.json",
     "mode": "600",
-    "response_path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260804-v4-b56c7be8eb2c20c3.response.json",
+    "response_path": "/home/postfiat/.pft/a666-r4-candidate-proxy/restart-a666-r4-official-journey-pass1-20260805-v5-da9e081e97e72a07.response.json",
     "response_currently_absent": true,
     "pid_file": "/home/postfiat/.pft/a666-r4-candidate-proxy/proxy.pid",
     "pid_file_mode": "600",
@@ -49,12 +49,13 @@
     "source_and_candidate_hashes_revalidated": true
   },
   "self_test": {
-    "vector_count": 10,
+    "vector_count": 11,
     "valid_fake_restart": true,
-    "exact_v4_contract_accepted_dry_run": true,
+    "exact_v5_contract_accepted_dry_run": true,
     "v1_request_rejected_without_mutation": true,
     "v2_request_rejected_without_mutation": true,
     "v3_request_rejected_without_mutation": true,
+    "v4_request_rejected_without_mutation": true,
     "missing_run_id_rejected": true,
     "unknown_run_id_rejected": true,
     "wrong_candidate_rejected": true,
@@ -73,6 +74,7 @@
     "watcher_unit_live": true,
     "control_mode_600": true,
     "request_identity_unique": true,
+    "request_initially_absent": true,
     "request_payload_runner_exact": true,
     "candidate_and_source_pinned": true,
     "self_tests_all_green": true,
@@ -92,6 +94,12 @@
     },
     {
       "run_id": "a666-r4-official-journey-pass1-20260804-v3",
+      "invocation_count": 1,
+      "verdict": "failed",
+      "failure_step": 1
+    },
+    {
+      "run_id": "a666-r4-official-journey-pass1-20260804-v4",
       "invocation_count": 1,
       "verdict": "failed",
       "failure_step": 1
