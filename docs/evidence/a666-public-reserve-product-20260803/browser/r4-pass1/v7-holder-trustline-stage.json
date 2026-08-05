@@ -1,60 +1,68 @@
 {
-  "schema": "postfiat.a666.r4.v7-holder-trustline-stage.v1",
-  "recorded_at_utc": "2026-08-05T05:20:00Z",
+  "schema": "postfiat.a666.r4.v7-holder-trustline-stage.v2",
+  "recorded_at_utc": "2026-08-05T05:37:00Z",
   "verdict": "red",
-  "stop_no_retry_applied": true,
-  "bindings": {
-    "trustline_stager_commit": "9e2bb26de4135f58093f1fe50494b7c87a5a64b2",
-    "successor_proxy_restage_commit": "75b3db3e2a2433f836b6ec340b0016efcef95d57",
-    "add_asset_product_test_commit": "11c142ff591a122a59a751d492ddef84e4d72091",
-    "required_candidate_revision": "1bc25ac7384de8837a14b8150863ea1bc0e883eb"
+  "stop_no_retry": true,
+  "history": {
+    "prior_red_commit": "b58155a",
+    "prior_blockers": [
+      "trustline_stager_candidate_binding_stale",
+      "fresh_wallet_pft_balance_zero"
+    ],
+    "candidate_binding_closed_by": "9efae5a",
+    "pft_bootstrap_closed_by": "4d16a998ab1fb65a24a40a2169e072cbe6bc6ca6"
   },
-  "check": {
+  "authorization": {
+    "authorized_stage_command": "scripts/a666-r4-fresh-wallet-trustline-stage stage",
+    "stage_invocations": 0,
+    "reason_not_invoked": "required production UI preflight failed before any holder operation"
+  },
+  "read_only_check": {
     "command": "scripts/a666-r4-fresh-wallet-trustline-stage check",
     "exit_code": 0,
-    "elapsed_seconds": 0.34,
-    "reported_business_mutations": 0,
-    "address_sha256": "2f58eb97683596c676c06da165c3e8011ff9860827acb9b30355a2a83638f4a6",
-    "raw_address_included": false,
-    "loopback_endpoint_count": 6,
-    "six_way_tuple_equal": true,
-    "height": 833,
-    "both_trustlines_absent": true,
-    "supply_baseline_captured": true
-  },
-  "preconditions": {
-    "required_candidate_proxy_revision": "1bc25ac7384de8837a14b8150863ea1bc0e883eb",
-    "observed_live_proxy_revision": "1bc25ac7384de8837a14b8150863ea1bc0e883eb",
-    "stager_setup_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
-    "stager_reported_revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
-    "candidate_binding_exact": false,
+    "runtime_ms": 392,
+    "candidate_revision": "1bc25ac7384de8837a14b8150863ea1bc0e883eb",
+    "four_way_candidate_binding_green": true,
+    "fleet_six_way_equal": true,
+    "block_height": 834,
+    "fresh_pft_atoms": 74,
     "fresh_sequence": 0,
-    "fresh_pft_balance_atoms": 0,
-    "sufficient_pft_for_two_fees_and_two_reserves": false,
-    "pfusdc_line_absent": true,
-    "a666_line_absent": true,
-    "first_blocker": "trustline_stager_candidate_binding_stale",
-    "secondary_blocker": "fresh_wallet_pft_balance_zero"
+    "pfusdc_trustline_absent": true,
+    "a666_trustline_absent": true
   },
-  "execution": {
-    "stage_command_invocations": 0,
-    "holder_trustline_submissions": 0,
-    "issuer_authorization_submissions": 0,
-    "funding_submissions": 0,
-    "receipt_count": 0,
-    "business_mutations": 0,
-    "passphrase_read": false,
-    "seed_or_key_read": false
+  "production_ui_preflight": {
+    "origin": "http://127.0.0.1:31021",
+    "persistent_profile": "/home/postfiat/.pft/a666-r4-fresh-wallet-v7/browser-profile",
+    "passphrase_read_at_fill_time": true,
+    "passphrase_value_recorded": false,
+    "wallet_created": false,
+    "browser_timeout_ms": 15000,
+    "exit_code": 1,
+    "first_failure": "production_ui_wallet_shell_not_visible_after_unlock",
+    "error_class": "Playwright TimeoutError",
+    "failing_locator": ".pf-shell",
+    "selector_inventory_observed": false,
+    "holder_operations_submitted": 0
   },
-  "required_rework": {
-    "stager_must_bind_successor_candidate": true,
-    "stager_must_fail_when_pft_reserve_and_quoted_fees_are_insufficient": true,
-    "stage_must_not_run_until_both_are_green": true
+  "receipts": [],
+  "post_state": {
+    "unchanged_from_preflight": true,
+    "fresh_pft_atoms": 74,
+    "fresh_sequence": 0,
+    "pfusdc_trustline_absent": true,
+    "a666_trustline_absent": true
+  },
+  "next_action": {
+    "classification": "harness_or_persistent_profile_unlock_preflight_wall",
+    "instruction": "Diagnose the production unlock state without replaying any holder operation. The authorized stage command was never invoked."
   },
   "scope": {
+    "business_mutations": 0,
+    "trust_set_operations": 0,
+    "issuer_operations": 0,
+    "cli_or_server_wallet_signing": 0,
     "live_chain": false,
     "stakehub_interaction": false,
-    "credentials_included": false,
-    "environment_preserved": true
+    "credential_values_included": false
   }
 }
