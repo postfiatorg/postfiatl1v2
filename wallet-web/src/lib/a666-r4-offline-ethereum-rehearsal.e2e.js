@@ -1566,6 +1566,22 @@ test('A666 R4 construction official-readiness fixture binds current committed in
   assert.equal(construction.official_journey_invocations, 0);
   assert.equal(construction.business_mutations, 0);
 
+  // Semantic binding: the dynamic hashes must bind reality, not arbitrary
+  // bytes. Candidate revision, loopback shape, and readiness semantics are
+  // validated independently of the computed pins.
+  assert.equal(manifestCandidateRevision(fireControl), CANDIDATE_REVISION);
+  assert.equal(manifestCandidateRevision(setup), CANDIDATE_REVISION);
+  assert.equal(manifestCandidateRevision(deployment), CANDIDATE_REVISION);
+  assert.equal(loopbackManifestObservation('setup manifest', setup).valid, true);
+  assert.equal(loopbackManifestObservation('deployment manifest', deployment).valid, true);
+  for (const id of ['candidate_revision_fire_control', 'candidate_revision_setup',
+    'candidate_revision_deployment', 'setup_manifest_loopback', 'deployment_manifest_loopback',
+    'fire_control_ready_to_fire', 'fire_control_hash_pinned', 'setup_hash_pinned',
+    'deployment_hash_pinned', 'report_path_available', 'production_import_graph']) {
+    assert.equal(official.trace.find(item => item.id === id)?.ok, true,
+      `${id} must bind green on the current committed inputs`);
+  }
+
   // Non-vacuity: the current step-1 inputs carry real wallet identity pins
   // and the package-pin predicates bind them against the pinned git object.
   assert.match(String(setup.wallet.package_version), /^\d+\.\d+\.\d+$/, 'readiness fixture must carry the version pin');
@@ -1573,7 +1589,7 @@ test('A666 R4 construction official-readiness fixture binds current committed in
   for (const id of ['wallet_package_version_consistent_with_pinned_object',
     'wallet_package_json_sha256_consistent_with_pinned_object']) {
     const entry = official.trace.find(item => item.id === id);
-    assert.equal(entry.ok, true, `${id} must be green on the exact v3 inputs`);
+    assert.equal(entry.ok, true, `${id} must be green on the current committed inputs`);
     const flipped = structuredClone(readinessFixture);
     flipped.setup = structuredClone(setup);
     if (id.startsWith('wallet_package_version')) flipped.setup.wallet.package_version = '9.9.9';
@@ -1583,6 +1599,19 @@ test('A666 R4 construction official-readiness fixture binds current committed in
     assert.ok(flippedResult.failed.includes(id), `${id} must be the refusing predicate`);
     assert.equal(flippedResult.official_journey_invocations, 0);
   }
+});
+
+test('A666 R4 readiness fixture carries no inline historical artifact hash literals (structural negative)', async () => {
+  const source = await readFile(fileURLToPath(import.meta.url), 'utf8');
+  const start = source.indexOf("test('A666 R4 construction official-readiness fixture");
+  assert.ok(start > -1, 'readiness test must exist');
+  const end = source.indexOf("\ntest('", start + 1);
+  assert.ok(end > start, 'readiness test span must terminate');
+  const span = source.slice(start, end);
+  assert.deepEqual(span.match(/'[0-9a-f]{64}'/g) ?? [], [],
+    'readiness fixture must bind fire-control/setup/deployment dynamically via sha256File(); inline historical hash literals are forbidden');
+  assert.ok(span.split('sha256File(paths.').length - 1 >= 3,
+    'all three official input artifacts must be hashed from their committed paths at test time');
 });
 
 test('A666 R4 120-entry official input contract rejects every incomplete enforcement shape', async () => {

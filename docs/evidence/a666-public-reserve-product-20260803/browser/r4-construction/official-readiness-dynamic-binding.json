@@ -1,0 +1,71 @@
+{
+  "schema": "postfiat.a666.r4.official-readiness-dynamic-binding.v1",
+  "generated_utc": "2026-08-05",
+  "links": {
+    "v4_failure": "0e2cce3",
+    "sidebar_choreography_red": "e10b6ad",
+    "shared_observer_green": "49e4ce8"
+  },
+  "change": "official-readiness fixture binds fire-control/setup/deployment dynamically via sha256File() of the exact committed artifact paths at test time; inline historical hash literals removed and structurally forbidden (source-scan negative); semantic validation independent of the pins (candidate revision x3, loopback manifests, readiness shape, 11 named registry predicates asserted green); stale 'v3 inputs' wording corrected",
+  "dynamic_artifacts": [
+    {
+      "role": "fire_control",
+      "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/journey-fire-control-preflight.json",
+      "sha256_at_test_time": "3818e527b44e53f33494efe6c0fe28b65b390f53eda5c55593ba1069dda17ba2",
+      "ready_to_fire": true
+    },
+    {
+      "role": "setup",
+      "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/setup-endpoints-manifest.json",
+      "sha256_at_test_time": "a73b957e9f9f22e2f5c3915a3a3f702c589c733056facb93b7192f794ec50c49",
+      "wallet_pins": {
+        "package_version": "0.1.2",
+        "package_json_sha256": "6bd5869e589b9bec47e6e8cc6efe243e09f09ad78cc81d06e8751cd4a6d0f0fb"
+      }
+    },
+    {
+      "role": "deployment",
+      "path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/ethereum-contract-stage.json",
+      "sha256_at_test_time": "24811b46b8dffbd9fbf0edaf2b0ce9b9545f7ad656d600abc259311274c09168"
+    }
+  ],
+  "stale_literal_incident": "v3 fire-control literal e4b3297356e0ec802e72a79dc533b42cee2994191a2d8b9d0f93135a04aed04e drifted after requalification (current 3818e527...); dynamic binding makes the readiness gate track reality while the structural negative forbids reintroduction",
+  "browser_step1_predicates": {
+    "count": 6,
+    "ids": [
+      "served",
+      "wallet_created_and_unlocked",
+      "version_visible_exact",
+      "package_json_sha256_match",
+      "candidate_bound",
+      "production_graph"
+    ],
+    "construction_preflight_executes_all": true,
+    "observer": "observeStepOneBuildIdentity (49e4ce8), shared by construction preflight and official step 1"
+  },
+  "suite_wrapper_note": "full construction suite wrapper now pins POSTFIAT_R4_SETUP_MANIFEST to the requalified official r4-pass1/setup-endpoints-manifest.json; the legacy unpinned r4-construction setup fixture cannot satisfy the mandatory browser preflight (step-1 observer hard-requires wallet identity pins) and remains only in legacy tests",
+  "commands": [
+    {
+      "cmd": "node --check wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+      "exit": 0
+    },
+    {
+      "cmd": "node --test --test-name-pattern \"official-readiness|inline historical|mode parity|structural guard|negatives|v3 build identity\"",
+      "exit": 0,
+      "summary": "tests 19, matched 6, pass 6, fail 0, todo 0"
+    },
+    {
+      "cmd": "scripts/a666-r4-official-input-contract-extract check",
+      "exit": 0,
+      "stdout": "{\"ok\": true, \"accessor_count\": 120, \"mismatch_count\": 0}"
+    },
+    {
+      "cmd": "npm run test:r4-construction (preflight env block, pinned official setup manifest)",
+      "exit": 0,
+      "summary": "tests 19, pass 19, fail 0, todo 0; step_1_browser_identity_green=true, all 6 step-1 checks green against the exact served build"
+    }
+  ],
+  "credentials_included": false,
+  "official_journey_invocations": 0,
+  "business_mutations": 0
+}
