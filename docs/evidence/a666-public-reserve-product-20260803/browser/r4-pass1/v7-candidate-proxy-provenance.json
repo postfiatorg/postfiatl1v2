@@ -21,7 +21,7 @@
   "tree_hash_at_candidate": "6149e38e0d959bf14145843c1ed010b10690597a",
   "server_js_sha256": "0458f721c06783f8f4095259b932e554426e3b35af77bce9a25405ebde434a26",
   "package_lock_sha256": "6ed3d70403dabf69a3b4dde632c6a2926bcb554e4b774d8c1336689fc1e48c3a",
-  "dependencies_action": "npm_ci",
+  "dependencies_action": "reused",
   "dependencies_present": true
  },
  "wallet_dist": {
@@ -32,6 +32,15 @@
   "mode": "600",
   "outside_git": true,
   "value_recorded": false
+ },
+ "local_session": {
+  "principal_ready_file": "/home/postfiat/.pft/a666-r4-fresh-wallet-v7/fresh-wallet-ready.json",
+  "principal_ready_file_mode": "600",
+  "principal_address_sha256": "2f58eb97683596c676c06da165c3e8011ff9860827acb9b30355a2a83638f4a6",
+  "principal_value_recorded": false,
+  "readiness_endpoint": "/api/bridge/local-session",
+  "ready": true,
+  "token_value_recorded": false
  },
  "fresh_fleet": {
   "preserved_root": "/tmp/postfiat-atomic-swap-local-six-1848893-1785831355561267349",
@@ -55,7 +64,7 @@
  "stakehub_interaction": false,
  "proxy_hold": {
   "launched": true,
-  "pid": 3318900,
+  "pid": 2029130,
   "listen": "127.0.0.1:31021",
   "healthz_reachable": true,
   "process_identity_exact": true,

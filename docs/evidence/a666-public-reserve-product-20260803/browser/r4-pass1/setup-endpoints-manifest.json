@@ -75,7 +75,7 @@
   },
   "candidate_provenance": {
     "evidence_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/v7-candidate-proxy-provenance.json",
-    "evidence_sha256": "d78464ee258703927c505255953a71507af805b2e98e676279fc2b81046391bb",
+    "evidence_sha256": "699fde89324fd62a5cd8f98a7093ea41a4dd05620f3afe6e048bace7546964a7",
     "candidate_revision": "1bc25ac7384de8837a14b8150863ea1bc0e883eb",
     "wallet_dist_evidence_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/v7-wallet-dist-sha256.json",
     "wallet_dist_evidence_sha256": "eabf71305229f76d6fa03c7edf0a8dd307f61e4ac2e01b6a6f933b0a0094a98d",

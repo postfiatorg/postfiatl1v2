@@ -46,6 +46,27 @@ mkdir -p "$(dirname "$EVIDENCE_FILE")"
 umask 077
 mkdir -p "$RUN_DIR"
 
+# 0. Local-session principal (stage mode): sourced at use-time from the
+# mode-600 fresh-wallet ready file. The public address value is never
+# printed, placed in argv, logged, or recorded in public evidence.
+LOCAL_SESSION_PRINCIPAL_FILE="${POSTFIAT_R4_FRESH_WALLET_READY_FILE:-/home/postfiat/.pft/a666-r4-fresh-wallet-v7/fresh-wallet-ready.json}"
+WALLET_PROXY_LOCAL_SESSION_PRINCIPAL=""
+if [[ "$MODE" == "stage" ]]; then
+  if [[ ! -f "$LOCAL_SESSION_PRINCIPAL_FILE" || "$(stat -c '%a' "$LOCAL_SESSION_PRINCIPAL_FILE")" != "600" ]]; then
+    echo "candidate_proxy_stage_refuse: local_session_principal_ready_file_missing_or_mode_unsafe" >&2
+    exit 2
+  fi
+  WALLET_PROXY_LOCAL_SESSION_PRINCIPAL="$(python3 - "$LOCAL_SESSION_PRINCIPAL_FILE" <<'PY'
+import json, re, sys
+ready = json.load(open(sys.argv[1]))
+address = ready.get("address", "")
+if not re.fullmatch(r"pf[0-9a-f]{40}", address):
+    raise SystemExit(1)
+print(address)
+PY
+)" || { echo "candidate_proxy_stage_refuse: local_session_principal_malformed_or_empty" >&2; exit 2; }
+fi
+
 teardown() {
   local torn_down=false
   if [[ -f "$PROXY_READY_FILE" ]]; then
@@ -151,6 +172,23 @@ token_file_mode="$(stat -c '%a' "$TOKEN_FILE")"
 token_file_scoped=false
 [[ "$token_file_mode" == "600" && "$TOKEN_FILE" != "$repo_root"* ]] && token_file_scoped=true
 $token_file_scoped || fail "proxy_token_file_not_scoped_600"
+
+# 4b. The local-session principal must exist in the proxy token map or the
+# candidate proxy refuses to boot (server.js validateLocalSessionConfig).
+# The token value is generated at runtime into the same mode-600 file and
+# is never printed or recorded.
+if ! python3 - "$TOKEN_FILE" "$LOCAL_SESSION_PRINCIPAL_FILE" >/dev/null <<'PY'
+import json, secrets, sys
+token_path, ready_path = sys.argv[1], sys.argv[2]
+principal = json.load(open(ready_path)).get("address", "")
+tokens = json.load(open(token_path))
+if principal not in tokens:
+    tokens[principal] = secrets.token_hex(32)
+    with open(token_path, "w", encoding="utf-8") as handle:
+        json.dump(tokens, handle)
+        handle.write("\n")
+PY
+then fail "local_session_principal_token_entry_failed"; fi
 
 # 5. Accepted fresh-root fleet and six loopback RPC endpoints: committed
 # equality plus live read-only status probes requiring identical tuples.
@@ -280,6 +318,7 @@ if $preconditions_green; then
       RPC_FLEET="$rpc_fleet" \
       WALLET_STATIC_DIR="$CANDIDATE_WORKTREE/wallet-web/dist" \
       WALLET_PROXY_API_TOKENS_FILE="$TOKEN_FILE" \
+      WALLET_PROXY_LOCAL_SESSION_PRINCIPAL="$WALLET_PROXY_LOCAL_SESSION_PRINCIPAL" \
       node wallet-proxy/server.js >"$PROXY_LOG" 2>&1 &
     echo $! > "$RUN_DIR/proxy.pid"
   )
@@ -313,6 +352,28 @@ PY
   fi
 fi
 
+local_session_ready=false
+if $proxy_launched; then
+  local_session_scratch="$RUN_DIR/.local-session-readiness.scratch"
+  if (umask 077; curl -fsS -H 'sec-fetch-site: same-origin' \
+    "http://$PROXY_LISTEN_HOST:$PROXY_LISTEN_PORT/api/bridge/local-session" > "$local_session_scratch" 2>/dev/null); then
+    if python3 - "$local_session_scratch" <<'PY'
+import hashlib, json, sys
+payload = json.load(open(sys.argv[1]))
+token = payload.get("token", "")
+ok = payload.get("ok") is True and len(token) >= 32
+record = {"ok": payload.get("ok") is True, "token_length": len(token), "token_sha256": hashlib.sha256(token.encode()).hexdigest() if token else None}
+with open(sys.argv[1], "w", encoding="utf-8") as handle:
+    json.dump(record, handle)
+    handle.write("\n")
+raise SystemExit(0 if ok else 1)
+PY
+    then local_session_ready=true; fi
+  fi
+  rm -f "$local_session_scratch"
+fi
+$local_session_ready || fail "local_session_readiness_failed"
+
 proxy_process_identity=false
 if [[ -n "$proxy_pid" ]] && kill -0 "$proxy_pid" 2>/dev/null; then
   if python3 - "$proxy_pid" "$CANDIDATE_WORKTREE" <<'PY'
@@ -330,7 +391,7 @@ fi
 $proxy_process_identity || fail "proxy_process_identity_mismatch"
 
 ready=false
-if $preconditions_green && $proxy_launched && $proxy_healthz && $proxy_process_identity; then
+if $preconditions_green && $proxy_launched && $proxy_healthz && $proxy_process_identity && $local_session_ready; then
   ready=true
 fi
 
@@ -369,6 +430,15 @@ artifact = {
         "mode": "$token_file_mode",
         "outside_git": True,
         "value_recorded": False,
+    },
+    "local_session": {
+        "principal_ready_file": "$LOCAL_SESSION_PRINCIPAL_FILE",
+        "principal_ready_file_mode": "600",
+        "principal_address_sha256": __import__("hashlib").sha256((lambda p: json.load(open(p)).get("address", "").encode())("$LOCAL_SESSION_PRINCIPAL_FILE")).hexdigest() if "$MODE" == "stage" else None,
+        "principal_value_recorded": False,
+        "readiness_endpoint": "/api/bridge/local-session",
+        "ready": B("$local_session_ready"),
+        "token_value_recorded": False,
     },
     "fresh_fleet": {
         "preserved_root": "$ACCEPTED_PRESERVED_ROOT",
