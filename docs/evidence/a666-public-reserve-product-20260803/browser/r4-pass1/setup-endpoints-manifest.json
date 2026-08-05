@@ -88,6 +88,15 @@
     "deployment_green": true,
     "mocks": 0
   },
+  "journey_export_recipient": {
+    "role": "journey_export_recipient",
+    "address": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
+    "address_sha256": "2f9257defd381b3b2b2743869acadf53db7acf7f19cba39a777c1f75506ad9db",
+    "account_index": 2,
+    "anvil_endpoint_url": "http://127.0.0.1:8547",
+    "anvil_chain_id": 1,
+    "evidence_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/v7-ethereum-recipient-stage.json"
+  },
   "stakehub": {
     "observation_method": "read-only systemd user-unit state",
     "active_unit_count": 1,
