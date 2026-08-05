@@ -1,0 +1,172 @@
+{
+  "schema": "postfiat.a666.live-demo.canonical-runner-mapping.v1",
+  "recorded_date_utc": "2026-08-05",
+  "classification": "RED",
+  "ready_to_fire": false,
+  "fire_authorized": false,
+  "business_mutations": 0,
+  "live_reads": 0,
+  "first_blocker": "legacy_single_command_live_runner_retired_and_current_workflow_is_not_a_five_leg_live_equivalent",
+  "repository": {
+    "path": "/home/postfiat/repos/StakeHub-repeat-demo",
+    "profile": "data/wallet-demo-devnet2.json",
+    "profile_sha256": "8c7a2d6bb8baa924005d4724abce1caeaf3e2b56c0bc5d3d530df26a64b02e57"
+  },
+  "authority": {
+    "executor_state": "/home/postfiat/repos/orc_directives/cli_demo_campaign_20260706/EXECUTOR-STATE.md",
+    "sauron_queue": "/home/postfiat/repos/orc_directives/cli_demo_campaign_20260706/SAURON-QUEUE.md",
+    "spend_ledger": "/home/postfiat/repos/orc_directives/cli_demo_campaign_20260706/spend-ledger.json",
+    "leg1_packet_commit": "4210e1c3bfa3cc09c44c563376ea9b47a4d570c7",
+    "leg1_packet": "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg1-mainnet-cctp-pftl-held.json"
+  },
+  "runner_history": {
+    "legacy_parser_commit_parent": "6c41a4a53e02c69c5d69a74b0c48e7dde9c0c83b^",
+    "retirement_commit": "6c41a4a53e02c69c5d69a74b0c48e7dde9c0c83b",
+    "retirement_message": "Retire legacy wallet demo campaign runner",
+    "legacy_parser_lines": "stakehub/cli.py historical lines 245-255 and 710-723",
+    "legacy_command_shape": "cd /home/postfiat/repos/StakeHub-repeat-demo && /usr/bin/python3 -m stakehub.cli --home /home/postfiat/.stakehub wallet demo run --profile /home/postfiat/repos/StakeHub-repeat-demo/data/wallet-demo-devnet2.json --out-dir <UNIQUE_MODE_700_RUN_DIR> --live --strict-fleet-verify --loops 1",
+    "current_cli_accepts_legacy_command": false,
+    "current_cli_commands": [
+      "preflight",
+      "up",
+      "down",
+      "verify",
+      "authorize",
+      "units",
+      "workflow",
+      "transparent-navswap"
+    ],
+    "current_cli_lines": "stakehub/cli.py:321-372,883-939"
+  },
+  "current_equivalent_review": {
+    "command_shape": "cd /home/postfiat/repos/StakeHub-repeat-demo && /usr/bin/python3 -m stakehub.cli --home /home/postfiat/.stakehub wallet demo workflow --profile /home/postfiat/repos/StakeHub-repeat-demo/data/wallet-demo-devnet2.json --run-dir <UNIQUE_MODE_700_RUN_DIR> --action execute --rfq-bundle <ACCEPTED_RFQ_BUNDLE>",
+    "implementation": "stakehub/wallet_demo.py:275-535",
+    "money_steps": [
+      "public_funding",
+      "shield_ingress",
+      "private_swap",
+      "private_egress",
+      "public_settlement"
+    ],
+    "command_builder": "stakehub/product_workflow_commands.py:8-42",
+    "live_authority": false,
+    "full_five_leg_live_equivalent": false,
+    "omissions": [
+      "Ethereum-mainnet USDC to Arbitrum CCTP and certified pfUSDC bridge-in",
+      "governed public pfUSDC to a651 primary issue as the requested Leg2",
+      "PFTL a651 export packet and Ethereum-mainnet a651 mint or consume",
+      "Ethereum-mainnet a651 return burn and certified PFTL a651 import",
+      "NAV redemption followed by pfUSDC to external USDC withdrawal"
+    ]
+  },
+  "legacy_stage_to_leg_mapping": [
+    {
+      "runner_stage": "L1_WRAP_LIVE",
+      "code": "stakehub/wallet_demo.py:1803-1870",
+      "sauron_leg": "Leg1 mainnet USDC to Arbitrum and PFTL pfUSDC",
+      "behavior": "Uses recovered/funded pfUSDC when valid; otherwise the live segment performs bridge-in. skip_bridge_in_if_funded=true.",
+      "complete_match": true,
+      "double_bridge_risk": "Leg1 packet must never be fired again if its CCTP burn or PFTL deposit already succeeded. A subsequent runner may proceed only if it proves the recovered relay/funded-path status and records L1 spend zero."
+    },
+    {
+      "runner_stage": "L2_TRANSPARENT_LIVE",
+      "code": "stakehub/wallet_demo.py:1872-1885",
+      "sauron_leg": "Leg2 governed pfUSDC to NAV asset",
+      "behavior": "Runs the dashboard transparent NAVSwap and operator completion.",
+      "complete_match": true
+    },
+    {
+      "runner_stage": "L3_PRIVATE_LIVE",
+      "code": "stakehub/wallet_demo.py:1887-1927",
+      "sauron_leg": "Private issue/redeem preparation",
+      "behavior": "Shield, private swap, and PFTL private egress through steps 6-9.",
+      "complete_match": true
+    },
+    {
+      "runner_stage": "L4_UNISWAP_LIVE",
+      "code": "stakehub/wallet_demo.py:1929-1943,2360-2422",
+      "sauron_leg": "Leg3 a651 export and Ethereum Uniswap asset action",
+      "behavior": "Sells pre-existing Ethereum-mainnet a651 inventory through Universal Router after fork proof.",
+      "complete_match": false,
+      "omission": "No PFTL export packet, proof, or Ethereum mint binds the PFTL a651 produced by L2/L3 to the mainnet inventory sold."
+    },
+    {
+      "runner_stage": "none",
+      "code": null,
+      "sauron_leg": "Leg4 Ethereum return burn to certified PFTL a651 import",
+      "behavior": null,
+      "complete_match": false,
+      "omission": "No Ethereum a651 return burn, BFT certificate, or certified PFTL a651 import."
+    },
+    {
+      "runner_stage": "L5_REDEEM_LIVE",
+      "code": "stakehub/wallet_demo.py:1945-1972",
+      "sauron_leg": "Leg5 NAV redeem, pfUSDC bridge-out, and USDC withdrawal",
+      "behavior": "Runs live E2E steps 10-11 and requires status bridged_out.",
+      "complete_match": true
+    }
+  ],
+  "size_contract": {
+    "requested_usdc": "10.000000",
+    "profile_live_private_amount": "30",
+    "profile_l4_target_usdc_atoms": 30000000,
+    "profile_l4_max_notional_usdc": "30",
+    "runner_amount_argument": false,
+    "source": "stakehub/wallet_demo.py:1800-1802,1929-1931; data/wallet-demo-devnet2.json w6.live_private_amount and l4_live",
+    "verdict": "STOP_CAP_RULING_REQUIRED",
+    "reason": "The legacy runner reads amount 30 from the profile and has no amount CLI option. Current campaign spend 501.024845 plus a 30.000000 L4 booking equals 531.024845, exceeding the 530 cap by 1.024845. The requested 10.000000 cannot be substituted without a separately reviewed profile and route contract change."
+  },
+  "leg1_reconciliation": {
+    "leg1_substep_a_subsumed_by_legacy_runner": true,
+    "leg1_substep_b_subsumed_by_legacy_runner": true,
+    "condition": "The legacy L1 stage either performs them or proves a recovered/funded path and books zero. Never fire the standalone packet and then allow the runner to repeat an accepted upstream burn/deposit.",
+    "current_status": "No action: both Leg1 packet and runner fire remain unauthorized."
+  },
+  "legacy_guards": {
+    "campaign_spend_cap_usdc": "530",
+    "current_spend_usdc": "501.024845",
+    "profile_l4_booking_usdc": "30",
+    "projected_spend_usdc": "531.024845",
+    "cap_excess_usdc": "1.024845",
+    "loops": 1,
+    "required_fleet": "6 of 6 same height, tip, root; mempool zero",
+    "receipt_filter_env": "STAKEHUB_VAULT_BRIDGE_LIVE_MIN_COUNTED_HEIGHT",
+    "receipt_freshness": "Counted source must satisfy the profile block-age gate at L2 admission; historical planning used about 90 blocks.",
+    "warm_service": "Profile-bound supervised prover must be ready and its process identity/hash verified.",
+    "prior_receipt_paths": [
+      "ceremony_recovery_relay_20260707T020300Z",
+      "stage4-run1-live-20260707T081000Z",
+      "stage4-run1-live-v2-20260707T083509Z",
+      "ruling81-amount9-autoheal-fire-20260708T231900Z"
+    ],
+    "environment_rule": "Resolve environment names from the pinned profile and current code; never copy credential values into a packet."
+  },
+  "fire_plan": {
+    "status": "REFUSED",
+    "reasons": [
+      "Current CLI no longer exposes wallet demo run --live.",
+      "Current workflow execute is not a live five-leg equivalent and declares live_authority=false.",
+      "Legacy L4 omits PFTL-to-Ethereum export conservation.",
+      "Legacy flow has no Ethereum-to-PFTL a651 return import.",
+      "Profile hard-requires a 30-USDC L4 booking that exceeds the present cap."
+    ],
+    "required_before_any_future_fire": [
+      "A reviewed current CLI entrypoint exposing the intended full production flow",
+      "Production export and return stages bound to literal a651 and chain id 1",
+      "A cap ruling or reviewed amount/profile change",
+      "Fresh preflight of current profile identity, five services, warm prover, fleet, receipt freshness, balances, and exact ledger projection",
+      "A new explicit single-fire authorization"
+    ],
+    "stop_no_retry": true
+  },
+  "validation": {
+    "zero_live_reads": true,
+    "zero_mutations": true,
+    "zero_service_actions": true,
+    "credential_values_included": false,
+    "legacy_runner_retired": true,
+    "current_equivalent_complete": false,
+    "size_10_supported": false,
+    "cap_gate_passes": false
+  }
+}
