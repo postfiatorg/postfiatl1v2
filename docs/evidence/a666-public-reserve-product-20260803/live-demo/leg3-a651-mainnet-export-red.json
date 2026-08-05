@@ -1,0 +1,203 @@
+{
+  "schema": "postfiat.a666.live-demo.leg3-a651-mainnet-export-red.v1",
+  "recorded_date_utc": "2026-08-05",
+  "classification": "RED",
+  "held": true,
+  "ready_to_fire": false,
+  "fire_authorized": false,
+  "business_mutations": 0,
+  "live_reads": 0,
+  "service_actions": 0,
+  "first_blocker": "production_a651_pftl_to_ethereum_mainnet_export_command_and_profile_config_missing",
+  "objective": "Export the exact a651 output finalized by Leg2 from PFTL to its Ethereum-mainnet Uniswap asset before any live Uniswap action.",
+  "authority": {
+    "route_identity_commit": "8a84adaa1784c25fb994f50d20996390debcc271",
+    "route_identity_evidence": "docs/evidence/a666-public-reserve-product-20260803/live-demo/route-identity-a651-not-a666.json",
+    "route_identity_rule": "Use the literal on-chain a651 asset id and never relabel it as A666.",
+    "profile": {
+      "path": "/home/postfiat/repos/StakeHub-repeat-demo/data/wallet-demo-devnet2.json",
+      "sha256": "8c7a2d6bb8baa924005d4724abce1caeaf3e2b56c0bc5d3d530df26a64b02e57"
+    },
+    "controls": [
+      {
+        "path": "/home/postfiat/repos/orc_directives/cli_demo_campaign_20260706/EXECUTOR-STATE.md",
+        "sha256": "e7ff7045ab89f29d43d37acfeeab66ef346bef7750d632b841a1e96c3e4b93af"
+      },
+      {
+        "path": "/home/postfiat/repos/orc_directives/cli_demo_campaign_20260706/SAURON-QUEUE.md",
+        "sha256": "18eecf50195763e00f837fe47fe777772613fc907cf7dea51d2066a054fbfaec"
+      },
+      {
+        "path": "/home/postfiat/repos/orc_directives/cli_demo_campaign_20260706/spend-ledger.json",
+        "sha256": "edf81155121277c7a6860717ad45baf2c0678b11d65d8aaa16a5430e33a1884e"
+      }
+    ]
+  },
+  "asset_binding": {
+    "symbol": "a651",
+    "pftl_asset_id": "8584aa713209eb8253293c891f7269e35841f004080e06414db019f868610e9cb57dfb7aca3d51427fbe369b6ebde127",
+    "precision": 6,
+    "leg2_output_amount_atoms": null,
+    "amount_rule": "Consume exactly the smallest positive a651 amount recorded by the accepted Leg2 issue receipt derived from the 10000000-pfUSDC-atom input. No amount may be inferred before that receipt exists.",
+    "amount_blocker": "No accepted Leg2 receipt is present in the named live-demo evidence set, and this turn performs zero live reads."
+  },
+  "profile_findings": {
+    "w6_notes": "W6 completion is local-only and L4 executes on a fresh local Ethereum fork.",
+    "profile_lines": [
+      "data/wallet-demo-devnet2.json:99-115",
+      "data/wallet-demo-devnet2.json:142-158",
+      "data/wallet-demo-devnet2.json:277-285"
+    ],
+    "local_l4": {
+      "configured": true,
+      "mode": "command",
+      "script": "scripts/wallet_demo_uniswap_l4_fork.py",
+      "fork_block_number": 25460305,
+      "classification": "forbidden_test_path"
+    },
+    "l4_live": {
+      "configured_for_existing_mainnet_inventory_swap": true,
+      "profile_lines": "data/wallet-demo-devnet2.json:288-303",
+      "script": "scripts/wallet_demo_uniswap_l4_live.py",
+      "effect": "Sells pre-existing Ethereum-mainnet a651 through Universal Router; it does not create or consume a PFTL export packet.",
+      "code_lines": [
+        "stakehub/wallet_demo.py:1929-1943",
+        "stakehub/wallet_demo.py:2360-2422",
+        "scripts/wallet_demo_uniswap_l4_live.py:600-611",
+        "scripts/wallet_demo_uniswap_l4_live.py:1250-1290"
+      ]
+    },
+    "production_export": {
+      "configured": false,
+      "ethereum_chain_id_pin": null,
+      "destination_contract_pin": null,
+      "pftl_export_profile_pin": null,
+      "export_relay_command": null,
+      "proof_or_vk_pin": null
+    }
+  },
+  "cli_surface": {
+    "module": "/usr/bin/python3 -m stakehub.cli",
+    "wallet_commands_observed": [
+      "profile",
+      "new",
+      "acquire",
+      "bridge",
+      "get-navcoin",
+      "status",
+      "swap",
+      "private-egress",
+      "private-roundtrip",
+      "prover",
+      "sync",
+      "run",
+      "api",
+      "demo"
+    ],
+    "pftl_private_egress_shape": "cd /home/postfiat/repos/StakeHub-repeat-demo && /usr/bin/python3 -m stakehub.cli --home /home/postfiat/.stakehub wallet private-egress --profile /home/postfiat/repos/StakeHub-repeat-demo/data/wallet-demo-devnet2.json --run-dir <LEG2_RUN_DIR> --note-file <LEG2_A651_NOTE_FILE> --operation-id <UNIQUE_OPERATION_ID>",
+    "pftl_private_egress_scope": "Spends one private note and credits public a651 on PFTL only; proves exact-six PFTL acceptance.",
+    "pftl_private_egress_code": [
+      "stakehub/cli.py:275-279",
+      "stakehub/cli.py:851-856",
+      "stakehub/generalized_wallet.py:1831-1962"
+    ],
+    "production_mainnet_export_shape": null,
+    "production_mainnet_export_verdict": "No module-mode command accepts the finalized public a651 output, creates a PFTL export packet, produces a mainnet relay proof, or mints/consumes the corresponding Ethereum asset.",
+    "forbidden_substitutes": [
+      "scripts/wallet_demo_uniswap_l4_fork.py",
+      "scripts/wallet_demo_uniswap_l4_live.py used against pre-existing mainnet a651 inventory",
+      "Anvil",
+      "fork mode",
+      "local_l4",
+      "Sepolia",
+      "any testnet EVM route"
+    ]
+  },
+  "missing_production_contract": {
+    "required_profile_fields": [
+      "literal Ethereum chain id 1",
+      "literal destination a651 contract",
+      "governed PFTL export profile and route identity",
+      "canonical node binary hash",
+      "canonical export prover program/VK hashes",
+      "mainnet relay or ingestion finality policy",
+      "maximum proof age in PFTL blocks",
+      "Ethereum RPC class restricted to mainnet"
+    ],
+    "required_command_stages": [
+      "PFTL a651 export burn-or-lock using the accepted Leg2 output and exact amount",
+      "export packet finality with packet id, commitment root, block height, and profile identity",
+      "detached content-addressed proof generation for waits exceeding ten minutes",
+      "Ethereum-mainnet consume or mint bound to the exact packet and proof",
+      "post-transaction PFTL and Ethereum conservation verification"
+    ],
+    "required_signer_boundaries": [
+      "PFTL holder signs only the export operation through its wallet custody path",
+      "Ethereum relay signer is referenced by configured vault label or file path at use-time",
+      "no credential value enters public artifacts or command lines"
+    ],
+    "estimated_gap": "Production command/config integration required; a packet cannot safely invent these pins or substitute the existing inventory-only Uniswap script."
+  },
+  "future_prefire_contract": {
+    "all_required": true,
+    "checks": [
+      "Leg2 accepted receipt and six-way finality identify the exact positive a651 output",
+      "governed export route is live, unpaused, invariant-holding, and bound to literal a651",
+      "destination chain reports Ethereum chain id 1",
+      "destination contract bytecode and configured identity match canonical pins",
+      "canonical PFTL binary and export proof program/VK hashes match release evidence",
+      "current NAV, reserve proof, supply, and export entitlement are fresh and mutually consistent",
+      "Ethereum signer has at least the semantic ETH gas floor derived by the production exporter",
+      "campaign spend projection remains within the configured cap",
+      "no endpoint or artifact references Sepolia, testnet, Anvil, a fork, or local_l4",
+      "all six PFTL RPCs agree before signing and mempools are empty"
+    ]
+  },
+  "future_acceptance_template": {
+    "pftl": {
+      "a651_before_atoms": null,
+      "a651_after_atoms": null,
+      "burn_or_lock_delta_atoms": null,
+      "export_packet_id": null,
+      "export_commitment_root": null,
+      "export_height": null,
+      "export_profile_identity": null,
+      "six_way_finality": false
+    },
+    "ethereum": {
+      "chain_id": 1,
+      "contract": null,
+      "asset_before_atoms": null,
+      "asset_after_atoms": null,
+      "consume_or_mint_transaction_id": null,
+      "receipt_status": null,
+      "gas_used_wei": null
+    },
+    "proof": {
+      "program_hash": null,
+      "vk_hash": null,
+      "artifact_hash": null,
+      "source_height": null,
+      "observed_height": null,
+      "freshness_blocks": null,
+      "within_max_age": false,
+      "detached_unit": null,
+      "mode_600_log_path": null
+    },
+    "conservation": {
+      "same_amount_pftl_and_ethereum": false,
+      "fees_separated_by_asset": false,
+      "supply_conserved": false
+    }
+  },
+  "stop_rule": "STOP-no-retry on any mismatch. Never substitute local_l4, Anvil, a fork, Sepolia, a testnet, or pre-existing Ethereum inventory for the missing export path.",
+  "validation": {
+    "current_profile_export_sequence_only_local_l4_and_inventory_swap": true,
+    "existing_live_script_inventory_only": true,
+    "production_export_command_present": false,
+    "production_export_config_present": false,
+    "credential_values_included": false,
+    "live_chain_actions_executed": false,
+    "pftl_actions_executed": false
+  }
+}
