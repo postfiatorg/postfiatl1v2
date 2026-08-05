@@ -1,0 +1,15 @@
+{
+  "schema": "postfiat.a666.r4.official-journey-receipts-index.v1",
+  "run_id": "a666-r4-official-journey-pass1-20260805-v5",
+  "official_invocation_count": 1,
+  "receipt_count": 0,
+  "receipts": [],
+  "reason": "official runner failed at step 3 before any wallet business operation or receipt",
+  "downloaded_public_receipt": {
+    "created": false,
+    "scan_executed": false,
+    "reason": "step 10 was not reached"
+  },
+  "business_mutations": 0,
+  "credentials_included": false
+}
