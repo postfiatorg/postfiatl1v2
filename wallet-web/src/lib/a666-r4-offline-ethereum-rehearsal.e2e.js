@@ -25,6 +25,8 @@ import {
 const CANDIDATE_REVISION = '39f7fae3191aa34c376ae1657650a9ec2444f421';
 const ASYNC_PROOF_SLOT_SCHEMA = 'postfiat.a666.r4.async-proof-slot.v1';
 const ASYNC_PROOF_RUN_ID = 'a666-r4-receipt-prover-pathb-20260804-v3';
+const JOURNEY_ROUTE_ID = 'pftl-a666-r4-offline-rehearsal-v1';
+const RESERVE_PROOF_SCHEMA = 'postfiat.nav_reserve_proof_status.v1';
 const DRY_RUN_STEPS = Object.freeze([1, 2, 3, 4, 5, 6, 9, 10]);
 const POLL_INTERVAL_MS = 5_000;
 const MAX_ASYNC_WAIT_MS = 12 * 60 * 60 * 1_000;
@@ -501,29 +503,61 @@ async function observeStepTwoWalletShell(page, created) {
   });
 }
 
+function reserveProofContract(request, response) {
+  assert.equal(request?.method, 'nav_reserve_proof_status', 'reserve proof request method mismatch');
+  assert.match(String(request?.id || ''), /^web-[1-9][0-9]*$/, 'reserve proof request id is malformed');
+  assert.match(String(request?.params?.asset_id || ''), /^[0-9a-f]{96}$/, 'reserve proof asset_id is malformed');
+  assert.equal(response?.id, request.id, 'reserve proof response id does not match its request');
+  assert.equal(response?.ok, true, 'reserve proof RPC response is not ok');
+  const report = response?.result;
+  assert.equal(report?.schema, RESERVE_PROOF_SCHEMA, 'reserve proof response schema mismatch');
+  assert.equal(report?.found, true, 'reserve proof response did not find the selected asset');
+  assert.equal(report?.asset_id, request.params.asset_id, 'reserve proof response asset_id mismatch');
+  assert.ok(Array.isArray(report?.packets) && report.packets.length > 0 && report.packets.length <= 16,
+    'reserve proof packet count is outside the bounded contract');
+  assert.ok(report.packets.every(packet => typeof packet?.state === 'string' && packet.state.length > 0),
+    'reserve proof packet state is missing');
+  const finalized = report.packets.filter(packet => packet.state === 'finalized');
+  assert.ok(finalized.length >= 2, 'reserve proof response must expose at least two finalized packets');
+  assert.ok(finalized.every(packet => Number.isInteger(packet.source_count) && packet.source_count === 6),
+    'every finalized reserve packet must declare source_count 6');
+  const proofIdentities = finalized
+    .map(packet => packet.reserve_packet_hash ?? packet.packet_id)
+    .filter(identity => typeof identity === 'string' && identity.length > 0);
+  assert.ok(proofIdentities.length >= 2 && new Set(proofIdentities).size >= 2,
+    'reserve proof response must expose two distinct packet/proof identities');
+  return { report, finalized, proofIdentities };
+}
+
 async function observeStepThreeReserveProof(page, rpcFrames) {
-  // Shared step-3 display predicates: identical in construction preflight
-  // and official mode. Fail-closed: the navcoin-market testid wait and the
-  // reserve-proof frame wait are never weakened. Read-only; no mutation.
-  const market = await openPrimaryMarket(page);
-  const marketText = (await market.textContent() || '').replace(/\s+/g, ' ');
+  // Shared step-3 choreography and predicates are identical in construction
+  // and official mode. Select the exact route, then accept only the method/id-
+  // bound reserve-proof response. Read-only; no mutation.
+  const opened = await openPrimaryMarket(page, rpcFrames);
+  const marketText = (await opened.market.textContent() || '').replace(/\s+/g, ' ');
   const reserveResponse = await waitForReserveProofFrame(rpcFrames);
+  const proof = reserveProofContract(opened.proofRequest, reserveResponse);
   const packets = reserveResponse.result?.packets ?? reserveResponse.result?.result?.packets ?? [];
-  const sourceIdentities = packets.flatMap(packet => packet.source_identities ?? packet.sources ?? []);
-  const proofIdentities = packets.map(packet => packet.packet_hash ?? packet.reserve_packet_hash).filter(Boolean);
   const step = observedStep(3, {
     label: 'six sources/proofs/NAV',
-    source_identities: sourceIdentities,
-    proof_identities: proofIdentities,
+    route_id: JOURNEY_ROUTE_ID,
+    request_method: opened.proofRequest.method,
+    request_id: opened.proofRequest.id,
+    request_asset_id: opened.proofRequest.params.asset_id,
+    response_id: reserveResponse.id,
+    finalized_packet_count: proof.finalized.length,
+    source_counts: proof.finalized.map(packet => packet.source_count),
+    proof_identities: proof.proofIdentities,
     rendered_nav_summary: marketText.match(/Verified NAV[^\n]*/)?.[0] ?? '',
-    reserve_response_id: reserveResponse.id ?? null,
   }, {
-    six_sources: sourceIdentities.length === 6 && new Set(sourceIdentities).size === 6,
-    both_proofs: proofIdentities.length >= 2 && new Set(proofIdentities).size >= 2,
+    response_schema: proof.report.schema === RESERVE_PROOF_SCHEMA,
+    packets_bounded: packets.length > 0 && packets.length <= 16,
+    finalized_sources_six: proof.finalized.every(packet => packet.source_count === 6),
+    both_proofs: new Set(proof.proofIdentities).size >= 2,
     nav_rendered: /Verified NAV/.test(marketText),
     proof_rendered: /matches finalized PFTL reserve proof/.test(marketText),
   });
-  return { step, market, marketText };
+  return { step, market: opened.market, marketText };
 }
 
 async function observeStepFourBalances(market, marketText) {
@@ -640,11 +674,17 @@ async function runConstructionPreflight({
   try {
     const context = await browser.newContext();
     const page = await context.newPage();
-    const rpcFrames = [];
-    page.on('websocket', socket => socket.on('framereceived', event => {
-      if (typeof event.payload !== 'string') return;
-      try { rpcFrames.push(JSON.parse(event.payload)); } catch { /* non-JSON frames are irrelevant */ }
-    }));
+    const rpcTraffic = { sent: [], received: [] };
+    page.on('websocket', socket => {
+      socket.on('framesent', event => {
+        if (typeof event.payload !== 'string') return;
+        try { rpcTraffic.sent.push(JSON.parse(event.payload)); } catch { /* non-JSON frames are irrelevant */ }
+      });
+      socket.on('framereceived', event => {
+        if (typeof event.payload !== 'string') return;
+        try { rpcTraffic.received.push(JSON.parse(event.payload)); } catch { /* non-JSON frames are irrelevant */ }
+      });
+    });
     page.setDefaultTimeout(30_000);
     stepOneBrowser = await observeStepOneBuildIdentity({
       page,
@@ -657,7 +697,7 @@ async function runConstructionPreflight({
     await recordDisplayStep('step_2_wallet_shell', () => observeStepTwoWalletShell(page, stepOneBrowser.created));
     let stepThreeObserved = null;
     await recordDisplayStep('step_3_reserve_proof', async () => {
-      stepThreeObserved = await observeStepThreeReserveProof(page, rpcFrames);
+      stepThreeObserved = await observeStepThreeReserveProof(page, rpcTraffic);
       return stepThreeObserved.step;
     });
     if (stepThreeObserved) {
@@ -918,23 +958,72 @@ async function unlock(page, passphrase) {
   await page.locator('.pf-shell').waitFor();
 }
 
-async function openPrimaryMarket(page) {
-  await page.locator('.pf-sidebar .pf-nav').filter({ hasText: 'NAV Markets' }).click();
-  await page.locator('[data-testid="navcoin-market"]').waitFor();
-  return page.locator('[data-testid="navcoin-market"]');
+async function waitForTrafficEntry(entries, predicate, failure, timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const match = entries.find(predicate);
+    if (match) return match;
+    await new Promise(resolveWait => setTimeout(resolveWait, 50));
+  }
+  throw new Error(failure);
 }
 
-async function waitForReserveProofFrame(frames) {
-  const deadline = Date.now() + 30_000;
-  while (Date.now() < deadline) {
-    const match = [...frames].reverse().find(value => {
-      const packets = value?.result?.packets ?? value?.result?.result?.packets;
-      return Array.isArray(packets);
-    });
-    if (match) return match;
-    await new Promise(resolveWait => setTimeout(resolveWait, 100));
-  }
-  throw new Error('production wallet did not observe the reserve-proof RPC response');
+function matchingRpcResponse(received, request) {
+  return received.find(response => response?.id === request?.id) ?? null;
+}
+
+async function openPrimaryMarket(page, rpcTraffic) {
+  const sentStart = rpcTraffic.sent.length;
+  await page.locator('.pf-sidebar .pf-nav').filter({ hasText: 'NAV Markets' }).click();
+  const market = page.locator('[data-testid="navcoin-market"]');
+  await market.waitFor({ state: 'visible' });
+  const selector = market.locator('#navcoin-market-select');
+  await selector.waitFor({ state: 'visible' });
+  const journeyOptionPresent = await selector.locator('option').evaluateAll(
+    (options, routeId) => options.some(option => option.value === routeId),
+    JOURNEY_ROUTE_ID,
+  );
+  assert.equal(journeyOptionPresent, true, `journey route option ${JOURNEY_ROUTE_ID} is absent`);
+  await selector.selectOption(JOURNEY_ROUTE_ID);
+  assert.equal(await selector.inputValue(), JOURNEY_ROUTE_ID, 'wrong NAVCoin journey route selected');
+
+  const routesRequest = await waitForTrafficEntry(
+    rpcTraffic.sent,
+    request => request?.method === 'navcoin_bridge_routes',
+    'production wallet did not emit navcoin_bridge_routes',
+  );
+  const routesResponse = await waitForTrafficEntry(
+    rpcTraffic.received,
+    response => response?.id === routesRequest.id,
+    'production wallet did not receive its navcoin_bridge_routes response',
+  );
+  assert.equal(routesResponse?.result?.schema, 'postfiat-pftl-uniswap-routes-status-v2',
+    'route registry response schema mismatch');
+  const route = routesResponse.result.routes?.find(row => row?.route_id === JOURNEY_ROUTE_ID);
+  assert.ok(route, `journey route ${JOURNEY_ROUTE_ID} is missing from route registry response`);
+  assert.match(String(route.native_nav_asset_id || ''), /^[0-9a-f]{96}$/,
+    'journey route native NAV asset id is malformed');
+
+  const proofRequest = await waitForTrafficEntry(
+    rpcTraffic.sent,
+    request => rpcTraffic.sent.indexOf(request) >= sentStart
+      && request?.method === 'nav_reserve_proof_status'
+      && request?.params?.asset_id === route.native_nav_asset_id,
+    'production wallet did not emit the selected-route nav_reserve_proof_status request',
+  );
+  rpcTraffic.reserveProofRequest = proofRequest;
+  return { market, proofRequest };
+}
+
+async function waitForReserveProofFrame(rpcFrames) {
+  const request = rpcFrames.reserveProofRequest;
+  assert.equal(request?.method, 'nav_reserve_proof_status',
+    'reserve-proof frame wait requires the selected-route method context');
+  return waitForTrafficEntry(
+    rpcFrames.received,
+    response => response?.id === request.id,
+    'production wallet did not receive the method/id-bound reserve-proof response',
+  );
 }
 
 async function marketBalances(market) {
@@ -1076,11 +1165,17 @@ test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet j
   const context = await chromium.launchPersistentContext('', { headless: true, acceptDownloads: true });
   try {
     const page = await context.newPage();
-    const rpcFrames = [];
-    page.on('websocket', socket => socket.on('framereceived', event => {
-      if (typeof event.payload !== 'string') return;
-      try { rpcFrames.push(JSON.parse(event.payload)); } catch { /* non-JSON frames are irrelevant */ }
-    }));
+    const rpcTraffic = { sent: [], received: [] };
+    page.on('websocket', socket => {
+      socket.on('framesent', event => {
+        if (typeof event.payload !== 'string') return;
+        try { rpcTraffic.sent.push(JSON.parse(event.payload)); } catch { /* non-JSON frames are irrelevant */ }
+      });
+      socket.on('framereceived', event => {
+        if (typeof event.payload !== 'string') return;
+        try { rpcTraffic.received.push(JSON.parse(event.payload)); } catch { /* non-JSON frames are irrelevant */ }
+      });
+    });
     page.setDefaultTimeout(30_000);
     const stepOneBrowser = await observeStepOneBuildIdentity({
       page,
@@ -1095,7 +1190,7 @@ test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet j
     seed = created.seed;
     results.push(await observeStepTwoWalletShell(page, created));
 
-    const stepThree = await observeStepThreeReserveProof(page, rpcFrames);
+    const stepThree = await observeStepThreeReserveProof(page, rpcTraffic);
     results.push(stepThree.step);
     const market = stepThree.market;
     results.push(await observeStepFourBalances(stepThree.market, stepThree.marketText));
@@ -1590,6 +1685,123 @@ test('A666 R4 RED-FIRST served candidate NAV Markets exposes visible navcoin mar
   }
 });
 
+function reserveProofFixture() {
+  const assetId = 'a'.repeat(96);
+  const request = {
+    version: 'postfiat-local-rpc-v1',
+    id: 'web-7',
+    method: 'nav_reserve_proof_status',
+    params: { asset_id: assetId },
+  };
+  const packet = (identity, sourceCount = 6) => ({
+    packet_id: identity,
+    reserve_packet_hash: identity.repeat(96),
+    state: 'finalized',
+    source_count: sourceCount,
+  });
+  const response = {
+    version: 'postfiat-local-rpc-v1',
+    id: request.id,
+    ok: true,
+    result: {
+      schema: RESERVE_PROOF_SCHEMA,
+      found: true,
+      asset_id: assetId,
+      packets: [packet('b'), packet('c')],
+    },
+  };
+  return { request, response };
+}
+
+function stepThreePageFixture({ selectorVisible = true, selectedRoute = JOURNEY_ROUTE_ID } = {}) {
+  const routeAssetId = 'a'.repeat(96);
+  const routesRequest = { id: 'web-1', method: 'navcoin_bridge_routes', params: {} };
+  const routesResponse = {
+    id: routesRequest.id,
+    ok: true,
+    result: {
+      schema: 'postfiat-pftl-uniswap-routes-status-v2',
+      routes: [{ route_id: JOURNEY_ROUTE_ID, native_nav_asset_id: routeAssetId }],
+    },
+  };
+  const traffic = { sent: [routesRequest], received: [routesResponse] };
+  let currentValue = '';
+  const selector = {
+    async waitFor() {
+      if (!selectorVisible) throw new Error('primary market adapter selector is absent');
+    },
+    locator(name) {
+      assert.equal(name, 'option');
+      return { async evaluateAll(callback, routeId) { return callback([{ value: JOURNEY_ROUTE_ID }], routeId); } };
+    },
+    async selectOption(routeId) {
+      currentValue = selectedRoute;
+      const proof = reserveProofFixture();
+      proof.request.params.asset_id = routeAssetId;
+      traffic.sent.push(proof.request);
+      traffic.received.push(proof.response);
+      return routeId;
+    },
+    async inputValue() { return currentValue; },
+  };
+  const market = {
+    async waitFor() {},
+    locator(name) {
+      assert.equal(name, '#navcoin-market-select');
+      return selector;
+    },
+  };
+  const page = {
+    locator(name) {
+      if (name === '.pf-sidebar .pf-nav') {
+        return { filter() { return { async click() {} }; } };
+      }
+      assert.equal(name, '[data-testid="navcoin-market"]');
+      return market;
+    },
+  };
+  return { page, traffic };
+}
+
+test('A666 R4 step-3 choreography rejects wrapper-only readiness and binds proof method/request identity', async () => {
+  const historical = execFileSync(
+    'git',
+    ['show', '84fa197:wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js'],
+    { cwd: REPO_ROOT, encoding: 'utf8' },
+  );
+  const oldStart = historical.indexOf('async function openPrimaryMarket(page)');
+  const oldEnd = historical.indexOf('\nasync function waitForReserveProofFrame', oldStart);
+  const oldOpen = historical.slice(oldStart, oldEnd);
+  assert.ok(oldOpen.includes('[data-testid="navcoin-market"]'), '84fa197 waited for the shared wrapper');
+  assert.equal(oldOpen.includes('#navcoin-market-select'), false,
+    '84fa197 incorrectly treated wrapper visibility as adapter readiness');
+
+  const fallback = stepThreePageFixture({ selectorVisible: false });
+  await assert.rejects(openPrimaryMarket(fallback.page, fallback.traffic), /adapter selector is absent/);
+  const wrongRoute = stepThreePageFixture({ selectedRoute: 'wrong-route' });
+  await assert.rejects(openPrimaryMarket(wrongRoute.page, wrongRoute.traffic), /wrong NAVCoin journey route selected/);
+
+  const valid = reserveProofFixture();
+  const packetShapedUnrelated = structuredClone(valid.response);
+  packetShapedUnrelated.id = 'web-unrelated';
+  assert.equal(matchingRpcResponse([packetShapedUnrelated], valid.request), null,
+    'packet-shaped unrelated frame must be rejected');
+  const wrongId = structuredClone(valid.response);
+  wrongId.id = 'web-8';
+  assert.equal(matchingRpcResponse([wrongId], valid.request), null,
+    'wrong request id must be rejected');
+
+  const sourceFive = reserveProofFixture();
+  sourceFive.response.result.packets[0].source_count = 5;
+  assert.throws(() => reserveProofContract(sourceFive.request, sourceFive.response), /source_count 6/);
+  const duplicate = reserveProofFixture();
+  duplicate.response.result.packets[1].reserve_packet_hash = duplicate.response.result.packets[0].reserve_packet_hash;
+  assert.throws(() => reserveProofContract(duplicate.request, duplicate.response), /two distinct packet\/proof identities/);
+  const accepted = reserveProofContract(valid.request, valid.response);
+  assert.equal(accepted.finalized.length, 2);
+  assert.equal(new Set(accepted.proofIdentities).size, 2);
+});
+
 test('A666 R4 mode parity: construction and official execute the identical 18-predicate registry with identical traces', () => {
   const fixture = syntheticValidationFixture();
   const construction = runValidationRegistry(normalizeValidationInputs('construction', fixture));
@@ -1672,7 +1884,7 @@ test('A666 R4 steps 1-4 display predicates are mode-shared: structural completen
 
   // Negative 2: a missing construction observer fails the guard.
   const missingObserver = source.replace(
-    'await observeStepThreeReserveProof(page, rpcFrames)',
+    'await observeStepThreeReserveProof(page, rpcTraffic)',
     'await Promise.resolve(null)',
   );
   assert.ok(sharedDisplayCoverageProblems(missingObserver)
