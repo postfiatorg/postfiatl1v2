@@ -1,8 +1,8 @@
 {
   "schema": "postfiat.a666.r4.construction-setup-endpoints.v1",
   "candidate": {
-    "revision": "23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f",
-    "worktree": "/tmp/a666-r4-successor-23b9bff",
+    "revision": "1bc25ac7384de8837a14b8150863ea1bc0e883eb",
+    "worktree": "/tmp/a666-r4-successor-1bc25ac",
     "revision_exact": true,
     "tracked_clean": true
   },
@@ -59,7 +59,7 @@
     "reachable": true,
     "loopback": true,
     "package_version": "0.1.2",
-    "package_json_sha256": "fe6209c5219a583e0f55f8ca0c93244e14ae569288ee46af910bbaa97e1989b3"
+    "package_json_sha256": "a3a62ecf5161caa733c42de5158b4b464bedc7d5c75faf31a3f521661c6b3bba"
   },
   "proxy": {
     "origin_url": "http://127.0.0.1:31021",
@@ -67,11 +67,21 @@
     "http_status": 200,
     "reachable": true,
     "loopback": true,
-    "pid": 3766731,
+    "pid": 3318900,
     "process_identity_exact": true,
-    "source_tree_hash": "5919ae695d910cfbe3b41c9783ef79354784b4ee",
-    "server_js_sha256": "6aebb3576bde511ce99f8b69a36fe502d3ddffad23275c5761f380fd3675bf41",
+    "source_tree_hash": "6149e38e0d959bf14145843c1ed010b10690597a",
+    "server_js_sha256": "0458f721c06783f8f4095259b932e554426e3b35af77bce9a25405ebde434a26",
     "business_operations_submitted": 0
+  },
+  "candidate_provenance": {
+    "evidence_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/v7-candidate-proxy-provenance.json",
+    "evidence_sha256": "d78464ee258703927c505255953a71507af805b2e98e676279fc2b81046391bb",
+    "candidate_revision": "1bc25ac7384de8837a14b8150863ea1bc0e883eb",
+    "wallet_dist_evidence_path": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/v7-wallet-dist-sha256.json",
+    "wallet_dist_evidence_sha256": "eabf71305229f76d6fa03c7edf0a8dd307f61e4ac2e01b6a6f933b0a0094a98d",
+    "package_json_sha256": "a3a62ecf5161caa733c42de5158b4b464bedc7d5c75faf31a3f521661c6b3bba",
+    "proxy_source_tree_hash": "6149e38e0d959bf14145843c1ed010b10690597a",
+    "proxy_server_js_sha256": "0458f721c06783f8f4095259b932e554426e3b35af77bce9a25405ebde434a26"
   },
   "anvil": {
     "endpoint_url": "http://127.0.0.1:8547",

@@ -8,10 +8,8 @@ READY=${POSTFIAT_R4_FRESH_WALLET_READY:-/home/postfiat/.pft/a666-r4-fresh-wallet
 PROFILE=${POSTFIAT_R4_FRESH_WALLET_PROFILE:-/home/postfiat/.pft/a666-r4-fresh-wallet-v7/browser-profile}
 PASSPHRASE=${POSTFIAT_R4_FRESH_WALLET_PASSPHRASE:-/home/postfiat/.pft/a666-r4-fresh-wallet-v7/wallet-passphrase.local}
 FLEET=${POSTFIAT_R4_RPC_ENDPOINTS_FILE:-$ROOT/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fleet/construction-rpc-endpoints.json}
-PROVENANCE=${POSTFIAT_R4_PROXY_PROVENANCE:-/tmp/a666-r4-v7-23b9bff-proxy-provenance.json}
 ISSUER_REQUEST=${POSTFIAT_R4_ISSUER_AUTH_REQUEST:-}
 CHECK_OUT=${POSTFIAT_R4_TRUSTLINE_CHECK_OUT:-/tmp/a666-r4-v7-trustline-check.json}
-CANDIDATE=23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f
 ADDRESS_SHA=2f58eb97683596c676c06da165c3e8011ff9860827acb9b30355a2a83638f4a6
 ROUTE=pftl-a666-r4-offline-rehearsal-v1
 
@@ -22,6 +20,9 @@ selector(){ grep -q 'data-testid="add-asset"' "$1" || refuse missing_add_asset_s
 absent(){ [[ $1 == false && $2 == false ]] || refuse unexpected_preexisting_line; }
 supply_equal(){ [[ $1 == "$2" ]] || refuse supply_changed; }
 no_bundle(){ [[ $1 != *from-bundle* && $1 != *bundle_dir* ]] || refuse bundle_helper_forbidden; }
+candidate_revisions_match(){
+ [[ $1 =~ ^[0-9a-f]{40}$ && $1 == "$2" && $1 == "$3" && $1 == "$4" ]]
+}
 public_guard(){ python3 - "$1" <<'PY'
 import json,re,sys
 d=json.load(open(sys.argv[1]))
@@ -49,17 +50,27 @@ issuer_request(){
 }
 
 check(){
+ local setup_candidate requested_candidate provenance_ref provenance_path ready_candidate provenance_candidate
  mode "$READY" 600 ready; mode "$PROFILE" 700 profile; mode "$PASSPHRASE" 600 passphrase
- [[ -f $SETUP && -f $FLEET && -f $PROVENANCE ]] || refuse missing_path_input
- python3 - "$SETUP" "$READY" "$FLEET" "$PROVENANCE" "$CHECK_OUT" "$CANDIDATE" "$ADDRESS_SHA" "$ROUTE" <<'PY'
+ [[ -f $SETUP && -f $FLEET ]] || refuse missing_path_input
+ setup_candidate=$(jq -r '.candidate.revision // empty' "$SETUP") || refuse setup_candidate_read
+ requested_candidate=${POSTFIAT_R4_CANDIDATE_REVISION:-$setup_candidate}
+ provenance_ref=${POSTFIAT_R4_CANDIDATE_PROXY_EVIDENCE:-$(jq -r '.candidate_provenance.evidence_path // empty' "$SETUP")}
+ [[ -n "$provenance_ref" && "$provenance_ref" != "null" ]] || refuse missing_candidate_provenance
+ if [[ "$provenance_ref" == /* ]]; then provenance_path="$provenance_ref"; else provenance_path="$ROOT/$provenance_ref"; fi
+ [[ -f "$provenance_path" ]] || refuse missing_path_input
+ ready_candidate=$(jq -r '.candidate_revision // empty' "$READY") || refuse ready_candidate_read
+ provenance_candidate=$(jq -r '.candidate.revision_observed // empty' "$provenance_path") || refuse provenance_candidate_read
+ candidate_revisions_match "$requested_candidate" "$setup_candidate" "$ready_candidate" "$provenance_candidate" || refuse candidate_revision_mismatch
+ python3 - "$SETUP" "$READY" "$FLEET" "$provenance_path" "$CHECK_OUT" "$requested_candidate" "$setup_candidate" "$ADDRESS_SHA" "$ROUTE" <<'PY'
 import hashlib,json,socket,sys,time
 from pathlib import Path
-sp,rp,fp,pp,out=map(Path,sys.argv[1:6]); candidate,ah,route_id=sys.argv[6:9]; started=time.time()
+sp,rp,fp,pp,out=map(Path,sys.argv[1:6]); requested_candidate,setup_candidate,ah,route_id=sys.argv[6:10]; started=time.time()
 s=json.load(open(sp)); r=json.load(open(rp)); f=json.load(open(fp)); p=json.load(open(pp)); address=r.get('address','')
 if hashlib.sha256(address.encode()).hexdigest()!=ah:raise SystemExit('address_hash_mismatch')
 origin=s.get('proxy',{}).get('origin_url') or s.get('wallet',{}).get('origin_url') or s.get('wallet_origin')
-if origin!='http://127.0.0.1:31021' or s.get('candidate',{}).get('revision')!=candidate or r.get('candidate_revision')!=candidate:raise SystemExit('candidate_or_origin')
-if p.get('ready') is not True or p.get('candidate',{}).get('revision_observed')!=candidate:raise SystemExit('provenance')
+if origin!='http://127.0.0.1:31021' or requested_candidate!=setup_candidate or s.get('candidate',{}).get('revision')!=requested_candidate or r.get('candidate_revision')!=requested_candidate:raise SystemExit('candidate_or_origin')
+if p.get('ready') is not True or p.get('candidate',{}).get('revision_observed')!=requested_candidate:raise SystemExit('provenance')
 eps=[(x.get('host'),x.get('rpc_port')) for x in f.get('endpoints',[])]
 if len(eps)!=6 or len(set(eps))!=6 or any(h!='127.0.0.1' or not isinstance(q,int) for h,q in eps):raise SystemExit('fleet')
 def call(ep,i,m,params):
@@ -86,7 +97,7 @@ def line(x,aid):
  return {'present':q is not None,'authorized':q.get('authorized') if q else None,'frozen':q.get('frozen') if q else None}
 pl=[line(x,pf) for x in aa];al=[line(x,a6) for x in aa]
 bs={(x.get('result',{}).get('issued_supply_atoms'),x.get('result',{}).get('authorized_valid_supply_atoms'),x.get('result',{}).get('settlement_reserve_atoms')) for x in sup if x.get('ok')}
-d={'schema':'postfiat.a666.r4.fresh-wallet-trustline-check.v1','candidate_revision':candidate,'origin':origin,'address_sha256':ah,
+d={'schema':'postfiat.a666.r4.fresh-wallet-trustline-check.v1','candidate_revision':requested_candidate,'origin':origin,'address_sha256':ah,
 'fleet':{'endpoint_count':6,'loopback_only':True,'six_way_tuple_equal':len(tuples)==1 and all(x.get('ok') for x in st),'tuple':list(next(iter(tuples))) if len(tuples)==1 else None},
 'assets':{'pfusdc_asset_id':pf,'a666_asset_id':a6,'pfusdc':{'present_on_six':all(x['present'] for x in pl),'authorized_on_six':all(x['authorized'] is True for x in pl),'unfrozen_on_six':all(x['frozen'] is False for x in pl)},'a666':{'present_on_six':all(x['present'] for x in al),'authorized_on_six':all(x['authorized'] is True for x in al),'unfrozen_on_six':all(x['frozen'] is False for x in al)}},
 'account':{'sequence_values':sorted({x.get('result',{}).get('sequence') for x in accounts if x.get('ok')}),'pft_balance_values':sorted({x.get('result',{}).get('balance') for x in accounts if x.get('ok')})},
@@ -129,20 +140,25 @@ MJS
 }
 
 self_test(){
- local t f=0 n=0; t=$(mktemp -d /tmp/a666-r4-tl-selftest-XXXXXX); chmod 700 "$t"
+ local t f=0 n=0 candidate=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa other=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+ t=$(mktemp -d /tmp/a666-r4-tl-selftest-XXXXXX); chmod 700 "$t"
  bad(){ n=$((n+1)); if "$@" >/dev/null 2>&1;then f=$((f+1));fi; }
  good(){ n=$((n+1)); if ! "$@" >/dev/null 2>&1;then f=$((f+1));fi; }
  bad loopback https://example.invalid
  touch "$t/f";chmod 644 "$t/f";bad mode "$t/f" 600 ready
- printf wrong >"$t/c";bad grep -q "$CANDIDATE" "$t/c"
+ printf wrong >"$t/c";bad grep -q "$candidate" "$t/c"
   python3 -c 'import json,sys;json.dump({"address":"pf"+"0"*40},sys.stdout)' >"$t/raw";bad public_guard "$t/raw"
  printf x >"$t/src";bad selector "$t/src"
  bad absent true false
  bad supply_equal 1 2
  bad no_bundle from-bundle
  good loopback http://127.0.0.1:31021
- rm -rf "$t";[[ $f == 0 && $n == 9 ]]||refuse "self_test failures=$f vectors=$n"
- echo "trustline_stage_self_test=ok vectors=9 negative_vectors=8 business_mutations=0"
+ good candidate_revisions_match "$candidate" "$candidate" "$candidate" "$candidate"
+ bad candidate_revisions_match "$candidate" "$other" "$candidate" "$candidate"
+ bad candidate_revisions_match "$candidate" "$candidate" "$other" "$candidate"
+ bad candidate_revisions_match "$candidate" "$candidate" "$candidate" "$other"
+ rm -rf "$t";[[ $f == 0 && $n == 13 ]]||refuse "self_test failures=$f vectors=$n"
+ echo "trustline_stage_self_test=ok vectors=13 negative_vectors=11 candidate_mismatch_refusals=3 business_mutations=0"
 }
 
 case ${1:-check} in check)check;;stage)stage;;--self-test)self_test;;*)refuse 'usage [check|stage|--self-test]';;esac
