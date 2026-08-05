@@ -1,8 +1,8 @@
 {
-  "packet_version": 2,
+  "packet_version": 3,
   "packet_id": "a666-live-loop-leg1-a666-bridge-in-20260805",
   "classification": "HELD",
-  "wiring_status": "PARTIAL",
+  "wiring_status": "WIRED",
   "route": "pftl-a666-ethereum-wA666-usdc-v1",
   "chain_ids": {
     "ethereum_mainnet": 1,
@@ -64,23 +64,17 @@
   ],
   "surfaces": [
     {
-      "substep": "A: mainnet USDC to Arbitrum native USDC",
+      "substep": "A666 bridge-in",
       "status": "WIRED",
-      "surface": "stakehub/evm.py:489 bridge_usdc; stakehub/cli.py:1391-1416 bridge-usdc dispatch"
-    },
-    {
-      "substep": "B: Arbitrum ingress to PFTL pfUSDC",
-      "status": "PARTIAL",
-      "surface": "stakehub/live_loop_leg1_bridge_in.py builds scripts/a666-mainnet-pfusdc-claim-after-deposit.sh argv",
-      "gap": "literal_a666_bridge_in_surface"
+      "surface": "stakehub/private_swap_ingress.py:1050 submit_pftl_bridge_in; stage commands :619-724; trustline and balance checks :1211-1377; injected bridge_in_callable"
     }
   ],
   "requires": [
-    "remaining gap closed + regression green",
+    "surface regression green",
     "principal packet-hash confirmation",
     "prior leg committed evidence"
   ],
-  "supersedes_packet_sha256": "69bf378dc6ac1445c2c455fa30353c738d5640e88f9ff8e34e4c1de9727c1141",
+  "supersedes_packet_sha256": "08523e74d178686c429df2df064e5033e312163a2db5c48f944291c84ae99ba6",
   "self_executable": false,
   "supersedes_historical_packet": "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg1-mainnet-cctp-pftl-held.json",
   "supersession_rule": "This packet supersedes the historical packet for the literal A666 route; never run both a restored canonical runner and the historical packet."

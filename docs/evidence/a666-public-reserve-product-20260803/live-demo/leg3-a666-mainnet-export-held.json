@@ -1,5 +1,5 @@
 {
-  "packet_version": 2,
+  "packet_version": 3,
   "packet_id": "a666-live-loop-leg3-a666-mainnet-export-20260805",
   "classification": "HELD",
   "wiring_status": "WIRED",
@@ -71,6 +71,6 @@
     "principal packet-hash confirmation",
     "prior leg committed evidence"
   ],
-  "supersedes_packet_sha256": "d54d2649c37200c40deefbbd40679913f939947b3841b914722ffad977568df6",
+  "supersedes_packet_sha256": "f7921b1c98f62da2af2cb621ee81bba14d6b8531d7475fca7a026aab2117a00f",
   "self_executable": false
 }

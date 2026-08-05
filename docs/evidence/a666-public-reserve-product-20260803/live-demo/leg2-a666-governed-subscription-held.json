@@ -1,5 +1,5 @@
 {
-  "packet_version": 2,
+  "packet_version": 3,
   "packet_id": "a666-live-loop-leg2-a666-governed-subscription-20260805",
   "classification": "HELD",
   "wiring_status": "WIRED",
@@ -71,6 +71,6 @@
     "principal packet-hash confirmation",
     "prior leg committed evidence"
   ],
-  "supersedes_packet_sha256": "ec35b3d46e6be16fe251e69a2e37e74b8525fa27a589283d45be1651defe3c84",
+  "supersedes_packet_sha256": "c5fc7126aad801bfd2ba5c8f35b6c8b5810f490fad3fbbee839cdadc4162b60e",
   "self_executable": false
 }

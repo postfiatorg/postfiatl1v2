@@ -1,8 +1,8 @@
 {
-  "packet_version": 2,
+  "packet_version": 3,
   "packet_id": "a666-live-loop-leg5-a666-redeem-conservation-20260805",
   "classification": "HELD",
-  "wiring_status": "PARTIAL",
+  "wiring_status": "WIRED",
   "route": "pftl-a666-ethereum-wA666-usdc-v1",
   "chain_ids": {
     "ethereum_mainnet": 1,
@@ -61,28 +61,16 @@
   ],
   "surfaces": [
     {
-      "substep": "A: governed A666 primary redeem operation",
-      "status": "PARTIAL",
-      "surface": "stakehub/live_loop_leg5_redeem.py wraps scripts/a666-build-transparent-redeem-op.py"
-    },
-    {
-      "substep": "B: literal-route redeem quote/controller binding",
-      "status": "PARTIAL",
-      "surface": "stakehub/live_loop_leg5_redeem.py typed quoteRedeem/redeem call specification",
-      "gap": "literal_route_controller_binding"
-    },
-    {
-      "substep": "C: pfUSDC to external USDC",
-      "status": "ABSENT",
-      "surface": "No audited invoker exists",
-      "gap": "a666_redeem_external_usdc_surface"
+      "substep": "A666 redeem and pfUSDC external-USDC bridge-out",
+      "status": "WIRED",
+      "surface": "stakehub/private_swap_orchestration.py:7 submit_pftl_bridge_out; profile-driven --nav-asset pinned from private_swap_ingress route.native_asset_id to literal A666 521c6c63…; injected bridge_out_callable"
     }
   ],
   "requires": [
-    "remaining gap closed + regression green",
+    "surface regression green",
     "principal packet-hash confirmation",
     "prior leg committed evidence"
   ],
-  "supersedes_packet_sha256": "9bcc1453697f8f64ac5f737669d4a69f45f47f785646afc9fb96bf3539f5ab5a",
+  "supersedes_packet_sha256": "93d5be73150e4a9242018bd6b73ace1b4988e92ad29f9cb82ba5ba4f6eeb66fb",
   "self_executable": false
 }

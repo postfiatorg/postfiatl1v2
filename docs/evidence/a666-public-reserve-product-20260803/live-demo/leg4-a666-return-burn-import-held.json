@@ -1,5 +1,5 @@
 {
-  "packet_version": 2,
+  "packet_version": 3,
   "packet_id": "a666-live-loop-leg4-a666-return-burn-import-20260805",
   "classification": "HELD",
   "wiring_status": "WIRED",
@@ -71,6 +71,6 @@
     "principal packet-hash confirmation",
     "prior leg committed evidence"
   ],
-  "supersedes_packet_sha256": "b6e41ed59b2ce2fc78e13fd1716d2f1d3cef7ea7641c5f1ddb57f6bccd6623ba",
+  "supersedes_packet_sha256": "621577ad7d1bd3053a8040f39cc913137982d9aa87f00c5b0069f5fc1af1013f",
   "self_executable": false
 }
