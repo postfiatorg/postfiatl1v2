@@ -1,7 +1,7 @@
 {
   "schema": "postfiat.a666.recovery.regression_manifest.v1",
   "status": "complete",
-  "generated_at_utc": "2026-08-05T00:58:44Z",
+  "generated_at_utc": "2026-08-05T01:18:15Z",
   "evidence_root": "docs/evidence/a666-public-reserve-product-20260803",
   "contracts": [
     "docs/plans/A666-PRODUCT-RECOVERY-AND-DEMO-RELAUNCH-SPEC-20260803.md#61-layer-a-targeted-regressions",
@@ -355,10 +355,12 @@
       ],
       "non_blocking_follow_up": {
         "id": "R7-reserve-proof-websocket-frame-request-binding",
-        "status": "planned_non_blocking_pass_2_follow_up",
+        "status": "implemented_load_bearing_v6_pending_commit",
         "scope": "Reserve-proof acceptance must bind every WebSocket packet frame to its producing RPC method and request ID rather than accept any packet-shaped frame.",
-        "v6_blocking": false,
-        "rationale": "The stable market container class is fixed; the deeper reserve-proof transport-tightness work is intentionally tracked for pass #2/R7 and does not alter the V6 fire gate."
+        "v6_blocking": true,
+        "pending_commit": null,
+        "completion_status": "not_complete_pending_choreography_commit",
+        "rationale": "The transport-tightness rule is load-bearing for V6; its choreography commit is not yet known and must not be fabricated."
       },
       "restart_evidence": {
         "commit": "3b9c4a93e016f77a5bfbd41219cf5a4210d5c519",
@@ -366,6 +368,31 @@
         "contract": "The consumed V5 failed step-3 official window was closed by exact dashboard restart inventory equality; no funds, data, keys, config, or software actions occurred."
       },
       "enforcement_status": "ci_enforced"
+    },
+    {
+      "id": "HARNESS-07",
+      "name": "public_proof_status_rpc_omitted_from_browser_proxy_allowlist",
+      "classification": "browser_origin_public_read_proxy_route_omission",
+      "staging_red": {
+        "commit": "8cb97bed8fe646c1b03400873791ea5a54eddfce",
+        "evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/candidate-proxy-v6-data-plane.json",
+        "first_blocker": "nav_reserve_proof_status_request_not_observed",
+        "observed_browser_error": "proxy_auth_required",
+        "official_journey_invocations": 0,
+        "business_mutations": 0
+      },
+      "diagnosis": {
+        "cause": "The public proof-status RPC is omitted from the wallet-proxy browser-origin public-read allowlist, so an unauthenticated browser call is refused although the validator status surface is public and ledger-backed.",
+        "provider_neutral_validator_contract": {
+          "test": "crates/node/src/tests/nav_reserve_proof_status_tests.rs:7",
+          "handler": "crates/node/src/lifecycle_queries.rs:1886-1959",
+          "rule": "The status reports cryptographically finalized provider-neutral packet facts including source_count rather than named provider identities."
+        },
+        "six_validator_context": "All six staged loopback validators serve the same ledger-backed provider-neutral status contract."
+      },
+      "corrective_rule": "Before nav_reserve_proof_status is allowlisted for browser-origin unauthenticated access, a browser-origin public-read regression must prove the allowed request returns the ledger-backed provider-neutral status and rejects any unauthenticated non-public method.",
+      "regression_status": "required_before_allowlist",
+      "enforcement_status": "pending_browser_origin_unauthenticated_regression"
     }
   ],
   "budget_outliers": [

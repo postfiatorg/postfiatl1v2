@@ -135,6 +135,15 @@ Mandatory set still to extract as standalone <2-minute tests:
 
 ## R4 — Browser readiness **(gate: OPEN)**
 
+- **[SPEC-INTERPRETATION] §8 step 3 — subject to Sauron veto.** “Show six
+  source identities” is satisfied by cryptographically finalized packets where
+  every packet attests `source_count=6`, together with two distinct aggregate
+  proof/packet identities. Named provider identities remain withheld by
+  deliberate provider-neutral policy. Basis:
+  `crates/node/src/tests/nav_reserve_proof_status_tests.rs:7` and
+  `crates/node/src/lifecycle_queries.rs:1886-1959`, which expose
+  ledger-backed provider-neutral status rather than provider names.
+
 - [x] Reload/reconnect/recovery e2e coverage for journey step 9 in
   `wallet-web`: production `PftlPrivatePrimary` recovery path survives
   actual proxy SIGTERM/restart and durable Chromium reload, including the
