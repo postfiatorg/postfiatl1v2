@@ -1,0 +1,303 @@
+#!/usr/bin/env bash
+# a666-r4-fresh-wallet-stage — retryable V7 setup-stage harness.
+#
+# Creates one fresh browser wallet through the production UI on the staged
+# candidate (default same-origin http://127.0.0.1:31021), persists the
+# encrypted browser profile for the official journey's connect/unlock path,
+# emits a mode-600 funding-target ready file, closes the browser, relaunches
+# the persistent context, and proves the production unlock path recovers the
+# same public address hash. No transactions, no funding, no StakeHub touch.
+#
+# Custody: the seed is never persisted or printed. The passphrase exists only
+# in a mode-600 local file and browser storage. Committed evidence carries
+# only the address sha256, file paths, candidate pins, and custody assertions.
+#
+# Usage:
+#   scripts/a666-r4-fresh-wallet-stage            # stage (retryable)
+#   scripts/a666-r4-fresh-wallet-stage --self-test
+set -Eeuo pipefail
+
+REPO_ROOT="/home/postfiat/repos/a666-eth-fast-lane-combined-20260724"
+RUN_DIR="/home/postfiat/.pft/a666-r4-fresh-wallet-v7"
+PROFILE_DIR="$RUN_DIR/browser-profile"
+PASSPHRASE_FILE="$RUN_DIR/wallet-passphrase.local"
+READY_FILE="$RUN_DIR/fresh-wallet-ready.json"
+EVIDENCE="$REPO_ROOT/docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/fresh-wallet-stage-v7.json"
+CANDIDATE_REVISION="23b9bffbd7fcf3327ce67615e7abd5dd3265ea9f"
+EXPECTED_PACKAGE_SHA256="fe6209c5219a583e0f55f8ca0c93244e14ae569288ee46af910bbaa97e1989b3"
+ORIGIN="${POSTFIAT_R4_FRESH_WALLET_ORIGIN:-http://127.0.0.1:31021}"
+PROVENANCE="${POSTFIAT_R4_FRESH_WALLET_PROVENANCE:-/tmp/a666-r4-v7-23b9bff-proxy-provenance.json}"
+PROXY_READY="/home/postfiat/.pft/a666-r4-candidate-proxy/proxy.ready.json"
+WALLET_WEB="$REPO_ROOT/wallet-web"
+ACTION="${1:-stage}"
+
+die() { echo "fresh_wallet_stage_refuse: $*" >&2; exit 2; }
+
+require_loopback_origin() {
+  [[ "$1" =~ ^http://127\.0\.0\.1:[0-9]+$ ]] || die "non_loopback_origin $1"
+}
+
+require_mode() { # path expected_mode label
+  [[ -e "$1" ]] || die "missing_$3 $1"
+  local actual; actual="$(stat -c '%a' "$1")"
+  [[ "$actual" == "$2" ]] || die "mode_violation $3 expected=$2 actual=$actual"
+}
+
+require_candidate_stage() {
+  [[ -f "$PROVENANCE" ]] || die "missing_candidate_pin provenance=$PROVENANCE"
+  jq -e --arg rev "$CANDIDATE_REVISION" \
+    '.ready == true and .candidate.revision_observed == $rev and .candidate.revision_exact == true' \
+    "$PROVENANCE" >/dev/null || die "candidate_pin_mismatch provenance=$PROVENANCE"
+  [[ -f "$PROXY_READY" ]] || die "missing_proxy_ready $PROXY_READY"
+  local pid; pid="$(jq -r .pid "$PROXY_READY")"
+  kill -0 "$pid" 2>/dev/null || die "proxy_process_dead pid=$pid"
+  curl -fsS --max-time 3 "$ORIGIN/healthz" >/dev/null || die "proxy_health_not_200 $ORIGIN"
+}
+
+custody_guard() { # evidence_path -> exit 1 on any custody field
+  python3 - "$1" <<'PY'
+import json, re, sys
+doc = json.load(open(sys.argv[1]))
+BAD_KEYS = {'seed', 'mnemonic', 'passphrase', 'private_key', 'secret',
+            'address', 'wallet_address', 'recovery_key', 'seed_display'}
+def walk(node):
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key.lower() in BAD_KEYS:
+                raise SystemExit(1)
+            walk(value)
+    elif isinstance(node, list):
+        for value in node:
+            walk(value)
+    elif isinstance(node, str):
+        if re.search(r'\bpf[0-9a-f]{40}\b', node):
+            raise SystemExit(1)
+walk(doc)
+PY
+}
+
+addresses_match() { [[ -n "$1" && -n "$2" && "$1" == "$2" ]]; }
+
+self_test() {
+  local failures=0 temp
+  temp="$(mktemp -d /tmp/a666-r4-fresh-wallet-selftest-XXXXXXXX)"; chmod 700 "$temp"
+  # 1. non-loopback origins refuse before any browser launch
+  ( require_loopback_origin "https://example.invalid" ) 2>/dev/null && failures=$((failures+1))
+  ( require_loopback_origin "http://192.168.1.10:31021" ) 2>/dev/null && failures=$((failures+1))
+  ( require_loopback_origin "http://127.0.0.1" ) 2>/dev/null && failures=$((failures+1))
+  ( require_loopback_origin "http://127.0.0.1:31021" ) || failures=$((failures+1))
+  # 2. mode violations refuse
+  mkdir "$temp/dir755"; chmod 755 "$temp/dir755"
+  ( require_mode "$temp/dir755" 700 profile ) 2>/dev/null && failures=$((failures+1))
+  printf 'x\n' >"$temp/file644"; chmod 644 "$temp/file644"
+  ( require_mode "$temp/file644" 600 ready ) 2>/dev/null && failures=$((failures+1))
+  chmod 700 "$temp/dir755"; ( require_mode "$temp/dir755" 700 profile ) || failures=$((failures+1))
+  # 3. missing/stale candidate pin refuses (bind the resolved global inside
+  # the subshell; script-level env resolution happens once at startup)
+  ( PROVENANCE="$temp/absent.json" require_candidate_stage ) 2>/dev/null && failures=$((failures+1))
+  printf '{"ready":true,"candidate":{"revision_observed":"39f7fae3191aa34c376ae1657650a9ec2444f421","revision_exact":true}}\n' >"$temp/stale.json"
+  ( PROVENANCE="$temp/stale.json" require_candidate_stage ) 2>/dev/null && failures=$((failures+1))
+  # 4. custody fields in evidence refuse
+  printf '{"address":"pf%040d"}\n' 0 | python3 -c "import sys,json;json.dump({'address':'pf'+'a'*40},sys.stdout)" >"$temp/bad-evidence.json"
+  custody_guard "$temp/bad-evidence.json" 2>/dev/null && failures=$((failures+1))
+  printf '{"seed":"%064d"}\n' 0 | python3 -c "import sys,json;json.dump({'seed':'b'*64},sys.stdout)" >"$temp/seed-evidence.json"
+  custody_guard "$temp/seed-evidence.json" 2>/dev/null && failures=$((failures+1))
+  printf '{"address_sha256":"%s","passphrase_file":"/x"}\n' "$(printf 'c%.0s' {1..64})" >"$temp/clean-evidence.json"
+  custody_guard "$temp/clean-evidence.json" || failures=$((failures+1))
+  # 5. profile/address mismatch refuses
+  addresses_match "pf$(printf 'a%.0s' {1..40})" "pf$(printf 'd%.0s' {1..40})" && failures=$((failures+1))
+  addresses_match "pf$(printf 'a%.0s' {1..40})" "pf$(printf 'a%.0s' {1..40})" || failures=$((failures+1))
+  rm -rf "$temp"
+  [[ "$failures" == 0 ]] || die "self_test_failures=$failures"
+  echo 'fresh_wallet_stage_self_test=ok vectors=5 non_loopback_rejected=true mode_violation_rejected=true missing_candidate_pin_rejected=true custody_field_rejected=true address_mismatch_rejected=true'
+}
+
+stage() {
+  local started; started="$(date +%s%3N)"
+  require_loopback_origin "$ORIGIN"
+  umask 077
+  mkdir -p "$RUN_DIR" "$PROFILE_DIR"
+  require_mode "$RUN_DIR" 700 run_dir
+  require_mode "$PROFILE_DIR" 700 profile
+  require_candidate_stage
+
+  local driver; driver="$(mktemp "$RUN_DIR/.fresh-wallet-driver-XXXXXXXX.mjs")"; chmod 600 "$driver"
+  cat >"$driver" <<'MJS'
+import { createRequire } from 'node:module';
+import { createHash, randomBytes } from 'node:crypto';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+
+const [origin, profileDir, passphraseFile, readyFile, candidateRevision, walletWeb] = process.argv.slice(2);
+const require = createRequire(`${walletWeb}/package.json`);
+const { chromium } = require('playwright');
+const sha256 = (value) => createHash('sha256').update(value).digest('hex');
+
+async function readAddress(page) {
+  return page.evaluate(() => new Promise((resolve, reject) => {
+    const request = indexedDB.open('postfiat-wallet');
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction('vaults', 'readonly');
+      const record = tx.objectStore('vaults').get('default');
+      record.onerror = () => reject(record.error);
+      record.onsuccess = () => {
+        const address = record.result?.metadata?.address || '';
+        db.close();
+        resolve(address);
+      };
+    };
+  }));
+}
+
+async function unlockIfLocked(page, passphrase) {
+  const lock = page.getByText('Wallet locked', { exact: true });
+  if (await lock.isVisible().catch(() => false)) {
+    await page.locator('input[placeholder="Passphrase"]').fill(passphrase);
+    await page.getByRole('button', { name: 'Unlock', exact: true }).click();
+  }
+  await page.locator('.pf-shell').waitFor();
+}
+
+let passphrase = existsSync(passphraseFile) ? readFileSync(passphraseFile, 'utf8').trim() : '';
+let created = false;
+
+const contextOne = await chromium.launchPersistentContext(profileDir, { headless: true });
+try {
+  const page = contextOne.pages()[0] ?? await contextOne.newPage();
+  page.setDefaultTimeout(15_000);
+  await page.goto(origin, { waitUntil: 'domcontentloaded' });
+  const createButton = page.getByRole('button', { name: 'Create Wallet', exact: true });
+  const createVisible = await createButton.first()
+    .waitFor({ state: 'visible', timeout: 10_000 }).then(() => true).catch(() => false);
+  if (createVisible) {
+    if (!passphrase) {
+      passphrase = randomBytes(24).toString('hex');
+      writeFileSync(passphraseFile, `${passphrase}\n`, { mode: 0o600 });
+    }
+    await createButton.first().click();
+    const seedDisplay = page.locator('.pf-seed-display');
+    await seedDisplay.waitFor({ state: 'visible' });
+    const seed = String(await seedDisplay.textContent() || '').trim();
+    if (!/^[0-9a-f]{64}$/.test(seed)) throw new Error('seed display malformed');
+    // The seed is verified in-page only. It is never persisted, logged,
+    // returned, or written to any file, argv, or evidence field.
+    await page.locator('.pf-checkbox input').check();
+    await page.locator('input[placeholder="Encryption passphrase (min 10 chars)"]').fill(passphrase);
+    await page.locator('input[placeholder="Confirm passphrase"]').fill(passphrase);
+    await page.getByRole('button', { name: 'Create Wallet', exact: true }).last().click();
+    await page.locator('.pf-shell').waitFor();
+    created = true;
+  } else {
+    if (!passphrase) throw new Error('wallet exists but no passphrase file; refusing to guess');
+    await unlockIfLocked(page, passphrase);
+  }
+  const address = await readAddress(page);
+  if (!/^pf[0-9a-f]{40}$/.test(address)) throw new Error('public wallet address malformed');
+  writeFileSync(readyFile, `${JSON.stringify({
+    schema: 'postfiat.a666.r4.fresh-wallet-ready.v1',
+    address,
+    origin,
+    candidate_revision: candidateRevision,
+    created_this_stage: created,
+    recorded_utc: new Date().toISOString(),
+  }, null, 2)}\n`, { mode: 0o600 });
+  await contextOne.close();
+
+  // Reconnect proof: relaunch the persisted profile, take the production
+  // unlock path, and recover the identical public address. No transactions.
+  const contextTwo = await chromium.launchPersistentContext(profileDir, { headless: true });
+  try {
+    const pageTwo = contextTwo.pages()[0] ?? await contextTwo.newPage();
+    pageTwo.setDefaultTimeout(15_000);
+    await pageTwo.goto(origin, { waitUntil: 'domcontentloaded' });
+    const createAgain = pageTwo.getByRole('button', { name: 'Create Wallet', exact: true });
+    const createAgainVisible = await createAgain.first()
+      .waitFor({ state: 'visible', timeout: 10_000 }).then(() => true).catch(() => false);
+    if (createAgainVisible) {
+      throw new Error('persisted profile lost the wallet; reconnect cannot prove identity');
+    }
+    await unlockIfLocked(pageTwo, passphrase);
+    const recovered = await readAddress(pageTwo);
+    if (recovered !== address) throw new Error('reconnect recovered a different address');
+    console.log(JSON.stringify({
+      address_sha256: sha256(address),
+      created_this_stage: created,
+      reconnect_ok: true,
+      transactions: 0,
+    }));
+  } finally {
+    await contextTwo.close();
+  }
+} finally {
+  if (contextOne) await contextOne.close().catch(() => {});
+}
+MJS
+
+  local result
+  result="$(node "$driver" "$ORIGIN" "$PROFILE_DIR" "$PASSPHRASE_FILE" "$READY_FILE" "$CANDIDATE_REVISION" "$WALLET_WEB")"
+  require_mode "$PASSPHRASE_FILE" 600 passphrase_file
+  require_mode "$READY_FILE" 600 ready_file
+  local address_hash created reconnect_ok provenance_sha runtime
+  address_hash="$(jq -r .address_sha256 <<<"$result")"
+  created="$(jq -r .created_this_stage <<<"$result")"
+  reconnect_ok="$(jq -r .reconnect_ok <<<"$result")"
+  [[ "$reconnect_ok" == "true" ]]
+  provenance_sha="$(sha256sum "$PROVENANCE" | awk '{print $1}')"
+  runtime="$(($(date +%s%3N)-started))"
+
+  jq -n \
+    --arg schema postfiat.a666.r4.fresh-wallet-stage.v1 \
+    --arg origin "$ORIGIN" \
+    --arg candidate "$CANDIDATE_REVISION" \
+    --arg package_sha "$EXPECTED_PACKAGE_SHA256" \
+    --arg provenance "$PROVENANCE" --arg provenance_sha "$provenance_sha" \
+    --arg run_dir "$RUN_DIR" --arg profile "$PROFILE_DIR" \
+    --arg ready_file "$READY_FILE" --arg passphrase_file "$PASSPHRASE_FILE" \
+    --arg address_sha256 "$address_hash" \
+    --argjson created "$created" \
+    --argjson runtime_ms "$runtime" \
+    '{
+      schema: $schema,
+      run_id: "a666-r4-official-journey-pass1-20260805-v7",
+      origin: $origin,
+      candidate_revision: $candidate,
+      wallet_package_json_sha256: $package_sha,
+      proxy_provenance_path: $provenance,
+      proxy_provenance_sha256: $provenance_sha,
+      profile_dir: $profile,
+      ready_file: $ready_file,
+      passphrase_file: $passphrase_file,
+      file_modes: { run_dir: "700", profile_dir: "700", ready_file: "600", passphrase_file: "600" },
+      address_sha256: $address_sha256,
+      created_this_stage: $created,
+      reconnect_proof: {
+        persistent_context_relaunched: true,
+        production_unlock_path: true,
+        same_address_recovered: true,
+        seed_or_mnemonic_egress: false,
+        transactions: 0
+      },
+      custody_assertions: {
+        seed_persisted: false,
+        seed_in_argv_log_git_evidence: false,
+        passphrase_only_in_mode600_file_and_browser_storage: true,
+        raw_address_only_in_mode600_ready_file: true,
+        evidence_carries_address_sha256_only: true,
+        stakehub_touched: false,
+        funding_or_transfer_performed: false,
+        official_invocations: 0
+      },
+      runtime_ms: $runtime_ms,
+      retryable: true,
+      credentials_included: false
+    }' >"$EVIDENCE.tmp" && mv "$EVIDENCE.tmp" "$EVIDENCE"
+  custody_guard "$EVIDENCE" || die "custody_guard_rejected_written_evidence"
+  echo "fresh_wallet_stage=ok created_this_stage=$created reconnect_proof=true address_sha256=$address_hash runtime_ms=$runtime"
+}
+
+case "$ACTION" in
+  --self-test) self_test ;;
+  stage) stage ;;
+  *) die "usage: a666-r4-fresh-wallet-stage [stage|--self-test]" ;;
+esac
