@@ -1,0 +1,72 @@
+{
+  "packet_id": "a666-live-loop-leg1-a666-bridge-in-20260805",
+  "classification": "HELD",
+  "route": "pftl-a666-ethereum-wA666-usdc-v1",
+  "chain_ids": {
+    "ethereum_mainnet": 1,
+    "arbitrum": 42161
+  },
+  "amount_atoms": 10000000,
+  "amount_usdc": "10.000000",
+  "cap_arithmetic": {
+    "spent_usdc": "501.024845",
+    "cap_usdc": "530.000000",
+    "projected_usdc": "511.024845",
+    "headroom_usdc": "18.975155"
+  },
+  "credential_references": [],
+  "requires": [
+    "gap closed + regression green",
+    "principal packet-hash confirmation",
+    "prior leg committed evidence"
+  ],
+  "self_executable": false,
+  "leg": 1,
+  "leg_name": "A666 bridge-in",
+  "preconditions": [
+    {
+      "name": "Literal A666 route binding",
+      "how_verified_read_only": "Read the active profile and runner preflight; require exact equality with pftl-a666-ethereum-wA666-usdc-v1."
+    },
+    {
+      "name": "Live endpoint binding",
+      "how_verified_read_only": "Read the active profile endpoints; require Ethereum mainnet chain_id 1 and Arbitrum chain_id 42161, with no Sepolia, testnet, Anvil, fork, or local_l4 endpoint."
+    },
+    {
+      "name": "Cap arithmetic",
+      "how_verified_read_only": "Read the spend ledger and recompute 501.024845 + 10.000000 = 511.024845 and 530.000000 - 511.024845 = 18.975155."
+    },
+    {
+      "name": "StakeHub preservation",
+      "how_verified_read_only": "Read service state and account balances; verify all five StakeHub services and funds remain preserved before any leg."
+    },
+    {
+      "name": "Supersession of historical bridge packet",
+      "how_verified_read_only": "Read the restored runner selection and the historical leg1-mainnet-cctp-pftl-held.json record; verify only this literal-A666 packet is selected."
+    }
+  ],
+  "abort_conditions": [
+    "active service/profile identity differs from the reviewed packet",
+    "warm service or fleet is unavailable",
+    "any validator differs in height/tip/root",
+    "route identity is ambiguous",
+    "literal asset/route/contract differs from the packet",
+    "cap projection exceeds the configured cap",
+    "existing receipt indicates a replay or already-completed substep",
+    "endpoint is Sepolia, testnet, Anvil, fork, or local_l4",
+    "credential value appears in output",
+    "exact before/after arithmetic fails",
+    "a live command has no committed RED-first regression and reviewed HELD packet",
+    "the principal decision or packet-hash confirmation is missing",
+    "the restored canonical runner and old packet would both be run, creating double-bridge risk"
+  ],
+  "command_template": "/usr/bin/python3 -m stakehub.cli wallet demo run --execute-leg 1 --held-packet PATH_TO_HELD_PACKET --confirm-packet-sha256 HEX_SHA256_OF_HELD_PACKET --live",
+  "evidence_output_paths": [
+    "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg1-a666-bridge-in-execution.json",
+    "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg1-a666-bridge-in-before-after.json",
+    "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg1-a666-bridge-in-stdout-stderr.txt"
+  ],
+  "known_gap": "literal_a666_bridge_in_surface",
+  "supersedes_historical_packet": "docs/evidence/a666-public-reserve-product-20260803/live-demo/leg1-mainnet-cctp-pftl-held.json",
+  "supersession_rule": "This packet supersedes the historical packet for the literal A666 route; never run both a restored canonical runner and the historical packet."
+}
