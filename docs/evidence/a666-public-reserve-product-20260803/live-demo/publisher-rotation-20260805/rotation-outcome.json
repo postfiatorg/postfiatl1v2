@@ -1,0 +1,22 @@
+{
+  "schema": "postfiat.a666.live-demo.publisher-rotation-20260805.v1",
+  "recorded_at_utc": "2026-08-05T20:12:00Z",
+  "new_publisher": "pfaf3b9a1593427e656aa1e03ca641ca7842a6f0e7",
+  "old_publisher": "pf11ea21d97fa9d32eb9d04d060978ff522a58f90e",
+  "algorithm_id": "ML-DSA-65",
+  "vault_location": "~/.stakehub/deployment-signing/vault.enc",
+  "vault_sha256": "2960c1caf47228e55625feb6a74b5402054f1c038cdb467091e2ea3684ee54f2",
+  "passphrase_file": "~/.pft/a666-live-demo/deployment/keys/vault-passphrase (mode 600)",
+  "backup_dir": "~/.pft/a666-live-demo/deployment/backup-local/2960c1ca... (local fallback)",
+  "true_off_host_backup_verified": false,
+  "manifest_sha256": "cf9b436105a401f1af64dde1400a7eed8d73e46663abc30c25e90d50152a8675",
+  "public_key_sha256": "b5a33e9dcca2d42c63b6d1d16a03061afd5172b36b571bcc9741f6a8294f2882",
+  "verify_exit_codes": {"8a_valid": 0, "8b_old_key": 1, "8c_tampered": 1, "8d_expired": 1},
+  "canonical_identity_c3": "3f0c2153af59f9af4e55f2abe63d19ab89541d831a1ffee80cd7777721004cc7",
+  "stakehub_commit": "213ed5e416175505e48afc3966dd22f9dce2804c",
+  "deployment_id": "pftl-escrow-ae3c53c-00616722",
+  "binary_sha256": "006167226531582cf81666dded004f26707beedc2ce3fa850caf5b0b82fd22e7",
+  "git_revision": "ae3c53c9f07013d2813f3e248eec1d75320d0c03",
+  "build_profile": "debug",
+  "valid_window_utc": "2026-08-05T20:10:37Z to 2026-08-12T20:10:37Z"
+}
