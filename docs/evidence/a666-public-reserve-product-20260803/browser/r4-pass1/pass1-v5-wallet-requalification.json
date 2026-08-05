@@ -1,18 +1,35 @@
 {
-  "schema": "postfiat.a666.r4.pass1-v5-wallet-requalification.v1",
-  "verdict": "red",
-  "harness_head": "c057a2c99a4cbb088084747133d0eb6dbea5fd81",
-  "required_commits": ["49e4ce8", "bfe07d2", "c057a2c"],
+  "schema": "postfiat.a666.r4.pass1-v5-wallet-requalification.v2",
+  "verdict": "green",
+  "composite": true,
+  "current_head_before_evidence_commit": "f4a70fe3678e9d319f876bc245745d4aa2aa4a60",
+  "matrix_tree_head": "c057a2c99a4cbb088084747133d0eb6dbea5fd81",
+  "functional_code_revision_covered": "bfe07d24fb684c955b5ff72acac8c8ec3fcb6678",
+  "functional_code_lineage": [
+    "49e4ce851f19f90445c70df84d071c6073b91205",
+    "bfe07d24fb684c955b5ff72acac8c8ec3fcb6678"
+  ],
+  "nonfunctional_commits_after_matrix": [
+    {
+      "commit": "69a9da997db5d5433db73eb13acea76f66a9e9cf",
+      "scope": "this requalification evidence only"
+    },
+    {
+      "commit": "f4a70fe3678e9d319f876bc245745d4aa2aa4a60",
+      "scope": "official-readiness dynamic-binding evidence only"
+    }
+  ],
+  "code_unchanged_after_matrix": true,
   "product_candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
   "disk_preflight": {
     "available_kib": 191363260,
     "passed": true
   },
-  "binding_source": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-readiness-dynamic-binding.json",
-  "commands": [
+  "results": [
     {
       "name": "npm-test",
       "command": "npm test",
+      "source_commit": "69a9da997db5d5433db73eb13acea76f66a9e9cf",
       "exit_code": 0,
       "runtime_ms": 30402,
       "matched": 233,
@@ -25,6 +42,7 @@
     {
       "name": "build",
       "command": "npm run build",
+      "source_commit": "69a9da997db5d5433db73eb13acea76f66a9e9cf",
       "exit_code": 0,
       "runtime_ms": 780,
       "modules_transformed": 1805,
@@ -34,6 +52,7 @@
     {
       "name": "custody-browser",
       "command": "npm run test:custody-browser",
+      "source_commit": "69a9da997db5d5433db73eb13acea76f66a9e9cf",
       "exit_code": 0,
       "runtime_ms": 6350,
       "matched": 1,
@@ -47,6 +66,7 @@
     {
       "name": "public-browser",
       "command": "npm run test:public-browser",
+      "source_commit": "69a9da997db5d5433db73eb13acea76f66a9e9cf",
       "exit_code": 0,
       "runtime_ms": 8167,
       "matched": 2,
@@ -59,40 +79,48 @@
     },
     {
       "name": "r4-construction",
-      "command": "npm run test:r4-construction",
-      "exit_code": 1,
-      "runtime_ms": 864,
+      "command": "npm run test:r4-construction with the literal mandatory environment contract recorded by f4a70fe",
+      "source_commit": "f4a70fe3678e9d319f876bc245745d4aa2aa4a60",
+      "exit_code": 0,
+      "runtime_ms": 1413,
       "matched": 19,
-      "passed": 18,
-      "failed": 1,
+      "passed": 19,
+      "failed": 0,
       "todo": 0,
-      "output_path": "/tmp/a666-r4-v5-requalification-r4-construction.log",
-      "output_sha256": "e7c8371fbbb08653ccab91281e850011f82a2b5c7ac3b653f6bc3a09068a55f2"
+      "skipped": 0,
+      "extractor_accessor_count": 120,
+      "extractor_mismatch_count": 0,
+      "binding_evidence": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-readiness-dynamic-binding.json"
     }
   ],
-  "first_failure": {
-    "command": "npm run test:r4-construction",
-    "test": "A666 R4 offline Ethereum rehearsal drives the production rendered wallet journey",
-    "error_class": "ERR_TEST_FAILURE",
-    "error": "POSTFIAT_R4_WALLET_ORIGIN is required",
-    "source": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:850",
-    "classification": "construction environment binding absent from invocation",
-    "retry_performed": false
-  },
   "step_1_browser_predicates": {
-    "executed": false,
-    "step_1_browser_identity_green": false,
-    "served": false,
-    "wallet_created_and_unlocked": false,
-    "version_visible_exact": false,
-    "package_json_sha256_match": false,
-    "candidate_bound": false,
-    "production_graph": false,
-    "reason": "construction runner refused before browser launch because POSTFIAT_R4_WALLET_ORIGIN was absent"
+    "executed": true,
+    "step_1_browser_identity_green": true,
+    "count": 6,
+    "served": true,
+    "wallet_created_and_unlocked": true,
+    "version_visible_exact": true,
+    "package_json_sha256_match": true,
+    "candidate_bound": true,
+    "production_graph": true
+  },
+  "prior_refused_attempt": {
+    "source_commit": "69a9da997db5d5433db73eb13acea76f66a9e9cf",
+    "command": "npm run test:r4-construction",
+    "exit_code": 1,
+    "matched": 19,
+    "passed": 18,
+    "failed": 1,
+    "todo": 0,
+    "error": "POSTFIAT_R4_WALLET_ORIGIN is required",
+    "classification": "construction environment binding absent from invocation",
+    "browser_launched": false,
+    "official_journey_invocations": 0,
+    "business_mutations": 0,
+    "preserved": true
   },
   "official_journey_invocations": 0,
   "business_mutations": 0,
   "browser_official_invocations": 0,
-  "retry_performed": false,
   "credentials_included": false
 }
