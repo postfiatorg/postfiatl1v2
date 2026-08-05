@@ -1,0 +1,41 @@
+{
+  "schema": "postfiat.a666.r4.v7-holder-trustline-stage-finality-red.v1",
+  "recorded_utc": "2026-08-05T11:45:00Z",
+  "status": "RED",
+  "stop_no_retry": true,
+  "commit_at_fire": "b263fbb",
+  "invocation": {
+    "command": "scripts/a666-r4-fresh-wallet-trustline-stage stage-holder",
+    "count": 1,
+    "exit_code": 1,
+    "pfusdc_clicks": 1,
+    "a666_clicks": 0,
+    "terminal_error": "add-asset finality response missing",
+    "receipts": 0
+  },
+  "ledger_state_after": {
+    "height": 834,
+    "six_way_tuple_equal": true,
+    "pft_balance": 74,
+    "sequence": 0,
+    "pfusdc_line_present": false,
+    "a666_line_present": false,
+    "supply_baseline_tuple": [null, 1000000, 898718],
+    "supplies_unchanged": true,
+    "mutations_applied": 0,
+    "verified_by": "scripts/a666-r4-fresh-wallet-trustline-stage check (exit 0, pre and post invocation, identical state)"
+  },
+  "pre_submit_observations": {
+    "asset_info": "ok, found=true, asset_id match, issuer nonempty, requires_authorization=false",
+    "asset_fee_quote": "ok, minimum_fee=32, sequence=1, sender_meets_reserve_after_fee=true, operation echo deep-equal to the exact holder trust_set (limit=1000000, authorized=false, frozen=false, reserve_paid=10), source match",
+    "chain_binding": "fleet status chain_id equals served bundle pinned CHAIN_ID (postfiat-wan-devnet-2)"
+  },
+  "submit_frame_disposition": "UNKNOWN",
+  "no_retry_performed": true,
+  "custody": {
+    "seed_passphrase_private_signature_values_printed": false,
+    "passphrase_access": "file path only at browser fill-time; never printed",
+    "address_published_as_sha256_only": "2f58eb97683596c676c06da165c3e8011ff9860827acb9b30355a2a83638f4a6",
+    "stakehub_untouched": true
+  }
+}
