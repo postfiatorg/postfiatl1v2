@@ -1,0 +1,98 @@
+{
+  "schema": "postfiat.a666.r4.pass1-v5-wallet-requalification.v1",
+  "verdict": "red",
+  "harness_head": "c057a2c99a4cbb088084747133d0eb6dbea5fd81",
+  "required_commits": ["49e4ce8", "bfe07d2", "c057a2c"],
+  "product_candidate_revision": "39f7fae3191aa34c376ae1657650a9ec2444f421",
+  "disk_preflight": {
+    "available_kib": 191363260,
+    "passed": true
+  },
+  "binding_source": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/official-readiness-dynamic-binding.json",
+  "commands": [
+    {
+      "name": "npm-test",
+      "command": "npm test",
+      "exit_code": 0,
+      "runtime_ms": 30402,
+      "matched": 233,
+      "passed": 233,
+      "failed": 0,
+      "todo": 0,
+      "output_path": "/tmp/a666-r4-v5-requalification-npm-test.log",
+      "output_sha256": "4d824bb16ff6aad2efcb28be0d523c09f6995e3aa20c1e9d2d45fc94a03b4765"
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "exit_code": 0,
+      "runtime_ms": 780,
+      "modules_transformed": 1805,
+      "output_path": "/tmp/a666-r4-v5-requalification-build.log",
+      "output_sha256": "1cbfd64ccefb3b282869e16c659f5a14cba530d73285a4f9a4f3ea39b3f51a50"
+    },
+    {
+      "name": "custody-browser",
+      "command": "npm run test:custody-browser",
+      "exit_code": 0,
+      "runtime_ms": 6350,
+      "matched": 1,
+      "passed": 1,
+      "failed": 0,
+      "todo": 0,
+      "custody_boundary_green": true,
+      "output_path": "/tmp/a666-r4-v5-requalification-custody-browser.log",
+      "output_sha256": "922d5140e97513595d80c61bd2eb1eaeeca2edfbe04b4d6581e8341a35a5ecfe"
+    },
+    {
+      "name": "public-browser",
+      "command": "npm run test:public-browser",
+      "exit_code": 0,
+      "runtime_ms": 8167,
+      "matched": 2,
+      "passed": 2,
+      "failed": 0,
+      "todo": 0,
+      "step9_recovery_and_receipt_download_green": true,
+      "output_path": "/tmp/a666-r4-v5-requalification-public-browser.log",
+      "output_sha256": "c92372a5664dd1c751991c89212cd5b3ad4b44803eef10afb3f31fea799f4062"
+    },
+    {
+      "name": "r4-construction",
+      "command": "npm run test:r4-construction",
+      "exit_code": 1,
+      "runtime_ms": 864,
+      "matched": 19,
+      "passed": 18,
+      "failed": 1,
+      "todo": 0,
+      "output_path": "/tmp/a666-r4-v5-requalification-r4-construction.log",
+      "output_sha256": "e7c8371fbbb08653ccab91281e850011f82a2b5c7ac3b653f6bc3a09068a55f2"
+    }
+  ],
+  "first_failure": {
+    "command": "npm run test:r4-construction",
+    "test": "A666 R4 offline Ethereum rehearsal drives the production rendered wallet journey",
+    "error_class": "ERR_TEST_FAILURE",
+    "error": "POSTFIAT_R4_WALLET_ORIGIN is required",
+    "source": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js:850",
+    "classification": "construction environment binding absent from invocation",
+    "retry_performed": false
+  },
+  "step_1_browser_predicates": {
+    "executed": false,
+    "step_1_browser_identity_green": false,
+    "served": false,
+    "wallet_created_and_unlocked": false,
+    "version_visible_exact": false,
+    "package_json_sha256_match": false,
+    "candidate_bound": false,
+    "production_graph": false,
+    "reason": "construction runner refused before browser launch because POSTFIAT_R4_WALLET_ORIGIN was absent"
+  },
+  "official_journey_invocations": 0,
+  "business_mutations": 0,
+  "browser_official_invocations": 0,
+  "retry_performed": false,
+  "credentials_included": false
+}
