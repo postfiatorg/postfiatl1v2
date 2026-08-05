@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -1683,6 +1683,133 @@ test('A666 R4 RED-FIRST served candidate NAV Markets exposes visible navcoin mar
   } finally {
     await browser.close();
   }
+});
+
+async function assertPathBSelected(selector, timeoutMs = 15_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const value = await selector.inputValue().catch(() => '');
+    if (value === JOURNEY_ROUTE_ID) return;
+    await new Promise(resolveWait => setTimeout(resolveWait, 100));
+  }
+  throw new Error(`Path-B route ${JOURNEY_ROUTE_ID} was not auto-selected on the mounted adapter`);
+}
+
+test('A666 R4 DOM-IDENTITY healthy NAV Markets exposes exactly one navcoin-market testid', { todo: 'RED-first: e1b71a1 wrapper div plus NavcoinPrimaryMarket section both carry the testid; exactly one required; staged actual count is 2 (candidate-proxy-v6-data-plane.json)' }, async () => {
+  // Same-origin candidate staging (31021): identical env/proxy-auth
+  // choreography as runConstructionPreflight, which produced the staged
+  // count=2 strict-mode blocker. Read-only; zero mutations.
+  const walletOrigin = requiredLoopbackOrigin('POSTFIAT_R4_WALLET_ORIGIN', 'served candidate wallet origin');
+  const proxyOrigin = requiredLoopbackOrigin('POSTFIAT_R4_PROXY_ORIGIN', 'candidate proxy origin');
+  assert.equal(walletOrigin.href, proxyOrigin.href,
+    'DOM-identity healthy vector requires same-origin candidate staging');
+  const setup = await readJson(
+    join(REPO_ROOT, 'docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/setup-endpoints-manifest.json'),
+    'setup manifest',
+  );
+  const pinnedPackage = pinnedCandidatePackage(REPO_ROOT, CANDIDATE_REVISION);
+  const productionGraph = await verifyProductionGraph();
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const rpcTraffic = { sent: [], received: [] };
+    page.on('websocket', socket => {
+      socket.on('framesent', event => {
+        if (typeof event.payload !== 'string') return;
+        try { rpcTraffic.sent.push(JSON.parse(event.payload)); } catch { /* non-JSON frames are irrelevant */ }
+      });
+      socket.on('framereceived', event => {
+        if (typeof event.payload !== 'string') return;
+        try { rpcTraffic.received.push(JSON.parse(event.payload)); } catch { /* non-JSON frames are irrelevant */ }
+      });
+    });
+    page.setDefaultTimeout(30_000);
+    const stepOne = await observeStepOneBuildIdentity({
+      page,
+      walletOrigin,
+      setup,
+      pinnedPackage,
+      productionGraph,
+      passphrase: 'a666-r4-dom-identity-vector',
+    });
+    await observeStepTwoWalletShell(page, stepOne.created);
+    await page.locator('.pf-sidebar .pf-nav').filter({ hasText: 'NAV Markets' }).click();
+    // Adapter-mounted assertion BEFORE any testid count: the select lives
+    // only inside NavcoinPrimaryMarket, never in the NavcoinMarket wrapper.
+    const selector = page.locator('#navcoin-market-select');
+    await selector.waitFor({ state: 'visible' });
+    const journeyOptionPresent = await selector.locator('option').evaluateAll(
+      (options, routeId) => options.some(option => option.value === routeId),
+      JOURNEY_ROUTE_ID,
+    );
+    assert.equal(journeyOptionPresent, true, `journey route option ${JOURNEY_ROUTE_ID} is absent`);
+    // Path-B selection: post-0a9e552 exactly one route is live, so the
+    // adapter disables the select (markets.length < 2) and auto-selects the
+    // sole live market. Require the mounted select to resolve to Path-B.
+    await assertPathBSelected(selector);
+    assert.equal(await selector.inputValue(), JOURNEY_ROUTE_ID, 'wrong NAVCoin journey route selected');
+    const routesRequest = await waitForTrafficEntry(
+      rpcTraffic.sent,
+      request => request?.method === 'navcoin_bridge_routes',
+      'production wallet did not emit navcoin_bridge_routes',
+    );
+    const routesResponse = await waitForTrafficEntry(
+      rpcTraffic.received,
+      response => response?.id === routesRequest.id,
+      'production wallet did not receive its navcoin_bridge_routes response',
+    );
+    assert.equal(routesResponse?.result?.schema, 'postfiat-pftl-uniswap-routes-status-v2',
+      'route registry response schema mismatch');
+    const market = page.locator('[data-testid="navcoin-market"]');
+    assert.equal(await market.count(), 1,
+      'healthy branch must expose exactly one navcoin-market testid');
+  } finally {
+    await browser.close();
+  }
+});
+
+test('A666 R4 DOM-IDENTITY fallback NAV Markets exposes exactly one navcoin-market testid', async () => {
+  const distPort = 24000 + (process.pid % 2000);
+  const distOrigin = `http://127.0.0.1:${distPort}`;
+  const server = spawn('python3', ['-m', 'http.server', String(distPort), '--bind', '127.0.0.1', '--directory', join(WALLET_ROOT, 'dist')], { stdio: 'ignore' });
+  const started = Date.now();
+  let up = false;
+  while (Date.now() - started < 10_000) {
+    up = await fetch(`${distOrigin}/`).then((r) => r.ok).catch(() => false);
+    if (up) break;
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  assert.ok(up, 'static dist server must come up');
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    page.setDefaultTimeout(10_000);
+    // No /rpc on the static server: route registry fetch fails, markets stay empty,
+    // NavcoinMarket takes the fallback branch (no NavcoinPrimaryMarket mount).
+    await page.goto(distOrigin, { waitUntil: 'domcontentloaded' });
+    await createBrowserControlledWallet(page, 'a666-r4-dom-identity-fallback');
+    await page.locator('.pf-sidebar .pf-nav').filter({ hasText: 'NAV Markets' }).click();
+    const market = page.locator('[data-testid="navcoin-market"]');
+    await market.first().waitFor({ state: 'visible', timeout: 5_000 });
+    assert.equal(await market.count(), 1, 'fallback branch must expose exactly one navcoin-market testid');
+  } finally {
+    await browser.close();
+    server.kill('SIGTERM');
+  }
+  await new Promise((r) => setTimeout(r, 300));
+  const stillUp = await fetch(`${distOrigin}/`).then(() => true).catch(() => false);
+  assert.equal(stillUp, false, 'static dist server port must be closed after the test');
+});
+
+test('A666 R4 DOM-IDENTITY vector source guard: both branches present, healthy case never skipped', async () => {
+  const source = await readFile(fileURLToPath(import.meta.url), 'utf8');
+  assert.ok(source.includes('A666 R4 DOM-IDENTITY healthy NAV Markets exposes exactly one navcoin-market testid'));
+  assert.ok(source.includes('A666 R4 DOM-IDENTITY fallback NAV Markets exposes exactly one navcoin-market testid'));
+  const healthyStart = source.indexOf("test('A666 R4 DOM-IDENTITY healthy");
+  const healthyHeader = source.slice(healthyStart, source.indexOf('async () =>', healthyStart));
+  assert.equal(healthyHeader.includes('skip:'), false, 'healthy case must stay an active todo, never skipped');
 });
 
 function reserveProofFixture() {
