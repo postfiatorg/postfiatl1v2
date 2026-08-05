@@ -972,20 +972,47 @@ function matchingRpcResponse(received, request) {
   return received.find(response => response?.id === request?.id) ?? null;
 }
 
+async function selectJourneyRoute(selector, timeoutMs = 15_000) {
+  // Shared Path-B selection contract. Post-0a9e552 route_live filtering can
+  // leave exactly one live route; the product then disables the selector and
+  // auto-selects the sole live market (bba3632 recorded the selectOption
+  // wall this caused). Enabled selectors take the exact Path-B option;
+  // disabled selectors are adapter-ready only when they expose exactly one
+  // option and already carry Path-B. The exact-value assertion never weakens.
+  await selector.waitFor({ state: 'visible' });
+  const optionInfo = await selector.locator('option').evaluateAll(
+    (options, routeId) => ({
+      values: options.map(option => option.value),
+      hasRoute: options.some(option => option.value === routeId),
+    }),
+    JOURNEY_ROUTE_ID,
+  );
+  assert.equal(optionInfo.hasRoute, true, `journey route option ${JOURNEY_ROUTE_ID} is absent`);
+  if (await selector.isDisabled()) {
+    assert.equal(optionInfo.values.length, 1,
+      'disabled NAVCoin market selector must expose exactly one option');
+    const deadline = Date.now() + timeoutMs;
+    let value = '';
+    while (Date.now() < deadline) {
+      value = await selector.inputValue().catch(() => '');
+      if (value === JOURNEY_ROUTE_ID) return;
+      await new Promise(resolveWait => setTimeout(resolveWait, 100));
+    }
+    assert.equal(value, JOURNEY_ROUTE_ID,
+      'disabled NAVCoin market selector must already carry the Path-B route');
+    return;
+  }
+  await selector.selectOption(JOURNEY_ROUTE_ID);
+  assert.equal(await selector.inputValue(), JOURNEY_ROUTE_ID, 'wrong NAVCoin journey route selected');
+}
+
 async function openPrimaryMarket(page, rpcTraffic) {
   const sentStart = rpcTraffic.sent.length;
   await page.locator('.pf-sidebar .pf-nav').filter({ hasText: 'NAV Markets' }).click();
   const market = page.locator('[data-testid="navcoin-market"]');
   await market.waitFor({ state: 'visible' });
   const selector = market.locator('#navcoin-market-select');
-  await selector.waitFor({ state: 'visible' });
-  const journeyOptionPresent = await selector.locator('option').evaluateAll(
-    (options, routeId) => options.some(option => option.value === routeId),
-    JOURNEY_ROUTE_ID,
-  );
-  assert.equal(journeyOptionPresent, true, `journey route option ${JOURNEY_ROUTE_ID} is absent`);
-  await selector.selectOption(JOURNEY_ROUTE_ID);
-  assert.equal(await selector.inputValue(), JOURNEY_ROUTE_ID, 'wrong NAVCoin journey route selected');
+  await selectJourneyRoute(selector);
 
   const routesRequest = await waitForTrafficEntry(
     rpcTraffic.sent,
@@ -1685,16 +1712,6 @@ test('A666 R4 RED-FIRST served candidate NAV Markets exposes visible navcoin mar
   }
 });
 
-async function assertPathBSelected(selector, timeoutMs = 15_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const value = await selector.inputValue().catch(() => '');
-    if (value === JOURNEY_ROUTE_ID) return;
-    await new Promise(resolveWait => setTimeout(resolveWait, 100));
-  }
-  throw new Error(`Path-B route ${JOURNEY_ROUTE_ID} was not auto-selected on the mounted adapter`);
-}
-
 test('A666 R4 DOM-IDENTITY healthy NAV Markets exposes exactly one navcoin-market testid', async () => {
   // Same-origin candidate staging (31021): identical env/proxy-auth
   // choreography as runConstructionPreflight, which produced the staged
@@ -1737,18 +1754,9 @@ test('A666 R4 DOM-IDENTITY healthy NAV Markets exposes exactly one navcoin-marke
     await page.locator('.pf-sidebar .pf-nav').filter({ hasText: 'NAV Markets' }).click();
     // Adapter-mounted assertion BEFORE any testid count: the select lives
     // only inside NavcoinPrimaryMarket, never in the NavcoinMarket wrapper.
+    // Shared helper handles the single-live-route disabled-select contract.
     const selector = page.locator('#navcoin-market-select');
-    await selector.waitFor({ state: 'visible' });
-    const journeyOptionPresent = await selector.locator('option').evaluateAll(
-      (options, routeId) => options.some(option => option.value === routeId),
-      JOURNEY_ROUTE_ID,
-    );
-    assert.equal(journeyOptionPresent, true, `journey route option ${JOURNEY_ROUTE_ID} is absent`);
-    // Path-B selection: post-0a9e552 exactly one route is live, so the
-    // adapter disables the select (markets.length < 2) and auto-selects the
-    // sole live market. Require the mounted select to resolve to Path-B.
-    await assertPathBSelected(selector);
-    assert.equal(await selector.inputValue(), JOURNEY_ROUTE_ID, 'wrong NAVCoin journey route selected');
+    await selectJourneyRoute(selector);
     const routesRequest = await waitForTrafficEntry(
       rpcTraffic.sent,
       request => request?.method === 'navcoin_bridge_routes',
@@ -1841,7 +1849,7 @@ function reserveProofFixture() {
   return { request, response };
 }
 
-function stepThreePageFixture({ selectorVisible = true, selectedRoute = JOURNEY_ROUTE_ID } = {}) {
+function stepThreePageFixture({ selectorVisible = true, selectedRoute = JOURNEY_ROUTE_ID, selectorDisabled = false } = {}) {
   const routeAssetId = 'a'.repeat(96);
   const routesRequest = { id: 'web-1', method: 'navcoin_bridge_routes', params: {} };
   const routesResponse = {
@@ -1853,7 +1861,17 @@ function stepThreePageFixture({ selectorVisible = true, selectedRoute = JOURNEY_
     },
   };
   const traffic = { sent: [routesRequest], received: [routesResponse] };
-  let currentValue = '';
+  const calls = { selectOption: 0 };
+  let currentValue = selectorDisabled ? selectedRoute : '';
+  let proofPushed = false;
+  const pushProof = () => {
+    if (proofPushed) return;
+    proofPushed = true;
+    const proof = reserveProofFixture();
+    proof.request.params.asset_id = routeAssetId;
+    traffic.sent.push(proof.request);
+    traffic.received.push(proof.response);
+  };
   const selector = {
     async waitFor() {
       if (!selectorVisible) throw new Error('primary market adapter selector is absent');
@@ -1862,15 +1880,17 @@ function stepThreePageFixture({ selectorVisible = true, selectedRoute = JOURNEY_
       assert.equal(name, 'option');
       return { async evaluateAll(callback, routeId) { return callback([{ value: JOURNEY_ROUTE_ID }], routeId); } };
     },
+    async isDisabled() { return selectorDisabled; },
     async selectOption(routeId) {
+      calls.selectOption += 1;
       currentValue = selectedRoute;
-      const proof = reserveProofFixture();
-      proof.request.params.asset_id = routeAssetId;
-      traffic.sent.push(proof.request);
-      traffic.received.push(proof.response);
+      pushProof();
       return routeId;
     },
-    async inputValue() { return currentValue; },
+    async inputValue() {
+      if (currentValue === JOURNEY_ROUTE_ID) pushProof();
+      return currentValue;
+    },
   };
   const market = {
     async waitFor() {},
@@ -1888,8 +1908,60 @@ function stepThreePageFixture({ selectorVisible = true, selectedRoute = JOURNEY_
       return market;
     },
   };
-  return { page, traffic };
+  return { page, traffic, selectorCalls: calls };
 }
+
+function selectionHelperFixture({ disabled = false, options = [JOURNEY_ROUTE_ID], value = '' } = {}) {
+  let currentValue = value;
+  const calls = { selectOption: 0 };
+  const selector = {
+    async waitFor() {},
+    locator(name) {
+      assert.equal(name, 'option');
+      return {
+        async evaluateAll(callback, routeId) {
+          return callback(options.map(optionValue => ({ value: optionValue })), routeId);
+        },
+      };
+    },
+    async isDisabled() { return disabled; },
+    async selectOption(routeId) { calls.selectOption += 1; currentValue = routeId; },
+    async inputValue() { return currentValue; },
+  };
+  return { selector, calls };
+}
+
+test('A666 R4 selection helper single-live-route contract: disabled exact Path-B ready, wrong value and multi-option rejected, enabled multi-route still selects', async () => {
+  // RED-first record: bba3632 documented the selectOption wall when route_live
+  // filtering leaves one route and the product correctly disables the
+  // selector; the DOM-identity healthy run reproduced it against 31021.
+  const ready = selectionHelperFixture({ disabled: true, value: JOURNEY_ROUTE_ID });
+  await selectJourneyRoute(ready.selector);
+  assert.equal(ready.calls.selectOption, 0, 'disabled selector must never receive selectOption');
+
+  const wrongValue = selectionHelperFixture({ disabled: true, value: 'wrong-route' });
+  await assert.rejects(selectJourneyRoute(wrongValue.selector, 200), /must already carry the Path-B route/);
+  assert.equal(wrongValue.calls.selectOption, 0);
+
+  const multiOption = selectionHelperFixture({ disabled: true, options: [JOURNEY_ROUTE_ID, 'other-route'], value: JOURNEY_ROUTE_ID });
+  await assert.rejects(selectJourneyRoute(multiOption.selector, 200), /exactly one option/);
+
+  const enabled = selectionHelperFixture({ options: ['other-route', JOURNEY_ROUTE_ID] });
+  await selectJourneyRoute(enabled.selector);
+  assert.equal(enabled.calls.selectOption, 1, 'enabled selector must select exactly once');
+  assert.equal(await enabled.selector.inputValue(), JOURNEY_ROUTE_ID);
+
+  const enabledMissing = selectionHelperFixture({ options: ['other-route'] });
+  await assert.rejects(selectJourneyRoute(enabledMissing.selector, 200), /is absent/);
+
+  // End-to-end through openPrimaryMarket: disabled single-option Path-B
+  // selector is adapter-ready and the proof binding still completes.
+  const disabledReady = stepThreePageFixture({ selectorDisabled: true });
+  const opened = await openPrimaryMarket(disabledReady.page, disabledReady.traffic);
+  assert.equal(disabledReady.selectorCalls.selectOption, 0,
+    'openPrimaryMarket must not call selectOption on a disabled selector');
+  assert.equal(opened.proofRequest.method, 'nav_reserve_proof_status');
+});
 
 test('A666 R4 step-3 choreography rejects wrapper-only readiness and binds proof method/request identity', async () => {
   const historical = execFileSync(

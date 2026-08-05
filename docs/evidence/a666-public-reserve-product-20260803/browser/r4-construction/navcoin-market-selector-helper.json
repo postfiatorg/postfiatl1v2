@@ -1,0 +1,49 @@
+{
+  "schema": "postfiat.a666.r4.navcoin-market-selector-helper.v1",
+  "recorded_at_utc": "2026-08-05T03:45:00Z",
+  "verdict": "green",
+  "closes": {
+    "semantic_wall_record": "bba3632 (v6 construction step-3 selectOption timeout: route_live filtering leaves one route; product correctly disables the selector)",
+    "disabled_select_observation": "docs/evidence/a666-public-reserve-product-20260803/browser/r4-construction/navcoin-market-dom-identity-green.json (healthy DOM run reproduced the disabled-select wall against 31021 before the Path-B auto-resolution workaround)"
+  },
+  "helper": {
+    "name": "selectJourneyRoute",
+    "file": "wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+    "contract": "enabled selector: selectOption(JOURNEY_ROUTE_ID) then exact-value assert; disabled selector: exactly one option required AND current value must already equal pftl-a666-r4-offline-rehearsal-v1 (bounded readiness wait, strict assert, selectOption never called). No product edit; no assertion weakening.",
+    "consumers": [
+      "openPrimaryMarket (construction + official shared step-3 choreography)",
+      "A666 R4 DOM-IDENTITY healthy NAV Markets case"
+    ]
+  },
+  "vectors": {
+    "test": "A666 R4 selection helper single-live-route contract: disabled exact Path-B ready, wrong value and multi-option rejected, enabled multi-route still selects",
+    "cases": {
+      "disabled_one_option_path_b_ready_without_selectoption": true,
+      "disabled_wrong_value_rejected": "/must already carry the Path-B route/",
+      "disabled_multi_option_rejected": "/exactly one option/",
+      "enabled_multi_route_selects_path_b_exactly_once": true,
+      "enabled_route_absent_rejected": "/is absent/",
+      "open_primary_market_disabled_selector_proof_binding_completes_zero_selectoption": true,
+      "prior_negatives_preserved": "wrapper-only readiness rejected; wrong-route enabled selector rejected with identical message"
+    }
+  },
+  "targeted_run": {
+    "command": "cd wallet-web && POSTFIAT_R4_WALLET_ORIGIN=http://127.0.0.1:31021 POSTFIAT_R4_PROXY_ORIGIN=http://127.0.0.1:31021 node --test --test-name-pattern \"selection helper|step-3 choreography|DOM-IDENTITY\" src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js",
+    "exit_code": 0,
+    "matched": 5,
+    "pass": 5,
+    "fail": 0,
+    "todo": 0,
+    "note": "DOM-IDENTITY healthy case passes against the real staged 31021 disabled selector (adapter-mounted, Path-B auto-resolved)"
+  },
+  "gates": {
+    "node_check_exit": 0,
+    "extractor": { "accessor_count": 120, "mismatch_count": 0, "exit_code": 0 }
+  },
+  "scope": {
+    "product_edits": 0,
+    "official_invocations": 0,
+    "business_mutations": 0,
+    "credentials_included": false
+  }
+}
