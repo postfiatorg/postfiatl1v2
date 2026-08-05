@@ -1,0 +1,14 @@
+{
+  "schema": "postfiat.a666.live-demo.binrepin-provenance-20260805.v1",
+  "recorded_at_utc": "2026-08-05T19:10:00Z",
+  "source_binary": "/home/postfiat/tmp/pftl-escrow-ae3c53c-00616722/postfiat-node",
+  "source_hash": "006167226531582cf81666dded004f26707beedc2ce3fa850caf5b0b82fd22e7",
+  "durable_path": "/home/postfiat/.pft/a666-live-demo/bin/postfiat-node-006167226531582cf81666dded004f26707beedc2ce3fa850caf5b0b82fd22e7",
+  "durable_mode": "500",
+  "dest_dir_mode": "700",
+  "fleet_agreement": "6/6 validator processes identical to fleet file hash",
+  "fleet_hash": "006167226531582cf81666dded004f26707beedc2ce3fa850caf5b0b82fd22e7",
+  "profile_commit_sha": "3c1dfebacd070818a5755bbc9eb0a66786a52f35",
+  "new_canonical_identity_c2": "206cc738d617f8de5b65d361f99ac9190b82089995808d85aa4662a3f6cf8304",
+  "old_canonical_identity_prefix": "bfb3d043"
+}
