@@ -144,6 +144,15 @@ Mandatory set still to extract as standalone <2-minute tests:
   `crates/node/src/lifecycle_queries.rs:1886-1959`, which expose
   ledger-backed provider-neutral status rather than provider names.
 
+- [ ] **DEFECT-13 (observed; OPEN).** A fresh generated self-custody wallet
+  cannot create the pfUSDC/A666 trustlines required for onboarding. RED
+  evidence: `docs/evidence/a666-public-reserve-product-20260803/browser/r4-pass1/v7-add-asset-red.json`
+  (commit `9db2f52`). **Scope fence:** holder-signed trustline creation is
+  product wallet; pfUSDC auto-authorizes; A666 issuer authorization is
+  rehearsal/operator staging via DIRECT certified-asset-ops; no issuer tool/key in wallet.
+  **Follow-up:** certified bundle helper cannot express issuer-signed TrustSet;
+  direct request is required this campaign, helper support remains follow-up.
+
 - [x] Reload/reconnect/recovery e2e coverage for journey step 9 in
   `wallet-web`: production `PftlPrivatePrimary` recovery path survives
   actual proxy SIGTERM/restart and durable Chromium reload, including the
