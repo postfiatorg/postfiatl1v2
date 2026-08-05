@@ -1037,6 +1037,8 @@
   ],
   "stakehub_scope_constraint": {
     "authority_deprecation_only": true,
+    "principal_directive_2026_08_05": "Stakehub is a product i dont want it deleted or destroyed -- i just want it decoupled from NAVCoin calculation.",
+    "binding_interpretation": "StakeHub operates indefinitely as a product; R10 removes it only from NAVCoin/NAV calculation and reserve-proof authority. Deletion, destruction, decommission, and defunding remain prohibited.",
     "delete_decommission_uninstall_prohibited": true,
     "funds_balances_keys_data_untouched": true,
     "r4_temporary_unit_stop_allowed": true,

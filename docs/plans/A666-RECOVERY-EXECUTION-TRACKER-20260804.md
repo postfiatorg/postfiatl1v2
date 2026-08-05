@@ -204,8 +204,9 @@ Mandatory set still to extract as standalone <2-minute tests:
 
 ## R8 — Live preflight **(gate: FROZEN until R0-R7 and decisions)**
 
-- [ ] **[DECISION]** key rotation: rotate live operator/signer/publisher
-  keys, or signed accepted-risk record (principal)
+- [ ] **[DECISION] [DECIDED 2026-08-05]** key rotation: no credential/key
+  rotation; accepted-risk record `docs/plans/A666-DECISION-KEY-ROTATION-20260805.md`
+  satisfies the alternative to rotate live operator/signer/publisher keys (principal)
 - [ ] Credential inventory of terminated staff completed (hosts, RPC,
   bridge relays)
 - [ ] Signed recovery snapshot of live chain, independently verified
@@ -234,13 +235,16 @@ Each step requires prior-step evidence plus principal confirmation:
 
 > **Standing Sauron constraint:** R10 means decoupling StakeHub as proof/runtime
 > authority for the layer1v2 public stack only. StakeHub remains in use and must
-> never be deleted, decommissioned, uninstalled, or have funds, balances, keys,
-> software, services, or data touched or emptied. R4 may temporarily stop its
-> user units using the mode-600 restart inventory, but teardown must restart the
-> inventoried units and prove the restarted unit count matches the inventory.
-> Any StakeHub action beyond unit start/stop requires Sauron's explicit sign-off.
-> CI identifier rejection is scoped to L1v2 runtime paths, never external
-> StakeHub tooling on the host.
+> never be deleted, destroyed, decommissioned, uninstalled, defunded, or have
+> funds, balances, keys, software, services, or data touched or emptied.
+> **Principal directive (2026-08-05):** "Stakehub is a product i dont want it deleted or destroyed -- i just want it decoupled from NAVCoin calculation."
+> **Binding interpretation:** StakeHub operates indefinitely as a product; R10
+> removes it only from NAVCoin/NAV calculation and reserve-proof authority. R4
+> may temporarily stop its user units using the mode-600 restart inventory, but
+> teardown must restart the inventoried units and prove the restarted unit count
+> matches the inventory. Any StakeHub action beyond unit start/stop requires
+> Sauron's explicit sign-off. CI identifier rejection is scoped to L1v2 runtime
+> paths, never external StakeHub tooling on the host.
 
 - [ ] StakeHub proof/runtime authority removed from the public stack
 - [ ] Continued operation proven without it
