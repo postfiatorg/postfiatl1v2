@@ -1,26 +1,16 @@
 {
-  "schema": "postfiat.a666.r4.v7-holder-trustline-stage.v2",
-  "recorded_at_utc": "2026-08-05T05:37:00Z",
+  "schema": "postfiat.a666.r4.v7-holder-trustline-stage.v3",
+  "recorded_at_utc": "2026-08-05T06:02:00Z",
   "verdict": "red",
   "stop_no_retry": true,
   "history": {
-    "prior_red_commit": "b58155a",
-    "prior_blockers": [
-      "trustline_stager_candidate_binding_stale",
-      "fresh_wallet_pft_balance_zero"
-    ],
-    "candidate_binding_closed_by": "9efae5a",
-    "pft_bootstrap_closed_by": "4d16a998ab1fb65a24a40a2169e072cbe6bc6ca6"
+    "initial_red_commit": "b58155a",
+    "unlock_choreography_commit": "ec4de115ab3ccd1404638752fb369cdb888d479c",
+    "send_tab_choreography_commit": "948ed8da59d78b348b14c30a2d11e11131e60588",
+    "pft_bootstrap_commit": "4d16a998ab1fb65a24a40a2169e072cbe6bc6ca6"
   },
-  "authorization": {
-    "authorized_stage_command": "scripts/a666-r4-fresh-wallet-trustline-stage stage",
-    "stage_invocations": 0,
-    "reason_not_invoked": "required production UI preflight failed before any holder operation"
-  },
-  "read_only_check": {
-    "command": "scripts/a666-r4-fresh-wallet-trustline-stage check",
-    "exit_code": 0,
-    "runtime_ms": 392,
+  "pre_state": {
+    "source": "stage command internal check",
     "candidate_revision": "1bc25ac7384de8837a14b8150863ea1bc0e883eb",
     "four_way_candidate_binding_green": true,
     "fleet_six_way_equal": true,
@@ -30,37 +20,39 @@
     "pfusdc_trustline_absent": true,
     "a666_trustline_absent": true
   },
-  "production_ui_preflight": {
-    "origin": "http://127.0.0.1:31021",
-    "persistent_profile": "/home/postfiat/.pft/a666-r4-fresh-wallet-v7/browser-profile",
-    "passphrase_read_at_fill_time": true,
-    "passphrase_value_recorded": false,
-    "wallet_created": false,
-    "browser_timeout_ms": 15000,
-    "exit_code": 1,
-    "first_failure": "production_ui_wallet_shell_not_visible_after_unlock",
-    "error_class": "Playwright TimeoutError",
-    "failing_locator": ".pf-shell",
-    "selector_inventory_observed": false,
-    "holder_operations_submitted": 0
+  "execution": {
+    "command": "POSTFIAT_R4_ISSUER_AUTH_REQUEST=<mode-600 schema-only path> scripts/a666-r4-fresh-wallet-trustline-stage stage",
+    "stage_invocations": 1,
+    "exit_code": 2,
+    "runtime_ms": 417,
+    "stdout_path": "/tmp/a666-r4-v7-holder-trustline-fire-20260805/stage.stdout",
+    "stderr_path": "/tmp/a666-r4-v7-holder-trustline-fire-20260805/stage.stderr",
+    "first_failure": "missing_add_asset_selector",
+    "failure_location": "pre-browser source guard",
+    "browser_launched": false,
+    "passphrase_read": false,
+    "holder_trustline_submissions": 0,
+    "issuer_authorization_submissions": 0,
+    "receipts": []
   },
-  "receipts": [],
+  "root_cause": {
+    "classification": "harness_source_guard_stale",
+    "stale_guard_path": "wallet-web/src/App.jsx",
+    "production_control_path": "wallet-web/src/components/Send.jsx",
+    "send_tab_preflight_previously_green": true,
+    "instruction": "Do not replay this stage invocation. Correct only the pre-browser source guard before a separately authorized attempt."
+  },
   "post_state": {
-    "unchanged_from_preflight": true,
+    "unchanged_from_pre_state": true,
     "fresh_pft_atoms": 74,
     "fresh_sequence": 0,
     "pfusdc_trustline_absent": true,
     "a666_trustline_absent": true
   },
-  "next_action": {
-    "classification": "harness_or_persistent_profile_unlock_preflight_wall",
-    "instruction": "Diagnose the production unlock state without replaying any holder operation. The authorized stage command was never invoked."
-  },
   "scope": {
     "business_mutations": 0,
     "trust_set_operations": 0,
     "issuer_operations": 0,
-    "cli_or_server_wallet_signing": 0,
     "live_chain": false,
     "stakehub_interaction": false,
     "credential_values_included": false
