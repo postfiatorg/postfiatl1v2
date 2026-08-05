@@ -1695,7 +1695,7 @@ async function assertPathBSelected(selector, timeoutMs = 15_000) {
   throw new Error(`Path-B route ${JOURNEY_ROUTE_ID} was not auto-selected on the mounted adapter`);
 }
 
-test('A666 R4 DOM-IDENTITY healthy NAV Markets exposes exactly one navcoin-market testid', { todo: 'RED-first: e1b71a1 wrapper div plus NavcoinPrimaryMarket section both carry the testid; exactly one required; staged actual count is 2 (candidate-proxy-v6-data-plane.json)' }, async () => {
+test('A666 R4 DOM-IDENTITY healthy NAV Markets exposes exactly one navcoin-market testid', async () => {
   // Same-origin candidate staging (31021): identical env/proxy-auth
   // choreography as runConstructionPreflight, which produced the staged
   // count=2 strict-mode blocker. Read-only; zero mutations.
@@ -1764,6 +1764,7 @@ test('A666 R4 DOM-IDENTITY healthy NAV Markets exposes exactly one navcoin-marke
     const market = page.locator('[data-testid="navcoin-market"]');
     assert.equal(await market.count(), 1,
       'healthy branch must expose exactly one navcoin-market testid');
+    await market.waitFor({ state: 'visible' });
   } finally {
     await browser.close();
   }
