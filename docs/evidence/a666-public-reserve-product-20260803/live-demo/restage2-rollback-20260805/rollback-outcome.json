@@ -1,0 +1,30 @@
+{
+  "schema": "postfiat.a666.live-demo.restage2-rollback-20260805.v1",
+  "recorded_at_utc": "2026-08-05T19:15:00Z",
+  "overall_verdict": "ROLLED BACK — preflight failed on deployment manifest gate (new blocker, not binary hash)",
+  "steps_succeeded": {
+    "step1_source_verify": "GREEN — 00616722... matched",
+    "step2_durable_copy": "GREEN — /home/postfiat/.pft/a666-live-demo/bin/postfiat-node-00616722... mode 500",
+    "step3_profile_edit": "GREEN — exactly 2 lines changed",
+    "step4_canonical_recompute": "GREEN — C2=206cc738d617f8de5b65d361f99ac9190b82089995808d85aa4662a3f6cf8304",
+    "step5_commits": "GREEN — StakeHub 3c1dfeba, A666 2e58a872",
+    "step6_restage": "GREEN — 18793/8787/8788 all C2, all services ok, all listeners up"
+  },
+  "step7_preflight": {
+    "result": "RED",
+    "exit_code": 1,
+    "failure": "deployment manifest verification failed: error: deployment-manifest-verify failed: deployment manifest is non-canonical, inactive, or expired",
+    "note": "Binary hash gate PASSED with durable copy; new blocker is deployment manifest verification. Triggered rollback per STOP-no-retry."
+  },
+  "rollback_performed": {
+    "kill_prover": "GREEN — 18793 down",
+    "restore_8787": "GREEN — identity null (snapshot)",
+    "recreate_8788": "GREEN — identity 91aa6c9d (snapshot)",
+    "git_revert_profile": "GREEN — c646b0a5 reverted 3c1dfeba"
+  },
+  "post_rollback_identity": {
+    "8787": "null",
+    "8788": "91aa6c9d",
+    "18793": "down"
+  }
+}
