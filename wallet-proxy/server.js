@@ -309,6 +309,7 @@ const PUBLIC_READ_RPC_METHODS = new Set([
     'vault_bridge_status',
     'navcoin_bridge_routes',
     'navcoin_bridge_supply_status',
+    'nav_reserve_proof_status',
     'escrow_info',
     'owned_objects',
     'owned_recovery_capabilities',

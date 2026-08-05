@@ -202,6 +202,7 @@ async function main() {
     'owned_certificate',
     'owned_recovery_status',
     'navcoin_bridge_supply_status',
+    'nav_reserve_proof_status',
     'vault_bridge_status',
     'fx_fix_list',
     'fx_fix_info',
@@ -341,41 +342,34 @@ async function main() {
     const timeoutVote = await callAuthenticatedRpc(port, 'consensus_v2_timeout_vote');
     assert.strictEqual(timeoutVote.error.code, 'proxy_internal_method');
 
-    // A666 R4 step-3 RED vector (proxy allowlist gap, read-only diagnosis B):
+    // A666 R4 step-3 vector (proxy allowlist fix, read-only diagnosis B):
     // a browser-origin unauthenticated nav_reserve_proof_status read is a
-    // public status read like its navcoin_bridge_* siblings, but the current
-    // PUBLIC_READ_RPC_METHODS allowlist omits it, so the proxy refuses before
-    // any backend contact. Live diagnosis: 31021 browser-origin refused;
-    // all six validators serve the method (handler ledger-backed,
-    // provider-neutral; crates/node/src/lifecycle_queries.rs:1886).
-    // RED capture: the refusal must be exactly proxy_auth_required (locks
-    // the defect class; any other refusal or a backend mutation is a
-    // different bug). TODO(red-first, expected-fail): when the allowlist
-    // line lands, replace the two capture asserts with the required public
-    // forwarding behavior; keep this vector registered.
+    // public status read like its navcoin_bridge_* siblings and must pass
+    // the auth gate to backend forwarding. Live diagnosis: all six
+    // validators serve the method (handler ledger-backed, provider-neutral;
+    // crates/node/src/lifecycle_queries.rs:1886). In this harness the test
+    // fleet is unreachable, so a transport/forwarding failure is expected;
+    // an auth or origin refusal is the regression.
     const a666R4NavAssetId = '521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c';
-    const step3RedVector = await callBrowserUnauthenticatedRpc(
+    const step3Vector = await callBrowserUnauthenticatedRpc(
       port,
       'nav_reserve_proof_status',
       { asset_id: a666R4NavAssetId },
       'http://127.0.0.1:31021',
       '127.0.0.1:31021',
     );
-    assert.strictEqual(step3RedVector.ok, false,
-      'pre-fix capture: the allowlist gap must refuse the unauthenticated browser read');
-    assert.strictEqual(step3RedVector.error?.code, 'proxy_auth_required',
-      'pre-fix capture: refusal must be exactly proxy_auth_required (allowlist gap, not origin or backend failure)');
-    const requiredPublicRead = rpcRequestRequiresAuth('nav_reserve_proof_status') === false;
-    if (!requiredPublicRead) {
-      console.log('EXPECTED-RED a666-r4-step3: nav_reserve_proof_status is not publicly forwarded (proxy allowlist gap; backend serves it on all six validators)');
-    }
-    // Anti-deletion guard: this RED vector must stay registered until the
-    // allowlist fix flips it to the required green behavior.
+    assert.strictEqual(rpcRequestRequiresAuth('nav_reserve_proof_status'), false,
+      'nav_reserve_proof_status is a public read');
+    assert.notStrictEqual(step3Vector.error?.code, 'proxy_auth_required',
+      'public status read must not be auth-refused');
+    assert.notStrictEqual(step3Vector.error?.code, 'proxy_origin_required',
+      'public status read must not be origin-refused');
+    assert.notStrictEqual(step3Vector.error?.code, 'proxy_internal_method',
+      'public status read must not be internal-classified');
+    // Anti-deletion guard: this vector must stay registered.
     const ownSource = fs.readFileSync(__filename, 'utf8');
     assert(ownSource.includes("'nav_reserve_proof_status'"),
-      'step-3 RED vector must stay registered');
-    assert(ownSource.includes('EXPECTED-RED a666-r4-step3'),
-      'the expected-fail marker must survive until the allowlist fix lands');
+      'step-3 public-read vector must stay registered');
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
