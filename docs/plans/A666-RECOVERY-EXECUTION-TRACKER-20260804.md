@@ -204,7 +204,7 @@ Mandatory set still to extract as standalone <2-minute tests:
 
 ## R8 — Live preflight **(gate: FROZEN until R0-R7 and decisions)**
 
-- [ ] **[DECISION] [DECIDED 2026-08-05]** key rotation: no credential/key
+- [ ] **[DECISION] [DECIDED] 2026-08-05** key rotation: no credential/key
   rotation; accepted-risk record `docs/plans/A666-DECISION-KEY-ROTATION-20260805.md`
   satisfies the alternative to rotate live operator/signer/publisher keys (principal)
 - [ ] Credential inventory of terminated staff completed (hosts, RPC,
@@ -245,6 +245,15 @@ Each step requires prior-step evidence plus principal confirmation:
 > matches the inventory. Any StakeHub action beyond unit start/stop requires
 > Sauron's explicit sign-off. CI identifier rejection is scoped to L1v2 runtime
 > paths, never external StakeHub tooling on the host.
+>
+> **Official-window minimized-downtime rule:** pre-stage all dependencies; stop
+> the StakeHub dashboard as the final act before fire; restart it immediately on
+> termination, refusal, failure, or success. Every absence/restart proof records
+> stop timestamp, restart timestamp, and computed downtime duration. StakeHub
+> remains a live product indefinitely.
+
+- **[DECISION] [DECIDED] 2026-08-05** StakeHub restoration GO executed; evidence
+  commit `688b67a`; service state restored 5/5.
 
 - [ ] StakeHub proof/runtime authority removed from the public stack
 - [ ] Continued operation proven without it
@@ -262,8 +271,10 @@ Each step requires prior-step evidence plus principal confirmation:
 - [ ] Monthly recovery drill (restore from signed snapshot + outage
   catch-up) with archived report — first drill completed
 - [ ] Runbooks: one page per operator action ending in a report-hash check
-- [ ] **[DECISION]** staffing: operations/abort owner, protocol reviewer,
-  wallet owner assigned — or signed accepted-risk record (principal)
+- [ ] **[DECISION] [DECIDED] 2026-08-05** staffing: single operator plus
+  automation is the accepted-risk record `docs/plans/A666-DECISION-STAFFING-20260805.md`;
+  it satisfies the alternative to roles assigned (principal). The Phase 3 checkbox
+  remains open until its operational work executes.
 - [ ] One external stranger completes clean-clone verification; transcript
   archived
 
