@@ -487,6 +487,114 @@ async function observeStepOneBuildIdentity({
   return { step, created };
 }
 
+async function observeStepTwoWalletShell(page, created) {
+  // Shared step-2 display predicates: identical in construction preflight
+  // and official mode. Read-only DOM observation; no mutation.
+  const shellVisible = await page.locator('.pf-shell').isVisible();
+  return observedStep(2, {
+    label: 'browser-controlled connect/create',
+    wallet_address: created.address,
+    shell_visible: shellVisible,
+  }, {
+    browser_address: /^pf[0-9a-f]{40}$/.test(created.address),
+    rendered_wallet: shellVisible,
+  });
+}
+
+async function observeStepThreeReserveProof(page, rpcFrames) {
+  // Shared step-3 display predicates: identical in construction preflight
+  // and official mode. Fail-closed: the navcoin-market testid wait and the
+  // reserve-proof frame wait are never weakened. Read-only; no mutation.
+  const market = await openPrimaryMarket(page);
+  const marketText = (await market.textContent() || '').replace(/\s+/g, ' ');
+  const reserveResponse = await waitForReserveProofFrame(rpcFrames);
+  const packets = reserveResponse.result?.packets ?? reserveResponse.result?.result?.packets ?? [];
+  const sourceIdentities = packets.flatMap(packet => packet.source_identities ?? packet.sources ?? []);
+  const proofIdentities = packets.map(packet => packet.packet_hash ?? packet.reserve_packet_hash).filter(Boolean);
+  const step = observedStep(3, {
+    label: 'six sources/proofs/NAV',
+    source_identities: sourceIdentities,
+    proof_identities: proofIdentities,
+    rendered_nav_summary: marketText.match(/Verified NAV[^\n]*/)?.[0] ?? '',
+    reserve_response_id: reserveResponse.id ?? null,
+  }, {
+    six_sources: sourceIdentities.length === 6 && new Set(sourceIdentities).size === 6,
+    both_proofs: proofIdentities.length >= 2 && new Set(proofIdentities).size >= 2,
+    nav_rendered: /Verified NAV/.test(marketText),
+    proof_rendered: /matches finalized PFTL reserve proof/.test(marketText),
+  });
+  return { step, market, marketText };
+}
+
+async function observeStepFourBalances(market, marketText) {
+  // Shared step-4 display predicates: identical in construction preflight
+  // and official mode. Read-only DOM observation; no mutation.
+  const initialBalances = await marketBalances(market);
+  return observedStep(4, {
+    label: 'A666+pfUSDC balances',
+    balances: initialBalances,
+  }, {
+    a666_visible: Object.keys(initialBalances).some(key => /A666/i.test(key)),
+    pfusdc_visible: Object.keys(initialBalances).some(key => /pfUSDC/i.test(key)),
+    finalized_marker: /YOUR BALANCES\s*finalized/i.test(marketText),
+  });
+}
+
+// Registry of the shared steps 1-4 display observers. The structural
+// completeness guard fails the suite if any step 1-4 predicate is
+// reachable only in official mode, if construction misses an observer, or
+// if a mutation step (5-8) or dependent step (9-10) enters construction.
+const SHARED_DISPLAY_OBSERVERS = Object.freeze([
+  'observeStepOneBuildIdentity',
+  'observeStepTwoWalletShell',
+  'observeStepThreeReserveProof',
+  'observeStepFourBalances',
+]);
+const CONSTRUCTION_FORBIDDEN_MUTATION_STEPS = Object.freeze([
+  'completeTransparentRoundTrip',
+  'completePrivateRoundTrip',
+  'pollContentAddressedSlot',
+  'requestProxyRestart',
+]);
+
+function sharedDisplayCoverageProblems(source) {
+  // Pure static completeness check over the runner source. Needles are
+  // concatenated so this guard's own source never matches them.
+  const problems = [];
+  const preflightNeedle = 'async function runConstructionPreflight' + '({';
+  const preflightStart = source.indexOf(preflightNeedle);
+  const preflightEnd = source.indexOf('\nasync function', preflightStart + 1);
+  if (preflightStart === -1 || preflightEnd === -1) return ['construction preflight function not found'];
+  const preflight = source.slice(preflightStart, preflightEnd);
+  for (const observer of SHARED_DISPLAY_OBSERVERS) {
+    if (!preflight.includes(`${observer}(`)) {
+      problems.push(`construction preflight missing shared observer: ${observer}`);
+    }
+  }
+  for (const mutation of CONSTRUCTION_FORBIDDEN_MUTATION_STEPS) {
+    if (preflight.includes(`${mutation}(`)) {
+      problems.push(`mutation/dependent step reachable in construction preflight: ${mutation}`);
+    }
+  }
+  const officialStart = source.indexOf("assert.equal(runContract.mode," + " 'official');");
+  const officialEnd = source.indexOf('await completeTransparentRoundTrip' + '(page, market)', officialStart);
+  if (officialStart === -1 || officialEnd === -1) {
+    problems.push('official steps 1-4 span not found');
+    return problems;
+  }
+  const officialDisplay = source.slice(officialStart, officialEnd);
+  const inline = officialDisplay.match(/observedStep\([1-4],/g) ?? [];
+  if (inline.length > 0) {
+    problems.push(`official steps 1-4 define predicates inline outside the shared observers: ${inline.join(', ')}`);
+  }
+  for (const observer of SHARED_DISPLAY_OBSERVERS) {
+    if (!officialDisplay.includes(`${observer}(`)) {
+      problems.push(`official journey missing shared observer: ${observer}`);
+    }
+  }
+  return problems;
+}
+
 async function runConstructionPreflight({
   walletOrigin, proxyOrigin, fireControl, setup, deployment, productionGraph, pinnedPackage,
   fireControlPath, setupPath, deploymentPath,
@@ -509,10 +617,34 @@ async function runConstructionPreflight({
     walletStatus = error.code || error.message;
   }
   let stepOneBrowser;
+  const constructionDisplaySteps = [];
+  const recordDisplayStep = async (name, run) => {
+    // Construction records step 2-4 display outcomes as findings. A
+    // staged-stack RED is preserved exactly, never asserted away and never
+    // blocking; zero mutations and zero official invocations are issued.
+    try {
+      const step = await run();
+      constructionDisplaySteps.push({ name, executed: true, ok: step.ok === true, checks: step.checks ?? null });
+      return step;
+    } catch (error) {
+      constructionDisplaySteps.push({
+        name,
+        executed: true,
+        ok: false,
+        construction_finding: String(error?.message || error).split('\n')[0].slice(0, 300),
+      });
+      return null;
+    }
+  };
   const browser = await chromium.launch({ headless: true });
   try {
     const context = await browser.newContext();
     const page = await context.newPage();
+    const rpcFrames = [];
+    page.on('websocket', socket => socket.on('framereceived', event => {
+      if (typeof event.payload !== 'string') return;
+      try { rpcFrames.push(JSON.parse(event.payload)); } catch { /* non-JSON frames are irrelevant */ }
+    }));
     page.setDefaultTimeout(30_000);
     stepOneBrowser = await observeStepOneBuildIdentity({
       page,
@@ -522,6 +654,22 @@ async function runConstructionPreflight({
       productionGraph,
       passphrase: 'a666-r4-construction-step1',
     });
+    await recordDisplayStep('step_2_wallet_shell', () => observeStepTwoWalletShell(page, stepOneBrowser.created));
+    let stepThreeObserved = null;
+    await recordDisplayStep('step_3_reserve_proof', async () => {
+      stepThreeObserved = await observeStepThreeReserveProof(page, rpcFrames);
+      return stepThreeObserved.step;
+    });
+    if (stepThreeObserved) {
+      await recordDisplayStep('step_4_balances', () => observeStepFourBalances(stepThreeObserved.market, stepThreeObserved.marketText));
+    } else {
+      constructionDisplaySteps.push({
+        name: 'step_4_balances',
+        executed: false,
+        ok: false,
+        construction_finding: 'skipped: step 3 reserve-proof observation was not green in construction',
+      });
+    }
   } finally {
     await browser.close();
   }
@@ -698,6 +846,9 @@ async function runConstructionPreflight({
     production_import_graph: productionGraph,
     step_1_browser_identity_green: stepOneBrowser.step.ok,
     step_1_browser_observation: stepOneBrowser.step,
+    steps_2_4_display_observations: constructionDisplaySteps,
+    steps_1_4_display_all_green: stepOneBrowser.step.ok
+      && constructionDisplaySteps.every(entry => entry.executed && entry.ok),
     artifact_slots: {
       export: {
         path: exportSlot.path,
@@ -942,43 +1093,12 @@ test('A666 R4 offline Ethereum rehearsal drives the production rendered wallet j
     results.push(stepOneBrowser.step);
     const created = stepOneBrowser.created;
     seed = created.seed;
-    results.push(observedStep(2, {
-      label: 'browser-controlled connect/create',
-      wallet_address: created.address,
-      shell_visible: await page.locator('.pf-shell').isVisible(),
-    }, {
-      browser_address: /^pf[0-9a-f]{40}$/.test(created.address),
-      rendered_wallet: await page.locator('.pf-shell').isVisible(),
-    }));
+    results.push(await observeStepTwoWalletShell(page, created));
 
-    const market = await openPrimaryMarket(page);
-    const marketText = (await market.textContent() || '').replace(/\s+/g, ' ');
-    const reserveResponse = await waitForReserveProofFrame(rpcFrames);
-    const packets = reserveResponse.result?.packets ?? reserveResponse.result?.result?.packets ?? [];
-    const sourceIdentities = packets.flatMap(packet => packet.source_identities ?? packet.sources ?? []);
-    const proofIdentities = packets.map(packet => packet.packet_hash ?? packet.reserve_packet_hash).filter(Boolean);
-    results.push(observedStep(3, {
-      label: 'six sources/proofs/NAV',
-      source_identities: sourceIdentities,
-      proof_identities: proofIdentities,
-      rendered_nav_summary: marketText.match(/Verified NAV[^\n]*/)?.[0] ?? '',
-      reserve_response_id: reserveResponse.id ?? null,
-    }, {
-      six_sources: sourceIdentities.length === 6 && new Set(sourceIdentities).size === 6,
-      both_proofs: proofIdentities.length >= 2 && new Set(proofIdentities).size >= 2,
-      nav_rendered: /Verified NAV/.test(marketText),
-      proof_rendered: /matches finalized PFTL reserve proof/.test(marketText),
-    }));
-
-    const initialBalances = await marketBalances(market);
-    results.push(observedStep(4, {
-      label: 'A666+pfUSDC balances',
-      balances: initialBalances,
-    }, {
-      a666_visible: Object.keys(initialBalances).some(key => /A666/i.test(key)),
-      pfusdc_visible: Object.keys(initialBalances).some(key => /pfUSDC/i.test(key)),
-      finalized_marker: /YOUR BALANCES\s*finalized/i.test(marketText),
-    }));
+    const stepThree = await observeStepThreeReserveProof(page, rpcFrames);
+    results.push(stepThree.step);
+    const market = stepThree.market;
+    results.push(await observeStepFourBalances(stepThree.market, stepThree.marketText));
 
     const transparent = await completeTransparentRoundTrip(page, market);
     results.push(observedStep(5, {
@@ -1488,6 +1608,57 @@ test('A666 R4 structural guard: official mode introduces no validation outside t
   const traceIds = runValidationRegistry(normalizeValidationInputs('construction', fixture)).trace
     .map(entry => entry.id);
   assert.deepEqual(traceIds, ids, 'construction trace must cover every registry predicate in registry order');
+});
+
+test('A666 R4 steps 1-4 display predicates are mode-shared: structural completeness guard with RED proof and negatives', async () => {
+  const source = await readFile(fileURLToPath(import.meta.url), 'utf8');
+  assert.deepEqual(sharedDisplayCoverageProblems(source), [],
+    'current source: every step 1-4 display predicate must execute in both modes');
+
+  // RED proof: the pre-fix source (49e4ce8, step-1-only construction
+  // browser preflight) must fail this guard. The v5 official run reached
+  // step 3 with zero construction coverage of its predicates (20e0ee8).
+  const historical = execFileSync(
+    'git',
+    ['show', '49e4ce8:wallet-web/src/lib/a666-r4-offline-ethereum-rehearsal.e2e.js'],
+    { cwd: REPO_ROOT, encoding: 'utf8' },
+  );
+  const historicalProblems = sharedDisplayCoverageProblems(historical);
+  assert.ok(historicalProblems.some(problem => problem.includes('construction preflight missing shared observer: observeStepTwoWalletShell')),
+    'pre-fix source lacked the step-2 construction observer');
+  assert.ok(historicalProblems.some(problem => problem.includes('construction preflight missing shared observer: observeStepThreeReserveProof')),
+    'pre-fix source lacked the step-3 construction observer');
+  assert.ok(historicalProblems.some(problem => problem.includes('construction preflight missing shared observer: observeStepFourBalances')),
+    'pre-fix source lacked the step-4 construction observer');
+  assert.ok(historicalProblems.some(problem => problem.includes('inline')),
+    'pre-fix official journey defined step 2-4 predicates inline');
+
+  // Negative 1: an official-only step 1-4 predicate (inline observedStep in
+  // the official display span) fails the guard.
+  const officialOnly = source.replace(
+    'results.push(await observeStepTwoWalletShell(page, created));',
+    "results.push(await observeStepTwoWalletShell(page, created));\n    results.push(observedStep(3, { label: 'x' }, { official_only: true }));",
+  );
+  assert.ok(sharedDisplayCoverageProblems(officialOnly)
+    .some(problem => problem.includes('inline')), 'official-only predicate must fail');
+
+  // Negative 2: a missing construction observer fails the guard.
+  const missingObserver = source.replace(
+    'await observeStepThreeReserveProof(page, rpcFrames)',
+    'await Promise.resolve(null)',
+  );
+  assert.ok(sharedDisplayCoverageProblems(missingObserver)
+    .some(problem => problem.includes('construction preflight missing shared observer: observeStepThreeReserveProof')),
+    'missing construction observer must fail');
+
+  // Negative 3: a mutation step entering construction fails the guard.
+  const mutationInConstruction = source.replace(
+    'await browser.close();',
+    'await completeTransparentRoundTrip(page, market);\n    await browser.close();',
+  );
+  assert.ok(sharedDisplayCoverageProblems(mutationInConstruction)
+    .some(problem => problem.includes('mutation/dependent step reachable in construction preflight')),
+    'mutation step in construction must fail');
 });
 
 test('A666 R4 build identity negatives refuse before invocation: nonexistent revision/object, wrong hash/version, worktree divergence', async () => {
