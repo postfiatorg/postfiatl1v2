@@ -1,0 +1,58 @@
+{
+  "schema": "postfiat.a666.live-demo.route-identity.v1",
+  "recorded_at_date_utc": "2026-08-05",
+  "recording_agent": "orc_ghash (read-only sizing analysis; no live reads, no mutations)",
+  "authority": {
+    "dispatch": "Nazgul Angmar via Troll Burzum inter-agent NEW_TASK 'ROUTE IDENTITY EVIDENCE', session date 2026-08-05 (Etc/UTC); exact dispatch clock time not carried in the payload",
+    "ruling_summary": "default mint path is governed a651 unless Sauron overrides before mint"
+  },
+  "facts": [
+    {
+      "id": "RI-1",
+      "claim": "The current CLI-default wallet-demo profile names the on-chain NAV asset 'a651', not A666.",
+      "evidence": [
+        "StakeHub-repeat-demo/stakehub/cli.py:15 (DEFAULT_WALLET_DEMO_PROFILE = data/wallet-demo-devnet2.json)",
+        "StakeHub-repeat-demo/stakehub/dashboard_server.py:100 (A651_PFTL_ASSET_ID_DEFAULT)",
+        "StakeHub-repeat-demo/data/wallet-demo-devnet2.json assets.a651 (symbol asset of the NAV leg)"
+      ]
+    },
+    {
+      "id": "RI-2",
+      "claim": "Per code inspected, a651 is devnet-2's only governed A666-class NAV route in this profile: every full-loop gate (primary mint at NAV, egress, settlement, redeem) references the a651 asset id and its issuer custody.",
+      "evidence": [
+        "StakeHub-repeat-demo/stakehub/private_swap_egress.py:1331-1339 (fee payer min 1_000_000 native atoms)",
+        "StakeHub-repeat-demo/stakehub/private_swap_egress.py:2294 (vault supply min 10_000_000 atoms)",
+        "StakeHub-repeat-demo/stakehub/private_swap_egress.py:2335-2342,2369-2377,2407 (wallet pfUSDC min 10_000_000 atoms)",
+        "StakeHub-repeat-demo/stakehub/private_swap_egress.py:155-172 (settlement quantization: settlement*redeem % minted == 0, derived > 0)"
+      ]
+    },
+    {
+      "id": "RI-3",
+      "claim": "Leg1 sizing is asset-neutral: the computed cross-leg minimum 10_000_000 atoms (10.000000 USDC) derives from pfUSDC-side gates and does not depend on the NAV asset's label.",
+      "evidence": [
+        "StakeHub-repeat-demo/stakehub/dashboard_server.py:103 (TRANSPARENT_ROUNDTRIP_PFUSDC_MIN_ATOMS = 10_000_000)",
+        "StakeHub-repeat-demo/stakehub/generalized_wallet.py:971-972 (bridge-in atoms > 0)",
+        "StakeHub-repeat-demo/stakehub/dashboard_server.py:3024-3032 (_amount_atoms_6dp >= 1 atom)"
+      ]
+    },
+    {
+      "id": "RI-4",
+      "claim": "Later receipts MUST record the literal on-chain asset id observed at execution time and MUST NOT relabel it as A666.",
+      "evidence": [
+        "this record, authority.dispatch above"
+      ]
+    },
+    {
+      "id": "RI-5",
+      "claim": "Default mint path per Angmar ruling is the governed a651 route unless Sauron overrides before mint.",
+      "evidence": [
+        "this record, authority.ruling_summary above"
+      ]
+    }
+  ],
+  "constraints": {
+    "no_live_reads": true,
+    "no_mutations": true,
+    "credential_scan": "no env values, no key material, no raw wallet passphrases; only public asset-id/genesis-class hashes and file:line citations"
+  }
+}
