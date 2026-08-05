@@ -1,0 +1,216 @@
+{
+  "schema": "postfiat.a666.live-demo.leg1-mainnet-cctp-pftl-held.v1",
+  "created_utc": "2026-08-05T00:00:00Z",
+  "classification": "HELD",
+  "fire_authorized": false,
+  "ready_to_fire": false,
+  "business_mutations": 0,
+  "live_reads_this_turn": 0,
+  "objective": "Move exactly 10.000000 USDC from Ethereum mainnet through Circle CCTP to Arbitrum, then bridge exactly 10000000 atoms into PFTL pfUSDC.",
+  "authority": {
+    "executor_state": "/home/postfiat/repos/orc_directives/cli_demo_campaign_20260706/EXECUTOR-STATE.md",
+    "sauron_queue": "/home/postfiat/repos/orc_directives/cli_demo_campaign_20260706/SAURON-QUEUE.md",
+    "spend_ledger": "/home/postfiat/repos/orc_directives/cli_demo_campaign_20260706/spend-ledger.json",
+    "code_repo": "/home/postfiat/repos/StakeHub-repeat-demo",
+    "profile": "/home/postfiat/repos/StakeHub-repeat-demo/data/wallet-demo-devnet2.json",
+    "interpreter": {
+      "path": "/usr/bin/python3",
+      "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"
+    }
+  },
+  "campaign_spend": {
+    "before_usdc": "501.024845",
+    "cap_usdc": "530.000000",
+    "leg1_usdc": "10.000000",
+    "after_usdc": "511.024845",
+    "remaining_usdc": "18.975155",
+    "exact_atom_equation": "501024845 + 10000000 = 511024845; 530000000 - 511024845 = 18975155",
+    "ledger_update": "Only after both separately authorized substeps have a fully accounted terminal outcome; never on preparation or a precondition refusal."
+  },
+  "known_static_bindings": {
+    "required_canonical_profile_hash": "bfb3d0439adabd4ee4995fcbdba488fa68ba9859037181be83a48d7885a12a12",
+    "profile_file_sha256": "8c7a2d6bb8baa924005d4724abce1caeaf3e2b56c0bc5d3d530df26a64b02e57",
+    "required_warm_service": "127.0.0.1:18793",
+    "required_stakehub_active_units": 5,
+    "required_networks": [
+      "ethereum-mainnet-chain-id-1",
+      "arbitrum-one",
+      "pftl-devnet"
+    ],
+    "forbidden_network_classes": [
+      "sepolia",
+      "testnet-evm-fallback",
+      "live-endpoint-with-unverified-chain-id"
+    ]
+  },
+  "current_hold_reasons": [
+    {
+      "code": "bfinal_current_profile_not_active",
+      "required": "bfb3d0439adabd4ee4995fcbdba488fa68ba9859037181be83a48d7885a12a12",
+      "last_observed": "91aa6c9d-restored-by-required-rollback",
+      "evidence_commit": "d786cba0c9de733fe8a66d09f39f4558d467c2e9"
+    },
+    {
+      "code": "warm_service_18793_unavailable",
+      "required": "healthy and profile-bound before any signing",
+      "last_observed": "connection_refused",
+      "evidence_commit": "d786cba0c9de733fe8a66d09f39f4558d467c2e9"
+    },
+    {
+      "code": "full_preflight_not_green",
+      "required": "current-profile identity plus warm service plus five active services and canonical fleet",
+      "last_observed": "failed before any ledger or fund mutation",
+      "evidence_commit": "d786cba0c9de733fe8a66d09f39f4558d467c2e9"
+    }
+  ],
+  "fresh_prefire_contract": {
+    "all_required": true,
+    "checks": [
+      "spend ledger total is exactly 501.024845 and cap is exactly 530.000000",
+      "semantic projection is exactly 511.024845 with 18.975155 headroom",
+      "bfinal active canonical identity equals required bfb3d043 hash",
+      "warm service 127.0.0.1:18793 is ready for the current profile",
+      "all five StakeHub user units are active and healthy",
+      "fleet binaries and hashes equal the canonical current-profile manifest",
+      "Ethereum endpoint reports chain id 1; Arbitrum endpoint reports the configured Arbitrum chain; PFTL endpoints report the configured devnet",
+      "no endpoint or configuration names Sepolia or a testnet EVM fallback",
+      "all six PFTL RPCs agree on height, tip, state root, chain identity, and empty mempool",
+      "freshness bounds in blocks pass for every bridge proof and relay input",
+      "source Ethereum wallet USDC is at least 10.000000 and has quoted ETH gas",
+      "same wallet has quoted Arbitrum ETH gas for CCTP receiveMessage and the subsequent vault deposit",
+      "destination Arbitrum USDC before balance and PFTL pfUSDC before balance are freshly captured",
+      "unique mode-700 run directory is empty and has no prior bridge receipt"
+    ],
+    "stop_rule": "Any mismatch anywhere: STOP-no-retry. Do not sign, submit, resume, or rewrite arithmetic."
+  },
+  "substeps": [
+    {
+      "id": "A",
+      "name": "ethereum-mainnet-usdc-to-arbitrum-cctp",
+      "authorization": "requires its own fresh explicit written GO",
+      "command": "cd /home/postfiat/repos/StakeHub-repeat-demo && /usr/bin/python3 -m stakehub.cli --home /home/postfiat/.stakehub bridge-usdc --usdc 10.000000",
+      "confirmation_input": "type yes only after all fresh preconditions pass",
+      "signer_boundary": "StakeHub local EVM account; passphrase fetched at use-time through the configured vault/path mechanism and never printed",
+      "code_contract": [
+        "stakehub/cli.py:409-410",
+        "stakehub/cli.py:1354-1379",
+        "stakehub/evm.py:489-557"
+      ],
+      "expected_principal_atoms": 10000000,
+      "required_sequence": [
+        "fresh read-only mainnet and Arbitrum balance and gas snapshots",
+        "allowance approval only if current allowance is insufficient",
+        "one CCTP depositForBurn for 10000000 atoms",
+        "one Circle attestation for that exact message hash",
+        "one Arbitrum receiveMessage mint for that exact message and attestation"
+      ],
+      "acceptance": [
+        "mainnet burn receipt finalized on chain id 1",
+        "CCTP message hash and attestation bind to the burn",
+        "Arbitrum mint receipt finalized on the configured Arbitrum chain",
+        "Ethereum USDC principal delta is exactly -10000000 atoms",
+        "Arbitrum USDC principal delta is exactly +10000000 atoms",
+        "USDC principal conservation holds across the CCTP leg",
+        "mainnet and Arbitrum gas deltas are recorded separately from USDC",
+        "all receipt transaction hashes are unique and successful"
+      ],
+      "on_failure": "STOP-no-retry. Preserve burn/message/mint evidence. Never burn again if the burn exists; any recovery needs a new separately authorized resume packet."
+    },
+    {
+      "id": "B",
+      "name": "arbitrum-usdc-to-pftl-pfusdc",
+      "authorization": "requires a second fresh explicit written GO after substep A is fully green",
+      "dependency": "Substep A finality, attestation, exact +10000000 Arbitrum USDC delta, and gas accounting are accepted.",
+      "command": "cd /home/postfiat/repos/StakeHub-repeat-demo && /usr/bin/python3 -m stakehub.cli --home /home/postfiat/.stakehub wallet bridge --profile /home/postfiat/repos/StakeHub-repeat-demo/data/wallet-demo-devnet2.json --run-dir <UNIQUE_MODE_700_LEG1_RUN_DIR> --pfusdc-atoms 10000000",
+      "signer_boundary": "The run-wallet and configured bridge authorities remain inside the production StakeHub wallet/bridge path; credential references are resolved at use-time and never emitted.",
+      "code_contract": [
+        "stakehub/cli.py:256-259",
+        "stakehub/cli.py:819-822",
+        "stakehub/generalized_wallet.py:961-1108"
+      ],
+      "expected_principal_atoms": 10000000,
+      "required_sequence": [
+        "fresh exact-six PFTL before snapshot",
+        "native gas funding required by the production bridge path",
+        "one Arbitrum vault deposit for exactly 10000000 USDC atoms",
+        "certified PFTL bridge-in and validator-owned finality",
+        "fresh exact-six PFTL after snapshot"
+      ],
+      "acceptance": [
+        "Arbitrum vault/deposit receipt is finalized and binds to 10000000 atoms",
+        "validator-owned PFTL receipt identities and accepted codes are present",
+        "all six PFTL validators prove the same finalized result",
+        "PFTL pfUSDC recipient delta is exactly +10000000 atoms",
+        "pfUSDC supply and bridge custody conservation reconcile exactly",
+        "Arbitrum USDC delta is exactly -10000000 atoms apart from separately denominated gas",
+        "six RPCs converge on height, tip, and state root with empty mempool",
+        "gas and fees are recorded by chain and asset, never netted into USDC principal"
+      ],
+      "on_failure": "STOP-no-retry. Preserve the exact terminal receipt and never replay a successful upstream deposit or certified operation."
+    }
+  ],
+  "evidence_template": {
+    "private_run_root": "<UNIQUE_MODE_700_LEG1_RUN_DIR>",
+    "public_values_only": true,
+    "before": {
+      "ethereum": {
+        "chain_id": null,
+        "block": null,
+        "usdc_atoms": null,
+        "eth_wei": null
+      },
+      "arbitrum": {
+        "chain_id": null,
+        "block": null,
+        "usdc_atoms": null,
+        "eth_wei": null
+      },
+      "pftl": {
+        "height": null,
+        "tip_hash": null,
+        "state_root": null,
+        "pfusdc_balance_atoms": null,
+        "pfusdc_supply_atoms": null,
+        "six_equal": false
+      }
+    },
+    "substep_a": {
+      "authorized": false,
+      "command_exit": null,
+      "burn_transaction_id": null,
+      "message_hash": null,
+      "attestation_hash": null,
+      "mint_transaction_id": null,
+      "principal_delta_exact": false,
+      "gas_accounted_separately": false
+    },
+    "substep_b": {
+      "authorized": false,
+      "command_exit": null,
+      "arbitrum_deposit_transaction_id": null,
+      "pftl_receipt_ids": [],
+      "accepted_receipt_codes_6_of_6": false,
+      "recipient_delta_atoms": null,
+      "supply_conservation": false,
+      "six_equal": false
+    },
+    "after": {
+      "ethereum_usdc_atoms": null,
+      "arbitrum_usdc_atoms": null,
+      "pftl_pfusdc_atoms": null,
+      "campaign_spend_usdc": null,
+      "campaign_headroom_usdc": null
+    }
+  },
+  "validation": {
+    "arithmetic_exact": true,
+    "separate_substep_authorizations": true,
+    "substep_b_depends_on_substep_a_green": true,
+    "stop_no_retry": true,
+    "ledger_update_deferred": true,
+    "credential_values_included": false,
+    "live_chain_actions_executed": false,
+    "pftl_actions_executed": false,
+    "stakehub_service_actions_executed": false
+  }
+}
