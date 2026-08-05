@@ -1,0 +1,74 @@
+{
+  "schema": "postfiat.a666.r4.v7-add-asset-product.v1",
+  "recorded_at_utc": "2026-08-05T05:05:00Z",
+  "verdict": "green",
+  "traceability": {
+    "red_commit": "9db2f521ff7e4cc5d3b46d5d7de9aab8f4bb0503",
+    "holder_operation_helper_commit": "5fcaca89ac9fff31427ad264b87a41f513b72418",
+    "production_ui_commit": "1bc25ac7384de8837a14b8150863ea1bc0e883eb"
+  },
+  "root_cause": {
+    "classification": "browser fixture chain identity drift",
+    "prior_fixture_chain_id": "postfiat-wan-devnet",
+    "corrected_fixture_chain_id": "postfiat-wan-devnet-2",
+    "production_wallet_backup_chain": "postfiat-wan-devnet-2",
+    "correction": "the mock asset fee quote now binds the same chain identity as the production wallet backup"
+  },
+  "syntax": {
+    "command": "node --check wallet-web/src/lib/public-route-smoke.e2e.js",
+    "exit_code": 0
+  },
+  "targeted": {
+    "command": "cd wallet-web && node --test src/lib/public-route-smoke.e2e.js",
+    "exit_code": 0,
+    "elapsed_seconds": 5.12,
+    "test_runtime_ms": 1596.023271,
+    "matched": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0,
+    "test_name": "fresh self-custody wallet adds pfUSDC with a holder-signed trust_set"
+  },
+  "public_browser": {
+    "command": "cd wallet-web && npm run test:public-browser",
+    "exit_code": 0,
+    "elapsed_seconds": 8.29,
+    "suite_runtime_ms": 8094.069236,
+    "matched": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "product_path": {
+    "production_wallet_rendered": true,
+    "production_proxy_started_by_test": true,
+    "proxy_quote_self_assertion": true,
+    "wallet_created_and_unlocked_in_browser": true,
+    "holder_trust_set_signed_in_browser": true,
+    "exact_asset_fee_quote_count": 1,
+    "exact_signed_submission_count": 1,
+    "finalized_success_observed": true,
+    "reserve_insufficient_negative_quote_count": 1,
+    "reserve_insufficient_negative_submission_count": 0,
+    "issuer_authorize_freeze_rpc_count": 0
+  },
+  "custody": {
+    "seed_generated_in_browser": true,
+    "seed_in_quote_boundary": false,
+    "seed_in_submission_boundary": false,
+    "passphrase_in_quote_boundary": false,
+    "passphrase_in_submission_boundary": false,
+    "private_or_owner_key_fields_in_operation": false,
+    "issuer_side_signing": false,
+    "new_dependency": false
+  },
+  "scope": {
+    "rehearsal_stack_business_mutations": 0,
+    "live_chain": false,
+    "stakehub_interaction": false,
+    "product_files_changed_in_closeout": 0,
+    "credentials_included": false
+  }
+}
