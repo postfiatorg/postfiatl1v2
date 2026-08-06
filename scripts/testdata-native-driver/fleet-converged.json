@@ -1,0 +1,8 @@
+[
+  {"endpoint":"127.0.0.1:39660","genesis_hash":"genesis-synthetic","state_root":"root-a","height":10},
+  {"endpoint":"127.0.0.1:39651","genesis_hash":"genesis-synthetic","state_root":"root-a","height":10},
+  {"endpoint":"127.0.0.1:39652","genesis_hash":"genesis-synthetic","state_root":"root-a","height":10},
+  {"endpoint":"127.0.0.1:39653","genesis_hash":"genesis-synthetic","state_root":"root-a","height":10},
+  {"endpoint":"127.0.0.1:39654","genesis_hash":"genesis-synthetic","state_root":"root-a","height":10},
+  {"endpoint":"127.0.0.1:39655","genesis_hash":"genesis-synthetic","state_root":"root-a","height":10}
+]

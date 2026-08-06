@@ -1,0 +1,90 @@
+{
+  "packet_id": "a666-native-v1-leg3c-approve-wa666-permit2",
+  "packet_version": 1,
+  "classification": "HELD",
+  "status": "HELD",
+  "leg": "3c",
+  "leg_name": "Exact wA666 approval to Permit2",
+  "route": "pftl-a666-ethereum-wA666-usdc-v1",
+  "chain_ids": {
+    "ethereum_mainnet": 1,
+    "pftl_chain_id": "postfiat-wan-devnet-2"
+  },
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "route_epoch": 6,
+  "pricing_nav_epoch": 5,
+  "pricing_reserve_packet_hash": "78c9fce35e0dc1ad9a7bd5b25b34e432c606fc38889e1543d5242cff12fe637bb0a508aff3655d2e2e27ac872f88f289",
+  "amount_atoms": 11027135,
+  "amount_source_class": "receipt-chained-leg3b-mint",
+  "self_executable": false,
+  "stop_no_retry": true,
+  "fire_hash_confirmation": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+  "preconditions": [
+    "6/6 fleet agrees on postfiat-wan-devnet-2 and the pinned genesis hash",
+    "route is live and unpaused at route epoch 6",
+    "E5 pricing reserve packet hash equals 78c9fce35e0dc1ad9a7bd5b25b34e432c606fc38889e1543d5242cff12fe637bb0a508aff3655d2e2e27ac872f88f289",
+    "packet SHA-256 equals the fire-time native authorization binding entry",
+    "native replay read is clean for this packet idempotency key"
+  ],
+  "abort_conditions": [
+    "any state read disagrees across required quorum",
+    "any receipt, finality height, or state root is missing or mismatched",
+    "any replay or duplicate idempotency record exists",
+    "any amount, route, epoch, asset, recipient, or signer differs from this packet",
+    "any deviation anywhere: STOP-no-retry; HOLD all subsequent legs"
+  ],
+  "executor": {
+    "kind": "evm_script",
+    "surface": "agentd evm_contract_tx custody leaf",
+    "command_template": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5','data':'<PENDING-FIRE-TIME:erc20-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3c','value_wei':0,'gas_usd':0},timeout=1200)))\""
+  },
+  "state_reads": [
+    "cast eth_call through two public Ethereum RPCs",
+    "Ethereum block, receipt, code, balance, allowance, and event-log reads"
+  ],
+  "receipt_gate": {
+    "required": "Ethereum receipt status=1 and block; allowance owner is 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0; exact allowance equals 11027135",
+    "next_leg": "native-leg3d-permit2-wa666-router"
+  },
+  "custody_signing_leaf": {
+    "kind": "agentd EVM custody as 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+    "locations": [
+      "/home/postfiat/repos/StakeHub/stakehub/agentd.py"
+    ]
+  },
+  "economics": {
+    "spent_usdc": "501.024845",
+    "principal_usdc": "10.000000",
+    "projected_usdc": "511.024845",
+    "cap_usdc": "530.000000",
+    "headroom_usdc": "18.975155",
+    "rule": "Leg 1 is the sole principal spend. Recompute gas at fire time; projection above cap is STOP-no-retry."
+  },
+  "budget_guard": {
+    "cap_usdc": "530.000000",
+    "prior_spend_usdc": "501.024845",
+    "leg_ceiling_usdc": "PENDING-FIRE-TIME",
+    "leg_class": "gas",
+    "resolution_policy": "fire-time binding step computes fresh gas quote (current base fee x gas limit x ETH/USD), writes it into the fire-time authorized binding, driver enforces prior_actual + fresh_quote <= 530.000000 else STOP-no-retry",
+    "driver_rule": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry"
+  },
+  "command_template": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5','data':'<PENDING-FIRE-TIME:erc20-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3c','value_wei':0,'gas_usd':0},timeout=1200)))\"",
+  "credential_references": [
+    "/home/postfiat/repos/StakeHub/stakehub/agentd.py"
+  ],
+  "surfaces": [
+    {
+      "name": "wA666 ERC20 approval",
+      "status": "native-EVM-calldata",
+      "selector": "0x095ea7b3"
+    }
+  ],
+  "requires": [
+    "leg3b status-1 mint receipt"
+  ],
+  "evidence_output_paths": [
+    "native-v1/leg3c/ethereum-receipt.json",
+    "native-v1/leg3c/allowance-poststate.json"
+  ],
+  "supersedes": "live-demo/v4/v5 packet set preserved as superseded evidence; never execute it."
+}

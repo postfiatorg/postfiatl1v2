@@ -1,0 +1,12 @@
+{
+  "version": "postfiat-local-rpc-v1",
+  "id": "u46",
+  "ok": true,
+  "result": {
+    "route_epoch": 6,
+    "paused": false,
+    "pricing_nav_epoch": 5,
+    "nav_per_unit": 90234207,
+    "pricing_reserve_packet_hash": "78c9fce35e0dc1ad9a7bd5b25b34e432c606fc38889e1543d5242cff12fe637bb0a508aff3655d2e2e27ac872f88f289"
+  }
+}

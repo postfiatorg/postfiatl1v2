@@ -1,0 +1,107 @@
+{
+  "packet_id": "a666-native-v1-leg1-bridge-in",
+  "packet_version": 1,
+  "classification": "HELD",
+  "status": "HELD",
+  "leg": 1,
+  "leg_name": "USDC bridge-in and finalized pfUSDC deposit claim",
+  "route": "pftl-a666-ethereum-wA666-usdc-v1",
+  "chain_ids": {
+    "ethereum_mainnet": 1,
+    "pftl_chain_id": "postfiat-wan-devnet-2"
+  },
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "route_epoch": 6,
+  "pricing_nav_epoch": 5,
+  "pricing_reserve_packet_hash": "78c9fce35e0dc1ad9a7bd5b25b34e432c606fc38889e1543d5242cff12fe637bb0a508aff3655d2e2e27ac872f88f289",
+  "amount_atoms": 10000000,
+  "amount_source_class": "static-10-USDC-principal",
+  "self_executable": false,
+  "stop_no_retry": true,
+  "fire_hash_confirmation": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+  "preconditions": [
+    "6/6 fleet agrees on postfiat-wan-devnet-2 and the pinned genesis hash",
+    "route is live and unpaused at route epoch 6",
+    "E5 pricing reserve packet hash equals 78c9fce35e0dc1ad9a7bd5b25b34e432c606fc38889e1543d5242cff12fe637bb0a508aff3655d2e2e27ac872f88f289",
+    "packet SHA-256 equals the fire-time native authorization binding entry",
+    "native replay read is clean for this packet idempotency key"
+  ],
+  "abort_conditions": [
+    "any state read disagrees across required quorum",
+    "any receipt, finality height, or state root is missing or mismatched",
+    "any replay or duplicate idempotency record exists",
+    "any amount, route, epoch, asset, recipient, or signer differs from this packet",
+    "any deviation anywhere: STOP-no-retry; HOLD all subsequent legs"
+  ],
+  "executor": {
+    "kind": "stage_sequence",
+    "stages": [
+      {"kind": "stage_sequence", "command": "nav-roundtrip-live-demo --evm-deposit-only"},
+      {"kind": "stage_sequence", "command": "nav-roundtrip-live-demo --deposit-relay-only --claim-deposit"}
+    ],
+    "surface": "postfiat-node nav-roundtrip-live-demo staged ingress",
+    "command_template": "postfiat-node nav-roundtrip-live-demo --evm-deposit-only --artifact-dir <PENDING-FIRE-TIME:leg1-evm-artifact-dir> --source-rpc-url <PENDING-FIRE-TIME:source-rpc-url> --source-chain-id 1 --vault <PENDING-FIRE-TIME:vault-address> --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pftl-recipient pfab9b9228942e5c529633a13aa271d5297bec6353 --amount-atoms 10000000 --nonce <PENDING-FIRE-TIME:leg1-nonce> --session-id <PENDING-FIRE-TIME:leg1-session-id> --resume && postfiat-node nav-roundtrip-live-demo --deposit-relay-only --claim-deposit --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --artifact-dir <PENDING-FIRE-TIME:leg1-relay-artifact-dir> --evm-deposit-report <PENDING-FIRE-TIME:leg1-evm-deposit-report> --source-rpc-url <PENDING-FIRE-TIME:source-rpc-url> --source-chain-id 1 --vault <PENDING-FIRE-TIME:vault-address> --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --policy-hash db6be8d07e88d1d6e7033248541fa8d7e0a6c8403c7c9c175cb67d2a247d9d0aeb6a0efe14c83a11e32ffab609117f8d --proposer <PENDING-FIRE-TIME:route-proposer> --attestor <PENDING-FIRE-TIME:route-attestor> --finalizer <PENDING-FIRE-TIME:route-finalizer> --claimer pfab9b9228942e5c529633a13aa271d5297bec6353 --proposer-key-file <PENDING-FIRE-TIME:proposer-key-file> --attestor-key-file <PENDING-FIRE-TIME:attestor-key-file> --finalizer-key-file <PENDING-FIRE-TIME:finalizer-key-file> --claimer-key-file <PENDING-FIRE-TIME:claimer-key-file> --expires-at-height <PENDING-FIRE-TIME:expires-at-height> --resume"
+  },
+  "state_reads": [
+    "fleet postfiat-node rpc status: six-of-six chain, height, tip, and state root",
+    "fleet postfiat-node rpc account_assets for the packet owner/subscriber",
+    "fleet postfiat-node rpc receipts, tx, and batch_archive for finality",
+    "fleet navcoin_bridge_supply_status and navcoin_bridge_receipt_replay",
+    "cast eth_call through two public Ethereum RPCs",
+    "Ethereum block, receipt, code, balance, allowance, and event-log reads"
+  ],
+  "receipt_gate": {
+    "required": "Ethereum deposit receipt status=1; native deposit relay tx_ids; receipt.accepted=true; finalized height and state root; pfUSDC balance delta exactly 10000000",
+    "next_leg": "native-leg2a-order-reserve"
+  },
+  "custody_signing_leaf": {
+    "kind": "agentd EVM custody plus proposer/finalizer/claimer PFTL key files",
+    "locations": [
+      "/home/postfiat/repos/StakeHub/stakehub/agentd.py",
+      "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/"
+    ]
+  },
+  "economics": {
+    "spent_usdc": "501.024845",
+    "principal_usdc": "10.000000",
+    "projected_usdc": "511.024845",
+    "cap_usdc": "530.000000",
+    "headroom_usdc": "18.975155",
+    "rule": "Leg 1 is the sole principal spend. Recompute gas at fire time; projection above cap is STOP-no-retry."
+  },
+  "budget_guard": {
+    "cap_usdc": "530.000000",
+    "prior_spend_usdc": "501.024845",
+    "leg_ceiling_usdc": "10.000000",
+    "leg_class": "principal",
+    "resolution_policy": "static packet ceiling is bound before execution; projection above 530.000000 is STOP-no-retry",
+    "driver_rule": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry"
+  },
+  "command_template": "postfiat-node nav-roundtrip-live-demo --evm-deposit-only --artifact-dir <PENDING-FIRE-TIME:leg1-evm-artifact-dir> --source-rpc-url <PENDING-FIRE-TIME:source-rpc-url> --source-chain-id 1 --vault <PENDING-FIRE-TIME:vault-address> --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pftl-recipient pfab9b9228942e5c529633a13aa271d5297bec6353 --amount-atoms 10000000 --nonce <PENDING-FIRE-TIME:leg1-nonce> --session-id <PENDING-FIRE-TIME:leg1-session-id> --resume && postfiat-node nav-roundtrip-live-demo --deposit-relay-only --claim-deposit --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --artifact-dir <PENDING-FIRE-TIME:leg1-relay-artifact-dir> --evm-deposit-report <PENDING-FIRE-TIME:leg1-evm-deposit-report> --source-rpc-url <PENDING-FIRE-TIME:source-rpc-url> --source-chain-id 1 --vault <PENDING-FIRE-TIME:vault-address> --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --policy-hash db6be8d07e88d1d6e7033248541fa8d7e0a6c8403c7c9c175cb67d2a247d9d0aeb6a0efe14c83a11e32ffab609117f8d --proposer <PENDING-FIRE-TIME:route-proposer> --attestor <PENDING-FIRE-TIME:route-attestor> --finalizer <PENDING-FIRE-TIME:route-finalizer> --claimer pfab9b9228942e5c529633a13aa271d5297bec6353 --proposer-key-file <PENDING-FIRE-TIME:proposer-key-file> --attestor-key-file <PENDING-FIRE-TIME:attestor-key-file> --finalizer-key-file <PENDING-FIRE-TIME:finalizer-key-file> --claimer-key-file <PENDING-FIRE-TIME:claimer-key-file> --expires-at-height <PENDING-FIRE-TIME:expires-at-height> --resume",
+  "credential_references": [
+    "/home/postfiat/repos/StakeHub/stakehub/agentd.py",
+    "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/"
+  ],
+  "surfaces": [
+    {
+      "name": "evm deposit",
+      "status": "native-stage",
+      "command": "nav-roundtrip-live-demo --evm-deposit-only"
+    },
+    {
+      "name": "deposit relay and claim",
+      "status": "native-stage",
+      "command": "nav-roundtrip-live-demo --deposit-relay-only --claim-deposit"
+    }
+  ],
+  "requires": [
+    "native preflight receipt",
+    "fresh nonce and replay-clean deposit id"
+  ],
+  "evidence_output_paths": [
+    "native-v1/leg1/evm-deposit.json",
+    "native-v1/leg1/deposit-relay.json",
+    "native-v1/leg1/finalized-deposit-claim.json"
+  ],
+  "supersedes": "live-demo/v4/v5 packet set preserved as superseded evidence; never execute it."
+}

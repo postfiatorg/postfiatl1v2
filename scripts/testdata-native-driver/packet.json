@@ -1,0 +1,20 @@
+{
+  "packet_id": "synthetic-leg-2a",
+  "leg": "2a",
+  "route": "route-synthetic",
+  "chain_id": "chain-synthetic",
+  "genesis_hash": "genesis-synthetic",
+  "operation": {
+    "operation": "pftl_uniswap_order_reserve",
+    "subscriber": "pf-subscriber",
+    "route_id": "route-synthetic",
+    "reservation_id": "reservation-synthetic",
+    "ethereum_recipient": "0x1234",
+    "route_epoch": 6,
+    "policy_epoch": 5,
+    "policy_hash": "policy-synthetic",
+    "mint_amount_atoms": 11,
+    "max_settlement_value_atoms": 10,
+    "expires_at_height": 100
+  }
+}

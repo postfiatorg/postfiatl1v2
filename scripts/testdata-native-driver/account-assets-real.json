@@ -1,0 +1,9 @@
+{
+  "version": "postfiat-local-rpc-v1",
+  "id": "u46",
+  "ok": true,
+  "result": {
+    "account": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+    "assets": []
+  }
+}

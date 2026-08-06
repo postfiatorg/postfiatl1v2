@@ -1,0 +1,11 @@
+{
+  "version": "postfiat-local-rpc-v1",
+  "id": "u46",
+  "ok": true,
+  "result": {
+    "accepted": true,
+    "receipt_id": "receipt-synthetic",
+    "height": 10,
+    "state_root": "root-a"
+  }
+}

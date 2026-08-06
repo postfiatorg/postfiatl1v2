@@ -1,0 +1,1 @@
+{"schema":"postfiat.native-campaign-journal-v1","legs":[{"leg":"2a","status":"SUBMITTED","submission":{"tx_ids":["tx-synthetic"]},"finality":[]}],"resume_policy":"resume only when all listed receipt_ids/finality roots match; otherwise STOP"}
