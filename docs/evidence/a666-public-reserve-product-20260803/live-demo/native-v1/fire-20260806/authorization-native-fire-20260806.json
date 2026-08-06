@@ -1,12 +1,22 @@
 {
   "authorization_status": "STAGED-S1-PENDING-TROLL-VERIFICATION",
+  "client_tool": {
+    "base_commit": "2246d257",
+    "binary_sha256": "a982f8d27a42daad39e6a7d2ad1aff69a97064b7890da654fc9aae8f47f58f95",
+    "commit": "c33b3b7",
+    "mutations": "/tmp/snaga-u64/mutations.txt",
+    "path": "/tmp/fire-20260806-bin/postfiat-node-client-depositv2",
+    "redgreen_evidence": "/tmp/troll-redgreen.txt",
+    "scope": "leg1 stage-1 deposit submission + relay client only",
+    "tests": "/tmp/snaga-u64/tests-targeted.txt"
+  },
   "custody_leaf_locations": [
     "/run/user/1000/postfiat-constrained-signer/a666-signer.sock",
     "/home/postfiat/.stakehub/live-demo-holder-custody/",
     "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/"
   ],
   "fire_10_finalization": {
-    "binding_sha256": "af9ed8bc067f03826987675cf0e5988432ee7728555b5c267bb98953e4b1de1b",
+    "binding_sha256": "ca057f865ac484a638ddf5f092e492453aac87a3b5d074982f1468571b114aea",
     "leg3a_optional_digest_fields": "omitted",
     "status": "STAGED-S1-RESOLVED-EXCEPT-RECEIPT-CHAIN-AND-PROVER-SOURCES",
     "u57_contract_leaf": "scripts/native_evm_contract_leaf.py",
@@ -23,11 +33,11 @@
   },
   "native_campaign_driver": {
     "commit": "a94e01bbb9a508305f63b3a04fc06a6b6e9990c0",
-    "sha256": "885b8f99dae192f470273c1c18dce114a66e3d8b1c363e394166c5f04bde4ab0"
+    "sha256": "179430ce68404e31ed0050b064167cf0eeca7e83b323778bd24dedbfaeb1b0cc"
   },
   "resolution_rules": {
     "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/resolution-rules.md",
-    "sha256": "b8291362ed70343f14fda710708fb64e4ad6e1a00a93bd9be0cb2a5db12ff606"
+    "sha256": "be69f07167f4b74695d8832917ab08c921498a08491505cac135ca5ec1bc96ee"
   },
   "route_pins": {
     "canonical_binary_sha256": "05330fb20a40b8a4536000ec57da1862d879bcdc4a21bc8c0657f5c56aa8e0f5",
@@ -45,7 +55,7 @@
   "stage_bindings": {
     "S1": {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/binding-S1.json",
-      "sha256": "af9ed8bc067f03826987675cf0e5988432ee7728555b5c267bb98953e4b1de1b"
+      "sha256": "ca057f865ac484a638ddf5f092e492453aac87a3b5d074982f1468571b114aea"
     },
     "S2": {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/binding-S2.json",

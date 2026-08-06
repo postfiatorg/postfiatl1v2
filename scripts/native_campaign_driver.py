@@ -24,8 +24,10 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 SCHEMA = "postfiat.native-campaign-journal-v1"
 RPC_VERSION = "postfiat-local-rpc-v1"
 REQUEST_SCHEMA = "postfiat-certified-asset-ops-request-v1"
+# deployed fleet binary pin (2246d257) — reference only, never overwritten
 EXPECTED_NODE_SHA256 = "05330fb20a40b8a4536000ec57da1862d879bcdc4a21bc8c0657f5c56aa8e0f5"
-DEFAULT_NODE = "/tmp/krimp-u22/postfiat-node-canonical"
+EXPECTED_CLIENT_NODE_SHA256 = "a982f8d27a42daad39e6a7d2ad1aff69a97064b7890da654fc9aae8f47f58f95"
+DEFAULT_CLIENT_NODE = "/tmp/fire-20260806-bin/postfiat-node-client-depositv2"
 FLEET_ENDPOINTS = ["127.0.0.1:39660", "127.0.0.1:39651", "127.0.0.1:39652", "127.0.0.1:39653", "127.0.0.1:39654", "127.0.0.1:39655"]
 CERTIFIED = {
     "2a": "pftl_uniswap_order_reserve",
@@ -76,7 +78,7 @@ def _sha256(path: Path) -> str:
 
 
 def _binary_path() -> Path:
-    return Path(os.environ.get("POSTFIAT_NODE_BIN", DEFAULT_NODE))
+    return Path(os.environ.get("POSTFIAT_NODE_BIN", DEFAULT_CLIENT_NODE))
 
 
 def check_binary(path: Path | None = None) -> Path:
@@ -84,7 +86,7 @@ def check_binary(path: Path | None = None) -> Path:
     if not path.is_file():
         raise ConfigError(f"node binary is missing: {path}")
     digest = _sha256(path)
-    if digest != EXPECTED_NODE_SHA256:
+    if digest != EXPECTED_CLIENT_NODE_SHA256:
         raise ConfigError(f"node binary digest mismatch: {digest}")
     return path
 
