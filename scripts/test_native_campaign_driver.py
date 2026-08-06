@@ -412,7 +412,7 @@ class FlowTests(unittest.TestCase):
     def test_t39_prover_leaf_resume_hashes(self):
         import native_prover_leaf as leaf
         out=self.root/"proof"; out.mkdir(); (out/"proof-calldata.bin").write_bytes(b"a"); (out/"public-values.bin").write_bytes(b"b"); import hashlib
-        report={"proof-calldata_sha256":hashlib.sha256(b"a").hexdigest(),"public-values_sha256":hashlib.sha256(b"b").hexdigest()}; (out/"proof-report.json").write_text(json.dumps(report)); self.assertEqual(leaf.verify_existing(out)["proof-calldata_sha256"],report["proof-calldata_sha256"])
+        report={"proof-calldata_sha256":hashlib.sha256(b"a").hexdigest(),"public-values_sha256":hashlib.sha256(b"b").hexdigest(),"program_vkey":leaf.EXPECTED_PROGRAM_VKEY,"elf_sha256":leaf.EXPECTED_ELF_SHA256}; (out/"proof-report.json").write_text(json.dumps(report)); self.assertEqual(leaf.verify_existing(out)["proof-calldata_sha256"],report["proof-calldata_sha256"])
 
     def test_t40_staged_exemption_requires_complete_entry(self):
         packet={"packet_id":"p","leg":"5a","executor":{"kind":"evm_script","commands":[["x","PENDING-FIRE-TIME:v"]]}}; pp=self.root/"p.json"; pp.write_text(json.dumps(packet)); import hashlib; h=hashlib.sha256(pp.read_bytes()).hexdigest(); bp=self.root/"b.json"; bp.write_text(json.dumps({"packets":[{"packet_id":"p","path":"p.json","sha256":h}],"staged_fields":[{"packet":"p.json","json_pointer":"/executor/commands/0/1","source":"leg4 receipt","stage":"S4"}]})); lines=d.validate_executable(bp,"5a"); self.assertTrue(any("STAGED-EXEMPT" in x for x in lines))
@@ -508,6 +508,75 @@ class FlowTests(unittest.TestCase):
             r"/ops_file_template/operations/0/operation/nav_amount_atoms",
         ):
             d.validate_executable(binding, "5a")
+
+    def test_t49_prover_remote_commands_are_absolute_and_env_pinned(self):
+        import argparse
+        import native_prover_leaf as leaf
+
+        out = self.root / "proof"
+        out.mkdir()
+        (out / "evm-deposit.json").write_text(json.dumps({"deposit_tx": "0xdeposit"}))
+        calls = []
+
+        def fake_run(argv):
+            calls.append(list(argv))
+            if argv and argv[0] == "scp" and len(argv) >= 3:
+                destination = argv[-1]
+                if not destination.startswith("prover.example:"):
+                    target = pathlib.Path(destination)
+                    if target.name == "proof-calldata.bin":
+                        target.write_bytes(b"calldata")
+                    elif target.name == "public-values.bin":
+                        target.write_bytes(b"public")
+                    elif target.name == "remote-proof-report.json":
+                        target.write_text(json.dumps({
+                            "program_vkey": leaf.EXPECTED_PROGRAM_VKEY,
+                            "elf_sha256": leaf.EXPECTED_ELF_SHA256,
+                        }))
+            return None
+
+        args = argparse.Namespace(
+            artifact_dir=str(out),
+            witness=None,
+            prover_host="prover.example",
+            remote_workdir="/work/test campaign",
+            ssh_key=None,
+            execution_rpc="https://execution.example",
+            beacon_rpc="https://beacon.example",
+            source_rpc_url=["https://source.example"],
+            deposit_tx=None,
+        )
+        old_run = leaf.run
+        leaf.run = fake_run
+        try:
+            leaf.prove(args)
+        finally:
+            leaf.run = old_run
+        ssh_commands = [call[-1] for call in calls if call and call[0] == "ssh"]
+        self.assertEqual(len(ssh_commands), 2)
+        binary = "/work/test campaign/tools/eth-l1-mainnet-fast-lane-p0/target/release/eth-l1-mainnet-fast-lane-p0"
+        for command in ssh_commands:
+            self.assertTrue(command.startswith("SP1_PROVER=cuda "))
+            self.assertIn(binary, command)
+            self.assertNotIn("cargo run", command)
+            self.assertNotIn("&&", command)
+            self.assertNotIn("cd ", command)
+
+    def test_t50_prover_wrong_vkey_rejected(self):
+        import native_prover_leaf as leaf
+
+        out = self.root / "bad-proof"
+        out.mkdir()
+        (out / "proof-calldata.bin").write_bytes(b"calldata")
+        (out / "public-values.bin").write_bytes(b"public")
+        (out / "proof-report.json").write_text(json.dumps({
+            "program_vkey": "0xwrong",
+            "elf_sha256": leaf.EXPECTED_ELF_SHA256,
+            "proof-calldata_sha256": hashlib.sha256(b"calldata").hexdigest(),
+            "public-values_sha256": hashlib.sha256(b"public").hexdigest(),
+        }))
+        with self.assertRaisesRegex(RuntimeError, "program_vkey"):
+            leaf.verify_existing(out)
 
 
 if __name__ == "__main__":

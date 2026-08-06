@@ -6,7 +6,7 @@
     "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/"
   ],
   "fire_10_finalization": {
-    "binding_sha256": "3ad416c5c140967bd2bc1ad7f5a6d861c1c475c5ed6c2a63cc3278c80b5a4c2c",
+    "binding_sha256": "af9ed8bc067f03826987675cf0e5988432ee7728555b5c267bb98953e4b1de1b",
     "leg3a_optional_digest_fields": "omitted",
     "status": "STAGED-S1-RESOLVED-EXCEPT-RECEIPT-CHAIN-AND-PROVER-SOURCES",
     "u57_contract_leaf": "scripts/native_evm_contract_leaf.py",
@@ -27,7 +27,7 @@
   },
   "resolution_rules": {
     "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/resolution-rules.md",
-    "sha256": "967450bda94817294fedacc6c88a4bac780ee7c0e2940f81ea6af42e59ab55a4"
+    "sha256": "e4e87fd760a840d77b0968c4ee228e67de5584b3a77926940910bef8774ae79c"
   },
   "route_pins": {
     "canonical_binary_sha256": "05330fb20a40b8a4536000ec57da1862d879bcdc4a21bc8c0657f5c56aa8e0f5",
@@ -45,7 +45,7 @@
   "stage_bindings": {
     "S1": {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/binding-S1.json",
-      "sha256": "3ad416c5c140967bd2bc1ad7f5a6d861c1c475c5ed6c2a63cc3278c80b5a4c2c"
+      "sha256": "af9ed8bc067f03826987675cf0e5988432ee7728555b5c267bb98953e4b1de1b"
     },
     "S2": {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/binding-S2.json",

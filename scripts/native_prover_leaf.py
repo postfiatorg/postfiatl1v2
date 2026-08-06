@@ -10,6 +10,11 @@ import sys
 from pathlib import Path
 
 
+# Profile-pinned epoch-5 vault-claim verifier and committed ingress ELF lineage.
+EXPECTED_PROGRAM_VKEY = "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e"
+EXPECTED_ELF_SHA256 = "0e59a0cf7723b9028aaa4c57f9e9c0da72119a552d62a5577223ba7b2df222d3"
+
+
 def digest(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as fh:
@@ -22,11 +27,19 @@ def run(argv: list[str]) -> None:
     subprocess.run(argv, check=True)
 
 
+def _validate_report_pins(report: dict) -> None:
+    if report.get("program_vkey") != EXPECTED_PROGRAM_VKEY:
+        raise RuntimeError("proof report program_vkey mismatch")
+    if report.get("elf_sha256") != EXPECTED_ELF_SHA256:
+        raise RuntimeError("proof report elf_sha256 mismatch")
+
+
 def verify_existing(out: Path) -> dict:
     report_path = out / "proof-report.json"
     if not report_path.exists():
         raise RuntimeError("existing proof output lacks proof-report.json")
     report = json.loads(report_path.read_text())
+    _validate_report_pins(report)
     for name in ("proof-calldata.bin", "public-values.bin"):
         path = out / name
         expected = report.get(name.replace(".bin", "_sha256")) or report.get(name + "_sha256")
@@ -55,7 +68,9 @@ def prove(args: argparse.Namespace) -> dict:
     remote = f"{args.prover_host}:{args.remote_workdir}"
     ssh = ["ssh"]
     witness = Path(args.witness) if args.witness else None
-    remote_witness = f"{args.remote_workdir.rstrip('/')}/witness.json"
+    remote_workdir = args.remote_workdir.rstrip("/")
+    remote_witness = f"{remote_workdir}/witness.json"
+    remote_binary = f"{remote_workdir}/tools/eth-l1-mainnet-fast-lane-p0/target/release/eth-l1-mainnet-fast-lane-p0"
     scp = ["scp"]
     if args.ssh_key:
         ssh += ["-i", args.ssh_key]
@@ -65,14 +80,26 @@ def prove(args: argparse.Namespace) -> dict:
             raise ValueError(f"witness missing: {witness}")
         run(scp + [str(witness), f"{args.prover_host}:{remote_witness}"])
     else:
-        capture = "cargo run --release --manifest-path tools/eth-l1-mainnet-fast-lane-p0/Cargo.toml -- capture --deployment " + shlex.quote(args.remote_workdir + "/deployment.json") + " --output " + shlex.quote(remote_witness) + " --execution-rpc " + shlex.quote(args.execution_rpc) + " --beacon-rpc " + shlex.quote(args.beacon_rpc)
-        run(ssh + [args.prover_host, "cd", args.remote_workdir, "&&", capture])
-    command = "cargo run --release --manifest-path tools/eth-l1-mainnet-fast-lane-p0/Cargo.toml -- prove --witness " + shlex.quote(remote_witness) + " --output-dir " + shlex.quote(args.remote_workdir) + " --require-prover cuda"
-    run(ssh + [args.prover_host, "cd", args.remote_workdir, "&&", command])
+        capture = (
+            "SP1_PROVER=cuda " + shlex.quote(remote_binary)
+            + " capture --deployment " + shlex.quote(f"{remote_workdir}/deployment.json")
+            + " --output " + shlex.quote(remote_witness)
+            + " --execution-rpc " + shlex.quote(args.execution_rpc)
+            + " --beacon-rpc " + shlex.quote(args.beacon_rpc)
+        )
+        run(ssh + [args.prover_host, capture])
+    command = (
+        "SP1_PROVER=cuda " + shlex.quote(remote_binary)
+        + " prove --witness " + shlex.quote(remote_witness)
+        + " --output-dir " + shlex.quote(remote_workdir)
+        + " --require-prover cuda"
+    )
+    run(ssh + [args.prover_host, command])
     run(scp + [f"{remote}/proof-calldata.bin", str(out / "proof-calldata.bin")])
     run(scp + [f"{remote}/public-values.bin", str(out / "public-values.bin")])
     run(scp + [f"{remote}/proof-report.json", str(out / "remote-proof-report.json")])
     report = json.loads((out / "remote-proof-report.json").read_text())
+    _validate_report_pins(report)
     report["proof-calldata_sha256"] = digest(out / "proof-calldata.bin")
     report["public-values_sha256"] = digest(out / "public-values.bin")
     report["deposit_tx"] = args.deposit_tx
