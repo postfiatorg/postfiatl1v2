@@ -537,11 +537,47 @@ class FlowTests(unittest.TestCase):
 
     def test_t49_prover_remote_commands_are_absolute_and_env_pinned(self):
         import argparse
+        from types import SimpleNamespace
         import native_prover_leaf as leaf
 
         out = self.root / "proof"
         out.mkdir()
-        (out / "evm-deposit.json").write_text(json.dumps({"deposit_tx": "0xdeposit"}))
+        tx = "11" * 32
+        nonce = "22" * 32
+        route = leaf.EXPECTED_ROUTE_BINDING
+        recipient = "pfab9b9228942e5c529633a13aa271d5297bec6353"
+        depositor = "1455bd7fbfbf92a171ef36025e13959e3b0ad8c0"
+        def word(value):
+            return f"{int(value, 16) if isinstance(value, str) else value:064x}"
+        event_data = "".join([
+            word(0xE0), word(10_000_000), nonce, route, word(1),
+            word(leaf.EXPECTED_VAULT_ADDRESS[2:]),
+            word(leaf.EXPECTED_TOKEN_ADDRESS[2:]), word(len(recipient)),
+            recipient.encode().hex().ljust(64, "0"),
+        ])
+        receipt = {
+            "status": "0x1", "blockNumber": "0x100",
+            "transactionHash": "0x" + tx, "from": "0x" + depositor,
+            "logs": [{"address": leaf.EXPECTED_VAULT_ADDRESS,
+                       "topics": ["0x" + "00" * 32, "0x" + "33" * 32,
+                                  "0x" + "0" * 24 + depositor],
+                       "data": "0x" + event_data}],
+        }
+        deposit_report = {
+            "deposit_tx": "0x" + tx, "vault_address": leaf.EXPECTED_VAULT_ADDRESS,
+            "usdc_address": leaf.EXPECTED_TOKEN_ADDRESS, "stakehub_wallet": "0x" + depositor,
+            "pftl_recipient": recipient, "amount_atoms": 10_000_000,
+            "nonce": "0x" + nonce,
+        }
+        (out / "evm-deposit.json").write_text(json.dumps(deposit_report))
+        deposit_id = "0x" + "33" * 32
+        capture_values = {
+            "deposit_id": deposit_id, "tx_hash": "0x" + tx,
+            "vault_address": leaf.EXPECTED_VAULT_ADDRESS,
+            "token_address": leaf.EXPECTED_TOKEN_ADDRESS, "depositor": "0x" + depositor,
+            "pftl_recipient": recipient, "amount_atoms": 10_000_000,
+            "nonce": "0x" + nonce, "route_binding": "0x" + route,
+        }
         calls = []
 
         def fake_run(argv):
@@ -559,7 +595,19 @@ class FlowTests(unittest.TestCase):
                             "program_vkey": leaf.EXPECTED_PROGRAM_VKEY,
                             "elf_sha256": leaf.EXPECTED_ELF_SHA256,
                         }))
+                    elif target.name == "capture-public-values.json":
+                        target.write_text(json.dumps(capture_values))
             return None
+
+        def fake_run_output(argv):
+            calls.append(list(argv))
+            descriptor = out / "deployment-descriptor.json"
+            return SimpleNamespace(stdout=f"{leaf.digest(descriptor)}  deployment.json\\n")
+
+        old_rpc = leaf._rpc_receipt
+        old_run_output = leaf.run_output
+        leaf._rpc_receipt = lambda _url, _tx: receipt
+        leaf.run_output = fake_run_output
 
         args = argparse.Namespace(
             artifact_dir=str(out),
@@ -578,10 +626,21 @@ class FlowTests(unittest.TestCase):
             leaf.prove(args)
         finally:
             leaf.run = old_run
-        ssh_commands = [call[-1] for call in calls if call and call[0] == "ssh"]
-        self.assertEqual(len(ssh_commands), 2)
+            leaf.run_output = old_run_output
+            leaf._rpc_receipt = old_rpc
+        ssh_calls = [(idx, call[-1]) for idx, call in enumerate(calls) if call and call[0] == "ssh"]
+        ssh_commands = [command for _, command in ssh_calls]
+        self.assertEqual(len(ssh_commands), 3)
         binary = "/work/test campaign/tools/eth-l1-mainnet-fast-lane-p0/target/release/eth-l1-mainnet-fast-lane-p0"
-        for command in ssh_commands:
+        descriptor_scp = next(i for i, call in enumerate(calls)
+                              if call and call[0] == "scp" and call[-1].endswith("/deployment.json"))
+        remote_hash = next(i for i, command in ssh_calls if command.startswith("sha256sum "))
+        capture_idx = next(i for i, command in ssh_calls if " capture " in command)
+        prove_idx = next(i for i, command in ssh_calls if " prove " in command)
+        self.assertLess(descriptor_scp, remote_hash)
+        self.assertLess(remote_hash, capture_idx)
+        self.assertLess(capture_idx, prove_idx)
+        for _, command in ssh_calls[1:]:
             self.assertTrue(command.startswith("SP1_PROVER=cuda "))
             self.assertIn(binary, command)
             self.assertNotIn("cargo run", command)
