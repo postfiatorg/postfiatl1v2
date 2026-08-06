@@ -20,7 +20,7 @@
     },
     {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg1-bridge-in.json",
-      "sha256": "f805598cc1975df59d5d03de3fcf517b786ece5b4b53e58767be0db73ae0e538"
+      "sha256": "46339ca716bdc310e410c4f152f23eaf9ea89cb9d4a3931923f7b4be09003062"
     },
     {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg2a-order-reserve.json",
@@ -110,6 +110,14 @@
       "data_dir": "/var/lib/postfiat/validator-0",
       "key_file": "/var/lib/postfiat/validator-0/validator_keys.json",
       "topology": "/etc/postfiat/releases/pnok-private-fix-2246d25/topology.json"
+    },
+    "leg1_reprove": {
+      "deployment_descriptor_sha256": "eb271b08bea23552b0440fd1b2d804d6ff2523c1c9718d1547c05571da4d1805",
+      "proof_calldata_sha256": "a5543158b1379268abe1c275a070320998ad2ba20f6941241bebc580a4c8fbcf",
+      "proof_report_sha256": "5ff4d061aab05084f1997381fdb62371b68b6fa193f83a7f9eea68f766747d67",
+      "public_values_sha256": "37cd3ac6532342894703ad7ec210c8bf00780f23fb21377db16208c54d2536e6",
+      "verified_deposit_block": 25698310,
+      "verified_deposit_id": "0xe54713583c1bb46e908e8f01f1c996966dc5c82281365c91092a27ae0852d02b"
     },
     "leg1_session_id": "native-v1-fire-20260806-leg1-deposit",
     "leg2a_expires_at_height": 1776,

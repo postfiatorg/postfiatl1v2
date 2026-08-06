@@ -52,3 +52,9 @@ A completed stage binding is not an execution command. The executor must first v
 
 - **Nazgûl ruling.** The dead local `nav-roundtrip-live-demo --deposit-relay-only` path is prohibited: it requires validator-local topology, NodeStore, and validator key access and cannot execute through forwarded RPC. Control host builds and signs the propose then finalize/claim batches with issuer/holder operation keys using `--batch-only`; only signed public `mempool-batch.json` artifacts transfer to validator-0. Validator-0 runs `transport-certified-batch-round` sequentially with its own validator key directory. Before batch-only, validator-0 height must remain below 1776 and clone issuer/holder account sequences/state roots must equal validator-0 and validator-1; only one re-clone/re-check is allowed before any submission.
 - **Placeholder-key tripwire.** Control-host batch-only commands bind `/nonexistent-placeholder-validator-key-must-never-be-dereferenced.json` as syntactically required `--key-file`. Any dereference failure is STOP-no-retry. Issuer and holder keys never leave the control host; validator keys never leave validator-0.
+
+## 2026-08-06 FIRE-17 live-deposit reprove addendum
+
+- **Stale-descriptor root cause and quarantine.** FIRE-16's prover leaf never generated `deployment.json`; its capture therefore used an h390 remnant. That proof set is quarantined at `/tmp/krimp-exec-fire20260806/leg-1/stale-fire16/` and cannot be relayed.
+- **Hardened reprove.** U69, U72, and U73 hardened the leaf in commits `f77392d`, `1257ed2`, and `01d105d`. The live-deposit reprove uses the descriptor, proof, and public values under `/tmp/krimp-exec-fire20260806/leg-1-reprove/`; the prover leaf is commit `01d105d`.
+- **Descriptor-before-capture gate.** Capture is permitted only after the deployment descriptor SHA-256 has been generated and matches the bound descriptor hash. Missing, stale, or mismatched descriptor material is STOP-no-retry.
