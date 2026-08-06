@@ -27,7 +27,7 @@
   },
   "resolution_rules": {
     "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/resolution-rules.md",
-    "sha256": "e4e87fd760a840d77b0968c4ee228e67de5584b3a77926940910bef8774ae79c"
+    "sha256": "b8291362ed70343f14fda710708fb64e4ad6e1a00a93bd9be0cb2a5db12ff606"
   },
   "route_pins": {
     "canonical_binary_sha256": "05330fb20a40b8a4536000ec57da1862d879bcdc4a21bc8c0657f5c56aa8e0f5",
