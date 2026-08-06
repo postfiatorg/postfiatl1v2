@@ -5,7 +5,10 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import os
 from pathlib import Path
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from threading import Thread
 
 import pytest
 
@@ -242,3 +245,47 @@ def test_missing_source_rpc_is_fail_closed() -> None:
     report = _report()
     with pytest.raises(ValueError, match="source-rpc"):
         leaf._verify_canonical_receipt([], _descriptor(report), report)
+
+
+def test_rpc_receipt_uses_explicit_user_agent() -> None:
+    receipt = _receipt()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):  # noqa: N802 - stdlib handler API
+            agent = self.headers.get("User-Agent", "")
+            if not agent or agent.startswith("Python-urllib"):
+                self.send_response(403)
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps({"jsonrpc": "2.0", "id": 1, "result": receipt}).encode())
+
+        def log_message(self, *_args):
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        got = leaf._rpc_receipt(f"http://127.0.0.1:{server.server_port}/", "0x" + TX)
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+        server.server_close()
+    assert got["status"] == "0x1"
+    assert got["blockNumber"] == "0x1882006"
+
+
+@pytest.mark.skipif(
+    os.environ.get("POSTFIAT_LEAF_LIVE_RPC") != "1",
+    reason="set POSTFIAT_LEAF_LIVE_RPC=1 to run the public Ethereum RPC smoke test",
+)
+def test_live_public_rpc_receipt_smoke() -> None:
+    receipt = leaf._rpc_receipt(
+        "https://ethereum-rpc.publicnode.com",
+        "0x" + TX,
+    )
+    assert receipt["status"] == "0x1"
+    assert receipt["blockNumber"] == "0x1882006"

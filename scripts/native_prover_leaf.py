@@ -123,7 +123,15 @@ def _rpc_receipt(url: str, tx_hash: str) -> dict:
         "method": "eth_getTransactionReceipt",
         "params": [tx_hash],
     }).encode()
-    request = urllib.request.Request(url, data=payload, headers={"content-type": "application/json"}, method="POST")
+    request = urllib.request.Request(
+        url,
+        data=payload,
+        headers={
+            "content-type": "application/json",
+            "User-Agent": "postfiat-native-prover-leaf/1.0",
+        },
+        method="POST",
+    )
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             body = json.loads(response.read().decode())
