@@ -1608,15 +1608,28 @@ fn nav_roundtrip_live_demo_evm_deposit(
         "approve(address,uint256)",
         &[options.vault_address.as_str(), &options.amount_atoms.to_string()],
     )?;
-    let deposit_data = cast_calldata(
-        &options.cast_binary,
-        "deposit(uint256,string,bytes32)",
-        &[
-            &options.amount_atoms.to_string(),
-            options.pftl_recipient.as_str(),
-            options.nonce.as_str(),
-        ],
-    )?;
+    let deposit_data = if let Some(route_binding) = options.route_binding.as_deref() {
+        cast_calldata(
+            &options.cast_binary,
+            "depositV2(uint256,string,bytes32,bytes32)",
+            &[
+                &options.amount_atoms.to_string(),
+                options.pftl_recipient.as_str(),
+                options.nonce.as_str(),
+                route_binding,
+            ],
+        )?
+    } else {
+        cast_calldata(
+            &options.cast_binary,
+            "deposit(uint256,string,bytes32)",
+            &[
+                &options.amount_atoms.to_string(),
+                options.pftl_recipient.as_str(),
+                options.nonce.as_str(),
+            ],
+        )?
+    };
     let approve_calldata_file = options.artifact_dir.join("approve.calldata.txt");
     let deposit_calldata_file = options.artifact_dir.join("deposit.calldata.txt");
     write_text_file(&approve_calldata_file, &approve_data)?;

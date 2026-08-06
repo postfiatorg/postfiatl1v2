@@ -818,6 +818,7 @@ fn nav_roundtrip_live_demo(
             usdc_address: options.usdc_address.clone(),
             stakehub_wallet: options.stakehub_wallet.clone(),
             pftl_recipient: options.pftl_recipient.clone(),
+            route_binding: None,
             amount_atoms: options.amount_atoms,
             nonce: options.nonce.clone(),
             session_id: options.session_id.clone(),

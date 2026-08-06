@@ -1,3 +1,22 @@
+fn parse_route_binding(value: &str) -> Result<String, String> {
+    let normalized = value
+        .strip_prefix("0x")
+        .or_else(|| value.strip_prefix("0X"))
+        .unwrap_or(value);
+    if normalized.len() != 64
+        || !normalized
+            .as_bytes()
+            .chunks_exact(2)
+            .all(|pair| pair.iter().all(|byte| byte.is_ascii_hexdigit()))
+    {
+        return Err("--route-binding must be exactly 32 bytes of hex".to_string());
+    }
+    if normalized.bytes().all(|byte| byte == b'0') {
+        return Err("--route-binding must be nonzero".to_string());
+    }
+    Ok(format!("0x{}", normalized.to_ascii_lowercase()))
+}
+
 fn run_cli_group_02(command: &str, flags: &[String]) -> Result<(), String> {
     match command {
         "nav-roundtrip-live-demo" => {
@@ -302,6 +321,9 @@ fn run_cli_group_02(command: &str, flags: &[String]) -> Result<(), String> {
                     flag_value(flags, "--stakehub-wallet").ok_or("missing --stakehub-wallet")?;
                 let pftl_recipient =
                     flag_value(flags, "--pftl-recipient").ok_or("missing --pftl-recipient")?;
+                let route_binding = parse_route_binding(
+                    flag_value(flags, "--route-binding").ok_or("missing --route-binding")?,
+                )?;
                 let nonce = flag_value(flags, "--nonce").ok_or("missing --nonce")?;
                 let session_id = flag_value(flags, "--session-id").ok_or("missing --session-id")?;
                 let amount_atoms = flag_value(flags, "--amount-atoms")
@@ -330,6 +352,7 @@ fn run_cli_group_02(command: &str, flags: &[String]) -> Result<(), String> {
                         usdc_address: usdc_address.to_string(),
                         stakehub_wallet: stakehub_wallet.to_string(),
                         pftl_recipient: pftl_recipient.to_string(),
+                        route_binding: Some(route_binding),
                         amount_atoms,
                         nonce: nonce.to_string(),
                         session_id: session_id.to_string(),

@@ -240,6 +240,88 @@
     }
 
     #[test]
+    fn nav_roundtrip_evm_deposit_requires_valid_route_binding_before_agent() {
+        fn args(route_binding: Option<&str>) -> Vec<String> {
+            let mut values = vec![
+                "nav-roundtrip-live-demo",
+                "--evm-deposit-only",
+                "--artifact-dir",
+                "/tmp/route-binding-validation-artifacts",
+                "--source-rpc-url",
+                "https://example.invalid",
+                "--vault",
+                "0x1111111111111111111111111111111111111111",
+                "--usdc",
+                "0x2222222222222222222222222222222222222222",
+                "--stakehub-wallet",
+                "0x3333333333333333333333333333333333333333",
+                "--pftl-recipient",
+                "pf07381735ddb7de134e8be8402b465c9cd8ec7546",
+                "--amount-atoms",
+                "10000000",
+                "--nonce",
+                "0xfe457c66ab796d980ffcabf557ae7c13c60eefca01a276e5b023e812418b04b6",
+                "--session-id",
+                "route-binding-test",
+            ]
+            .into_iter()
+            .map(String::from)
+            .collect::<Vec<_>>();
+            if let Some(binding) = route_binding {
+                values.push("--route-binding".to_string());
+                values.push(binding.to_string());
+            }
+            values
+        }
+
+        let missing = run_cli(args(None)).expect_err("missing route binding must fail");
+        assert!(missing.contains("missing --route-binding"), "{missing}");
+        let zero = run_cli(args(Some(
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+        )))
+        .expect_err("zero route binding must fail");
+        assert!(zero.contains("must be nonzero"), "{zero}");
+        let malformed = run_cli(args(Some("0x1234")))
+            .expect_err("malformed route binding must fail");
+        assert!(malformed.contains("exactly 32 bytes"), "{malformed}");
+    }
+
+    #[test]
+    fn nav_roundtrip_evm_deposit_encodes_deposit_v2_route_binding() {
+        let amount = "10000000";
+        let recipient = "pfab9b9228942e5c529633a13aa271d5297bec6353";
+        let nonce =
+            "0xfe457c66ab796d980ffcabf557ae7c13c60eefca01a276e5b023e812418b04b6";
+        let route_binding =
+            "0xcaec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93";
+        let expected = "0x2391b45700000000000000000000000000000000000000000000000000000000009896800000000000000000000000000000000000000000000000000000000000000080fe457c66ab796d980ffcabf557ae7c13c60eefca01a276e5b023e812418b04b6caec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93000000000000000000000000000000000000000000000000000000000000002a70666162396239323238393432653563353239363333613133616132373164353239376265633633353300000000000000000000000000000000000000000000";
+
+        let encoded = cast_calldata(
+            "cast",
+            "depositV2(uint256,string,bytes32,bytes32)",
+            &[amount, recipient, nonce, route_binding],
+        )
+        .expect("cast must encode depositV2");
+        assert_eq!(expected, encoded);
+        assert_eq!("0x2391b457", &encoded[..10]);
+
+        for (changed_amount, changed_recipient, changed_nonce, changed_binding) in [
+            ("10000001", recipient, nonce, route_binding),
+            (amount, "pfab9b9228942e5c529633a13aa271d5297bec6354", nonce, route_binding),
+            (amount, recipient, "0xfe457c66ab796d980ffcabf557ae7c13c60eefca01a276e5b023e812418b04b7", route_binding),
+            (amount, recipient, nonce, "0xcaec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d94"),
+        ] {
+            let perturbed = cast_calldata(
+                "cast",
+                "depositV2(uint256,string,bytes32,bytes32)",
+                &[changed_amount, changed_recipient, changed_nonce, changed_binding],
+            )
+            .expect("perturbed calldata must encode");
+            assert_ne!(expected, perturbed);
+        }
+    }
+
+    #[test]
     fn certified_asset_ops_submit_accepts_bundle_input() {
         let root = env::temp_dir().join(format!(
             "postfiat-certified-asset-ops-submit-bundle-{}",
@@ -777,7 +859,8 @@ if [ "$1" = "calldata" ]; then
     echo 0x095ea7b3
     exit 0
   fi
-  if [ "$2" = "deposit(uint256,string,bytes32)" ]; then
+  if [ "$2" = "depositV2(uint256,string,bytes32,bytes32)" ]; then
+    [ "$#" -eq 6 ] || {{ echo "depositV2 requires route binding" >&2; exit 8; }}
     echo 0xabcdef01
     exit 0
   fi
@@ -883,6 +966,8 @@ exit 9
             wallet.to_string(),
             "--pftl-recipient".to_string(),
             buyer.to_string(),
+            "--route-binding".to_string(),
+            "0xcaec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93".to_string(),
             "--amount-atoms".to_string(),
             "1000000".to_string(),
             "--nonce".to_string(),
@@ -977,7 +1062,7 @@ if [ "$1" = "calldata" ]; then
     echo 0x095ea7b3
     exit 0
   fi
-  if [ "$2" = "deposit(uint256,string,bytes32)" ]; then
+  if [ "$2" = "depositV2(uint256,string,bytes32,bytes32)" ]; then
     echo 0xabcdef01
     exit 0
   fi
@@ -1076,6 +1161,8 @@ exit 9
             wallet.to_string(),
             "--pftl-recipient".to_string(),
             buyer.to_string(),
+            "--route-binding".to_string(),
+            "0xcaec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93".to_string(),
             "--amount-atoms".to_string(),
             "1000000".to_string(),
             "--nonce".to_string(),
@@ -1328,7 +1415,7 @@ if [ "$1" = "calldata" ]; then
     echo 0x095ea7b3
     exit 0
   fi
-  if [ "$2" = "deposit(uint256,string,bytes32)" ]; then
+  if [ "$2" = "depositV2(uint256,string,bytes32,bytes32)" ]; then
     echo 0xabcdef01
     exit 0
   fi
@@ -1411,6 +1498,7 @@ exit 9
             usdc_address: usdc.to_string(),
             stakehub_wallet: wallet.to_string(),
             pftl_recipient: buyer.to_string(),
+            route_binding: Some("0xcaec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93".to_string()),
             amount_atoms: 1_000_000,
             nonce: nonce.to_string(),
             session_id: "nav-roundtrip-test-session".to_string(),
@@ -1497,7 +1585,7 @@ exit 9
 set -euo pipefail
 if [ "$1" = "calldata" ]; then
   if [ "$2" = "approve(address,uint256)" ]; then echo 0x095ea7b3; exit 0; fi
-  if [ "$2" = "deposit(uint256,string,bytes32)" ]; then echo 0xabcdef01; exit 0; fi
+  if [ "$2" = "depositV2(uint256,string,bytes32,bytes32)" ]; then echo 0xabcdef01; exit 0; fi
 fi
 if [ "$1" = "call" ]; then
   sig="$3"
@@ -1572,6 +1660,7 @@ exit 9
             usdc_address: usdc.to_string(),
             stakehub_wallet: wallet.to_string(),
             pftl_recipient: buyer.to_string(),
+            route_binding: Some("0xcaec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93".to_string()),
             amount_atoms: 1_000_000,
             nonce: nonce.to_string(),
             session_id: "nav-roundtrip-test-session".to_string(),

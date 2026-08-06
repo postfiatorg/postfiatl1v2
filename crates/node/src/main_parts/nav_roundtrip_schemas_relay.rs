@@ -171,6 +171,7 @@ struct NavRoundtripEvmDepositOptions {
     usdc_address: String,
     stakehub_wallet: String,
     pftl_recipient: String,
+    route_binding: Option<String>,
     amount_atoms: u64,
     nonce: String,
     session_id: String,
