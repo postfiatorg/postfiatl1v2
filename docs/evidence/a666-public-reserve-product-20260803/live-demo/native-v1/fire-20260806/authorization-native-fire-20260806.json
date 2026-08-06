@@ -16,12 +16,18 @@
     "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/"
   ],
   "fire_10_finalization": {
-    "binding_sha256": "ca057f865ac484a638ddf5f092e492453aac87a3b5d074982f1468571b114aea",
+    "binding_sha256": "300b59a9194d8db9491fd18f0466e0b214d25d18de114d76dc870bdeed869dc3",
     "leg3a_optional_digest_fields": "omitted",
     "status": "STAGED-S1-RESOLVED-EXCEPT-RECEIPT-CHAIN-AND-PROVER-SOURCES",
     "u57_contract_leaf": "scripts/native_evm_contract_leaf.py",
     "u57_prover_leaf": "scripts/native_prover_leaf.py",
     "u58_staged_fields_contract": "packet,json_pointer,source,stage"
+  },
+  "fire_16_relay_rebind": {
+    "binding_sha256": "300b59a9194d8db9491fd18f0466e0b214d25d18de114d76dc870bdeed869dc3",
+    "leg1_packet_path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg1-bridge-in.json",
+    "leg1_packet_sha256": "f805598cc1975df59d5d03de3fcf517b786ece5b4b53e58767be0db73ae0e538",
+    "mode": "two-phase control-host signed public batch handoff"
   },
   "fire_1_evidence": {
     "rejected_artifact": "/tmp/krimp-fire1/fork-sims.txt",
@@ -33,11 +39,11 @@
   },
   "native_campaign_driver": {
     "commit": "a94e01bbb9a508305f63b3a04fc06a6b6e9990c0",
-    "sha256": "179430ce68404e31ed0050b064167cf0eeca7e83b323778bd24dedbfaeb1b0cc"
+    "sha256": "5f8e8c358c8a927b13e676fb411693e9d6c4a77dd137391350d17e6d45ab2f7a"
   },
   "resolution_rules": {
     "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/resolution-rules.md",
-    "sha256": "be69f07167f4b74695d8832917ab08c921498a08491505cac135ca5ec1bc96ee"
+    "sha256": "3c2f42e5be0fd7920dbeed8feba0f3c8087abc2abcfd60945f02b57a181d8f26"
   },
   "route_pins": {
     "canonical_binary_sha256": "05330fb20a40b8a4536000ec57da1862d879bcdc4a21bc8c0657f5c56aa8e0f5",
@@ -55,7 +61,7 @@
   "stage_bindings": {
     "S1": {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/binding-S1.json",
-      "sha256": "ca057f865ac484a638ddf5f092e492453aac87a3b5d074982f1468571b114aea"
+      "sha256": "300b59a9194d8db9491fd18f0466e0b214d25d18de114d76dc870bdeed869dc3"
     },
     "S2": {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/binding-S2.json",

@@ -228,6 +228,34 @@ def _field(value: Mapping[str, Any], *names: str) -> Any:
     return None
 
 
+def _source_rpc_url(packet: Mapping[str, Any]) -> str:
+    """Return the packet-bound Ethereum RPC URL for every cast read."""
+    value = packet.get("source_rpc_url") or packet.get("ethereum_rpc_url")
+    if not isinstance(value, str) or not value or "PENDING" in value:
+        raise ConfigError("packet source_rpc_url is required for Ethereum receipt reads")
+    return value
+
+
+def _cast_receipt(packet: Mapping[str, Any], tx_hash: str, runner: Callable[[Sequence[str]], Any] | None) -> Mapping[str, Any]:
+    """Read and strictly validate one Ethereum receipt through the packet RPC."""
+    receipt = _call(
+        ["cast", "receipt", str(tx_hash), "--rpc-url", _source_rpc_url(packet), "--json"],
+        runner,
+    )
+    if not isinstance(receipt, Mapping):
+        raise StopError("cast receipt must be JSON object")
+    actual_hash = receipt.get("transactionHash", receipt.get("transaction_hash"))
+    if not isinstance(actual_hash, str) or actual_hash.lower() != str(tx_hash).lower():
+        raise StopError("cast receipt transaction hash mismatch")
+    if receipt.get("status") != "0x1":
+        raise StopError("Ethereum receipt status is not 0x1")
+    block_number = receipt.get("blockNumber", receipt.get("block_number"))
+    block_hash = receipt.get("blockHash", receipt.get("block_hash"))
+    if not block_number or not isinstance(block_hash, str) or not block_hash:
+        raise StopError("cast receipt missing block number or block hash")
+    return receipt
+
+
 _SPEND_LEGS = {"0", "1", "3b0", "3c", "3d", "3e", "3f", "3g", "3h", "4-burn", "5b"}
 
 
@@ -533,9 +561,7 @@ def _phase_receipt_gate(packet: Mapping[str, Any], reports: list[Mapping[str, An
             raise StopError("phase-1 EVM receipt reverted")
         if expected:
             _validate_expected_receipt(report, expected)
-        receipt = _call(["cast", "receipt", str(tx_hash)], runner)
-        if not isinstance(receipt, Mapping):
-            raise StopError("phase-1 cast receipt malformed")
+        receipt = _cast_receipt(packet, str(tx_hash), runner)
         _validate_eth_finality(receipt)
         if expected:
             _validate_expected_receipt(receipt, expected)
@@ -563,7 +589,7 @@ def _gate_deposit_stage(packet: Mapping[str, Any], leg_dir: Path, runner: Callab
     interval = float(packet.get("deposit_receipt_poll_interval_secs", 15))
     started = time.monotonic()
     while True:
-        receipt = _call(["cast", "receipt", tx_hash], runner)
+        receipt = _cast_receipt(packet, tx_hash, runner)
         if isinstance(receipt, Mapping):
             try:
                 _validate_eth_finality(receipt)
@@ -743,9 +769,7 @@ def _receipt_gate(tx_ids: list[str], packet: Mapping[str, Any], node: Path, runn
                 evm_hashes.append(str(report[key]))
     evm_receipts: list[Mapping[str, Any]] = []
     for tx_hash in evm_hashes:
-        receipt = _call(["cast", "receipt", tx_hash], runner)
-        if not isinstance(receipt, Mapping):
-            raise StopError("cast receipt malformed")
+        receipt = _cast_receipt(packet, tx_hash, runner)
         _validate_eth_finality(receipt)
         if expected_receipt:
             _validate_expected_receipt(receipt, expected_receipt)
@@ -788,7 +812,7 @@ def _append_journal(artifact_dir: Path, packet: Mapping[str, Any], pre: Mapping[
     delta = packet.get("delta_assertions", {})
     if isinstance(delta, Mapping) and {"before_atoms", "after_atoms", "amount_atoms"} <= set(delta):
         _validate_delta(delta["before_atoms"], delta["after_atoms"], delta["amount_atoms"])
-    entry = {"leg": leg, "name": packet.get("leg_name", str(leg)), "pre_state_root": pre.get("state_root"), "pre_height": pre.get("height"), "submission": {"ops_file": submission.get("ops_file"), "artifact_dir": str(artifact_dir), "tx_ids": finality.get("tx_ids", []), "ethereum_tx_hashes": finality.get("ethereum_tx_hashes", [])}, "finality": finality.get("finality", []), "post_state_root": post.get("state_root"), "post_height": post.get("height"), "delta_assertions": delta, "actual_cost_usdc": _actual_cost(packet, finality), "status": "FINALIZED"}
+    entry = {"leg": leg, "name": packet.get("leg_name", str(leg)), "source_rpc_url": packet.get("source_rpc_url") or packet.get("ethereum_rpc_url"), "pre_state_root": pre.get("state_root"), "pre_height": pre.get("height"), "submission": {"ops_file": submission.get("ops_file"), "artifact_dir": str(artifact_dir), "tx_ids": finality.get("tx_ids", []), "ethereum_tx_hashes": finality.get("ethereum_tx_hashes", [])}, "finality": finality.get("finality", []), "post_state_root": post.get("state_root"), "post_height": post.get("height"), "delta_assertions": delta, "actual_cost_usdc": _actual_cost(packet, finality), "status": "FINALIZED"}
     journal["chain_id"] = packet.get("chain_id", journal.get("chain_id"))
     journal["genesis_hash"] = packet.get("genesis_hash", pre.get("genesis_hash", journal.get("genesis_hash")))
     journal["route_id"] = packet.get("route", packet.get("route_id", journal.get("route_id")))
@@ -816,7 +840,7 @@ def _verify_entry(entry: Mapping[str, Any], node: Path, runner: Callable[[Sequen
             except ValueError as exc:
                 raise StopError(f"journal receipt mismatch: {exc}") from exc
     for tx_hash in entry.get("submission", {}).get("ethereum_tx_hashes", []):
-        _validate_eth_finality(_call(["cast", "receipt", str(tx_hash)], runner))
+        _validate_eth_finality(_cast_receipt(entry, str(tx_hash), runner))
 
 
 def verify_journal(artifact_dir: Path, runner: Callable[[Sequence[str]], Any] | None = None, node: Path | None = None) -> bool:

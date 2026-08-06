@@ -90,6 +90,7 @@ class FlowTests(unittest.TestCase):
             "packet_id": "packet-" + str(leg), "leg": leg,
             "route": "route-synthetic", "chain_id": "chain-synthetic",
             "genesis_hash": "genesis-synthetic",
+            "source_rpc_url": "https://source.example",
             "budget_guard": {"cap_usdc": "530", "prior_spend_usdc": "1", "leg_ceiling_usdc": "0", "eth_usd": "3000"},
         }
         if operation is not None:
@@ -126,7 +127,10 @@ class FlowTests(unittest.TestCase):
             if "--method tx" in argv or "--method batch_archive" in argv:
                 return {"ok": True}
             if argv and argv[0] == "cast":
-                return {"status": "0x1", "blockNumber": "0x10"}
+                if "--rpc-url" not in argv:
+                    raise AssertionError("cast receipt missing packet-bound --rpc-url")
+                tx_hash = argv[2] if len(argv) > 2 else ""
+                return {"status": "0x1", "blockNumber": "0x10", "blockHash": "0xblock", "transactionHash": tx_hash}
             return {"accepted": accepted, "tx_ids": ["tx-1"]}
         return call
 
@@ -260,7 +264,9 @@ class FlowTests(unittest.TestCase):
         good = self.runner()
         def good_runner(argv):
             if argv and argv[0] == "cast":
-                return {"status":"0x1", "blockNumber":"0x10", "from":"0xaaaa", "to":"0xbbbb", "value":"0xa", "gasUsed":"0x2", "effectiveGasPrice":"0x3"}
+                if "--rpc-url" not in argv:
+                    raise AssertionError("cast receipt missing packet-bound --rpc-url")
+                return {"status":"0x1", "blockNumber":"0x10", "blockHash":"0xblock", "transactionHash":"tx-evm", "from":"0xaaaa", "to":"0xbbbb", "value":"0xa", "gasUsed":"0x2", "effectiveGasPrice":"0x3"}
             return good(argv)
         result = d._receipt_gate([], packet, self.node, good_runner, {"height":10,"state_root":"root-a"}, dispatch, self.root / "leg")
         self.assertEqual(len(result["evm_receipts"]), 1)
@@ -339,7 +345,7 @@ class FlowTests(unittest.TestCase):
         calls=[]
         def run(argv):
             calls.append(list(argv))
-            if argv and argv[0]=="cast": return {"status":"0x1","blockNumber":"0x1","from":"0x3333","to":"0x2222","value":"0x1"}
+            if argv and argv[0]=="cast": return {"status":"0x1","blockNumber":"0x1","blockHash":"0xblock","transactionHash":"burn-hash","from":"0x3333","to":"0x2222","value":"0x1"}
             return {"tx_hash":"burn-hash","status":"0x1"}
         with self.assertRaisesRegex(d.ConfigError,"amount_atoms"):
             d._dispatch(packet,self.node,self.root / "leg",run)
@@ -362,18 +368,18 @@ class FlowTests(unittest.TestCase):
 
     def test_t28f_existing_burn_report_skips_broadcast(self):
         leg=self.root/"leg"; leg.mkdir(); (leg/"burn-report.json").write_text(json.dumps({"tx_hash":"burn","status":"0x1","from":"0xa","to":"0xb","value_wei":1})); packet=self.packet("4"); packet["expected_receipt"]={"from":"0xa","to":"0xb","value_wei":1}; packet["executor"]={"kind":"phases","phases":[{"kind":"evm_script","commands":[["burn"]],"report":"{artifact_dir}/burn-report.json"},{"kind":"certified_ops"}]}; calls=[]
-        def run(argv): calls.append(argv); return {"status":"0x1","blockNumber":"0x1","from":"0xa","to":"0xb","value":"0x1"}
+        def run(argv): calls.append(argv); return {"status":"0x1","blockNumber":"0x1","blockHash":"0xblock","transactionHash":"burn","from":"0xa","to":"0xb","value":"0x1"}
         with self.assertRaises(d.ConfigError): d._dispatch(packet,self.node,leg,run)
         self.assertFalse(any(c and c[0] == "burn" for c in calls))
 
     def test_t29_deposit_gate_passes_and_resume_skips_stage1(self):
         leg=self.root/"d"; leg.mkdir(); (leg/"evm-deposit.json").write_text(json.dumps({"deposit_tx":"tx","delta_ok":True})); packet=self.packet("1"); packet["deposit_receipt_timeout_secs"]=0; packet["deposit_receipt_poll_interval_secs"]=0
-        rec=lambda argv:{"status":"0x1","blockNumber":"0x1"}
+        rec=lambda argv:{"status":"0x1","blockNumber":"0x1","blockHash":"0xblock","transactionHash":"tx"}
         self.assertTrue(d._gate_deposit_stage(packet,leg,rec)["delta_ok"])
 
     def test_t30_deposit_reverted_stops(self):
         leg=self.root/"d"; leg.mkdir(); (leg/"evm-deposit.json").write_text(json.dumps({"deposit_tx":"tx","delta_ok":True})); packet=self.packet("1"); packet["deposit_receipt_timeout_secs"]=0
-        with self.assertRaises(d.StopError): d._gate_deposit_stage(packet,leg,lambda argv:{"status":"0x0","blockNumber":"0x1"})
+        with self.assertRaises(d.StopError): d._gate_deposit_stage(packet,leg,lambda argv:{"status":"0x0","blockNumber":"0x1","blockHash":"0xblock","transactionHash":"tx"})
 
     def test_t31_deposit_delta_false_stops(self):
         leg=self.root/"d"; leg.mkdir(); (leg/"evm-deposit.json").write_text(json.dumps({"deposit_tx":"tx","delta_ok":False})); packet=self.packet("1")
@@ -381,7 +387,7 @@ class FlowTests(unittest.TestCase):
 
     def test_t32_deposit_timeout_stops(self):
         leg=self.root/"d"; leg.mkdir(); (leg/"evm-deposit.json").write_text(json.dumps({"deposit_tx":"tx","delta_ok":True})); packet=self.packet("1"); packet["deposit_receipt_timeout_secs"]=0
-        with self.assertRaises(d.StopError): d._gate_deposit_stage(packet,leg,lambda argv:{"status":"0x0"})
+        with self.assertRaises(d.StopError): d._gate_deposit_stage(packet,leg,lambda argv:{"status":"0x0","transactionHash":"tx","blockHash":"0xblock","blockNumber":"0x1"})
 
     def test_t33_deposit_malformed_stops(self):
         leg=self.root/"d"; leg.mkdir(); (leg/"evm-deposit.json").write_text("not-json"); packet=self.packet("1")
@@ -389,7 +395,27 @@ class FlowTests(unittest.TestCase):
 
     def test_t34_deposit_expected_receipt_mismatch_stops(self):
         leg=self.root/"d"; leg.mkdir(); (leg/"evm-deposit.json").write_text(json.dumps({"deposit_tx":"tx","delta_ok":True})); packet=self.packet("1"); packet["deposit_receipt_timeout_secs"]=0; packet["expected_receipt"]={"to":"0xgood"}
-        with self.assertRaises(d.StopError): d._gate_deposit_stage(packet,leg,lambda argv:{"status":"0x1","blockNumber":"0x1","to":"0xbad"})
+        with self.assertRaises(d.StopError): d._gate_deposit_stage(packet,leg,lambda argv:{"status":"0x1","blockNumber":"0x1","blockHash":"0xblock","transactionHash":"tx","to":"0xbad"})
+
+    def test_t68_cast_receipt_uses_packet_rpc_url_and_strict_json(self):
+        leg = self.root / "rpc-bound"; leg.mkdir()
+        (leg / "evm-deposit.json").write_text(json.dumps({"deposit_tx": "tx", "delta_ok": True}))
+        packet = self.packet("1"); packet["deposit_receipt_timeout_secs"] = 0
+        seen = []
+        def fake_cast(argv):
+            seen.append(list(argv))
+            self.assertIn("--rpc-url", argv)
+            self.assertIn(packet["source_rpc_url"], argv)
+            return {"status": "0x1", "blockNumber": "0x1", "blockHash": "0xblock", "transactionHash": "tx"}
+        self.assertTrue(d._gate_deposit_stage(packet, leg, fake_cast)["delta_ok"])
+        self.assertEqual(1, len(seen))
+
+    def test_t69_cast_receipt_requires_block_hash_and_matching_tx(self):
+        packet = self.packet("1")
+        with self.assertRaises(d.StopError):
+            d._cast_receipt(packet, "tx", lambda argv: {"status": "0x1", "blockNumber": "0x1", "transactionHash": "tx"})
+        with self.assertRaises(d.StopError):
+            d._cast_receipt(packet, "tx", lambda argv: {"status": "0x1", "blockNumber": "0x1", "blockHash": "0xblock", "transactionHash": "other"})
 
     def test_t35_linter_rejects_current_held_packets(self):
         binding=HERE.parent/"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/authorization-binding-native-v1.json"
@@ -397,17 +423,17 @@ class FlowTests(unittest.TestCase):
 
     def test_t36_leg1_dispatch_resume_path(self):
         leg=self.root/"leg"; leg.mkdir(); (leg/"evm-deposit.json").write_text(json.dumps({"deposit_tx":"tx","delta_ok":True})); packet=self.packet("1"); packet["deposit_receipt_timeout_secs"]=0; packet["executor"]={"commands":[["burn","--artifact-dir",str(leg)],["relay","--artifact-dir",str(leg)]]}; calls=[]
-        def run(argv): calls.append(argv); return {"status":"0x1","blockNumber":"0x1"}
+        def run(argv): calls.append(argv); return {"status":"0x1","blockNumber":"0x1","blockHash":"0xblock","transactionHash":"tx"}
         result=d._dispatch(packet,self.node,leg,run); self.assertEqual(result["commands"][0][0],"relay"); self.assertEqual(len(calls),2)
 
     def test_t37_leg1_gate_reverted_public_dispatch(self):
         leg=self.root/"leg"; leg.mkdir(); (leg/"evm-deposit.json").write_text(json.dumps({"deposit_tx":"tx","delta_ok":True})); packet=self.packet("1"); packet["deposit_receipt_timeout_secs"]=0; packet["executor"]={"commands":[["burn"],["relay"]]}; calls=[]
-        with self.assertRaises(d.StopError): d._dispatch(packet,self.node,leg,lambda argv:(calls.append(argv) or {"status":"0x0","blockNumber":"0x1"}))
+        with self.assertRaises(d.StopError): d._dispatch(packet,self.node,leg,lambda argv:(calls.append(argv) or {"status":"0x0","blockNumber":"0x1","blockHash":"0xblock","transactionHash":"tx"}))
         self.assertEqual(len(calls),1)
 
     def test_t38_prover_hash_mismatch_stops_three_stage(self):
         leg=self.root/"leg"; leg.mkdir(); (leg/"evm-deposit.json").write_text(json.dumps({"deposit_tx":"tx","delta_ok":True})); (leg/"proof-report.json").write_text(json.dumps({"proof-calldata_sha256":"bad"})); packet=self.packet("1"); packet["deposit_receipt_timeout_secs"]=0; packet["expected_proof_hashes"]={"proof-calldata_sha256":"good"}; packet["executor"]={"commands":[["deposit"],["prove"],["relay"]]}; calls=[]
-        with self.assertRaises(d.StopError): d._dispatch(packet,self.node,leg,lambda argv:(calls.append(argv) or {"status":"0x1","blockNumber":"0x1"}))
+        with self.assertRaises(d.StopError): d._dispatch(packet,self.node,leg,lambda argv:(calls.append(argv) or {"status":"0x1","blockNumber":"0x1","blockHash":"0xblock","transactionHash":"tx"}))
 
     def test_t39_prover_leaf_resume_hashes(self):
         import native_prover_leaf as leaf

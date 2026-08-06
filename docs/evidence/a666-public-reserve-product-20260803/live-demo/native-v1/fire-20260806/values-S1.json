@@ -41,6 +41,19 @@
       "key_file": "/var/lib/postfiat/validator-0/validator_keys.json",
       "topology": "/etc/postfiat/releases/pnok-private-fix-2246d25/topology.json"
     },
+    "leg1_relay_two_phase": {
+      "binding_sha256": "300b59a9194d8db9491fd18f0466e0b214d25d18de114d76dc870bdeed869dc3",
+      "deposit_block": 25698310,
+      "deposit_tx": "0x016f9c5f9b99fc951cea7c539f7f791c2d753d35793296b2e284f96512575924",
+      "evm_deposit_json_sha256": "7ed608aef9d3295fa0325ecc07de8cee402df1e9b08c5c135a94c2589cd936ec",
+      "packet_sha256": "f805598cc1975df59d5d03de3fcf517b786ece5b4b53e58767be0db73ae0e538",
+      "proof_calldata_file": "/tmp/krimp-exec-fire20260806/leg-1/proof-calldata.bin",
+      "proof_calldata_sha256": "63601a4b2c0edf0ea29f4591abe4a91811292cc4ce9c421f9184e0d6e6c690f2",
+      "public_values_file": "/tmp/krimp-exec-fire20260806/leg-1/public-values.bin",
+      "public_values_sha256": "4c7ce0beb7af4c9161f00e3d6532ab1965202cf5cee03fb0ad7a7622f3587e6d",
+      "relay_mode": "two-phase control-host signed public batch handoff",
+      "resolution_rules_sha256": "3c2f42e5be0fd7920dbeed8feba0f3c8087abc2abcfd60945f02b57a181d8f26"
+    },
     "leg1_route_binding": {
       "provenance": "vault ERC20BridgeVaultV2 route binding, matches accepted h390 deposit tx 0xb72a5151be91e6e171ffa708f093539807e9e24d627cbf2f797c33fc6ce3304c input and staging deployment.json sha 1d4a2945\u20268033; U64 ruling depositV2 fix",
       "value": "0xcaec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93"
@@ -106,7 +119,7 @@
       "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
     },
     "native-leg1-bridge-in.json": {
-      "/command_template": "nav-roundtrip-live-demo --evm-deposit-only --artifact-dir {artifact_dir} --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pftl-recipient pfab9b9228942e5c529633a13aa271d5297bec6353 --amount-atoms 10000000 --nonce 0xfe457c66ab796d980ffcabf557ae7c13c60eefca01a276e5b023e812418b04b6 --route-binding 0xcaec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93 --session-id native-v1-fire-20260806-leg1-deposit --resume && python3 scripts/native_prover_leaf.py --artifact-dir {artifact_dir} --source-rpc-url https://ethereum-rpc.publicnode.com --execution-rpc https://ethereum-rpc.publicnode.com --beacon-rpc https://ethereum-beacon-api.publicnode.com --prover-host pftl-fire-prover --remote-workdir /work/native-fire-20260806-leg1 && nav-roundtrip-live-demo --deposit-relay-only --claim-deposit --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --key-file /var/lib/postfiat/validator-0/validator_keys.json --artifact-dir {artifact_dir} --evm-deposit-report PENDING-FIRE-TIME:leg1-evm-deposit-report --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --policy-hash 5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158 --source-proof-kind sp1-ethereum-finality-v1 --source-proof-hash PENDING-FIRE-TIME:leg1-prover-proof-hash --source-public-values-hash PENDING-FIRE-TIME:leg1-prover-public-values-hash --proposer pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8 --proposer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --finalizer pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8 --finalizer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --claimer pfab9b9228942e5c529633a13aa271d5297bec6353 --claimer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json --expires-at-height 1776 --resume",
+      "/command_template": "nav-roundtrip-live-demo --evm-deposit-only --artifact-dir '{artifact_dir}' --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pftl-recipient pfab9b9228942e5c529633a13aa271d5297bec6353 --amount-atoms 10000000 --nonce 0xfe457c66ab796d980ffcabf557ae7c13c60eefca01a276e5b023e812418b04b6 --route-binding 0xcaec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93 --session-id native-v1-fire-20260806-leg1-deposit --resume && python3 scripts/native_prover_leaf.py --artifact-dir '{artifact_dir}' --source-rpc-url https://ethereum-rpc.publicnode.com --execution-rpc https://ethereum-rpc.publicnode.com --beacon-rpc https://ethereum-beacon-api.publicnode.com --prover-host pftl-fire-prover --remote-workdir /work/native-fire-20260806-leg1 && bash -lc 'set -euo pipefail; /tmp/fire-20260806-bin/postfiat-node-client-depositv2 vault-bridge-deposit-relay-rpc-bundle --cast-bin /home/postfiat/.foundry/bin/cast --source-rpc-url https://ethereum-rpc.publicnode.com --tx-hash 0x016f9c5f9b99fc951cea7c539f7f791c2d753d35793296b2e284f96512575924 --vault-address 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --token-address 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 --asset-id 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --policy-hash 5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158 --proposer pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8 --finalizer pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8 --claimer pfab9b9228942e5c529633a13aa271d5297bec6353 --expires-at-height 1776 --bundle \"$1/relay/relay-bundle\" --overwrite --source-proof-kind sp1-ethereum-finality-v1 --source-proof-file /tmp/krimp-exec-fire20260806/leg-1/proof-calldata.bin --source-public-values-file /tmp/krimp-exec-fire20260806/leg-1/public-values.bin' bash '{artifact_dir}' && bash -lc 'set -euo pipefail; /tmp/fire-20260806-bin/postfiat-node-client-depositv2 pftl-certified-asset-ops-from-bundle --bundle \"$1/relay/relay-bundle\" --output \"$1/relay/full.ops.json\" --proposer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --finalizer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --claimer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json --overwrite' bash '{artifact_dir}' && bash -lc 'set -euo pipefail; mkdir -p \"$1/relay\"; jq '\"'\"'{schema,operations:[.operations[]|select(.label==\"propose\")]}'\"'\"' \"$1/relay/full.ops.json\" > \"$1/relay/propose.ops.json\"' bash '{artifact_dir}' && bash -lc 'set -euo pipefail; mkdir -p \"$1/relay\"; jq --arg holder \"pfab9b9228942e5c529633a13aa271d5297bec6353\" '\"'\"'{schema,operations:[.operations[]|select(.label==\"finalize\" or .label==\"claim\")|if .label==\"claim\" then .operation.recipient=$holder else . end]}'\"'\"' \"$1/relay/full.ops.json\" > \"$1/relay/finalize-claim.ops.json\"' bash '{artifact_dir}' && bash -lc 'set -euo pipefail; test \"$(jq '\"'\"'.operations|length'\"'\"' \"$1/relay/propose.ops.json\")\" = 1' bash '{artifact_dir}' && bash -lc 'set -euo pipefail; test \"$(jq '\"'\"'.operations|length'\"'\"' \"$1/relay/finalize-claim.ops.json\")\" = 2' bash '{artifact_dir}' && bash -lc 'set -euo pipefail; /tmp/fire-20260806-bin/postfiat-node-client-depositv2 pftl-submit-certified-asset-ops --batch-only --ops-file \"$1/relay/propose.ops.json\" --data-dir /tmp/krimp-u21/h776-clone/validator-1 --topology /tmp/krimp-u21/h776-clone/topology-live.json --key-file /nonexistent-placeholder-validator-key-must-never-be-dereferenced.json --artifact-dir \"$1/relay/round-propose\"' bash '{artifact_dir}' && bash -lc 'set -euo pipefail; /tmp/fire-20260806-bin/postfiat-node-client-depositv2 pftl-submit-certified-asset-ops --batch-only --ops-file \"$1/relay/finalize-claim.ops.json\" --data-dir /tmp/krimp-u21/h776-clone/validator-1 --topology /tmp/krimp-u21/h776-clone/topology-live.json --key-file /nonexistent-placeholder-validator-key-must-never-be-dereferenced.json --artifact-dir \"$1/relay/round-finalize-claim\"' bash '{artifact_dir}' && bash -lc 'set -euo pipefail; ssh root@64.176.220.75 mkdir -p /var/lib/postfiat/validator-0/fire-20260806-leg1' bash '{artifact_dir}' && bash -lc 'set -euo pipefail; scp \"$1/relay/round-propose/mempool-batch.json\" root@64.176.220.75:/var/lib/postfiat/validator-0/fire-20260806-leg1/propose.mempool-batch.json' bash '{artifact_dir}' && bash -lc 'set -euo pipefail; scp \"$1/relay/round-finalize-claim/mempool-batch.json\" root@64.176.220.75:/var/lib/postfiat/validator-0/fire-20260806-leg1/finalize-claim.mempool-batch.json' bash '{artifact_dir}' && bash -lc 'set -euo pipefail; mkdir -p \"$1/relay\"; ssh root@64.176.220.75 '\"'\"'/opt/postfiat/releases/pnok-private-fix-2246d25/postfiat-node transport-certified-batch-round --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --batch-kind transparent --batch-file /var/lib/postfiat/validator-0/fire-20260806-leg1/propose.mempool-batch.json --validator-key-dir /var/lib/postfiat/validator-0 --artifact-dir /var/lib/postfiat/validator-0/fire-20260806-leg1/round-propose --timeout-ms 180000 --send-retries 8 --retry-backoff-ms 250'\"'\"' > \"$1/relay/round-propose.report.json\"' bash '{artifact_dir}' && bash -lc 'set -euo pipefail; jq -e '\"'\"'.round_ok==true'\"'\"' \"$1/relay/round-propose.report.json\" >/dev/null' bash '{artifact_dir}' && bash -lc 'set -euo pipefail; mkdir -p \"$1/relay\"; ssh root@64.176.220.75 '\"'\"'/opt/postfiat/releases/pnok-private-fix-2246d25/postfiat-node transport-certified-batch-round --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --batch-kind transparent --batch-file /var/lib/postfiat/validator-0/fire-20260806-leg1/finalize-claim.mempool-batch.json --validator-key-dir /var/lib/postfiat/validator-0 --artifact-dir /var/lib/postfiat/validator-0/fire-20260806-leg1/round-finalize-claim --timeout-ms 180000 --send-retries 8 --retry-backoff-ms 250'\"'\"' > \"$1/relay/round-finalize-claim.report.json\"' bash '{artifact_dir}' && bash -lc 'set -euo pipefail; jq -e '\"'\"'.round_ok==true'\"'\"' \"$1/relay/round-finalize-claim.report.json\" >/dev/null' bash '{artifact_dir}'",
       "/executor": {
         "commands": [
           [
@@ -153,56 +166,113 @@
             "/work/native-fire-20260806-leg1"
           ],
           [
-            "nav-roundtrip-live-demo",
-            "--deposit-relay-only",
-            "--claim-deposit",
-            "--data-dir",
-            "/var/lib/postfiat/validator-0",
-            "--topology",
-            "/etc/postfiat/releases/pnok-private-fix-2246d25/topology.json",
-            "--key-file",
-            "/var/lib/postfiat/validator-0/validator_keys.json",
-            "--artifact-dir",
-            "{artifact_dir}",
-            "--evm-deposit-report",
-            "PENDING-FIRE-TIME:leg1-evm-deposit-report",
-            "--source-rpc-url",
-            "https://ethereum-rpc.publicnode.com",
-            "--source-chain-id",
-            "1",
-            "--vault",
-            "0xaaa78fda7062efce769e95cd72fc55e507bc8183",
-            "--usdc",
-            "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-            "--pfusdc",
-            "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
-            "--policy-hash",
-            "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
-            "--source-proof-kind",
-            "sp1-ethereum-finality-v1",
-            "--source-proof-hash",
-            "PENDING-FIRE-TIME:leg1-prover-proof-hash",
-            "--source-public-values-hash",
-            "PENDING-FIRE-TIME:leg1-prover-public-values-hash",
-            "--proposer",
-            "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
-            "--proposer-key-file",
-            "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json",
-            "--finalizer",
-            "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
-            "--finalizer-key-file",
-            "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json",
-            "--claimer",
-            "pfab9b9228942e5c529633a13aa271d5297bec6353",
-            "--claimer-key-file",
-            "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json",
-            "--expires-at-height",
-            "1776",
-            "--resume"
+            "bash",
+            "-lc",
+            "set -euo pipefail; /tmp/fire-20260806-bin/postfiat-node-client-depositv2 vault-bridge-deposit-relay-rpc-bundle --cast-bin /home/postfiat/.foundry/bin/cast --source-rpc-url https://ethereum-rpc.publicnode.com --tx-hash 0x016f9c5f9b99fc951cea7c539f7f791c2d753d35793296b2e284f96512575924 --vault-address 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --token-address 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 --asset-id 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --policy-hash 5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158 --proposer pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8 --finalizer pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8 --claimer pfab9b9228942e5c529633a13aa271d5297bec6353 --expires-at-height 1776 --bundle \"$1/relay/relay-bundle\" --overwrite --source-proof-kind sp1-ethereum-finality-v1 --source-proof-file /tmp/krimp-exec-fire20260806/leg-1/proof-calldata.bin --source-public-values-file /tmp/krimp-exec-fire20260806/leg-1/public-values.bin",
+            "bash",
+            "{artifact_dir}"
+          ],
+          [
+            "bash",
+            "-lc",
+            "set -euo pipefail; /tmp/fire-20260806-bin/postfiat-node-client-depositv2 pftl-certified-asset-ops-from-bundle --bundle \"$1/relay/relay-bundle\" --output \"$1/relay/full.ops.json\" --proposer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --finalizer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --claimer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json --overwrite",
+            "bash",
+            "{artifact_dir}"
+          ],
+          [
+            "bash",
+            "-lc",
+            "set -euo pipefail; mkdir -p \"$1/relay\"; jq '{schema,operations:[.operations[]|select(.label==\"propose\")]}' \"$1/relay/full.ops.json\" > \"$1/relay/propose.ops.json\"",
+            "bash",
+            "{artifact_dir}"
+          ],
+          [
+            "bash",
+            "-lc",
+            "set -euo pipefail; mkdir -p \"$1/relay\"; jq --arg holder \"pfab9b9228942e5c529633a13aa271d5297bec6353\" '{schema,operations:[.operations[]|select(.label==\"finalize\" or .label==\"claim\")|if .label==\"claim\" then .operation.recipient=$holder else . end]}' \"$1/relay/full.ops.json\" > \"$1/relay/finalize-claim.ops.json\"",
+            "bash",
+            "{artifact_dir}"
+          ],
+          [
+            "bash",
+            "-lc",
+            "set -euo pipefail; test \"$(jq '.operations|length' \"$1/relay/propose.ops.json\")\" = 1",
+            "bash",
+            "{artifact_dir}"
+          ],
+          [
+            "bash",
+            "-lc",
+            "set -euo pipefail; test \"$(jq '.operations|length' \"$1/relay/finalize-claim.ops.json\")\" = 2",
+            "bash",
+            "{artifact_dir}"
+          ],
+          [
+            "bash",
+            "-lc",
+            "set -euo pipefail; /tmp/fire-20260806-bin/postfiat-node-client-depositv2 pftl-submit-certified-asset-ops --batch-only --ops-file \"$1/relay/propose.ops.json\" --data-dir /tmp/krimp-u21/h776-clone/validator-1 --topology /tmp/krimp-u21/h776-clone/topology-live.json --key-file /nonexistent-placeholder-validator-key-must-never-be-dereferenced.json --artifact-dir \"$1/relay/round-propose\"",
+            "bash",
+            "{artifact_dir}"
+          ],
+          [
+            "bash",
+            "-lc",
+            "set -euo pipefail; /tmp/fire-20260806-bin/postfiat-node-client-depositv2 pftl-submit-certified-asset-ops --batch-only --ops-file \"$1/relay/finalize-claim.ops.json\" --data-dir /tmp/krimp-u21/h776-clone/validator-1 --topology /tmp/krimp-u21/h776-clone/topology-live.json --key-file /nonexistent-placeholder-validator-key-must-never-be-dereferenced.json --artifact-dir \"$1/relay/round-finalize-claim\"",
+            "bash",
+            "{artifact_dir}"
+          ],
+          [
+            "bash",
+            "-lc",
+            "set -euo pipefail; ssh root@64.176.220.75 mkdir -p /var/lib/postfiat/validator-0/fire-20260806-leg1",
+            "bash",
+            "{artifact_dir}"
+          ],
+          [
+            "bash",
+            "-lc",
+            "set -euo pipefail; scp \"$1/relay/round-propose/mempool-batch.json\" root@64.176.220.75:/var/lib/postfiat/validator-0/fire-20260806-leg1/propose.mempool-batch.json",
+            "bash",
+            "{artifact_dir}"
+          ],
+          [
+            "bash",
+            "-lc",
+            "set -euo pipefail; scp \"$1/relay/round-finalize-claim/mempool-batch.json\" root@64.176.220.75:/var/lib/postfiat/validator-0/fire-20260806-leg1/finalize-claim.mempool-batch.json",
+            "bash",
+            "{artifact_dir}"
+          ],
+          [
+            "bash",
+            "-lc",
+            "set -euo pipefail; mkdir -p \"$1/relay\"; ssh root@64.176.220.75 '/opt/postfiat/releases/pnok-private-fix-2246d25/postfiat-node transport-certified-batch-round --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --batch-kind transparent --batch-file /var/lib/postfiat/validator-0/fire-20260806-leg1/propose.mempool-batch.json --validator-key-dir /var/lib/postfiat/validator-0 --artifact-dir /var/lib/postfiat/validator-0/fire-20260806-leg1/round-propose --timeout-ms 180000 --send-retries 8 --retry-backoff-ms 250' > \"$1/relay/round-propose.report.json\"",
+            "bash",
+            "{artifact_dir}"
+          ],
+          [
+            "bash",
+            "-lc",
+            "set -euo pipefail; jq -e '.round_ok==true' \"$1/relay/round-propose.report.json\" >/dev/null",
+            "bash",
+            "{artifact_dir}"
+          ],
+          [
+            "bash",
+            "-lc",
+            "set -euo pipefail; mkdir -p \"$1/relay\"; ssh root@64.176.220.75 '/opt/postfiat/releases/pnok-private-fix-2246d25/postfiat-node transport-certified-batch-round --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --batch-kind transparent --batch-file /var/lib/postfiat/validator-0/fire-20260806-leg1/finalize-claim.mempool-batch.json --validator-key-dir /var/lib/postfiat/validator-0 --artifact-dir /var/lib/postfiat/validator-0/fire-20260806-leg1/round-finalize-claim --timeout-ms 180000 --send-retries 8 --retry-backoff-ms 250' > \"$1/relay/round-finalize-claim.report.json\"",
+            "bash",
+            "{artifact_dir}"
+          ],
+          [
+            "bash",
+            "-lc",
+            "set -euo pipefail; jq -e '.round_ok==true' \"$1/relay/round-finalize-claim.report.json\" >/dev/null",
+            "bash",
+            "{artifact_dir}"
           ]
         ],
         "kind": "stage_sequence",
-        "surface": "native deposit -> remote SP1 proof -> vault relay/claim"
+        "surface": "native deposit -> remote SP1 proof -> control-host signed-batch handoff -> validator-0 certified rounds"
       },
       "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
     },
