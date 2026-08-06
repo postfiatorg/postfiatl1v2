@@ -58,3 +58,9 @@ A completed stage binding is not an execution command. The executor must first v
 - **Stale-descriptor root cause and quarantine.** FIRE-16's prover leaf never generated `deployment.json`; its capture therefore used an h390 remnant. That proof set is quarantined at `/tmp/krimp-exec-fire20260806/leg-1/stale-fire16/` and cannot be relayed.
 - **Hardened reprove.** U69, U72, and U73 hardened the leaf in commits `f77392d`, `1257ed2`, and `01d105d`. The live-deposit reprove uses the descriptor, proof, and public values under `/tmp/krimp-exec-fire20260806/leg-1-reprove/`; the prover leaf is commit `01d105d`.
 - **Descriptor-before-capture gate.** Capture is permitted only after the deployment descriptor SHA-256 has been generated and matches the bound descriptor hash. Missing, stale, or mismatched descriptor material is STOP-no-retry.
+
+## 2026-08-06 FIRE-18 stage-3 re-sequence addendum
+
+- **Observed stop and root cause.** FIRE-17 stopped at command 10 with `missing_vault_bridge_deposit`. Finalize/claim mempool admission requires deposit evidence that exists only after the propose round applies on-chain. The h390 precedent signed sequentially on-validator, so the condition did not surface in the two-phase batch-only design.
+- **Required sequence.** Re-run idempotent Phase A1 bundle, signed ops, split, count gates, and propose batch-only; transfer/apply the propose round; refresh the clone from validator-1 with `validator_keys.json` excluded; then gate clone height == live validator-1 height == propose round `end_height` before constructing the finalize/claim batch-only artifact. Transfer/apply finalize/claim only after that gate.
+- **Full-run semantics.** Previously built batches never crossed to any validator, so there is zero replay risk. Krimp executes the full new order with no resume. The clone reconciliation occurs twice: pre-Phase-A1 and post-propose at the refresh gate.
