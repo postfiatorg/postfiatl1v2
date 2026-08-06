@@ -1,5 +1,4 @@
 {
-  "stage": "S1",
   "active_packets": [
     "native-leg0-proxy-verify.json",
     "native-leg1-bridge-in.json",
@@ -18,103 +17,8 @@
     "native-leg5a-primary-redeem.json",
     "native-leg5b-bridge-out.json"
   ],
-  "resolved_values": {
-    "native-leg0-proxy-verify.json": {
-      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
-    },
-    "native-leg1-bridge-in.json": {
-      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
-    },
-    "native-leg2a-order-reserve.json": {
-      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
-      "/ops_file_template/operations/0/operation/expires_at_height": 1776
-    },
-    "native-leg2b-primary-subscribe.json": {
-      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
-      "/ops_file_template/operations/0/operation/subscription_nonce": "bc6aede459db85326aeb077b8adff7ba924f47c102a346084b437fca9c2deda5"
-    },
-    "native-leg3a-export-debit.json": {
-      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
-      "/ops_file_template/operations/0/operation/export_nonce": "e1799423cdaca561a8f7467339517425ac82aba86a15a2fc8e78c67f56d42da3",
-      "/ops_file_template/operations/0/operation/refund_delay_blocks": 100
-    },
-    "native-leg3b0-signer-funding.json": {
-      "/budget_guard/leg_ceiling_usdc": "0.0201",
-      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
-    },
-    "native-leg3b-accept-mint.json": {
-      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
-    },
-    "native-leg3c-approve-wa666-permit2.json": {
-      "/budget_guard/leg_ceiling_usdc": "0.0525",
-      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
-    },
-    "native-leg3d-permit2-wa666-router.json": {
-      "/budget_guard/leg_ceiling_usdc": "0.0286",
-      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
-    },
-    "native-leg3e-swap-wa666-usdc.json": {
-      "/amount_atoms": 11027135,
-      "/budget_guard/leg_ceiling_usdc": "0.1297",
-      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
-      "/harness": "/tmp/krimp-fire1b/fork-sims-values.txt",
-      "/min_out_atoms": 7816122
-    },
-    "native-leg3f-approve-usdc-permit2.json": {
-      "/budget_guard/leg_ceiling_usdc": "0.0525",
-      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
-    },
-    "native-leg3g-permit2-usdc-router.json": {
-      "/budget_guard/leg_ceiling_usdc": "0.0286",
-      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
-    },
-    "native-leg3h-swap-usdc-wa666.json": {
-      "/budget_guard/leg_ceiling_usdc": "0.1325",
-      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
-      "/harness": "/tmp/krimp-fire1b/fork-sims-values.txt"
-    },
-    "native-leg4-return-burn-import.json": {
-      "/budget_guard/leg_ceiling_usdc": "0.1910",
-      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
-    },
-    "native-leg5a-primary-redeem.json": {
-      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
-      "/ops_file_template/operations/0/operation/redemption_nonce": "255206e04d1078f448560667842b64cfbe0f278e731b68ba5d14050cb2369939"
-    },
-    "native-leg5b-bridge-out.json": {
-      "/budget_guard/leg_ceiling_usdc": "0.2865",
-      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
-    }
-  },
   "binding_context": {
-    "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
-    "route_epoch": 6,
-    "pricing_nav_epoch": 5,
-    "pricing_reserve_packet_hash": "78c9fce35e0dc1ad9a7bd5b25b34e432c606fc38889e1543d5242cff12fe637bb0a508aff3655d2e2e27ac872f88f289",
-    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
-    "pftl_binding_height": 776,
-    "pftl_state_root_prefix": "10dfb17b640a6974",
-    "replay_sweep": "CLEAN; deterministic branch-2 nonce derivation authorized because branch-1 literal values do not exist",
-    "leg2a_expires_at_height": 1776,
-    "leg3a_refund_delay_blocks": 100,
-    "leg3e": {
-      "amount_in_atoms": 11027135,
-      "sim_block": 25696286,
-      "sim_block_hash": "0x05c48df05c746fb065e495887df17b99a5f65575f8375acedc155a3f2b5e0ae8",
-      "simulated_output_atoms": 8057858,
-      "min_out_atoms": 7816122,
-      "calldata_sha256": "3aa253bc429689ee803bef59a5169559d0f6ac9c3d15f77f8707bca384571c55",
-      "freshness_last_fire_block": 25696414,
-      "evidence": "/tmp/krimp-fire1b/fork-sims-values.txt"
-    },
-    "leg3h_s2_reference_only": {
-      "amount_in_source": "actual finalized leg3e USDC receipt output",
-      "sim_block": 25696286,
-      "reference_fill_atoms": 11013374,
-      "reference_min_out_atoms": 10682972,
-      "calldata_sha256": "733799a08305e558d652437e26b548b330f43e86666f1ac5f710aa9b2e2b6ee3",
-      "rule": "S2 must fresh re-simulate and rebind before fire."
-    },
+    "claim_policy_hash_leg1": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
     "gas_usdc": {
       "3b0": "0.0201",
       "3c": "0.0525",
@@ -125,10 +29,553 @@
       "3h": "0.1325",
       "4-burn": "0.1910",
       "5b": "0.2865",
-      "total": "0.9220",
-      "projection": "511.946845",
       "cap": "530.000000",
-      "headroom": "18.053155"
+      "headroom": "18.053155",
+      "projection": "511.946845",
+      "total": "0.9220"
+    },
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "leg1_deposit_nonce": "0xfe457c66ab796d980ffcabf557ae7c13c60eefca01a276e5b023e812418b04b6",
+    "leg1_relay_env": {
+      "data_dir": "/var/lib/postfiat/validator-0",
+      "key_file": "/var/lib/postfiat/validator-0/validator_keys.json",
+      "topology": "/etc/postfiat/releases/pnok-private-fix-2246d25/topology.json"
+    },
+    "leg1_session_id": "native-v1-fire-20260806-leg1-deposit",
+    "leg2a_expires_at_height": 1776,
+    "leg2a_reservation_id": "b60d5c5a76a5ca4dde2d612532c22d5ab2fc610db3b0c55ff7b98a0f73ce4f12",
+    "leg3a_deadline_base_unix": 1786029594,
+    "leg3a_destination_deadline_seconds": 1786036794,
+    "leg3a_digest_ruling": "OPTIONAL: omit ethereum_packet_digest and ethereum_packet_schema_version",
+    "leg3a_packet_hash": "0f78934b2b4331322255f469bca08bb471cb2fcbc9cf013257ec405ab41342e6",
+    "leg3a_refund_delay_blocks": 100,
+    "leg3e": {
+      "amount_in_atoms": 11027135,
+      "calldata_sha256": "3aa253bc429689ee803bef59a5169559d0f6ac9c3d15f77f8707bca384571c55",
+      "evidence": "/tmp/krimp-fire1b/fork-sims-values.txt",
+      "freshness_last_fire_block": 25696414,
+      "min_out_atoms": 7816122,
+      "sim_block": 25696286,
+      "sim_block_hash": "0x05c48df05c746fb065e495887df17b99a5f65575f8375acedc155a3f2b5e0ae8",
+      "simulated_output_atoms": 8057858
+    },
+    "leg3e_calldata_sha256": "fb8b20d6401cb5592e8df4fd34629b0f298f6494aa527ba7988b43d5a801cbe4",
+    "leg3h_s2_reference_only": {
+      "amount_in_source": "actual finalized leg3e USDC receipt output",
+      "calldata_sha256": "733799a08305e558d652437e26b548b330f43e86666f1ac5f710aa9b2e2b6ee3",
+      "reference_fill_atoms": 11013374,
+      "reference_min_out_atoms": 10682972,
+      "rule": "S2 must fresh re-simulate and rebind before fire.",
+      "sim_block": 25696286
+    },
+    "leg4_return_nonce": "516a19d200aa087ee558737b5b200c1cba28cad50d5edaddf769eb9115f56196",
+    "permit2_expiry_epoch": 1786036794,
+    "pftl_binding_height": 776,
+    "pftl_state_root_prefix": "10dfb17b640a6974",
+    "pricing_nav_epoch": 5,
+    "pricing_reserve_packet_hash": "78c9fce35e0dc1ad9a7bd5b25b34e432c606fc38889e1543d5242cff12fe637bb0a508aff3655d2e2e27ac872f88f289",
+    "replay_sweep": "CLEAN; deterministic branch-2 nonce derivation authorized because branch-1 literal values do not exist",
+    "route_epoch": 6,
+    "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+    "source_proof_kind_leg1": "sp1-ethereum-finality-v1",
+    "staged_policy": "only receipt-chain values, FIRE-10 ruled prover host/beacon endpoint, and U57 command contracts remain staged",
+    "u57_argv_contract": "/tmp/snaga-u57/argv-contracts.md"
+  },
+  "provenance": {
+    "authority": "FIRE-10 consolidated ruling via supervising chain, 2026-08-06",
+    "calldata_encoding_transcript": "/tmp/ghash-fire10/encoding-inputs.txt",
+    "digest_status": "awaiting U57 code-truth; optional PENDING fields remain omittable under driver contract",
+    "fire9": "/tmp/ghash-fire9/verifier-pins-redacted.json",
+    "leg0_prestate": "/tmp/krimp-exec-fire20260806/leg0-prestate.txt",
+    "leg3e_builder_output": "/tmp/ghash-fire10/leg3e-calldata.json",
+    "prover_recipe": "/tmp/snaga-u56/remote-recipe.md",
+    "u57_contract": "/tmp/snaga-u57/argv-contracts.md"
+  },
+  "resolved_values": {
+    "native-leg0-proxy-verify.json": {
+      "/command_template": "read-only preflight recorded at /tmp/krimp-exec-fire20260806/leg0-prestate.txt; driver short-circuits leg 0",
+      "/executor": {
+        "commands": [],
+        "kind": "read_only",
+        "surface": "six-fleet RPC plus two-RPC EVM prestate already recorded"
+      },
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    },
+    "native-leg1-bridge-in.json": {
+      "/command_template": "nav-roundtrip-live-demo --evm-deposit-only --artifact-dir {artifact_dir} --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pftl-recipient pfab9b9228942e5c529633a13aa271d5297bec6353 --amount-atoms 10000000 --nonce 0xfe457c66ab796d980ffcabf557ae7c13c60eefca01a276e5b023e812418b04b6 --session-id native-v1-fire-20260806-leg1-deposit --resume && python3 scripts/native_prover_leaf.py --artifact-dir {artifact_dir} --source-rpc-url https://ethereum-rpc.publicnode.com --execution-rpc https://ethereum-rpc.publicnode.com --beacon-rpc PENDING-FIRE-TIME:beacon-endpoint --prover-host PENDING-FIRE-TIME:prover-ssh-target --remote-workdir /work/native-fire-20260806-leg1 && nav-roundtrip-live-demo --deposit-relay-only --claim-deposit --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --key-file /var/lib/postfiat/validator-0/validator_keys.json --artifact-dir {artifact_dir} --evm-deposit-report PENDING-FIRE-TIME:leg1-evm-deposit-report --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --policy-hash 5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158 --source-proof-kind sp1-ethereum-finality-v1 --source-proof-hash PENDING-FIRE-TIME:leg1-prover-proof-hash --source-public-values-hash PENDING-FIRE-TIME:leg1-prover-public-values-hash --proposer pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8 --proposer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --finalizer pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8 --finalizer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --claimer pfab9b9228942e5c529633a13aa271d5297bec6353 --claimer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json --expires-at-height 1776 --resume",
+      "/executor": {
+        "commands": [
+          [
+            "nav-roundtrip-live-demo",
+            "--evm-deposit-only",
+            "--artifact-dir",
+            "{artifact_dir}",
+            "--source-rpc-url",
+            "https://ethereum-rpc.publicnode.com",
+            "--source-chain-id",
+            "1",
+            "--vault",
+            "0xaaa78fda7062efce769e95cd72fc55e507bc8183",
+            "--usdc",
+            "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+            "--stakehub-wallet",
+            "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+            "--pftl-recipient",
+            "pfab9b9228942e5c529633a13aa271d5297bec6353",
+            "--amount-atoms",
+            "10000000",
+            "--nonce",
+            "0xfe457c66ab796d980ffcabf557ae7c13c60eefca01a276e5b023e812418b04b6",
+            "--session-id",
+            "native-v1-fire-20260806-leg1-deposit",
+            "--resume"
+          ],
+          [
+            "python3",
+            "scripts/native_prover_leaf.py",
+            "--artifact-dir",
+            "{artifact_dir}",
+            "--source-rpc-url",
+            "https://ethereum-rpc.publicnode.com",
+            "--execution-rpc",
+            "https://ethereum-rpc.publicnode.com",
+            "--beacon-rpc",
+            "PENDING-FIRE-TIME:beacon-endpoint",
+            "--prover-host",
+            "PENDING-FIRE-TIME:prover-ssh-target",
+            "--remote-workdir",
+            "/work/native-fire-20260806-leg1"
+          ],
+          [
+            "nav-roundtrip-live-demo",
+            "--deposit-relay-only",
+            "--claim-deposit",
+            "--data-dir",
+            "/var/lib/postfiat/validator-0",
+            "--topology",
+            "/etc/postfiat/releases/pnok-private-fix-2246d25/topology.json",
+            "--key-file",
+            "/var/lib/postfiat/validator-0/validator_keys.json",
+            "--artifact-dir",
+            "{artifact_dir}",
+            "--evm-deposit-report",
+            "PENDING-FIRE-TIME:leg1-evm-deposit-report",
+            "--source-rpc-url",
+            "https://ethereum-rpc.publicnode.com",
+            "--source-chain-id",
+            "1",
+            "--vault",
+            "0xaaa78fda7062efce769e95cd72fc55e507bc8183",
+            "--usdc",
+            "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+            "--pfusdc",
+            "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+            "--policy-hash",
+            "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+            "--source-proof-kind",
+            "sp1-ethereum-finality-v1",
+            "--source-proof-hash",
+            "PENDING-FIRE-TIME:leg1-prover-proof-hash",
+            "--source-public-values-hash",
+            "PENDING-FIRE-TIME:leg1-prover-public-values-hash",
+            "--proposer",
+            "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+            "--proposer-key-file",
+            "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json",
+            "--finalizer",
+            "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+            "--finalizer-key-file",
+            "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json",
+            "--claimer",
+            "pfab9b9228942e5c529633a13aa271d5297bec6353",
+            "--claimer-key-file",
+            "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json",
+            "--expires-at-height",
+            "1776",
+            "--resume"
+          ]
+        ],
+        "kind": "stage_sequence",
+        "surface": "native deposit -> remote SP1 proof -> vault relay/claim"
+      },
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    },
+    "native-leg2a-order-reserve.json": {
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
+      "/ops_file_template/operations/0/key_file": "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json",
+      "/ops_file_template/operations/0/operation/expires_at_height": 1776,
+      "/ops_file_template/operations/0/operation/reservation_id": "b60d5c5a76a5ca4dde2d612532c22d5ab2fc610db3b0c55ff7b98a0f73ce4f12"
+    },
+    "native-leg2b-primary-subscribe.json": {
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
+      "/ops_file_template/operations/0/key_file": "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json",
+      "/ops_file_template/operations/0/operation/subscription_nonce": "bc6aede459db85326aeb077b8adff7ba924f47c102a346084b437fca9c2deda5"
+    },
+    "native-leg3a-export-debit.json": {
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
+      "/ops_file_template/operations/0/key_file": "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json",
+      "/ops_file_template/operations/0/operation/destination_deadline_seconds": 1786036794,
+      "/ops_file_template/operations/0/operation/export_nonce": "e1799423cdaca561a8f7467339517425ac82aba86a15a2fc8e78c67f56d42da3",
+      "/ops_file_template/operations/0/operation/packet_hash": "0f78934b2b4331322255f469bca08bb471cb2fcbc9cf013257ec405ab41342e6",
+      "/ops_file_template/operations/0/operation/refund_delay_blocks": 100
+    },
+    "native-leg3b-accept-mint.json": {
+      "/executor": {
+        "commands": [
+          [
+            "python3",
+            "scripts/native_evm_contract_leaf.py",
+            "--to",
+            "PENDING-FIRE-TIME:leg3b-controller-address",
+            "--calldata",
+            "PENDING-FIRE-TIME:leg3b-accept-mint-calldata",
+            "--value-wei",
+            "0",
+            "--chain-id",
+            "1",
+            "--rpc-url",
+            "https://ethereum-rpc.publicnode.com",
+            "--stakehub-home",
+            "/home/postfiat/.stakehub",
+            "--artifact-dir",
+            "{artifact_dir}",
+            "--fee-ceiling-wei",
+            "PENDING-FIRE-TIME:leg3b-fee-ceiling-wei",
+            "--label",
+            "a666-native-v1-leg3b-accept-mint"
+          ]
+        ],
+        "kind": "evm_script",
+        "surface": "scripts/native_evm_contract_leaf.py U57 custody leaf"
+      },
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    },
+    "native-leg3b0-signer-funding.json": {
+      "/budget_guard/leg_ceiling_usdc": "0.0201",
+      "/command_template": "python3 scripts/native_evm_leaf_send.py --stakehub-home /home/postfiat/.stakehub --chain-id 1 --rpc-url https://ethereum-rpc.publicnode.com --recipient 0xe01eaf76f155b2759402b39fe126b5a81655f424 --amount-wei 10000000000000000 --max-fee-wei 5666645628000 --label leg3b0-signer-funding --report <PENDING-FIRE-TIME:leg3b0-report>",
+      "/executor": {
+        "commands": [
+          [
+            "python3",
+            "scripts/native_evm_leaf_send.py",
+            "--stakehub-home",
+            "/home/postfiat/.stakehub",
+            "--chain-id",
+            "1",
+            "--rpc-url",
+            "https://ethereum-rpc.publicnode.com",
+            "--recipient",
+            "0xe01eaf76f155b2759402b39fe126b5a81655f424",
+            "--amount-wei",
+            "10000000000000000",
+            "--max-fee-wei",
+            "5666645628000",
+            "--label",
+            "leg3b0-signer-funding",
+            "--report",
+            "PENDING-FIRE-TIME:leg3b0-report"
+          ]
+        ],
+        "kind": "evm_script",
+        "surface": "scripts/native_evm_leaf_send.py exact ETH funding leaf"
+      },
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    },
+    "native-leg3c-approve-wa666-permit2.json": {
+      "/budget_guard/leg_ceiling_usdc": "0.0525",
+      "/executor": {
+        "commands": [
+          [
+            "python3",
+            "scripts/native_evm_contract_leaf.py",
+            "--to",
+            "0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5",
+            "--calldata",
+            "0x095ea7b3000000000000000000000000000000000022d473030f116ddee9f6b43ac78ba30000000000000000000000000000000000000000000000000000000000a842bf",
+            "--value-wei",
+            "0",
+            "--chain-id",
+            "1",
+            "--rpc-url",
+            "https://ethereum-rpc.publicnode.com",
+            "--stakehub-home",
+            "/home/postfiat/.stakehub",
+            "--artifact-dir",
+            "{artifact_dir}",
+            "--fee-ceiling-wei",
+            "PENDING-FIRE-TIME:leg3c-fee-ceiling-wei",
+            "--label",
+            "a666-native-v1-leg3c-approve-wa666-permit2"
+          ]
+        ],
+        "kind": "evm_script",
+        "surface": "scripts/native_evm_contract_leaf.py U57 custody leaf"
+      },
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    },
+    "native-leg3d-permit2-wa666-router.json": {
+      "/budget_guard/leg_ceiling_usdc": "0.0286",
+      "/executor": {
+        "commands": [
+          [
+            "python3",
+            "scripts/native_evm_contract_leaf.py",
+            "--to",
+            "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+            "--calldata",
+            "0x87517c45000000000000000000000000ee4c92edb03efdd9b519339edc19ad70c69a9be500000000000000000000000066a9893cc07d91d95644aedd05d03f95e1dba8af0000000000000000000000000000000000000000000000000000000000a842bf000000000000000000000000000000000000000000000000000000006a74c23a",
+            "--value-wei",
+            "0",
+            "--chain-id",
+            "1",
+            "--rpc-url",
+            "https://ethereum-rpc.publicnode.com",
+            "--stakehub-home",
+            "/home/postfiat/.stakehub",
+            "--artifact-dir",
+            "{artifact_dir}",
+            "--fee-ceiling-wei",
+            "PENDING-FIRE-TIME:leg3d-fee-ceiling-wei",
+            "--label",
+            "a666-native-v1-leg3d-permit2-wa666-router"
+          ]
+        ],
+        "kind": "evm_script",
+        "surface": "scripts/native_evm_contract_leaf.py U57 custody leaf"
+      },
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    },
+    "native-leg3e-swap-wa666-usdc.json": {
+      "/amount_atoms": 11027135,
+      "/budget_guard/leg_ceiling_usdc": "0.1297",
+      "/executor": {
+        "commands": [
+          [
+            "python3",
+            "scripts/native_evm_contract_leaf.py",
+            "--to",
+            "0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af",
+            "--calldata",
+            "0x3593564c000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000006a74c23a00000000000000000000000000000000000000000000000000000000000000011000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000340000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000003060c0f00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000001e0000000000000000000000000000000000000000000000000000000000000024000000000000000000000000000000000000000000000000000000000000001600000000000000000000000000000000000000000000000000000000000000020000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48000000000000000000000000ee4c92edb03efdd9b519339edc19ad70c69a9be500000000000000000000000000000000000000000000000000000000000001f4000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a842bf00000000000000000000000000000000000000000000000000000000007743ba000000000000000000000000000000000000000000000000000000000000012000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000ee4c92edb03efdd9b519339edc19ad70c69a9be50000000000000000000000000000000000000000000000000000000000a842bf0000000000000000000000000000000000000000000000000000000000000040000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb4800000000000000000000000000000000000000000000000000000000007743ba",
+            "--value-wei",
+            "0",
+            "--chain-id",
+            "1",
+            "--rpc-url",
+            "https://ethereum-rpc.publicnode.com",
+            "--stakehub-home",
+            "/home/postfiat/.stakehub",
+            "--artifact-dir",
+            "{artifact_dir}",
+            "--fee-ceiling-wei",
+            "PENDING-FIRE-TIME:leg3e-fee-ceiling-wei",
+            "--label",
+            "a666-native-v1-leg3e-swap-wa666-usdc"
+          ]
+        ],
+        "kind": "evm_script",
+        "surface": "scripts/native_evm_contract_leaf.py U57 custody leaf"
+      },
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
+      "/harness": "/tmp/krimp-fire1b/fork-sims-values.txt",
+      "/min_out_atoms": 7816122
+    },
+    "native-leg3f-approve-usdc-permit2.json": {
+      "/budget_guard/leg_ceiling_usdc": "0.0525",
+      "/executor": {
+        "commands": [
+          [
+            "python3",
+            "scripts/native_evm_contract_leaf.py",
+            "--to",
+            "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+            "--calldata",
+            "PENDING-FIRE-TIME:leg3f-erc20-approve-calldata",
+            "--value-wei",
+            "0",
+            "--chain-id",
+            "1",
+            "--rpc-url",
+            "https://ethereum-rpc.publicnode.com",
+            "--stakehub-home",
+            "/home/postfiat/.stakehub",
+            "--artifact-dir",
+            "{artifact_dir}",
+            "--fee-ceiling-wei",
+            "PENDING-FIRE-TIME:leg3f-fee-ceiling-wei",
+            "--label",
+            "a666-native-v1-leg3f-approve-usdc-permit2"
+          ]
+        ],
+        "kind": "evm_script",
+        "surface": "scripts/native_evm_contract_leaf.py U57 custody leaf"
+      },
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    },
+    "native-leg3g-permit2-usdc-router.json": {
+      "/budget_guard/leg_ceiling_usdc": "0.0286",
+      "/executor": {
+        "commands": [
+          [
+            "python3",
+            "scripts/native_evm_contract_leaf.py",
+            "--to",
+            "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+            "--calldata",
+            "PENDING-FIRE-TIME:leg3g-permit2-approve-calldata",
+            "--value-wei",
+            "0",
+            "--chain-id",
+            "1",
+            "--rpc-url",
+            "https://ethereum-rpc.publicnode.com",
+            "--stakehub-home",
+            "/home/postfiat/.stakehub",
+            "--artifact-dir",
+            "{artifact_dir}",
+            "--fee-ceiling-wei",
+            "PENDING-FIRE-TIME:leg3g-fee-ceiling-wei",
+            "--label",
+            "a666-native-v1-leg3g-permit2-usdc-router"
+          ]
+        ],
+        "kind": "evm_script",
+        "surface": "scripts/native_evm_contract_leaf.py U57 custody leaf"
+      },
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    },
+    "native-leg3h-swap-usdc-wa666.json": {
+      "/budget_guard/leg_ceiling_usdc": "0.1325",
+      "/executor": {
+        "commands": [
+          [
+            "python3",
+            "scripts/native_evm_contract_leaf.py",
+            "--to",
+            "0x66a9893cC07D91D95644AEDD05D03f95e1dBA8Af",
+            "--calldata",
+            "PENDING-FIRE-TIME:leg3h-swap-calldata",
+            "--value-wei",
+            "0",
+            "--chain-id",
+            "1",
+            "--rpc-url",
+            "https://ethereum-rpc.publicnode.com",
+            "--stakehub-home",
+            "/home/postfiat/.stakehub",
+            "--artifact-dir",
+            "{artifact_dir}",
+            "--fee-ceiling-wei",
+            "PENDING-FIRE-TIME:leg3h-fee-ceiling-wei",
+            "--label",
+            "a666-native-v1-leg3h-swap-usdc-wa666"
+          ]
+        ],
+        "kind": "evm_script",
+        "surface": "scripts/native_evm_contract_leaf.py U57 custody leaf"
+      },
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
+      "/harness": "/tmp/krimp-fire1b/fork-sims-values.txt"
+    },
+    "native-leg4-return-burn-import.json": {
+      "/budget_guard/leg_ceiling_usdc": "0.1910",
+      "/executor/phases/0/commands/0/8": "516a19d200aa087ee558737b5b200c1cba28cad50d5edaddf769eb9115f56196",
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
+      "/ops_file_template/operations/0/key_file": "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/faucet-key.json",
+      "/ops_file_template/operations/0/operation/operator": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b",
+      "/ops_file_template/operations/0/operation/return_nonce": "516a19d200aa087ee558737b5b200c1cba28cad50d5edaddf769eb9115f56196",
+      "/ops_file_template/operations/0/source": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b"
+    },
+    "native-leg5a-primary-redeem.json": {
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
+      "/ops_file_template/operations/0/key_file": "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json",
+      "/ops_file_template/operations/0/operation/redemption_nonce": "255206e04d1078f448560667842b64cfbe0f278e731b68ba5d14050cb2369939"
+    },
+    "native-leg5b-bridge-out.json": {
+      "/budget_guard/leg_ceiling_usdc": "0.2865",
+      "/command_template": "nav-roundtrip-live-demo --burn-to-redeem-only --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --key-file /var/lib/postfiat/validator-0/validator_keys.json --artifact-dir {artifact_dir} --nav-exit-report PENDING-FIRE-TIME:leg5a-redemption-derived-nav-exit-report --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --owner pfab9b9228942e5c529633a13aa271d5297bec6353 --owner-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json --destination-ref evm-erc20:1:0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --amount-atoms PENDING-FIRE-TIME:leg5a-pfUSDC-payout-atoms --resume && nav-roundtrip-live-demo --evm-withdrawal-only --data-dir /var/lib/postfiat/validator-0 --artifact-dir {artifact_dir} --burn-to-redeem-report PENDING-FIRE-TIME:leg5b-burn-report --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --verifier 0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --signatures-file PENDING-FIRE-TIME:withdrawal-signatures-file --session-id native-v1-fire-20260806-leg5b-bridge-out --resume && nav-roundtrip-live-demo --pftl-settle-only --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --key-file /var/lib/postfiat/validator-0/validator_keys.json --artifact-dir {artifact_dir} --evm-withdrawal-report PENDING-FIRE-TIME:leg5b-withdrawal-report --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --settlement-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --resume",
+      "/executor": {
+        "commands": [
+          [
+            "nav-roundtrip-live-demo",
+            "--burn-to-redeem-only",
+            "--data-dir",
+            "/var/lib/postfiat/validator-0",
+            "--topology",
+            "/etc/postfiat/releases/pnok-private-fix-2246d25/topology.json",
+            "--key-file",
+            "/var/lib/postfiat/validator-0/validator_keys.json",
+            "--artifact-dir",
+            "{artifact_dir}",
+            "--nav-exit-report",
+            "PENDING-FIRE-TIME:leg5a-redemption-derived-nav-exit-report",
+            "--pfusdc",
+            "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+            "--owner",
+            "pfab9b9228942e5c529633a13aa271d5297bec6353",
+            "--owner-key-file",
+            "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json",
+            "--destination-ref",
+            "evm-erc20:1:0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+            "--amount-atoms",
+            "PENDING-FIRE-TIME:leg5a-pfUSDC-payout-atoms",
+            "--resume"
+          ],
+          [
+            "nav-roundtrip-live-demo",
+            "--evm-withdrawal-only",
+            "--data-dir",
+            "/var/lib/postfiat/validator-0",
+            "--artifact-dir",
+            "{artifact_dir}",
+            "--burn-to-redeem-report",
+            "PENDING-FIRE-TIME:leg5b-burn-report",
+            "--source-rpc-url",
+            "https://ethereum-rpc.publicnode.com",
+            "--source-chain-id",
+            "1",
+            "--vault",
+            "0xaaa78fda7062efce769e95cd72fc55e507bc8183",
+            "--verifier",
+            "0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A",
+            "--usdc",
+            "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+            "--stakehub-wallet",
+            "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+            "--pfusdc",
+            "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+            "--signatures-file",
+            "PENDING-FIRE-TIME:withdrawal-signatures-file",
+            "--session-id",
+            "native-v1-fire-20260806-leg5b-bridge-out",
+            "--resume"
+          ],
+          [
+            "nav-roundtrip-live-demo",
+            "--pftl-settle-only",
+            "--data-dir",
+            "/var/lib/postfiat/validator-0",
+            "--topology",
+            "/etc/postfiat/releases/pnok-private-fix-2246d25/topology.json",
+            "--key-file",
+            "/var/lib/postfiat/validator-0/validator_keys.json",
+            "--artifact-dir",
+            "{artifact_dir}",
+            "--evm-withdrawal-report",
+            "PENDING-FIRE-TIME:leg5b-withdrawal-report",
+            "--pfusdc",
+            "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+            "--settlement-key-file",
+            "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json",
+            "--resume"
+          ]
+        ],
+        "kind": "stage_sequence",
+        "surface": "native burn -> EVM withdrawal -> PFTL settlement"
+      },
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
     }
-  }
+  },
+  "schema": "postfiat.fire20260806.values-S1.v2",
+  "stage": "S1"
 }

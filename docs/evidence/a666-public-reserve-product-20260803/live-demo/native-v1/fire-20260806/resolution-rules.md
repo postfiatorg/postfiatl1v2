@@ -39,3 +39,10 @@ Freshness gate: before any swap leg executes, if current Ethereum block > sim_bl
 ## Stage authorization rule
 
 A completed stage binding is not an execution command. The executor must first verify its exact packet hash against the stage binding, complete all listed preconditions, and commit the required final receipt before the next stage exists. Any stale simulation, unresolved ceiling, replay hit, state disagreement, or source/receipt mismatch is STOP-no-retry.
+
+## FIRE-10 v2 rulings
+
+- **Leg 1 policy correction and proof gate.** The deposit relay uses vault-bridge claim policy `5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158`, not primary-market policy `db6be8d0…`; the latter remains limited to legs 2a, 2b, and 5a. Leg 1 is three ordered stages: deposit, `native_prover_leaf.py`, then relay/claim. The relay accepts source proof kind `sp1-ethereum-finality-v1`; source proof and public-values hashes are stage-2 receipt outputs. Proposer/finalizer are the same issuer identity, and no attestor flag is allowed because the policy has `min_attestations=0`.
+- **Leg 3a optional fields.** `ethereum_packet_digest` and `ethereum_packet_schema_version` are omitted from the export-debit op. FIRE-10 code-truth determined both fields optional; no derived digest is supplied.
+- **U57 custody leaves.** Legs 3b through 3h invoke `scripts/native_evm_contract_leaf.py` with the exact U57 argv contract. Calldata that depends on a prior receipt remains stage-bound; calldata generated from already-fixed inputs is recorded with its encoding command and SHA in the resolution input.
+- **Staged-fields convention.** Every remaining `PENDING-FIRE-TIME` value is recorded in the stage binding with its named producing receipt or prerequisite stage. An unresolved value is an execution gate, never a default. For legs 2b through 5b, receipt-chained values must come only from the specified prior finalized receipt. For leg 1, `beacon-endpoint` and `prover-ssh-target` must be supplied from the prover stand-up evidence before stage 1. For EVM owner nonces and gas ceilings, the fire-time read/quote is the only source.

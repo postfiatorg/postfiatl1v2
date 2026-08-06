@@ -17,6 +17,7 @@ import re
 import subprocess
 import socket
 import sys
+import time
 import tempfile
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
@@ -538,6 +539,43 @@ def _phase_receipt_gate(packet: Mapping[str, Any], reports: list[Mapping[str, An
             _validate_expected_receipt(receipt, expected)
 
 
+def _locate_evm_report(leg_dir: Path) -> Path | None:
+    matches = sorted(leg_dir.glob("**/evm-deposit.json"))
+    return matches[0] if matches else None
+
+
+def _gate_deposit_stage(packet: Mapping[str, Any], leg_dir: Path, runner: Callable[[Sequence[str]], Any] | None) -> Mapping[str, Any]:
+    report_path = _locate_evm_report(leg_dir)
+    if report_path is None:
+        raise StopError("EVM deposit report missing after stage 1")
+    try:
+        report = _load(report_path)
+    except ConfigError as exc:
+        raise StopError("EVM deposit report malformed") from exc
+    if not isinstance(report, Mapping) or not report.get("deposit_tx"):
+        raise StopError("EVM deposit report missing deposit_tx")
+    if report.get("delta_ok") is not True:
+        raise StopError("EVM deposit report delta_ok is false")
+    tx_hash = str(report["deposit_tx"])
+    timeout = float(packet.get("deposit_receipt_timeout_secs", 2400))
+    interval = float(packet.get("deposit_receipt_poll_interval_secs", 15))
+    started = time.monotonic()
+    while True:
+        receipt = _call(["cast", "receipt", tx_hash], runner)
+        if isinstance(receipt, Mapping):
+            try:
+                _validate_eth_finality(receipt)
+                expected = packet.get("expected_receipt")
+                if isinstance(expected, Mapping):
+                    _validate_expected_receipt(receipt, expected)
+                return report
+            except (ValueError, StopError):
+                pass
+        if time.monotonic() - started >= timeout:
+            raise StopError("EVM deposit receipt finality timeout")
+        time.sleep(interval)
+
+
 def _dispatch(packet: Mapping[str, Any], node: Path, leg_dir: Path, runner: Callable[[Sequence[str]], Any] | None) -> dict[str, Any]:
     leg = _leg_key(packet.get("leg"))
     if leg == "0":
@@ -586,6 +624,29 @@ def _dispatch(packet: Mapping[str, Any], node: Path, leg_dir: Path, runner: Call
         return {"commands": first_result.get("commands", []) + second_result.get("commands", []), "outputs": first_result.get("outputs", []) + second_result.get("outputs", []), "reports": first_result.get("reports", []) + second_result.get("reports", []), "kind": "phases"}
     if leg == "1":
         commands = _normalize_stage(_command_from_packet(packet, node, leg_dir), node)
+        if len(commands) < 2:
+            raise ConfigError("leg 1 requires deposit and relay commands")
+        report = _locate_evm_report(leg_dir)
+        first_result = {"commands": [], "outputs": [], "reports": []}
+        if report is None:
+            first_result = _submit_and_collect(commands[:1], runner, leg_dir, "stage")
+        deposit_report = _gate_deposit_stage(packet, leg_dir, runner)
+        if len(commands) == 2:
+            second_result = _submit_and_collect(commands[1:], runner, leg_dir, "stage")
+            return {"commands": first_result.get("commands", []) + second_result.get("commands", []), "outputs": first_result.get("outputs", []) + second_result.get("outputs", []), "reports": first_result.get("reports", []) + second_result.get("reports", []) + [deposit_report], "kind": "stage"}
+        proof_result = _submit_and_collect(commands[1:2], runner, leg_dir, "prover")
+        proof_path = next(iter(sorted(leg_dir.glob("**/proof-report.json"))), None)
+        if proof_path is None:
+            raise StopError("ingress prover report missing after proof stage")
+        proof_report = _load(proof_path)
+        if not isinstance(proof_report, Mapping):
+            raise StopError("ingress prover report malformed")
+        expected_hashes = packet.get("expected_proof_hashes", {})
+        for key, value in expected_hashes.items():
+            if value and proof_report.get(key) != value:
+                raise StopError(f"ingress proof hash mismatch: {key}")
+        relay_result = _submit_and_collect(commands[2:], runner, leg_dir, "stage")
+        return {"commands": first_result.get("commands", []) + proof_result.get("commands", []) + relay_result.get("commands", []), "outputs": first_result.get("outputs", []) + proof_result.get("outputs", []) + relay_result.get("outputs", []), "reports": first_result.get("reports", []) + proof_result.get("reports", []) + relay_result.get("reports", []) + [deposit_report, proof_report], "kind": "stage"}
     elif leg in CERTIFIED:
         ops_path, tag, _ = _render_ops(packet, leg_dir)
         commands = [[str(node), "pftl-submit-certified-asset-ops", "--ops-file", str(ops_path), "--artifact-dir", str(leg_dir)]]
@@ -820,6 +881,125 @@ def run_leg(packet_path: Path, binding_path: Path, artifact_dir: Path, resume: b
     return {"status": "FINALIZED", "leg": packet.get("leg"), "tx_ids": tx_ids, "post": post}
 
 
+def _packet_path_from_entry(entry: Mapping[str, Any], binding_path: Path) -> Path:
+    value = entry.get("path") or entry.get("packet_path")
+    if not value:
+        raise ConfigError("binding packet entry has no path")
+    path = Path(str(value))
+    if not path.is_absolute():
+        path = binding_path.parent / path
+        if not path.exists():
+            path = Path.cwd() / str(value)
+    return path
+
+
+def _walk_strings(value: Any, prefix: str = "") -> Iterable[tuple[str, str]]:
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            yield from _walk_strings(item, f"{prefix}/{key}")
+    elif isinstance(value, list):
+        for idx, item in enumerate(value):
+            yield from _walk_strings(item, f"{prefix}/{idx}")
+    elif isinstance(value, str):
+        yield prefix, value
+
+
+def _staged_entries(binding: Any) -> list[dict[str, Any]]:
+    raw = binding.get("staged_fields", []) if isinstance(binding, Mapping) else []
+    out: list[dict[str, Any]] = []
+    if isinstance(raw, Mapping):
+        for pointer, value in raw.items():
+            if isinstance(value, Mapping):
+                item = dict(value); item.setdefault("json_pointer", pointer)
+            else:
+                item = {"json_pointer": pointer, "source": value}
+            out.append(item)
+    elif isinstance(raw, list):
+        out = [dict(x) for x in raw if isinstance(x, Mapping)]
+    return out
+
+
+def _pointer_value(root: Any, pointer: str) -> Any:
+    value = root
+    for part in pointer.split("/")[1:]:
+        part = part.replace("~1", "/").replace("~0", "~")
+        if isinstance(value, Mapping): value = value.get(part)
+        elif isinstance(value, list): value = value[int(part)] if int(part) < len(value) else None
+        else: return None
+    return value
+
+
+def validate_executable(binding_path: Path, through: str) -> list[str]:
+    binding = _load(binding_path)
+    entries = _binding_entries(binding)
+    target = _leg_order(through)
+    staged = _staged_entries(binding)
+    lines: list[str] = []
+    for entry in entries:
+        packet_path = _packet_path_from_entry(entry, binding_path)
+        packet = _load(packet_path)
+        if not isinstance(packet, Mapping) or _leg_order(packet.get("leg")) > target:
+            continue
+        leg = str(packet.get("leg"))
+        executor = packet.get("executor") if isinstance(packet.get("executor"), Mapping) else {}
+        kind = executor.get("kind", "stage_sequence" if leg in ("1", "5b") else ("certified_ops" if leg in CERTIFIED else "evm_script"))
+        if kind not in ("read_only", "stage_sequence", "evm_script", "certified_ops", "phases"):
+            raise ConfigError(f"LEG {leg}: unsupported executor kind {kind}")
+        def scan_pending(surface: Any, base_pointer: str) -> None:
+            for raw_pointer, value in _walk_strings(surface):
+                pointer = base_pointer + raw_pointer
+                if "PENDING" not in value:
+                    continue
+                candidates = [
+                    x for x in staged
+                    if x.get("packet") in (None, packet_path.name, str(packet_path))
+                    and x.get("json_pointer") == pointer
+                ]
+                valid = [
+                    x for x in candidates
+                    if isinstance(x.get("source"), str) and x.get("source")
+                    and isinstance(x.get("stage"), str) and x.get("stage")
+                ]
+                if not valid:
+                    raise ConfigError(f"LEG {leg}: unresolved executable field {pointer}: {value}")
+                chosen = valid[0]
+                actual_value = _pointer_value(packet, pointer)
+                if "PENDING" not in str(actual_value):
+                    raise ConfigError(f"LEG {leg}: staged exemption points to resolved field {pointer}")
+                lines.append(f"STAGED-EXEMPT {leg} {pointer} <- {chosen['source']} @{chosen['stage']}")
+
+        surfaces = executor
+        if kind == "phases":
+            # Preserve the packet's real /executor/phases/... pointer shape.
+            surfaces = {"phases": executor.get("phases", [])}
+        scan_pending(surfaces, "/executor")
+        if kind == "certified_ops":
+            # Certified templates are executable inputs too; exemptions must
+            # use their real /ops_file_template/... packet pointers.
+            scan_pending(packet.get("ops_file_template", {}), "/ops_file_template")
+        if kind == "phases" and not executor.get("phases"):
+            raise ConfigError(f"LEG {leg}: phases has no commands")
+        if kind in ("stage_sequence", "evm_script") and not (executor.get("commands") or executor.get("args") or executor.get("command")):
+            raise ConfigError(f"LEG {leg}: executable argv commands absent")
+        if kind == "phases":
+            for phase in executor.get("phases", []):
+                if phase.get("kind") == "evm_script" and not (phase.get("commands") or phase.get("command")):
+                    raise ConfigError(f"LEG {leg}: phase command absent")
+        if kind == "certified_ops":
+            try:
+                _operation_from_packet(packet, leg)
+            except ConfigError as exc:
+                # _operation_from_packet names the unresolved field rather
+                # than echoing its value. scan_pending above already enforced
+                # a complete exemption for every actual PENDING pointer.
+                if "PENDING" not in str(exc) and "unresolved fire-time field" not in str(exc):
+                    raise ConfigError(f"LEG {leg}: {exc}")
+        lines.append(f"LEG {leg} EXECUTABLE {kind} commands {len(executor.get('commands', [])) if isinstance(executor.get('commands'), list) else 0} staged-exempt")
+    if not lines:
+        raise ConfigError("no packet entries through requested leg")
+    return lines
+
+
 def _cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="native_campaign_driver")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -832,6 +1012,9 @@ def _cli_parser() -> argparse.ArgumentParser:
     status.add_argument("--artifact-dir", required=True)
     verify = sub.add_parser("verify-journal")
     verify.add_argument("--artifact-dir", required=True)
+    lint = sub.add_parser("validate-executable")
+    lint.add_argument("--binding", required=True)
+    lint.add_argument("--through", required=True)
     return parser
 
 
@@ -842,6 +1025,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "run-leg":
             result = run_leg(Path(args.packet), Path(args.binding), Path(args.artifact_dir), args.resume)
             print(json.dumps(result, sort_keys=True))
+        elif args.command == "validate-executable":
+            for line in validate_executable(Path(args.binding), args.through):
+                print(line)
         elif args.command == "status":
             check_binary()
             journal = _read_journal(Path(args.artifact_dir))

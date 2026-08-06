@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import importlib.util
+import hashlib
 import json
 import os
 import pathlib
@@ -364,6 +365,149 @@ class FlowTests(unittest.TestCase):
         def run(argv): calls.append(argv); return {"status":"0x1","blockNumber":"0x1","from":"0xa","to":"0xb","value":"0x1"}
         with self.assertRaises(d.ConfigError): d._dispatch(packet,self.node,leg,run)
         self.assertFalse(any(c and c[0] == "burn" for c in calls))
+
+    def test_t29_deposit_gate_passes_and_resume_skips_stage1(self):
+        leg=self.root/"d"; leg.mkdir(); (leg/"evm-deposit.json").write_text(json.dumps({"deposit_tx":"tx","delta_ok":True})); packet=self.packet("1"); packet["deposit_receipt_timeout_secs"]=0; packet["deposit_receipt_poll_interval_secs"]=0
+        rec=lambda argv:{"status":"0x1","blockNumber":"0x1"}
+        self.assertTrue(d._gate_deposit_stage(packet,leg,rec)["delta_ok"])
+
+    def test_t30_deposit_reverted_stops(self):
+        leg=self.root/"d"; leg.mkdir(); (leg/"evm-deposit.json").write_text(json.dumps({"deposit_tx":"tx","delta_ok":True})); packet=self.packet("1"); packet["deposit_receipt_timeout_secs"]=0
+        with self.assertRaises(d.StopError): d._gate_deposit_stage(packet,leg,lambda argv:{"status":"0x0","blockNumber":"0x1"})
+
+    def test_t31_deposit_delta_false_stops(self):
+        leg=self.root/"d"; leg.mkdir(); (leg/"evm-deposit.json").write_text(json.dumps({"deposit_tx":"tx","delta_ok":False})); packet=self.packet("1")
+        with self.assertRaises(d.StopError): d._gate_deposit_stage(packet,leg,lambda argv:{})
+
+    def test_t32_deposit_timeout_stops(self):
+        leg=self.root/"d"; leg.mkdir(); (leg/"evm-deposit.json").write_text(json.dumps({"deposit_tx":"tx","delta_ok":True})); packet=self.packet("1"); packet["deposit_receipt_timeout_secs"]=0
+        with self.assertRaises(d.StopError): d._gate_deposit_stage(packet,leg,lambda argv:{"status":"0x0"})
+
+    def test_t33_deposit_malformed_stops(self):
+        leg=self.root/"d"; leg.mkdir(); (leg/"evm-deposit.json").write_text("not-json"); packet=self.packet("1")
+        with self.assertRaises(d.StopError): d._gate_deposit_stage(packet,leg,lambda argv:{})
+
+    def test_t34_deposit_expected_receipt_mismatch_stops(self):
+        leg=self.root/"d"; leg.mkdir(); (leg/"evm-deposit.json").write_text(json.dumps({"deposit_tx":"tx","delta_ok":True})); packet=self.packet("1"); packet["deposit_receipt_timeout_secs"]=0; packet["expected_receipt"]={"to":"0xgood"}
+        with self.assertRaises(d.StopError): d._gate_deposit_stage(packet,leg,lambda argv:{"status":"0x1","blockNumber":"0x1","to":"0xbad"})
+
+    def test_t35_linter_rejects_current_held_packets(self):
+        binding=HERE.parent/"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/authorization-binding-native-v1.json"
+        with self.assertRaises(d.ConfigError): d.validate_executable(binding,"1")
+
+    def test_t36_leg1_dispatch_resume_path(self):
+        leg=self.root/"leg"; leg.mkdir(); (leg/"evm-deposit.json").write_text(json.dumps({"deposit_tx":"tx","delta_ok":True})); packet=self.packet("1"); packet["deposit_receipt_timeout_secs"]=0; packet["executor"]={"commands":[["burn","--artifact-dir",str(leg)],["relay","--artifact-dir",str(leg)]]}; calls=[]
+        def run(argv): calls.append(argv); return {"status":"0x1","blockNumber":"0x1"}
+        result=d._dispatch(packet,self.node,leg,run); self.assertEqual(result["commands"][0][0],"relay"); self.assertEqual(len(calls),2)
+
+    def test_t37_leg1_gate_reverted_public_dispatch(self):
+        leg=self.root/"leg"; leg.mkdir(); (leg/"evm-deposit.json").write_text(json.dumps({"deposit_tx":"tx","delta_ok":True})); packet=self.packet("1"); packet["deposit_receipt_timeout_secs"]=0; packet["executor"]={"commands":[["burn"],["relay"]]}; calls=[]
+        with self.assertRaises(d.StopError): d._dispatch(packet,self.node,leg,lambda argv:(calls.append(argv) or {"status":"0x0","blockNumber":"0x1"}))
+        self.assertEqual(len(calls),1)
+
+    def test_t38_prover_hash_mismatch_stops_three_stage(self):
+        leg=self.root/"leg"; leg.mkdir(); (leg/"evm-deposit.json").write_text(json.dumps({"deposit_tx":"tx","delta_ok":True})); (leg/"proof-report.json").write_text(json.dumps({"proof-calldata_sha256":"bad"})); packet=self.packet("1"); packet["deposit_receipt_timeout_secs"]=0; packet["expected_proof_hashes"]={"proof-calldata_sha256":"good"}; packet["executor"]={"commands":[["deposit"],["prove"],["relay"]]}; calls=[]
+        with self.assertRaises(d.StopError): d._dispatch(packet,self.node,leg,lambda argv:(calls.append(argv) or {"status":"0x1","blockNumber":"0x1"}))
+
+    def test_t39_prover_leaf_resume_hashes(self):
+        import native_prover_leaf as leaf
+        out=self.root/"proof"; out.mkdir(); (out/"proof-calldata.bin").write_bytes(b"a"); (out/"public-values.bin").write_bytes(b"b"); import hashlib
+        report={"proof-calldata_sha256":hashlib.sha256(b"a").hexdigest(),"public-values_sha256":hashlib.sha256(b"b").hexdigest()}; (out/"proof-report.json").write_text(json.dumps(report)); self.assertEqual(leaf.verify_existing(out)["proof-calldata_sha256"],report["proof-calldata_sha256"])
+
+    def test_t40_staged_exemption_requires_complete_entry(self):
+        packet={"packet_id":"p","leg":"5a","executor":{"kind":"evm_script","commands":[["x","PENDING-FIRE-TIME:v"]]}}; pp=self.root/"p.json"; pp.write_text(json.dumps(packet)); import hashlib; h=hashlib.sha256(pp.read_bytes()).hexdigest(); bp=self.root/"b.json"; bp.write_text(json.dumps({"packets":[{"packet_id":"p","path":"p.json","sha256":h}],"staged_fields":[{"packet":"p.json","json_pointer":"/executor/commands/0/1","source":"leg4 receipt","stage":"S4"}]})); lines=d.validate_executable(bp,"5a"); self.assertTrue(any("STAGED-EXEMPT" in x for x in lines))
+
+    def test_t41_staged_missing_source_rejects(self):
+        packet={"packet_id":"p","leg":"5a","executor":{"commands":[["x","PENDING-FIRE-TIME:v"]]}}; pp=self.root/"p.json"; pp.write_text(json.dumps(packet)); bp=self.root/"b.json"; bp.write_text(json.dumps({"packets":[{"packet_id":"p","path":"p.json"}],"staged_fields":[{"packet":"p.json","json_pointer":"/executor/commands/0/1","stage":"S4"}]}))
+        with self.assertRaises(d.ConfigError): d.validate_executable(bp,"5a")
+
+    def test_t42_staged_missing_stage_rejects(self):
+        packet={"packet_id":"p","leg":"5a","executor":{"commands":[["x","PENDING-FIRE-TIME:v"]]}}; pp=self.root/"p.json"; pp.write_text(json.dumps(packet)); bp=self.root/"b.json"; bp.write_text(json.dumps({"packets":[{"packet_id":"p","path":"p.json"}],"staged_fields":[{"packet":"p.json","json_pointer":"/executor/commands/0/1","source":"receipt"}]}))
+        with self.assertRaises(d.ConfigError): d.validate_executable(bp,"5a")
+
+    def test_t43_exemption_resolved_field_rejects(self):
+        packet={"packet_id":"p","leg":"5a","executor":{"commands":[["x","resolved"]]}}; pp=self.root/"p.json"; pp.write_text(json.dumps(packet)); bp=self.root/"b.json"; bp.write_text(json.dumps({"packets":[{"packet_id":"p","path":"p.json"}],"staged_fields":[{"packet":"p.json","json_pointer":"/executor/commands/0/1","source":"receipt","stage":"S4"}]}))
+        with self.assertRaises(d.ConfigError): d.validate_executable(bp,"5a")
+
+    def test_t44_dispatch_pending_still_fails(self):
+        packet=self.packet("5a",self.operation("pftl_uniswap_primary_redeem")); packet["operation"]["nav_amount_atoms"]="PENDING-FIRE-TIME:x"
+        with self.assertRaises(d.ConfigError): d._operation_from_packet(packet,"5a")
+
+
+    def _phase_linter_fixture(self, staged_pointer=None):
+        packet = {
+            "packet_id": "phase-pointer",
+            "leg": "4",
+            "executor": {
+                "kind": "phases",
+                "phases": [
+                    {
+                        "kind": "evm_script",
+                        "commands": [["burn", "PENDING-FIRE-TIME:burn_event_hash"]],
+                    },
+                    {"kind": "certified_ops"},
+                ],
+            },
+        }
+        packet_path = self.root / "phase-pointer.json"
+        packet_path.write_text(json.dumps(packet))
+        binding = {
+            "packets": [{
+                "packet_id": "phase-pointer",
+                "path": packet_path.name,
+                "sha256": hashlib.sha256(packet_path.read_bytes()).hexdigest(),
+            }]
+        }
+        if staged_pointer is not None:
+            binding["staged_fields"] = [{
+                "packet": packet_path.name,
+                "json_pointer": staged_pointer,
+                "source": "phase-1 burn receipt",
+                "stage": "S4",
+            }]
+        binding_path = self.root / "phase-binding.json"
+        binding_path.write_text(json.dumps(binding))
+        return binding_path
+
+    def test_t45_phase_linter_uses_real_pointer(self):
+        binding = self._phase_linter_fixture("/executor/phases/0/commands/0/1")
+        lines = d.validate_executable(binding, "4")
+        self.assertIn(
+            "STAGED-EXEMPT 4 /executor/phases/0/commands/0/1",
+            "\n".join(lines),
+        )
+
+    def test_t46_phase_linter_missing_entry_names_real_pointer(self):
+        binding = self._phase_linter_fixture()
+        with self.assertRaisesRegex(
+            d.ConfigError, r"/executor/phases/0/commands/0/1"
+        ):
+            d.validate_executable(binding, "4")
+
+    def test_t47_phase_linter_rejects_synthetic_pointer(self):
+        binding = self._phase_linter_fixture("/executor/0/commands/0/1")
+        with self.assertRaisesRegex(
+            d.ConfigError, r"/executor/phases/0/commands/0/1"
+        ):
+            d.validate_executable(binding, "4")
+
+    def test_t48_certified_linter_requires_operation_staged_entry(self):
+        operation = self.operation("pftl_uniswap_primary_redeem")
+        operation["nav_amount_atoms"] = "PENDING-FIRE-TIME:redeem-amount"
+        packet = self.packet("5a")
+        packet["executor"] = {"kind": "certified_ops"}
+        packet["ops_file_template"] = {
+            "operations": [{"source": "pf-owner", "key_file": "/tmp/key-ref", "operation": operation}]
+        }
+        path, binding = self.write_packet_binding(packet)
+        bound = json.loads(binding.read_text())
+        bound["packets"][0]["path"] = path.name
+        binding.write_text(json.dumps(bound))
+        with self.assertRaisesRegex(
+            d.ConfigError,
+            r"/ops_file_template/operations/0/operation/nav_amount_atoms",
+        ):
+            d.validate_executable(binding, "5a")
 
 
 if __name__ == "__main__":

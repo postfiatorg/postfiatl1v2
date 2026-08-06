@@ -1,1 +1,2470 @@
-{"binding_status":"STAGED-S1-PENDING-FIRE-TIME-AUTHORIZATION","campaign_journal_schema_id":"postfiat.native-campaign-journal-v1","canonical_binary_sha256":"05330fb20a40b8a4536000ec57da1862d879bcdc4a21bc8c0657f5c56aa8e0f5","executor_stub_finalization":"U45","fire_time_fields":{"authorization_timestamp_utc":"PENDING-FIRE-TIME","authorizer":"PENDING-FIRE-TIME","current_Ethereum_blocks_and_fork_simulations":"PENDING-FIRE-TIME","current_fleet_tip_and_state_root":"PENDING-FIRE-TIME","one_shot_order_confirmation":"PENDING-FIRE-TIME","resolved_gas_ceiling_quotes":"PENDING-FIRE-TIME"},"genesis_hash":"ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9","packets":[{"path":"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg0-proxy-verify.json","sha256":"ada38daffb232d3c88008f4d8e3532ffb83fdf47d5495a9084a6a8307c4d848e"},{"path":"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg1-bridge-in.json","sha256":"d1d0060900c9c15ed8b9fe0be8b03a4a6177b57589a248246434888c795ba1a4"},{"path":"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg2a-order-reserve.json","sha256":"200b5a5c2c3d0bdb9200f9dedd859cf005bf1b5723957cb6a84cd3a06a34c0a2"},{"path":"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg2b-primary-subscribe.json","sha256":"79ce32390ac36075d9d00b19d08e284e34c24dc110fb90546fbe4f7c82220515"},{"path":"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3a-export-debit.json","sha256":"8247424c5a423d597ef4d55371188599d315f43ea6f513eeff8bf81ff913563b"},{"path":"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3b-accept-mint.json","sha256":"37b974fa8123d52fe381f05ca34106e07f351343dc3f9f6a1d8c5c8cde07eeb3"},{"path":"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3b0-signer-funding.json","sha256":"fc9e22d677d392cea66c67b670eadf7c4247985f4c81303f1be019eed70de2fb"},{"path":"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3c-approve-wa666-permit2.json","sha256":"c16fe47281f371439d559e92fb1d5900c98f18ae40a197e5dcfa052a63a045df"},{"path":"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3d-permit2-wa666-router.json","sha256":"8b26c0d3e1e375e414f892eee7a188147fc00a960feaf101b1a3f8766f871567"},{"path":"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3e-swap-wa666-usdc.json","sha256":"09b6e193a278d9529b3862ccd3f4dd5825a55ac37d7496ecb9b08ece4b039721"},{"path":"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3f-approve-usdc-permit2.json","sha256":"600fedbdc93383f455fcada64a43710604ac9579e72c7cc1132a86ad04861885"},{"path":"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3g-permit2-usdc-router.json","sha256":"6bcc90b516fa8a5a8cb0af632aabfab4d5d0e6705da2ac8f64728cffcf5850c4"},{"path":"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3h-swap-usdc-wa666.json","sha256":"3bf8ef920f1c34f44fa9ec02b20e72883829227786df08ea7c6f80d55d24718e"},{"path":"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg4-return-burn-import.json","sha256":"df5a1fa5eed307924d39b5612c6487deabb4ffa97cea030a1462656d7995532e"},{"path":"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg5a-primary-redeem.json","sha256":"f49f59ed5c225fb84a1266401cff672fa783dd3746d432f34af84ae987165dc5"},{"path":"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg5b-bridge-out.json","sha256":"78d5cfd83d2f961ed361b469830253743f3ab1163a18675293df893e4ec05266"}],"pricing_nav_epoch":5,"pricing_reserve_packet_hash":"78c9fce35e0dc1ad9a7bd5b25b34e432c606fc38889e1543d5242cff12fe637bb0a508aff3655d2e2e27ac872f88f289","route":"pftl-a666-ethereum-wA666-usdc-v1","route_epoch":6,"schema":"postfiat.native-campaign-authorization-binding-v1","source_binding_sha256":"82d7ec24364a31e4415826437070a7dec39a70a3bbcebcc35ce566bb38e34f86","stage":"S1","stage_packet_count":16,"stage_resolution_context":{"gas_usdc":{"3b0":"0.0201","3c":"0.0525","3d":"0.0286","3e":"0.1297","3f":"0.0525","3g":"0.0286","3h":"0.1325","4-burn":"0.1910","5b":"0.2865","cap":"530.000000","headroom":"18.053155","projection":"511.946845","total":"0.9220"},"genesis_hash":"ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9","leg2a_expires_at_height":1776,"leg3a_refund_delay_blocks":100,"leg3e":{"amount_in_atoms":11027135,"calldata_sha256":"3aa253bc429689ee803bef59a5169559d0f6ac9c3d15f77f8707bca384571c55","evidence":"/tmp/krimp-fire1b/fork-sims-values.txt","freshness_last_fire_block":25696414,"min_out_atoms":7816122,"sim_block":25696286,"sim_block_hash":"0x05c48df05c746fb065e495887df17b99a5f65575f8375acedc155a3f2b5e0ae8","simulated_output_atoms":8057858},"leg3h_s2_reference_only":{"amount_in_source":"actual finalized leg3e USDC receipt output","calldata_sha256":"733799a08305e558d652437e26b548b330f43e86666f1ac5f710aa9b2e2b6ee3","reference_fill_atoms":11013374,"reference_min_out_atoms":10682972,"rule":"S2 must fresh re-simulate and rebind before fire.","sim_block":25696286},"pftl_binding_height":776,"pftl_state_root_prefix":"10dfb17b640a6974","pricing_nav_epoch":5,"pricing_reserve_packet_hash":"78c9fce35e0dc1ad9a7bd5b25b34e432c606fc38889e1543d5242cff12fe637bb0a508aff3655d2e2e27ac872f88f289","replay_sweep":"CLEAN; deterministic branch-2 nonce derivation authorized because branch-1 literal values do not exist","route_epoch":6,"route_id":"pftl-a666-ethereum-wA666-usdc-v1"},"stop_no_retro":"Any packet-byte edit, changed state pin, stale simulation, unresolved gas ceiling, or nonmatching packet SHA invalidates this skeleton and requires a new authorization binding. STOP-no-retry."}
+{
+  "binding_status": "STAGED-S1-PENDING-FIRE-TIME-AUTHORIZATION",
+  "campaign_journal_schema_id": "postfiat.native-campaign-journal-v1",
+  "canonical_binary_sha256": "05330fb20a40b8a4536000ec57da1862d879bcdc4a21bc8c0657f5c56aa8e0f5",
+  "digest_omission_ruling": "leg3a ethereum_packet_digest and ethereum_packet_schema_version omitted as optional per FIRE-10 code-truth ruling",
+  "executor_stub_finalization": "U45",
+  "fire_time_fields": {
+    "authorization_timestamp_utc": "PENDING-FIRE-TIME",
+    "authorizer": "PENDING-FIRE-TIME",
+    "current_Ethereum_blocks_and_fork_simulations": "PENDING-FIRE-TIME",
+    "current_fleet_tip_and_state_root": "PENDING-FIRE-TIME",
+    "one_shot_order_confirmation": "PENDING-FIRE-TIME",
+    "resolved_gas_ceiling_quotes": "PENDING-FIRE-TIME"
+  },
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "packets": [
+    {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg0-proxy-verify.json",
+      "sha256": "2df8068c0b9e6db360eb828959314467bfa1d34763f7eda8f1a11339c2bb8ced"
+    },
+    {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg1-bridge-in.json",
+      "sha256": "40c23a3277dbbd21d5804a22fa7be069c6d701d60bc2ab956cfd6a5419f2a42e"
+    },
+    {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg2a-order-reserve.json",
+      "sha256": "fc356139e9950bd6ff3056a03bdc3351271ec6c24a2c60e4676928b886671714"
+    },
+    {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg2b-primary-subscribe.json",
+      "sha256": "ef88d977d02c874df4bcbca1879ab595265085cd26e40a7fce8b0ad20163bf42"
+    },
+    {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3a-export-debit.json",
+      "sha256": "b3271f2fc7da6c91a67744f736d3e3ef926a40beabd260a9929df6ba2e76bf3a"
+    },
+    {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3b-accept-mint.json",
+      "sha256": "14b0a36cd1e4768608fb4a0a97d3d9fc25cc7722be2a74bdb0c44715d15f848b"
+    },
+    {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3b0-signer-funding.json",
+      "sha256": "a3447f98eb15d255df3622cb1912ffdbbca7c719b8316b6c9d260617e14de064"
+    },
+    {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3c-approve-wa666-permit2.json",
+      "sha256": "af67f1b1d89a25f790508e77b15321c019bf7899cdc3e2b7f936960ae48f7c1a"
+    },
+    {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3d-permit2-wa666-router.json",
+      "sha256": "e80e8092958824ba53074a5107a117acad55491010be2438d9c4069d0a1f85a3"
+    },
+    {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3e-swap-wa666-usdc.json",
+      "sha256": "f171c982c1a37a436ff9989809cf53d23b84d45a2a7d1095e5fcdd41f6c8e50f"
+    },
+    {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3f-approve-usdc-permit2.json",
+      "sha256": "cc99af4f4eea906aaba05d0eb0ea67eb82ac5740404402d40898c8a5f1c81cbe"
+    },
+    {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3g-permit2-usdc-router.json",
+      "sha256": "3251954991274136d678ed946a3c7fd431d30a80c5dc65a80dfcd2d53595586c"
+    },
+    {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg3h-swap-usdc-wa666.json",
+      "sha256": "4c9a598f27dbd3818f8afb9dd43a5c95d666689d827b385bea270caf213656d9"
+    },
+    {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg4-return-burn-import.json",
+      "sha256": "46ac60b2d0fca313fa333425a8788697adad2abb94c2800e66bbe77664391c9c"
+    },
+    {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg5a-primary-redeem.json",
+      "sha256": "c3affa77469799f2094346927b3933a44b97efded4aab027e60ed271ddb343e9"
+    },
+    {
+      "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg5b-bridge-out.json",
+      "sha256": "5dc9fa5425c86d9904dfda3b4ebbd50291eba4af19464644bcb254a023d44185"
+    }
+  ],
+  "pricing_nav_epoch": 5,
+  "pricing_reserve_packet_hash": "78c9fce35e0dc1ad9a7bd5b25b34e432c606fc38889e1543d5242cff12fe637bb0a508aff3655d2e2e27ac872f88f289",
+  "route": "pftl-a666-ethereum-wA666-usdc-v1",
+  "route_epoch": 6,
+  "schema": "postfiat.native-campaign-authorization-binding-v1",
+  "source_binding_sha256": "82d7ec24364a31e4415826437070a7dec39a70a3bbcebcc35ce566bb38e34f86",
+  "stage": "S1",
+  "stage_packet_count": 16,
+  "stage_resolution_context": {
+    "claim_policy_hash_leg1": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+    "gas_usdc": {
+      "3b0": "0.0201",
+      "3c": "0.0525",
+      "3d": "0.0286",
+      "3e": "0.1297",
+      "3f": "0.0525",
+      "3g": "0.0286",
+      "3h": "0.1325",
+      "4-burn": "0.1910",
+      "5b": "0.2865",
+      "cap": "530.000000",
+      "headroom": "18.053155",
+      "projection": "511.946845",
+      "total": "0.9220"
+    },
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "leg1_deposit_nonce": "0xfe457c66ab796d980ffcabf557ae7c13c60eefca01a276e5b023e812418b04b6",
+    "leg1_relay_env": {
+      "data_dir": "/var/lib/postfiat/validator-0",
+      "key_file": "/var/lib/postfiat/validator-0/validator_keys.json",
+      "topology": "/etc/postfiat/releases/pnok-private-fix-2246d25/topology.json"
+    },
+    "leg1_session_id": "native-v1-fire-20260806-leg1-deposit",
+    "leg2a_expires_at_height": 1776,
+    "leg2a_reservation_id": "b60d5c5a76a5ca4dde2d612532c22d5ab2fc610db3b0c55ff7b98a0f73ce4f12",
+    "leg3a_deadline_base_unix": 1786029594,
+    "leg3a_destination_deadline_seconds": 1786036794,
+    "leg3a_digest_ruling": "OPTIONAL: omit ethereum_packet_digest and ethereum_packet_schema_version",
+    "leg3a_packet_hash": "0f78934b2b4331322255f469bca08bb471cb2fcbc9cf013257ec405ab41342e6",
+    "leg3a_refund_delay_blocks": 100,
+    "leg3e": {
+      "amount_in_atoms": 11027135,
+      "calldata_sha256": "3aa253bc429689ee803bef59a5169559d0f6ac9c3d15f77f8707bca384571c55",
+      "evidence": "/tmp/krimp-fire1b/fork-sims-values.txt",
+      "freshness_last_fire_block": 25696414,
+      "min_out_atoms": 7816122,
+      "sim_block": 25696286,
+      "sim_block_hash": "0x05c48df05c746fb065e495887df17b99a5f65575f8375acedc155a3f2b5e0ae8",
+      "simulated_output_atoms": 8057858
+    },
+    "leg3e_calldata_sha256": "fb8b20d6401cb5592e8df4fd34629b0f298f6494aa527ba7988b43d5a801cbe4",
+    "leg3h_s2_reference_only": {
+      "amount_in_source": "actual finalized leg3e USDC receipt output",
+      "calldata_sha256": "733799a08305e558d652437e26b548b330f43e86666f1ac5f710aa9b2e2b6ee3",
+      "reference_fill_atoms": 11013374,
+      "reference_min_out_atoms": 10682972,
+      "rule": "S2 must fresh re-simulate and rebind before fire.",
+      "sim_block": 25696286
+    },
+    "leg4_return_nonce": "516a19d200aa087ee558737b5b200c1cba28cad50d5edaddf769eb9115f56196",
+    "permit2_expiry_epoch": 1786036794,
+    "pftl_binding_height": 776,
+    "pftl_state_root_prefix": "10dfb17b640a6974",
+    "pricing_nav_epoch": 5,
+    "pricing_reserve_packet_hash": "78c9fce35e0dc1ad9a7bd5b25b34e432c606fc38889e1543d5242cff12fe637bb0a508aff3655d2e2e27ac872f88f289",
+    "replay_sweep": "CLEAN; deterministic branch-2 nonce derivation authorized because branch-1 literal values do not exist",
+    "route_epoch": 6,
+    "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+    "source_proof_kind_leg1": "sp1-ethereum-finality-v1",
+    "staged_policy": "only receipt-chain values, FIRE-10 ruled prover host/beacon endpoint, and U57 command contracts remain staged",
+    "u57_argv_contract": "/tmp/snaga-u57/argv-contracts.md"
+  },
+  "staged_field_sources": [
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg0-proxy-verify.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg0-proxy-verify.json",
+      "placeholder": "postfiat-node rpc --method status; postfiat-node rpc --method account_assets; postfiat-node rpc --method receipts; postfiat-node rpc --method tx; postfiat-node rpc --method batch_archive; cast call <PENDING-FIRE-TIME:verified-EVM-read>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value/command_template",
+      "packet": "native-leg0-proxy-verify.json",
+      "placeholder": "postfiat-node rpc --method status; postfiat-node rpc --method account_assets; postfiat-node rpc --method receipts; postfiat-node rpc --method tx; postfiat-node rpc --method batch_archive; cast call <PENDING-FIRE-TIME:verified-EVM-read>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg0-proxy-verify.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "nav-roundtrip-live-demo --evm-deposit-only --artifact-dir {artifact_dir} --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pftl-recipient pfab9b9228942e5c529633a13aa271d5297bec6353 --amount-atoms 10000000 --nonce 0xfe457c66ab796d980ffcabf557ae7c13c60eefca01a276e5b023e812418b04b6 --session-id native-v1-fire-20260806-leg1-deposit --resume && python3 scripts/native_prover_leaf.py --artifact-dir {artifact_dir} --source-rpc-url https://ethereum-rpc.publicnode.com --execution-rpc https://ethereum-rpc.publicnode.com --beacon-rpc PENDING-FIRE-TIME:beacon-endpoint --prover-host PENDING-FIRE-TIME:prover-ssh-target --remote-workdir /work/native-fire-20260806-leg1 && nav-roundtrip-live-demo --deposit-relay-only --claim-deposit --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --key-file /var/lib/postfiat/validator-0/validator_keys.json --artifact-dir {artifact_dir} --evm-deposit-report PENDING-FIRE-TIME:leg1-evm-deposit-report --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --policy-hash 5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158 --source-proof-kind sp1-ethereum-finality-v1 --source-proof-hash PENDING-FIRE-TIME:leg1-prover-proof-hash --source-public-values-hash PENDING-FIRE-TIME:leg1-prover-public-values-hash --proposer pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8 --proposer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --finalizer pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8 --finalizer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --claimer pfab9b9228942e5c529633a13aa271d5297bec6353 --claimer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json --expires-at-height 1776 --resume",
+      "source": "Krimp GPU Stage-B capture validation in flight; historical capture endpoint recovery",
+      "stage": "fire-time pre-leg1"
+    },
+    {
+      "json_pointer": "/executor/commands/1/9",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:beacon-endpoint",
+      "source": "Krimp GPU Stage-B capture validation in flight; historical capture endpoint recovery",
+      "stage": "fire-time pre-leg1"
+    },
+    {
+      "json_pointer": "/executor/commands/1/11",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:prover-ssh-target",
+      "source": "/tmp/krimp-gpu/instance.txt GPU stand-up evidence",
+      "stage": "fire-time pre-leg1"
+    },
+    {
+      "json_pointer": "/executor/commands/2/12",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:leg1-evm-deposit-report",
+      "source": "leg1 stage-1 evm-deposit.json receipt",
+      "stage": "post-leg1-deposit"
+    },
+    {
+      "json_pointer": "/executor/commands/2/28",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:leg1-prover-proof-hash",
+      "source": "leg1 stage-2 native_prover_leaf proof report",
+      "stage": "post-leg1-prover"
+    },
+    {
+      "json_pointer": "/executor/commands/2/30",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:leg1-prover-public-values-hash",
+      "source": "leg1 stage-2 native_prover_leaf proof report",
+      "stage": "post-leg1-prover"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/resolved_value",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "nav-roundtrip-live-demo --evm-deposit-only --artifact-dir {artifact_dir} --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pftl-recipient pfab9b9228942e5c529633a13aa271d5297bec6353 --amount-atoms 10000000 --nonce 0xfe457c66ab796d980ffcabf557ae7c13c60eefca01a276e5b023e812418b04b6 --session-id native-v1-fire-20260806-leg1-deposit --resume && python3 scripts/native_prover_leaf.py --artifact-dir {artifact_dir} --source-rpc-url https://ethereum-rpc.publicnode.com --execution-rpc https://ethereum-rpc.publicnode.com --beacon-rpc PENDING-FIRE-TIME:beacon-endpoint --prover-host PENDING-FIRE-TIME:prover-ssh-target --remote-workdir /work/native-fire-20260806-leg1 && nav-roundtrip-live-demo --deposit-relay-only --claim-deposit --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --key-file /var/lib/postfiat/validator-0/validator_keys.json --artifact-dir {artifact_dir} --evm-deposit-report PENDING-FIRE-TIME:leg1-evm-deposit-report --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --policy-hash 5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158 --source-proof-kind sp1-ethereum-finality-v1 --source-proof-hash PENDING-FIRE-TIME:leg1-prover-proof-hash --source-public-values-hash PENDING-FIRE-TIME:leg1-prover-public-values-hash --proposer pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8 --proposer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --finalizer pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8 --finalizer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --claimer pfab9b9228942e5c529633a13aa271d5297bec6353 --claimer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json --expires-at-height 1776 --resume",
+      "source": "Krimp GPU Stage-B capture validation in flight; historical capture endpoint recovery",
+      "stage": "fire-time pre-leg1"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "postfiat-node nav-roundtrip-live-demo --evm-deposit-only --artifact-dir <PENDING-FIRE-TIME:leg1-evm-artifact-dir> --source-rpc-url <PENDING-FIRE-TIME:source-rpc-url> --source-chain-id 1 --vault <PENDING-FIRE-TIME:vault-address> --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pftl-recipient pfab9b9228942e5c529633a13aa271d5297bec6353 --amount-atoms 10000000 --nonce <PENDING-FIRE-TIME:leg1-nonce> --session-id <PENDING-FIRE-TIME:leg1-session-id> --resume && postfiat-node nav-roundtrip-live-demo --deposit-relay-only --claim-deposit --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --artifact-dir <PENDING-FIRE-TIME:leg1-relay-artifact-dir> --evm-deposit-report <PENDING-FIRE-TIME:leg1-evm-deposit-report> --source-rpc-url <PENDING-FIRE-TIME:source-rpc-url> --source-chain-id 1 --vault <PENDING-FIRE-TIME:vault-address> --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --policy-hash db6be8d07e88d1d6e7033248541fa8d7e0a6c8403c7c9c175cb67d2a247d9d0aeb6a0efe14c83a11e32ffab609117f8d --proposer <PENDING-FIRE-TIME:route-proposer> --attestor <PENDING-FIRE-TIME:route-attestor> --finalizer <PENDING-FIRE-TIME:route-finalizer> --claimer pfab9b9228942e5c529633a13aa271d5297bec6353 --proposer-key-file <PENDING-FIRE-TIME:proposer-key-file> --attestor-key-file <PENDING-FIRE-TIME:attestor-key-file> --finalizer-key-file <PENDING-FIRE-TIME:finalizer-key-file> --claimer-key-file <PENDING-FIRE-TIME:claimer-key-file> --expires-at-height <PENDING-FIRE-TIME:expires-at-height> --resume",
+      "source": "leg1 stage-1 evm-deposit.json receipt",
+      "stage": "post-leg1-deposit"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/1/9",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:beacon-endpoint",
+      "source": "Krimp GPU Stage-B capture validation in flight; historical capture endpoint recovery",
+      "stage": "fire-time pre-leg1"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/1/11",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:prover-ssh-target",
+      "source": "/tmp/krimp-gpu/instance.txt GPU stand-up evidence",
+      "stage": "fire-time pre-leg1"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/2/12",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:leg1-evm-deposit-report",
+      "source": "leg1 stage-1 evm-deposit.json receipt",
+      "stage": "post-leg1-deposit"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/2/28",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:leg1-prover-proof-hash",
+      "source": "leg1 stage-2 native_prover_leaf proof report",
+      "stage": "post-leg1-prover"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/2/30",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:leg1-prover-public-values-hash",
+      "source": "leg1 stage-2 native_prover_leaf proof report",
+      "stage": "post-leg1-prover"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value/command_template",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "postfiat-node nav-roundtrip-live-demo --evm-deposit-only --artifact-dir <PENDING-FIRE-TIME:leg1-evm-artifact-dir> --source-rpc-url <PENDING-FIRE-TIME:source-rpc-url> --source-chain-id 1 --vault <PENDING-FIRE-TIME:vault-address> --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pftl-recipient pfab9b9228942e5c529633a13aa271d5297bec6353 --amount-atoms 10000000 --nonce <PENDING-FIRE-TIME:leg1-nonce> --session-id <PENDING-FIRE-TIME:leg1-session-id> --resume && postfiat-node nav-roundtrip-live-demo --deposit-relay-only --claim-deposit --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --artifact-dir <PENDING-FIRE-TIME:leg1-relay-artifact-dir> --evm-deposit-report <PENDING-FIRE-TIME:leg1-evm-deposit-report> --source-rpc-url <PENDING-FIRE-TIME:source-rpc-url> --source-chain-id 1 --vault <PENDING-FIRE-TIME:vault-address> --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --policy-hash db6be8d07e88d1d6e7033248541fa8d7e0a6c8403c7c9c175cb67d2a247d9d0aeb6a0efe14c83a11e32ffab609117f8d --proposer <PENDING-FIRE-TIME:route-proposer> --attestor <PENDING-FIRE-TIME:route-attestor> --finalizer <PENDING-FIRE-TIME:route-finalizer> --claimer pfab9b9228942e5c529633a13aa271d5297bec6353 --proposer-key-file <PENDING-FIRE-TIME:proposer-key-file> --attestor-key-file <PENDING-FIRE-TIME:attestor-key-file> --finalizer-key-file <PENDING-FIRE-TIME:finalizer-key-file> --claimer-key-file <PENDING-FIRE-TIME:claimer-key-file> --expires-at-height <PENDING-FIRE-TIME:expires-at-height> --resume",
+      "source": "leg1 stage-1 evm-deposit.json receipt",
+      "stage": "post-leg1-deposit"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg2a-order-reserve.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg2a-order-reserve.json",
+      "placeholder": "postfiat-node pftl-submit-certified-asset-ops --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --ops-file <PENDING-FIRE-TIME:leg2a-ops-file> --artifact-dir <PENDING-FIRE-TIME:leg2a-artifact-dir> --resume",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/executor/command_template",
+      "packet": "native-leg2a-order-reserve.json",
+      "placeholder": "postfiat-node pftl-submit-certified-asset-ops --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --ops-file <PENDING-FIRE-TIME:leg2a-ops-file> --artifact-dir <PENDING-FIRE-TIME:leg2a-artifact-dir> --resume",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/primary_order_reserve/reservation_id",
+      "packet": "native-leg2a-order-reserve.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg2a-order-reserve.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg2a-order-reserve.json",
+      "placeholder": "<PENDING-FIRE-TIME:holder-custody-materialization-path>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg2a-order-reserve.json",
+      "placeholder": "PENDING-FIRE-TIME:expires-at-height",
+      "source": "S4 live fleet height plus 1000",
+      "stage": "post-leg4"
+    },
+    {
+      "json_pointer": "/resolved_fields/3/source_value",
+      "packet": "native-leg2a-order-reserve.json",
+      "placeholder": "PENDING-FIRE-TIME:fresh-reservation-id",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg2b-primary-subscribe.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg2b-primary-subscribe.json",
+      "placeholder": "postfiat-node pftl-submit-certified-asset-ops --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --ops-file <PENDING-FIRE-TIME:leg2b-ops-file> --artifact-dir <PENDING-FIRE-TIME:leg2b-artifact-dir> --resume",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/executor/command_template",
+      "packet": "native-leg2b-primary-subscribe.json",
+      "placeholder": "postfiat-node pftl-submit-certified-asset-ops --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --ops-file <PENDING-FIRE-TIME:leg2b-ops-file> --artifact-dir <PENDING-FIRE-TIME:leg2b-artifact-dir> --resume",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/reservation_id",
+      "packet": "native-leg2b-primary-subscribe.json",
+      "placeholder": "PENDING-FIRE-TIME:leg2a-receipt-reservation-id",
+      "source": "leg2a finalized order-reserve receipt reservation_id",
+      "stage": "post-leg2a"
+    },
+    {
+      "json_pointer": "/primary_subscribe/reservation_id",
+      "packet": "native-leg2b-primary-subscribe.json",
+      "placeholder": "PENDING-FIRE-TIME:leg2a-receipt-reservation-id",
+      "source": "leg2a finalized order-reserve receipt reservation_id",
+      "stage": "post-leg2a"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg2b-primary-subscribe.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg2b-primary-subscribe.json",
+      "placeholder": "<PENDING-FIRE-TIME:holder-custody-materialization-path>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg2b-primary-subscribe.json",
+      "placeholder": "PENDING-FIRE-TIME:fresh-subscription-nonce",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "postfiat-node pftl-submit-certified-asset-ops --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --ops-file <PENDING-FIRE-TIME:leg3a-ops-file> --artifact-dir <PENDING-FIRE-TIME:leg3a-artifact-dir> --resume && postfiat-node pftl-uniswap-receipt-witness --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --receipt-hash <PENDING-FIRE-TIME:leg3a-receipt-hash> --output <PENDING-FIRE-TIME:leg3a-receipt-witness>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/executor/command_template",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "postfiat-node pftl-submit-certified-asset-ops --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --ops-file <PENDING-FIRE-TIME:leg3a-ops-file> --artifact-dir <PENDING-FIRE-TIME:leg3a-artifact-dir> --resume && postfiat-node pftl-uniswap-receipt-witness --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --receipt-hash <PENDING-FIRE-TIME:leg3a-receipt-hash> --output <PENDING-FIRE-TIME:leg3a-receipt-witness>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/reservation_id",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "PENDING-FIRE-TIME:leg2a-receipt-reservation-id",
+      "source": "leg2a finalized order-reserve receipt reservation_id",
+      "stage": "post-leg2a"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "<PENDING-FIRE-TIME:holder-custody-materialization-path>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "PENDING-FIRE-TIME:destination-deadline-seconds",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/3/source_value",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "PENDING-FIRE-TIME:ethereum-packet-digest",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/4/source_value",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "PENDING-FIRE-TIME:ethereum-packet-schema-version",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/5/source_value",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "PENDING-FIRE-TIME:fresh-export-nonce",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/6/source_value",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "PENDING-FIRE-TIME:fresh-export-packet-hash",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/7/source_value",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "PENDING-FIRE-TIME:refund-delay-blocks",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "python3 scripts/a666-mainnet-accept-and-mint.py --execute --receipt-witness <PENDING-FIRE-TIME:leg3a-receipt-witness> --proof-dir <PENDING-FIRE-TIME:proof-dir> --state-file <PENDING-FIRE-TIME:leg3b-state-file> --expected-finalized-height <PENDING-FIRE-TIME:leg3a-finalized-height>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/executor/commands/0/3",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3b-controller-address",
+      "source": "leg3a finalized export receipt/witness and controller proof material",
+      "stage": "post-leg3a"
+    },
+    {
+      "json_pointer": "/executor/commands/0/5",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3b-accept-mint-calldata",
+      "source": "leg3a finalized export receipt/witness and controller proof material",
+      "stage": "post-leg3a"
+    },
+    {
+      "json_pointer": "/executor/commands/0/17",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3b-fee-ceiling-wei",
+      "source": "fire-time EVM owner nonce/base-fee/ETH-USD quote and cap check",
+      "stage": "fire-time pre-leg3b"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/resolved_value/commands/0/3",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3b-controller-address",
+      "source": "leg3a finalized export receipt/witness and controller proof material",
+      "stage": "post-leg3a"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/resolved_value/commands/0/5",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3b-accept-mint-calldata",
+      "source": "leg3a finalized export receipt/witness and controller proof material",
+      "stage": "post-leg3a"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/resolved_value/commands/0/17",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3b-fee-ceiling-wei",
+      "source": "fire-time EVM owner nonce/base-fee/ETH-USD quote and cap check",
+      "stage": "fire-time pre-leg3b"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value/command_template",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "python3 scripts/a666-mainnet-accept-and-mint.py --execute --receipt-witness <PENDING-FIRE-TIME:leg3a-receipt-witness> --proof-dir <PENDING-FIRE-TIME:proof-dir> --state-file <PENDING-FIRE-TIME:leg3b-state-file> --expected-finalized-height <PENDING-FIRE-TIME:leg3a-finalized-height>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "python3 scripts/native_evm_leaf_send.py --stakehub-home /home/postfiat/.stakehub --chain-id 1 --rpc-url https://ethereum-rpc.publicnode.com --recipient 0xe01eaf76f155b2759402b39fe126b5a81655f424 --amount-wei 10000000000000000 --max-fee-wei 5666645628000 --label leg3b0-signer-funding --report <PENDING-FIRE-TIME:leg3b0-report>",
+      "source": "leg3b0 status-1 funding receipt",
+      "stage": "post-leg3b0"
+    },
+    {
+      "json_pointer": "/executor/commands/0/17",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3b0-report",
+      "source": "leg3b0 status-1 funding receipt",
+      "stage": "post-leg3b0"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "python3 scripts/native_evm_leaf_send.py --stakehub-home /home/postfiat/.stakehub --chain-id 1 --rpc-url https://ethereum-rpc.publicnode.com --recipient 0xe01eaf76f155b2759402b39fe126b5a81655f424 --amount-wei 10000000000000000 --max-fee-wei 5666645628000 --label leg3b0-signer-funding --report <PENDING-FIRE-TIME:leg3b0-report>",
+      "source": "leg3b0 status-1 funding receipt",
+      "stage": "post-leg3b0"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "python3 scripts/native_evm_leaf_send.py --stakehub-home <PENDING-FIRE-TIME:stakehub-home> --chain-id 1 --rpc-url <PENDING-FIRE-TIME:ethereum-rpc-url> --recipient 0xe01eaf76f155b2759402b39fe126b5a81655f424 --amount-wei 10000000000000000 --max-fee-wei 5666645628000 --label leg3b0-signer-funding --report <PENDING-FIRE-TIME:leg3b0-report>",
+      "source": "leg3b0 status-1 funding receipt",
+      "stage": "post-leg3b0"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/resolved_value/commands/0/17",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3b0-report",
+      "source": "leg3b0 status-1 funding receipt",
+      "stage": "post-leg3b0"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value/command_template",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "python3 scripts/native_evm_leaf_send.py --stakehub-home <PENDING-FIRE-TIME:stakehub-home> --chain-id 1 --rpc-url <PENDING-FIRE-TIME:ethereum-rpc-url> --recipient 0xe01eaf76f155b2759402b39fe126b5a81655f424 --amount-wei 10000000000000000 --max-fee-wei 5666645628000 --label leg3b0-signer-funding --report <PENDING-FIRE-TIME:leg3b0-report>",
+      "source": "leg3b0 status-1 funding receipt",
+      "stage": "post-leg3b0"
+    },
+    {
+      "json_pointer": "/resolved_fields/3/source_value",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3c-approve-wa666-permit2.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3c-approve-wa666-permit2.json",
+      "placeholder": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5','data':'<PENDING-FIRE-TIME:erc20-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3c','value_wei':0,'gas_usd':0},timeout=1200)))\"",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/executor/commands/0/17",
+      "packet": "native-leg3c-approve-wa666-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3c-fee-ceiling-wei",
+      "source": "fire-time EVM owner nonce/base-fee/ETH-USD quote and cap check",
+      "stage": "fire-time pre-leg3c"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg3c-approve-wa666-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/0/17",
+      "packet": "native-leg3c-approve-wa666-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3c-fee-ceiling-wei",
+      "source": "fire-time EVM owner nonce/base-fee/ETH-USD quote and cap check",
+      "stage": "fire-time pre-leg3c"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value/command_template",
+      "packet": "native-leg3c-approve-wa666-permit2.json",
+      "placeholder": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5','data':'<PENDING-FIRE-TIME:erc20-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3c','value_wei':0,'gas_usd':0},timeout=1200)))\"",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg3c-approve-wa666-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3d-permit2-wa666-router.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3d-permit2-wa666-router.json",
+      "placeholder": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0x000000000022D473030F116dDEE9F6B43aC78BA3','data':'<PENDING-FIRE-TIME:permit2-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3d','value_wei':0,'gas_usd':0},timeout=1200)))\"",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/executor/commands/0/17",
+      "packet": "native-leg3d-permit2-wa666-router.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3d-fee-ceiling-wei",
+      "source": "fire-time EVM owner nonce/base-fee/ETH-USD quote and cap check",
+      "stage": "fire-time pre-leg3d"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg3d-permit2-wa666-router.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/0/17",
+      "packet": "native-leg3d-permit2-wa666-router.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3d-fee-ceiling-wei",
+      "source": "fire-time EVM owner nonce/base-fee/ETH-USD quote and cap check",
+      "stage": "fire-time pre-leg3d"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value/command_template",
+      "packet": "native-leg3d-permit2-wa666-router.json",
+      "placeholder": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0x000000000022D473030F116dDEE9F6B43aC78BA3','data':'<PENDING-FIRE-TIME:permit2-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3d','value_wei':0,'gas_usd':0},timeout=1200)))\"",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg3d-permit2-wa666-router.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3e-swap-wa666-usdc.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3e-swap-wa666-usdc.json",
+      "placeholder": "python3 scripts/pftl-uniswap-mainnet-swap.py --direction wa666-to-usdc --amount-in-atoms 11027135 --min-out-atoms PENDING-FIRE-TIME --deadline-epoch PENDING-FIRE-TIME --execute --packet-sha256 <PENDING-FIRE-TIME>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/executor/commands/0/17",
+      "packet": "native-leg3e-swap-wa666-usdc.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3e-fee-ceiling-wei",
+      "source": "fire-time EVM owner nonce/base-fee/ETH-USD quote and cap check",
+      "stage": "fire-time pre-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg3e-swap-wa666-usdc.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/resolved_value/commands/0/17",
+      "packet": "native-leg3e-swap-wa666-usdc.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3e-fee-ceiling-wei",
+      "source": "fire-time EVM owner nonce/base-fee/ETH-USD quote and cap check",
+      "stage": "fire-time pre-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value/command_template",
+      "packet": "native-leg3e-swap-wa666-usdc.json",
+      "placeholder": "python3 scripts/pftl-uniswap-mainnet-swap.py --direction wa666-to-usdc --amount-in-atoms 11027135 --min-out-atoms PENDING-FIRE-TIME --deadline-epoch PENDING-FIRE-TIME --execute --packet-sha256 <PENDING-FIRE-TIME>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/3/source_value",
+      "packet": "native-leg3e-swap-wa666-usdc.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/resolved_fields/5/source_value",
+      "packet": "native-leg3e-swap-wa666-usdc.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/amount_atoms",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3e-receipt-usdc-output-atoms",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48','data':'<PENDING-FIRE-TIME:erc20-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3f','value_wei':0,'gas_usd':0},timeout=1200)))\"",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/executor/commands/0/5",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3f-erc20-approve-calldata",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/executor/commands/0/17",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3f-fee-ceiling-wei",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/0/5",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3f-erc20-approve-calldata",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/0/17",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3f-fee-ceiling-wei",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value/command_template",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48','data':'<PENDING-FIRE-TIME:erc20-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3f','value_wei':0,'gas_usd':0},timeout=1200)))\"",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/amount_atoms",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3e-receipt-usdc-output-atoms",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0x000000000022D473030F116dDEE9F6B43aC78BA3','data':'<PENDING-FIRE-TIME:permit2-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3g','value_wei':0,'gas_usd':0},timeout=1200)))\"",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/executor/commands/0/5",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3g-permit2-approve-calldata",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/executor/commands/0/17",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3g-fee-ceiling-wei",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/0/5",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3g-permit2-approve-calldata",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/0/17",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3g-fee-ceiling-wei",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value/command_template",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0x000000000022D473030F116dDEE9F6B43aC78BA3','data':'<PENDING-FIRE-TIME:permit2-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3g','value_wei':0,'gas_usd':0},timeout=1200)))\"",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/amount_atoms",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3e-receipt-usdc-output-atoms",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "python3 scripts/pftl-uniswap-mainnet-swap.py --direction usdc-to-wa666 --amount-in-atoms PENDING-FIRE-TIME --min-out-atoms PENDING-FIRE-TIME --deadline-epoch PENDING-FIRE-TIME --execute --packet-sha256 <PENDING-FIRE-TIME>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/executor/commands/0/5",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3h-swap-calldata",
+      "source": "leg3e finalized Ethereum receipt output and S2 fresh fork simulation",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/executor/commands/0/17",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3h-fee-ceiling-wei",
+      "source": "leg3e finalized Ethereum receipt output and S2 fresh fork simulation",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/min_out_atoms",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/0/5",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3h-swap-calldata",
+      "source": "leg3e finalized Ethereum receipt output and S2 fresh fork simulation",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/0/17",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3h-fee-ceiling-wei",
+      "source": "leg3e finalized Ethereum receipt output and S2 fresh fork simulation",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value/command_template",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "python3 scripts/pftl-uniswap-mainnet-swap.py --direction usdc-to-wa666 --amount-in-atoms PENDING-FIRE-TIME --min-out-atoms PENDING-FIRE-TIME --deadline-epoch PENDING-FIRE-TIME --execute --packet-sha256 <PENDING-FIRE-TIME>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/amount_atoms",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3h-receipt-wa666-output-atoms",
+      "source": "leg3e finalized Ethereum receipt output and S2 fresh fork simulation",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PHASE 1 (one execution): env POSTFIAT_SIGNER_SOCKET=/run/user/1000/postfiat-constrained-signer/a666-signer.sock python3 scripts/a666-mainnet-burn-for-return.py --execute --amount-atoms <PENDING-FIRE-TIME:leg3h-wa666-output-atoms> --return-nonce <PENDING-FIRE-TIME:return-nonce> --ethereum-sender 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pftl-recipient pfab9b9228942e5c529633a13aa271d5297bec6353. Require the status-1 burn receipt. PHASE 2: driver injects the phase-1 tx_hash as burn_event_hash and submits pftl_uniswap_return_import through pftl-submit-certified-asset-ops. Any phase mismatch is STOP-no-retry.",
+      "source": "leg3e finalized Ethereum receipt output and S2 fresh fork simulation",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/executor/phases/0/commands/0/6",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3h-wa666-output-atoms",
+      "source": "leg3e finalized Ethereum receipt output and S2 fresh fork simulation",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/amount_atoms",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3h-wa666-output-atoms",
+      "source": "leg3e finalized Ethereum receipt output and S2 fresh fork simulation",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/burn_height",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:ethereum-burn-height",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/external_event_proof",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:checkpoint-certificate-receipt-proof-and-log-index",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/finalized_height",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:pftl-finalized-height",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:return-nonce",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/resolved_fields/3/source_value",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "<PENDING-FIRE-TIME:operator-key-file>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/4/source_value",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:route-operator-account",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/5/source_value",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:return-nonce",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/6/source_value",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:route-operator-account",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/amount_atoms",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "PENDING-FIRE-TIME:leg4-import-receipt-a666-atoms",
+      "source": "leg4 finalized return-import receipt and S4 primary-redeem arithmetic",
+      "stage": "post-leg4"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "postfiat-node pftl-submit-certified-asset-ops --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --ops-file <PENDING-FIRE-TIME:leg5a-ops-file> --artifact-dir <PENDING-FIRE-TIME:leg5a-artifact-dir> --resume",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/executor/command_template",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "postfiat-node pftl-submit-certified-asset-ops --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --ops-file <PENDING-FIRE-TIME:leg5a-ops-file> --artifact-dir <PENDING-FIRE-TIME:leg5a-artifact-dir> --resume",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/expires_at_height",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "PENDING-FIRE-TIME:expires-at-height",
+      "source": "S4 live fleet height plus 1000",
+      "stage": "post-leg4"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/min_settlement_value_atoms",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "PENDING-FIRE-TIME:floor-ceil-redemption-payout",
+      "source": "leg4 finalized return-import receipt and S4 primary-redeem arithmetic",
+      "stage": "post-leg4"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/nav_amount_atoms",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "PENDING-FIRE-TIME:leg4-import-receipt-a666-atoms",
+      "source": "leg4 finalized return-import receipt and S4 primary-redeem arithmetic",
+      "stage": "post-leg4"
+    },
+    {
+      "json_pointer": "/primary_redeem/amount_atoms",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "PENDING-FIRE-TIME:leg4-import-receipt-a666-atoms",
+      "source": "leg4 finalized return-import receipt and S4 primary-redeem arithmetic",
+      "stage": "post-leg4"
+    },
+    {
+      "json_pointer": "/primary_redeem/min_payout_atoms",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "<PENDING-FIRE-TIME:holder-custody-materialization-path>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "PENDING-FIRE-TIME:fresh-redemption-nonce",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/amount_atoms",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5a-receipt-pfUSDC-payout-atoms",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "nav-roundtrip-live-demo --burn-to-redeem-only --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --key-file /var/lib/postfiat/validator-0/validator_keys.json --artifact-dir {artifact_dir} --nav-exit-report PENDING-FIRE-TIME:leg5a-redemption-derived-nav-exit-report --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --owner pfab9b9228942e5c529633a13aa271d5297bec6353 --owner-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json --destination-ref evm-erc20:1:0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --amount-atoms PENDING-FIRE-TIME:leg5a-pfUSDC-payout-atoms --resume && nav-roundtrip-live-demo --evm-withdrawal-only --data-dir /var/lib/postfiat/validator-0 --artifact-dir {artifact_dir} --burn-to-redeem-report PENDING-FIRE-TIME:leg5b-burn-report --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --verifier 0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --signatures-file PENDING-FIRE-TIME:withdrawal-signatures-file --session-id native-v1-fire-20260806-leg5b-bridge-out --resume && nav-roundtrip-live-demo --pftl-settle-only --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --key-file /var/lib/postfiat/validator-0/validator_keys.json --artifact-dir {artifact_dir} --evm-withdrawal-report PENDING-FIRE-TIME:leg5b-withdrawal-report --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --settlement-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --resume",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/executor/commands/0/11",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5a-redemption-derived-nav-exit-report",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/executor/commands/0/21",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5a-pfUSDC-payout-atoms",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/executor/commands/1/7",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5b-burn-report",
+      "source": "leg5b preceding burn/withdrawal stage report",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/executor/commands/1/23",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:withdrawal-signatures-file",
+      "source": "leg5b preceding burn/withdrawal stage report",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/executor/commands/2/11",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5b-withdrawal-report",
+      "source": "leg5b preceding burn/withdrawal stage report",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "nav-roundtrip-live-demo --burn-to-redeem-only --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --key-file /var/lib/postfiat/validator-0/validator_keys.json --artifact-dir {artifact_dir} --nav-exit-report PENDING-FIRE-TIME:leg5a-redemption-derived-nav-exit-report --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --owner pfab9b9228942e5c529633a13aa271d5297bec6353 --owner-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json --destination-ref evm-erc20:1:0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --amount-atoms PENDING-FIRE-TIME:leg5a-pfUSDC-payout-atoms --resume && nav-roundtrip-live-demo --evm-withdrawal-only --data-dir /var/lib/postfiat/validator-0 --artifact-dir {artifact_dir} --burn-to-redeem-report PENDING-FIRE-TIME:leg5b-burn-report --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --verifier 0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --signatures-file PENDING-FIRE-TIME:withdrawal-signatures-file --session-id native-v1-fire-20260806-leg5b-bridge-out --resume && nav-roundtrip-live-demo --pftl-settle-only --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --key-file /var/lib/postfiat/validator-0/validator_keys.json --artifact-dir {artifact_dir} --evm-withdrawal-report PENDING-FIRE-TIME:leg5b-withdrawal-report --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --settlement-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --resume",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "postfiat-node nav-roundtrip-live-demo --burn-to-redeem-only --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --artifact-dir <PENDING-FIRE-TIME:leg5b-burn-artifact-dir> --nav-exit-report <PENDING-FIRE-TIME:leg5a-redemption-derived-nav-exit-report> --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --owner pfab9b9228942e5c529633a13aa271d5297bec6353 --owner-key-file <PENDING-FIRE-TIME:owner-key-file> --destination-ref evm-erc20:1:0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --amount-atoms <PENDING-FIRE-TIME:leg5a-pfUSDC-payout-atoms> --resume && postfiat-node nav-roundtrip-live-demo --evm-withdrawal-only --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --artifact-dir <PENDING-FIRE-TIME:leg5b-withdrawal-artifact-dir> --burn-to-redeem-report <PENDING-FIRE-TIME:leg5b-burn-report> --source-rpc-url <PENDING-FIRE-TIME:source-rpc-url> --source-chain-id 1 --vault <PENDING-FIRE-TIME:vault-address> --verifier <PENDING-FIRE-TIME:verifier-address> --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --signatures-file <PENDING-FIRE-TIME:withdrawal-signatures-file> --session-id <PENDING-FIRE-TIME:leg5b-session-id> --resume && postfiat-node nav-roundtrip-live-demo --pftl-settle-only --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --artifact-dir <PENDING-FIRE-TIME:leg5b-settle-artifact-dir> --evm-withdrawal-report <PENDING-FIRE-TIME:leg5b-withdrawal-report> --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --settlement-key-file <PENDING-FIRE-TIME:settlement-key-file> --resume",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/resolved_value/commands/0/11",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5a-redemption-derived-nav-exit-report",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/resolved_value/commands/0/21",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5a-pfUSDC-payout-atoms",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/resolved_value/commands/1/7",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5b-burn-report",
+      "source": "leg5b preceding burn/withdrawal stage report",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/resolved_value/commands/1/23",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:withdrawal-signatures-file",
+      "source": "leg5b preceding burn/withdrawal stage report",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/resolved_value/commands/2/11",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5b-withdrawal-report",
+      "source": "leg5b preceding burn/withdrawal stage report",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value/command_template",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "postfiat-node nav-roundtrip-live-demo --burn-to-redeem-only --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --artifact-dir <PENDING-FIRE-TIME:leg5b-burn-artifact-dir> --nav-exit-report <PENDING-FIRE-TIME:leg5a-redemption-derived-nav-exit-report> --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --owner pfab9b9228942e5c529633a13aa271d5297bec6353 --owner-key-file <PENDING-FIRE-TIME:owner-key-file> --destination-ref evm-erc20:1:0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --amount-atoms <PENDING-FIRE-TIME:leg5a-pfUSDC-payout-atoms> --resume && postfiat-node nav-roundtrip-live-demo --evm-withdrawal-only --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --artifact-dir <PENDING-FIRE-TIME:leg5b-withdrawal-artifact-dir> --burn-to-redeem-report <PENDING-FIRE-TIME:leg5b-burn-report> --source-rpc-url <PENDING-FIRE-TIME:source-rpc-url> --source-chain-id 1 --vault <PENDING-FIRE-TIME:vault-address> --verifier <PENDING-FIRE-TIME:verifier-address> --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --signatures-file <PENDING-FIRE-TIME:withdrawal-signatures-file> --session-id <PENDING-FIRE-TIME:leg5b-session-id> --resume && postfiat-node nav-roundtrip-live-demo --pftl-settle-only --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --artifact-dir <PENDING-FIRE-TIME:leg5b-settle-artifact-dir> --evm-withdrawal-report <PENDING-FIRE-TIME:leg5b-withdrawal-report> --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --settlement-key-file <PENDING-FIRE-TIME:settlement-key-file> --resume",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/3/source_value",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    }
+  ],
+  "staged_fields": [
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg0-proxy-verify.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg0-proxy-verify.json",
+      "placeholder": "postfiat-node rpc --method status; postfiat-node rpc --method account_assets; postfiat-node rpc --method receipts; postfiat-node rpc --method tx; postfiat-node rpc --method batch_archive; cast call <PENDING-FIRE-TIME:verified-EVM-read>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value/command_template",
+      "packet": "native-leg0-proxy-verify.json",
+      "placeholder": "postfiat-node rpc --method status; postfiat-node rpc --method account_assets; postfiat-node rpc --method receipts; postfiat-node rpc --method tx; postfiat-node rpc --method batch_archive; cast call <PENDING-FIRE-TIME:verified-EVM-read>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg0-proxy-verify.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "nav-roundtrip-live-demo --evm-deposit-only --artifact-dir {artifact_dir} --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pftl-recipient pfab9b9228942e5c529633a13aa271d5297bec6353 --amount-atoms 10000000 --nonce 0xfe457c66ab796d980ffcabf557ae7c13c60eefca01a276e5b023e812418b04b6 --session-id native-v1-fire-20260806-leg1-deposit --resume && python3 scripts/native_prover_leaf.py --artifact-dir {artifact_dir} --source-rpc-url https://ethereum-rpc.publicnode.com --execution-rpc https://ethereum-rpc.publicnode.com --beacon-rpc PENDING-FIRE-TIME:beacon-endpoint --prover-host PENDING-FIRE-TIME:prover-ssh-target --remote-workdir /work/native-fire-20260806-leg1 && nav-roundtrip-live-demo --deposit-relay-only --claim-deposit --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --key-file /var/lib/postfiat/validator-0/validator_keys.json --artifact-dir {artifact_dir} --evm-deposit-report PENDING-FIRE-TIME:leg1-evm-deposit-report --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --policy-hash 5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158 --source-proof-kind sp1-ethereum-finality-v1 --source-proof-hash PENDING-FIRE-TIME:leg1-prover-proof-hash --source-public-values-hash PENDING-FIRE-TIME:leg1-prover-public-values-hash --proposer pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8 --proposer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --finalizer pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8 --finalizer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --claimer pfab9b9228942e5c529633a13aa271d5297bec6353 --claimer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json --expires-at-height 1776 --resume",
+      "source": "Krimp GPU Stage-B capture validation in flight; historical capture endpoint recovery",
+      "stage": "fire-time pre-leg1"
+    },
+    {
+      "json_pointer": "/executor/commands/1/9",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:beacon-endpoint",
+      "source": "Krimp GPU Stage-B capture validation in flight; historical capture endpoint recovery",
+      "stage": "fire-time pre-leg1"
+    },
+    {
+      "json_pointer": "/executor/commands/1/11",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:prover-ssh-target",
+      "source": "/tmp/krimp-gpu/instance.txt GPU stand-up evidence",
+      "stage": "fire-time pre-leg1"
+    },
+    {
+      "json_pointer": "/executor/commands/2/12",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:leg1-evm-deposit-report",
+      "source": "leg1 stage-1 evm-deposit.json receipt",
+      "stage": "post-leg1-deposit"
+    },
+    {
+      "json_pointer": "/executor/commands/2/28",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:leg1-prover-proof-hash",
+      "source": "leg1 stage-2 native_prover_leaf proof report",
+      "stage": "post-leg1-prover"
+    },
+    {
+      "json_pointer": "/executor/commands/2/30",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:leg1-prover-public-values-hash",
+      "source": "leg1 stage-2 native_prover_leaf proof report",
+      "stage": "post-leg1-prover"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/resolved_value",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "nav-roundtrip-live-demo --evm-deposit-only --artifact-dir {artifact_dir} --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pftl-recipient pfab9b9228942e5c529633a13aa271d5297bec6353 --amount-atoms 10000000 --nonce 0xfe457c66ab796d980ffcabf557ae7c13c60eefca01a276e5b023e812418b04b6 --session-id native-v1-fire-20260806-leg1-deposit --resume && python3 scripts/native_prover_leaf.py --artifact-dir {artifact_dir} --source-rpc-url https://ethereum-rpc.publicnode.com --execution-rpc https://ethereum-rpc.publicnode.com --beacon-rpc PENDING-FIRE-TIME:beacon-endpoint --prover-host PENDING-FIRE-TIME:prover-ssh-target --remote-workdir /work/native-fire-20260806-leg1 && nav-roundtrip-live-demo --deposit-relay-only --claim-deposit --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --key-file /var/lib/postfiat/validator-0/validator_keys.json --artifact-dir {artifact_dir} --evm-deposit-report PENDING-FIRE-TIME:leg1-evm-deposit-report --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --policy-hash 5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158 --source-proof-kind sp1-ethereum-finality-v1 --source-proof-hash PENDING-FIRE-TIME:leg1-prover-proof-hash --source-public-values-hash PENDING-FIRE-TIME:leg1-prover-public-values-hash --proposer pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8 --proposer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --finalizer pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8 --finalizer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --claimer pfab9b9228942e5c529633a13aa271d5297bec6353 --claimer-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json --expires-at-height 1776 --resume",
+      "source": "Krimp GPU Stage-B capture validation in flight; historical capture endpoint recovery",
+      "stage": "fire-time pre-leg1"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "postfiat-node nav-roundtrip-live-demo --evm-deposit-only --artifact-dir <PENDING-FIRE-TIME:leg1-evm-artifact-dir> --source-rpc-url <PENDING-FIRE-TIME:source-rpc-url> --source-chain-id 1 --vault <PENDING-FIRE-TIME:vault-address> --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pftl-recipient pfab9b9228942e5c529633a13aa271d5297bec6353 --amount-atoms 10000000 --nonce <PENDING-FIRE-TIME:leg1-nonce> --session-id <PENDING-FIRE-TIME:leg1-session-id> --resume && postfiat-node nav-roundtrip-live-demo --deposit-relay-only --claim-deposit --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --artifact-dir <PENDING-FIRE-TIME:leg1-relay-artifact-dir> --evm-deposit-report <PENDING-FIRE-TIME:leg1-evm-deposit-report> --source-rpc-url <PENDING-FIRE-TIME:source-rpc-url> --source-chain-id 1 --vault <PENDING-FIRE-TIME:vault-address> --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --policy-hash db6be8d07e88d1d6e7033248541fa8d7e0a6c8403c7c9c175cb67d2a247d9d0aeb6a0efe14c83a11e32ffab609117f8d --proposer <PENDING-FIRE-TIME:route-proposer> --attestor <PENDING-FIRE-TIME:route-attestor> --finalizer <PENDING-FIRE-TIME:route-finalizer> --claimer pfab9b9228942e5c529633a13aa271d5297bec6353 --proposer-key-file <PENDING-FIRE-TIME:proposer-key-file> --attestor-key-file <PENDING-FIRE-TIME:attestor-key-file> --finalizer-key-file <PENDING-FIRE-TIME:finalizer-key-file> --claimer-key-file <PENDING-FIRE-TIME:claimer-key-file> --expires-at-height <PENDING-FIRE-TIME:expires-at-height> --resume",
+      "source": "leg1 stage-1 evm-deposit.json receipt",
+      "stage": "post-leg1-deposit"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/1/9",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:beacon-endpoint",
+      "source": "Krimp GPU Stage-B capture validation in flight; historical capture endpoint recovery",
+      "stage": "fire-time pre-leg1"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/1/11",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:prover-ssh-target",
+      "source": "/tmp/krimp-gpu/instance.txt GPU stand-up evidence",
+      "stage": "fire-time pre-leg1"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/2/12",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:leg1-evm-deposit-report",
+      "source": "leg1 stage-1 evm-deposit.json receipt",
+      "stage": "post-leg1-deposit"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/2/28",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:leg1-prover-proof-hash",
+      "source": "leg1 stage-2 native_prover_leaf proof report",
+      "stage": "post-leg1-prover"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/2/30",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME:leg1-prover-public-values-hash",
+      "source": "leg1 stage-2 native_prover_leaf proof report",
+      "stage": "post-leg1-prover"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value/command_template",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "postfiat-node nav-roundtrip-live-demo --evm-deposit-only --artifact-dir <PENDING-FIRE-TIME:leg1-evm-artifact-dir> --source-rpc-url <PENDING-FIRE-TIME:source-rpc-url> --source-chain-id 1 --vault <PENDING-FIRE-TIME:vault-address> --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pftl-recipient pfab9b9228942e5c529633a13aa271d5297bec6353 --amount-atoms 10000000 --nonce <PENDING-FIRE-TIME:leg1-nonce> --session-id <PENDING-FIRE-TIME:leg1-session-id> --resume && postfiat-node nav-roundtrip-live-demo --deposit-relay-only --claim-deposit --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --artifact-dir <PENDING-FIRE-TIME:leg1-relay-artifact-dir> --evm-deposit-report <PENDING-FIRE-TIME:leg1-evm-deposit-report> --source-rpc-url <PENDING-FIRE-TIME:source-rpc-url> --source-chain-id 1 --vault <PENDING-FIRE-TIME:vault-address> --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --policy-hash db6be8d07e88d1d6e7033248541fa8d7e0a6c8403c7c9c175cb67d2a247d9d0aeb6a0efe14c83a11e32ffab609117f8d --proposer <PENDING-FIRE-TIME:route-proposer> --attestor <PENDING-FIRE-TIME:route-attestor> --finalizer <PENDING-FIRE-TIME:route-finalizer> --claimer pfab9b9228942e5c529633a13aa271d5297bec6353 --proposer-key-file <PENDING-FIRE-TIME:proposer-key-file> --attestor-key-file <PENDING-FIRE-TIME:attestor-key-file> --finalizer-key-file <PENDING-FIRE-TIME:finalizer-key-file> --claimer-key-file <PENDING-FIRE-TIME:claimer-key-file> --expires-at-height <PENDING-FIRE-TIME:expires-at-height> --resume",
+      "source": "leg1 stage-1 evm-deposit.json receipt",
+      "stage": "post-leg1-deposit"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg1-bridge-in.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg2a-order-reserve.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg2a-order-reserve.json",
+      "placeholder": "postfiat-node pftl-submit-certified-asset-ops --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --ops-file <PENDING-FIRE-TIME:leg2a-ops-file> --artifact-dir <PENDING-FIRE-TIME:leg2a-artifact-dir> --resume",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/executor/command_template",
+      "packet": "native-leg2a-order-reserve.json",
+      "placeholder": "postfiat-node pftl-submit-certified-asset-ops --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --ops-file <PENDING-FIRE-TIME:leg2a-ops-file> --artifact-dir <PENDING-FIRE-TIME:leg2a-artifact-dir> --resume",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/primary_order_reserve/reservation_id",
+      "packet": "native-leg2a-order-reserve.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg2a-order-reserve.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg2a-order-reserve.json",
+      "placeholder": "<PENDING-FIRE-TIME:holder-custody-materialization-path>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg2a-order-reserve.json",
+      "placeholder": "PENDING-FIRE-TIME:expires-at-height",
+      "source": "S4 live fleet height plus 1000",
+      "stage": "post-leg4"
+    },
+    {
+      "json_pointer": "/resolved_fields/3/source_value",
+      "packet": "native-leg2a-order-reserve.json",
+      "placeholder": "PENDING-FIRE-TIME:fresh-reservation-id",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg2b-primary-subscribe.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg2b-primary-subscribe.json",
+      "placeholder": "postfiat-node pftl-submit-certified-asset-ops --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --ops-file <PENDING-FIRE-TIME:leg2b-ops-file> --artifact-dir <PENDING-FIRE-TIME:leg2b-artifact-dir> --resume",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/executor/command_template",
+      "packet": "native-leg2b-primary-subscribe.json",
+      "placeholder": "postfiat-node pftl-submit-certified-asset-ops --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --ops-file <PENDING-FIRE-TIME:leg2b-ops-file> --artifact-dir <PENDING-FIRE-TIME:leg2b-artifact-dir> --resume",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/reservation_id",
+      "packet": "native-leg2b-primary-subscribe.json",
+      "placeholder": "PENDING-FIRE-TIME:leg2a-receipt-reservation-id",
+      "source": "leg2a finalized order-reserve receipt reservation_id",
+      "stage": "post-leg2a"
+    },
+    {
+      "json_pointer": "/primary_subscribe/reservation_id",
+      "packet": "native-leg2b-primary-subscribe.json",
+      "placeholder": "PENDING-FIRE-TIME:leg2a-receipt-reservation-id",
+      "source": "leg2a finalized order-reserve receipt reservation_id",
+      "stage": "post-leg2a"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg2b-primary-subscribe.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg2b-primary-subscribe.json",
+      "placeholder": "<PENDING-FIRE-TIME:holder-custody-materialization-path>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg2b-primary-subscribe.json",
+      "placeholder": "PENDING-FIRE-TIME:fresh-subscription-nonce",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "postfiat-node pftl-submit-certified-asset-ops --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --ops-file <PENDING-FIRE-TIME:leg3a-ops-file> --artifact-dir <PENDING-FIRE-TIME:leg3a-artifact-dir> --resume && postfiat-node pftl-uniswap-receipt-witness --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --receipt-hash <PENDING-FIRE-TIME:leg3a-receipt-hash> --output <PENDING-FIRE-TIME:leg3a-receipt-witness>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/executor/command_template",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "postfiat-node pftl-submit-certified-asset-ops --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --ops-file <PENDING-FIRE-TIME:leg3a-ops-file> --artifact-dir <PENDING-FIRE-TIME:leg3a-artifact-dir> --resume && postfiat-node pftl-uniswap-receipt-witness --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --receipt-hash <PENDING-FIRE-TIME:leg3a-receipt-hash> --output <PENDING-FIRE-TIME:leg3a-receipt-witness>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/reservation_id",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "PENDING-FIRE-TIME:leg2a-receipt-reservation-id",
+      "source": "leg2a finalized order-reserve receipt reservation_id",
+      "stage": "post-leg2a"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "<PENDING-FIRE-TIME:holder-custody-materialization-path>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "PENDING-FIRE-TIME:destination-deadline-seconds",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/3/source_value",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "PENDING-FIRE-TIME:ethereum-packet-digest",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/4/source_value",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "PENDING-FIRE-TIME:ethereum-packet-schema-version",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/5/source_value",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "PENDING-FIRE-TIME:fresh-export-nonce",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/6/source_value",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "PENDING-FIRE-TIME:fresh-export-packet-hash",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/7/source_value",
+      "packet": "native-leg3a-export-debit.json",
+      "placeholder": "PENDING-FIRE-TIME:refund-delay-blocks",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "python3 scripts/a666-mainnet-accept-and-mint.py --execute --receipt-witness <PENDING-FIRE-TIME:leg3a-receipt-witness> --proof-dir <PENDING-FIRE-TIME:proof-dir> --state-file <PENDING-FIRE-TIME:leg3b-state-file> --expected-finalized-height <PENDING-FIRE-TIME:leg3a-finalized-height>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/executor/commands/0/3",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3b-controller-address",
+      "source": "leg3a finalized export receipt/witness and controller proof material",
+      "stage": "post-leg3a"
+    },
+    {
+      "json_pointer": "/executor/commands/0/5",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3b-accept-mint-calldata",
+      "source": "leg3a finalized export receipt/witness and controller proof material",
+      "stage": "post-leg3a"
+    },
+    {
+      "json_pointer": "/executor/commands/0/17",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3b-fee-ceiling-wei",
+      "source": "fire-time EVM owner nonce/base-fee/ETH-USD quote and cap check",
+      "stage": "fire-time pre-leg3b"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/resolved_value/commands/0/3",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3b-controller-address",
+      "source": "leg3a finalized export receipt/witness and controller proof material",
+      "stage": "post-leg3a"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/resolved_value/commands/0/5",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3b-accept-mint-calldata",
+      "source": "leg3a finalized export receipt/witness and controller proof material",
+      "stage": "post-leg3a"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/resolved_value/commands/0/17",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3b-fee-ceiling-wei",
+      "source": "fire-time EVM owner nonce/base-fee/ETH-USD quote and cap check",
+      "stage": "fire-time pre-leg3b"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value/command_template",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "python3 scripts/a666-mainnet-accept-and-mint.py --execute --receipt-witness <PENDING-FIRE-TIME:leg3a-receipt-witness> --proof-dir <PENDING-FIRE-TIME:proof-dir> --state-file <PENDING-FIRE-TIME:leg3b-state-file> --expected-finalized-height <PENDING-FIRE-TIME:leg3a-finalized-height>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg3b-accept-mint.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "python3 scripts/native_evm_leaf_send.py --stakehub-home /home/postfiat/.stakehub --chain-id 1 --rpc-url https://ethereum-rpc.publicnode.com --recipient 0xe01eaf76f155b2759402b39fe126b5a81655f424 --amount-wei 10000000000000000 --max-fee-wei 5666645628000 --label leg3b0-signer-funding --report <PENDING-FIRE-TIME:leg3b0-report>",
+      "source": "leg3b0 status-1 funding receipt",
+      "stage": "post-leg3b0"
+    },
+    {
+      "json_pointer": "/executor/commands/0/17",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3b0-report",
+      "source": "leg3b0 status-1 funding receipt",
+      "stage": "post-leg3b0"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "python3 scripts/native_evm_leaf_send.py --stakehub-home /home/postfiat/.stakehub --chain-id 1 --rpc-url https://ethereum-rpc.publicnode.com --recipient 0xe01eaf76f155b2759402b39fe126b5a81655f424 --amount-wei 10000000000000000 --max-fee-wei 5666645628000 --label leg3b0-signer-funding --report <PENDING-FIRE-TIME:leg3b0-report>",
+      "source": "leg3b0 status-1 funding receipt",
+      "stage": "post-leg3b0"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "python3 scripts/native_evm_leaf_send.py --stakehub-home <PENDING-FIRE-TIME:stakehub-home> --chain-id 1 --rpc-url <PENDING-FIRE-TIME:ethereum-rpc-url> --recipient 0xe01eaf76f155b2759402b39fe126b5a81655f424 --amount-wei 10000000000000000 --max-fee-wei 5666645628000 --label leg3b0-signer-funding --report <PENDING-FIRE-TIME:leg3b0-report>",
+      "source": "leg3b0 status-1 funding receipt",
+      "stage": "post-leg3b0"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/resolved_value/commands/0/17",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3b0-report",
+      "source": "leg3b0 status-1 funding receipt",
+      "stage": "post-leg3b0"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value/command_template",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "python3 scripts/native_evm_leaf_send.py --stakehub-home <PENDING-FIRE-TIME:stakehub-home> --chain-id 1 --rpc-url <PENDING-FIRE-TIME:ethereum-rpc-url> --recipient 0xe01eaf76f155b2759402b39fe126b5a81655f424 --amount-wei 10000000000000000 --max-fee-wei 5666645628000 --label leg3b0-signer-funding --report <PENDING-FIRE-TIME:leg3b0-report>",
+      "source": "leg3b0 status-1 funding receipt",
+      "stage": "post-leg3b0"
+    },
+    {
+      "json_pointer": "/resolved_fields/3/source_value",
+      "packet": "native-leg3b0-signer-funding.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3c-approve-wa666-permit2.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3c-approve-wa666-permit2.json",
+      "placeholder": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5','data':'<PENDING-FIRE-TIME:erc20-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3c','value_wei':0,'gas_usd':0},timeout=1200)))\"",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/executor/commands/0/17",
+      "packet": "native-leg3c-approve-wa666-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3c-fee-ceiling-wei",
+      "source": "fire-time EVM owner nonce/base-fee/ETH-USD quote and cap check",
+      "stage": "fire-time pre-leg3c"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg3c-approve-wa666-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/0/17",
+      "packet": "native-leg3c-approve-wa666-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3c-fee-ceiling-wei",
+      "source": "fire-time EVM owner nonce/base-fee/ETH-USD quote and cap check",
+      "stage": "fire-time pre-leg3c"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value/command_template",
+      "packet": "native-leg3c-approve-wa666-permit2.json",
+      "placeholder": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5','data':'<PENDING-FIRE-TIME:erc20-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3c','value_wei':0,'gas_usd':0},timeout=1200)))\"",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg3c-approve-wa666-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3d-permit2-wa666-router.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3d-permit2-wa666-router.json",
+      "placeholder": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0x000000000022D473030F116dDEE9F6B43aC78BA3','data':'<PENDING-FIRE-TIME:permit2-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3d','value_wei':0,'gas_usd':0},timeout=1200)))\"",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/executor/commands/0/17",
+      "packet": "native-leg3d-permit2-wa666-router.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3d-fee-ceiling-wei",
+      "source": "fire-time EVM owner nonce/base-fee/ETH-USD quote and cap check",
+      "stage": "fire-time pre-leg3d"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg3d-permit2-wa666-router.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/0/17",
+      "packet": "native-leg3d-permit2-wa666-router.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3d-fee-ceiling-wei",
+      "source": "fire-time EVM owner nonce/base-fee/ETH-USD quote and cap check",
+      "stage": "fire-time pre-leg3d"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value/command_template",
+      "packet": "native-leg3d-permit2-wa666-router.json",
+      "placeholder": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0x000000000022D473030F116dDEE9F6B43aC78BA3','data':'<PENDING-FIRE-TIME:permit2-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3d','value_wei':0,'gas_usd':0},timeout=1200)))\"",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg3d-permit2-wa666-router.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3e-swap-wa666-usdc.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3e-swap-wa666-usdc.json",
+      "placeholder": "python3 scripts/pftl-uniswap-mainnet-swap.py --direction wa666-to-usdc --amount-in-atoms 11027135 --min-out-atoms PENDING-FIRE-TIME --deadline-epoch PENDING-FIRE-TIME --execute --packet-sha256 <PENDING-FIRE-TIME>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/executor/commands/0/17",
+      "packet": "native-leg3e-swap-wa666-usdc.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3e-fee-ceiling-wei",
+      "source": "fire-time EVM owner nonce/base-fee/ETH-USD quote and cap check",
+      "stage": "fire-time pre-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg3e-swap-wa666-usdc.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/resolved_value/commands/0/17",
+      "packet": "native-leg3e-swap-wa666-usdc.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3e-fee-ceiling-wei",
+      "source": "fire-time EVM owner nonce/base-fee/ETH-USD quote and cap check",
+      "stage": "fire-time pre-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value/command_template",
+      "packet": "native-leg3e-swap-wa666-usdc.json",
+      "placeholder": "python3 scripts/pftl-uniswap-mainnet-swap.py --direction wa666-to-usdc --amount-in-atoms 11027135 --min-out-atoms PENDING-FIRE-TIME --deadline-epoch PENDING-FIRE-TIME --execute --packet-sha256 <PENDING-FIRE-TIME>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/3/source_value",
+      "packet": "native-leg3e-swap-wa666-usdc.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/resolved_fields/5/source_value",
+      "packet": "native-leg3e-swap-wa666-usdc.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/amount_atoms",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3e-receipt-usdc-output-atoms",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48','data':'<PENDING-FIRE-TIME:erc20-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3f','value_wei':0,'gas_usd':0},timeout=1200)))\"",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/executor/commands/0/5",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3f-erc20-approve-calldata",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/executor/commands/0/17",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3f-fee-ceiling-wei",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/0/5",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3f-erc20-approve-calldata",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/0/17",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3f-fee-ceiling-wei",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value/command_template",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48','data':'<PENDING-FIRE-TIME:erc20-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3f','value_wei':0,'gas_usd':0},timeout=1200)))\"",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg3f-approve-usdc-permit2.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/amount_atoms",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3e-receipt-usdc-output-atoms",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0x000000000022D473030F116dDEE9F6B43aC78BA3','data':'<PENDING-FIRE-TIME:permit2-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3g','value_wei':0,'gas_usd':0},timeout=1200)))\"",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/executor/commands/0/5",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3g-permit2-approve-calldata",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/executor/commands/0/17",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3g-fee-ceiling-wei",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/0/5",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3g-permit2-approve-calldata",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/0/17",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3g-fee-ceiling-wei",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value/command_template",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "python3 -c \"import json,sys; sys.path.insert(0,'/home/postfiat/repos/StakeHub'); from stakehub.agentd import call; print(json.dumps(call({'op':'evm_contract_tx','to':'0x000000000022D473030F116dDEE9F6B43aC78BA3','data':'<PENDING-FIRE-TIME:permit2-approve-calldata>','rpc_url':'https://ethereum-rpc.publicnode.com','chain_id':1,'label':'a666-native-v1-leg3g','value_wei':0,'gas_usd':0},timeout=1200)))\"",
+      "source": "leg3e finalized Ethereum receipt USDC output plus fire-time EVM nonce/quote",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg3g-permit2-usdc-router.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/amount_atoms",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3e-receipt-usdc-output-atoms",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "python3 scripts/pftl-uniswap-mainnet-swap.py --direction usdc-to-wa666 --amount-in-atoms PENDING-FIRE-TIME --min-out-atoms PENDING-FIRE-TIME --deadline-epoch PENDING-FIRE-TIME --execute --packet-sha256 <PENDING-FIRE-TIME>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/executor/commands/0/5",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3h-swap-calldata",
+      "source": "leg3e finalized Ethereum receipt output and S2 fresh fork simulation",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/executor/commands/0/17",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3h-fee-ceiling-wei",
+      "source": "leg3e finalized Ethereum receipt output and S2 fresh fork simulation",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/min_out_atoms",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/0/5",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3h-swap-calldata",
+      "source": "leg3e finalized Ethereum receipt output and S2 fresh fork simulation",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value/commands/0/17",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3h-fee-ceiling-wei",
+      "source": "leg3e finalized Ethereum receipt output and S2 fresh fork simulation",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value/command_template",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "python3 scripts/pftl-uniswap-mainnet-swap.py --direction usdc-to-wa666 --amount-in-atoms PENDING-FIRE-TIME --min-out-atoms PENDING-FIRE-TIME --deadline-epoch PENDING-FIRE-TIME --execute --packet-sha256 <PENDING-FIRE-TIME>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg3h-swap-usdc-wa666.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/amount_atoms",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3h-receipt-wa666-output-atoms",
+      "source": "leg3e finalized Ethereum receipt output and S2 fresh fork simulation",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PHASE 1 (one execution): env POSTFIAT_SIGNER_SOCKET=/run/user/1000/postfiat-constrained-signer/a666-signer.sock python3 scripts/a666-mainnet-burn-for-return.py --execute --amount-atoms <PENDING-FIRE-TIME:leg3h-wa666-output-atoms> --return-nonce <PENDING-FIRE-TIME:return-nonce> --ethereum-sender 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pftl-recipient pfab9b9228942e5c529633a13aa271d5297bec6353. Require the status-1 burn receipt. PHASE 2: driver injects the phase-1 tx_hash as burn_event_hash and submits pftl_uniswap_return_import through pftl-submit-certified-asset-ops. Any phase mismatch is STOP-no-retry.",
+      "source": "leg3e finalized Ethereum receipt output and S2 fresh fork simulation",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/executor/phases/0/commands/0/6",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3h-wa666-output-atoms",
+      "source": "leg3e finalized Ethereum receipt output and S2 fresh fork simulation",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/amount_atoms",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:leg3h-wa666-output-atoms",
+      "source": "leg3e finalized Ethereum receipt output and S2 fresh fork simulation",
+      "stage": "post-leg3e"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/burn_height",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:ethereum-burn-height",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/external_event_proof",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:checkpoint-certificate-receipt-proof-and-log-index",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/finalized_height",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:pftl-finalized-height",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:return-nonce",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/resolved_fields/3/source_value",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "<PENDING-FIRE-TIME:operator-key-file>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/4/source_value",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:route-operator-account",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/5/source_value",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:return-nonce",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/6/source_value",
+      "packet": "native-leg4-return-burn-import.json",
+      "placeholder": "PENDING-FIRE-TIME:route-operator-account",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/amount_atoms",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "PENDING-FIRE-TIME:leg4-import-receipt-a666-atoms",
+      "source": "leg4 finalized return-import receipt and S4 primary-redeem arithmetic",
+      "stage": "post-leg4"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "postfiat-node pftl-submit-certified-asset-ops --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --ops-file <PENDING-FIRE-TIME:leg5a-ops-file> --artifact-dir <PENDING-FIRE-TIME:leg5a-artifact-dir> --resume",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/executor/command_template",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "postfiat-node pftl-submit-certified-asset-ops --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --ops-file <PENDING-FIRE-TIME:leg5a-ops-file> --artifact-dir <PENDING-FIRE-TIME:leg5a-artifact-dir> --resume",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/expires_at_height",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "PENDING-FIRE-TIME:expires-at-height",
+      "source": "S4 live fleet height plus 1000",
+      "stage": "post-leg4"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/min_settlement_value_atoms",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "PENDING-FIRE-TIME:floor-ceil-redemption-payout",
+      "source": "leg4 finalized return-import receipt and S4 primary-redeem arithmetic",
+      "stage": "post-leg4"
+    },
+    {
+      "json_pointer": "/ops_file_template/operations/0/operation/nav_amount_atoms",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "PENDING-FIRE-TIME:leg4-import-receipt-a666-atoms",
+      "source": "leg4 finalized return-import receipt and S4 primary-redeem arithmetic",
+      "stage": "post-leg4"
+    },
+    {
+      "json_pointer": "/primary_redeem/amount_atoms",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "PENDING-FIRE-TIME:leg4-import-receipt-a666-atoms",
+      "source": "leg4 finalized return-import receipt and S4 primary-redeem arithmetic",
+      "stage": "post-leg4"
+    },
+    {
+      "json_pointer": "/primary_redeem/min_payout_atoms",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "<PENDING-FIRE-TIME:holder-custody-materialization-path>",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value",
+      "packet": "native-leg5a-primary-redeem.json",
+      "placeholder": "PENDING-FIRE-TIME:fresh-redemption-nonce",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/amount_atoms",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5a-receipt-pfUSDC-payout-atoms",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/budget_guard/driver_rule",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "execution with unresolved PENDING-FIRE-TIME ceiling on a spend leg is STOP-no-retry",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/command_template",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "nav-roundtrip-live-demo --burn-to-redeem-only --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --key-file /var/lib/postfiat/validator-0/validator_keys.json --artifact-dir {artifact_dir} --nav-exit-report PENDING-FIRE-TIME:leg5a-redemption-derived-nav-exit-report --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --owner pfab9b9228942e5c529633a13aa271d5297bec6353 --owner-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json --destination-ref evm-erc20:1:0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --amount-atoms PENDING-FIRE-TIME:leg5a-pfUSDC-payout-atoms --resume && nav-roundtrip-live-demo --evm-withdrawal-only --data-dir /var/lib/postfiat/validator-0 --artifact-dir {artifact_dir} --burn-to-redeem-report PENDING-FIRE-TIME:leg5b-burn-report --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --verifier 0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --signatures-file PENDING-FIRE-TIME:withdrawal-signatures-file --session-id native-v1-fire-20260806-leg5b-bridge-out --resume && nav-roundtrip-live-demo --pftl-settle-only --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --key-file /var/lib/postfiat/validator-0/validator_keys.json --artifact-dir {artifact_dir} --evm-withdrawal-report PENDING-FIRE-TIME:leg5b-withdrawal-report --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --settlement-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --resume",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/executor/commands/0/11",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5a-redemption-derived-nav-exit-report",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/executor/commands/0/21",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5a-pfUSDC-payout-atoms",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/executor/commands/1/7",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5b-burn-report",
+      "source": "leg5b preceding burn/withdrawal stage report",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/executor/commands/1/23",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:withdrawal-signatures-file",
+      "source": "leg5b preceding burn/withdrawal stage report",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/executor/commands/2/11",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5b-withdrawal-report",
+      "source": "leg5b preceding burn/withdrawal stage report",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/0/source_value",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME",
+      "source": "source-packet lineage placeholder; explicit stage resolver required",
+      "stage": "source-lineage-only"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/resolved_value",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "nav-roundtrip-live-demo --burn-to-redeem-only --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --key-file /var/lib/postfiat/validator-0/validator_keys.json --artifact-dir {artifact_dir} --nav-exit-report PENDING-FIRE-TIME:leg5a-redemption-derived-nav-exit-report --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --owner pfab9b9228942e5c529633a13aa271d5297bec6353 --owner-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/holder-key.json --destination-ref evm-erc20:1:0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --amount-atoms PENDING-FIRE-TIME:leg5a-pfUSDC-payout-atoms --resume && nav-roundtrip-live-demo --evm-withdrawal-only --data-dir /var/lib/postfiat/validator-0 --artifact-dir {artifact_dir} --burn-to-redeem-report PENDING-FIRE-TIME:leg5b-burn-report --source-rpc-url https://ethereum-rpc.publicnode.com --source-chain-id 1 --vault 0xaaa78fda7062efce769e95cd72fc55e507bc8183 --verifier 0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --signatures-file PENDING-FIRE-TIME:withdrawal-signatures-file --session-id native-v1-fire-20260806-leg5b-bridge-out --resume && nav-roundtrip-live-demo --pftl-settle-only --data-dir /var/lib/postfiat/validator-0 --topology /etc/postfiat/releases/pnok-private-fix-2246d25/topology.json --key-file /var/lib/postfiat/validator-0/validator_keys.json --artifact-dir {artifact_dir} --evm-withdrawal-report PENDING-FIRE-TIME:leg5b-withdrawal-report --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --settlement-key-file /home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/pfusdc-issuer-key.json --resume",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/1/source_value",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "postfiat-node nav-roundtrip-live-demo --burn-to-redeem-only --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --artifact-dir <PENDING-FIRE-TIME:leg5b-burn-artifact-dir> --nav-exit-report <PENDING-FIRE-TIME:leg5a-redemption-derived-nav-exit-report> --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --owner pfab9b9228942e5c529633a13aa271d5297bec6353 --owner-key-file <PENDING-FIRE-TIME:owner-key-file> --destination-ref evm-erc20:1:0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --amount-atoms <PENDING-FIRE-TIME:leg5a-pfUSDC-payout-atoms> --resume && postfiat-node nav-roundtrip-live-demo --evm-withdrawal-only --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --artifact-dir <PENDING-FIRE-TIME:leg5b-withdrawal-artifact-dir> --burn-to-redeem-report <PENDING-FIRE-TIME:leg5b-burn-report> --source-rpc-url <PENDING-FIRE-TIME:source-rpc-url> --source-chain-id 1 --vault <PENDING-FIRE-TIME:vault-address> --verifier <PENDING-FIRE-TIME:verifier-address> --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --signatures-file <PENDING-FIRE-TIME:withdrawal-signatures-file> --session-id <PENDING-FIRE-TIME:leg5b-session-id> --resume && postfiat-node nav-roundtrip-live-demo --pftl-settle-only --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --artifact-dir <PENDING-FIRE-TIME:leg5b-settle-artifact-dir> --evm-withdrawal-report <PENDING-FIRE-TIME:leg5b-withdrawal-report> --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --settlement-key-file <PENDING-FIRE-TIME:settlement-key-file> --resume",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/resolved_value/commands/0/11",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5a-redemption-derived-nav-exit-report",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/resolved_value/commands/0/21",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5a-pfUSDC-payout-atoms",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/resolved_value/commands/1/7",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5b-burn-report",
+      "source": "leg5b preceding burn/withdrawal stage report",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/resolved_value/commands/1/23",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:withdrawal-signatures-file",
+      "source": "leg5b preceding burn/withdrawal stage report",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/resolved_value/commands/2/11",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME:leg5b-withdrawal-report",
+      "source": "leg5b preceding burn/withdrawal stage report",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/2/source_value/command_template",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "postfiat-node nav-roundtrip-live-demo --burn-to-redeem-only --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --artifact-dir <PENDING-FIRE-TIME:leg5b-burn-artifact-dir> --nav-exit-report <PENDING-FIRE-TIME:leg5a-redemption-derived-nav-exit-report> --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --owner pfab9b9228942e5c529633a13aa271d5297bec6353 --owner-key-file <PENDING-FIRE-TIME:owner-key-file> --destination-ref evm-erc20:1:0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --amount-atoms <PENDING-FIRE-TIME:leg5a-pfUSDC-payout-atoms> --resume && postfiat-node nav-roundtrip-live-demo --evm-withdrawal-only --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --artifact-dir <PENDING-FIRE-TIME:leg5b-withdrawal-artifact-dir> --burn-to-redeem-report <PENDING-FIRE-TIME:leg5b-burn-report> --source-rpc-url <PENDING-FIRE-TIME:source-rpc-url> --source-chain-id 1 --vault <PENDING-FIRE-TIME:vault-address> --verifier <PENDING-FIRE-TIME:verifier-address> --usdc 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 --stakehub-wallet 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --signatures-file <PENDING-FIRE-TIME:withdrawal-signatures-file> --session-id <PENDING-FIRE-TIME:leg5b-session-id> --resume && postfiat-node nav-roundtrip-live-demo --pftl-settle-only --data-dir <PENDING-FIRE-TIME:pftl-data-dir> --topology <PENDING-FIRE-TIME:topology-file> --key-file <PENDING-FIRE-TIME:validator-key-file> --artifact-dir <PENDING-FIRE-TIME:leg5b-settle-artifact-dir> --evm-withdrawal-report <PENDING-FIRE-TIME:leg5b-withdrawal-report> --pfusdc 02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b --settlement-key-file <PENDING-FIRE-TIME:settlement-key-file> --resume",
+      "source": "leg5a finalized primary-redeem receipt",
+      "stage": "post-leg5a"
+    },
+    {
+      "json_pointer": "/resolved_fields/3/source_value",
+      "packet": "native-leg5b-bridge-out.json",
+      "placeholder": "PENDING-FIRE-TIME: SHA-256 must equal authorization-binding-native-v1.json before one execution.",
+      "source": "stage binding SHA confirmation ritual",
+      "stage": "stage preflight"
+    }
+  ],
+  "staged_fields_contract": "U58 exact packet + json_pointer + source + stage; resolved fields may not be exempted",
+  "stop_no_retro": "Any packet-byte edit, changed state pin, stale simulation, unresolved gas ceiling, or nonmatching packet SHA invalidates this skeleton and requires a new authorization binding. STOP-no-retry."
+}
