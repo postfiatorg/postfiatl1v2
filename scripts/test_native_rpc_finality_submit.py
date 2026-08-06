@@ -29,7 +29,7 @@ TX = {
 def status_response(**overrides):
     value = {
         "chain_id": "postfiat-wan-devnet-2",
-        "block_height": 776,
+        "block_height": 779,
         "block_tip_hash": "11" * 48,
         "state_root": "22" * 48,
         "node_id": "validator-0",
@@ -73,7 +73,7 @@ class RpcServer:
                         return
                     if outer.delay:
                         threading.Event().wait(0.2)
-                    response = outer.status if index == 0 else outer.finality
+                    response = outer.status if outer.requests[-1].get("method") == "status" else outer.finality
                     self.wfile.write(json.dumps(response, separators=(",", ":")).encode() + b"\n")
                     self.wfile.flush()
 
@@ -102,6 +102,11 @@ def invoke(tmp_path, rpc, **kwargs):
         "--socket-port", str(rpc.server.server_address[1]),
         "--readiness-timeout-ms", str(kwargs.pop("timeout_ms", 45000)),
     ]
+    mapping = kwargs.get("validator_ports")
+    if mapping is None:
+        port = rpc.server.server_address[1]
+        mapping = ",".join(f"validator-{index}:{port}" for index in range(6))
+    args.extend(["--validator-ports", mapping])
     code = mod.main(args)
     return code, output
 
@@ -117,7 +122,7 @@ def test_green_status_pins_and_finality_envelope(tmp_path, capsys):
     assert finality["version"] == mod.RPC_VERSION
     assert finality["id"] == "campaign"
     params = finality["params"]
-    assert params["proxy_required_current_height"] == 776
+    assert params["proxy_required_current_height"] == 779
     assert params["proxy_required_parent_hash"] == "11" * 48
     assert params["proxy_required_state_root"] == "22" * 48
     assert params["signed_asset_transaction_json"] == json.dumps(TX, separators=(",", ":"))
@@ -174,3 +179,59 @@ def test_malformed_status_socket_closed_timeout_and_bad_tx_stop(tmp_path):
             "--socket-port", str(rpc.server.server_address[1]),
         ])
     assert code == 2
+
+
+def test_proposer_routing_targets_validator_three(tmp_path):
+    with RpcServer(status_response(block_height=776), finality_response()) as initial, RpcServer(status_response(), finality_response()) as target:
+        mapping = ",".join([
+            f"validator-0:{initial.server.server_address[1]}",
+            f"validator-1:{initial.server.server_address[1]}",
+            f"validator-2:{initial.server.server_address[1]}",
+            f"validator-3:{target.server.server_address[1]}",
+            f"validator-4:{initial.server.server_address[1]}",
+            f"validator-5:{initial.server.server_address[1]}",
+        ])
+        code, _ = invoke(tmp_path, initial, validator_ports=mapping)
+    assert code == 0
+    assert not any(request.get("method") != "status" for request in initial.requests)
+    assert [request.get("method") for request in target.requests] == ["mempool_submit_signed_asset_transaction_finality"]
+
+
+def test_wrong_proposer_reroutes_once(tmp_path):
+    wrong = finality_response()
+    wrong["ok"] = False
+    wrong["error"] = {"code": "rpc_finality_wrong_proposer", "message": "retry the signed request at `validator-5`"}
+    with RpcServer(status_response(block_height=779), wrong) as initial, RpcServer(status_response(), finality_response()) as target:
+        mapping = ",".join([
+            f"validator-0:{initial.server.server_address[1]}",
+            f"validator-1:{initial.server.server_address[1]}",
+            f"validator-2:{initial.server.server_address[1]}",
+            f"validator-3:{initial.server.server_address[1]}",
+            f"validator-4:{initial.server.server_address[1]}",
+            f"validator-5:{target.server.server_address[1]}",
+        ])
+        code, output = invoke(tmp_path, initial, validator_ports=mapping)
+    assert code == 0
+    assert json.loads(output.read_text())["attempts"][0]["outcome"] == "rpc_finality_wrong_proposer"
+    assert len(json.loads(output.read_text())["attempts"]) == 2
+
+
+def test_wrong_proposer_exhaustion_attempts_each_validator_once(tmp_path):
+    servers = []
+    try:
+        for index in range(6):
+            response = finality_response()
+            response["ok"] = False
+            response["error"] = {"code": "rpc_finality_wrong_proposer", "message": f"retry the signed request at `validator-{(index + 1) % 6}`"}
+            server = RpcServer(status_response(block_height=779), response)
+            server.__enter__()
+            servers.append(server)
+        mapping = ",".join(f"validator-{index}:{server.server.server_address[1]}" for index, server in enumerate(servers))
+        code, output = invoke(tmp_path, servers[0], validator_ports=mapping)
+        assert code == 2
+        assert not output.exists()
+        # stdout is intentionally not used for a failed run; inspect each server's request count.
+        assert sum(1 for server in servers for request in server.requests if request.get("method") == "mempool_submit_signed_asset_transaction_finality") == 6
+    finally:
+        for server in servers:
+            server.__exit__(None, None, None)

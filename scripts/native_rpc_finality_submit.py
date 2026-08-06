@@ -4,12 +4,21 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import socket
 import sys
 from pathlib import Path
 
 RPC_VERSION = "postfiat-local-rpc-v1"
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+DEFAULT_VALIDATOR_PORTS = (
+    ("validator-0", 39660),
+    ("validator-1", 39651),
+    ("validator-2", 39652),
+    ("validator-3", 39653),
+    ("validator-4", 39654),
+    ("validator-5", 39655),
+)
 
 
 class StopError(RuntimeError):
@@ -66,6 +75,37 @@ def _result(response: dict, label: str) -> dict:
     return result
 
 
+def _validator_ports(value: str) -> dict[str, int]:
+    result: dict[str, int] = {}
+    for item in value.split(","):
+        try:
+            validator, port_text = item.split(":", 1)
+            port = int(port_text)
+        except (ValueError, AttributeError) as exc:
+            raise StopError(f"invalid validator port mapping: {item}") from exc
+        if not validator or not 1 <= port <= 65535 or validator in result:
+            raise StopError(f"invalid validator port mapping: {item}")
+        result[validator] = port
+    if not result:
+        raise StopError("validator port mapping is empty")
+    return result
+
+
+def _wrong_proposer(response: dict) -> str | None:
+    if response.get("ok") is not False:
+        return None
+    error = response.get("error")
+    if not isinstance(error, dict) or error.get("code") != "rpc_finality_wrong_proposer":
+        return None
+    message = error.get("message")
+    if not isinstance(message, str):
+        raise StopError("wrong-proposer response has no message")
+    match = re.search(r"retry the signed request at `([^`]+)`", message)
+    if not match:
+        raise StopError("wrong-proposer response omitted expected validator")
+    return match.group(1)
+
+
 def submit(args: argparse.Namespace) -> dict:
     _, signed_json = _load_signed_transaction(Path(args.signed_tx_file))
     timeout_seconds = max(0.001, args.readiness_timeout_ms / 1000.0)
@@ -78,15 +118,26 @@ def submit(args: argparse.Namespace) -> dict:
     # StatusReport serializes block_height, block_tip_hash, and state_root;
     # see postfiatl1v2 crates/types/src/core_chain.rs:450-480 and the RPC
     # status dispatch in crates/node/src/rpc_cli.rs:1033-1052.
-    finality_request = None
     with socket.create_connection((args.socket_host, args.socket_port), timeout=timeout_seconds) as sock:
         status = _result(_request(sock, status_request, timeout_seconds), "status")
-        required = ("block_height", "block_tip_hash", "state_root")
-        missing = [name for name in required if name not in status or status[name] in (None, "")]
-        if missing:
-            raise StopError("status missing finality pin field(s): " + ",".join(missing))
-        if not isinstance(status["block_height"], int) or isinstance(status["block_height"], bool):
-            raise StopError("status block_height must be an integer")
+    required = ("block_height", "block_tip_hash", "state_root")
+    missing = [name for name in required if name not in status or status[name] in (None, "")]
+    if missing:
+        raise StopError("status missing finality pin field(s): " + ",".join(missing))
+    if not isinstance(status["block_height"], int) or isinstance(status["block_height"], bool):
+        raise StopError("status block_height must be an integer")
+    validator_ports = _validator_ports(args.validator_ports)
+    sorted_validators = sorted(validator_ports)
+    next_height = status["block_height"] + 1
+    proposer = sorted_validators[next_height % len(sorted_validators)]
+    attempted: set[str] = set()
+    attempts: list[dict] = []
+    response = None
+    while len(attempted) < len(sorted_validators):
+        if proposer in attempted:
+            raise StopError("proposer routing repeated a validator")
+        attempted.add(proposer)
+        port = validator_ports[proposer]
         finality_request = {
             "version": RPC_VERSION,
             "id": args.id,
@@ -99,7 +150,26 @@ def submit(args: argparse.Namespace) -> dict:
                 "signed_asset_transaction_json": signed_json,
             },
         }
-        response = _request(sock, finality_request, timeout_seconds)
+        try:
+            with socket.create_connection((args.socket_host, port), timeout=timeout_seconds) as sock:
+                response = _request(sock, finality_request, timeout_seconds)
+        except OSError as exc:
+            attempts.append({"validator": proposer, "port": port, "height": next_height, "view": 0, "outcome": "socket_error"})
+            print(f"attempt validator={proposer} port={port} height={next_height} view=0 outcome=socket_error", file=sys.stderr)
+            raise StopError(f"finality RPC socket failed for {proposer}:{port}") from exc
+        wrong = _wrong_proposer(response)
+        if wrong is not None:
+            attempts.append({"validator": proposer, "port": port, "height": next_height, "view": 0, "outcome": "rpc_finality_wrong_proposer"})
+            print(f"attempt validator={proposer} port={port} height={next_height} view=0 outcome=rpc_finality_wrong_proposer", file=sys.stderr)
+            if wrong not in validator_ports:
+                raise StopError(f"wrong-proposer named unknown validator: {wrong}")
+            proposer = wrong
+            continue
+        attempts.append({"validator": proposer, "port": port, "height": next_height, "view": 0, "outcome": "response"})
+        print(f"attempt validator={proposer} port={port} height={next_height} view=0 outcome=response", file=sys.stderr)
+        break
+    if response is None:
+        raise StopError("proposer routing exhausted all validators")
     result = _result(response, "finality")
     finality = result.get("finality")
     if not isinstance(finality, dict):
@@ -119,7 +189,9 @@ def submit(args: argparse.Namespace) -> dict:
     end_height = header.get("height") if isinstance(header, dict) else None
     if not isinstance(tx_id, str) or not tx_id or not isinstance(end_height, int):
         raise StopError("finality response missing tx_id or block height")
-    return {"response": response, "tx_id": tx_id, "end_height": end_height, "round_ok": result["round_ok"]}
+    response_with_audit = dict(response)
+    response_with_audit["attempts"] = attempts
+    return {"response": response_with_audit, "tx_id": tx_id, "end_height": end_height, "round_ok": result["round_ok"], "attempts": attempts}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -129,6 +201,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", required=True)
     parser.add_argument("--socket-host", default="127.0.0.1")
     parser.add_argument("--socket-port", type=int, default=39660)
+    parser.add_argument(
+        "--validator-ports",
+        default=",".join(f"{name}:{port}" for name, port in DEFAULT_VALIDATOR_PORTS),
+    )
     parser.add_argument("--readiness-timeout-ms", type=int, default=45000)
     args = parser.parse_args(argv)
     try:

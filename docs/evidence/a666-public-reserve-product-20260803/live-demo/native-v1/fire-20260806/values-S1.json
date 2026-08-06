@@ -42,7 +42,7 @@
       "topology": "/etc/postfiat/releases/pnok-private-fix-2246d25/topology.json"
     },
     "leg1_relay_two_phase": {
-      "binding_sha256": "a3e68017954e5bd265cc76c6f353ea0c9a9d0217593acf2016d4e68bc18d3592",
+      "binding_sha256": "0e710949262b6722977b895b856320ee5e1ffb50f0a6afb5ed71616d647c1df9",
       "deployment_descriptor_file": "/tmp/krimp-exec-fire20260806/leg-1-reprove/deployment-descriptor.json",
       "deployment_descriptor_sha256": "eb271b08bea23552b0440fd1b2d804d6ff2523c1c9718d1547c05571da4d1805",
       "evm_deposit_json_sha256": "7ed608aef9d3295fa0325ecc07de8cee402df1e9b08c5c135a94c2589cd936ec",
@@ -87,12 +87,13 @@
         "submission_tool": {
           "commit": "90ef0ed",
           "path": "scripts/native_rpc_finality_submit.py",
-          "sha256": "fed5225f4436234ad169955a8880158598a3cebb53e110ac3d1f7fddb3bfbc72"
+          "sha256": "36d900647da01dbe6535ec7628ce8386ed207308d0577895240c7b63f0baa3fa"
         },
-        "tool_gates": "ok + finality.confirmed + receipt.accepted + round_ok; exit 2 is STOP-no-retry"
+        "tool_gates": "ok + finality.confirmed + receipt.accepted + round_ok; exit 2 is STOP-no-retry",
+        "routing_provenance": "submitter sha updated for proposer routing (U77); commands unchanged"
       },
       "reprove_provenance": "FIRE-17 live-deposit reprove; descriptor was hash-gated before capture.",
-      "resolution_rules_sha256": "fd3b9933291435d46f57ea46748e4334049f42e2e8986a5677169c2c4c845ea3",
+      "resolution_rules_sha256": "9067a8106b2a577b47edd339e6bfc88b4903e782dfb88cb61fd9ba224d3b956c",
       "stale_fire16_audit": {
         "location": "/tmp/krimp-exec-fire20260806/leg-1/stale-fire16/",
         "proof_calldata_sha256": "63601a4b2c0edf0ea29f4591abe4a91811292cc4ce9c421f9184e0d6e6c690f2",
