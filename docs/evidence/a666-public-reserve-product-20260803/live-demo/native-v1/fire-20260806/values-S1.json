@@ -1,0 +1,134 @@
+{
+  "stage": "S1",
+  "active_packets": [
+    "native-leg0-proxy-verify.json",
+    "native-leg1-bridge-in.json",
+    "native-leg2a-order-reserve.json",
+    "native-leg2b-primary-subscribe.json",
+    "native-leg3a-export-debit.json",
+    "native-leg3b0-signer-funding.json",
+    "native-leg3b-accept-mint.json",
+    "native-leg3c-approve-wa666-permit2.json",
+    "native-leg3d-permit2-wa666-router.json",
+    "native-leg3e-swap-wa666-usdc.json",
+    "native-leg3f-approve-usdc-permit2.json",
+    "native-leg3g-permit2-usdc-router.json",
+    "native-leg3h-swap-usdc-wa666.json",
+    "native-leg4-return-burn-import.json",
+    "native-leg5a-primary-redeem.json",
+    "native-leg5b-bridge-out.json"
+  ],
+  "resolved_values": {
+    "native-leg0-proxy-verify.json": {
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    },
+    "native-leg1-bridge-in.json": {
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    },
+    "native-leg2a-order-reserve.json": {
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
+      "/ops_file_template/operations/0/operation/expires_at_height": 1776
+    },
+    "native-leg2b-primary-subscribe.json": {
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
+      "/ops_file_template/operations/0/operation/subscription_nonce": "bc6aede459db85326aeb077b8adff7ba924f47c102a346084b437fca9c2deda5"
+    },
+    "native-leg3a-export-debit.json": {
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
+      "/ops_file_template/operations/0/operation/export_nonce": "e1799423cdaca561a8f7467339517425ac82aba86a15a2fc8e78c67f56d42da3",
+      "/ops_file_template/operations/0/operation/refund_delay_blocks": 100
+    },
+    "native-leg3b0-signer-funding.json": {
+      "/budget_guard/leg_ceiling_usdc": "0.0201",
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    },
+    "native-leg3b-accept-mint.json": {
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    },
+    "native-leg3c-approve-wa666-permit2.json": {
+      "/budget_guard/leg_ceiling_usdc": "0.0525",
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    },
+    "native-leg3d-permit2-wa666-router.json": {
+      "/budget_guard/leg_ceiling_usdc": "0.0286",
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    },
+    "native-leg3e-swap-wa666-usdc.json": {
+      "/amount_atoms": 11027135,
+      "/budget_guard/leg_ceiling_usdc": "0.1297",
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
+      "/harness": "/tmp/krimp-fire1b/fork-sims-values.txt",
+      "/min_out_atoms": 7816122
+    },
+    "native-leg3f-approve-usdc-permit2.json": {
+      "/budget_guard/leg_ceiling_usdc": "0.0525",
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    },
+    "native-leg3g-permit2-usdc-router.json": {
+      "/budget_guard/leg_ceiling_usdc": "0.0286",
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    },
+    "native-leg3h-swap-usdc-wa666.json": {
+      "/budget_guard/leg_ceiling_usdc": "0.1325",
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
+      "/harness": "/tmp/krimp-fire1b/fork-sims-values.txt"
+    },
+    "native-leg4-return-burn-import.json": {
+      "/budget_guard/leg_ceiling_usdc": "0.1910",
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    },
+    "native-leg5a-primary-redeem.json": {
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution.",
+      "/ops_file_template/operations/0/operation/redemption_nonce": "255206e04d1078f448560667842b64cfbe0f278e731b68ba5d14050cb2369939"
+    },
+    "native-leg5b-bridge-out.json": {
+      "/budget_guard/leg_ceiling_usdc": "0.2865",
+      "/fire_hash_confirmation": "SHA-256 must equal fire-20260806/binding-S1.json before one execution."
+    }
+  },
+  "binding_context": {
+    "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+    "route_epoch": 6,
+    "pricing_nav_epoch": 5,
+    "pricing_reserve_packet_hash": "78c9fce35e0dc1ad9a7bd5b25b34e432c606fc38889e1543d5242cff12fe637bb0a508aff3655d2e2e27ac872f88f289",
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "pftl_binding_height": 776,
+    "pftl_state_root_prefix": "10dfb17b640a6974",
+    "replay_sweep": "CLEAN; deterministic branch-2 nonce derivation authorized because branch-1 literal values do not exist",
+    "leg2a_expires_at_height": 1776,
+    "leg3a_refund_delay_blocks": 100,
+    "leg3e": {
+      "amount_in_atoms": 11027135,
+      "sim_block": 25696286,
+      "sim_block_hash": "0x05c48df05c746fb065e495887df17b99a5f65575f8375acedc155a3f2b5e0ae8",
+      "simulated_output_atoms": 8057858,
+      "min_out_atoms": 7816122,
+      "calldata_sha256": "3aa253bc429689ee803bef59a5169559d0f6ac9c3d15f77f8707bca384571c55",
+      "freshness_last_fire_block": 25696414,
+      "evidence": "/tmp/krimp-fire1b/fork-sims-values.txt"
+    },
+    "leg3h_s2_reference_only": {
+      "amount_in_source": "actual finalized leg3e USDC receipt output",
+      "sim_block": 25696286,
+      "reference_fill_atoms": 11013374,
+      "reference_min_out_atoms": 10682972,
+      "calldata_sha256": "733799a08305e558d652437e26b548b330f43e86666f1ac5f710aa9b2e2b6ee3",
+      "rule": "S2 must fresh re-simulate and rebind before fire."
+    },
+    "gas_usdc": {
+      "3b0": "0.0201",
+      "3c": "0.0525",
+      "3d": "0.0286",
+      "3e": "0.1297",
+      "3f": "0.0525",
+      "3g": "0.0286",
+      "3h": "0.1325",
+      "4-burn": "0.1910",
+      "5b": "0.2865",
+      "total": "0.9220",
+      "projection": "511.946845",
+      "cap": "530.000000",
+      "headroom": "18.053155"
+    }
+  }
+}
