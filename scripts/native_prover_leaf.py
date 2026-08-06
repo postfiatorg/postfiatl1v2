@@ -230,9 +230,11 @@ def _assert_public_values(values: dict, descriptor: dict, deposit_id: str, depos
         if actual.lower() != expected.lower():
             raise RuntimeError(f"capture public-values {name} mismatch")
     eq_hash("deposit_id", deposit_id)
-    actual_tx = "0x" + _bytes32(values.get("tx_hash"), "tx_hash")
-    if actual_tx.lower() != descriptor["deposit_tx"].lower():
-        raise RuntimeError("capture public-values tx_hash mismatch")
+    # PfUsdcEthereumIngressPublicValuesV1 has no tx_hash field
+    # (crates/types/src/pfusdc_tier4_types.rs:35-61).  The transaction binding
+    # is cryptographic through deposit_id: capture fetched the canonical
+    # receipt by descriptor deposit_tx, and the guest commits that same ID.
+    # The deposit_id assertion above therefore binds the receipt to the proof.
     if _address(values.get("vault_address"), "vault_address") != EXPECTED_VAULT_ADDRESS.lower():
         raise RuntimeError("capture public-values vault_address mismatch")
     if _address(values.get("token_address"), "token_address") != EXPECTED_TOKEN_ADDRESS.lower():

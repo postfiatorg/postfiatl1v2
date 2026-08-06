@@ -219,7 +219,6 @@ def test_public_values_are_independently_bound() -> None:
     deposit_id, _ = leaf._decode_deposit_log(_receipt(), descriptor, report)
     values = {
         "deposit_id": deposit_id,
-        "tx_hash": descriptor["deposit_tx"],
         "vault_address": descriptor["vault"],
         "token_address": leaf.EXPECTED_TOKEN_ADDRESS,
         "depositor": report["stakehub_wallet"],
@@ -231,7 +230,6 @@ def test_public_values_are_independently_bound() -> None:
     leaf._assert_public_values(values, descriptor, deposit_id, report)
     for key, bad in (
         ("deposit_id", "0x" + "33" * 32),
-        ("tx_hash", "0x" + "44" * 32),
         ("amount_atoms", descriptor["amount_atoms"] + 1),
         ("route_binding", "0x" + "55" * 32),
     ):

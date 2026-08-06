@@ -572,7 +572,7 @@ class FlowTests(unittest.TestCase):
         (out / "evm-deposit.json").write_text(json.dumps(deposit_report))
         deposit_id = "0x" + "33" * 32
         capture_values = {
-            "deposit_id": deposit_id, "tx_hash": "0x" + tx,
+            "deposit_id": deposit_id,
             "vault_address": leaf.EXPECTED_VAULT_ADDRESS,
             "token_address": leaf.EXPECTED_TOKEN_ADDRESS, "depositor": "0x" + depositor,
             "pftl_recipient": recipient, "amount_atoms": 10_000_000,
