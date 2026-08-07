@@ -8,13 +8,15 @@ PFTL1V2 is the workflow and economic source of truth: it records operations, rec
 
 ## 2. Current verified state (h778 checkpoint)
 
+Unit convention: every PFTL and EVM token quantity in this runbook is stated in 6-decimal atomic units (atoms) unless explicitly suffixed with a whole-token unit. Acceptance reads compare against atom values exactly.
+
 - PFTL propose is h777 and finalize is h778. Finalized deposit record `e54713583c1bb46e908e8f01f1c996966dc5c82281365c91092a27ae0852d02b`, transaction `ca562096…`, status `finalized`, expires at h1776.
 - Fleet is 6/6 at h778 with state root `b287451679a9d4d9`. The claim has not been submitted. No mutations have occurred since h778.
-- Ethereum deposit is mined: `0x016f9c5f9b99fc951cea7c539f7f791c2d753d35793296b2e284f96512575924`, block 25698310, 10,000,000 USDC atoms to vault `0xaaa78fda7062efce769e95cd72fc55e507bc8183`.
-- Wallet USDC is 74,161,443 and nonce is 304.
-- Holder `pfab9b9228942e5c529633a13aa271d5297bec6353` has pfUSDC balance 1,358,493.
-- Mainnet route backing is deposits_verified 422,210,781 minus claims_minted 412,210,781, leaving exactly 10,000,000 finalized unclaimed backing.
-- NAV cap is 287,859,297. The target is 297,859,297 at epoch 45.
+- Ethereum deposit is mined: `0x016f9c5f9b99fc951cea7c539f7f791c2d753d35793296b2e284f96512575924`, block 25698310, 10,000,000 USDC atoms (10.000000 USDC) to vault `0xaaa78fda7062efce769e95cd72fc55e507bc8183`.
+- Wallet USDC is 74,161,443 atoms (74.161443 USDC) and nonce is 304.
+- Holder `pfab9b9228942e5c529633a13aa271d5297bec6353` has pfUSDC balance 1,358,493 atoms (1.358493 pfUSDC).
+- Mainnet route backing is deposits_verified 422,210,781 atoms (422.210781 pfUSDC) minus claims_minted 412,210,781 atoms (412.210781 pfUSDC), leaving exactly 10,000,000 atoms (10.000000 pfUSDC) finalized unclaimed backing.
+- NAV cap is 287,859,297 atoms (287.859297 pfUSDC). The target is 297,859,297 atoms (297.859297 pfUSDC) at epoch 45.
 
 ## 3. Authoritative artifact hashes
 
@@ -69,11 +71,11 @@ The bound S-UPGRADE commands are in `packets-S1/native-leg1-bridge-in.json`: cmd
 Post-gates: each validator's remote `/opt/postfiat/releases/pnok-private-fix-2246d25-orchard1/postfiat-node` hashes to `25e60759…`, units are active, all six report the same advancing height and state root, and height advances after observation. This is a separate HELD packet boundary.
 ## 6. Stage 1: finalized deposit claim
 
-Packet: `native-leg1-bridge-in.json`, S-CLAIM. Resolve the bound claim command and its S-UPGRADE dependencies through `resolution-rules.md`; do not copy unresolved fields into a command. Objective: claim exactly 10,000,000 pfUSDC atoms to holder `pfab9b9228942e5c529633a13aa271d5297bec6353`. HELD boundary: claim is its own packet and must finish before any later packet is opened. STOP-no-retry on any mismatch, unresolved field, replay, or finality failure. Acceptance: holder balance becomes 11,358,493, cap becomes 297,859,297 at epoch 45, route claims_minted becomes 422,210,781, global supply equals cap, and all six validators report identical height and root. Evidence follows the packet's resolved `native-v1/leg1/` artifact convention.
+Packet: `native-leg1-bridge-in.json`, S-CLAIM. Resolve the bound claim command and its S-UPGRADE dependencies through `resolution-rules.md`; do not copy unresolved fields into a command. Objective: claim exactly 10,000,000 pfUSDC atoms (10.000000 pfUSDC) to holder `pfab9b9228942e5c529633a13aa271d5297bec6353`. HELD boundary: claim is its own packet and must finish before any later packet is opened. STOP-no-retry on any mismatch, unresolved field, replay, or finality failure. Acceptance: holder balance becomes 11,358,493 atoms (11.358493 pfUSDC), cap becomes 297,859,297 atoms (297.859297 pfUSDC) at epoch 45, route claims_minted becomes 422,210,781 atoms (422.210781 pfUSDC), global supply equals cap, and all six validators report identical height and root. Evidence follows the packet's resolved `native-v1/leg1/` artifact convention.
 
 ## 7. Stage 2: pfUSDC to A666 subscription
 
-Packets: `native-leg2a-order-reserve.json`, `native-leg2b-primary-subscribe.json`. Resolve each certified-ops command and submit as separate held packets, with the reservation receipt chaining into subscribe. Objective: debit exactly 10,000,000 pfUSDC and mint exactly 11,027,135 A666 to the bound subscriber. HELD boundary: order-reserve finality is required before subscribe. STOP-no-retry on stale epoch, packet hash, reservation, amount, signer, or replay. Acceptance: each PFTL receipt is accepted and finalized, certificate quorum passes, and six validators converge on height/root. Evidence uses `native-v1/leg2a/` and `native-v1/leg2b/` resolver-selected artifact directories.
+Packets: `native-leg2a-order-reserve.json`, `native-leg2b-primary-subscribe.json`. Resolve each certified-ops command and submit as separate held packets, with the reservation receipt chaining into subscribe. Objective: debit exactly 10,000,000 pfUSDC atoms (10.000000 pfUSDC) and mint exactly 11,027,135 A666 atoms (11.027135 A666) to the bound subscriber. HELD boundary: order-reserve finality is required before subscribe. STOP-no-retry on stale epoch, packet hash, reservation, amount, signer, or replay. Acceptance: each PFTL receipt is accepted and finalized, certificate quorum passes, and six validators converge on height/root. Evidence uses `native-v1/leg2a/` and `native-v1/leg2b/` resolver-selected artifact directories.
 
 ## 8. Stage 3: export to wA666
 
@@ -101,19 +103,19 @@ Packet: `native-leg5b-bridge-out.json`. Resolve the three sequential stages: bur
 
 ## 14. Conservation and caps
 
-Protected baseline: 103,000,000 wA666, isolated and never touched. Wallet USDC baseline was 84,161,443; after the 10,000,000 deposit it is 74,161,443. The 530 USDC cap is cumulative campaign-wide: prior spend 501.024845 + mined 10-USDC leg-1 principal 10.000000 = 511.024845 <= 530.000000, leaving 18.975155 headroom before fresh gas. Every subsequent gas quote updates prior_actual and must keep projected cumulative spend <= 530.000000. GPU cap is $10 total, approximately $4.55 already spent; no further GPU is authorized because the reserve-packet proving path is abandoned.
+Protected baseline: 103,000,000 wA666 atoms (103.000000 wA666), isolated and never touched. Wallet USDC baseline was 84,161,443 atoms (84.161443 USDC); after the 10,000,000-atom deposit (10.000000 USDC) it is 74,161,443 atoms (74.161443 USDC). The 530 USDC cap is cumulative campaign-wide: prior spend 501.024845 + mined 10-USDC leg-1 principal 10.000000 = 511.024845 <= 530.000000, leaving 18.975155 headroom before fresh gas. Every subsequent gas quote updates prior_actual and must keep projected cumulative spend <= 530.000000. GPU cap is $10 total, approximately $4.55 already spent; no further GPU is authorized because the reserve-packet proving path is abandoned.
 
 Arithmetic:
 
-- Claim: 1,358,493 + 10,000,000 = 11,358,493.
-- NAV cap: 287,859,297 + 10,000,000 = 297,859,297.
-- Route backing: 422,210,781 - 412,210,781 = 10,000,000.
+- Claim: 1,358,493 atoms (1.358493 pfUSDC) + 10,000,000 atoms (10.000000 pfUSDC) = 11,358,493 atoms (11.358493 pfUSDC).
+- NAV cap: 287,859,297 atoms (287.859297 pfUSDC) + 10,000,000 atoms (10.000000 pfUSDC) = 297,859,297 atoms (297.859297 pfUSDC).
+- Route backing: 422,210,781 atoms (422.210781 pfUSDC) - 412,210,781 atoms (412.210781 pfUSDC) = 10,000,000 atoms (10.000000 pfUSDC).
 
 | Leg | Pre-state | Debit | Credit | Fee | Post-state | Evidence |
 |---|---:|---:|---:|---:|---:|---|
-| 1 claim | | 10,000,000 USDC atoms | 10,000,000 pfUSDC atoms | | | |
-| 2 subscription | | 10,000,000 pfUSDC atoms | 11,027,135 A666 atoms | | | |
-| 3 export | | 11,027,135 A666 atoms | EVM A666 | | | |
+| 1 claim | | 10,000,000 USDC atoms (10.000000 USDC) | 10,000,000 pfUSDC atoms (10.000000 pfUSDC) | | | |
+| 2 subscription | | 10,000,000 pfUSDC atoms (10.000000 pfUSDC) | 11,027,135 A666 atoms (11.027135 A666) | | | |
+| 3 export | | 11,027,135 A666 atoms (11.027135 A666) | EVM A666 | | | |
 | 4 forward swap | | A666 | USDC | gas | | |
 | 5 reverse swap | | USDC | A666 | gas | | |
 | 6 return import | | A666 | PFTL A666 | | | |
@@ -131,10 +133,10 @@ The safe-rollout pre-rollout backup is the only full-fleet rollback point. After
 ## 17. Final acceptance checklist
 
 - [ ] Stage 0 orchard-fix SHA, active units, advancing height, and 6/6 convergence verified.
-- [ ] Claim holder balance is 11,358,493; cap is 297,859,297 at epoch 45.
+- [ ] Claim holder balance is 11,358,493 atoms (11.358493 pfUSDC); cap is 297,859,297 atoms (297.859297 pfUSDC) at epoch 45.
 - [ ] Every PFTL receipt is accepted/finalized with certificate quorum and six-way convergence.
 - [ ] Every EVM receipt is mined status 1 with exact balance deltas.
-- [ ] Subscription mints exactly 11,027,135 A666.
+- [ ] Subscription mints exactly 11,027,135 A666 atoms (11.027135 A666).
 - [ ] Forward and reverse swap minimum-output rules pass.
 - [ ] Return import and redemption deltas reconcile.
 - [ ] External bridge-out destination and USDC delta reconcile.
