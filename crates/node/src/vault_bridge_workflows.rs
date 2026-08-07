@@ -374,6 +374,10 @@ pub fn vault_bridge_bootstrap_bundle(
     })
 }
 
+/// Production source-chain deposit intent successor to client commit c33b3b7's
+/// `nav-roundtrip-live-demo --evm-deposit-only --route-binding` path. It emits
+/// the same `depositV2(uint256,string,bytes32,bytes32)` call shape while binding
+/// the route deterministically from the governed policy hash and route epoch.
 pub fn vault_bridge_deposit_intent(
     options: VaultBridgeDepositIntentOptions,
 ) -> io::Result<VaultBridgeDepositIntentReport> {
@@ -653,22 +657,7 @@ pub fn vault_bridge_deposit_plan(
                 &source_public_values,
             )
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
-        if public_values.source_chain_id != evidence.source_chain_id
-            || public_values.vault_address != evidence.vault_address
-            || public_values.token_address != evidence.token_address
-            || public_values.depositor != evidence.depositor
-            || public_values.pftl_recipient != evidence.pftl_recipient
-            || public_values.pftl_recipient_hash != evidence.pftl_recipient_hash
-            || public_values.amount_atoms != evidence.amount_atoms
-            || public_values.nonce != evidence.nonce
-            || public_values.route_binding != evidence.route_binding
-            || public_values.deposit_id != evidence.deposit_id
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "Ethereum-finality public values do not match the canonical vault deposit receipt",
-            ));
-        }
+        validate_ethereum_ingress_public_values_match(&public_values, &evidence)?;
         // The Ethereum-finality guest authenticates the deposit's permanent
         // storage record under a later finalized execution-state root. Its
         // evidence coordinate is therefore that finalized block, not the
@@ -2234,6 +2223,29 @@ fn validate_vault_bridge_deposit_filters(
     Ok(())
 }
 
+fn validate_ethereum_ingress_public_values_match(
+    public_values: &postfiat_types::PfUsdcEthereumIngressPublicValuesV1,
+    evidence: &VaultBridgeDepositEvidence,
+) -> io::Result<()> {
+    if public_values.source_chain_id != evidence.source_chain_id
+        || public_values.vault_address != evidence.vault_address
+        || public_values.token_address != evidence.token_address
+        || public_values.depositor != evidence.depositor
+        || public_values.pftl_recipient != evidence.pftl_recipient
+        || public_values.pftl_recipient_hash != evidence.pftl_recipient_hash
+        || public_values.amount_atoms != evidence.amount_atoms
+        || public_values.nonce != evidence.nonce
+        || public_values.route_binding != evidence.route_binding
+        || public_values.deposit_id != evidence.deposit_id
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Ethereum-finality public values do not match the canonical vault deposit receipt",
+        ));
+    }
+    Ok(())
+}
+
 fn vault_bridge_deposit_plan_log_input(
     options: &VaultBridgeDepositPlanOptions,
 ) -> io::Result<serde_json::Value> {
@@ -3671,4 +3683,158 @@ pub(super) fn market_ops_replay_bundle_file(bundle_dir: &Path) -> PathBuf {
 
 fn vault_bridge_reserve_replay_bundle_file(bundle_dir: &Path) -> PathBuf {
     bundle_dir.join("bundle.json")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const FIRE_POLICY_HASH: &str =
+        "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158";
+    const FIRE_ROUTE_BINDING: &str =
+        "caec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93";
+    const FIRE_RECIPIENT: &str = "pfab9b9228942e5c529633a13aa271d5297bec6353";
+    const FIRE_NONCE: &str = "fe457c66ab796d980ffcabf557ae7c13c60eefca01a276e5b023e812418b04b6";
+    const FIRE_DEPOSIT_CALLDATA: &str = "0x2391b45700000000000000000000000000000000000000000000000000000000009896800000000000000000000000000000000000000000000000000000000000000080fe457c66ab796d980ffcabf557ae7c13c60eefca01a276e5b023e812418b04b6caec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93000000000000000000000000000000000000000000000000000000000000002a70666162396239323238393432653563353239363333613133616132373164353239376265633633353300000000000000000000000000000000000000000000";
+    const FIRE_APPROVE_CALLDATA: &str = "0x095ea7b3000000000000000000000000aaa78fda7062efce769e95cd72fc55e507bc81830000000000000000000000000000000000000000000000000000000000989680";
+
+    fn abi_word_u64(value: u64) -> String {
+        format!("{value:064x}")
+    }
+
+    fn abi_word_hex(value: &str) -> String {
+        format!("{:0>64}", value.trim_start_matches("0x"))
+    }
+
+    fn abi_word_address(value: &str) -> String {
+        abi_word_hex(value)
+    }
+
+    fn encode_fire_deposit_calldata() -> String {
+        let recipient = FIRE_RECIPIENT.as_bytes();
+        let mut encoded = String::from("0x2391b457");
+        encoded.push_str(&abi_word_u64(10_000_000));
+        encoded.push_str(&abi_word_u64(128));
+        encoded.push_str(&abi_word_hex(FIRE_NONCE));
+        encoded.push_str(&abi_word_hex(FIRE_ROUTE_BINDING));
+        encoded.push_str(&abi_word_u64(recipient.len() as u64));
+        let mut recipient_word = recipient
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        recipient_word.push_str(&"0".repeat((64 - recipient_word.len() % 64) % 64));
+        encoded.push_str(&recipient_word);
+        encoded
+    }
+
+    fn encode_fire_approve_calldata() -> String {
+        format!(
+            "0x095ea7b3{}{}",
+            abi_word_address("0xaaa78fda7062efce769e95cd72fc55e507bc8183"),
+            abi_word_u64(10_000_000)
+        )
+    }
+
+    fn fire_intent_options() -> VaultBridgeDepositIntentOptions {
+        VaultBridgeDepositIntentOptions {
+            source_chain_id: 1,
+            vault_address: "0xaaa78fda7062efce769e95cd72fc55e507bc8183".to_string(),
+            token_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48".to_string(),
+            depositor: "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0".to_string(),
+            amount_atoms: 10_000_000,
+            pftl_recipient: FIRE_RECIPIENT.to_string(),
+            nonce: FIRE_NONCE.to_string(),
+            asset_id: "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b".to_string(),
+            policy_hash: FIRE_POLICY_HASH.to_string(),
+            route_epoch: 5,
+            proposer: None,
+            expires_at_height: Some(1776),
+            bundle_dir: None,
+        }
+    }
+
+    #[test]
+    fn fire_route_binding_is_pinned_to_policy_and_epoch() {
+        assert_eq!(
+            vault_bridge_route_binding(FIRE_POLICY_HASH, 5).expect("fire route binding"),
+            FIRE_ROUTE_BINDING
+        );
+    }
+
+    #[test]
+    fn fire_deposit_v2_and_approve_calldata_are_pinned() {
+        let report = vault_bridge_deposit_intent(fire_intent_options()).expect("deposit intent");
+        assert_eq!(report.route_binding, format!("0x{FIRE_ROUTE_BINDING}"));
+        assert_eq!(
+            report.deposit_signature,
+            "depositV2(uint256,string,bytes32,bytes32)"
+        );
+        assert_eq!(
+            report.deposit_cast_args,
+            vec![
+                "10000000".to_string(),
+                FIRE_RECIPIENT.to_string(),
+                format!("0x{FIRE_NONCE}"),
+                format!("0x{FIRE_ROUTE_BINDING}"),
+            ]
+        );
+        assert_eq!(encode_fire_deposit_calldata(), FIRE_DEPOSIT_CALLDATA);
+        assert_eq!(encode_fire_approve_calldata(), FIRE_APPROVE_CALLDATA);
+        assert!(report
+            .deposit_cast_command
+            .contains("depositV2(uint256,string,bytes32,bytes32)"));
+    }
+
+    #[test]
+    fn ethereum_relay_rejects_public_values_with_mismatched_route_binding() {
+        let evidence = VaultBridgeDepositEvidence {
+            source_chain_id: 1,
+            vault_address: "0xaaa78fda7062efce769e95cd72fc55e507bc8183".to_string(),
+            token_address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48".to_string(),
+            depositor: "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0".to_string(),
+            pftl_recipient: FIRE_RECIPIENT.to_string(),
+            pftl_recipient_hash: vault_bridge_pftl_recipient_hash(FIRE_RECIPIENT)
+                .expect("recipient hash"),
+            amount_atoms: 10_000_000,
+            nonce: FIRE_NONCE.to_string(),
+            route_binding: FIRE_ROUTE_BINDING.to_string(),
+            deposit_id: "11".repeat(32),
+            block_hash: "22".repeat(32),
+            tx_hash: "33".repeat(32),
+            log_index: 0,
+        };
+        let public_values = postfiat_types::PfUsdcEthereumIngressPublicValuesV1 {
+            schema: postfiat_types::PFUSDC_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1.to_string(),
+            route_id: "pftl-a666-ethereum-wA666-usdc-v1".to_string(),
+            source_chain_id: 1,
+            prior_finalized_beacon_root: "44".repeat(32),
+            prior_finalized_slot: 1,
+            finalized_beacon_root: "55".repeat(32),
+            finalized_slot: 2,
+            finalized_execution_block_hash: "66".repeat(32),
+            finalized_execution_block_number: 1,
+            execution_state_root: "77".repeat(32),
+            vault_address: evidence.vault_address.clone(),
+            vault_runtime_code_hash: "88".repeat(32),
+            token_address: evidence.token_address.clone(),
+            token_runtime_code_hash: "99".repeat(32),
+            depositor: evidence.depositor.clone(),
+            pftl_recipient: evidence.pftl_recipient.clone(),
+            pftl_recipient_hash: evidence.pftl_recipient_hash.clone(),
+            amount_atoms: evidence.amount_atoms,
+            nonce: evidence.nonce.clone(),
+            route_binding: "aa".repeat(32),
+            deposit_id: evidence.deposit_id.clone(),
+            evidence_root: "bb".repeat(48),
+            manifest_hash: "cc".repeat(32),
+            deposit_nullifier: "dd".repeat(32),
+            total_obligations_atoms: evidence.amount_atoms.to_string(),
+            vault_token_balance_atoms: evidence.amount_atoms.to_string(),
+        };
+        let error = validate_ethereum_ingress_public_values_match(&public_values, &evidence)
+            .expect_err("mismatched route binding accepted");
+        assert!(error
+            .to_string()
+            .contains("Ethereum-finality public values do not match"));
+    }
 }
