@@ -24,19 +24,21 @@ Unit convention: every PFTL and EVM token quantity in this runbook is stated in 
 |---|---|
 | Fleet release commit | `540b2c1c739affd0f33da0be9fd5f9a92c3c8673`, `/home/postfiat/repos/a666-orchard-fix-2246d25` |
 | Feature lineage, not for fleet | `16621fa94a4a29c637574180800777fa4ed0e1b5` |
-| Fleet orchard-fix binary | `25e607595e581e7d435c6282f2db95aa473cf61877a7d75cea73505ea697c7f4`, `/tmp/fire-20260806-bin/postfiat-node-2246d25-orchardfix` |
+| Production client (EVM bundle tooling) | `e1f84b1f42dc901b22bacb16196f8ff09609ddcbc5af862d62a44c5db60bf9d8`, `/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/fire-20260806-client/postfiat-node-client`, source `9d15145b1247b0c4c475205136c5f95fa6e9eca8` (`port/depositv2-route-binding`, production successor of the pinned client-depositv2-2246d25 tool; depositV2 byte-parity proven) |
+| Main integration tip | `01aafb5477a7394f1a8a9632c6c358375800c770` (origin/main; contains feature lineage + port + this evidence set) |
+| Fleet orchard-fix binary | `25e607595e581e7d435c6282f2db95aa473cf61877a7d75cea73505ea697c7f4`, `/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/pnok-private-fix-20260801/pnok-private-fix-2246d25-orchard1/build/postfiat-node` (also staged under `validator-stage/rootfs/opt/` and deployed fleet-side at `/opt/postfiat/releases/pnok-private-fix-2246d25-orchard1/`) |
 | Finality submitter | `a29f19e9b67cabc43ed2a9140efdf1aa139f92259881a2311bf9a04428cfe315`, `scripts/native_rpc_finality_submit.py` |
-| Binding | `df8d2e35bd62a74b294a1cfbf40423283fbb670b236d1b5e40094a5149e6b901`, `binding-S1.json` |
-| Values | `2a0d9574c682180a54ccb1f5a158c4befd4b2a9f3f4ae7fc354033401eaa8cf2`, `values-S1.json` |
-| Resolution rules | `04c6f1c69f27194ef24f774dd52b1b6247fdaf5a515d65b86acb6be3bc7b1ecd`, `resolution-rules.md` |
-| Authorization | `90709e21d62fc226e9d0b533ff1f4f9bf01bc751645c2f4584b0e2b08901a91d`, `authorization-native-fire-20260806.json` |
+| Binding | `cc1bd291543e45e59fa2ff89df7e5c041c8ed101d6f93fb7e0eac57dd134bf9c`, `binding-S1.json` |
+| Values | `9d6c226217c0b72ff881ca5004060492649057098e957ec519c8b6aa88b18a33`, `values-S1.json` |
+| Resolution rules | `54a7056568a8f863bb8c64634bf963580feac9588c25fac989ed1b761c538293`, `resolution-rules.md` |
+| Authorization | `f0679ac76e5194527cc62aded34e778dfdc23089eab16efcb803c45fe74588d5`, `authorization-native-fire-20260806.json` |
 
 Packet SHA-256 values, computed from `packets-S1/*.json`:
 
 | Packet | SHA-256 |
 |---|---|
 | native-leg0-proxy-verify.json | `2df8068c0b9e6db360eb828959314467bfa1d34763f7eda8f1a11339c2bb8ced` |
-| native-leg1-bridge-in.json | `781196d440a24486200cd39f9c5d7897a15839889cdc5f02fe45b7bdbb4177c9` |
+| native-leg1-bridge-in.json | `b6ae7b845d7a03d888af1ed8975f4e8d0edacd66884da7863fab2cce694a927a` |
 | native-leg2a-order-reserve.json | `fc356139e9950bd6ff3056a03bdc3351271ec6c24a2c60e4676928b886671714` |
 | native-leg2b-primary-subscribe.json | `ef88d977d02c874df4bcbca1879ab595265085cd26e40a7fce8b0ad20163bf42` |
 | native-leg3a-export-debit.json | `b3271f2fc7da6c91a67744f736d3e3ef926a40beabd260a9929df6ba2e76bf3a` |
@@ -69,6 +71,8 @@ Fleet hosts: v0 `64.176.220.75`, v1 `95.179.184.122`, v2 `66.42.48.39`, v3 `149.
 The bound S-UPGRADE commands are in `packets-S1/native-leg1-bridge-in.json`: cmd00-cmd04, `rollout_commands` preflight/backup/apply-next for all six validators, and `post_rollout_gates`. Resolve them through the packet resolution rules. Do not re-author commands.
 
 Post-gates: each validator's remote `/opt/postfiat/releases/pnok-private-fix-2246d25-orchard1/postfiat-node` hashes to `25e60759…`, units are active, all six report the same advancing height and state root, and height advances after observation. This is a separate HELD packet boundary.
+
+Binary binding policy: ledger-semantics commands (status, `pftl-submit-certified-asset-ops` batch-only, and `deployment-*`) bind to the orchard release build with fleet 2246d257-lineage semantics, including the 83ac75d divergence guard. EVM-side deterministic tooling (`vault-bridge-deposit-relay-rpc-bundle`, `pftl-certified-asset-ops-from-bundle`) binds to the production client. This split stands until the fleet runs a main-derived release.
 ## 6. Stage 1: finalized deposit claim
 
 Packet: `native-leg1-bridge-in.json`, S-CLAIM. Resolve the bound claim command and its S-UPGRADE dependencies through `resolution-rules.md`; do not copy unresolved fields into a command. Objective: claim exactly 10,000,000 pfUSDC atoms (10.000000 pfUSDC) to holder `pfab9b9228942e5c529633a13aa271d5297bec6353`. HELD boundary: claim is its own packet and must finish before any later packet is opened. STOP-no-retry on any mismatch, unresolved field, replay, or finality failure. Acceptance: holder balance becomes 11,358,493 atoms (11.358493 pfUSDC), cap becomes 297,859,297 atoms (297.859297 pfUSDC) at epoch 45, route claims_minted becomes 422,210,781 atoms (422.210781 pfUSDC), global supply equals cap, and all six validators report identical height and root. Evidence follows the packet's resolved `native-v1/leg1/` artifact convention.
@@ -154,7 +158,8 @@ The same orchard-undercount pattern remains deferred at `crates/execution/src/na
 |---|---|
 | `/home/postfiat/repos/a666-eth-fast-lane-combined-20260724` | [EXISTS] |
 | `/home/postfiat/repos/a666-orchard-fix-2246d25` | [EXISTS] |
-| `/tmp/fire-20260806-bin/postfiat-node-2246d25-orchardfix` | [EXISTS] |
+| `/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/pnok-private-fix-20260801/pnok-private-fix-2246d25-orchard1/build/postfiat-node` | [EXISTS] |
+| `/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/fire-20260806-client/postfiat-node-client` | [EXISTS] |
 | `docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/` | [EXISTS] |
 | `/home/postfiat/.postfiat/deployment-bfinal-1a8c0cb6.private.json` | [EXISTS] |
 | `/home/postfiat/.postfiat/recovery-v3-snapshot-publisher.private.json` | [EXISTS] |
