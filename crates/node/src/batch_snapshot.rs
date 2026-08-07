@@ -458,13 +458,18 @@ fn apply_batch_with_timings_inner(
     let compatibility =
         asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance);
     ensure_atomic_swap_batch_allowed(&batch, block_height, compatibility)?;
-    let receipts = execute_transparent_batch(
+    let orchard_balances = shielded
+        .orchard
+        .as_ref()
+        .map_or(&[][..], |pool| pool.asset_orchard_balances.as_slice());
+    let receipts = execute_transparent_batch_with_orchard(
         &genesis,
         &governance,
         &mut ledger,
         &batch,
         block_height,
         compatibility,
+        orchard_balances,
     );
     let execute_batch_ms = apply_batch_elapsed_ms(stage_start);
 

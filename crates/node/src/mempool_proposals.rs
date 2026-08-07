@@ -489,6 +489,11 @@ fn admit_signed_asset_transaction_to_mempool(
         ));
     }
     let ledger = store.read_ledger()?;
+    let shielded = store.read_shielded()?;
+    let orchard_balances = shielded
+        .orchard
+        .as_ref()
+        .map_or(&[][..], |pool| pool.asset_orchard_balances.as_slice());
     let mempool = store.read_mempool()?;
     enforce_mempool_admission_limits(&mempool, &signed.unsigned.source)?;
     let tx_id = asset_transaction_tx_id(&signed);
@@ -533,12 +538,13 @@ fn admit_signed_asset_transaction_to_mempool(
         }
     }
     for pending in &mempool.pending_asset_transactions {
-        let pending_receipt = execute_asset_transaction_with_compatibility(
+        let pending_receipt = execute_asset_transaction_with_compatibility_and_orchard(
             &genesis,
             &mut dry_run_ledger,
             &pending.transaction,
             block_height,
             asset_execution_compatibility,
+            orchard_balances,
         );
         if !pending_receipt.accepted {
             return Err(io::Error::new(
@@ -550,12 +556,13 @@ fn admit_signed_asset_transaction_to_mempool(
             ));
         }
     }
-    let dry_run_receipt = execute_asset_transaction_with_compatibility(
+    let dry_run_receipt = execute_asset_transaction_with_compatibility_and_orchard(
         &genesis,
         &mut dry_run_ledger,
         &signed,
         block_height,
         asset_execution_compatibility,
+        orchard_balances,
     );
     if !dry_run_receipt.accepted {
         return Err(io::Error::new(
@@ -2946,13 +2953,18 @@ fn build_transparent_batch_proposal(
     let compatibility =
         asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance);
     ensure_atomic_swap_batch_allowed(&batch, block_height, compatibility)?;
-    let receipts = execute_transparent_batch(
+    let orchard_balances = shielded
+        .orchard
+        .as_ref()
+        .map_or(&[][..], |pool| pool.asset_orchard_balances.as_slice());
+    let receipts = execute_transparent_batch_with_orchard(
         &genesis,
         &governance,
         &mut ledger,
         &batch,
         block_height,
         compatibility,
+        orchard_balances,
     );
     let batch_id = ordered_reference.batch_id;
     let mut proposed_ordered_batches = ordered_batches;

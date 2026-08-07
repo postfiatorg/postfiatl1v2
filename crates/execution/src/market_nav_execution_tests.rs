@@ -2077,6 +2077,7 @@ fn ethereum_backed_claim_grows_cap_and_converges_across_six_replicas() {
     initial.asset_definitions.push(asset.clone());
     initial.nav_proof_profiles.push(profile);
     initial.nav_assets.push(nav_asset);
+    initial.nav_assets[0].circulating_supply = 20_000_000;
     initial.vault_bridge_deposits.push(deposit);
     let challenge = VaultBridgeDepositChallengeOperation {
         challenger: recipient.clone(),
@@ -2123,11 +2124,32 @@ fn ethereum_backed_claim_grows_cap_and_converges_across_six_replicas() {
         "vault_bridge_deposit_recipient_mismatch"
     );
 
+    // Legacy ledger-only execution leaves the checkpoint unchanged when Orchard
+    // custody already contributes 20M atoms, reproducing the production mismatch.
+    let orchard_balances = vec![postfiat_types::AssetOrchardAssetBalance {
+        asset_id: asset.asset_id.clone(),
+        ingress_total: 20_000_000,
+        egress_total: 0,
+        live_total: 20_000_000,
+    }];
+    let mut legacy = initial.clone();
+    apply_vault_bridge_deposit_claim(&genesis, &mut legacy, &claim, 10)
+        .expect("legacy claim still executes ledger-only");
+    assert_eq!(legacy.nav_assets[0].circulating_supply, 20_000_000);
+    assert!(issued_asset_supply(&legacy, &asset.asset_id).expect("legacy supply") + 20_000_000
+        > legacy.nav_assets[0].circulating_supply);
+
     let mut replicas = Vec::new();
     for mut replica in std::iter::repeat_with(|| initial.clone()).take(6) {
-        apply_vault_bridge_deposit_claim(&genesis, &mut replica, &claim, 10)
-            .expect("proof-bounded claim can follow finalization in the same block");
-        assert_eq!(replica.nav_assets[0].circulating_supply, amount_atoms);
+        apply_vault_bridge_deposit_claim_with_orchard(
+            &genesis,
+            &mut replica,
+            &claim,
+            10,
+            &orchard_balances,
+        )
+        .expect("proof-bounded claim can follow finalization in the same block");
+        assert_eq!(replica.nav_assets[0].circulating_supply, 22_000_000);
         assert_eq!(replica.nav_assets[0].finalized_epoch, 1);
         assert_eq!(
             replica
