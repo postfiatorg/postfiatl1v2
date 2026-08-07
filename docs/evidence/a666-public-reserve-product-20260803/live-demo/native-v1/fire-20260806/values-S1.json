@@ -42,7 +42,7 @@
       "topology": "/etc/postfiat/releases/pnok-private-fix-2246d25/topology.json"
     },
     "leg1_relay_two_phase": {
-      "binding_sha256": "5ec071273c56b7162451a9f97cbae828ae631826ef7db205e9b21e76c58670b1",
+      "binding_sha256": "2f2c4f91612c82971a09fcf340e7e96ff2e064a548afa02109d0afe2bab831e2",
       "deployment_descriptor_file": "/tmp/krimp-exec-fire20260806/leg-1-reprove/deployment-descriptor.json",
       "deployment_descriptor_sha256": "eb271b08bea23552b0440fd1b2d804d6ff2523c1c9718d1547c05571da4d1805",
       "evm_deposit_json_sha256": "7ed608aef9d3295fa0325ecc07de8cee402df1e9b08c5c135a94c2589cd936ec",
@@ -52,7 +52,7 @@
         "destroyed": true,
         "instance_id": 47022433
       },
-      "packet_sha256": "296148ac88afc766a15ee9eec87a56e70430d02027982c3f4947f2384ccaa277",
+      "packet_sha256": "f7c26de77a45bad35ab7765b72f269f310322c96bcc52a09c9e049323dd54f69",
       "proof_calldata_file": "/tmp/krimp-exec-fire20260806/leg-1-reprove/proof-calldata.bin",
       "proof_calldata_sha256": "a5543158b1379268abe1c275a070320998ad2ba20f6941241bebc580a4c8fbcf",
       "proof_report_file": "/tmp/krimp-exec-fire20260806/leg-1-reprove/proof-report.json",
@@ -65,7 +65,7 @@
       "prover_leaf_commit": "01d105d",
       "public_values_file": "/tmp/krimp-exec-fire20260806/leg-1-reprove/public-values.bin",
       "public_values_sha256": "37cd3ac6532342894703ad7ec210c8bf00780f23fb21377db16208c54d2536e6",
-      "relay_mode": "two-phase control-host signed public batch handoff with post-propose clone refresh before finalize-claim batch construction",
+      "relay_mode": "two-phase control-host signed public batch handoff with post-propose and post-finalize clone refreshes; finalize and claim are separate RPC-finality submissions",
       "resequence_fire18": {
         "phase_a1": "bundle, signed ops, splits, count gates, and propose batch-only are re-run idempotently",
         "phase_b1": "propose batch transfers and applies before the clone refresh",
@@ -93,14 +93,20 @@
         "routing_provenance": "submitter auto-routes to deterministic proposer; persists full response before gating; gates ok/confirmed/accepted/certified_sends_deferred/tx_id/height; round_ok audit-only per h714 precedent"
       },
       "reprove_provenance": "FIRE-17 live-deposit reprove; descriptor was hash-gated before capture.",
-      "resolution_rules_sha256": "ad3e30c064c4d4947034fa44074877336971ed98b26e5e78e37b2f16d3135be6",
+      "resolution_rules_sha256": "820b894eae4fbc812cc7ab272358bebc210b1a7849318564a52ca803ebb01642",
       "stale_fire16_audit": {
         "location": "/tmp/krimp-exec-fire20260806/leg-1/stale-fire16/",
         "proof_calldata_sha256": "63601a4b2c0edf0ea29f4591abe4a91811292cc4ce9c421f9184e0d6e6c690f2",
         "public_values_sha256": "4c7ce0beb7af4c9161f00e3d6532ab1965202cf5cee03fb0ad7a7622f3587e6d"
       },
       "verified_deposit_block": 25698310,
-      "verified_deposit_id": "0xe54713583c1bb46e908e8f01f1c996966dc5c82281365c91092a27ae0852d02b"
+      "verified_deposit_id": "0xe54713583c1bb46e908e8f01f1c996966dc5c82281365c91092a27ae0852d02b",
+      "fire20j_tail_rebind": {
+        "accepted_propose_height": 777,
+        "resume_stage3_command_index": 11,
+        "root_cause": "same-batch finalize+claim admission cannot see route backing until finalize is applied",
+        "provenance": "nav_vault_asset_execution.rs:2188-2230,2480-2496; market_nav_asset_types.rs:3665-3700; August h714-h717 separate heights"
+      }
     },
     "leg1_route_binding": {
       "provenance": "vault ERC20BridgeVaultV2 route binding, matches accepted h390 deposit tx 0xb72a5151be91e6e171ffa708f093539807e9e24d627cbf2f797c33fc6ce3304c input and staging deployment.json sha 1d4a2945\u20268033; U64 ruling depositV2 fix",

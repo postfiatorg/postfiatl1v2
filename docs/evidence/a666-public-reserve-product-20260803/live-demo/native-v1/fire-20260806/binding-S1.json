@@ -20,7 +20,7 @@
     },
     {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg1-bridge-in.json",
-      "sha256": "296148ac88afc766a15ee9eec87a56e70430d02027982c3f4947f2384ccaa277"
+      "sha256": "f7c26de77a45bad35ab7765b72f269f310322c96bcc52a09c9e049323dd54f69"
     },
     {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg2a-order-reserve.json",
@@ -158,7 +158,18 @@
     "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
     "source_proof_kind_leg1": "sp1-ethereum-finality-v1",
     "staged_policy": "only receipt-chain values, FIRE-10 ruled prover host/beacon endpoint, and U57 command contracts remain staged",
-    "u57_argv_contract": "/tmp/snaga-u57/argv-contracts.md"
+    "u57_argv_contract": "/tmp/snaga-u57/argv-contracts.md",
+    "leg1_relay_tail_fire20j": {
+      "accepted_propose_height": 777,
+      "remaining_finality_submissions": [
+        "vault_bridge_deposit_finalize",
+        "vault_bridge_deposit_claim"
+      ],
+      "resume_stage3_command_index": 11,
+      "stage3_relay_command_count": 21,
+      "rule": "claim-only batch is constructed only after finalize finality plus clone finalized-state gate; duplicate propose is forbidden",
+      "provenance": "FIRE-20J; nav_vault_asset_execution.rs:2188-2230,2480-2496; market_nav_asset_types.rs:3665-3700; August h714-h717 separate heights"
+    }
   },
   "staged_field_sources": [
     {

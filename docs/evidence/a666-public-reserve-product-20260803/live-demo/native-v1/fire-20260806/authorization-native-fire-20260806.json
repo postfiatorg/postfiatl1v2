@@ -16,7 +16,7 @@
     "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/"
   ],
   "fire_10_finalization": {
-    "binding_sha256": "5ec071273c56b7162451a9f97cbae828ae631826ef7db205e9b21e76c58670b1",
+    "binding_sha256": "2f2c4f91612c82971a09fcf340e7e96ff2e064a548afa02109d0afe2bab831e2",
     "leg3a_optional_digest_fields": "omitted",
     "status": "STAGED-S1-RESOLVED-EXCEPT-RECEIPT-CHAIN-AND-PROVER-SOURCES",
     "u57_contract_leaf": "scripts/native_evm_contract_leaf.py",
@@ -27,9 +27,9 @@
     "u58_staged_fields_contract": "packet,json_pointer,source,stage"
   },
   "fire_16_relay_rebind": {
-    "binding_sha256": "5ec071273c56b7162451a9f97cbae828ae631826ef7db205e9b21e76c58670b1",
+    "binding_sha256": "2f2c4f91612c82971a09fcf340e7e96ff2e064a548afa02109d0afe2bab831e2",
     "leg1_packet_path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg1-bridge-in.json",
-    "leg1_packet_sha256": "296148ac88afc766a15ee9eec87a56e70430d02027982c3f4947f2384ccaa277",
+    "leg1_packet_sha256": "f7c26de77a45bad35ab7765b72f269f310322c96bcc52a09c9e049323dd54f69",
     "mode": "two-phase control-host signed public batch handoff"
   },
   "fire_1_evidence": {
@@ -46,7 +46,7 @@
   },
   "resolution_rules": {
     "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/resolution-rules.md",
-    "sha256": "ad3e30c064c4d4947034fa44074877336971ed98b26e5e78e37b2f16d3135be6"
+    "sha256": "820b894eae4fbc812cc7ab272358bebc210b1a7849318564a52ca803ebb01642"
   },
   "route_pins": {
     "canonical_binary_sha256": "05330fb20a40b8a4536000ec57da1862d879bcdc4a21bc8c0657f5c56aa8e0f5",
@@ -64,7 +64,7 @@
   "stage_bindings": {
     "S1": {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/binding-S1.json",
-      "sha256": "5ec071273c56b7162451a9f97cbae828ae631826ef7db205e9b21e76c58670b1"
+      "sha256": "2f2c4f91612c82971a09fcf340e7e96ff2e064a548afa02109d0afe2bab831e2"
     },
     "S2": {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/binding-S2.json",
@@ -79,5 +79,10 @@
       "sha256": "PENDING-POST-LEG4-IMPORT-RECEIPT"
     }
   },
-  "stop_no_retry_covenant": "Every stage requires the exact resolved packet SHA, fresh pinned state and receipts, unresolved ceiling rejection, replay-clean proof, and prior-stage finality. Any mismatch, stale simulation, missing field, or post-hash edit is STOP-no-retry and requires a new stage binding."
+  "stop_no_retry_covenant": "Every stage requires the exact resolved packet SHA, fresh pinned state and receipts, unresolved ceiling rejection, replay-clean proof, and prior-stage finality. Any mismatch, stale simulation, missing field, or post-hash edit is STOP-no-retry and requires a new stage binding.",
+  "fire_20j_tail_rebind": {
+    "binding_sha256": "2f2c4f91612c82971a09fcf340e7e96ff2e064a548afa02109d0afe2bab831e2",
+    "leg1_packet_sha256": "f7c26de77a45bad35ab7765b72f269f310322c96bcc52a09c9e049323dd54f69",
+    "provenance": "separate finalize and claim finality submissions after accepted propose at h777; code citations recorded in resolution-rules.md FIRE-20J"
+  }
 }
