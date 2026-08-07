@@ -16,7 +16,7 @@
     "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/"
   ],
   "fire_10_finalization": {
-    "binding_sha256": "2f2c4f91612c82971a09fcf340e7e96ff2e064a548afa02109d0afe2bab831e2",
+    "binding_sha256": "df8d2e35bd62a74b294a1cfbf40423283fbb670b236d1b5e40094a5149e6b901",
     "leg3a_optional_digest_fields": "omitted",
     "status": "STAGED-S1-RESOLVED-EXCEPT-RECEIPT-CHAIN-AND-PROVER-SOURCES",
     "u57_contract_leaf": "scripts/native_evm_contract_leaf.py",
@@ -27,9 +27,9 @@
     "u58_staged_fields_contract": "packet,json_pointer,source,stage"
   },
   "fire_16_relay_rebind": {
-    "binding_sha256": "2f2c4f91612c82971a09fcf340e7e96ff2e064a548afa02109d0afe2bab831e2",
+    "binding_sha256": "df8d2e35bd62a74b294a1cfbf40423283fbb670b236d1b5e40094a5149e6b901",
     "leg1_packet_path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg1-bridge-in.json",
-    "leg1_packet_sha256": "f7c26de77a45bad35ab7765b72f269f310322c96bcc52a09c9e049323dd54f69",
+    "leg1_packet_sha256": "781196d440a24486200cd39f9c5d7897a15839889cdc5f02fe45b7bdbb4177c9",
     "mode": "two-phase control-host signed public batch handoff"
   },
   "fire_1_evidence": {
@@ -46,7 +46,7 @@
   },
   "resolution_rules": {
     "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/resolution-rules.md",
-    "sha256": "820b894eae4fbc812cc7ab272358bebc210b1a7849318564a52ca803ebb01642"
+    "sha256": "04c6f1c69f27194ef24f774dd52b1b6247fdaf5a515d65b86acb6be3bc7b1ecd"
   },
   "route_pins": {
     "canonical_binary_sha256": "05330fb20a40b8a4536000ec57da1862d879bcdc4a21bc8c0657f5c56aa8e0f5",
@@ -64,7 +64,7 @@
   "stage_bindings": {
     "S1": {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/binding-S1.json",
-      "sha256": "2f2c4f91612c82971a09fcf340e7e96ff2e064a548afa02109d0afe2bab831e2"
+      "sha256": "df8d2e35bd62a74b294a1cfbf40423283fbb670b236d1b5e40094a5149e6b901"
     },
     "S2": {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/binding-S2.json",
@@ -84,5 +84,14 @@
     "binding_sha256": "2f2c4f91612c82971a09fcf340e7e96ff2e064a548afa02109d0afe2bab831e2",
     "leg1_packet_sha256": "f7c26de77a45bad35ab7765b72f269f310322c96bcc52a09c9e049323dd54f69",
     "provenance": "separate finalize and claim finality submissions after accepted propose at h777; code citations recorded in resolution-rules.md FIRE-20J"
+  },
+  "fire_20l_orchardfix_upgrade": {
+    "release_id": "pnok-private-fix-2246d25-orchard1",
+    "git_revision": "540b2c1c739affd0f33da0be9fd5f9a92c3c8673",
+    "binary_sha256": "25e607595e581e7d435c6282f2db95aa473cf61877a7d75cea73505ea697c7f4",
+    "binary_file": "/tmp/fire-20260806-bin/postfiat-node-2246d25-orchardfix",
+    "scope": "execution-semantics-only rolling upgrade before held claim resume",
+    "binding_sha256": "df8d2e35bd62a74b294a1cfbf40423283fbb670b236d1b5e40094a5149e6b901",
+    "leg1_packet_sha256": "781196d440a24486200cd39f9c5d7897a15839889cdc5f02fe45b7bdbb4177c9"
   }
 }

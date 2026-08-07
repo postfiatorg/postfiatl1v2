@@ -42,7 +42,7 @@
       "topology": "/etc/postfiat/releases/pnok-private-fix-2246d25/topology.json"
     },
     "leg1_relay_two_phase": {
-      "binding_sha256": "2f2c4f91612c82971a09fcf340e7e96ff2e064a548afa02109d0afe2bab831e2",
+      "binding_sha256": "df8d2e35bd62a74b294a1cfbf40423283fbb670b236d1b5e40094a5149e6b901",
       "deployment_descriptor_file": "/tmp/krimp-exec-fire20260806/leg-1-reprove/deployment-descriptor.json",
       "deployment_descriptor_sha256": "eb271b08bea23552b0440fd1b2d804d6ff2523c1c9718d1547c05571da4d1805",
       "evm_deposit_json_sha256": "7ed608aef9d3295fa0325ecc07de8cee402df1e9b08c5c135a94c2589cd936ec",
@@ -52,7 +52,7 @@
         "destroyed": true,
         "instance_id": 47022433
       },
-      "packet_sha256": "f7c26de77a45bad35ab7765b72f269f310322c96bcc52a09c9e049323dd54f69",
+      "packet_sha256": "781196d440a24486200cd39f9c5d7897a15839889cdc5f02fe45b7bdbb4177c9",
       "proof_calldata_file": "/tmp/krimp-exec-fire20260806/leg-1-reprove/proof-calldata.bin",
       "proof_calldata_sha256": "a5543158b1379268abe1c275a070320998ad2ba20f6941241bebc580a4c8fbcf",
       "proof_report_file": "/tmp/krimp-exec-fire20260806/leg-1-reprove/proof-report.json",
@@ -93,7 +93,7 @@
         "routing_provenance": "submitter auto-routes to deterministic proposer; persists full response before gating; gates ok/confirmed/accepted/certified_sends_deferred/tx_id/height; round_ok audit-only per h714 precedent"
       },
       "reprove_provenance": "FIRE-17 live-deposit reprove; descriptor was hash-gated before capture.",
-      "resolution_rules_sha256": "820b894eae4fbc812cc7ab272358bebc210b1a7849318564a52ca803ebb01642",
+      "resolution_rules_sha256": "04c6f1c69f27194ef24f774dd52b1b6247fdaf5a515d65b86acb6be3bc7b1ecd",
       "stale_fire16_audit": {
         "location": "/tmp/krimp-exec-fire20260806/leg-1/stale-fire16/",
         "proof_calldata_sha256": "63601a4b2c0edf0ea29f4591abe4a91811292cc4ce9c421f9184e0d6e6c690f2",
@@ -106,6 +106,15 @@
         "resume_stage3_command_index": 11,
         "root_cause": "same-batch finalize+claim admission cannot see route backing until finalize is applied",
         "provenance": "nav_vault_asset_execution.rs:2188-2230,2480-2496; market_nav_asset_types.rs:3665-3700; August h714-h717 separate heights"
+      },
+      "fire20l_orchardfix": {
+        "release_id": "pnok-private-fix-2246d25-orchard1",
+        "git_revision": "540b2c1c739affd0f33da0be9fd5f9a92c3c8673",
+        "binary_file": "/tmp/fire-20260806-bin/postfiat-node-2246d25-orchardfix",
+        "binary_sha256": "25e607595e581e7d435c6282f2db95aa473cf61877a7d75cea73505ea697c7f4",
+        "claim_resume": "refresh clone + height gate before orchardfix claim batch-only",
+        "provenance": "FIRE-20L; old client claim batch failure /tmp/krimp-fire20k/cmd20.err and /tmp/krimp-u85/claim-batch-only-oldbinary.log",
+        "signing_bindings": "generated target-stage signing bindings; all unit/env paths target orchard1"
       }
     },
     "leg1_route_binding": {
