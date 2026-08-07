@@ -20,7 +20,7 @@
     },
     {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg1-bridge-in.json",
-      "sha256": "f7c26de77a45bad35ab7765b72f269f310322c96bcc52a09c9e049323dd54f69"
+      "sha256": "b6ae7b845d7a03d888af1ed8975f4e8d0edacd66884da7863fab2cce694a927a"
     },
     {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg2a-order-reserve.json",
@@ -169,6 +169,21 @@
       "stage3_relay_command_count": 21,
       "rule": "claim-only batch is constructed only after finalize finality plus clone finalized-state gate; duplicate propose is forbidden",
       "provenance": "FIRE-20J; nav_vault_asset_execution.rs:2188-2230,2480-2496; market_nav_asset_types.rs:3665-3700; August h714-h717 separate heights"
+    },
+    "s_upgrade_orchardfix": {
+      "release_id": "pnok-private-fix-2246d25-orchard1",
+      "git_revision": "540b2c1c739affd0f33da0be9fd5f9a92c3c8673",
+      "binary_sha256": "25e607595e581e7d435c6282f2db95aa473cf61877a7d75cea73505ea697c7f4",
+      "binary_file": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/pnok-private-fix-20260801/pnok-private-fix-2246d25-orchard1/build/postfiat-node",
+      "claim_resume": "S-CLAIM refresh+height gate then orchardfix claim batch-only; finality submitter remains a29f19e9b67cabc43ed2a9140efdf1aa139f92259881a2311bf9a04428cfe315",
+      "acceptance": {
+        "holder_pfusdc": "11358493",
+        "circulating_supply": "297859297",
+        "finalized_epoch": 45,
+        "mainnet_claims_minted": "422210781",
+        "global_supply_equals_cap": true
+      },
+      "signing_bindings_tripwire": "manifest-create signing bindings must contain zero /pnok-private-fix-2246d25/ foreign-release paths; local manifest-verify must use validator-bindings.signing.json, never validator-N.bindings.json"
     }
   },
   "staged_field_sources": [
