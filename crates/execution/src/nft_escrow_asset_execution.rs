@@ -755,6 +755,7 @@ fn apply_asset_operation(
     transaction: &SignedAssetTransaction,
     block_height: u64,
     compatibility: AssetExecutionCompatibility,
+    orchard_balances: &[AssetOrchardAssetBalance],
 ) -> Result<(), (&'static str, String)> {
     match &transaction.unsigned.operation {
         AssetTransactionOperation::AssetCreate(operation) => {
@@ -2555,7 +2556,13 @@ fn apply_asset_operation(
                     "vault_bridge_deposit_claim transaction kind mismatch".to_string(),
                 ));
             }
-            apply_vault_bridge_deposit_claim(genesis, ledger, operation, block_height)
+            apply_vault_bridge_deposit_claim_with_orchard(
+                genesis,
+                ledger,
+                operation,
+                block_height,
+                orchard_balances,
+            )
         }
         AssetTransactionOperation::VaultBridgeFastIngressLifecycle(operation) => {
             if transaction.unsigned.transaction_kind

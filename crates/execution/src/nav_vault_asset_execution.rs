@@ -2009,6 +2009,22 @@ fn apply_vault_bridge_deposit_claim(
     operation: &VaultBridgeDepositClaimOperation,
     block_height: u64,
 ) -> Result<(), (&'static str, String)> {
+    apply_vault_bridge_deposit_claim_with_orchard(
+        genesis,
+        ledger,
+        operation,
+        block_height,
+        &[],
+    )
+}
+
+pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    operation: &VaultBridgeDepositClaimOperation,
+    block_height: u64,
+    orchard_balances: &[AssetOrchardAssetBalance],
+) -> Result<(), (&'static str, String)> {
     let nav_asset = ledger.nav_asset(&operation.asset_id).cloned().ok_or_else(|| {
         (
             "missing_nav_asset",
@@ -2169,7 +2185,17 @@ fn apply_vault_bridge_deposit_claim(
         ));
     }
     let claim_amount = operation.amount_atoms;
-    let current_supply = issued_asset_supply(ledger, &operation.asset_id)?;
+    let ledger_supply = issued_asset_supply(ledger, &operation.asset_id)?;
+    let orchard_live = orchard_balances
+        .iter()
+        .find(|balance| balance.asset_id == operation.asset_id)
+        .map_or(0, |balance| balance.live_total);
+    let current_supply = ledger_supply.checked_add(orchard_live).ok_or_else(|| {
+        (
+            "issued_supply_orchard_overflow",
+            "vault bridge asset claim orchard-inclusive issued supply overflowed".to_string(),
+        )
+    })?;
     let supply_after_claim = current_supply.checked_add(claim_amount).ok_or_else(|| {
         (
             "issued_supply_overflow",

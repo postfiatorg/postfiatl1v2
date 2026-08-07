@@ -14,6 +14,7 @@ use postfiat_types::{
     vault_bridge_withdrawal_execution_observation_root,
     vault_bridge_withdrawal_packet_legacy_domainless_evm_digest,
     vault_bridge_withdrawal_packet_legacy_domainless_hash, AssetDefinition,
+    AssetOrchardAssetBalance,
     AssetOrchardPrivatePrimaryIssueActionPayload,
     AssetOrchardPrivatePrimaryRedeemActionPayload, AssetTransactionOperation, Escrow,
     EscrowCreateOperation, EscrowTransactionOperation,
@@ -692,6 +693,7 @@ pub fn execute_asset_transaction(
         tx_id,
         &signing_bytes,
         AssetExecutionCompatibility::strict(),
+        &[],
     )
 }
 
@@ -718,6 +720,24 @@ pub fn execute_asset_transaction_with_compatibility(
     block_height: u64,
     compatibility: AssetExecutionCompatibility,
 ) -> Receipt {
+    execute_asset_transaction_with_compatibility_and_orchard(
+        genesis,
+        ledger,
+        transaction,
+        block_height,
+        compatibility,
+        &[],
+    )
+}
+
+pub fn execute_asset_transaction_with_compatibility_and_orchard(
+    genesis: &Genesis,
+    ledger: &mut LedgerState,
+    transaction: &SignedAssetTransaction,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+    orchard_balances: &[AssetOrchardAssetBalance],
+) -> Receipt {
     let tx_id = asset_transaction_tx_id(transaction);
     let signing_bytes = transaction.unsigned.signing_bytes();
     execute_asset_transaction_with_checked_preimage(
@@ -728,6 +748,7 @@ pub fn execute_asset_transaction_with_compatibility(
         tx_id,
         &signing_bytes,
         compatibility,
+        orchard_balances,
     )
 }
 
@@ -747,6 +768,7 @@ pub fn execute_asset_transaction_with_replay_preimage(
         tx_id,
         signing_bytes,
         AssetExecutionCompatibility::strict(),
+        &[],
     )
 }
 
@@ -767,6 +789,7 @@ pub fn execute_asset_transaction_with_replay_preimage_and_compatibility(
         tx_id,
         signing_bytes,
         compatibility,
+        &[],
     )
 }
 
@@ -787,6 +810,7 @@ pub fn execute_asset_transaction_with_replay_compatibility(
         tx_id,
         &signing_bytes,
         compatibility,
+        &[],
     )
 }
 
@@ -798,6 +822,7 @@ fn execute_asset_transaction_with_checked_preimage(
     tx_id: String,
     signing_bytes: &[u8],
     compatibility: AssetExecutionCompatibility,
+    orchard_balances: &[AssetOrchardAssetBalance],
 ) -> Receipt {
     let allow_legacy_vault_bridge_consume_supply_operator =
         !compatibility.bridge_verification_rules_active(block_height);
@@ -984,6 +1009,7 @@ fn execute_asset_transaction_with_checked_preimage(
         transaction,
         block_height,
         compatibility,
+        orchard_balances,
     ) {
         return Receipt::rejected(tx_id, code, message).with_fee_policy_and_state_expansion(
             0,

@@ -52,6 +52,26 @@ pub(super) fn execute_transparent_batch(
     block_height: u64,
     asset_execution_compatibility: AssetExecutionCompatibility,
 ) -> Vec<Receipt> {
+    execute_transparent_batch_with_orchard(
+        genesis,
+        governance,
+        ledger,
+        batch,
+        block_height,
+        asset_execution_compatibility,
+        &[],
+    )
+}
+
+pub(super) fn execute_transparent_batch_with_orchard(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &mut LedgerState,
+    batch: &TransactionBatch,
+    block_height: u64,
+    asset_execution_compatibility: AssetExecutionCompatibility,
+    orchard_balances: &[postfiat_types::AssetOrchardAssetBalance],
+) -> Vec<Receipt> {
     let mut receipts = Vec::with_capacity(batch.transaction_count());
     for transfer in &batch.transactions {
         receipts.push(execute_transfer(genesis, ledger, transfer));
@@ -63,12 +83,13 @@ pub(super) fn execute_transparent_batch(
         receipts.push(
             governed_vault_bridge_route_rejection(transaction, governance, ledger, block_height)
                 .unwrap_or_else(|| {
-                    execute_asset_transaction_with_compatibility(
+                    execute_asset_transaction_with_compatibility_and_orchard(
                         genesis,
                         ledger,
                         transaction,
                         block_height,
                         asset_execution_compatibility,
+                        orchard_balances,
                     )
                 }),
         );
