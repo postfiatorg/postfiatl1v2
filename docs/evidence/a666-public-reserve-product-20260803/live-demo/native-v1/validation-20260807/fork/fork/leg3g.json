@@ -1,0 +1,9 @@
+{
+  "leg":"3g",
+  "executed":false,
+  "status":"NOT-EXECUTED",
+  "verdict":"CONSTRUCTION-PASS/AMOUNT-CHAINED",
+  "reason":"leg3e produced no receipt; Permit2 amount and calldata are receipt-chained and cannot be safely constructed from a live output",
+  "packet_amount":"PENDING-FIRE-TIME:leg3e-receipt-usdc-output-atoms",
+  "gas_ceiling_usdc":"0.0286"
+}

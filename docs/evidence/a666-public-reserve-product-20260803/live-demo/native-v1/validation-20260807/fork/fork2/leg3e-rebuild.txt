@@ -1,0 +1,13 @@
+snapshot="0x0"
+true
+fork_timestamp=1786112802
+fresh_deadline=1786116402
+eth_call_with_minout_zero=0x
+probe_status=0x1
+probe_tx=0xfda366a0f054f85957b386ebad5f516e482f7be57677d3330a12c661c4109864
+usdc_before=74161443
+usdc_after=82219301
+fresh_fill_usdc_atoms=8057858
+fresh_min_out_floor_97pct=7816122
+pinned_expected_fill=8057858
+pinned_min_out=7816122

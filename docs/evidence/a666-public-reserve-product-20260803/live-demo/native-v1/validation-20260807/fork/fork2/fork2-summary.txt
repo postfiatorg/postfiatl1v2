@@ -1,0 +1,15 @@
+V-FORK-2 regenerated-call-data summary
+Fork: local Anvil only, impersonation account 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0; no StakeHub custody/signing or live broadcast.
+
+leg | template/source | rebuilt fields | receipt/status | deltas | verdict
+3c | packet approve | none | 0x1 | allowance 11027135 | PASS
+3d | packet permit2 approval | deadline -> fork timestamp + 3600 | 0x1 | approval amount 11027135 | PASS-REBUILT
+3e | packet forward swap | deadline, min_out, none otherwise | 0x1 | wA666 -11027135; USDC +8057858 | PASS-REBUILT; fresh fill 8057858, min_out 7816122
+3f | packet reverse approve | receipt-chained USDC amount 8057858; deadline | 0x1 | allowance 8057858 | PASS-REBUILT
+3g | packet reverse permit2 approval | receipt-chained USDC amount 8057858; deadline | 0x1 | approval 8057858 | PASS-REBUILT
+3h | forward calldata structural template; packet's own calldata is unresolved PENDING | deadline, zeroForOne=1, amount-in 8057858, min_out 10682972, settlement/take token addresses; pool key order preserved | 0x1 (0x418195f6118d63f0cdde21f846cb4804f190aee323a225fbad654db22b074aa1) | USDC -8057858; wA666 +11013374 | PASS-REBUILT; fresh fill 11013374, min_out 10682972
+4 | native-leg4-return-burn-import phase-1 | amount resolved to 11013374 but no signing | NOT RUN | none | UNVALIDATED: constrained-signer socket forbidden
+5b | native-leg5b-bridge-out | no resolvable calldata; leg5a receipt/signatures absent | NOT RUN | none | UNVALIDATED: dependent reports and custody unavailable
+
+Leg3h correction: prior PoolNotInitialized was caused by globally swapping token addresses and violating pool-key currency ordering. The corrected reconstruction preserved the forward template's pool-key currency0<currency1 order and changed only reverse direction/fire-time fields. The packet's own leg3h executor calldata remains PENDING, so this structural reconstruction is explicitly recorded.
+Executed steps required StakeHub: no. Every executed step used local Anvil impersonation and cast; custody-dependent leg4 and leg5b were not executed.

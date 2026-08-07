@@ -1,0 +1,14 @@
+{
+  "leg": "4",
+  "status": "UNVALIDATED",
+  "verdict": "UNVALIDATED",
+  "executed": false,
+  "amount_atoms_resolved_from_leg3h": 11013374,
+  "expected_receipt": {
+    "status": "0x1",
+    "from": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+    "to": "0x9A0262C0572fb4DB08765408eB225E207F40c3d9",
+    "value_wei": "0"
+  },
+  "reason": "phase-1 packet requires the constrained-signer socket; this fork run forbids live custody/signing and uses impersonation only"
+}

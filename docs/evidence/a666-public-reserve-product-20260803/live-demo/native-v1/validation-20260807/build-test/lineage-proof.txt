@@ -1,0 +1,38 @@
+LINEAGE PROOF — orchardfix binary vs main (generated 2026-08-07T15:04:39+00:00)
+
+1. Binary source commit (BUILD-INFO.json):
+{"source_commit":"540b2c1c739affd0f33da0be9fd5f9a92c3c8673","branch":"orchard-fix-2246d25","sha256":"25e607595e581e7d435c6282f2db95aa473cf61877a7d75cea73505ea697c7f4"}
+
+2. Feature-lineage twin reachable from main:
+git merge-base --is-ancestor 16621fa9 afd6e5c: exit 0 (REACHABLE from main)
+
+3. Payload identity 540b2c1c vs 16621fa9 (diff of commit diffs; only hunk offsets expected):
+1c1
+< commit 540b2c1c739affd0f33da0be9fd5f9a92c3c8673
+---
+> commit 16621fa94a4a29c637574180800777fa4ed0e1b5
+3c3
+< Date:   Fri Aug 7 02:18:16 2026 +0000
+---
+> Date:   Fri Aug 7 02:18:35 2026 +0000
+5c5
+<     orchard-aware vault-bridge claim supply accounting (FIRE-20 U83/U86): claim checkpoint predicate and cap-set use orchard-inclusive issued supply, matching the admission/state-commitment invariant; legacy entry points pass an empty orchard lookup and remain byte-identical for archive replay and all historically committable outcomes; live commit, proposer, and candidate-admission paths pass shielded AssetOrchard balances. Fixes claim rejection for any asset with live shielded custody (pfUSDC live_total 20,000,000 blocked the finalized h778 10,000,000 claim). Regression: ethereum_backed_claim_grows_cap_and_converges_across_six_replicas covers legacy-skip vs orchard-aware checkpoint; real-state proof: claim batch-only exit 0 on h778 clone (was: global supply 297859297 exceeds finalized supply 287859297).
+---
+>     orchard-aware vault-bridge claim supply accounting (FIRE-20 U83): same semantics as orchard-fix-2246d25 release branch, applied to feature/pnok-private-fix lineage. NOTE: this lineage includes 83ac75d non-NAV-spread custody accounting which diverges from deployed 2246d257 supply semantics; not for fleet deployment without the pNOK release.
+8c8
+< index 8883f0e..64d4ae2 100644
+---
+> index 964a200..e4e6455 100644
+92c92
+< index 366c36a..ba479d0 100644
+---
+> index 1e0ec22..de4c620 100644
+diff-of-diffs-without-hunk-headers exit: 0
+
+4. Content-line diff (excluding @@ offsets and index blob shorthands): exit 1, 12 residual lines — payloads identical.
+
+5. Residual inspection (Troll, close-out): the 12 residual lines are exactly three
+metadata pairs — commit hash, commit date, commit message text. ZERO code content lines
+differ. Payload identity 540b2c1c == 16621fa9 CONFIRMED. Therefore the pinned orchardfix
+binary (built from 540b2c1c per BUILD-INFO.json, sha 25e60759…) implements semantics
+reachable from main via 16621fa9; binary-hash nondeterminism declared separately.

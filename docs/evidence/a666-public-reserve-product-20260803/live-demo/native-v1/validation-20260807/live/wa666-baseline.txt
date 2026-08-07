@@ -1,0 +1,6 @@
+token=0xee4c92edb03efdd9b519339edc19ad70c69a9be5
+holder=0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0
+observed_balance_atoms=103000000
+expected_balance_atoms=103000000
+packet_match_lines_present
+PASS: address references in packets are leg1 deposit source, leg2/3 recipient or owner metadata, custody labels, and leg5b destination. No executor amount/debit field spends the protected 103,000,000 baseline; swaps are receipt-chained with a gate requiring wallet balance never below baseline.

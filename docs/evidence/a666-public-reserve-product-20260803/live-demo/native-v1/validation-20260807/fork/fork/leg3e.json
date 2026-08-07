@@ -1,0 +1,11 @@
+{
+  "leg": "3e",
+  "status": "SIM-FAIL",
+  "tx_hash": "",
+  "simulation_exit": 1,
+  "expected_fork_fill_usdc_atoms": 8057858,
+  "pinned_min_out_atoms": 7816122,
+  "verdict": "FAIL-UNEXPECTED-REVERT",
+  "revert_reason": "custom error 0x5bf6f916",
+  "revert_decode_path": "/tmp/snaga-val/fork/leg3e-revert-decode.txt"
+}

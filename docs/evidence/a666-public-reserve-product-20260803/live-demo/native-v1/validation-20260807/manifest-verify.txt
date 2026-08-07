@@ -1,0 +1,3 @@
+MANIFEST 100% HASH AUDIT
+entries=103 sha256_matches=103 mismatches=0
+VERDICT: CLEAN

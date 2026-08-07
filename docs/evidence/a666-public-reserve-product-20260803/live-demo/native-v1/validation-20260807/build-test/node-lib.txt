@@ -1,0 +1,5 @@
+test tests::orchard_action_gate_verifies_applies_and_rejects_duplicate_nullifiers ... ok
+test tests::wan_devnet_invalid_asset_orchard_swap_proof_is_rejected_and_valid_swap_still_applies ... ok
+
+test result: ok. 267 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 2496.82s
+

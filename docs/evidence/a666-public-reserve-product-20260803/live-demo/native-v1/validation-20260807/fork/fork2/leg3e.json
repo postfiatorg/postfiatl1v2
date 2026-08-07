@@ -1,0 +1,1 @@
+{"leg":"3e","status":"0x1","tx_hash":"0x6debe870b463f81061dc0c3ff6d29e5c9f9302f981f473f14e69475b093f0b2f","wA666_before":114027135,"wA666_after":103000000,"wA666_delta":-11027135,"usdc_before":74161443,"usdc_after":82219301,"usdc_delta":8057858,"fresh_fill_usdc_atoms":8057858,"fresh_min_out_atoms":7816122,"pinned_min_out_atoms":7816122,"verdict":"PASS-REBUILT"}

@@ -1,0 +1,9 @@
+{
+  "leg":"3f",
+  "executed":false,
+  "status":"NOT-EXECUTED",
+  "verdict":"CONSTRUCTION-PASS/AMOUNT-CHAINED",
+  "reason":"leg3e produced no receipt because its pinned calldata eth_call reverted TransactionDeadlinePassed(); receipt-chained USDC input is therefore unavailable",
+  "packet_amount":"PENDING-FIRE-TIME:leg3e-receipt-usdc-output-atoms",
+  "gas_ceiling_usdc":"0.0525"
+}

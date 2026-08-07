@@ -1,0 +1,14 @@
+claim exit: 0
+    "final_status_ms": 6.058782000000001
+  }
+}
+
+=== remaining legs ===
+leg2a-order-reserve: 0 executor commands (HELD placeholder) — SKIP
+leg2b-primary-subscribe: 0 executor commands (HELD placeholder) — SKIP
+leg3a-export-debit: 0 executor commands (HELD placeholder) — SKIP
+leg4-return-burn-import: 0 executor commands (HELD placeholder) — SKIP
+leg5a-primary-redeem: 0 executor commands (HELD placeholder) — SKIP
+leg5b-bridge-out: 3 executor commands (navcoin-bridge ops, not batch-only eligible — require live fleet state)
+
+PRESTATE-CHAINING METHOD: stateless-per-leg. The claim batch-only (leg1) is the only PFTL-mempool-batch operation in the S1 packet set. Legs 2a-5a are HELD placeholders with 0 commands. Leg5b has navcoin-bridge commands that require live fleet state, not batch-only. The prestate chain is: leg1 deposit→propose→finalize→claim (all in one packet), then legs 2-5 are subsequent campaign stages not yet resolved.

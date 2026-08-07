@@ -1,0 +1,7 @@
+bridge_deposits count 59 sum_amount_atoms 425110901
+allocations count 61 sum_amount_atoms 415110931
+receipts count 58 sum_amount_atoms 415110901
+redemptions count 25 sum_amount_atoms 125559005
+buckets count 3 sum_amount_atoms 0
+issued 287859297 circulating 287859297 counted 317551406 epoch 44
+claim_record {"deposit_id": "e54713583c1bb46e908e8f01f1c996966dc5c82281365c91092a27ae0852d02b", "amount_atoms": 10000000, "status": "finalized", "finalized_at_height": 778, "expires_at_height": 1776, "pftl_recipient": "pfab9b9228942e5c529633a13aa271d5297bec6353", "tx_hash": "016f9c5f9b99fc951cea7c539f7f791c2d753d35793296b2e284f96512575924", "evidence_root": "f72c42efd83058d93c7dabd518ea94b2e93ff9a5314e1824764c6c780bdbfd8dc5f3fb22ce8b441b4f3159c092755bb3"}

@@ -1,0 +1,5 @@
+LEG4 phase-1 burn rebuild
+Source packet: native-leg4-return-burn-import.json
+Receipt-chained amount source: leg3h wA666 output
+Resolved amount_atoms: 11013374 (leg3h receipt wA666_delta)
+The packet phase-1 command requires POSTFIAT_SIGNER_SOCKET=/run/user/1000/postfiat-constrained-signer/a666-signer.sock and a constrained-signer custody leaf. This fork run is impersonation-only and forbids live custody/signing, so the phase-1 burn was deliberately not invoked. No calldata or live signer request was made.

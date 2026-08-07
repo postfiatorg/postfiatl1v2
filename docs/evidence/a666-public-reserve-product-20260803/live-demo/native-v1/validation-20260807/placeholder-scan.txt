@@ -1,0 +1,13 @@
+PLACEHOLDER SCAN
+self_excluded=placeholder-scan.txt; MANIFEST.json excluded as generated metadata
+PENDING-TEST-RESULT_COUNT=0
+PENDING-FIRE-TIME_COUNT=894
+PENDING_FIRE_PROVENANCE | fork/fork/leg3f.json | occurrences=1 | COPIED_FORK_EVIDENCE_PROVENANCE
+PENDING_FIRE_PROVENANCE | fork/fork/leg3g.json | occurrences=1 | COPIED_FORK_EVIDENCE_PROVENANCE
+PENDING_FIRE_PROVENANCE | fork/fork/leg3h.json | occurrences=1 | COPIED_FORK_EVIDENCE_PROVENANCE
+PENDING_FIRE_PROVENANCE | fork/fork/leg4.json | occurrences=1 | COPIED_FORK_EVIDENCE_PROVENANCE
+PENDING_FIRE_PROVENANCE | fork/fork/leg5b.json | occurrences=1 | COPIED_FORK_EVIDENCE_PROVENANCE
+PENDING_FIRE_PROVENANCE | packet/determinism.txt | occurrences=758 | COPIED_DETERMINISM_PROVENANCE
+PENDING_FIRE_PROVENANCE | packet/resolver-full.txt | occurrences=131 | COPIED_PACKET_EVIDENCE_PROVENANCE
+CLASSIFICATION_TOTALS: determinism=758; resolver=131; fork_evidence=5; report=0
+VERDICT: CLEAN

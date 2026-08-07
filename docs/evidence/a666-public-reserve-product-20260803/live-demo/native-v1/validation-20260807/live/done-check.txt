@@ -1,0 +1,4 @@
+DONE-CHECK
+1 wA666 baseline PASS
+2 arithmetic PASS static cells, receipt-chained cells marked unresolved by design
+3 caps PASS
