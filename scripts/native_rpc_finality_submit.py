@@ -106,6 +106,14 @@ def _wrong_proposer(response: dict) -> str | None:
     return match.group(1)
 
 
+def _persist_response(path: str, response: dict, attempts: list[dict]) -> None:
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    persisted = dict(response)
+    persisted["attempts"] = attempts
+    output.write_text(json.dumps(persisted, indent=2, sort_keys=True) + "\n")
+
+
 def submit(args: argparse.Namespace) -> dict:
     _, signed_json = _load_signed_transaction(Path(args.signed_tx_file))
     timeout_seconds = max(0.001, args.readiness_timeout_ms / 1000.0)
@@ -157,15 +165,22 @@ def submit(args: argparse.Namespace) -> dict:
             attempts.append({"validator": proposer, "port": port, "height": next_height, "view": 0, "outcome": "socket_error"})
             print(f"attempt validator={proposer} port={port} height={next_height} view=0 outcome=socket_error", file=sys.stderr)
             raise StopError(f"finality RPC socket failed for {proposer}:{port}") from exc
-        wrong = _wrong_proposer(response)
+        try:
+            wrong = _wrong_proposer(response)
+        except StopError:
+            attempts.append({"validator": proposer, "port": port, "height": next_height, "view": 0, "outcome": "malformed_response"})
+            _persist_response(args.output, response, attempts)
+            raise
         if wrong is not None:
             attempts.append({"validator": proposer, "port": port, "height": next_height, "view": 0, "outcome": "rpc_finality_wrong_proposer"})
+            _persist_response(args.output, response, attempts)
             print(f"attempt validator={proposer} port={port} height={next_height} view=0 outcome=rpc_finality_wrong_proposer", file=sys.stderr)
             if wrong not in validator_ports:
                 raise StopError(f"wrong-proposer named unknown validator: {wrong}")
             proposer = wrong
             continue
         attempts.append({"validator": proposer, "port": port, "height": next_height, "view": 0, "outcome": "response"})
+        _persist_response(args.output, response, attempts)
         print(f"attempt validator={proposer} port={port} height={next_height} view=0 outcome=response", file=sys.stderr)
         break
     if response is None:
@@ -181,17 +196,17 @@ def submit(args: argparse.Namespace) -> dict:
         raise StopError("finality.confirmed was not true")
     if receipt.get("accepted") is not True:
         raise StopError("finality.receipt.accepted was not true")
-    if result.get("round_ok") is not True:
-        raise StopError("finality round_ok was not true")
+    if result.get("certified_sends_deferred") is not True:
+        raise StopError("finality certified_sends_deferred was not true")
     tx_id = result.get("tx_id")
     header = finality.get("block")
     header = header.get("header") if isinstance(header, dict) else None
     end_height = header.get("height") if isinstance(header, dict) else None
-    if not isinstance(tx_id, str) or not tx_id or not isinstance(end_height, int):
+    if not isinstance(tx_id, str) or not tx_id or not isinstance(end_height, int) or isinstance(end_height, bool):
         raise StopError("finality response missing tx_id or block height")
     response_with_audit = dict(response)
     response_with_audit["attempts"] = attempts
-    return {"response": response_with_audit, "tx_id": tx_id, "end_height": end_height, "round_ok": result["round_ok"], "attempts": attempts}
+    return {"response": response_with_audit, "tx_id": tx_id, "end_height": end_height, "round_ok": result.get("round_ok"), "attempts": attempts}
 
 
 def main(argv: list[str] | None = None) -> int:

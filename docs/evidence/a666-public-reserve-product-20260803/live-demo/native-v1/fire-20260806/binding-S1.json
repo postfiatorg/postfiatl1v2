@@ -20,7 +20,7 @@
     },
     {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg1-bridge-in.json",
-      "sha256": "c9604aa57ba1f231c441ccf9e3a48f459888f140b627f93631023d1c0e08ddb5"
+      "sha256": "296148ac88afc766a15ee9eec87a56e70430d02027982c3f4947f2384ccaa277"
     },
     {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg2a-order-reserve.json",
@@ -120,7 +120,7 @@
       "verified_deposit_id": "0xe54713583c1bb46e908e8f01f1c996966dc5c82281365c91092a27ae0852d02b"
     },
     "leg1_session_id": "native-v1-fire-20260806-leg1-deposit",
-    "rpc_finality_submitter_routing": "submitter auto-routes to deterministic proposer port; re-routes only on typed rpc_finality_wrong_proposer, bounded 6 unique validators, fail-closed exit 2",
+    "rpc_finality_submitter_routing": "submitter auto-routes to deterministic proposer; persists full response before gating; gates ok/confirmed/accepted/certified_sends_deferred/tx_id/height; round_ok audit-only per h714 precedent",
     "leg2a_expires_at_height": 1776,
     "leg2a_reservation_id": "b60d5c5a76a5ca4dde2d612532c22d5ab2fc610db3b0c55ff7b98a0f73ce4f12",
     "leg3a_deadline_base_unix": 1786029594,

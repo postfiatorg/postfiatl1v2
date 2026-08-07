@@ -42,7 +42,7 @@
       "topology": "/etc/postfiat/releases/pnok-private-fix-2246d25/topology.json"
     },
     "leg1_relay_two_phase": {
-      "binding_sha256": "0e710949262b6722977b895b856320ee5e1ffb50f0a6afb5ed71616d647c1df9",
+      "binding_sha256": "5ec071273c56b7162451a9f97cbae828ae631826ef7db205e9b21e76c58670b1",
       "deployment_descriptor_file": "/tmp/krimp-exec-fire20260806/leg-1-reprove/deployment-descriptor.json",
       "deployment_descriptor_sha256": "eb271b08bea23552b0440fd1b2d804d6ff2523c1c9718d1547c05571da4d1805",
       "evm_deposit_json_sha256": "7ed608aef9d3295fa0325ecc07de8cee402df1e9b08c5c135a94c2589cd936ec",
@@ -52,7 +52,7 @@
         "destroyed": true,
         "instance_id": 47022433
       },
-      "packet_sha256": "c9604aa57ba1f231c441ccf9e3a48f459888f140b627f93631023d1c0e08ddb5",
+      "packet_sha256": "296148ac88afc766a15ee9eec87a56e70430d02027982c3f4947f2384ccaa277",
       "proof_calldata_file": "/tmp/krimp-exec-fire20260806/leg-1-reprove/proof-calldata.bin",
       "proof_calldata_sha256": "a5543158b1379268abe1c275a070320998ad2ba20f6941241bebc580a4c8fbcf",
       "proof_report_file": "/tmp/krimp-exec-fire20260806/leg-1-reprove/proof-report.json",
@@ -87,13 +87,13 @@
         "submission_tool": {
           "commit": "90ef0ed",
           "path": "scripts/native_rpc_finality_submit.py",
-          "sha256": "36d900647da01dbe6535ec7628ce8386ed207308d0577895240c7b63f0baa3fa"
+          "sha256": "a29f19e9b67cabc43ed2a9140efdf1aa139f92259881a2311bf9a04428cfe315"
         },
-        "tool_gates": "ok + finality.confirmed + receipt.accepted + round_ok; exit 2 is STOP-no-retry",
-        "routing_provenance": "submitter sha updated for proposer routing (U77); commands unchanged"
+        "tool_gates": "ok===true + finality.confirmed===true + receipt.accepted===true + certified_sends_deferred===true + tx_id nonempty + block.header.height integer; round_ok audit-only per h714 precedent; exit 2 is STOP-no-retry",
+        "routing_provenance": "submitter auto-routes to deterministic proposer; persists full response before gating; gates ok/confirmed/accepted/certified_sends_deferred/tx_id/height; round_ok audit-only per h714 precedent"
       },
       "reprove_provenance": "FIRE-17 live-deposit reprove; descriptor was hash-gated before capture.",
-      "resolution_rules_sha256": "9067a8106b2a577b47edd339e6bfc88b4903e782dfb88cb61fd9ba224d3b956c",
+      "resolution_rules_sha256": "ad3e30c064c4d4947034fa44074877336971ed98b26e5e78e37b2f16d3135be6",
       "stale_fire16_audit": {
         "location": "/tmp/krimp-exec-fire20260806/leg-1/stale-fire16/",
         "proof_calldata_sha256": "63601a4b2c0edf0ea29f4591abe4a91811292cc4ce9c421f9184e0d6e6c690f2",

@@ -42,7 +42,10 @@ def finality_response(**overrides):
     result = {
         "schema": "postfiat-rpc-mempool-submit-signed-asset-transaction-finality-v1",
         "tx_id": "33" * 48,
-        "round_ok": True,
+        # August h714 precedent: deferred sends make round_ok false while
+        # the finality response is still accepted.
+        "certified_sends_deferred": True,
+        "round_ok": False,
         "finality": {
             "confirmed": True,
             "receipt": {"accepted": True},
@@ -116,7 +119,11 @@ def test_green_status_pins_and_finality_envelope(tmp_path, capsys):
         code, output = invoke(tmp_path, rpc)
     assert code == 0
     assert output.exists()
-    assert json.loads(output.read_text())["ok"] is True
+    saved = json.loads(output.read_text())
+    assert saved["ok"] is True
+    assert saved["result"]["certified_sends_deferred"] is True
+    assert saved["result"]["round_ok"] is False
+    assert saved["attempts"]
     assert [request["method"] for request in rpc.requests] == ["status", "mempool_submit_signed_asset_transaction_finality"]
     finality = rpc.requests[1]
     assert finality["version"] == mod.RPC_VERSION
@@ -129,13 +136,29 @@ def test_green_status_pins_and_finality_envelope(tmp_path, capsys):
     assert "campaign 333333333333" in capsys.readouterr().out
 
 
+def test_h714_precedent_shape_round_ok_false_is_accepted(tmp_path):
+    precedent_path = Path(__file__).parents[1] / "deployments/pnok-private-fix-20260801/source-live-route-v2/deposit-500/pftl-finality/01-propose-h714/finality.responses.json"
+    precedent = json.loads(precedent_path.read_text())[0]["response"]
+    assert precedent["ok"] is True
+    assert precedent["result"]["finality"]["confirmed"] is True
+    assert precedent["result"]["finality"]["receipt"]["accepted"] is True
+    assert precedent["result"]["certified_sends_deferred"] is True
+    assert precedent["result"]["round_ok"] is False
+    with RpcServer(status_response(block_height=713), precedent) as rpc:
+        code, output = invoke(tmp_path, rpc)
+    assert code == 0
+    saved = json.loads(output.read_text())
+    assert saved["result"]["round_ok"] is False
+    assert saved["attempts"]
+
+
 @pytest.mark.parametrize(
     "response,needle",
     [
         ({"ok": False}, "not ok"),
         ({"result": {"round_ok": True, "finality": {"confirmed": False, "receipt": {"accepted": True}, "block": {"header": {"height": 1}}}}}, "confirmed"),
         ({"result": {"round_ok": True, "finality": {"confirmed": True, "receipt": {"accepted": False}, "block": {"header": {"height": 1}}}}}, "accepted"),
-        ({"result": {"round_ok": False, "finality": {"confirmed": True, "receipt": {"accepted": True}, "block": {"header": {"height": 1}}}}}, "round_ok"),
+        ({"result": {"certified_sends_deferred": False, "round_ok": False, "finality": {"confirmed": True, "receipt": {"accepted": True}, "block": {"header": {"height": 1}}}}}, "deferred"),
     ],
 )
 def test_each_finality_gate_stops(tmp_path, response, needle):
@@ -145,8 +168,27 @@ def test_each_finality_gate_stops(tmp_path, response, needle):
     else:
         finality["result"].update(response["result"])
     with RpcServer(status_response(), finality) as rpc:
-        code, _ = invoke(tmp_path, rpc)
+        code, output = invoke(tmp_path, rpc)
     assert code == 2
+    persisted = json.loads(output.read_text())
+    assert persisted["attempts"]
+    for key, value in finality.items():
+        assert persisted[key] == value
+
+
+@pytest.mark.parametrize("missing_path", ["tx_id", "height"])
+def test_missing_required_finality_field_persists_response(tmp_path, missing_path):
+    finality = finality_response()
+    if missing_path == "tx_id":
+        del finality["result"]["tx_id"]
+    else:
+        del finality["result"]["finality"]["block"]["header"]["height"]
+    with RpcServer(status_response(), finality) as rpc:
+        code, output = invoke(tmp_path, rpc)
+    assert code == 2
+    persisted = json.loads(output.read_text())
+    assert persisted["result"] == finality["result"]
+    assert len(persisted["attempts"]) == 1
 
 
 @pytest.mark.parametrize("missing", ["block_height", "block_tip_hash", "state_root"])
@@ -229,7 +271,8 @@ def test_wrong_proposer_exhaustion_attempts_each_validator_once(tmp_path):
         mapping = ",".join(f"validator-{index}:{server.server.server_address[1]}" for index, server in enumerate(servers))
         code, output = invoke(tmp_path, servers[0], validator_ports=mapping)
         assert code == 2
-        assert not output.exists()
+        assert output.exists()
+        assert len(json.loads(output.read_text())["attempts"]) == 6
         # stdout is intentionally not used for a failed run; inspect each server's request count.
         assert sum(1 for server in servers for request in server.requests if request.get("method") == "mempool_submit_signed_asset_transaction_finality") == 6
     finally:

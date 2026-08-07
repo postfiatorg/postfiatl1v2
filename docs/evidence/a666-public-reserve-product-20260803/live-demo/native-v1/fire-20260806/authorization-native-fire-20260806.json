@@ -16,20 +16,20 @@
     "/home/postfiat/tmp/navswap-ce22-venue-rebuild-20260719/private/"
   ],
   "fire_10_finalization": {
-    "binding_sha256": "0e710949262b6722977b895b856320ee5e1ffb50f0a6afb5ed71616d647c1df9",
+    "binding_sha256": "5ec071273c56b7162451a9f97cbae828ae631826ef7db205e9b21e76c58670b1",
     "leg3a_optional_digest_fields": "omitted",
     "status": "STAGED-S1-RESOLVED-EXCEPT-RECEIPT-CHAIN-AND-PROVER-SOURCES",
     "u57_contract_leaf": "scripts/native_evm_contract_leaf.py",
     "u57_prover_leaf": "scripts/native_prover_leaf.py",
     "u57_prover_leaf_sha256": "95f1a5c3b66052676fcd948401076fb55c5dfd1d105d7c2d44992de7a622dbb1",
     "u76_rpc_finality_submit": "scripts/native_rpc_finality_submit.py",
-    "u76_rpc_finality_submit_sha256": "36d900647da01dbe6535ec7628ce8386ed207308d0577895240c7b63f0baa3fa",
+    "u76_rpc_finality_submit_sha256": "a29f19e9b67cabc43ed2a9140efdf1aa139f92259881a2311bf9a04428cfe315",
     "u58_staged_fields_contract": "packet,json_pointer,source,stage"
   },
   "fire_16_relay_rebind": {
-    "binding_sha256": "0e710949262b6722977b895b856320ee5e1ffb50f0a6afb5ed71616d647c1df9",
+    "binding_sha256": "5ec071273c56b7162451a9f97cbae828ae631826ef7db205e9b21e76c58670b1",
     "leg1_packet_path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/packets-S1/native-leg1-bridge-in.json",
-    "leg1_packet_sha256": "c9604aa57ba1f231c441ccf9e3a48f459888f140b627f93631023d1c0e08ddb5",
+    "leg1_packet_sha256": "296148ac88afc766a15ee9eec87a56e70430d02027982c3f4947f2384ccaa277",
     "mode": "two-phase control-host signed public batch handoff"
   },
   "fire_1_evidence": {
@@ -46,7 +46,7 @@
   },
   "resolution_rules": {
     "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/resolution-rules.md",
-    "sha256": "9067a8106b2a577b47edd339e6bfc88b4903e782dfb88cb61fd9ba224d3b956c"
+    "sha256": "ad3e30c064c4d4947034fa44074877336971ed98b26e5e78e37b2f16d3135be6"
   },
   "route_pins": {
     "canonical_binary_sha256": "05330fb20a40b8a4536000ec57da1862d879bcdc4a21bc8c0657f5c56aa8e0f5",
@@ -64,7 +64,7 @@
   "stage_bindings": {
     "S1": {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/binding-S1.json",
-      "sha256": "0e710949262b6722977b895b856320ee5e1ffb50f0a6afb5ed71616d647c1df9"
+      "sha256": "5ec071273c56b7162451a9f97cbae828ae631826ef7db205e9b21e76c58670b1"
     },
     "S2": {
       "path": "docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/binding-S2.json",
