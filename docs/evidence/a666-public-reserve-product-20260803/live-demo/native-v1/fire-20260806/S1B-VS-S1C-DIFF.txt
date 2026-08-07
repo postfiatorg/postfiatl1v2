@@ -1,0 +1,74 @@
+# S1b vs S1c canonical diff
+
+## native-leg0-proxy-verify.json: ALLOWLIST PASS (3 leaves)
+- `/fire_hash_confirmation`
+- `/resolution_stage`
+- `/resolved_fields/2/resolved_value`
+## native-leg1-bridge-in.json: ALLOWLIST PASS (3 leaves)
+- `/fire_hash_confirmation`
+- `/resolution_stage`
+- `/resolved_fields/2/resolved_value`
+## native-leg2a-order-reserve.json: ALLOWLIST PASS (3 leaves)
+- `/fire_hash_confirmation`
+- `/resolution_stage`
+- `/resolved_fields/0/resolved_value`
+## native-leg2b-primary-subscribe.json: ALLOWLIST PASS (3 leaves)
+- `/fire_hash_confirmation`
+- `/resolution_stage`
+- `/resolved_fields/0/resolved_value`
+## native-leg3a-export-debit.json: ALLOWLIST PASS (5 leaves)
+- `/fire_hash_confirmation`
+- `/ops_file_template/operations/0/operation/destination_deadline_seconds`
+- `/resolution_stage`
+- `/resolved_fields/0/resolved_value`
+- `/resolved_fields/2/resolved_value`
+## native-leg3b-accept-mint.json: ALLOWLIST PASS (3 leaves)
+- `/fire_hash_confirmation`
+- `/resolution_stage`
+- `/resolved_fields/1/resolved_value`
+## native-leg3b0-signer-funding.json: ALLOWLIST PASS (7 leaves)
+- `/budget_guard/leg_ceiling_usdc`
+- `/executor/commands/0/13`
+- `/fire_hash_confirmation`
+- `/resolution_stage`
+- `/resolved_fields/0/resolved_value`
+- `/resolved_fields/2/resolved_value/commands/0/13`
+- `/resolved_fields/3/resolved_value`
+## native-leg3c-approve-wa666-permit2.json: ALLOWLIST PASS (7 leaves)
+- `/budget_guard/leg_ceiling_usdc`
+- `/executor/commands/0/17`
+- `/fire_hash_confirmation`
+- `/resolution_stage`
+- `/resolved_fields/0/resolved_value`
+- `/resolved_fields/1/resolved_value/commands/0/17`
+- `/resolved_fields/2/resolved_value`
+## native-leg3d-permit2-wa666-router.json: ALLOWLIST PASS (9 leaves)
+- `/budget_guard/leg_ceiling_usdc`
+- `/executor/commands/0/17`
+- `/executor/commands/0/5`
+- `/fire_hash_confirmation`
+- `/resolution_stage`
+- `/resolved_fields/0/resolved_value`
+- `/resolved_fields/1/resolved_value/commands/0/17`
+- `/resolved_fields/1/resolved_value/commands/0/5`
+- `/resolved_fields/2/resolved_value`
+## native-leg3e-swap-wa666-usdc.json: ALLOWLIST PASS (11 leaves)
+- `/budget_guard/leg_ceiling_usdc`
+- `/executor/commands/0/17`
+- `/executor/commands/0/5`
+- `/fire_hash_confirmation`
+- `/harness`
+- `/resolution_stage`
+- `/resolved_fields/1/resolved_value`
+- `/resolved_fields/2/resolved_value/commands/0/17`
+- `/resolved_fields/2/resolved_value/commands/0/5`
+- `/resolved_fields/3/resolved_value`
+- `/resolved_fields/4/resolved_value`
+
+## Invariants
+- fill 8057858: identical
+- min-out 7816122: identical
+- amount 11027135: identical
+- reservation, subscription nonce, and export nonce: identical
+
+VERDICT: ALLOWLIST-CLEAN
