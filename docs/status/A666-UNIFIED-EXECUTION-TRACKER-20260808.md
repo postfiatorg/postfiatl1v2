@@ -21,9 +21,9 @@
 
 | Gate | State | Evidence |
 |---|---|---|
-| Docs publication (Step 0) | OPEN | |
-| A0 preflight | OPEN | |
-| A1 NEAR fix | OPEN | |
+| Docs publication (Step 0) | CLOSED | postfiatl1v2 main 65c0e71..fe72c3a; StakeHub master 6382478..e3fed38; strict builds + redaction PASS |
+| A0 preflight | CLOSED | /tmp/a666-unified-a0/A0-PREFLIGHT-REPORT.md — zero drift vs handoff snapshot; agent unlocked, policy restored (12k/50k/24 whitelist); fleet 6/6 h779 converged; wA666 baseline intact; nonce 304 |
+| A1 NEAR fix | CLOSED | StakeHub master 2839f4e; threshold 150->85; real mainnet v6 fixture h210383329 lpv86; RED on parent, 63/63 GREEN with fix |
 | A2 reader session | OPEN | |
 | A3 E6 proof | OPEN | |
 | A4 E6 finalize | OPEN | |
@@ -49,4 +49,5 @@
 
 (append-only; every agent writes before/after each gate)
 
+- 2026-08-08 ~01:15 UTC: Manager: Step 0 + A0 + A1 closed in one session. Executor-A/Verifier-A roles currently performed by Manager (no live mutation yet; A2 is the first custody op).
 - 2026-08-08: Manager: plan committed to docs/plans/, tracker created, fire-discipline skill read and bound to Track A. Envelope active per principal GO.
