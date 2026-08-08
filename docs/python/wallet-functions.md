@@ -354,5 +354,7 @@ sent = send_pft(
 
 ```bash
 PYTHONPATH=python python -m unittest discover -s python/tests
+# HISTORICAL: the command below was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/testnet-python-wallet-functions-smoke
 ```

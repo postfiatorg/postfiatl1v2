@@ -42,6 +42,8 @@ scripts/docs-site-serve --host 127.0.0.1 --port 8088
 Start with the existing scripts instead of inventing a new harness:
 
 ```bash
+# HISTORICAL: devnet-sdk-rpc-smoke was archived outside the repository during
+# the open-source cleanup; see scripts/README.md. The other commands remain.
 scripts/devnet-up
 scripts/devnet-sdk-rpc-smoke
 scripts/devnet-submit-transfer

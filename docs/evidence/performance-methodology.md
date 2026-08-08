@@ -27,6 +27,8 @@ throughput figure must be rebenchmarked before it becomes a fee constant.
 Run from the repository root:
 
 ```bash
+# HISTORICAL: these commands were archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/performance-methodology-policy-verify --fixtures
 scripts/performance-methodology-policy-verify --write-report
 scripts/performance-methodology-policy-verify --verify-report

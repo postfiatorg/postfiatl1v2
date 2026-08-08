@@ -8,8 +8,8 @@
 > [A666 current state](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
 > Prototype statements below remain historical implementation context.
 
-Status: native NAV smoke  
-Script: `scripts/navcoin-current-infra-smoke`
+Status: historical native NAV smoke
+Script: `scripts/navcoin-current-infra-smoke` *(archived outside this repository; see `scripts/README.md`)*
 
 > This page documents the settlement rail. The verification layer that
 > now governs whether reserve packets may finalize — proof profiles,
@@ -32,8 +32,8 @@ This proves the operating shape without adding a general smart-contract VM.
 
 ## What The Smoke Does
 
-`scripts/navcoin-current-infra-smoke` starts a controlled validator devnet and
-runs the NAVCOIN path end to end:
+The archived `scripts/navcoin-current-infra-smoke` (see `scripts/README.md`)
+started a controlled validator devnet and ran the NAVCOIN path end to end:
 
 1. Create a `NAV` issued asset.
 2. Write a reserve packet that binds supply, NAV per unit, verified net assets,
@@ -52,6 +52,8 @@ runs the NAVCOIN path end to end:
 Run:
 
 ```bash
+# HISTORICAL: this command was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/navcoin-current-infra-smoke
 ```
 

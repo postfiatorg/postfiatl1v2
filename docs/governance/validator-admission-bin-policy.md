@@ -41,6 +41,8 @@ The fixture suite requires the selector to handle these cases:
 Run the verifier from the repository root:
 
 ```bash
+# HISTORICAL: these commands were archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/validator-admission-bin-policy-verify --fixtures
 scripts/validator-admission-bin-policy-verify --write-report
 scripts/validator-admission-bin-policy-verify --verify-report

@@ -162,6 +162,8 @@ The invalid fixtures cover the first fail-closed cases:
 Focused schema validation can be run locally with:
 
 ```bash
+# HISTORICAL: this command was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/validator-evidence-fixtures-validate
 ```
 

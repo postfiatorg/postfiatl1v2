@@ -61,6 +61,8 @@ docs/governance/agent/fixtures/privacy_assurance_receipt/invalid_ungoverned_poli
 ## Verification
 
 ```bash
+# HISTORICAL: these commands were archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/privacy-assurance-receipt-verify --fixtures
 scripts/privacy-assurance-receipt-verify --write-report
 scripts/privacy-assurance-receipt-verify --verify-report

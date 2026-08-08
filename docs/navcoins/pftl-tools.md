@@ -12,21 +12,23 @@ commands, Python builders, and contracts behind the docs.
 
 ## Smoke and evidence scripts
 
-| Tool | Purpose |
-|---|---|
-| `scripts/navcoin-current-infra-smoke` | Runs the native NAV lifecycle: issued asset, NAV registration, reserve packet, epoch finalization, mint, offer-book swap, redeem, and validator convergence. |
-| `scripts/navcoin-multifetch-smoke` | Exercises `multi-fetch-quorum` against live Hyperliquid data with registered attestors, observation roots, tolerance policy, and quorum finalization. |
-| `scripts/hyperliquid-drift-study` | Measures snapshot drift so tolerance bands are based on observed external-source behavior instead of exact-match assumptions. |
-| `scripts/navcoin-a651-wan-devnet-phase1` | Registers and finalizes interim a651 NAV state on the WAN devnet. |
-| `scripts/navcoin-sp1-test-wan-devnet.sh` | Tests the SP1-backed a651 proof path against WAN devnet state. |
-| `scripts/navcoin-sp1-test-wan-devnet-remote.sh` | Remote-run variant of the SP1 WAN devnet proof path. |
-| `scripts/navcoin-a651-sp1-wan-devnet-remote.sh` | Remote a651/SP1 WAN devnet execution helper. |
-| `scripts/navcoin-market-ops-cold-start-check` | Checks market-operation cold-start assumptions and parameter readiness. |
-| `scripts/private-a651-pfusdc-optimized-swap-live` | Runs the legacy optimized private a651/pfUSDC shielded swap path for regression/reproduction. |
+| Tool | Purpose | Availability |
+|---|---|---|
+| `scripts/navcoin-current-infra-smoke` | Runs the native NAV lifecycle: issued asset, NAV registration, reserve packet, epoch finalization, mint, offer-book swap, redeem, and validator convergence. | Archived outside this repository; see `scripts/README.md`. |
+| `scripts/navcoin-multifetch-smoke` | Exercises `multi-fetch-quorum` against live Hyperliquid data with registered attestors, observation roots, tolerance policy, and quorum finalization. | Archived outside this repository; see `scripts/README.md`. |
+| `scripts/hyperliquid-drift-study` | Measures snapshot drift so tolerance bands are based on observed external-source behavior instead of exact-match assumptions. | Archived outside this repository; see `scripts/README.md`. |
+| `scripts/navcoin-a651-wan-devnet-phase1` | Registers and finalizes interim a651 NAV state on the WAN devnet. | Archived outside this repository; see `scripts/README.md`. |
+| `scripts/navcoin-sp1-test-wan-devnet.sh` | Tests the SP1-backed a651 proof path against WAN devnet state. | Archived outside this repository; see `scripts/README.md`. |
+| `scripts/navcoin-sp1-test-wan-devnet-remote.sh` | Remote-run variant of the SP1 WAN devnet proof path. | Archived outside this repository; see `scripts/README.md`. |
+| `scripts/navcoin-a651-sp1-wan-devnet-remote.sh` | Remote a651/SP1 WAN devnet execution helper. | Archived outside this repository; see `scripts/README.md`. |
+| `scripts/navcoin-market-ops-cold-start-check` | Checks market-operation cold-start assumptions and parameter readiness. | Archived outside this repository; see `scripts/README.md`. |
+| `scripts/private-a651-pfusdc-optimized-swap-live` | Runs the legacy optimized private a651/pfUSDC shielded swap path for regression/reproduction. | Current in-repository command. |
 
 Common local runs:
 
 ```bash
+# HISTORICAL: the first two commands were archived outside the repository
+# during the open-source cleanup; see scripts/README.md.
 scripts/navcoin-current-infra-smoke
 scripts/navcoin-multifetch-smoke
 PYTHONPATH=python python3 docs/examples/navcoin_mint_and_nav.py
