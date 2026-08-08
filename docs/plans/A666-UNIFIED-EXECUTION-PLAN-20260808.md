@@ -555,3 +555,10 @@ Respawn state (verify live again before trusting):
 - Additive commit `9bdc024986a031258cbece8d66b27ed4edde9375` binds only those reviewed lines by exact path, line number, and SHA-256 of the complete source line. Any content change or movement produces both the original direct-proving class and a stale-allowlist class. New self-tests reconstruct the exact vectors and prove drift rejection.
 - Recovery-policy self-test and full reviewed-tree check pass; Python compile, public secret self-test and exact-tree scan, source portability, and diff checks pass. The branch was fast-forward pushed and PR31's body updated; no pushed history was rewritten.
 - PR30 remains unchanged and held. Watcher stays disarmed; PR7, service, Vast provider surface, A6/B4-frozen worktrees, target-jammy, deletion, cleanup, retirement, and history rewrite remain untouched.
+
+### 2026-08-08 08:59Z — PR31 recovery-policy runner portability repaired
+
+- The third matrix still failed in the recovery-policy self-test. Location/class-safe log extraction identified the failure class and missing executable location only: this Rust runner does not provide ambient `rg`. No new code finding or secret value appeared.
+- Additive commit `4e19949278bc14a714f36dcb93b18875807a3b17` replaces `rg --files` with captured `git ls-files --cached --others --exclude-standard` for real repositories and a bounded Python walk for the self-test's non-Git miniature trees. Enumeration output is captured; only scanner locations/classes can be emitted.
+- The exact policy self-test and full reviewed-tree check both pass with a PATH that deliberately excludes `rg`. Python compile, exact-tree public secret scan, source portability, and diff checks pass. Branch push was fast-forward only; PR31 body and tracker were updated; a fresh matrix is active.
+- PR30 remains unchanged and held. Watcher stays disarmed; PR7, service, Vast provider surface, A6/B4-frozen worktrees, target-jammy, deletion, cleanup, retirement, and history rewrite remain untouched.
