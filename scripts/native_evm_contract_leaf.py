@@ -22,6 +22,12 @@ def rpc(url, method, params):
     if obj.get("error"): raise RuntimeError(str(obj["error"]))
     return obj.get("result")
 def num(v): return int(v,16) if isinstance(v,str) and v.startswith("0x") else int(v)
+def sender(home):
+    value=json.loads((Path(home)/"manifest.json").read_text())["evm"]["address"]
+    if not isinstance(value,str) or not value.startswith("0x") or len(value)!=42:
+        raise ValueError("stakehub manifest omitted valid evm sender")
+    int(value[2:],16)
+    return value
 def receipt(url,tx):
     for _ in range(120):
         got=rpc(url,"eth_getTransactionReceipt",[tx])
@@ -35,7 +41,7 @@ def main(argv=None):
         data=Path(a.calldata[1:]).read_text().strip() if a.calldata.startswith("@") else a.calldata
         if not data.startswith("0x"): raise ValueError("calldata must be 0x hex or @file")
         int(data[2:] or "0",16)
-        gas=num(rpc(a.rpc_url,"eth_estimateGas",[{"to":a.to,"data":data,"value":hex(a.value_wei)}])); price=num(rpc(a.rpc_url,"eth_gasPrice",[]))
+        gas=num(rpc(a.rpc_url,"eth_estimateGas",[{"from":sender(a.stakehub_home),"to":a.to,"data":data,"value":hex(a.value_wei)}])); price=num(rpc(a.rpc_url,"eth_gasPrice",[]))
         if gas*price>a.fee_ceiling_wei: raise RuntimeError("estimated fee exceeds ceiling")
         os.environ.setdefault("EVM_RPC_URL",a.rpc_url)
         tx = native_agentd_leaf.evm_contract_tx(
