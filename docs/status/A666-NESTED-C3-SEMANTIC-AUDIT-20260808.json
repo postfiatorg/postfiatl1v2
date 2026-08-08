@@ -6371,10 +6371,1626 @@
       "worktree": "/home/postfiat/repos/_worktree_holding/pftl1v2-pr9-ambient-backlog"
     }
   ],
+  "canonical_control_body_summaries": [
+    {
+      "body_bytes": 379,
+      "body_sha256": "e712c8011d89796d661fdf4f3203085db3660ee236c01d9f33a70e47885fe98f",
+      "called_identifiers": [
+        "is_empty",
+        "is_lower_hex",
+        "is_multiple_of",
+        "len",
+        "to_string"
+      ],
+      "control_class": "cobalt-signature-shape-validation",
+      "definition_found": true,
+      "identifier": "validate_rbc_signature_hex",
+      "locations": [
+        "crates/consensus_cobalt/src/internal_validation.rs"
+      ],
+      "parameter_identifiers": [
+        "signature_hex"
+      ],
+      "referenced_constants": [
+        "MAX_COBALT_SIGNATURE_HEX_LEN",
+        "RBC"
+      ],
+      "referenced_type_identifiers": [
+        "Cobalt",
+        "Err"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 7,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 585,
+      "body_sha256": "e4a20528cab50293d300010ecc56ba80962d200d90c4cf6744df9b0457f760d6",
+      "called_identifiers": [
+        "rbc_echo_message_id",
+        "to_string",
+        "validate_rbc_linked_message"
+      ],
+      "control_class": "cobalt-rbc-echo-validation",
+      "definition_found": true,
+      "identifier": "validate_rbc_echo",
+      "locations": [
+        "crates/consensus_cobalt/src/rbc_abba_mvba.rs"
+      ],
+      "parameter_identifiers": [
+        "domain",
+        "message",
+        "propose"
+      ],
+      "referenced_constants": [
+        "RBC"
+      ],
+      "referenced_type_identifiers": [
+        "Err"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 1,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 2,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 1,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 580,
+      "body_sha256": "d1369a6669b7301aa081bac83dea70233dd9b3a2ca9e1dd20682ec7a828aacc6",
+      "called_identifiers": [
+        "rbc_propose_message_id",
+        "to_string",
+        "validate_hash_hex",
+        "validate_node_id",
+        "validate_rbc_domain",
+        "validate_rbc_signature_hex"
+      ],
+      "control_class": "cobalt-rbc-propose-validation",
+      "definition_found": true,
+      "identifier": "validate_rbc_propose",
+      "locations": [
+        "crates/consensus_cobalt/src/rbc_abba_mvba.rs"
+      ],
+      "parameter_identifiers": [
+        "domain",
+        "message"
+      ],
+      "referenced_constants": [
+        "RBC"
+      ],
+      "referenced_type_identifiers": [
+        "Err"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 1,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 2,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 2,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 1338,
+      "body_sha256": "d94c9073562972e367cb12a11ec914df4a32c13a338aa22237c54589f0ab127d",
+      "called_identifiers": [
+        "assert",
+        "build_rbc_echo",
+        "build_rbc_propose",
+        "clone",
+        "contains",
+        "expect",
+        "expect_err",
+        "root",
+        "test_domain",
+        "to_string",
+        "validate_rbc_echo",
+        "validate_rbc_propose"
+      ],
+      "control_class": "cobalt-tamper-regression",
+      "definition_found": true,
+      "identifier": "rbc_validation_rejects_tampered_bindings",
+      "locations": [
+        "crates/consensus_cobalt/src/tests.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [
+        "ABCD",
+        "RBC"
+      ],
+      "referenced_type_identifiers": [],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 5,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 9,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 215,
+      "body_sha256": "d20893f988ce03bff2246d6ea5d732721fc7054f8350f313240e9599468ae7af",
+      "called_identifiers": [
+        "matches"
+      ],
+      "control_class": "debug-proof-chain-allow-policy",
+      "definition_found": true,
+      "identifier": "debug_proof_chain_id_allowed",
+      "locations": [
+        "crates/proofs/src/lib.rs"
+      ],
+      "parameter_identifiers": [
+        "chain_id"
+      ],
+      "referenced_constants": [],
+      "referenced_type_identifiers": [],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 1,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 103,
+      "body_sha256": "be3912bf66d078fc92e5ddb1ace6d04c80930bc6cd4e430ce7903ff68db9891f",
+      "called_identifiers": [
+        "debug_proof_chain_id_allowed",
+        "is_lower_hex_len"
+      ],
+      "control_class": "debug-proof-chain-gate",
+      "definition_found": true,
+      "identifier": "debug_proofs_enabled_for_chain",
+      "locations": [
+        "crates/proofs/src/lib.rs"
+      ],
+      "parameter_identifiers": [
+        "chain_id",
+        "genesis_hash"
+      ],
+      "referenced_constants": [
+        "PROTOCOL_HASH_HEX_LEN"
+      ],
+      "referenced_type_identifiers": [],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 2,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 62,
+      "body_sha256": "12c46e5627d55e0ce019e128032ed818f349b2dfb429e18402583109b017178e",
+      "called_identifiers": [
+        "debug_proofs_enabled_for_chain"
+      ],
+      "control_class": "debug-pool-chain-gate",
+      "definition_found": true,
+      "identifier": "debug_shielded_pool_enabled_for_chain",
+      "locations": [
+        "crates/privacy/src/lib.rs"
+      ],
+      "parameter_identifiers": [
+        "chain_id",
+        "genesis_hash"
+      ],
+      "referenced_constants": [],
+      "referenced_type_identifiers": [],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 1,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 425,
+      "body_sha256": "18545e4cd5efacd340e5e2cd900484c35a16fe82eed650675735a1b3a0f83d73",
+      "called_identifiers": [
+        "assert",
+        "contains",
+        "debug_proofs_enabled_for_chain",
+        "expect_err",
+        "for_chain",
+        "hex96",
+        "to_string"
+      ],
+      "control_class": "debug-mainnet-rejection-regression",
+      "definition_found": true,
+      "identifier": "debug_proof_gate_rejects_mainnet_chain_ids",
+      "locations": [
+        "crates/proofs/src/lib.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [],
+      "referenced_type_identifiers": [
+        "DebugProofSystem"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 1,
+        "limit": 0,
+        "mainnet": 3,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 213,
+      "body_sha256": "26cdaac56b8153d20d5f186da2aafcfedd292f099df6bcb437d0711cacf51e3b",
+      "called_identifiers": [
+        "assert",
+        "debug_proofs_enabled_for_chain",
+        "for_chain",
+        "hex96",
+        "is_ok"
+      ],
+      "control_class": "debug-chain-allow-regression",
+      "definition_found": true,
+      "identifier": "debug_proof_gate_allows_explicit_debug_chain_ids",
+      "locations": [
+        "crates/proofs/src/lib.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [],
+      "referenced_type_identifiers": [
+        "DebugProofSystem"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 1721,
+      "body_sha256": "a38f0424d4aae955ab4214fa6b70a811ccb56e308379a0cb7556dd3db896804f",
+      "called_identifiers": [
+        "decode_transport_hex",
+        "format",
+        "ml_dsa_65_verify_with_context",
+        "ok_or_else",
+        "read_transport_validator_registry",
+        "to_string",
+        "transport_auth_message",
+        "transport_validator_registry_record"
+      ],
+      "control_class": "transport-envelope-auth",
+      "definition_found": true,
+      "identifier": "validate_transport_envelope_auth",
+      "locations": [
+        "crates/node/src/transport_protocol.rs"
+      ],
+      "parameter_identifiers": [
+        "auth",
+        "data_dir",
+        "frame",
+        "topology"
+      ],
+      "referenced_constants": [
+        "ML_DSA_65_ALGORITHM",
+        "ML_DSA_65_PUBLIC_KEY_BYTES",
+        "ML_DSA_65_SIGNATURE_BYTES",
+        "TRANSPORT_AUTH_CONTEXT",
+        "TRANSPORT_AUTH_SCHEMA"
+      ],
+      "referenced_type_identifiers": [
+        "Err",
+        "Some"
+      ],
+      "risk_keyword_counts": {
+        "auth": 27,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 6,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 1
+      }
+    },
+    {
+      "body_bytes": 5997,
+      "body_sha256": "1790be95d6f1dcd9c9463c165956b2df6a707517d36c1afe4d93b43c0987dc85",
+      "called_identifiers": [
+        "assert",
+        "bytes_to_hex",
+        "cfg",
+        "clear",
+        "clone",
+        "create_dir_all",
+        "expect",
+        "format",
+        "frame_message",
+        "from_mode",
+        "is_err",
+        "iter",
+        "join",
+        "json",
+        "map",
+        "ml_dsa_65_keygen_from_seed",
+        "network_domain_from_topology",
+        "remove_dir_all",
+        "repeat",
+        "set_permissions",
+        "sign_transport_envelope_auth",
+        "test_status",
+        "test_topology",
+        "to_string",
+        "to_string_pretty",
+        "transport_health_request_payload",
+        "transport_health_response_payload",
+        "transport_hello",
+        "unique_transport_protocol_test_dir",
+        "validate_transport_health_request",
+        "validate_transport_health_response",
+        "write"
+      ],
+      "control_class": "transport-auth-binding-regression",
+      "definition_found": true,
+      "identifier": "authenticated_health_exchange_binds_nonce_route_state_and_signers",
+      "locations": [
+        "crates/node/src/transport_protocol.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [
+        "ML_DSA_65_ALGORITHM",
+        "TRANSPORT_HEALTH_REQUEST_SCHEMA",
+        "TRANSPORT_HEALTH_REQUEST_TOPIC",
+        "TRANSPORT_HEALTH_RESPONSE_SCHEMA",
+        "TRANSPORT_HEALTH_RESPONSE_TOPIC",
+        "TRANSPORT_REMOTE_PROPOSAL_CAPABILITY",
+        "VALIDATOR_KEYS_FILE",
+        "VALIDATOR_REGISTRY_FILE"
+      ],
+      "referenced_type_identifiers": [
+        "PermissionsExt",
+        "Some",
+        "TransportHealthRequestEnvelope",
+        "TransportHealthResponseEnvelope",
+        "Vec"
+      ],
+      "risk_keyword_counts": {
+        "auth": 6,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 14,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 379,
+      "body_sha256": "6211cc95cb2cd713ac0cceed6753d54e759bdab7fad74f99d4cc291b8ae1617a",
+      "called_identifiers": [
+        "assert",
+        "rpc_serve_method_allowed"
+      ],
+      "control_class": "remote-unsigned-mutation-exclusion",
+      "definition_found": true,
+      "identifier": "unsigned_owned_lane_mutations_are_never_remote_methods",
+      "locations": [
+        "crates/node/src/rpc_cli.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [],
+      "referenced_type_identifiers": [],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 1,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 190,
+      "body_sha256": "5be3d8fb2e4caf773d05265fa569ea2d63722db0c344b99164e5de5e2df29eb1",
+      "called_identifiers": [
+        "rpc_serve_method_allowed_with_owned_lane"
+      ],
+      "control_class": "remote-method-allow-policy",
+      "definition_found": true,
+      "identifier": "rpc_serve_method_allowed",
+      "locations": [
+        "crates/node/src/rpc_cli.rs"
+      ],
+      "parameter_identifiers": [
+        "allow_mempool_submit",
+        "allow_mempool_submit_finality",
+        "allow_orchard_batch_create",
+        "method"
+      ],
+      "referenced_constants": [],
+      "referenced_type_identifiers": [],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "control_class": "panic-free-committee-parser",
+      "definition_found": false,
+      "identifier": "try_committee",
+      "locations": []
+    },
+    {
+      "body_bytes": 1175,
+      "body_sha256": "a8c405278c8543eca8e5577a2c22c00d11ffaacfd51d920935f3c3832425d9e2",
+      "called_identifiers": [
+        "FastSwapOpaqueHashV1",
+        "clone",
+        "computed_root",
+        "enumerate",
+        "expect",
+        "format",
+        "iter",
+        "map",
+        "ml_dsa_65_keygen_from_seed",
+        "to_string"
+      ],
+      "control_class": "committee-parser",
+      "definition_found": true,
+      "identifier": "committee",
+      "locations": [
+        "crates/bridge/src/ethereum_checkpoint.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [
+        "FASTSWAP_SCHEMA_VERSION_V1",
+        "ZERO"
+      ],
+      "referenced_type_identifiers": [
+        "FastSwapChainDomainV1",
+        "FastSwapCommitteeDomainV1",
+        "FastSwapCommitteeRootV1",
+        "FastSwapCommitteeV1",
+        "FastSwapOpaqueHashV1",
+        "FastSwapValidatorV1",
+        "Vec"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 1,
+        "checksum": 0,
+        "committee": 11,
+        "expect": 1,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 1099,
+      "body_sha256": "de609d486c081addae9bfb56a936a17a1badb15d15a51ec3b75edb9d72224875",
+      "called_identifiers": [
+        "clone",
+        "collect",
+        "computed_root",
+        "domain",
+        "enumerate",
+        "expect",
+        "format",
+        "into_iter",
+        "iter",
+        "map",
+        "ml_dsa_65_keygen_from_seed",
+        "to_vec"
+      ],
+      "control_class": "committee-parser",
+      "definition_found": true,
+      "identifier": "committee",
+      "locations": [
+        "crates/execution/src/fastswap_bridge.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [
+        "FASTSWAP_SCHEMA_VERSION_V1",
+        "ZERO"
+      ],
+      "referenced_type_identifiers": [
+        "FastSwapCommitteeDomainV1",
+        "FastSwapCommitteeRootV1",
+        "FastSwapCommitteeV1",
+        "FastSwapValidatorV1",
+        "Vec"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 11,
+        "expect": 1,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 1291,
+      "body_sha256": "82e5c2d3b4a033775cb601137f4673e1f96f4134698aac31adaf9b7eac98327b",
+      "called_identifiers": [
+        "FastSwapOpaqueHashV1",
+        "clone",
+        "collect",
+        "computed_root",
+        "enumerate",
+        "expect",
+        "format",
+        "into_iter",
+        "iter",
+        "map",
+        "ml_dsa_65_keygen_from_seed",
+        "to_owned",
+        "to_vec"
+      ],
+      "control_class": "committee-parser",
+      "definition_found": true,
+      "identifier": "committee",
+      "locations": [
+        "crates/execution/src/fastswap_decision.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [
+        "ZERO"
+      ],
+      "referenced_type_identifiers": [
+        "CommitteeKeys",
+        "FastSwapChainDomainV1",
+        "FastSwapCommitteeDomainV1",
+        "FastSwapCommitteeRootV1",
+        "FastSwapCommitteeV1",
+        "FastSwapOpaqueHashV1",
+        "FastSwapValidatorV1",
+        "Vec"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 1,
+        "checksum": 0,
+        "committee": 11,
+        "expect": 1,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 506,
+      "body_sha256": "29bf9565ae82bfe7688a00126abca1ffbef42bb3b8d4f2365264b512a39c6655",
+      "called_identifiers": [
+        "bytes_to_hex",
+        "enumerate",
+        "expect",
+        "format",
+        "iter",
+        "map",
+        "ml_dsa_65_keygen_from_seed",
+        "try_new"
+      ],
+      "control_class": "committee-parser",
+      "definition_found": true,
+      "identifier": "committee",
+      "locations": [
+        "crates/ordering_fast/src/consensus_v2/tests.rs"
+      ],
+      "parameter_identifiers": [
+        "count"
+      ],
+      "referenced_constants": [],
+      "referenced_type_identifiers": [
+        "ConsensusV2Validator",
+        "ConsensusV2ValidatorSet",
+        "Vec"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 1,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 488,
+      "body_sha256": "03e7bf9b0f094e17dd1f5e6600c1cabd9e6e77be735875b8c691fd80751f0e3a",
+      "called_identifiers": [
+        "bytes_to_hex",
+        "collect",
+        "enumerate",
+        "expect",
+        "format",
+        "iter",
+        "map",
+        "ml_dsa_65_keygen_from_seed",
+        "try_new"
+      ],
+      "control_class": "committee-parser",
+      "definition_found": true,
+      "identifier": "committee",
+      "locations": [
+        "crates/pfusdc_proofs/src/tests.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [],
+      "referenced_type_identifiers": [
+        "ConsensusV2Validator",
+        "ConsensusV2ValidatorSet",
+        "Vec"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 1,
+        "expect": 1,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 968,
+      "body_sha256": "1bb0367eeabe82df94325a9da5363a858f9893df3f767fcd3dcb64007ab5a572",
+      "called_identifiers": [
+        "FastSwapOpaqueHashV1",
+        "computed_root",
+        "expect",
+        "format",
+        "map",
+        "to_owned"
+      ],
+      "control_class": "committee-parser",
+      "definition_found": true,
+      "identifier": "committee",
+      "locations": [
+        "crates/rpc_sdk/src/fastswap_wallet.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [
+        "FASTSWAP_SCHEMA_VERSION_V1",
+        "ZERO"
+      ],
+      "referenced_type_identifiers": [
+        "FastSwapChainDomainV1",
+        "FastSwapCommitteeDomainV1",
+        "FastSwapCommitteeRootV1",
+        "FastSwapCommitteeV1",
+        "FastSwapOpaqueHashV1",
+        "FastSwapValidatorV1",
+        "Vec"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 1,
+        "checksum": 0,
+        "committee": 11,
+        "expect": 1,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 326,
+      "body_sha256": "75c5f7bcc6e81879264adc9212b9e65a2e1da95b42dccdd96eb8d5334d06d4bf",
+      "called_identifiers": [
+        "ml_dsa_65_keygen_from_seed",
+        "to_string"
+      ],
+      "control_class": "committee-parser",
+      "definition_found": true,
+      "identifier": "committee",
+      "locations": [
+        "tools/nav-reserve-proof/crates/reserve-proof-cli/src/manifest_builder.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [],
+      "referenced_type_identifiers": [
+        "BftCheckpointCommitteeV1",
+        "BftCheckpointValidatorV1"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 1,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 629,
+      "body_sha256": "be2fafb35c7b375d024c3d564007883dceb7d904352bae60528c7ae49fe381e1",
+      "called_identifiers": [
+        "clone",
+        "collect",
+        "enumerate",
+        "format",
+        "iter",
+        "map",
+        "ml_dsa_65_keygen_from_seed"
+      ],
+      "control_class": "committee-parser",
+      "definition_found": true,
+      "identifier": "committee",
+      "locations": [
+        "tools/nav-reserve-proof/crates/reserve-proof-types/src/aave_v3.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [],
+      "referenced_type_identifiers": [
+        "BftCheckpointCommitteeV1",
+        "BftCheckpointValidatorV1",
+        "Vec"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 1,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 585,
+      "body_sha256": "21bd7242bc197cc78513508fc0f89e9e0a5a676dbf8d4de5c2a034d6809c7ab1",
+      "called_identifiers": [
+        "clone",
+        "collect",
+        "enumerate",
+        "format",
+        "iter",
+        "map",
+        "ml_dsa_65_keygen_from_seed"
+      ],
+      "control_class": "committee-parser",
+      "definition_found": true,
+      "identifier": "committee",
+      "locations": [
+        "tools/nav-reserve-proof/crates/reserve-proof-types/src/evm_checkpoint.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [],
+      "referenced_type_identifiers": [
+        "EvmCheckpointCommitteeV1",
+        "EvmCheckpointValidatorV1",
+        "Vec"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 3,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 585,
+      "body_sha256": "f7d08dc2f93b6fe862688532eaab4597c5e7f7f90b68d0399591f07a3cea2812",
+      "called_identifiers": [
+        "clone",
+        "collect",
+        "enumerate",
+        "format",
+        "iter",
+        "map",
+        "ml_dsa_65_keygen_from_seed"
+      ],
+      "control_class": "committee-parser",
+      "definition_found": true,
+      "identifier": "committee",
+      "locations": [
+        "tools/nav-reserve-proof/crates/reserve-proof-types/src/evm_spot.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [],
+      "referenced_type_identifiers": [
+        "BftCheckpointCommitteeV1",
+        "BftCheckpointValidatorV1",
+        "Vec"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 3,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 629,
+      "body_sha256": "72e746d6153a5a14db90c256433718f0a92d9402518bafadc07644d88a515033",
+      "called_identifiers": [
+        "clone",
+        "collect",
+        "enumerate",
+        "format",
+        "iter",
+        "map",
+        "ml_dsa_65_keygen_from_seed"
+      ],
+      "control_class": "committee-parser",
+      "definition_found": true,
+      "identifier": "committee",
+      "locations": [
+        "tools/nav-reserve-proof/crates/reserve-proof-types/src/hyperliquid_receipt.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [],
+      "referenced_type_identifiers": [
+        "BftCheckpointCommitteeV1",
+        "BftCheckpointValidatorV1",
+        "Vec"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 1,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 585,
+      "body_sha256": "f7d08dc2f93b6fe862688532eaab4597c5e7f7f90b68d0399591f07a3cea2812",
+      "called_identifiers": [
+        "clone",
+        "collect",
+        "enumerate",
+        "format",
+        "iter",
+        "map",
+        "ml_dsa_65_keygen_from_seed"
+      ],
+      "control_class": "committee-parser",
+      "definition_found": true,
+      "identifier": "committee",
+      "locations": [
+        "tools/nav-reserve-proof/crates/reserve-proof-types/src/monero_reserve.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [],
+      "referenced_type_identifiers": [
+        "BftCheckpointCommitteeV1",
+        "BftCheckpointValidatorV1",
+        "Vec"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 3,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 629,
+      "body_sha256": "72e746d6153a5a14db90c256433718f0a92d9402518bafadc07644d88a515033",
+      "called_identifiers": [
+        "clone",
+        "collect",
+        "enumerate",
+        "format",
+        "iter",
+        "map",
+        "ml_dsa_65_keygen_from_seed"
+      ],
+      "control_class": "committee-parser",
+      "definition_found": true,
+      "identifier": "committee",
+      "locations": [
+        "tools/nav-reserve-proof/crates/reserve-proof-types/src/near_receipt.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [],
+      "referenced_type_identifiers": [
+        "BftCheckpointCommitteeV1",
+        "BftCheckpointValidatorV1",
+        "Vec"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 1,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 424,
+      "body_sha256": "c95bdf38456f3bdb9d05173d67490cf5874d3e3228a6e902dd0c756999b040d5",
+      "called_identifiers": [
+        "assert",
+        "contains",
+        "expect",
+        "expect_err",
+        "format",
+        "repeat",
+        "validate_rpc_serve_request_line"
+      ],
+      "control_class": "rpc-preparse-size-gate-regression",
+      "definition_found": true,
+      "identifier": "rpc_serve_rejects_oversized_request_lines_before_parse",
+      "locations": [
+        "crates/node/src/main_parts/tests/rpc_serve_request_tests.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [
+        "MAX_RPC_REQUEST_BYTES"
+      ],
+      "referenced_type_identifiers": [],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 2,
+        "limit": 3,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 443,
+      "body_sha256": "16bede54e568380d506f6d6a6b67fae54257e1c019f201c27cb6d37485cea8eb",
+      "called_identifiers": [
+        "format",
+        "from_millis",
+        "map_err",
+        "set_nodelay",
+        "set_read_timeout",
+        "set_write_timeout"
+      ],
+      "control_class": "transport-stream-timeout",
+      "definition_found": true,
+      "identifier": "set_stream_timeout",
+      "locations": [
+        "crates/node/src/transport_protocol.rs"
+      ],
+      "parameter_identifiers": [
+        "stream",
+        "timeout_ms"
+      ],
+      "referenced_constants": [
+        "TCP_NODELAY"
+      ],
+      "referenced_type_identifiers": [
+        "Duration",
+        "Some"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 8,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 351,
+      "body_sha256": "dd18eea69b7741e223fea52035116334683a639505d497f06813a2ca2fdb7f51",
+      "called_identifiers": [
+        "Serialization",
+        "finalize",
+        "into",
+        "map_err",
+        "new",
+        "to_string",
+        "to_vec",
+        "update"
+      ],
+      "control_class": "storage-snapshot-checksum",
+      "definition_found": true,
+      "identifier": "snapshot_checksum",
+      "locations": [
+        "crates/storage/src/fastswap_store.rs"
+      ],
+      "parameter_identifiers": [
+        "next_sequence",
+        "state"
+      ],
+      "referenced_constants": [
+        "FASTSWAP_SNAPSHOT_SCHEMA"
+      ],
+      "referenced_type_identifiers": [
+        "FastSwapStoreError",
+        "Serialization",
+        "Sha3_384"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 1395,
+      "body_sha256": "7a8d2e3b312abea24f9d7666fc85a94d63f91d6b99359352add4d04a19511f75",
+      "called_identifiers": [
+        "FastSwapEffectsDigestV1",
+        "FastSwapIdV1",
+        "FastSwapIntentIdV1",
+        "append",
+        "assert",
+        "assert_eq",
+        "clone",
+        "drop",
+        "expect",
+        "join",
+        "keys",
+        "matches",
+        "new",
+        "next",
+        "ok",
+        "open",
+        "read",
+        "remove_dir_all",
+        "remove_file",
+        "replay",
+        "reserve_all",
+        "state",
+        "test_dir",
+        "write",
+        "write_all"
+      ],
+      "control_class": "storage-corruption-regression",
+      "definition_found": true,
+      "identifier": "torn_final_record_is_ignored_but_checksum_corruption_is_fatal",
+      "locations": [
+        "crates/storage/src/fastswap_store.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [
+        "FASTSWAP_LOCK_FILE",
+        "FASTSWAP_WAL_FILE"
+      ],
+      "referenced_type_identifiers": [
+        "CorruptWal",
+        "Err",
+        "FastSwapEffectsDigestV1",
+        "FastSwapIdV1",
+        "FastSwapIntentIdV1",
+        "FastSwapStore",
+        "FastSwapStoreError",
+        "OpenOptions"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 10,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 365,
+      "body_sha256": "ad43ddb6aebaabfdec69114d604a4d69fbc04566b8c43dd076f30cbd86acdf14",
+      "called_identifiers": [
+        "format",
+        "new"
+      ],
+      "control_class": "orchard-live-circuit-policy",
+      "definition_found": true,
+      "identifier": "supported_asset_orchard_swap_circuit_id",
+      "locations": [
+        "crates/privacy_orchard/src/asset_orchard.rs"
+      ],
+      "parameter_identifiers": [
+        "circuit_id"
+      ],
+      "referenced_constants": [
+        "ASSET_ORCHARD_CIRCUIT_ID_V3_REPLAY",
+        "ASSET_ORCHARD_CIRCUIT_ID_V4"
+      ],
+      "referenced_type_identifiers": [
+        "AssetOrchardError",
+        "Err"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 427,
+      "body_sha256": "5a9cd426498855a77b2b5b9b959361d513e8b1e3dda3ef53cd5ab5220eb850b0",
+      "called_identifiers": [
+        "format",
+        "new"
+      ],
+      "control_class": "orchard-live-vk-policy-validation",
+      "definition_found": true,
+      "identifier": "validate_asset_orchard_swap_vk_policy",
+      "locations": [
+        "crates/privacy_orchard/src/verify.rs"
+      ],
+      "parameter_identifiers": [
+        "circuit_id",
+        "policy"
+      ],
+      "referenced_constants": [
+        "ASSET_ORCHARD_CIRCUIT_ID_V1"
+      ],
+      "referenced_type_identifiers": [
+        "AssetOrchardVkVerificationPolicy",
+        "Err",
+        "LiveCurrent",
+        "OrchardVerificationError"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 1750,
+      "body_sha256": "4ea976a2addb6ea2b3310fc29c14fd74995c11a5d1483b1efb1584924f4334c1",
+      "called_identifiers": [
+        "assert_eq",
+        "code",
+        "expect",
+        "expect_err",
+        "validate_asset_orchard_private_egress_vk_policy",
+        "validate_asset_orchard_swap_vk_policy"
+      ],
+      "control_class": "orchard-legacy-vk-boundary-regression",
+      "definition_found": true,
+      "identifier": "legacy_vk_ids_are_archive_only_at_the_verifier_policy_boundary",
+      "locations": [
+        "crates/privacy_orchard/src/verify.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [
+        "ASSET_ORCHARD_CIRCUIT_ID_V1",
+        "ASSET_ORCHARD_CIRCUIT_ID_V3_REPLAY",
+        "ASSET_ORCHARD_PRIVATE_EGRESS_CIRCUIT_ID_V1",
+        "ASSET_ORCHARD_PRIVATE_EGRESS_CIRCUIT_ID_V1_REPLAY"
+      ],
+      "referenced_type_identifiers": [
+        "ArchiveReplay",
+        "AssetOrchardVkVerificationPolicy",
+        "LiveCurrent"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 6,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 3295,
+      "body_sha256": "d87d89384398ed7f078979868f51b2ef212843cfd74c69d2bf5107b8331fa952",
+      "called_identifiers": [
+        "all",
+        "as_hex",
+        "assert_invariant",
+        "bytes_to_hex",
+        "clone",
+        "from_utf8",
+        "is_err",
+        "is_ok",
+        "iter",
+        "mutated_inputs",
+        "new",
+        "record_parse",
+        "replacen",
+        "to_orchard",
+        "to_vec",
+        "valid_orchard_action",
+        "validate"
+      ],
+      "control_class": "orchard-parser-fuzz-target",
+      "definition_found": true,
+      "identifier": "fuzz_orchard_parser",
+      "locations": [
+        "crates/fuzz_harness/src/main.rs"
+      ],
+      "parameter_identifiers": [
+        "iterations"
+      ],
+      "referenced_constants": [
+        "ORCHARD_ANCHOR_BYTES",
+        "ORCHARD_COMMITMENT_BYTES",
+        "ORCHARD_NULLIFIER_BYTES"
+      ],
+      "referenced_type_identifiers": [
+        "Err",
+        "FuzzTargetReport",
+        "OrchardShieldedAction",
+        "String"
+      ],
+      "risk_keyword_counts": {
+        "auth": 0,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 0,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 0,
+        "signature": 0,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 0
+      }
+    },
+    {
+      "body_bytes": 1303,
+      "body_sha256": "72e46a9314795abdc54a4261bf9280863ac7816d085dc3d03efcaa1c455ee9ab",
+      "called_identifiers": [
+        "AssertUnwindSafe",
+        "assert",
+        "assert_count_mismatch",
+        "assert_eq",
+        "catch_unwind",
+        "code",
+        "expect",
+        "is_ok",
+        "panic",
+        "pop",
+        "public_fields_without_binding_check",
+        "sample_action",
+        "sighash",
+        "signed_sample_action",
+        "verify_spend_authorizations"
+      ],
+      "control_class": "orchard-panic-free-index-regression",
+      "definition_found": true,
+      "identifier": "asset_orchard_indexing_helpers_reject_count_mismatch_without_panic",
+      "locations": [
+        "crates/privacy_orchard/src/asset_orchard.rs"
+      ],
+      "parameter_identifiers": [],
+      "referenced_constants": [],
+      "referenced_type_identifiers": [
+        "AssertUnwindSafe",
+        "AssetOrchardError",
+        "Err",
+        "Result"
+      ],
+      "risk_keyword_counts": {
+        "auth": 2,
+        "chain_id": 0,
+        "checksum": 0,
+        "committee": 0,
+        "expect": 1,
+        "limit": 0,
+        "mainnet": 0,
+        "panic": 8,
+        "signature": 4,
+        "timeout": 0,
+        "unsafe": 0,
+        "unwrap": 0,
+        "verify": 1
+      }
+    }
+  ],
   "current_canonical": {
     "commit": "52e51bc290eb8d6416e78d31bab6315de5729af6",
     "repository": "postfiatorg/postfiatl1v2 main"
   },
+  "manager_semantic_rulings": [
+    {
+      "evidence": "Production RBC validation summaries call only schema/id/linked-message validators; cryptographic verifier references under the Cobalt crate occur only in examples/tests. Committee-binding equivalence is absent.",
+      "reason_class": "production-cobalt-signature-verification-absent",
+      "source": "pftl1v2-pr1-cobalt-sig-verify",
+      "verdict": "keeper-port-required"
+    },
+    {
+      "evidence": "The exact-canonical proof-gate filter passes two tests; the privacy gate is an exact one-line delegation to that tested proof gate.",
+      "reason_class": "canonical-ci-and-exact-delegation-pass",
+      "source": "pftl1v2-pr2-debug-pool-gate",
+      "verdict": "semantic-close-archive-c4-candidate"
+    },
+    {
+      "evidence": "Exact-canonical transport binding and unsigned-remote-method exclusion filters each pass one test.",
+      "reason_class": "canonical-transport-and-rpc-exclusion-ci-pass",
+      "source": "pftl1v2-pr3-rpc-transport-auth",
+      "verdict": "semantic-close-archive-c4-candidate"
+    },
+    {
+      "evidence": "Canonical has pre-parse request limits and stream timeouts, but the archived global/per-peer dispatch bounds, bounded accept worker, and try_committee mechanism are absent by exact mechanism.",
+      "reason_class": "archived-concurrency-worker-and-parser-controls-unproved",
+      "source": "pftl1v2-pr4-dos-hardening",
+      "verdict": "keeper-review-or-port-required"
+    },
+    {
+      "evidence": "Canonical snapshot/WAL integrity summaries use an unkeyed Sha3_384 checksum and corruption regression; archived IntegrityKey, HMAC, authenticated JSONL envelope, and keyed-open controls are absent.",
+      "reason_class": "keyed-storage-integrity-absent",
+      "source": "pftl1v2-pr5-storage-integrity",
+      "verdict": "keeper-port-required"
+    },
+    {
+      "evidence": "Exact-canonical VK-boundary and panic-free indexing filters each pass one test; the Orchard parser fuzz target is structurally present.",
+      "reason_class": "canonical-vk-and-panic-ci-pass",
+      "source": "pftl1v2-pr6-orchard-vk-panics",
+      "verdict": "semantic-close-archive-c4-candidate"
+    },
+    {
+      "evidence": "All 198 finding ids persist and canonical intentionally reclassifies 170 statuses; the newer canonical ledger is authoritative.",
+      "reason_class": "complete-id-set-with-newer-status-classes",
+      "source": "pftl1v2-pr9-ambient-backlog",
+      "verdict": "canonical-supersedes-archive-c4-candidate"
+    },
+    {
+      "evidence": "Canonical has 585 missing doc/script pairs across 102 active docs and 361 unique absent script targets.",
+      "reason_class": "current-dead-script-reference-backlog",
+      "source": "pftl1v2-pr10a-dead-script-refs",
+      "verdict": "patch-source-fresh-remediation-required"
+    },
+    {
+      "evidence": "Canonical exposes 116 RPC dispatch wire methods; 62 are undocumented under docs/rpc.",
+      "reason_class": "current-rpc-documentation-gap",
+      "source": "pftl1v2-pr10b-docs-content-gaps",
+      "verdict": "patch-source-fresh-rpc-coverage-required"
+    }
+  ],
   "methodology": "Old-branch diffs and current-canonical blobs are captured internally. Output is limited to commit ids, code identifiers, sanitized locations, counts, ratios, and assessment classes; no source line, diff hunk, config line, or secret value is emitted.",
   "retirement_reference_audit": {
     "config_references": [],

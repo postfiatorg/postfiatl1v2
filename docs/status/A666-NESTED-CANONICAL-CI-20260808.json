@@ -1,0 +1,390 @@
+{
+  "all_commands_exit_zero": true,
+  "all_parsed_results_successful": true,
+  "all_target_filters_matched": false,
+  "canonical_commit": "52e51bc290eb8d6416e78d31bab6315de5729af6",
+  "commands": [
+    {
+      "filter": "debug_proof_gate",
+      "label": "pr2_proofs",
+      "package": "postfiat-proofs",
+      "parsed_success": true,
+      "result_summaries": [
+        {
+          "failed": 0,
+          "filtered_out": 17,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 2,
+          "status": "ok",
+          "stream_class": "stdout"
+        }
+      ],
+      "shell_exit_code": 0,
+      "source": "pftl1v2-pr2-debug-pool-gate",
+      "stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 116,
+        "sha256": "bb09171ec4262ea8b373268a3bb6c17b1fa4880980841eafe4b0c8e46981e66e"
+      },
+      "target_filter_matched": true,
+      "target_tests_passed": 2
+    },
+    {
+      "filter": "debug_shielded_pool",
+      "label": "pr2_privacy",
+      "package": "postfiat-privacy",
+      "parsed_success": true,
+      "result_summaries": [
+        {
+          "failed": 0,
+          "filtered_out": 5,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        }
+      ],
+      "shell_exit_code": 0,
+      "source": "pftl1v2-pr2-debug-pool-gate",
+      "stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 113,
+        "sha256": "2a534218f55282658c7c4938cb668f39411627ade6cfa17c8d1215e48dc8c57c"
+      },
+      "target_filter_matched": false,
+      "target_tests_passed": 0
+    },
+    {
+      "filter": "authenticated_health_exchange_binds_nonce_route_state_and_signers",
+      "label": "pr3_transport",
+      "package": "postfiat-node",
+      "parsed_success": true,
+      "result_summaries": [
+        {
+          "failed": 0,
+          "filtered_out": 269,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 32,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 1,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 1,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 10,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 111,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 1,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 9,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 1,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 2,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 1,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        }
+      ],
+      "shell_exit_code": 0,
+      "source": "pftl1v2-pr3-rpc-transport-auth",
+      "stderr": {
+        "bytes": 595,
+        "sha256": "fd73eb9a887a8800234d3bf085e1784c300fef8f5bc9d147ddd07d8ad901ef7c"
+      },
+      "stdout": {
+        "bytes": 1362,
+        "sha256": "089a4e6ed5a9b26c32939bc19b1e6ca4ee8688f07bf20c338e215e6e3a33712a"
+      },
+      "target_filter_matched": true,
+      "target_tests_passed": 1
+    },
+    {
+      "filter": "unsigned_owned_lane_mutations_are_never_remote_methods",
+      "label": "pr3_rpc_exclusion",
+      "package": "postfiat-node",
+      "parsed_success": true,
+      "result_summaries": [
+        {
+          "failed": 0,
+          "filtered_out": 269,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 32,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 1,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 1,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 0,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 10,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 111,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 1,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 9,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 1,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 2,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        },
+        {
+          "failed": 0,
+          "filtered_out": 1,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 0,
+          "status": "ok",
+          "stream_class": "stdout"
+        }
+      ],
+      "shell_exit_code": 0,
+      "source": "pftl1v2-pr3-rpc-transport-auth",
+      "stderr": {
+        "bytes": 595,
+        "sha256": "fd73eb9a887a8800234d3bf085e1784c300fef8f5bc9d147ddd07d8ad901ef7c"
+      },
+      "stdout": {
+        "bytes": 1362,
+        "sha256": "e59c47433ab63916ebd666a2ad2f6fbb15448850bc9e0dcc58f41897e9a0ddfd"
+      },
+      "target_filter_matched": true,
+      "target_tests_passed": 1
+    },
+    {
+      "filter": "legacy_vk_ids_are_archive_only_at_the_verifier_policy_boundary",
+      "label": "pr6_vk",
+      "package": "postfiat-privacy-orchard",
+      "parsed_success": true,
+      "result_summaries": [
+        {
+          "failed": 0,
+          "filtered_out": 106,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 1,
+          "status": "ok",
+          "stream_class": "stdout"
+        }
+      ],
+      "shell_exit_code": 0,
+      "source": "pftl1v2-pr6-orchard-vk-panics",
+      "stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 115,
+        "sha256": "1c00ed82ceb4bde88f83aea6f63246905395a4e6a445fd892440060713f711c6"
+      },
+      "target_filter_matched": true,
+      "target_tests_passed": 1
+    },
+    {
+      "filter": "asset_orchard_indexing_helpers_reject_count_mismatch_without_panic",
+      "label": "pr6_panic",
+      "package": "postfiat-privacy-orchard",
+      "parsed_success": true,
+      "result_summaries": [
+        {
+          "failed": 0,
+          "filtered_out": 106,
+          "ignored": 0,
+          "measured": 0,
+          "passed": 1,
+          "status": "ok",
+          "stream_class": "stdout"
+        }
+      ],
+      "shell_exit_code": 0,
+      "source": "pftl1v2-pr6-orchard-vk-panics",
+      "stderr": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "stdout": {
+        "bytes": 115,
+        "sha256": "d21d93155e9d3f85b9419d178c4945af4b500d69a37191d8bb6c93b63b698a23"
+      },
+      "target_filter_matched": true,
+      "target_tests_passed": 1
+    }
+  ],
+  "methodology": "Cargo stdout/stderr remained captured in local files. This summary emits only labels, package/filter names, exit codes, parsed numeric test-result fields, byte sizes, hashes, and secret-adjacent locations/classes. It never emits a captured log line or matched value.",
+  "run_directory": "/tmp/a666-c3-ci-20260808-qit68W",
+  "schema": "postfiat.track-c.canonical-ci-evidence.v1",
+  "secret_adjacent_findings": [],
+  "secret_scan_coverage": {
+    "candidate_files": 12,
+    "content_scanned": 12,
+    "large_files_location_only": 0,
+    "unreadable_files_location_only": 0
+  }
+}

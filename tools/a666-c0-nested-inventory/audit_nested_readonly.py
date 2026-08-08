@@ -62,6 +62,150 @@ CONFIG_ROOTS: tuple[tuple[Path, str], ...] = (
 )
 
 
+CANONICAL_BODY_TARGETS: tuple[tuple[str, str], ...] = (
+    ("validate_rbc_signature_hex", "cobalt-signature-shape-validation"),
+    ("validate_rbc_echo", "cobalt-rbc-echo-validation"),
+    ("validate_rbc_propose", "cobalt-rbc-propose-validation"),
+    ("rbc_validation_rejects_tampered_bindings", "cobalt-tamper-regression"),
+    ("debug_proof_chain_id_allowed", "debug-proof-chain-allow-policy"),
+    ("debug_proofs_enabled_for_chain", "debug-proof-chain-gate"),
+    ("debug_shielded_pool_enabled_for_chain", "debug-pool-chain-gate"),
+    (
+        "debug_proof_gate_rejects_mainnet_chain_ids",
+        "debug-mainnet-rejection-regression",
+    ),
+    (
+        "debug_proof_gate_allows_explicit_debug_chain_ids",
+        "debug-chain-allow-regression",
+    ),
+    ("validate_transport_envelope_auth", "transport-envelope-auth"),
+    (
+        "authenticated_health_exchange_binds_nonce_route_state_and_signers",
+        "transport-auth-binding-regression",
+    ),
+    (
+        "unsigned_owned_lane_mutations_are_never_remote_methods",
+        "remote-unsigned-mutation-exclusion",
+    ),
+    ("rpc_serve_method_allowed", "remote-method-allow-policy"),
+    ("try_committee", "panic-free-committee-parser"),
+    ("committee", "committee-parser"),
+    (
+        "rpc_serve_rejects_oversized_request_lines_before_parse",
+        "rpc-preparse-size-gate-regression",
+    ),
+    ("set_stream_timeout", "transport-stream-timeout"),
+    ("snapshot_checksum", "storage-snapshot-checksum"),
+    (
+        "torn_final_record_is_ignored_but_checksum_corruption_is_fatal",
+        "storage-corruption-regression",
+    ),
+    (
+        "supported_asset_orchard_swap_circuit_id",
+        "orchard-live-circuit-policy",
+    ),
+    (
+        "validate_asset_orchard_swap_vk_policy",
+        "orchard-live-vk-policy-validation",
+    ),
+    (
+        "legacy_vk_ids_are_archive_only_at_the_verifier_policy_boundary",
+        "orchard-legacy-vk-boundary-regression",
+    ),
+    ("fuzz_orchard_parser", "orchard-parser-fuzz-target"),
+    (
+        "asset_orchard_indexing_helpers_reject_count_mismatch_without_panic",
+        "orchard-panic-free-index-regression",
+    ),
+)
+
+MANAGER_SEMANTIC_RULINGS: tuple[dict[str, Any], ...] = (
+    {
+        "source": "pftl1v2-pr1-cobalt-sig-verify",
+        "verdict": "keeper-port-required",
+        "reason_class": "production-cobalt-signature-verification-absent",
+        "evidence": (
+            "Production RBC validation summaries call only schema/id/linked-message "
+            "validators; cryptographic verifier references under the Cobalt crate "
+            "occur only in examples/tests. Committee-binding equivalence is absent."
+        ),
+    },
+    {
+        "source": "pftl1v2-pr2-debug-pool-gate",
+        "verdict": "semantic-close-archive-c4-candidate",
+        "reason_class": "canonical-ci-and-exact-delegation-pass",
+        "evidence": (
+            "The exact-canonical proof-gate filter passes two tests; the privacy "
+            "gate is an exact one-line delegation to that tested proof gate."
+        ),
+    },
+    {
+        "source": "pftl1v2-pr3-rpc-transport-auth",
+        "verdict": "semantic-close-archive-c4-candidate",
+        "reason_class": "canonical-transport-and-rpc-exclusion-ci-pass",
+        "evidence": (
+            "Exact-canonical transport binding and unsigned-remote-method exclusion "
+            "filters each pass one test."
+        ),
+    },
+    {
+        "source": "pftl1v2-pr4-dos-hardening",
+        "verdict": "keeper-review-or-port-required",
+        "reason_class": "archived-concurrency-worker-and-parser-controls-unproved",
+        "evidence": (
+            "Canonical has pre-parse request limits and stream timeouts, but the "
+            "archived global/per-peer dispatch bounds, bounded accept worker, and "
+            "try_committee mechanism are absent by exact mechanism."
+        ),
+    },
+    {
+        "source": "pftl1v2-pr5-storage-integrity",
+        "verdict": "keeper-port-required",
+        "reason_class": "keyed-storage-integrity-absent",
+        "evidence": (
+            "Canonical snapshot/WAL integrity summaries use an unkeyed Sha3_384 "
+            "checksum and corruption regression; archived IntegrityKey, HMAC, "
+            "authenticated JSONL envelope, and keyed-open controls are absent."
+        ),
+    },
+    {
+        "source": "pftl1v2-pr6-orchard-vk-panics",
+        "verdict": "semantic-close-archive-c4-candidate",
+        "reason_class": "canonical-vk-and-panic-ci-pass",
+        "evidence": (
+            "Exact-canonical VK-boundary and panic-free indexing filters each pass "
+            "one test; the Orchard parser fuzz target is structurally present."
+        ),
+    },
+    {
+        "source": "pftl1v2-pr9-ambient-backlog",
+        "verdict": "canonical-supersedes-archive-c4-candidate",
+        "reason_class": "complete-id-set-with-newer-status-classes",
+        "evidence": (
+            "All 198 finding ids persist and canonical intentionally reclassifies "
+            "170 statuses; the newer canonical ledger is authoritative."
+        ),
+    },
+    {
+        "source": "pftl1v2-pr10a-dead-script-refs",
+        "verdict": "patch-source-fresh-remediation-required",
+        "reason_class": "current-dead-script-reference-backlog",
+        "evidence": (
+            "Canonical has 585 missing doc/script pairs across 102 active docs and "
+            "361 unique absent script targets."
+        ),
+    },
+    {
+        "source": "pftl1v2-pr10b-docs-content-gaps",
+        "verdict": "patch-source-fresh-rpc-coverage-required",
+        "reason_class": "current-rpc-documentation-gap",
+        "evidence": (
+            "Canonical exposes 116 RPC dispatch wire methods; 62 are undocumented "
+            "under docs/rpc."
+        ),
+    },
+)
+
 TARGETED_EXPECTATIONS: dict[str, tuple[tuple[str, str, str], ...]] = {
     "pftl1v2-pr1-cobalt-sig-verify": (
         ("identifier", "CobaltSignatureCommittee", "committee-binding-control"),
@@ -521,6 +665,148 @@ def semantic_audit(worktree: Path) -> dict[str, Any]:
     }
 
 
+def canonical_body_summaries() -> list[dict[str, Any]]:
+    summaries: list[dict[str, Any]] = []
+    excluded_calls = {
+        "if",
+        "for",
+        "while",
+        "loop",
+        "match",
+        "return",
+        "Some",
+        "None",
+        "Ok",
+        "Err",
+    }
+    for identifier, control_class in CANONICAL_BODY_TARGETS:
+        output = git_bytes(
+            CURRENT_REPO,
+            [
+                "grep",
+                "-l",
+                "-F",
+                "-e",
+                f"fn {identifier}",
+                CURRENT_COMMIT,
+                "--",
+                "*.rs",
+            ],
+            allow_failure=True,
+        )
+        locations: list[str] = []
+        if output is not None:
+            prefix = f"{CURRENT_COMMIT}:"
+            for line in output.decode(
+                "utf-8", errors="surrogateescape"
+            ).splitlines():
+                raw = line[len(prefix) :] if line.startswith(prefix) else line
+                locations.append(raw)
+        if not locations:
+            summaries.append(
+                {
+                    "identifier": identifier,
+                    "control_class": control_class,
+                    "definition_found": False,
+                    "locations": [],
+                }
+            )
+            continue
+        for raw_location in sorted(set(locations)):
+            data = blob(CURRENT_REPO, CURRENT_COMMIT, raw_location)
+            assert data is not None
+            pattern = re.compile(
+                rb"\bfn\s+" + re.escape(identifier.encode("ascii")) + rb"\s*\("
+            )
+            match = pattern.search(data)
+            if match is None:
+                continue
+            brace = data.find(b"{", match.end())
+            if brace < 0:
+                continue
+            depth = 0
+            end = len(data)
+            for index in range(brace, len(data)):
+                byte = data[index]
+                if byte == ord("{"):
+                    depth += 1
+                elif byte == ord("}"):
+                    depth -= 1
+                    if depth == 0:
+                        end = index + 1
+                        break
+            signature = data[match.start() : brace]
+            body = data[brace:end]
+            calls = sorted(
+                {
+                    item.decode("ascii")
+                    for item in re.findall(
+                        rb"\b([A-Za-z_][A-Za-z0-9_]*)\s*!?\s*\(",
+                        body,
+                    )
+                    if item.decode("ascii") not in excluded_calls
+                }
+            )
+            constants = sorted(
+                {
+                    item.decode("ascii")
+                    for item in re.findall(rb"\b[A-Z][A-Z0-9_]{2,}\b", body)
+                }
+            )
+            types = sorted(
+                {
+                    item.decode("ascii")
+                    for item in re.findall(
+                        rb"\b[A-Z][A-Za-z0-9_]{2,}\b", body
+                    )
+                    if not re.fullmatch(rb"[A-Z][A-Z0-9_]{2,}", item)
+                }
+            )
+            parameters = sorted(
+                {
+                    item.decode("ascii")
+                    for item in re.findall(
+                        rb"\b([a-z_][A-Za-z0-9_]*)\s*:", signature
+                    )
+                }
+            )
+            lowered = body.lower()
+            risk_counts = {
+                keyword: lowered.count(keyword.encode())
+                for keyword in (
+                    "auth",
+                    "verify",
+                    "signature",
+                    "committee",
+                    "chain_id",
+                    "mainnet",
+                    "limit",
+                    "timeout",
+                    "checksum",
+                    "panic",
+                    "unwrap",
+                    "expect",
+                    "unsafe",
+                )
+            }
+            summaries.append(
+                {
+                    "identifier": identifier,
+                    "control_class": control_class,
+                    "definition_found": True,
+                    "locations": [inventory.safe_location(raw_location)],
+                    "parameter_identifiers": parameters,
+                    "called_identifiers": calls,
+                    "referenced_constants": constants,
+                    "referenced_type_identifiers": types,
+                    "risk_keyword_counts": risk_counts,
+                    "body_bytes": len(body),
+                    "body_sha256": hashlib.sha256(body).hexdigest(),
+                }
+            )
+    return summaries
+
+
 def config_references(targets: list[Path]) -> list[dict[str, str]]:
     findings: set[tuple[str, str, str]] = set()
     encoded_targets = [(str(target).encode(), target.name) for target in targets]
@@ -658,6 +944,8 @@ def main() -> int:
             "source line, diff hunk, config line, or secret value is emitted."
         ),
         "audits": audits,
+        "canonical_control_body_summaries": canonical_body_summaries(),
+        "manager_semantic_rulings": list(MANAGER_SEMANTIC_RULINGS),
         "retirement_reference_audit": runtime,
     }
     hashes = hash_score_artifacts()

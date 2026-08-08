@@ -1,0 +1,3304 @@
+{
+  "canonical_commit": "52e51bc290eb8d6416e78d31bab6315de5729af6",
+  "methodology": "All Git blobs and grep results are captured internally. Output contains sanitized locations, finding ids, status classes, script paths, RPC identifiers/method names, counts, hashes, and booleans only. No source/prose line, rationale, matched secret value, or Git stderr is emitted.",
+  "pr10a_dead_script_references": {
+    "active_docs": [
+      {
+        "location": "docs/business/navcoin-current-infra.md",
+        "missing_script": "scripts/navcoin-current-infra-smoke"
+      },
+      {
+        "location": "docs/business/navcoin-proof-of-reserves.md",
+        "missing_script": "scripts/hyperliquid-drift-study"
+      },
+      {
+        "location": "docs/business/navcoin-proof-of-reserves.md",
+        "missing_script": "scripts/navcoin-current-infra-smoke"
+      },
+      {
+        "location": "docs/business/navcoin-proof-of-reserves.md",
+        "missing_script": "scripts/navcoin-multifetch-smoke"
+      },
+      {
+        "location": "docs/business/navcoin-python-example.md",
+        "missing_script": "scripts/navcoin-current-infra-smoke"
+      },
+      {
+        "location": "docs/business/whitepaper.md",
+        "missing_script": "scripts/navcoin-current-infra-smoke"
+      },
+      {
+        "location": "docs/evidence/performance-methodology.md",
+        "missing_script": "scripts/performance-methodology-policy-verify"
+      },
+      {
+        "location": "docs/evidence/sglang-determinism.md",
+        "missing_script": "scripts/qwen-mlx-replay-profile-runner"
+      },
+      {
+        "location": "docs/evidence/sglang-determinism.md",
+        "missing_script": "scripts/qwen-sglang-replay-profile-runner"
+      },
+      {
+        "location": "docs/evidence/sglang-determinism.md",
+        "missing_script": "scripts/sglang-determinism-vast-experiment"
+      },
+      {
+        "location": "docs/evidence/xrpl-unl-coordination.md",
+        "missing_script": "scripts/xrpl-unl-coordination-snapshot"
+      },
+      {
+        "location": "docs/governance/cobalt-implementation.md",
+        "missing_script": "scripts/testnet-cobalt-controlled-readiness-gate"
+      },
+      {
+        "location": "docs/governance/cobalt-implementation.md",
+        "missing_script": "scripts/testnet-cobalt-full-local-harness"
+      },
+      {
+        "location": "docs/governance/cobalt-implementation.md",
+        "missing_script": "scripts/testnet-cobalt-full-remote-drill"
+      },
+      {
+        "location": "docs/governance/cobalt-transition-safety-proof.md",
+        "missing_script": "scripts/cobalt-transition-safety-proof-verify"
+      },
+      {
+        "location": "docs/governance/validator-admission-bin-policy.md",
+        "missing_script": "scripts/validator-admission-bin-policy-verify"
+      },
+      {
+        "location": "docs/governance/validator-evidence-packet-schema.md",
+        "missing_script": "scripts/validator-evidence-fixtures-validate"
+      },
+      {
+        "location": "docs/governance/validator-registry.md",
+        "missing_script": "scripts/qwen-cobalt-live-registry-authority-drill"
+      },
+      {
+        "location": "docs/governance/validator-registry.md",
+        "missing_script": "scripts/testnet-cobalt-placement-preflight"
+      },
+      {
+        "location": "docs/governance/validator-registry.md",
+        "missing_script": "scripts/testnet-cobalt-topology-diversity-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/qwen-cobalt-live-registry-authority-drill"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/validator-evidence-fixtures-validate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-accepted-process-activation"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-adversarial-cases"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-attack-hardness-readiness-summary"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-attack-surface-comparison"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-bad-decision-challenge-drill"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-challenge-packet-validate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-cobalt-dry-run-binding"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-cobalt-question"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-conformance-packet-validate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-context-packet-validate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-cross-machine-receipts"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-decision-packet-validate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-decision-replay-harness"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-evidence-packet-validate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-evidence-request-replay-harness"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-evidence-request-validate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-foundation-override-simulation"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-full-distribution-reproduction-lane"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-full-vocab-receipt"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-internal-decision-replay"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-internal-evidence-request-replay"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-live-model-receipt"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-model-governance-question"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-model-receipt-conformance-binding"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-monetary-policy-question"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-naive-prompt-baseline"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-naive-prompt-exploit-baseline"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-non-validator-flow"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-non-validator-rebuttal-packet"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-packet-suite-validate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-pq-authorization-question"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-privacy-question"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-prompt-space-coverage-matrix"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-prompt-space-replay-matrix"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-proof-summary"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-challenge-disposition"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-conformance-mapping-readiness"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-conformance-packet"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-conformance-review"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-decision"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-evidence-packet"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-evidence-request"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-full-vocab-disposition"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-full-vocab-replay-execution"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-full-vocab-sufficiency-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-approval"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-authorization-request"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-exact-authorization-intake"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-execution-authorization"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-execution-receipt-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-final-execution-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-guarded-apply-rehearsal"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-guarded-execution"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-live-action-execution-packet-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-live-action-packet"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-operator-signoff"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-post-action-execution-receipt-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-preflight-output-receipt-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-readiness"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-disposition-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-disposition-signoff-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-authorization-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-execution-packet-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-handoff-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-closing-audit-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-disposition-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-disposition-signoff-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-finalization-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-handoff-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-publication-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-receipt-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-availability-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-closing-audit-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-disposition-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-disposition-signoff-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-durability-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-finalization-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-handoff-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-integrity-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-publication-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-redundancy-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-retention-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-closing-audit-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-disposition-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-disposition-signoff-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-finalization-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-handoff-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-publication-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-replay-execution"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-replay-readiness"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-question"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-replay-disposition"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-replay-prompt"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-superseding-replayed-decision"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-question-validate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-readiness-summary"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-rebuttal-report"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-silent-override-detector"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-static-rule-baseline"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-static-rule-comparison"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution-plan.md",
+        "missing_script": "scripts/verifiable-constitution-validator-evidence-question"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution.md",
+        "missing_script": "scripts/qwen-cobalt-live-registry-authority-drill"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution.md",
+        "missing_script": "scripts/verifiable-constitution-accepted-process-activation"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution.md",
+        "missing_script": "scripts/verifiable-constitution-attack-hardness-readiness-summary"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution.md",
+        "missing_script": "scripts/verifiable-constitution-cross-machine-receipts"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution.md",
+        "missing_script": "scripts/verifiable-constitution-foundation-override-simulation"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution.md",
+        "missing_script": "scripts/verifiable-constitution-live-model-receipt"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution.md",
+        "missing_script": "scripts/verifiable-constitution-proof-summary"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-durability-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-integrity-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution.md",
+        "missing_script": "scripts/verifiable-constitution-protocol-architecture-live-effect-release-effect-post-execution-release-record-archive-redundancy-gate"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution.md",
+        "missing_script": "scripts/verifiable-constitution-readiness-summary"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution.md",
+        "missing_script": "scripts/verifiable-constitution-replay-equivalence-invariant"
+      },
+      {
+        "location": "docs/governance/verifiable-constitution.md",
+        "missing_script": "scripts/verifiable-constitution-silent-override-detector"
+      },
+      {
+        "location": "docs/handoffs/wallet-private-swap-enablement-plan.md",
+        "missing_script": "scripts/shielded-nav-swap-e2e-live.py"
+      },
+      {
+        "location": "docs/handoffs/wallet-private-swap-enablement-plan.md",
+        "missing_script": "scripts/shielded-navswap-ux-live.py"
+      },
+      {
+        "location": "docs/navcoins/pftl-tools.md",
+        "missing_script": "scripts/hyperliquid-drift-study"
+      },
+      {
+        "location": "docs/navcoins/pftl-tools.md",
+        "missing_script": "scripts/navcoin-a651-sp1-wan-devnet-remote.sh"
+      },
+      {
+        "location": "docs/navcoins/pftl-tools.md",
+        "missing_script": "scripts/navcoin-a651-wan-devnet-phase1"
+      },
+      {
+        "location": "docs/navcoins/pftl-tools.md",
+        "missing_script": "scripts/navcoin-current-infra-smoke"
+      },
+      {
+        "location": "docs/navcoins/pftl-tools.md",
+        "missing_script": "scripts/navcoin-market-ops-cold-start-check"
+      },
+      {
+        "location": "docs/navcoins/pftl-tools.md",
+        "missing_script": "scripts/navcoin-multifetch-smoke"
+      },
+      {
+        "location": "docs/navcoins/pftl-tools.md",
+        "missing_script": "scripts/navcoin-sp1-test-wan-devnet-remote.sh"
+      },
+      {
+        "location": "docs/navcoins/pftl-tools.md",
+        "missing_script": "scripts/navcoin-sp1-test-wan-devnet.sh"
+      },
+      {
+        "location": "docs/plans/A666-R4-OFFLINE-ETHEREUM-REHEARSAL-DESIGN-20260804.md",
+        "missing_script": "scripts/a666-r4-offline-ethereum-rehearsal-setup"
+      },
+      {
+        "location": "docs/plans/A666-R4-OFFLINE-ETHEREUM-REHEARSAL-DESIGN-20260804.md",
+        "missing_script": "scripts/a666-r4-offline-ethereum-rehearsal-verify"
+      },
+      {
+        "location": "docs/plans/CHAIN-OPTIMIZATION-STACKED-RESEARCH-20260729.md",
+        "missing_script": "scripts/private-egress-pinned-vk-regression-gate"
+      },
+      {
+        "location": "docs/plans/NAV-SWAP-EFFICIENCY-RESEARCH-20260729.md",
+        "missing_script": "scripts/private-egress-pinned-vk-regression-gate"
+      },
+      {
+        "location": "docs/plans/asset-orchard-proxy-phase1a-extension-plan.md",
+        "missing_script": "scripts/wallet-shielded-swap-step7-e2e.mjs"
+      },
+      {
+        "location": "docs/plans/pftl-uniswap-bridge-redeployment-spec.md",
+        "missing_script": "scripts/navswap-custody-inventory.mjs"
+      },
+      {
+        "location": "docs/plans/private-egress-consensus-performance-plan.md",
+        "missing_script": "scripts/node-run-peer-certified"
+      },
+      {
+        "location": "docs/plans/private-egress-consensus-performance-plan.md",
+        "missing_script": "scripts/private-egress-pinned-vk-regression-gate"
+      },
+      {
+        "location": "docs/plans/private-egress-consensus-performance-plan.md",
+        "missing_script": "scripts/testnet-asset-orchard-private-egress-peer-certified-smoke"
+      },
+      {
+        "location": "docs/plans/trustless-navswap-wallet-integration-spec.md",
+        "missing_script": "scripts/navswap-custody-inventory.mjs"
+      },
+      {
+        "location": "docs/plans/trustless-navswap-wallet-integration-spec.md",
+        "missing_script": "scripts/shielded-nav-swap-e2e-live.py"
+      },
+      {
+        "location": "docs/plans/trustless-navswap-wallet-integration-spec.md",
+        "missing_script": "scripts/shielded-navswap-ux-live.py"
+      },
+      {
+        "location": "docs/privacy/assurance-receipts.md",
+        "missing_script": "scripts/privacy-assurance-receipt-verify"
+      },
+      {
+        "location": "docs/privacy/correlation-bounds.md",
+        "missing_script": "scripts/privacy-correlation-bound-verify"
+      },
+      {
+        "location": "docs/privacy/deanonymization-bounds.md",
+        "missing_script": "scripts/privacy-deanonymization-bound-verify"
+      },
+      {
+        "location": "docs/privacy/disclosure.md",
+        "missing_script": "scripts/privacy-assurance-receipt-verify"
+      },
+      {
+        "location": "docs/privacy/disclosure.md",
+        "missing_script": "scripts/testnet-orchard-wallet-finality-smoke"
+      },
+      {
+        "location": "docs/privacy/floor-calibration.md",
+        "missing_script": "scripts/privacy-floor-calibration-verify"
+      },
+      {
+        "location": "docs/privacy/longitudinal-linkage.md",
+        "missing_script": "scripts/privacy-longitudinal-linkage-verify"
+      },
+      {
+        "location": "docs/privacy/metadata-anonymity-bounds.md",
+        "missing_script": "scripts/privacy-metadata-anonymity-bound-verify"
+      },
+      {
+        "location": "docs/privacy/observer-inference-model.md",
+        "missing_script": "scripts/privacy-observer-inference-model-verify"
+      },
+      {
+        "location": "docs/privacy/orchard-halo2.md",
+        "missing_script": "scripts/testnet-live-orchard-full-flow-smoke"
+      },
+      {
+        "location": "docs/privacy/orchard-halo2.md",
+        "missing_script": "scripts/testnet-orchard-peer-certified-smoke"
+      },
+      {
+        "location": "docs/privacy/orchard-halo2.md",
+        "missing_script": "scripts/testnet-orchard-wallet-finality-smoke"
+      },
+      {
+        "location": "docs/privacy/shielded-asset-predicates.md",
+        "missing_script": "scripts/shielded-asset-predicate-registry-verify"
+      },
+      {
+        "location": "docs/python/wallet-functions.md",
+        "missing_script": "scripts/testnet-python-wallet-functions-smoke"
+      },
+      {
+        "location": "docs/quantum/authorization.md",
+        "missing_script": "scripts/testnet-ml-dsa-performance-smoke"
+      },
+      {
+        "location": "docs/quantum/authorization.md",
+        "missing_script": "scripts/testnet-wallet-test-vectors-smoke"
+      },
+      {
+        "location": "docs/research-requests/consensus-finality-latency-research-request.md",
+        "missing_script": "scripts/node-run-peer-certified"
+      },
+      {
+        "location": "docs/research-requests/consensus-finality-latency-research-request.md",
+        "missing_script": "scripts/testnet-tx-finality-latency-benchmark"
+      },
+      {
+        "location": "docs/research-requests/full_response.md",
+        "missing_script": "scripts/gov-gate-0-cobalt-baseline"
+      },
+      {
+        "location": "docs/research-requests/full_response.md",
+        "missing_script": "scripts/gov-gate-1-bundle-hash"
+      },
+      {
+        "location": "docs/research-requests/full_response.md",
+        "missing_script": "scripts/gov-gate-10-verifier"
+      },
+      {
+        "location": "docs/research-requests/full_response.md",
+        "missing_script": "scripts/gov-gate-11-adversarial"
+      },
+      {
+        "location": "docs/research-requests/full_response.md",
+        "missing_script": "scripts/gov-gate-12-integrated-l1"
+      },
+      {
+        "location": "docs/research-requests/full_response.md",
+        "missing_script": "scripts/gov-gate-2-local-docker"
+      },
+      {
+        "location": "docs/research-requests/full_response.md",
+        "missing_script": "scripts/gov-gate-3-modal-h100"
+      },
+      {
+        "location": "docs/research-requests/full_response.md",
+        "missing_script": "scripts/gov-gate-4-provider-portability"
+      },
+      {
+        "location": "docs/research-requests/full_response.md",
+        "missing_script": "scripts/gov-gate-5-cobalt-shadow"
+      },
+      {
+        "location": "docs/research-requests/full_response.md",
+        "missing_script": "scripts/gov-gate-6-replay"
+      },
+      {
+        "location": "docs/research-requests/full_response.md",
+        "missing_script": "scripts/gov-gate-7-rules"
+      },
+      {
+        "location": "docs/research-requests/full_response.md",
+        "missing_script": "scripts/gov-gate-8-dry-run"
+      },
+      {
+        "location": "docs/research-requests/full_response.md",
+        "missing_script": "scripts/gov-gate-9-guarded-apply"
+      },
+      {
+        "location": "docs/research-requests/heavy_redesign.md",
+        "missing_script": "scripts/gov-gate-0-cobalt-baseline"
+      },
+      {
+        "location": "docs/research-requests/heavy_redesign.md",
+        "missing_script": "scripts/gov-gate-1-bundle-hash"
+      },
+      {
+        "location": "docs/research-requests/heavy_redesign.md",
+        "missing_script": "scripts/gov-gate-10-verifier"
+      },
+      {
+        "location": "docs/research-requests/heavy_redesign.md",
+        "missing_script": "scripts/gov-gate-11-adversarial"
+      },
+      {
+        "location": "docs/research-requests/heavy_redesign.md",
+        "missing_script": "scripts/gov-gate-12-integrated-l1"
+      },
+      {
+        "location": "docs/research-requests/heavy_redesign.md",
+        "missing_script": "scripts/gov-gate-2-local-docker"
+      },
+      {
+        "location": "docs/research-requests/heavy_redesign.md",
+        "missing_script": "scripts/gov-gate-3-modal-h100"
+      },
+      {
+        "location": "docs/research-requests/heavy_redesign.md",
+        "missing_script": "scripts/gov-gate-4-provider-portability"
+      },
+      {
+        "location": "docs/research-requests/heavy_redesign.md",
+        "missing_script": "scripts/gov-gate-5-cobalt-shadow"
+      },
+      {
+        "location": "docs/research-requests/heavy_redesign.md",
+        "missing_script": "scripts/gov-gate-6-replay"
+      },
+      {
+        "location": "docs/research-requests/heavy_redesign.md",
+        "missing_script": "scripts/gov-gate-7-rules"
+      },
+      {
+        "location": "docs/research-requests/heavy_redesign.md",
+        "missing_script": "scripts/gov-gate-8-dry-run"
+      },
+      {
+        "location": "docs/research-requests/heavy_redesign.md",
+        "missing_script": "scripts/gov-gate-9-guarded-apply"
+      },
+      {
+        "location": "docs/review/code-review-remediation-handoff-2026-05-22.md",
+        "missing_script": "scripts/check-publish-artifact-redaction"
+      },
+      {
+        "location": "docs/review/controlled-testnet-review-packet.md",
+        "missing_script": "scripts/testnet-controlled-launch-evidence-pack"
+      },
+      {
+        "location": "docs/review/controlled-testnet-review-packet.md",
+        "missing_script": "scripts/testnet-public-claims-check"
+      },
+      {
+        "location": "docs/rpc/write-policy.md",
+        "missing_script": "scripts/testnet-controlled-write-edge-policy-audit"
+      },
+      {
+        "location": "docs/runbooks/account-tx-index.md",
+        "missing_script": "scripts/testnet-account-tx-disk-index-smoke"
+      },
+      {
+        "location": "docs/runbooks/account-tx-index.md",
+        "missing_script": "scripts/testnet-six-wallet-account-tx-smoke"
+      },
+      {
+        "location": "docs/runbooks/controlled-testnet-operator-launch.md",
+        "missing_script": "scripts/testnet-operator-launch-packet"
+      },
+      {
+        "location": "docs/runbooks/controlled-testnet-operator-launch.md",
+        "missing_script": "scripts/testnet-release-final-candidate"
+      },
+      {
+        "location": "docs/runbooks/controlled-write-edge-policy.md",
+        "missing_script": "scripts/testnet-controlled-write-edge-policy-audit"
+      },
+      {
+        "location": "docs/runbooks/controlled-write-edge-policy.md",
+        "missing_script": "scripts/testnet-rpc-write-edge-load-smoke"
+      },
+      {
+        "location": "docs/runbooks/navcoin-market-ops-cold-start.md",
+        "missing_script": "scripts/navcoin-market-ops-cold-start-check"
+      },
+      {
+        "location": "docs/runbooks/operator-day-two.md",
+        "missing_script": "scripts/testnet-live-account-tx-index-refresh"
+      },
+      {
+        "location": "docs/runbooks/operator-day-two.md",
+        "missing_script": "scripts/testnet-live-evidence-refresh"
+      },
+      {
+        "location": "docs/runbooks/operator-day-two.md",
+        "missing_script": "scripts/testnet-live-python-rpc-client-smoke"
+      },
+      {
+        "location": "docs/runbooks/operator-day-two.md",
+        "missing_script": "scripts/testnet-live-validator-doctor"
+      },
+      {
+        "location": "docs/runbooks/operator-day-two.md",
+        "missing_script": "scripts/testnet-overnight-evidence-refresh"
+      },
+      {
+        "location": "docs/runbooks/public-rpc-operator-policy.md",
+        "missing_script": "scripts/testnet-orchard-rpc-batch-create-smoke"
+      },
+      {
+        "location": "docs/runbooks/public-rpc-operator-policy.md",
+        "missing_script": "scripts/testnet-orchard-rpc-concurrency-limit-smoke"
+      },
+      {
+        "location": "docs/runbooks/public-rpc-operator-policy.md",
+        "missing_script": "scripts/testnet-orchard-rpc-malformed-edge-load-smoke"
+      },
+      {
+        "location": "docs/runbooks/public-rpc-operator-policy.md",
+        "missing_script": "scripts/testnet-orchard-rpc-rate-limit-smoke"
+      },
+      {
+        "location": "docs/runbooks/public-rpc-operator-policy.md",
+        "missing_script": "scripts/testnet-orchard-rpc-threshold-gate"
+      },
+      {
+        "location": "docs/runbooks/public-rpc-operator-policy.md",
+        "missing_script": "scripts/testnet-provision-bundle"
+      },
+      {
+        "location": "docs/runbooks/public-rpc-operator-policy.md",
+        "missing_script": "scripts/testnet-rpc-read-alias-smoke"
+      },
+      {
+        "location": "docs/runbooks/public-rpc-operator-policy.md",
+        "missing_script": "scripts/testnet-rpc-serve-tamper"
+      },
+      {
+        "location": "docs/runbooks/public-rpc-operator-policy.md",
+        "missing_script": "scripts/testnet-rpc-write-edge-load-smoke"
+      },
+      {
+        "location": "docs/runbooks/python-rpc-client.md",
+        "missing_script": "scripts/testnet-live-python-rpc-client-smoke"
+      },
+      {
+        "location": "docs/runbooks/python-rpc-client.md",
+        "missing_script": "scripts/testnet-live-readonly-receipt-pull"
+      },
+      {
+        "location": "docs/runbooks/python-rpc-client.md",
+        "missing_script": "scripts/testnet-python-rpc-client-smoke"
+      },
+      {
+        "location": "docs/runbooks/python-rpc-client.md",
+        "missing_script": "scripts/testnet-wallet-receipt-packet-smoke"
+      },
+      {
+        "location": "docs/runbooks/sdk-wallet-flow.md",
+        "missing_script": "scripts/testnet-sdk-wallet-cli-smoke"
+      },
+      {
+        "location": "docs/runbooks/sdk-wallet-flow.md",
+        "missing_script": "scripts/testnet-wallet-receipt-packet-smoke"
+      },
+      {
+        "location": "docs/runbooks/sdk-wallet-flow.md",
+        "missing_script": "scripts/testnet-wallet-sign-transfer-smoke"
+      },
+      {
+        "location": "docs/runbooks/validator-doctor.md",
+        "missing_script": "scripts/testnet-live-validator-doctor"
+      },
+      {
+        "location": "docs/runbooks/validator-emergency-key-rotation.md",
+        "missing_script": "scripts/testnet-remote-emergency-key-rotation-rehearsal"
+      },
+      {
+        "location": "docs/runbooks/validator-history-retention.md",
+        "missing_script": "scripts/testnet-history-role-policy-smoke"
+      },
+      {
+        "location": "docs/specs/hosted-documentation-site.md",
+        "missing_script": "scripts/devnet-sdk-rpc-smoke"
+      },
+      {
+        "location": "docs/specs/hosted-documentation-site.md",
+        "missing_script": "scripts/testnet-cobalt-controlled-readiness-gate"
+      },
+      {
+        "location": "docs/specs/hosted-documentation-site.md",
+        "missing_script": "scripts/testnet-live-orchard-full-flow-smoke"
+      },
+      {
+        "location": "docs/specs/hosted-documentation-site.md",
+        "missing_script": "scripts/testnet-live-wallet-finality"
+      },
+      {
+        "location": "docs/specs/hosted-documentation-site.md",
+        "missing_script": "scripts/testnet-ml-dsa-performance-smoke"
+      },
+      {
+        "location": "docs/specs/hosted-documentation-site.md",
+        "missing_script": "scripts/testnet-orchard-wallet-finality-smoke"
+      },
+      {
+        "location": "docs/specs/hosted-documentation-site.md",
+        "missing_script": "scripts/testnet-tx-finality-latency-benchmark"
+      },
+      {
+        "location": "docs/specs/hosted-documentation-site.md",
+        "missing_script": "scripts/testnet-wallet-test-vectors-smoke"
+      },
+      {
+        "location": "docs/start/first-day.md",
+        "missing_script": "scripts/devnet-sdk-rpc-smoke"
+      },
+      {
+        "location": "docs/status/OPEN-SOURCE-PRODUCTIONIZATION-AUDIT-20260716.md",
+        "missing_script": "scripts/audit"
+      },
+      {
+        "location": "docs/status/OPEN-SOURCE-PRODUCTIONIZATION-AUDIT-20260716.md",
+        "missing_script": "scripts/devnet"
+      },
+      {
+        "location": "docs/status/OPEN-SOURCE-PRODUCTIONIZATION-AUDIT-20260716.md",
+        "missing_script": "scripts/release"
+      },
+      {
+        "location": "docs/status/OPEN-SOURCE-PRODUCTIONIZATION-AUDIT-20260716.md",
+        "missing_script": "scripts/stakehub-wallet-bridge-ux-live.mjs"
+      },
+      {
+        "location": "docs/status/OPEN-SOURCE-PRODUCTIONIZATION-LAB-BOOK-20260716.md",
+        "missing_script": "scripts/stakehub-wallet-bridge-ux-live.mjs"
+      },
+      {
+        "location": "docs/status/PNOK-PRIVATE-FIX-DEMO-ACCEPTANCE-20260801.md",
+        "missing_script": "scripts/live-pnok-private-fix-campaign.mjs"
+      },
+      {
+        "location": "docs/status/PNOK-PRIVATE-FIX-DEMO-ACCEPTANCE-20260801.md",
+        "missing_script": "scripts/live-pnok-private-fix-recovery-faults.mjs"
+      },
+      {
+        "location": "docs/status/adversarial-finality-gate-2026-06-06.md",
+        "missing_script": "scripts/testnet-byzantine-proposer-disjoint-smoke"
+      },
+      {
+        "location": "docs/status/adversarial-finality-gate-2026-06-06.md",
+        "missing_script": "scripts/testnet-finality-chaos-gate"
+      },
+      {
+        "location": "docs/status/adversarial-finality-gate-2026-06-06.md",
+        "missing_script": "scripts/testnet-finality-delayed-vote-retry-smoke"
+      },
+      {
+        "location": "docs/status/adversarial-finality-gate-2026-06-06.md",
+        "missing_script": "scripts/testnet-finality-partition-matrix-smoke"
+      },
+      {
+        "location": "docs/status/adversarial-finality-gate-2026-06-06.md",
+        "missing_script": "scripts/testnet-proposal-vote-lock-restart-smoke"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/admission-game-model-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/admission-security-parameter-provenance-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/admission-security-sensitivity-model-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/ai-admitted-replay-readiness-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/ai-governance-adversarial-corpus-gate-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/ai-governance-corpus-methodology-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/ai-governance-external-corpus-model-replay"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/ai-governance-external-corpus-score"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/ai-governance-methodology-digest-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/ai-redteam-methodology-digest-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/end-to-end-governance-security-model-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/evidence-attestation-distributional-sim-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/evidence-attestation-measurement-capture-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/evidence-security-composition-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/formal-validator-attestor-economics-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/governance-capture-analysis-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/source-attestation-case-study-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/source-shaped-sensitivity-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/system-trust-adversarial-model-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/trust-assumption-incentive-trace-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/trust-capture-economics-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/validator-admission-calibration-framework-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/validator-admission-corruption-sensitivity-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/validator-admission-measurement-economics-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/validator-admission-security-economics-game-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/validator-admission-worked-trace-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/validator-attestor-market-stress-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/whitepaper-admission-core-boundary-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/whitepaper-evidence-digest-verify"
+      },
+      {
+        "location": "docs/status/ai-red-teaming-sprint-2026-05-30.md",
+        "missing_script": "scripts/whitepaper-formal-trust-economics-core-verify"
+      },
+      {
+        "location": "docs/status/ambient-p0-remediation-status-2026-05-22.md",
+        "missing_script": "scripts/ai-job"
+      },
+      {
+        "location": "docs/status/ambient-p0-remediation-status-2026-05-22.md",
+        "missing_script": "scripts/testnet-remote-observability"
+      },
+      {
+        "location": "docs/status/ambient-p1-remediation-plan-2026-05-22.md",
+        "missing_script": "scripts/artifact"
+      },
+      {
+        "location": "docs/status/ambient-p1-remediation-plan-2026-05-22.md",
+        "missing_script": "scripts/docs-site-basic-auth-server"
+      },
+      {
+        "location": "docs/status/avax-sui-peer-latency-scope-2026-06-07.md",
+        "missing_script": "scripts/peer-latency-avax-local"
+      },
+      {
+        "location": "docs/status/avax-sui-peer-latency-scope-2026-06-07.md",
+        "missing_script": "scripts/peer-latency-avax-public"
+      },
+      {
+        "location": "docs/status/avax-sui-peer-latency-scope-2026-06-07.md",
+        "missing_script": "scripts/testnet-real-transaction-latency-benchmark"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/devnet-sdk-shielded-rpc-smoke"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-benchmark-evidence-pack"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-cobalt-amendment-lifecycle-smoke"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-cobalt-amendment-replay-bundle"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-cobalt-lifecycle-audit"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-controlled-launch-evidence-pack"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-controlled-launch-prep-check"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-controlled-write-edge-policy-audit"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-governance-genesis-bundle-smoke"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-history-role-policy-smoke"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-ml-dsa-performance-smoke"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-operator-launch-packet"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-orchard-peer-certified-smoke"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-orchard-rpc-malformed-edge-load-smoke"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-orchard-rpc-rate-limit-smoke"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-orchard-rpc-threshold-gate"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-orchard-wallet-finality-smoke"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-registry-root-binding-audit"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-release-candidate-gate"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-release-gate"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-release-status"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-remote-placement-capacity-profile"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-remote-rpc-read-load"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-remote-soak"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-remote-soak-checkpoint-smoke"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-rpc-read-alias-smoke"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-rpc-write-edge-load-smoke"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-sdk-wallet-cli-smoke"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-validator-registry-lifecycle-replay-bundle"
+      },
+      {
+        "location": "docs/status/chain-state-current.md",
+        "missing_script": "scripts/testnet-wallet-sign-transfer-smoke"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-abba-byzantine"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-adversarial-harness"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-adversarial-soak"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-capture-model"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-collusion-threshold"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-crash-restart"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-dabc-invalid-candidates"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-governance-spam"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-key-compromise-recovery"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-live-process-kill"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-membership-race"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-parser-payload-fuzz"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-partition-simulation"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-rbc-byzantine"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-resource-dos"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-rollback-recovery"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-stale-replay"
+      },
+      {
+        "location": "docs/status/cobalt-adversarial-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-trust-graph-poison"
+      },
+      {
+        "location": "docs/status/controlled-launch-execution-milestone.md",
+        "missing_script": "scripts/testnet-controlled-launch-prep-check"
+      },
+      {
+        "location": "docs/status/controlled-launch-execution-milestone.md",
+        "missing_script": "scripts/testnet-live-evidence-refresh"
+      },
+      {
+        "location": "docs/status/controlled-launch-execution-milestone.md",
+        "missing_script": "scripts/testnet-live-hardening-evidence-pack"
+      },
+      {
+        "location": "docs/status/controlled-launch-execution-milestone.md",
+        "missing_script": "scripts/testnet-live-wallet-finality"
+      },
+      {
+        "location": "docs/status/controlled-launch-execution-milestone.md",
+        "missing_script": "scripts/testnet-release-live-launch"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-benchmark-evidence-pack"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-amendment-lifecycle-smoke"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-amendment-replay-bundle"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-lifecycle-audit"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-controlled-launch-evidence-pack"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-controlled-launch-prep-check"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-governance-genesis-bundle-smoke"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-history-role-policy-smoke"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-live-hardening-evidence-pack"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-operator-launch-packet"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-orchard-peer-certified-smoke"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-orchard-rpc-batch-create-smoke"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-orchard-wallet-finality-smoke"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-public-claims-check"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-registry-root-binding-audit"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-release-live-launch"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-remote-rpc-read-load"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-sdk-wallet-cli-smoke"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-validator-registry-lifecycle-replay-bundle"
+      },
+      {
+        "location": "docs/status/controlled-testnet-burndown.md",
+        "missing_script": "scripts/testnet-wallet-sign-transfer-smoke"
+      },
+      {
+        "location": "docs/status/emergency-oversized-file-refactor-burndown-2026-05-24.md",
+        "missing_script": "scripts/check-ambient-disposition-ledger"
+      },
+      {
+        "location": "docs/status/emergency-oversized-file-refactor-burndown-2026-05-24.md",
+        "missing_script": "scripts/check-cobalt-report-references"
+      },
+      {
+        "location": "docs/status/emergency-oversized-file-refactor-burndown-2026-05-24.md",
+        "missing_script": "scripts/check-oversized-files"
+      },
+      {
+        "location": "docs/status/emergency-oversized-file-refactor-burndown-2026-05-24.md",
+        "missing_script": "scripts/check-reference-artifacts"
+      },
+      {
+        "location": "docs/status/emergency-oversized-file-refactor-burndown-2026-05-24.md",
+        "missing_script": "scripts/modules"
+      },
+      {
+        "location": "docs/status/emergency-oversized-file-refactor-burndown-2026-05-24.md",
+        "missing_script": "scripts/validator-evidence-fixtures-validate"
+      },
+      {
+        "location": "docs/status/emergency-oversized-file-refactor-burndown-2026-05-24.md",
+        "missing_script": "scripts/validator_evidence_fixtures_validate_parts"
+      },
+      {
+        "location": "docs/status/fast-finality-experiment-2026-06-05.md",
+        "missing_script": "scripts/node-run-peer-certified"
+      },
+      {
+        "location": "docs/status/fast-finality-experiment-2026-06-05.md",
+        "missing_script": "scripts/testnet-live-orchard-binary-upgrade"
+      },
+      {
+        "location": "docs/status/fast-finality-experiment-2026-06-05.md",
+        "missing_script": "scripts/testnet-live-wallet-finality"
+      },
+      {
+        "location": "docs/status/fast-finality-experiment-2026-06-05.md",
+        "missing_script": "scripts/testnet-transport-peer-certified-quorum-early-smoke"
+      },
+      {
+        "location": "docs/status/fast-finality-experiment-2026-06-05.md",
+        "missing_script": "scripts/testnet-tx-finality-latency-benchmark"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-abba-byzantine"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-adversarial-harness"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-adversarial-soak"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-amendment-replay-bundle"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-capture-model"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-collusion-threshold"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-controlled-launch-gate"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-controlled-readiness-gate"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-crash-restart"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-dabc-invalid-candidates"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-full-local-harness"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-full-release-gate"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-full-remote-drill"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-full-replay-verify"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-gate-selection-self-test"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-governance-spam"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-key-compromise-recovery"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-live-process-kill"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-membership-race"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-parser-payload-fuzz"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-partition-simulation"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-placement-manifest-draft"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-placement-preflight"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-rbc-byzantine"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-remote-credential-preflight"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-remote-plan-realignment-dry-run"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-resource-dos"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-rollback-recovery"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-stale-replay"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-strict-launch-expected-fail"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-topology-diversity-gate"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-cobalt-trust-graph-poison"
+      },
+      {
+        "location": "docs/status/full-cobalt-burndown.md",
+        "missing_script": "scripts/testnet-placement-manifest-verify"
+      },
+      {
+        "location": "docs/status/full-matched-postfiat-xrpl-latency-matrix-plan-2026-06-07.md",
+        "missing_script": "scripts/postfiat-xrpl-latency-evidence-v3"
+      },
+      {
+        "location": "docs/status/full-matched-postfiat-xrpl-latency-matrix-plan-2026-06-07.md",
+        "missing_script": "scripts/testnet-finality-chaos-gate"
+      },
+      {
+        "location": "docs/status/full-matched-postfiat-xrpl-latency-matrix-plan-2026-06-07.md",
+        "missing_script": "scripts/testnet-real-transaction-latency-benchmark"
+      },
+      {
+        "location": "docs/status/full-matched-postfiat-xrpl-latency-matrix-plan-2026-06-07.md",
+        "missing_script": "scripts/whitepaper-openai-chat-latest-score"
+      },
+      {
+        "location": "docs/status/full-matched-postfiat-xrpl-latency-matrix-plan-2026-06-07.md",
+        "missing_script": "scripts/xrpl-private-control-benchmark"
+      },
+      {
+        "location": "docs/status/generated-evidence-hygiene-burndown-2026-05-22.md",
+        "missing_script": "scripts/check-publish-artifact-redaction"
+      },
+      {
+        "location": "docs/status/latency-claims-evidence-upgrade-plan-2026-06-08.md",
+        "missing_script": "scripts/build-rippled-timing-profiles"
+      },
+      {
+        "location": "docs/status/latency-claims-evidence-upgrade-plan-2026-06-08.md",
+        "missing_script": "scripts/xrpl-private-control-benchmark"
+      },
+      {
+        "location": "docs/status/latency-claims-evidence-upgrade-plan-2026-06-08.md",
+        "missing_script": "scripts/xrpl-timing-stability-matrix"
+      },
+      {
+        "location": "docs/status/latency-evidence-lab-book-addendum-2026-06-09.md",
+        "missing_script": "scripts/build-rippled-timing-profiles"
+      },
+      {
+        "location": "docs/status/latency-evidence-lab-book-addendum-2026-06-09.md",
+        "missing_script": "scripts/peer-latency-avax-local"
+      },
+      {
+        "location": "docs/status/latency-evidence-lab-book-addendum-2026-06-09.md",
+        "missing_script": "scripts/peer-latency-sui-local"
+      },
+      {
+        "location": "docs/status/latency-evidence-lab-book-addendum-2026-06-09.md",
+        "missing_script": "scripts/postfiat-xrpl-latency-evidence-v4"
+      },
+      {
+        "location": "docs/status/latency-evidence-lab-book-addendum-2026-06-09.md",
+        "missing_script": "scripts/select-xrpl-tuned-profile"
+      },
+      {
+        "location": "docs/status/latency-evidence-lab-book-addendum-2026-06-09.md",
+        "missing_script": "scripts/testnet-finality-chaos-gate"
+      },
+      {
+        "location": "docs/status/latency-evidence-lab-book-addendum-2026-06-09.md",
+        "missing_script": "scripts/testnet-real-transaction-latency-benchmark"
+      },
+      {
+        "location": "docs/status/latency-evidence-lab-book-addendum-2026-06-09.md",
+        "missing_script": "scripts/xrpl-private-control-benchmark"
+      },
+      {
+        "location": "docs/status/latency-evidence-lab-book-addendum-2026-06-09.md",
+        "missing_script": "scripts/xrpl-timing-stability-matrix"
+      },
+      {
+        "location": "docs/status/latency-hot-path-growth-fix-plan-2026-06-07.md",
+        "missing_script": "scripts/testnet-finality-chaos-gate"
+      },
+      {
+        "location": "docs/status/latency-hot-path-growth-fix-plan-2026-06-07.md",
+        "missing_script": "scripts/testnet-tx-finality-latency-benchmark"
+      },
+      {
+        "location": "docs/status/latency-optimization-whip-2026-06-06.md",
+        "missing_script": "scripts/node-run-peer-certified"
+      },
+      {
+        "location": "docs/status/latency-optimization-whip-2026-06-06.md",
+        "missing_script": "scripts/testnet-latency-driver-report"
+      },
+      {
+        "location": "docs/status/latency-optimization-whip-2026-06-06.md",
+        "missing_script": "scripts/testnet-live-binary-compatibility-check"
+      },
+      {
+        "location": "docs/status/latency-optimization-whip-2026-06-06.md",
+        "missing_script": "scripts/testnet-live-orchard-binary-upgrade"
+      },
+      {
+        "location": "docs/status/latency-optimization-whip-2026-06-06.md",
+        "missing_script": "scripts/testnet-live-validator-doctor"
+      },
+      {
+        "location": "docs/status/latency-optimization-whip-2026-06-06.md",
+        "missing_script": "scripts/testnet-live-wallet-finality"
+      },
+      {
+        "location": "docs/status/latency-optimization-whip-2026-06-06.md",
+        "missing_script": "scripts/testnet-live-wallet-finality-benchmark"
+      },
+      {
+        "location": "docs/status/latency-optimization-whip-2026-06-06.md",
+        "missing_script": "scripts/testnet-transport-peer-certified-partial-outage-smoke"
+      },
+      {
+        "location": "docs/status/latency-optimization-whip-2026-06-06.md",
+        "missing_script": "scripts/testnet-transport-peer-certified-quorum-early-smoke"
+      },
+      {
+        "location": "docs/status/latency-optimization-whip-2026-06-06.md",
+        "missing_script": "scripts/testnet-tx-finality-latency-benchmark"
+      },
+      {
+        "location": "docs/status/more-interesting-latency-claims-spec-2026-06-08.md",
+        "missing_script": "scripts/postfiat-xrpl-latency-evidence-v4"
+      },
+      {
+        "location": "docs/status/more-interesting-latency-claims-spec-2026-06-08.md",
+        "missing_script": "scripts/select-xrpl-tuned-profile"
+      },
+      {
+        "location": "docs/status/more-interesting-latency-claims-spec-2026-06-08.md",
+        "missing_script": "scripts/xrpl-timing-stability-matrix"
+      },
+      {
+        "location": "docs/status/navswap-morning-handoff-2026-06-29.md",
+        "missing_script": "scripts/navswap-custody-inventory.mjs"
+      },
+      {
+        "location": "docs/status/navswap-wallet-overnight-2026-06-29.md",
+        "missing_script": "scripts/navswap-custody-inventory.mjs"
+      },
+      {
+        "location": "docs/status/no-proof-of-stake-audit-2026-05-25.md",
+        "missing_script": "scripts/no-proof-of-stake"
+      },
+      {
+        "location": "docs/status/operator-script-hardening-burndown-2026-05-22.md",
+        "missing_script": "scripts/ai-job"
+      },
+      {
+        "location": "docs/status/orchard-halo2-implementation-plan.md",
+        "missing_script": "scripts/testnet-orchard-peer-certified-smoke"
+      },
+      {
+        "location": "docs/status/orchard-halo2-implementation-plan.md",
+        "missing_script": "scripts/testnet-orchard-rpc-batch-create-smoke"
+      },
+      {
+        "location": "docs/status/orchard-halo2-implementation-plan.md",
+        "missing_script": "scripts/testnet-orchard-rpc-malformed-edge-load-smoke"
+      },
+      {
+        "location": "docs/status/orchard-halo2-implementation-plan.md",
+        "missing_script": "scripts/testnet-orchard-rpc-rate-limit-smoke"
+      },
+      {
+        "location": "docs/status/orchard-halo2-implementation-plan.md",
+        "missing_script": "scripts/testnet-orchard-rpc-threshold-gate"
+      },
+      {
+        "location": "docs/status/orchard-halo2-implementation-plan.md",
+        "missing_script": "scripts/testnet-orchard-wallet-finality-smoke"
+      },
+      {
+        "location": "docs/status/overnight-launch-hardening-burndown.md",
+        "missing_script": "scripts/testnet-account-tx-disk-index-smoke"
+      },
+      {
+        "location": "docs/status/overnight-launch-hardening-burndown.md",
+        "missing_script": "scripts/testnet-live-evidence-refresh"
+      },
+      {
+        "location": "docs/status/overnight-launch-hardening-burndown.md",
+        "missing_script": "scripts/testnet-live-python-rpc-client-smoke"
+      },
+      {
+        "location": "docs/status/overnight-launch-hardening-burndown.md",
+        "missing_script": "scripts/testnet-live-readonly-receipt-pull"
+      },
+      {
+        "location": "docs/status/overnight-launch-hardening-burndown.md",
+        "missing_script": "scripts/testnet-live-validator-doctor"
+      },
+      {
+        "location": "docs/status/overnight-launch-hardening-burndown.md",
+        "missing_script": "scripts/testnet-overnight-evidence-refresh"
+      },
+      {
+        "location": "docs/status/overnight-launch-hardening-burndown.md",
+        "missing_script": "scripts/testnet-python-rpc-client-smoke"
+      },
+      {
+        "location": "docs/status/overnight-launch-hardening-burndown.md",
+        "missing_script": "scripts/testnet-six-wallet-account-tx-smoke"
+      },
+      {
+        "location": "docs/status/overnight-launch-hardening-burndown.md",
+        "missing_script": "scripts/testnet-wallet-receipt-packet-smoke"
+      },
+      {
+        "location": "docs/status/overnight-whip-plan-2026-05-17.md",
+        "missing_script": "scripts/testnet-live-evidence-refresh"
+      },
+      {
+        "location": "docs/status/overnight-whip-plan-2026-05-17.md",
+        "missing_script": "scripts/testnet-wallet-receipt-packet-smoke"
+      },
+      {
+        "location": "docs/status/packet-b-completion-plan-2026-06-09.md",
+        "missing_script": "scripts/docs"
+      },
+      {
+        "location": "docs/status/packet-b-completion-plan-2026-06-09.md",
+        "missing_script": "scripts/testnet-finality-chaos-gate"
+      },
+      {
+        "location": "docs/status/packet-b-completion-plan-2026-06-09.md",
+        "missing_script": "scripts/testnet-provision-bundle"
+      },
+      {
+        "location": "docs/status/packet-b-completion-plan-2026-06-09.md",
+        "missing_script": "scripts/testnet-remote-ssh-smoke"
+      },
+      {
+        "location": "docs/status/packet-b-completion-plan-2026-06-09.md",
+        "missing_script": "scripts/xrpl-private-control-multihost-benchmark"
+      },
+      {
+        "location": "docs/status/packet-b-multihost-lab-2026-06-09.md",
+        "missing_script": "scripts/testnet-finality-chaos-gate"
+      },
+      {
+        "location": "docs/status/packet-b-multihost-lab-2026-06-09.md",
+        "missing_script": "scripts/testnet-provision-bundle"
+      },
+      {
+        "location": "docs/status/packet-b-multihost-lab-2026-06-09.md",
+        "missing_script": "scripts/testnet-remote-ssh-smoke"
+      },
+      {
+        "location": "docs/status/packet-b-multihost-lab-2026-06-09.md",
+        "missing_script": "scripts/xrpl-private-control-multihost-benchmark"
+      },
+      {
+        "location": "docs/status/packet-b-multihost-postfiat-xrpl-latency-plan-2026-06-09.md",
+        "missing_script": "scripts/build-rippled-timing-profiles"
+      },
+      {
+        "location": "docs/status/packet-b-multihost-postfiat-xrpl-latency-plan-2026-06-09.md",
+        "missing_script": "scripts/postfiat-xrpl-latency-evidence-v4"
+      },
+      {
+        "location": "docs/status/packet-b-multihost-postfiat-xrpl-latency-plan-2026-06-09.md",
+        "missing_script": "scripts/select-xrpl-tuned-profile"
+      },
+      {
+        "location": "docs/status/packet-b-multihost-postfiat-xrpl-latency-plan-2026-06-09.md",
+        "missing_script": "scripts/testnet-finality-chaos-gate"
+      },
+      {
+        "location": "docs/status/packet-b-multihost-postfiat-xrpl-latency-plan-2026-06-09.md",
+        "missing_script": "scripts/testnet-provision-bundle"
+      },
+      {
+        "location": "docs/status/packet-b-multihost-postfiat-xrpl-latency-plan-2026-06-09.md",
+        "missing_script": "scripts/testnet-remote-deploy-plan"
+      },
+      {
+        "location": "docs/status/packet-b-multihost-postfiat-xrpl-latency-plan-2026-06-09.md",
+        "missing_script": "scripts/testnet-remote-ssh-smoke"
+      },
+      {
+        "location": "docs/status/packet-b-multihost-postfiat-xrpl-latency-plan-2026-06-09.md",
+        "missing_script": "scripts/xrpl-private-control-benchmark"
+      },
+      {
+        "location": "docs/status/packet-b-multihost-postfiat-xrpl-latency-plan-2026-06-09.md",
+        "missing_script": "scripts/xrpl-private-control-multihost-benchmark"
+      },
+      {
+        "location": "docs/status/packet-b-multihost-postfiat-xrpl-latency-plan-2026-06-09.md",
+        "missing_script": "scripts/xrpl-timing-stability-matrix"
+      },
+      {
+        "location": "docs/status/postfiat-l1v2-xrpl-latency-evidence-packet-v2-plan-2026-06-06.md",
+        "missing_script": "scripts/postfiat-xrpl-latency-evidence-v2"
+      },
+      {
+        "location": "docs/status/privacy-production-burndown.md",
+        "missing_script": "scripts/testnet-live-orchard-binary-upgrade"
+      },
+      {
+        "location": "docs/status/privacy-production-burndown.md",
+        "missing_script": "scripts/testnet-live-orchard-direct-deposit-smoke"
+      },
+      {
+        "location": "docs/status/privacy-production-burndown.md",
+        "missing_script": "scripts/testnet-live-orchard-full-flow-smoke"
+      },
+      {
+        "location": "docs/status/privacy-production-burndown.md",
+        "missing_script": "scripts/testnet-live-orchard-malformed-edge-load"
+      },
+      {
+        "location": "docs/status/privacy-production-burndown.md",
+        "missing_script": "scripts/testnet-live-orchard-malformed-edge-load-series"
+      },
+      {
+        "location": "docs/status/privacy-production-burndown.md",
+        "missing_script": "scripts/testnet-live-orchard-observability"
+      },
+      {
+        "location": "docs/status/privacy-production-burndown.md",
+        "missing_script": "scripts/testnet-live-orchard-privacy-soak"
+      },
+      {
+        "location": "docs/status/privacy-production-burndown.md",
+        "missing_script": "scripts/testnet-live-orchard-restart-drill"
+      },
+      {
+        "location": "docs/status/privacy-production-burndown.md",
+        "missing_script": "scripts/testnet-live-orchard-snapshot-drill"
+      },
+      {
+        "location": "docs/status/privacy-production-burndown.md",
+        "missing_script": "scripts/testnet-orchard-deterministic-vectors-smoke"
+      },
+      {
+        "location": "docs/status/privacy-production-burndown.md",
+        "missing_script": "scripts/testnet-orchard-fee-resource-policy"
+      },
+      {
+        "location": "docs/status/privacy-production-burndown.md",
+        "missing_script": "scripts/testnet-orchard-peer-certified-smoke"
+      },
+      {
+        "location": "docs/status/privacy-production-burndown.md",
+        "missing_script": "scripts/testnet-orchard-privacy-audit-packet"
+      },
+      {
+        "location": "docs/status/privacy-production-burndown.md",
+        "missing_script": "scripts/testnet-orchard-rpc-batch-create-smoke"
+      },
+      {
+        "location": "docs/status/privacy-production-burndown.md",
+        "missing_script": "scripts/testnet-orchard-rpc-concurrency-limit-smoke"
+      },
+      {
+        "location": "docs/status/privacy-production-burndown.md",
+        "missing_script": "scripts/testnet-orchard-rpc-malformed-edge-load-smoke"
+      },
+      {
+        "location": "docs/status/privacy-production-burndown.md",
+        "missing_script": "scripts/testnet-orchard-wallet-finality-smoke"
+      },
+      {
+        "location": "docs/status/public-claims-checklist.md",
+        "missing_script": "scripts/testnet-benchmark-evidence-pack"
+      },
+      {
+        "location": "docs/status/public-claims-checklist.md",
+        "missing_script": "scripts/testnet-cobalt-amendment-lifecycle-smoke"
+      },
+      {
+        "location": "docs/status/public-claims-checklist.md",
+        "missing_script": "scripts/testnet-cobalt-lifecycle-audit"
+      },
+      {
+        "location": "docs/status/public-claims-checklist.md",
+        "missing_script": "scripts/testnet-controlled-launch-evidence-pack"
+      },
+      {
+        "location": "docs/status/public-claims-checklist.md",
+        "missing_script": "scripts/testnet-history-role-policy-smoke"
+      },
+      {
+        "location": "docs/status/public-claims-checklist.md",
+        "missing_script": "scripts/testnet-live-wallet-finality"
+      },
+      {
+        "location": "docs/status/public-claims-checklist.md",
+        "missing_script": "scripts/testnet-registry-root-binding-audit"
+      },
+      {
+        "location": "docs/status/public-claims-checklist.md",
+        "missing_script": "scripts/testnet-sdk-wallet-cli-smoke"
+      },
+      {
+        "location": "docs/status/qwen-replay-profile-portability-experiment.md",
+        "missing_script": "scripts/qwen-mlx-replay-profile-runner"
+      },
+      {
+        "location": "docs/status/qwen-replay-profile-portability-experiment.md",
+        "missing_script": "scripts/qwen-sglang-replay-profile-runner"
+      },
+      {
+        "location": "docs/status/real-transaction-latency-benchmark-plan-2026-06-07.md",
+        "missing_script": "scripts/testnet-finality-chaos-gate"
+      },
+      {
+        "location": "docs/status/real-transaction-latency-benchmark-plan-2026-06-07.md",
+        "missing_script": "scripts/testnet-real-transaction-latency-benchmark"
+      },
+      {
+        "location": "docs/status/reference-artifact-retention-policy-2026-05-24.md",
+        "missing_script": "scripts/check-cobalt-report-references"
+      },
+      {
+        "location": "docs/status/reference-artifact-retention-policy-2026-05-24.md",
+        "missing_script": "scripts/check-reference-artifacts"
+      },
+      {
+        "location": "docs/status/subsecond-finality-milestone-2026-06-05.md",
+        "missing_script": "scripts/testnet-live-validator-doctor"
+      },
+      {
+        "location": "docs/status/wallet-navswap-agent-handoff-2026-06-29.md",
+        "missing_script": "scripts/tests"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/<redacted-tokenlike-name-sha256-07bebe3791a5>"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/cobalt-key-continuity-receipt-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/cobalt-transition-safety-proof-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/privacy-correlation-bound-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/privacy-deanonymization-bound-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/privacy-floor-calibration-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/privacy-longitudinal-linkage-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/privacy-metadata-anonymity-bound-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/privacy-observer-inference-model-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/qwen-cobalt-bounded-registry-delta-candidate-contract"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/qwen-cobalt-bounded-registry-delta-guarded-add-rehearsal"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/validator-attestor-market-calibration-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/validator-economic-attestation-lifecycle-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/validator-economic-attestor-budget-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/validator-economic-attestor-capture-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/validator-economic-attestor-cost-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/validator-economic-bound-adversary-pricing-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/validator-economic-bound-calibration-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/validator-economic-bound-policy-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/validator-economic-deviation-gain-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/validator-economic-input-misreporting-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/validator-economic-loss-measurement-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/validator-economic-population-stability-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/validator-economic-scalar-reduction-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/validator-economic-synthetic-flow-verify"
+      },
+      {
+        "location": "docs/status/whitepaper-guided-whip-plan-2026-05-29.md",
+        "missing_script": "scripts/validator-registry-addition-liveness-verify"
+      },
+      {
+        "location": "docs/status/xrpl-feature-parity-burndown.md",
+        "missing_script": "scripts/testnet-python-rpc-client-smoke"
+      },
+      {
+        "location": "docs/status/xrpl-feature-parity-burndown.md",
+        "missing_script": "scripts/xrpl-dex-offer-matching-model"
+      },
+      {
+        "location": "docs/status/xrpl-feature-parity-burndown.md",
+        "missing_script": "scripts/xrpl-feature-parity-dex-008-controlled-validator-smoke"
+      },
+      {
+        "location": "docs/status/xrpl-feature-parity-burndown.md",
+        "missing_script": "scripts/xrpl-feature-parity-payment-v2-multivalidator-smoke"
+      },
+      {
+        "location": "docs/status/xrpl-private-control-release-latency-2026-06-06.md",
+        "missing_script": "scripts/xrpl-pft-local-final-evidence-packet"
+      },
+      {
+        "location": "docs/validators/emergency-key-rotation.md",
+        "missing_script": "scripts/testnet-remote-emergency-key-rotation-rehearsal"
+      },
+      {
+        "location": "docs/validators/launch.md",
+        "missing_script": "scripts/testnet-controlled-launch-prep-check"
+      },
+      {
+        "location": "docs/validators/launch.md",
+        "missing_script": "scripts/testnet-operator-launch-packet"
+      },
+      {
+        "location": "docs/validators/launch.md",
+        "missing_script": "scripts/testnet-release-live-launch"
+      },
+      {
+        "location": "docs/validators/launch.md",
+        "missing_script": "scripts/testnet-release-package"
+      },
+      {
+        "location": "docs/validators/overview.md",
+        "missing_script": "scripts/testnet-live-validator-doctor"
+      },
+      {
+        "location": "docs/validators/overview.md",
+        "missing_script": "scripts/testnet-remote-emergency-key-rotation-rehearsal"
+      },
+      {
+        "location": "docs/validators/overview.md",
+        "missing_script": "scripts/testnet-remote-restart-drill"
+      },
+      {
+        "location": "docs/validators/overview.md",
+        "missing_script": "scripts/testnet-remote-snapshot-drill"
+      },
+      {
+        "location": "docs/wallets/transparent-wallet.md",
+        "missing_script": "scripts/testnet-live-wallet-finality"
+      },
+      {
+        "location": "docs/wallets/transparent-wallet.md",
+        "missing_script": "scripts/testnet-wallet-test-vectors-smoke"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/devnet-signed-mempool-ingress"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/node-run-peer-certified"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/rpc-catch-up-from-validator.sh"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-fee-reserve-policy-smoke"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-node-run-peer-certified-partial-outage-smoke"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-node-run-peer-certified-restart-smoke"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-placement-manifest-verify"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-release-candidate-gate"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-release-final-candidate"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-release-final-candidate-watch"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-remote-emergency-key-rotation-rehearsal"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-remote-placement-capacity-profile"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-remote-rpc-edge-load"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-remote-soak"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-remote-ssh-smoke"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-remote-topology-capture-profile"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-remote-validator-registry-drill"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-rpc-catchup-smoke"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-rpc-serve-tamper"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-validator-registry-update-smoke"
+      },
+      {
+        "location": "roadmap.md",
+        "missing_script": "scripts/testnet-wallet-test-vectors-smoke"
+      }
+    ],
+    "active_docs_missing_pairs": 585,
+    "affected_active_document_count": 102,
+    "archived_docs": [],
+    "archived_docs_missing_pairs": 0,
+    "methodology": "Git grep is captured internally. Output contains only sanitized documentation locations and referenced script paths whose target is absent from the canonical tree; no matching prose line is emitted.",
+    "semantic_objective_present": false,
+    "unique_missing_location_reference_pairs": 585,
+    "unique_missing_script_count": 361
+  },
+  "pr10b_rpc_coverage": {
+    "archived_coverage_path": "docs/rpc/method-coverage.md",
+    "archived_coverage_path_present": false,
+    "dispatch_wire_method_count": 116,
+    "documented_method_count": 54,
+    "methodology": "RPC constant identifiers and protocol method names are extracted internally from canonical source; docs/rpc content is searched internally. Output contains identifiers, protocol method names, booleans, counts, and sanitized paths only; no source or prose line is emitted.",
+    "methods": [
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "account"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "account_assets"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "account_escrows"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "account_lines"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "account_nfts"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "account_offers"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "account_tx"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "account_tx_index_status"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "apply_batch"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "apply_bridge_batch"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "apply_shield_batch"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "archive_window"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "asset_fee_quote"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "asset_info"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "asset_orchard_action_status"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "asset_orchard_swap_create"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "atomic_settlement_template"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "atomic_swap_fee_quote"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "batch_archive"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "batch_transfer"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "blocks"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "book_offers"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "bridge_batch_domain"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "bridge_batch_pause"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "bridge_batch_resume"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "bridge_batch_transfer"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "bridge_domain"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "bridge_pause"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "bridge_resume"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "bridge_status"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "bridge_transfer"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "escrow_fee_quote"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "escrow_info"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "faucet"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "fee"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "fx_fix_info"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "fx_fix_list"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "fx_fix_quote"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "fx_fix_reservation_info"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "issuer_assets"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "issuer_nfts"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "ledger"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "manifests"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "market_ops_status"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "mempool_batch"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "mempool_status"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "mempool_submit_fastlane_primary"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "mempool_submit_signed_asset_transaction"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "mempool_submit_signed_atomic_swap_transaction"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "mempool_submit_signed_escrow_transaction"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "mempool_submit_signed_nft_transaction"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "mempool_submit_signed_offer_transaction"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "mempool_submit_signed_payment_v2"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "mempool_submit_signed_transfer"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "mempool_submit_transfer"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "metrics"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "nav_reserve_proof_status"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "navcoin_bridge_claims"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "navcoin_bridge_destination_consume"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "navcoin_bridge_export_debit"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "navcoin_bridge_import_return"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "navcoin_bridge_launch_config_init"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "navcoin_bridge_launch_config_template"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "navcoin_bridge_packet"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "navcoin_bridge_packet_preflight"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "navcoin_bridge_primary_subscribe"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "navcoin_bridge_receipt_replay"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "navcoin_bridge_record_fork_rehearsal"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "navcoin_bridge_record_return_burn"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "navcoin_bridge_refund_source"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "navcoin_bridge_route_init"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "navcoin_bridge_routes"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "navcoin_bridge_supply_status"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "nft_fee_quote"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "nft_info"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "offer_fee_quote"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "offer_info"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "orchard_pool_report"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "owned-sign"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "owned-unwrap-apply"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "owned-unwrap-sign"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "owned_objects"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "owned_sign"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "owned_unwrap_apply"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "owned_unwrap_sign"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "pftl_uniswap_receipt_witness"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "pfusdc_checkpoint_witness"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "pfusdc_egress_witness"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "receipts"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "server_info"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "shield_batch_asset_orchard_ingress"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "shield_batch_migrate"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "shield_batch_mint"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "shield_batch_orchard"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "shield_batch_orchard_deposit"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "shield_batch_orchard_withdraw"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "shield_batch_spend"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "shield_batch_swap"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "shield_disclose"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "shield_mint"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "shield_scan"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "shield_spend"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "shield_turnstile"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "status"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "transfer"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "transfer_fee_quote"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "tx"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "validate_local_keys"
+      },
+      {
+        "documented_under_docs_rpc": true,
+        "wire_method": "validators"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "vault_bridge_route"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "vault_bridge_status"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "verify_blocks"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "verify_bridge"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "verify_mempool"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "verify_shielded"
+      },
+      {
+        "documented_under_docs_rpc": false,
+        "wire_method": "verify_state"
+      }
+    ],
+    "rpc_docs_paths": [
+      "docs/rpc/account-history.md",
+      "docs/rpc/examples.md",
+      "docs/rpc/methods.md",
+      "docs/rpc/overview.md",
+      "docs/rpc/write-policy.md"
+    ],
+    "semantic_objective_present": false,
+    "undocumented_method_count": 62,
+    "undocumented_wire_methods": [
+      "apply_batch",
+      "apply_bridge_batch",
+      "apply_shield_batch",
+      "archive_window",
+      "asset_orchard_action_status",
+      "asset_orchard_swap_create",
+      "batch_archive",
+      "batch_transfer",
+      "bridge_batch_domain",
+      "bridge_batch_pause",
+      "bridge_batch_resume",
+      "bridge_batch_transfer",
+      "bridge_domain",
+      "bridge_pause",
+      "bridge_resume",
+      "bridge_transfer",
+      "faucet",
+      "fx_fix_info",
+      "fx_fix_list",
+      "fx_fix_quote",
+      "fx_fix_reservation_info",
+      "market_ops_status",
+      "mempool_batch",
+      "mempool_submit_transfer",
+      "nav_reserve_proof_status",
+      "navcoin_bridge_destination_consume",
+      "navcoin_bridge_export_debit",
+      "navcoin_bridge_import_return",
+      "navcoin_bridge_launch_config_init",
+      "navcoin_bridge_launch_config_template",
+      "navcoin_bridge_packet_preflight",
+      "navcoin_bridge_primary_subscribe",
+      "navcoin_bridge_record_fork_rehearsal",
+      "navcoin_bridge_record_return_burn",
+      "navcoin_bridge_refund_source",
+      "navcoin_bridge_route_init",
+      "owned-sign",
+      "owned-unwrap-apply",
+      "owned-unwrap-sign",
+      "pftl_uniswap_receipt_witness",
+      "pfusdc_checkpoint_witness",
+      "pfusdc_egress_witness",
+      "shield_batch_asset_orchard_ingress",
+      "shield_batch_migrate",
+      "shield_batch_mint",
+      "shield_batch_orchard",
+      "shield_batch_orchard_deposit",
+      "shield_batch_orchard_withdraw",
+      "shield_batch_spend",
+      "shield_batch_swap",
+      "shield_disclose",
+      "shield_mint",
+      "shield_scan",
+      "shield_spend",
+      "validate_local_keys",
+      "vault_bridge_route",
+      "vault_bridge_status",
+      "verify_blocks",
+      "verify_bridge",
+      "verify_mempool",
+      "verify_shielded",
+      "verify_state"
+    ]
+  },
+  "pr9_ambient_ledgers": {
+    "current_id_count": 198,
+    "ledgers": [
+      {
+        "current_finding_count": 100,
+        "current_status_counts": {
+          "downgraded": 9,
+          "fixed": 12,
+          "generated_artifact": 78,
+          "wont_fix_documented": 1
+        },
+        "location": "docs/status/ambient-finding-disposition-ledger/p0-001-100.json",
+        "old_finding_count": 100,
+        "old_ids_missing_current": [],
+        "old_status_counts": {
+          "downgraded": 9,
+          "fixed": 12,
+          "remediated_by_removal": 78,
+          "wont_fix_documented": 1
+        },
+        "status_changed_ids": [
+          "SEC-P0-023",
+          "SEC-P0-024",
+          "SEC-P0-025",
+          "SEC-P0-026",
+          "SEC-P0-027",
+          "SEC-P0-028",
+          "SEC-P0-029",
+          "SEC-P0-030",
+          "SEC-P0-031",
+          "SEC-P0-032",
+          "SEC-P0-033",
+          "SEC-P0-034",
+          "SEC-P0-035",
+          "SEC-P0-036",
+          "SEC-P0-037",
+          "SEC-P0-038",
+          "SEC-P0-039",
+          "SEC-P0-040",
+          "SEC-P0-041",
+          "SEC-P0-042",
+          "SEC-P0-043",
+          "SEC-P0-044",
+          "SEC-P0-045",
+          "SEC-P0-046",
+          "SEC-P0-047",
+          "SEC-P0-048",
+          "SEC-P0-049",
+          "SEC-P0-050",
+          "SEC-P0-051",
+          "SEC-P0-052",
+          "SEC-P0-053",
+          "SEC-P0-054",
+          "SEC-P0-055",
+          "SEC-P0-056",
+          "SEC-P0-057",
+          "SEC-P0-058",
+          "SEC-P0-059",
+          "SEC-P0-060",
+          "SEC-P0-061",
+          "SEC-P0-062",
+          "SEC-P0-063",
+          "SEC-P0-064",
+          "SEC-P0-065",
+          "SEC-P0-066",
+          "SEC-P0-067",
+          "SEC-P0-068",
+          "SEC-P0-069",
+          "SEC-P0-070",
+          "SEC-P0-071",
+          "SEC-P0-072",
+          "SEC-P0-073",
+          "SEC-P0-074",
+          "SEC-P0-075",
+          "SEC-P0-076",
+          "SEC-P0-077",
+          "SEC-P0-078",
+          "SEC-P0-079",
+          "SEC-P0-080",
+          "SEC-P0-081",
+          "SEC-P0-082",
+          "SEC-P0-083",
+          "SEC-P0-084",
+          "SEC-P0-085",
+          "SEC-P0-086",
+          "SEC-P0-087",
+          "SEC-P0-088",
+          "SEC-P0-089",
+          "SEC-P0-090",
+          "SEC-P0-091",
+          "SEC-P0-092",
+          "SEC-P0-093",
+          "SEC-P0-094",
+          "SEC-P0-095",
+          "SEC-P0-096",
+          "SEC-P0-097",
+          "SEC-P0-098",
+          "SEC-P0-099",
+          "SEC-P0-100"
+        ],
+        "status_transition_counts": {
+          "remediated_by_removal->generated_artifact": 78
+        }
+      },
+      {
+        "current_finding_count": 98,
+        "current_status_counts": {
+          "archive_only": 4,
+          "downgraded": 1,
+          "fixed": 1,
+          "generated_artifact": 18,
+          "script_backlog": 74
+        },
+        "location": "docs/status/ambient-finding-disposition-ledger/p0-101-198.json",
+        "old_finding_count": 98,
+        "old_ids_missing_current": [],
+        "old_status_counts": {
+          "archive_only": 4,
+          "downgraded": 1,
+          "fixed": 5,
+          "remediated_by_removal": 88
+        },
+        "status_changed_ids": [
+          "SEC-P0-101",
+          "SEC-P0-102",
+          "SEC-P0-103",
+          "SEC-P0-104",
+          "SEC-P0-105",
+          "SEC-P0-106",
+          "SEC-P0-107",
+          "SEC-P0-108",
+          "SEC-P0-109",
+          "SEC-P0-110",
+          "SEC-P0-111",
+          "SEC-P0-112",
+          "SEC-P0-113",
+          "SEC-P0-114",
+          "SEC-P0-115",
+          "SEC-P0-116",
+          "SEC-P0-117",
+          "SEC-P0-118",
+          "SEC-P0-119",
+          "SEC-P0-120",
+          "SEC-P0-121",
+          "SEC-P0-122",
+          "SEC-P0-123",
+          "SEC-P0-124",
+          "SEC-P0-125",
+          "SEC-P0-126",
+          "SEC-P0-127",
+          "SEC-P0-128",
+          "SEC-P0-129",
+          "SEC-P0-130",
+          "SEC-P0-131",
+          "SEC-P0-132",
+          "SEC-P0-133",
+          "SEC-P0-134",
+          "SEC-P0-135",
+          "SEC-P0-136",
+          "SEC-P0-137",
+          "SEC-P0-138",
+          "SEC-P0-139",
+          "SEC-P0-140",
+          "SEC-P0-141",
+          "SEC-P0-142",
+          "SEC-P0-143",
+          "SEC-P0-144",
+          "SEC-P0-145",
+          "SEC-P0-146",
+          "SEC-P0-147",
+          "SEC-P0-148",
+          "SEC-P0-149",
+          "SEC-P0-150",
+          "SEC-P0-151",
+          "SEC-P0-152",
+          "SEC-P0-153",
+          "SEC-P0-154",
+          "SEC-P0-155",
+          "SEC-P0-156",
+          "SEC-P0-157",
+          "SEC-P0-158",
+          "SEC-P0-159",
+          "SEC-P0-160",
+          "SEC-P0-161",
+          "SEC-P0-162",
+          "SEC-P0-163",
+          "SEC-P0-164",
+          "SEC-P0-165",
+          "SEC-P0-166",
+          "SEC-P0-167",
+          "SEC-P0-168",
+          "SEC-P0-169",
+          "SEC-P0-170",
+          "SEC-P0-171",
+          "SEC-P0-172",
+          "SEC-P0-173",
+          "SEC-P0-174",
+          "SEC-P0-175",
+          "SEC-P0-176",
+          "SEC-P0-177",
+          "SEC-P0-178",
+          "SEC-P0-179",
+          "SEC-P0-180",
+          "SEC-P0-181",
+          "SEC-P0-182",
+          "SEC-P0-183",
+          "SEC-P0-184",
+          "SEC-P0-185",
+          "SEC-P0-186",
+          "SEC-P0-187",
+          "SEC-P0-188",
+          "SEC-P0-189",
+          "SEC-P0-190",
+          "SEC-P0-191",
+          "SEC-P0-192"
+        ],
+        "status_transition_counts": {
+          "fixed->script_backlog": 4,
+          "remediated_by_removal->generated_artifact": 18,
+          "remediated_by_removal->script_backlog": 70
+        }
+      }
+    ],
+    "manual_status_review_required": true,
+    "methodology": "Only ledger locations, finding ids, and status-class counts are emitted. Rationales and all other field values are never emitted.",
+    "old_id_count": 198,
+    "old_ids_missing_current": [],
+    "semantic_objective_present": true,
+    "status_changed_ids": [
+      "SEC-P0-023",
+      "SEC-P0-024",
+      "SEC-P0-025",
+      "SEC-P0-026",
+      "SEC-P0-027",
+      "SEC-P0-028",
+      "SEC-P0-029",
+      "SEC-P0-030",
+      "SEC-P0-031",
+      "SEC-P0-032",
+      "SEC-P0-033",
+      "SEC-P0-034",
+      "SEC-P0-035",
+      "SEC-P0-036",
+      "SEC-P0-037",
+      "SEC-P0-038",
+      "SEC-P0-039",
+      "SEC-P0-040",
+      "SEC-P0-041",
+      "SEC-P0-042",
+      "SEC-P0-043",
+      "SEC-P0-044",
+      "SEC-P0-045",
+      "SEC-P0-046",
+      "SEC-P0-047",
+      "SEC-P0-048",
+      "SEC-P0-049",
+      "SEC-P0-050",
+      "SEC-P0-051",
+      "SEC-P0-052",
+      "SEC-P0-053",
+      "SEC-P0-054",
+      "SEC-P0-055",
+      "SEC-P0-056",
+      "SEC-P0-057",
+      "SEC-P0-058",
+      "SEC-P0-059",
+      "SEC-P0-060",
+      "SEC-P0-061",
+      "SEC-P0-062",
+      "SEC-P0-063",
+      "SEC-P0-064",
+      "SEC-P0-065",
+      "SEC-P0-066",
+      "SEC-P0-067",
+      "SEC-P0-068",
+      "SEC-P0-069",
+      "SEC-P0-070",
+      "SEC-P0-071",
+      "SEC-P0-072",
+      "SEC-P0-073",
+      "SEC-P0-074",
+      "SEC-P0-075",
+      "SEC-P0-076",
+      "SEC-P0-077",
+      "SEC-P0-078",
+      "SEC-P0-079",
+      "SEC-P0-080",
+      "SEC-P0-081",
+      "SEC-P0-082",
+      "SEC-P0-083",
+      "SEC-P0-084",
+      "SEC-P0-085",
+      "SEC-P0-086",
+      "SEC-P0-087",
+      "SEC-P0-088",
+      "SEC-P0-089",
+      "SEC-P0-090",
+      "SEC-P0-091",
+      "SEC-P0-092",
+      "SEC-P0-093",
+      "SEC-P0-094",
+      "SEC-P0-095",
+      "SEC-P0-096",
+      "SEC-P0-097",
+      "SEC-P0-098",
+      "SEC-P0-099",
+      "SEC-P0-100",
+      "SEC-P0-101",
+      "SEC-P0-102",
+      "SEC-P0-103",
+      "SEC-P0-104",
+      "SEC-P0-105",
+      "SEC-P0-106",
+      "SEC-P0-107",
+      "SEC-P0-108",
+      "SEC-P0-109",
+      "SEC-P0-110",
+      "SEC-P0-111",
+      "SEC-P0-112",
+      "SEC-P0-113",
+      "SEC-P0-114",
+      "SEC-P0-115",
+      "SEC-P0-116",
+      "SEC-P0-117",
+      "SEC-P0-118",
+      "SEC-P0-119",
+      "SEC-P0-120",
+      "SEC-P0-121",
+      "SEC-P0-122",
+      "SEC-P0-123",
+      "SEC-P0-124",
+      "SEC-P0-125",
+      "SEC-P0-126",
+      "SEC-P0-127",
+      "SEC-P0-128",
+      "SEC-P0-129",
+      "SEC-P0-130",
+      "SEC-P0-131",
+      "SEC-P0-132",
+      "SEC-P0-133",
+      "SEC-P0-134",
+      "SEC-P0-135",
+      "SEC-P0-136",
+      "SEC-P0-137",
+      "SEC-P0-138",
+      "SEC-P0-139",
+      "SEC-P0-140",
+      "SEC-P0-141",
+      "SEC-P0-142",
+      "SEC-P0-143",
+      "SEC-P0-144",
+      "SEC-P0-145",
+      "SEC-P0-146",
+      "SEC-P0-147",
+      "SEC-P0-148",
+      "SEC-P0-149",
+      "SEC-P0-150",
+      "SEC-P0-151",
+      "SEC-P0-152",
+      "SEC-P0-153",
+      "SEC-P0-154",
+      "SEC-P0-155",
+      "SEC-P0-156",
+      "SEC-P0-157",
+      "SEC-P0-158",
+      "SEC-P0-159",
+      "SEC-P0-160",
+      "SEC-P0-161",
+      "SEC-P0-162",
+      "SEC-P0-163",
+      "SEC-P0-164",
+      "SEC-P0-165",
+      "SEC-P0-166",
+      "SEC-P0-167",
+      "SEC-P0-168",
+      "SEC-P0-169",
+      "SEC-P0-170",
+      "SEC-P0-171",
+      "SEC-P0-172",
+      "SEC-P0-173",
+      "SEC-P0-174",
+      "SEC-P0-175",
+      "SEC-P0-176",
+      "SEC-P0-177",
+      "SEC-P0-178",
+      "SEC-P0-179",
+      "SEC-P0-180",
+      "SEC-P0-181",
+      "SEC-P0-182",
+      "SEC-P0-183",
+      "SEC-P0-184",
+      "SEC-P0-185",
+      "SEC-P0-186",
+      "SEC-P0-187",
+      "SEC-P0-188",
+      "SEC-P0-189",
+      "SEC-P0-190",
+      "SEC-P0-191",
+      "SEC-P0-192"
+    ]
+  },
+  "schema": "postfiat.track-c.nested-docs-equivalence.v1"
+}
