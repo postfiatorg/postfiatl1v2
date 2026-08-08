@@ -33,7 +33,7 @@
 | B2 epoch 7/8 proofs | OPEN | |
 | B3 qualification 6/6 | OPEN | |
 | B4 G5 rehearsal | OPEN | |
-| C0 inventory | OPEN | |
+| C0 inventory | CLOSED | 20/20 manifests at /tmp/a666-c0-inventory/*.json; notable: postfiatl1v2 on open-source-productionization branch 266 ahead of origin/main; nav-proof-external-verifier 265 ahead; postfiatl1v2-fastswap 210 ahead; StakeHub-repeat-demo 154 ahead + 34 dirty; a666 worktree 345 untracked/64G (protected evidence) |
 | C1 target architecture | OPEN | |
 | C3 integration complete | OPEN | |
 | C4 retirement complete | OPEN | |
@@ -48,6 +48,8 @@
 ## Stage state journal
 
 (append-only; every agent writes before/after each gate)
+
+- 2026-08-08 ~01:30 UTC: A3 in progress. E6 rebuild run dir: nav-e6-fresh/20260808T005948Z-e5compat. XMR sidecar rebuilt (coingecko:XMR, price 37259000000 e8). HL receipt witness built from fresh legacy-reader snapshot (block 42592633). First aggregate-witness attempt FAILED CLOSED on NEAR head hash: 213618e host verification has the pre-fix V6 threshold. Fix committed on branch e6-e5compat-near-v6-fix (8512776, guest contains no NEAR code); script rebuild running. vkey gate: rebuilt guest ELF must byte-match archived governed-aggregate-program-00580ee8.elf (sha256 dd743c38...) before any prove.
 
 - 2026-08-08 ~01:15 UTC: Manager: Step 0 + A0 + A1 closed in one session. Executor-A/Verifier-A roles currently performed by Manager (no live mutation yet; A2 is the first custody op).
 - 2026-08-08: Manager: plan committed to docs/plans/, tracker created, fire-discipline skill read and bound to Track A. Envelope active per principal GO.
