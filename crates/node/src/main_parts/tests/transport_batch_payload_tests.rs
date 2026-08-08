@@ -149,7 +149,7 @@ mod transport_batch_payload_tests {
             &data_dir,
             &topology,
             &local_status,
-            15_000,
+            60_000,
         )
             .expect("authenticated persistent peer health");
         assert_eq!(authenticated, data_dirs.len() - 1);

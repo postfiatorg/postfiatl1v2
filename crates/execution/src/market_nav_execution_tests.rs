@@ -7557,15 +7557,14 @@ fn ar05_active_export_entitlement_blocks_route_epoch_advance_until_closed() {
         9,
     );
     assert!(receipt.accepted, "{receipt:?}");
-    assert!(ledger
+    assert!(!ledger
         .pftl_uniswap_route(&route_id)
         .expect("AR-05 route after completion")
         .v2
         .as_ref()
         .expect("AR-05 v2 state")
         .export_entitlements
-        .get(&reservation_id)
-        .is_none());
+        .contains_key(&reservation_id));
 
     let receipt = execute(
         &mut ledger,

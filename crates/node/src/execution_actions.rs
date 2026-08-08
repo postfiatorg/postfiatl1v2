@@ -44,6 +44,7 @@ pub(super) fn execute_fastlane_primary_for_chain(
     execute_fastlane_primary_transaction(ledger, transaction, block_height)
 }
 
+#[cfg(test)]
 pub(super) fn execute_transparent_batch(
     genesis: &Genesis,
     governance: &GovernanceState,
