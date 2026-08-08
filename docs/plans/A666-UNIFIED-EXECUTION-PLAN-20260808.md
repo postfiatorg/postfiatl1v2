@@ -272,3 +272,12 @@ State for any respawn (verify live before trusting):
 - Evidence: run-dir e6-ops/ (ops jsons, manifest, both finality receipts); clone round artifacts under the a4-clone dir.
 - Money: PFTL chain-state ops only (reserve submit + finalize, authorized by plan A4); no Ethereum/StakeHub/keys/vault balances touched. NEXT: A5 — S1f binding from these values, then legs 2a->5b receipt-by-receipt.
 
+
+### 2026-08-08 ~05:0xZ — GATE E CLOSED: S1f binding rendered, linted, committed
+
+- values-S1f.json + binding-S1f.json (sha256 d6a165b72b8a7fdeeb9f0a12d10bb335e17ca42cd1480d9afaa0364d8b32c35b) + packets-S1f/ committed as a666-eth-fast-lane e6c35e9. Active legs 2a,2b,3a,3b0,3b,3c,3d,3e; 3f-3h/4/5a/5b stay receipt-chained (S2f/S3f/S4f pattern).
+- Every Gate E requirement bound: mint 11,012,575 (boundary-verified, principal exactly 10,000,000), reservation sha384(native-v1|route|leg2a-reserve|781|20260808) 96-hex, nonces sha256 same rule (subscribe/export/redeem), all recipients lowercase, pricing epoch 6 + packet b06262a1..., gas ceilings from live base fee 36.8Mwei ETH/USD 1913.24 (total 0.253739, projection 511.278584 <= 530), swap deadline bind-time+4h in calldata, two-fork delta-zero sim at 2-RPC-agreed block 25707323 (fill 8,047,252; min-out 7,805,834; leg3h sequential reference 10,998,833), leg3a digest fields OMITTED per FIRE-10 ruling, linter validate-executable --through 3e PASS with proper staged exemptions.
+- Sim + derived-value evidence: /tmp/a666-s1f/ (agreement, calldata jsons, derived-values.json). Freshness: leg3e must fire by Ethereum block 25707451 (sim+128) else re-sim + rebind (S1b precedent).
+- Executor surface: scripts/native_campaign_driver.py run-leg (fail-closed, binary pins verified: client a982f8d2... present at /tmp/fire-20260806-bin/). Journal artifact dir to be created at fire.
+- NEXT: fire leg 2a (order reserve) via driver, then 2b, 3a, then EVM legs 3b0-3e; each receipt-gated.
+
