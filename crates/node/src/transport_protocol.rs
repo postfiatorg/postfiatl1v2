@@ -1,5 +1,16 @@
 use super::*;
 
+/// Wall-clock nanoseconds since the Unix epoch, saturating to 0 when the
+/// system clock is set before the epoch. The transport timestamp path must
+/// never panic on a skewed or rewound clock (X1 hardening).
+#[allow(dead_code)]
+pub(super) fn transport_unix_time_nanos_saturating() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0)
+}
+
 pub(super) fn read_topology_file(path: &PathBuf) -> Result<NetworkTopology, String> {
     let raw = std::fs::read_to_string(path)
         .map_err(|error| format!("topology read `{}` failed: {error}", path.display()))?;
@@ -2005,10 +2016,7 @@ mod transport_cli_tests {
     }
 
     fn unique_transport_test_ready_file(test_name: &str) -> PathBuf {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system clock must be after epoch")
-            .as_nanos();
+        let nanos = transport_unix_time_nanos_saturating();
         std::env::temp_dir()
             .join(format!(
                 "postfiat-{test_name}-{}-{nanos}",

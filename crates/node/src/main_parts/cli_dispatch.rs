@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::{self, Child, Command, Output, Stdio};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
-    mpsc, Arc, Mutex,
+    mpsc, Arc, Condvar, Mutex,
 };
 use std::thread;
 use std::time::{Duration, Instant};
@@ -287,6 +287,7 @@ const DIRECT_STATE_ENV: &str = "POSTFIAT_ALLOW_DIRECT_STATE";
 const TRANSPORT_AUTH_SCHEMA: &str = "postfiat-transport-auth-v1";
 const TRANSPORT_AUTH_CONTEXT: &[u8] = b"postfiat-l1-v2/transport-auth/v1";
 const MAX_RPC_SERVE_ACTIVE_CONNECTIONS: usize = 64;
+const TRANSPORT_BLOCK_VOTE_LISTEN_MAX_IN_FLIGHT: usize = 16;
 const RPC_ORCHARD_ACTION_SPOOL_DIR: &str = "rpc-orchard-actions";
 const RPC_ORCHARD_BATCH_SPOOL_DIR: &str = "rpc-orchard-batches";
 

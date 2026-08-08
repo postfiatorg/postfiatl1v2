@@ -47,6 +47,8 @@ struct RpcServeReport {
     max_orchard_batch_create_per_peer: u64,
     max_orchard_batch_create_total: u64,
     max_orchard_batch_create_concurrent: u64,
+    max_child_dispatch_concurrent: u64,
+    max_child_dispatch_per_peer: u64,
     invalid_signature_count: u64,
     duplicate_transaction_count: u64,
     request_too_large_count: u64,
@@ -56,6 +58,7 @@ struct RpcServeReport {
     orchard_batch_create_global_rate_limited_count: u64,
     orchard_batch_create_concurrency_limited_count: u64,
     orchard_batch_create_not_public_safe_count: u64,
+    child_dispatch_concurrency_limited_count: u64,
     rpc_child_timeout_count: u64,
     method_not_allowed_count: u64,
     read_only: bool,
@@ -105,6 +108,8 @@ struct RpcServeOptions {
     max_orchard_batch_create_per_peer: u64,
     max_orchard_batch_create_total: u64,
     max_orchard_batch_create_concurrent: u64,
+    max_child_dispatch_concurrent: u64,
+    max_child_dispatch_per_peer: u64,
     keep_alive: bool,
 }
 
@@ -132,8 +137,11 @@ struct RpcServeConnectionContext {
     max_orchard_batch_create_per_peer: u64,
     max_orchard_batch_create_total: u64,
     max_orchard_batch_create_concurrent: u64,
+    max_child_dispatch_concurrent: u64,
+    max_child_dispatch_per_peer: u64,
     mempool_submit_state: Arc<Mutex<RpcServeMempoolSubmitState>>,
     orchard_batch_create_state: Arc<Mutex<RpcServeMempoolSubmitState>>,
+    child_dispatch_state: Arc<Mutex<RpcServeMempoolSubmitState>>,
     mempool_mutation_lock: Arc<Mutex<()>>,
     finality_submit_lock: Arc<Mutex<()>>,
     health_cache: Arc<Mutex<RpcServeHealthCache>>,
@@ -207,6 +215,7 @@ struct RpcServeMempoolSubmitState {
     counts_by_peer: BTreeMap<String, std::collections::VecDeque<Instant>>,
     total_timestamps: std::collections::VecDeque<Instant>,
     active_count: u64,
+    peer_active_counts: BTreeMap<String, u64>,
 }
 
 #[derive(Debug, Default)]
@@ -230,11 +239,14 @@ struct RpcServeMempoolSubmitCounters {
 #[derive(Debug)]
 struct RpcServeActiveCounterGuard {
     state: Arc<Mutex<RpcServeMempoolSubmitState>>,
+    peer_addr: Option<String>,
 }
 
 static RPC_SERVE_SPOOL_COUNTER: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
 const RPC_SERVE_SPOOL_DIR_ATTEMPTS: u32 = 128;
+const DEFAULT_RPC_CHILD_DISPATCH_CONCURRENT: u64 = 8;
+const DEFAULT_RPC_CHILD_DISPATCH_PER_PEER: u64 = 4;
 const RPC_ORCHARD_ACTION_SPOOL_MAX_REQUEST_BYTES: u64 = MAX_RPC_REQUEST_BYTES as u64;
 const RPC_ORCHARD_ACTION_SPOOL_MAX_TOTAL_BYTES: u64 = 64 * 1024 * 1024;
 const RPC_SERVE_RATE_LIMIT_WINDOW: Duration = Duration::from_secs(60);
@@ -266,6 +278,14 @@ impl Drop for RpcServeActiveCounterGuard {
     fn drop(&mut self) {
         if let Ok(mut state) = self.state.lock() {
             state.active_count = state.active_count.saturating_sub(1);
+            if let Some(peer_addr) = self.peer_addr.as_ref() {
+                if let Some(peer_active) = state.peer_active_counts.get_mut(peer_addr) {
+                    *peer_active = peer_active.saturating_sub(1);
+                    if *peer_active == 0 {
+                        state.peer_active_counts.remove(peer_addr);
+                    }
+                }
+            }
         }
     }
 }
@@ -590,6 +610,7 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
     let mut requests = Vec::with_capacity(options.max_requests);
     let mempool_submit_state = Arc::new(Mutex::new(RpcServeMempoolSubmitState::default()));
     let orchard_batch_create_state = Arc::new(Mutex::new(RpcServeMempoolSubmitState::default()));
+    let child_dispatch_state = Arc::new(Mutex::new(RpcServeMempoolSubmitState::default()));
     let mempool_mutation_lock = Arc::new(Mutex::new(()));
     let finality_submit_lock = Arc::new(Mutex::new(()));
     let health_cache = Arc::new(Mutex::new(RpcServeHealthCache {
@@ -662,8 +683,11 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
             max_orchard_batch_create_per_peer: options.max_orchard_batch_create_per_peer,
             max_orchard_batch_create_total: options.max_orchard_batch_create_total,
             max_orchard_batch_create_concurrent: options.max_orchard_batch_create_concurrent,
+            max_child_dispatch_concurrent: options.max_child_dispatch_concurrent,
+            max_child_dispatch_per_peer: options.max_child_dispatch_per_peer,
             mempool_submit_state: Arc::clone(&mempool_submit_state),
             orchard_batch_create_state: Arc::clone(&orchard_batch_create_state),
+            child_dispatch_state: Arc::clone(&child_dispatch_state),
             mempool_mutation_lock: Arc::clone(&mempool_mutation_lock),
             finality_submit_lock: Arc::clone(&finality_submit_lock),
             health_cache: Arc::clone(&health_cache),
@@ -759,6 +783,8 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
         rpc_serve_error_class_count(&requests, "orchard_batch_create_concurrency_limited");
     let orchard_batch_create_not_public_safe_count =
         rpc_serve_error_class_count(&requests, "orchard_batch_create_not_public_safe");
+    let child_dispatch_concurrency_limited_count =
+        rpc_serve_error_class_count(&requests, "rpc_child_dispatch_concurrency_limited");
     let rpc_child_timeout_count = rpc_serve_error_class_count(&requests, "rpc_child_timeout");
     let method_not_allowed_count = rpc_serve_error_class_count(&requests, "method_not_allowed");
     Ok(RpcServeReport {
@@ -780,6 +806,8 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
         max_orchard_batch_create_per_peer: options.max_orchard_batch_create_per_peer,
         max_orchard_batch_create_total: options.max_orchard_batch_create_total,
         max_orchard_batch_create_concurrent: options.max_orchard_batch_create_concurrent,
+        max_child_dispatch_concurrent: options.max_child_dispatch_concurrent,
+        max_child_dispatch_per_peer: options.max_child_dispatch_per_peer,
         invalid_signature_count,
         duplicate_transaction_count,
         request_too_large_count,
@@ -789,6 +817,7 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
         orchard_batch_create_global_rate_limited_count,
         orchard_batch_create_concurrency_limited_count,
         orchard_batch_create_not_public_safe_count,
+        child_dispatch_concurrency_limited_count,
         rpc_child_timeout_count,
         method_not_allowed_count,
         read_only: !options.allow_mempool_submit
@@ -1098,13 +1127,7 @@ fn handle_rpc_serve_connection(
                     } else if method == "atomic_swap_fee_quote" {
                         run_rpc_serve_atomic_swap_fee_quote(&request, context)
                     } else {
-                        match run_rpc_request_via_child(
-                            &context.data_dir,
-                            &context.spool_dir,
-                            request_index,
-                            &line,
-                            context.child_timeout_ms,
-                        ) {
+                        match run_rpc_request_via_child_limited(context, request_index, &line) {
                             Ok(response) => response,
                             Err(error) => rpc_serve_child_error_response(&id, &error),
                         }
@@ -1194,13 +1217,7 @@ fn handle_rpc_serve_connection(
                     if let Some(counts) = orchard_batch_create_counts.as_mut() {
                         counts.active_count = active_count;
                     }
-                    match run_rpc_request_via_child(
-                        &context.data_dir,
-                        &context.spool_dir,
-                        request_index,
-                        &line,
-                        context.child_timeout_ms,
-                    ) {
+                    match run_rpc_request_via_child_limited(context, request_index, &line) {
                         Ok(response) => response,
                         Err(error) => rpc_serve_child_error_response(&id, &error),
                     }
@@ -1844,13 +1861,7 @@ fn handle_rpc_serve_connection(
             }
         }
     } else if method == "server_info" {
-        match run_rpc_request_via_child(
-            &context.data_dir,
-            &context.spool_dir,
-            request_index,
-            &line,
-            context.child_timeout_ms,
-        ) {
+        match run_rpc_request_via_child_limited(context, request_index, &line) {
             Ok(mut response) => {
                 if response.ok {
                     if let Some(result) = response.result.as_mut() {
@@ -1871,13 +1882,7 @@ fn handle_rpc_serve_connection(
             Err(error) => rpc_serve_child_error_response(&id, &error),
         }
     } else {
-        match run_rpc_request_via_child(
-            &context.data_dir,
-            &context.spool_dir,
-            request_index,
-            &line,
-            context.child_timeout_ms,
-        ) {
+        match run_rpc_request_via_child_limited(context, request_index, &line) {
             Ok(response) => response,
             Err(error) => rpc_serve_child_error_response(&id, &error),
         }
@@ -2163,9 +2168,63 @@ fn try_acquire_rpc_serve_active_orchard_worker(
     Ok((
         RpcServeActiveCounterGuard {
             state: Arc::clone(state),
+            peer_addr: None,
         },
         active_count,
     ))
+}
+
+// N3 hardening: cap the process-per-request child dispatch path both globally
+// and per remote peer so a fork-flood cannot exhaust process/CPU. Requests
+// beyond the cap fail fast with a typed error instead of queueing a spawn.
+fn try_acquire_rpc_serve_child_dispatch(
+    context: &RpcServeConnectionContext,
+) -> Result<RpcServeActiveCounterGuard, String> {
+    let mut state = context
+        .child_dispatch_state
+        .lock()
+        .map_err(|_| "rpc serve child dispatch counter lock poisoned".to_string())?;
+    if state.active_count >= context.max_child_dispatch_concurrent {
+        return Err(format!(
+            "rpc serve exceeded global concurrent child dispatch limit {}",
+            context.max_child_dispatch_concurrent
+        ));
+    }
+    let peer_active = state
+        .peer_active_counts
+        .get(&context.peer_addr)
+        .copied()
+        .unwrap_or(0);
+    if peer_active >= context.max_child_dispatch_per_peer {
+        return Err(format!(
+            "rpc serve exceeded per-peer concurrent child dispatch limit {} for peer `{}`",
+            context.max_child_dispatch_per_peer, context.peer_addr
+        ));
+    }
+    state.active_count = state.active_count.saturating_add(1);
+    *state
+        .peer_active_counts
+        .entry(context.peer_addr.clone())
+        .or_insert(0) = peer_active.saturating_add(1);
+    Ok(RpcServeActiveCounterGuard {
+        state: Arc::clone(&context.child_dispatch_state),
+        peer_addr: Some(context.peer_addr.clone()),
+    })
+}
+
+fn run_rpc_request_via_child_limited(
+    context: &RpcServeConnectionContext,
+    request_index: u64,
+    request_json: &str,
+) -> Result<RpcResponse, String> {
+    let _dispatch_guard = try_acquire_rpc_serve_child_dispatch(context)?;
+    run_rpc_request_via_child(
+        &context.data_dir,
+        &context.spool_dir,
+        request_index,
+        request_json,
+        context.child_timeout_ms,
+    )
 }
 
 fn is_orchard_batch_create_method(method: &str) -> bool {
@@ -4770,4 +4829,106 @@ fn rpc_serve_error_class(method: &str, response: &RpcResponse) -> Option<String>
         };
     }
     Some(error.code.clone())
+}
+
+#[cfg(test)]
+mod child_dispatch_limit_tests {
+    use super::*;
+
+    fn child_dispatch_test_context(
+        max_child_dispatch_concurrent: u64,
+        max_child_dispatch_per_peer: u64,
+    ) -> RpcServeConnectionContext {
+        RpcServeConnectionContext {
+            data_dir: PathBuf::from("child-dispatch-test"),
+            spool_dir: PathBuf::from("child-dispatch-test"),
+            node_id: "test-node".to_string(),
+            peer_addr: "127.0.0.1".to_string(),
+            allow_mempool_submit: false,
+            allow_mempool_submit_finality: false,
+            allow_orchard_batch_create: false,
+            owned_lane_enabled: true,
+            owned_certificate_domain: postfiat_types::OwnedCertificateDomain {
+                schema: postfiat_types::OWNED_CERTIFICATE_DOMAIN_SCHEMA_V2.to_string(),
+                chain_id: "child-dispatch-test".to_string(),
+                genesis_hash: "00".repeat(48),
+                protocol_version: 1,
+                registry_id: "child-dispatch-test".to_string(),
+            },
+            child_timeout_ms: 1_000,
+            finality_topology_file: PathBuf::from("child-dispatch-test"),
+            finality_key_file: PathBuf::from("child-dispatch-test"),
+            finality_proposal_key_file: None,
+            finality_artifact_root: PathBuf::from("child-dispatch-test"),
+            finality_timeout_ms: 1_000,
+            finality_send_retries: 0,
+            finality_retry_backoff_ms: 0,
+            finality_quorum_early_full_propagation: false,
+            max_mempool_submit_per_peer: 8,
+            max_mempool_submit_total: 32,
+            max_orchard_batch_create_per_peer: 2,
+            max_orchard_batch_create_total: 8,
+            max_orchard_batch_create_concurrent: 1,
+            max_child_dispatch_concurrent,
+            max_child_dispatch_per_peer,
+            mempool_submit_state: Arc::new(Mutex::new(RpcServeMempoolSubmitState::default())),
+            orchard_batch_create_state: Arc::new(Mutex::new(
+                RpcServeMempoolSubmitState::default(),
+            )),
+            child_dispatch_state: Arc::new(Mutex::new(RpcServeMempoolSubmitState::default())),
+            mempool_mutation_lock: Arc::new(Mutex::new(())),
+            finality_submit_lock: Arc::new(Mutex::new(())),
+            health_cache: Arc::new(Mutex::new(RpcServeHealthCache {
+                status: None,
+                mempool: None,
+                status_checked_at: None,
+                mempool_checked_at: None,
+            })),
+            fastswap_service: Arc::new(Mutex::new(None)),
+            runtime_metrics: Arc::new(RpcServeRuntimeMetrics::default()),
+        }
+    }
+
+    // N3 regression: the N+1-th concurrent child dispatch request from one
+    // peer fails fast with a clear error instead of queueing a process spawn.
+    #[test]
+    fn per_peer_child_dispatch_cap_fails_fast() {
+        let context = child_dispatch_test_context(8, 2);
+        let first = try_acquire_rpc_serve_child_dispatch(&context)
+            .expect("first dispatch slot");
+        let _second = try_acquire_rpc_serve_child_dispatch(&context)
+            .expect("second dispatch slot");
+        let error = try_acquire_rpc_serve_child_dispatch(&context)
+            .expect_err("third concurrent dispatch must fail fast");
+        assert!(
+            error.contains("per-peer concurrent child dispatch limit 2"),
+            "{error}"
+        );
+        // Releasing a slot lets the peer dispatch again (normal operation
+        // under the cap).
+        drop(first);
+        try_acquire_rpc_serve_child_dispatch(&context)
+            .expect("dispatch slot must be reusable after release");
+    }
+
+    // N3 regression: the global cap binds even when many distinct peers each
+    // stay under their per-peer cap.
+    #[test]
+    fn global_child_dispatch_cap_fails_fast_across_peers() {
+        let context = child_dispatch_test_context(2, 1);
+        let _first = try_acquire_rpc_serve_child_dispatch(&context)
+            .expect("first peer dispatch slot");
+        let mut second_peer = context;
+        second_peer.peer_addr = "127.0.0.2".to_string();
+        let _second = try_acquire_rpc_serve_child_dispatch(&second_peer)
+            .expect("second peer dispatch slot");
+        let mut third_peer = second_peer;
+        third_peer.peer_addr = "127.0.0.3".to_string();
+        let error = try_acquire_rpc_serve_child_dispatch(&third_peer)
+            .expect_err("global cap must fail fast across peers");
+        assert!(
+            error.contains("global concurrent child dispatch limit 2"),
+            "{error}"
+        );
+    }
 }
