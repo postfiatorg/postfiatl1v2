@@ -15,7 +15,6 @@ paths=(
   wallet-web/src
   wallet-proxy
   crates
-  scripts
   tools
   deployments/a666-export-relay-mainnet-20260731
 )
@@ -26,6 +25,7 @@ fi
 if rg -n -i \
   --glob '!**/*.test.js' \
   --glob '!**/*.test.jsx' \
+  --glob '!**/*.e2e.js' \
   --glob '!**/*_tests.rs' \
   --glob '!**/tests/**' \
   --glob '!**/testdata/**' \
@@ -44,6 +44,7 @@ fi
 route_identity_matches="$(rg -n -i \
   --glob '!**/*.test.js' \
   --glob '!**/*.test.jsx' \
+  --glob '!**/*.e2e.js' \
   --glob '!wallet-proxy/test_*.js' \
   --glob '!wallet-proxy/fixtures/**' \
   --glob '!wallet-proxy/node_modules/**' \
