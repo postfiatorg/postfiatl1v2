@@ -146,9 +146,9 @@ flowchart LR
 - `crates/consensus_cobalt/examples/cobalt_cover_sizing.rs`
 - `crates/consensus_cobalt/examples/cobalt_safety_witness.rs`
 - `crates/consensus_cobalt/examples/current_trust_graph_root.rs`
-- `scripts/testnet-cobalt-full-local-harness`
-- `scripts/testnet-cobalt-full-remote-drill`
-- `scripts/testnet-cobalt-controlled-readiness-gate`
+- `scripts/testnet-cobalt-full-local-harness` *(archived outside this repository; see `scripts/README.md`)*
+- `scripts/testnet-cobalt-full-remote-drill` *(archived outside this repository; see `scripts/README.md`)*
+- `scripts/testnet-cobalt-controlled-readiness-gate` *(archived outside this repository; see `scripts/README.md`)*
 - `docs/status/full-cobalt-burndown.md`
 
 ## Current Evidence

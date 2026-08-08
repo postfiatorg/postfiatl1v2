@@ -88,6 +88,8 @@ removal.
 ## Verification
 
 ```bash
+# HISTORICAL: these commands were archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/privacy-observer-inference-model-verify --fixtures
 scripts/privacy-observer-inference-model-verify --write-report
 scripts/privacy-observer-inference-model-verify --verify-report

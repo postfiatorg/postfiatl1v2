@@ -100,6 +100,8 @@ stale observation, and ungoverned policy.
 ## Verification
 
 ```bash
+# HISTORICAL: these commands were archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/privacy-correlation-bound-verify --fixtures
 scripts/privacy-correlation-bound-verify --write-report
 scripts/privacy-correlation-bound-verify --verify-report

@@ -99,6 +99,10 @@ postfiat-shielded-asset-predicate-registry-v1
 
 Core files:
 
+The verifier path in the following evidence manifest is historical: it was
+archived outside this repository during the open-source cleanup (see
+`scripts/README.md`).
+
 ```text
 docs/governance/agent/shielded_asset_predicate_registry_schema.json
 docs/governance/agent/fixtures/shielded_asset_predicate_registry/valid_predicate_registry.json
@@ -155,6 +159,8 @@ anonymity set.
 ## Verification
 
 ```bash
+# HISTORICAL: these commands were archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/shielded-asset-predicate-registry-verify --fixtures
 scripts/shielded-asset-predicate-registry-verify --write-report
 scripts/shielded-asset-predicate-registry-verify --verify-report

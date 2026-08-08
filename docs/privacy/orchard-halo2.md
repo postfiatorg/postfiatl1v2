@@ -106,8 +106,8 @@ When a verified Orchard action is applied, the node persists:
 
 ## Evidence
 
-- `scripts/testnet-orchard-wallet-finality-smoke`
-- `scripts/testnet-orchard-peer-certified-smoke`
-- `scripts/testnet-live-orchard-full-flow-smoke`
+- `scripts/testnet-orchard-wallet-finality-smoke` *(archived outside this repository; see `scripts/README.md`)*
+- `scripts/testnet-orchard-peer-certified-smoke` *(archived outside this repository; see `scripts/README.md`)*
+- `scripts/testnet-live-orchard-full-flow-smoke` *(archived outside this repository; see `scripts/README.md`)*
 - `reports/testnet-live-orchard-full-flow/live-orchard-full-flow-20260515T183724Z/testnet-live-orchard-full-flow.json`
 - `reports/orchard-verification-budget-v1-report.json`

@@ -70,6 +70,8 @@ statement-hash mismatch, missing required cases, and verifier-claim removal.
 ## Verification
 
 ```bash
+# HISTORICAL: these commands were archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/privacy-longitudinal-linkage-verify --fixtures
 scripts/privacy-longitudinal-linkage-verify --write-report
 scripts/privacy-longitudinal-linkage-verify --verify-report

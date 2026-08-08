@@ -78,8 +78,36 @@ def require_clean_with(relative: str, content: str) -> None:
         assert "a666_recovery_ci_policy=ok" in result.stdout, result.stdout
 
 
+def require_exact_direct_proving_allowlist() -> None:
+    repo_root = CHECKER.parent.parent
+    vectors = {
+        "scripts/test_native_campaign_driver.py": (435, 626),
+        "scripts/test_native_prover_leaf.py": (180,),
+    }
+    for relative, allowed_lines in vectors.items():
+        source_lines = (repo_root / relative).read_text(encoding="utf-8").splitlines()
+        fixture_lines = [""] * max(allowed_lines)
+        for line in allowed_lines:
+            fixture_lines[line - 1] = source_lines[line - 1]
+        with tempfile.TemporaryDirectory(prefix="a666-ci-policy-allowlist-") as directory:
+            root = Path(directory)
+            clean_fixture(root)
+            write_fixture(root, relative, "\n".join(fixture_lines) + "\n")
+            result = invoke(root)
+            assert result.returncode == 0, result.stdout
+
+            drift_line = allowed_lines[-1]
+            fixture_lines[drift_line - 1] += " "
+            write_fixture(root, relative, "\n".join(fixture_lines) + "\n")
+            result = invoke(root)
+            assert result.returncode != 0, result.stdout
+            expected = f"{relative}:{drift_line}: stale-direct-proving-allowlist"
+            assert expected in result.stdout, result.stdout
+
+
 def main() -> int:
     require_clean()
+    require_exact_direct_proving_allowlist()
 
     api = "pro" + "ve"
     require_failure(
@@ -140,7 +168,10 @@ def main() -> int:
         1,
     )
 
-    print("a666_recovery_ci_policy_selftest=ok clean=1 failure_path_clean=2 rejected=6")
+    print(
+        "a666_recovery_ci_policy_selftest=ok clean=1 allowlist_vectors=2 "
+        "allowlist_drift_rejected=2 failure_path_clean=2 rejected=6"
+    )
     return 0
 
 

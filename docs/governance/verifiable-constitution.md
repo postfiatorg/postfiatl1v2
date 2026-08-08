@@ -98,6 +98,9 @@ parsed-output-root split is selector divergence and forces hold/no-op.
 
 Verifier:
 
+The following replay verifier command is historical: it was archived outside
+this repository during the open-source cleanup (see `scripts/README.md`).
+
 ```text
 scripts/verifiable-constitution-replay-equivalence-invariant --verify-report \
   --output reports/verifiable-constitution/vc-111-replay-equivalence-invariant-report.json
@@ -860,6 +863,8 @@ The completed drill did this on a local project-controlled chain:
 Verify it with:
 
 ```bash
+# HISTORICAL: this command was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/qwen-cobalt-live-registry-authority-drill --verify-report
 ```
 
@@ -1120,6 +1125,8 @@ Current supporting reports:
 Verifier commands:
 
 ```bash
+# HISTORICAL: these commands were archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/verifiable-constitution-readiness-summary --verify-report
 scripts/verifiable-constitution-proof-summary --verify-report
 scripts/verifiable-constitution-attack-hardness-readiness-summary --verify-report

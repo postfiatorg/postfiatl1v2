@@ -55,8 +55,8 @@ sequenceDiagram
 ## Current Tooling
 
 - `scripts/testnet-validator-doctor-smoke`
-- `scripts/testnet-live-validator-doctor`
+- `scripts/testnet-live-validator-doctor` *(archived outside this repository; see `scripts/README.md`)*
 - `scripts/testnet-monitor-snapshot-smoke`
-- `scripts/testnet-remote-restart-drill`
-- `scripts/testnet-remote-snapshot-drill`
-- `scripts/testnet-remote-emergency-key-rotation-rehearsal`
+- `scripts/testnet-remote-restart-drill` *(archived outside this repository; see `scripts/README.md`)*
+- `scripts/testnet-remote-snapshot-drill` *(archived outside this repository; see `scripts/README.md`)*
+- `scripts/testnet-remote-emergency-key-rotation-rehearsal` *(archived outside this repository; see `scripts/README.md`)*
