@@ -11,7 +11,7 @@
 > **Current architecture boundary (2026-08-01):** StakeHub is an internal
 > operator product, not a public protocol component or trust anchor. New proof
 > profiles use the provider-neutral public-values ABI and the open
-> [`tools/nav-reserve-proof`](../../tools/nav-reserve-proof/README.md) kit.
+> [`tools/nav-reserve-proof`](https://github.com/postfiatorg/postfiatl1v2/blob/main/tools/nav-reserve-proof/README.md) kit.
 > Existing provider-named profiles and packets remain immutable historical
 > state; wallets execute only from finalized PFTL proof, packet, and route
 > state. See the

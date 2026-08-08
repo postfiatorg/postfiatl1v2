@@ -89,6 +89,10 @@ nav:
   - Whitepaper: whitepaper.md
   - NAVCoins:
       - Overview: navcoins/index.md
+      - A666 Live Funds Runbook: runbooks/A666-END-TO-END-LIVE-FUNDS-RUNBOOK-20260807.md
+      - A666 Current Execution Handoff: handoffs/A666-LIVE-FUNDS-EXECUTION-HANDOFF-20260807.md
+      - A666 Unified Execution Plan: plans/A666-UNIFIED-EXECUTION-PLAN-20260808.md
+      - A666 Unified Execution Tracker: status/A666-UNIFIED-EXECUTION-TRACKER-20260808.md
       - A666 Current State: status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md
       - A666 Production Hardening: plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md
       - Reserve Redemption System: plans/NAVCOIN-RESERVE-REDEMPTION-SYSTEM-SPEC-20260730.md

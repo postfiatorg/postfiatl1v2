@@ -1,5 +1,12 @@
 # A666 Recovery and Live-Demo Handoff
 
+> **SUPERSEDED FOR CURRENT OPERATIONS (2026-08-08).** This document is
+> historical evidence from 2026-08-05. Resume from
+> [A666 Live Funds Execution Handoff](A666-LIVE-FUNDS-EXECUTION-HANDOFF-20260807.md)
+> and the canonical
+> [live-funds runbook](../runbooks/A666-END-TO-END-LIVE-FUNDS-RUNBOOK-20260807.md).
+> Stage 0 and the PFTL claim have since finalized; never repeat them.
+
 - **Prepared:** 2026-08-05 UTC
 - **Worktree:** `/home/postfiat/repos/a666-eth-fast-lane-combined-20260724`
 - **Branch:** `feature/pnok-private-fix`

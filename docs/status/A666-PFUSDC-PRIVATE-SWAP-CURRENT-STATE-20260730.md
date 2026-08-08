@@ -1,5 +1,12 @@
 # A666, pfUSDC, Private Swap, Bridge, and Uniswap Current State
 
+> **HISTORICAL DEPLOYED-STATE BASELINE.** This page remains authoritative for
+> the 2026-07-30 release it records. Current live-campaign state moved forward:
+> the orchard-aware fleet rollout and 10.000000 pfUSDC claim finalized at PFTL
+> height 779. For current operations use the
+> [live-funds runbook](../runbooks/A666-END-TO-END-LIVE-FUNDS-RUNBOOK-20260807.md)
+> and [current execution handoff](../handoffs/A666-LIVE-FUNDS-EXECUTION-HANDOFF-20260807.md).
+
 > **Architecture update (2026-08-01):** This remains the authoritative record
 > of the July 30 deployed state and evidence. New production work is governed
 > by the

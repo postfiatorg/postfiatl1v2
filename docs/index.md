@@ -10,11 +10,16 @@ This site is the engineering front door. It is not a dump of internal notes. It
 points to the current code, scripts, reports, and operating runbooks that define
 what has been built.
 
-For the current reserve-backed NAVCoin product—including Ethereum-mainnet
-pfUSDC, A666 primary issue/redemption, the private PFTL middle, proof-gated
-wA666, the Uniswap venue, live deployment state, and remaining production
-gates—start with
-[A666, pfUSDC, Private Swap, Bridge, and Uniswap Current State](status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md).
+For the current live-funds A666 campaign—including the finalized Ethereum
+USDC deposit, orchard-aware six-validator rollout, finalized PFTL claim, E6
+NAV refresh blocker, and remaining issue/swap/redeem/bridge-out legs—start with
+the [A666 live-funds runbook](runbooks/A666-END-TO-END-LIVE-FUNDS-RUNBOOK-20260807.md)
+and [current execution handoff](handoffs/A666-LIVE-FUNDS-EXECUTION-HANDOFF-20260807.md).
+Program-level sequencing lives in the
+[A666 unified execution plan](plans/A666-UNIFIED-EXECUTION-PLAN-20260808.md) with live
+gate state in the [execution tracker](status/A666-UNIFIED-EXECUTION-TRACKER-20260808.md).
+The [July 30 current-state page](status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md)
+remains the deployed-state baseline, not the current execution checkpoint.
 The proposed next-generation
 [NAVCoin Reserve Redemption System](plans/NAVCOIN-RESERVE-REDEMPTION-SYSTEM-SPEC-20260730.md)
 defines separately escrowed two-sided primary facilities for approved

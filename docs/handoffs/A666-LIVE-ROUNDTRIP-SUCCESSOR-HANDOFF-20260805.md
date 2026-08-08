@@ -1,5 +1,12 @@
 # A666 LIVE ROUND-TRIP — SUCCESSOR HANDOFF — 2026-08-05
 
+> **SUPERSEDED FOR CURRENT OPERATIONS (2026-08-08).** Preserve this document
+> for its historical evidence. Resume from
+> [A666 Live Funds Execution Handoff](A666-LIVE-FUNDS-EXECUTION-HANDOFF-20260807.md)
+> and the canonical
+> [live-funds runbook](../runbooks/A666-END-TO-END-LIVE-FUNDS-RUNBOOK-20260807.md).
+> The fleet rollout and 10.000000 pfUSDC claim are final; legs 2 onward remain open.
+
 > **READ THIS FIRST**
 >
 > The human's actual objective is a real live-money round trip using the already-deployed literal A666 route:
