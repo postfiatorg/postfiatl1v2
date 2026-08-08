@@ -55,6 +55,15 @@ def send(args: argparse.Namespace) -> dict[str, Any]:
     estimated_fee = gas * gas_price
     if estimated_fee > int(args.max_fee_wei):
         raise RuntimeError("estimated fee exceeds max-fee-wei")
+    if args.expected_recipient_balance_wei is not None:
+        recipient_balance = _hex_int(
+            _rpc(args.rpc_url, "eth_getBalance", [args.recipient, "latest"])
+        )
+        if recipient_balance != int(args.expected_recipient_balance_wei):
+            raise RuntimeError(
+                "recipient balance changed before broadcast: "
+                f"expected {args.expected_recipient_balance_wei}, got {recipient_balance}"
+            )
     tx_hash = native_agentd_leaf.evm_send(args.stakehub_home, "ethereum", args.recipient, amount, args.label)
     receipt = _wait_receipt(args.rpc_url, tx_hash)
     status = _hex_int(receipt.get("status", 0))
@@ -84,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--recipient", required=True)
     parser.add_argument("--amount-wei", required=True, type=int)
     parser.add_argument("--max-fee-wei", required=True, type=int)
+    parser.add_argument("--expected-recipient-balance-wei", type=int)
     parser.add_argument("--label", required=True)
     parser.add_argument("--report", required=True)
     args = parser.parse_args(argv)
