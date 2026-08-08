@@ -548,7 +548,7 @@ fn validate_rbc_linked_message(
 
 fn validate_rbc_signature_hex(signature_hex: &str) -> Result<(), String> {
     if signature_hex.is_empty() {
-        return Ok(());
+        return Err("Cobalt message signature must be nonempty".to_string());
     }
     if signature_hex.len() > MAX_COBALT_SIGNATURE_HEX_LEN {
         return Err("Cobalt signature exceeds maximum hex length".to_string());
@@ -557,6 +557,90 @@ fn validate_rbc_signature_hex(signature_hex: &str) -> Result<(), String> {
         return Err("RBC signature must be lowercase hex".to_string());
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_rbc_linked_message_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    label: &str,
+    chain_id: &str,
+    genesis_hash: &str,
+    protocol_version: u32,
+    trust_graph_root: &str,
+    sender: &str,
+    proposer: &str,
+    amendment_slot: u64,
+    payload_hash: &str,
+    propose_message_id: &str,
+    signature_hex: &str,
+    propose: &RbcPropose,
+    payload: &[u8],
+) -> Result<(), String> {
+    validate_rbc_linked_message(
+        domain,
+        label,
+        chain_id,
+        genesis_hash,
+        protocol_version,
+        trust_graph_root,
+        sender,
+        proposer,
+        amendment_slot,
+        payload_hash,
+        propose_message_id,
+        signature_hex,
+        propose,
+    )?;
+    verify_cobalt_message_signature(
+        committee,
+        RBC_MESSAGE_SIGNATURE_CONTEXT,
+        sender,
+        payload,
+        signature_hex,
+    )
+    .map_err(|error| format!("{label} {error}"))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_abba_message_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    kind: &str,
+    message_id: &str,
+    chain_id: &str,
+    genesis_hash: &str,
+    protocol_version: u32,
+    trust_graph_root: &str,
+    sender: &str,
+    agreement_id: &str,
+    round: u64,
+    signature_hex: &str,
+    expected_message_id: &str,
+    payload: &[u8],
+) -> Result<(), String> {
+    validate_abba_message(
+        domain,
+        kind,
+        message_id,
+        chain_id,
+        genesis_hash,
+        protocol_version,
+        trust_graph_root,
+        sender,
+        agreement_id,
+        round,
+        signature_hex,
+        expected_message_id,
+    )?;
+    verify_cobalt_message_signature(
+        committee,
+        ABBA_MESSAGE_SIGNATURE_CONTEXT,
+        sender,
+        payload,
+        signature_hex,
+    )
+    .map_err(|error| format!("ABBA {kind} {error}"))
 }
 
 fn evaluate_rbc_support(

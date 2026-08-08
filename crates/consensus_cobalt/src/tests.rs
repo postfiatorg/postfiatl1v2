@@ -527,6 +527,168 @@
         bytes_to_hex(&signature)
     }
 
+    fn test_validator_seed(sender: &str) -> u8 {
+        sender
+            .strip_prefix("validator-")
+            .and_then(|suffix| suffix.parse::<u8>().ok())
+            .map(|index| index.wrapping_add(40))
+            .unwrap_or(200)
+    }
+
+    fn test_validator_key(sender: &str) -> postfiat_crypto_provider::MlDsa65KeyPair {
+        ml_dsa_65_keygen_from_seed(&[test_validator_seed(sender); 32])
+    }
+
+    fn test_committee_for_validators(validators: &[String]) -> CobaltSignatureCommittee {
+        let mut committee = CobaltSignatureCommittee::default();
+        for validator in validators {
+            committee
+                .insert(validator.clone(), &test_validator_key(validator).public_key)
+                .expect("committee key");
+        }
+        committee
+    }
+
+    fn test_committee_for_graph(graph: &TrustGraph) -> CobaltSignatureCommittee {
+        let validators = graph
+            .trust_views
+            .iter()
+            .map(|view| view.validator.clone())
+            .collect::<Vec<_>>();
+        test_committee_for_validators(&validators)
+    }
+
+    fn signed_rbc_propose(
+        domain: &CobaltDomain,
+        trust_graph_root: String,
+        sender: &str,
+        amendment_slot: u64,
+        payload_hash: String,
+    ) -> RbcPropose {
+        sign_rbc_propose(
+            domain,
+            trust_graph_root,
+            sender,
+            amendment_slot,
+            payload_hash,
+            &test_validator_key(sender).private_key,
+        )
+        .expect("signed propose")
+    }
+
+    fn signed_rbc_echo(domain: &CobaltDomain, propose: &RbcPropose, sender: &str) -> RbcEcho {
+        sign_rbc_echo(domain, propose, sender, &test_validator_key(sender).private_key)
+            .expect("signed echo")
+    }
+
+    fn signed_rbc_ready(domain: &CobaltDomain, propose: &RbcPropose, sender: &str) -> RbcReady {
+        sign_rbc_ready(domain, propose, sender, &test_validator_key(sender).private_key)
+            .expect("signed ready")
+    }
+
+    fn signed_rbc_accept(domain: &CobaltDomain, propose: &RbcPropose, sender: &str) -> RbcAccept {
+        sign_rbc_accept(domain, propose, sender, &test_validator_key(sender).private_key)
+            .expect("signed accept")
+    }
+
+    fn signed_dabc_check(
+        domain: &CobaltDomain,
+        trust_graph_root: String,
+        sender: &str,
+        checkpoint_height: u64,
+        pending_pairs: Vec<DabcPendingPair>,
+    ) -> DabcFullKnowledgeCheck {
+        sign_dabc_full_knowledge_check(
+            domain,
+            trust_graph_root,
+            sender,
+            checkpoint_height,
+            pending_pairs,
+            &test_validator_key(sender).private_key,
+        )
+        .expect("signed DABC check")
+    }
+
+    fn signed_abba_init(
+        domain: &CobaltDomain,
+        trust_graph_root: String,
+        sender: &str,
+        agreement_id: String,
+        round: u64,
+        value: bool,
+    ) -> AbbaInit {
+        sign_abba_init(
+            domain,
+            trust_graph_root,
+            sender,
+            agreement_id,
+            round,
+            value,
+            &test_validator_key(sender).private_key,
+        )
+        .expect("signed ABBA init")
+    }
+
+    fn signed_abba_aux(
+        domain: &CobaltDomain,
+        trust_graph_root: String,
+        sender: &str,
+        agreement_id: String,
+        round: u64,
+        value: bool,
+    ) -> AbbaAux {
+        sign_abba_aux(
+            domain,
+            trust_graph_root,
+            sender,
+            agreement_id,
+            round,
+            value,
+            &test_validator_key(sender).private_key,
+        )
+        .expect("signed ABBA aux")
+    }
+
+    fn signed_abba_conf(
+        domain: &CobaltDomain,
+        trust_graph_root: String,
+        sender: &str,
+        agreement_id: String,
+        round: u64,
+        value: bool,
+    ) -> AbbaConf {
+        sign_abba_conf(
+            domain,
+            trust_graph_root,
+            sender,
+            agreement_id,
+            round,
+            value,
+            &test_validator_key(sender).private_key,
+        )
+        .expect("signed ABBA conf")
+    }
+
+    fn signed_abba_finish(
+        domain: &CobaltDomain,
+        trust_graph_root: String,
+        sender: &str,
+        agreement_id: String,
+        round: u64,
+        value: bool,
+    ) -> AbbaFinish {
+        sign_abba_finish(
+            domain,
+            trust_graph_root,
+            sender,
+            agreement_id,
+            round,
+            value,
+            &test_validator_key(sender).private_key,
+        )
+        .expect("signed ABBA finish")
+    }
+
     fn nonuniform_certificate_fixture() -> (
         CobaltDomain,
         TrustGraph,
@@ -611,16 +773,14 @@
         let view_1 = trust_view_for_validator(&graph, "validator-1").expect("view 1");
         let view_2 = trust_view_for_validator(&graph, "validator-2").expect("view 2");
 
-        let propose_a = build_rbc_propose(
+        let propose_a = signed_rbc_propose(
             &domain,
             graph.trust_graph_root.clone(),
             "validator-0",
             11,
             root('a'),
-            "",
-        )
-        .expect("propose a");
-        let accept_a = build_rbc_accept(&domain, &propose_a, "validator-1", "").expect("accept a");
+        );
+        let accept_a = signed_rbc_accept(&domain, &propose_a, "validator-1");
         let candidate_a =
             mvba_candidate_from_rbc_accept(&domain, &propose_a, &accept_a).expect("candidate a");
         let set_a = build_mvba_valid_input_set(
@@ -632,16 +792,14 @@
         .expect("set a");
         let first = ratify_dabc_amendment(&domain, &graph, &set_a, None, 20).expect("first");
 
-        let propose_b = build_rbc_propose(
+        let propose_b = signed_rbc_propose(
             &domain,
             graph.trust_graph_root.clone(),
             "validator-3",
             12,
             root('c'),
-            "",
-        )
-        .expect("propose b");
-        let accept_b = build_rbc_accept(&domain, &propose_b, "validator-2", "").expect("accept b");
+        );
+        let accept_b = signed_rbc_accept(&domain, &propose_b, "validator-2");
         let candidate_b =
             mvba_candidate_from_rbc_accept(&domain, &propose_b, &accept_b).expect("candidate b");
         let set_b = build_mvba_valid_input_set(
@@ -679,15 +837,7 @@
                     }]
                 };
                 checks.push(
-                    build_dabc_full_knowledge_check(
-                        domain,
-                        graph.trust_graph_root.clone(),
-                        sender,
-                        height,
-                        pending_pairs,
-                        "",
-                    )
-                    .expect("check"),
+                    signed_dabc_check(domain, graph.trust_graph_root.clone(), sender, height, pending_pairs),
                 );
             }
         }
@@ -1149,17 +1299,19 @@
         let domain = test_domain();
         let trust_graph_root = root('e');
         let payload_hash = root('f');
-        let unsigned_propose = build_rbc_propose(
-            &domain,
-            trust_graph_root.clone(),
+        let propose_payload = rbc_signing_payload_bytes(
+            "propose",
+            &domain.chain_id,
+            &domain.genesis_hash,
+            domain.protocol_version,
+            &trust_graph_root,
             "validator-0",
+            None,
             9,
-            payload_hash.clone(),
-            "",
+            &payload_hash,
+            None,
         )
-        .expect("unsigned propose");
-        let propose_payload =
-            rbc_propose_signing_payload_bytes(&unsigned_propose).expect("propose payload");
+        .expect("propose payload");
         let propose_signature = sign_rbc_payload(&propose_payload, 11);
         let propose = build_rbc_propose(
             &domain,
@@ -1170,44 +1322,82 @@
             propose_signature.clone(),
         )
         .expect("signed propose");
-        assert_eq!(propose.message_id, unsigned_propose.message_id);
         assert_eq!(
             propose.message_id,
             rbc_propose_message_id(&propose).expect("propose id")
         );
         assert_eq!(propose.signature_hex, propose_signature);
         validate_rbc_propose(&domain, &propose).expect("validate propose");
+        let seed_key = ml_dsa_65_keygen_from_seed(&[11; 32]);
+        let helper_propose = sign_rbc_propose(
+            &domain,
+            trust_graph_root.clone(),
+            "validator-0",
+            9,
+            payload_hash.clone(),
+            &seed_key.private_key,
+        )
+        .expect("sign_rbc_propose");
+        assert_eq!(helper_propose.message_id, propose.message_id);
+        assert!(ml_dsa_65_verify_with_context(
+            &seed_key.public_key,
+            &propose_payload,
+            &postfiat_crypto_provider::hex_to_bytes(&helper_propose.signature_hex)
+                .expect("helper signature hex"),
+            RBC_MESSAGE_SIGNATURE_CONTEXT,
+        ));
 
-        let unsigned_echo =
-            build_rbc_echo(&domain, &propose, "validator-1", "").expect("unsigned echo");
-        let echo_signature = sign_rbc_payload(
-            &rbc_echo_signing_payload_bytes(&unsigned_echo).expect("echo payload"),
-            12,
-        );
+        let echo_payload = rbc_signing_payload_bytes(
+            "echo",
+            &domain.chain_id,
+            &domain.genesis_hash,
+            domain.protocol_version,
+            &propose.trust_graph_root,
+            "validator-1",
+            Some(&propose.sender),
+            propose.amendment_slot,
+            &propose.payload_hash,
+            Some(&propose.message_id),
+        )
+        .expect("echo payload");
+        let echo_signature = sign_rbc_payload(&echo_payload, 12);
         let echo = build_rbc_echo(&domain, &propose, "validator-1", echo_signature).expect("echo");
-        assert_eq!(echo.message_id, unsigned_echo.message_id);
         validate_rbc_echo(&domain, &echo, &propose).expect("validate echo");
 
-        let unsigned_ready =
-            build_rbc_ready(&domain, &propose, "validator-2", "").expect("unsigned ready");
-        let ready_signature = sign_rbc_payload(
-            &rbc_ready_signing_payload_bytes(&unsigned_ready).expect("ready payload"),
-            13,
-        );
+        let ready_payload = rbc_signing_payload_bytes(
+            "ready",
+            &domain.chain_id,
+            &domain.genesis_hash,
+            domain.protocol_version,
+            &propose.trust_graph_root,
+            "validator-2",
+            Some(&propose.sender),
+            propose.amendment_slot,
+            &propose.payload_hash,
+            Some(&propose.message_id),
+        )
+        .expect("ready payload");
+        let ready_signature = sign_rbc_payload(&ready_payload, 13);
         let ready =
             build_rbc_ready(&domain, &propose, "validator-2", ready_signature).expect("ready");
-        assert_eq!(ready.message_id, unsigned_ready.message_id);
         validate_rbc_ready(&domain, &ready, &propose).expect("validate ready");
 
-        let unsigned_accept =
-            build_rbc_accept(&domain, &propose, "validator-3", "").expect("unsigned accept");
-        let accept_signature = sign_rbc_payload(
-            &rbc_accept_signing_payload_bytes(&unsigned_accept).expect("accept payload"),
-            14,
-        );
+        let accept_payload = rbc_signing_payload_bytes(
+            "accept",
+            &domain.chain_id,
+            &domain.genesis_hash,
+            domain.protocol_version,
+            &propose.trust_graph_root,
+            "validator-3",
+            Some(&propose.sender),
+            propose.amendment_slot,
+            &propose.payload_hash,
+            Some(&propose.message_id),
+        )
+        .expect("accept payload");
+        let accept_signature = sign_rbc_payload(&accept_payload, 14);
         let accept =
             build_rbc_accept(&domain, &propose, "validator-3", accept_signature).expect("accept");
-        assert_eq!(accept.message_id, unsigned_accept.message_id);
         validate_rbc_accept(&domain, &accept, &propose).expect("validate accept");
 
         assert_ne!(propose.message_id, echo.message_id);
@@ -1216,11 +1406,315 @@
     }
 
     #[test]
+    fn rbc_signed_validation_rejects_empty_forged_and_non_committee_signatures() {
+        let (domain, graph, _linkage_report, _proposal, _support) =
+            nonuniform_certificate_fixture();
+        let committee = test_committee_for_graph(&graph);
+        let propose = signed_rbc_propose(
+            &domain,
+            graph.trust_graph_root.clone(),
+            "validator-0",
+            9,
+            root('f'),
+        );
+        let echo = signed_rbc_echo(&domain, &propose, "validator-1");
+        let ready = signed_rbc_ready(&domain, &propose, "validator-2");
+        let accept = signed_rbc_accept(&domain, &propose, "validator-3");
+
+        // Valid signed messages verify.
+        validate_rbc_propose_signed(&domain, &committee, &propose).expect("signed propose");
+        validate_rbc_echo_signed(&domain, &committee, &echo, &propose).expect("signed echo");
+        validate_rbc_ready_signed(&domain, &committee, &ready, &propose).expect("signed ready");
+        validate_rbc_accept_signed(&domain, &committee, &accept, &propose).expect("signed accept");
+
+        // Empty signatures are rejected everywhere, including the legacy schema path.
+        let mut unsigned = propose.clone();
+        unsigned.signature_hex.clear();
+        let empty_error =
+            validate_rbc_propose(&domain, &unsigned).expect_err("empty signature must fail");
+        assert!(
+            empty_error.contains("signature must be nonempty"),
+            "{empty_error}"
+        );
+        let empty_signed_error = validate_rbc_propose_signed(&domain, &committee, &unsigned)
+            .expect_err("empty signature must fail signed validation");
+        assert!(
+            empty_signed_error.contains("signature must be nonempty"),
+            "{empty_signed_error}"
+        );
+
+        // Forged signatures (valid ML-DSA signature from the wrong key) are rejected.
+        let attacker_key = ml_dsa_65_keygen_from_seed(&[99; 32]);
+        let forged = sign_rbc_echo(
+            &domain,
+            &propose,
+            "validator-1",
+            &attacker_key.private_key,
+        )
+        .expect("attacker-signed echo");
+        let forged_error = validate_rbc_echo_signed(&domain, &committee, &forged, &propose)
+            .expect_err("forged signature must fail");
+        assert!(
+            forged_error.contains("does not verify against committee key"),
+            "{forged_error}"
+        );
+
+        // Tampered payload (message id no longer matches the signed bytes) is rejected.
+        let mut tampered = echo.clone();
+        tampered.payload_hash = root('d');
+        validate_rbc_echo_signed(&domain, &committee, &tampered, &propose)
+            .expect_err("tampered echo must fail");
+
+        // Signers outside the committee are rejected.
+        let outsider = signed_rbc_ready(&domain, &propose, "validator-9");
+        let outsider_error = validate_rbc_ready_signed(&domain, &committee, &outsider, &propose)
+            .expect_err("non-committee signer must fail");
+        assert!(
+            outsider_error.contains("not a registered committee member"),
+            "{outsider_error}"
+        );
+
+        // ABBA messages get the same treatment.
+        let agreement_id = hash_hex("postfiat.test.abba.agreement", b"agreement-signed");
+        let init = signed_abba_init(
+            &domain,
+            graph.trust_graph_root.clone(),
+            "validator-0",
+            agreement_id.clone(),
+            1,
+            true,
+        );
+        validate_abba_init_signed(&domain, &committee, &init).expect("signed ABBA init");
+        let forged_init = sign_abba_init(
+            &domain,
+            graph.trust_graph_root.clone(),
+            "validator-0",
+            agreement_id,
+            1,
+            true,
+            &attacker_key.private_key,
+        )
+        .expect("attacker-signed init");
+        let forged_init_error = validate_abba_init_signed(&domain, &committee, &forged_init)
+            .expect_err("forged ABBA init must fail");
+        assert!(
+            forged_init_error.contains("does not verify against committee key"),
+            "{forged_init_error}"
+        );
+
+        // DABC full-knowledge checks get the same treatment.
+        let check = signed_dabc_check(
+            &domain,
+            graph.trust_graph_root.clone(),
+            "validator-1",
+            10,
+            Vec::new(),
+        );
+        validate_dabc_full_knowledge_check_signed(&domain, &committee, &check)
+            .expect("signed DABC check");
+        let forged_check = sign_dabc_full_knowledge_check(
+            &domain,
+            graph.trust_graph_root.clone(),
+            "validator-1",
+            10,
+            Vec::new(),
+            &attacker_key.private_key,
+        )
+        .expect("attacker-signed check");
+        let forged_check_error =
+            validate_dabc_full_knowledge_check_signed(&domain, &committee, &forged_check)
+                .expect_err("forged DABC check must fail");
+        assert!(
+            forged_check_error.contains("does not verify against committee key"),
+            "{forged_check_error}"
+        );
+    }
+
+    #[test]
+    fn rbc_signed_support_dedupes_signers_and_rejects_non_committee() {
+        let (domain, graph, _linkage_report, _proposal, _support) =
+            nonuniform_certificate_fixture();
+        let committee = test_committee_for_graph(&graph);
+        let propose = signed_rbc_propose(
+            &domain,
+            graph.trust_graph_root.clone(),
+            "validator-0",
+            9,
+            root('f'),
+        );
+        let first_five = validators(7).into_iter().take(5).collect::<Vec<_>>();
+        let validator_1_view = trust_view_for_validator(&graph, "validator-1").expect("view 1");
+
+        // A valid signed quorum of distinct validators is accepted.
+        let echo_messages = first_five
+            .iter()
+            .map(|sender| signed_rbc_echo(&domain, &propose, sender))
+            .collect::<Vec<_>>();
+        let echo_evaluation = evaluate_rbc_echo_support_signed(
+            &domain,
+            &committee,
+            validator_1_view,
+            &propose,
+            &echo_messages,
+        )
+        .expect("signed echo support");
+        assert!(echo_evaluation.weak_support);
+        assert!(echo_evaluation.strong_support);
+        assert_eq!(echo_evaluation.support.len(), 5);
+        assert!(rbc_ready_allowed_from_echo(&echo_evaluation));
+
+        // Duplicate signers are counted once, so a duplicated two-validator set
+        // can never fabricate strong support.
+        let mut duplicated = vec![
+            signed_rbc_echo(&domain, &propose, "validator-0"),
+            signed_rbc_echo(&domain, &propose, "validator-0"),
+            signed_rbc_echo(&domain, &propose, "validator-1"),
+            signed_rbc_echo(&domain, &propose, "validator-1"),
+            signed_rbc_echo(&domain, &propose, "validator-1"),
+        ];
+        let duplicated_evaluation = evaluate_rbc_echo_support_signed(
+            &domain,
+            &committee,
+            validator_1_view,
+            &propose,
+            &duplicated,
+        )
+        .expect("duplicated echo support");
+        assert_eq!(duplicated_evaluation.support.len(), 2);
+        assert!(!duplicated_evaluation.strong_support);
+        assert!(!rbc_ready_allowed_from_echo(&duplicated_evaluation));
+
+        // Forged signature inside the batch fails the whole evaluation.
+        let attacker_key = ml_dsa_65_keygen_from_seed(&[99; 32]);
+        duplicated.push(
+            sign_rbc_echo(&domain, &propose, "validator-2", &attacker_key.private_key)
+                .expect("attacker-signed echo"),
+        );
+        let forged_batch_error = evaluate_rbc_echo_support_signed(
+            &domain,
+            &committee,
+            validator_1_view,
+            &propose,
+            &duplicated,
+        )
+        .expect_err("forged batch member must fail");
+        assert!(
+            forged_batch_error.contains("does not verify against committee key"),
+            "{forged_batch_error}"
+        );
+
+        // A signer outside the committee fails the whole evaluation.
+        let mut outsider_batch = first_five
+            .iter()
+            .take(4)
+            .map(|sender| signed_rbc_ready(&domain, &propose, sender))
+            .collect::<Vec<_>>();
+        outsider_batch.push(signed_rbc_ready(&domain, &propose, "validator-9"));
+        let outsider_error = evaluate_rbc_ready_support_signed(
+            &domain,
+            &committee,
+            validator_1_view,
+            &propose,
+            &outsider_batch,
+        )
+        .expect_err("non-committee batch member must fail");
+        assert!(
+            outsider_error.contains("not a registered committee member"),
+            "{outsider_error}"
+        );
+
+        // A valid signed ready quorum of distinct validators is accepted.
+        let ready_messages = first_five
+            .iter()
+            .map(|sender| signed_rbc_ready(&domain, &propose, sender))
+            .collect::<Vec<_>>();
+        let ready_evaluation = evaluate_rbc_ready_support_signed(
+            &domain,
+            &committee,
+            validator_1_view,
+            &propose,
+            &ready_messages,
+        )
+        .expect("signed ready support");
+        assert!(ready_evaluation.strong_support);
+        assert!(rbc_accept_allowed_from_ready(&ready_evaluation));
+
+        // ABBA signed support evaluation dedupes and verifies the same way.
+        let agreement_id = hash_hex("postfiat.test.abba.agreement", b"agreement-support");
+        let aux_messages = first_five
+            .iter()
+            .map(|sender| {
+                signed_abba_aux(
+                    &domain,
+                    graph.trust_graph_root.clone(),
+                    sender,
+                    agreement_id.clone(),
+                    1,
+                    true,
+                )
+            })
+            .collect::<Vec<_>>();
+        let aux_evaluation = evaluate_abba_aux_support_signed(
+            &domain,
+            &committee,
+            validator_1_view,
+            &agreement_id,
+            1,
+            true,
+            &aux_messages,
+        )
+        .expect("signed aux support");
+        assert!(abba_strong_support(&aux_evaluation));
+        assert_eq!(aux_evaluation.support.len(), 5);
+    }
+
+    #[test]
+    fn cobalt_committee_builds_from_registry_entries() {
+        let entries = ["validator-0", "validator-1"]
+            .iter()
+            .map(|validator| {
+                registry_entry(
+                    validator,
+                    &bytes_to_hex(&test_validator_key(validator).public_key),
+                    true,
+                )
+            })
+            .collect::<Vec<_>>();
+        let committee =
+            CobaltSignatureCommittee::from_registry_entries(&entries).expect("registry committee");
+        assert_eq!(committee.len(), 2);
+        assert!(committee.is_member("validator-0"));
+        assert!(!committee.is_member("validator-2"));
+
+        let inactive = vec![registry_entry(
+            "validator-3",
+            &bytes_to_hex(&test_validator_key("validator-3").public_key),
+            false,
+        )];
+        let inactive_committee =
+            CobaltSignatureCommittee::from_registry_entries(&inactive).expect("inactive filtered");
+        assert!(inactive_committee.is_empty());
+
+        let mut bad_algorithm = registry_entry(
+            "validator-4",
+            &bytes_to_hex(&test_validator_key("validator-4").public_key),
+            true,
+        );
+        bad_algorithm.algorithm_id = "ed25519".to_string();
+        let bad_algorithm_error =
+            CobaltSignatureCommittee::from_registry_entries(&[bad_algorithm])
+                .expect_err("non-ML-DSA algorithm must fail");
+        assert!(
+            bad_algorithm_error.contains("unsupported algorithm"),
+            "{bad_algorithm_error}"
+        );
+    }
+
+    #[test]
     fn rbc_validation_rejects_tampered_bindings() {
         let domain = test_domain();
-        let propose = build_rbc_propose(&domain, root('e'), "validator-0", 9, root('f'), "")
-            .expect("propose");
-        let echo = build_rbc_echo(&domain, &propose, "validator-1", "").expect("echo");
+        let propose = signed_rbc_propose(&domain, root('e'), "validator-0", 9, root('f'));
+        let echo = signed_rbc_echo(&domain, &propose, "validator-1");
 
         let mut bad_propose = propose.clone();
         bad_propose.message_id = root('a');
@@ -1254,19 +1748,11 @@
     fn evaluates_rbc_echo_and_ready_support_against_local_view() {
         let (domain, graph, _linkage_report, _proposal, _support) =
             nonuniform_certificate_fixture();
-        let propose = build_rbc_propose(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            9,
-            root('f'),
-            "",
-        )
-        .expect("propose");
+        let propose = signed_rbc_propose(&domain, graph.trust_graph_root.clone(), "validator-0", 9, root('f'));
         let first_five = validators(7).into_iter().take(5).collect::<Vec<_>>();
         let echo_messages = first_five
             .iter()
-            .map(|sender| build_rbc_echo(&domain, &propose, sender, "").expect("echo"))
+            .map(|sender| signed_rbc_echo(&domain, &propose, sender))
             .collect::<Vec<_>>();
         let validator_1_view = trust_view_for_validator(&graph, "validator-1").expect("view 1");
         let echo_evaluation =
@@ -1279,7 +1765,7 @@
 
         let weak_ready_messages = ["validator-0", "validator-1"]
             .into_iter()
-            .map(|sender| build_rbc_ready(&domain, &propose, sender, "").expect("ready"))
+            .map(|sender| signed_rbc_ready(&domain, &propose, sender))
             .collect::<Vec<_>>();
         let weak_ready_evaluation =
             evaluate_rbc_ready_support(&domain, validator_1_view, &propose, &weak_ready_messages)
@@ -1291,7 +1777,7 @@
 
         let strong_ready_messages = first_five
             .iter()
-            .map(|sender| build_rbc_ready(&domain, &propose, sender, "").expect("ready"))
+            .map(|sender| signed_rbc_ready(&domain, &propose, sender))
             .collect::<Vec<_>>();
         let strong_ready_evaluation =
             evaluate_rbc_ready_support(&domain, validator_1_view, &propose, &strong_ready_messages)
@@ -1312,27 +1798,19 @@
     fn rbc_nonidentical_trust_views_accept_one_payload() {
         let (domain, graph, _linkage_report, _proposal, _support) =
             nonuniform_certificate_fixture();
-        let propose = build_rbc_propose(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            15,
-            root('f'),
-            "",
-        )
-        .expect("propose");
+        let propose = signed_rbc_propose(&domain, graph.trust_graph_root.clone(), "validator-0", 15, root('f'));
         let validator_ids = validators(7);
         let echo_messages = validator_ids
             .iter()
-            .map(|sender| build_rbc_echo(&domain, &propose, sender, "").expect("echo"))
+            .map(|sender| signed_rbc_echo(&domain, &propose, sender))
             .collect::<Vec<_>>();
         let ready_messages = validator_ids
             .iter()
-            .map(|sender| build_rbc_ready(&domain, &propose, sender, "").expect("ready"))
+            .map(|sender| signed_rbc_ready(&domain, &propose, sender))
             .collect::<Vec<_>>();
         let accept_messages = validator_ids
             .iter()
-            .map(|sender| build_rbc_accept(&domain, &propose, sender, "").expect("accept"))
+            .map(|sender| signed_rbc_accept(&domain, &propose, sender))
             .collect::<Vec<_>>();
 
         let mut accepted_by = Vec::new();
@@ -1376,28 +1854,12 @@
     fn detects_conflicting_rbc_accepts_from_linked_validators() {
         let (domain, graph, _linkage_report, _proposal, _support) =
             nonuniform_certificate_fixture();
-        let left_propose = build_rbc_propose(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            9,
-            root('f'),
-            "",
-        )
-        .expect("left propose");
-        let right_propose = build_rbc_propose(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            9,
-            root('d'),
-            "",
-        )
-        .expect("right propose");
+        let left_propose = signed_rbc_propose(&domain, graph.trust_graph_root.clone(), "validator-0", 9, root('f'));
+        let right_propose = signed_rbc_propose(&domain, graph.trust_graph_root.clone(), "validator-0", 9, root('d'));
         let left_accept =
-            build_rbc_accept(&domain, &left_propose, "validator-1", "").expect("left accept");
+            signed_rbc_accept(&domain, &left_propose, "validator-1");
         let right_accept =
-            build_rbc_accept(&domain, &right_propose, "validator-2", "").expect("right accept");
+            signed_rbc_accept(&domain, &right_propose, "validator-2");
 
         let evidence = detect_rbc_conflicting_accept(
             &domain,
@@ -1420,7 +1882,7 @@
         assert!(is_lower_hex_len(&evidence.evidence_id, 96));
 
         let same_payload_accept =
-            build_rbc_accept(&domain, &left_propose, "validator-2", "").expect("same accept");
+            signed_rbc_accept(&domain, &left_propose, "validator-2");
         let no_conflict = detect_rbc_conflicting_accept(
             &domain,
             &graph,
@@ -1443,20 +1905,19 @@
         assert_eq!(round_state.round, 3);
         assert!(round_state.init_messages.is_empty());
 
-        let unsigned_init = build_abba_init(
-            &domain,
-            trust_graph_root.clone(),
+        let init_payload = abba_signing_payload_bytes(
+            "init",
+            &domain.chain_id,
+            &domain.genesis_hash,
+            domain.protocol_version,
+            &trust_graph_root,
             "validator-0",
-            agreement_id.clone(),
+            &agreement_id,
             3,
             true,
-            "",
         )
-        .expect("unsigned init");
-        let init_signature = sign_abba_payload(
-            &abba_init_signing_payload_bytes(&unsigned_init).expect("init payload"),
-            21,
-        );
+        .expect("init payload");
+        let init_signature = sign_abba_payload(&init_payload, 21);
         let init = build_abba_init(
             &domain,
             trust_graph_root.clone(),
@@ -1467,9 +1928,21 @@
             init_signature,
         )
         .expect("init");
-        assert_eq!(init.message_id, unsigned_init.message_id);
         validate_abba_init(&domain, &init).expect("validate init");
 
+        let aux_payload = abba_signing_payload_bytes(
+            "aux",
+            &domain.chain_id,
+            &domain.genesis_hash,
+            domain.protocol_version,
+            &trust_graph_root,
+            "validator-1",
+            &agreement_id,
+            3,
+            true,
+        )
+        .expect("aux payload");
+        let aux_signature = sign_abba_payload(&aux_payload, 22);
         let aux = build_abba_aux(
             &domain,
             trust_graph_root.clone(),
@@ -1477,48 +1950,15 @@
             agreement_id.clone(),
             3,
             true,
-            sign_abba_payload(
-                &abba_aux_signing_payload_bytes(
-                    &build_abba_aux(
-                        &domain,
-                        trust_graph_root.clone(),
-                        "validator-1",
-                        agreement_id.clone(),
-                        3,
-                        true,
-                        "",
-                    )
-                    .expect("unsigned aux"),
-                )
-                .expect("aux payload"),
-                22,
-            ),
+            aux_signature,
         )
         .expect("aux");
         validate_abba_aux(&domain, &aux).expect("validate aux");
 
-        let conf = build_abba_conf(
-            &domain,
-            trust_graph_root.clone(),
-            "validator-2",
-            agreement_id.clone(),
-            3,
-            false,
-            "",
-        )
-        .expect("conf");
+        let conf = signed_abba_conf(&domain, trust_graph_root.clone(), "validator-2", agreement_id.clone(), 3, false);
         validate_abba_conf(&domain, &conf).expect("validate conf");
 
-        let finish = build_abba_finish(
-            &domain,
-            trust_graph_root,
-            "validator-3",
-            agreement_id,
-            3,
-            false,
-            "",
-        )
-        .expect("finish");
+        let finish = signed_abba_finish(&domain, trust_graph_root, "validator-3", agreement_id, 3, false);
         validate_abba_finish(&domain, &finish).expect("validate finish");
 
         assert_ne!(init.message_id, aux.message_id);
@@ -1543,16 +1983,7 @@
         .expect_err("zero round should fail");
         assert!(bad_round.contains("round must be nonzero"), "{bad_round}");
 
-        let mut init = build_abba_init(
-            &domain,
-            trust_graph_root,
-            "validator-0",
-            agreement_id,
-            1,
-            true,
-            "",
-        )
-        .expect("init");
+        let mut init = signed_abba_init(&domain, trust_graph_root, "validator-0", agreement_id, 1, true);
         init.message_id = root('a');
         let tamper_error = validate_abba_init(&domain, &init).expect_err("tampered id should fail");
         assert!(
@@ -1570,16 +2001,7 @@
         let aux_messages = first_five
             .iter()
             .map(|sender| {
-                build_abba_aux(
-                    &domain,
-                    graph.trust_graph_root.clone(),
-                    sender,
-                    agreement_id.clone(),
-                    1,
-                    true,
-                    "",
-                )
-                .expect("aux")
+                signed_abba_aux(&domain, graph.trust_graph_root.clone(), sender, agreement_id.clone(), 1, true)
             })
             .collect::<Vec<_>>();
         let validator_1_view = trust_view_for_validator(&graph, "validator-1").expect("view 1");
@@ -1599,16 +2021,7 @@
         let weak_conf_messages = ["validator-0", "validator-1"]
             .into_iter()
             .map(|sender| {
-                build_abba_conf(
-                    &domain,
-                    graph.trust_graph_root.clone(),
-                    sender,
-                    agreement_id.clone(),
-                    1,
-                    true,
-                    "",
-                )
-                .expect("conf")
+                signed_abba_conf(&domain, graph.trust_graph_root.clone(), sender, agreement_id.clone(), 1, true)
             })
             .collect::<Vec<_>>();
         let weak_conf = evaluate_abba_conf_support(
@@ -1636,26 +2049,8 @@
         assert!(!wrong_view_conf.weak_support);
         assert!(!wrong_view_conf.strong_support);
 
-        let finish_true = build_abba_finish(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-1",
-            agreement_id.clone(),
-            1,
-            true,
-            "",
-        )
-        .expect("finish true");
-        let finish_false = build_abba_finish(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-2",
-            agreement_id.clone(),
-            1,
-            false,
-            "",
-        )
-        .expect("finish false");
+        let finish_true = signed_abba_finish(&domain, graph.trust_graph_root.clone(), "validator-1", agreement_id.clone(), 1, true);
+        let finish_false = signed_abba_finish(&domain, graph.trust_graph_root.clone(), "validator-2", agreement_id.clone(), 1, false);
         let evidence = detect_abba_conflicting_finish(&domain, &graph, &finish_true, &finish_false)
             .expect("finish conflict")
             .expect("linked finish conflict evidence");
@@ -1666,16 +2061,7 @@
         assert_ne!(evidence.left_value, evidence.right_value);
         assert!(is_lower_hex_len(&evidence.evidence_id, 96));
 
-        let same_finish = build_abba_finish(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-2",
-            evidence.agreement_id,
-            1,
-            true,
-            "",
-        )
-        .expect("same finish");
+        let same_finish = signed_abba_finish(&domain, graph.trust_graph_root.clone(), "validator-2", evidence.agreement_id, 1, true);
         assert!(
             detect_abba_conflicting_finish(&domain, &graph, &finish_true, &same_finish)
                 .expect("same finish check")
@@ -1692,76 +2078,13 @@
             build_abba_round_state(graph.trust_graph_root.clone(), agreement_id.clone(), 1)
                 .expect("round state");
 
-        let init_true = build_abba_init(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            agreement_id.clone(),
-            1,
-            true,
-            "",
-        )
-        .expect("init true");
-        let init_false = build_abba_init(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            agreement_id.clone(),
-            1,
-            false,
-            "",
-        )
-        .expect("init false");
-        let aux_true = build_abba_aux(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            agreement_id.clone(),
-            1,
-            true,
-            "",
-        )
-        .expect("aux true");
-        let aux_false = build_abba_aux(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            agreement_id.clone(),
-            1,
-            false,
-            "",
-        )
-        .expect("aux false");
-        let conf_true = build_abba_conf(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            agreement_id.clone(),
-            1,
-            true,
-            "",
-        )
-        .expect("conf true");
-        let conf_false = build_abba_conf(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            agreement_id.clone(),
-            1,
-            false,
-            "",
-        )
-        .expect("conf false");
-        let finish_false = build_abba_finish(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            agreement_id.clone(),
-            1,
-            false,
-            "",
-        )
-        .expect("finish false");
+        let init_true = signed_abba_init(&domain, graph.trust_graph_root.clone(), "validator-0", agreement_id.clone(), 1, true);
+        let init_false = signed_abba_init(&domain, graph.trust_graph_root.clone(), "validator-0", agreement_id.clone(), 1, false);
+        let aux_true = signed_abba_aux(&domain, graph.trust_graph_root.clone(), "validator-0", agreement_id.clone(), 1, true);
+        let aux_false = signed_abba_aux(&domain, graph.trust_graph_root.clone(), "validator-0", agreement_id.clone(), 1, false);
+        let conf_true = signed_abba_conf(&domain, graph.trust_graph_root.clone(), "validator-0", agreement_id.clone(), 1, true);
+        let conf_false = signed_abba_conf(&domain, graph.trust_graph_root.clone(), "validator-0", agreement_id.clone(), 1, false);
+        let finish_false = signed_abba_finish(&domain, graph.trust_graph_root.clone(), "validator-0", agreement_id.clone(), 1, false);
         let finish_true_messages = [
             "validator-0",
             "validator-1",
@@ -1772,16 +2095,7 @@
         ]
         .into_iter()
         .map(|sender| {
-            build_abba_finish(
-                &domain,
-                graph.trust_graph_root.clone(),
-                sender,
-                agreement_id.clone(),
-                1,
-                true,
-                "",
-            )
-            .expect("finish true")
+            signed_abba_finish(&domain, graph.trust_graph_root.clone(), sender, agreement_id.clone(), 1, true)
         })
         .collect::<Vec<_>>();
 
@@ -1926,29 +2240,13 @@
         let (domain, graph, _linkage_report, _proposal, _support) =
             nonuniform_certificate_fixture();
         let agreement_id = hash_hex("postfiat.test.mvba.agreement", b"agreement-5");
-        let propose_a = build_rbc_propose(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            11,
-            root('a'),
-            "",
-        )
-        .expect("propose a");
-        let accept_a = build_rbc_accept(&domain, &propose_a, "validator-1", "").expect("accept a");
+        let propose_a = signed_rbc_propose(&domain, graph.trust_graph_root.clone(), "validator-0", 11, root('a'));
+        let accept_a = signed_rbc_accept(&domain, &propose_a, "validator-1");
         let candidate_a =
             mvba_candidate_from_rbc_accept(&domain, &propose_a, &accept_a).expect("candidate a");
 
-        let propose_b = build_rbc_propose(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            11,
-            root('b'),
-            "",
-        )
-        .expect("propose b");
-        let accept_b = build_rbc_accept(&domain, &propose_b, "validator-2", "").expect("accept b");
+        let propose_b = signed_rbc_propose(&domain, graph.trust_graph_root.clone(), "validator-0", 11, root('b'));
+        let accept_b = signed_rbc_accept(&domain, &propose_b, "validator-2");
         let candidate_b =
             mvba_candidate_from_rbc_accept(&domain, &propose_b, &accept_b).expect("candidate b");
         assert_ne!(candidate_a.candidate_id, candidate_b.candidate_id);
@@ -1990,16 +2288,8 @@
         let (domain, graph, _linkage_report, _proposal, _support) =
             nonuniform_certificate_fixture();
         let view_1 = trust_view_for_validator(&graph, "validator-1").expect("view 1");
-        let propose = build_rbc_propose(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            11,
-            root('a'),
-            "",
-        )
-        .expect("propose");
-        let accept = build_rbc_accept(&domain, &propose, "validator-1", "").expect("accept");
+        let propose = signed_rbc_propose(&domain, graph.trust_graph_root.clone(), "validator-0", 11, root('a'));
+        let accept = signed_rbc_accept(&domain, &propose, "validator-1");
         let candidate =
             mvba_candidate_from_rbc_accept(&domain, &propose, &accept).expect("candidate");
         let flooded = vec![candidate; MAX_MVBA_CANDIDATES_PER_SET + 1];
@@ -2015,16 +2305,8 @@
         let view_1 = trust_view_for_validator(&graph, "validator-1").expect("view 1");
         let view_2 = trust_view_for_validator(&graph, "validator-2").expect("view 2");
 
-        let propose_a = build_rbc_propose(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            11,
-            root('a'),
-            "",
-        )
-        .expect("propose a");
-        let accept_a = build_rbc_accept(&domain, &propose_a, "validator-1", "").expect("accept a");
+        let propose_a = signed_rbc_propose(&domain, graph.trust_graph_root.clone(), "validator-0", 11, root('a'));
+        let accept_a = signed_rbc_accept(&domain, &propose_a, "validator-1");
         let candidate_a =
             mvba_candidate_from_rbc_accept(&domain, &propose_a, &accept_a).expect("candidate a");
         let set_a = build_mvba_valid_input_set(
@@ -2043,16 +2325,8 @@
         assert!(is_lower_hex_len(&first.ratification_id, 96));
         validate_dabc_ratified_amendment(&domain, &graph, &first, None).expect("validate first");
 
-        let propose_b = build_rbc_propose(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-3",
-            12,
-            root('c'),
-            "",
-        )
-        .expect("propose b");
-        let accept_b = build_rbc_accept(&domain, &propose_b, "validator-2", "").expect("accept b");
+        let propose_b = signed_rbc_propose(&domain, graph.trust_graph_root.clone(), "validator-3", 12, root('c'));
+        let accept_b = signed_rbc_accept(&domain, &propose_b, "validator-2");
         let candidate_b =
             mvba_candidate_from_rbc_accept(&domain, &propose_b, &accept_b).expect("candidate b");
         let set_b = build_mvba_valid_input_set(
@@ -2074,16 +2348,8 @@
         validate_dabc_ratified_amendment(&domain, &graph, &second, Some(&first))
             .expect("validate second");
 
-        let propose_c = build_rbc_propose(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-4",
-            13,
-            root('e'),
-            "",
-        )
-        .expect("propose c");
-        let accept_c = build_rbc_accept(&domain, &propose_c, "validator-5", "").expect("accept c");
+        let propose_c = signed_rbc_propose(&domain, graph.trust_graph_root.clone(), "validator-4", 13, root('e'));
+        let accept_c = signed_rbc_accept(&domain, &propose_c, "validator-5");
         let candidate_c =
             mvba_candidate_from_rbc_accept(&domain, &propose_c, &accept_c).expect("candidate c");
         let set_c = build_mvba_valid_input_set(
@@ -2126,6 +2392,7 @@
     #[test]
     fn full_knowledge_checkpoint_gates_dabc_activation() {
         let (domain, graph, first, second) = dabc_two_amendment_chain_fixture();
+        let committee = test_committee_for_graph(&graph);
         let ratified_chain = vec![first.clone(), second.clone()];
         let support = validators(7).into_iter().take(5).collect::<Vec<_>>();
 
@@ -2144,20 +2411,28 @@
                     }]
                 };
                 checks.push(
-                    build_dabc_full_knowledge_check(
-                        &domain,
-                        graph.trust_graph_root.clone(),
-                        sender,
-                        height,
-                        pending_pairs,
-                        "",
-                    )
-                    .expect("check"),
+                    signed_dabc_check(&domain, graph.trust_graph_root.clone(), sender, height, pending_pairs),
                 );
             }
         }
-        let checkpoint = build_dabc_full_knowledge_checkpoint(
+        let mut forged_checks = checks.clone();
+        forged_checks[0].signature_hex =
+            "00".repeat(postfiat_crypto_provider::ML_DSA_65_SIGNATURE_BYTES);
+        let forged_error = build_dabc_full_knowledge_checkpoint_signed(
             &domain,
+            &committee,
+            &graph,
+            "validator-1",
+            10,
+            second.activation_height,
+            forged_checks,
+        )
+        .expect_err("forged checkpoint support must fail");
+        assert!(forged_error.contains("signature"), "{forged_error}");
+
+        let checkpoint = build_dabc_full_knowledge_checkpoint_signed(
+            &domain,
+            &committee,
             &graph,
             "validator-1",
             10,
@@ -2167,8 +2442,9 @@
         .expect("checkpoint");
         assert_eq!(checkpoint.covered_heights, vec![10, 20]);
 
-        let activation = validate_dabc_activation_with_full_knowledge(
+        let activation = validate_dabc_activation_with_full_knowledge_signed(
             &domain,
+            &committee,
             &graph,
             &ratified_chain,
             &second,
@@ -2184,20 +2460,13 @@
         for height in [10_u64, 20_u64] {
             for sender in support.iter().take(4) {
                 incomplete_checks.push(
-                    build_dabc_full_knowledge_check(
-                        &domain,
-                        graph.trust_graph_root.clone(),
-                        sender,
-                        height,
-                        Vec::new(),
-                        "",
-                    )
-                    .expect("incomplete check"),
+                    signed_dabc_check(&domain, graph.trust_graph_root.clone(), sender, height, Vec::new()),
                 );
             }
         }
-        let incomplete_error = build_dabc_full_knowledge_checkpoint(
+        let incomplete_error = build_dabc_full_knowledge_checkpoint_signed(
             &domain,
+            &committee,
             &graph,
             "validator-1",
             10,
@@ -2213,19 +2482,12 @@
         let early_checks = support
             .iter()
             .map(|sender| {
-                build_dabc_full_knowledge_check(
-                    &domain,
-                    graph.trust_graph_root.clone(),
-                    sender,
-                    10,
-                    Vec::new(),
-                    "",
-                )
-                .expect("early check")
+                signed_dabc_check(&domain, graph.trust_graph_root.clone(), sender, 10, Vec::new())
             })
             .collect::<Vec<_>>();
-        let early_checkpoint = build_dabc_full_knowledge_checkpoint(
+        let early_checkpoint = build_dabc_full_knowledge_checkpoint_signed(
             &domain,
+            &committee,
             &graph,
             "validator-1",
             10,
@@ -2233,8 +2495,9 @@
             early_checks,
         )
         .expect("early checkpoint");
-        let early_error = validate_dabc_activation_with_full_knowledge(
+        let early_error = validate_dabc_activation_with_full_knowledge_signed(
             &domain,
+            &committee,
             &graph,
             &ratified_chain,
             &second,
@@ -2258,20 +2521,13 @@
                     Vec::new()
                 };
                 unresolved_checks.push(
-                    build_dabc_full_knowledge_check(
-                        &domain,
-                        graph.trust_graph_root.clone(),
-                        sender,
-                        height,
-                        pending_pairs,
-                        "",
-                    )
-                    .expect("unresolved check"),
+                    signed_dabc_check(&domain, graph.trust_graph_root.clone(), sender, height, pending_pairs),
                 );
             }
         }
-        let unresolved_checkpoint = build_dabc_full_knowledge_checkpoint(
+        let unresolved_checkpoint = build_dabc_full_knowledge_checkpoint_signed(
             &domain,
+            &committee,
             &graph,
             "validator-1",
             10,
@@ -2279,8 +2535,9 @@
             unresolved_checks,
         )
         .expect("unresolved checkpoint");
-        let unresolved_error = validate_dabc_activation_with_full_knowledge(
+        let unresolved_error = validate_dabc_activation_with_full_knowledge_signed(
             &domain,
+            &committee,
             &graph,
             &ratified_chain,
             &second,
@@ -3236,17 +3493,9 @@
         let payload_hash =
             validator_registry_lifecycle_payload_hash(&domain, &update).expect("payload hash");
 
-        let propose = build_rbc_propose(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            41,
-            payload_hash.clone(),
-            "",
-        )
-        .expect("propose lifecycle");
+        let propose = signed_rbc_propose(&domain, graph.trust_graph_root.clone(), "validator-0", 41, payload_hash.clone());
         let accept =
-            build_rbc_accept(&domain, &propose, "validator-1", "").expect("accept lifecycle");
+            signed_rbc_accept(&domain, &propose, "validator-1");
         let candidate = mvba_candidate_from_rbc_accept(&domain, &propose, &accept)
             .expect("lifecycle candidate");
         let view_1 = trust_view_for_validator(&graph, "validator-1").expect("view 1");
@@ -3271,17 +3520,9 @@
         assert_eq!(lifecycle.payload_hash, payload_hash);
         assert!(is_lower_hex_len(&lifecycle.lifecycle_ratification_id, 96));
 
-        let wrong_propose = build_rbc_propose(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            42,
-            root('a'),
-            "",
-        )
-        .expect("wrong propose");
+        let wrong_propose = signed_rbc_propose(&domain, graph.trust_graph_root.clone(), "validator-0", 42, root('a'));
         let wrong_accept =
-            build_rbc_accept(&domain, &wrong_propose, "validator-1", "").expect("wrong accept");
+            signed_rbc_accept(&domain, &wrong_propose, "validator-1");
         let wrong_candidate =
             mvba_candidate_from_rbc_accept(&domain, &wrong_propose, &wrong_accept)
                 .expect("wrong candidate");
@@ -3456,17 +3697,9 @@
         let replacement_payload =
             transaction_network_membership_payload_hash(&domain, &replacement)
                 .expect("replacement payload");
-        let propose = build_rbc_propose(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            301,
-            replacement_payload.clone(),
-            "",
-        )
-        .expect("replacement propose");
+        let propose = signed_rbc_propose(&domain, graph.trust_graph_root.clone(), "validator-0", 301, replacement_payload.clone());
         let accept =
-            build_rbc_accept(&domain, &propose, "validator-1", "").expect("replacement accept");
+            signed_rbc_accept(&domain, &propose, "validator-1");
         let candidate = mvba_candidate_from_rbc_accept(&domain, &propose, &accept)
             .expect("replacement candidate");
         let view_1 = trust_view_for_validator(&graph, "validator-1").expect("view 1");
@@ -3542,17 +3775,9 @@
         )
         .expect("replacement network resumes finality");
 
-        let wrong_propose = build_rbc_propose(
-            &domain,
-            graph.trust_graph_root.clone(),
-            "validator-0",
-            302,
-            root('d'),
-            "",
-        )
-        .expect("wrong replacement propose");
+        let wrong_propose = signed_rbc_propose(&domain, graph.trust_graph_root.clone(), "validator-0", 302, root('d'));
         let wrong_accept =
-            build_rbc_accept(&domain, &wrong_propose, "validator-1", "").expect("wrong accept");
+            signed_rbc_accept(&domain, &wrong_propose, "validator-1");
         let wrong_candidate =
             mvba_candidate_from_rbc_accept(&domain, &wrong_propose, &wrong_accept)
                 .expect("wrong candidate");
@@ -3777,17 +4002,9 @@
 
         let payload_hash = trust_graph_rollback_payload_hash(&domain, &rollback_record)
             .expect("rollback payload hash");
-        let propose = build_rbc_propose(
-            &domain,
-            authority_graph.trust_graph_root.clone(),
-            "validator-0",
-            201,
-            payload_hash.clone(),
-            "",
-        )
-        .expect("rollback propose");
+        let propose = signed_rbc_propose(&domain, authority_graph.trust_graph_root.clone(), "validator-0", 201, payload_hash.clone());
         let accept =
-            build_rbc_accept(&domain, &propose, "validator-1", "").expect("rollback accept");
+            signed_rbc_accept(&domain, &propose, "validator-1");
         let candidate =
             mvba_candidate_from_rbc_accept(&domain, &propose, &accept).expect("rollback candidate");
         let view_1 =
@@ -3847,17 +4064,9 @@
             "{tampered_error}"
         );
 
-        let wrong_propose = build_rbc_propose(
-            &domain,
-            authority_graph.trust_graph_root.clone(),
-            "validator-0",
-            202,
-            root('d'),
-            "",
-        )
-        .expect("wrong rollback propose");
+        let wrong_propose = signed_rbc_propose(&domain, authority_graph.trust_graph_root.clone(), "validator-0", 202, root('d'));
         let wrong_accept =
-            build_rbc_accept(&domain, &wrong_propose, "validator-1", "").expect("wrong accept");
+            signed_rbc_accept(&domain, &wrong_propose, "validator-1");
         let wrong_candidate =
             mvba_candidate_from_rbc_accept(&domain, &wrong_propose, &wrong_accept)
                 .expect("wrong candidate");
@@ -3937,16 +4146,8 @@
             .expect("validate G1 lifecycle record");
         let payload_hash =
             trust_graph_lifecycle_payload_hash(&domain, &record).expect("G1 payload hash");
-        let propose = build_rbc_propose(
-            &domain,
-            g0.trust_graph_root.clone(),
-            "validator-0",
-            101,
-            payload_hash.clone(),
-            "",
-        )
-        .expect("propose G1 lifecycle");
-        let accept = build_rbc_accept(&domain, &propose, "validator-1", "").expect("accept G1");
+        let propose = signed_rbc_propose(&domain, g0.trust_graph_root.clone(), "validator-0", 101, payload_hash.clone());
+        let accept = signed_rbc_accept(&domain, &propose, "validator-1");
         let candidate =
             mvba_candidate_from_rbc_accept(&domain, &propose, &accept).expect("candidate G1");
         let g0_view = trust_view_for_validator(&g0, "validator-1").expect("G0 view");
@@ -3980,17 +4181,9 @@
         assert_eq!(lifecycle.payload_hash, payload_hash);
         assert!(is_lower_hex_len(&lifecycle.lifecycle_ratification_id, 96));
 
-        let wrong_propose = build_rbc_propose(
-            &domain,
-            g0.trust_graph_root.clone(),
-            "validator-0",
-            102,
-            root('f'),
-            "",
-        )
-        .expect("wrong propose");
+        let wrong_propose = signed_rbc_propose(&domain, g0.trust_graph_root.clone(), "validator-0", 102, root('f'));
         let wrong_accept =
-            build_rbc_accept(&domain, &wrong_propose, "validator-1", "").expect("wrong accept");
+            signed_rbc_accept(&domain, &wrong_propose, "validator-1");
         let wrong_candidate =
             mvba_candidate_from_rbc_accept(&domain, &wrong_propose, &wrong_accept)
                 .expect("wrong candidate");

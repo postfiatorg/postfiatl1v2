@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use postfiat_crypto_provider::hash_hex;
+use postfiat_crypto_provider::{
+    hash_hex, hex_to_bytes, ml_dsa_65_verify_with_context, ML_DSA_65_ALGORITHM,
+};
 use postfiat_types::{
     GovernanceAmendment, GovernanceVote, ValidatorRegistryEntry, ValidatorRegistryUpdateRecord,
     GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED, GOVERNANCE_AUTHORITY_MODE_FOUNDATION,
@@ -409,6 +411,149 @@ pub struct NonUniformGovernanceCertificate {
 }
 
 pub const RBC_MESSAGE_SIGNATURE_CONTEXT: &[u8] = b"postfiat-l1-v2/cobalt-rbc/v1";
+
+/// Committee binding for Cobalt RBC/ABBA/MVBA/DABC message validation.
+///
+/// Maps validator node ids to their registered ML-DSA-65 public keys. Validators
+/// are identified by `TrustView.validator` / `TrustView.derived_unl` entries, so a
+/// committee built from a `TrustView` makes every validated message prove
+/// membership in that view and binds the signature to the signer's registered key.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct CobaltSignatureCommittee {
+    public_keys: BTreeMap<String, Vec<u8>>,
+}
+
+impl CobaltSignatureCommittee {
+    /// Build a committee that treats every validator in `view.derived_unl` (plus the
+    /// view's own validator) as a committee member whose public key is `public_key`.
+    pub fn uniform_from_trust_view(view: &TrustView, public_key: &[u8]) -> Result<Self, String> {
+        ml_dsa_65_validate_key_bytes("Cobalt committee public key", public_key)?;
+        let mut committee = Self::default();
+        committee
+            .public_keys
+            .insert(view.validator.clone(), public_key.to_vec());
+        for validator in &view.derived_unl {
+            committee
+                .public_keys
+                .insert(validator.clone(), public_key.to_vec());
+        }
+        Ok(committee)
+    }
+
+    /// Register or replace the ML-DSA-65 public key for a committee member.
+    pub fn insert(
+        &mut self,
+        validator: impl Into<String>,
+        public_key: &[u8],
+    ) -> Result<(), String> {
+        let validator = validator.into();
+        if validator.trim().is_empty() {
+            return Err("Cobalt committee validator id must be nonempty".to_string());
+        }
+        ml_dsa_65_validate_key_bytes("Cobalt committee public key", public_key)?;
+        self.public_keys.insert(validator, public_key.to_vec());
+        Ok(())
+    }
+
+    /// Register a committee member from its ML-DSA-65 public key encoded as
+    /// lowercase hex.
+    pub fn insert_hex(
+        &mut self,
+        validator: impl Into<String>,
+        public_key_hex: &str,
+    ) -> Result<(), String> {
+        let public_key = hex_to_bytes(public_key_hex)
+            .map_err(|error| format!("Cobalt committee public key must be hex: {error}"))?;
+        self.insert(validator, &public_key)
+    }
+
+    /// Build a committee from active validator registry entries. Entries with an
+    /// algorithm other than ML-DSA-65 are rejected.
+    pub fn from_registry_entries(
+        entries: &[ValidatorRegistryEntry],
+    ) -> Result<Self, String> {
+        let mut committee = Self::default();
+        for entry in entries {
+            if !entry.active {
+                continue;
+            }
+            if entry.algorithm_id != ML_DSA_65_ALGORITHM {
+                return Err(format!(
+                    "Cobalt committee validator `{}` uses unsupported algorithm `{}`",
+                    entry.node_id, entry.algorithm_id
+                ));
+            }
+            committee.insert_hex(entry.node_id.clone(), &entry.public_key_hex)?;
+        }
+        Ok(committee)
+    }
+
+    pub fn is_member(&self, validator: &str) -> bool {
+        self.public_keys.contains_key(validator)
+    }
+
+    pub fn len(&self) -> usize {
+        self.public_keys.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.public_keys.is_empty()
+    }
+
+    fn public_key(&self, validator: &str) -> Option<&[u8]> {
+        self.public_keys.get(validator).map(Vec::as_slice)
+    }
+}
+
+fn ml_dsa_65_validate_key_bytes(label: &str, public_key: &[u8]) -> Result<(), String> {
+    postfiat_crypto_provider::ml_dsa_65_validate_public_key(public_key)
+        .map_err(|error| format!("{label} is not a valid ML-DSA-65 public key: {error}"))
+}
+
+/// Verify a Cobalt protocol message signature against the sender's registered
+/// committee key. `payload` must be the canonical signing payload bytes
+/// (`rbc_*_signing_payload_bytes`, `abba_*_signing_payload_bytes`, or
+/// `dabc_full_knowledge_check_signing_payload_bytes`).
+pub fn verify_cobalt_message_signature(
+    committee: &CobaltSignatureCommittee,
+    context: &[u8],
+    sender: &str,
+    payload: &[u8],
+    signature_hex: &str,
+) -> Result<(), String> {
+    validate_rbc_signature_hex(signature_hex)?;
+    let public_key = committee.public_key(sender).ok_or_else(|| {
+        format!("Cobalt message sender `{sender}` is not a registered committee member")
+    })?;
+    let signature = hex_to_bytes(signature_hex)
+        .map_err(|error| format!("Cobalt signature must be hex: {error}"))?;
+    if !ml_dsa_65_verify_with_context(public_key, payload, &signature, context) {
+        return Err(format!(
+            "Cobalt message signature does not verify against committee key for `{sender}`"
+        ));
+    }
+    Ok(())
+}
+
+fn collect_cobalt_support_senders(
+    committee: &CobaltSignatureCommittee,
+    message_kind: &str,
+    senders: impl IntoIterator<Item = String>,
+) -> Result<Vec<String>, String> {
+    let mut seen = BTreeSet::new();
+    let mut support = Vec::new();
+    for sender in senders {
+        if !committee.is_member(&sender) {
+            return Err(format!(
+                "{message_kind} sender `{sender}` is not a registered committee member"
+            ));
+        }
+        if seen.insert(sender.clone()) {
+            support.push(sender);
+        }
+    }
+    Ok(support)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RbcPropose {

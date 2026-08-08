@@ -19,7 +19,36 @@ pub fn build_rbc_propose(
         signature_hex: signature_hex.into(),
     };
     message.message_id = rbc_propose_message_id(&message)?;
-    validate_rbc_propose(domain, &message)?;
+    validate_rbc_propose_schema(domain, &message)?;
+    Ok(message)
+}
+
+/// Sign a freshly built RBC propose message with `private_key` (ML-DSA-65).
+pub fn sign_rbc_propose(
+    domain: &CobaltDomain,
+    trust_graph_root: impl Into<String>,
+    sender: impl Into<String>,
+    amendment_slot: u64,
+    payload_hash: impl Into<String>,
+    private_key: &[u8],
+) -> Result<RbcPropose, String> {
+    validate_domain(domain)?;
+    let mut message = RbcPropose {
+        message_id: String::new(),
+        chain_id: domain.chain_id.clone(),
+        genesis_hash: domain.genesis_hash.clone(),
+        protocol_version: domain.protocol_version,
+        trust_graph_root: trust_graph_root.into(),
+        sender: sender.into(),
+        amendment_slot,
+        payload_hash: payload_hash.into(),
+        signature_hex: String::new(),
+    };
+    message.message_id = rbc_propose_message_id(&message)?;
+    let payload = rbc_propose_signing_payload_bytes(&message)?;
+    message.signature_hex =
+        sign_cobalt_payload(private_key, &payload, RBC_MESSAGE_SIGNATURE_CONTEXT)?;
+    validate_rbc_propose_schema(domain, &message)?;
     Ok(message)
 }
 
@@ -29,7 +58,7 @@ pub fn build_rbc_echo(
     sender: impl Into<String>,
     signature_hex: impl Into<String>,
 ) -> Result<RbcEcho, String> {
-    validate_rbc_propose(domain, propose)?;
+    validate_rbc_propose_schema(domain, propose)?;
     let mut message = RbcEcho {
         message_id: String::new(),
         chain_id: domain.chain_id.clone(),
@@ -44,7 +73,36 @@ pub fn build_rbc_echo(
         signature_hex: signature_hex.into(),
     };
     message.message_id = rbc_echo_message_id(&message)?;
-    validate_rbc_echo(domain, &message, propose)?;
+    validate_rbc_echo_schema(domain, &message, propose)?;
+    Ok(message)
+}
+
+/// Sign a freshly built RBC echo for `propose` with `private_key` (ML-DSA-65).
+pub fn sign_rbc_echo(
+    domain: &CobaltDomain,
+    propose: &RbcPropose,
+    sender: impl Into<String>,
+    private_key: &[u8],
+) -> Result<RbcEcho, String> {
+    validate_rbc_propose_schema(domain, propose)?;
+    let mut message = RbcEcho {
+        message_id: String::new(),
+        chain_id: domain.chain_id.clone(),
+        genesis_hash: domain.genesis_hash.clone(),
+        protocol_version: domain.protocol_version,
+        trust_graph_root: propose.trust_graph_root.clone(),
+        sender: sender.into(),
+        proposer: propose.sender.clone(),
+        amendment_slot: propose.amendment_slot,
+        payload_hash: propose.payload_hash.clone(),
+        propose_message_id: propose.message_id.clone(),
+        signature_hex: String::new(),
+    };
+    message.message_id = rbc_echo_message_id(&message)?;
+    let payload = rbc_echo_signing_payload_bytes(&message)?;
+    message.signature_hex =
+        sign_cobalt_payload(private_key, &payload, RBC_MESSAGE_SIGNATURE_CONTEXT)?;
+    validate_rbc_echo_schema(domain, &message, propose)?;
     Ok(message)
 }
 
@@ -54,7 +112,7 @@ pub fn build_rbc_ready(
     sender: impl Into<String>,
     signature_hex: impl Into<String>,
 ) -> Result<RbcReady, String> {
-    validate_rbc_propose(domain, propose)?;
+    validate_rbc_propose_schema(domain, propose)?;
     let mut message = RbcReady {
         message_id: String::new(),
         chain_id: domain.chain_id.clone(),
@@ -69,7 +127,36 @@ pub fn build_rbc_ready(
         signature_hex: signature_hex.into(),
     };
     message.message_id = rbc_ready_message_id(&message)?;
-    validate_rbc_ready(domain, &message, propose)?;
+    validate_rbc_ready_schema(domain, &message, propose)?;
+    Ok(message)
+}
+
+/// Sign a freshly built RBC ready for `propose` with `private_key` (ML-DSA-65).
+pub fn sign_rbc_ready(
+    domain: &CobaltDomain,
+    propose: &RbcPropose,
+    sender: impl Into<String>,
+    private_key: &[u8],
+) -> Result<RbcReady, String> {
+    validate_rbc_propose_schema(domain, propose)?;
+    let mut message = RbcReady {
+        message_id: String::new(),
+        chain_id: domain.chain_id.clone(),
+        genesis_hash: domain.genesis_hash.clone(),
+        protocol_version: domain.protocol_version,
+        trust_graph_root: propose.trust_graph_root.clone(),
+        sender: sender.into(),
+        proposer: propose.sender.clone(),
+        amendment_slot: propose.amendment_slot,
+        payload_hash: propose.payload_hash.clone(),
+        propose_message_id: propose.message_id.clone(),
+        signature_hex: String::new(),
+    };
+    message.message_id = rbc_ready_message_id(&message)?;
+    let payload = rbc_ready_signing_payload_bytes(&message)?;
+    message.signature_hex =
+        sign_cobalt_payload(private_key, &payload, RBC_MESSAGE_SIGNATURE_CONTEXT)?;
+    validate_rbc_ready_schema(domain, &message, propose)?;
     Ok(message)
 }
 
@@ -79,7 +166,7 @@ pub fn build_rbc_accept(
     sender: impl Into<String>,
     signature_hex: impl Into<String>,
 ) -> Result<RbcAccept, String> {
-    validate_rbc_propose(domain, propose)?;
+    validate_rbc_propose_schema(domain, propose)?;
     let mut message = RbcAccept {
         message_id: String::new(),
         chain_id: domain.chain_id.clone(),
@@ -94,11 +181,50 @@ pub fn build_rbc_accept(
         signature_hex: signature_hex.into(),
     };
     message.message_id = rbc_accept_message_id(&message)?;
-    validate_rbc_accept(domain, &message, propose)?;
+    validate_rbc_accept_schema(domain, &message, propose)?;
     Ok(message)
 }
 
-pub fn validate_rbc_propose(domain: &CobaltDomain, message: &RbcPropose) -> Result<(), String> {
+/// Sign a freshly built RBC accept for `propose` with `private_key` (ML-DSA-65).
+pub fn sign_rbc_accept(
+    domain: &CobaltDomain,
+    propose: &RbcPropose,
+    sender: impl Into<String>,
+    private_key: &[u8],
+) -> Result<RbcAccept, String> {
+    validate_rbc_propose_schema(domain, propose)?;
+    let mut message = RbcAccept {
+        message_id: String::new(),
+        chain_id: domain.chain_id.clone(),
+        genesis_hash: domain.genesis_hash.clone(),
+        protocol_version: domain.protocol_version,
+        trust_graph_root: propose.trust_graph_root.clone(),
+        sender: sender.into(),
+        proposer: propose.sender.clone(),
+        amendment_slot: propose.amendment_slot,
+        payload_hash: propose.payload_hash.clone(),
+        propose_message_id: propose.message_id.clone(),
+        signature_hex: String::new(),
+    };
+    message.message_id = rbc_accept_message_id(&message)?;
+    let payload = rbc_accept_signing_payload_bytes(&message)?;
+    message.signature_hex =
+        sign_cobalt_payload(private_key, &payload, RBC_MESSAGE_SIGNATURE_CONTEXT)?;
+    validate_rbc_accept_schema(domain, &message, propose)?;
+    Ok(message)
+}
+
+fn sign_cobalt_payload(
+    private_key: &[u8],
+    payload: &[u8],
+    context: &[u8],
+) -> Result<String, String> {
+    postfiat_crypto_provider::ml_dsa_65_sign_with_context(private_key, payload, context)
+        .map(|signature| postfiat_crypto_provider::bytes_to_hex(&signature))
+        .map_err(|error| format!("failed to sign Cobalt message: {error}"))
+}
+
+fn validate_rbc_propose_schema(domain: &CobaltDomain, message: &RbcPropose) -> Result<(), String> {
     validate_rbc_domain(
         domain,
         &message.chain_id,
@@ -116,7 +242,36 @@ pub fn validate_rbc_propose(domain: &CobaltDomain, message: &RbcPropose) -> Resu
     Ok(())
 }
 
-pub fn validate_rbc_echo(
+/// Schema-only validation for protocol simulations.
+///
+/// Production callers must use [`validate_rbc_propose_signed`]. This entry
+/// point is deliberately absent unless the explicit simulation feature is
+/// enabled.
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+pub fn validate_rbc_propose(domain: &CobaltDomain, message: &RbcPropose) -> Result<(), String> {
+    validate_rbc_propose_schema(domain, message)
+}
+
+/// Requires committee membership and verifies the ML-DSA signature over the
+/// canonical signing payload against the sender's registered public key.
+pub fn validate_rbc_propose_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    message: &RbcPropose,
+) -> Result<(), String> {
+    validate_rbc_propose_schema(domain, message)?;
+    let payload = rbc_propose_signing_payload_bytes(message)?;
+    verify_cobalt_message_signature(
+        committee,
+        RBC_MESSAGE_SIGNATURE_CONTEXT,
+        &message.sender,
+        &payload,
+        &message.signature_hex,
+    )
+    .map_err(|error| format!("RBC propose {error}"))
+}
+
+fn validate_rbc_echo_schema(
     domain: &CobaltDomain,
     message: &RbcEcho,
     propose: &RbcPropose,
@@ -143,7 +298,49 @@ pub fn validate_rbc_echo(
     Ok(())
 }
 
-pub fn validate_rbc_ready(
+/// Schema-only validation for protocol simulations.
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+pub fn validate_rbc_echo(
+    domain: &CobaltDomain,
+    message: &RbcEcho,
+    propose: &RbcPropose,
+) -> Result<(), String> {
+    validate_rbc_echo_schema(domain, message, propose)
+}
+
+/// Requires committee membership and verifies the sender's ML-DSA signature.
+pub fn validate_rbc_echo_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    message: &RbcEcho,
+    propose: &RbcPropose,
+) -> Result<(), String> {
+    let payload = rbc_echo_signing_payload_bytes(message)?;
+    validate_rbc_linked_message_signed(
+        domain,
+        committee,
+        "RBC echo",
+        &message.chain_id,
+        &message.genesis_hash,
+        message.protocol_version,
+        &message.trust_graph_root,
+        &message.sender,
+        &message.proposer,
+        message.amendment_slot,
+        &message.payload_hash,
+        &message.propose_message_id,
+        &message.signature_hex,
+        propose,
+        &payload,
+    )?;
+    let expected_id = rbc_echo_message_id(message)?;
+    if message.message_id != expected_id {
+        return Err("RBC echo message id mismatch".to_string());
+    }
+    Ok(())
+}
+
+fn validate_rbc_ready_schema(
     domain: &CobaltDomain,
     message: &RbcReady,
     propose: &RbcPropose,
@@ -170,7 +367,49 @@ pub fn validate_rbc_ready(
     Ok(())
 }
 
-pub fn validate_rbc_accept(
+/// Schema-only validation for protocol simulations.
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+pub fn validate_rbc_ready(
+    domain: &CobaltDomain,
+    message: &RbcReady,
+    propose: &RbcPropose,
+) -> Result<(), String> {
+    validate_rbc_ready_schema(domain, message, propose)
+}
+
+/// Requires committee membership and verifies the sender's ML-DSA signature.
+pub fn validate_rbc_ready_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    message: &RbcReady,
+    propose: &RbcPropose,
+) -> Result<(), String> {
+    let payload = rbc_ready_signing_payload_bytes(message)?;
+    validate_rbc_linked_message_signed(
+        domain,
+        committee,
+        "RBC ready",
+        &message.chain_id,
+        &message.genesis_hash,
+        message.protocol_version,
+        &message.trust_graph_root,
+        &message.sender,
+        &message.proposer,
+        message.amendment_slot,
+        &message.payload_hash,
+        &message.propose_message_id,
+        &message.signature_hex,
+        propose,
+        &payload,
+    )?;
+    let expected_id = rbc_ready_message_id(message)?;
+    if message.message_id != expected_id {
+        return Err("RBC ready message id mismatch".to_string());
+    }
+    Ok(())
+}
+
+fn validate_rbc_accept_schema(
     domain: &CobaltDomain,
     message: &RbcAccept,
     propose: &RbcPropose,
@@ -189,6 +428,48 @@ pub fn validate_rbc_accept(
         &message.propose_message_id,
         &message.signature_hex,
         propose,
+    )?;
+    let expected_id = rbc_accept_message_id(message)?;
+    if message.message_id != expected_id {
+        return Err("RBC accept message id mismatch".to_string());
+    }
+    Ok(())
+}
+
+/// Schema-only validation for protocol simulations.
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+pub fn validate_rbc_accept(
+    domain: &CobaltDomain,
+    message: &RbcAccept,
+    propose: &RbcPropose,
+) -> Result<(), String> {
+    validate_rbc_accept_schema(domain, message, propose)
+}
+
+/// Requires committee membership and verifies the sender's ML-DSA signature.
+pub fn validate_rbc_accept_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    message: &RbcAccept,
+    propose: &RbcPropose,
+) -> Result<(), String> {
+    let payload = rbc_accept_signing_payload_bytes(message)?;
+    validate_rbc_linked_message_signed(
+        domain,
+        committee,
+        "RBC accept",
+        &message.chain_id,
+        &message.genesis_hash,
+        message.protocol_version,
+        &message.trust_graph_root,
+        &message.sender,
+        &message.proposer,
+        message.amendment_slot,
+        &message.payload_hash,
+        &message.propose_message_id,
+        &message.signature_hex,
+        propose,
+        &payload,
     )?;
     let expected_id = rbc_accept_message_id(message)?;
     if message.message_id != expected_id {
@@ -285,35 +566,103 @@ pub fn rbc_accept_message_id(message: &RbcAccept) -> Result<String, String> {
     ))
 }
 
-pub fn evaluate_rbc_echo_support(
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+fn evaluate_rbc_echo_support_schema(
     domain: &CobaltDomain,
     view: &TrustView,
     propose: &RbcPropose,
     echoes: &[RbcEcho],
 ) -> Result<RbcSupportEvaluation, String> {
     validate_trust_view(domain, view)?;
-    validate_rbc_propose(domain, propose)?;
+    validate_rbc_propose_schema(domain, propose)?;
     let mut support = Vec::with_capacity(echoes.len());
     for echo in echoes {
-        validate_rbc_echo(domain, echo, propose)?;
+        validate_rbc_echo_schema(domain, echo, propose)?;
         support.push(echo.sender.clone());
     }
     evaluate_rbc_support(view, "echo", propose, support)
 }
 
-pub fn evaluate_rbc_ready_support(
+/// Schema-only quorum evaluation for protocol simulations.
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+pub fn evaluate_rbc_echo_support(
+    domain: &CobaltDomain,
+    view: &TrustView,
+    propose: &RbcPropose,
+    echoes: &[RbcEcho],
+) -> Result<RbcSupportEvaluation, String> {
+    evaluate_rbc_echo_support_schema(domain, view, propose, echoes)
+}
+
+/// Verifies every echo against `committee`; each signer must be a registered
+/// committee member, and duplicate signers are counted once.
+pub fn evaluate_rbc_echo_support_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    view: &TrustView,
+    propose: &RbcPropose,
+    echoes: &[RbcEcho],
+) -> Result<RbcSupportEvaluation, String> {
+    validate_trust_view(domain, view)?;
+    validate_rbc_propose_signed(domain, committee, propose)?;
+    for echo in echoes {
+        validate_rbc_echo_signed(domain, committee, echo, propose)?;
+    }
+    let support = collect_cobalt_support_senders(
+        committee,
+        "RBC echo",
+        echoes.iter().map(|echo| echo.sender.clone()),
+    )?;
+    evaluate_rbc_support(view, "echo", propose, support)
+}
+
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+fn evaluate_rbc_ready_support_schema(
     domain: &CobaltDomain,
     view: &TrustView,
     propose: &RbcPropose,
     readies: &[RbcReady],
 ) -> Result<RbcSupportEvaluation, String> {
     validate_trust_view(domain, view)?;
-    validate_rbc_propose(domain, propose)?;
+    validate_rbc_propose_schema(domain, propose)?;
     let mut support = Vec::with_capacity(readies.len());
     for ready in readies {
-        validate_rbc_ready(domain, ready, propose)?;
+        validate_rbc_ready_schema(domain, ready, propose)?;
         support.push(ready.sender.clone());
     }
+    evaluate_rbc_support(view, "ready", propose, support)
+}
+
+/// Schema-only quorum evaluation for protocol simulations.
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+pub fn evaluate_rbc_ready_support(
+    domain: &CobaltDomain,
+    view: &TrustView,
+    propose: &RbcPropose,
+    readies: &[RbcReady],
+) -> Result<RbcSupportEvaluation, String> {
+    evaluate_rbc_ready_support_schema(domain, view, propose, readies)
+}
+
+/// Verifies every ready against `committee`; each signer must be a registered
+/// committee member, and duplicate signers are counted once.
+pub fn evaluate_rbc_ready_support_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    view: &TrustView,
+    propose: &RbcPropose,
+    readies: &[RbcReady],
+) -> Result<RbcSupportEvaluation, String> {
+    validate_trust_view(domain, view)?;
+    validate_rbc_propose_signed(domain, committee, propose)?;
+    for ready in readies {
+        validate_rbc_ready_signed(domain, committee, ready, propose)?;
+    }
+    let support = collect_cobalt_support_senders(
+        committee,
+        "RBC ready",
+        readies.iter().map(|ready| ready.sender.clone()),
+    )?;
     evaluate_rbc_support(view, "ready", propose, support)
 }
 
@@ -338,10 +687,10 @@ pub fn detect_rbc_conflicting_accept(
     right_accept: &RbcAccept,
 ) -> Result<Option<RbcConflictingAcceptEvidence>, String> {
     validate_trust_graph(domain, graph)?;
-    validate_rbc_propose(domain, left_propose)?;
-    validate_rbc_propose(domain, right_propose)?;
-    validate_rbc_accept(domain, left_accept, left_propose)?;
-    validate_rbc_accept(domain, right_accept, right_propose)?;
+    validate_rbc_propose_schema(domain, left_propose)?;
+    validate_rbc_propose_schema(domain, right_propose)?;
+    validate_rbc_accept_schema(domain, left_accept, left_propose)?;
+    validate_rbc_accept_schema(domain, right_accept, right_propose)?;
     if left_accept.trust_graph_root != graph.trust_graph_root
         || right_accept.trust_graph_root != graph.trust_graph_root
     {
@@ -439,7 +788,7 @@ pub fn build_abba_init(
         signature_hex: signature_hex.into(),
     };
     message.message_id = abba_init_message_id(&message)?;
-    validate_abba_init(domain, &message)?;
+    validate_abba_init_schema(domain, &message)?;
     Ok(message)
 }
 
@@ -465,7 +814,7 @@ pub fn build_abba_aux(
         signature_hex: signature_hex.into(),
     };
     message.message_id = abba_aux_message_id(&message)?;
-    validate_abba_aux(domain, &message)?;
+    validate_abba_aux_schema(domain, &message)?;
     Ok(message)
 }
 
@@ -491,7 +840,7 @@ pub fn build_abba_conf(
         signature_hex: signature_hex.into(),
     };
     message.message_id = abba_conf_message_id(&message)?;
-    validate_abba_conf(domain, &message)?;
+    validate_abba_conf_schema(domain, &message)?;
     Ok(message)
 }
 
@@ -517,7 +866,7 @@ pub fn build_abba_finish(
         signature_hex: signature_hex.into(),
     };
     message.message_id = abba_finish_message_id(&message)?;
-    validate_abba_finish(domain, &message)?;
+    validate_abba_finish_schema(domain, &message)?;
     Ok(message)
 }
 
@@ -543,7 +892,7 @@ pub fn build_abba_round_state(
     Ok(state)
 }
 
-pub fn validate_abba_init(domain: &CobaltDomain, message: &AbbaInit) -> Result<(), String> {
+fn validate_abba_init_schema(domain: &CobaltDomain, message: &AbbaInit) -> Result<(), String> {
     validate_abba_message(
         domain,
         "init",
@@ -560,7 +909,70 @@ pub fn validate_abba_init(domain: &CobaltDomain, message: &AbbaInit) -> Result<(
     )
 }
 
-pub fn validate_abba_aux(domain: &CobaltDomain, message: &AbbaAux) -> Result<(), String> {
+/// Schema-only validation for protocol simulations.
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+pub fn validate_abba_init(domain: &CobaltDomain, message: &AbbaInit) -> Result<(), String> {
+    validate_abba_init_schema(domain, message)
+}
+
+/// Sign a freshly built ABBA init with `private_key` (ML-DSA-65).
+#[allow(clippy::too_many_arguments)]
+pub fn sign_abba_init(
+    domain: &CobaltDomain,
+    trust_graph_root: impl Into<String>,
+    sender: impl Into<String>,
+    agreement_id: impl Into<String>,
+    round: u64,
+    value: bool,
+    private_key: &[u8],
+) -> Result<AbbaInit, String> {
+    validate_domain(domain)?;
+    let mut message = AbbaInit {
+        message_id: String::new(),
+        chain_id: domain.chain_id.clone(),
+        genesis_hash: domain.genesis_hash.clone(),
+        protocol_version: domain.protocol_version,
+        trust_graph_root: trust_graph_root.into(),
+        sender: sender.into(),
+        agreement_id: agreement_id.into(),
+        round,
+        value,
+        signature_hex: String::new(),
+    };
+    message.message_id = abba_init_message_id(&message)?;
+    let payload = abba_init_signing_payload_bytes(&message)?;
+    message.signature_hex =
+        sign_cobalt_payload(private_key, &payload, ABBA_MESSAGE_SIGNATURE_CONTEXT)?;
+    validate_abba_init_schema(domain, &message)?;
+    Ok(message)
+}
+
+/// Requires committee membership and verifies the sender's ML-DSA signature.
+pub fn validate_abba_init_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    message: &AbbaInit,
+) -> Result<(), String> {
+    let payload = abba_init_signing_payload_bytes(message)?;
+    validate_abba_message_signed(
+        domain,
+        committee,
+        "init",
+        &message.message_id,
+        &message.chain_id,
+        &message.genesis_hash,
+        message.protocol_version,
+        &message.trust_graph_root,
+        &message.sender,
+        &message.agreement_id,
+        message.round,
+        &message.signature_hex,
+        &abba_init_message_id(message)?,
+        &payload,
+    )
+}
+
+fn validate_abba_aux_schema(domain: &CobaltDomain, message: &AbbaAux) -> Result<(), String> {
     validate_abba_message(
         domain,
         "aux",
@@ -577,7 +989,70 @@ pub fn validate_abba_aux(domain: &CobaltDomain, message: &AbbaAux) -> Result<(),
     )
 }
 
-pub fn validate_abba_conf(domain: &CobaltDomain, message: &AbbaConf) -> Result<(), String> {
+/// Schema-only validation for protocol simulations.
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+pub fn validate_abba_aux(domain: &CobaltDomain, message: &AbbaAux) -> Result<(), String> {
+    validate_abba_aux_schema(domain, message)
+}
+
+/// Sign a freshly built ABBA aux with `private_key` (ML-DSA-65).
+#[allow(clippy::too_many_arguments)]
+pub fn sign_abba_aux(
+    domain: &CobaltDomain,
+    trust_graph_root: impl Into<String>,
+    sender: impl Into<String>,
+    agreement_id: impl Into<String>,
+    round: u64,
+    value: bool,
+    private_key: &[u8],
+) -> Result<AbbaAux, String> {
+    validate_domain(domain)?;
+    let mut message = AbbaAux {
+        message_id: String::new(),
+        chain_id: domain.chain_id.clone(),
+        genesis_hash: domain.genesis_hash.clone(),
+        protocol_version: domain.protocol_version,
+        trust_graph_root: trust_graph_root.into(),
+        sender: sender.into(),
+        agreement_id: agreement_id.into(),
+        round,
+        value,
+        signature_hex: String::new(),
+    };
+    message.message_id = abba_aux_message_id(&message)?;
+    let payload = abba_aux_signing_payload_bytes(&message)?;
+    message.signature_hex =
+        sign_cobalt_payload(private_key, &payload, ABBA_MESSAGE_SIGNATURE_CONTEXT)?;
+    validate_abba_aux_schema(domain, &message)?;
+    Ok(message)
+}
+
+/// Requires committee membership and verifies the sender's ML-DSA signature.
+pub fn validate_abba_aux_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    message: &AbbaAux,
+) -> Result<(), String> {
+    let payload = abba_aux_signing_payload_bytes(message)?;
+    validate_abba_message_signed(
+        domain,
+        committee,
+        "aux",
+        &message.message_id,
+        &message.chain_id,
+        &message.genesis_hash,
+        message.protocol_version,
+        &message.trust_graph_root,
+        &message.sender,
+        &message.agreement_id,
+        message.round,
+        &message.signature_hex,
+        &abba_aux_message_id(message)?,
+        &payload,
+    )
+}
+
+fn validate_abba_conf_schema(domain: &CobaltDomain, message: &AbbaConf) -> Result<(), String> {
     validate_abba_message(
         domain,
         "conf",
@@ -594,7 +1069,70 @@ pub fn validate_abba_conf(domain: &CobaltDomain, message: &AbbaConf) -> Result<(
     )
 }
 
-pub fn validate_abba_finish(domain: &CobaltDomain, message: &AbbaFinish) -> Result<(), String> {
+/// Schema-only validation for protocol simulations.
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+pub fn validate_abba_conf(domain: &CobaltDomain, message: &AbbaConf) -> Result<(), String> {
+    validate_abba_conf_schema(domain, message)
+}
+
+/// Sign a freshly built ABBA conf with `private_key` (ML-DSA-65).
+#[allow(clippy::too_many_arguments)]
+pub fn sign_abba_conf(
+    domain: &CobaltDomain,
+    trust_graph_root: impl Into<String>,
+    sender: impl Into<String>,
+    agreement_id: impl Into<String>,
+    round: u64,
+    value: bool,
+    private_key: &[u8],
+) -> Result<AbbaConf, String> {
+    validate_domain(domain)?;
+    let mut message = AbbaConf {
+        message_id: String::new(),
+        chain_id: domain.chain_id.clone(),
+        genesis_hash: domain.genesis_hash.clone(),
+        protocol_version: domain.protocol_version,
+        trust_graph_root: trust_graph_root.into(),
+        sender: sender.into(),
+        agreement_id: agreement_id.into(),
+        round,
+        value,
+        signature_hex: String::new(),
+    };
+    message.message_id = abba_conf_message_id(&message)?;
+    let payload = abba_conf_signing_payload_bytes(&message)?;
+    message.signature_hex =
+        sign_cobalt_payload(private_key, &payload, ABBA_MESSAGE_SIGNATURE_CONTEXT)?;
+    validate_abba_conf_schema(domain, &message)?;
+    Ok(message)
+}
+
+/// Requires committee membership and verifies the sender's ML-DSA signature.
+pub fn validate_abba_conf_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    message: &AbbaConf,
+) -> Result<(), String> {
+    let payload = abba_conf_signing_payload_bytes(message)?;
+    validate_abba_message_signed(
+        domain,
+        committee,
+        "conf",
+        &message.message_id,
+        &message.chain_id,
+        &message.genesis_hash,
+        message.protocol_version,
+        &message.trust_graph_root,
+        &message.sender,
+        &message.agreement_id,
+        message.round,
+        &message.signature_hex,
+        &abba_conf_message_id(message)?,
+        &payload,
+    )
+}
+
+fn validate_abba_finish_schema(domain: &CobaltDomain, message: &AbbaFinish) -> Result<(), String> {
     validate_abba_message(
         domain,
         "finish",
@@ -608,6 +1146,69 @@ pub fn validate_abba_finish(domain: &CobaltDomain, message: &AbbaFinish) -> Resu
         message.round,
         &message.signature_hex,
         &abba_finish_message_id(message)?,
+    )
+}
+
+/// Schema-only validation for protocol simulations.
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+pub fn validate_abba_finish(domain: &CobaltDomain, message: &AbbaFinish) -> Result<(), String> {
+    validate_abba_finish_schema(domain, message)
+}
+
+/// Sign a freshly built ABBA finish with `private_key` (ML-DSA-65).
+#[allow(clippy::too_many_arguments)]
+pub fn sign_abba_finish(
+    domain: &CobaltDomain,
+    trust_graph_root: impl Into<String>,
+    sender: impl Into<String>,
+    agreement_id: impl Into<String>,
+    round: u64,
+    value: bool,
+    private_key: &[u8],
+) -> Result<AbbaFinish, String> {
+    validate_domain(domain)?;
+    let mut message = AbbaFinish {
+        message_id: String::new(),
+        chain_id: domain.chain_id.clone(),
+        genesis_hash: domain.genesis_hash.clone(),
+        protocol_version: domain.protocol_version,
+        trust_graph_root: trust_graph_root.into(),
+        sender: sender.into(),
+        agreement_id: agreement_id.into(),
+        round,
+        value,
+        signature_hex: String::new(),
+    };
+    message.message_id = abba_finish_message_id(&message)?;
+    let payload = abba_finish_signing_payload_bytes(&message)?;
+    message.signature_hex =
+        sign_cobalt_payload(private_key, &payload, ABBA_MESSAGE_SIGNATURE_CONTEXT)?;
+    validate_abba_finish_schema(domain, &message)?;
+    Ok(message)
+}
+
+/// Requires committee membership and verifies the sender's ML-DSA signature.
+pub fn validate_abba_finish_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    message: &AbbaFinish,
+) -> Result<(), String> {
+    let payload = abba_finish_signing_payload_bytes(message)?;
+    validate_abba_message_signed(
+        domain,
+        committee,
+        "finish",
+        &message.message_id,
+        &message.chain_id,
+        &message.genesis_hash,
+        message.protocol_version,
+        &message.trust_graph_root,
+        &message.sender,
+        &message.agreement_id,
+        message.round,
+        &message.signature_hex,
+        &abba_finish_message_id(message)?,
+        &payload,
     )
 }
 
@@ -695,7 +1296,8 @@ pub fn abba_finish_message_id(message: &AbbaFinish) -> Result<String, String> {
     ))
 }
 
-pub fn evaluate_abba_aux_support(
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+fn evaluate_abba_aux_support_schema(
     domain: &CobaltDomain,
     view: &TrustView,
     agreement_id: &str,
@@ -704,13 +1306,57 @@ pub fn evaluate_abba_aux_support(
     messages: &[AbbaAux],
 ) -> Result<AbbaSupportEvaluation, String> {
     validate_trust_view(domain, view)?;
-    let mut support = Vec::with_capacity(messages.len());
-    let mut relevant_candidates = Vec::with_capacity(messages.len());
     for message in messages {
-        validate_abba_aux(domain, message)?;
+        validate_abba_aux_schema(domain, message)?;
+    }
+    evaluate_abba_aux_support_collect(view, agreement_id, round, value, messages)
+}
+
+/// Schema-only quorum evaluation for protocol simulations.
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+pub fn evaluate_abba_aux_support(
+    domain: &CobaltDomain,
+    view: &TrustView,
+    agreement_id: &str,
+    round: u64,
+    value: bool,
+    messages: &[AbbaAux],
+) -> Result<AbbaSupportEvaluation, String> {
+    evaluate_abba_aux_support_schema(domain, view, agreement_id, round, value, messages)
+}
+
+/// Verifies every aux against `committee`; each signer must be a registered
+/// committee member, and duplicate signers are counted once.
+pub fn evaluate_abba_aux_support_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    view: &TrustView,
+    agreement_id: &str,
+    round: u64,
+    value: bool,
+    messages: &[AbbaAux],
+) -> Result<AbbaSupportEvaluation, String> {
+    validate_trust_view(domain, view)?;
+    for message in messages {
+        validate_abba_aux_signed(domain, committee, message)?;
+    }
+    evaluate_abba_aux_support_collect(view, agreement_id, round, value, messages)
+}
+
+fn evaluate_abba_aux_support_collect(
+    view: &TrustView,
+    agreement_id: &str,
+    round: u64,
+    value: bool,
+    messages: &[AbbaAux],
+) -> Result<AbbaSupportEvaluation, String> {
+    let mut seen = BTreeSet::new();
+    let mut support = Vec::new();
+    let mut relevant_candidates = Vec::new();
+    for message in messages {
         if message.agreement_id == agreement_id && message.round == round {
             relevant_candidates.push(abba_aux_equivocation_candidate(message));
-            if message.value == value {
+            if message.value == value && seen.insert(message.sender.clone()) {
                 support.push(message.sender.clone());
             }
         }
@@ -720,7 +1366,8 @@ pub fn evaluate_abba_aux_support(
     evaluate_abba_support(view, "aux", agreement_id, round, value, support)
 }
 
-pub fn evaluate_abba_conf_support(
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+fn evaluate_abba_conf_support_schema(
     domain: &CobaltDomain,
     view: &TrustView,
     agreement_id: &str,
@@ -729,13 +1376,57 @@ pub fn evaluate_abba_conf_support(
     messages: &[AbbaConf],
 ) -> Result<AbbaSupportEvaluation, String> {
     validate_trust_view(domain, view)?;
-    let mut support = Vec::with_capacity(messages.len());
-    let mut relevant_candidates = Vec::with_capacity(messages.len());
     for message in messages {
-        validate_abba_conf(domain, message)?;
+        validate_abba_conf_schema(domain, message)?;
+    }
+    evaluate_abba_conf_support_collect(view, agreement_id, round, value, messages)
+}
+
+/// Schema-only quorum evaluation for protocol simulations.
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+pub fn evaluate_abba_conf_support(
+    domain: &CobaltDomain,
+    view: &TrustView,
+    agreement_id: &str,
+    round: u64,
+    value: bool,
+    messages: &[AbbaConf],
+) -> Result<AbbaSupportEvaluation, String> {
+    evaluate_abba_conf_support_schema(domain, view, agreement_id, round, value, messages)
+}
+
+/// Verifies every conf against `committee`; each signer must be a registered
+/// committee member, and duplicate signers are counted once.
+pub fn evaluate_abba_conf_support_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    view: &TrustView,
+    agreement_id: &str,
+    round: u64,
+    value: bool,
+    messages: &[AbbaConf],
+) -> Result<AbbaSupportEvaluation, String> {
+    validate_trust_view(domain, view)?;
+    for message in messages {
+        validate_abba_conf_signed(domain, committee, message)?;
+    }
+    evaluate_abba_conf_support_collect(view, agreement_id, round, value, messages)
+}
+
+fn evaluate_abba_conf_support_collect(
+    view: &TrustView,
+    agreement_id: &str,
+    round: u64,
+    value: bool,
+    messages: &[AbbaConf],
+) -> Result<AbbaSupportEvaluation, String> {
+    let mut seen = BTreeSet::new();
+    let mut support = Vec::new();
+    let mut relevant_candidates = Vec::new();
+    for message in messages {
         if message.agreement_id == agreement_id && message.round == round {
             relevant_candidates.push(abba_conf_equivocation_candidate(message));
-            if message.value == value {
+            if message.value == value && seen.insert(message.sender.clone()) {
                 support.push(message.sender.clone());
             }
         }
@@ -745,7 +1436,8 @@ pub fn evaluate_abba_conf_support(
     evaluate_abba_support(view, "conf", agreement_id, round, value, support)
 }
 
-pub fn evaluate_abba_finish_support(
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+fn evaluate_abba_finish_support_schema(
     domain: &CobaltDomain,
     view: &TrustView,
     agreement_id: &str,
@@ -754,13 +1446,57 @@ pub fn evaluate_abba_finish_support(
     messages: &[AbbaFinish],
 ) -> Result<AbbaSupportEvaluation, String> {
     validate_trust_view(domain, view)?;
-    let mut support = Vec::with_capacity(messages.len());
-    let mut relevant_candidates = Vec::with_capacity(messages.len());
     for message in messages {
-        validate_abba_finish(domain, message)?;
+        validate_abba_finish_schema(domain, message)?;
+    }
+    evaluate_abba_finish_support_collect(view, agreement_id, round, value, messages)
+}
+
+/// Schema-only quorum evaluation for protocol simulations.
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
+pub fn evaluate_abba_finish_support(
+    domain: &CobaltDomain,
+    view: &TrustView,
+    agreement_id: &str,
+    round: u64,
+    value: bool,
+    messages: &[AbbaFinish],
+) -> Result<AbbaSupportEvaluation, String> {
+    evaluate_abba_finish_support_schema(domain, view, agreement_id, round, value, messages)
+}
+
+/// Verifies every finish against `committee`; each signer must be a registered
+/// committee member, and duplicate signers are counted once.
+pub fn evaluate_abba_finish_support_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    view: &TrustView,
+    agreement_id: &str,
+    round: u64,
+    value: bool,
+    messages: &[AbbaFinish],
+) -> Result<AbbaSupportEvaluation, String> {
+    validate_trust_view(domain, view)?;
+    for message in messages {
+        validate_abba_finish_signed(domain, committee, message)?;
+    }
+    evaluate_abba_finish_support_collect(view, agreement_id, round, value, messages)
+}
+
+fn evaluate_abba_finish_support_collect(
+    view: &TrustView,
+    agreement_id: &str,
+    round: u64,
+    value: bool,
+    messages: &[AbbaFinish],
+) -> Result<AbbaSupportEvaluation, String> {
+    let mut seen = BTreeSet::new();
+    let mut support = Vec::new();
+    let mut relevant_candidates = Vec::new();
+    for message in messages {
         if message.agreement_id == agreement_id && message.round == round {
             relevant_candidates.push(abba_finish_equivocation_candidate(message));
-            if message.value == value {
+            if message.value == value && seen.insert(message.sender.clone()) {
                 support.push(message.sender.clone());
             }
         }
@@ -785,8 +1521,8 @@ pub fn detect_abba_conflicting_finish(
     right: &AbbaFinish,
 ) -> Result<Option<AbbaConflictingFinishEvidence>, String> {
     validate_trust_graph(domain, graph)?;
-    validate_abba_finish(domain, left)?;
-    validate_abba_finish(domain, right)?;
+    validate_abba_finish_schema(domain, left)?;
+    validate_abba_finish_schema(domain, right)?;
     if left.trust_graph_root != graph.trust_graph_root
         || right.trust_graph_root != graph.trust_graph_root
     {
@@ -850,8 +1586,8 @@ pub fn detect_abba_init_equivocation(
     left: &AbbaInit,
     right: &AbbaInit,
 ) -> Result<Option<AbbaEquivocationEvidence>, String> {
-    validate_abba_init(domain, left)?;
-    validate_abba_init(domain, right)?;
+    validate_abba_init_schema(domain, left)?;
+    validate_abba_init_schema(domain, right)?;
     detect_abba_equivocation_candidates(
         domain,
         abba_init_equivocation_candidate(left),
@@ -864,8 +1600,8 @@ pub fn detect_abba_aux_equivocation(
     left: &AbbaAux,
     right: &AbbaAux,
 ) -> Result<Option<AbbaEquivocationEvidence>, String> {
-    validate_abba_aux(domain, left)?;
-    validate_abba_aux(domain, right)?;
+    validate_abba_aux_schema(domain, left)?;
+    validate_abba_aux_schema(domain, right)?;
     detect_abba_equivocation_candidates(
         domain,
         abba_aux_equivocation_candidate(left),
@@ -878,8 +1614,8 @@ pub fn detect_abba_conf_equivocation(
     left: &AbbaConf,
     right: &AbbaConf,
 ) -> Result<Option<AbbaEquivocationEvidence>, String> {
-    validate_abba_conf(domain, left)?;
-    validate_abba_conf(domain, right)?;
+    validate_abba_conf_schema(domain, left)?;
+    validate_abba_conf_schema(domain, right)?;
     detect_abba_equivocation_candidates(
         domain,
         abba_conf_equivocation_candidate(left),
@@ -892,8 +1628,8 @@ pub fn detect_abba_finish_equivocation(
     left: &AbbaFinish,
     right: &AbbaFinish,
 ) -> Result<Option<AbbaEquivocationEvidence>, String> {
-    validate_abba_finish(domain, left)?;
-    validate_abba_finish(domain, right)?;
+    validate_abba_finish_schema(domain, left)?;
+    validate_abba_finish_schema(domain, right)?;
     detect_abba_equivocation_candidates(
         domain,
         abba_finish_equivocation_candidate(left),
@@ -912,16 +1648,16 @@ pub fn detect_abba_round_equivocations(
         return Err("ABBA round must be nonzero".to_string());
     }
     for message in &state.init_messages {
-        validate_abba_init(domain, message)?;
+        validate_abba_init_schema(domain, message)?;
     }
     for message in &state.aux_messages {
-        validate_abba_aux(domain, message)?;
+        validate_abba_aux_schema(domain, message)?;
     }
     for message in &state.conf_messages {
-        validate_abba_conf(domain, message)?;
+        validate_abba_conf_schema(domain, message)?;
     }
     for message in &state.finish_messages {
-        validate_abba_finish(domain, message)?;
+        validate_abba_finish_schema(domain, message)?;
     }
     let mut evidence_by_id = BTreeMap::new();
     collect_abba_equivocations(
@@ -1010,8 +1746,8 @@ pub fn mvba_candidate_from_rbc_accept(
     propose: &RbcPropose,
     accept: &RbcAccept,
 ) -> Result<MvbaCandidate, String> {
-    validate_rbc_propose(domain, propose)?;
-    validate_rbc_accept(domain, accept, propose)?;
+    validate_rbc_propose_schema(domain, propose)?;
+    validate_rbc_accept_schema(domain, accept, propose)?;
     let mut candidate = MvbaCandidate {
         candidate_id: String::new(),
         chain_id: domain.chain_id.clone(),
