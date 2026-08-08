@@ -1,3 +1,4 @@
+use crate::integrity::{legacy_checksum, macs_equal, IntegrityKey, MAC_BYTES};
 use postfiat_types::{
     FastAssetControlStateV1, FastAssetObjectV1, FastAssetRuleHashV1, FastAssetRuleV1,
     FastHolderPermitIdV1, FastHolderPermitV1, FastLaneCheckpointIdV1, FastLaneDepositReceiptV1,
@@ -23,8 +24,10 @@ const FASTSWAP_LOCK_FILE: &str = "fastswap-v1.lock";
 const FASTSWAP_VOTE_ARTIFACT_DIRECTORY: &str = "vote-artifacts";
 const FASTSWAP_WAL_MAX_RECORD_BYTES: usize = 1024 * 1024;
 const FASTSWAP_SNAPSHOT_MAX_BYTES: usize = 64 * 1024 * 1024;
-const FASTSWAP_WAL_CHECKSUM_BYTES: usize = 48;
+const FASTSWAP_WAL_CHECKSUM_BYTES: usize = MAC_BYTES;
 const FASTSWAP_SNAPSHOT_SCHEMA: &str = "postfiat-fastswap-snapshot-v1";
+const FASTSWAP_WAL_MAC_DOMAIN: &[u8] = b"postfiat.fastswap.wal.record.v1";
+const FASTSWAP_SNAPSHOT_MAC_DOMAIN: &[u8] = b"postfiat.fastswap.snapshot.v1";
 const FASTLANE_STATE_FILE_SCHEMA: &str = "postfiat-fastlane-state-file-v1";
 pub const FASTLANE_STATE_FILE_MAX_BYTES: usize = FASTSWAP_SNAPSHOT_MAX_BYTES;
 
@@ -135,7 +138,14 @@ struct FastSwapSnapshotV1 {
     schema: String,
     next_sequence: u64,
     state: FastSwapSnapshotStateV1,
+    /// Legacy unkeyed `Sha3_384` checksum. Still written so down-level nodes
+    /// can open the file during a rolling upgrade; no longer trusted.
     checksum: Vec<u8>,
+    /// Keyed HMAC-SHA3-384 over the snapshot payload (hex). Absent in
+    /// pre-MAC snapshots; those are verified against `checksum` once and
+    /// re-written with a MAC (migration window, see `crate::integrity`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mac: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -400,7 +410,15 @@ impl Drop for ProcessLock {
             // Explicit unlock makes the logical store owner authoritative even
             // when a concurrently forked child briefly inherited the open file
             // description before exec closed its descriptor.
-            let _ = unsafe { libc::flock(self._file.as_raw_fd(), libc::LOCK_UN) };
+            if unsafe { libc::flock(self._file.as_raw_fd(), libc::LOCK_UN) } != 0 {
+                // The subsequent close still releases the lock; this is loud
+                // because silent failure here used to mask lock-discipline
+                // bugs (S3).
+                eprintln!(
+                    "warning: failed to explicitly unlock FastSwap store lock: {}",
+                    io::Error::last_os_error()
+                );
+            }
         }
     }
 }
@@ -433,6 +451,8 @@ pub struct FastSwapStore {
     snapshot_path: PathBuf,
     vote_artifact_directory: PathBuf,
     next_sequence: u64,
+    integrity_key: IntegrityKey,
+    allow_legacy_migration: bool,
     _process_lock: ProcessLock,
     #[cfg(test)]
     fail_before_append_once: bool,
@@ -446,7 +466,30 @@ impl FastSwapStore {
     }
 
     pub fn open(directory: impl AsRef<Path>) -> Result<Self, FastSwapStoreError> {
-        let directory = directory.as_ref();
+        Self::open_inner(directory.as_ref(), None, false)
+    }
+
+    /// Explicit one-shot opener for an offline, operator-verified legacy
+    /// store. Normal opens reject unkeyed snapshots and WAL records.
+    pub fn open_for_legacy_migration(
+        directory: impl AsRef<Path>,
+    ) -> Result<Self, FastSwapStoreError> {
+        Self::open_inner(directory.as_ref(), None, true)
+    }
+
+    /// Open with an integrity key anchored outside the store directory.
+    pub fn open_with_integrity_key(
+        directory: impl AsRef<Path>,
+        key_path: impl AsRef<Path>,
+    ) -> Result<Self, FastSwapStoreError> {
+        Self::open_inner(directory.as_ref(), Some(key_path.as_ref()), false)
+    }
+
+    fn open_inner(
+        directory: &Path,
+        key_path: Option<&Path>,
+        allow_legacy_migration: bool,
+    ) -> Result<Self, FastSwapStoreError> {
         fs::create_dir_all(directory)?;
         let lock_path = directory.join(FASTSWAP_LOCK_FILE);
         let mut lock_file = OpenOptions::new()
@@ -470,8 +513,12 @@ impl FastSwapStore {
         let snapshot_path = directory.join(FASTSWAP_SNAPSHOT_FILE);
         let vote_artifact_directory = directory.join(FASTSWAP_VOTE_ARTIFACT_DIRECTORY);
         fs::create_dir_all(&vote_artifact_directory)?;
-        let snapshot = read_snapshot(&snapshot_path)?;
-        let records = read_records(&wal_path)?;
+        let integrity_key = match key_path {
+            Some(path) => IntegrityKey::load_or_create_at(path)?,
+            None => IntegrityKey::load_or_create(directory)?,
+        };
+        let snapshot = read_snapshot(&snapshot_path, &integrity_key, allow_legacy_migration)?;
+        let records = read_records(&wal_path, &integrity_key, allow_legacy_migration)?;
         let snapshot_next = snapshot.as_ref().map_or(0, |value| value.next_sequence);
         let next_sequence = validate_record_sequences(&records, snapshot_next)?;
         Ok(Self {
@@ -479,6 +526,8 @@ impl FastSwapStore {
             snapshot_path,
             vote_artifact_directory,
             next_sequence,
+            integrity_key,
+            allow_legacy_migration,
             _process_lock: ProcessLock { _file: lock_file },
             #[cfg(test)]
             fail_before_append_once: false,
@@ -498,8 +547,16 @@ impl FastSwapStore {
     }
 
     pub fn replay(&self, base: &FastLaneStateV1) -> Result<FastLaneStateV1, FastSwapStoreError> {
-        let records = read_records(&self.wal_path)?;
-        let snapshot = read_snapshot(&self.snapshot_path)?;
+        let records = read_records(
+            &self.wal_path,
+            &self.integrity_key,
+            self.allow_legacy_migration,
+        )?;
+        let snapshot = read_snapshot(
+            &self.snapshot_path,
+            &self.integrity_key,
+            self.allow_legacy_migration,
+        )?;
         let (mut state, mut expected) = match snapshot {
             Some(snapshot) => (snapshot.state.into_state()?, snapshot.next_sequence),
             None => (base.clone(), 0),
@@ -527,10 +584,18 @@ impl FastSwapStore {
     /// replay base. Sequence numbers never reset.
     pub fn compact_snapshot(&self, state: &FastLaneStateV1) -> Result<(), FastSwapStoreError> {
         let snapshot_state = FastSwapSnapshotStateV1::from_state(state);
+        let payload = snapshot_payload(self.next_sequence, &snapshot_state)?;
         let snapshot = FastSwapSnapshotV1 {
             schema: FASTSWAP_SNAPSHOT_SCHEMA.to_owned(),
             next_sequence: self.next_sequence,
-            checksum: snapshot_checksum(self.next_sequence, &snapshot_state)?.to_vec(),
+            // Kept for down-level readers during rolling upgrades; the keyed
+            // MAC is the authoritative tag.
+            checksum: legacy_checksum(FASTSWAP_SNAPSHOT_MAC_DOMAIN, &payload).to_vec(),
+            mac: Some(crate::integrity::to_hex(
+                &self
+                    .integrity_key
+                    .mac(FASTSWAP_SNAPSHOT_MAC_DOMAIN, &payload),
+            )),
             state: snapshot_state,
         };
         write_snapshot(&self.snapshot_path, &snapshot)?;
@@ -748,30 +813,38 @@ impl FastSwapStore {
         &self,
         swap_id: FastSwapIdV1,
     ) -> Result<Option<FastSwapEffectsV1>, FastSwapStoreError> {
-        Ok(read_records(&self.wal_path)?
-            .into_iter()
-            .rev()
-            .find_map(|record| match record {
-                FastSwapWalRecordV1::ApplyConfirm { effects, .. } if effects.swap_id == swap_id => {
-                    Some(effects)
-                }
-                _ => None,
-            }))
+        Ok(read_records(
+            &self.wal_path,
+            &self.integrity_key,
+            self.allow_legacy_migration,
+        )?
+        .into_iter()
+        .rev()
+        .find_map(|record| match record {
+            FastSwapWalRecordV1::ApplyConfirm { effects, .. } if effects.swap_id == swap_id => {
+                Some(effects)
+            }
+            _ => None,
+        }))
     }
 
     pub fn applied_exit_effects(
         &self,
         exit_id: FastLaneExitIdV1,
     ) -> Result<Option<FastLaneExitEffectsV1>, FastSwapStoreError> {
-        Ok(read_records(&self.wal_path)?
-            .into_iter()
-            .rev()
-            .find_map(|record| match record {
-                FastSwapWalRecordV1::ApplyExit { effects, .. } if effects.exit_id == exit_id => {
-                    Some(effects)
-                }
-                _ => None,
-            }))
+        Ok(read_records(
+            &self.wal_path,
+            &self.integrity_key,
+            self.allow_legacy_migration,
+        )?
+        .into_iter()
+        .rev()
+        .find_map(|record| match record {
+            FastSwapWalRecordV1::ApplyExit { effects, .. } if effects.exit_id == exit_id => {
+                Some(effects)
+            }
+            _ => None,
+        }))
     }
 
     /// Persist retrievable signed evidence before it can leave the validator.
@@ -880,7 +953,7 @@ impl FastSwapStore {
                 "injected WAL pre-append failure",
             )));
         }
-        append_synced_record(&self.wal_path, record)?;
+        append_synced_record(&self.wal_path, &self.integrity_key, record)?;
         #[cfg(test)]
         if std::mem::take(&mut self.fail_after_sync_once) {
             return Err(FastSwapStoreError::Io(io::Error::new(
@@ -1393,6 +1466,7 @@ fn apply_record(
 
 fn append_synced_record(
     path: &Path,
+    integrity_key: &IntegrityKey,
     record: &FastSwapWalRecordV1,
 ) -> Result<(), FastSwapStoreError> {
     let payload = serde_json::to_vec(record)
@@ -1404,11 +1478,11 @@ fn append_synced_record(
         .len()
         .try_into()
         .map_err(|_| FastSwapStoreError::RecordTooLarge(payload.len()))?;
-    let checksum = checksum(&payload);
+    let tag = integrity_key.mac(FASTSWAP_WAL_MAC_DOMAIN, &payload);
     let mut file = OpenOptions::new().create(true).append(true).open(path)?;
     file.write_all(&length.to_be_bytes())?;
     file.write_all(&payload)?;
-    file.write_all(&checksum)?;
+    file.write_all(&tag)?;
     file.sync_data()?;
     Ok(())
 }
@@ -1439,20 +1513,21 @@ fn validate_record_sequences(
     Ok(expected.max(snapshot_next))
 }
 
-fn snapshot_checksum(
+/// Canonical payload covered by the snapshot integrity tags (both the keyed
+/// MAC and the legacy checksum).
+fn snapshot_payload(
     next_sequence: u64,
     state: &FastSwapSnapshotStateV1,
-) -> Result<[u8; FASTSWAP_WAL_CHECKSUM_BYTES], FastSwapStoreError> {
-    let payload = serde_json::to_vec(&(FASTSWAP_SNAPSHOT_SCHEMA, next_sequence, state))
-        .map_err(|error| FastSwapStoreError::Serialization(error.to_string()))?;
-    let mut hasher = Sha3_384::new();
-    hasher.update(b"postfiat.fastswap.snapshot.v1");
-    hasher.update([0_u8]);
-    hasher.update(payload);
-    Ok(hasher.finalize().into())
+) -> Result<Vec<u8>, FastSwapStoreError> {
+    serde_json::to_vec(&(FASTSWAP_SNAPSHOT_SCHEMA, next_sequence, state))
+        .map_err(|error| FastSwapStoreError::Serialization(error.to_string()))
 }
 
-fn read_snapshot(path: &Path) -> Result<Option<FastSwapSnapshotV1>, FastSwapStoreError> {
+fn read_snapshot(
+    path: &Path,
+    integrity_key: &IntegrityKey,
+    allow_legacy_migration: bool,
+) -> Result<Option<FastSwapSnapshotV1>, FastSwapStoreError> {
     let bytes = match fs::read(path) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -1470,13 +1545,52 @@ fn read_snapshot(path: &Path) -> Result<Option<FastSwapSnapshotV1>, FastSwapStor
             "snapshot schema mismatch",
         ));
     }
-    if snapshot.checksum.len() != FASTSWAP_WAL_CHECKSUM_BYTES
-        || snapshot_checksum(snapshot.next_sequence, &snapshot.state)?.as_slice()
-            != snapshot.checksum.as_slice()
-    {
-        return Err(FastSwapStoreError::CorruptSnapshot(
-            "snapshot checksum mismatch",
-        ));
+    let payload = snapshot_payload(snapshot.next_sequence, &snapshot.state)?;
+    match snapshot.mac.as_deref() {
+        Some(mac_hex) => {
+            let tag = crate::integrity::from_hex(mac_hex).ok_or(
+                FastSwapStoreError::CorruptSnapshot("snapshot MAC is not hex"),
+            )?;
+            if !macs_equal(
+                &integrity_key.mac(FASTSWAP_SNAPSHOT_MAC_DOMAIN, &payload),
+                &tag,
+            ) {
+                return Err(FastSwapStoreError::CorruptSnapshot(
+                    "snapshot MAC mismatch (tampered or foreign-key snapshot)",
+                ));
+            }
+        }
+        None => {
+            if !allow_legacy_migration {
+                return Err(FastSwapStoreError::CorruptSnapshot(
+                    "legacy snapshot rejected; use explicit offline migration open",
+                ));
+            }
+            // Migration window: accept the legacy unkeyed checksum once, log
+            // loudly, and re-write with the keyed MAC.
+            if snapshot.checksum.len() != FASTSWAP_WAL_CHECKSUM_BYTES
+                || !macs_equal(
+                    &legacy_checksum(FASTSWAP_SNAPSHOT_MAC_DOMAIN, &payload),
+                    &snapshot.checksum,
+                )
+            {
+                return Err(FastSwapStoreError::CorruptSnapshot(
+                    "snapshot checksum mismatch",
+                ));
+            }
+            eprintln!(
+                "warning: FastSwap snapshot `{}` uses the legacy unkeyed checksum; \
+                 re-writing with keyed MAC",
+                path.display()
+            );
+            let upgraded = FastSwapSnapshotV1 {
+                mac: Some(crate::integrity::to_hex(
+                    &integrity_key.mac(FASTSWAP_SNAPSHOT_MAC_DOMAIN, &payload),
+                )),
+                ..snapshot.clone()
+            };
+            write_snapshot(path, &upgraded)?;
+        }
     }
     Ok(Some(snapshot))
 }
@@ -1509,7 +1623,11 @@ fn write_snapshot(path: &Path, snapshot: &FastSwapSnapshotV1) -> Result<(), Fast
     Ok(())
 }
 
-fn read_records(path: &Path) -> Result<Vec<FastSwapWalRecordV1>, FastSwapStoreError> {
+fn read_records(
+    path: &Path,
+    integrity_key: &IntegrityKey,
+    allow_legacy_migration: bool,
+) -> Result<Vec<FastSwapWalRecordV1>, FastSwapStoreError> {
     let mut bytes = Vec::new();
     match File::open(path) {
         Ok(mut file) => {
@@ -1520,6 +1638,7 @@ fn read_records(path: &Path) -> Result<Vec<FastSwapWalRecordV1>, FastSwapStoreEr
     }
     let mut offset = 0_usize;
     let mut records = Vec::new();
+    let mut legacy_tags: Vec<u64> = Vec::new();
     while offset < bytes.len() {
         let start = offset;
         let Some(length_bytes) = bytes.get(offset..offset.saturating_add(4)) else {
@@ -1554,11 +1673,29 @@ fn read_records(path: &Path) -> Result<Vec<FastSwapWalRecordV1>, FastSwapStoreEr
         offset += length;
         let stored_checksum = &bytes[offset..record_end];
         offset = record_end;
-        if checksum(payload) != stored_checksum {
-            return Err(FastSwapStoreError::CorruptWal {
-                offset: start as u64,
-                reason: "checksum mismatch",
-            });
+        if !macs_equal(
+            &integrity_key.mac(FASTSWAP_WAL_MAC_DOMAIN, payload),
+            stored_checksum,
+        ) {
+            // Migration window: a tag that matches the legacy unkeyed
+            // checksum is accepted once and re-written with the keyed MAC.
+            if macs_equal(
+                &legacy_checksum(FASTSWAP_WAL_MAC_DOMAIN, payload),
+                stored_checksum,
+            ) {
+                if !allow_legacy_migration {
+                    return Err(FastSwapStoreError::CorruptWal {
+                        offset: start as u64,
+                        reason: "legacy WAL tag rejected; use explicit offline migration open",
+                    });
+                }
+                legacy_tags.push(start as u64);
+            } else {
+                return Err(FastSwapStoreError::CorruptWal {
+                    offset: start as u64,
+                    reason: "integrity MAC mismatch (tampered or foreign-key WAL record)",
+                });
+            }
         }
         let record =
             serde_json::from_slice(payload).map_err(|_| FastSwapStoreError::CorruptWal {
@@ -1567,7 +1704,67 @@ fn read_records(path: &Path) -> Result<Vec<FastSwapWalRecordV1>, FastSwapStoreEr
             })?;
         records.push(record);
     }
+    if !legacy_tags.is_empty() {
+        eprintln!(
+            "warning: FastSwap WAL `{}` contains {} legacy unkeyed-checksummed record(s) \
+             at offsets {:?}; re-writing with keyed MACs",
+            path.display(),
+            legacy_tags.len(),
+            legacy_tags
+        );
+        upgrade_wal_tags(path, &bytes, integrity_key)?;
+    }
     Ok(records)
+}
+
+/// Re-write the WAL in place, replacing every legacy unkeyed tag with the
+/// keyed MAC. Only records that already parsed and verified (keyed or
+/// legacy) are re-emitted, so the byte stream is identical apart from the
+/// tag bytes; a torn tail is preserved verbatim.
+fn upgrade_wal_tags(
+    path: &Path,
+    bytes: &[u8],
+    integrity_key: &IntegrityKey,
+) -> Result<(), FastSwapStoreError> {
+    let mut output = Vec::with_capacity(bytes.len());
+    let mut offset = 0_usize;
+    while offset < bytes.len() {
+        let start = offset;
+        let Some(length_bytes) = bytes.get(offset..offset.saturating_add(4)) else {
+            break;
+        };
+        let length = u32::from_be_bytes(length_bytes.try_into().map_err(|_| {
+            FastSwapStoreError::CorruptWal {
+                offset: start as u64,
+                reason: "invalid length prefix",
+            }
+        })?) as usize;
+        offset += 4;
+        let record_end = offset
+            .checked_add(length)
+            .and_then(|value| value.checked_add(FASTSWAP_WAL_CHECKSUM_BYTES))
+            .ok_or(FastSwapStoreError::CorruptWal {
+                offset: start as u64,
+                reason: "record length overflow",
+            })?;
+        if record_end > bytes.len() {
+            break;
+        }
+        let payload = &bytes[offset..offset + length];
+        output.extend_from_slice(length_bytes);
+        output.extend_from_slice(payload);
+        output.extend_from_slice(&integrity_key.mac(FASTSWAP_WAL_MAC_DOMAIN, payload));
+        offset = record_end;
+    }
+    // Preserve any torn tail byte-for-byte.
+    output.extend_from_slice(&bytes[offset..]);
+    if output == bytes {
+        return Ok(());
+    }
+    let mut file = OpenOptions::new().write(true).truncate(true).open(path)?;
+    file.write_all(&output)?;
+    file.sync_all()?;
+    Ok(())
 }
 
 fn checksum(payload: &[u8]) -> [u8; FASTSWAP_WAL_CHECKSUM_BYTES] {
@@ -2030,6 +2227,210 @@ mod tests {
         ));
         drop(first);
         FastSwapStore::open(&directory).expect("kernel releases lock on close");
+        fs::remove_dir_all(directory).expect("cleanup");
+    }
+
+    #[test]
+    fn tampered_wal_mac_is_rejected_not_upgraded() {
+        // S1 regression: a tampered record whose tag matches neither the
+        // keyed MAC nor the legacy checksum must fail the load (never a
+        // silent accept).
+        let directory = test_dir("tampered-wal");
+        let base = state();
+        let mut live = base.clone();
+        let key = *live.objects.keys().next().expect("object");
+        {
+            let mut store = FastSwapStore::open(&directory).expect("open");
+            store
+                .reserve_all(
+                    &mut live,
+                    FastSwapIdV1([8; 48]),
+                    FastSwapIntentIdV1([9; 48]),
+                    FastSwapEffectsDigestV1([10; 48]),
+                    100,
+                    &[key],
+                )
+                .expect("reserve");
+        }
+        // Tamper with the payload *and* write a tag that matches neither the
+        // keyed MAC nor the legacy checksum of the tampered payload.
+        let wal = directory.join(FASTSWAP_WAL_FILE);
+        let mut bytes = fs::read(&wal).expect("read wal");
+        bytes[8] ^= 1;
+        let tag_start = bytes.len() - FASTSWAP_WAL_CHECKSUM_BYTES;
+        for byte in &mut bytes[tag_start..] {
+            *byte = 0xaa;
+        }
+        fs::write(&wal, bytes).expect("corrupt wal");
+        assert!(matches!(
+            FastSwapStore::open(&directory),
+            Err(FastSwapStoreError::CorruptWal { .. })
+        ));
+        fs::remove_file(directory.join(FASTSWAP_LOCK_FILE)).ok();
+        fs::remove_dir_all(directory).expect("cleanup");
+    }
+
+    #[test]
+    fn legacy_wal_loads_and_upgrades() {
+        // S1 migration window: a WAL carrying legacy unkeyed checksums loads
+        // once, logs loudly, and is re-written with keyed MACs.
+        let directory = test_dir("legacy-wal-upgrade");
+        let base = state();
+        let mut live = base.clone();
+        let key = *live.objects.keys().next().expect("object");
+        {
+            let mut store = FastSwapStore::open(&directory).expect("open");
+            store
+                .reserve_all(
+                    &mut live,
+                    FastSwapIdV1([8; 48]),
+                    FastSwapIntentIdV1([9; 48]),
+                    FastSwapEffectsDigestV1([10; 48]),
+                    100,
+                    &[key],
+                )
+                .expect("reserve");
+        }
+        // Downgrade the WAL: replace the keyed MAC with the legacy unkeyed
+        // checksum for the same payload.
+        let wal = directory.join(FASTSWAP_WAL_FILE);
+        let mut bytes = fs::read(&wal).expect("read wal");
+        let payload_len = u32::from_be_bytes(bytes[0..4].try_into().expect("len")) as usize;
+        let payload = bytes[4..4 + payload_len].to_vec();
+        let legacy = legacy_checksum(FASTSWAP_WAL_MAC_DOMAIN, &payload);
+        let tag_start = 4 + payload_len;
+        bytes[tag_start..tag_start + FASTSWAP_WAL_CHECKSUM_BYTES].copy_from_slice(&legacy);
+        fs::write(&wal, &bytes).expect("write legacy wal");
+
+        assert!(matches!(
+            FastSwapStore::open(&directory),
+            Err(FastSwapStoreError::CorruptWal { .. })
+        ));
+
+        // The legacy WAL must load and replay exactly.
+        let store = FastSwapStore::open_for_legacy_migration(&directory)
+            .expect("legacy WAL must load through explicit migration");
+        assert_eq!(store.replay(&base).expect("replay"), live);
+        drop(store);
+
+        // WAL tags must now be keyed MACs (legacy bytes replaced in place).
+        let upgraded = fs::read(&wal).expect("read upgraded wal");
+        let upgraded_tag = &upgraded[tag_start..tag_start + FASTSWAP_WAL_CHECKSUM_BYTES];
+        assert_ne!(
+            upgraded_tag,
+            legacy.as_slice(),
+            "legacy WAL tag must be re-written with a keyed MAC"
+        );
+        // And the store still opens/replays after the upgrade.
+        let store = FastSwapStore::open(&directory).expect("upgraded WAL must load");
+        assert_eq!(store.replay(&base).expect("replay"), live);
+        drop(store);
+        fs::remove_dir_all(directory).expect("cleanup");
+    }
+
+    #[test]
+    fn legacy_snapshot_loads_and_upgrades() {
+        // S1 migration window: a snapshot without a keyed MAC (legacy
+        // unkeyed checksum only) loads once, logs loudly, and is re-written
+        // with the keyed MAC.
+        let directory = test_dir("legacy-snapshot-upgrade");
+        let base = state();
+        let mut live = base.clone();
+        let key = *live.objects.keys().next().expect("object");
+        {
+            let mut store = FastSwapStore::open(&directory).expect("open");
+            store
+                .reserve_all(
+                    &mut live,
+                    FastSwapIdV1([8; 48]),
+                    FastSwapIntentIdV1([9; 48]),
+                    FastSwapEffectsDigestV1([10; 48]),
+                    100,
+                    &[key],
+                )
+                .expect("reserve");
+            store.compact_snapshot(&live).expect("snapshot");
+        }
+        // Downgrade the snapshot: drop the `mac` field (the legacy
+        // `checksum` field still covers the payload).
+        let snapshot_path = directory.join(FASTSWAP_SNAPSHOT_FILE);
+        let mut snapshot_json: serde_json::Value =
+            serde_json::from_slice(&fs::read(&snapshot_path).expect("read snapshot"))
+                .expect("snapshot json");
+        snapshot_json.as_object_mut().expect("object").remove("mac");
+        fs::write(
+            &snapshot_path,
+            serde_json::to_vec(&snapshot_json).expect("encode"),
+        )
+        .expect("write legacy snapshot");
+
+        assert!(matches!(
+            FastSwapStore::open(&directory),
+            Err(FastSwapStoreError::CorruptSnapshot(_))
+        ));
+
+        // The legacy snapshot must load and replay exactly.
+        let store = FastSwapStore::open_for_legacy_migration(&directory)
+            .expect("legacy snapshot must load through explicit migration");
+        assert_eq!(store.replay(&base).expect("replay"), live);
+        drop(store);
+
+        // Snapshot must carry the keyed MAC field again.
+        let upgraded_snapshot: serde_json::Value =
+            serde_json::from_slice(&fs::read(&snapshot_path).expect("read upgraded snapshot"))
+                .expect("snapshot json");
+        assert!(
+            upgraded_snapshot
+                .get("mac")
+                .and_then(|value| value.as_str())
+                .is_some(),
+            "legacy snapshot must be re-written with a keyed MAC"
+        );
+        // And the store still opens/replays after the upgrade.
+        let store = FastSwapStore::open(&directory).expect("upgraded snapshot must load");
+        assert_eq!(store.replay(&base).expect("replay"), live);
+        drop(store);
+        fs::remove_dir_all(directory).expect("cleanup");
+    }
+
+    #[test]
+    fn tampered_snapshot_mac_is_rejected() {
+        // S1 regression: a snapshot whose keyed MAC does not verify fails
+        // the load instead of silently replaying a forged state.
+        let directory = test_dir("tampered-snapshot");
+        let base = state();
+        let mut live = base.clone();
+        let key = *live.objects.keys().next().expect("object");
+        {
+            let mut store = FastSwapStore::open(&directory).expect("open");
+            store
+                .reserve_all(
+                    &mut live,
+                    FastSwapIdV1([8; 48]),
+                    FastSwapIntentIdV1([9; 48]),
+                    FastSwapEffectsDigestV1([10; 48]),
+                    100,
+                    &[key],
+                )
+                .expect("reserve");
+            store.compact_snapshot(&live).expect("snapshot");
+        }
+        let snapshot_path = directory.join(FASTSWAP_SNAPSHOT_FILE);
+        let mut snapshot_json: serde_json::Value =
+            serde_json::from_slice(&fs::read(&snapshot_path).expect("read snapshot"))
+                .expect("snapshot json");
+        // Tamper with the state but keep the old MAC.
+        snapshot_json["next_sequence"] = serde_json::json!(999);
+        fs::write(
+            &snapshot_path,
+            serde_json::to_vec(&snapshot_json).expect("encode"),
+        )
+        .expect("tamper snapshot");
+        assert!(matches!(
+            FastSwapStore::open(&directory),
+            Err(FastSwapStoreError::CorruptSnapshot(_))
+        ));
+        fs::remove_file(directory.join(FASTSWAP_LOCK_FILE)).ok();
         fs::remove_dir_all(directory).expect("cleanup");
     }
 }

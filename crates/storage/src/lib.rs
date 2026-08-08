@@ -19,8 +19,15 @@ use postfiat_types::{
     MempoolNftTransactionEntry, MempoolOfferTransactionEntry, MempoolPaymentV2Entry, MempoolState,
     NodeState, Receipt, ShieldedState,
 };
+use serde::{Deserialize, Serialize};
 
 pub mod fastswap_store;
+pub mod integrity;
+
+use integrity::{
+    from_hex, macs_equal, to_hex, IntegrityKey, FILE_MAC_MARKER, JSONL_CHAIN_GENESIS,
+    JSONL_ENVELOPE_KIND, MAC_BYTES,
+};
 
 pub const GENESIS_FILE: &str = "genesis.json";
 pub const GOVERNANCE_FILE: &str = "governance.json";
@@ -52,6 +59,8 @@ static ATOMIC_WRITE_COUNTER: AtomicU64 = AtomicU64::new(0);
 #[derive(Debug, Clone)]
 pub struct NodeStore {
     data_dir: PathBuf,
+    integrity_key: IntegrityKey,
+    allow_legacy_migration: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,9 +71,52 @@ pub struct FilesystemCapacity {
 
 impl NodeStore {
     pub fn new(data_dir: impl Into<PathBuf>) -> Self {
+        let data_dir = data_dir.into();
+        let integrity_key = IntegrityKey::load_or_create(&data_dir)
+            .unwrap_or_else(|error| panic!("failed to load storage integrity key: {error}"));
         Self {
-            data_dir: data_dir.into(),
+            data_dir,
+            integrity_key,
+            allow_legacy_migration: false,
         }
+    }
+
+    /// Fallible constructor: identical to [`NodeStore::new`] but returns an
+    /// error instead of panicking when the node-local integrity key cannot be
+    /// loaded (permissions, entropy failure, ...).
+    pub fn try_new(data_dir: impl Into<PathBuf>) -> io::Result<Self> {
+        let data_dir = data_dir.into();
+        let integrity_key = IntegrityKey::load_or_create(&data_dir)?;
+        Ok(Self {
+            data_dir,
+            integrity_key,
+            allow_legacy_migration: false,
+        })
+    }
+
+    /// Open an offline, operator-verified legacy directory for one-shot
+    /// migration. Normal constructors never accept unkeyed state.
+    pub fn try_new_for_legacy_migration(data_dir: impl Into<PathBuf>) -> io::Result<Self> {
+        let data_dir = data_dir.into();
+        let integrity_key = IntegrityKey::load_or_create(&data_dir)?;
+        Ok(Self {
+            data_dir,
+            integrity_key,
+            allow_legacy_migration: true,
+        })
+    }
+
+    /// Open with an integrity key anchored at an operator-protected path
+    /// outside the state directory.
+    pub fn try_new_with_integrity_key(
+        data_dir: impl Into<PathBuf>,
+        key_path: impl AsRef<Path>,
+    ) -> io::Result<Self> {
+        Ok(Self {
+            data_dir: data_dir.into(),
+            integrity_key: IntegrityKey::load_or_create_at(key_path.as_ref())?,
+            allow_legacy_migration: false,
+        })
     }
 
     pub fn data_dir(&self) -> &Path {
@@ -97,50 +149,56 @@ impl NodeStore {
         let json = genesis
             .to_json()
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
-        atomic_write(self.data_dir.join(GENESIS_FILE), json)
+        let bytes = self
+            .write_json_with_mac("genesis", json.as_bytes())
+            .map_err(invalid_data)?;
+        atomic_write(self.data_dir.join(GENESIS_FILE), bytes)
     }
 
     pub fn read_genesis(&self) -> io::Result<Genesis> {
-        let path = self.data_dir.join(GENESIS_FILE);
-        let raw = read_text(&path, "genesis")?;
-        Genesis::from_json(&raw).map_err(|error| parse_error(&path, "genesis", error))
+        let raw = self.read_body_with_mac(&self.data_dir.join(GENESIS_FILE), "genesis")?;
+        Genesis::from_json(&raw)
+            .map_err(|error| parse_error(&self.data_dir.join(GENESIS_FILE), "genesis", error))
     }
 
     pub fn write_governance(&self, governance: &GovernanceState) -> io::Result<()> {
-        write_json(self.data_dir.join(GOVERNANCE_FILE), governance)
+        self.write_json(self.data_dir.join(GOVERNANCE_FILE), governance)
     }
 
     pub fn read_governance(&self) -> io::Result<GovernanceState> {
-        read_json(self.data_dir.join(GOVERNANCE_FILE))
+        self.read_json(self.data_dir.join(GOVERNANCE_FILE))
     }
 
     pub fn write_node_state(&self, node_state: &NodeState) -> io::Result<()> {
         let json = node_state
             .to_json()
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
-        atomic_write(self.data_dir.join(NODE_STATE_FILE), json)
+        let bytes = self
+            .write_json_with_mac("node state", json.as_bytes())
+            .map_err(invalid_data)?;
+        atomic_write(self.data_dir.join(NODE_STATE_FILE), bytes)
     }
 
     pub fn read_node_state(&self) -> io::Result<NodeState> {
-        let path = self.data_dir.join(NODE_STATE_FILE);
-        let raw = read_text(&path, "node state")?;
-        NodeState::from_json(&raw).map_err(|error| parse_error(&path, "node state", error))
+        let raw = self.read_body_with_mac(&self.data_dir.join(NODE_STATE_FILE), "node state")?;
+        NodeState::from_json(&raw)
+            .map_err(|error| parse_error(&self.data_dir.join(NODE_STATE_FILE), "node state", error))
     }
 
     pub fn write_ledger(&self, ledger: &LedgerState) -> io::Result<()> {
-        write_json(self.data_dir.join(LEDGER_FILE), ledger)
+        self.write_json(self.data_dir.join(LEDGER_FILE), ledger)
     }
 
     pub fn read_ledger(&self) -> io::Result<LedgerState> {
-        read_json(self.data_dir.join(LEDGER_FILE))
+        self.read_json(self.data_dir.join(LEDGER_FILE))
     }
 
     pub fn write_shielded(&self, shielded: &ShieldedState) -> io::Result<()> {
-        write_json(self.data_dir.join(SHIELDED_FILE), shielded)
+        self.write_json(self.data_dir.join(SHIELDED_FILE), shielded)
     }
 
     pub fn read_shielded(&self) -> io::Result<ShieldedState> {
-        match read_json(self.data_dir.join(SHIELDED_FILE)) {
+        match self.read_json(self.data_dir.join(SHIELDED_FILE)) {
             Ok(shielded) => Ok(shielded),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(ShieldedState::empty()),
             Err(error) => Err(error),
@@ -148,11 +206,11 @@ impl NodeStore {
     }
 
     pub fn write_bridge(&self, bridge: &BridgeState) -> io::Result<()> {
-        write_json(self.data_dir.join(BRIDGE_FILE), bridge)
+        self.write_json(self.data_dir.join(BRIDGE_FILE), bridge)
     }
 
     pub fn read_bridge(&self) -> io::Result<BridgeState> {
-        match read_json(self.data_dir.join(BRIDGE_FILE)) {
+        match self.read_json(self.data_dir.join(BRIDGE_FILE)) {
             Ok(bridge) => Ok(bridge),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(BridgeState::empty()),
             Err(error) => Err(error),
@@ -160,14 +218,14 @@ impl NodeStore {
     }
 
     pub fn write_receipts(&self, receipts: &[Receipt]) -> io::Result<()> {
-        write_json(self.data_dir.join(RECEIPTS_FILE), receipts)?;
-        remove_optional_file(self.data_dir.join(RECEIPTS_APPEND_FILE))
+        self.write_json(self.data_dir.join(RECEIPTS_FILE), receipts)?;
+        self.remove_jsonl_log(&self.data_dir.join(RECEIPTS_APPEND_FILE))
     }
 
     pub fn read_receipts(&self) -> io::Result<Vec<Receipt>> {
-        let mut receipts: Vec<Receipt> = read_json(self.data_dir.join(RECEIPTS_FILE))?;
+        let mut receipts: Vec<Receipt> = self.read_json(self.data_dir.join(RECEIPTS_FILE))?;
         for receipt in
-            read_jsonl_records(self.data_dir.join(RECEIPTS_APPEND_FILE), "receipt append")?
+            self.read_jsonl_records(&self.data_dir.join(RECEIPTS_APPEND_FILE), "receipt append")?
         {
             merge_appended_receipt(&mut receipts, receipt)?;
         }
@@ -179,7 +237,7 @@ impl NodeStore {
     }
 
     pub fn append_receipt_record(&self, receipt: &Receipt) -> io::Result<()> {
-        append_jsonl_record(self.data_dir.join(RECEIPTS_APPEND_FILE), receipt)
+        self.append_jsonl_record(self.data_dir.join(RECEIPTS_APPEND_FILE), receipt)
     }
 
     pub fn write_mempool(&self, mempool: &MempoolState) -> io::Result<()> {
@@ -188,11 +246,11 @@ impl NodeStore {
     }
 
     fn write_mempool_unlocked(&self, mempool: &MempoolState) -> io::Result<()> {
-        write_json(self.data_dir.join(MEMPOOL_FILE), mempool)
+        self.write_json(self.data_dir.join(MEMPOOL_FILE), mempool)
     }
 
     pub fn read_mempool(&self) -> io::Result<MempoolState> {
-        match read_json(self.data_dir.join(MEMPOOL_FILE)) {
+        match self.read_json(self.data_dir.join(MEMPOOL_FILE)) {
             Ok(mempool) => Ok(mempool),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(MempoolState::empty()),
             Err(error) => Err(error),
@@ -274,17 +332,19 @@ impl NodeStore {
     }
 
     pub fn write_blocks(&self, blocks: &BlockLog) -> io::Result<()> {
-        write_json(self.data_dir.join(BLOCKS_FILE), blocks)?;
-        remove_optional_file(self.data_dir.join(BLOCKS_APPEND_FILE))
+        self.write_json(self.data_dir.join(BLOCKS_FILE), blocks)?;
+        self.remove_jsonl_log(&self.data_dir.join(BLOCKS_APPEND_FILE))
     }
 
     pub fn read_blocks(&self) -> io::Result<BlockLog> {
-        let mut blocks = match read_json(self.data_dir.join(BLOCKS_FILE)) {
+        let mut blocks = match self.read_json(self.data_dir.join(BLOCKS_FILE)) {
             Ok(blocks) => Ok(blocks),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(BlockLog::empty()),
             Err(error) => Err(error),
         }?;
-        for block in read_jsonl_records(self.data_dir.join(BLOCKS_APPEND_FILE), "block append")? {
+        for block in
+            self.read_jsonl_records(&self.data_dir.join(BLOCKS_APPEND_FILE), "block append")?
+        {
             merge_appended_block(&mut blocks, block)?;
         }
         Ok(blocks)
@@ -295,30 +355,30 @@ impl NodeStore {
     }
 
     pub fn append_block_record(&self, block: &BlockRecord) -> io::Result<()> {
-        append_jsonl_record(self.data_dir.join(BLOCKS_APPEND_FILE), block)
+        self.append_jsonl_record(self.data_dir.join(BLOCKS_APPEND_FILE), block)
     }
 
     pub fn write_chain_tip(&self, tip: &ChainTipState) -> io::Result<()> {
-        write_json(self.data_dir.join(CHAIN_TIP_FILE), tip)
+        self.write_json(self.data_dir.join(CHAIN_TIP_FILE), tip)
     }
 
     pub fn read_chain_tip(&self) -> io::Result<ChainTipState> {
-        read_json(self.data_dir.join(CHAIN_TIP_FILE))
+        self.read_json(self.data_dir.join(CHAIN_TIP_FILE))
     }
 
     pub fn write_batch_archive(&self, archive: &BatchArchive) -> io::Result<()> {
-        write_json(self.data_dir.join(BATCH_ARCHIVE_FILE), archive)?;
-        remove_optional_file(self.data_dir.join(BATCH_ARCHIVE_APPEND_FILE))
+        self.write_json(self.data_dir.join(BATCH_ARCHIVE_FILE), archive)?;
+        self.remove_jsonl_log(&self.data_dir.join(BATCH_ARCHIVE_APPEND_FILE))
     }
 
     pub fn read_batch_archive(&self) -> io::Result<BatchArchive> {
-        let mut archive = match read_json(self.data_dir.join(BATCH_ARCHIVE_FILE)) {
+        let mut archive = match self.read_json(self.data_dir.join(BATCH_ARCHIVE_FILE)) {
             Ok(archive) => Ok(archive),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(BatchArchive::empty()),
             Err(error) => Err(error),
         }?;
-        for entry in read_jsonl_records(
-            self.data_dir.join(BATCH_ARCHIVE_APPEND_FILE),
+        for entry in self.read_jsonl_records(
+            &self.data_dir.join(BATCH_ARCHIVE_APPEND_FILE),
             "batch archive append",
         )? {
             merge_appended_archive_entry(&mut archive, entry)?;
@@ -327,18 +387,19 @@ impl NodeStore {
     }
 
     pub fn append_batch_archive_entry(&self, entry: BatchArchiveEntry) -> io::Result<()> {
-        append_jsonl_record(self.data_dir.join(BATCH_ARCHIVE_APPEND_FILE), &entry)
+        self.append_jsonl_record(self.data_dir.join(BATCH_ARCHIVE_APPEND_FILE), &entry)
     }
 
     pub fn write_ordered_batches(&self, batch_ids: &[String]) -> io::Result<()> {
-        write_json(self.data_dir.join(ORDERED_BATCHES_FILE), batch_ids)?;
-        remove_optional_file(self.data_dir.join(ORDERED_BATCHES_APPEND_FILE))
+        self.write_json(self.data_dir.join(ORDERED_BATCHES_FILE), batch_ids)?;
+        self.remove_jsonl_log(&self.data_dir.join(ORDERED_BATCHES_APPEND_FILE))
     }
 
     pub fn read_ordered_batches(&self) -> io::Result<Vec<String>> {
-        let mut batch_ids: Vec<String> = read_json(self.data_dir.join(ORDERED_BATCHES_FILE))?;
-        for batch_id in read_jsonl_records(
-            self.data_dir.join(ORDERED_BATCHES_APPEND_FILE),
+        let mut batch_ids: Vec<String> =
+            self.read_json(self.data_dir.join(ORDERED_BATCHES_FILE))?;
+        for batch_id in self.read_jsonl_records(
+            &self.data_dir.join(ORDERED_BATCHES_APPEND_FILE),
             "ordered batch append",
         )? {
             merge_appended_ordered_batch(&mut batch_ids, batch_id)?;
@@ -351,20 +412,20 @@ impl NodeStore {
     }
 
     pub fn append_ordered_batch_record(&self, batch_id: &str) -> io::Result<()> {
-        append_jsonl_record(self.data_dir.join(ORDERED_BATCHES_APPEND_FILE), batch_id)
+        self.append_jsonl_record(self.data_dir.join(ORDERED_BATCHES_APPEND_FILE), batch_id)
     }
 
     pub fn write_ordered_commit_journal<T: serde::Serialize + ?Sized>(
         &self,
         journal: &T,
     ) -> io::Result<()> {
-        write_json(self.data_dir.join(ORDERED_COMMIT_JOURNAL_FILE), journal)
+        self.write_json(self.data_dir.join(ORDERED_COMMIT_JOURNAL_FILE), journal)
     }
 
     pub fn read_ordered_commit_journal<T: serde::de::DeserializeOwned>(
         &self,
     ) -> io::Result<Option<T>> {
-        match read_json(self.data_dir.join(ORDERED_COMMIT_JOURNAL_FILE)) {
+        match self.read_json(self.data_dir.join(ORDERED_COMMIT_JOURNAL_FILE)) {
             Ok(journal) => Ok(Some(journal)),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
             Err(error) => Err(error),
@@ -392,6 +453,584 @@ impl NodeStore {
     pub fn lock_ordered_commit(&self) -> io::Result<StorageMutationLock> {
         acquire_mutation_lock(&self.data_dir, ORDERED_COMMIT_MUTATION_LOCK_FILE)
     }
+
+    fn file_mac(&self, label: &str, body: &[u8]) -> [u8; MAC_BYTES] {
+        self.integrity_key
+            .mac(file_mac_domain(label).as_bytes(), body)
+    }
+
+    fn jsonl_mac(&self, payload: &[u8]) -> [u8; MAC_BYTES] {
+        // Single fixed domain: the chain input (previous MAC || 0x00 ||
+        // canonical payload) already binds every record to its position and
+        // contents, so a per-label domain is unnecessary — and keeping the
+        // label out of the MAC removes any write/read label drift.
+        self.integrity_key
+            .mac(b"postfiat.storage.jsonl-record.v1", payload)
+    }
+
+    /// Serialize `value` and append the keyed integrity trailer; see the
+    /// format note in [`integrity`].
+    fn write_json_with_mac(&self, label: &str, body: &[u8]) -> io::Result<Vec<u8>> {
+        enforce_serialized_size("state JSON", body.len() as u64, MAX_STATE_FILE_BYTES)?;
+        // Canonical form: exactly one newline between body and trailer, and
+        // the MAC always covers the body *without* that trailing newline so
+        // the verify side can be unambiguous.
+        let body = strip_trailing_newlines(body);
+        let mac = self.file_mac(label, body);
+        let mut bytes = Vec::with_capacity(body.len() + 1 + FILE_MAC_MARKER.len() + 96 + 1);
+        bytes.extend_from_slice(body);
+        bytes.push(b'\n');
+        bytes.extend_from_slice(FILE_MAC_MARKER.as_bytes());
+        bytes.extend_from_slice(to_hex(&mac).as_bytes());
+        bytes.push(b'\n');
+        enforce_serialized_size("state file", bytes.len() as u64, MAX_STATE_FILE_BYTES)?;
+        Ok(bytes)
+    }
+
+    /// Read a whole-file state body, verifying the keyed integrity trailer.
+    /// Legacy untagged files are accepted once, logged loudly, and re-written
+    /// with the keyed trailer (migration window — see [`integrity`]).
+    fn read_body_with_mac(&self, path: &Path, label: &str) -> io::Result<String> {
+        let raw = read_text(path, label)?;
+        match split_mac_trailer(&raw) {
+            Some((body, tag_hex)) => {
+                let tag = from_hex(tag_hex).ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("integrity tag in `{}` is not valid hex", path.display()),
+                    )
+                })?;
+                if !macs_equal(&self.file_mac(label, body.as_bytes()), &tag) {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "integrity MAC mismatch in {label} `{}`; refusing to load possibly \
+                             tampered state",
+                            path.display()
+                        ),
+                    ));
+                }
+                Ok(body.to_owned())
+            }
+            None => {
+                if !self.allow_legacy_migration {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "{label} `{}` is legacy untagged state; use the explicit offline migration constructor",
+                            path.display()
+                        ),
+                    ));
+                }
+                eprintln!(
+                    "warning: {label} `{}` has no integrity tag (legacy format); \
+                     upgrading it to the keyed format",
+                    path.display()
+                );
+                let bytes = self.write_json_with_mac(label, raw.as_bytes())?;
+                atomic_write(path, bytes)?;
+                Ok(raw)
+            }
+        }
+    }
+
+    fn write_json<T: serde::Serialize + ?Sized>(&self, path: PathBuf, value: &T) -> io::Result<()> {
+        let json = serde_json::to_string_pretty(value).map_err(invalid_data)?;
+        let bytes = self.write_json_with_mac("state file", json.as_bytes())?;
+        atomic_write(path, bytes)
+    }
+
+    fn read_json<T: serde::de::DeserializeOwned>(&self, path: PathBuf) -> io::Result<T> {
+        let raw = self.read_body_with_mac(&path, "state file")?;
+        serde_json::from_str(&raw).map_err(|error| parse_error(&path, "state file", error))
+    }
+
+    /// Append one record as a keyed, hash-chained JSONL envelope and fsync
+    /// the file (plus its parent directory on first create). See [`integrity`]
+    /// for the envelope format.
+    fn append_jsonl_record<T: serde::Serialize + ?Sized>(
+        &self,
+        path: PathBuf,
+        value: &T,
+    ) -> io::Result<()> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let payload = serde_json::to_vec(value).map_err(invalid_data)?;
+        enforce_serialized_size(
+            "JSONL record",
+            payload.len() as u64,
+            MAX_JSONL_RECORD_BYTES as u64,
+        )?;
+        let existing_len = match fs::metadata(&path) {
+            Ok(metadata) => metadata.len(),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => 0,
+            Err(error) => return Err(error),
+        };
+        // Fail closed on oversized logs before the repair pass can truncate
+        // them (mirrors the pre-integrity behaviour).
+        enforce_serialized_size("JSONL append file", existing_len, MAX_JSONL_FILE_BYTES)?;
+        repair_trailing_partial_jsonl(&path)?;
+        let (existing_len, chain, record_count) = self.read_jsonl_tail(&path)?;
+        enforce_serialized_size("JSONL append file", existing_len, MAX_JSONL_FILE_BYTES)?;
+        let envelope = self.jsonl_envelope(&chain, payload);
+        let envelope_json = serde_json::to_string(&envelope).map_err(invalid_data)?;
+        let new_len = existing_len
+            .checked_add(envelope_json.len() as u64)
+            .and_then(|len| len.checked_add(1))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "JSONL size overflow"))?;
+        enforce_serialized_size("JSONL append file", new_len, MAX_JSONL_FILE_BYTES)?;
+        let existed = existing_len > 0;
+        let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
+        file.write_all(envelope_json.as_bytes())?;
+        file.write_all(b"\n")?;
+        file.sync_all()?;
+        if !existed {
+            // Persist the newly created directory entry, not just the data.
+            sync_parent_dir(&path)?;
+        }
+        self.write_jsonl_head(&path, record_count.saturating_add(1), &envelope.mac)?;
+        Ok(())
+    }
+
+    fn jsonl_envelope(&self, chain: &str, payload: Vec<u8>) -> JsonlEnvelope {
+        // The MAC covers the canonical payload (round-tripped through
+        // `serde_json::Value`) so verification does not depend on the struct
+        // field order of whatever type was appended.
+        let record: serde_json::Value =
+            serde_json::from_slice(&payload).expect("payload is valid JSON");
+        let canonical = serde_json::to_vec(&record).expect("value is valid JSON");
+        let mut mac_input = Vec::with_capacity(chain.len() + 1 + canonical.len());
+        mac_input.extend_from_slice(chain.as_bytes());
+        mac_input.push(0);
+        mac_input.extend_from_slice(&canonical);
+        JsonlEnvelope {
+            pftmac: JSONL_ENVELOPE_KIND.to_owned(),
+            chain: chain.to_owned(),
+            record,
+            mac: to_hex(&self.jsonl_mac(&mac_input)),
+        }
+    }
+
+    /// Verify the keyed chain of an append file and return the accepted
+    /// records. A legacy (untagged) prefix is upgraded in place after its
+    /// records parse cleanly; any MAC mismatch is fatal.
+    fn read_jsonl_records<T: serde::de::DeserializeOwned>(
+        &self,
+        path: &Path,
+        label: &str,
+    ) -> io::Result<Vec<T>> {
+        let file = match File::open(path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => return Err(error),
+        };
+        enforce_serialized_size(label, file.metadata()?.len(), MAX_JSONL_FILE_BYTES)?;
+        let mut reader = BufReader::new(file);
+        let mut records = Vec::new();
+        let mut raw_lines: Vec<Vec<u8>> = Vec::new();
+        let mut chain = JSONL_CHAIN_GENESIS.to_owned();
+        let mut previous_chain = JSONL_CHAIN_GENESIS.to_owned();
+        let mut legacy_prefix = false;
+        let mut saw_envelope = false;
+        let mut line = Vec::new();
+        let mut line_index = 0_usize;
+        loop {
+            line.clear();
+            let read = reader
+                .by_ref()
+                .take(MAX_JSONL_RECORD_BYTES as u64 + 2)
+                .read_until(b'\n', &mut line)?;
+            if read == 0 {
+                break;
+            }
+            line_index = line_index.saturating_add(1);
+            if line.len() > MAX_JSONL_RECORD_BYTES.saturating_add(1) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "{label} `{}` line {line_index} exceeds {} bytes",
+                        path.display(),
+                        MAX_JSONL_RECORD_BYTES
+                    ),
+                ));
+            }
+            if !line.ends_with(b"\n") {
+                break;
+            }
+            while matches!(line.last(), Some(b'\n' | b'\r')) {
+                line.pop();
+            }
+            if line.iter().all(u8::is_ascii_whitespace) {
+                continue;
+            }
+            if records.len() >= MAX_JSONL_RECORDS {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "{label} `{}` exceeds {} records",
+                        path.display(),
+                        MAX_JSONL_RECORDS
+                    ),
+                ));
+            }
+            let (payload, verified_mac) = if let Ok(envelope) =
+                serde_json::from_slice::<JsonlEnvelope>(&line)
+            {
+                if saw_envelope && legacy_prefix {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "{label} `{}` mixes legacy and keyed records after line {}",
+                            path.display(),
+                            line_index
+                        ),
+                    ));
+                }
+                saw_envelope = true;
+                let payload =
+                    self.verify_jsonl_envelope(path, label, line_index, &envelope, &chain)?;
+                // The chain advances by the envelope's *verified* MAC field;
+                // recomputing it here would bind the next record to whatever
+                // canonicalization this build happens to use instead of the
+                // bytes actually committed to disk.
+                (payload, envelope.mac)
+            } else {
+                if !self.allow_legacy_migration {
+                    return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!(
+                                "{label} `{}` line {} is legacy untagged state; use the explicit offline migration constructor",
+                                path.display(),
+                                line_index
+                            ),
+                        ));
+                }
+                if saw_envelope {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "{label} `{}` line {} is an untagged record inside a keyed log; \
+                             refusing to load possibly tampered history",
+                            path.display(),
+                            line_index
+                        ),
+                    ));
+                }
+                legacy_prefix = true;
+                // Upgrade re-MACs the canonical payload (see
+                // `jsonl_envelope`), so store the canonical bytes here.
+                let canonical = serde_json::from_slice::<serde_json::Value>(&line)
+                    .and_then(|value| serde_json::to_vec(&value))
+                    .map_err(|error| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!(
+                                "failed to parse {label} `{}` line {}: {error}",
+                                path.display(),
+                                line_index
+                            ),
+                        )
+                    })?;
+                (canonical, chain.clone())
+            };
+            let record = serde_json::from_slice(&payload).map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "failed to parse {label} `{}` line {}: {error}",
+                        path.display(),
+                        line_index
+                    ),
+                )
+            })?;
+            previous_chain = chain;
+            chain = verified_mac;
+            raw_lines.push(payload);
+            records.push(record);
+        }
+        if legacy_prefix && !records.is_empty() {
+            eprintln!(
+                "warning: {label} `{}` contains {} untagged legacy record(s); \
+                 re-writing with keyed MAC chain",
+                path.display(),
+                records.len()
+            );
+            let mut body = Vec::new();
+            let mut rewrite_chain = JSONL_CHAIN_GENESIS.to_owned();
+            for payload in &raw_lines {
+                let envelope = self.jsonl_envelope(&rewrite_chain, payload.clone());
+                rewrite_chain = envelope.mac.clone();
+                body.extend_from_slice(
+                    serde_json::to_string(&envelope)
+                        .map_err(invalid_data)?
+                        .as_bytes(),
+                );
+                body.push(b'\n');
+            }
+            atomic_write(path, body)?;
+            chain = rewrite_chain;
+            self.write_jsonl_head(path, records.len() as u64, &chain)?;
+        } else if !records.is_empty() {
+            self.verify_jsonl_head(path, records.len() as u64, &chain, &previous_chain)?;
+        }
+        Ok(records)
+    }
+
+    fn verify_jsonl_envelope(
+        &self,
+        path: &Path,
+        label: &str,
+        line_index: usize,
+        envelope: &JsonlEnvelope,
+        expected_chain: &str,
+    ) -> io::Result<Vec<u8>> {
+        if envelope.pftmac != JSONL_ENVELOPE_KIND {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "{label} `{}` line {} has unknown integrity envelope `{}`",
+                    path.display(),
+                    line_index,
+                    envelope.pftmac
+                ),
+            ));
+        }
+        if envelope.chain != expected_chain {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "{label} `{}` line {} breaks the MAC chain (expected `{expected_chain}`, \
+                     found `{}`); history was truncated or reordered",
+                    path.display(),
+                    line_index,
+                    envelope.chain
+                ),
+            ));
+        }
+        let payload = serde_json::to_vec(&envelope.record).map_err(invalid_data)?;
+        let mut mac_input = Vec::with_capacity(expected_chain.len() + 1 + payload.len());
+        mac_input.extend_from_slice(expected_chain.as_bytes());
+        mac_input.push(0);
+        mac_input.extend_from_slice(&payload);
+        let tag = from_hex(&envelope.mac).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "{label} `{}` line {} has a non-hex integrity tag",
+                    path.display(),
+                    line_index
+                ),
+            )
+        })?;
+        if !macs_equal(&self.jsonl_mac(&mac_input), &tag) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "{label} `{}` line {} failed integrity verification; refusing to load \
+                     possibly tampered history",
+                    path.display(),
+                    line_index
+                ),
+            ));
+        }
+        Ok(payload)
+    }
+
+    /// Return the file length and the MAC-chain head (`"genesis"` when the
+    /// file is empty/missing or legacy-format, so the first keyed record
+    /// always chains from genesis).
+    fn read_jsonl_tail(&self, path: &Path) -> io::Result<(u64, String, u64)> {
+        let file = match File::open(path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                return Ok((0, JSONL_CHAIN_GENESIS.to_owned(), 0));
+            }
+            Err(error) => return Err(error),
+        };
+        let len = file.metadata()?.len();
+        if len == 0 {
+            return Ok((0, JSONL_CHAIN_GENESIS.to_owned(), 0));
+        }
+        let mut reader = BufReader::new(file);
+        let mut chain = JSONL_CHAIN_GENESIS.to_owned();
+        let mut previous_chain = JSONL_CHAIN_GENESIS.to_owned();
+        let mut record_count = 0_u64;
+        let mut line = Vec::new();
+        loop {
+            line.clear();
+            let read = reader
+                .by_ref()
+                .take(MAX_JSONL_RECORD_BYTES as u64 + 2)
+                .read_until(b'\n', &mut line)?;
+            if read == 0 || !line.ends_with(b"\n") {
+                break;
+            }
+            let mut trimmed: &[u8] = &line;
+            while matches!(trimmed.last(), Some(b'\n' | b'\r')) {
+                trimmed = &trimmed[..trimmed.len() - 1];
+            }
+            if trimmed.iter().all(u8::is_ascii_whitespace) {
+                continue;
+            }
+            let envelope: JsonlEnvelope = serde_json::from_slice(trimmed).map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "JSONL append `{}` contains an untagged record; migrate it before appending",
+                        path.display()
+                    ),
+                )
+            })?;
+            self.verify_jsonl_envelope(
+                path,
+                "JSONL append",
+                record_count.saturating_add(1) as usize,
+                &envelope,
+                &chain,
+            )?;
+            previous_chain = chain;
+            chain = envelope.mac;
+            record_count = record_count.saturating_add(1);
+        }
+        self.verify_jsonl_head(path, record_count, &chain, &previous_chain)?;
+        Ok((len, chain, record_count))
+    }
+
+    fn jsonl_head_path(path: &Path) -> PathBuf {
+        let mut name = path
+            .file_name()
+            .map(|name| name.to_os_string())
+            .unwrap_or_default();
+        name.push(".head");
+        path.with_file_name(name)
+    }
+
+    fn jsonl_head_mac(&self, count: u64, chain: &str) -> io::Result<[u8; MAC_BYTES]> {
+        let payload =
+            serde_json::to_vec(&(JSONL_HEAD_SCHEMA, count, chain)).map_err(invalid_data)?;
+        Ok(self
+            .integrity_key
+            .mac(b"postfiat.storage.jsonl-head.v1", &payload))
+    }
+
+    fn write_jsonl_head(&self, path: &Path, count: u64, chain: &str) -> io::Result<()> {
+        let head = JsonlHead {
+            schema: JSONL_HEAD_SCHEMA.to_owned(),
+            record_count: count,
+            chain: chain.to_owned(),
+            mac: to_hex(&self.jsonl_head_mac(count, chain)?),
+        };
+        atomic_write(
+            Self::jsonl_head_path(path),
+            serde_json::to_vec(&head).map_err(invalid_data)?,
+        )
+    }
+
+    fn verify_jsonl_head(
+        &self,
+        path: &Path,
+        count: u64,
+        chain: &str,
+        previous_chain: &str,
+    ) -> io::Result<()> {
+        let head_path = Self::jsonl_head_path(path);
+        let bytes = match fs::read(&head_path) {
+            Ok(bytes) => bytes,
+            Err(error)
+                if error.kind() == io::ErrorKind::NotFound && self.allow_legacy_migration =>
+            {
+                self.write_jsonl_head(path, count, chain)?;
+                return Ok(());
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "JSONL head `{}` is missing; possible tail rollback",
+                        head_path.display()
+                    ),
+                ));
+            }
+            Err(error) => return Err(error),
+        };
+        let head: JsonlHead = serde_json::from_slice(&bytes).map_err(invalid_data)?;
+        let expected_mac = self.jsonl_head_mac(head.record_count, &head.chain)?;
+        if head.schema != JSONL_HEAD_SCHEMA
+            || !macs_equal(&expected_mac, &from_hex(&head.mac).unwrap_or_default())
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "JSONL head `{}` failed integrity verification",
+                    head_path.display()
+                ),
+            ));
+        }
+        if head.record_count == count && head.chain == chain {
+            return Ok(());
+        }
+        // The log is fsynced before the head. A crash in that narrow interval
+        // leaves exactly one fully authenticated record beyond the old head;
+        // advance the head after verifying the complete chain.
+        if head.record_count.saturating_add(1) == count && head.chain == previous_chain {
+            self.write_jsonl_head(path, count, chain)?;
+            return Ok(());
+        }
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "JSONL head `{}` does not match the authenticated log tail; possible rollback",
+                head_path.display()
+            ),
+        ));
+    }
+
+    fn remove_jsonl_log(&self, path: &Path) -> io::Result<()> {
+        remove_optional_file(path.to_path_buf())?;
+        remove_optional_file(Self::jsonl_head_path(path))
+    }
+}
+
+const JSONL_HEAD_SCHEMA: &str = "postfiat-storage-jsonl-head-v1";
+
+#[derive(Debug, Serialize, Deserialize)]
+struct JsonlEnvelope {
+    pftmac: String,
+    chain: String,
+    record: serde_json::Value,
+    mac: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct JsonlHead {
+    schema: String,
+    record_count: u64,
+    chain: String,
+    mac: String,
+}
+
+fn file_mac_domain(label: &str) -> String {
+    format!("postfiat.storage.state-file.v1:{label}")
+}
+
+/// Split a whole-file state document into its JSON body and trailing
+/// `pftmac1:<hex>` integrity tag, if present.
+fn split_mac_trailer(raw: &str) -> Option<(&str, &str)> {
+    let trimmed = raw.trim_end_matches(['\n', '\r']);
+    let last_line = trimmed.lines().last()?;
+    let tag_hex = last_line.strip_prefix(FILE_MAC_MARKER)?;
+    let body_end = trimmed.len() - last_line.len();
+    let body = trimmed[..body_end].trim_end_matches(['\n', '\r']);
+    Some((body, tag_hex))
+}
+
+fn strip_trailing_newlines(body: &[u8]) -> &[u8] {
+    let mut end = body.len();
+    while end > 0 && matches!(body[end - 1], b'\n' | b'\r') {
+        end -= 1;
+    }
+    &body[..end]
 }
 
 fn invalid_data(error: impl std::error::Error + Send + Sync + 'static) -> io::Error {
@@ -406,14 +1045,15 @@ fn filesystem_capacity(path: &Path) -> io::Result<FilesystemCapacity> {
             format!("storage path `{}` contains a NUL byte", path.display()),
         )
     })?;
-    let mut stats = std::mem::MaybeUninit::<libc::statvfs>::zeroed();
+    // Zeroed storage is valid for the plain-old-data `statvfs` struct, so no
+    // `assume_init` is required: statvfs overwrites the fields on success and
+    // we never read them on failure.
+    let mut stats: libc::statvfs = unsafe { std::mem::zeroed() };
     // SAFETY: `path` is a live NUL-terminated CString and `stats` points to
-    // writable, correctly sized storage initialized by a successful statvfs.
-    if unsafe { libc::statvfs(path.as_ptr(), stats.as_mut_ptr()) } != 0 {
+    // writable, correctly sized storage.
+    if unsafe { libc::statvfs(path.as_ptr(), &mut stats) } != 0 {
         return Err(io::Error::last_os_error());
     }
-    // SAFETY: statvfs returned success and therefore initialized `stats`.
-    let stats = unsafe { stats.assume_init() };
     let fragment_size = if stats.f_frsize == 0 {
         stats.f_bsize
     } else {
@@ -497,119 +1137,6 @@ fn acquire_mutation_lock(data_dir: &Path, file_name: &str) -> io::Result<Storage
     }
 
     Ok(StorageMutationLock { _file: file })
-}
-
-fn write_json<T: serde::Serialize + ?Sized>(path: PathBuf, value: &T) -> io::Result<()> {
-    let json = serde_json::to_string_pretty(value).map_err(invalid_data)?;
-    enforce_serialized_size("state JSON", json.len() as u64, MAX_STATE_FILE_BYTES)?;
-    atomic_write(path, format!("{json}\n"))
-}
-
-fn append_jsonl_record<T: serde::Serialize + ?Sized>(path: PathBuf, value: &T) -> io::Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let json = serde_json::to_string(value).map_err(invalid_data)?;
-    enforce_serialized_size(
-        "JSONL record",
-        json.len() as u64,
-        MAX_JSONL_RECORD_BYTES as u64,
-    )?;
-    let existing_len = match fs::metadata(&path) {
-        Ok(metadata) => metadata.len(),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => 0,
-        Err(error) => return Err(error),
-    };
-    enforce_serialized_size("JSONL append file", existing_len, MAX_JSONL_FILE_BYTES)?;
-    repair_trailing_partial_jsonl(&path)?;
-    let existing_len = match fs::metadata(&path) {
-        Ok(metadata) => metadata.len(),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => 0,
-        Err(error) => return Err(error),
-    };
-    let new_len = existing_len
-        .checked_add(json.len() as u64)
-        .and_then(|len| len.checked_add(1))
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "JSONL size overflow"))?;
-    enforce_serialized_size("JSONL append file", new_len, MAX_JSONL_FILE_BYTES)?;
-    let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
-    file.write_all(json.as_bytes())?;
-    file.write_all(b"\n")?;
-    file.sync_all()?;
-    sync_parent_dir(&path)
-}
-
-fn read_json<T: serde::de::DeserializeOwned>(path: PathBuf) -> io::Result<T> {
-    let raw = read_text(&path, "state file")?;
-    serde_json::from_str(&raw).map_err(|error| parse_error(&path, "state file", error))
-}
-
-fn read_jsonl_records<T: serde::de::DeserializeOwned>(
-    path: PathBuf,
-    label: &str,
-) -> io::Result<Vec<T>> {
-    let file = match File::open(&path) {
-        Ok(file) => file,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error),
-    };
-    enforce_serialized_size(label, file.metadata()?.len(), MAX_JSONL_FILE_BYTES)?;
-    let mut reader = BufReader::new(file);
-    let mut records = Vec::new();
-    let mut line = Vec::new();
-    let mut line_index = 0_usize;
-    loop {
-        line.clear();
-        let read = reader
-            .by_ref()
-            .take(MAX_JSONL_RECORD_BYTES as u64 + 2)
-            .read_until(b'\n', &mut line)?;
-        if read == 0 {
-            break;
-        }
-        line_index = line_index.saturating_add(1);
-        if line.len() > MAX_JSONL_RECORD_BYTES.saturating_add(1) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "{label} `{}` line {line_index} exceeds {} bytes",
-                    path.display(),
-                    MAX_JSONL_RECORD_BYTES
-                ),
-            ));
-        }
-        if !line.ends_with(b"\n") {
-            break;
-        }
-        while matches!(line.last(), Some(b'\n' | b'\r')) {
-            line.pop();
-        }
-        if line.iter().all(u8::is_ascii_whitespace) {
-            continue;
-        }
-        if records.len() >= MAX_JSONL_RECORDS {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "{label} `{}` exceeds {} records",
-                    path.display(),
-                    MAX_JSONL_RECORDS
-                ),
-            ));
-        }
-        let record = serde_json::from_slice(&line).map_err(|error| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "failed to parse {label} `{}` line {}: {error}",
-                    path.display(),
-                    line_index
-                ),
-            )
-        })?;
-        records.push(record);
-    }
-    Ok(records)
 }
 
 fn merge_appended_block(blocks: &mut BlockLog, block: BlockRecord) -> io::Result<()> {
@@ -1159,14 +1686,11 @@ mod tests {
         store
             .append_block_record(&first)
             .expect("append first block");
-        fs::write(
-            dir.join(BLOCKS_APPEND_FILE),
-            format!(
-                "{}\n{{\"partial\":",
-                serde_json::to_string(&first).expect("serialize first block")
-            ),
-        )
-        .expect("write partial append file");
+        OpenOptions::new()
+            .append(true)
+            .open(dir.join(BLOCKS_APPEND_FILE))
+            .and_then(|mut file| file.write_all(b"{\"partial\":"))
+            .expect("write partial append tail");
 
         store
             .append_block_record(&second)
@@ -1260,7 +1784,9 @@ mod tests {
             .expect("extend sparse append file");
         let before = fs::metadata(&path).expect("metadata before").len();
 
-        let error = append_jsonl_record(path.clone(), &sample_receipt("tx-size", "tesSUCCESS"))
+        let store = NodeStore::new(&dir);
+        let error = store
+            .append_jsonl_record(path.clone(), &sample_receipt("tx-size", "tesSUCCESS"))
             .expect_err("oversized append log must fail closed");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         assert_eq!(fs::metadata(&path).expect("metadata after").len(), before);
@@ -1471,6 +1997,183 @@ mod tests {
             .collect::<Result<Vec<_>, _>>()
             .expect("collect entries");
         assert_eq!(leftovers.len(), 1);
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn tampered_state_file_is_rejected() {
+        let dir = unique_test_dir("postfiat-storage-tampered-state-test");
+        let store = NodeStore::new(&dir);
+        store
+            .write_ledger(&LedgerState::empty())
+            .expect("write ledger");
+        assert!(store.read_ledger().is_ok(), "baseline read must pass");
+
+        let path = dir.join(LEDGER_FILE);
+        let raw = fs::read_to_string(&path).expect("read ledger file");
+        assert!(raw.contains(FILE_MAC_MARKER), "file must carry a MAC");
+        // Flip a byte inside the JSON body without touching the MAC trailer.
+        let tampered = raw.replacen("\"accounts\"", "\"accountz\"", 1);
+        assert_ne!(tampered, raw);
+        fs::write(&path, tampered).expect("tamper ledger");
+
+        let error = store.read_ledger().expect_err("tampered ledger must fail");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("MAC mismatch"), "{error}");
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn legacy_state_file_loads_and_upgrades() {
+        let dir = unique_test_dir("postfiat-storage-legacy-state-test");
+        let normal_store = NodeStore::new(&dir);
+        let ledger = LedgerState::empty();
+        let legacy_json = format!("{}\n", serde_json::to_string_pretty(&ledger).expect("json"));
+        let path = dir.join(LEDGER_FILE);
+        fs::write(&path, &legacy_json).expect("write legacy ledger");
+        let error = normal_store
+            .read_ledger()
+            .expect_err("normal open must reject legacy ledger");
+        assert!(error.to_string().contains("explicit offline migration"));
+        let store = NodeStore::try_new_for_legacy_migration(&dir)
+            .expect("open explicit legacy migration store");
+
+        assert_eq!(
+            store.read_ledger().expect("legacy ledger must load"),
+            ledger
+        );
+        let upgraded = fs::read_to_string(&path).expect("read upgraded file");
+        assert!(
+            upgraded.contains(FILE_MAC_MARKER),
+            "legacy file must be re-written with an integrity trailer"
+        );
+        assert_eq!(
+            store.read_ledger().expect("upgraded ledger must load"),
+            ledger
+        );
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn tampered_jsonl_record_is_rejected() {
+        let dir = unique_test_dir("postfiat-storage-tampered-jsonl-test");
+        let store = NodeStore::new(&dir);
+        store.write_receipts(&[]).expect("write empty receipts");
+        store
+            .append_receipt_record(&sample_receipt("tx-1", "tesSUCCESS"))
+            .expect("append receipt");
+        assert_eq!(store.read_receipts().expect("baseline").len(), 1);
+
+        let path = dir.join(RECEIPTS_APPEND_FILE);
+        let raw = fs::read_to_string(&path).expect("read append log");
+        let tampered = raw.replacen("tesSUCCESS", "tesFAILED!", 1);
+        assert_ne!(tampered, raw);
+        fs::write(&path, tampered).expect("tamper append log");
+
+        let error = store
+            .read_receipts()
+            .expect_err("tampered receipt log must fail");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(
+            error.to_string().contains("integrity verification"),
+            "{error}"
+        );
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn truncated_jsonl_chain_is_rejected() {
+        let dir = unique_test_dir("postfiat-storage-truncated-jsonl-test");
+        let store = NodeStore::new(&dir);
+        store.write_receipts(&[]).expect("write empty receipts");
+        store
+            .append_receipt_record(&sample_receipt("tx-1", "tesSUCCESS"))
+            .expect("append first");
+        store
+            .append_receipt_record(&sample_receipt("tx-2", "tesSUCCESS"))
+            .expect("append second");
+
+        // Delete the first record: the second record's chain pointer no
+        // longer starts at genesis, so the gap must be detected.
+        let path = dir.join(RECEIPTS_APPEND_FILE);
+        let raw = fs::read_to_string(&path).expect("read append log");
+        let second_line = raw.lines().nth(1).expect("two records").to_string();
+        fs::write(&path, format!("{second_line}\n")).expect("drop first record");
+
+        let error = store
+            .read_receipts()
+            .expect_err("truncated receipt log must fail");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("MAC chain"), "{error}");
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn deleted_jsonl_tail_is_rejected_by_authenticated_head() {
+        let dir = unique_test_dir("postfiat-storage-deleted-jsonl-tail-test");
+        let store = NodeStore::new(&dir);
+        store.write_receipts(&[]).expect("write empty receipts");
+        store
+            .append_receipt_record(&sample_receipt("tx-1", "tesSUCCESS"))
+            .expect("append first");
+        store
+            .append_receipt_record(&sample_receipt("tx-2", "tesSUCCESS"))
+            .expect("append second");
+
+        let path = dir.join(RECEIPTS_APPEND_FILE);
+        let raw = fs::read_to_string(&path).expect("read append log");
+        let first_line = raw.lines().next().expect("first record");
+        fs::write(&path, format!("{first_line}\n")).expect("delete authenticated tail");
+
+        let error = store
+            .read_receipts()
+            .expect_err("deleted final record must fail closed");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("possible rollback"), "{error}");
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn legacy_jsonl_log_loads_and_upgrades() {
+        let dir = unique_test_dir("postfiat-storage-legacy-jsonl-test");
+        let normal_store = NodeStore::new(&dir);
+        normal_store
+            .write_receipts(&[])
+            .expect("write empty receipts");
+        let receipt = sample_receipt("tx-legacy", "tesSUCCESS");
+        // Write a pre-integrity (bare JSON record) append log.
+        let path = dir.join(RECEIPTS_APPEND_FILE);
+        fs::write(
+            &path,
+            format!("{}\n", serde_json::to_string(&receipt).expect("json")),
+        )
+        .expect("write legacy append log");
+        let error = normal_store
+            .read_receipts()
+            .expect_err("normal open must reject legacy append log");
+        assert!(error.to_string().contains("explicit offline migration"));
+        let store = NodeStore::try_new_for_legacy_migration(&dir)
+            .expect("open explicit legacy migration store");
+
+        assert_eq!(
+            store.read_receipts().expect("legacy log must load"),
+            vec![receipt.clone()]
+        );
+        let upgraded = fs::read_to_string(&path).expect("read upgraded log");
+        assert!(
+            upgraded.contains("\"pftmac\""),
+            "legacy log must be re-written with MAC envelopes"
+        );
+        assert_eq!(
+            store.read_receipts().expect("upgraded log must load"),
+            vec![receipt]
+        );
 
         fs::remove_dir_all(dir).expect("cleanup");
     }
