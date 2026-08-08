@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -11,6 +12,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 GENERATOR = ROOT / "scripts/testnet-rpc-method-inventory"
+RPC_DOCS = ROOT / "docs/rpc"
+METHOD_ROW_RE = re.compile(
+    r"^\| ((?:`[a-z0-9_-]+`(?:, )?)+) \|", re.MULTILINE
+)
+METHOD_NAME_RE = re.compile(r"`([a-z0-9_-]+)`")
+
+
+def documented_method_rows() -> set[str]:
+    methods: set[str] = set()
+    for path in sorted(RPC_DOCS.glob("*.md")):
+        for method_cell in METHOD_ROW_RE.findall(path.read_text(encoding="utf-8")):
+            methods.update(METHOD_NAME_RE.findall(method_cell))
+    return methods
 
 
 def main() -> int:
@@ -60,11 +74,19 @@ def main() -> int:
         if item["posture"] == "sdk_only_or_unknown"
     ]
     assert not unknown, f"unclassified RPC methods: {unknown}"
+
+    dispatch_methods = {
+        item["method"] for item in inventory["methods"] if item["node_dispatch"]
+    }
+    missing_docs = sorted(dispatch_methods - documented_method_rows())
+    assert not missing_docs, f"undocumented node dispatch methods: {missing_docs}"
+
     assert inventory["verified"] is True
     assert all(inventory["checks"].values()), inventory["checks"]
     print(
         "rpc_method_inventory_regression=ok "
-        f"methods={inventory['counts']['total_methods']}"
+        f"methods={inventory['counts']['total_methods']} "
+        f"dispatch_documented={len(dispatch_methods)}/{len(dispatch_methods)}"
     )
     return 0
 
