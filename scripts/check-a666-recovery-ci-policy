@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import subprocess
 import sys
@@ -32,6 +33,24 @@ NON_DIRECT_EXCLUSIONS = frozenset(
     {"test", "tests", "*_tests.rs", "*.test.*", "fixtures", "generated", "vendor", "dist"}
 )
 DIRECT_API_RE = re.compile(r"(?:\.|::)(?:prove|prove_plonk|prove_groth16)\s*\(")
+# Exact reviewed unit-test lines only: a packet descriptor used by a hash-mismatch
+# STOP test and two prover-leaf calls whose external execution surfaces are mocked.
+# Path, line, and complete source-line hash must all match; any edit or movement
+# reopens the finding and emits a stale-allowlist finding.
+DIRECT_PROVING_TEST_ALLOWLIST = {
+    (
+        "scripts/test_native_campaign_driver.py",
+        435,
+    ): "fd4cccbcaefc0040fb263db387af57235c4b07111f389379240cc22185a11601",
+    (
+        "scripts/test_native_campaign_driver.py",
+        626,
+    ): "2033a7c776cc503fb9fb3aa66ca43797fc310a927426f48077a14fbbd901dde6",
+    (
+        "scripts/test_native_prover_leaf.py",
+        180,
+    ): "b6e564cb533869d889f368f6d226be3f0c6bedbb65e899773ef548d110d23ee9",
+}
 CARGO_PROVE_RE = re.compile(r"\bcargo\s+prove\b")
 COMMAND_ARRAY_RE = re.compile(r"(?:\[|,)\s*['\"](?:prove|prover)['\"]")
 COMMAND_CALL_RE = re.compile(
@@ -187,13 +206,16 @@ def is_shell_like(relative: Path) -> bool:
     return relative.suffix == ".sh" or not relative.suffix
 
 
-def direct_proving_findings(relative: Path, text: str) -> list[Finding]:
+def direct_proving_findings(
+    relative: Path, text: str
+) -> tuple[list[Finding], set[tuple[str, int]]]:
     if not is_test_path(relative):
-        return []
+        return [], set()
     findings: list[Finding] = []
+    observed_allowances: set[tuple[str, int]] = set()
     for index, raw_line in enumerate(text.splitlines(), start=1):
         line = non_comment_line(raw_line)
-        if (
+        if not (
             DIRECT_API_RE.search(line)
             or CARGO_PROVE_RE.search(line)
             or COMMAND_ARRAY_RE.search(line)
@@ -203,8 +225,15 @@ def direct_proving_findings(relative: Path, text: str) -> list[Finding]:
                 and re.search(r"(?:^|[;|&]\s*)(?:prove|prover)(?=\s|$)", line)
             )
         ):
-            findings.append(Finding(relative.as_posix(), index, "direct-proving-in-test"))
-    return findings
+            continue
+        key = (relative.as_posix(), index)
+        expected_hash = DIRECT_PROVING_TEST_ALLOWLIST.get(key)
+        actual_hash = hashlib.sha256(raw_line.encode("utf-8")).hexdigest()
+        if expected_hash == actual_hash:
+            observed_allowances.add(key)
+            continue
+        findings.append(Finding(relative.as_posix(), index, "direct-proving-in-test"))
+    return findings, observed_allowances
 
 
 def branch_end(lines: list[str], start: int) -> int:
@@ -324,10 +353,13 @@ def identifier_findings(relative: Path, text: str, category: str | None) -> list
 def scan(root: Path) -> tuple[list[Finding], Counter[str], int, int]:
     findings: list[Finding] = []
     excluded = Counter({category: 0 for category in EXCLUSION_CATEGORIES})
+    enumerated_paths: set[str] = set()
+    observed_direct_proving_allowances: set[tuple[str, int]] = set()
     enumerated = 0
     scanned = 0
     for relative in enumerate_files(root):
         enumerated += 1
+        enumerated_paths.add(relative.as_posix())
         category = excluded_category(relative)
         if category is not None:
             excluded[category] += 1
@@ -337,11 +369,17 @@ def scan(root: Path) -> tuple[list[Finding], Counter[str], int, int]:
         if text is None:
             continue
         scanned += 1
-        findings.extend(direct_proving_findings(relative, text))
+        direct_findings, observed_allowances = direct_proving_findings(relative, text)
+        findings.extend(direct_findings)
+        observed_direct_proving_allowances.update(observed_allowances)
         if category not in NON_DIRECT_EXCLUSIONS:
             findings.extend(success_branch_write_findings(relative, text))
             findings.extend(literal_result_findings(relative, text))
         findings.extend(identifier_findings(relative, text, category))
+    for path, line in DIRECT_PROVING_TEST_ALLOWLIST:
+        key = (path, line)
+        if path in enumerated_paths and key not in observed_direct_proving_allowances:
+            findings.append(Finding(path, line, "stale-direct-proving-allowlist"))
     return sorted(findings, key=lambda item: (item.path, item.line, item.rule)), excluded, enumerated, scanned
 
 
