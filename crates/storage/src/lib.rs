@@ -106,6 +106,39 @@ impl NodeStore {
         })
     }
 
+    /// Verify and durably rewrite every storage-owned legacy file under the
+    /// node-local integrity key. The operation is restartable: already keyed
+    /// files are verified, while remaining legacy files are migrated.
+    ///
+    /// Callers must ensure the node is offline and the legacy directory was
+    /// obtained from a trusted source before using this migration path.
+    pub fn migrate_legacy_state(&self) -> io::Result<()> {
+        if !self.allow_legacy_migration {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "legacy storage migration requires the explicit migration constructor",
+            ));
+        }
+        self.read_genesis()?;
+        self.read_node_state()?;
+        self.read_governance()?;
+        self.read_ledger()?;
+        self.read_receipts()?;
+        self.read_blocks()?;
+        self.read_batch_archive()?;
+        self.read_ordered_batches()?;
+        self.read_mempool()?;
+        self.read_shielded()?;
+        self.read_bridge()?;
+        match self.read_chain_tip() {
+            Ok(_) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+        self.read_ordered_commit_journal_raw()?;
+        Ok(())
+    }
+
     /// Open with an integrity key anchored at an operator-protected path
     /// outside the state directory.
     pub fn try_new_with_integrity_key(
@@ -434,7 +467,7 @@ impl NodeStore {
 
     pub fn read_ordered_commit_journal_raw(&self) -> io::Result<Option<String>> {
         let path = self.data_dir.join(ORDERED_COMMIT_JOURNAL_FILE);
-        match read_text(&path, "state file") {
+        match self.read_body_with_mac(&path, "state file") {
             Ok(raw) => Ok(Some(raw)),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
             Err(error) => Err(error),
@@ -977,13 +1010,13 @@ impl NodeStore {
             self.write_jsonl_head(path, count, chain)?;
             return Ok(());
         }
-        return Err(io::Error::new(
+        Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!(
                 "JSONL head `{}` does not match the authenticated log tail; possible rollback",
                 head_path.display()
             ),
-        ));
+        ))
     }
 
     fn remove_jsonl_log(&self, path: &Path) -> io::Result<()> {

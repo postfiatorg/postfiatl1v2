@@ -2806,6 +2806,25 @@ fn copy_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
     Ok(())
 }
 
+fn migrate_trusted_historical_seed_storage(data_dir: &Path) {
+    // These checked-in replay fixtures intentionally model state created before
+    // keyed storage. Normal opening must fail closed until the test explicitly
+    // opts into the trusted, offline migration path.
+    let error = NodeStore::try_new(data_dir)
+        .and_then(|store| store.read_genesis())
+        .expect_err("normal opener must reject unkeyed historical fixture state");
+    assert!(error.to_string().contains("explicit offline migration"));
+
+    let store = NodeStore::try_new_for_legacy_migration(data_dir)
+        .expect("open trusted historical fixture for migration");
+    store
+        .migrate_legacy_state()
+        .expect("migrate trusted historical fixture storage");
+    store
+        .read_genesis()
+        .expect("migrated historical fixture must reopen logically");
+}
+
 #[test]
 fn historical_external_certificate_applies_via_catch_up_replay_path() {
     let testdata = Path::new(env!("CARGO_MANIFEST_DIR")).join("testdata");
@@ -2824,6 +2843,7 @@ fn historical_external_certificate_applies_via_catch_up_replay_path() {
 
     let data_dir = unique_test_dir("postfiat-historical-cert-catchup-replay");
     copy_dir_all(&seed_dir, &data_dir).expect("seed height-2 workdir");
+    migrate_trusted_historical_seed_storage(&data_dir);
     let batch_file = catchup_fixtures.join("batch.json");
     let certificate_file = catchup_fixtures.join("block-certificate.json");
     let replay_block_file = catchup_fixtures.join("block.json");
@@ -2883,6 +2903,7 @@ fn historical_external_certificate_rejects_state_divergent_catch_up_without_muta
     let catchup_fixtures = testdata.join("wan-devnet-catchup-block-3");
     let data_dir = unique_test_dir("postfiat-historical-cert-state-divergence");
     copy_dir_all(&seed_dir, &data_dir).expect("seed height-2 workdir");
+    migrate_trusted_historical_seed_storage(&data_dir);
 
     let store = NodeStore::new(&data_dir);
     let mut divergent_ledger = store.read_ledger().expect("read seed ledger");
@@ -2935,6 +2956,7 @@ fn historical_external_certificate_rejects_wrong_local_parent_without_mutation()
     let catchup_fixtures = testdata.join("wan-devnet-catchup-block-3");
     let data_dir = unique_test_dir("postfiat-historical-cert-parent-divergence");
     copy_dir_all(&seed_dir, &data_dir).expect("seed height-2 workdir");
+    migrate_trusted_historical_seed_storage(&data_dir);
 
     let store = NodeStore::new(&data_dir);
     let mut divergent_tip = store.read_chain_tip().expect("read seed tip");

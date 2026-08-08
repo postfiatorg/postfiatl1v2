@@ -129,19 +129,12 @@ fn copy_fastpay_node_dir(source: &Path, destination: &Path) {
 }
 
 fn rewrite_fastpay_node_id(data_dir: &Path, node_id: &str) {
-    let path = data_dir.join(NODE_STATE_FILE);
-    let mut state: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&path).expect("read copied node state"))
-            .expect("parse copied node state");
-    state["node_id"] = serde_json::json!(node_id);
-    atomic_write(
-        path,
-        format!(
-            "{}\n",
-            serde_json::to_string_pretty(&state).expect("copied node state JSON")
-        ),
-    )
-    .expect("write copied node identity");
+    let store = NodeStore::new(data_dir);
+    let mut state = store.read_node_state().expect("read copied node state");
+    state.node_id = node_id.to_string();
+    store
+        .write_node_state(&state)
+        .expect("write copied node identity");
 }
 
 fn signed_owned_deposit_for_test(

@@ -79,9 +79,9 @@ impl IntegrityKey {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        match read_key_file(&path)? {
+        match read_key_file(path)? {
             Some(key) => Ok(key),
-            None => create_key_file(&path),
+            None => create_key_file(path),
         }
     }
 
