@@ -2935,10 +2935,17 @@ fn snapshot_file_bytes(
     basis: SnapshotVerificationBasis,
 ) -> io::Result<Vec<u8>> {
     match file_name {
+        GENESIS_FILE => snapshot_json_bytes(&store.read_genesis()?),
+        NODE_STATE_FILE => snapshot_json_bytes(&store.read_node_state()?),
+        GOVERNANCE_FILE => snapshot_json_bytes(&store.read_governance()?),
+        LEDGER_FILE => snapshot_json_bytes(&store.read_ledger()?),
         BLOCKS_FILE => snapshot_json_bytes(&store.read_blocks()?),
         BATCH_ARCHIVE_FILE => snapshot_json_bytes(&store.read_batch_archive()?),
         ORDERED_BATCHES_FILE => snapshot_json_bytes(&store.read_ordered_batches()?),
         RECEIPTS_FILE => snapshot_json_bytes(&store.read_receipts()?),
+        MEMPOOL_FILE => snapshot_json_bytes(&store.read_mempool()?),
+        SHIELDED_FILE => snapshot_json_bytes(&store.read_shielded()?),
+        BRIDGE_FILE => snapshot_json_bytes(&store.read_bridge()?),
         CONSENSUS_V2_SAFETY_SNAPSHOT_FILE => {
             if basis == SnapshotVerificationBasis::FinalizedCheckpoint {
                 // The certified checkpoint fixes every state transition through
@@ -2980,6 +2987,18 @@ fn snapshot_json_bytes<T: Serialize + ?Sized>(value: &T) -> io::Result<Vec<u8>> 
     let json = serde_json::to_string_pretty(value)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     Ok(format!("{json}\n").into_bytes())
+}
+
+fn key_imported_snapshot_state(data_dir: &Path) -> io::Result<NodeStore> {
+    // Snapshot manifests bind the portable logical JSON. Node-local integrity
+    // MACs must never cross that boundary: doing so either leaks/reuses a
+    // source trust anchor or makes the restored files unverifiable under the
+    // destination key. The explicit migration opener accepts each verified
+    // untagged file once and durably rewrites it under the newly created
+    // destination key.
+    let store = NodeStore::try_new_for_legacy_migration(data_dir)?;
+    store.migrate_legacy_state()?;
+    Ok(store)
 }
 
 fn import_snapshot_with_basis(
@@ -3047,6 +3066,7 @@ fn import_snapshot_with_basis(
         }
         atomic_write(data_dir.join(&file.name), bytes)?;
     }
+    let imported_store = key_imported_snapshot_state(&data_dir)?;
 
     if manifest.snapshot_version == SNAPSHOT_VERSION {
         restore_consensus_v2_artifact_snapshot(
@@ -3060,15 +3080,14 @@ fn import_snapshot_with_basis(
             CONSENSUS_V2_QC_DIR,
         )?;
     } else {
-        let legacy_store = NodeStore::new(&data_dir);
-        let legacy_genesis = legacy_store.read_genesis()?;
+        let legacy_genesis = imported_store.read_genesis()?;
         if legacy_genesis.consensus_v2_activation_height.is_some() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "legacy snapshot cannot restore an activated consensus v2 signer without safety state",
             ));
         }
-        let legacy_ledger = legacy_store.read_ledger()?;
+        let legacy_ledger = imported_store.read_ledger()?;
         if legacy_ledger.fastpay_recovery_policy.is_some()
             || !legacy_ledger.fastpay_recovery_committees.is_empty()
             || !legacy_ledger.fastpay_recovery_reveals.is_empty()

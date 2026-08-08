@@ -642,13 +642,14 @@ fn verify_history_rebuild_shadow(
     ));
     std::fs::create_dir(&shadow_dir)?;
     let result = (|| {
-        for file_name in [GENESIS_FILE, FAUCET_ACCOUNT_FILE, VALIDATOR_REGISTRY_GENESIS_FILE] {
+        for file_name in [FAUCET_ACCOUNT_FILE, VALIDATOR_REGISTRY_GENESIS_FILE] {
             std::fs::copy(
                 source_store.data_dir().join(file_name),
                 shadow_dir.join(file_name),
             )?;
         }
         let shadow_store = NodeStore::new(&shadow_dir);
+        shadow_store.write_genesis(&source_store.read_genesis()?)?;
         write_validator_registry_file(
             &shadow_dir.join(VALIDATOR_REGISTRY_FILE),
             state.validator_registry,

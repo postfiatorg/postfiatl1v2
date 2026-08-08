@@ -54,6 +54,7 @@ use postfiat_rpc_sdk::{
     wallet_sign_atomic_swap_from_quote, wallet_sign_transfer_from_quote, RpcRequest, RpcResponse,
     WalletBackupFile, WalletSignAssetTransactionFields,
 };
+use postfiat_storage::NodeStore;
 use postfiat_types::{
     issued_asset_id, market_ops_asset_id, market_ops_evidence_root, market_ops_reserve_packet_hash,
     market_ops_supply_packet_hash, pftl_uniswap_return_burn_id_from_fields,
@@ -64,19 +65,19 @@ use postfiat_types::{
     EthereumExternalEventProofV1, EthereumFinalizedCheckpointV1, EthereumReceiptProofV1,
     EthereumRouteVerificationPolicyV1, FastSwapChainDomainV1, FastSwapCommitteeDomainV1,
     FastSwapCommitteeRootV1, FastSwapCommitteeV1, FastSwapGovernanceBootstrapPayloadV1,
-    FastSwapOpaqueHashV1, FastSwapValidatorV1, Genesis, IssuedPaymentOperation, LedgerState,
-    MarketOpsAlignmentParams, MarketOpsEnvelope, MarketOpsFinalizeOperation, MarketOpsMintLimits,
-    MarketOpsPolicyInputs, MarketOpsPolicyRegisterOperation, MarketOpsPolicyRegistration,
-    MarketOpsReserveDeployLimits, MarketOpsVenueObservation, MempoolState,
-    NavAssetRegisterOperation, NavAttestorRegisterOperation, NavEpochFinalizeOperation,
-    NavProfileRegisterOperation, NavProofProfile, NavReserveAttestOperation,
-    NavReservePublicValuesV1, NavReserveSubmitOperation, PftlUniswapDestinationConsumeOperation,
-    PftlUniswapExportDebitOperation, PftlUniswapMintPacketV2, PftlUniswapOrderReleaseOperation,
-    PftlUniswapOrderReserveOperation, PftlUniswapPrimaryMarketPolicyV2,
-    PftlUniswapPrimaryRedeemOperation, PftlUniswapPrimarySubscribeV2Operation,
-    PftlUniswapReturnImportOperation, PftlUniswapRouteEpochAdvanceOperation,
-    PftlUniswapRouteInitV2Operation, PftlUniswapRoutePauseOperation, SignedAssetTransaction,
-    SignedTransfer, UnsignedAssetTransaction, UnsignedTransfer, VaultBridgeDepositAttestOperation,
+    FastSwapOpaqueHashV1, FastSwapValidatorV1, IssuedPaymentOperation, MarketOpsAlignmentParams,
+    MarketOpsEnvelope, MarketOpsFinalizeOperation, MarketOpsMintLimits, MarketOpsPolicyInputs,
+    MarketOpsPolicyRegisterOperation, MarketOpsPolicyRegistration, MarketOpsReserveDeployLimits,
+    MarketOpsVenueObservation, NavAssetRegisterOperation, NavAttestorRegisterOperation,
+    NavEpochFinalizeOperation, NavProfileRegisterOperation, NavProofProfile,
+    NavReserveAttestOperation, NavReservePublicValuesV1, NavReserveSubmitOperation,
+    PftlUniswapDestinationConsumeOperation, PftlUniswapExportDebitOperation,
+    PftlUniswapMintPacketV2, PftlUniswapOrderReleaseOperation, PftlUniswapOrderReserveOperation,
+    PftlUniswapPrimaryMarketPolicyV2, PftlUniswapPrimaryRedeemOperation,
+    PftlUniswapPrimarySubscribeV2Operation, PftlUniswapReturnImportOperation,
+    PftlUniswapRouteEpochAdvanceOperation, PftlUniswapRouteInitV2Operation,
+    PftlUniswapRoutePauseOperation, SignedAssetTransaction, SignedTransfer,
+    UnsignedAssetTransaction, UnsignedTransfer, VaultBridgeDepositAttestOperation,
     VaultBridgeDepositClaimOperation, VaultBridgeDepositEvidence,
     VaultBridgeDepositFinalizeOperation, VaultBridgeDepositObservation,
     VaultBridgeDepositProposeOperation, ADDRESS_NAMESPACE, ETHEREUM_CHECKPOINT_SCHEMA_V1,
@@ -171,80 +172,38 @@ fn copy_dir(source: &Path, destination: &Path) {
 }
 
 fn rewrite_node_identity(data_dir: &Path, node_id: &str) {
-    let path = data_dir.join("node_state.json");
-    let mut state: Value = serde_json::from_slice(&fs::read(&path).expect("read node state"))
-        .expect("parse node state");
-    state["node_id"] = json!(node_id);
-    fs::write(
-        path,
-        format!(
-            "{}\n",
-            serde_json::to_string_pretty(&state).expect("serialize node state")
-        ),
-    )
-    .expect("write node identity");
+    let store = NodeStore::new(data_dir);
+    let mut state = store.read_node_state().expect("read node state");
+    state.node_id = node_id.to_string();
+    store.write_node_state(&state).expect("write node identity");
 }
 
 fn activate_atomic_swaps_in_fresh_genesis(data_dir: &Path) {
-    let path = data_dir.join("genesis.json");
-    let mut genesis: Value =
-        serde_json::from_slice(&fs::read(&path).expect("read genesis")).expect("parse genesis");
-    genesis["atomic_swap_activation_height"] = json!(0);
-    fs::write(
-        path,
-        format!(
-            "{}\n",
-            serde_json::to_string_pretty(&genesis).expect("serialize activated genesis")
-        ),
-    )
-    .expect("activate atomic swaps in fresh integration genesis");
-    let genesis: Genesis = serde_json::from_slice(
-        &fs::read(data_dir.join("genesis.json")).expect("read activated genesis"),
-    )
-    .expect("parse activated genesis type");
-    let mut chain_tip: Value = serde_json::from_slice(
-        &fs::read(data_dir.join("chain_tip.json")).expect("read initial chain tip"),
-    )
-    .expect("parse initial chain tip");
-    chain_tip["genesis_hash"] = json!(genesis_hash(&genesis));
-    fs::write(
-        data_dir.join("chain_tip.json"),
-        format!(
-            "{}\n",
-            serde_json::to_string_pretty(&chain_tip).expect("serialize initial chain tip")
-        ),
-    )
-    .expect("align initial chain tip with activated genesis");
+    let store = NodeStore::new(data_dir);
+    let mut genesis = store.read_genesis().expect("read genesis");
+    genesis.atomic_swap_activation_height = Some(0);
+    store
+        .write_genesis(&genesis)
+        .expect("activate atomic swaps in fresh integration genesis");
+    let mut chain_tip = store.read_chain_tip().expect("read initial chain tip");
+    chain_tip.genesis_hash = genesis_hash(&genesis);
+    store
+        .write_chain_tip(&chain_tip)
+        .expect("align initial chain tip with activated genesis");
 }
 
 fn activate_consensus_v2_in_fresh_genesis(data_dir: &Path) {
-    let path = data_dir.join("genesis.json");
-    let mut genesis: Value =
-        serde_json::from_slice(&fs::read(&path).expect("read genesis")).expect("parse genesis");
-    genesis["consensus_v2_activation_height"] = json!(1);
-    fs::write(
-        &path,
-        format!(
-            "{}\n",
-            serde_json::to_string_pretty(&genesis).expect("serialize consensus-v2 genesis")
-        ),
-    )
-    .expect("activate consensus v2 in fresh integration genesis");
-    let genesis: Genesis = serde_json::from_slice(&fs::read(&path).expect("read updated genesis"))
-        .expect("parse updated genesis type");
-    let mut chain_tip: Value = serde_json::from_slice(
-        &fs::read(data_dir.join("chain_tip.json")).expect("read initial chain tip"),
-    )
-    .expect("parse initial chain tip");
-    chain_tip["genesis_hash"] = json!(genesis_hash(&genesis));
-    fs::write(
-        data_dir.join("chain_tip.json"),
-        format!(
-            "{}\n",
-            serde_json::to_string_pretty(&chain_tip).expect("serialize initial chain tip")
-        ),
-    )
-    .expect("align initial chain tip with consensus-v2 genesis");
+    let store = NodeStore::new(data_dir);
+    let mut genesis = store.read_genesis().expect("read genesis");
+    genesis.consensus_v2_activation_height = Some(1);
+    store
+        .write_genesis(&genesis)
+        .expect("activate consensus v2 in fresh integration genesis");
+    let mut chain_tip = store.read_chain_tip().expect("read initial chain tip");
+    chain_tip.genesis_hash = genesis_hash(&genesis);
+    store
+        .write_chain_tip(&chain_tip)
+        .expect("align initial chain tip with consensus-v2 genesis");
 }
 
 fn split_validator_key(data_dir: &Path, validator: &str) -> PathBuf {
@@ -740,10 +699,9 @@ fn start_services(harness: &mut Harness, topology_path: &Path, rpc_ports: &[u16]
 
 fn bootstrap_fastswap_committee(harness: &Harness, data_dirs: &[PathBuf]) -> FastSwapCommitteeV1 {
     let data_dir = &data_dirs[0];
-    let genesis: Genesis = serde_json::from_slice(
-        &fs::read(data_dir.join("genesis.json")).expect("read committee genesis"),
-    )
-    .expect("parse committee genesis");
+    let genesis = NodeStore::new(data_dir)
+        .read_genesis()
+        .expect("read committee genesis");
     let validator_keys: Value = serde_json::from_slice(
         &fs::read(data_dir.join("validator_keys.json")).expect("read committee validator keys"),
     )
@@ -1095,10 +1053,9 @@ fn governed_fastswap_committee_bootstrap_converges_across_six_validators() {
         })
         .expect("replay governed FastSwap bootstrap");
         roots.push(verified.state_root);
-        let ledger: LedgerState = serde_json::from_slice(
-            &fs::read(data_dir.join("ledger.json")).expect("read FastSwap bootstrap ledger"),
-        )
-        .expect("parse FastSwap bootstrap ledger");
+        let ledger = NodeStore::new(data_dir)
+            .read_ledger()
+            .expect("read FastSwap bootstrap ledger");
         assert_eq!(ledger.fastswap_committees, vec![committee.clone()]);
         assert_eq!(ledger.fastswap_activation_height, Some(4));
         assert_eq!(verified.block_count, 3, "validator {index}");
@@ -2342,10 +2299,9 @@ fn provider_neutral_qnav_proof_finalizes_and_survives_six_validator_restart() {
     })
     .expect("initialize qNAV six-validator seed");
     activate_consensus_v2_in_fresh_genesis(&seed_dir);
-    let qualified_genesis: Genesis = serde_json::from_slice(
-        &fs::read(seed_dir.join("genesis.json")).expect("read qNAV genesis"),
-    )
-    .expect("parse qNAV genesis");
+    let qualified_genesis = NodeStore::new(&seed_dir)
+        .read_genesis()
+        .expect("read qNAV genesis");
     assert_eq!(
         genesis_hash(&qualified_genesis),
         "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9"
@@ -2510,10 +2466,9 @@ fn provider_neutral_qnav_proof_finalizes_and_survives_six_validator_restart() {
     assert_eq!(finalized.0, submitted.0 + 1);
 
     for index in 0..VALIDATORS {
-        let ledger: LedgerState = serde_json::from_slice(
-            &fs::read(harness.node(index).join("ledger.json")).expect("read qNAV ledger"),
-        )
-        .expect("parse qNAV ledger");
+        let ledger = NodeStore::new(harness.node(index))
+            .read_ledger()
+            .expect("read qNAV ledger");
         let profile = ledger
             .nav_proof_profile(QNAV_PROFILE_ID)
             .expect("qNAV profile after finality");
@@ -2586,10 +2541,9 @@ fn provider_neutral_qnav_proof_finalizes_and_survives_six_validator_restart() {
         data_dir: restored_dir.clone(),
     })
     .expect("replay finalized provider-neutral qNAV snapshot history");
-    let restored_ledger: LedgerState = serde_json::from_slice(
-        &fs::read(restored_dir.join("ledger.json")).expect("read restored qNAV ledger"),
-    )
-    .expect("parse restored qNAV ledger");
+    let restored_ledger = NodeStore::new(&restored_dir)
+        .read_ledger()
+        .expect("read restored qNAV ledger");
     assert_eq!(
         restored_ledger
             .nav_proof_profile(QNAV_PROFILE_ID)
@@ -3052,10 +3006,9 @@ fn a666_spawn_rehearsal_network(
     harness: &mut Harness,
     data_dirs: &[PathBuf],
 ) -> (PathBuf, Vec<u16>, Vec<PathBuf>) {
-    let genesis: Genesis = serde_json::from_slice(
-        &fs::read(data_dirs[0].join("genesis.json")).expect("read exact A666 genesis"),
-    )
-    .expect("parse exact A666 genesis");
+    let genesis = NodeStore::new(&data_dirs[0])
+        .read_genesis()
+        .expect("read exact A666 genesis");
     let base_port = free_base_port();
     let topology_path = harness.root.join("a666-public-successor-topology.json");
     let topology = local_topology(
@@ -3175,10 +3128,9 @@ fn a666_generate_pre_migration_network(inputs: &A666LifecycleInputs) -> A666Rehe
     })
     .expect("initialize exact A666 migration seed");
     activate_consensus_v2_in_fresh_genesis(&seed_dir);
-    let qualified_genesis: Genesis = serde_json::from_slice(
-        &fs::read(seed_dir.join("genesis.json")).expect("read exact A666 genesis"),
-    )
-    .expect("parse exact A666 genesis");
+    let qualified_genesis = NodeStore::new(&seed_dir)
+        .read_genesis()
+        .expect("read exact A666 genesis");
     assert_eq!(
         genesis_hash(&qualified_genesis),
         public_values.pftl_genesis_hash
@@ -3436,10 +3388,9 @@ fn a666_successor_lifecycle_from_network(
     assert_eq!(finalized.0, submitted.0 + 1);
 
     for index in 0..VALIDATORS {
-        let ledger: LedgerState = serde_json::from_slice(
-            &fs::read(harness.node(index).join("ledger.json")).expect("read A666 ledger"),
-        )
-        .expect("parse A666 ledger");
+        let ledger = NodeStore::new(harness.node(index))
+            .read_ledger()
+            .expect("read A666 ledger");
         assert_eq!(
             ledger
                 .nav_assets
@@ -3667,11 +3618,9 @@ fn a666_successor_lifecycle_from_network(
         }),
         "claim-controlled-pfusdc-vault-deposit",
     );
-    let pfusdc_backed_ledger: LedgerState = serde_json::from_slice(
-        &fs::read(harness.node(0).join("ledger.json"))
-            .expect("read controlled pfUSDC-backed ledger"),
-    )
-    .expect("parse controlled pfUSDC-backed ledger");
+    let pfusdc_backed_ledger = NodeStore::new(harness.node(0))
+        .read_ledger()
+        .expect("read controlled pfUSDC-backed ledger");
     let pfusdc_source_root = vault_bridge_source_root_for_asset(
         &pfusdc_backed_ledger.vault_bridge_bucket_states,
         PFUSDC_ASSET_ID,
@@ -3941,11 +3890,9 @@ fn a666_successor_lifecycle_from_network(
         "execute-transparent-a666-issue",
     );
 
-    let overlay_ledger: LedgerState = serde_json::from_slice(
-        &fs::read(harness.node(0).join("ledger.json"))
-            .expect("read controlled A666 overlay ledger"),
-    )
-    .expect("parse controlled A666 overlay ledger");
+    let overlay_ledger = NodeStore::new(harness.node(0))
+        .read_ledger()
+        .expect("read controlled A666 overlay ledger");
     let overlay = postfiat_execution::nav_subscription_reserve_overlay_for_asset(
         &overlay_ledger,
         A666_ASSET_ID,
@@ -4554,11 +4501,10 @@ fn a666_successor_lifecycle_from_network(
         .checked_sub(transparent_redeem_base)
         .expect("expected A666 settlement reserve");
     for index in 0..VALIDATORS {
-        let ledger: LedgerState = serde_json::from_slice(
-            &fs::read(harness.node(index).join("ledger.json"))
-                .expect("read finalized A666 lifecycle ledger"),
-        )
-        .expect("parse finalized A666 lifecycle ledger");
+        let store = NodeStore::new(harness.node(index));
+        let ledger = store
+            .read_ledger()
+            .expect("read finalized A666 lifecycle ledger");
         assert_eq!(
             postfiat_execution::issued_asset_supply(&ledger, A666_ASSET_ID)
                 .expect("final A666 issued supply"),
@@ -4569,11 +4515,9 @@ fn a666_successor_lifecycle_from_network(
         // trustlines, route settlement custody (reserve plus non-NAV
         // spread), and the AssetOrchard shielded pool, so conservation is
         // asserted over global custody (AR-11).
-        let shielded_state: postfiat_types::ShieldedState = serde_json::from_slice(
-            &fs::read(harness.node(index).join("shielded.json"))
-                .expect("read finalized A666 lifecycle shielded state"),
-        )
-        .expect("parse finalized A666 lifecycle shielded state");
+        let shielded_state = store
+            .read_shielded()
+            .expect("read finalized A666 lifecycle shielded state");
         assert_eq!(
             postfiat_node::global_issued_asset_supply(&ledger, &shielded_state, PFUSDC_ASSET_ID)
                 .expect("final pfUSDC global issued supply"),
@@ -4658,10 +4602,9 @@ fn a666_successor_lifecycle_from_network(
         data_dir: restored_dir.clone(),
     })
     .expect("replay finalized A666 successor snapshot history");
-    let restored_ledger: LedgerState = serde_json::from_slice(
-        &fs::read(restored_dir.join("ledger.json")).expect("read restored A666 ledger"),
-    )
-    .expect("parse restored A666 ledger");
+    let restored_ledger = NodeStore::new(&restored_dir)
+        .read_ledger()
+        .expect("read restored A666 ledger");
     assert_eq!(
         restored_ledger
             .nav_proof_profile(A666_SUCCESSOR_PROFILE)
@@ -4912,10 +4855,9 @@ fn atomic_swap_local_six_validator_tcp_finality_and_catch_up() {
         "finalize-a651-market-ops",
     );
 
-    let seeded_ledger: LedgerState = serde_json::from_slice(
-        &fs::read(seed_dir.join("ledger.json")).expect("read real-pair seed ledger"),
-    )
-    .expect("parse real-pair seed ledger");
+    let seeded_ledger = NodeStore::new(&seed_dir)
+        .read_ledger()
+        .expect("read real-pair seed ledger");
     assert!(
         seeded_ledger.nav_asset(&pfusdc_asset_id).is_some(),
         "pfUSDC must remain NAV-tracked for bridge reserve accounting"
@@ -4979,10 +4921,9 @@ fn atomic_swap_local_six_validator_tcp_finality_and_catch_up() {
 
     let base_port = free_base_port();
     let topology_path = harness.root.join("topology.json");
-    let activated_genesis: Genesis = serde_json::from_slice(
-        &fs::read(seed_dir.join("genesis.json")).expect("read activated seed genesis"),
-    )
-    .expect("parse activated seed genesis");
+    let activated_genesis = NodeStore::new(&seed_dir)
+        .read_genesis()
+        .expect("read activated seed genesis");
     let topology = local_topology(
         NetworkDomain {
             chain_id: activated_genesis.chain_id.clone(),
@@ -5188,10 +5129,8 @@ fn atomic_swap_local_six_validator_tcp_finality_and_catch_up() {
             !data_dir.join("ordered_commit_journal.json").exists(),
             "validator {index} retained an ordered-commit journal after convergence"
         );
-        let mempool: MempoolState = serde_json::from_slice(
-            &fs::read(data_dir.join("mempool.json")).expect("read converged mempool"),
-        )
-        .expect("parse converged mempool");
+        let store = NodeStore::new(&data_dir);
+        let mempool = store.read_mempool().expect("read converged mempool");
         assert!(
             mempool
                 .pending_atomic_swaps
@@ -5199,10 +5138,9 @@ fn atomic_swap_local_six_validator_tcp_finality_and_catch_up() {
                 .all(|entry| entry.tx_id != finality.tx_id),
             "validator {index} retained the finalized atomic swap in its mempool"
         );
-        let ledger: LedgerState = serde_json::from_slice(
-            &fs::read(data_dir.join("ledger.json")).expect("read converged real-pair ledger"),
-        )
-        .expect("parse converged real-pair ledger");
+        let ledger = store
+            .read_ledger()
+            .expect("read converged real-pair ledger");
         assert_eq!(
             ledger
                 .trustline_for_account_asset(&pfusdc_owner_id.address, &pfusdc_asset_id)
