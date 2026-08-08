@@ -53,3 +53,7 @@
 
 - 2026-08-08 ~01:15 UTC: Manager: Step 0 + A0 + A1 closed in one session. Executor-A/Verifier-A roles currently performed by Manager (no live mutation yet; A2 is the first custody op).
 - 2026-08-08: Manager: plan committed to docs/plans/, tracker created, fire-discipline skill read and bound to Track A. Envelope active per principal GO.
+
+## Journal
+
+- 2026-08-08T02:3xZ A3: vkey tripwire FIRED (rebuilt ELF -> 0x00fa3bef...) — first prove killed early. Resolved by injecting archived governed ELF dd743c38... with SP1_SKIP_PROGRAM_BUILD=true host rebuild. vkey-print (new tool, StakeHub-e6-213618e 2581c43) confirms 0x00580ee8... EXACT. Pinned-guest --execute PASS (22.6M cycles), PV policy 0x076c071e44... EXACT. Groth16 prove relaunched pinned: PID /tmp/a666-unified-a0/agg-prove2.pid, log /tmp/a666-unified-a0/agg-prove2.log. Gates remaining for A3 close: proof completes + vkey line + PV policy recheck + local verify.
