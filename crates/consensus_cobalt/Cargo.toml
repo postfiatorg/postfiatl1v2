@@ -10,6 +10,12 @@ publish = false
 [lib]
 path = "src/lib.rs"
 
+[features]
+default = []
+# Enables schema-only, unsigned Cobalt validators and quorum evaluators used by
+# adversarial simulations. Production builds must leave this feature disabled.
+cobalt-unsafe-simulation = []
+
 [dependencies]
 postfiat-crypto-provider = { path = "../crypto_provider" }
 postfiat-types = { path = "../types" }
@@ -18,3 +24,59 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 postfiat-mempool-dag = { path = "../mempool_dag" }
+
+[[example]]
+name = "cobalt_abba_byzantine"
+required-features = ["cobalt-unsafe-simulation"]
+
+[[example]]
+name = "cobalt_adversarial_harness"
+required-features = ["cobalt-unsafe-simulation"]
+
+[[example]]
+name = "cobalt_adversarial_soak"
+required-features = ["cobalt-unsafe-simulation"]
+
+[[example]]
+name = "cobalt_crash_restart"
+required-features = ["cobalt-unsafe-simulation"]
+
+[[example]]
+name = "cobalt_dabc_invalid_candidates"
+required-features = ["cobalt-unsafe-simulation"]
+
+[[example]]
+name = "cobalt_governance_spam"
+required-features = ["cobalt-unsafe-simulation"]
+
+[[example]]
+name = "cobalt_live_process_kill"
+required-features = ["cobalt-unsafe-simulation"]
+
+[[example]]
+name = "cobalt_parser_payload_fuzz"
+required-features = ["cobalt-unsafe-simulation"]
+
+[[example]]
+name = "cobalt_partition_simulation"
+required-features = ["cobalt-unsafe-simulation"]
+
+[[example]]
+name = "cobalt_rbc_byzantine"
+required-features = ["cobalt-unsafe-simulation"]
+
+[[example]]
+name = "cobalt_resource_dos"
+required-features = ["cobalt-unsafe-simulation"]
+
+[[example]]
+name = "cobalt_rollback_recovery"
+required-features = ["cobalt-unsafe-simulation"]
+
+[[example]]
+name = "cobalt_stale_replay"
+required-features = ["cobalt-unsafe-simulation"]
+
+[[example]]
+name = "rbc_nonuniform_tcp_drill"
+required-features = ["cobalt-unsafe-simulation"]

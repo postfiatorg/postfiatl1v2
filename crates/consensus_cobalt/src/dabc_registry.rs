@@ -135,11 +135,78 @@ pub fn build_dabc_full_knowledge_check(
         signature_hex: signature_hex.into(),
     };
     check.message_id = dabc_full_knowledge_check_message_id(&check)?;
-    validate_dabc_full_knowledge_check(domain, &check)?;
+    validate_dabc_full_knowledge_check_schema(domain, &check)?;
     Ok(check)
 }
 
+/// Sign a freshly built DABC full-knowledge check with `private_key` (ML-DSA-65).
+pub fn sign_dabc_full_knowledge_check(
+    domain: &CobaltDomain,
+    trust_graph_root: TrustGraphRoot,
+    sender: impl Into<String>,
+    checkpoint_height: u64,
+    pending_pairs: Vec<DabcPendingPair>,
+    private_key: &[u8],
+) -> Result<DabcFullKnowledgeCheck, String> {
+    validate_domain(domain)?;
+    validate_hash_hex("DABC full-knowledge trust graph root", &trust_graph_root)?;
+    let mut pending_pairs = pending_pairs;
+    pending_pairs.sort_by(dabc_pending_pair_cmp);
+    pending_pairs.dedup_by(|left, right| {
+        left.amendment_slot == right.amendment_slot
+            && left.output_candidate_id == right.output_candidate_id
+    });
+    let mut check = DabcFullKnowledgeCheck {
+        message_id: String::new(),
+        chain_id: domain.chain_id.clone(),
+        genesis_hash: domain.genesis_hash.clone(),
+        protocol_version: domain.protocol_version,
+        trust_graph_root,
+        sender: sender.into(),
+        checkpoint_height,
+        pending_pairs,
+        signature_hex: String::new(),
+    };
+    check.message_id = dabc_full_knowledge_check_message_id(&check)?;
+    let payload = dabc_full_knowledge_check_signing_payload_bytes(&check)?;
+    check.signature_hex =
+        sign_cobalt_payload(private_key, &payload, RBC_MESSAGE_SIGNATURE_CONTEXT)?;
+    validate_dabc_full_knowledge_check_schema(domain, &check)?;
+    Ok(check)
+}
+
+/// Like [`validate_dabc_full_knowledge_check`], but additionally requires the
+/// sender to be a registered committee member and verifies the sender's ML-DSA
+/// signature over the canonical signing payload.
+pub fn validate_dabc_full_knowledge_check_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    check: &DabcFullKnowledgeCheck,
+) -> Result<(), String> {
+    validate_dabc_full_knowledge_check_schema(domain, check)?;
+    let payload = dabc_full_knowledge_check_signing_payload_bytes(check)?;
+    verify_cobalt_message_signature(
+        committee,
+        RBC_MESSAGE_SIGNATURE_CONTEXT,
+        &check.sender,
+        &payload,
+        &check.signature_hex,
+    )
+    .map_err(|error| format!("DABC full-knowledge check {error}"))
+}
+
+/// Schema-only DABC validation for simulations and parser fuzzing.
+///
+/// Production callers must use [`validate_dabc_full_knowledge_check_signed`].
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
 pub fn validate_dabc_full_knowledge_check(
+    domain: &CobaltDomain,
+    check: &DabcFullKnowledgeCheck,
+) -> Result<(), String> {
+    validate_dabc_full_knowledge_check_schema(domain, check)
+}
+
+fn validate_dabc_full_knowledge_check_schema(
     domain: &CobaltDomain,
     check: &DabcFullKnowledgeCheck,
 ) -> Result<(), String> {
@@ -191,8 +258,51 @@ pub fn dabc_full_knowledge_check_message_id(
     ))
 }
 
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
 pub fn build_dabc_full_knowledge_checkpoint(
     domain: &CobaltDomain,
+    graph: &TrustGraph,
+    local_validator: impl Into<String>,
+    interval_height: u64,
+    wait_until_height: u64,
+    checks: Vec<DabcFullKnowledgeCheck>,
+) -> Result<DabcFullKnowledgeCheckpoint, String> {
+    build_dabc_full_knowledge_checkpoint_internal(
+        domain,
+        None,
+        graph,
+        local_validator,
+        interval_height,
+        wait_until_height,
+        checks,
+    )
+}
+
+/// Build a production checkpoint whose every support message is authenticated
+/// against the active Cobalt committee.
+pub fn build_dabc_full_knowledge_checkpoint_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    graph: &TrustGraph,
+    local_validator: impl Into<String>,
+    interval_height: u64,
+    wait_until_height: u64,
+    checks: Vec<DabcFullKnowledgeCheck>,
+) -> Result<DabcFullKnowledgeCheckpoint, String> {
+    build_dabc_full_knowledge_checkpoint_internal(
+        domain,
+        Some(committee),
+        graph,
+        local_validator,
+        interval_height,
+        wait_until_height,
+        checks,
+    )
+}
+
+fn build_dabc_full_knowledge_checkpoint_internal(
+    domain: &CobaltDomain,
+    committee: Option<&CobaltSignatureCommittee>,
     graph: &TrustGraph,
     local_validator: impl Into<String>,
     interval_height: u64,
@@ -222,12 +332,37 @@ pub fn build_dabc_full_knowledge_checkpoint(
         checks,
     };
     checkpoint.checkpoint_id = dabc_full_knowledge_checkpoint_id(domain, &checkpoint)?;
-    validate_dabc_full_knowledge_checkpoint(domain, graph, &checkpoint)?;
+    validate_dabc_full_knowledge_checkpoint_internal(domain, committee, graph, &checkpoint)?;
     Ok(checkpoint)
 }
 
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
 pub fn validate_dabc_full_knowledge_checkpoint(
     domain: &CobaltDomain,
+    graph: &TrustGraph,
+    checkpoint: &DabcFullKnowledgeCheckpoint,
+) -> Result<(), String> {
+    validate_dabc_full_knowledge_checkpoint_internal(domain, None, graph, checkpoint)
+}
+
+/// Validate checkpoint quorum support with registered-key signature checks.
+pub fn validate_dabc_full_knowledge_checkpoint_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    graph: &TrustGraph,
+    checkpoint: &DabcFullKnowledgeCheckpoint,
+) -> Result<(), String> {
+    validate_dabc_full_knowledge_checkpoint_internal(
+        domain,
+        Some(committee),
+        graph,
+        checkpoint,
+    )
+}
+
+fn validate_dabc_full_knowledge_checkpoint_internal(
+    domain: &CobaltDomain,
+    committee: Option<&CobaltSignatureCommittee>,
     graph: &TrustGraph,
     checkpoint: &DabcFullKnowledgeCheckpoint,
 ) -> Result<(), String> {
@@ -265,7 +400,12 @@ pub fn validate_dabc_full_knowledge_checkpoint(
     let allowed: BTreeSet<&str> = view.derived_unl.iter().map(String::as_str).collect();
     let mut support_by_height: BTreeMap<u64, Vec<String>> = BTreeMap::new();
     for check in &checkpoint.checks {
-        validate_dabc_full_knowledge_check(domain, check)?;
+        match committee {
+            Some(committee) => {
+                validate_dabc_full_knowledge_check_signed(domain, committee, check)?
+            }
+            None => validate_dabc_full_knowledge_check_schema(domain, check)?,
+        }
         if check.trust_graph_root != checkpoint.trust_graph_root {
             return Err(
                 "DABC full-knowledge checkpoint check trust graph root mismatch".to_string(),
@@ -333,6 +473,7 @@ pub fn dabc_full_knowledge_checkpoint_id(
     ))
 }
 
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
 pub fn validate_dabc_activation_with_full_knowledge(
     domain: &CobaltDomain,
     graph: &TrustGraph,
@@ -340,8 +481,46 @@ pub fn validate_dabc_activation_with_full_knowledge(
     ratified: &DabcRatifiedAmendment,
     checkpoint: &DabcFullKnowledgeCheckpoint,
 ) -> Result<DabcActivationEvidence, String> {
+    validate_dabc_activation_with_full_knowledge_internal(
+        domain,
+        None,
+        graph,
+        ratified_chain,
+        ratified,
+        checkpoint,
+    )
+}
+
+/// Validate DABC activation using only committee-authenticated checkpoint
+/// support. This is the production activation entry point.
+pub fn validate_dabc_activation_with_full_knowledge_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    graph: &TrustGraph,
+    ratified_chain: &[DabcRatifiedAmendment],
+    ratified: &DabcRatifiedAmendment,
+    checkpoint: &DabcFullKnowledgeCheckpoint,
+) -> Result<DabcActivationEvidence, String> {
+    validate_dabc_activation_with_full_knowledge_internal(
+        domain,
+        Some(committee),
+        graph,
+        ratified_chain,
+        ratified,
+        checkpoint,
+    )
+}
+
+fn validate_dabc_activation_with_full_knowledge_internal(
+    domain: &CobaltDomain,
+    committee: Option<&CobaltSignatureCommittee>,
+    graph: &TrustGraph,
+    ratified_chain: &[DabcRatifiedAmendment],
+    ratified: &DabcRatifiedAmendment,
+    checkpoint: &DabcFullKnowledgeCheckpoint,
+) -> Result<DabcActivationEvidence, String> {
     validate_dabc_ratified_chain(domain, graph, ratified_chain)?;
-    validate_dabc_full_knowledge_checkpoint(domain, graph, checkpoint)?;
+    validate_dabc_full_knowledge_checkpoint_internal(domain, committee, graph, checkpoint)?;
     if ratified.activation_height == 0 {
         return Err("DABC activation height must be nonzero".to_string());
     }
@@ -415,8 +594,45 @@ pub fn dabc_activation_evidence_id(
     Ok(hash_hex("postfiat.cobalt.dabc.activation.v1", &encoded))
 }
 
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
 pub fn build_dabc_replay_bundle(
     domain: &CobaltDomain,
+    graph: &TrustGraph,
+    ratified_amendments: Vec<DabcRatifiedAmendment>,
+    full_knowledge_checkpoints: Vec<DabcFullKnowledgeCheckpoint>,
+    activation_evidence: Vec<DabcActivationEvidence>,
+) -> Result<DabcReplayBundle, String> {
+    build_dabc_replay_bundle_internal(
+        domain,
+        None,
+        graph,
+        ratified_amendments,
+        full_knowledge_checkpoints,
+        activation_evidence,
+    )
+}
+
+pub fn build_dabc_replay_bundle_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    graph: &TrustGraph,
+    ratified_amendments: Vec<DabcRatifiedAmendment>,
+    full_knowledge_checkpoints: Vec<DabcFullKnowledgeCheckpoint>,
+    activation_evidence: Vec<DabcActivationEvidence>,
+) -> Result<DabcReplayBundle, String> {
+    build_dabc_replay_bundle_internal(
+        domain,
+        Some(committee),
+        graph,
+        ratified_amendments,
+        full_knowledge_checkpoints,
+        activation_evidence,
+    )
+}
+
+fn build_dabc_replay_bundle_internal(
+    domain: &CobaltDomain,
+    committee: Option<&CobaltSignatureCommittee>,
     graph: &TrustGraph,
     ratified_amendments: Vec<DabcRatifiedAmendment>,
     full_knowledge_checkpoints: Vec<DabcFullKnowledgeCheckpoint>,
@@ -440,12 +656,31 @@ pub fn build_dabc_replay_bundle(
         activation_evidence,
     };
     bundle.bundle_id = dabc_replay_bundle_id(domain, &bundle)?;
-    verify_dabc_replay_bundle(domain, graph, &bundle)?;
+    verify_dabc_replay_bundle_internal(domain, committee, graph, &bundle)?;
     Ok(bundle)
 }
 
+#[cfg(any(test, feature = "cobalt-unsafe-simulation"))]
 pub fn verify_dabc_replay_bundle(
     domain: &CobaltDomain,
+    graph: &TrustGraph,
+    bundle: &DabcReplayBundle,
+) -> Result<DabcReplayReport, String> {
+    verify_dabc_replay_bundle_internal(domain, None, graph, bundle)
+}
+
+pub fn verify_dabc_replay_bundle_signed(
+    domain: &CobaltDomain,
+    committee: &CobaltSignatureCommittee,
+    graph: &TrustGraph,
+    bundle: &DabcReplayBundle,
+) -> Result<DabcReplayReport, String> {
+    verify_dabc_replay_bundle_internal(domain, Some(committee), graph, bundle)
+}
+
+fn verify_dabc_replay_bundle_internal(
+    domain: &CobaltDomain,
+    committee: Option<&CobaltSignatureCommittee>,
     graph: &TrustGraph,
     bundle: &DabcReplayBundle,
 ) -> Result<DabcReplayReport, String> {
@@ -480,7 +715,7 @@ pub fn verify_dabc_replay_bundle(
     let mut checkpoints_by_id = BTreeMap::new();
     let mut checkpoint_ids = Vec::with_capacity(bundle.full_knowledge_checkpoints.len());
     for checkpoint in &bundle.full_knowledge_checkpoints {
-        validate_dabc_full_knowledge_checkpoint(domain, graph, checkpoint)?;
+        validate_dabc_full_knowledge_checkpoint_internal(domain, committee, graph, checkpoint)?;
         if checkpoints_by_id
             .insert(checkpoint.checkpoint_id.clone(), checkpoint)
             .is_some()
@@ -520,8 +755,9 @@ pub fn verify_dabc_replay_bundle(
             .ok_or_else(|| {
                 "DABC replay bundle activation evidence references unknown ratification".to_string()
             })?;
-        let expected = validate_dabc_activation_with_full_knowledge(
+        let expected = validate_dabc_activation_with_full_knowledge_internal(
             domain,
+            committee,
             graph,
             &bundle.ratified_amendments,
             ratified,
