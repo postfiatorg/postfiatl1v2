@@ -814,6 +814,7 @@ pub fn execute_asset_transaction_with_replay_compatibility(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_asset_transaction_with_checked_preimage(
     genesis: &Genesis,
     ledger: &mut LedgerState,
