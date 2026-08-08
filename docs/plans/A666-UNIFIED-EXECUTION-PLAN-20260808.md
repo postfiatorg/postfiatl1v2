@@ -305,3 +305,36 @@ Receipts (all accepted=true, fee 23 each, ok=true fail-closed submitter gates):
 
 NEXT (Ethereum side): leg 3b0 signer funding (if needed), 3b accept-and-mint via controller with receipt witness (postfiat-node pftl-uniswap-receipt-witness for tx 2543517d...), 3c/3d approvals, 3e swap (RE-SIM REQUIRED — sim block 25707323 is stale by now; re-run two-fork sim, min-out floor(0.97 x fill), rebind values). StakeHub agent custody for all EVM sends; gas budget headroom 18.72.
 
+### 2026-08-08 — GPT-5.6-Sol post-crash respawn HANDOFF — A5 HELD at Leg 3b witness
+
+Respawn state (verify live again before trusting):
+
+- Started exactly at the reported failure: `pftl-uniswap-receipt-witness` had errored `PFTL-Uniswap receipt witness bounds are invalid`; `/tmp/a666-s1g/leg3b/receipt-witness.json` was absent. No witness rebuild completed and no EVM send was fired by this respawn.
+- Read-only live sweep over all six tx/receipts RPCs: fleet 6/6 at height 787, tip `a622da3a...`, state root `c6839e57...`, mempool 0, build `2246d257`.
+- Every landed `a666-s1g-*` label was mapped from its submit artifact to its full tx id and queried through both `tx` and `receipts`. All five tx queries returned `confirmed=true`; every validator returned exactly one matching receipt with `accepted=true` and `code=accepted`. Therefore NEVER re-run any of them:
+  - `a666-s1g-order-release` tx `34f281f5...`: accepted; live receipt fee 22 (correction to the prior summary's blanket fee-23 claim).
+  - `a666-s1g-route-epoch-advance` tx `2d42f270...`: accepted; fee 23.
+  - `a666-s1g-order-reserve` tx `2610adb9...`: accepted; fee 23; RES2 is terminal because subscribe consumed it.
+  - `a666-s1g-primary-subscribe` tx `b7716ed8...`: accepted; fee 23.
+  - `a666-s1g-export-debit` tx `2543517d...`: accepted; fee 23.
+- Disk guard PASS: 110 GB available (>20 GB floor). Existing user changes/untracked evidence in the a666 worktree were observed and left untouched.
+- UNCONDITIONAL STOP during read-only preflight: a process-list diagnostic surfaced a VS Code connection-token class secret in transient command output. The value is deliberately omitted here and was never copied into an artifact. Per Section 2, "any secret appearing in output" means STOP-no-retry. Live mutations are held pending a fresh principal ruling; no chain, wallet, StakeHub, key, vault, balance, or money state was mutated by this respawn.
+- Exact safe technical resume point after a fresh ruling: re-query the same five labels on all six validators; confirm height/root convergence and mempool 0; confirm receipt-witness output still absent; diagnose the bounds check from code and the height-787 tx finality object; build and validate the witness locally; only then evaluate Leg 3b0 and the held EVM packet. Never reuse RES1/RES2, never submit tx `2543517d...` again, and re-sim/rebind Leg 3e before any swap.
+
+
+### 2026-08-08 ~03:4xZ — SESSION DIED on Anthropic API credit exhaustion; MODEL AUTH RULING
+
+**RULING (binds every respawn): we run on the Claude Code subscription PLAN, never on Anthropic API credit spend.**
+
+- PFTerminal `/model` has two near-identical provider tabs. `Claude Plan` = `claude-fable-5-plan` / `claude-opus-5-plan`, Claude Code subscription auth — CORRECT LANE. `Anthropic` = `claude-fable-5` / `claude-opus-5`, Anthropic API key with metered credit — WRONG LANE, burns API spend.
+- This session was running on the `Anthropic` (API key) tab as "Claude Fable 5 high" and died mid-leg-3b with `invalid_request_error: Your credit balance is too low to access the Anthropic API` -> `Goal stalled`. That error is only reachable from the API-key tab; the Claude Plan lane is unaffected by the API credit balance.
+- Recovery order: (1) `/model` -> `Claude Plan` tab -> `Claude Fable 5 Plan` -> effort High. (2) If the goal stays stalled, the session holds a stale model pin in its remote compact task (observed: `400 The 'claude-fable-5' model is not supported when using Codex with a ChatGPT account`) — Ctrl-C to shell and relaunch `pfterminal --yolo` FRESH, never `pfterminal resume <id>` which restores the stale pin. (3) Only if the Plan lane is truly unavailable, fall back to OpenAI GPT-5.6-Sol xhigh, then Kimi.
+- NEVER `/goal resume` — it marks the goal complete and stops the agent. Re-engage by direct directive.
+- Full detail written to the runbook as new section 0.0 "Operator environment — model auth (READ ON EVERY RESPAWN)".
+
+**State at death (nothing lost, no funds at risk):**
+
+- Closed: Step 0, A0, A1, A2, A3, A4 (E6 finalized on-chain h781, nav_per_unit 90,353,505, epoch 6), Gate E (S1f binding e6c35e9), C0.
+- Leg 2a fired + finalized. Leg 2b failed CLOSED on `pftl_uniswap_pricing_binding_mismatch`. S1g corrective sequence landed: order_release tx 34f281f5... h783 receipt code=accepted; route_epoch 7, policy_epoch 7, pricing E6; fresh reservation RES2 ed3c0b77...fae46, mint 11,012,575, max_settle 10,000,000.
+- OPEN DEFECT inherited by the next session: leg 3b receipt-witness build failed with `PFTL-Uniswap receipt witness bounds are invalid`; `/tmp/a666-s1g/leg3b/receipt-witness.json` was never written. The failed step wrote nothing and RES2 is live and unspent.
+- Restarted 2026-08-08 ~03:45Z on GPT-5.6-Sol xhigh as the interim lane; switch to Claude Fable 5 Plan per the ruling above.

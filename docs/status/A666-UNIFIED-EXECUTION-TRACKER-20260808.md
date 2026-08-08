@@ -25,9 +25,9 @@
 | A0 preflight | CLOSED | /tmp/a666-unified-a0/A0-PREFLIGHT-REPORT.md — zero drift vs handoff snapshot; agent unlocked, policy restored (12k/50k/24 whitelist); fleet 6/6 h779 converged; wA666 baseline intact; nonce 304 |
 | A1 NEAR fix | CLOSED | StakeHub master 2839f4e; threshold 150->85; real mainnet v6 fixture h210383329 lpv86; RED on parent, 63/63 GREEN with fix |
 | A2 reader session | CLOSED | session hl-existing-reader-20260808T005232Z open->snapshot->close; tx 03f13d56... status 1 TO pinned reader 0xd5c4200b (no deploy), HL block 42592633, cost 0.000022654 HYPE (cap 0.02); reader code verified live 9006B/2e49ae2b; evidence StakeHub-master-e6/zk/target/operator-real-20260808/ |
-| A3 E6 proof | OPEN | |
-| A4 E6 finalize | OPEN | |
-| A5 legs 2a-5b | OPEN | |
+| A3 E6 proof | CLOSED | pinned governed vkey `0x00580ee8...`; PV policy exact; Groth16 proof locally verified; plan AGENT COMMENTS |
+| A4 E6 finalize | CLOSED | reserve submit c71c0222 h780; epoch finalize 8389696a h781; E6 nav 90,353,505; plan AGENT COMMENTS |
+| A5 legs 2a-5b | HELD — STOP at Leg 3b witness | 2a/2b/3a accepted through h787; six-RPC respawn sweep exact; witness absent; plan final AGENT COMMENTS |
 | A6 closeout | OPEN | |
 | B1 Groth16 env | OPEN | |
 | B2 epoch 7/8 proofs | OPEN | |
@@ -45,9 +45,13 @@
 
 (append-only)
 
+- 2026-08-08 GPT-5.6-Sol respawn: unconditional secret-output STOP during read-only preflight. A process-list diagnostic surfaced a VS Code connection-token class secret in transient command output. Value omitted and never persisted. No live mutation occurred. A5 held at the failed Leg 3b witness build pending fresh principal ruling.
+
 ## Stage state journal
 
 (append-only; every agent writes before/after each gate)
+
+- 2026-08-08 ~03:40 UTC: SESSION DIED — Anthropic API credit exhaustion (`invalid_request_error: Your credit balance is too low`), goal stalled mid leg-3b. RULING RECORDED: we run the Claude Code subscription **PLAN** lane (`claude-fable-5-plan`, `/model` -> `Claude Plan` tab), NEVER the `Anthropic` API-key tab (`claude-fable-5`) which bills metered API credit. Recovery procedure written to runbook section 0.0 and plan AGENT COMMENTS. Restarted fresh on `pfterminal --yolo` (never `pfterminal resume` — stale model pin); interim lane GPT-5.6-Sol xhigh pending switch to Fable 5 Plan. No funds at risk: RES2 ed3c0b77... live and unspent, failed leg-3b witness step wrote nothing.
 
 - 2026-08-08 ~01:30 UTC: A3 in progress. E6 rebuild run dir: nav-e6-fresh/20260808T005948Z-e5compat. XMR sidecar rebuilt (coingecko:XMR, price 37259000000 e8). HL receipt witness built from fresh legacy-reader snapshot (block 42592633). First aggregate-witness attempt FAILED CLOSED on NEAR head hash: 213618e host verification has the pre-fix V6 threshold. Fix committed on branch e6-e5compat-near-v6-fix (8512776, guest contains no NEAR code); script rebuild running. vkey gate: rebuilt guest ELF must byte-match archived governed-aggregate-program-00580ee8.elf (sha256 dd743c38...) before any prove.
 
@@ -55,6 +59,8 @@
 - 2026-08-08: Manager: plan committed to docs/plans/, tracker created, fire-discipline skill read and bound to Track A. Envelope active per principal GO.
 
 ## Journal
+
+- 2026-08-08 GPT-5.6-Sol respawn HANDOFF: live read-only reconciliation found fleet 6/6 h787 / root c6839e57 / mempool 0. All five a666-s1g labels return confirmed tx plus exactly one receipt on every validator, accepted=true/code=accepted (release fee 22; advance/reserve/subscribe/export fee 23). Never re-run. RES2 terminal. Leg 3b witness file remains absent after prior bounds error; no EVM send fired. Live mutations HELD by STOP-log entry; no money/keys/vault/balances touched. Full handoff in plan final AGENT COMMENTS.
 
 - 2026-08-08T06:2xZ GATE E CLOSED (S1f binding + linter PASS, a666 e6c35e9) and A5 legs 2a/2b/3a FINALIZED via S1g corrective sequence (release 34f281f5 h783, epoch-advance 2d42f270 h784 -> route epoch 7 policy 50af7455 pricing E6, reserve 2610adb9 h785, subscribe b7716ed8 h786 conservation exact -10,000,000 pfUSDC/+11,012,575 A666, export 2543517d h787). Fleet h787 mempool 0. Next: Ethereum legs 3b0-3e (agent custody), re-sim 3e before fire.
 

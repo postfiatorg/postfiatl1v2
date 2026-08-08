@@ -12,6 +12,42 @@
 > receipt and conservation gates, then the next packet. Any deviation means
 > **STOP-no-retry**.
 
+## 0.0 Operator environment — model auth (READ ON EVERY RESPAWN)
+
+**We run on the Claude Code subscription PLAN, never on Anthropic API credit spend.**
+
+In PFTerminal's `/model` selector these are two different provider tabs, and the
+distinction is easy to miss because the model names read almost identically:
+
+| Tab | Model id | Auth | Use it? |
+|---|---|---|---|
+| `Claude Plan` | `claude-fable-5-plan`, `claude-opus-5-plan` | Claude Code subscription auth | **YES — this is the correct lane** |
+| `Anthropic` | `claude-fable-5`, `claude-opus-5` | Anthropic API key, metered credit | **NO — burns API credit** |
+
+Symptom of being on the wrong tab: the run dies mid-campaign with
+`{"type":"invalid_request_error","message":"Your credit balance is too low to
+access the Anthropic API..."}` and the goal goes to `Goal stalled`. That is an
+API-credit error and it can only happen on the `Anthropic` tab; the `Claude Plan`
+tab is unaffected by the API credit balance.
+
+Recovery, in order:
+
+1. `/model` -> Left/Right to the **`Claude Plan`** tab -> select `Claude Fable 5 Plan` -> effort `High`.
+2. If the goal loop stays stalled after the switch, the session still holds a
+   stale model pin in its remote compact task. Ctrl-C to the shell and relaunch
+   `pfterminal --yolo` (a fresh start, **not** `pfterminal resume <id>`, which
+   restores the same stale pin). Re-issue direction from this runbook plus the
+   plan's AGENT COMMENTS.
+3. Only if the Claude Plan lane is genuinely unavailable, fall back to OpenAI
+   `GPT-5.6-Sol` at `Extra high`, then Kimi.
+
+Never `/goal resume` — it marks the goal complete and stops the agent. Re-engage
+with a direct directive instead.
+
+Incident of record: 2026-08-08 ~03:40 UTC, mid Track-A leg 3b. The session was on
+the `Anthropic` API-key tab, exhausted the credit balance, and stalled. See the
+plan's AGENT COMMENTS entry for the same date.
+
 ## 0. One-screen handoff
 
 ### DONE
