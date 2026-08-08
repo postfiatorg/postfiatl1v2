@@ -33,6 +33,13 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.95.0 --profile minimal
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20.20.2"
+          cache: npm
+          cache-dependency-path: wallet-web/package-lock.json
+      - name: Install wallet test dependencies
+        run: npm ci --prefix wallet-web
       - name: A666 recovery manifest and standalone regressions
         run: scripts/check-a666-recovery-regression-manifest --run
       - name: A666 recovery CI rejection policy

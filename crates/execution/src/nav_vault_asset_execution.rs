@@ -2003,6 +2003,7 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
     Ok(())
 }
 
+#[cfg(test)]
 fn apply_vault_bridge_deposit_claim(
     genesis: &Genesis,
     ledger: &mut LedgerState,
