@@ -290,3 +290,18 @@ State for any respawn (verify live before trusting):
 - Note for A5 later stages: leg 5a rebind (S4f) must use policy_epoch 7 + policy_hash 50af7455... + pricing E6.
 - If respawning mid-sequence: check receipts for labels a666-s1g-* via tx/receipts RPC before re-firing anything; never reuse RES1 or RES2 after a terminal state.
 
+
+### 2026-08-08 ~06:2xZ — S1g corrective sequence + legs 2a/2b/3a ALL FINALIZED (PFTL side of loop complete through 3a)
+
+Receipts (all accepted=true, fee 23 each, ok=true fail-closed submitter gates):
+- order_release (RES1): tx 34f281f5... h783
+- route_epoch_advance 6->7 (issuer-signed): tx 2d42f270... h784. Route now epoch 7, policy_epoch 7 policy_hash 50af7455..., pricing pinned E6 b06262a1..., outbound TRUSTLESS_FINALITY.
+- order_reserve (RES2 ed3c0b77...fae46, mint 11,012,575, max_settle 10,000,000, expires 1782): tx 2610adb9... h785
+- primary_subscribe_v2 (LEG 2B): tx b7716ed8... h786. CONSERVATION EXACT: holder pfUSDC 11,358,493 -> 1,358,493 (-10,000,000); A666 99,000,000 -> 110,012,575 (+11,012,575).
+- export_debit (LEG 3A): tx 2543517d... h787. Holder A666 back to 99,000,000 (11,012,575 exported to entitlement). Fleet at h787 root c6839e57..., mempool 0.
+- CODE-TRUTH CORRECTION found live: FIRE-10 digest-omission ruling is STALE — deployed orchardfix REQUIRES ethereum_packet_digest + schema_version=2 on live export (pftl_uniswap_ethereum_verification.rs verify_live_export). Digest computed per PftlUniswapMintPacketV2.evm_digest (keccak packed; policy commitment keccak(policy_hash bytes)); value 288464d7f9d92bd3abf61b523e2d7336b21a3bdf5de6c074f948849300def306. packet_hash must be 96-hex (sha384) not 64.
+- Leg 3a op values for the Ethereum side: packet_hash sha384(native-v1|route|leg3a-export-packet-r2|786|20260808), export_nonce sha256(...|leg3a-export-r2|786|20260808), deadline now+48h, recipient 0x1455bd...c0 lowercase, controller 0x9a0262c0572fb4db08765408eb225e207f40c3d9, wrapped 0xee4c92edb03efdd9b519339edc19ad70c69a9be5.
+- Evidence: /tmp/a666-s1g/ (ops, signed txs, finality jsons, batch-only rounds).
+
+NEXT (Ethereum side): leg 3b0 signer funding (if needed), 3b accept-and-mint via controller with receipt witness (postfiat-node pftl-uniswap-receipt-witness for tx 2543517d...), 3c/3d approvals, 3e swap (RE-SIM REQUIRED — sim block 25707323 is stale by now; re-run two-fork sim, min-out floor(0.97 x fill), rebind values). StakeHub agent custody for all EVM sends; gas budget headroom 18.72.
+

@@ -56,6 +56,8 @@
 
 ## Journal
 
+- 2026-08-08T06:2xZ GATE E CLOSED (S1f binding + linter PASS, a666 e6c35e9) and A5 legs 2a/2b/3a FINALIZED via S1g corrective sequence (release 34f281f5 h783, epoch-advance 2d42f270 h784 -> route epoch 7 policy 50af7455 pricing E6, reserve 2610adb9 h785, subscribe b7716ed8 h786 conservation exact -10,000,000 pfUSDC/+11,012,575 A666, export 2543517d h787). Fleet h787 mempool 0. Next: Ethereum legs 3b0-3e (agent custody), re-sim 3e before fire.
+
 - 2026-08-08T04:0xZ GATE A4 CLOSED: E6 finalized on-chain. Proof phase: pinned vkey 0x00580ee8 proof verified locally; policy 0x076c07 exact. Ops: nav_reserve_submit tx c71c0222... h780, nav_epoch_finalize tx 8389696a... h781, both 6/6 converged. Live A666 profile now epoch 6 / nav 90,353,505 / packet b06262a1.... Max compliant mint recomputed: 11,012,575 atoms. Evidence: nav-e6-fresh/20260808T005948Z-e5compat/e6-ops/.
 
 - 2026-08-08T02:3xZ A3: vkey tripwire FIRED (rebuilt ELF -> 0x00fa3bef...) — first prove killed early. Resolved by injecting archived governed ELF dd743c38... with SP1_SKIP_PROGRAM_BUILD=true host rebuild. vkey-print (new tool, StakeHub-e6-213618e 2581c43) confirms 0x00580ee8... EXACT. Pinned-guest --execute PASS (22.6M cycles), PV policy 0x076c071e44... EXACT. Groth16 prove relaunched pinned: PID /tmp/a666-unified-a0/agg-prove2.pid, log /tmp/a666-unified-a0/agg-prove2.log. Gates remaining for A3 close: proof completes + vkey line + PV policy recheck + local verify.
