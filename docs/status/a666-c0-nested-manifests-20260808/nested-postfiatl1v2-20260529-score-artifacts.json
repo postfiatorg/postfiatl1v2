@@ -1,0 +1,57 @@
+{
+  "ahead_behind": {
+    "current_canonical": {
+      "commit": "52e51bc290eb8d6416e78d31bab6315de5729af6",
+      "label": "postfiatorg/postfiatl1v2 main",
+      "status": "not-git"
+    }
+  },
+  "ahead_origin_main": "",
+  "ahead_origin_master": "",
+  "branch": "",
+  "dirty_tracked": 0,
+  "dirty_tracked_files": [],
+  "disk": "7.2MiB",
+  "disk_footprint_bytes": 7581722,
+  "git_cherry_v": {
+    "current_canonical": {
+      "commits": [],
+      "status": "not-git"
+    }
+  },
+  "head": "",
+  "proposed_disposition": {
+    "class": "archive",
+    "reason": "Non-Git scoring evidence has no upstream preservation. Keep a location/class-only redaction manifest plus content hashes in the retirement archive before removing the local directory."
+  },
+  "remote": "",
+  "schema": "postfiat.track-c.worktree-manifest.v2",
+  "secret_adjacent_findings": [
+    {
+      "class": "api-token-reference-or-assignment",
+      "line": 3,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/external-whitepapers/near-whitepaper.extracted.md"
+    },
+    {
+      "class": "api-token-reference-or-assignment",
+      "line": 14,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/external-whitepapers/score-summary.md"
+    }
+  ],
+  "secret_adjacent_methodology": "The scanner reads local content internally and emits only sanitized locations, line numbers, and finding classes. It never emits a matched value or matching line; this inventory pass therefore cannot itself surface a secret value or trigger a secret-output STOP.",
+  "secret_scan_coverage": {
+    "candidate_files": 161,
+    "content_scanned": 161,
+    "large_files_location_only": 0,
+    "unreadable_files_location_only": 0
+  },
+  "untracked": 161,
+  "untracked_classification_counts": {
+    "evidence": 153,
+    "scratch_or_generated": 0,
+    "secret_adjacent": 2,
+    "source_or_other": 6
+  },
+  "upstream": "",
+  "worktree": "/home/postfiat/repos/_worktree_holding/postfiatl1v2-20260529-score-artifacts"
+}

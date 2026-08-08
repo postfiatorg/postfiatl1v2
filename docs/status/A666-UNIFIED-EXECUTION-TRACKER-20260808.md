@@ -14,7 +14,7 @@
 | Verifier-A | read-only verification | a666 worktree + Ethereum RPC | COMPLETE (4 watcher defects found; underlying receipt gates verified) |
 | Prover-B | Groth16 env + proves | a666-eth-fast-lane-combined-20260724 | STOP-HELD before B1 (fresh secret-output STOP; zero mutation) |
 | Qualifier-B pool | per-source qualification | a666-eth-fast-lane-combined-20260724 | UNASSIGNED |
-| Surveyor-C pool | read-only inventory | in-scope worktrees | COMPLETE (campaign disposition table recorded; C0 residual identified) |
+| Surveyor-C pool | read-only inventory | in-scope worktrees | COMPLETE (C0 30/30 manifest units; C1 target architecture CLOSED) |
 | Integrator-C | PR series | canonical checkouts | UNASSIGNED |
 
 ## Gate states
@@ -33,8 +33,8 @@
 | B2 epoch 7/8 proofs | OPEN | |
 | B3 qualification 6/6 | OPEN | |
 | B4 G5 rehearsal | OPEN | |
-| C0 inventory | REOPENED — top-level 20/20 claim incomplete | `/tmp/a666-c0-inventory/` treated `_worktree_holding` as one item, but live survey found a 454 MB container with 9 registered clean Git worktrees plus 1 non-Git score-artifacts directory, none individually manifested. `e6-scratch` is also a non-Git 1,261-byte launcher stub. C0 can re-close only after each child is manifested/classified or explicitly scoped out. |
-| C1 target architecture | DECISION RECORDED; gate OPEN on C0 dependency | Canonical StakeHub `master` at live `2839f4e`; canonical PFTL `main` at live `52e51bc`; ordered PR series, campaign dispositions, and freeze constraints recorded below. `_worktree_holding` children remain unmanifested, so C0 dependency prevents formal C1 closure. |
+| C0 inventory | CLOSED — 30/30 manifest units | Original 20 top-level manifests plus 10 nested manifests cover every in-scope unit. Nested set: 9 clean/pushed Git worktrees, 9 merged archive PRs, 0 dirty tracked, 0 Git-untracked; 1 non-Git score-artifacts child with 161 classified files. Persistent manifests under `docs/status/a666-c0-nested-manifests-20260808/`, mirrored byte-identically into `/tmp/a666-c0-inventory/`; aggregate digest `77ce46f3...`. Secret scan emits locations/classes only, never values or matching lines. |
+| C1 target architecture | CLOSED | Canonical StakeHub `master@2839f4e`; canonical PFTL `main@52e51bc`. Ordered campaign PR series and freeze constraints recorded. Nine nested private-archive branches are archive-backed candidates for retire-clean only after C3 semantic-equivalence checks because current PFTL history is rewritten/unrelated; non-Git score artifacts require a hashed location/class-redacted archive. No retirement is authorized by C1 closure. |
 | C3 integration complete | OPEN | |
 | C4 retirement complete | OPEN | |
 | D1 migration packet | OPEN | |
@@ -49,6 +49,9 @@ Live canonical refs at the 2026-08-08 ~06:0xZ survey:
 - PFTL `main`: `52e51bc290eb8d6416e78d31bab6315de5729af6`
 - Behind/ahead is raw commit topology against the matching canonical ref.
 - Dirty T/U is porcelain tracked/untracked entry count. No worktree was mutated.
+- Nested-manifest methodology is secret-output-safe by construction: the scanner reads content internally but emits only sanitized locations, line numbers, and finding classes, never a matched value, matching line, Git stderr, or credential-bearing remote URL. This pass therefore cannot itself surface a secret value or trigger another secret-output STOP.
+- The nine nested branches share the private-archive history, while current canonical PFTL `main@52e51bc` has unrelated rewritten history. Their manifests record current-canonical `git cherry -v` as `no-common-ancestor`, then report exact ahead/behind and `git cherry -v` against same-history `origin/open-source-productionization-20260716@637879a`. Merged PR state is recorded separately and is not misrepresented as current-main patch equivalence.
+- Persistent nested manifests: `docs/status/a666-c0-nested-manifests-20260808/`; byte-identical operational copies: `/tmp/a666-c0-inventory/nested-*.json`.
 
 | Worktree | Branch / HEAD | Behind / ahead | Dirty T/U | Unique content | Disposition and reason |
 |---|---|---:|---:|---|---|
@@ -62,7 +65,17 @@ Live canonical refs at the 2026-08-08 ~06:0xZ survey:
 | `a666-eth-fast-lane-combined-20260724` | `feature/pnok-private-fix` / `54cf4ef` | 22 / 4 | 5 / 345 at survey; staged script files clean after exact commits | `e6c35e9` E6 binding; `7e7ce52` per-submit deadline; `1520e6f` recipient pre-broadcast balance; `54cf4ef` sender nonce bind | **RETAIN-FROZEN -> MERGE/ARCHIVE after B4.** Preserve all four commits as campaign evidence/safety tooling, then redaction-archive campaign evidence. Upstream remains `16621fa`; four user units reference the checkout. |
 | `a666-orchard-fix-2246d25` | `orchard-fix-2246d25` / `540b2c1` | 447 / 1 | 0 / 0 | Raw commit 1, patch-unique 0 | **RETAIN-FROZEN -> DISCARD after A6.** Stable patch-id `f6e5c686...` matches canonical `16621fa`. Preserve the Section 6.3 `83ac75d` deployed-semantics ruling in integration records. |
 | `e6-scratch` | non-Git directory | N/A | N/A | One 1,261-byte `launch-build.sh`; no secret-pattern class found | **ARCHIVE** as a hashed build helper, then discard after B2/B4. It references `StakeHub/zk`. |
-| `_worktree_holding` | non-Git container | N/A | N/A | Ten children: nine clean registered Git worktrees plus one non-Git score-artifacts directory | **RETAIN-FROZEN pending scope correction.** The single blank C0 manifest is invalid. Each child needs a manifest/disposition or explicit out-of-scope ruling. |
+| `_worktree_holding` | non-Git container | N/A | N/A | Index container only; all ten children now manifested below | **INDEX -> retire after children.** It has no independent cargo; retain until child archive/retirement checklists complete. |
+| `_worktree_holding/pftl1v2-pr1-cobalt-sig-verify` | `fix/20260725-1-cobalt-sig-verify` / `83c07f2` | current NCA; archive integration 8 / 5 | 0 / 0 | `git cherry +5` same-history; archive PR 18 MERGED; 97 location/class findings across 6 classes | **ARCHIVE -> retire-clean after canonical semantic-equivalence audit.** Fully pushed and clean; preserve branch, merged PR, and manifest. |
+| `_worktree_holding/pftl1v2-pr10a-dead-script-refs` | `fix/20260725-10a-dead-script-refs` / `f07217f` | current NCA; archive integration 8 / 2 | 0 / 0 | `git cherry +2` same-history; archive PR 15 MERGED; 87 location/class findings across 6 classes | **ARCHIVE -> retire-clean after canonical semantic-equivalence audit.** Fully pushed and clean; preserve branch, merged PR, and manifest. |
+| `_worktree_holding/pftl1v2-pr10b-docs-content-gaps` | `fix/20260725-10b-docs-content-gaps` / `64ea179` | current NCA; archive integration 8 / 3 | 0 / 0 | `git cherry +3` same-history; archive PR 17 MERGED; 87 location/class findings across 6 classes | **ARCHIVE -> retire-clean after canonical semantic-equivalence audit.** Fully pushed and clean; preserve branch, merged PR, and manifest. |
+| `_worktree_holding/pftl1v2-pr2-debug-pool-gate` | `fix/20260725-2-debug-pool-gate` / `f722a31` | current NCA; archive integration 8 / 6 | 0 / 0 | `git cherry +6` same-history; archive PR 16 MERGED; 87 location/class findings across 6 classes | **ARCHIVE -> retire-clean after canonical semantic-equivalence audit.** Fully pushed and clean; preserve branch, merged PR, and manifest. |
+| `_worktree_holding/pftl1v2-pr3-rpc-transport-auth` | `fix/20260725-3-rpc-transport-auth` / `1a9f426` | current NCA; archive integration 8 / 6 | 0 / 0 | `git cherry +6` same-history; archive PR 22 MERGED; 89 location/class findings across 6 classes | **ARCHIVE -> retire-clean after canonical semantic-equivalence audit.** Fully pushed and clean; preserve branch, merged PR, and manifest. |
+| `_worktree_holding/pftl1v2-pr4-dos-hardening` | `fix/20260725-4-dos-hardening` / `01b7190` | current NCA; archive integration 8 / 2 | 0 / 0 | `git cherry +2` same-history; archive PR 20 MERGED; 87 location/class findings across 6 classes | **ARCHIVE -> retire-clean after canonical semantic-equivalence audit.** Fully pushed and clean; preserve branch, merged PR, and manifest. |
+| `_worktree_holding/pftl1v2-pr5-storage-integrity` | `fix/20260725-5-storage-integrity` / `d948aad` | current NCA; archive integration 8 / 7 | 0 / 0 | `git cherry +7` same-history; archive PR 21 MERGED; 87 location/class findings across 6 classes | **ARCHIVE -> retire-clean after canonical semantic-equivalence audit.** Fully pushed and clean; preserve branch, merged PR, and manifest. |
+| `_worktree_holding/pftl1v2-pr6-orchard-vk-panics` | `fix/20260725-6-orchard-vk-panics` / `a00e7da` | current NCA; archive integration 8 / 6 | 0 / 0 | `git cherry +6` same-history; archive PR 19 MERGED; 87 location/class findings across 6 classes | **ARCHIVE -> retire-clean after canonical semantic-equivalence audit.** Fully pushed and clean; preserve branch, merged PR, and manifest. |
+| `_worktree_holding/pftl1v2-pr9-ambient-backlog` | `fix/20260725-9-ambient-backlog` / `a417c65` | current NCA; archive integration 9 / 5 | 0 / 0 | `git cherry +5` same-history; archive PR 14 MERGED; 87 location/class findings across 6 classes | **ARCHIVE -> retire-clean after canonical semantic-equivalence audit.** Fully pushed and clean; preserve branch, merged PR, and manifest. |
+| `_worktree_holding/postfiatl1v2-20260529-score-artifacts` | non-Git evidence | N/A | 0 / 161 files | 153 evidence, 2 secret-adjacent, 6 other; 2 location/class findings; 7.2 MiB | **ARCHIVE**, then retire. No upstream preservation exists; require location/class redaction record plus content-hash archive before removal. |
 
 ### Canonical ordered PR series
 
@@ -94,7 +107,7 @@ PFTL campaign suffix:
 - Until B4: `a666-eth-fast-lane-combined-20260724`.
 - Config-reference holds: `StakeHub` in six scanned files; `StakeHub-repeat-demo` in four; `a666-eth-fast-lane-combined-20260724` in four.
 - Preserve local-only keepers before retirement: `e6-e5compat-near-v6-fix`, `pft-cli-wallet-20260721`, `e6c35e9`, `7e7ce52`, `1520e6f`, and `54cf4ef`.
-- C1 target decisions are recorded, but formal closure waits on C0: manifest or explicitly scope all nine `_worktree_holding` Git children and its score-artifacts child. No retirement or deletion is authorized yet.
+- C0 and C1 are CLOSED. All nine `_worktree_holding` Git children and the score-artifacts child have persistent individual manifests and recorded dispositions. Nested Git branches remain archive-backed until C3 semantic-equivalence checks against rewritten canonical PFTL `main`; the score-artifacts child remains until its hashed archive exists. No retirement or deletion is authorized yet.
 
 ## STOP log
 
@@ -117,6 +130,8 @@ PFTL campaign suffix:
 - 2026-08-08: Manager: plan committed to docs/plans/, tracker created, fire-discipline skill read and bound to Track A. Envelope active per principal GO.
 
 ## Journal
+
+- 2026-08-08 ~07:0xZ GATES C0 AND C1 CLOSED: ten missing `_worktree_holding` child manifests persisted under `docs/status/a666-c0-nested-manifests-20260808/` and mirrored byte-identically to `/tmp/a666-c0-inventory/`; aggregate digest `77ce46f32e5df875e7ca658f101e9aaf203a70db3c5c545859c8e7db54dad67d`. Secret scanner emits sanitized locations/line numbers/classes only, never values, matching lines, Git stderr, or credential-bearing URLs. Nine Git worktrees are clean/pushed with merged archive PRs 14-22; their modern-canonical comparison is explicitly `no-common-ancestor`, so they are ARCHIVE -> retire-clean only after C3 semantic equivalence. Score child has 161 classified files and requires a hashed redaction-safe archive. C0 CLOSED 30/30; C1 CLOSED with canonical StakeHub `master@2839f4e`, PFTL `main@52e51bc`, ordered PRs, freezes, and nested retirement rules recorded. No deletion, provider call, watcher start, service/policy/wallet/chain/funds mutation occurred.
 
 - 2026-08-08 ~06:3xZ A-W1..A-W4 FINAL VERIFIER-A PASS; FIRE-READY LOCALLY, DISARMED UNDER STOP: source/deployed SHA-256 `cc3e606339d8c2b65c65375ec7e7503e7fc0643ddb220eaa01459551ba3ccfae` byte-identical. Commit `e4a93df` keeps only pre-trigger read-only errors retryable and converts every unexpected post-trigger exception to terminal `STOP-no-retry`; wrong-recipient and status-0 receipt tests prove STOP-file creation. Full isolated suite 14 passed. Durable intent, owner-nonce binding, pending/mined recovery, exact transaction shape/status, report/journal cross-check, per-submit deadline, exact checkpoint commitment, and the no-second-0.01-ETH-send invariant all independently PASS. Latest two-RPC poll: signer 0, verifier 691 at exact prior commitment; agent unlocked, whitelist 24, signer absent; no watcher process and lock free; no live STOP/DONE/intent/report. Service remains active at PID 1975132 on detached reviewed `2839f4e`; PR 7 OPEN/MERGEABLE at `5d33bae`; deadline headroom 161,525 seconds. Principal secret-output STOP remains binding, so no watcher start or mutation occurred.
 

@@ -1,0 +1,516 @@
+{
+  "ahead_behind": {
+    "archive_origin_main": {
+      "ahead": 268,
+      "behind": 0,
+      "ref": "origin/main"
+    },
+    "current_canonical": {
+      "commit": "52e51bc290eb8d6416e78d31bab6315de5729af6",
+      "common_ancestor": null,
+      "interpretation": "unrelated rewritten histories; raw counts are recorded but are not integration evidence",
+      "label": "postfiatorg/postfiatl1v2 main",
+      "raw_ahead": null,
+      "raw_behind": null
+    },
+    "same_history_integration_ref": {
+      "ahead": 2,
+      "behind": 8,
+      "ref": "origin/open-source-productionization-20260716"
+    }
+  },
+  "ahead_origin_main": "268",
+  "ahead_origin_master": "",
+  "branch": "fix/20260725-10a-dead-script-refs",
+  "dirty_tracked": 0,
+  "dirty_tracked_files": [],
+  "disk": "57.8MiB",
+  "disk_footprint_bytes": 60651689,
+  "git_cherry_v": {
+    "current_canonical": {
+      "commits": [],
+      "status": "no-common-ancestor"
+    },
+    "same_history_integration_ref": {
+      "commits": [
+        {
+          "commit": "4bb0da99ae4292e340bb38461899aad21a4686dd",
+          "sign": "+",
+          "subject": "docs: annotate archived-script references; restore runbook executability"
+        },
+        {
+          "commit": "f07217f41827bee61530752fa97f2759bc6676cd",
+          "sign": "+",
+          "subject": "docs: annotate remaining archived script references"
+        }
+      ],
+      "minus_patch_equivalent": 0,
+      "plus_unique": 2,
+      "ref": "origin/open-source-productionization-20260716",
+      "status": "ok"
+    }
+  },
+  "head": "f07217f41827bee61530752fa97f2759bc6676cd",
+  "proposed_disposition": {
+    "class": "archive",
+    "reason": "Worktree is clean, branch is fully pushed, and its archive PR is merged, but today's canonical PFTL main has unrelated rewritten history. Preserve the upstream branch, merged PR, and this manifest until semantic equivalence against canonical main is demonstrated; no dirty or untracked cargo exists.",
+    "terminal_state": "retire-clean-after-canonical-equivalence"
+  },
+  "pull_request": {
+    "merged_at": "2026-07-26T17:23:52Z",
+    "number": 15,
+    "repository": "postfiatorg/postfiatl1v2-private-archive-20260717",
+    "state": "MERGED",
+    "url": "https://github.com/postfiatorg/postfiatl1v2-private-archive-20260717/pull/15"
+  },
+  "remote": "postfiatorg/postfiatl1v2-private-archive-20260717",
+  "schema": "postfiat.track-c.worktree-manifest.v2",
+  "secret_adjacent_findings": [
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 461,
+      "location": "crates/bench_harness/src/main.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 18,
+      "location": "crates/crypto_provider/src/lib.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 47,
+      "location": "crates/crypto_provider/src/lib.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 55,
+      "location": "crates/crypto_provider/src/lib.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 59,
+      "location": "crates/crypto_provider/src/lib.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 64,
+      "location": "crates/crypto_provider/src/lib.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 69,
+      "location": "crates/crypto_provider/src/lib.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 70,
+      "location": "crates/crypto_provider/src/lib.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 78,
+      "location": "crates/crypto_provider/src/lib.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 84,
+      "location": "crates/crypto_provider/src/lib.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 85,
+      "location": "crates/crypto_provider/src/lib.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 169,
+      "location": "crates/crypto_provider/src/lib.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 38,
+      "location": "crates/ethereum-contracts/script/DeployERC20Bridge.s.sol"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 3,
+      "location": "crates/ethereum-contracts/script/erc20-bridge.env.example"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 1044,
+      "location": "crates/node/src/batch_snapshot.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 1287,
+      "location": "crates/node/src/batch_snapshot.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 1532,
+      "location": "crates/node/src/batch_snapshot.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 2251,
+      "location": "crates/node/src/batch_snapshot.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 2315,
+      "location": "crates/node/src/block_finality.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 2917,
+      "location": "crates/node/src/block_finality.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 4006,
+      "location": "crates/node/src/block_finality.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 2193,
+      "location": "crates/node/src/block_replay_wallet.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 2265,
+      "location": "crates/node/src/block_replay_wallet.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 2336,
+      "location": "crates/node/src/block_replay_wallet.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 2407,
+      "location": "crates/node/src/block_replay_wallet.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 2469,
+      "location": "crates/node/src/block_replay_wallet.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 201,
+      "location": "crates/node/src/consensus_artifacts.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 3673,
+      "location": "crates/node/src/consensus_artifacts.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 3735,
+      "location": "crates/node/src/consensus_artifacts.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 3785,
+      "location": "crates/node/src/consensus_artifacts.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 345,
+      "location": "crates/node/src/consensus_v2_finality.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 261,
+      "location": "crates/node/src/ethereum_checkpoint_signing.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 1843,
+      "location": "crates/node/src/ethereum_checkpoint_signing.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 403,
+      "location": "crates/node/src/fastpay_recovery_node.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 483,
+      "location": "crates/node/src/fastpay_recovery_node.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 534,
+      "location": "crates/node/src/fastpay_recovery_node.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 40,
+      "location": "crates/node/src/fastswap_service.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 59,
+      "location": "crates/node/src/fastswap_service.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 329,
+      "location": "crates/node/src/fastswap_service.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 123,
+      "location": "crates/node/src/governance.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 594,
+      "location": "crates/node/src/governance.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 1595,
+      "location": "crates/node/src/governance.rs"
+    },
+    {
+      "class": "mnemonic-seed-reference-or-assignment",
+      "line": 660,
+      "location": "crates/node/src/governance_agent_parts/ruleset_hashing_io.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 513,
+      "location": "crates/node/src/main_parts/nav_roundtrip_checkpoint_accounting.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 1229,
+      "location": "crates/node/src/main_parts/nav_roundtrip_checkpoint_accounting.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 1231,
+      "location": "crates/node/src/main_parts/nav_roundtrip_checkpoint_accounting.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 268,
+      "location": "crates/node/src/storage_commit.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 854,
+      "location": "crates/node/src/storage_commit.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 1459,
+      "location": "crates/node/src/storage_commit.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 226,
+      "location": "crates/node/src/tests/helpers_orchard_transfer_escrow.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 269,
+      "location": "crates/node/src/tests/helpers_orchard_transfer_escrow.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 312,
+      "location": "crates/node/src/tests/helpers_orchard_transfer_escrow.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 380,
+      "location": "crates/node/src/tests/helpers_orchard_transfer_escrow.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 4664,
+      "location": "crates/node/src/tests/helpers_orchard_transfer_escrow.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 721,
+      "location": "crates/node/src/tests/orchard_transfer_escrow.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 2378,
+      "location": "crates/node/src/tests/vault_bridge_governed_route.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 52,
+      "location": "crates/node/src/transport_protocol.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 218,
+      "location": "crates/node/src/transport_protocol.rs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 2198,
+      "location": "crates/ordering_fast/src/lib.rs"
+    },
+    {
+      "class": "api-token-reference-or-assignment",
+      "line": 192,
+      "location": "crates/rpc_sdk/src/bin/fastswap_wallet_service.rs"
+    },
+    {
+      "class": "api-token-reference-or-assignment",
+      "line": 1061,
+      "location": "crates/rpc_sdk/src/bin/fastswap_wallet_service.rs"
+    },
+    {
+      "class": "credential-adjacent-filename",
+      "location": "docs/governance/agent/fixtures/validator_evidence/collector_writer/invalid_secret_scan_failed.json"
+    },
+    {
+      "class": "credential-adjacent-filename",
+      "location": "docs/specs/wallet-mnemonic-design.md"
+    },
+    {
+      "class": "password-passphrase-reference-or-assignment",
+      "line": 332,
+      "location": "docs/specs/web-wallet.md"
+    },
+    {
+      "class": "password-passphrase-reference-or-assignment",
+      "line": 628,
+      "location": "docs/specs/web-wallet.md"
+    },
+    {
+      "class": "password-passphrase-reference-or-assignment",
+      "line": 629,
+      "location": "docs/specs/web-wallet.md"
+    },
+    {
+      "class": "password-passphrase-reference-or-assignment",
+      "line": 630,
+      "location": "docs/specs/web-wallet.md"
+    },
+    {
+      "class": "credential-adjacent-filename",
+      "location": "docs/status/OPEN-SOURCE-SECRET-HISTORY-CLASSIFICATION-20260716.md"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 95,
+      "location": "docs/status/ambient-p0-remediation-status-2026-05-22.md"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 96,
+      "location": "docs/status/ambient-p0-remediation-status-2026-05-22.md"
+    },
+    {
+      "class": "api-token-reference-or-assignment",
+      "line": 293,
+      "location": "python/postfiat_ops/safe_rollout.py"
+    },
+    {
+      "class": "mnemonic-seed-reference-or-assignment",
+      "line": 18,
+      "location": "scripts/gov-inference-gate-3_5-lineaged-plan"
+    },
+    {
+      "class": "mnemonic-seed-reference-or-assignment",
+      "line": 27,
+      "location": "scripts/gov-inference-gate-3_5-lineaged-verify"
+    },
+    {
+      "class": "mnemonic-seed-reference-or-assignment",
+      "line": 22,
+      "location": "scripts/gov-inference-operator-gate-pack"
+    },
+    {
+      "class": "mnemonic-seed-reference-or-assignment",
+      "line": 18,
+      "location": "scripts/gov-inference-release-handoff"
+    },
+    {
+      "class": "password-passphrase-reference-or-assignment",
+      "line": 258,
+      "location": "scripts/pftl-uniswap-wallet-e2e.mjs"
+    },
+    {
+      "class": "credential-adjacent-filename",
+      "location": "scripts/public-secret-scan"
+    },
+    {
+      "class": "password-passphrase-reference-or-assignment",
+      "line": 18,
+      "location": "scripts/stakehub-wallet-bridge-ux-live.mjs"
+    },
+    {
+      "class": "password-passphrase-reference-or-assignment",
+      "line": 423,
+      "location": "scripts/stakehub-wallet-bridge-ux-live.mjs"
+    },
+    {
+      "class": "credential-adjacent-filename",
+      "location": "scripts/test-public-secret-scan"
+    },
+    {
+      "class": "api-token-reference-or-assignment",
+      "line": 126,
+      "location": "scripts/test-verify-publication-candidate"
+    },
+    {
+      "class": "password-passphrase-reference-or-assignment",
+      "line": 246,
+      "location": "scripts/wallet-shielded-ingress-e2e.mjs"
+    },
+    {
+      "class": "password-passphrase-reference-or-assignment",
+      "line": 1433,
+      "location": "scripts/wallet-shielded-swap-step7-e2e.mjs"
+    },
+    {
+      "class": "password-passphrase-reference-or-assignment",
+      "line": 71,
+      "location": "wallet-proxy/test_gate3.js"
+    },
+    {
+      "class": "password-passphrase-reference-or-assignment",
+      "line": 29,
+      "location": "wallet-web/scripts/private-swap-ux-acceptance.mjs"
+    },
+    {
+      "class": "private-key-reference-or-assignment",
+      "line": 33,
+      "location": "wallet-web/src/lib/shielded-navswap.test.js"
+    },
+    {
+      "class": "bearer-token-material",
+      "line": 467,
+      "location": "wallet-web/src/lib/swap-server.test.js"
+    }
+  ],
+  "secret_adjacent_methodology": "The scanner reads local content internally and emits only sanitized locations, line numbers, and finding classes. It never emits a matched value or matching line, and captured Git stderr is never copied to output; this inventory pass therefore cannot itself surface a secret value or trigger a secret-output STOP.",
+  "secret_scan_coverage": {
+    "candidate_files": 1628,
+    "content_scanned": 1628,
+    "large_files_location_only": 0,
+    "unreadable_files_location_only": 0
+  },
+  "untracked": 0,
+  "untracked_classification_counts": {
+    "evidence": 0,
+    "scratch_or_generated": 0,
+    "secret_adjacent": 0,
+    "source_or_other": 0
+  },
+  "upstream": "origin/fix/20260725-10a-dead-script-refs",
+  "worktree": "/home/postfiat/repos/_worktree_holding/pftl1v2-pr10a-dead-script-refs"
+}
