@@ -421,6 +421,16 @@ class FlowTests(unittest.TestCase):
         binding=HERE.parent/"docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/authorization-binding-native-v1.json"
         with self.assertRaises(d.ConfigError): d.validate_executable(binding,"1")
 
+    def test_t35b_linter_rejects_odd_length_calldata(self):
+        packet = self.packet("3h")
+        packet["executor"] = {"kind": "evm_script", "commands": [["leaf", "--calldata", "0x123"]]}
+        path, binding = self.write_packet_binding(packet)
+        bound = json.loads(binding.read_text())
+        bound["packets"][0]["path"] = path.name
+        binding.write_text(json.dumps(bound))
+        with self.assertRaisesRegex(d.ConfigError, r"malformed --calldata hex"):
+            d.validate_executable(binding, "3h")
+
     def test_t36_leg1_dispatch_resume_path(self):
         leg=self.root/"leg"; leg.mkdir(); (leg/"evm-deposit.json").write_text(json.dumps({"deposit_tx":"tx","delta_ok":True})); packet=self.packet("1"); packet["deposit_receipt_timeout_secs"]=0; packet["executor"]={"commands":[["burn","--artifact-dir",str(leg)],["relay","--artifact-dir",str(leg)]]}; calls=[]
         def run(argv): calls.append(argv); return {"status":"0x1","blockNumber":"0x1","blockHash":"0xblock","transactionHash":"tx"}
