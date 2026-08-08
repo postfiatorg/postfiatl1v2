@@ -250,3 +250,13 @@ State for any respawn (verify live before trusting):
 - B1 diagnosis: docker works from this launch context (group 988(docker) active, server 29.1.3, /var/run/docker.sock reachable) — the Aug 3 failure was stale supplementary groups in user-systemd managers (guard b4ed59c). Gate B1 trivial end-to-end proof DEFERRED until the A3 Groth16 prove frees RAM (would contend, OOM risk = STOP hazard).
 - Groth16 prove in flight: PID file /tmp/a666-unified-a0/agg-prove2.pid, log /tmp/a666-unified-a0/agg-prove2.log. Started ~02:37Z.
 
+
+### 2026-08-08 ~03:1xZ — GATE D PROOF PHASE CLOSED (steps 1-6)
+
+- Groth16 prove COMPLETED (~10 min wall on CPU, 24 cores): proof.bin 4412 B, calldata 356 B, PV 2720 B.
+- Prove log final line: aggregate program vkey: 0x00580ee8c389192568a29dc23d54c22e73a3a45203b22e3d5a934801871e11a7 — EXACT PIN.
+- final PV sha256 40074b8e... == execute PV == preview PV (byte-identical all three).
+- Step 6 independent local verify: new verify-aggregate bin (StakeHub-e6-213618e, embeds injected governed ELF dd743c38...) -> "verified OK" + pinned vkey. CLOSED.
+- In-process gates also passed during prove: client.verify, PV==native-verifier bytes, reconcile gate (0 mismatch lines in log).
+- NEXT: A4 per PACKET-A4-e6-finalize.HELD.md in run dir — fresh status captures (read-only), 57ec4168 builder (unsigned templates), batch-only validate on fresh clone, then submit/finalize EXACTLY ONCE.
+
