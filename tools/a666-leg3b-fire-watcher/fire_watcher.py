@@ -744,6 +744,18 @@ def fire_sequence(need_funding: bool) -> None:
     )
 
 
+def run_triggered_sequence(*, need_funding: bool) -> None:
+    try:
+        fire_sequence(need_funding=need_funding)
+    except SystemExit:
+        raise
+    except Exception as error:  # noqa: BLE001 - every post-trigger error is terminal.
+        stop(
+            "triggered leg 3b sequence raised an unexpected error; "
+            f"{type(error).__name__}: {error}"
+        )
+
+
 def main() -> None:
     lock_path = BASE / "fire_watcher.lock"
     lock = open(lock_path, "w", encoding="utf-8")
@@ -760,21 +772,23 @@ def main() -> None:
         raise SystemExit(0)
     log("fire watcher armed: waiting for exact 0.01 ETH funding or whitelist entry")
     while True:
+        need_funding: bool | None = None
         try:
             deadline_guard("poll")
             balance = signer_balance_wei()
             if balance >= REQUIRED_SIGNER_WEI:
                 log(f"TRIGGER: signer funded externally ({balance} wei)")
-                fire_sequence(need_funding=False)
-                return
-            if whitelist_has_signer():
+                need_funding = False
+            elif whitelist_has_signer():
                 log("TRIGGER: signer entered agentd whitelist")
-                fire_sequence(need_funding=True)
-                return
+                need_funding = True
         except SystemExit:
             raise
-        except Exception as error:  # noqa: BLE001 - read-only poll errors are retryable.
+        except Exception as error:  # noqa: BLE001 - only read-only poll errors retry.
             log(f"poll error (retryable): {error}")
+        if need_funding is not None:
+            run_triggered_sequence(need_funding=need_funding)
+            return
         time.sleep(30)
 
 

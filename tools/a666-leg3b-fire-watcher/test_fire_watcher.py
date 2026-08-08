@@ -224,6 +224,69 @@ def test_pending_bound_nonce_recovery_stops_without_resend(
     assert error.value.code == 2
 
 
+def test_triggered_wrong_shape_creates_terminal_stop(
+    watcher, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    transaction = {
+        "hash": "0x" + "44" * 32,
+        "from": watcher.OWNER,
+        "to": "0x" + "00" * 20,
+        "value": hex(watcher.FUND_WEI),
+        "nonce": hex(304),
+    }
+
+    def wrong_shape_sequence(*, need_funding: bool) -> None:
+        assert need_funding
+        watcher.validate_funding_transaction_shape(transaction, 304)
+
+    monkeypatch.setattr(watcher, "fire_sequence", wrong_shape_sequence)
+    with pytest.raises(SystemExit) as error:
+        watcher.run_triggered_sequence(need_funding=True)
+    assert error.value.code == 2
+    stop_text = (watcher.BASE / "STOP.txt").read_text()
+    assert "STOP-no-retry" in stop_text
+    assert "recipient" in stop_text
+
+
+def test_triggered_status_zero_receipt_creates_terminal_stop(
+    watcher, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tx_hash = "0x" + "55" * 32
+    transaction = {
+        "hash": tx_hash,
+        "from": watcher.OWNER,
+        "to": watcher.SIGNER,
+        "value": hex(watcher.FUND_WEI),
+        "nonce": hex(304),
+    }
+
+    def rpc(method: str, params: list):
+        assert params == [tx_hash]
+        if method == "eth_getTransactionByHash":
+            return transaction
+        if method == "eth_getTransactionReceipt":
+            return {
+                "status": "0x0",
+                "blockNumber": "0x65",
+                "gasUsed": "0x5208",
+                "effectiveGasPrice": "0x1",
+            }
+        raise AssertionError(method)
+
+    def reverted_sequence(*, need_funding: bool) -> None:
+        assert need_funding
+        watcher.validate_funding_transaction(tx_hash, expected_nonce=304)
+
+    monkeypatch.setattr(watcher, "rpc", rpc)
+    monkeypatch.setattr(watcher, "fire_sequence", reverted_sequence)
+    with pytest.raises(SystemExit) as error:
+        watcher.run_triggered_sequence(need_funding=True)
+    assert error.value.code == 2
+    stop_text = (watcher.BASE / "STOP.txt").read_text()
+    assert "STOP-no-retry" in stop_text
+    assert "receipt status 0 != 1" in stop_text
+
+
 def test_funding_leaf_rechecks_recipient_balance_immediately_before_send(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
