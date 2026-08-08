@@ -216,3 +216,18 @@ Expected wall-clock, honest ranges: Track A is hours-not-days if A2/A3 hold (the
 ## AGENT COMMENTS
 
 (append-only; every agent records material findings, deviations, and gate evidence here or in the tracker with a pointer here)
+
+### 2026-08-08 ~01:5xZ — resumed session (post-crash respawn) — A3 in flight
+
+State for any respawn (verify live before trusting):
+
+- Step 0, A0, A1, A2: CLOSED (see tracker). A2 spent 0.0000227 HYPE, tx 03f13d56..., evidence /home/postfiat/repos/StakeHub-master-e6/zk/target/operator-real-20260808/
+- A3 run dir: /home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-public-reserve-product-20260803/nav-e6-fresh/20260808T005948Z-e5compat (also in /tmp/a666-unified-a0/e6-run-dir.txt)
+- NEAR v6 fix (150->85) applied host-side in StakeHub-e6-213618e branch e6-e5compat-near-v6-fix commit 8512776; script bins rebuilt OK.
+- aggregate-witness: PASS (six legs). reconcile: PASS. aggregate-prove --execute: PASS, PV 2720 bytes.
+- POLICY GATE CLOSED: execute PV bytes[96:128] = 0x076c071e44127158ef82350e7feeb64e0be0a06bf8ba4be5f0374ac36b992ac7 (exact pin). Cross-check: witness policy preimage byte-identical to known-good fresh-old-xmr-and-hl.json (/tmp/ghash-e6-policy/policy-isolator-recompute.txt).
+- Groth16 prove RUNNING detached: PID in /tmp/a666-unified-a0/agg-prove.pid, log /tmp/a666-unified-a0/agg-prove.log. Outputs -> run dir aggregate-proof.bin / -calldata.bin / aggregate-public-values.bin.
+- VKEY TRIPWIRE OPEN: rebuilt guest ELF sha256 bbd5aa35... differs from archived governed ELF dd743c38... (may be path-embed nondeterminism). vkey only prints at END of --prove, so a vkey-print bin was added (script/src/bin/vkey_print.rs, branch commit pending) and is computing the rebuilt ELF vkey: log /tmp/a666-unified-a0/vkey-print.log, PID /tmp/a666-unified-a0/vkey-print.pid. GATE: if vkey != 0x00580ee8c389192568a29dc23d54c22e73a3a45203b22e3d5a934801871e11a7 -> KILL the prove, fallback = cfg-gate the NEAR fix out of the zkvm target so guest bytes revert, rebuild, re-verify ELF hash, relaunch. STOP-no-retry on anything weirder.
+- expected-signer env vars are NOT needed: option_env fallback is DECLARED_OWNER = 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 which IS the required signer.
+- Money since resume: zero. Only local builds, reads, witness assembly.
+
