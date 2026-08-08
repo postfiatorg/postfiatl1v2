@@ -260,3 +260,15 @@ State for any respawn (verify live before trusting):
 - In-process gates also passed during prove: client.verify, PV==native-verifier bytes, reconcile gate (0 mismatch lines in log).
 - NEXT: A4 per PACKET-A4-e6-finalize.HELD.md in run dir — fresh status captures (read-only), 57ec4168 builder (unsigned templates), batch-only validate on fresh clone, then submit/finalize EXACTLY ONCE.
 
+
+### 2026-08-08 ~04:0xZ — GATE A4 / GATE D FULLY CLOSED: E6 FINALIZED ON-CHAIN
+
+- Builder inputs captured fresh from a byte-clone of live validator-1 (rsync, exclude validator_keys.json; clone height 779 root 2a2a9bf6... == live 6/6). Clone: see /tmp/a666-unified-a0/a4-clone-dir.txt. Ledger-row inputs shape-matched the recon dry-run exactly (alloc 62 / buckets 3 / receipts 59 after settlement-asset filter).
+- 57ec4168 builder output (unsigned): epoch 6, proof net assets 2,833,885,006,774 + overlay 21,032,560,900 (root e5201317...b82ddc, unchanged) = 2,854,917,567,674 usd_1e8; supply 31,597,197,455 atoms -> nav_per_unit 90,353,505; reserve_packet_hash b06262a1e6e4eba7851b7326638cba350f8deffbc0bdd9069595ae9e0f56475e05fd1b4804a1e40a8948ac344c49951a.
+- Batch-only round 01 validated on clone; live nav_reserve_submit tx c71c0222... FINALIZED at height 780 (6/6 converged root b8ee4042...).
+- Clone refreshed, height gate 780==780 PASS; batch-only round 02 validated; live nav_epoch_finalize tx 8389696a... FINALIZED at height 781.
+- POST-STATE (all six validators): height 781 root bf8a7010..., A666 profile finalized_epoch=6, nav_per_unit=90,353,505, finalized_reserve_packet_hash=b06262a1... EXACT, halted=false. Pricing freshness trivially inside the 100-block gate.
+- Mint recompute (Gate E prep): at NAV 90,353,505 the max compliant mint is 11,012,575 A666 atoms (base 9,950,248 -> principal exactly 10,000,000 pfUSDC atoms; 11,012,576 breaches). The old 11,027,135 and the 11,011,167 hypothetical are both dead.
+- Evidence: run-dir e6-ops/ (ops jsons, manifest, both finality receipts); clone round artifacts under the a4-clone dir.
+- Money: PFTL chain-state ops only (reserve submit + finalize, authorized by plan A4); no Ethereum/StakeHub/keys/vault balances touched. NEXT: A5 — S1f binding from these values, then legs 2a->5b receipt-by-receipt.
+
