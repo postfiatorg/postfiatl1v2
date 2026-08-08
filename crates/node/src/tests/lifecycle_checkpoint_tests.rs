@@ -29,19 +29,10 @@ fn copy_tree(src: &Path, dst: &Path) {
 }
 
 fn rewrite_node_id(data_dir: &Path, node_id: &str) {
-    let path = data_dir.join("node_state.json");
-    let mut state: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&path).expect("read node state"))
-            .expect("parse node state");
-    state["node_id"] = serde_json::Value::String(node_id.to_string());
-    atomic_write(
-        &path,
-        format!(
-            "{}\n",
-            serde_json::to_string_pretty(&state).expect("serialize node state")
-        ),
-    )
-    .expect("write node state");
+    let store = NodeStore::new(data_dir);
+    let mut state = store.read_node_state().expect("read node state");
+    state.node_id = node_id.to_string();
+    store.write_node_state(&state).expect("write node state");
 }
 
 struct CheckpointFixture {
