@@ -55,6 +55,24 @@ def send(args: argparse.Namespace) -> dict[str, Any]:
     estimated_fee = gas * gas_price
     if estimated_fee > int(args.max_fee_wei):
         raise RuntimeError("estimated fee exceeds max-fee-wei")
+    if args.expected_sender_nonce is not None:
+        if not args.sender:
+            raise ValueError("--sender is required with --expected-sender-nonce")
+        latest_nonce = _hex_int(
+            _rpc(args.rpc_url, "eth_getTransactionCount", [args.sender, "latest"])
+        )
+        pending_nonce = _hex_int(
+            _rpc(args.rpc_url, "eth_getTransactionCount", [args.sender, "pending"])
+        )
+        if (
+            latest_nonce != int(args.expected_sender_nonce)
+            or pending_nonce != int(args.expected_sender_nonce)
+        ):
+            raise RuntimeError(
+                "sender nonce changed before broadcast: "
+                f"expected {args.expected_sender_nonce}, latest {latest_nonce}, "
+                f"pending {pending_nonce}"
+            )
     if args.expected_recipient_balance_wei is not None:
         recipient_balance = _hex_int(
             _rpc(args.rpc_url, "eth_getBalance", [args.recipient, "latest"])
@@ -94,6 +112,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--amount-wei", required=True, type=int)
     parser.add_argument("--max-fee-wei", required=True, type=int)
     parser.add_argument("--expected-recipient-balance-wei", type=int)
+    parser.add_argument("--sender")
+    parser.add_argument("--expected-sender-nonce", type=int)
     parser.add_argument("--label", required=True)
     parser.add_argument("--report", required=True)
     args = parser.parse_args(argv)
