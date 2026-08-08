@@ -14,7 +14,7 @@
 | Verifier-A | read-only verification | a666 worktree + Ethereum RPC | COMPLETE (4 watcher defects found; underlying receipt gates verified) |
 | Prover-B | Groth16 env + proves | a666-eth-fast-lane-combined-20260724 | STOP-HELD before B1 (fresh secret-output STOP; zero mutation) |
 | Qualifier-B pool | per-source qualification | a666-eth-fast-lane-combined-20260724 | UNASSIGNED |
-| Surveyor-C pool | read-only inventory | in-scope worktrees | ACTIVE (campaign dispositions; no mutations) |
+| Surveyor-C pool | read-only inventory | in-scope worktrees | COMPLETE (campaign disposition table recorded; C0 residual identified) |
 | Integrator-C | PR series | canonical checkouts | UNASSIGNED |
 
 ## Gate states
@@ -27,19 +27,74 @@
 | A2 reader session | CLOSED | session hl-existing-reader-20260808T005232Z open->snapshot->close; tx 03f13d56... status 1 TO pinned reader 0xd5c4200b (no deploy), HL block 42592633, cost 0.000022654 HYPE (cap 0.02); reader code verified live 9006B/2e49ae2b; evidence StakeHub-master-e6/zk/target/operator-real-20260808/ |
 | A3 E6 proof | CLOSED | pinned governed vkey `0x00580ee8...`; PV policy exact; Groth16 proof locally verified; plan AGENT COMMENTS |
 | A4 E6 finalize | CLOSED | reserve submit c71c0222 h780; epoch finalize 8389696a h781; E6 nav 90,353,505; plan AGENT COMMENTS |
-| A5 legs 2a-5b | BLOCKED, NOT FAILED — proofs/scripts staged; watcher DISARMED and requires safety patch before re-arm | Live signer remains 0 ETH / off-whitelist; verifier 691. Independent audit found inherited watcher not crash-idempotent around 3b0, external trigger incorrectly set to 0.005 rather than authorized 0.01 ETH, deadline checked only once, and recovered checkpoint skip gates height but not commitment. Underlying scripts do gate Ethereum mutations on receipt `status=1`; final leg 3b gates accepted+consumed and exact +11,012,575 deltas. Fresh principal ruling clears the secret-output STOP, but the four watcher fixes and re-review must close before re-arm. PR 7/service/checkout remain untouched at OPEN/active/`2839f4e`; packet deadline 1786331925. |
+| A5 legs 2a-5b | BLOCKED, NOT FAILED — A-W1..A-W4 patched; watcher DISARMED; fresh re-review in progress | Source/deployed watcher SHA `ed8ca8b5...` byte-identical; exact 0.01 ETH trigger, durable 3b0 no-resend intent/reconciliation, per-submit deadline epoch 1786330125 via a666 `7e7ce52`, and recovered 756+target-commitment gate staged. Unit suite 9 passed; standalone local verification transcript `dd88d206...` proves both Groth16 artifacts. Live signer 0/off-whitelist, verifier 691; no intent/report/fire. Re-arm still requires both fresh Verifier-A PASS and principal clearing the unrelated Track B secret-output STOP. PR 7/service/`2839f4e` untouched; packet deadline 1786331925. |
 | A6 closeout | OPEN | |
 | B1 Groth16 env | OPEN | |
 | B2 epoch 7/8 proofs | OPEN | |
 | B3 qualification 6/6 | OPEN | |
 | B4 G5 rehearsal | OPEN | |
 | C0 inventory | REOPENED — top-level 20/20 claim incomplete | `/tmp/a666-c0-inventory/` treated `_worktree_holding` as one item, but live survey found a 454 MB container with 9 registered clean Git worktrees plus 1 non-Git score-artifacts directory, none individually manifested. `e6-scratch` is also a non-Git 1,261-byte launcher stub. C0 can re-close only after each child is manifested/classified or explicitly scoped out. |
-| C1 target architecture | OPEN | |
+| C1 target architecture | DECISION RECORDED; gate OPEN on C0 dependency | Canonical StakeHub `master` at live `2839f4e`; canonical PFTL `main` at live `52e51bc`; ordered PR series, campaign dispositions, and freeze constraints recorded below. `_worktree_holding` children remain unmanifested, so C0 dependency prevents formal C1 closure. |
 | C3 integration complete | OPEN | |
 | C4 retirement complete | OPEN | |
 | D1 migration packet | OPEN | |
 | D2 live migration (PRINCIPAL GO) | OPEN | |
 | D3 legacy lane retired | OPEN | |
+
+## Track C C1 campaign-worktree disposition table
+
+Live canonical refs at the 2026-08-08 ~06:0xZ survey:
+
+- StakeHub `master`: `2839f4e474b73ed09a5ec121a825f6978cdc5e58`
+- PFTL `main`: `52e51bc290eb8d6416e78d31bab6315de5729af6`
+- Behind/ahead is raw commit topology against the matching canonical ref.
+- Dirty T/U is porcelain tracked/untracked entry count. No worktree was mutated.
+
+| Worktree | Branch / HEAD | Behind / ahead | Dirty T/U | Unique content | Disposition and reason |
+|---|---|---:|---:|---|---|
+| `StakeHub` | `master` / `fb9886e` | 4 / 0 | 52 / 29 | Zero commits; substantial uncommitted source/tests plus Robinhood/perp work and generated site | **MERGE** as the plan-mandated patch source and eventual canonical checkout. Split by domain; never bulk-add. Regenerate/discard generated `site/` and egg-info. Several user units still reference this path. |
+| `StakeHub-master-e6` | detached / `2839f4e` | 0 / 0 | 0 / 0 | None | **RETAIN-FROZEN through A6.** Active `stakehub-pfusdc-wallet-agent.service` PYTHONPATH checkout on the exact reviewed canonical commit. Keep untouched until the principal-approved PR 7 ceremony. |
+| `StakeHub-e6-213618e` | `e6-e5compat-near-v6-fix` / `b2608b5` | 5 / 3 | 0 / 0 | `8512776`, `2581c43`, `b2608b5` | **RETAIN-FROZEN -> MERGE after A6.** Port `2581c43` vkey-print and `b2608b5` verify-aggregate to fresh master. `8512776` is the old-lineage version of the NEAR fix already represented by `2839f4e`; resolve, never blind-cherry-pick. Local-only branch. |
+| `StakeHub-hl-existing-reader` | `fix/hl-existing-reader-binding` / `e9f0d0e` | 3 / 0 | 0 / 0 | None | **DISCARD / retire-clean.** PR 6 merged at `6382478`; branch is an ancestor of master with zero keepers. |
+| `StakeHub-red-base` | detached / `fb9886e` | 4 / 0 | 2 / 1 | Zero commits; two uncommitted test blobs absent from every ref | **ARCHIVE**, then retire. Preserve a redaction-scanned, hashed RED-parent test overlay; never silently discard the two unique blobs. |
+| `StakeHub-repeat-demo` | `pft-cli-wallet-20260721` / `676e40e` | 16 / 154 | 34 / 9 | 154 raw commits: 151 non-merge keepers plus merges `386aeb5`, `a7c3a1c`, `e4e2e77` | **MERGE selectively as ordered PRs; never wholesale-merge.** Local-only branch. Retirement blocked by four systemd/config references until consumers migrate. |
+| `StakeHub-vkey-repro-20260730` | detached / `213618e` | 5 / 0 | 1 / 0 | No commits; dirty blob exactly equals `8512776` | **DISCARD** after E6 branch archive/port. No independent keeper. |
+| `a666-eth-fast-lane-combined-20260724` | `feature/pnok-private-fix` / `7e7ce52` | 22 / 2 | 5 / 345 at survey; watcher-script files clean after exact commit | `e6c35e9` terminal E6 binding plus `7e7ce52` per-submit deadline guards | **RETAIN-FROZEN -> MERGE/ARCHIVE after B4.** Preserve both commits as campaign evidence/safety tooling, then redaction-archive campaign evidence. Upstream remains `16621fa`; four user units reference the checkout. |
+| `a666-orchard-fix-2246d25` | `orchard-fix-2246d25` / `540b2c1` | 447 / 1 | 0 / 0 | Raw commit 1, patch-unique 0 | **RETAIN-FROZEN -> DISCARD after A6.** Stable patch-id `f6e5c686...` matches canonical `16621fa`. Preserve the Section 6.3 `83ac75d` deployed-semantics ruling in integration records. |
+| `e6-scratch` | non-Git directory | N/A | N/A | One 1,261-byte `launch-build.sh`; no secret-pattern class found | **ARCHIVE** as a hashed build helper, then discard after B2/B4. It references `StakeHub/zk`. |
+| `_worktree_holding` | non-Git container | N/A | N/A | Ten children: nine clean registered Git worktrees plus one non-Git score-artifacts directory | **RETAIN-FROZEN pending scope correction.** The single blank C0 manifest is invalid. Each child needs a manifest/disposition or explicit out-of-scope ruling. |
+
+### Canonical ordered PR series
+
+StakeHub:
+
+1. PR 7, `5d33bae` onto `master`, remains OPEN/CLEAN. Merge only after leg 3b lands and the principal approves the single restart/unlock ceremony.
+2. Fresh-master E6 operator-tools PR: port `2581c43`, then `b2608b5`; exclude duplicate-lineage `8512776`.
+3. Split `StakeHub-repeat-demo`, smallest dependency first:
+   1. `pft_wallet` packaging, wallet primitives, API, and operations.
+   2. Atomic-swap/generalized-wallet state and tests.
+   3. Fail-closed A666 five-leg adapters and profile bindings.
+   4. Redaction-safe campaign fixtures, docs, and evidence.
+4. Split dirty `StakeHub` patch source:
+   1. Remaining custody/agent changes after subtracting PR 7.
+   2. Reserve-proof/Hyperliquid/NEAR changes after subtracting master and E6 tools.
+   3. Robinhood/perp work as a separate non-A666 PR or archive.
+   4. Rebuild generated site artifacts last.
+
+PFTL campaign suffix:
+
+1. Use the separately classified depositV2/validation sequence.
+2. No orchard PR: `540b2c1` is patch-equivalent to canonical `16621fa`.
+3. After B4, port `e6c35e9` and its focused safety-tooling successor `7e7ce52` onto current `main`, with the `83ac75d` deployed-semantics divergence ruling explicit.
+4. Redaction-archive the 345 untracked evidence roots before retirement.
+
+### Freeze and retirement constraints
+
+- Until A6: `StakeHub-master-e6`, `StakeHub-e6-213618e`, `a666-orchard-fix-2246d25`.
+- Until B4: `a666-eth-fast-lane-combined-20260724`.
+- Config-reference holds: `StakeHub` in six scanned files; `StakeHub-repeat-demo` in four; `a666-eth-fast-lane-combined-20260724` in four.
+- Preserve local-only keepers before retirement: `e6-e5compat-near-v6-fix`, `pft-cli-wallet-20260721`, `e6c35e9`, and `7e7ce52`.
+- C1 target decisions are recorded, but formal closure waits on C0: manifest or explicitly scope all nine `_worktree_holding` Git children and its score-artifacts child. No retirement or deletion is authorized yet.
 
 ## STOP log
 
@@ -48,6 +103,7 @@
 - 2026-08-08 GPT-5.6-Sol respawn: unconditional secret-output STOP during read-only preflight. A process-list diagnostic surfaced a VS Code connection-token class secret in transient command output. Value omitted and never persisted. No live mutation occurred. A5 held at the failed Leg 3b witness build pending fresh principal ruling.
 - 2026-08-08 ~04:1xZ RESUME RULING: principal instructed "ramp up on this handoff ... and then continue executing where other agent left off." Hold lifted. Safe-resume sweep re-run first: 6/6 h787 root c6839e57 converged, 30/30 tx+receipt checks accepted, witness absent, disk 110 GB. Live mutations re-authorized inside the Section 2 envelope; fail-closed rules unchanged.
 - 2026-08-08 ~05:5xZ TRACK B SECRET-OUTPUT STOP: read-only `scripts/gov-inference-provider vast-instances` surfaced a Jupyter-token-class secret field in transient output. Value omitted and never persisted. No B1/B2 job launched; no remote/local mutation occurred. Instance 47146923 was confirmed running before STOP. Section 2 requires STOP-no-retry and a fresh principal ruling. Track A watcher was reconciled at signer balance 0 / verifier height 691, then targeted SIGTERM was sent to the validated watcher process; lock is free, no STOP/DONE/fire artifact exists, and no chain/wallet/key/vault/balance/service state moved. Track C read-only inventory remains independent and continues.
+- 2026-08-08 ~06:0xZ MANAGER CLASSIFICATION FOR PRINCIPAL RULING: both secret-output incidents to date are third-party infrastructure tokens incidentally printed by read-only diagnostics: one VS Code connection-token class and one Jupyter-token class on the rented GPU box. Neither is campaign key material; neither is the StakeHub passphrase; neither was persisted; no mutation occurred in either incident. The current STOP is correctly called and remains in force until the principal rules.
 
 ## Stage state journal
 
@@ -61,6 +117,12 @@
 - 2026-08-08: Manager: plan committed to docs/plans/, tracker created, fire-discipline skill read and bound to Track A. Envelope active per principal GO.
 
 ## Journal
+
+- 2026-08-08 ~06:1xZ A-W1..A-W4 PATCH STAGED, WATCHER STILL DISARMED: source and deployed copy SHA-256 `ed8ca8b508a4dda7cbc20b45abad79cb52a4ddbdfd5117da9744284b0531d9b2` byte-identical. A-W1 adds fsync+atomic pre-broadcast intent, exact report/agent-journal transaction recovery, verified journal-chain/head binding, owner latest/pending nonce capture, and a permanent no-resend path after any started attempt; balance is re-read immediately before broadcast and partial funding fails closed. A-W2 external trigger/floor is exactly 10^16 wei. A-W3 checks the deadline margin at command start and passes epoch 1786330125 to commit `7e7ce52`, whose submit helpers recheck immediately before checkpoint, proof-accept, and consume broadcasts. A-W4 gates recovered height 756 on full commitment `0x3b7c8bde64bfb6e8f5c65b2cde016a658ca270d01d399548336d12c5c5ec5b12`. Unit suite 9 passed; live read-only integration: 9,115-entry agent journal hash chain PASS, signer 0, verifier 691/prior commitment exact, no funding intent/report. Fresh Verifier-A re-review IN PROGRESS; watcher lock free and no process armed.
+
+- 2026-08-08 ~06:1xZ STANDALONE LEG-3B LOCAL VERIFY PASS: `/tmp/a666-s1g/leg3b/LOCAL-VERIFY-TRANSCRIPT-20260808.md` SHA-256 `dd88d206bf406407f73194e5f190b2b5f1600e8167354b58359eeb11f17fd57b`. Checkpoint 691->756 and receipt proofs both returned exit 0 / empty stderr under SP1 6.3.1 `Groth16Verifier::verify`; deployed vkey `0x004e44ac...`, pinned ELF SHA-256 `495e4627...`, CPU/CUDA PV equality, commitments, packet digest, deadline, and exact 11,012,575 all PASS. No RPC/signing/service/provider/chain/wallet/key/vault mutation. Transient 4.6 MB helper and symlink removed after transcript finalization; transcript remains.
+
+- 2026-08-08 ~06:1xZ C1 CAMPAIGN DISPOSITION DECISION RECORDED: full table, canonical refs, ordered PR series, and freeze constraints now appear in the dedicated tracker section above. Live drift captured (`StakeHub-e6-213618e` -> `b2608b5`; a666 -> `7e7ce52` after manager safety patch). Formal C1 gate remains OPEN only because C0 dependency is reopened for nine unmanifested `_worktree_holding` Git children plus its non-Git score-artifacts child. No worktree retirement/deletion authorized.
 
 - 2026-08-08 ~06:0xZ C0 REOPENED ON LIVE TOPOLOGY: survey proved the recorded `20/20` top-level manifest count hid `_worktree_holding` (454 MB container; 9 registered clean Git child worktrees + 1 non-Git score-artifacts directory, none individually manifested). `e6-scratch` is non-Git and contains only a 1,261-byte launcher. C1 remains OPEN; no deletion/retirement authorized. StakeHub topology evidence is complete and the full disposition table is in progress.
 

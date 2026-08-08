@@ -427,3 +427,29 @@ Respawn state (verify live again before trusting):
 - The recorded C0 `20/20` count covered top-level entries rather than every registered worktree. Live survey found `/home/postfiat/repos/_worktree_holding` is a 454 MB container containing nine registered clean Git worktrees plus one non-Git score-artifacts directory; none has an individual C0 manifest.
 - `/home/postfiat/repos/e6-scratch` is also non-Git and contains only a 1,261-byte `launch-build.sh` stub.
 - Gate correction: C0 is REOPENED and C1 remains OPEN. Each holding-container child must receive a manifest/disposition or an explicit written out-of-scope classification before C0 can close. No delete, retirement, checkout move, or other worktree mutation occurred. StakeHub campaign topology is surveyed; the unified disposition table remains in progress.
+
+### 2026-08-08 ~06:1xZ — Manager direction recorded; STOP classification; independent work authorized
+
+- Current Track B secret-output STOP is correctly called and remains in force; the principal ruling request is pending. Both incidents to date are classified as third-party infrastructure tokens incidentally printed by read-only diagnostics: a VS Code connection-token class and a Jupyter-token class on the rented GPU box. Neither is campaign key material, neither is the StakeHub passphrase, neither was persisted, and no mutation occurred.
+- Independent local safety staging, standalone proof verification, and Track C read-only classification were authorized while the STOP remains. Live fire, B1/B2, PR 7, wallet-agent service operations, unlock requests, and all landed PFTL commands remain held/untouched.
+
+### 2026-08-08 ~06:1xZ — A-W1 through A-W4 patched locally; watcher deployed but DISARMED; re-review in progress
+
+- Source `tools/a666-leg3b-fire-watcher/fire_watcher.py` and deployed `/tmp/a666-s1g/leg3b/fire_watcher.py` are byte-identical at SHA-256 `ed8ca8b508a4dda7cbc20b45abad79cb52a4ddbdfd5117da9744284b0531d9b2`. Lock is free; no watcher process, `STOP.txt`, `LEG3B-DONE.txt`, funding intent, funding report, or fire command artifact exists.
+- **A-W1 staged:** fsync+atomic pre-broadcast intent is durable before the exact 0.01 ETH child command. The intent binds verified agent-journal chain/head, owner latest/pending nonces, signer/owner/amount/label, and fresh signer balance. Once phase `broadcast_attempt_started` exists, no code path can send again: restart recovers only an exact report or one post-head agent-journal tx and verifies on-chain from/to/value/status=1; ambiguity/missing evidence/partial balance STOPs. Balance is re-read immediately before the first broadcast.
+- **A-W2 staged:** external trigger and funding floor are exactly `10000000000000000` wei = 0.01 ETH. The inherited 0.005 ETH threshold is gone; a partial sub-0.01 balance fails closed.
+- **A-W3 staged:** watcher checks the 30-minute margin after persisting each command and immediately before subprocess start. It passes `POSTFIAT_MUTATION_NOT_AFTER_EPOCH=1786330125` to a666 commit `7e7ce52`, whose helpers enforce the same deadline immediately before each constrained-signer submit: checkpoint advance, proof accept, and packet consume.
+- **A-W4 staged:** both prestate and crash-recovery skip require height 756 plus full target commitment `0x3b7c8bde64bfb6e8f5c65b2cde016a658ca270d01d399548336d12c5c5ec5b12`; height-only recovery is gone.
+- Tests: `pytest -q tools/a666-leg3b-fire-watcher/test_fire_watcher.py` -> 9 passed; syntax/diff checks PASS. Read-only live integration parsed and hash-verified all 9,115 agent-journal entries; signer remains 0; verifier 691 with exact prior commitment; funding intent/report remain absent. Fresh Verifier-A critical re-review is in progress. Ruling alone still does not re-arm until that review passes.
+
+### 2026-08-08 ~06:1xZ — Standalone persisted leg-3b local verification PASS
+
+- Transcript: `/tmp/a666-s1g/leg3b/LOCAL-VERIFY-TRANSCRIPT-20260808.md`, SHA-256 `dd88d206bf406407f73194e5f190b2b5f1600e8167354b58359eeb11f17fd57b`.
+- SP1 6.3.1 `Groth16Verifier::verify` returned exit 0 with empty stderr for the checkpoint 691->756 proof and receipt/accept proof. Pinned ELF SHA-256 `495e46273337ce4ff035177825a605cc389ad82c05ead11d4874e349ba22cc3a` re-derived deployed vkey `0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9`.
+- CPU/CUDA public values are byte-identical. Prior/result commitments chain exactly, and packet digest `0x288464d7...def306`, recipient, deadline 1786331925, and mint 11,012,575 bind exactly. The transient 4.6 MB helper and symlink were removed after transcript finalization; the transcript is preserved. No RPC, signature, service, provider, chain, wallet, key, vault, or balance mutation occurred.
+
+### 2026-08-08 ~06:1xZ — C1 campaign disposition table recorded; formal gate held on reopened C0
+
+- Tracker now contains the full live disposition table for StakeHub/a666 campaign worktrees, canonical refs, ordered PR series, and freeze/retirement constraints. Canonical StakeHub is `master@2839f4e`; canonical PFTL is `main@52e51bc`.
+- Material decisions: `StakeHub-master-e6` stays frozen through A6; E6 tools `2581c43` then `b2608b5` port after A6; merged HL-reader branch retires clean; RED base archives first; repeat-demo splits into ordered PRs; orchard fix is patch-equivalent and retires after A6; a666 campaign checkout stays frozen through B4 and now preserves `e6c35e9` plus safety commit `7e7ce52`.
+- C1 target architecture decision is recorded, but the formal gate remains OPEN on C0 dependency: nine registered Git children and one score-artifacts child inside `_worktree_holding` still lack individual manifests or explicit out-of-scope rulings. No retirement or deletion is authorized.
