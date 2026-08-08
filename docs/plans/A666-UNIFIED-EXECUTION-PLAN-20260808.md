@@ -231,3 +231,14 @@ State for any respawn (verify live before trusting):
 - expected-signer env vars are NOT needed: option_env fallback is DECLARED_OWNER = 0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0 which IS the required signer.
 - Money since resume: zero. Only local builds, reads, witness assembly.
 
+
+### 2026-08-08 ~02:2xZ — vkey tripwire FIRED and RESOLVED; pinned-guest Groth16 prove relaunched
+
+- Tripwire: rebuilt-ELF vkey came back 0x00fa3bef... != pinned 0x00580ee8... First prove KILLED at ~5.5 min (no output written).
+- Root cause: rebuilding the 213618e script package regenerates the guest ELF and drifts the vkey (NEAR patch and/or path nondeterminism — not isolated further, did not need to be).
+- Resolution (no gate weakened): copied archived governed ELF (sha256 dd743c38..., the exact E5 artifact) over target/elf-compilation/.../stakehub-aggregate-program, rebuilt host bins with SP1_SKIP_PROGRAM_BUILD=true so sp1-build leaves the guest untouched but still wires include_elf paths. Injected ELF hash verified before AND after rebuild.
+- New tool: vkey-print bin (StakeHub-e6-213618e commit 2581c43) prints the embedded guest vkey without proving. Against the injected ELF: 0x00580ee8c389192568a29dc23d54c22e73a3a45203b22e3d5a934801871e11a7 — EXACT PIN. VKEY GATE CLOSED.
+- Pinned-guest --execute on the fresh witness: PASS, 22,631,608 cycles, PV 2720 bytes, policy 0x076c071e44... exact. The pinned guest does NOT re-verify NEAR head hashing in-circuit, so the fresh lpv-86 NEAR leg is fine under the pinned vkey; the corrected NEAR hashing lives host-side only (branch commit 8512776).
+- Groth16 prove RELAUNCHED with the pinned-guest binary (aggregate-prove sha256 fd931709...): PID file /tmp/a666-unified-a0/agg-prove2.pid, log /tmp/a666-unified-a0/agg-prove2.log, outputs -> run dir. Expected: prints "aggregate program vkey: 0x00580ee8..." at completion; verify PV policy bytes[96:128] again and vkey line before calling A3 closed.
+- If a respawn finds the prove dead with no proof-out: safe to relaunch the same command from run-dir env; nothing on-chain moved. Money since resume: still zero.
+
