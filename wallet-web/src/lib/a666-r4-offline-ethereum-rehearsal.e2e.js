@@ -2086,7 +2086,8 @@ test('DEFECT-13 RED-FIRST: fresh self-custody wallet creates pfUSDC and A666 tru
   const origin = new URL(process.env.POSTFIAT_R4_WALLET_ORIGIN || 'http://127.0.0.1:31021');
   assert.ok(['127.0.0.1', 'localhost', '::1'].includes(origin.hostname), 'DEFECT-13 origin must be loopback');
   assert.ok(origin.port, 'DEFECT-13 origin must include an explicit port');
-  const runDir = '/home/postfiat/.pft/a666-r4-fresh-wallet-v7';
+  const runDir = process.env.POSTFIAT_A666_R4_RUN_DIR;
+  assert.ok(runDir, 'DEFECT-13 run directory must be supplied explicitly');
   const ready = JSON.parse(await readFile(join(runDir, 'fresh-wallet-ready.json'), 'utf8'));
   const passphrase = (await readFile(join(runDir, 'wallet-passphrase.local'), 'utf8')).trim();
   assert.match(String(ready.address || ''), /^pf[0-9a-f]{40}$/,
