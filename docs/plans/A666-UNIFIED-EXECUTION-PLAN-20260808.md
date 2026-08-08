@@ -242,3 +242,11 @@ State for any respawn (verify live before trusting):
 - Groth16 prove RELAUNCHED with the pinned-guest binary (aggregate-prove sha256 fd931709...): PID file /tmp/a666-unified-a0/agg-prove2.pid, log /tmp/a666-unified-a0/agg-prove2.log, outputs -> run dir. Expected: prints "aggregate program vkey: 0x00580ee8..." at completion; verify PV policy bytes[96:128] again and vkey line before calling A3 closed.
 - If a respawn finds the prove dead with no proof-out: safe to relaunch the same command from run-dir env; nothing on-chain moved. Money since resume: still zero.
 
+
+### 2026-08-08 ~02:5xZ — Gate D step 4 closed; A4 HELD packet written; B1 diagnosis done
+
+- Gate D step 3: reconcile residual 0 (report in run dir). Step 4: preview PV == pinned-guest execute PV byte-for-byte, sha256 40074b8e... CLOSED.
+- A4 packet (HELD, fires only after proof + local verify): <run dir>/PACKET-A4-e6-finalize.HELD.md sha256 ddb819b0... Uses authoritative 57ec4168 builder (byte-for-byte copy /tmp/ghash-e6-recon/builder-57ec4168.py sha 1cc5a13b...), fresh status captures over postfiat-local-rpc-v1, batch-only validate, finalize once, mint recomputed from final NAV.
+- B1 diagnosis: docker works from this launch context (group 988(docker) active, server 29.1.3, /var/run/docker.sock reachable) — the Aug 3 failure was stale supplementary groups in user-systemd managers (guard b4ed59c). Gate B1 trivial end-to-end proof DEFERRED until the A3 Groth16 prove frees RAM (would contend, OOM risk = STOP hazard).
+- Groth16 prove in flight: PID file /tmp/a666-unified-a0/agg-prove2.pid, log /tmp/a666-unified-a0/agg-prove2.log. Started ~02:37Z.
+
