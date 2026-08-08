@@ -562,3 +562,10 @@ Respawn state (verify live again before trusting):
 - Additive commit `4e19949278bc14a714f36dcb93b18875807a3b17` replaces `rg --files` with captured `git ls-files --cached --others --exclude-standard` for real repositories and a bounded Python walk for the self-test's non-Git miniature trees. Enumeration output is captured; only scanner locations/classes can be emitted.
 - The exact policy self-test and full reviewed-tree check both pass with a PATH that deliberately excludes `rg`. Python compile, exact-tree public secret scan, source portability, and diff checks pass. Branch push was fast-forward only; PR31 body and tracker were updated; a fresh matrix is active.
 - PR30 remains unchanged and held. Watcher stays disarmed; PR7, service, Vast provider surface, A6/B4-frozen worktrees, target-jammy, deletion, cleanup, retirement, and history rewrite remain untouched.
+
+### 2026-08-08 09:49Z — PR31 parallel transport-test load flake hardened
+
+- A complete local workspace run finished the 45-minute 269-test node-library tranche without failures, then found two unchanged-main node integration failures. Output-safe diagnosis emitted test locations/classes only: one authenticated persistent peer-health connection failure and its derivative poisoned global transport-test lock.
+- Both exact regressions pass in fresh serial processes, proving a parallel-load readiness flake rather than a protocol failure. Additive commit `58f26cfd0626e2202654bde30d2f9ac5ada70efc` changes only the test helper's authenticated peer-health readiness budget from 15 seconds to 60 seconds.
+- Both focused tests, workspace format, diff check, and exact-tree public secret scan pass. The branch was fast-forward pushed, PR31 body updated, and a fresh GitHub matrix started.
+- PR30 remains unchanged and held. Watcher stays disarmed; PR7, service, Vast provider surface, A6/B4-frozen worktrees, target-jammy, deletion, cleanup, retirement, and history rewrite remain untouched.
