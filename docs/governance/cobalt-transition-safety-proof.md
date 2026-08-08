@@ -42,6 +42,8 @@ old-checker validation, and missing key continuity.
 ## Verification
 
 ```bash
+# HISTORICAL: these commands were archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/cobalt-transition-safety-proof-verify --fixtures
 scripts/cobalt-transition-safety-proof-verify --write-report
 scripts/cobalt-transition-safety-proof-verify --verify-report

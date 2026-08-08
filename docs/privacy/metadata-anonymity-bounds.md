@@ -86,6 +86,8 @@ the public surface, and ungoverned metadata policy.
 ## Verification
 
 ```bash
+# HISTORICAL: these commands were archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/privacy-metadata-anonymity-bound-verify --fixtures
 scripts/privacy-metadata-anonymity-bound-verify --write-report
 scripts/privacy-metadata-anonymity-bound-verify --verify-report

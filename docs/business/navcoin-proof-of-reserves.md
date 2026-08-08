@@ -106,7 +106,8 @@ without holding a monopoly (plan §10a).
 
 ## Empirical basis for tolerance
 
-The drift study (`scripts/hyperliquid-drift-study`) observed a live
+The archived drift study (`scripts/hyperliquid-drift-study`; see
+`scripts/README.md`) observed a live
 ~$275M Hyperliquid vault: equity span drift of 0.0005 bp across ten
 samples, with ZERO bit-identical observation snapshots. Conclusion baked
 into the design: exact-match attestation is physically impossible on
@@ -135,11 +136,11 @@ Python modules under `python/postfiat_rpc/`:
 
 ## Smokes and evidence
 
-| Script | Proves |
-|---|---|
-| `scripts/navcoin-current-infra-smoke` | Legacy lifecycle end-to-end (see the Current Infrastructure page) |
-| `scripts/navcoin-multifetch-smoke` | Full multi-fetch lane against LIVE Hyperliquid data: bonded attestor registration, tolerance profile, packet from a live observation, three independent observer attestations with distinct roots, quorum finalize, validator convergence |
-| `scripts/hyperliquid-drift-study` | Snapshot-skew measurement for tolerance policy |
+| Script | Proves | Availability |
+|---|---|---|
+| `scripts/navcoin-current-infra-smoke` | Legacy lifecycle end-to-end (see the Current Infrastructure page) | Archived outside this repository; see `scripts/README.md`. |
+| `scripts/navcoin-multifetch-smoke` | Full multi-fetch lane against LIVE Hyperliquid data: bonded attestor registration, tolerance profile, packet from a live observation, three independent observer attestations with distinct roots, quorum finalize, validator convergence | Archived outside this repository; see `scripts/README.md`. |
+| `scripts/hyperliquid-drift-study` | Snapshot-skew measurement for tolerance policy | Archived outside this repository; see `scripts/README.md`. |
 
 Reports land under `reports/`; public copies with checksums are mirrored
 to the website evidence bundle.

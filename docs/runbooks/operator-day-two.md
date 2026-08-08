@@ -49,6 +49,8 @@ observed validators are height/root consistent.
 For the controlled live fleet:
 
 ```bash
+# HISTORICAL: this command was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 RUN_ID=live-validator-doctor-$(date -u +%Y%m%dT%H%M%SZ) \
   SSH_CRED_FILE=/path/to/machine-credentials.txt \
   scripts/testnet-live-validator-doctor
@@ -158,6 +160,8 @@ atomic rotation remains preferable for real-value production.
 For a one-command read-only live evidence sweep:
 
 ```bash
+# HISTORICAL: these commands were archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/testnet-live-evidence-refresh \
   --account-address "$PUBLIC_CANARY_ADDRESS"
 ```
@@ -165,6 +169,8 @@ scripts/testnet-live-evidence-refresh \
 To skip SSH checks and only exercise public/read-only RPC surfaces:
 
 ```bash
+# HISTORICAL: this command was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/testnet-live-evidence-refresh \
   --account-address "$PUBLIC_CANARY_ADDRESS" \
   --skip-ssh-checks
@@ -174,6 +180,8 @@ For the full controlled operator sweep, including SSH validator checks and the
 bounded live wallet / Orchard write gates:
 
 ```bash
+# HISTORICAL: this command was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/testnet-live-evidence-refresh \
   --account-address "$PUBLIC_CANARY_ADDRESS" \
   --include-write-gates
@@ -211,6 +219,8 @@ when the disk index is absent or stale.
 For a live read-only fleet smoke with public account-history canary:
 
 ```bash
+# HISTORICAL: this command was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/testnet-live-python-rpc-client-smoke \
   --endpoint-file reports/testnet-remote-config-bundles-ssh-smoke/testnet-config-bundle-20260514T143535Z/remote-topology.json \
   --account-address "$PUBLIC_CANARY_ADDRESS" \
@@ -285,6 +295,8 @@ target/debug/postfiat-node account-tx-index-build \
 For a controlled live fleet refresh with SSH credentials available, run:
 
 ```bash
+# HISTORICAL: this command was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 RUN_ID=live-account-tx-index-$(date -u +%Y%m%dT%H%M%SZ) \
   SSH_CRED_FILE=/path/to/machine-credentials.txt \
   scripts/testnet-live-account-tx-index-refresh
@@ -318,6 +330,8 @@ privacy-alpha gated, or operator/local-only.
 For a local current-head operator-tooling evidence packet:
 
 ```bash
+# HISTORICAL: this command was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 RUN_ID=current-head-tooling-$(date -u +%Y%m%dT%H%M%SZ)
 scripts/testnet-overnight-evidence-refresh \
   --run-id "$RUN_ID" \
@@ -368,7 +382,8 @@ Before an independent operator is counted toward controlled-testnet diversity:
   public evidence packets.
 - Start the validator and read-only RPC services with public write methods
   disabled by default.
-- Run `scripts/testnet-live-validator-doctor` or the local validator doctor and
+- Run `scripts/testnet-live-validator-doctor` *(archived outside this repository;
+  see `scripts/README.md`)* or the local validator doctor and
   keep only the redaction-safe report path as evidence.
 - Run `scripts/testnet-rpc-doctor` against the read-only RPC endpoint before
   publishing or sharing the endpoint.

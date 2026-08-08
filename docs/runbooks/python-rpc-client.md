@@ -308,6 +308,8 @@ the CSV is intended as the operator-facing account-history export.
 For a local end-to-end wallet receipt packet, use:
 
 ```bash
+# HISTORICAL: this command was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/testnet-wallet-receipt-packet-smoke
 ```
 
@@ -321,6 +323,8 @@ zero archive lookups and zero retained-history scans.
 For a live read-only receipt pull using an existing public canary transaction:
 
 ```bash
+# HISTORICAL: this command was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 ENDPOINT_FILE=reports/testnet-remote-config-bundles-ssh-smoke/testnet-config-bundle-20260514T143535Z/remote-topology.json
 ADDRESS=pflivewalletrecipient0000000000000001
 TX_ID=98bccf352db9ae8a2a62938477b14c5ccd675c2423ee931ac19cd110e7dece7c05c5796b036790815041653440b3de5e
@@ -348,12 +352,16 @@ Current limitations:
 Run the local smoke:
 
 ```bash
+# HISTORICAL: this command was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/testnet-python-rpc-client-smoke
 ```
 
 Run a live read-only endpoint smoke:
 
 ```bash
+# HISTORICAL: this command was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/testnet-live-python-rpc-client-smoke \
   --endpoint-file reports/testnet-remote-config-bundles-ssh-smoke/testnet-config-bundle-20260514T143535Z/remote-topology.json \
   --account-address "$PUBLIC_CANARY_ADDRESS" \

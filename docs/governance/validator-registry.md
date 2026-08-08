@@ -112,6 +112,8 @@ missing-domain hold, contradictory-evidence hold, and unknown model-field hold.
 The Qwen/Cobalt path now has one controlled internal live-effect drill:
 
 ```bash
+# HISTORICAL: this command was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/qwen-cobalt-live-registry-authority-drill --verify-report
 ```
 
@@ -143,5 +145,5 @@ correctness.
 - `docs/governance/full-cobalt-shipping-plan.md`
 - `docs/examples/controlled-testnet-placement-manifest.example.json`
 - `docs/status/controlled-testnet-placement-manifest.json`
-- `scripts/testnet-cobalt-topology-diversity-gate`
-- `scripts/testnet-cobalt-placement-preflight`
+- `scripts/testnet-cobalt-topology-diversity-gate` *(archived outside this repository; see `scripts/README.md`)*
+- `scripts/testnet-cobalt-placement-preflight` *(archived outside this repository; see `scripts/README.md`)*

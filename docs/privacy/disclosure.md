@@ -53,7 +53,7 @@ bounded receipt for one action, note, transaction, or time window.
 Fixture and verifier:
 
 - `docs/governance/agent/fixtures/privacy_assurance_receipt/valid_assurance_receipt.json`
-- `scripts/privacy-assurance-receipt-verify --fixtures`
+- `scripts/privacy-assurance-receipt-verify --fixtures` *(archived outside this repository; see `scripts/README.md`)*
 
 ## Verification
 
@@ -68,5 +68,5 @@ Fixture and verifier:
 ## Sources
 
 - `crates/node/src/privacy.rs`
-- `scripts/testnet-orchard-wallet-finality-smoke`
+- `scripts/testnet-orchard-wallet-finality-smoke` *(archived outside this repository; see `scripts/README.md`)*
 - `docs/status/privacy-production-burndown.md`

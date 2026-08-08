@@ -87,7 +87,7 @@ The controlled-testnet path supports:
 | Minting is capped by finalized reserve supply. | `nav_mint_at_nav`. |
 | Redemption burns units and creates deterministic claims. | `nav_redeem_at_nav`. |
 | Challenged or unsafe assets can halt. | `nav_reserve_challenge` and `nav_halt`. |
-| NAV/PFT secondary liquidity uses the existing offer book. | `scripts/navcoin-current-infra-smoke`. |
+| NAV/PFT secondary liquidity uses the existing offer book. | Historical evidence: `scripts/navcoin-current-infra-smoke` *(archived outside this repository; see `scripts/README.md`)*. |
 | Python can build reserve packets and operation JSON. | `python/postfiat_rpc/navcoin.py` and `python/tests/test_navcoin.py`. |
 
 The native smoke test runs the path end to end on a controlled validator
