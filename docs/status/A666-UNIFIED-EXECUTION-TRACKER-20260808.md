@@ -160,7 +160,7 @@ Retirement-reference result: zero references to any of the ten nested children i
 | PR6 `a00e7da` | `038dc94f6279515598783683f171d30b383dba81bf245898d5ec84efbf95f939` | `d7817dc63a4264bfe34d5315071a41237f15d62f0ddb05873719974a36d15f0c` | 9,208,503 |
 | PR9 `a417c65` | `697f4547531426d3f891bbfe8b1d4b4ce14d19a23aa11dac095ba96226fb4ae3` | `ffa98d0ecc428e7904828938fd7d7aed05f7727df663b539591e67deeadfa6a9` | 9,205,516 |
 
-Total archive bytes: 36,842,751. Post-completion closeout at 2026-08-08 11:13 UTC reverified every source worktree clean, each HEAD byte-equal to its pushed upstream with ahead/behind `0/0`, all four gzip streams and tar listings readable, and all manifests/`INDEX.json` parseable. Archive completion does not authorize deletion or worktree retirement.
+Total archive bytes: 36,842,751. Post-completion closeout at 2026-08-08 11:13 UTC reverified every source worktree clean, each HEAD byte-equal to its pushed upstream with ahead/behind `0/0`, all four gzip streams and tar listings readable, and all manifests/`INDEX.json` parseable. A second content-binding audit recomputed each compressed and uncompressed archive SHA-256, every one of 6,512 archived file byte counts and Git-blob SHA-1 values, total content bytes, and executable-bit class against the manifests; all pass. Tar permission normalization from the archive umask is non-semantic and the manifests retain original Git modes. Archive completion does not authorize deletion or worktree retirement.
 
 ### C2/C3 integration PR evidence
 

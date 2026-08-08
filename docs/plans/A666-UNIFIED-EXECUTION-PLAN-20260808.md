@@ -591,3 +591,9 @@ Respawn state (verify live again before trusting):
 - The historical fixture boundary is explicit and tested by construction: normal keyed open rejects the unkeyed fixture; the trusted offline migration opener is invoked deliberately; logical reopening must then pass. Non-storage filesystem concerns such as proposals, certificates, topology, validator keys, and controlled reports remain direct I/O.
 - Storage tests pass 42/42; storage format, diff check, and the raw-path audit pass. Focused node tests are still compiling, so the branch remains unpushed and no PR exists. Remaining affected tests, check/Clippy, touched-file formatting, and location/class-only secret scan gate publication.
 - Keyed-integrity equivalence is still unresolved and must be presented as an open review question in the PR description. No merge, service/provider/watcher/PR7/PR30/PR31/frozen worktree, deletion, retirement, or history action occurred.
+
+### 2026-08-08 11:2xZ — Archive content-to-manifest binding independently closed
+
+- A content-only verifier recomputed each of four compressed archive SHA-256 values, each uncompressed-tar SHA-256, and every archived regular file's byte count and Git-blob SHA-1 against its manifest: 1,628 files per source, 6,512 total, all PASS. Manifest total bytes and the four index policy bindings also pass.
+- Tar permission modes reflect the archive environment's umask; executable-bit classes match Git for every file, while each manifest retains the authoritative original Git mode. No file content or secret candidate was emitted during verification.
+- This strengthens the already-complete additive archive disposition but changes no archive/source/worktree state and still authorizes no deletion or retirement.
