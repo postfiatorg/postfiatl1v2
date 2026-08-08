@@ -151,6 +151,7 @@ nav:
   - RPC:
       - Overview: rpc/overview.md
       - Methods: rpc/methods.md
+      - Dispatch Method Coverage: rpc/method-coverage.md
       - Account History: rpc/account-history.md
       - Write Policy: rpc/write-policy.md
       - Examples: rpc/examples.md
