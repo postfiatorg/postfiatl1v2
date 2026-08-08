@@ -421,3 +421,9 @@ Respawn state (verify live again before trusting):
   - **A-W4:** crash recovery that sees verifier height 756 must also require target commitment `0x3b7c8bde...c5ec5b12` before skipping checkpoint submission.
 - Leg 3b's prepared-state recovery is otherwise idempotent: it validates immutable witness/proof/pre-state hashes, skips an already accepted proof, skips an already consumed packet, and uniquely recovers the consume transaction from its event. Limitation: the artifact directory lacks a standalone persisted local-verifier transcript; this pass verified hashes, report bindings, CPU/CUDA PV equality, witness consistency, and live state.
 - Ruling alone does not re-arm the watcher. After a fresh principal ruling clears the unrelated secret-output STOP, A-W1 through A-W4 must be patched and read-only re-reviewed before the watcher starts.
+
+### 2026-08-08 ~06:0xZ — Track C live topology correction; C0 REOPENED
+
+- The recorded C0 `20/20` count covered top-level entries rather than every registered worktree. Live survey found `/home/postfiat/repos/_worktree_holding` is a 454 MB container containing nine registered clean Git worktrees plus one non-Git score-artifacts directory; none has an individual C0 manifest.
+- `/home/postfiat/repos/e6-scratch` is also non-Git and contains only a 1,261-byte `launch-build.sh` stub.
+- Gate correction: C0 is REOPENED and C1 remains OPEN. Each holding-container child must receive a manifest/disposition or an explicit written out-of-scope classification before C0 can close. No delete, retirement, checkout move, or other worktree mutation occurred. StakeHub campaign topology is surveyed; the unified disposition table remains in progress.

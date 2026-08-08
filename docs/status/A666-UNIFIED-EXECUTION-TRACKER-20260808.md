@@ -33,7 +33,7 @@
 | B2 epoch 7/8 proofs | OPEN | |
 | B3 qualification 6/6 | OPEN | |
 | B4 G5 rehearsal | OPEN | |
-| C0 inventory | CLOSED | 20/20 manifests at /tmp/a666-c0-inventory/*.json; notable: postfiatl1v2 on open-source-productionization branch 266 ahead of origin/main; nav-proof-external-verifier 265 ahead; postfiatl1v2-fastswap 210 ahead; StakeHub-repeat-demo 154 ahead + 34 dirty; a666 worktree 345 untracked/64G (protected evidence) |
+| C0 inventory | REOPENED — top-level 20/20 claim incomplete | `/tmp/a666-c0-inventory/` treated `_worktree_holding` as one item, but live survey found a 454 MB container with 9 registered clean Git worktrees plus 1 non-Git score-artifacts directory, none individually manifested. `e6-scratch` is also a non-Git 1,261-byte launcher stub. C0 can re-close only after each child is manifested/classified or explicitly scoped out. |
 | C1 target architecture | OPEN | |
 | C3 integration complete | OPEN | |
 | C4 retirement complete | OPEN | |
@@ -61,6 +61,8 @@
 - 2026-08-08: Manager: plan committed to docs/plans/, tracker created, fire-discipline skill read and bound to Track A. Envelope active per principal GO.
 
 ## Journal
+
+- 2026-08-08 ~06:0xZ C0 REOPENED ON LIVE TOPOLOGY: survey proved the recorded `20/20` top-level manifest count hid `_worktree_holding` (454 MB container; 9 registered clean Git child worktrees + 1 non-Git score-artifacts directory, none individually manifested). `e6-scratch` is non-Git and contains only a 1,261-byte launcher. C1 remains OPEN; no deletion/retirement authorized. StakeHub topology evidence is complete and the full disposition table is in progress.
 
 - 2026-08-08 ~05:5xZ VERIFIER-A WATCHER AUDIT — FIRE-READY CLAIM WITHDRAWN: read-only three-RPC audit confirmed no A mutation (signer 0; verifier 691; prior commitment exact; receipt unaccepted; packet unconsumed; recipient protected baseline 103,000,000; supply 31,498,197,455). Artifacts bind deadline 1786331925, mint 11,012,575, digest 0x288464d7..., deployed vkey 0x004e44ac..., CPU/CUDA PVs byte-identical. Underlying receipt gates PASS: 3b0, checkpoint, proof accept, and consume each require Ethereum `status=1`; terminal state requires accepted receipt, consumed packet, exact controller/supply/recipient +11,012,575, unchanged migration reserve. Terminology correction: Ethereum receipts expose `status=1`, not PFTL `code=accepted`. Watcher findings that must close before re-arm: [A-W1] durable 3b0 intent/journal/nonce reconciliation plus fresh pre-send balance; [A-W2] external funding threshold exactly 0.01 ETH or proven aggregate gas bound; [A-W3] deadline-margin guard immediately before every mutation; [A-W4] recovered height 756 must also match target commitment 0x3b7c8bde...c5ec5b12. Leg 3b itself is crash-recoverable after prepared state exists. No standalone persisted cryptographic local-verify transcript was found; prior proof reports remain the evidence source.
 
