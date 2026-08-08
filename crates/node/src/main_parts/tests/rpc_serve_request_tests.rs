@@ -97,6 +97,8 @@ mod rpc_serve_request_tests {
                 max_orchard_batch_create_per_peer: 2,
                 max_orchard_batch_create_total: 8,
                 max_orchard_batch_create_concurrent: 1,
+                max_child_dispatch_concurrent: 8,
+                max_child_dispatch_per_peer: 4,
                 keep_alive: false,
             })
             .expect("serve timeout vote loopback RPC")
@@ -294,6 +296,8 @@ mod rpc_serve_request_tests {
                 max_orchard_batch_create_per_peer: 2,
                 max_orchard_batch_create_total: 8,
                 max_orchard_batch_create_concurrent: 1,
+                max_child_dispatch_concurrent: 8,
+                max_child_dispatch_per_peer: 4,
                 keep_alive: false,
             })
             .expect("serve FastPay v3 loopback RPC")

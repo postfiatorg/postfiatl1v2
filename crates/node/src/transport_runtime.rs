@@ -607,7 +607,6 @@ pub(super) fn transport_block_vote_listen(
     if let Some(ready_file) = ready_file.as_ref() {
         clear_transport_ready_file(ready_file, "transport block vote listen")?;
     }
-    let mut accepted = Vec::with_capacity(max_requests);
     let (listener, shielded_verifier_prewarm) = transport_startup_after_prewarm(
         || prewarm_shielded_verifier_cache("transport block vote listen"),
         || {
@@ -637,22 +636,31 @@ pub(super) fn transport_block_vote_listen(
             Ok(())
         },
     )?;
-    for _ in 0..max_requests {
-        let (mut stream, _) = listener
-            .accept()
-            .map_err(|error| format!("transport block vote accept failed: {error}"))?;
-        set_stream_timeout(&stream, timeout_ms)?;
-        let response = handle_transport_block_vote_connection(
-            &mut stream,
-            &data_dir,
-            &key_file,
-            &vote_dir,
-            &topology,
-            &local_status,
-            require_signed_proposal,
-        )?;
-        accepted.push(response);
-    }
+    let accepted = accept_transport_connections_bounded(
+        &listener,
+        max_requests,
+        TRANSPORT_BLOCK_VOTE_LISTEN_MAX_IN_FLIGHT,
+        timeout_ms,
+        "transport block vote listen",
+        {
+            let data_dir = data_dir.clone();
+            let key_file = key_file.clone();
+            let vote_dir = vote_dir.clone();
+            let topology = topology.clone();
+            let local_status = local_status.clone();
+            move |mut stream: TcpStream| {
+                handle_transport_block_vote_connection(
+                    &mut stream,
+                    &data_dir,
+                    &key_file,
+                    &vote_dir,
+                    &topology,
+                    &local_status,
+                    require_signed_proposal,
+                )
+            }
+        },
+    )?;
 
     Ok(TransportBlockVoteListenReport {
         schema: "postfiat-transport-block-vote-listen-v1".to_string(),
@@ -664,6 +672,77 @@ pub(super) fn transport_block_vote_listen(
         accepted,
         verified: true,
     })
+}
+
+// Serve accepted connections on bounded worker threads so one stalled or
+// dead peer cannot wedge a listener (remote DoS hardening). The semaphore
+// caps in-flight handling: while at most `max_in_flight` connections are
+// being served, the accept loop keeps accepting, so a single slow peer never
+// blocks subsequent accepts. New accepts only pause when every slot is busy,
+// and each slot is released at latest by the per-connection read timeout.
+fn accept_transport_connections_bounded<T: Send + 'static>(
+    listener: &TcpListener,
+    max_requests: usize,
+    max_in_flight: usize,
+    timeout_ms: u64,
+    context: &str,
+    handle_connection: impl Fn(TcpStream) -> Result<T, String> + Send + Sync + 'static,
+) -> Result<Vec<T>, String> {
+    let max_in_flight = max_in_flight.max(1).min(max_requests);
+    let in_flight_slots = Arc::new((Mutex::new(max_in_flight), Condvar::new()));
+    let handle_connection = Arc::new(handle_connection);
+    let mut handles = Vec::with_capacity(max_requests);
+    for _ in 0..max_requests {
+        let (stream, _) = listener
+            .accept()
+            .map_err(|error| format!("{context} accept failed: {error}"))?;
+        set_stream_timeout(&stream, timeout_ms)?;
+        {
+            let (slots, idle) = &*in_flight_slots;
+            let mut slots = slots
+                .lock()
+                .map_err(|_| format!("{context} slot lock poisoned"))?;
+            while *slots == 0 {
+                slots = idle
+                    .wait(slots)
+                    .map_err(|_| format!("{context} slot lock poisoned"))?;
+            }
+            *slots = slots.saturating_sub(1);
+        }
+        let in_flight_slots_for_thread = Arc::clone(&in_flight_slots);
+        let handle_connection_for_thread = Arc::clone(&handle_connection);
+        let context_for_thread = context.to_string();
+        handles.push(thread::spawn(move || {
+            let result = handle_connection_for_thread(stream);
+            let (slots, idle) = &*in_flight_slots_for_thread;
+            {
+                let mut slots = slots
+                    .lock()
+                    .map_err(|_| format!("{context_for_thread} slot lock poisoned"))?;
+                *slots = slots.saturating_add(1);
+            }
+            idle.notify_all();
+            result
+        }));
+    }
+
+    let mut accepted = Vec::with_capacity(max_requests);
+    let mut first_error = None;
+    for handle in handles {
+        match handle.join() {
+            Ok(Ok(response)) => accepted.push(response),
+            Ok(Err(error)) => {
+                first_error.get_or_insert(error);
+            }
+            Err(_) => {
+                first_error.get_or_insert_with(|| format!("{context} worker thread panicked"));
+            }
+        }
+    }
+    if let Some(error) = first_error {
+        return Err(error);
+    }
+    Ok(accepted)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -4778,4 +4857,170 @@ fn list_certified_loop_batch_files(batch_dir: &Path) -> Result<Vec<PathBuf>, Str
     }
     batch_files.sort_by_key(|path| path.display().to_string());
     Ok(batch_files)
+}
+
+#[cfg(test)]
+mod bounded_accept_tests {
+    use super::*;
+    use std::io::{BufRead, BufReader};
+    use std::sync::mpsc;
+
+    // N2 regression: a stalled connection must not prevent a second
+    // connection from being accepted and fully served.
+    #[test]
+    fn stalled_peer_does_not_block_second_connection() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test listener");
+        let address = listener.local_addr().expect("test listener address");
+        let server = thread::spawn(move || {
+            accept_transport_connections_bounded(
+                &listener,
+                2,
+                TRANSPORT_BLOCK_VOTE_LISTEN_MAX_IN_FLIGHT,
+                10_000,
+                "test bounded accept",
+                |mut stream| {
+                    let mut line = String::new();
+                    let read_result = BufReader::new(&stream).read_line(&mut line);
+                    if read_result.is_ok() {
+                        use std::io::Write;
+                        let _ = stream.write_all(b"ok\n");
+                        Ok(line)
+                    } else {
+                        Ok("error\n".to_string())
+                    }
+                },
+            )
+        });
+
+        // First peer connects and stalls without ever sending a frame.
+        let stalled = TcpStream::connect(address).expect("connect stalled peer");
+        std::thread::sleep(Duration::from_millis(100));
+
+        // Second peer must be accepted and served even though the first peer
+        // never sends anything.
+        let mut second = TcpStream::connect(address).expect("connect second peer");
+        second
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .expect("set second peer read timeout");
+        use std::io::Write;
+        second
+            .write_all(b"second\n")
+            .expect("write second peer frame");
+        let mut response = String::new();
+        BufReader::new(&second)
+            .read_line(&mut response)
+            .expect("read second peer response");
+        assert_eq!(response, "ok\n");
+
+        // Unblock the stalled peer so the server can finish its max_requests
+        // quota and the assertion above can be joined.
+        drop(stalled);
+        let accepted = server
+            .join()
+            .expect("server thread panicked")
+            .expect("bounded accept run failed");
+        assert!(accepted.iter().any(|line| line == "second\n"));
+    }
+
+    // N2 regression: the bounded accept loop enforces the read timeout so a
+    // stalled connection's slot is released even when the peer never sends.
+    #[test]
+    fn stalled_connection_released_by_read_timeout() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test listener");
+        let address = listener.local_addr().expect("test listener address");
+        let (release_tx, release_rx) = mpsc::channel();
+        let server = thread::spawn(move || {
+            accept_transport_connections_bounded(
+                &listener,
+                2,
+                1,
+                300,
+                "test bounded accept",
+                move |stream| {
+                    let mut line = String::new();
+                    let read_result = BufReader::new(&stream).read_line(&mut line);
+                    let _ = release_tx.send(());
+                    let _ = read_result;
+                    Ok(line)
+                },
+            )
+        });
+
+        // Fill the only in-flight slot with a stalled peer.
+        let _stalled = TcpStream::connect(address).expect("connect stalled peer");
+        // The slot must be released by the read timeout without the peer
+        // sending anything; then the server accepts the second connection.
+        release_rx
+            .recv_timeout(Duration::from_secs(10))
+            .expect("stalled connection must be released by read timeout");
+        let mut second = TcpStream::connect(address).expect("connect second peer");
+        use std::io::Write;
+        second
+            .write_all(b"second\n")
+            .expect("write second peer frame");
+        let accepted = server
+            .join()
+            .expect("server thread panicked")
+            .expect("bounded accept run failed");
+        assert!(accepted.iter().any(|line| line == "second\n"));
+    }
+
+    // A failed worker must not make the listener return while other accepted
+    // workers are still running. Detached workers could otherwise continue
+    // mutating vote state after the caller has observed a terminal error.
+    #[test]
+    fn worker_error_waits_for_all_accepted_workers() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test listener");
+        let address = listener.local_addr().expect("test listener address");
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let release_rx = Arc::new(Mutex::new(release_rx));
+        let server = thread::spawn(move || {
+            accept_transport_connections_bounded(
+                &listener,
+                2,
+                2,
+                10_000,
+                "test bounded accept",
+                move |stream| {
+                    let mut line = String::new();
+                    BufReader::new(&stream)
+                        .read_line(&mut line)
+                        .map_err(|error| error.to_string())?;
+                    if line == "fail\n" {
+                        return Err("intentional worker failure".to_string());
+                    }
+                    started_tx.send(()).map_err(|error| error.to_string())?;
+                    release_rx
+                        .lock()
+                        .map_err(|_| "release receiver lock poisoned".to_string())?
+                        .recv()
+                        .map_err(|error| error.to_string())?;
+                    Ok(line)
+                },
+            )
+        });
+
+        let mut failed = TcpStream::connect(address).expect("connect failed worker");
+        use std::io::Write;
+        failed.write_all(b"fail\n").expect("write failed worker");
+        let mut blocked = TcpStream::connect(address).expect("connect blocked worker");
+        blocked
+            .write_all(b"blocked\n")
+            .expect("write blocked worker");
+        started_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("second worker started");
+        assert!(
+            !server.is_finished(),
+            "listener returned before every accepted worker completed"
+        );
+        release_tx.send(()).expect("release second worker");
+
+        let error = server
+            .join()
+            .expect("server thread panicked")
+            .expect_err("worker failure must propagate");
+        assert_eq!(error, "intentional worker failure");
+    }
 }

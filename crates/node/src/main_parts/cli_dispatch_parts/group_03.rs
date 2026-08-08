@@ -377,6 +377,28 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             if max_orchard_batch_create_concurrent == 0 {
                 return Err("--max-orchard-batch-create-concurrent must be positive".to_string());
             }
+            let max_child_dispatch_concurrent =
+                flag_value(flags, "--max-child-dispatch-concurrent")
+                    .map(str::to_string)
+                    .unwrap_or_else(|| DEFAULT_RPC_CHILD_DISPATCH_CONCURRENT.to_string())
+                    .parse::<u64>()
+                    .map_err(|_| {
+                        "--max-child-dispatch-concurrent must be a u64".to_string()
+                    })?;
+            if max_child_dispatch_concurrent == 0 {
+                return Err("--max-child-dispatch-concurrent must be positive".to_string());
+            }
+            let max_child_dispatch_per_peer =
+                flag_value(flags, "--max-child-dispatch-per-peer")
+                    .map(str::to_string)
+                    .unwrap_or_else(|| DEFAULT_RPC_CHILD_DISPATCH_PER_PEER.to_string())
+                    .parse::<u64>()
+                    .map_err(|_| {
+                        "--max-child-dispatch-per-peer must be a u64".to_string()
+                    })?;
+            if max_child_dispatch_per_peer == 0 {
+                return Err("--max-child-dispatch-per-peer must be positive".to_string());
+            }
             let keep_alive = flag_present(flags, "--keep-alive");
             let report = rpc_serve(RpcServeOptions {
                 data_dir,
@@ -405,6 +427,8 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 max_orchard_batch_create_per_peer,
                 max_orchard_batch_create_total,
                 max_orchard_batch_create_concurrent,
+                max_child_dispatch_concurrent,
+                max_child_dispatch_per_peer,
                 keep_alive,
             })?;
             let json = serde_json::to_string_pretty(&report)
