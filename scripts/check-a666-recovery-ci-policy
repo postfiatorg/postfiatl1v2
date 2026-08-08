@@ -94,18 +94,30 @@ class Finding:
 
 def enumerate_files(root: Path) -> list[Path]:
     result = subprocess.run(
-        ["rg", "--files", "-0"],
-        cwd=root,
+        [
+            "git",
+            "-C",
+            str(root),
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+        ],
         check=False,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    if result.returncode != 0:
-        raise RuntimeError("rg --files failed")
+    if result.returncode == 0:
+        return sorted(
+            Path(item.decode("utf-8"))
+            for item in result.stdout.split(b"\0")
+            if item
+        )
     return sorted(
-        Path(item.decode("utf-8"))
-        for item in result.stdout.split(b"\0")
-        if item
+        path.relative_to(root)
+        for path in root.rglob("*")
+        if path.is_file() and ".git" not in path.relative_to(root).parts
     )
 
 
