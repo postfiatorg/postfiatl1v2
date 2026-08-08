@@ -10,7 +10,14 @@ except ImportError:
     import native_agentd_leaf
 
 def rpc(url, method, params):
-    req=Request(url,data=json.dumps({"jsonrpc":"2.0","id":1,"method":method,"params":params}).encode(),headers={"content-type":"application/json"})
+    req = Request(
+        url,
+        data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode(),
+        headers={
+            "content-type": "application/json",
+            "user-agent": "a666-native-contract-leaf/1.0",
+        },
+    )
     with urlopen(req,timeout=15) as res: obj=json.loads(res.read().decode())
     if obj.get("error"): raise RuntimeError(str(obj["error"]))
     return obj.get("result")
@@ -31,7 +38,16 @@ def main(argv=None):
         gas=num(rpc(a.rpc_url,"eth_estimateGas",[{"to":a.to,"data":data,"value":hex(a.value_wei)}])); price=num(rpc(a.rpc_url,"eth_gasPrice",[]))
         if gas*price>a.fee_ceiling_wei: raise RuntimeError("estimated fee exceeds ceiling")
         os.environ.setdefault("EVM_RPC_URL",a.rpc_url)
-        tx=native_agentd_leaf.evm_contract_tx(a.stakehub_home,a.chain_id,a.to,data,a.value_wei,a.label); rec=receipt(a.rpc_url,tx)
+        tx = native_agentd_leaf.evm_contract_tx(
+            a.stakehub_home, a.chain_id, a.to, data, a.value_wei, a.label
+        )
+        if not isinstance(tx, str) or not tx:
+            raise RuntimeError("agent response omitted tx hash")
+        tx = tx if tx.startswith("0x") else f"0x{tx}"
+        if len(tx) != 66:
+            raise RuntimeError("agent response returned malformed tx hash")
+        int(tx[2:], 16)
+        rec=receipt(a.rpc_url,tx)
         if num(rec.get("status",0))!=1: raise RuntimeError("transaction reverted")
         out=Path(a.artifact_dir); out.mkdir(parents=True,exist_ok=True); report={"tx_hash":tx,"status":1,"block_number":num(rec.get("blockNumber",0)),"to":a.to,"value_wei":a.value_wei,"gas_used":num(rec.get("gasUsed",gas)),"effective_gas_price":num(rec.get("effectiveGasPrice",price)),"calldata":data}
         (out/"contract-tx-report.json").write_text(json.dumps(report,indent=2,sort_keys=True)+"\n"); print(json.dumps(report,sort_keys=True)); return 0
