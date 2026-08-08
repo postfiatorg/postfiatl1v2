@@ -17,7 +17,11 @@ except ImportError:
 
 def _rpc(url: str, method: str, params: list[Any]) -> Any:
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
-    request = Request(url, data=body, headers={"content-type": "application/json"})
+    request = Request(
+        url,
+        data=body,
+        headers={"content-type": "application/json", "user-agent": "a666-leg3b-watcher/1.0"},
+    )
     with urlopen(request, timeout=15) as response:
         payload = json.loads(response.read().decode())
     if payload.get("error"):
@@ -82,7 +86,9 @@ def send(args: argparse.Namespace) -> dict[str, Any]:
                 "recipient balance changed before broadcast: "
                 f"expected {args.expected_recipient_balance_wei}, got {recipient_balance}"
             )
-    tx_hash = native_agentd_leaf.evm_send(args.stakehub_home, "ethereum", args.recipient, amount, args.label)
+    # master-e6 agentd CHAINS table is keyed "mainnet" (not "ethereum"); see
+    # StakeHub-master-e6/stakehub/evm.py:19 and the 2026-08-08 leg3b0 KeyError STOP.
+    tx_hash = native_agentd_leaf.evm_send(args.stakehub_home, "mainnet", args.recipient, amount, args.label)
     receipt = _wait_receipt(args.rpc_url, tx_hash)
     status = _hex_int(receipt.get("status", 0))
     if status != 1:
