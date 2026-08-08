@@ -1,0 +1,814 @@
+{
+  "content_bytes": 7581722,
+  "file_count": 161,
+  "files": [
+    {
+      "bytes": 25111,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/external-whitepapers/bittensor-whitepaper.extracted.md",
+      "sha256": "fd2399c1206a6eac02ea05cd58483fad5cf21b3f69c305eea39c1f18b4851ac1"
+    },
+    {
+      "bytes": 586080,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/external-whitepapers/bittensor-whitepaper.html",
+      "sha256": "ba9c4efb3d5f504bea1faa989924f1f495679fc5488406358a192c0934041d91"
+    },
+    {
+      "bytes": 118372,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/external-whitepapers/near-whitepaper.extracted.md",
+      "sha256": "dcfd529d214ee7908e1eb9a0e0dca1ba57bb242fe50ff3296bcf6d513d3d7951"
+    },
+    {
+      "bytes": 342032,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/external-whitepapers/near-whitepaper.pdf",
+      "sha256": "4e827263d9d5527f810bbd2cd64876d4f12dae2baff5b5424d15edff03fab694"
+    },
+    {
+      "bytes": 71781,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/external-whitepapers/pearl-whitepaper.extracted.md",
+      "sha256": "228cdd17b9985c2354f3ed82c73fa7900e03fb5253d9e3c69c56b60dd96182c8"
+    },
+    {
+      "bytes": 608298,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/external-whitepapers/pearl-whitepaper.pdf",
+      "sha256": "d8192ad4dbdd7e9eb477aed9bb4a23a40ff117139f89ef7b04345b058a3c6e4c"
+    },
+    {
+      "bytes": 48966,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/external-whitepapers/postfiatorg-live-whitepaper.md",
+      "sha256": "96acb007e0714023a2d735409b4de4de4e2da332f5a76654a6c93f75d13cbb8a"
+    },
+    {
+      "bytes": 2540,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/external-whitepapers/score-summary.md",
+      "sha256": "31691a4e0aaf25f89c36a0651c4511643bf5074bb9fbb194c484525d8bd19908"
+    },
+    {
+      "bytes": 25875,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/bitcoin-length/whitepaperv2-3545w.md",
+      "sha256": "50fbc26636a760c4e6f6eaaf970573eb6f9c7b61ced7f6de5471c00e432bb0d0"
+    },
+    {
+      "bytes": 16704,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/higher-intel/20260526T125235Z-gpt55-round049-challenge-replay-pq-budget-response.json",
+      "sha256": "fc7893ae39500be590bb3cc05211878cce3c4adf035007cb3ce5323399572e0c"
+    },
+    {
+      "bytes": 14401,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/higher-intel/20260526T125235Z-gpt55-round049-challenge-replay-pq-budget-response.md",
+      "sha256": "5004d3af4c02aa41c8b94119f7814bccc3d882c0bd8f682521263fb513d77003"
+    },
+    {
+      "bytes": 66470,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/higher-intel/20260526T125235Z-gpt55-round049-challenge-replay-pq-budget.md",
+      "sha256": "356160f5aedba511285fc0b3099ce0cb806240fcdd09cc0d40c4b40d99e88fce"
+    },
+    {
+      "bytes": 38244,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/h01_replay_profile_scope.md",
+      "sha256": "cf5c13e255209c2d9a64af8b5c0042ffb9598687209c27236d550760107923c8"
+    },
+    {
+      "bytes": 38811,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/h02_prompt_injection_threat.md",
+      "sha256": "510d64ba2cd539b728b3949947983e7acdeca894808b964e92af19542dee0cd5"
+    },
+    {
+      "bytes": 38720,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/h03_replay_set_diversity.md",
+      "sha256": "2a5f578b8a40f51f8511232a9ab51032cb9b5041dc14ac67c51c076d8592b058"
+    },
+    {
+      "bytes": 38793,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/h04_model_deprecation_policy.md",
+      "sha256": "dd4da192133569c5b13ba59f61cb557952d0d19050892e44327ed57f0f40d1c9"
+    },
+    {
+      "bytes": 38911,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/h05_poa_adversarial_calibration.md",
+      "sha256": "4dc2b4c1323115ad31db1520b3ae9c4fac52891adef800902bad07f38a70324a"
+    },
+    {
+      "bytes": 38457,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/h06_ordering_receipts_protocol.md",
+      "sha256": "1e9ae3f304954b75ecd1926819ac4684ab950c5b02a522d6fc38b13d0f3c83ad"
+    },
+    {
+      "bytes": 39014,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/h07_cobalt_status_and_defs.md",
+      "sha256": "1d6c5314bd01c422ec6596ee50582f4a6ca84eabb968ae0f9f887a13afb7396d"
+    },
+    {
+      "bytes": 38688,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/h08_cobalt_complexity_bound.md",
+      "sha256": "7ac7a0cfd784cb1528eef82f674dea1ae66d3230b03798aa52eda734a9be9f7f"
+    },
+    {
+      "bytes": 38870,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/h09_privacy_transition_atomicity.md",
+      "sha256": "dd6215727fb2256528bf6e7669a61464e0c6b0567bfd5d65de3fe2cccf610193"
+    },
+    {
+      "bytes": 39129,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/h10_mldsa_comparison.md",
+      "sha256": "095322b38d70f00799b02a6bad95f10d6921982a778c37cdb95f11beaf79afd3"
+    },
+    {
+      "bytes": 38254,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/h11_ai_replay_profile_rules.md",
+      "sha256": "7b00c3924eedae53c898c4e9731a806078a663258f2c5cefe001c50a51ca67b8"
+    },
+    {
+      "bytes": 2580,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/hypotheses.md",
+      "sha256": "03d3b68fb6c7ce9be1decfcf09fce182bd66cf218f7029785ba8e6220888762c"
+    },
+    {
+      "bytes": 535,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/memo-h01_replay_profile_scope.score.out",
+      "sha256": "ccb5e18bb1e722b888cd1f10ac84fdd0e8d7359b8e5c04e21dd753ce8ac89f45"
+    },
+    {
+      "bytes": 544,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/memo-h02_prompt_injection_threat.score.out",
+      "sha256": "8080db756c123a167ab8140742e6830c825f2f02a90ac060bf97f05cf121cc67"
+    },
+    {
+      "bytes": 535,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/memo-h03_replay_set_diversity.score.out",
+      "sha256": "aae44e0f615e42218f2773cbf689cdb0e7a4e268992ef038ef79ca681a9d0b63"
+    },
+    {
+      "bytes": 547,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/memo-h04_model_deprecation_policy.score.out",
+      "sha256": "523405e80fa81b0b557a4906e81d07f7239dea37ac09da6a0a05fb33d84d7f5c"
+    },
+    {
+      "bytes": 556,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/memo-h05_poa_adversarial_calibration.score.out",
+      "sha256": "33dab97477810448c6632903c0e80cd3f210ef2d9cc40956025932aae25d1ed1"
+    },
+    {
+      "bytes": 553,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/memo-h06_ordering_receipts_protocol.score.out",
+      "sha256": "ba48f7f36c175ba6d33992762d12612159b0edffd81d16daec7e4d5a6850bb57"
+    },
+    {
+      "bytes": 541,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/memo-h07_cobalt_status_and_defs.score.out",
+      "sha256": "9fb203234eec800b91e4116b197ddd1d7f4b197dde7f2299a939b67ff59b8004"
+    },
+    {
+      "bytes": 544,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/memo-h08_cobalt_complexity_bound.score.out",
+      "sha256": "2fd9db8db58e806d4e91e9140e1b4fac5941d0fb33c90b3f0f5c0917f7109d5d"
+    },
+    {
+      "bytes": 559,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/memo-h09_privacy_transition_atomicity.score.out",
+      "sha256": "80816d50451d06015ef9beeb9eb6ce1b1132935d56f7c4c0f662e57b9f5ecd20"
+    },
+    {
+      "bytes": 523,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/memo-h10_mldsa_comparison.score.out",
+      "sha256": "93ae24ef15e0d239aeed482a2f4d39d8c57cf04349e9edb42a56bc96915bc8e5"
+    },
+    {
+      "bytes": 490,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/memo-targeted-round/memo-hypotheses.score.out",
+      "sha256": "ea232b6fe6bfbc4dda595c43e284a3374988cfb5be66e6cd2cba432f99beed08"
+    },
+    {
+      "bytes": 167529,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T131457Z-r050-openai-research-rewrite/01-topic-selection.prompt.md",
+      "sha256": "5985fc91064d354edec047e9bdb1688d370df8532afda543c992c282df0d10e2"
+    },
+    {
+      "bytes": 1436,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T131457Z-r050-openai-research-rewrite/01-topic-selection.response.json",
+      "sha256": "a41f4a1abef454cd7f5e61f86c9436d0a0da25f6cd18f7da472a4f32d66c7dc5"
+    },
+    {
+      "bytes": 0,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T131457Z-r050-openai-research-rewrite/01-topic-selection.response.md",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 129097,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T131457Z-r050-openai-research-rewrite/inputs/opus-complaints.md",
+      "sha256": "386bc8b6f663eaa58eba4323f22a5ff02e61eafbe3c9400de3d1e1a8bb2f9047"
+    },
+    {
+      "bytes": 37142,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T131457Z-r050-openai-research-rewrite/inputs/whitepaper.md",
+      "sha256": "df7573f6083c4b642db440e92abc7d7c55ee7a085d044e1a328bcb0b5ac8a359"
+    },
+    {
+      "bytes": 51909,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T131803Z-r050-openai-research-rewrite-compact/inputs/opus-complaints.md",
+      "sha256": "dbed1118bb118ac93dde78fd1c35f19116ba1e3633d6dc580effa13bd9f5689a"
+    },
+    {
+      "bytes": 37142,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T131803Z-r050-openai-research-rewrite-compact/inputs/whitepaper.md",
+      "sha256": "df7573f6083c4b642db440e92abc7d7c55ee7a085d044e1a328bcb0b5ac8a359"
+    },
+    {
+      "bytes": 167529,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/01-topic-selection.prompt.md",
+      "sha256": "4572bf49699e0a4894b9d8f4123b7a0e98fb36e51ec411ae4797be4dcb9c579c"
+    },
+    {
+      "bytes": 10284,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/01-topic-selection.response.json",
+      "sha256": "32ed34ebadf00e398ce16be7b76c51d96675daf62fb6a5c5b89ae60dfe38aa46"
+    },
+    {
+      "bytes": 8258,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/01-topic-selection.response.md",
+      "sha256": "6c8754393cad9fdd5c1e04b601ea163d498d56c3cdaf0ee0ecbff4995b6d14e6"
+    },
+    {
+      "bytes": 2613,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/02-research-01-cobalt-xrpl-lineage.prompt.md",
+      "sha256": "cb6bc88768e4db06341ad08611cdd350ac5ebdac75cdba807e3acf3d3958ae85"
+    },
+    {
+      "bytes": 31096,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/02-research-01-cobalt-xrpl-lineage.response.json",
+      "sha256": "a112b5b1be71bb79fb6d5915889528ffde9cb57be09840ec91640eb1cbd75802"
+    },
+    {
+      "bytes": 17586,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/02-research-01-cobalt-xrpl-lineage.response.md",
+      "sha256": "e76b86d0866f79b2d6bbe6bdd5ba97265ad1ed51bfd934d2c283e57b1acdba7a"
+    },
+    {
+      "bytes": 2528,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/02-research-02-pq-cert-budget.prompt.md",
+      "sha256": "c3269a321505270d17b1de75fdd48f7a66c84496854d23533fc40d221817e169"
+    },
+    {
+      "bytes": 32398,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/02-research-02-pq-cert-budget.response.json",
+      "sha256": "5fa8e0e59a28e22750aa27959122fba9491864215563945ccbc17822db5642d7"
+    },
+    {
+      "bytes": 20264,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/02-research-02-pq-cert-budget.response.md",
+      "sha256": "1b0775adced7ab90dbeaf7bf78c271e66117eb468fbef72e94632dff0fdef782"
+    },
+    {
+      "bytes": 2886,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/02-research-03-shielded-envelope-composition.prompt.md",
+      "sha256": "07765b5c72374ca37db04c0fcd40f14837e38bea3b842f7f571fd40d908d7e3f"
+    },
+    {
+      "bytes": 34376,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/02-research-03-shielded-envelope-composition.response.json",
+      "sha256": "8b724fd970c34e057eaaab31a69de27246f3412e68f420d7bdbc10ccbf0ee1b8"
+    },
+    {
+      "bytes": 20094,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/02-research-03-shielded-envelope-composition.response.md",
+      "sha256": "b00d437267a3725bf42a05bd8a818861754f54ba4200b2150e296f957862bf3d"
+    },
+    {
+      "bytes": 2835,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/02-research-04-deterministic-replay-runtime.prompt.md",
+      "sha256": "d6edc8ae7138aff474452d5f77fe587fc70eccf52a87fced754128ffba4a413d"
+    },
+    {
+      "bytes": 29935,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/02-research-04-deterministic-replay-runtime.response.json",
+      "sha256": "401e9f4b65567c9b730c33bef33efb9b2066955b2097871974120efe3110e2a9"
+    },
+    {
+      "bytes": 19801,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/02-research-04-deterministic-replay-runtime.response.md",
+      "sha256": "3247d23bc4d537c2b0f654f7cb30343baaa056a645c505470735d6c8ef82b1b3"
+    },
+    {
+      "bytes": 2803,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/02-research-05-accountable-inclusion-receipts.prompt.md",
+      "sha256": "13758b660784664daa371262538086eef97f5b5e4bf519218c5596aa5114fc91"
+    },
+    {
+      "bytes": 29621,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/02-research-05-accountable-inclusion-receipts.response.json",
+      "sha256": "c8436aeb1d80ccd2659f162d6d6cf2d398939b6d362771c13230782fe89be6b4"
+    },
+    {
+      "bytes": 17406,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/02-research-05-accountable-inclusion-receipts.response.md",
+      "sha256": "8ba1a026ed8fe7c32a357c17fe579c247f8b174bc06942921ff313f907e93f69"
+    },
+    {
+      "bytes": 96748,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/02-research-aggregate.json",
+      "sha256": "5dc1b8e21e9f9a16ec08ac4ba21e97f1aaa676361b40d501b3eb4e5840672518"
+    },
+    {
+      "bytes": 47724,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/02-research-aggregate.md",
+      "sha256": "3913ceed909dd2e910eaad83e7733857faaf5ace17869fa8365ed2a363a2da46"
+    },
+    {
+      "bytes": 272655,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/03-full-rewrite.prompt.md",
+      "sha256": "53cbfbff289bec2968729124ad5f9758bcf1f09dbf323fbaea12b33c4b5e654a"
+    },
+    {
+      "bytes": 51444,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/03-full-rewrite.response.json",
+      "sha256": "6ab9ec0bab5a63f8ad2d5dc5f85374990548564fc083ce8bef9834da67dea804"
+    },
+    {
+      "bytes": 48190,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/03-full-rewrite.response.md",
+      "sha256": "bc37205a9c28ac7440edd232d9f7565a67454aef1f6dbcf729cc0514cf424c77"
+    },
+    {
+      "bytes": 650,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/04-opus-score.stdout.txt",
+      "sha256": "d44b5ace7771aa2b304c500bb1ee09251846edc94c625a2b7c7d93f288bbd1bc"
+    },
+    {
+      "bytes": 129097,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/inputs/opus-complaints.md",
+      "sha256": "20595173e17a50d84800c224ee44146ec029b1c116c69d35a5615edbef7ba165"
+    },
+    {
+      "bytes": 37142,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/inputs/whitepaper.md",
+      "sha256": "df7573f6083c4b642db440e92abc7d7c55ee7a085d044e1a328bcb0b5ac8a359"
+    },
+    {
+      "bytes": 3640,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/metadata.json",
+      "sha256": "8914e7cb1d9cf89ac22f7ef12f3174245b273ab4cac4d5068e39cf11deea0859"
+    },
+    {
+      "bytes": 48190,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T132010Z-r050-openai-research-rewrite-big-budget/whitepaperv2-openai-research-rewrite.md",
+      "sha256": "bc37205a9c28ac7440edd232d9f7565a67454aef1f6dbcf729cc0514cf424c77"
+    },
+    {
+      "bytes": 167091,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/01-topic-selection.prompt.md",
+      "sha256": "8094359611a2b429a6705a8e04a5c77dbb505edb8f2629a75c99c58dd2f499c4"
+    },
+    {
+      "bytes": 11233,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/01-topic-selection.response.json",
+      "sha256": "a172f98a02e4c5828e7a716bb26115bca1e8de678847f9a8ee1b2592e3885d31"
+    },
+    {
+      "bytes": 9216,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/01-topic-selection.response.md",
+      "sha256": "9bfad90d921277f0995a7292e03f618140dfabaf14dae1a6f102baa07cc332dd"
+    },
+    {
+      "bytes": 2932,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/02-research-01-cobalt-xrpl-reconfig-safety.prompt.md",
+      "sha256": "3128e1e1ffd2ba0d12b68180d12dc61d7b80b1b9ec2c7178a773ef48ca01083b"
+    },
+    {
+      "bytes": 32628,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/02-research-01-cobalt-xrpl-reconfig-safety.response.json",
+      "sha256": "5d04d005d3c8ae8b30057fd9b92aa3fd70aa452f31265bea5008a16bc6e9f0b3"
+    },
+    {
+      "bytes": 20188,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/02-research-01-cobalt-xrpl-reconfig-safety.response.md",
+      "sha256": "920a1f86a5ee50ad8797eef1da1f66808e62872e8fc21308542b0d29b35bca99"
+    },
+    {
+      "bytes": 2757,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/02-research-02-pq-bft-certificate-budget.prompt.md",
+      "sha256": "491189fce8e34cac3f8182b324e60c02c382fefb3b652e715b5343d6948ac13b"
+    },
+    {
+      "bytes": 31469,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/02-research-02-pq-bft-certificate-budget.response.json",
+      "sha256": "7cd5d642d4138f057e13958e40f62f743cfc8a7ea2630c07e197a5a435a024c8"
+    },
+    {
+      "bytes": 19638,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/02-research-02-pq-bft-certificate-budget.response.md",
+      "sha256": "84fe0b51d3007a0f27a9826f67d9014c2cf63805cca233a94437b9c1339faa89"
+    },
+    {
+      "bytes": 2983,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/02-research-03-deterministic-ai-replay.prompt.md",
+      "sha256": "7044d6e89dfb346f71908087082633084d80f46e6f2c3e3bb27eeb04bf0a0a45"
+    },
+    {
+      "bytes": 29723,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/02-research-03-deterministic-ai-replay.response.json",
+      "sha256": "5b62875f0b058e640bc0af4f733ea1bd81b253c93607fecd845050d13772cbf0"
+    },
+    {
+      "bytes": 19412,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/02-research-03-deterministic-ai-replay.response.md",
+      "sha256": "73b09efd8bdf21760b80067a7cd8f3d7cc62ad8868948e83dcb7543975e1009c"
+    },
+    {
+      "bytes": 2899,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/02-research-04-shielded-envelope-composition.prompt.md",
+      "sha256": "bc6635071d6578d4ef8a5b4508ba5f0b5261eb4b37e992b7cb561aca111b1e9e"
+    },
+    {
+      "bytes": 31371,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/02-research-04-shielded-envelope-composition.response.json",
+      "sha256": "0068c2e1051cde3048ed0aa57c550c44122a03dabcf0e2c944b5125276bc3593"
+    },
+    {
+      "bytes": 20199,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/02-research-04-shielded-envelope-composition.response.md",
+      "sha256": "319304551c5c4bc178dc267c25c88a5ad54cc48698bb40baa5a6524bc275fdfa"
+    },
+    {
+      "bytes": 3070,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/02-research-05-validator-risk-metrics.prompt.md",
+      "sha256": "3e915d97bff1557fe9705ec9ab0e2d64b2246532323da32cb8549dc4c54524ab"
+    },
+    {
+      "bytes": 38333,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/02-research-05-validator-risk-metrics.response.json",
+      "sha256": "3b6d6ed736d16208585f6b269b48eaec01909c21f12a5681003aa6d6769a8db6"
+    },
+    {
+      "bytes": 23256,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/02-research-05-validator-risk-metrics.response.md",
+      "sha256": "ea69ab9e4c377d159ba0d4e9c6233bf2f0739987913f9ab8eeca25563aeff743"
+    },
+    {
+      "bytes": 104463,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/02-research-aggregate.json",
+      "sha256": "37adf9e21235af0a4806b05aac465ee7f86b097e9cf3c4af1bccdabe091c45e8"
+    },
+    {
+      "bytes": 49962,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/02-research-aggregate.md",
+      "sha256": "d61c2644a24ffdff056c9f5c0745e0f4739aaa1a908420f15d53420bd69b2309"
+    },
+    {
+      "bytes": 280821,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/03-full-rewrite.prompt.md",
+      "sha256": "ccaa8987954e575bcb1beebb23147ad2770f78a96dabd1acccd42c86fe8602f2"
+    },
+    {
+      "bytes": 49463,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/03-full-rewrite.response.json",
+      "sha256": "093624830e083c0ada9b97ecc9160d3f1d78829755229256abd2760c01f1d859"
+    },
+    {
+      "bytes": 46290,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/03-full-rewrite.response.md",
+      "sha256": "0b2a59c070c7b9a45379478a862b746b30c1daa290f475832727c980d9f17fd2"
+    },
+    {
+      "bytes": 638,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/04-opus-score.stdout.txt",
+      "sha256": "cc0b2ce78ff72c69c406a9b738bc5c970bcd26e70a12aac10f53bc31ba5a64e2"
+    },
+    {
+      "bytes": 103891,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/inputs/opus-complaints.md",
+      "sha256": "993bf369867d26d4a42a793872474ffd7b11265061ec907b7047c7755e8a512f"
+    },
+    {
+      "bytes": 24636,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/inputs/score-journal.md",
+      "sha256": "597402efced0a4c51387667f4c35862f382b970619e160e66de919c67586a1bf"
+    },
+    {
+      "bytes": 37142,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/inputs/whitepaper.md",
+      "sha256": "df7573f6083c4b642db440e92abc7d7c55ee7a085d044e1a328bcb0b5ac8a359"
+    },
+    {
+      "bytes": 3302,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/metadata.json",
+      "sha256": "22d35f01ab806f1cc9676ed5c3a6403be705d0e779b6cd7989a5b31ce23d933f"
+    },
+    {
+      "bytes": 46290,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T134321Z-r051-score-journal-research-rewrite/whitepaperv2-openai-research-rewrite.md",
+      "sha256": "0b2a59c070c7b9a45379478a862b746b30c1daa290f475832727c980d9f17fd2"
+    },
+    {
+      "bytes": 148989,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T140819Z-r052-direct-complaints-journal-rewrite/01-direct-full-rewrite.prompt.md",
+      "sha256": "055ae97d5af1cdac2d04fec740d17a36e8c8c34d006b88463955e3c1fd45ffc1"
+    },
+    {
+      "bytes": 42388,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T140819Z-r052-direct-complaints-journal-rewrite/01-direct-full-rewrite.response.json",
+      "sha256": "fc31712eb8c874ed839938cd556024a15cc26a3b17adc4cd3b290b2b7e127d89"
+    },
+    {
+      "bytes": 39265,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T140819Z-r052-direct-complaints-journal-rewrite/01-direct-full-rewrite.response.md",
+      "sha256": "8eb7ee45d669a0385ad15655cc57418dfe88f99a68ecd8ea2defcbb9e5da1691"
+    },
+    {
+      "bytes": 645,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T140819Z-r052-direct-complaints-journal-rewrite/04-opus-score.stdout.txt",
+      "sha256": "ad45381aec120ac4b9a0511e2ed04436357a61b162a77cd68ff3b07806e2016a"
+    },
+    {
+      "bytes": 83526,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T140819Z-r052-direct-complaints-journal-rewrite/inputs/opus-complaints.md",
+      "sha256": "6e1d65e8dc8b31857697fea8fe1cd4445de5b509a73c0008e1421d4f02c840e2"
+    },
+    {
+      "bytes": 26887,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T140819Z-r052-direct-complaints-journal-rewrite/inputs/score-journal.md",
+      "sha256": "c16da585b9deb95e0dffc76fd726a76d37d585af9a7b5864fd080cbd765ade28"
+    },
+    {
+      "bytes": 37142,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T140819Z-r052-direct-complaints-journal-rewrite/inputs/whitepaper.md",
+      "sha256": "df7573f6083c4b642db440e92abc7d7c55ee7a085d044e1a328bcb0b5ac8a359"
+    },
+    {
+      "bytes": 2955,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T140819Z-r052-direct-complaints-journal-rewrite/metadata.json",
+      "sha256": "37e665f04496cf99770a94102b75011c8c904ae8b618607dbeffeb75c7c7df5f"
+    },
+    {
+      "bytes": 39265,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/openai-research-rewrite/20260526T140819Z-r052-direct-complaints-journal-rewrite/whitepaperv2-openai-direct-rewrite.md",
+      "sha256": "8eb7ee45d669a0385ad15655cc57418dfe88f99a68ecd8ea2defcbb9e5da1691"
+    },
+    {
+      "bytes": 38790,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/qwen-constitution-targeted/whitepaperv2-qwen-constitution-compact.md",
+      "sha256": "b60fbad68ed76b77f38ff95c6def04590c8ba4e362c7cc52c659933a4c99c3db"
+    },
+    {
+      "bytes": 39491,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/qwen-constitution-targeted/whitepaperv2-qwen-constitution-targeted.md",
+      "sha256": "3cc3766738db27c73c158e916a708e24f685a6332ba1e8ad843dda84e5d4f4ce"
+    },
+    {
+      "bytes": 38067,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-048/r048_01_envelope_binding_soundness.md",
+      "sha256": "a639d0665503936ef60eec0add83b50be99e3ddf6ce217cd48e5509d1b258970"
+    },
+    {
+      "bytes": 37839,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-048/r048_02_envelope_binding_compact.md",
+      "sha256": "c934af703359488ec8cd4ced7ec2e068e4148e3be4ebd2e839b9dc40ba73a74f"
+    },
+    {
+      "bytes": 37755,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-048/r048_03_cobalt_transition_budget.md",
+      "sha256": "dfe664bf86380d22676affb9b8a452520b31ba6fa2c8b0e18daf8beb1b5195b8"
+    },
+    {
+      "bytes": 37688,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-048/r048_04_model_static_boundary.md",
+      "sha256": "43ffff27400983303aee9e1510b1e989de12326f91ad6a5d86c518bcd2c0abf2"
+    },
+    {
+      "bytes": 37447,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-048/r048_05_worked_example_design_test.md",
+      "sha256": "da3e9f760a4df69f777eb5da0c1dc2a5658935a8b1589414520997e92136ed45"
+    },
+    {
+      "bytes": 38049,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-048/r048_06_section8_verification_surface.md",
+      "sha256": "67363c1785a0f3e802717a4f0048bc68f581542ffe0e052d2726477a443387d3"
+    },
+    {
+      "bytes": 39437,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-048/r048_07_combo_binding_budget_model_mldsa.md",
+      "sha256": "fd642ca37201be0e65a17863395698ad2265f4bde43f6c111eebe603750d6b74"
+    },
+    {
+      "bytes": 38950,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-049/r049_01_challenge_packets.md",
+      "sha256": "60ffbe19dfb0c2b8b455592acf834f39c4e65ddbe0ead4715a8ea38271cfe2ab"
+    },
+    {
+      "bytes": 38008,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-049/r049_02_admitted_runtime_profile.md",
+      "sha256": "7c52ebb9242c3773720ea55e1192df77b0fde40e14ca3480f37de68d64335aa8"
+    },
+    {
+      "bytes": 38475,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-049/r049_03_canonical_parsed_output.md",
+      "sha256": "52b1b89f32be592ee8ca19239620e800305d271735042c1a33102fea842a8eb8"
+    },
+    {
+      "bytes": 37859,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-049/r049_04_admission_receipts.md",
+      "sha256": "de77f319a75115e342efce73d1c1b56637c8b717d8988f08a539af4ff2510805"
+    },
+    {
+      "bytes": 39416,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-049/r049_05_omission_evidence.md",
+      "sha256": "e926a7b5ee4c4cf8ef53ecdd29df0a2080fa857c27b53c5023579ba86564bbcc"
+    },
+    {
+      "bytes": 38238,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-049/r049_06_mldsa_certificate_budget.md",
+      "sha256": "d1d75fe3ac3b1942a473296c9109def01214bbcaea541310d0a02c5ada3f10f6"
+    },
+    {
+      "bytes": 41866,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-049/r049_07_challenge_replay_admission_combo.md",
+      "sha256": "3ecb528f826674949d280383726c95d71adde0bfa983d1a296aac56827310ddd"
+    },
+    {
+      "bytes": 38827,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-053/r053_01_compact_validator_example.md",
+      "sha256": "1cc260ba9e8d98374fd2dd47d86079166c1b681beaedde677d9111e5ced8b315"
+    },
+    {
+      "bytes": 40077,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-053/r053_02_long_validator_example.md",
+      "sha256": "8ebf0438c9590987415449e3a54f6874794ca6498cbab2e4acc6e8d970fae0a1"
+    },
+    {
+      "bytes": 39791,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-053/r053_03_compact_example_replay_argument.md",
+      "sha256": "e4bfab0b714ba14a1e939a15ad7426e1505c38f0b26d9ad0b39a49e0e1d3b56c"
+    },
+    {
+      "bytes": 38914,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-053/r053_04_poa_and_compact_example.md",
+      "sha256": "400d7dc89d31ce3b80d0d7b25eadcbef4e03d49af2f0e09803fadb5e3bd9dab1"
+    },
+    {
+      "bytes": 39878,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-053/r053_05_poa_example_replay_argument.md",
+      "sha256": "6a5ec0de5fc1190cd44c99120770755de8b9aaf2ce893baa041e13ab8496da02"
+    },
+    {
+      "bytes": 39883,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-053/r053_06_section8_evidence_table.md",
+      "sha256": "924695290176dfcf4768d1d740898a23afe4c7f58f2d6798c0b9d2afc96e92d7"
+    },
+    {
+      "bytes": 40609,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-053/r053_07_section8_privacy_linkability.md",
+      "sha256": "86005f19d064d533320eb4d4ef32f092d60a899812c5dd3ac01996e893b655be"
+    },
+    {
+      "bytes": 40445,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-053/r053_08_section8_mldsa_budget.md",
+      "sha256": "81c30a884d4dcee8eaa0bc0bc3645786d9b33aa923f029044c7d367901c9dc19"
+    },
+    {
+      "bytes": 40847,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-053/r053_09_section8_replay_argument.md",
+      "sha256": "4f4d4c9252c0cd5714df457b8484b4b2b4bb3daff61d073989d8904b3db555b3"
+    },
+    {
+      "bytes": 41171,
+      "location": "docs/archive/whitepaper-drafts/2026-05-26/opus-score-optimization/round-053/r053_10_section8_privacy_mldsa.md",
+      "sha256": "15913a471678037a4cedcb71ea5c7203654b83774567cc73a2ec4712ef31a2ec"
+    },
+    {
+      "bytes": 44248,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/ai-governance-containment/whitepaperv2-ai-containment.md",
+      "sha256": "7b7398e758805fc221a759786756ddc021c29c77eb2493cd745a26120a3cdf21"
+    },
+    {
+      "bytes": 35037,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/cobalt-chain-corollary/whitepaperv2-cobalt-chain-compact.md",
+      "sha256": "a75c6d5a16957ab954e26be4aa7733fdf43801f9e889bce9461bc903ebffa7c9"
+    },
+    {
+      "bytes": 35782,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/cobalt-chain-corollary/whitepaperv2-cobalt-chain-corollary.md",
+      "sha256": "fc377c6cb3f01e7c72db2c8f081d257c1642620385912090ce6e6a58499bdca2"
+    },
+    {
+      "bytes": 38010,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/cobalt-registrar-evidence-wording/variant-a-falsification-fallback.md",
+      "sha256": "312310142d3fe1766dbc650292ca4aea07a7267c813de8d331b00a439b804805"
+    },
+    {
+      "bytes": 37408,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/cobalt-registrar-evidence-wording/variant-b-compact-evidence.md",
+      "sha256": "43d194870371332fa85a0604d23879f8825ebaf1d2f68bb665b26f57fb1eefa5"
+    },
+    {
+      "bytes": 37650,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/cobalt-registrar-evidence-wording/variant-c-constitutional-interpretation.md",
+      "sha256": "544c9da00e6c7d23a1707439f9a2e4f9d3aa57ad21e78904e4ae871caea51427"
+    },
+    {
+      "bytes": 44258,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/cobalt-self-ratification/whitepaperv2-cobalt-replay-boundary.md",
+      "sha256": "53587c795ddf7caf2ddb3b747f7bceb18af85c98b38e3c24a0bb8c6cf463242c"
+    },
+    {
+      "bytes": 37591,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/no-incentive-bakeoff/whitepaperv2-01-no-artificial-rent.md",
+      "sha256": "8a500eea4cd870aa08f1054bf892131e22eb08a1995f31a3300211ac9002dacd"
+    },
+    {
+      "bytes": 37433,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/no-incentive-bakeoff/whitepaperv2-02-admitted-not-paid.md",
+      "sha256": "98ee17874383da7a09bdc8f6b366020d1c9f9ca1c0867daa8614d50874e64d13"
+    },
+    {
+      "bytes": 37512,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/no-incentive-bakeoff/whitepaperv2-03-safety-not-reward.md",
+      "sha256": "0e80d108737fbb329876a55ed4761b08891631de416394c458f0a40d4e7efa95"
+    },
+    {
+      "bytes": 37441,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/no-incentive-bakeoff/whitepaperv2-04-lagrange-no-formula.md",
+      "sha256": "4d8a690de0518931a4a22cf3b0ee115cbe6f1c5e9a8a37cad9741f85cb4e02a5"
+    },
+    {
+      "bytes": 37560,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/no-incentive-bakeoff/whitepaperv2-05-design-equation.md",
+      "sha256": "c1ed808238adebca22cb385d794ea7a5ea41fa1850460ee2cae94400df11f8e8"
+    },
+    {
+      "bytes": 37637,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/no-incentive-bakeoff/whitepaperv2-06-operational-power.md",
+      "sha256": "89c8d8cd23c67a9e831df44985a9c078bd02840b19da9b9e819371d4512f18c8"
+    },
+    {
+      "bytes": 37587,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/no-incentive-bakeoff/whitepaperv2-07-receipt-duty.md",
+      "sha256": "b09d07df7b949ea6f32b5340a14734ccfad09cf49f8ef1d600d8079010a138ca"
+    },
+    {
+      "bytes": 37754,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/no-incentive-bakeoff/whitepaperv2-08-source-binding-table.md",
+      "sha256": "a890ae2d1a63f0a51e1b23013f1e25281a5c5c7ba5b60bf86f4312338e83d446"
+    },
+    {
+      "bytes": 37584,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/no-incentive-bakeoff/whitepaperv2-09-ai-head-to-head-compact.md",
+      "sha256": "b923ce5a77b57d0de56b682a09398457bd26042351bb5707c5bde07ad4a653b6"
+    },
+    {
+      "bytes": 37630,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/no-incentive-bakeoff/whitepaperv2-10-admitted-plus-receipt-duty.md",
+      "sha256": "1d1c909424efbcbd7dbf1be3bb1263ca91c05022dd6cd4212805d781db5360ce"
+    },
+    {
+      "bytes": 39228,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/opus48-bloat-cut/whitepaperv2-bloat-cut.md",
+      "sha256": "760d3c961497366e8fcca94ab05ce6da8319ec0c28f662bc42bff15475b636b4"
+    },
+    {
+      "bytes": 38015,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/opus48-top3-targets/whitepaperv2-01-evidence-provenance.md",
+      "sha256": "9eede108dcf27f1ef98677d136f35d6581ab2563e32a818daddce7629ce2baf8"
+    },
+    {
+      "bytes": 36130,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/opus48-top3-targets/whitepaperv2-02-ai-replay-framing.md",
+      "sha256": "1a981b9cc688058434f78bc3f42901ef0b84a8e8833aa5f18426899b3a302c4a"
+    },
+    {
+      "bytes": 37737,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/opus48-top3-targets/whitepaperv2-03-receipt-duty.md",
+      "sha256": "01c8718159de1a762ef2592438837b8d91aed56b89c5b19f75ba72860e3c43bd"
+    },
+    {
+      "bytes": 35763,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/privacy-assurance-test/whitepaperv2-assurance-institutional.md",
+      "sha256": "128ca13e150102fc21b70aafe41c50fc8c0dd011ba1b93a027f14fea12e2ceb8"
+    },
+    {
+      "bytes": 35723,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/sglang-determinism-evidence/whitepaperv2-sglang-2900-crosshw-table.md",
+      "sha256": "adc53c48db25d1296e405415dc79e9cf95379eb5fe794563c3f1cb66986df542"
+    },
+    {
+      "bytes": 35399,
+      "location": "docs/archive/whitepaper-drafts/2026-05-28/sglang-determinism-evidence/whitepaperv2-sglang-2900-crosshw.md",
+      "sha256": "28da111496ad32b3fd56577767a93d9362afc56d32359eefb94ed84e92b9cc72"
+    },
+    {
+      "bytes": 11261,
+      "location": "scripts/whitepaper-round-048-generate",
+      "sha256": "9b4a96aefab1724462f993fff1df6624b6d956e1640b1f61661cdc45cf1806ee"
+    },
+    {
+      "bytes": 15685,
+      "location": "scripts/whitepaper-round-049-generate",
+      "sha256": "fe521cb00bc790ab733ba02adccb32d5f904b8a876ae0971cb9eb38ba473e48e"
+    },
+    {
+      "bytes": 21408,
+      "location": "scripts/whitepaper-round-053-generate",
+      "sha256": "b6e2426afa8bd25b6dfe35a6f940fd31681bf0d5d3386ac0e407c15a92aa74a5"
+    }
+  ],
+  "methodology": "Only sanitized locations, byte counts, and SHA-256 content hashes are emitted; file contents and matched secret-adjacent values are never emitted.",
+  "root": "/home/postfiat/repos/_worktree_holding/postfiatl1v2-20260529-score-artifacts",
+  "schema": "postfiat.track-c.content-hash-manifest.v1"
+}
