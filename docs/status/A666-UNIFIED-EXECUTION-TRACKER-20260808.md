@@ -24,7 +24,7 @@
 | Docs publication (Step 0) | CLOSED | postfiatl1v2 main 65c0e71..fe72c3a; StakeHub master 6382478..e3fed38; strict builds + redaction PASS |
 | A0 preflight | CLOSED | /tmp/a666-unified-a0/A0-PREFLIGHT-REPORT.md — zero drift vs handoff snapshot; agent unlocked, policy restored (12k/50k/24 whitelist); fleet 6/6 h779 converged; wA666 baseline intact; nonce 304 |
 | A1 NEAR fix | CLOSED | StakeHub master 2839f4e; threshold 150->85; real mainnet v6 fixture h210383329 lpv86; RED on parent, 63/63 GREEN with fix |
-| A2 reader session | OPEN | |
+| A2 reader session | CLOSED | session hl-existing-reader-20260808T005232Z open->snapshot->close; tx 03f13d56... status 1 TO pinned reader 0xd5c4200b (no deploy), HL block 42592633, cost 0.000022654 HYPE (cap 0.02); reader code verified live 9006B/2e49ae2b; evidence StakeHub-master-e6/zk/target/operator-real-20260808/ |
 | A3 E6 proof | OPEN | |
 | A4 E6 finalize | OPEN | |
 | A5 legs 2a-5b | OPEN | |
