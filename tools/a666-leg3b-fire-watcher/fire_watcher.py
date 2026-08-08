@@ -120,7 +120,11 @@ def rpc(method: str, params: list[Any]) -> Any:
     body = json.dumps(
         {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
     ).encode()
-    request = Request(RPC, data=body, headers={"content-type": "application/json"})
+    request = Request(
+        RPC,
+        data=body,
+        headers={"content-type": "application/json", "user-agent": "a666-leg3b-watcher/1.0"},
+    )
     with urlopen(request, timeout=60) as response:
         payload = json.loads(response.read().decode())
     if payload.get("error"):
