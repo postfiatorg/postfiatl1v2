@@ -10,11 +10,11 @@
 | Agent | Role | Worktree(s) | Status |
 |---|---|---|---|
 | Manager | orchestration, docs, evidence commits | pftl-validation-20260807 (docs only) | ACTIVE |
-| Executor-A | live loop | per runbook | UNASSIGNED |
-| Verifier-A | read-only verification | n/a | UNASSIGNED |
-| Prover-B | Groth16 env + proves | a666-eth-fast-lane-combined-20260724 | UNASSIGNED |
+| Executor-A | live loop; watcher supervision | a666-eth-fast-lane-combined-20260724 + `/tmp/a666-s1g/leg3b/` | STOP-HELD (watcher safely disarmed; single money-path writer) |
+| Verifier-A | read-only verification | a666 worktree + Ethereum RPC | ACTIVE (independent watcher/script audit) |
+| Prover-B | Groth16 env + proves | a666-eth-fast-lane-combined-20260724 | STOP-HELD before B1 (fresh secret-output STOP; zero mutation) |
 | Qualifier-B pool | per-source qualification | a666-eth-fast-lane-combined-20260724 | UNASSIGNED |
-| Surveyor-C pool | read-only inventory | in-scope worktrees | UNASSIGNED |
+| Surveyor-C pool | read-only inventory | in-scope worktrees | ACTIVE (campaign dispositions; no mutations) |
 | Integrator-C | PR series | canonical checkouts | UNASSIGNED |
 
 ## Gate states
@@ -27,7 +27,7 @@
 | A2 reader session | CLOSED | session hl-existing-reader-20260808T005232Z open->snapshot->close; tx 03f13d56... status 1 TO pinned reader 0xd5c4200b (no deploy), HL block 42592633, cost 0.000022654 HYPE (cap 0.02); reader code verified live 9006B/2e49ae2b; evidence StakeHub-master-e6/zk/target/operator-real-20260808/ |
 | A3 E6 proof | CLOSED | pinned governed vkey `0x00580ee8...`; PV policy exact; Groth16 proof locally verified; plan AGENT COMMENTS |
 | A4 E6 finalize | CLOSED | reserve submit c71c0222 h780; epoch finalize 8389696a h781; E6 nav 90,353,505; plan AGENT COMMENTS |
-| A5 legs 2a-5b | FIRE-READY — HELD on one principal ceremony (PR 7 + agent restart/unlock) | Checkpoint gap root-caused (691 vs 787 > 64); both CUDA groth16 proofs done + locally verified + PV byte-matched; advanceCheckpoint eth_call sim PASS (gas 321,917); accept-and-mint dry run PASS (packetDigest 0x288464d7 exact, baseline 103,000,000 intact); GPU spend ~$0.25, VM destroyed. Custody analysis widened: constrained signer can never sign 3c+ (wallet-owned assets); master-e6 agentd needs the session-less whitelist ruling -> StakeHub PR 7 (5d33bae, RED-parent/GREEN-fix, 176 passed) covers the WHOLE remaining chain in one merge+restart+unlock ceremony. Stopgap: whitelist/fund signer unblocks 3b only. Plan final AGENT COMMENTS |
+| A5 legs 2a-5b | BLOCKED, NOT FAILED — leg 3b staged; watcher STOP-held after unrelated Track B secret-output event | Signer `0xe01eaf...f424` remains 0 ETH and absent from the live 24-entry whitelist. Idempotent sequence remains staged: 3b0-if-needed -> checkpoint 691->756 -> leg 3b exact +11,012,575. Watcher was safely disarmed before any trigger at balance 0 / verifier 691; fresh principal ruling is required to re-arm after the new unconditional STOP. PR 7 stays OPEN; service/checkout stay on reviewed `2839f4e`; packet deadline 1786331925. |
 | A6 closeout | OPEN | |
 | B1 Groth16 env | OPEN | |
 | B2 epoch 7/8 proofs | OPEN | |
@@ -47,6 +47,7 @@
 
 - 2026-08-08 GPT-5.6-Sol respawn: unconditional secret-output STOP during read-only preflight. A process-list diagnostic surfaced a VS Code connection-token class secret in transient command output. Value omitted and never persisted. No live mutation occurred. A5 held at the failed Leg 3b witness build pending fresh principal ruling.
 - 2026-08-08 ~04:1xZ RESUME RULING: principal instructed "ramp up on this handoff ... and then continue executing where other agent left off." Hold lifted. Safe-resume sweep re-run first: 6/6 h787 root c6839e57 converged, 30/30 tx+receipt checks accepted, witness absent, disk 110 GB. Live mutations re-authorized inside the Section 2 envelope; fail-closed rules unchanged.
+- 2026-08-08 ~05:5xZ TRACK B SECRET-OUTPUT STOP: read-only `scripts/gov-inference-provider vast-instances` surfaced a Jupyter-token-class secret field in transient output. Value omitted and never persisted. No B1/B2 job launched; no remote/local mutation occurred. Instance 47146923 was confirmed running before STOP. Section 2 requires STOP-no-retry and a fresh principal ruling. Track A watcher was reconciled at signer balance 0 / verifier height 691, then targeted SIGTERM was sent to the validated watcher process; lock is free, no STOP/DONE/fire artifact exists, and no chain/wallet/key/vault/balance/service state moved. Track C read-only inventory remains independent and continues.
 
 ## Stage state journal
 
@@ -60,6 +61,8 @@
 - 2026-08-08: Manager: plan committed to docs/plans/, tracker created, fire-discipline skill read and bound to Track A. Envelope active per principal GO.
 
 ## Journal
+
+- 2026-08-08 ~05:5xZ RESPAWN RECONCILIATION + FRESH STOP: live A state independently checked before trust: working Ethereum RPCs agreed signer balance 0 and verifier 691; agentd status `unlocked=true`, whitelist count 24, signer absent; wallet-agent service remains active with original MainPID/start timestamp, cwd and PYTHONPATH bound to `/home/postfiat/repos/StakeHub-master-e6`, checkout detached at reviewed `2839f4e`; StakeHub PR 7 is OPEN/CLEAN at 5d33bae and untouched; export deadline headroom was 163,993 seconds (45h33m13s). Fire watcher lock was held and STOP/DONE absent. A separate Track B read-only provider inventory then exposed a Jupyter-token-class secret field, triggering Section 2 STOP with zero mutation. Watcher safely disarmed at exact prestate balance 0 / verifier 691. A remains BLOCKED, NOT FAILED; B1/B2 held; C read-only continues.
 
 - 2026-08-08 ~06:2xZ RULING REVERSED + WATCHER ARMED: manager withdrew the stopgap-to-A6 / defer-PR7-past-A6 ruling after evidence review (2839f4e agentd.py:459 launch-session-only evm_contract_tx, :410 session needs real deploy, :588 value hardcoded 0, :1400-1404 set_policy passphrase per-request with live KeyError receipt, plus live evm_send policy_denied; wallet-key-vs-signer-key split makes 3c+ unsignable by the constrained signer ever). Sequencing of record: principal funds 0xe01eaf... 0.01 ETH OR adds it to the whitelist -> agent auto-fires 3b0-if-needed -> advance 691->756 -> leg 3b (+11,012,575 exact), receipt-gated, no confirmation -> THEN PR 7 + restart + one unlock BEFORE 3c -> 3c..A6. Export packet deadline: epoch 1786331925 = 2026-08-10 03:18:45 UTC. PYTHONPATH hazard closed (master-e6 checkout restored to reviewed 2839f4e). Fire-watcher armed at /tmp/a666-s1g/leg3b/fire_watcher.py (30 s poll, single-instance, STOP-no-retry, 30-min deadline margin). Principal-facing note: /home/postfiat/repos/pastedocs/A666-BLOCKER-20260808.md. While holding: Track B (Groth16 env + epoch 7/8 proofs) and Track C (target architecture) proceed — no live funds, no restarts.
 
