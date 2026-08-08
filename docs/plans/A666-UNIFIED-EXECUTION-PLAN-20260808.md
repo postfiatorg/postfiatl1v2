@@ -453,3 +453,13 @@ Respawn state (verify live again before trusting):
 - Tracker now contains the full live disposition table for StakeHub/a666 campaign worktrees, canonical refs, ordered PR series, and freeze/retirement constraints. Canonical StakeHub is `master@2839f4e`; canonical PFTL is `main@52e51bc`.
 - Material decisions: `StakeHub-master-e6` stays frozen through A6; E6 tools `2581c43` then `b2608b5` port after A6; merged HL-reader branch retires clean; RED base archives first; repeat-demo splits into ordered PRs; orchard fix is patch-equivalent and retires after A6; a666 campaign checkout stays frozen through B4 and now preserves `e6c35e9` plus safety commit `7e7ce52`.
 - C1 target architecture decision is recorded, but the formal gate remains OPEN on C0 dependency: nine registered Git children and one score-artifacts child inside `_worktree_holding` still lack individual manifests or explicit out-of-scope rulings. No retirement or deletion is authorized.
+
+### 2026-08-08 ~06:2xZ — First patched-watcher re-review HOLD; A-W1 v2 staged; final review in progress
+
+- Verifier-A PASSED A-W2, A-W3, A-W4, atomic+fsynced intent durability, and the core no-duplicate property: after `broadcast_attempt_started`, every restart path reconciles or STOPs and no second `run_step` is reachable.
+- HOLD findings on the first patch were precise: its last signer-balance read still preceded journal/nonce/fsync/child gas work, leaving an external-funding race; owner latest/pending nonces were recorded but the watcher lacked autonomous pending-or-mined recovery by nonce.
+- v2 closes both without touching live state:
+  - a666 `1520e6f`: funding leaf requires recipient balance to equal the bound prestate immediately before the agentd request.
+  - a666 `54cf4ef`: the same leaf requires owner `latest == pending == expected nonce` immediately before the recipient-balance read and agentd request.
+  - watcher intent schema v2 records `owner_nonce_expected` and `ethereum_block_at_attempt` before spawn. Recovery cross-checks report/journal hashes, then searches the pending block and every mined block from the attempt height for exact owner+nonce; the candidate must match sender, signer recipient, exact 0.01 ETH value, and receipt status 1. A still-pending exact candidate, replacement ambiguity, mismatch, or missing evidence STOPs forever and never sends again.
+- New source/deployed watcher SHA-256: `732f81dcdce712ca89b1c11d71fe4bf049e02b137923532432f2b2e486945a1d`, byte-identical. `pytest -q tools/a666-leg3b-fire-watcher/test_fire_watcher.py` -> 12 passed. Watcher lock remains free; no live intent/report/STOP/DONE/fire artifact exists. Final Verifier-A read-only re-review is in progress; principal STOP remains binding.

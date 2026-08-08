@@ -27,7 +27,7 @@
 | A2 reader session | CLOSED | session hl-existing-reader-20260808T005232Z open->snapshot->close; tx 03f13d56... status 1 TO pinned reader 0xd5c4200b (no deploy), HL block 42592633, cost 0.000022654 HYPE (cap 0.02); reader code verified live 9006B/2e49ae2b; evidence StakeHub-master-e6/zk/target/operator-real-20260808/ |
 | A3 E6 proof | CLOSED | pinned governed vkey `0x00580ee8...`; PV policy exact; Groth16 proof locally verified; plan AGENT COMMENTS |
 | A4 E6 finalize | CLOSED | reserve submit c71c0222 h780; epoch finalize 8389696a h781; E6 nav 90,353,505; plan AGENT COMMENTS |
-| A5 legs 2a-5b | BLOCKED, NOT FAILED — A-W1..A-W4 patched; watcher DISARMED; fresh re-review in progress | Source/deployed watcher SHA `ed8ca8b5...` byte-identical; exact 0.01 ETH trigger, durable 3b0 no-resend intent/reconciliation, per-submit deadline epoch 1786330125 via a666 `7e7ce52`, and recovered 756+target-commitment gate staged. Unit suite 9 passed; standalone local verification transcript `dd88d206...` proves both Groth16 artifacts. Live signer 0/off-whitelist, verifier 691; no intent/report/fire. Re-arm still requires both fresh Verifier-A PASS and principal clearing the unrelated Track B secret-output STOP. PR 7/service/`2839f4e` untouched; packet deadline 1786331925. |
+| A5 legs 2a-5b | BLOCKED, NOT FAILED — A-W1..A-W4 patched v2; watcher DISARMED; final re-review in progress | Source/deployed watcher SHA `732f81dc...` byte-identical. v2 adds exact 0.01 ETH trigger; durable no-resend intent; owner latest=pending expected-nonce binding; child-side recipient balance+sender nonce recheck immediately before agentd; pending/mined exact owner+nonce recovery from attempt block; per-submit deadline epoch 1786330125 via `7e7ce52`; recovered 756+target-commitment gate. Unit suite 12 passed; local proof transcript `dd88d206...` PASS. Live signer 0/off-whitelist, verifier 691; no intent/report/fire. Re-arm requires final Verifier-A PASS and principal clearing Track B STOP. PR 7/service/`2839f4e` untouched; deadline 1786331925. |
 | A6 closeout | OPEN | |
 | B1 Groth16 env | OPEN | |
 | B2 epoch 7/8 proofs | OPEN | |
@@ -59,7 +59,7 @@ Live canonical refs at the 2026-08-08 ~06:0xZ survey:
 | `StakeHub-red-base` | detached / `fb9886e` | 4 / 0 | 2 / 1 | Zero commits; two uncommitted test blobs absent from every ref | **ARCHIVE**, then retire. Preserve a redaction-scanned, hashed RED-parent test overlay; never silently discard the two unique blobs. |
 | `StakeHub-repeat-demo` | `pft-cli-wallet-20260721` / `676e40e` | 16 / 154 | 34 / 9 | 154 raw commits: 151 non-merge keepers plus merges `386aeb5`, `a7c3a1c`, `e4e2e77` | **MERGE selectively as ordered PRs; never wholesale-merge.** Local-only branch. Retirement blocked by four systemd/config references until consumers migrate. |
 | `StakeHub-vkey-repro-20260730` | detached / `213618e` | 5 / 0 | 1 / 0 | No commits; dirty blob exactly equals `8512776` | **DISCARD** after E6 branch archive/port. No independent keeper. |
-| `a666-eth-fast-lane-combined-20260724` | `feature/pnok-private-fix` / `7e7ce52` | 22 / 2 | 5 / 345 at survey; watcher-script files clean after exact commit | `e6c35e9` terminal E6 binding plus `7e7ce52` per-submit deadline guards | **RETAIN-FROZEN -> MERGE/ARCHIVE after B4.** Preserve both commits as campaign evidence/safety tooling, then redaction-archive campaign evidence. Upstream remains `16621fa`; four user units reference the checkout. |
+| `a666-eth-fast-lane-combined-20260724` | `feature/pnok-private-fix` / `54cf4ef` | 22 / 4 | 5 / 345 at survey; staged script files clean after exact commits | `e6c35e9` E6 binding; `7e7ce52` per-submit deadline; `1520e6f` recipient pre-broadcast balance; `54cf4ef` sender nonce bind | **RETAIN-FROZEN -> MERGE/ARCHIVE after B4.** Preserve all four commits as campaign evidence/safety tooling, then redaction-archive campaign evidence. Upstream remains `16621fa`; four user units reference the checkout. |
 | `a666-orchard-fix-2246d25` | `orchard-fix-2246d25` / `540b2c1` | 447 / 1 | 0 / 0 | Raw commit 1, patch-unique 0 | **RETAIN-FROZEN -> DISCARD after A6.** Stable patch-id `f6e5c686...` matches canonical `16621fa`. Preserve the Section 6.3 `83ac75d` deployed-semantics ruling in integration records. |
 | `e6-scratch` | non-Git directory | N/A | N/A | One 1,261-byte `launch-build.sh`; no secret-pattern class found | **ARCHIVE** as a hashed build helper, then discard after B2/B4. It references `StakeHub/zk`. |
 | `_worktree_holding` | non-Git container | N/A | N/A | Ten children: nine clean registered Git worktrees plus one non-Git score-artifacts directory | **RETAIN-FROZEN pending scope correction.** The single blank C0 manifest is invalid. Each child needs a manifest/disposition or explicit out-of-scope ruling. |
@@ -85,7 +85,7 @@ PFTL campaign suffix:
 
 1. Use the separately classified depositV2/validation sequence.
 2. No orchard PR: `540b2c1` is patch-equivalent to canonical `16621fa`.
-3. After B4, port `e6c35e9` and its focused safety-tooling successor `7e7ce52` onto current `main`, with the `83ac75d` deployed-semantics divergence ruling explicit.
+3. After B4, port `e6c35e9` plus focused safety-tooling commits `7e7ce52`, `1520e6f`, and `54cf4ef` onto current `main`, with the `83ac75d` deployed-semantics divergence ruling explicit.
 4. Redaction-archive the 345 untracked evidence roots before retirement.
 
 ### Freeze and retirement constraints
@@ -93,7 +93,7 @@ PFTL campaign suffix:
 - Until A6: `StakeHub-master-e6`, `StakeHub-e6-213618e`, `a666-orchard-fix-2246d25`.
 - Until B4: `a666-eth-fast-lane-combined-20260724`.
 - Config-reference holds: `StakeHub` in six scanned files; `StakeHub-repeat-demo` in four; `a666-eth-fast-lane-combined-20260724` in four.
-- Preserve local-only keepers before retirement: `e6-e5compat-near-v6-fix`, `pft-cli-wallet-20260721`, `e6c35e9`, and `7e7ce52`.
+- Preserve local-only keepers before retirement: `e6-e5compat-near-v6-fix`, `pft-cli-wallet-20260721`, `e6c35e9`, `7e7ce52`, `1520e6f`, and `54cf4ef`.
 - C1 target decisions are recorded, but formal closure waits on C0: manifest or explicitly scope all nine `_worktree_holding` Git children and its score-artifacts child. No retirement or deletion is authorized yet.
 
 ## STOP log
@@ -117,6 +117,8 @@ PFTL campaign suffix:
 - 2026-08-08: Manager: plan committed to docs/plans/, tracker created, fire-discipline skill read and bound to Track A. Envelope active per principal GO.
 
 ## Journal
+
+- 2026-08-08 ~06:2xZ A-W1 V2 AFTER FIRST RE-REVIEW HOLD: Verifier-A passed A-W2/A-W3/A-W4 and proved no second send reachable after a durable marker, but held A-W1 because the first patch lacked autonomous owner-nonce recovery and its watcher-side balance read preceded journal/nonce/fsync/child gas work. v2 closes both: native leaf commits `1520e6f` + `54cf4ef` require owner latest==pending==bound expected nonce, then exact recipient balance 0 as the final RPC before agentd; watcher intent v2 binds expected nonce and attempt block, cross-checks report/journal hashes, searches pending and every mined block from attempt for exact owner+nonce, validates sender/recipient/value/status=1, and permanently STOPs on pending/ambiguity/mismatch. Source/deployed SHA `732f81dcdce712ca89b1c11d71fe4bf049e02b137923532432f2b2e486945a1d`; suite 12 passed; final Verifier-A re-review IN PROGRESS; watcher disarmed.
 
 - 2026-08-08 ~06:1xZ A-W1..A-W4 PATCH STAGED, WATCHER STILL DISARMED: source and deployed copy SHA-256 `ed8ca8b508a4dda7cbc20b45abad79cb52a4ddbdfd5117da9744284b0531d9b2` byte-identical. A-W1 adds fsync+atomic pre-broadcast intent, exact report/agent-journal transaction recovery, verified journal-chain/head binding, owner latest/pending nonce capture, and a permanent no-resend path after any started attempt; balance is re-read immediately before broadcast and partial funding fails closed. A-W2 external trigger/floor is exactly 10^16 wei. A-W3 checks the deadline margin at command start and passes epoch 1786330125 to commit `7e7ce52`, whose submit helpers recheck immediately before checkpoint, proof-accept, and consume broadcasts. A-W4 gates recovered height 756 on full commitment `0x3b7c8bde64bfb6e8f5c65b2cde016a658ca270d01d399548336d12c5c5ec5b12`. Unit suite 9 passed; live read-only integration: 9,115-entry agent journal hash chain PASS, signer 0, verifier 691/prior commitment exact, no funding intent/report. Fresh Verifier-A re-review IN PROGRESS; watcher lock free and no process armed.
 
