@@ -37,6 +37,8 @@ reports/sglang-determinism-vast/20260526/sglang-determinism-vast-report.json
 Verification command:
 
 ```bash
+# HISTORICAL: this command was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/sglang-determinism-vast-experiment --verify-report \
   --report reports/sglang-determinism-vast/20260526/sglang-determinism-vast-report.json
 ```
@@ -132,6 +134,8 @@ reports/qwen-mlx-profile-portability/github-macos-15-xlarge-26687502688/github-2
 Verification:
 
 ```bash
+# HISTORICAL: these commands were archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/qwen-sglang-replay-profile-runner verify-report \
   --report reports/qwen-sglang-profile-portability/20260528-vast-a100/machine_report.json
 

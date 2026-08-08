@@ -94,6 +94,8 @@ The valid fixture covers the baseline route. Negative fixtures verify:
 ## Verification
 
 ```bash
+# HISTORICAL: these commands were archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/privacy-deanonymization-bound-verify --fixtures
 scripts/privacy-deanonymization-bound-verify --write-report
 scripts/privacy-deanonymization-bound-verify --verify-report

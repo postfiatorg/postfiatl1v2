@@ -53,7 +53,7 @@ flowchart TD
 ## Source
 
 - `docs/runbooks/controlled-testnet-operator-launch.md`
-- `scripts/testnet-release-package`
-- `scripts/testnet-controlled-launch-prep-check`
-- `scripts/testnet-release-live-launch`
-- `scripts/testnet-operator-launch-packet`
+- `scripts/testnet-release-package` *(archived outside this repository; see `scripts/README.md`)*
+- `scripts/testnet-controlled-launch-prep-check` *(archived outside this repository; see `scripts/README.md`)*
+- `scripts/testnet-release-live-launch` *(archived outside this repository; see `scripts/README.md`)*
+- `scripts/testnet-operator-launch-packet` *(archived outside this repository; see `scripts/README.md`)*

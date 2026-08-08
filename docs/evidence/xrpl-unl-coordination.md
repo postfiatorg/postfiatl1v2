@@ -14,6 +14,8 @@ current amendment-state facts exposed by public XRPL endpoints.
 ## Command
 
 ```bash
+# HISTORICAL: this command was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/xrpl-unl-coordination-snapshot \
   --out reports/xrpl-unl-coordination/20260527/live-snapshot.json
 ```

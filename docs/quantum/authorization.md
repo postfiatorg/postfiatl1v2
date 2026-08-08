@@ -75,5 +75,5 @@ flowchart TD
 - `crates/types/src/lib.rs`
 - `crates/node/src/transport_cli.rs`
 - `crates/rpc_sdk/src/lib.rs`
-- `scripts/testnet-ml-dsa-performance-smoke`
-- `scripts/testnet-wallet-test-vectors-smoke`
+- `scripts/testnet-ml-dsa-performance-smoke` *(archived outside this repository; see `scripts/README.md`)*
+- `scripts/testnet-wallet-test-vectors-smoke` *(archived outside this repository; see `scripts/README.md`)*

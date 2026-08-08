@@ -73,6 +73,8 @@ mismatch, and verifier-claim removal.
 ## Verification
 
 ```bash
+# HISTORICAL: these commands were archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/privacy-floor-calibration-verify --fixtures
 scripts/privacy-floor-calibration-verify --write-report
 scripts/privacy-floor-calibration-verify --verify-report

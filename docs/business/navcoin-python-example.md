@@ -121,6 +121,8 @@ In the full smoke test, each submitted transaction is sealed into a local batch
 and replayed across the validator data directories. That test is:
 
 ```bash
+# HISTORICAL: this command was archived outside the repository during the
+# open-source cleanup; see scripts/README.md.
 scripts/navcoin-current-infra-smoke
 ```
 
