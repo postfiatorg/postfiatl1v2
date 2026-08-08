@@ -11,7 +11,7 @@
 |---|---|---|---|
 | Manager | orchestration, docs, evidence commits | pftl-validation-20260807 (docs only) | ACTIVE |
 | Executor-A | live loop; watcher supervision | a666-eth-fast-lane-combined-20260724 + `/tmp/a666-s1g/leg3b/` | STOP-HELD (watcher safely disarmed; single money-path writer) |
-| Verifier-A | read-only verification | a666 worktree + Ethereum RPC | ACTIVE (independent watcher/script audit) |
+| Verifier-A | read-only verification | a666 worktree + Ethereum RPC | COMPLETE (4 watcher defects found; underlying receipt gates verified) |
 | Prover-B | Groth16 env + proves | a666-eth-fast-lane-combined-20260724 | STOP-HELD before B1 (fresh secret-output STOP; zero mutation) |
 | Qualifier-B pool | per-source qualification | a666-eth-fast-lane-combined-20260724 | UNASSIGNED |
 | Surveyor-C pool | read-only inventory | in-scope worktrees | ACTIVE (campaign dispositions; no mutations) |
@@ -27,7 +27,7 @@
 | A2 reader session | CLOSED | session hl-existing-reader-20260808T005232Z open->snapshot->close; tx 03f13d56... status 1 TO pinned reader 0xd5c4200b (no deploy), HL block 42592633, cost 0.000022654 HYPE (cap 0.02); reader code verified live 9006B/2e49ae2b; evidence StakeHub-master-e6/zk/target/operator-real-20260808/ |
 | A3 E6 proof | CLOSED | pinned governed vkey `0x00580ee8...`; PV policy exact; Groth16 proof locally verified; plan AGENT COMMENTS |
 | A4 E6 finalize | CLOSED | reserve submit c71c0222 h780; epoch finalize 8389696a h781; E6 nav 90,353,505; plan AGENT COMMENTS |
-| A5 legs 2a-5b | BLOCKED, NOT FAILED — leg 3b staged; watcher STOP-held after unrelated Track B secret-output event | Signer `0xe01eaf...f424` remains 0 ETH and absent from the live 24-entry whitelist. Idempotent sequence remains staged: 3b0-if-needed -> checkpoint 691->756 -> leg 3b exact +11,012,575. Watcher was safely disarmed before any trigger at balance 0 / verifier 691; fresh principal ruling is required to re-arm after the new unconditional STOP. PR 7 stays OPEN; service/checkout stay on reviewed `2839f4e`; packet deadline 1786331925. |
+| A5 legs 2a-5b | BLOCKED, NOT FAILED — proofs/scripts staged; watcher DISARMED and requires safety patch before re-arm | Live signer remains 0 ETH / off-whitelist; verifier 691. Independent audit found inherited watcher not crash-idempotent around 3b0, external trigger incorrectly set to 0.005 rather than authorized 0.01 ETH, deadline checked only once, and recovered checkpoint skip gates height but not commitment. Underlying scripts do gate Ethereum mutations on receipt `status=1`; final leg 3b gates accepted+consumed and exact +11,012,575 deltas. Fresh principal ruling clears the secret-output STOP, but the four watcher fixes and re-review must close before re-arm. PR 7/service/checkout remain untouched at OPEN/active/`2839f4e`; packet deadline 1786331925. |
 | A6 closeout | OPEN | |
 | B1 Groth16 env | OPEN | |
 | B2 epoch 7/8 proofs | OPEN | |
@@ -61,6 +61,8 @@
 - 2026-08-08: Manager: plan committed to docs/plans/, tracker created, fire-discipline skill read and bound to Track A. Envelope active per principal GO.
 
 ## Journal
+
+- 2026-08-08 ~05:5xZ VERIFIER-A WATCHER AUDIT — FIRE-READY CLAIM WITHDRAWN: read-only three-RPC audit confirmed no A mutation (signer 0; verifier 691; prior commitment exact; receipt unaccepted; packet unconsumed; recipient protected baseline 103,000,000; supply 31,498,197,455). Artifacts bind deadline 1786331925, mint 11,012,575, digest 0x288464d7..., deployed vkey 0x004e44ac..., CPU/CUDA PVs byte-identical. Underlying receipt gates PASS: 3b0, checkpoint, proof accept, and consume each require Ethereum `status=1`; terminal state requires accepted receipt, consumed packet, exact controller/supply/recipient +11,012,575, unchanged migration reserve. Terminology correction: Ethereum receipts expose `status=1`, not PFTL `code=accepted`. Watcher findings that must close before re-arm: [A-W1] durable 3b0 intent/journal/nonce reconciliation plus fresh pre-send balance; [A-W2] external funding threshold exactly 0.01 ETH or proven aggregate gas bound; [A-W3] deadline-margin guard immediately before every mutation; [A-W4] recovered height 756 must also match target commitment 0x3b7c8bde...c5ec5b12. Leg 3b itself is crash-recoverable after prepared state exists. No standalone persisted cryptographic local-verify transcript was found; prior proof reports remain the evidence source.
 
 - 2026-08-08 ~05:5xZ RESPAWN RECONCILIATION + FRESH STOP: live A state independently checked before trust: working Ethereum RPCs agreed signer balance 0 and verifier 691; agentd status `unlocked=true`, whitelist count 24, signer absent; wallet-agent service remains active with original MainPID/start timestamp, cwd and PYTHONPATH bound to `/home/postfiat/repos/StakeHub-master-e6`, checkout detached at reviewed `2839f4e`; StakeHub PR 7 is OPEN/CLEAN at 5d33bae and untouched; export deadline headroom was 163,993 seconds (45h33m13s). Fire watcher lock was held and STOP/DONE absent. A separate Track B read-only provider inventory then exposed a Jupyter-token-class secret field, triggering Section 2 STOP with zero mutation. Watcher safely disarmed at exact prestate balance 0 / verifier 691. A remains BLOCKED, NOT FAILED; B1/B2 held; C read-only continues.
 
