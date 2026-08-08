@@ -32,6 +32,7 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Any
+from urllib.request import Request, urlopen
 
 BASE = Path("/tmp/a666-s1g/leg3b")
 FIRE = BASE / "fire"
@@ -115,20 +116,16 @@ def cast_call(args: list[str]) -> str:
     return out.stdout.strip()
 
 
-def cast_json(args: list[str]) -> dict[str, Any]:
-    out = subprocess.run(
-        [CAST, *args, "--json", "--rpc-url", RPC],
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
-    )
-    if out.returncode != 0:
-        raise RuntimeError(f"cast {' '.join(args[:2])} failed: {out.stderr.strip()[:200]}")
-    value = json.loads(out.stdout)
-    if not isinstance(value, dict):
-        raise RuntimeError(f"cast {' '.join(args[:2])} did not return a JSON object")
-    return value
+def rpc(method: str, params: list[Any]) -> Any:
+    body = json.dumps(
+        {"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
+    ).encode()
+    request = Request(RPC, data=body, headers={"content-type": "application/json"})
+    with urlopen(request, timeout=60) as response:
+        payload = json.loads(response.read().decode())
+    if payload.get("error"):
+        raise RuntimeError(f"{method} failed: {payload['error']}")
+    return payload.get("result")
 
 
 def parse_int(value: Any) -> int:
@@ -199,23 +196,16 @@ def entries_after_head(
     raise RuntimeError("funding intent journal head is absent from the verified journal")
 
 
-def validate_funding_transaction(tx_hash: str) -> dict[str, Any]:
-    normalized_hash = tx_hash if tx_hash.startswith("0x") else f"0x{tx_hash}"
-    transaction = cast_json(["tx", normalized_hash])
-    receipt = cast_json(["receipt", normalized_hash])
+def validate_funding_transaction_shape(
+    transaction: dict[str, Any], expected_nonce: int
+) -> dict[str, Any]:
     evidence = {
-        "tx_hash": normalized_hash,
-        "status": parse_int(receipt.get("status", 0)),
-        "block_number": parse_int(receipt.get("blockNumber", 0)),
+        "tx_hash": str(transaction.get("hash", "")),
         "from": str(transaction.get("from", "")).lower(),
         "to": str(transaction.get("to", "")).lower(),
         "value_wei": parse_int(transaction.get("value", 0)),
-        "nonce": parse_int(transaction.get("nonce", 0)),
-        "gas_used": parse_int(receipt.get("gasUsed", 0)),
-        "effective_gas_price": parse_int(receipt.get("effectiveGasPrice", 0)),
+        "nonce": parse_int(transaction.get("nonce", -1)),
     }
-    if evidence["status"] != 1:
-        raise RuntimeError(f"leg 3b0 receipt status {evidence['status']} != 1")
     if evidence["from"] != OWNER:
         raise RuntimeError(f"leg 3b0 sender {evidence['from']} != expected owner")
     if evidence["to"] != SIGNER:
@@ -224,7 +214,80 @@ def validate_funding_transaction(tx_hash: str) -> dict[str, Any]:
         raise RuntimeError(
             f"leg 3b0 value {evidence['value_wei']} != exact {FUND_WEI}"
         )
+    if evidence["nonce"] != expected_nonce:
+        raise RuntimeError(
+            f"leg 3b0 nonce {evidence['nonce']} != expected {expected_nonce}"
+        )
     return evidence
+
+
+def validate_funding_transaction(
+    tx_hash: str, *, expected_nonce: int
+) -> dict[str, Any] | None:
+    normalized_hash = tx_hash if tx_hash.startswith("0x") else f"0x{tx_hash}"
+    transaction = rpc("eth_getTransactionByHash", [normalized_hash])
+    if not isinstance(transaction, dict):
+        return None
+    evidence = validate_funding_transaction_shape(transaction, expected_nonce)
+    receipt = rpc("eth_getTransactionReceipt", [normalized_hash])
+    if receipt is None:
+        evidence.update({"status": None, "pending": True})
+        return evidence
+    if not isinstance(receipt, dict):
+        raise RuntimeError("leg 3b0 receipt RPC returned malformed data")
+    evidence.update(
+        {
+            "status": parse_int(receipt.get("status", 0)),
+            "pending": False,
+            "block_number": parse_int(receipt.get("blockNumber", 0)),
+            "gas_used": parse_int(receipt.get("gasUsed", 0)),
+            "effective_gas_price": parse_int(
+                receipt.get("effectiveGasPrice", 0)
+            ),
+        }
+    )
+    if evidence["status"] != 1:
+        raise RuntimeError(f"leg 3b0 receipt status {evidence['status']} != 1")
+    return evidence
+
+
+def find_funding_transaction_by_nonce(intent: dict[str, Any]) -> str | None:
+    expected_nonce = int(intent["owner_nonce_expected"])
+    attempt_block = int(intent["ethereum_block_at_attempt"])
+    latest_block = parse_int(rpc("eth_blockNumber", []))
+    candidates: dict[str, dict[str, Any]] = {}
+
+    pending_block = rpc("eth_getBlockByNumber", ["pending", True])
+    blocks: list[dict[str, Any]] = []
+    if isinstance(pending_block, dict):
+        blocks.append(pending_block)
+    for block_number in range(attempt_block, latest_block + 1):
+        block = rpc("eth_getBlockByNumber", [hex(block_number), True])
+        if isinstance(block, dict):
+            blocks.append(block)
+
+    for block in blocks:
+        for transaction in block.get("transactions", []):
+            if not isinstance(transaction, dict):
+                continue
+            if (
+                str(transaction.get("from", "")).lower() == OWNER
+                and parse_int(transaction.get("nonce", -1)) == expected_nonce
+            ):
+                tx_hash = str(transaction.get("hash", "")).lower()
+                if not tx_hash:
+                    stop("owner+nonce funding candidate omitted transaction hash")
+                candidates[tx_hash] = transaction
+    if len(candidates) > 1:
+        stop(
+            f"multiple transactions found for owner nonce {expected_nonce}; "
+            "refusing ambiguous recovery"
+        )
+    if not candidates:
+        return None
+    transaction = next(iter(candidates.values()))
+    validate_funding_transaction_shape(transaction, expected_nonce)
+    return str(transaction["hash"])
 
 
 def load_funding_intent() -> dict[str, Any] | None:
@@ -232,7 +295,7 @@ def load_funding_intent() -> dict[str, Any] | None:
         return None
     intent = json.loads(FUND_INTENT.read_text(encoding="utf-8"))
     required = {
-        "schema": "postfiat.a666.leg3b0.intent.v1",
+        "schema": "postfiat.a666.leg3b0.intent.v2",
         "owner": OWNER,
         "signer": SIGNER,
         "amount_wei": FUND_WEI,
@@ -249,13 +312,21 @@ def load_funding_intent() -> dict[str, Any] | None:
         "skipped_external_funding",
     }:
         stop(f"leg 3b0 intent has unknown phase {intent.get('phase')!r}")
+    if intent["phase"] in {"broadcast_attempt_started", "receipt_verified"}:
+        for key in (
+            "ethereum_block_at_attempt",
+            "journal_head_at_attempt",
+            "owner_nonce_expected",
+        ):
+            if key not in intent:
+                stop(f"leg 3b0 started intent omitted {key}")
     return intent
 
 
 def create_funding_intent() -> dict[str, Any]:
     entries = verified_journal_entries()
     intent: dict[str, Any] = {
-        "schema": "postfiat.a666.leg3b0.intent.v1",
+        "schema": "postfiat.a666.leg3b0.intent.v2",
         "phase": "prepared",
         "created_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "created_epoch": int(time.time()),
@@ -278,13 +349,15 @@ def recover_funding_from_report_or_journal(
     intent: dict[str, Any], *, wait_seconds: int
 ) -> dict[str, Any] | None:
     deadline = time.monotonic() + wait_seconds
+    expected_nonce = int(intent["owner_nonce_expected"])
+    pending_evidence: dict[str, Any] | None = None
     while True:
+        tx_hash: str | None = None
         if FUND_REPORT.exists():
             report = json.loads(FUND_REPORT.read_text(encoding="utf-8"))
             tx_hash = report.get("tx_hash")
             if not isinstance(tx_hash, str) or not tx_hash:
                 stop("leg 3b0 report omitted transaction hash")
-            return validate_funding_transaction(tx_hash)
 
         entries = verified_journal_entries()
         head = str(
@@ -303,12 +376,30 @@ def recover_funding_from_report_or_journal(
         if len(candidates) > 1:
             stop("multiple post-intent agent_evm_send candidates target the signer")
         if len(candidates) == 1:
-            tx_hash = candidates[0].get("tx")
-            if not isinstance(tx_hash, str) or not tx_hash:
+            journal_hash = candidates[0].get("tx")
+            if not isinstance(journal_hash, str) or not journal_hash:
                 stop("post-intent agent journal candidate omitted transaction hash")
-            return validate_funding_transaction(tx_hash)
+            if tx_hash is not None and journal_hash.lower() != tx_hash.lower():
+                stop("leg 3b0 report and agent journal transaction hashes disagree")
+            tx_hash = journal_hash
+
+        if tx_hash is None:
+            tx_hash = find_funding_transaction_by_nonce(intent)
+        if tx_hash is not None:
+            evidence = validate_funding_transaction(
+                tx_hash, expected_nonce=expected_nonce
+            )
+            if evidence is not None and evidence.get("status") == 1:
+                return evidence
+            if evidence is not None and evidence.get("pending"):
+                pending_evidence = evidence
 
         if time.monotonic() >= deadline:
+            if pending_evidence is not None:
+                stop(
+                    "exact owner+nonce leg 3b0 transaction remains pending; "
+                    f"tx={pending_evidence['tx_hash']}; refusing any duplicate send"
+                )
             return None
         time.sleep(5)
 
@@ -379,6 +470,14 @@ def reconcile_or_fund_signer() -> int:
 
     deadline_guard("leg 3b0 funding")
     attempt_entries = verified_journal_entries()
+    latest_nonce = owner_nonce("latest")
+    pending_nonce = owner_nonce("pending")
+    if latest_nonce != pending_nonce:
+        stop(
+            f"owner nonce collision before leg 3b0: latest={latest_nonce}, "
+            f"pending={pending_nonce}"
+        )
+    attempt_block = int(cast_call(["block-number"]))
     intent.update(
         {
             "phase": "broadcast_attempt_started",
@@ -386,9 +485,11 @@ def reconcile_or_fund_signer() -> int:
                 "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
             ),
             "broadcast_attempt_epoch": int(time.time()),
+            "ethereum_block_at_attempt": attempt_block,
             "journal_head_at_attempt": journal_head(attempt_entries),
-            "owner_nonce_latest_at_attempt": owner_nonce("latest"),
-            "owner_nonce_pending_at_attempt": owner_nonce("pending"),
+            "owner_nonce_expected": latest_nonce,
+            "owner_nonce_latest_at_attempt": latest_nonce,
+            "owner_nonce_pending_at_attempt": pending_nonce,
             "signer_balance_wei_at_attempt": balance,
         }
     )
@@ -411,6 +512,12 @@ def reconcile_or_fund_signer() -> int:
             str(FUND_WEI),
             "--max-fee-wei",
             str(FUND_MAX_FEE_WEI),
+            "--expected-recipient-balance-wei",
+            "0",
+            "--sender",
+            OWNER,
+            "--expected-sender-nonce",
+            str(latest_nonce),
             "--label",
             "leg3b0-signer-funding",
             "--report",

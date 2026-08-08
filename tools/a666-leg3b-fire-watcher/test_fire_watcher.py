@@ -32,7 +32,7 @@ def watcher(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 def base_intent(watcher, phase: str) -> dict:
     return {
-        "schema": "postfiat.a666.leg3b0.intent.v1",
+        "schema": "postfiat.a666.leg3b0.intent.v2",
         "phase": phase,
         "owner": watcher.OWNER,
         "signer": watcher.SIGNER,
@@ -167,6 +167,104 @@ def test_run_step_checks_deadline_after_persisting_command(
     )
     watcher.run_step("unit", ["true"], mutation=True)
     assert events[:3] == ["write:prepared", "deadline:unit", "subprocess"]
+
+
+def test_nonce_recovery_finds_exact_pending_or_mined_transaction(
+    watcher, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tx_hash = "0x" + "22" * 32
+    transaction = {
+        "hash": tx_hash,
+        "from": watcher.OWNER,
+        "to": watcher.SIGNER,
+        "value": hex(watcher.FUND_WEI),
+        "nonce": hex(304),
+    }
+
+    def rpc(method: str, params: list):
+        if method == "eth_blockNumber":
+            return hex(101)
+        if method == "eth_getBlockByNumber":
+            if params[0] == hex(101):
+                return {"transactions": [transaction]}
+            return {"transactions": []}
+        raise AssertionError(method)
+
+    monkeypatch.setattr(watcher, "rpc", rpc)
+    intent = {"owner_nonce_expected": 304, "ethereum_block_at_attempt": 100}
+    assert watcher.find_funding_transaction_by_nonce(intent) == tx_hash
+
+
+def test_pending_bound_nonce_recovery_stops_without_resend(
+    watcher, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    intent = {
+        **base_intent(watcher, "broadcast_attempt_started"),
+        "owner_nonce_expected": 304,
+        "ethereum_block_at_attempt": 100,
+        "journal_head_at_attempt": watcher.JOURNAL_GENESIS,
+    }
+    monkeypatch.setattr(watcher, "verified_journal_entries", lambda: [])
+    monkeypatch.setattr(
+        watcher,
+        "find_funding_transaction_by_nonce",
+        lambda current: "0x" + "33" * 32,
+    )
+    monkeypatch.setattr(
+        watcher,
+        "validate_funding_transaction",
+        lambda tx_hash, expected_nonce: {
+            "tx_hash": tx_hash,
+            "status": None,
+            "pending": True,
+        },
+    )
+    with pytest.raises(SystemExit) as error:
+        watcher.recover_funding_from_report_or_journal(intent, wait_seconds=0)
+    assert error.value.code == 2
+
+
+def test_funding_leaf_rechecks_recipient_balance_immediately_before_send(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.syspath_prepend(str(A666 / "scripts"))
+    module = load_module(
+        "native_evm_leaf_send_balance_test",
+        A666 / "scripts/native_evm_leaf_send.py",
+    )
+    calls: list[str] = []
+
+    def rpc(url: str, method: str, params: list):
+        calls.append(method)
+        return {
+            "eth_estimateGas": "0x5208",
+            "eth_gasPrice": "0x1",
+            "eth_getTransactionCount": "0x130",
+            "eth_getBalance": "0x1",
+        }[method]
+
+    monkeypatch.setattr(module, "_rpc", rpc)
+    monkeypatch.setattr(
+        module.native_agentd_leaf,
+        "evm_send",
+        lambda *args, **kwargs: pytest.fail("balance mismatch must prevent send"),
+    )
+    args = types.SimpleNamespace(
+        chain_id=1,
+        recipient="0xe01eaf76f155b2759402b39fe126b5a81655f424",
+        amount_wei=10**16,
+        rpc_url="https://ethereum-rpc.publicnode.com",
+        max_fee_wei=10**16,
+        expected_recipient_balance_wei=0,
+        sender="0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+        expected_sender_nonce=304,
+        stakehub_home="/home/postfiat/.stakehub",
+        label="leg3b0-signer-funding",
+        report=str(tmp_path / "report.json"),
+    )
+    with pytest.raises(RuntimeError, match="recipient balance changed"):
+        module.send(args)
+    assert calls[-1] == "eth_getBalance"
 
 
 @pytest.mark.parametrize(
