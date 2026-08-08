@@ -281,3 +281,12 @@ State for any respawn (verify live before trusting):
 - Executor surface: scripts/native_campaign_driver.py run-leg (fail-closed, binary pins verified: client a982f8d2... present at /tmp/fire-20260806-bin/). Journal artifact dir to be created at fire.
 - NEXT: fire leg 2a (order reserve) via driver, then 2b, 3a, then EVM legs 3b0-3e; each receipt-gated.
 
+
+### 2026-08-08 ~05:4xZ — leg 2a fired+finalized; SEQUENCING DEFECT found fail-closed at 2b; corrective S1g sequence in flight
+
+- LEG 2A: batch-only PASS (the S1c stale-pricing gate is cleared by E6), live submit ok=true, tx 363b00d8... h782, receipt accepted=true fee 23. Reservation 1c78d7b2... (96-hex) live, expires h1781.
+- LEG 2B REJECTED fail-closed at clone batch-only: pftl_uniswap_pricing_binding_mismatch — the route v2 primary_market_policy (policy_epoch 6) still pins pricing E5. Subscribing at E6 requires pftl_uniswap_route_epoch_advance (6->7) whose admission REQUIRES zero active reservations (nav_vault_asset_execution.rs:5147-5158). Correct order is: release -> epoch advance -> fresh reserve -> subscribe.
+- Corrective S1g sequence (ops in /tmp/a666-s1g/, each batch-only then live): 01 order_release (holder releases 1c78d7b2..., escrow refund, no fund loss), 02 route_epoch_advance issuer-signed 6->7 policy_epoch 7 policy_hash 50af7455e7ed12b3... (derivation verified byte-exact vs epoch-6 db6be8d0... via sha3-384 postfiat.pftl_uniswap.primary_market_policy.v2 preimage; pricing pinned to E6 b06262a1..., valid_from 782, expires 10000, max_nav_age 1000, governed ratios), 03 order_reserve fresh RES2 ed3c0b77...fae46 (sha384 native-v1|route|leg2a-reserve-r2|782|20260808) route/policy epoch 7 mint 11012575 max_settle 10000000 expires 1782, 04 subscribe_v2 RES2 pricing E6.
+- Note for A5 later stages: leg 5a rebind (S4f) must use policy_epoch 7 + policy_hash 50af7455... + pricing E6.
+- If respawning mid-sequence: check receipts for labels a666-s1g-* via tx/receipts RPC before re-firing anything; never reuse RES1 or RES2 after a terminal state.
+
