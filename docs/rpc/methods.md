@@ -1,7 +1,10 @@
 # RPC Methods
 
-This page is the hosted summary. The complete code-derived authorization
-inventory is [RPC Method Inventory](../runbooks/rpc-method-inventory.md).
+This page is the hosted summary of the public wallet and protocol surface.
+[RPC Dispatch Method Coverage](method-coverage.md) documents the remaining
+local, gated, compatibility, and verification arms. The complete code-derived
+authorization inventory is
+[RPC Method Inventory](../runbooks/rpc-method-inventory.md).
 
 ## Core Read Methods
 

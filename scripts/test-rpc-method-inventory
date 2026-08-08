@@ -4,16 +4,260 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 GENERATOR = ROOT / "scripts/testnet-rpc-method-inventory"
+RPC_DOCS = ROOT / "docs/rpc"
+METHOD_CELL_RE = re.compile(r"`([a-z0-9_-]+)`(?:, `([a-z0-9_-]+)`)*")
+METHOD_NAME_RE = re.compile(r"`([a-z0-9_-]+)`")
+SEPARATOR_CELL_RE = re.compile(r":?-{3,}:?")
+TABLE_SHAPES = {
+    ("Method", "Purpose"): (None, 1),
+    ("Method", "Posture", "Current dispatch behavior"): (1, 2),
+}
+POSTURE_LABELS = {
+    "read_only_public": "public read",
+    "authorized_protocol_mutation_public": "authorized protocol mutation public",
+    "controlled_write_gated": "controlled write gated",
+    "privacy_alpha_gated": "privacy-alpha gated",
+    "owned_lane_gated": "owned-lane gated",
+    "operator_or_local_only": "operator/local only",
+}
+
+
+class DocumentationError(ValueError):
+    """An RPC documentation table violates the coverage contract."""
+
+
+@dataclass(frozen=True)
+class MethodDocumentation:
+    source: str
+    line: int
+    posture: str | None
+    semantic: str
+
+
+def split_markdown_row(line: str) -> list[str] | None:
+    stripped = line.strip()
+    if not stripped.startswith("|") or not stripped.endswith("|"):
+        return None
+    return [cell.strip() for cell in re.split(r"(?<!\\)\|", stripped[1:-1])]
+
+
+def parse_method_documentation(
+    documents: dict[str, str],
+) -> dict[str, MethodDocumentation]:
+    methods: dict[str, MethodDocumentation] = {}
+    for source, text in sorted(documents.items()):
+        lines = text.splitlines()
+        active_shape: tuple[int | None, int] | None = None
+        expected_columns = 0
+        index = 0
+        while index < len(lines):
+            cells = split_markdown_row(lines[index])
+            if cells is None:
+                active_shape = None
+                expected_columns = 0
+                index += 1
+                continue
+
+            header = tuple(cells)
+            if header in TABLE_SHAPES:
+                if index + 1 >= len(lines):
+                    raise DocumentationError(
+                        f"{source}:{index + 1}: RPC method table lacks a separator row"
+                    )
+                separators = split_markdown_row(lines[index + 1])
+                if (
+                    separators is None
+                    or len(separators) != len(cells)
+                    or not all(SEPARATOR_CELL_RE.fullmatch(cell) for cell in separators)
+                ):
+                    raise DocumentationError(
+                        f"{source}:{index + 2}: malformed RPC method table separator"
+                    )
+                active_shape = TABLE_SHAPES[header]
+                expected_columns = len(cells)
+                index += 2
+                continue
+
+            method_cell = cells[0] if cells else ""
+            if active_shape is None:
+                if METHOD_CELL_RE.fullmatch(method_cell):
+                    raise DocumentationError(
+                        f"{source}:{index + 1}: method row is outside a recognized RPC method table"
+                    )
+                index += 1
+                continue
+
+            if len(cells) != expected_columns or not METHOD_CELL_RE.fullmatch(method_cell):
+                raise DocumentationError(
+                    f"{source}:{index + 1}: malformed RPC method documentation row"
+                )
+            posture_index, semantic_index = active_shape
+            semantic = cells[semantic_index]
+            if not semantic:
+                raise DocumentationError(
+                    f"{source}:{index + 1}: RPC method row has an empty semantic cell"
+                )
+            posture = cells[posture_index] if posture_index is not None else None
+            if posture_index is not None and not posture:
+                raise DocumentationError(
+                    f"{source}:{index + 1}: RPC method row has an empty posture cell"
+                )
+            row = MethodDocumentation(
+                source=source,
+                line=index + 1,
+                posture=posture,
+                semantic=semantic,
+            )
+            for method in METHOD_NAME_RE.findall(method_cell):
+                previous = methods.get(method)
+                if previous is not None:
+                    raise DocumentationError(
+                        f"duplicate RPC method row for {method}: "
+                        f"{previous.source}:{previous.line} and {source}:{index + 1}"
+                    )
+                methods[method] = row
+            index += 1
+    return methods
+
+
+def validate_dispatch_documentation(
+    documents: dict[str, str],
+    inventory_methods: dict[str, dict[str, object]],
+    dispatch_methods: set[str],
+) -> dict[str, MethodDocumentation]:
+    documented = parse_method_documentation(documents)
+    for method, row in documented.items():
+        if row.posture is None or method not in inventory_methods:
+            continue
+        inventory_posture = str(inventory_methods[method]["posture"])
+        expected_posture = POSTURE_LABELS.get(inventory_posture)
+        if expected_posture is None:
+            raise DocumentationError(
+                f"{row.source}:{row.line}: no documentation label for inventory posture "
+                f"{inventory_posture}"
+            )
+        if row.posture != expected_posture:
+            raise DocumentationError(
+                f"{row.source}:{row.line}: stale posture for {method}: "
+                f"expected {expected_posture}, got {row.posture}"
+            )
+    missing = sorted(dispatch_methods - documented.keys())
+    if missing:
+        raise DocumentationError(f"undocumented node dispatch methods: {missing}")
+    return documented
+
+
+def expect_documentation_failure(
+    name: str,
+    documents: dict[str, str],
+    inventory_methods: dict[str, dict[str, object]],
+    dispatch_methods: set[str],
+    expected_fragment: str,
+) -> None:
+    try:
+        validate_dispatch_documentation(documents, inventory_methods, dispatch_methods)
+    except DocumentationError as error:
+        if expected_fragment not in str(error):
+            raise AssertionError(
+                f"{name}: expected {expected_fragment!r} in {error!r}"
+            ) from error
+    else:
+        raise AssertionError(f"{name}: malformed documentation unexpectedly passed")
+
+
+def run_documentation_parser_regressions() -> None:
+    inventory = {
+        "status": {"posture": "read_only_public"},
+        "ledger": {"posture": "read_only_public"},
+    }
+    valid = {
+        "methods.md": """| Method | Purpose |
+| --- | --- |
+| `status` | Returns node status. |
+""",
+        "coverage.md": """| Method | Posture | Current dispatch behavior |
+| --- | --- | --- |
+| `ledger` | public read | Returns ledger state. |
+""",
+    }
+    parsed = validate_dispatch_documentation(valid, inventory, {"status", "ledger"})
+    assert set(parsed) == {"status", "ledger"}
+
+    expect_documentation_failure(
+        "duplicate",
+        {**valid, "duplicate.md": valid["methods.md"]},
+        inventory,
+        {"status", "ledger"},
+        "duplicate RPC method row",
+    )
+    expect_documentation_failure(
+        "malformed_shape",
+        {
+            "bad.md": """| Method | Notes |
+| --- | --- |
+| `status` | Returns node status. |
+"""
+        },
+        inventory,
+        {"status"},
+        "outside a recognized RPC method table",
+    )
+    expect_documentation_failure(
+        "empty_semantic",
+        {
+            "bad.md": """| Method | Purpose |
+| --- | --- |
+| `status` | |
+"""
+        },
+        inventory,
+        {"status"},
+        "empty semantic cell",
+    )
+    expect_documentation_failure(
+        "empty_posture",
+        {
+            "bad.md": """| Method | Posture | Current dispatch behavior |
+| --- | --- | --- |
+| `status` | | Returns node status. |
+"""
+        },
+        inventory,
+        {"status"},
+        "empty posture cell",
+    )
+    expect_documentation_failure(
+        "stale_posture",
+        {
+            "bad.md": """| Method | Posture | Current dispatch behavior |
+| --- | --- | --- |
+| `status` | operator/local only | Returns node status. |
+"""
+        },
+        inventory,
+        {"status"},
+        "stale posture",
+    )
+    expect_documentation_failure(
+        "missing",
+        {"methods.md": valid["methods.md"]},
+        inventory,
+        {"status", "ledger"},
+        "undocumented node dispatch methods",
+    )
 
 
 def main() -> int:
+    run_documentation_parser_regressions()
     with tempfile.TemporaryDirectory(prefix="postfiat-rpc-inventory-") as directory:
         output = Path(directory) / "inventory.json"
         subprocess.run(
@@ -60,11 +304,27 @@ def main() -> int:
         if item["posture"] == "sdk_only_or_unknown"
     ]
     assert not unknown, f"unclassified RPC methods: {unknown}"
+
+    dispatch_methods = {
+        item["method"] for item in inventory["methods"] if item["node_dispatch"]
+    }
+    documents = {
+        path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8")
+        for path in sorted(RPC_DOCS.glob("*.md"))
+    }
+    documented = validate_dispatch_documentation(
+        documents=documents,
+        inventory_methods=methods,
+        dispatch_methods=dispatch_methods,
+    )
+
     assert inventory["verified"] is True
     assert all(inventory["checks"].values()), inventory["checks"]
     print(
         "rpc_method_inventory_regression=ok "
-        f"methods={inventory['counts']['total_methods']}"
+        f"methods={inventory['counts']['total_methods']} "
+        f"dispatch_documented={len(dispatch_methods)}/{len(dispatch_methods)} "
+        f"unique_documentation_rows={len(documented)} parser_fixtures=7"
     )
     return 0
 
