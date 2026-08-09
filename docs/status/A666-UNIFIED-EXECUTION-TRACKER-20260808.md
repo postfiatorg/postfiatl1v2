@@ -282,3 +282,8 @@ The PR30 description also records that `83ac75d` is outside this Cobalt-only cha
 - [x] Handoff step-4 code verification complete. The pending redemption `b3651dd4…3a931d5b` can NEVER settle via a replacement vault: settle-time observations must exactly match the packet's old vault address (nav_vault_asset_execution.rs:1442-1455), the packet/hashes commit to it (account_owned_asset_types.rs:2936-2953), and no cancel/rebind/migrate op exists (core_chain.rs:42-57). Old vault revival is also impossible (no finalityVerifier setter, ERC20BridgeVaultL1.sol:75,110; immutable programVKey). Dishonest attestation and unbacked re-mint both refused.
 - [x] Plan of record: docs/plans/A666-EGRESS-LANE-REDEPLOY-PLAN-20260809.md — impair/write off the old bucket (195,031,396 atoms incl. the 9,932,863 claim, permanent tombstone), stand up a new governed route epoch + verifier (vkey 0x0015b046…, seeded at CURRENT height, no historical re-proving) + vault, custody whitelist (one principal passphrase command when addresses exist), fresh ~$10 round trip through the new lane, A6 restated, prevention items to the fix round.
 - Supersedes the "fund new vault and settle the existing IOU" sketch in both 20260809 handoffs.
+
+## 2026-08-10 ~00:0xZ — STOPPED BY PRINCIPAL MID-IMPAIR; handoff written
+
+- Impair tx `c2fefc40…ee84f8` (bucket 5d5abc04… -> counted 0, factor 0) is SIGNED and in validator-2's mempool, NOT yet included. One finality attempt at v2 rejected `rpc_finality_wrong_proposer` (h792 proposer is validator-0; server instructs retrying the SAME signed request there). No funds moved; accounting-only op. Successor must finish delivery per handoff Section 2 — same signed tx, no re-sign.
+- Handoff: docs/handoffs/A666-OWNER-HANDOFF-20260810-0000Z.md
