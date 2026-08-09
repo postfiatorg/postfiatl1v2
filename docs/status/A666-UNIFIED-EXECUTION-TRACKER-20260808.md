@@ -287,3 +287,13 @@ The PR30 description also records that `83ac75d` is outside this Cobalt-only cha
 
 - Impair tx `c2fefc40…ee84f8` (bucket 5d5abc04… -> counted 0, factor 0) is SIGNED and in validator-2's mempool, NOT yet included. One finality attempt at v2 rejected `rpc_finality_wrong_proposer` (h792 proposer is validator-0; server instructs retrying the SAME signed request there). No funds moved; accounting-only op. Successor must finish delivery per handoff Section 2 — same signed tx, no re-sign.
 - Handoff: docs/handoffs/A666-OWNER-HANDOFF-20260810-0000Z.md
+
+## 2026-08-09 ~23:35Z — Old-vault bucket impairment FINALIZED; six-validator reconciliation PASS
+
+- [x] Delivered the exact already-signed impairment transaction from validator-2 to the deterministic h792 proposer, validator-0. Signed-payload SHA-256 matched byte-for-byte on both hosts: `47965bca654ea5d17315fd18f1c3a39749cc8b9af5eef1450237e69e19a6d1d9`. No rebuild and no re-sign occurred.
+- [x] Transaction `c2fefc40598fc9169fe2b1dead1e0283de55e89ad65eea85d88f854257582170ee23cadf230c145a292d3adb42ee84f8` finalized at h792, view 0, proposer validator-0, tip `e7a9c178…c14040`, state root `6d643c14…192452`; receipt `accepted=true`, `code=accepted`, fee charged/burned 23 atoms. This operation is accounting-only; no funds moved.
+- [x] Six validators converged at h792 on the same tip and state root. The old-vault bucket `5d5abc04…3665c536` is `status=impaired`, `counted_value_atoms=0`, `impairment_factor_bps=0`, `last_updated_height=792` on all six. Tombstone redemption `b3651dd4…3a931d5b` remains truthfully `pending`, amount 9,932,863, settled 0.
+- [x] Validator-2 retained its pre-finality mempool copy until the designed terminal-entry reconciliation completed after restarting only `postfiat-validator-2-rpc.service`; the consensus validator PID remained unchanged. Final fleet mempool is 0/0/0/0/0/0 and validator-2 `verify-mempool` passes with zero pending entries.
+- [x] `stakehub-pfusdc-wallet-agent.service` was not restarted and remains the original unlocked process, PID 2568116, start timestamp 2026-08-08 12:48:39Z.
+- Evidence: validator-0 `/var/lib/postfiat/validator-0/a666-impair-20260809/impair.finality.validator-0.response.json` and finality artifact root `/var/lib/postfiat/validator-0/finality-artifacts/rpc-finality-181-impair-finality`; validator-2 source packet `/var/lib/postfiat/validator-2/a666-impair-20260809/`.
+- Next strict gate: predict the successor vault address, bind the new route profile/verifier/vault in July order, then deploy and whitelist the two new contracts before fresh funds move.
