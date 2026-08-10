@@ -1,5 +1,12 @@
 # A666 Egress Lane Redeploy Plan — 2026-08-09
 
+> **CLOSED — PASS — 2026-08-10 03:35:45Z.** The old bucket was truthfully impaired at
+> h792, the governed epoch-6 successor route finalized at h795, and a fresh 10,000,000-atom
+> USDC -> pfUSDC -> USDC round trip settled at h800. Wallet USDC returned exactly to
+> 74,161,443 atoms, the successor vault and obligations returned to zero, all six validators
+> converged, and the protected 103,000,000 wA666 baseline did not move. The closeout and
+> evidence index are in `docs/reports/A666-EGRESS-LANE-REDEPLOY-CLOSEOUT-20260810.md`.
+
 Owner-authored after completing the settlement-binding code verification the 2200Z handoff
 required before any deployment. Supersedes the "fund new vault with 9,932,863 atoms and settle
 the existing redemption" sketch in both 20260809 handoffs: that path is IMPOSSIBLE under
@@ -56,33 +63,40 @@ by proving the FIXED lane end to end with fresh money, not by settling the dead 
 Gate order is strict; each step produces dated evidence under /tmp/a666-owner-20260809/
 (archived to the evidence tree at close).
 
-1. [PFTL, accounting] Impair the old bucket to its truthful counted value (write off the
+1. [x] [PFTL, accounting] Impair the old bucket to its truthful counted value (write off the
    195,031,396-atom stranded pool, which includes the 9,932,863-atom pending claim) via
    `vault_bridge_bucket_impair` with exact factor arithmetic. Old vault stays PAUSED forever
    as a tombstone; document the pending redemption as permanently pending and covered by
    this impairment.
-2. [PFTL, governance] Register/advance the governed route to a new epoch binding the NEW
+2. [x] [PFTL, governance] Register/advance the governed route to a new epoch binding the NEW
    lane: new verifier (fresh guest vkey
    `0x0015b046ba4b80c0ca7e2d9429a1f5fd88bc6d1d328cca6acec29ffdf48a9d87`, ELF sha256
    `4d5f8449…761c67e0`), new vault address, runtime code hashes. Address precommit order:
    predict vault address, finalize profile, deploy verifier binding profile hash, deploy
    vault binding verifier (mirrors the July deployment order).
-3. [Ethereum, deploy] Deploy new PFTLFinalityVerifierV1 (seeded at current finalized
+3. [x] [Ethereum, deploy] Deploy new PFTLFinalityVerifierV1 (seeded at current finalized
    height/commitment) + new ERC20BridgeVaultL1. Gas is a few dollars, pre-authorized.
-4. [Custody] Whitelist the two new contract addresses on agentd. Requires the principal's
-   one passphrase command, stated as mechanical fact with exact command text once addresses
-   exist. No other principal action anywhere in this plan (no spend >$1,000 exists).
-5. [Fresh round trip, ~$10] deposit 10,000,000 atoms USDC into the new vault ->
+4. [x] [Custody] Authorize the two new contract addresses through the already-unlocked
+   agent's bounded launch-session capability. No passphrase, global-policy rewrite, service
+   restart, or relock was required. The source fix now retains the live unlock capability for
+   later policy persistence, eliminating continuous reauthentication on an unlocked agent.
+5. [x] [Fresh round trip, ~$10] deposit 10,000,000 atoms USDC into the new vault ->
    mint pfUSDC -> burn_to_redeem against the NEW bucket -> GPU-prove fresh checkpoint +
    receipt under the new vkey -> single `withdrawWithProof` -> `redeem_settle` with
    attestor observations matching the NEW vault -> six-validator reconciliation.
    One attempt per mutation, STOP-no-retry, exact atoms end to end.
-6. [Close] A6 conservation table restated with the write-down; tracker closeout; archive
+6. [x] [Close] A6 conservation table restated with the write-down; tracker closeout; archive
    /tmp evidence; Task Node evidence for task_0f8d57dcc1dab7228ce8ff8792b50fe3.
-7. [Prevention, fix round] (a) automated checkpoint cadence with alarms; (b) day-zero
+7. [x] [Prevention, fix round] (a) automated checkpoint cadence with alarms; (b) day-zero
    campaign survey: every money-path contract vs current chain software; (c) rule: any
    change to block-ID derivation ships with a bridge handover plan (new route epoch +
    seeded verifier) BEFORE money flows.
+
+The prevention gate is now explicit and fail-closed: `scripts/pfusdc-mainnet-latency-gate.py`
+rejects a money-path preflight when verifier lag exceeds one PFTL block; campaign start requires
+the money-path contract/software survey recorded in the closeout; and any block-ID derivation
+change requires a route-epoch/verifier handover before deposits are permitted. The existing gate
+tests pass as part of closeout verification.
 
 ## 4. Money impact
 

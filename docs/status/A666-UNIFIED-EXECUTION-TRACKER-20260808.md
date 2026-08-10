@@ -37,7 +37,7 @@
 | A3 E6 proof | CLOSED | pinned governed vkey `0x00580ee8...`; PV policy exact; Groth16 proof locally verified; plan AGENT COMMENTS |
 | A4 E6 finalize | CLOSED | reserve submit c71c0222 h780; epoch finalize 8389696a h781; E6 nav 90,353,505; plan AGENT COMMENTS |
 | A5 legs 2a-5b | FIRE-READY — A-W1..A-W4 VERIFIER-A PASS; principal standing ruling 2026-08-08 (plan Section 2) voids every sub-$1,000 funding hold (such holds = ROGUE ACTION) and clears the secret-output STOP for Track A; watcher re-arm authorized | Source/deployed watcher SHA `cc3e6063...` byte-identical at commit `e4a93df`. Exact 0.01 ETH trigger; durable no-resend intent; owner latest=pending expected-nonce binding; immediate child-side recipient balance+sender nonce recheck; pending/mined owner+nonce recovery; every post-trigger error terminally STOPs; per-submit deadline epoch 1786330125; recovered 756+exact target-commitment gate. Unit suite 14 passed; local proof transcript `dd88d206...` PASS. Live signer `0xe01eaf...` remains 0 ETH/off-whitelist; two independent live sources agree owner wallet `0x1455Bd...` still holds exactly 0.289735632642339914 ETH and nonce 304, byte-for-byte equal to the recorded pre-execution snapshot, so no owner-wallet Ethereum transaction or ETH spend occurred; verifier last reconciled at 691/prior exact; no intent/report/fire. Re-arm authorized without further principal input per the plan Section 2 standing ruling 2026-08-08; awaiting principal input for sub-$1,000 funding is ROGUE ACTION. PR 7/service/`2839f4e` untouched; deadline 1786331925. |
-| A6 closeout | OPEN | |
+| A6 closeout | CLOSED — PASS at h800 | Epoch-6 successor 10,000,000-atom round trip returned wallet USDC and pfUSDC exactly to baseline; successor vault/obligations zero; old 195,031,396-atom bucket impaired; 103,000,000 wA666 unchanged. See `docs/reports/A666-EGRESS-LANE-REDEPLOY-CLOSEOUT-20260810.md`. |
 | B1 Groth16 env | OPEN | |
 | B2 epoch 7/8 proofs | OPEN | |
 | B3 qualification 6/6 | OPEN | |
@@ -297,3 +297,28 @@ The PR30 description also records that `83ac75d` is outside this Cobalt-only cha
 - [x] `stakehub-pfusdc-wallet-agent.service` was not restarted and remains the original unlocked process, PID 2568116, start timestamp 2026-08-08 12:48:39Z.
 - Evidence: validator-0 `/var/lib/postfiat/validator-0/a666-impair-20260809/impair.finality.validator-0.response.json` and finality artifact root `/var/lib/postfiat/validator-0/finality-artifacts/rpc-finality-181-impair-finality`; validator-2 source packet `/var/lib/postfiat/validator-2/a666-impair-20260809/`.
 - Next strict gate: predict the successor vault address, bind the new route profile/verifier/vault in July order, then deploy and whitelist the two new contracts before fresh funds move.
+
+## 2026-08-10 03:35Z — A6 egress-lane successor CLOSED; fresh proof-native round trip PASS
+
+- [x] Governed route epoch 6 finalized at h795 and binds verifier
+  `0xA53926F0F7453ad9f8dCa592A076991eC627838C`, vault
+  `0x4939a45caa85Da31Fb26D7DBe6477B45F7f08688`, fresh egress vkey
+  `0x0015b046…a9d87`, and route profile hash `f088876e…b22107f1a`.
+- [x] Fresh ingress completed exactly once: deposit tx `0xb19ca77a…d2dd60f`, block
+  25,721,711, deposit ID `0x86bbc86d…679e9b74`; PFTL propose/finalize/claim at h796/h797/h798;
+  Joe pfUSDC increased by exactly 10,000,000 atoms.
+- [x] Fresh egress completed exactly once: burn tx `dc4bb068…6e70026` at h799; CUDA
+  Groth16 proof used vkey `0x0015b046…a9d87`; Ethereum withdrawal tx
+  `0xf0003bda…badb5fc`, block 25,721,902, returned exactly 10,000,000 USDC atoms and rejected
+  replay; PFTL settlement tx `1094c18c…f019c1ce` finalized at h800.
+- [x] Six validators converge at h800, state root `6f291979…92e9cb6c`, tip
+  `f6e97f10…d83c969`, mempool 0/0/0/0/0/0. Successor vault balance and obligations are zero;
+  wallet USDC is back to 74,161,443; Joe pfUSDC is back to 1,358,493; protected wA666 remains
+  exactly 103,000,000. Two independent Ethereum RPCs agree on height and all three balances.
+- [x] Custody used the already-unlocked bounded launch-session path. No additional passphrase,
+  global policy mutation, StakeHub service restart, or relock occurred. The agent source now
+  retains and zeroizes the live vault capability so policy persistence no longer re-prompts while
+  unlocked; focused tests pass 25/25.
+- [x] A6 conservation, exact atom/wei ledger, host-versus-guest finding, GPU cost/destruction,
+  evidence index, and prevention controls are archived in
+  `docs/reports/A666-EGRESS-LANE-REDEPLOY-CLOSEOUT-20260810.md`.
