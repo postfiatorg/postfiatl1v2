@@ -1,0 +1,38 @@
+{
+  "schema": "postfiat.a666.full_roundtrip_acceptance.v1",
+  "verdict": "PASS",
+  "workflow_id": "a666-rt06-20260810",
+  "deposit": {
+    "tx": "0x2a91124b7cc0cb43cdd022caa18276f27467d16aa52ad469a8b3aa73c9d5c3b4",
+    "deposit_id": "0xd97b01117aa5e2fb4d9b74050c779d36aa0f58d6aa457e2621bf95d1041d7d2c",
+    "amount_atoms": 10000000
+  },
+  "verified_nav_issue": {
+    "mint_amount_atoms": 11012575,
+    "pricing_source": "governed NAV epoch 6"
+  },
+  "uniswap": {
+    "forward_tx": "0x9f73ddc44a4d752ec6b35cee4c2f56d56e266f79dca2a404c335d28e76ada181",
+    "forward_usdc_atoms": 8047756,
+    "reverse_tx": "0x7ea6974c3c1bfe7fbb4e006292b7c9acdd8654fb1d026fb3ed7bd24cb49695d3",
+    "returned_wa666_atoms": 10998834
+  },
+  "return_import": {
+    "pftl_height": 863,
+    "amount_atoms": 10998834
+  },
+  "verified_nav_redeem": {
+    "redemption_nonce": "b88b94757ac774311586e23eae89fd39a331ae4437a7d8a7ed118d2a501541c1",
+    "pfusdc_output_atoms": 9932864
+  },
+  "successor_egress": {
+    "withdrawal_tx": "03a0986db5073307b7639f03b39eac556ba7235c6325c2e71b5854b3c993d2ed",
+    "amount_atoms": 9932864
+  },
+  "protected_wa666": {
+    "baseline_atoms": 103000000,
+    "final_atoms": 103000000
+  },
+  "final_wallet_usdc_atoms": 73758626,
+  "final_supply_invariant": true
+}

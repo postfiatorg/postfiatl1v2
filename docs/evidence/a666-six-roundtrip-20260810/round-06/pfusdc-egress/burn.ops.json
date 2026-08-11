@@ -1,0 +1,21 @@
+{
+  "schema": "postfiat-certified-asset-ops-request-v1",
+  "operations": [
+    {
+      "label": "a666-rt06-20260810-pfusdc-burn",
+      "source": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+      "key_file": "/home/postfiat/tmp/pfusdc-closed-roundtrip-20260720/keys/holder.json",
+      "operation": {
+        "operation": "vault_bridge_burn_to_redeem",
+        "owner": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+        "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+        "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+        "bucket_id": "c4b2691e5e25df47ec1f9b9b2b977413de84f914e288a0547bdd9b607a3aaf5becdc3bad87c5b3134f0c1a3d9d5351e7",
+        "amount_atoms": 9932864,
+        "epoch": 51,
+        "reserve_packet_hash": "e60e738118ce4ff26bf2c3233ba08d5c299f753264c210c4621bc15304425d699b718436b3e71d4a70b5b2a07d926ae3",
+        "destination_ref": "evm-erc20:1:0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0"
+      }
+    }
+  ]
+}

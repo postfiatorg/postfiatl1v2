@@ -1,0 +1,13 @@
+{
+  "elf_sha256": "0e59a0cf7723b9028aaa4c57f9e9c0da72119a552d62a5577223ba7b2df222d3",
+  "execute_ms": 0,
+  "host_execute_skipped": true,
+  "instruction_count": null,
+  "program_vkey": "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e",
+  "proof_bytes": 356,
+  "prover_backend": "cuda",
+  "public_values_bytes": 1652,
+  "schema": "postfiat.eth_l1_fast_lane_p0_proof_report.v1",
+  "serialized_proof_bytes": 3346,
+  "setup_and_groth16_ms": 144206
+}

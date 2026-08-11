@@ -1,0 +1,9 @@
+{
+  "schema": "postfiat.a666.destination_consume_acceptance.v1",
+  "verdict": "PASS",
+  "ethereum_mint_tx": "0x839c6ad7a36c751d2df58430ba49e95ec29a414bbe2b2924d6e03f839fe96768",
+  "packet_hash": "f0ede7f86b5195583eaf0fb4c352bf0002e80350bcd620aaba44792f75e6fae1a4a8f8752cc45889d68236f82253c4c1",
+  "ethereum_mint_block": 25726234,
+  "checkpoint_finalized_height": 25726246,
+  "pftl_height": 840
+}

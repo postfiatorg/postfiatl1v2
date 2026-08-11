@@ -1,0 +1,59 @@
+{
+  "schema": "postfiat-certified-asset-ops-report-v1",
+  "request_schema": "postfiat-certified-asset-ops-request-v1",
+  "data_dir": "/var/lib/postfiat/validator-0",
+  "topology_file": "/etc/postfiat/releases/pnok-private-fix-2246d25-orchard1/topology.json",
+  "artifact_dir": "/var/lib/postfiat/validator-0/joe-pfusdc-propose-h834",
+  "operation_count": 1,
+  "max_transactions": 1,
+  "allow_existing_mempool": false,
+  "prepare_only": false,
+  "batch_only": false,
+  "start_height": 833,
+  "start_state_root": "2ee762a8934fc071c0010cccb7da1202485f483f11eb2f45c5ac5054c62cf9cac8b0e9fa11eb0ba1752c4afd371078b1",
+  "start_mempool_pending": 0,
+  "end_height": 834,
+  "end_state_root": "c180b79442d866c38cfe317194318d10d5c13ce8326bbd49efb14c51d0bafe764cc66f050bb6300f04f426314017933f",
+  "end_mempool_pending": 0,
+  "operations": [
+    {
+      "label": "propose",
+      "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "transaction_kind": "vault_bridge_deposit_propose",
+      "operation_file": "/var/lib/postfiat/validator-0/joe-pfusdc-propose-h834/propose/operation.json",
+      "quote_file": "/var/lib/postfiat/validator-0/joe-pfusdc-propose-h834/propose/quote.json",
+      "signed_file": "/var/lib/postfiat/validator-0/joe-pfusdc-propose-h834/propose/signed.json",
+      "submit_file": "/var/lib/postfiat/validator-0/joe-pfusdc-propose-h834/propose/submit.json",
+      "tx_id": "2ef22fde89b89f3f5d052d082782992c763ddbae26835c67a835d2a2a7acd0a4fbf8283a4ff170162ea01301e3295f4f",
+      "sequence": 247,
+      "fee": 33,
+      "timings_ms": {
+        "prepare_ms": 0.24484000000000003,
+        "quote_ms": 15.1699,
+        "sign_ms": 4.827339,
+        "submit_ms": 434.819529
+      }
+    }
+  ],
+  "dependency_report": {
+    "declared_dependency_count": 0,
+    "same_round_dependency_count": 0,
+    "prior_round_dependency_count": 0,
+    "same_round_batch_eligible": true,
+    "candidate_batch_classes": [],
+    "replay_equivalence_required": false,
+    "live_round_compression_ready": true,
+    "live_round_compression_blockers": [],
+    "declarations": []
+  },
+  "batch_file": "/var/lib/postfiat/validator-0/joe-pfusdc-propose-h834/peer-certified-mempool-round/mempool-batch.json",
+  "round_artifact_dir": "/var/lib/postfiat/validator-0/joe-pfusdc-propose-h834/peer-certified-mempool-round",
+  "round_ok": true,
+  "timings_ms": {
+    "total_ms": 22050.366572000003,
+    "preflight_ms": 17.249563,
+    "operations_ms": 456.264532,
+    "certify_ms": 21565.7522,
+    "final_status_ms": 10.226354
+  }
+}

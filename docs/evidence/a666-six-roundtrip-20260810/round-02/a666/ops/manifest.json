@@ -1,0 +1,29 @@
+{
+  "base_value_atoms": 9950248,
+  "destination_deadline_seconds": 1786463786,
+  "ethereum_packet_digest": "fa692b2da67c523dceb7f675af0aa2366c6b458719fd7f6de7c909a94f036e26",
+  "ethereum_recipient": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+  "export_nonce": "9489a282048c5c37600d3d3ee724cba34c0035c875878cce0e34083a11953eee",
+  "files": {
+    "export": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-six-roundtrip-20260810/round-02/a666/ops/03-export.ops.json",
+    "mint_packet": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-six-roundtrip-20260810/round-02/a666/ops/03-mint-packet.json",
+    "mint_packet_digest": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-six-roundtrip-20260810/round-02/a666/ops/03-mint-packet-digest.json",
+    "reserve": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-six-roundtrip-20260810/round-02/a666/ops/01-reserve.ops.json",
+    "subscribe": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-six-roundtrip-20260810/round-02/a666/ops/02-subscribe.ops.json"
+  },
+  "issue_multiplier_bps": 10050,
+  "issue_spread_atoms": 49752,
+  "mint_amount_atoms": 11012575,
+  "nav_circulating_supply_atoms": 31597197455,
+  "nav_per_unit_usd_1e8": 90353505,
+  "nav_verified_net_assets_usd_1e8": 2854917567674,
+  "packet_hash": "2fa9d28136eeff80536d4edfecfc84a9d32a84e94d347d0d6c4197fa61420d6ec1b96c0b6c19b97477d37933e92f650e",
+  "pricing_nav_epoch": 6,
+  "pricing_reserve_packet_hash": "b06262a1e6e4eba7851b7326638cba350f8deffbc0bdd9069595ae9e0f56475e05fd1b4804a1e40a8948ac344c49951a",
+  "reservation_id": "870b65c668867e70d46738c3dc68727bbd713d42dd2acf0be97166506f8b02fbf97e98c9504042bf40e5077cf5c7ac5a",
+  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+  "schema": "postfiat.a666.transparent_primary_issue_ops.v1",
+  "settlement_value_atoms": 10000000,
+  "subscriber": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "subscription_nonce": "0f23f72d3e863b91ad407675dd2368ba134d9ad81bab40c33f7fd8bed90f07d4"
+}

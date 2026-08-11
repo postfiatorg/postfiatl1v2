@@ -1,0 +1,15 @@
+{
+  "schema": "postfiat.a666.transparent_issue_run_manifest.v1",
+  "workflow_id": "a666-rt05-20260810",
+  "validator_release": "pnok-private-fix-2246d25-orchard1",
+  "start_height": 844,
+  "expected_verifier_height": 839,
+  "prior_checkpoint_block_id": "fb946d34c8cddf9475e24af935f721ad361429ed7fdcc17b6deec55594cd7027562d87b67a98ffc48c94a2119fc17453",
+  "expected_wrapped_balance_before": 103000000,
+  "expected_wrapped_supply_before": 31498266161,
+  "amounts": {
+    "settlement_atoms": 10000000,
+    "mint_atoms": 11012575
+  },
+  "packet_hash": "920230e8524fa0f59f6a5336844e83fbf8437f80e8fb06107fc4f5b6f7a1de1a541b9afb751b49c74010fec80b7c0204"
+}

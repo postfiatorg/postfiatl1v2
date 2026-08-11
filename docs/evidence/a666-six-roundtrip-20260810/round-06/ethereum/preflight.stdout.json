@@ -1,0 +1,34 @@
+{
+  "addresses": {
+    "controller": "0x9A0262C0572fb4DB08765408eB225E207F40c3d9",
+    "migration": "0xFfBBae0eb8450D10F8C0D26C2952b089D56e517c",
+    "owner": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+    "token": "0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5",
+    "verifier": "0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A"
+  },
+  "chain_id": 1,
+  "packet_digest": "0xd784b35c092f1065135f2d90dcd2c8bdd61d5368cac7086865f55ec6601f0603",
+  "phase": "prepared",
+  "pre_state": {
+    "ethereum_block_number": 25726683,
+    "latest_finalized_height": 850,
+    "migration_reserve_atoms": 27306423797,
+    "mint_paused": false,
+    "packet_consumed": false,
+    "receipt_accepted": false,
+    "recipient_balance_atoms": 103000000,
+    "token_total_supply": 31498279903,
+    "total_minted_atoms": 31676272905
+  },
+  "proof": {
+    "proof_bytes": 356,
+    "proof_sha256": "349636137a4cfbe586f656d6a0e1f0b17de163243adb4472bef283fabf814461",
+    "public_values_bytes": 1120,
+    "public_values_sha256": "eb402762b82bb52bdff11c5e34c8fff2b5c8883fdbd50c94e9dc1f2af4218c23"
+  },
+  "receipt_commitment": "0xb20e05356246825499052a972463a4c3aa500629b6836e3f2576cdafad71ed9c",
+  "receipt_witness_sha256": "22d0ad2d711f110e62c309308830dd62dbbe745c59c73ec3b9dcc218ef9eefe2",
+  "rpc": "https://ethereum-rpc.publicnode.com",
+  "schema": "postfiat-a666-proof-gated-mint-mainnet-v1",
+  "transactions": []
+}

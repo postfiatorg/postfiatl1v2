@@ -1,0 +1,38 @@
+{
+  "amount_atoms": 10998834,
+  "block_log_index": 197,
+  "chain_id": 1,
+  "controller": "0x9A0262C0572fb4DB08765408eB225E207F40c3d9",
+  "ethereum_sender": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+  "event_log_index": 1,
+  "gas_estimate": 106462,
+  "native_nav_asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+  "pftl_recipient": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "phase": "burned",
+  "post_state": {
+    "nonce_consumed": true,
+    "recipient_balance_atoms": 103000000,
+    "token_total_supply": 31498224938,
+    "total_return_burned_atoms": 133997667
+  },
+  "pre_state": {
+    "nonce_consumed": false,
+    "recipient_balance_atoms": 113998834,
+    "token_total_supply": 31509223772,
+    "total_return_burned_atoms": 122998833
+  },
+  "receipt_sha256": "b29b684c14f5c626d83df26b0f0e59c50fc51b242ef5e8472842727e4fc3cfab",
+  "return_burn_id": "0c2c0b765d6f3277e3b83172dc6ebc662161e9cf8b18b544697ee323929b7c78",
+  "return_nonce": "b81547de8feb0e69af335c5002cca2aeffa80363b650faad317091e006ee04cc",
+  "rpc": "https://ethereum-rpc.publicnode.com",
+  "schema": "postfiat-a666-mainnet-return-burn-v1",
+  "transaction": {
+    "block_hash": "20e853de604908bc67ac7f48ac70f86e92d0a0f63edf3ce63ebe664813410d62",
+    "block_number": 25725568,
+    "gas_used": 84069,
+    "status": 1,
+    "transaction_index": 8,
+    "tx": "0x2426c4b662efab2ebd36649e6e0313006a677859f8ca81b9039787d55c044201"
+  },
+  "wrapped_token": "0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5"
+}
