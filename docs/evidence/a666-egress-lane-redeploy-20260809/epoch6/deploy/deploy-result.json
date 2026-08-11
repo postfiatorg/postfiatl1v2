@@ -1,0 +1,91 @@
+{
+  "gas_accounting": {
+    "cumulative_actual_usd": 0.6559254706533229,
+    "entries": [
+      {
+        "actual_usd": 0.45734382671944995,
+        "cumulative_actual_usd": 0.45734382671944995,
+        "effective_gas_price_wei": 92748879,
+        "eth_usd_basis": {
+          "block": 25614157,
+          "source": "Uniswap V4 ETH/USDC fee-3000 ts-60 mainnet pool via official StateView 0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227 (pinned official Uniswap deployment family)",
+          "usd_per_eth": 1874.5
+        },
+        "gas_units": 2630563,
+        "label": "verifier"
+      },
+      {
+        "actual_usd": 0.19858164393387293,
+        "cumulative_actual_usd": 0.6559254706533229,
+        "effective_gas_price_wei": 93827905,
+        "eth_usd_basis": {
+          "block": 25614157,
+          "source": "Uniswap V4 ETH/USDC fee-3000 ts-60 mainnet pool via official StateView 0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227 (pinned official Uniswap deployment family)",
+          "usd_per_eth": 1874.5
+        },
+        "gas_units": 1129072,
+        "label": "vault"
+      }
+    ],
+    "eth_usd_basis": {
+      "block": 25614157,
+      "source": "Uniswap V4 ETH/USDC fee-3000 ts-60 mainnet pool via official StateView 0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227 (pinned official Uniswap deployment family)",
+      "usd_per_eth": 1874.5
+    },
+    "hard_ceiling_usd": 150.0,
+    "pre_send_limit_usd": 130.0,
+    "schema": "postfiat.pfusdc.mainnet_gas_accounting.v1"
+  },
+  "manifest_digests": {
+    "postdeploy_enriched_manifest_sha256": "ac8882c4fa04c373145c4ff90cb2f18246f5da41509d25eec12fae26c69e87d6",
+    "pre_broadcast_input_path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-egress-lane-redeploy-20260809/epoch6/deploy/manifest.pre-broadcast.sha256-f1fdc96aa33c45428fffe1af871dfe684528067cd04043fb73f6719f8ccfebce.json",
+    "pre_broadcast_input_sha256": "f1fdc96aa33c45428fffe1af871dfe684528067cd04043fb73f6719f8ccfebce"
+  },
+  "schema": "postfiat.pfusdc.eth_mainnet_deploy_evidence.v1",
+  "session_id": "pfusdc-mainnet-epoch6-20260809T234955Z",
+  "started_utc": "2026-08-09T23:49:55Z",
+  "steps": [
+    {
+      "charged_usd": 0.0,
+      "contract": "PFTLFinalityVerifierV1",
+      "contract_address": "0xd2191BDFA9f2750bc8B9d3Cb3146291dD1251734",
+      "gas": {
+        "actual_usd": 0.45734382671944995,
+        "cumulative_actual_usd": 0.45734382671944995,
+        "effective_gas_price_wei": 92748879,
+        "eth_usd_basis": {
+          "block": 25614157,
+          "source": "Uniswap V4 ETH/USDC fee-3000 ts-60 mainnet pool via official StateView 0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227 (pinned official Uniswap deployment family)",
+          "usd_per_eth": 1874.5
+        },
+        "gas_units": 2630563,
+        "label": "verifier"
+      },
+      "gas_used": 2630563,
+      "ok": true,
+      "tx": "6fefa8730e729b6391f9b73b130a50a8e996f0d91069dbe50e1874e41f66ef75",
+      "value_wei": 0
+    },
+    {
+      "charged_usd": 0.0,
+      "contract": "ERC20BridgeVaultL1",
+      "contract_address": "0x2604Fcd968C174533e6Fa6FFB034c8f3798d69Ea",
+      "gas": {
+        "actual_usd": 0.19858164393387293,
+        "cumulative_actual_usd": 0.6559254706533229,
+        "effective_gas_price_wei": 93827905,
+        "eth_usd_basis": {
+          "block": 25614157,
+          "source": "Uniswap V4 ETH/USDC fee-3000 ts-60 mainnet pool via official StateView 0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227 (pinned official Uniswap deployment family)",
+          "usd_per_eth": 1874.5
+        },
+        "gas_units": 1129072,
+        "label": "vault"
+      },
+      "gas_used": 1129072,
+      "ok": true,
+      "tx": "d59b6a569f807fa11d4a27ff76d1a83c4f239d674de813fe4663cd7db4922ab0",
+      "value_wei": 0
+    }
+  ]
+}

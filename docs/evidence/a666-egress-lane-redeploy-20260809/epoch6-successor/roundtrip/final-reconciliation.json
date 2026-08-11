@@ -1,0 +1,77 @@
+{
+  "schema": "postfiat.a666.pfusdc_epoch6_successor_closeout.v1",
+  "verdict": "PASS",
+  "closed_at_utc": "2026-08-10T03:35:45Z",
+  "successor": {
+    "verifier": "0xA53926F0F7453ad9f8dCa592A076991eC627838C",
+    "vault": "0x4939a45caa85Da31Fb26D7DBe6477B45F7f08688",
+    "program_vkey": "0x0015b046ba4b80c0ca7e2d9429a1f5fd88bc6d1d328cca6acec29ffdf48a9d87",
+    "latest_finalized_height": 799,
+    "vault_usdc_atoms": 0,
+    "total_obligations_atoms": 0
+  },
+  "roundtrip": {
+    "amount_atoms": 10000000,
+    "deposit_tx": "0xb19ca77a83e6c329beaa44bc68403a3f58c37a24966eb456be386bcf6d2dd60f",
+    "deposit_block": 25721711,
+    "deposit_id": "0x86bbc86df9fda5d9ae4858469a9403b8174327e259965a99ee9567d5679e9b74",
+    "burn_tx": "dc4bb0686ee97c999d718894f8ef4e089bb6e6cc33960797f63f7411710d01d61675a5ca2ecb8cfae62a1c0ff6e70026",
+    "burn_height": 799,
+    "withdrawal_tx": "0xf0003bda41670668bfc6be8d17f7dd13d12d5bb8209313a6a56ffa1f3badb5fc",
+    "withdrawal_block": 25721902,
+    "settlement_tx": "1094c18cf1f4985545da9c8ba7b45e6dcd9703ec2cc4367bec6d2cbaf6480e33b17a8a2d06b5c27553cd2966f019c1ce",
+    "settlement_height": 800,
+    "settlement_receipt_hash": "c1adbb035928f70be7eeb16ffa5e7906373736830cf4e4f1bf4837da9ed3b5917a87bda8614787f442009103ee296251",
+    "redemption_id": "e0a1d2d1a46b3922dfcad258f136e236873e8669fdaec3a7dfa912070693afbffe2f3b158d6bad34d46fcd8c6b84b6fc",
+    "withdrawal_replay_rejected": true
+  },
+  "terminal_balances": {
+    "wallet_usdc_atoms_before": 74161443,
+    "wallet_usdc_atoms_after": 74161443,
+    "wallet_usdc_principal_delta_atoms": 0,
+    "joe_pfusdc_atoms_before": 1358493,
+    "joe_pfusdc_atoms_after": 1358493,
+    "joe_pfusdc_delta_atoms": 0,
+    "protected_wa666_atoms_before": 103000000,
+    "protected_wa666_atoms_after": 103000000,
+    "protected_wa666_delta_atoms": 0,
+    "wallet_eth_wei_after": 278826587877549800
+  },
+  "pftl_fleet": {
+    "validator_count": 6,
+    "height": 800,
+    "state_root": "6f2919796b22b1f39c67556cb041de83010d53fc122d174b6e491fcccd351f82d11751e6e0b1a19db6700bbf92e9cb6c",
+    "tip": "f6e97f10028fd635791d1076b214ae9937024c5e3755899e3bcc33005d5b2c31318f5a560c2977b5d34278b31d83c969",
+    "mempool_pending_each": [0, 0, 0, 0, 0, 0]
+  },
+  "accounting": {
+    "old_bucket_write_down_atoms": 195031396,
+    "old_bucket_counted_value_atoms_after": 0,
+    "old_redemption_atoms": 9932863,
+    "old_redemption_state": "permanent_pending_tombstone",
+    "new_bucket_id": "c4b2691e5e25df47ec1f9b9b2b977413de84f914e288a0547bdd9b607a3aaf5becdc3bad87c5b3134f0c1a3d9d5351e7",
+    "new_bucket_gross_receipt_atoms": 10000000,
+    "new_bucket_counted_value_atoms_after": 0,
+    "new_bucket_outstanding_atoms_after": 0,
+    "new_bucket_redemption_queue_atoms_after": 0
+  },
+  "gas": {
+    "deployment_usd": 0.76703297383193,
+    "roundtrip_approval_wei": 5382249808572,
+    "roundtrip_deposit_wei": 19162763443200,
+    "roundtrip_withdrawal_wei": 50321347514490,
+    "roundtrip_total_wei": 74866360766262
+  },
+  "proofs": {
+    "ingress_witness_sha256": "e73f863daa4a83a320fd01be02151b9b577a4d891d6517ef88802d956e950718",
+    "egress_witness_sha256": "86bb388234061802226f7ab9a018231a5d138732e860c9aa0ea7a0915929f154",
+    "egress_prover_binary_sha256": "42a72b06e1a7c763400942392ff9099a62acffbafc56d2bbc4758afc99454d43",
+    "gpu": "NVIDIA A100-PCIE-40GB, 595.71.05"
+  },
+  "custody": {
+    "additional_passphrase_prompts": 0,
+    "authorization_path": "unlocked_bounded_launch_sessions",
+    "stakehub_service_restarted": false,
+    "stakehub_service_relocked": false
+  }
+}

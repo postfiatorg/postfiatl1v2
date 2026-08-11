@@ -1,0 +1,21 @@
+{
+  "schema": "postfiat.a666.vast_prover_instance.v1",
+  "purpose": "build and freeze epoch-6 successor CUDA prover binaries",
+  "instance_id": 47316873,
+  "offer_id": 42079724,
+  "gpu": "NVIDIA A100-PCIE-40GB",
+  "driver_version": "580.95.05",
+  "image": "vastai/pytorch:cuda-13.0.3-auto",
+  "started_unix": 1786321773,
+  "destroyed_unix": 1786322818,
+  "destroyed_utc": "2026-08-10T00:46:58Z",
+  "duration_seconds": 1045,
+  "hourly_usd": 0.6962962962962963,
+  "estimated_cost_usd": 0.2021188271604938,
+  "destroy_verified_no_instances": true,
+  "local_binary_cache": "/home/postfiat/tmp/a666-epoch6-successor-prover-binaries",
+  "binary_sha256": {
+    "eth-l1-mainnet-fast-lane-p0-cuda": "ef72f20d2724e72bd6efa7ff9bdec7fcc84fcd574e186abd8d73030db05b9cd1",
+    "pfusdc-tier4-prover-cuda": "42a72b06e1a7c763400942392ff9099a62acffbafc56d2bbc4758afc99454d43"
+  }
+}

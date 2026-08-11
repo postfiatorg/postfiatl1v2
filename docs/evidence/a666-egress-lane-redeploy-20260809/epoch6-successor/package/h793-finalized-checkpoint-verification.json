@@ -1,0 +1,16 @@
+{
+  "certificate_id": "335b88f4260de38e0199257ae50a22fcd53586abd4a33bd3dbb1cc42c8f9a64e71c4a2d5c23c985919e2a4d163246cb7",
+  "chain_id": "postfiat-wan-devnet-2",
+  "checkpoint_block_hash": "ad1aaaa5e061ef8a15fcc5d8e79fed699cfa00df3c422f90d70e392d48fe54820944d24b514b2d2325973c5d5ceedee2",
+  "checkpoint_height": 793,
+  "checkpoint_state_root": "574deb2403d5cffbe4628d159311f164fb7c3e9f19054df5661f1df003e79aab8fda3d5c9cf1ee0c46dc0ce2b9799592",
+  "committee_epoch": 1,
+  "committee_root": "9f7ce761878dd29a42151dd5f94af4886344764f4dba235bdf5c231f1700b8d3720e47cbda3dc1392d99c39ea8cda39b",
+  "protocol_version": 1,
+  "quorum": 5,
+  "schema": "postfiat.finalized_checkpoint_verification.v1",
+  "source": "validator-0 verify-finalized-checkpoint after old-bucket impairment finality",
+  "validator_count": 6,
+  "verification_basis": "consensus-v2-finalized-checkpoint",
+  "verified": true
+}

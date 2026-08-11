@@ -1,0 +1,16 @@
+{
+  "schema": "postfiat.stakehub_policy_request.v1",
+  "status": "completed_via_unlocked_bounded_launch_sessions",
+  "agent_unlocked": true,
+  "service_restart_requested": false,
+  "addresses": [
+    "0xA53926F0F7453ad9f8dCa592A076991eC627838C",
+    "0x4939a45caa85Da31Fb26D7DBe6477B45F7f08688"
+  ],
+  "purpose": "epoch-6 successor verifier and proof-native pfUSDC vault",
+  "authorization_path": "bounded_launch_session",
+  "continuous_reauthentication_required": false,
+  "global_policy_mutated": false,
+  "service_restarted": false,
+  "note": "The already-unlocked agent authorized the exact successor calls through bounded launch sessions; no additional passphrase or policy rewrite was required."
+}

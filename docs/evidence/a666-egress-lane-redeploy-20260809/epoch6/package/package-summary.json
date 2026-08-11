@@ -1,0 +1,68 @@
+{
+  "checkpoint": {
+    "block_id": "e7a9c178fd108620a5c195aee74292489898d4aaebe4dfc6ff4548393b434c6fe883b2cabeb5609ad8ce312fddc14040",
+    "checkpoint_commitment": "0x083c73d380bcfa57a2911996e5761718e0c86df0d52a2d5ad77d51090a5127ba",
+    "committee_root_commitment": "0x88276f3a3cc8672f03bcbec69fdafad8f21daaa075ee08e2e7c9881f67279f3d",
+    "height": 792
+  },
+  "hashes": {
+    "binding": "0a5ac3088a9bde3ebd752559f97e7ccc44dabfd1e8e2edb6fcfac45950b37668",
+    "commitment": "0x82887e3ecd498e30289bd70fefddd128cd1a4f491412dc4bc0834828dfc69643",
+    "policy": "457766e1290132110ce609d432278a3ee504e96051310b94fdeca639d4afb115",
+    "profile": "21076a4df45bca0b6802e1b2ba6373c1e10b32be3ce9923343ae7e066d64f8062440031e70ed2cfe8d5d890d126fb398",
+    "vault_runtime": "0xc6dbb722c23bfc841624bb909fcb54d84a65a2ea6ece96e2a28bf61d5dea6d05",
+    "verifier_runtime": "0xd4d4ec468dac5d1cc462651d6a0ce84acaf84fd7fefe6d3e10ef271904392825"
+  },
+  "outputs": {
+    "bind": {
+      "path": "docs/evidence/a666-egress-lane-redeploy-20260809/epoch6/package/planned-nav-bind.mainnet-epoch6.json",
+      "sha256": "32cc99472ac2ab67f8015ad58342c17db8569ad2aca84e9db3d1054de7a79586"
+    },
+    "checkpoint": {
+      "path": "docs/evidence/a666-egress-lane-redeploy-20260809/epoch6/package/h792-finalized-checkpoint-verification.json",
+      "sha256": "e3d981f453f6f370c7b22944b850c3a173d08760e4fa9758bc345e76c78c53eb"
+    },
+    "consumer": {
+      "path": "deployments/pfusdc-eth-mainnet-20260809-epoch6/deploy-consumer.mainnet-epoch6.json",
+      "sha256": "b42efd28228667160b3dac3e64f0c2c8ac2f072b88465ee761c18580b92841e4"
+    },
+    "input": {
+      "path": "docs/evidence/a666-egress-lane-redeploy-20260809/epoch6/package/input-tuple.mainnet-epoch6.json",
+      "sha256": "83eacaf56e0d82b5523e8a21817aa38aa934d37812ee53f3699c6e758da96244"
+    },
+    "lineage": {
+      "path": "deployments/pfusdc-eth-mainnet-20260809-epoch6/manifest-lineage.mainnet-epoch6.json",
+      "sha256": "828cdfea19150d23c4185a3e8a90171e94832d08562d5aad19aa4a148af99634"
+    },
+    "manifest": {
+      "path": "deployments/pfusdc-eth-mainnet-20260809-epoch6/manifest.mainnet-epoch6.json",
+      "sha256": "f1fdc96aa33c45428fffe1af871dfe684528067cd04043fb73f6719f8ccfebce"
+    },
+    "nav": {
+      "path": "docs/evidence/a666-egress-lane-redeploy-20260809/epoch6/package/planned-nav-profile.mainnet-epoch6.json",
+      "sha256": "6ac4853eeda32996ca89c5fad16b07e0ed30f74d183919b966bde44519ba6d62"
+    },
+    "profile": {
+      "path": "docs/evidence/a666-egress-lane-redeploy-20260809/epoch6/package/h793-route-profile.json",
+      "sha256": "49f8ab2b7237a62a23cec511d4ba23e674447788fce8ee070cce962e272339b8"
+    },
+    "registration": {
+      "path": "docs/evidence/a666-egress-lane-redeploy-20260809/epoch6/package/route-registration.mainnet-epoch6.json",
+      "sha256": "749c67933a16c9d9698eb1bce3fd452e99f3d4645bb0b757c1fb8538fbe6c7d7"
+    },
+    "route": {
+      "path": "deployments/pfusdc-eth-mainnet-20260809-epoch6/route-profile.mainnet-epoch6.json",
+      "sha256": "5335b8b687ecc4edc41c02d59d1dfaf3d7db859e418bd10e7e167adf86263d5c"
+    }
+  },
+  "plan": {
+    "activation_height": 793,
+    "deployer_nonce": 314
+  },
+  "predicted_addresses": {
+    "vault": "0x2604fcd968c174533e6fa6ffb034c8f3798d69ea",
+    "verifier": "0xd2191bdfa9f2750bc8b9d3cb3146291dd1251734"
+  },
+  "schema": "postfiat.pfusdc.mainnet_epoch6_package_summary.v1",
+  "status": "PASS"
+}

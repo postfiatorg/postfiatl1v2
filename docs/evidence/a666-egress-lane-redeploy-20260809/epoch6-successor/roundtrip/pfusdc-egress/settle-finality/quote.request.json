@@ -1,0 +1,9 @@
+{
+  "id": "a666-epoch6-successor-10usdc-20260810-pfusdc-settle-quote",
+  "method": "asset_fee_quote",
+  "params": {
+    "operation_json": "{\"operation\":\"vault_bridge_redeem_settle\",\"issuer_or_redemption_account\":\"pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8\",\"asset_id\":\"02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b\",\"redemption_id\":\"e0a1d2d1a46b3922dfcad258f136e236873e8669fdaec3a7dfa912070693afbffe2f3b158d6bad34d46fcd8c6b84b6fc\",\"settlement_receipt_hash\":\"c1adbb035928f70be7eeb16ffa5e7906373736830cf4e4f1bf4837da9ed3b5917a87bda8614787f442009103ee296251\",\"settled_atoms\":10000000}",
+    "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8"
+  },
+  "version": "postfiat-local-rpc-v1"
+}
