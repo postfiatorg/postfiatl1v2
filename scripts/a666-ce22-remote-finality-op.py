@@ -18,7 +18,6 @@ from typing import Any
 
 
 EXPECTED_VALIDATORS = 6
-RELEASE_ID_PATTERN = r"[a-z0-9][a-z0-9.-]{0,127}"
 
 
 def load_rpc_helpers(script_dir: Path) -> Any:
@@ -31,42 +30,28 @@ def load_rpc_helpers(script_dir: Path) -> Any:
     return module
 
 
+def load_runtime_helpers(script_dir: Path) -> Any:
+    path = script_dir / "a666_remote_runtime.py"
+    spec = importlib.util.spec_from_file_location("a666_remote_runtime", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot import runtime helpers from {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def run(command: list[str], *, capture: bool = False) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, check=True, text=True, capture_output=capture)
 
 
 def load_proposer_hosts(path: Path) -> dict[str, str]:
-    value = json.loads(path.read_text())
-    expected = {f"validator-{index}" for index in range(EXPECTED_VALIDATORS)}
-    if not isinstance(value, dict) or set(value) != expected:
-        raise RuntimeError("proposer hosts file must map exactly validator-0 through validator-5")
-    if any(
-        not isinstance(host, str)
-        or not host
-        or any(character.isspace() for character in host)
-        or "@" in host
-        for host in value.values()
-    ):
-        raise RuntimeError("proposer hosts file contains an invalid SSH host")
-    return value
+    runtime = load_runtime_helpers(Path(__file__).resolve().parent)
+    return runtime.load_proposer_hosts(path)
 
 
 def validated_release_id(remote_binary: str, remote_topology: str) -> str:
-    binary_match = re.fullmatch(
-        rf"/opt/postfiat/releases/({RELEASE_ID_PATTERN})/postfiat-node",
-        remote_binary,
-    )
-    topology_match = re.fullmatch(
-        rf"/etc/postfiat/releases/({RELEASE_ID_PATTERN})/topology\.json",
-        remote_topology,
-    )
-    if binary_match is None or topology_match is None:
-        raise RuntimeError(
-            "remote binary and topology must be absolute signed-release paths"
-        )
-    if binary_match.group(1) != topology_match.group(1):
-        raise RuntimeError("remote binary and topology name different release IDs")
-    return binary_match.group(1)
+    runtime = load_runtime_helpers(Path(__file__).resolve().parent)
+    return runtime.validated_release_id(remote_binary, remote_topology)
 
 
 def parse_args() -> argparse.Namespace:
@@ -100,15 +85,28 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    script_dir = Path(__file__).resolve().parent
+    runtime = load_runtime_helpers(script_dir)
     release_id = validated_release_id(args.remote_binary, args.remote_topology)
     proposer_hosts = load_proposer_hosts(args.proposer_hosts_file)
-    rpc = load_rpc_helpers(Path(__file__).resolve().parent)
+    rpc = load_rpc_helpers(script_dir)
     ports = [int(value) for value in args.ports.split(",")]
     if len(ports) != EXPECTED_VALIDATORS:
         raise RuntimeError("exactly six RPC endpoints are required")
     if args.artifact_dir.exists():
         raise RuntimeError(f"artifact directory already exists: {args.artifact_dir}")
     args.artifact_dir.mkdir(parents=True, mode=0o700)
+    runtime_report = runtime.probe_remote_runtime(
+        proposer_hosts,
+        args.remote_binary,
+        args.remote_topology,
+        timeout_seconds=args.timeout_seconds,
+    )
+    rpc.write_json(
+        args.artifact_dir / "remote-runtime-identity.json",
+        runtime_report,
+        0o644,
+    )
 
     transaction_kind = "asset"
     transfer_spec: dict[str, Any] | None = None
