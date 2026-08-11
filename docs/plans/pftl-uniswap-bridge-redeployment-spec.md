@@ -538,7 +538,9 @@ PFTL burns or debits X native a666
 outstanding_bridge_claims += X
 Ethereum verifies packet
 Ethereum mints X wA666
+PFTL verifies the Ethereum PacketConsumed event
 outstanding_bridge_claims -= X
+ethereum_spendable_supply += X
 ```
 
 Ethereum to PFTL:
@@ -548,6 +550,13 @@ Ethereum burns X wA666
 PFTL verifies Ethereum burn event or accepted packet
 PFTL mints or reissues X native a666
 ```
+
+The Ethereum mint and the PFTL destination acknowledgement are separate
+cross-chain transitions. A successful Ethereum mint remains non-redeemable on
+PFTL until the exact `PacketConsumed` receipt is finalized and accepted by
+PFTL. An operator workflow MUST NOT report issue completion, enable secondary
+trading for the newly minted amount, or proceed to a return burn before that
+acknowledgement is accepted.
 
 Define `authorized_valid_supply(a666)` as the live PFTL liability ledger: all
 NAVCoin units issued by valid primary subscriptions or genesis seed events,
@@ -580,6 +589,31 @@ equation under replay-safe packet ids:
 | Source refund | Restore PFTL spendability; decrease `outstanding_bridge_claims`; permanently reject later destination consume. |
 | Ethereum return burn | Decrease Ethereum spendable supply; create one `pending_return_import_claims` entry for PFTL. |
 | PFTL return import | Restore PFTL spendability once; decrease `pending_return_import_claims`; mark the Ethereum burn event consumed. |
+
+Supply status MUST distinguish native primary-market redemption from wrapped
+bridge return capacity. `available_redeem_atoms` is the native PFTL primary
+market limit. `available_return_import_atoms` is the maximum wA666 amount that
+can be burned and imported immediately; for an active route it equals
+`ethereum_spendable_supply_atoms`, and it is zero while the route is paused or
+disabled. Status also exposes `source_debited_export_packet_count` and
+`source_debited_export_packet_atoms`; the latter must equal
+`outstanding_bridge_claims_atoms`.
+
+Before submitting an Ethereum return burn, clients MUST bind a fresh supply
+status to the configured route, controller, wrapped token, and native asset,
+require the supply invariant and active route gates, and reject any burn larger
+than `available_return_import_atoms`. Burned authentic tokens are not by
+themselves authority to consume an arbitrary outstanding packet: doing so could
+double-credit a genuinely in-flight export that later completes or refunds.
+
+Before any remote finality wrapper quotes or signs a PFTL mutation, it MUST
+verify both the transport and RPC process on every validator against the exact
+requested signed release. The preflight records and compares the resolved
+executable path and SHA-256, requires the requested topology path in each live
+process argument vector, and requires one topology SHA-256 across the fleet.
+A mismatch is a pre-signing failure. Offline replay with a binary that differs
+from the active validator runtime can produce a different proposal state root
+even when all inputs and the parent state are otherwise identical.
 
 Gate 1 and Gate 4 tests must replay every transition from genesis snapshots and
 assert the invariant after each block. If the current l1v2 bridge primitives
@@ -1601,6 +1635,17 @@ Do not collapse these labels.
   and the RPC SDK response validator tests
   `read_response_validation_accepts_supported_results` and
   `read_response_validation_rejects_bad_shapes_and_private_key_leaks`.
+- [x] Supply status separates primary redemption capacity from bridge-return
+  capacity and exposes unacknowledged exports. The additive fields
+  `available_return_import_atoms`, `source_debited_export_packet_count`, and
+  `source_debited_export_packet_atoms` prevent clients from treating
+  `available_redeem_atoms` or total wrapped supply as immediately importable.
+  The mainnet return-burn driver requires a bound supply-status file and fails
+  before signing when the requested burn exceeds acknowledged Ethereum supply.
+- [x] Remote finality operation and batch drivers fail before quoting or signing
+  unless all 12 live validator services match the requested release binary and
+  topology by resolved path and SHA-256. The guard prevents an offline replay
+  binary from proposing a state root that the live validator runtime rejects.
 - [x] Supply status must expose deterministic per-wallet native NAV balances, and
   the route ledger must reject an export debit when the requested source wallet
   lacks enough native balance even if aggregate route supply is sufficient.

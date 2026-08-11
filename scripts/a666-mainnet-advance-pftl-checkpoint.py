@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import time
 from typing import Any
 
 from web3 import Web3
@@ -25,6 +26,7 @@ ROUTE_ID = "pftl-a666-ethereum-wA666-usdc-v1"
 ROUTE_CONFIG_DIGEST = "12ed00ca87e29554ce4b978da1710fffc0830767e84e62f08df257f727db953efdd89bcf6ea99f5634d6e5ea8aca2933"
 SIGNER_SOCKET = Path(os.environ.get("POSTFIAT_SIGNER_SOCKET", "/run/postfiat/a666-signer.sock"))
 MAXIMUM_FEE_WEI = int(os.environ.get("POSTFIAT_SIGNER_MAXIMUM_FEE_WEI", "10000000000000000"))
+MUTATION_NOT_AFTER_EPOCH = int(os.environ.get("POSTFIAT_MUTATION_NOT_AFTER_EPOCH", "0"))
 OWNER = Web3.to_checksum_address("0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0")
 VERIFIER = Web3.to_checksum_address("0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A")
 PROGRAM_VKEY = "0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9"
@@ -55,6 +57,14 @@ def artifact() -> dict[str, Any]:
 
 def normalize_tx_hash(value: str) -> str:
     return value if value.startswith("0x") else f"0x{value}"
+
+
+def enforce_mutation_deadline() -> None:
+    if MUTATION_NOT_AFTER_EPOCH and int(time.time()) >= MUTATION_NOT_AFTER_EPOCH:
+        raise RuntimeError(
+            "checkpoint advance mutation deadline margin reached at epoch "
+            f"{MUTATION_NOT_AFTER_EPOCH}"
+        )
 
 
 def main() -> None:
@@ -129,6 +139,7 @@ def main() -> None:
         return
 
     calldata = function._encode_transaction_data()
+    enforce_mutation_deadline()
     response = submit_evm_transaction(
         SIGNER_SOCKET,
         chain_id=CHAIN_ID,

@@ -1,0 +1,21 @@
+{
+  "deadline_seconds": 1786474592,
+  "destination_chain_id": 1,
+  "destination_controller": "0x9a0262c0572fb4db08765408eb225e207f40c3d9",
+  "ethereum_recipient": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+  "mint_amount_atoms": 11012575,
+  "native_nav_asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+  "nonce": "4783da7c43523d77270a4d31aa2594657a037623e099642649700914f8e2ccb1",
+  "policy_hash_commitment": "5d7c81fe39521b5440dcc8ad840f4668ce85726822eb4bcdce8d3299d9540ba1",
+  "pricing_nav_epoch": 6,
+  "pricing_reserve_packet_hash": "b06262a1e6e4eba7851b7326638cba350f8deffbc0bdd9069595ae9e0f56475e05fd1b4804a1e40a8948ac344c49951a",
+  "reservation_id": "cd8693bce435bef0f92f7bd4b853e5a245d5c9087b1bdd39d1a9d4b28525bdc4c34dca7e255bc6e8e36dba0f42f86b0d",
+  "route_config_digest": "12ed00ca87e29554ce4b978da1710fffc0830767e84e62f08df257f727db953efdd89bcf6ea99f5634d6e5ea8aca2933",
+  "route_epoch": 7,
+  "settlement_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "settlement_value_atoms": 10000000,
+  "source_packet_hash": "1106e70de2aa63225e38fccee784f0afd72aa3f9d5356faea8793db8fbb65491b6def6f8b0f5bf7ed537e8592a280eee",
+  "source_receipt_hash": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+  "source_receipt_root": "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+  "wrapped_token": "0xee4c92edb03efdd9b519339edc19ad70c69a9be5"
+}

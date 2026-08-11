@@ -41,19 +41,22 @@ holder_key=$(realpath "$holder_key")
 issuer_key=$(realpath "$issuer_key")
 egress_dir="$phase_dir/pfusdc-egress"
 remote_node="/opt/postfiat/releases/$release_id/postfiat-node"
-remote_topology="/etc/postfiat/releases/$release_id/topology.json"
+remote_topology=${A666_PFTL_TOPOLOGY_PATH:-/etc/postfiat/releases/$release_id/topology.json}
+local_node=${A666_LOCAL_NODE_BIN:-target/release/postfiat-node}
 remote_root="/var/lib/postfiat/validator-2/$workflow_id-pfusdc-egress"
 a100_root="/workspace/a666-acceptance/live/$workflow_id-pfusdc-egress"
-a100_prover=/workspace/a666-acceptance/live/a666-epoch5-transparent-20260728t1505z/pfusdc-egress/pfusdc-tier4-prover-cuda
+a100_prover=${A666_PFUSDC_EGRESS_PROVER_BIN:-/workspace/a666-acceptance/live/a666-epoch5-transparent-20260728t1505z/pfusdc-egress/pfusdc-tier4-prover-cuda}
+expected_a100_prover_sha256=${A666_PFUSDC_EGRESS_PROVER_SHA256:-}
 validator2_host=$(jq -er '."validator-2"' "$hosts_file")
 joe=pfab9b9228942e5c529633a13aa271d5297bec6353
 joe_evm=0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0
 pfusdc_issuer=pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8
 pfusdc=02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b
-verifier=0x9a45D6F1DC9da443a88b1c336B3188fa7924d1ae
-program_vkey=0x0026a156bfd82ce1d1bf3f966c77daba8d5c266b8cc29928474747c4a02ca89b
-manifest=docs/evidence/a666-acceptance-20260728/phase-5-transparent-redeem-verify/pfusdc-egress/recovery-epoch5/deploy/manifest.postdeploy-enriched.json
-manifest_sha256=b69417647e6a4bed5a3e7fa5069a0844b80a63f78020ba34f4796e373e92e904
+verifier=${A666_PFUSDC_VERIFIER_ADDRESS:-0x9a45D6F1DC9da443a88b1c336B3188fa7924d1ae}
+program_vkey=${A666_PFUSDC_EGRESS_PROGRAM_VKEY:-0x0026a156bfd82ce1d1bf3f966c77daba8d5c266b8cc29928474747c4a02ca89b}
+manifest=${A666_PFUSDC_DEPLOYMENT_MANIFEST:-docs/evidence/a666-acceptance-20260728/phase-5-transparent-redeem-verify/pfusdc-egress/recovery-epoch5/deploy/manifest.postdeploy-enriched.json}
+manifest_sha256=${A666_PFUSDC_DEPLOYMENT_MANIFEST_SHA256:-b69417647e6a4bed5a3e7fa5069a0844b80a63f78020ba34f4796e373e92e904}
+stakehub_repo=${A666_STAKEHUB_REPO:-/home/postfiat/repos/StakeHub-master-e6}
 ethereum_rpc=${A666_ETHEREUM_RPC:-https://ethereum-rpc.publicnode.com}
 
 test -s "$hosts_file"
@@ -69,7 +72,7 @@ fi
 mkdir -p "$egress_dir"
 
 round_args=(
-  --node-bin target/release/postfiat-node
+  --node-bin "$local_node"
   --remote-runner scripts/a666-remote-sync-round.py
   --proposer-hosts-file "$hosts_file"
   --remote-binary "$remote_node"
@@ -236,6 +239,51 @@ jq -e \
    and .public_values_bytes<=4096' \
   "$egress_dir/proof-cuda/proof-report.json" >/dev/null
 
+cuda_provenance="$egress_dir/proof-cuda/cuda-provenance.json"
+if ! test -s "$cuda_provenance"; then
+  remote_prover_sha256=$(ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
+    "sha256sum '$a100_prover' | cut -d' ' -f1")
+  [[ "$remote_prover_sha256" =~ ^[0-9a-f]{64}$ ]]
+  if test -n "$expected_a100_prover_sha256"; then
+    test "$remote_prover_sha256" = "$expected_a100_prover_sha256"
+  fi
+  gpu_identity=$(ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
+    "nvidia-smi --query-gpu=name,driver_version --format=csv,noheader | head -n1")
+  test -n "$gpu_identity"
+  proof_report_sha256=$(sha256sum "$egress_dir/proof-cuda/proof-report.json" | awk '{print $1}')
+  proof_calldata_sha256=$(sha256sum "$egress_dir/proof-cuda/proof-calldata.bin" | awk '{print $1}')
+  jq -n \
+    --arg requested_backend cuda \
+    --arg prover_binary "$a100_prover" \
+    --arg prover_binary_sha256 "$remote_prover_sha256" \
+    --arg expected_prover_binary_sha256 "$expected_a100_prover_sha256" \
+    --arg gpu_identity "$gpu_identity" \
+    --arg proof_report_sha256 "$proof_report_sha256" \
+    --arg proof_calldata_sha256 "$proof_calldata_sha256" \
+    --arg program_vkey "$program_vkey" \
+    '{
+      schema:"postfiat.a666.pfusdc_cuda_proof_provenance.v1",
+      verdict:"PASS",
+      requested_backend:$requested_backend,
+      prover_binary:$prover_binary,
+      prover_binary_sha256:$prover_binary_sha256,
+      expected_prover_binary_sha256:$expected_prover_binary_sha256,
+      gpu_identity:$gpu_identity,
+      proof_report_sha256:$proof_report_sha256,
+      proof_calldata_sha256:$proof_calldata_sha256,
+      program_vkey:$program_vkey
+    }' > "$cuda_provenance"
+fi
+jq -e \
+  --arg vkey "$program_vkey" \
+  --arg expected_sha "$expected_a100_prover_sha256" \
+  '.verdict=="PASS"
+   and .requested_backend=="cuda"
+   and .program_vkey==$vkey
+   and (.prover_binary_sha256|test("^[0-9a-f]{64}$"))
+   and ($expected_sha=="" or .prover_binary_sha256==$expected_sha)' \
+  "$cuda_provenance" >/dev/null
+
 if ! test -s "$egress_dir/withdrawal-result.json"; then
   python3 scripts/a666-mainnet-pfusdc-withdraw.py \
     --proof-dir "$egress_dir/proof-cuda" \
@@ -243,7 +291,8 @@ if ! test -s "$egress_dir/withdrawal-result.json"; then
     --deployment-manifest "$manifest" \
     --expected-manifest-sha256 "$manifest_sha256" \
     --amount-atoms "$amount_atoms" \
-    --recipient "$joe_evm"
+    --recipient "$joe_evm" \
+    --stakehub-repo "$stakehub_repo"
 fi
 jq -e --argjson amount "$amount_atoms" \
   '.amount_atoms==$amount
@@ -299,6 +348,7 @@ jq -e '.confirmed==true and .accepted==true' \
 jq -n \
   --slurpfile burn "$egress_dir/burn-finality/summary.json" \
   --slurpfile proof "$egress_dir/proof-cuda/proof-report.json" \
+  --slurpfile cuda "$egress_dir/proof-cuda/cuda-provenance.json" \
   --slurpfile withdrawal "$egress_dir/withdrawal-result.json" \
   --slurpfile settle "$egress_dir/settle-finality/summary.json" \
   '{
@@ -306,6 +356,7 @@ jq -n \
     verdict:"PASS",
     pftl_burn_height:$burn[0].end_height,
     proof:$proof[0],
+    proof_provenance:$cuda[0],
     ethereum_withdrawal:{
       tx:$withdrawal[0].withdrawal_tx,
       amount_atoms:$withdrawal[0].amount_atoms,

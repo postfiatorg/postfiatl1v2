@@ -1,0 +1,11 @@
+{
+  "all_sends_verified": true,
+  "block_height": 800,
+  "certificate_id": "27925b6e39634158a215a64f079c024f25e114620116427319221722478360cf54e329cd0920319b0f02590fe416fe62",
+  "local_apply_verified": true,
+  "node_id": "validator-2",
+  "round_ok": true,
+  "schema": "postfiat-transport-peer-certified-mempool-round-v1",
+  "submitted_tx_id": "1094c18cf1f4985545da9c8ba7b45e6dcd9703ec2cc4367bec6d2cbaf6480e33b17a8a2d06b5c27553cd2966f019c1ce",
+  "vote_count": 5
+}

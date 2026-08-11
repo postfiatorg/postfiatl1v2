@@ -1,0 +1,21 @@
+{
+  "schema": "postfiat.a666.nav_arbitrage_probe_plan.v1",
+  "workflow_id": "a666-arbclip02-20260811",
+  "ethereum_chain_id": 1,
+  "direction": "usdc-to-wa666",
+  "amount_in_atoms": 50000000,
+  "amount_in_tokens": "50.000000",
+  "min_out_atoms": 66000000,
+  "min_out_tokens": "66.000000",
+  "modeled_output_atoms": 66309478,
+  "modeled_output_tokens": "66.309478",
+  "modeled_post_spot_usdc_per_wa666": "0.7681707837",
+  "verified_nav_usdc_per_a666": "0.90353505",
+  "pricing_nav_epoch": 6,
+  "baseline_pool_tick": 3021,
+  "baseline_sqrt_price_x96": "92147715135694968247828748729",
+  "protected_wa666_baseline_atoms": 103000000,
+  "protected_wa666_baseline_tokens": "103.000000",
+  "terminal_asset": "pfUSDC",
+  "ethereum_usdc_egress": false
+}

@@ -1,0 +1,61 @@
+{
+  "addresses": {
+    "controller": "0x9A0262C0572fb4DB08765408eB225E207F40c3d9",
+    "migration": "0xFfBBae0eb8450D10F8C0D26C2952b089D56e517c",
+    "owner": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+    "token": "0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5",
+    "verifier": "0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A"
+  },
+  "chain_id": 1,
+  "packet_digest": "0x2d4d9e7f326702a7d91721cb3c7f740aa5b30b1d28c20cd16b0857da0215a617",
+  "phase": "minted-to-recipient",
+  "post_state": {
+    "latest_finalized_height": 839,
+    "migration_reserve_atoms": 27306423797,
+    "mint_paused": false,
+    "packet_consumed": true,
+    "receipt_accepted": true,
+    "recipient_balance_atoms": 114012575,
+    "token_total_supply": 31509264995,
+    "total_minted_atoms": 31665260330
+  },
+  "pre_state": {
+    "ethereum_block_number": 25726231,
+    "latest_finalized_height": 828,
+    "migration_reserve_atoms": 27306423797,
+    "mint_paused": false,
+    "packet_consumed": false,
+    "receipt_accepted": false,
+    "recipient_balance_atoms": 103000000,
+    "token_total_supply": 31498252420,
+    "total_minted_atoms": 31654247755
+  },
+  "proof": {
+    "proof_bytes": 356,
+    "proof_sha256": "4ae9fa1e2361c382148c4e4175e93775f53f69de97c831238ad7905ef31cb132",
+    "public_values_bytes": 1120,
+    "public_values_sha256": "9043deff5b23f0407f44e29d3f245a370c5381bfe92497d740c6bdc8d6121039"
+  },
+  "receipt_commitment": "0x1e6f66630b2605a78e980e37cea30630189493f7cf6435fcd771237e3364eaae",
+  "receipt_witness_sha256": "fe8d785dae66118dae85c2be8711ab1e38ad2bcd07ecc9914ae88faa46b63bc8",
+  "rpc": "https://ethereum-rpc.publicnode.com",
+  "schema": "postfiat-a666-proof-gated-mint-mainnet-v1",
+  "transactions": [
+    {
+      "block_number": 25726233,
+      "gas_estimate": 371059,
+      "gas_used": 366979,
+      "label": "accept finalized A666 export proof",
+      "status": 1,
+      "tx": "0xc439a93e52d540d83cee095a5e33e8b7b8b47d84b5346d136e0c4fc6f4a5888a"
+    },
+    {
+      "block_number": 25726234,
+      "gas_estimate": 190376,
+      "gas_used": 168306,
+      "label": "consume finalized A666 mint packet",
+      "status": 1,
+      "tx": "0x839c6ad7a36c751d2df58430ba49e95ec29a414bbe2b2924d6e03f839fe96768"
+    }
+  ]
+}

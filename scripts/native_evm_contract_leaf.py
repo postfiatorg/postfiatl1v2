@@ -10,11 +10,24 @@ except ImportError:
     import native_agentd_leaf
 
 def rpc(url, method, params):
-    req=Request(url,data=json.dumps({"jsonrpc":"2.0","id":1,"method":method,"params":params}).encode(),headers={"content-type":"application/json"})
+    req = Request(
+        url,
+        data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode(),
+        headers={
+            "content-type": "application/json",
+            "user-agent": "a666-native-contract-leaf/1.0",
+        },
+    )
     with urlopen(req,timeout=15) as res: obj=json.loads(res.read().decode())
     if obj.get("error"): raise RuntimeError(str(obj["error"]))
     return obj.get("result")
 def num(v): return int(v,16) if isinstance(v,str) and v.startswith("0x") else int(v)
+def sender(home):
+    value=json.loads((Path(home)/"manifest.json").read_text())["evm"]["address"]
+    if not isinstance(value,str) or not value.startswith("0x") or len(value)!=42:
+        raise ValueError("stakehub manifest omitted valid evm sender")
+    int(value[2:],16)
+    return value
 def receipt(url,tx):
     for _ in range(120):
         got=rpc(url,"eth_getTransactionReceipt",[tx])
@@ -28,10 +41,19 @@ def main(argv=None):
         data=Path(a.calldata[1:]).read_text().strip() if a.calldata.startswith("@") else a.calldata
         if not data.startswith("0x"): raise ValueError("calldata must be 0x hex or @file")
         int(data[2:] or "0",16)
-        gas=num(rpc(a.rpc_url,"eth_estimateGas",[{"to":a.to,"data":data,"value":hex(a.value_wei)}])); price=num(rpc(a.rpc_url,"eth_gasPrice",[]))
+        gas=num(rpc(a.rpc_url,"eth_estimateGas",[{"from":sender(a.stakehub_home),"to":a.to,"data":data,"value":hex(a.value_wei)}])); price=num(rpc(a.rpc_url,"eth_gasPrice",[]))
         if gas*price>a.fee_ceiling_wei: raise RuntimeError("estimated fee exceeds ceiling")
         os.environ.setdefault("EVM_RPC_URL",a.rpc_url)
-        tx=native_agentd_leaf.evm_contract_tx(a.stakehub_home,a.chain_id,a.to,data,a.value_wei,a.label); rec=receipt(a.rpc_url,tx)
+        tx = native_agentd_leaf.evm_contract_tx(
+            a.stakehub_home, a.chain_id, a.to, data, a.value_wei, a.label
+        )
+        if not isinstance(tx, str) or not tx:
+            raise RuntimeError("agent response omitted tx hash")
+        tx = tx if tx.startswith("0x") else f"0x{tx}"
+        if len(tx) != 66:
+            raise RuntimeError("agent response returned malformed tx hash")
+        int(tx[2:], 16)
+        rec=receipt(a.rpc_url,tx)
         if num(rec.get("status",0))!=1: raise RuntimeError("transaction reverted")
         out=Path(a.artifact_dir); out.mkdir(parents=True,exist_ok=True); report={"tx_hash":tx,"status":1,"block_number":num(rec.get("blockNumber",0)),"to":a.to,"value_wei":a.value_wei,"gas_used":num(rec.get("gasUsed",gas)),"effective_gas_price":num(rec.get("effectiveGasPrice",price)),"calldata":data}
         (out/"contract-tx-report.json").write_text(json.dumps(report,indent=2,sort_keys=True)+"\n"); print(json.dumps(report,sort_keys=True)); return 0

@@ -1,0 +1,9 @@
+{
+  "id": "a666-rt03-20260810-pfusdc-settle-quote",
+  "method": "asset_fee_quote",
+  "params": {
+    "operation_json": "{\"operation\":\"vault_bridge_redeem_settle\",\"issuer_or_redemption_account\":\"pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8\",\"asset_id\":\"02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b\",\"redemption_id\":\"0e947cf5485c80002369c22ceae8b0f220f6d84374e7f1da9ca20ed3ca56f9b26771a29c45b1695c87c86b7d8c83f537\",\"settlement_receipt_hash\":\"ff5ad32ce834de9bfd5a49bac69c3f9bd47048b90b236c0947b8f5729a41ef3879de651e6d8c145ba14949b15410db8f\",\"settled_atoms\":9932864}",
+    "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8"
+  },
+  "version": "postfiat-local-rpc-v1"
+}

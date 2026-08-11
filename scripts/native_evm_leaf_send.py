@@ -17,7 +17,11 @@ except ImportError:
 
 def _rpc(url: str, method: str, params: list[Any]) -> Any:
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}).encode()
-    request = Request(url, data=body, headers={"content-type": "application/json"})
+    request = Request(
+        url,
+        data=body,
+        headers={"content-type": "application/json", "user-agent": "a666-leg3b-watcher/1.0"},
+    )
     with urlopen(request, timeout=15) as response:
         payload = json.loads(response.read().decode())
     if payload.get("error"):
@@ -55,7 +59,36 @@ def send(args: argparse.Namespace) -> dict[str, Any]:
     estimated_fee = gas * gas_price
     if estimated_fee > int(args.max_fee_wei):
         raise RuntimeError("estimated fee exceeds max-fee-wei")
-    tx_hash = native_agentd_leaf.evm_send(args.stakehub_home, "ethereum", args.recipient, amount, args.label)
+    if args.expected_sender_nonce is not None:
+        if not args.sender:
+            raise ValueError("--sender is required with --expected-sender-nonce")
+        latest_nonce = _hex_int(
+            _rpc(args.rpc_url, "eth_getTransactionCount", [args.sender, "latest"])
+        )
+        pending_nonce = _hex_int(
+            _rpc(args.rpc_url, "eth_getTransactionCount", [args.sender, "pending"])
+        )
+        if (
+            latest_nonce != int(args.expected_sender_nonce)
+            or pending_nonce != int(args.expected_sender_nonce)
+        ):
+            raise RuntimeError(
+                "sender nonce changed before broadcast: "
+                f"expected {args.expected_sender_nonce}, latest {latest_nonce}, "
+                f"pending {pending_nonce}"
+            )
+    if args.expected_recipient_balance_wei is not None:
+        recipient_balance = _hex_int(
+            _rpc(args.rpc_url, "eth_getBalance", [args.recipient, "latest"])
+        )
+        if recipient_balance != int(args.expected_recipient_balance_wei):
+            raise RuntimeError(
+                "recipient balance changed before broadcast: "
+                f"expected {args.expected_recipient_balance_wei}, got {recipient_balance}"
+            )
+    # master-e6 agentd CHAINS table is keyed "mainnet" (not "ethereum"); see
+    # StakeHub-master-e6/stakehub/evm.py:19 and the 2026-08-08 leg3b0 KeyError STOP.
+    tx_hash = native_agentd_leaf.evm_send(args.stakehub_home, "mainnet", args.recipient, amount, args.label)
     receipt = _wait_receipt(args.rpc_url, tx_hash)
     status = _hex_int(receipt.get("status", 0))
     if status != 1:
@@ -84,6 +117,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--recipient", required=True)
     parser.add_argument("--amount-wei", required=True, type=int)
     parser.add_argument("--max-fee-wei", required=True, type=int)
+    parser.add_argument("--expected-recipient-balance-wei", type=int)
+    parser.add_argument("--sender")
+    parser.add_argument("--expected-sender-nonce", type=int)
     parser.add_argument("--label", required=True)
     parser.add_argument("--report", required=True)
     args = parser.parse_args(argv)

@@ -1,0 +1,89 @@
+{
+  "agent_close_session": {
+    "ok": true
+  },
+  "agent_open_session": {
+    "ok": true
+  },
+  "amount_atoms": 10000000,
+  "approve": {
+    "block_number": 25726107,
+    "effective_gas_price_wei": 143492200,
+    "gas_used": 55558,
+    "response": {
+      "charged_usd": 20.0,
+      "gas_used": 55558,
+      "ok": true,
+      "tx": "836f566249d92df7a9dbc10a291a0e5586972271b5b0bff39454bfc4fc1c4f4a",
+      "value_wei": 0
+    },
+    "tx_hash": "0x836f566249d92df7a9dbc10a291a0e5586972271b5b0bff39454bfc4fc1c4f4a"
+  },
+  "chain_id": 1,
+  "deposit": {
+    "block_hash": "68e00c90998d6439b0911809b2ebde4be89f3da3941b2baf3507d05ace7d0b3b",
+    "block_number": 25726108,
+    "effective_gas_price_wei": 143724088,
+    "gas_used": 181457,
+    "log_index": 897,
+    "response": {
+      "charged_usd": 10.0,
+      "gas_used": 181457,
+      "ok": true,
+      "tx": "6110733d560072802a4d25a820f3e0f2949155a0e5781c660bc903abf4b337b6",
+      "value_wei": 0
+    },
+    "transaction_index": 136,
+    "tx_hash": "0x6110733d560072802a4d25a820f3e0f2949155a0e5781c660bc903abf4b337b6"
+  },
+  "deposit_calldata": "0x2391b457000000000000000000000000000000000000000000000000000000000098968000000000000000000000000000000000000000000000000000000000000000803d867c192ae30d7529c270f6c904b6448f4f5b547e7fa61dac28a197911779170a8b4b4184ca85b6b3f4e54d8bd581c747da3984df13b85d3610a57613d7228c000000000000000000000000000000000000000000000000000000000000002a70666162396239323238393432653563353239363333613133616132373164353239376265633633353300000000000000000000000000000000000000000000",
+  "deposit_calldata_sha256": "18f6a8842fd435336d74aa8c150925e61627c1e79ea8bf20b4d8187efd9013cc",
+  "deposit_record": {
+    "amount_atoms": 10000000,
+    "depositor": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+    "nonce": "0x3d867c192ae30d7529c270f6c904b6448f4f5b547e7fa61dac28a19791177917",
+    "recipient_hash": "0x13f03839b7fd67fe8d84d5a0d6e7bb3fef580e23d9872e0bd442d364cb0d4bb0",
+    "route_binding": "0x0a8b4b4184ca85b6b3f4e54d8bd581c747da3984df13b85d3610a57613d7228c"
+  },
+  "depositor": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+  "event": {
+    "amount_atoms": 10000000,
+    "deposit_id": "0x2f9257f87368c4d6f9553c4c20e02db05b09c42ef913205613d018b9c36572a2",
+    "depositor": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+    "nonce": "0x3d867c192ae30d7529c270f6c904b6448f4f5b547e7fa61dac28a19791177917",
+    "pftl_recipient": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+    "recipient_hash": "0x13f03839b7fd67fe8d84d5a0d6e7bb3fef580e23d9872e0bd442d364cb0d4bb0",
+    "route_binding": "0x0a8b4b4184ca85b6b3f4e54d8bd581c747da3984df13b85d3610a57613d7228c",
+    "source_chain_id": 1,
+    "token": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    "vault": "0x4939a45caa85Da31Fb26D7DBe6477B45F7f08688"
+  },
+  "manifest_sha256": "b213a7462ba5495977a6795376dada0a56d48ec58991b1821f2cb2463e7532be",
+  "nonce": "0x3d867c192ae30d7529c270f6c904b6448f4f5b547e7fa61dac28a19791177917",
+  "pftl_recipient": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "post_state": {
+    "allowance_atoms": 0,
+    "total_obligations_atoms": 10201408,
+    "vault_usdc_atoms": 10201408,
+    "wallet_eth_wei": 277989242225660462,
+    "wallet_usdc_atoms": 63960035
+  },
+  "pre_state": {
+    "allowance_atoms": 0,
+    "total_obligations_atoms": 201408,
+    "vault_usdc_atoms": 201408,
+    "wallet_eth_wei": 278023294107144278,
+    "wallet_usdc_atoms": 73960035
+  },
+  "predicted_deposit_id": "0x2f9257f87368c4d6f9553c4c20e02db05b09c42ef913205613d018b9c36572a2",
+  "recipient_hash": "0x13f03839b7fd67fe8d84d5a0d6e7bb3fef580e23d9872e0bd442d364cb0d4bb0",
+  "route_binding": "0x0a8b4b4184ca85b6b3f4e54d8bd581c747da3984df13b85d3610a57613d7228c",
+  "schema": "postfiat.a666.pfusdc_buyer_deposit.v1",
+  "session_id": "pfusdc-mainnet-epoch4-deposit-20260810T173132Z",
+  "source_schema": "postfiat.pfusdc.mainnet_epoch4_deposit.v1",
+  "usdc": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+  "vault": "0x4939a45caa85Da31Fb26D7DBe6477B45F7f08688",
+  "verdict": "PASS",
+  "verifier": "0xA53926F0F7453ad9f8dCa592A076991eC627838C",
+  "workflow_id": "a666-rt04-20260810"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "a666-variable-roundtrip-transparent-primary-redeem-quote",
+  "method": "asset_fee_quote",
+  "params": {
+    "operation_json": "{\"expires_at_height\":1830,\"min_settlement_value_atoms\":9932864,\"nav_amount_atoms\":10998834,\"operation\":\"pftl_uniswap_primary_redeem\",\"owner\":\"pfab9b9228942e5c529633a13aa271d5297bec6353\",\"policy_epoch\":7,\"policy_hash\":\"50af7455e7ed12b305decbf07d164eca9eb60eb53115dbf3569af4213d09cb11bed11da5a084a11847c0eca28ec6ca8d\",\"pricing_nav_epoch\":6,\"pricing_reserve_packet_hash\":\"b06262a1e6e4eba7851b7326638cba350f8deffbc0bdd9069595ae9e0f56475e05fd1b4804a1e40a8948ac344c49951a\",\"redemption_nonce\":\"22fd336557efd58adc1383433f44f03ed45a0ad242fe879da8ef2928a2772bf9\",\"route_epoch\":7,\"route_id\":\"pftl-a666-ethereum-wA666-usdc-v1\",\"settlement_recipient\":\"pfab9b9228942e5c529633a13aa271d5297bec6353\"}",
+    "source": "pfab9b9228942e5c529633a13aa271d5297bec6353"
+  },
+  "version": "postfiat-local-rpc-v1"
+}

@@ -1150,6 +1150,34 @@ fn pftl_uniswap_consensus_supply_status(
             })
         })?;
     let native_spendable_balance_count = route.native_spendable_balances_atoms.len();
+    let source_debited_export_packet_count = route
+        .export_packets
+        .values()
+        .filter(|packet| packet.status == PFTL_UNISWAP_EXPORT_STATUS_SOURCE_DEBITED)
+        .count() as u64;
+    let source_debited_export_packet_atoms = route
+        .export_packets
+        .values()
+        .filter(|packet| packet.status == PFTL_UNISWAP_EXPORT_STATUS_SOURCE_DEBITED)
+        .try_fold(0_u64, |sum, packet| {
+            sum.checked_add(packet.amount_atoms).ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "PFTL-Uniswap source-debited packet sum overflow",
+                )
+            })
+        })?;
+    if source_debited_export_packet_atoms != route.outstanding_bridge_claims_atoms {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "PFTL-Uniswap source-debited packet sum does not match outstanding claims",
+        ));
+    }
+    let available_return_import_atoms = if route.paused || !route.live_value_enabled {
+        0
+    } else {
+        route.ethereum_spendable_supply_atoms
+    };
     let mut native_spendable_balances = route
         .native_spendable_balances_atoms
         .iter()
@@ -1254,6 +1282,9 @@ fn pftl_uniswap_consensus_supply_status(
         other_registered_venue_supply_atoms: route.other_registered_venue_supply_atoms,
         outstanding_bridge_claims_atoms: route.outstanding_bridge_claims_atoms,
         pending_return_import_claims_atoms: route.pending_return_import_claims_atoms,
+        source_debited_export_packet_count,
+        source_debited_export_packet_atoms,
+        available_return_import_atoms,
         live_supply_sum_atoms,
         route_supply_cap_atoms: route.route_supply_cap_atoms,
         supply_cap_remaining_atoms,

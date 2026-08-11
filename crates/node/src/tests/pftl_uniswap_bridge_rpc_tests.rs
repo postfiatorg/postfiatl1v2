@@ -367,6 +367,9 @@
         assert!(supply.invariant_holds);
         assert_eq!(supply.authorized_valid_supply_atoms, 100);
         assert_eq!(supply.outstanding_bridge_claims_atoms, 40);
+        assert_eq!(supply.source_debited_export_packet_count, 1);
+        assert_eq!(supply.source_debited_export_packet_atoms, 40);
+        assert_eq!(supply.available_return_import_atoms, 0);
     }
 
     #[test]
@@ -445,6 +448,9 @@
         assert_eq!(supply.authorized_valid_supply_atoms, 100);
         assert_eq!(supply.pftl_spendable_supply_atoms, 60);
         assert_eq!(supply.outstanding_bridge_claims_atoms, 40);
+        assert_eq!(supply.source_debited_export_packet_count, 1);
+        assert_eq!(supply.source_debited_export_packet_atoms, 40);
+        assert_eq!(supply.available_return_import_atoms, 0);
         assert!(supply.invariant_holds);
     }
 
@@ -1228,6 +1234,9 @@
         assert_eq!(supply.ethereum_spendable_supply_atoms, 15);
         assert_eq!(supply.outstanding_bridge_claims_atoms, 0);
         assert_eq!(supply.pending_return_import_claims_atoms, 0);
+        assert_eq!(supply.source_debited_export_packet_count, 0);
+        assert_eq!(supply.source_debited_export_packet_atoms, 0);
+        assert_eq!(supply.available_return_import_atoms, 15);
 
         let receipts: Vec<PftlUniswapTransitionReceipt> =
             read_json_file(&data_dir.join(PFTL_UNISWAP_BRIDGE_RECEIPTS_FILE), "test receipts")

@@ -1,0 +1,33 @@
+{
+  "schema": "postfiat.a666.issue_acceptance.v2",
+  "verdict": "PASS",
+  "deposit_tx": "0x6110733d560072802a4d25a820f3e0f2949155a0e5781c660bc903abf4b337b6",
+  "packet_hash": "f0ede7f86b5195583eaf0fb4c352bf0002e80350bcd620aaba44792f75e6fae1a4a8f8752cc45889d68236f82253c4c1",
+  "packet_digest": "2d4d9e7f326702a7d91721cb3c7f740aa5b30b1d28c20cd16b0857da0215a617",
+  "start_height": 833,
+  "export_height": 839,
+  "end_height": 840,
+  "destination_consume_recorded": true,
+  "timing": {
+    "schema": "postfiat.a666.issue_timing.v2",
+    "deposit_block_number": 25726108,
+    "deposit_block_timestamp": 1786383107,
+    "mint_block_number": 25726234,
+    "mint_block_timestamp": 1786384619,
+    "deposit_to_mint_seconds": 1512,
+    "slo_seconds": 1500,
+    "slo_pass": false,
+    "recovery_timing_exception": true,
+    "timing_gate_pass": true
+  },
+  "uniswap_eligibility": {
+    "schema": "postfiat.a666.uniswap_eligibility.v2",
+    "pool_id": "0xc5f1e4b5bb07c0718eddcc3d102dc751b8953ec25bb05cdc14d95419d4d16e98",
+    "comparison_available": true,
+    "liquidity_before": 3000000000,
+    "liquidity_after": 3000000000,
+    "liquidity_consumed": 0,
+    "wa666_transfer_eth_call": "true",
+    "verdict": "PASS"
+  }
+}

@@ -56,9 +56,10 @@ mint_state="$phase_dir/ethereum/mint-state.json"
 supply_before="$phase_dir/pftl-supply-status-after.json"
 manifest="$phase_dir/a666/ops/manifest.json"
 remote_node="/opt/postfiat/releases/$release_id/postfiat-node"
-remote_topology="/etc/postfiat/releases/$release_id/topology.json"
+remote_topology=${A666_PFTL_TOPOLOGY_PATH:-/etc/postfiat/releases/$release_id/topology.json}
+local_node=${A666_LOCAL_NODE_BIN:-target/release/postfiat-node}
 remote_root="/var/lib/postfiat/validator-2/$workflow_id-destination-consume"
-rpc=http://127.0.0.1:28701
+rpc=${A666_VALIDATOR_ETHEREUM_RPC:-http://127.0.0.1:28701}
 
 test -s "$hosts_file"
 test -s "$operator_key"
@@ -249,7 +250,7 @@ jq -n \
   }' > "$proof_dir/destination-consume.ops.json"
 
 python3 scripts/a666-ce22-remote-finality-op.py \
-  --node-bin target/release/postfiat-node \
+  --node-bin "$local_node" \
   --remote-runner scripts/a666-remote-sync-round.py \
   --proposer-hosts-file "$hosts_file" \
   --remote-binary "$remote_node" \

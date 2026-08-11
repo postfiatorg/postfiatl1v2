@@ -1,0 +1,50 @@
+{
+  "block_tip_hash": "661548231d19081bb23c03c5cb6fe413c482edfe34c7f5c6906bd62c8ef8c259ce9cf49cd2e5eee1f1f25e3d85b13b05",
+  "height": 808,
+  "label": "a666-variable-roundtrip-transparent-primary-redeem",
+  "mempool_pending": 0,
+  "nodes": [
+    {
+      "height": 808,
+      "node_id": "validator-0",
+      "port": 28650,
+      "state_root": "21d326f6802f9db2d377437e788277734dc501c30d514b4388632a61fee9ab672e0f5ec4c861b352c3091fd7ed03ea5f"
+    },
+    {
+      "height": 808,
+      "node_id": "validator-1",
+      "port": 28651,
+      "state_root": "21d326f6802f9db2d377437e788277734dc501c30d514b4388632a61fee9ab672e0f5ec4c861b352c3091fd7ed03ea5f"
+    },
+    {
+      "height": 808,
+      "node_id": "validator-2",
+      "port": 28652,
+      "state_root": "21d326f6802f9db2d377437e788277734dc501c30d514b4388632a61fee9ab672e0f5ec4c861b352c3091fd7ed03ea5f"
+    },
+    {
+      "height": 808,
+      "node_id": "validator-3",
+      "port": 28653,
+      "state_root": "21d326f6802f9db2d377437e788277734dc501c30d514b4388632a61fee9ab672e0f5ec4c861b352c3091fd7ed03ea5f"
+    },
+    {
+      "height": 808,
+      "node_id": "validator-4",
+      "port": 28654,
+      "state_root": "21d326f6802f9db2d377437e788277734dc501c30d514b4388632a61fee9ab672e0f5ec4c861b352c3091fd7ed03ea5f"
+    },
+    {
+      "height": 808,
+      "node_id": "validator-5",
+      "port": 28655,
+      "state_root": "21d326f6802f9db2d377437e788277734dc501c30d514b4388632a61fee9ab672e0f5ec4c861b352c3091fd7ed03ea5f"
+    }
+  ],
+  "release_id": "pnok-private-fix-2246d25-orchard1",
+  "remote_binary": "/opt/postfiat/releases/pnok-private-fix-2246d25-orchard1/postfiat-node",
+  "remote_topology": "/etc/postfiat/releases/pnok-private-fix-2246d25-orchard1/topology.json",
+  "schema": "postfiat-a666-ce22-remote-finality-preflight-v1",
+  "state_root": "21d326f6802f9db2d377437e788277734dc501c30d514b4388632a61fee9ab672e0f5ec4c861b352c3091fd7ed03ea5f",
+  "validator_count": 6
+}

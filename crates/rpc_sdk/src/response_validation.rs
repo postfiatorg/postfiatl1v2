@@ -4047,8 +4047,8 @@ fn validate_navcoin_bridge_supply_status_result(
     validate_evm_address_field(result, "handoff_controller")?;
     validate_evm_address_field(result, "wrapped_navcoin_token")?;
     nonzero_u64_field(result, "ethereum_chain_id")?;
-    bool_field(result, "live_value_enabled")?;
-    bool_field(result, "paused")?;
+    let live_value_enabled = bool_field(result, "live_value_enabled")?;
+    let paused = bool_field(result, "paused")?;
     let authorized = u64_field(result, "authorized_valid_supply_atoms")?;
     let pftl = u64_field(result, "pftl_spendable_supply_atoms")?;
     let native_balance_count = u64_field(result, "native_spendable_balance_count")?;
@@ -4134,6 +4134,26 @@ fn validate_navcoin_bridge_supply_status_result(
     let ethereum = u64_field(result, "ethereum_spendable_supply_atoms")?;
     let other = u64_field(result, "other_registered_venue_supply_atoms")?;
     let outstanding = u64_field(result, "outstanding_bridge_claims_atoms")?;
+    u64_field(result, "source_debited_export_packet_count")?;
+    let source_debited_atoms = u64_field(result, "source_debited_export_packet_atoms")?;
+    if source_debited_atoms != outstanding {
+        return Err(invalid_result(
+            "source_debited_export_packet_atoms",
+            "expected source-debited packet atoms to equal outstanding bridge claims",
+        ));
+    }
+    let available_return_import_atoms = u64_field(result, "available_return_import_atoms")?;
+    let expected_return_import_atoms = if paused || !live_value_enabled {
+        0
+    } else {
+        ethereum
+    };
+    if available_return_import_atoms != expected_return_import_atoms {
+        return Err(invalid_result(
+            "available_return_import_atoms",
+            "expected return-import capacity to equal active Ethereum spendable supply",
+        ));
+    }
     let pending_return = u64_field(result, "pending_return_import_claims_atoms")?;
     let live_sum = u64_field(result, "live_supply_sum_atoms")?;
     let route_cap = nonzero_u64_field(result, "route_supply_cap_atoms")?;

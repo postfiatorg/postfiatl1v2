@@ -1,0 +1,52 @@
+{
+  "checkpoint": {
+    "certificate_id": "5103002493b1e31a763b3ea12016a7b6cac886d631a07228623a63cbad1be313ee6fe2ddba79d20f3dbd2fa1993b719e",
+    "chain_id": "postfiat-wan-devnet-2",
+    "checkpoint_block_hash": "e7a9c178fd108620a5c195aee74292489898d4aaebe4dfc6ff4548393b434c6fe883b2cabeb5609ad8ce312fddc14040",
+    "checkpoint_height": 792,
+    "checkpoint_state_root": "6d643c143a2168431a94597fe1b7172e6d7073c2104d9a697b6957ac3f90f1d5de993ed389adf6a079f8dd1434192452",
+    "committee_epoch": 1,
+    "consensus_v2_activation_height": 1,
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "protocol_version": 1,
+    "quorum": 5,
+    "schema": "postfiat.finalized_checkpoint_verification.v1",
+    "validator_count": 6,
+    "verification_basis": "consensus-v2-finalized-checkpoint",
+    "verified": true
+  },
+  "checks": {
+    "certified_checkpoint_pin": "PASS",
+    "constructor_simulation_and_runtime_hashes": "PASS",
+    "digest_bound_regeneration": "PASS",
+    "fresh_egress_guest": "PASS",
+    "live_nonce_and_empty_addresses": "PASS",
+    "live_six_validator_checkpoint": "PASS",
+    "package_summary": "PASS",
+    "scope_and_schedule": "PASS",
+    "stakehub_unlocked_correct_lineage": "PASS"
+  },
+  "constructor_simulation": {
+    "vault_creation_bytes": 5468,
+    "vault_estimated_gas": 1139200,
+    "vault_runtime_code_hash": "0xc6dbb722c23bfc841624bb909fcb54d84a65a2ea6ece96e2a28bf61d5dea6d05",
+    "verifier_creation_bytes": 13390,
+    "verifier_estimated_gas": 2652608,
+    "verifier_runtime_code_hash": "0xd4d4ec468dac5d1cc462651d6a0ce84acaf84fd7fefe6d3e10ef271904392825"
+  },
+  "live_deployer_nonce": 314,
+  "manifest_path": "deployments/pfusdc-eth-mainnet-20260809-epoch6/manifest.mainnet-epoch6.json",
+  "manifest_sha256": "f1fdc96aa33c45428fffe1af871dfe684528067cd04043fb73f6719f8ccfebce",
+  "predicted_addresses": {
+    "vault": "0x2604fcd968c174533e6fa6ffb034c8f3798d69ea",
+    "verifier": "0xd2191bdfa9f2750bc8b9d3cb3146291dd1251734"
+  },
+  "schema": "postfiat.pfusdc.mainnet_epoch6_predeploy_audit.v1",
+  "stakehub": {
+    "spent_today_usd": 0.0,
+    "unlocked": true,
+    "unlocked_for_s": 1285
+  },
+  "status": "PASS",
+  "timestamp_utc": "2026-08-09T23:49:54+00:00"
+}

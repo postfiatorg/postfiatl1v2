@@ -955,6 +955,26 @@ def _pointer_value(root: Any, pointer: str) -> Any:
     return value
 
 
+def _validate_calldata_argv(executor: Mapping[str, Any], leg: str, base_pointer: str = "/executor") -> None:
+    """Reject malformed calldata before an executable binding can be fired."""
+    commands = executor.get("commands", [])
+    if not isinstance(commands, list):
+        return
+    for command_index, raw_command in enumerate(commands):
+        argv = raw_command.split() if isinstance(raw_command, str) else raw_command
+        if not isinstance(argv, list):
+            continue
+        for argument_index, raw_argument in enumerate(argv[:-1]):
+            if raw_argument != "--calldata":
+                continue
+            calldata = argv[argument_index + 1]
+            pointer = f"{base_pointer}/commands/{command_index}/{argument_index + 1}"
+            if not isinstance(calldata, str) or "PENDING" in calldata:
+                continue
+            if not re.fullmatch(r"0x[0-9a-fA-F]+", calldata) or (len(calldata) - 2) % 2:
+                raise ConfigError(f"LEG {leg}: malformed --calldata hex at {pointer}")
+
+
 def validate_executable(binding_path: Path, through: str) -> list[str]:
     binding = _load(binding_path)
     entries = _binding_entries(binding)
@@ -999,6 +1019,12 @@ def validate_executable(binding_path: Path, through: str) -> list[str]:
             # Preserve the packet's real /executor/phases/... pointer shape.
             surfaces = {"phases": executor.get("phases", [])}
         scan_pending(surfaces, "/executor")
+        if kind == "phases":
+            for phase_index, phase in enumerate(executor.get("phases", [])):
+                if isinstance(phase, Mapping) and phase.get("kind") == "evm_script":
+                    _validate_calldata_argv(phase, leg, f"/executor/phases/{phase_index}")
+        else:
+            _validate_calldata_argv(executor, leg)
         if kind == "certified_ops":
             # Certified templates are executable inputs too; exemptions must
             # use their real /ops_file_template/... packet pointers.

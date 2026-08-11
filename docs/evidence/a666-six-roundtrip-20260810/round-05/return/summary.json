@@ -1,0 +1,9 @@
+{
+  "schema": "postfiat.a666.return_import_acceptance.v1",
+  "verdict": "PASS",
+  "ethereum_burn_tx": "0x4b2ad4e9eb560b023021717427d3932fa0c09d8ca1bec27aeba753570e8ca0fa",
+  "burn_event_hash": "52e09b151412773202de85d2b4fbd31138ed11be2b25378778b64089ebb0efa4",
+  "ethereum_burn_block": 25726480,
+  "checkpoint_finalized_height": 25726492,
+  "pftl_height": 852
+}

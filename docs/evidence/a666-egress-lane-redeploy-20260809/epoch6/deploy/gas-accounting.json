@@ -1,0 +1,37 @@
+{
+  "cumulative_actual_usd": 0.6559254706533229,
+  "entries": [
+    {
+      "actual_usd": 0.45734382671944995,
+      "cumulative_actual_usd": 0.45734382671944995,
+      "effective_gas_price_wei": 92748879,
+      "eth_usd_basis": {
+        "block": 25614157,
+        "source": "Uniswap V4 ETH/USDC fee-3000 ts-60 mainnet pool via official StateView 0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227 (pinned official Uniswap deployment family)",
+        "usd_per_eth": 1874.5
+      },
+      "gas_units": 2630563,
+      "label": "verifier"
+    },
+    {
+      "actual_usd": 0.19858164393387293,
+      "cumulative_actual_usd": 0.6559254706533229,
+      "effective_gas_price_wei": 93827905,
+      "eth_usd_basis": {
+        "block": 25614157,
+        "source": "Uniswap V4 ETH/USDC fee-3000 ts-60 mainnet pool via official StateView 0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227 (pinned official Uniswap deployment family)",
+        "usd_per_eth": 1874.5
+      },
+      "gas_units": 1129072,
+      "label": "vault"
+    }
+  ],
+  "eth_usd_basis": {
+    "block": 25614157,
+    "source": "Uniswap V4 ETH/USDC fee-3000 ts-60 mainnet pool via official StateView 0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227 (pinned official Uniswap deployment family)",
+    "usd_per_eth": 1874.5
+  },
+  "hard_ceiling_usd": 150.0,
+  "pre_send_limit_usd": 130.0,
+  "schema": "postfiat.pfusdc.mainnet_gas_accounting.v1"
+}

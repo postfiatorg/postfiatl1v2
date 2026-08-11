@@ -28,6 +28,16 @@ def load_rpc_helpers(script_dir: Path) -> Any:
     return module
 
 
+def load_runtime_helpers(script_dir: Path) -> Any:
+    path = script_dir / "a666_remote_runtime.py"
+    spec = importlib.util.spec_from_file_location("a666_remote_runtime", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot import runtime helpers from {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def run(command: list[str], *, capture: bool = False) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, check=True, text=True, capture_output=capture)
 
@@ -81,6 +91,12 @@ def wait_for_height(
 
 def main() -> None:
     args = parse_args()
+    script_dir = Path(__file__).resolve().parent
+    runtime = load_runtime_helpers(script_dir)
+    release_id = runtime.validated_release_id(
+        args.remote_binary,
+        args.remote_topology,
+    )
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", args.label):
         raise RuntimeError("label is not a safe remote path component")
     if args.resident_manifest is not None:
@@ -112,15 +128,12 @@ def main() -> None:
             ]
         )
         return
-    proposer_hosts = json.loads(args.proposer_hosts_file.read_text())
-    expected = {f"validator-{index}" for index in range(EXPECTED_VALIDATORS)}
-    if not isinstance(proposer_hosts, dict) or set(proposer_hosts) != expected:
-        raise RuntimeError("proposer hosts file must map validator-0 through validator-5")
+    proposer_hosts = runtime.load_proposer_hosts(args.proposer_hosts_file)
     ports = [int(value) for value in args.ports.split(",")]
     if len(ports) != EXPECTED_VALIDATORS:
         raise RuntimeError("exactly six RPC endpoints are required")
 
-    rpc = load_rpc_helpers(Path(__file__).resolve().parent)
+    rpc = load_rpc_helpers(script_dir)
     consensus_dir = args.artifact_dir / "consensus"
     if args.resume_postflight:
         if not args.artifact_dir.is_dir():
@@ -158,6 +171,17 @@ def main() -> None:
                 f"artifact directory already exists: {args.artifact_dir}"
             )
         args.artifact_dir.mkdir(parents=True, mode=0o700)
+        runtime_report = runtime.probe_remote_runtime(
+            proposer_hosts,
+            args.remote_binary,
+            args.remote_topology,
+            timeout_seconds=args.timeout_seconds,
+        )
+        rpc.write_json(
+            args.artifact_dir / "remote-runtime-identity.json",
+            runtime_report,
+            0o644,
+        )
         pre = rpc.wait_for_fleet_status(
             ports,
             args.timeout_seconds,
@@ -171,6 +195,9 @@ def main() -> None:
                 "schema": "postfiat-a666-ce22-remote-finality-batch-preflight-v1",
                 "label": args.label,
                 "batch_kind": args.batch_kind,
+                "release_id": release_id,
+                "remote_binary": args.remote_binary,
+                "remote_topology": args.remote_topology,
                 "height": parent["block_height"],
                 "state_root": parent["state_root"],
                 "nodes": pre,

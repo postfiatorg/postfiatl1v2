@@ -1,0 +1,12 @@
+{
+  "schema": "postfiat.a666.pfusdc_cuda_proof_provenance.v1",
+  "verdict": "PASS",
+  "requested_backend": "cuda",
+  "prover_binary": "/workspace/a666-acceptance/bin/pfusdc-tier4-prover-cuda",
+  "prover_binary_sha256": "42a72b06e1a7c763400942392ff9099a62acffbafc56d2bbc4758afc99454d43",
+  "expected_prover_binary_sha256": "42a72b06e1a7c763400942392ff9099a62acffbafc56d2bbc4758afc99454d43",
+  "gpu_identity": "NVIDIA A100-SXM4-40GB, 580.105.08",
+  "proof_report_sha256": "c6b330ef4dc1774cb2034c52c36a4c4ce41911da170f0f14d08def27fa74d750",
+  "proof_calldata_sha256": "869cf70d792b6c6a4e01e3e25166a0b4a39cbbb6f4368baf21d719956de19f92",
+  "program_vkey": "0x0015b046ba4b80c0ca7e2d9429a1f5fd88bc6d1d328cca6acec29ffdf48a9d87"
+}

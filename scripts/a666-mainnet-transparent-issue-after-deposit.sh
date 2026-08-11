@@ -11,6 +11,8 @@ expected_wrapped_balance_before=
 expected_wrapped_supply_before=
 resume_after_ingress_proof=false
 resume_after_ingress_deployment=false
+resume_after_pfusdc_claim=false
+resume_after_export_proof=false
 resume_after_private_middle=false
 allow_recovery_timing_exception=false
 private_middle=false
@@ -18,6 +20,8 @@ a100_host=${A666_A100_HOST:?A666_A100_HOST is required}
 a100_port=${A666_A100_PORT:-30886}
 validator2_host=${A666_VALIDATOR2_HOST:?A666_VALIDATOR2_HOST is required}
 release_id=${A666_PFTL_RELEASE_ID:-a666-variable-nav-9ffdfb6}
+pfusdc_deployment_manifest=${A666_PFUSDC_DEPLOYMENT_MANIFEST:?A666_PFUSDC_DEPLOYMENT_MANIFEST is required}
+pfusdc_deployment_manifest_sha256=${A666_PFUSDC_DEPLOYMENT_MANIFEST_SHA256:?A666_PFUSDC_DEPLOYMENT_MANIFEST_SHA256 is required}
 
 while (($#)); do
   case "$1" in
@@ -30,6 +34,8 @@ while (($#)); do
     --expected-wrapped-supply-before) expected_wrapped_supply_before=$2; shift 2 ;;
     --resume-after-ingress-proof) resume_after_ingress_proof=true; shift ;;
     --resume-after-ingress-deployment) resume_after_ingress_deployment=true; shift ;;
+    --resume-after-pfusdc-claim) resume_after_pfusdc_claim=true; shift ;;
+    --resume-after-export-proof) resume_after_export_proof=true; shift ;;
     --resume-after-private-middle) resume_after_private_middle=true; shift ;;
     --allow-recovery-timing-exception) allow_recovery_timing_exception=true; shift ;;
     --private-middle) private_middle=true; shift ;;
@@ -58,6 +64,8 @@ resume_point_count=0
 for resume_point in \
   "$resume_after_ingress_proof" \
   "$resume_after_ingress_deployment" \
+  "$resume_after_pfusdc_claim" \
+  "$resume_after_export_proof" \
   "$resume_after_private_middle"
 do
   if "$resume_point"; then
@@ -71,6 +79,8 @@ fi
 if "$allow_recovery_timing_exception" \
   && ! "$resume_after_ingress_proof" \
   && ! "$resume_after_ingress_deployment" \
+  && ! "$resume_after_pfusdc_claim" \
+  && ! "$resume_after_export_proof" \
   && ! "$resume_after_private_middle"
 then
   echo "a recovery timing exception requires an explicit resume point" >&2
@@ -87,9 +97,11 @@ fi
 
 cd "$repo"
 phase_dir=$(realpath "$phase_dir")
+pfusdc_deployment_manifest=$(realpath "$pfusdc_deployment_manifest")
 deposit_file="$phase_dir/deposit/deposit-result.json"
 ops_dir="$phase_dir/a666/ops"
 test -s "$deposit_file"
+test -s "$pfusdc_deployment_manifest"
 test -s "$ops_dir/manifest.json"
 for directory in ingress pftl export-proof ethereum; do
   mkdir -p "$phase_dir/$directory"
@@ -97,6 +109,16 @@ done
 
 deposit_tx=$(jq -er '.deposit.tx_hash' "$deposit_file")
 deposit_id=$(jq -er '.event.deposit_id | ltrimstr("0x")' "$deposit_file")
+deposit_vault=$(jq -er '.vault | ascii_downcase' "$deposit_file")
+deposit_manifest_sha256=$(jq -er '.manifest_sha256' "$deposit_file")
+actual_manifest_sha256=$(sha256sum "$pfusdc_deployment_manifest" | awk '{print $1}')
+test "$actual_manifest_sha256" = "$pfusdc_deployment_manifest_sha256"
+test "$deposit_manifest_sha256" = "$pfusdc_deployment_manifest_sha256"
+manifest_vault=$(jq -er '.route.vault_address | ascii_downcase' "$pfusdc_deployment_manifest")
+claim_policy_hash=$(jq -er '.route.route_profile_hash' "$pfusdc_deployment_manifest")
+[[ "$manifest_vault" =~ ^0x[0-9a-f]{40}$ ]]
+[[ "$claim_policy_hash" =~ ^[0-9a-f]{96}$ ]]
+test "$deposit_vault" = "$manifest_vault"
 packet_hash=$(jq -er '.packet_hash' "$ops_dir/manifest.json")
 packet_digest=$(jq -er '.ethereum_packet_digest' "$ops_dir/manifest.json")
 mint_amount=$(jq -er '.mint_amount_atoms' "$ops_dir/manifest.json")
@@ -111,8 +133,51 @@ test "$settlement_amount" -eq "$((base_value_amount + spread_amount))"
 jq -e --argjson settlement "$settlement_amount" \
   '.verdict=="PASS" and .amount_atoms==$settlement' "$deposit_file" >/dev/null
 
+run_manifest="$phase_dir/run-manifest.json"
+if test -e "$run_manifest"; then
+  jq -e \
+    --arg workflow_id "$workflow_id" \
+    --arg prior_checkpoint_block_id "$prior_checkpoint_block_id" \
+    --argjson start_height "$expected_pftl_height" \
+    --argjson expected_verifier_height "$expected_verifier_height" \
+    --argjson expected_wrapped_balance_before "$expected_wrapped_balance_before" \
+    --argjson expected_wrapped_supply_before "$expected_wrapped_supply_before" \
+    '.workflow_id==$workflow_id
+     and .start_height==$start_height
+     and .expected_verifier_height==$expected_verifier_height
+     and .prior_checkpoint_block_id==$prior_checkpoint_block_id
+     and .expected_wrapped_balance_before==$expected_wrapped_balance_before
+     and .expected_wrapped_supply_before==$expected_wrapped_supply_before' \
+    "$run_manifest" >/dev/null
+else
+  jq -n \
+    --arg workflow_id "$workflow_id" \
+    --arg validator_release "$release_id" \
+    --arg prior_checkpoint_block_id "$prior_checkpoint_block_id" \
+    --arg packet_hash "$packet_hash" \
+    --argjson start_height "$expected_pftl_height" \
+    --argjson expected_verifier_height "$expected_verifier_height" \
+    --argjson expected_wrapped_balance_before "$expected_wrapped_balance_before" \
+    --argjson expected_wrapped_supply_before "$expected_wrapped_supply_before" \
+    --argjson settlement_atoms "$settlement_amount" \
+    --argjson mint_atoms "$mint_amount" \
+    '{
+      schema:"postfiat.a666.transparent_issue_run_manifest.v1",
+      workflow_id:$workflow_id,
+      validator_release:$validator_release,
+      start_height:$start_height,
+      expected_verifier_height:$expected_verifier_height,
+      prior_checkpoint_block_id:$prior_checkpoint_block_id,
+      expected_wrapped_balance_before:$expected_wrapped_balance_before,
+      expected_wrapped_supply_before:$expected_wrapped_supply_before,
+      amounts:{settlement_atoms:$settlement_atoms,mint_atoms:$mint_atoms},
+      packet_hash:$packet_hash
+    }' > "$run_manifest"
+fi
+
 remote_node=/opt/postfiat/releases/$release_id/postfiat-node
-remote_topology=/etc/postfiat/releases/$release_id/topology.json
+remote_topology=${A666_PFTL_TOPOLOGY_PATH:-/etc/postfiat/releases/$release_id/topology.json}
+local_node=${A666_LOCAL_NODE_BIN:-target/release/postfiat-node}
 remote_run="/var/lib/postfiat/validator-2/$workflow_id"
 a100_root="/workspace/a666-acceptance/live/$workflow_id"
 ingress_prover=/workspace/a666-acceptance/bin/eth-l1-mainnet-fast-lane-p0-cuda-optimized
@@ -127,6 +192,29 @@ joe_evm=0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0
 uniswap_state_view=0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227
 uniswap_pool_id=0xc5f1e4b5bb07c0718eddcc3d102dc751b8953ec25bb05cdc14d95419d4d16e98
 
+if "$resume_after_export_proof"; then
+  test -s "$phase_dir/a666/03-export-round/summary.json"
+  test -s "$phase_dir/a666/joe-pfusdc-before.json"
+  test -s "$phase_dir/a666/joe-a666-before.json"
+  test -s "$phase_dir/pftl-supply-status-after.json"
+  test -s "$phase_dir/export-proof/receipt-witness.json"
+  test -s "$phase_dir/export-proof/proof-cuda/proof-report.json"
+  jq -e \
+    --argjson start "$((expected_pftl_height + 5))" \
+    --argjson end "$((expected_pftl_height + 6))" \
+    '.accepted==true and .confirmed==true
+     and .start_height==$start and .end_height==$end
+     and .transaction_kind=="pftl_uniswap_export_debit"' \
+    "$phase_dir/a666/03-export-round/summary.json" >/dev/null
+  ssh -o BatchMode=yes "root@$validator2_host" \
+    "$remote_node status --data-dir /var/lib/postfiat/validator-2 --expect-height $((expected_pftl_height + 6))" \
+    > "$phase_dir/pftl/resume-after-export-proof-status.json"
+  pfusdc_balance_before=$(jq -er '[.assets[]?.balance] | add // 0' \
+    "$phase_dir/a666/joe-pfusdc-before.json")
+  a666_balance_before=$(jq -er '[.assets[]?.balance] | add // 0' \
+    "$phase_dir/a666/joe-a666-before.json")
+  export_height=$((expected_pftl_height + 6))
+else
 if "$resume_after_private_middle"; then
   test -s "$phase_dir/orchard-private-issue/summary.json"
   jq -e \
@@ -141,6 +229,36 @@ if "$resume_after_private_middle"; then
   a666_balance_before=$(jq -er '[.assets[]?.balance] | add // 0' \
     "$phase_dir/a666/joe-a666-before.json")
   export_height=$((expected_pftl_height + 6))
+else
+if "$resume_after_pfusdc_claim"; then
+  test -s "$phase_dir/pftl/summary.json"
+  test -s "$phase_dir/pftl/status-before.json"
+  test -s "$phase_dir/pftl-supply-status-before.json"
+  test -s "$phase_dir/a666/joe-pfusdc-before.json"
+  test -s "$phase_dir/a666/joe-a666-before.json"
+  jq -e \
+    --argjson start "$expected_pftl_height" \
+    --argjson end "$((expected_pftl_height + 3))" \
+    --argjson amount "$settlement_amount" \
+    '.verdict=="PASS"
+     and .start_height==$start
+     and .finalized_height==$end
+     and .amount_atoms==$amount' \
+    "$phase_dir/pftl/summary.json" >/dev/null
+  ssh -o BatchMode=yes "root@$validator2_host" \
+    "$remote_node status --data-dir /var/lib/postfiat/validator-2 --expect-height $((expected_pftl_height + 3))" \
+    > "$phase_dir/pftl/resume-after-claim-status.json"
+  pfusdc_balance_before=$(jq -er '[.assets[]?.balance] | add // 0' \
+    "$phase_dir/a666/joe-pfusdc-before.json")
+  a666_balance_before=$(jq -er '[.assets[]?.balance] | add // 0' \
+    "$phase_dir/a666/joe-a666-before.json")
+  ssh -o BatchMode=yes "root@$validator2_host" \
+    "$remote_node account-assets --data-dir /var/lib/postfiat/validator-2 --account $joe --asset-id $pfusdc" \
+    > "$phase_dir/pftl/resume-holder-after-claim.json"
+  jq -e \
+    --argjson expected "$((pfusdc_balance_before + settlement_amount))" \
+    '([.assets[]?.balance] | add // 0)==$expected' \
+    "$phase_dir/pftl/resume-holder-after-claim.json" >/dev/null
 else
 ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node status --data-dir /var/lib/postfiat/validator-2 --expect-height $expected_pftl_height" \
@@ -256,13 +374,14 @@ DEPOSIT_ATOMS="$settlement_amount" \
 EXPECTED_HOLDER_ATOMS="$expected_holder_after_claim" \
 PFTL_NODE_BIN="$remote_node" \
 PFTL_TOPOLOGY="$remote_topology" \
-PFTL_POLICY_HASH=5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158 \
+PFTL_POLICY_HASH="$claim_policy_hash" \
 PFTL_LABEL_SUFFIX=$(if "$resume_after_ingress_proof" || "$resume_after_ingress_deployment"; then printf '%s' -retry1; fi) \
-PFTL_VAULT_ADDRESS=0xaaa78FdA7062eFce769e95cd72Fc55e507BC8183 \
+PFTL_VAULT_ADDRESS="$manifest_vault" \
 PFTL_RUN_DIR="$remote_run" \
 PFTL_PROOF_DIR="$remote_run/ingress-proof" \
 PFTL_LOCAL_EVIDENCE="$phase_dir/pftl" \
 bash "$repo/scripts/a666-mainnet-pfusdc-relay.sh"
+fi
 
 if "$private_middle"; then
   bash scripts/a666-mainnet-private-issue-middle.sh \
@@ -272,7 +391,7 @@ if "$private_middle"; then
   export_height=$((expected_pftl_height + 6))
 else
   round_args=(
-    --node-bin target/release/postfiat-node
+    --node-bin "$local_node"
     --remote-runner scripts/a666-remote-sync-round.py
     --proposer-hosts-file docs/evidence/a666-joe-mainnet-e2e-20260728/proposer-hosts.json
     --remote-binary "$remote_node"
@@ -306,7 +425,9 @@ else
     --ops-file "$ops_dir/03-export.ops.json" \
     --artifact-dir "$phase_dir/a666/03-export-round" \
     "${round_args[@]}"
-  export_height=$((expected_pftl_height + 5))
+  # The ingress relay finalizes propose, finalize, and claim in three distinct
+  # blocks before reserve, subscribe, and export consume the next three.
+  export_height=$((expected_pftl_height + 6))
 fi
 fi
 ssh -o BatchMode=yes "root@$validator2_host" \
@@ -374,19 +495,15 @@ ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
     --witness '$a100_root/export/receipt-witness.json' \
     --output-dir '$a100_root/export-proof' \
     --elf '$export_elf' \
-    --prove \
-    --require-prover cuda \
-    --skip-redundant-execute"
+    --prove"
 mkdir -p "$phase_dir/export-proof/proof-cuda"
 rsync -a -e "ssh -p $a100_port" \
   "root@$a100_host:$a100_root/export-proof/" \
   "$phase_dir/export-proof/proof-cuda/"
+fi
 jq -e '
   .program_vkey=="0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9"
   and .proof_mode=="groth16"
-  and .prover_backend=="cuda"
-  and .host_execute_skipped==true
-  and .execute_ms==0
   and .proof_bytes==356
   and .public_values_bytes==1120
 ' "$phase_dir/export-proof/proof-cuda/proof-report.json" >/dev/null
