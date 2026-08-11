@@ -923,6 +923,9 @@ fn pftl_uniswap_status_reports_expose_route_packet_claims_and_supply() {
     assert_eq!(supply.ethereum_spendable_supply_atoms, 20);
     assert_eq!(supply.outstanding_bridge_claims_atoms, 100);
     assert_eq!(supply.pending_return_import_claims_atoms, 30);
+    assert_eq!(supply.source_debited_export_packet_count, 1);
+    assert_eq!(supply.source_debited_export_packet_atoms, 100);
+    assert_eq!(supply.available_return_import_atoms, 20);
     assert_eq!(supply.live_supply_sum_atoms, 300);
 
     let packet =

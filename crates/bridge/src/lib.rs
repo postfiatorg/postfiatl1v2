@@ -450,6 +450,16 @@ pub struct PftlUniswapSupplyStatusReport {
     pub other_registered_venue_supply_atoms: u64,
     pub outstanding_bridge_claims_atoms: u64,
     pub pending_return_import_claims_atoms: u64,
+    /// Number of export packets still awaiting a proof-backed destination
+    /// consume or source refund transition.
+    pub source_debited_export_packet_count: u64,
+    /// Sum of the amounts in source-debited export packets. This must equal
+    /// `outstanding_bridge_claims_atoms`.
+    pub source_debited_export_packet_atoms: u64,
+    /// Maximum wrapped amount that can be burned and imported immediately.
+    /// This is deliberately distinct from `available_redeem_atoms`, which is
+    /// native PFTL primary-market redemption capacity.
+    pub available_return_import_atoms: u64,
     pub live_supply_sum_atoms: u64,
     pub route_supply_cap_atoms: u64,
     pub supply_cap_remaining_atoms: u64,
@@ -1849,6 +1859,27 @@ pub fn pftl_uniswap_bridge_supply_status(
     let native_spendable_balance_count = ledger.native_spendable_balances_atoms.len();
     let native_spendable_balance_sum_atoms =
         pftl_uniswap_native_spendable_balance_sum(&ledger.native_spendable_balances_atoms)?;
+    let source_debited_export_packet_count = ledger
+        .export_packets
+        .values()
+        .filter(|packet| packet.status == PftlUniswapExportPacketStatus::SourceDebited)
+        .count() as u64;
+    let source_debited_export_packet_atoms = ledger
+        .export_packets
+        .values()
+        .filter(|packet| packet.status == PftlUniswapExportPacketStatus::SourceDebited)
+        .try_fold(0_u64, |sum, packet| {
+            checked_add_atoms(
+                "source_debited_export_packet_atoms",
+                sum,
+                packet.amount_atoms,
+            )
+        })?;
+    let available_return_import_atoms = if ledger.paused {
+        0
+    } else {
+        ledger.ethereum_spendable_supply_atoms
+    };
     Ok(PftlUniswapSupplyStatusReport {
         schema: "postfiat-pftl-uniswap-supply-status-v1".to_string(),
         route_id: ledger.route_id.clone(),
@@ -1876,6 +1907,9 @@ pub fn pftl_uniswap_bridge_supply_status(
         other_registered_venue_supply_atoms: ledger.other_registered_venue_supply_atoms,
         outstanding_bridge_claims_atoms: ledger.outstanding_bridge_claims_atoms,
         pending_return_import_claims_atoms: ledger.pending_return_import_claims_atoms,
+        source_debited_export_packet_count,
+        source_debited_export_packet_atoms,
+        available_return_import_atoms,
         live_supply_sum_atoms,
         route_supply_cap_atoms: ledger.route_supply_cap_atoms,
         supply_cap_remaining_atoms,
