@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collect six independent Ethereum checkpoint votes concurrently."""
+"""Collect a quorum of independent Ethereum checkpoint votes concurrently."""
 
 from __future__ import annotations
 
@@ -16,6 +16,9 @@ from typing import Any
 
 
 EXPECTED_VALIDATORS = 6
+QUORUM_VALIDATORS = 5
+SIGN_ATTEMPTS = 8
+SIGN_RETRY_SECONDS = 3
 
 
 def parse_args() -> argparse.Namespace:
@@ -90,28 +93,50 @@ def collect_vote(
             f"root@{host}:{remote_checkpoint}",
         ]
     )
-    command = " ".join(
-        shlex.quote(value)
-        for value in [
-            remote_node,
-            "ethereum-checkpoint-vote-sign",
-            "--data-dir",
-            f"/var/lib/postfiat/{validator}",
-            "--checkpoint-file",
-            remote_checkpoint,
-            "--ethereum-rpc",
-            ethereum_rpc,
-            "--validator",
-            validator,
-            "--validator-key-file",
-            f"/var/lib/postfiat/{validator}/validator_keys.json",
-            "--vote-file",
-            remote_vote,
-        ]
-    )
-    completed = run(["ssh", *options, f"root@{host}", command], capture=True)
-    local_report.write_text(completed.stdout)
-    local_report.chmod(0o644)
+    existing_vote = subprocess.run(
+        ["ssh", *options, f"root@{host}", f"test -s {shlex.quote(remote_vote)}"],
+        check=False,
+    ).returncode == 0
+    if not existing_vote:
+        command = " ".join(
+            shlex.quote(value)
+            for value in [
+                remote_node,
+                "ethereum-checkpoint-vote-sign",
+                "--data-dir",
+                f"/var/lib/postfiat/{validator}",
+                "--checkpoint-file",
+                remote_checkpoint,
+                "--ethereum-rpc",
+                ethereum_rpc,
+                "--validator",
+                validator,
+                "--validator-key-file",
+                f"/var/lib/postfiat/{validator}/validator_keys.json",
+                "--vote-file",
+                remote_vote,
+            ]
+        )
+        completed: subprocess.CompletedProcess[str] | None = None
+        last_error: subprocess.CalledProcessError | None = None
+        for attempt in range(SIGN_ATTEMPTS):
+            try:
+                completed = run(
+                    ["ssh", *options, f"root@{host}", command], capture=True
+                )
+                break
+            except subprocess.CalledProcessError as error:
+                last_error = error
+                if "Resource temporarily unavailable" not in (error.stderr or ""):
+                    raise
+                if attempt + 1 == SIGN_ATTEMPTS:
+                    raise
+                time.sleep(SIGN_RETRY_SECONDS * (attempt + 1))
+        if completed is None:
+            assert last_error is not None
+            raise last_error
+        local_report.write_text(completed.stdout)
+        local_report.chmod(0o644)
     run(["scp", "-q", *options, f"root@{host}:{remote_vote}", str(local_vote)])
 
     validator2_vote = f"{validator2_remote_root}/{validator}.vote.json"
@@ -133,6 +158,7 @@ def collect_vote(
         "elapsed_ms": (time.monotonic() - started) * 1000.0,
         "local_vote_file": str(local_vote),
         "remote_vote_file": validator2_vote,
+        "reused_existing_vote": existing_vote,
     }
 
 
@@ -154,6 +180,7 @@ def main() -> None:
     started_unix_ms = int(time.time() * 1000)
     started = time.monotonic()
     rows: list[dict[str, Any]] = []
+    failures: list[dict[str, str]] = []
     with tempfile.TemporaryDirectory(prefix="a666-ssh-control-") as control_dir_text:
         control_dir = Path(control_dir_text)
         with ThreadPoolExecutor(max_workers=EXPECTED_VALIDATORS) as executor:
@@ -175,14 +202,35 @@ def main() -> None:
                 for validator in sorted(expected)
             }
             for future in as_completed(futures):
-                rows.append(future.result())
+                validator = futures[future]
+                try:
+                    rows.append(future.result())
+                except subprocess.CalledProcessError as error:
+                    failures.append(
+                        {
+                            "validator": validator,
+                            "error": str(error),
+                            "stderr": (error.stderr or "").strip(),
+                        }
+                    )
+
+    if len(rows) < QUORUM_VALIDATORS:
+        failed = ", ".join(sorted(row["validator"] for row in failures))
+        raise RuntimeError(
+            f"checkpoint vote quorum not reached: {len(rows)}/{EXPECTED_VALIDATORS}; "
+            f"failed validators: {failed}"
+        )
 
     rows.sort(key=lambda row: row["validator"])
     remote_vote_files = [row["remote_vote_file"] for row in rows]
     result = {
         "schema": "postfiat-a666-parallel-checkpoint-votes-v1",
-        "strategy": "six independent validator signatures collected concurrently",
+        "strategy": "independent validator signatures collected concurrently; 5-of-6 quorum required",
         "validator_count": len(rows),
+        "expected_validator_count": EXPECTED_VALIDATORS,
+        "quorum_validator_count": QUORUM_VALIDATORS,
+        "failure_count": len(failures),
+        "failures": sorted(failures, key=lambda row: row["validator"]),
         "started_at_unix_ms": started_unix_ms,
         "completed_at_unix_ms": int(time.time() * 1000),
         "elapsed_ms": (time.monotonic() - started) * 1000.0,

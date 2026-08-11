@@ -11,6 +11,7 @@ from typing import Any
 
 
 EXPECTED_VALIDATORS = 6
+QUORUM_VALIDATORS = 5
 EXPECTED_SCHEMA = "postfiat-a666-parallel-checkpoint-votes-v1"
 
 
@@ -25,15 +26,19 @@ def validated_vote_files(document: Any) -> list[str]:
         raise ValueError("fanout document must be an object")
     if document.get("schema") != EXPECTED_SCHEMA:
         raise ValueError("unexpected checkpoint vote fanout schema")
-    if document.get("validator_count") != EXPECTED_VALIDATORS:
-        raise ValueError("checkpoint vote fanout must contain exactly six validators")
+    validator_count = document.get("validator_count")
+    if (
+        not isinstance(validator_count, int)
+        or not QUORUM_VALIDATORS <= validator_count <= EXPECTED_VALIDATORS
+    ):
+        raise ValueError("checkpoint vote fanout must contain a 5-of-6 validator quorum")
 
     vote_files = document.get("remote_vote_files")
-    if not isinstance(vote_files, list) or len(vote_files) != EXPECTED_VALIDATORS:
-        raise ValueError("remote_vote_files must contain exactly six paths")
+    if not isinstance(vote_files, list) or len(vote_files) != validator_count:
+        raise ValueError("remote_vote_files must match validator_count")
     if any(not isinstance(path, str) or not path for path in vote_files):
         raise ValueError("every remote vote file must be a non-empty string")
-    if len(set(vote_files)) != EXPECTED_VALIDATORS:
+    if len(set(vote_files)) != validator_count:
         raise ValueError("remote vote file paths must be unique")
     if any(not PurePosixPath(path).is_absolute() for path in vote_files):
         raise ValueError("every remote vote file must be an absolute path")
