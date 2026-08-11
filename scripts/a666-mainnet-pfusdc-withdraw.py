@@ -29,6 +29,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-manifest-sha256", required=True)
     parser.add_argument("--amount-atoms", type=int, required=True)
     parser.add_argument("--recipient", required=True)
+    parser.add_argument(
+        "--stakehub-repo",
+        type=Path,
+        default=Path("/home/postfiat/repos/StakeHub-master-e6"),
+    )
     return parser.parse_args()
 
 
@@ -54,6 +59,10 @@ def main() -> None:
         raise RuntimeError("deployment manifest predates the epoch-5 recovery lane")
     if int(network["source_chain_id"]) != 1:
         raise RuntimeError("deployment manifest is not for Ethereum mainnet")
+    stakehub_package = args.stakehub_repo / "stakehub" / "agentd.py"
+    if not stakehub_package.is_file():
+        raise RuntimeError(f"StakeHub agent module is missing: {stakehub_package}")
+    sys.path.insert(0, str(args.stakehub_repo))
 
     spec = importlib.util.spec_from_file_location(
         "audited_pfusdc_mainnet_withdrawal_sender", BASE

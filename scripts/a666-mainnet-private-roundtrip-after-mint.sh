@@ -60,6 +60,7 @@ if ! test -s "$burn_dir/burn.json"; then
     --execute \
     --amount-atoms "$nav_amount_atoms" \
     --return-nonce "$return_nonce" \
+    --pftl-supply-status "$phase_dir/roundtrip-supply-before.json" \
     > "$burn_dir/burn.json"
 fi
 jq -e --argjson amount "$nav_amount_atoms" \

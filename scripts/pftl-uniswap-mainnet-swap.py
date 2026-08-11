@@ -111,13 +111,10 @@ def read_pool_state(web3: Web3) -> dict[str, int]:
 def fair_value_out(direction: str, amount_in: int, sqrt_price_x96: int) -> int:
     """Estimate output atoms from sqrtPriceX96 (ignores liquidity depth / tick)."""
     if direction == "usdc-to-wa666":
-        # price = (sqrtP/2^96)^2 = USDC per wA666; wA666_out = USDC_in / price
-        price = (sqrt_price_x96 * sqrt_price_x96) // Q96  # USDC atoms per wA666 atom
-        if price == 0:
-            return 0
-        return (amount_in * Q96 * Q96) // (sqrt_price_x96 * sqrt_price_x96)
-    else:  # wa666-to-usdc
+        # currency0=USDC and currency1=wA666, so sqrtP^2 is wA666/USDC.
         return (amount_in * sqrt_price_x96 * sqrt_price_x96) // (Q96 * Q96)
+    else:  # wa666-to-usdc
+        return (amount_in * Q96 * Q96) // (sqrt_price_x96 * sqrt_price_x96)
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +131,14 @@ def main() -> int:
     parser.add_argument("--packet-sha256", default=None, help="required for --execute")
     parser.add_argument("--quote-from-stateview", action="store_true")
     parser.add_argument("--execute", action="store_true", help="broadcast via agentd (REFUSES without --packet-sha256)")
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="optional non-overwriting JSON evidence output",
+    )
     args = parser.parse_args()
+    if args.output is not None and args.output.exists():
+        raise RuntimeError(f"refusing to overwrite {args.output}")
 
     calldata = build_swap_calldata(args.direction, args.amount_in_atoms, args.min_out_atoms, args.deadline_epoch)
     calldata_hash = hashlib.sha256(bytes.fromhex(calldata[2:])).hexdigest()
@@ -191,8 +195,16 @@ def main() -> int:
             print(json.dumps({"error": "--execute refused: simulation did not succeed", "simulation": sim_result}))
             return 1
         # Sign via agentd evm_contract_tx (same as a666-mainnet-seed-pool.py send())
-        sys.path.insert(0, "/home/postfiat/repos/StakeHub")
+        sys.path.insert(0, "/home/postfiat/repos/StakeHub-master-e6")
         from stakehub.agentd import call as agentd_call
+        token_in_address = WA666 if args.direction == "wa666-to-usdc" else USDC
+        token_out_address = USDC if args.direction == "wa666-to-usdc" else WA666
+        token_in = web3.eth.contract(address=token_in_address, abi=ERC20_ABI)
+        token_out = web3.eth.contract(address=token_out_address, abi=ERC20_ABI)
+        pre_balances = {
+            "token_in_atoms": int(token_in.functions.balanceOf(WALLET).call()),
+            "token_out_atoms": int(token_out.functions.balanceOf(WALLET).call()),
+        }
         resp = agentd_call({
             "op": "evm_contract_tx",
             "to": UNIVERSAL_ROUTER,
@@ -208,11 +220,35 @@ def main() -> int:
             return 1
         tx_hash = resp["tx"] if resp["tx"].startswith("0x") else f"0x{resp['tx']}"
         receipt = web3.eth.get_transaction_receipt(tx_hash)
+        post_balances = {
+            "token_in_atoms": int(token_in.functions.balanceOf(WALLET).call()),
+            "token_out_atoms": int(token_out.functions.balanceOf(WALLET).call()),
+        }
+        input_spent = pre_balances["token_in_atoms"] - post_balances["token_in_atoms"]
+        output_received = post_balances["token_out_atoms"] - pre_balances["token_out_atoms"]
+        if int(receipt.status) != 1:
+            raise RuntimeError(f"Uniswap transaction reverted: {tx_hash}")
+        if input_spent != args.amount_in_atoms:
+            raise RuntimeError(
+                f"Uniswap input delta {input_spent} != {args.amount_in_atoms}"
+            )
+        if output_received < args.min_out_atoms:
+            raise RuntimeError(
+                f"Uniswap output delta {output_received} < {args.min_out_atoms}"
+            )
         output["tx_hash"] = tx_hash
         output["tx_status"] = int(receipt.status)
         output["gas_used"] = int(receipt.gasUsed)
+        output["pre_balances"] = pre_balances
+        output["post_balances"] = post_balances
+        output["input_spent_atoms"] = input_spent
+        output["output_received_atoms"] = output_received
 
-    print(json.dumps(output, indent=2, sort_keys=True))
+    serialized = json.dumps(output, indent=2, sort_keys=True) + "\n"
+    if args.output is not None:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(serialized)
+    print(serialized, end="")
     return 0 if sim_result["status"] == "success" else 1
 
 
