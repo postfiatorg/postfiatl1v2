@@ -1,0 +1,10 @@
+{
+  "height": 867,
+  "round_ok": true,
+  "proposer": "validator-4",
+  "vote_count": 5,
+  "all_sends_verified": true,
+  "local_apply_verified": true,
+  "end_state_root": "e4497f52749ca6d679aa717494ef8f862842287709e2c17a2c87addc5c5e0b46982850bee35692b9e22d09bb63c2b9ce",
+  "block_tip_hash": "32f4325992efd0c0e96ba47c8899b7506e9331081b5462cdd7ea09037f91b00755ef5adc2d7ed9c9c9509eb6e95bf815"
+}

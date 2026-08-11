@@ -1,0 +1,83 @@
+{
+  "completed_at_unix_ms": 1786409089223,
+  "elapsed_ms": 10825.258769094944,
+  "expected_validator_count": 6,
+  "failure_count": 0,
+  "failures": [],
+  "quorum_validator_count": 5,
+  "remote_vote_files": [
+    "/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-0.vote.json",
+    "/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-1.vote.json",
+    "/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-2.vote.json",
+    "/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-3.vote.json",
+    "/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-4.vote.json",
+    "/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-5.vote.json"
+  ],
+  "remote_vote_files_csv": "/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-0.vote.json,/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-1.vote.json,/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-2.vote.json,/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-3.vote.json,/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-4.vote.json,/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-5.vote.json",
+  "schema": "postfiat-a666-parallel-checkpoint-votes-v1",
+  "started_at_unix_ms": 1786409078398,
+  "strategy": "independent validator signatures collected concurrently; 5-of-6 quorum required",
+  "validator_count": 6,
+  "validators": [
+    {
+      "completed_at_unix_ms": 1786409087846,
+      "elapsed_ms": 9447.337917983532,
+      "host": "64.176.220.75",
+      "local_vote_file": "docs/evidence/a666-nav-return-capacity-repair-20260810/packet-05-phase1-1-000000/destination-consume/proof/validator-0.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-0.vote.json",
+      "reused_existing_vote": true,
+      "started_at_unix_ms": 1786409078398,
+      "validator": "validator-0"
+    },
+    {
+      "completed_at_unix_ms": 1786409085398,
+      "elapsed_ms": 6999.4349256157875,
+      "host": "95.179.184.122",
+      "local_vote_file": "docs/evidence/a666-nav-return-capacity-repair-20260810/packet-05-phase1-1-000000/destination-consume/proof/validator-1.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-1.vote.json",
+      "reused_existing_vote": true,
+      "started_at_unix_ms": 1786409078399,
+      "validator": "validator-1"
+    },
+    {
+      "completed_at_unix_ms": 1786409078922,
+      "elapsed_ms": 522.4150866270065,
+      "host": "66.42.48.39",
+      "local_vote_file": "docs/evidence/a666-nav-return-capacity-repair-20260810/packet-05-phase1-1-000000/destination-consume/proof/validator-2.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-2.vote.json",
+      "reused_existing_vote": true,
+      "started_at_unix_ms": 1786409078400,
+      "validator": "validator-2"
+    },
+    {
+      "completed_at_unix_ms": 1786409089221,
+      "elapsed_ms": 10821.202240884304,
+      "host": "149.28.63.106",
+      "local_vote_file": "docs/evidence/a666-nav-return-capacity-repair-20260810/packet-05-phase1-1-000000/destination-consume/proof/validator-3.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-3.vote.json",
+      "reused_existing_vote": false,
+      "started_at_unix_ms": 1786409078400,
+      "validator": "validator-3"
+    },
+    {
+      "completed_at_unix_ms": 1786409085412,
+      "elapsed_ms": 7011.312402784824,
+      "host": "95.179.179.206",
+      "local_vote_file": "docs/evidence/a666-nav-return-capacity-repair-20260810/packet-05-phase1-1-000000/destination-consume/proof/validator-4.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-4.vote.json",
+      "reused_existing_vote": true,
+      "started_at_unix_ms": 1786409078401,
+      "validator": "validator-4"
+    },
+    {
+      "completed_at_unix_ms": 1786409078891,
+      "elapsed_ms": 489.61956799030304,
+      "host": "45.32.110.170",
+      "local_vote_file": "docs/evidence/a666-nav-return-capacity-repair-20260810/packet-05-phase1-1-000000/destination-consume/proof/validator-5.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/a666-capfix-05-20260810-destination-consume/validator-5.vote.json",
+      "reused_existing_vote": true,
+      "started_at_unix_ms": 1786409078401,
+      "validator": "validator-5"
+    }
+  ]
+}

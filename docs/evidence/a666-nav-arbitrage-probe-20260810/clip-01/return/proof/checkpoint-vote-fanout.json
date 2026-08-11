@@ -1,0 +1,83 @@
+{
+  "completed_at_unix_ms": 1786397665614,
+  "elapsed_ms": 11029.742196202278,
+  "expected_validator_count": 6,
+  "failure_count": 0,
+  "failures": [],
+  "quorum_validator_count": 5,
+  "remote_vote_files": [
+    "/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-0.vote.json",
+    "/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-1.vote.json",
+    "/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-2.vote.json",
+    "/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-3.vote.json",
+    "/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-4.vote.json",
+    "/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-5.vote.json"
+  ],
+  "remote_vote_files_csv": "/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-0.vote.json,/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-1.vote.json,/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-2.vote.json,/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-3.vote.json,/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-4.vote.json,/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-5.vote.json",
+  "schema": "postfiat-a666-parallel-checkpoint-votes-v1",
+  "started_at_unix_ms": 1786397654585,
+  "strategy": "independent validator signatures collected concurrently; 5-of-6 quorum required",
+  "validator_count": 6,
+  "validators": [
+    {
+      "completed_at_unix_ms": 1786397665515,
+      "elapsed_ms": 10929.787702858448,
+      "host": "64.176.220.75",
+      "local_vote_file": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-nav-arbitrage-probe-20260810/clip-01/return/proof/validator-0.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-0.vote.json",
+      "reused_existing_vote": false,
+      "started_at_unix_ms": 1786397654585,
+      "validator": "validator-0"
+    },
+    {
+      "completed_at_unix_ms": 1786397662964,
+      "elapsed_ms": 8377.97685712576,
+      "host": "95.179.184.122",
+      "local_vote_file": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-nav-arbitrage-probe-20260810/clip-01/return/proof/validator-1.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-1.vote.json",
+      "reused_existing_vote": false,
+      "started_at_unix_ms": 1786397654586,
+      "validator": "validator-1"
+    },
+    {
+      "completed_at_unix_ms": 1786397655975,
+      "elapsed_ms": 1388.4979262948036,
+      "host": "66.42.48.39",
+      "local_vote_file": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-nav-arbitrage-probe-20260810/clip-01/return/proof/validator-2.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-2.vote.json",
+      "reused_existing_vote": false,
+      "started_at_unix_ms": 1786397654587,
+      "validator": "validator-2"
+    },
+    {
+      "completed_at_unix_ms": 1786397665613,
+      "elapsed_ms": 11025.613106787205,
+      "host": "149.28.63.106",
+      "local_vote_file": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-nav-arbitrage-probe-20260810/clip-01/return/proof/validator-3.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-3.vote.json",
+      "reused_existing_vote": false,
+      "started_at_unix_ms": 1786397654587,
+      "validator": "validator-3"
+    },
+    {
+      "completed_at_unix_ms": 1786397662937,
+      "elapsed_ms": 8348.834536969662,
+      "host": "95.179.179.206",
+      "local_vote_file": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-nav-arbitrage-probe-20260810/clip-01/return/proof/validator-4.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-4.vote.json",
+      "reused_existing_vote": false,
+      "started_at_unix_ms": 1786397654588,
+      "validator": "validator-4"
+    },
+    {
+      "completed_at_unix_ms": 1786397656942,
+      "elapsed_ms": 2353.7435680627823,
+      "host": "45.32.110.170",
+      "local_vote_file": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-nav-arbitrage-probe-20260810/clip-01/return/proof/validator-5.vote.json",
+      "remote_vote_file": "/var/lib/postfiat/validator-2/a666-arbclip01-20260810-return-import/validator-5.vote.json",
+      "reused_existing_vote": false,
+      "started_at_unix_ms": 1786397654589,
+      "validator": "validator-5"
+    }
+  ]
+}

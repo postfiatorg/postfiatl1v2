@@ -1,0 +1,21 @@
+{
+  "schema": "postfiat.a666.nav_arbitrage_probe_import_rejection.v1",
+  "workflow_id": "a666-arbclip01-20260810",
+  "verdict": "REJECTED_BEFORE_CONSENSUS",
+  "error_code": "insufficient_pftl_uniswap_ethereum_supply",
+  "error_message": "return import exceeds route Ethereum spendable supply",
+  "return_import_atoms": 13571391,
+  "return_import_tokens": "13.571391",
+  "ethereum_spendable_supply_atoms": 9096189,
+  "ethereum_spendable_supply_tokens": "9.096189",
+  "capacity_shortfall_atoms": 4475202,
+  "capacity_shortfall_tokens": "4.475202",
+  "pftl_height_before": 866,
+  "pftl_height_after": 866,
+  "validator_count_checked": 6,
+  "validators_converged": true,
+  "mempool_pending_on_all_validators": 0,
+  "pftl_state_mutated": false,
+  "burn_event_consumed_on_pftl": false,
+  "burn_event_hash": "abc191c1f287a251cef21e6b876d4953126a692f58a62189fba399ddedcc1877"
+}

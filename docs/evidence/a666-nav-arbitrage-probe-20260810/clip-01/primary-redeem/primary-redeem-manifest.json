@@ -1,0 +1,13 @@
+{
+  "base_value_atoms": 12262228,
+  "base_value_rounding": "ceil",
+  "nav_amount_atoms": 13571391,
+  "nav_per_unit_usd_1e8": 90353505,
+  "policy_epoch": 7,
+  "policy_hash": "50af7455e7ed12b305decbf07d164eca9eb60eb53115dbf3569af4213d09cb11bed11da5a084a11847c0eca28ec6ca8d",
+  "redemption_nonce": "d6bf16d988cdd9c0a0225a510e73d8da008bcd8d041b7b3ae8a94ff3bcd52728",
+  "route_epoch": 7,
+  "schema": "postfiat.a666.transparent_primary_redeem.v1",
+  "settlement_output_atoms": 12256096,
+  "settlement_output_rounding": "floor"
+}

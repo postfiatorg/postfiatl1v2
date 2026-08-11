@@ -1,0 +1,17 @@
+{
+  "schema": "postfiat-pftl-uniswap-supply-status-v2",
+  "observed_pftl_height": 873,
+  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+  "handoff_controller": "0x9a0262c0572fb4db08765408eb225e207f40c3d9",
+  "wrapped_navcoin_token": "0xee4c92edb03efdd9b519339edc19ad70c69a9be5",
+  "native_nav_asset_id": "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c",
+  "live_value_enabled": true,
+  "paused": false,
+  "ethereum_spendable_supply_atoms": 31484722253,
+  "available_return_import_atoms": 31484722253,
+  "outstanding_bridge_claims_atoms": 0,
+  "pending_return_import_claims_atoms": 0,
+  "settlement_reserve_atoms": 198150288,
+  "reserve_backed_redeem_atoms": 219305590,
+  "invariant_holds": true
+}

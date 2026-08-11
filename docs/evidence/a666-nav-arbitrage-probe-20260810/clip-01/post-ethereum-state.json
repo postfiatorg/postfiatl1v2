@@ -1,0 +1,13 @@
+{
+  "ethereum_block": 25727340,
+  "wallet_usdc_atoms": 563758626,
+  "wallet_wa666_atoms": 103000000,
+  "wrapped_supply_atoms": 31484722253,
+  "pool": {
+    "sqrt_price_x96": "92147715135694968247828748729",
+    "tick": 3021,
+    "protocol_fee": 512125,
+    "lp_fee": 500,
+    "liquidity": 3000000000
+  }
+}

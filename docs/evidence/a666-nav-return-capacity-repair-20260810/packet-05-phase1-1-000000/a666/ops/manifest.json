@@ -1,0 +1,21 @@
+{
+  "destination_deadline_seconds": 1785311404,
+  "ethereum_packet_digest": "8dbd308f439e3bed08e72e858c6d94e1f6b87e975d95aa63b2cb265383e113ef",
+  "ethereum_recipient": "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0",
+  "export_nonce": "ce99cfffa937471847f3fe3b300979a721cd7d6f7802887be0a5ff656b8fab99",
+  "files": {
+    "export": "docs/evidence/a666-acceptance-20260728/phase-1-transparent-issue-debug/a666/ops/03-export.ops.json",
+    "mint_packet": "docs/evidence/a666-acceptance-20260728/phase-1-transparent-issue-debug/a666/ops/03-mint-packet.json",
+    "mint_packet_digest": "docs/evidence/a666-acceptance-20260728/phase-1-transparent-issue-debug/a666/ops/03-mint-packet-digest.json",
+    "reserve": "docs/evidence/a666-acceptance-20260728/phase-1-transparent-issue-debug/a666/ops/01-reserve.ops.json",
+    "subscribe": "docs/evidence/a666-acceptance-20260728/phase-1-transparent-issue-debug/a666/ops/02-subscribe.ops.json"
+  },
+  "mint_amount_atoms": 1000000,
+  "packet_hash": "72b2ccf189370d1a6012fd5a3fce3835612289a71f34b9807d3eea0655d0811b207e9b548c67a02b8178bd1581c1fd8d",
+  "reservation_id": "bb66508bf3b97b633c86f81caf5bbf8aa4874cc07a350e885a7428b97c5a428998162febeb77363637cabd59cbfbd873",
+  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
+  "schema": "postfiat.a666.transparent_primary_issue_ops.v1",
+  "settlement_value_atoms": 1005000,
+  "subscriber": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "subscription_nonce": "f198b0ed4da7b74b17b0a5d4f3145bdd39093ee12a78ed225ecee94e6877a72c"
+}

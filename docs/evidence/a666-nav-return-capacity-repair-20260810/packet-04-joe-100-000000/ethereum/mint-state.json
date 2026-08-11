@@ -1,0 +1,59 @@
+{
+  "addresses": {
+    "controller": "0x9A0262C0572fb4DB08765408eB225E207F40c3d9",
+    "migration": "0xFfBBae0eb8450D10F8C0D26C2952b089D56e517c",
+    "owner": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+    "token": "0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5",
+    "verifier": "0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A"
+  },
+  "chain_id": 1,
+  "packet_digest": "0x6285152bac1f632d597a04250d676d680a5bd9460a440a06ffa023e3bb952600",
+  "phase": "minted-to-recipient",
+  "post_state": {
+    "latest_finalized_height": 358,
+    "migration_reserve_atoms": 28386197455,
+    "mint_paused": false,
+    "packet_consumed": true,
+    "receipt_accepted": true,
+    "recipient_balance_atoms": 100000000,
+    "token_total_supply": 31486197455,
+    "total_minted_atoms": 31486197455
+  },
+  "pre_state": {
+    "latest_finalized_height": 348,
+    "migration_reserve_atoms": 28386197455,
+    "mint_paused": false,
+    "packet_consumed": false,
+    "receipt_accepted": false,
+    "recipient_balance_atoms": 0,
+    "token_total_supply": 31386197455,
+    "total_minted_atoms": 31386197455
+  },
+  "proof": {
+    "proof_bytes": 356,
+    "proof_sha256": "4f5500a9f5faafecdec60d09cf58509fa16fb3bbf56058381594cf84abf277d2",
+    "public_values_bytes": 1120,
+    "public_values_sha256": "4efac4d2c72427b72e37bda9933dbfd1ff4625b37ec79c69653aaffe3a297b6b"
+  },
+  "receipt_commitment": "0x3465d796f31407c1b193438024c049f75004d9c14af263c0d1414f2155db802b",
+  "rpc": "https://ethereum-rpc.publicnode.com",
+  "schema": "postfiat-a666-proof-gated-mint-mainnet-v1",
+  "transactions": [
+    {
+      "block_number": 25628155,
+      "gas_estimate": 371071,
+      "gas_used": 366991,
+      "label": "accept finalized A666 export proof",
+      "status": 1,
+      "tx": "0x1865f032c0714b1a415931479a555096d9540df346bb3537428af86deff42112"
+    },
+    {
+      "block_number": 25628156,
+      "gas_estimate": 207762,
+      "gas_used": 185454,
+      "label": "consume finalized A666 mint packet",
+      "status": 1,
+      "tx": "0xb4e91d0799ac566c50031329df06e9a51e638ceda20ef8ebcb6c6178429ca5a8"
+    }
+  ]
+}
