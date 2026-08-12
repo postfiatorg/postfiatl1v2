@@ -17,6 +17,8 @@ return_burned_topic=0x4d6105cbfd6dce49c1a94770a1492db4e1f2b0670d8bb14fe8da318d88
 ethereum_rpc=${NAVCOIN_ETHEREUM_RPC:-${A666_ETHEREUM_RPC:-https://ethereum-rpc.publicnode.com}}
 cast_bin=${NAVCOIN_CAST_BIN:-${A666_CAST_BIN:-cast}}
 finality_timeout_seconds=1800
+resume_after_checkpoint=false
+resume_auto=false
 
 while (($#)); do
   case "$1" in
@@ -24,6 +26,8 @@ while (($#)); do
     --workflow-id) workflow_id=$2; shift 2 ;;
     --expected-pftl-height) expected_pftl_height=$2; shift 2 ;;
     --finality-timeout-seconds) finality_timeout_seconds=$2; shift 2 ;;
+    --resume-after-checkpoint) resume_after_checkpoint=true; shift ;;
+    --resume-auto) resume_auto=true; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -50,9 +54,6 @@ rpc=${A666_VALIDATOR_ETHEREUM_RPC:-http://127.0.0.1:28701}
 test -s "$hosts_file"
 test -s "$operator_key"
 test -s "$burn_report"
-test ! -e "$proof_dir"
-test ! -e "$artifact_dir"
-mkdir -p "$proof_dir"
 
 burn_tx=$(jq -er '.transaction.tx' "$burn_report")
 burn_block=$(jq -er '.transaction.block_number' "$burn_report")
@@ -68,8 +69,33 @@ test "$log_index" = 1
 [[ "$burn_event_hash" =~ ^[0-9a-f]{64}$ ]]
 [[ "$return_nonce" =~ ^[0-9a-f]{64}$ ]]
 
-"$cast_bin" receipt "$burn_tx" --json --rpc-url "$ethereum_rpc" \
-  > "$proof_dir/burn-receipt.json"
+validator2_host=$(jq -er '."validator-2"' "$hosts_file")
+if "$resume_auto"; then
+  if test -s "$proof_dir/checkpoint.json" \
+    && test -s "$proof_dir/burn-receipt.json" \
+    && ! test -s "$proof_dir/receipt-proof.json" \
+    && ! test -e "$artifact_dir"; then
+    resume_after_checkpoint=true
+  elif test -e "$proof_dir" || test -e "$artifact_dir"; then
+    echo "return-import evidence is partial at an unsupported boundary" >&2
+    exit 1
+  fi
+fi
+
+if "$resume_after_checkpoint"; then
+  test -s "$proof_dir/checkpoint.json"
+  test -s "$proof_dir/burn-receipt.json"
+  test ! -s "$proof_dir/receipt-proof.json"
+  test ! -e "$artifact_dir"
+  ssh -o BatchMode=yes "root@$validator2_host" "test -d '$remote_root'"
+else
+  test ! -e "$proof_dir"
+  test ! -e "$artifact_dir"
+  mkdir -p "$proof_dir"
+
+  "$cast_bin" receipt "$burn_tx" --json --rpc-url "$ethereum_rpc" \
+    > "$proof_dir/burn-receipt.json"
+fi
 jq -e \
   --arg controller "${controller,,}" \
   --arg topic "$return_burned_topic" \
@@ -79,40 +105,49 @@ jq -e \
    and .logs[$log_index].topics[0]==$topic' \
   "$proof_dir/burn-receipt.json" >/dev/null
 
-validator2_host=$(jq -er '."validator-2"' "$hosts_file")
-ssh -o BatchMode=yes "root@$validator2_host" \
-  "test ! -e '$remote_root'; install -d -m 700 '$remote_root'"
+if ! "$resume_after_checkpoint"; then
+  ssh -o BatchMode=yes "root@$validator2_host" \
+    "test ! -e '$remote_root'; install -d -m 700 '$remote_root'"
+
+  deadline=$((SECONDS + finality_timeout_seconds))
+  while ! ssh -o BatchMode=yes "root@$validator2_host" \
+    "$remote_node ethereum-checkpoint-observe \
+      --data-dir /var/lib/postfiat/validator-2 \
+      --route-id '$route_id' \
+      --ethereum-rpc '$rpc' \
+      --block-number '$burn_block' \
+      --checkpoint-file '$remote_root/checkpoint.json'" \
+    > "$proof_dir/checkpoint-report.json" 2> "$proof_dir/checkpoint-observe.stderr"
+  do
+    if ((SECONDS >= deadline)); then
+      echo "timed out waiting for Ethereum checkpoint finality" >&2
+      exit 1
+    fi
+    sleep 12
+  done
+  if ! test -s "$proof_dir/checkpoint-observe.stderr"; then
+    printf '%s\n' "checkpoint observation completed without stderr" \
+      > "$proof_dir/checkpoint-observe.stderr"
+  fi
+  scp -q "root@$validator2_host:$remote_root/checkpoint.json" "$proof_dir/checkpoint.json"
+fi
 
 deadline=$((SECONDS + finality_timeout_seconds))
 while ! ssh -o BatchMode=yes "root@$validator2_host" \
-  "$remote_node ethereum-checkpoint-observe \
-    --data-dir /var/lib/postfiat/validator-2 \
-    --route-id '$route_id' \
-    --ethereum-rpc '$rpc' \
-    --block-number '$burn_block' \
-    --checkpoint-file '$remote_root/checkpoint.json'" \
-  > "$proof_dir/checkpoint-report.json" 2> "$proof_dir/checkpoint-observe.stderr"
-do
-  if ((SECONDS >= deadline)); then
-    echo "timed out waiting for Ethereum checkpoint finality" >&2
-    exit 1
-  fi
-  sleep 12
-done
-if ! test -s "$proof_dir/checkpoint-observe.stderr"; then
-  printf '%s\n' "checkpoint observation completed without stderr" \
-    > "$proof_dir/checkpoint-observe.stderr"
-fi
-scp -q "root@$validator2_host:$remote_root/checkpoint.json" "$proof_dir/checkpoint.json"
-
-ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node ethereum-receipt-proof-build \
     --data-dir /var/lib/postfiat/validator-2 \
     --route-id '$route_id' \
     --ethereum-rpc '$rpc' \
     --transaction-hash '$burn_tx' \
     --proof-file '$remote_root/receipt-proof.json'" \
-  > "$proof_dir/receipt-proof-report.json"
+  > "$proof_dir/receipt-proof-report.json" 2> "$proof_dir/receipt-proof.stderr"
+do
+  if ((SECONDS >= deadline)); then
+    echo "timed out building the Ethereum receipt proof" >&2
+    exit 1
+  fi
+  sleep 12
+done
 scp -q "root@$validator2_host:$remote_root/receipt-proof.json" "$proof_dir/receipt-proof.json"
 
 python3 scripts/a666-parallel-checkpoint-votes.py \

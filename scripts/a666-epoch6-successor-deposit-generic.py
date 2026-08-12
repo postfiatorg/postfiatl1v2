@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -58,10 +59,15 @@ def main() -> None:
     spec.loader.exec_module(sender)
 
     sender.HERE = args.output_dir
+    sender.BUILDER = Path(
+        os.environ.get("A666_DEPOSIT_BUILDER", str(sender.BUILDER))
+    )
     sender.MANIFEST = MANIFEST
     sender.EXPECTED_MANIFEST_SHA256 = MANIFEST_SHA256
     sender.CHAIN_ID = 1
-    sender.RPC = "https://ethereum-rpc.publicnode.com"
+    sender.RPC = os.environ.get(
+        "A666_ETHEREUM_RPC", "https://ethereum-rpc.publicnode.com"
+    )
     sender.VAULT = VAULT
     sender.VERIFIER = VERIFIER
     sender.USDC = USDC

@@ -37,7 +37,9 @@ wa666=0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5
 joe=pfab9b9228942e5c529633a13aa271d5297bec6353
 pfusdc=02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b
 a666=521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c
-nav_manifest=docs/evidence/a666-public-reserve-product-20260803/nav-e6-fresh/20260808T005948Z-e5compat/e6-ops/live-nav-mark-manifest.json
+nav_manifest=${A666_NAV_MANIFEST:-docs/evidence/a666-public-reserve-product-20260803/nav-e6-fresh/20260808T005948Z-e5compat/e6-ops/live-nav-mark-manifest.json}
+
+test -s "$nav_manifest"
 
 test -s "$phase_dir/destination-consume/summary.json"
 jq -e '.verdict=="PASS"' "$phase_dir/destination-consume/summary.json" >/dev/null
@@ -46,6 +48,21 @@ packet_binding=$(sha256sum "$phase_dir/a666/ops/manifest.json" | awk '{print $1}
 mkdir -p "$phase_dir/uniswap"
 
 if ! "$resume_after_return_import"; then
+allowance_event_id=$(date -u +%Y%m%dT%H%M%SZ)-$$
+allowance_prepare_file="$phase_dir/uniswap/allowances-prepare-$allowance_event_id.json"
+allowance_revoke_file="$phase_dir/uniswap/allowances-revoke-$allowance_event_id.json"
+revoke_uniswap_allowances() {
+  if ! test -e "$allowance_revoke_file"; then
+    python3 scripts/a666-mainnet-uniswap-allowances.py revoke \
+      --output "$allowance_revoke_file"
+  fi
+}
+trap revoke_uniswap_allowances EXIT
+python3 scripts/a666-mainnet-uniswap-allowances.py prepare \
+  --output "$allowance_prepare_file" \
+  --ttl-seconds 86400
+jq -e '.verdict=="PASS" and .mode=="prepare"' "$allowance_prepare_file" >/dev/null
+
 deadline=$(( $(date +%s) + 1800 ))
 python3 scripts/pftl-uniswap-mainnet-swap.py \
   --direction wa666-to-usdc \
@@ -136,6 +153,9 @@ jq -e --argjson amount "$forward_output" --argjson minimum "$reverse_min" \
   '.tx_status==1 and .input_spent_atoms==$amount and .output_received_atoms >= $minimum' \
   "$phase_dir/uniswap/reverse-execution.json" >/dev/null
 return_amount=$(jq -er '.output_received_atoms' "$phase_dir/uniswap/reverse-execution.json")
+revoke_uniswap_allowances
+jq -e '.verdict=="PASS" and .mode=="revoke"' "$allowance_revoke_file" >/dev/null
+trap - EXIT
 
 ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node navcoin-bridge-supply-status \

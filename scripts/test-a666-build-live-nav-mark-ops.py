@@ -188,6 +188,20 @@ else:
         self.assertEqual(template["asset_precision"], 6)
         self.assertEqual(template["subscription_overlay_value"], 1_000)
         self.assertEqual(len(template["subscription_overlay_source_root"]), 96)
+
+    def test_excludes_unbacked_primary_reserve_from_nav_overlay(self) -> None:
+        result, output = self.run_builder(
+            route_overrides={"settlement_reserve_atoms": 12}
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        overlay = json.loads(
+            (output / "finalized-subscription-overlay.json").read_text()
+        )["overlay"]
+        row = overlay["primary_market_rows"][0]
+        self.assertEqual(row["reported_settlement_reserve_atoms"], 12)
+        self.assertEqual(row["settlement_reserve_atoms"], 10)
+        self.assertEqual(row["excluded_unbacked_reserve_atoms"], 2)
+        self.assertEqual(overlay["value_nav_units"], 1_000)
         self.assertTrue((output / "01-reserve-submit.ops.json").is_file())
         self.assertTrue((output / "02-epoch-finalize.ops.json").is_file())
         manifest = json.loads((output / "live-nav-mark-manifest.json").read_text())

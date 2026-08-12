@@ -12,6 +12,7 @@ a100_host=${A666_A100_HOST:?A666_A100_HOST is required}
 a100_port=${A666_A100_PORT:-30886}
 validator2_host=${A666_VALIDATOR2_HOST:?A666_VALIDATOR2_HOST is required}
 release_id=${A666_PFTL_RELEASE_ID:-resident-local-commit-777faa0}
+ethereum_rpc=${A666_ETHEREUM_RPC:-https://ethereum-rpc.publicnode.com}
 
 while (($#)); do
   case "$1" in
@@ -135,7 +136,7 @@ if test -s "$phase_dir/ethereum/mint-state.json" \
 fi
 
 verifier_height=$(ssh -o BatchMode=yes "root@$validator2_host" \
-  '/var/lib/postfiat/validator-2/pfusdc-latency-20260727-run2/cast call 0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A "latestFinalizedHeight()(uint64)" --rpc-url https://ethereum-rpc.publicnode.com')
+  "/var/lib/postfiat/validator-2/pfusdc-latency-20260727-run2/cast call 0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A 'latestFinalizedHeight()(uint64)' --rpc-url '$ethereum_rpc'")
 [[ "$verifier_height" =~ ^[0-9]+$ ]]
 test "$export_height" -gt "$verifier_height"
 verifier_height_before=$verifier_height

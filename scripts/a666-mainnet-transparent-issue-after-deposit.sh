@@ -186,7 +186,7 @@ export_elf=/workspace/a666-acceptance/witness/deployed-program-004e44.elf
 joe=pfab9b9228942e5c529633a13aa271d5297bec6353
 pfusdc=02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b
 a666=521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c
-ethereum_rpc=https://ethereum-rpc.publicnode.com
+ethereum_rpc=${A666_ETHEREUM_RPC:-https://ethereum-rpc.publicnode.com}
 wa666=0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5
 joe_evm=0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0
 uniswap_state_view=0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227
@@ -462,7 +462,7 @@ jq -e \
    and .export_entitlement_atoms==0' \
   "$phase_dir/pftl-supply-status-after.json" >/dev/null
 verifier_height=$(ssh -o BatchMode=yes "root@$validator2_host" \
-  '/var/lib/postfiat/validator-2/pfusdc-latency-20260727-run2/cast call 0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A "latestFinalizedHeight()(uint64)" --rpc-url https://ethereum-rpc.publicnode.com')
+  "/var/lib/postfiat/validator-2/pfusdc-latency-20260727-run2/cast call 0xb79FF97EcC11574a8A78d0b5a9D7C8c2A94bF96A 'latestFinalizedHeight()(uint64)' --rpc-url '$ethereum_rpc'")
 test "$verifier_height" = "$expected_verifier_height"
 
 ssh -o BatchMode=yes "root@$validator2_host" \

@@ -5,25 +5,42 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 round=
 campaign_dir=
 amount_atoms=10000000
+run_label=
+workflow_id=
 
 while (($#)); do
   case "$1" in
     --round) round=$2; shift 2 ;;
     --campaign-dir) campaign_dir=$2; shift 2 ;;
     --amount-atoms) amount_atoms=$2; shift 2 ;;
+    --run-label) run_label=$2; shift 2 ;;
+    --workflow-id) workflow_id=$2; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
-[[ "$round" =~ ^0[1-6]$ ]]
 [[ "$amount_atoms" =~ ^[1-9][0-9]*$ ]]
 test -n "$campaign_dir"
 test "$amount_atoms" -eq 10000000
 
+# The original six-round acceptance campaign used --round 01..06.  Wallet UX
+# invocations need fresh, replay-safe identifiers after that campaign, so they
+# supply an explicit run label and workflow id instead.  Keep the old interface
+# for reproducibility while refusing mixed or partially specified identities.
+if test -n "$round"; then
+  [[ "$round" =~ ^0[1-6]$ ]]
+  test -z "$run_label"
+  test -z "$workflow_id"
+  run_label="round-$round"
+  workflow_id="a666-rt${round}-20260810"
+else
+  [[ "$run_label" =~ ^[a-z0-9][a-z0-9-]{0,63}$ ]]
+  [[ "$workflow_id" =~ ^[a-z0-9][a-z0-9-]{0,39}$ ]]
+fi
+
 cd "$repo"
 campaign_dir=$(realpath -m "$campaign_dir")
-phase_dir="$campaign_dir/round-$round"
+phase_dir="$campaign_dir/$run_label"
 test ! -e "$phase_dir"
-workflow_id="a666-rt${round}-20260810"
 release_id=${A666_PFTL_RELEASE_ID:?A666_PFTL_RELEASE_ID is required}
 remote_node="/opt/postfiat/releases/$release_id/postfiat-node"
 local_node=${A666_LOCAL_NODE_BIN:?A666_LOCAL_NODE_BIN is required}
@@ -32,8 +49,11 @@ validator2_host=$(jq -er '."validator-2"' "$hosts_file")
 rpc=${A666_ETHEREUM_RPC:-https://ethereum-rpc.publicnode.com}
 wallet=0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0
 wa666=0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5
-nav_manifest=docs/evidence/a666-public-reserve-product-20260803/nav-e6-fresh/20260808T005948Z-e5compat/e6-ops/live-nav-mark-manifest.json
+nav_manifest=${A666_NAV_MANIFEST:-docs/evidence/a666-public-reserve-product-20260803/nav-e6-fresh/20260808T005948Z-e5compat/e6-ops/live-nav-mark-manifest.json}
 holder_key=/home/postfiat/tmp/pfusdc-closed-roundtrip-20260720/keys/holder.json
+
+test -s "$nav_manifest"
+test -s "$holder_key"
 
 status=$(ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node status --data-dir /var/lib/postfiat/validator-2")

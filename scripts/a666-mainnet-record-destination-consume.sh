@@ -17,6 +17,7 @@ cast_bin=${A666_CAST_BIN:-/home/postfiat/.foundry/bin/cast}
 log_index=1
 finality_timeout_seconds=1800
 resume_after_finality=false
+resume_after_checkpoint=false
 resume_after_vote_fanout=false
 resume_auto=false
 resume_from_empty_receipt=false
@@ -29,6 +30,7 @@ while (($#)); do
     --log-index) log_index=$2; shift 2 ;;
     --finality-timeout-seconds) finality_timeout_seconds=$2; shift 2 ;;
     --resume-after-finality) resume_after_finality=true; shift ;;
+    --resume-after-checkpoint) resume_after_checkpoint=true; shift ;;
     --resume-after-vote-fanout) resume_after_vote_fanout=true; shift ;;
     --resume-auto) resume_auto=true; shift ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -42,7 +44,13 @@ done
 [[ "$expected_pftl_height" =~ ^[0-9]+$ ]]
 [[ "$log_index" =~ ^[0-9]+$ ]]
 [[ "$finality_timeout_seconds" =~ ^[0-9]+$ ]]
-if "$resume_after_finality" && "$resume_after_vote_fanout"; then
+resume_mode_count=0
+for resume_mode in "$resume_after_finality" "$resume_after_checkpoint" "$resume_after_vote_fanout"; do
+  if "$resume_mode"; then
+    resume_mode_count=$((resume_mode_count + 1))
+  fi
+done
+if test "$resume_mode_count" -gt 1; then
   echo "resume modes are mutually exclusive" >&2
   exit 2
 fi
@@ -87,6 +95,11 @@ if "$resume_auto"; then
     && ! test -e "$proof_dir/checkpoint-certificate.json" \
     && ! test -e "$artifact_dir"; then
     resume_after_vote_fanout=true
+  elif test -s "$proof_dir/checkpoint.json" \
+    && test -s "$proof_dir/mint-receipt.json" \
+    && ! test -s "$proof_dir/receipt-proof.json" \
+    && ! test -e "$artifact_dir"; then
+    resume_after_checkpoint=true
   elif test -d "$phase_dir/destination-consume" \
     && test -e "$proof_dir/mint-receipt.json" \
     && ! test -s "$proof_dir/mint-receipt.json" \
@@ -118,12 +131,22 @@ else
     test ! -e "$phase_dir/destination-consume/pftl-supply-status-after.json"
     ssh -o BatchMode=yes "root@$validator2_host" "test -d '$remote_root'"
   else
-    if ! "$resume_from_empty_receipt"; then
+    if "$resume_after_checkpoint"; then
+      test -s "$proof_dir/checkpoint.json"
+      test -s "$proof_dir/mint-receipt.json"
+      test ! -s "$proof_dir/receipt-proof.json"
+      test ! -e "$artifact_dir"
+      ssh -o BatchMode=yes "root@$validator2_host" "test -d '$remote_root'"
+    elif ! "$resume_from_empty_receipt"; then
       test ! -e "$phase_dir/destination-consume"
+      mkdir -p "$proof_dir"
+      "$cast_bin" receipt "$mint_tx" --json --rpc-url "$ethereum_rpc" \
+        > "$proof_dir/mint-receipt.json"
+    else
+      mkdir -p "$proof_dir"
+      "$cast_bin" receipt "$mint_tx" --json --rpc-url "$ethereum_rpc" \
+        > "$proof_dir/mint-receipt.json"
     fi
-    mkdir -p "$proof_dir"
-    "$cast_bin" receipt "$mint_tx" --json --rpc-url "$ethereum_rpc" \
-      > "$proof_dir/mint-receipt.json"
   fi
   jq -e \
     --arg controller "${controller,,}" \
@@ -139,11 +162,12 @@ else
     "$proof_dir/mint-receipt.json" >/dev/null
 
   if ! "$resume_after_vote_fanout"; then
-    ssh -o BatchMode=yes "root@$validator2_host" \
+    if ! "$resume_after_checkpoint"; then
+      ssh -o BatchMode=yes "root@$validator2_host" \
       "test ! -e '$remote_root'; install -d -m 700 '$remote_root'"
 
-    deadline=$((SECONDS + finality_timeout_seconds))
-    while ! ssh -o BatchMode=yes "root@$validator2_host" \
+      deadline=$((SECONDS + finality_timeout_seconds))
+      while ! ssh -o BatchMode=yes "root@$validator2_host" \
       "$remote_node ethereum-checkpoint-observe \
         --data-dir /var/lib/postfiat/validator-2 \
         --route-id '$route_id' \
@@ -151,27 +175,36 @@ else
         --block-number '$mint_block' \
         --checkpoint-file '$remote_root/checkpoint.json'" \
       > "$proof_dir/checkpoint-report.json" 2> "$proof_dir/checkpoint-observe.stderr"
-    do
-      if ((SECONDS >= deadline)); then
-        echo "timed out waiting for Ethereum checkpoint finality" >&2
-        exit 1
+      do
+        if ((SECONDS >= deadline)); then
+          echo "timed out waiting for Ethereum checkpoint finality" >&2
+          exit 1
+        fi
+        sleep 12
+      done
+      if ! test -s "$proof_dir/checkpoint-observe.stderr"; then
+        printf '%s\n' "checkpoint observation completed without stderr" \
+          > "$proof_dir/checkpoint-observe.stderr"
       fi
-      sleep 12
-    done
-    if ! test -s "$proof_dir/checkpoint-observe.stderr"; then
-      printf '%s\n' "checkpoint observation completed without stderr" \
-        > "$proof_dir/checkpoint-observe.stderr"
+      scp -q "root@$validator2_host:$remote_root/checkpoint.json" "$proof_dir/checkpoint.json"
     fi
-    scp -q "root@$validator2_host:$remote_root/checkpoint.json" "$proof_dir/checkpoint.json"
 
-    ssh -o BatchMode=yes "root@$validator2_host" \
+    deadline=$((SECONDS + finality_timeout_seconds))
+    while ! ssh -o BatchMode=yes "root@$validator2_host" \
       "$remote_node ethereum-receipt-proof-build \
         --data-dir /var/lib/postfiat/validator-2 \
         --route-id '$route_id' \
         --ethereum-rpc '$rpc' \
         --transaction-hash '$mint_tx' \
         --proof-file '$remote_root/receipt-proof.json'" \
-      > "$proof_dir/receipt-proof-report.json"
+      > "$proof_dir/receipt-proof-report.json" 2> "$proof_dir/receipt-proof.stderr"
+    do
+      if ((SECONDS >= deadline)); then
+        echo "timed out building the Ethereum receipt proof" >&2
+        exit 1
+      fi
+      sleep 12
+    done
     scp -q "root@$validator2_host:$remote_root/receipt-proof.json" "$proof_dir/receipt-proof.json"
 
     python3 scripts/a666-parallel-checkpoint-votes.py \

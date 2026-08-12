@@ -23,6 +23,7 @@ deposit_tx=${DEPOSIT_TX:?DEPOSIT_TX is required}
 deposit_atoms=${DEPOSIT_ATOMS:?DEPOSIT_ATOMS is required}
 expected_holder_atoms=${EXPECTED_HOLDER_ATOMS:?EXPECTED_HOLDER_ATOMS is required}
 label_suffix=${PFTL_LABEL_SUFFIX:-}
+source_rpc=${A666_ETHEREUM_RPC:-https://ethereum-rpc.publicnode.com}
 
 case "$relay_phase" in
   all|propose|claim) ;;
@@ -207,7 +208,7 @@ if test "$relay_phase" != claim; then
     --expect-height '$start_height' >/dev/null
   '$node' vault-bridge-deposit-relay-rpc-bundle \
     --cast-bin '$cast' \
-    --source-rpc-url https://ethereum-rpc.publicnode.com \
+    --source-rpc-url '$source_rpc' \
     --tx-hash '$deposit_tx' \
     --vault-address '$vault' \
     --token-address 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 \

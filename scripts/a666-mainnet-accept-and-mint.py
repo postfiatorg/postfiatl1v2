@@ -18,7 +18,8 @@ from web3 import Web3
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "python"))
-RPC = "https://ethereum-rpc.publicnode.com"
+ARTIFACT_ROOT = Path(os.environ.get("A666_CONTRACT_ARTIFACT_ROOT", ROOT))
+RPC = os.environ.get("A666_ETHEREUM_RPC", "https://ethereum-rpc.publicnode.com")
 CHAIN_ID = 1
 ROUTE_ID = "pftl-a666-ethereum-wA666-usdc-v1"
 ROUTE_CONFIG_DIGEST = "12ed00ca87e29554ce4b978da1710fffc0830767e84e62f08df257f727db953efdd89bcf6ea99f5634d6e5ea8aca2933"
@@ -50,7 +51,7 @@ def atomic_write_json(path: Path, value: Any) -> None:
 
 
 def artifact(source: str, contract: str) -> dict[str, Any]:
-    path = ROOT / f"crates/ethereum-contracts/out/{source}/{contract}.json"
+    path = ARTIFACT_ROOT / f"crates/ethereum-contracts/out/{source}/{contract}.json"
     return json.loads(path.read_text())
 
 

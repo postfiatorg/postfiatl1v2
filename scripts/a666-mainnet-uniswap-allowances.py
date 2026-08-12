@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -12,11 +13,14 @@ from pathlib import Path
 from web3 import Web3
 
 
-sys.path.insert(0, "/home/postfiat/repos/StakeHub-master-e6")
+sys.path.insert(
+    0,
+    os.environ.get("A666_STAKEHUB_REPO", "/home/postfiat/repos/StakeHub-repeat-demo"),
+)
 from stakehub.agentd import call as agentd_call  # noqa: E402
 
 
-RPC = "https://ethereum-rpc.publicnode.com"
+RPC = os.environ.get("A666_ETHEREUM_RPC", "https://ethereum-rpc.publicnode.com")
 WALLET = Web3.to_checksum_address("0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0")
 USDC = Web3.to_checksum_address("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")
 WA666 = Web3.to_checksum_address("0xeE4C92eDB03efdD9B519339edc19ad70C69A9bE5")

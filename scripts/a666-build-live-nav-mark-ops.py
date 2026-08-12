@@ -101,11 +101,10 @@ def build_overlay(
         if bucket["status"] == "active"
         and bucket.get("asset_id", settlement_asset) == settlement_asset
     )
-    settlement_reserve = int(route["settlement_reserve_atoms"])
-    if settlement_reserve < 0:
+    reported_settlement_reserve = int(route["settlement_reserve_atoms"])
+    if reported_settlement_reserve < 0:
         raise RuntimeError("primary-market reserve cannot be negative")
-    if settlement_reserve > active_bucket_backing:
-        raise RuntimeError("primary-market reserve exceeds proof-backed vault backing")
+    settlement_reserve = min(reported_settlement_reserve, active_bucket_backing)
     route_rows: list[dict[str, Any]] = []
     if settlement_reserve:
         route_rows.append(
@@ -114,6 +113,10 @@ def build_overlay(
                 "route_config_digest": route["route_config_digest"],
                 "settlement_asset_id": settlement_asset,
                 "settlement_reserve_atoms": settlement_reserve,
+                "reported_settlement_reserve_atoms": reported_settlement_reserve,
+                "excluded_unbacked_reserve_atoms": (
+                    reported_settlement_reserve - settlement_reserve
+                ),
                 "value_nav_units": settlement_to_nav_value(
                     settlement_reserve, settlement_unit, precision
                 ),
