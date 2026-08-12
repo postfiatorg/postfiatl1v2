@@ -10,16 +10,16 @@ async function source(relativePath) {
   return readFile(resolve(SRC_ROOT, relativePath), 'utf8');
 }
 
-test('mounted wallet navigation presents the current process in order', async () => {
+test('mounted wallet navigation presents user goals in order and hides operator tools', async () => {
   const app = await source('App.jsx');
   const expected = [
-    "{ id: 'wallet', label: 'Wallet' }",
-    "{ id: 'bridge', label: 'Bridge' }",
-    "{ id: 'market', label: 'NAV Markets' }",
-    "{ id: 'send', label: 'Send' }",
-    "{ id: 'swap', label: 'Process' }",
-    "{ id: 'nav', label: 'NavCoins' }",
-    "{ id: 'more', label: 'More' }",
+    "id: 'wallet', label: 'Home'",
+    "id: 'nav', label: 'Assets'",
+    "id: 'market', label: 'Trade'",
+    "id: 'bridge', label: 'Bridge'",
+    "id: 'send', label: 'Send'",
+    "id: 'activity', label: 'Activity'",
+    "id: 'more', label: 'Settings'",
   ];
   let previous = -1;
   for (const entry of expected) {
@@ -27,7 +27,7 @@ test('mounted wallet navigation presents the current process in order', async ()
     assert.ok(index > previous, `${entry} must be mounted in current-process order`);
     previous = index;
   }
-  assert.doesNotMatch(app, /FastSwapDemo|ProductPrivateSwap/);
+  assert.doesNotMatch(app, /FastSwapDemo|ProductPrivateSwap|A666RoundTrip|PrivateFix|label: 'Process'|label: 'A666 Loop'/);
 });
 
 test('empty-wallet onboarding can restore an encrypted wallet backup', async () => {
@@ -37,10 +37,24 @@ test('empty-wallet onboarding can restore an encrypted wallet backup', async () 
   ]);
 
   assert.match(app, /onImportBackup=\{handleImportBackup\}/);
-  assert.match(onboard, /Import Encrypted Backup/);
+  assert.match(onboard, /Restore from encrypted backup/);
+  assert.match(onboard, /This is the 64-character hexadecimal recovery seed—not the passphrase/);
   assert.match(onboard, /backup\.vault\.ciphertext/);
   assert.match(onboard, /isValidAddress\(backup\.metadata\.address\)/);
   assert.doesNotMatch(onboard, /decryptVault/);
+});
+
+test('unlocked wallet can rotate its browser passphrase without changing custody identity', async () => {
+  const [app, settings] = await Promise.all([
+    source('App.jsx'),
+    source('components/More.jsx'),
+  ]);
+
+  assert.match(app, /const seed = getDecryptedSeed\(\)/);
+  assert.match(app, /encryptVault\(seed, newPassphrase\)/);
+  assert.match(app, /\.\.\.vault\.metadata/);
+  assert.match(settings, /does not change the wallet address or recovery seed/);
+  assert.match(settings, /Existing backup files still require their original passphrase/);
 });
 
 test('bridge-in is Ethereum mainnet USDC and never executes a retired route', async () => {
@@ -51,20 +65,20 @@ test('bridge-in is Ethereum mainnet USDC and never executes a retired route', as
   ]);
   const runtime = `${bridge}\n${evm}\n${utils}`;
 
-  assert.match(bridge, /MetaMask bridge-in · Ethereum mainnet/);
+  assert.match(bridge, /Ethereum → PFTL/);
+  assert.match(bridge, /Deposit USDC/);
   assert.match(bridge, /loadGovernedVaultBridgeRoute/);
   assert.match(bridge, /depositToEthereumBridge/);
   assert.match(utils, /ETH_MAINNET_CHAIN_ID = 1/);
-  assert.doesNotMatch(runtime, /ARBITRUM_CHAIN_ID|USDC_CONTRACT_ARBITRUM|ensureArbitrum|getArbitrum/);
+  assert.doesNotMatch(runtime, /Arbitrum|ARBITRUM_CHAIN_ID|USDC_CONTRACT_ARBITRUM|ensureArbitrum|getArbitrum/);
   assert.doesNotMatch(runtime, /cctpBridgeUsdc|ensureEthereumSepolia/);
 });
 
 test('NAVCoin market UI is registry-driven and has no hard-coded asset identity', async () => {
-  const [market, registry, route, process] = await Promise.all([
+  const [market, registry, route] = await Promise.all([
     source('components/NavcoinPrimaryMarket.jsx'),
     source('lib/navcoin-markets.js'),
     source('lib/navcoin-primary-route.js'),
-    source('components/Swap.jsx'),
   ]);
 
   assert.match(registry, /navcoinMarketsFromRoutes/);
@@ -74,9 +88,12 @@ test('NAVCoin market UI is registry-driven and has no hard-coded asset identity'
   assert.match(market, /await readWrappedNavcoinBalance\(selected, market\)/);
   assert.match(market, /setMetamaskNavcoinBalance\(wrappedBalance\.toString\(\)\)/);
   assert.match(market, /verificationCopy\(route\?\.outbound_verification_class\)/);
+  assert.match(market, /https:\/\/app\.uniswap\.org\/swap\?chain=mainnet/);
+  assert.match(market, /inputCurrency=\$\{ETH_MAINNET_USDC\}&outputCurrency=\$\{market\.wrappedToken\}/);
+  assert.match(market, /Redeem at NAV → From MetaMask/);
   assert.doesNotMatch(market, /Return \$\{wrappedSymbol\} trustlessly/);
-  assert.match(process, /market\.symbol/);
-  assert.match(process, /onNavigate\?\.\('market', \{ marketKey: market\.key \}\)/);
+  assert.match(registry, /loadNavcoinMarkets/);
+  assert.match(registry, /assetInfo\(assetId\)/);
 });
 
 test('visible asset surfaces contain no executable a651/a652 assumptions or fake verification', async () => {
@@ -90,8 +107,10 @@ test('visible asset surfaces contain no executable a651/a652 assumptions or fake
 
   assert.doesNotMatch(runtime, /A651_ASSET_ID|A652_ASSET_ID|legacy_a651_uniswap/);
   assert.doesNotMatch(runtime, /setVerified\s*\(\s*true\s*\)/);
-  assert.match(runtime, /NAVCoin/);
-  assert.match(runtime, /Governed PFTL settlement asset|Governed NAVCoin settlement asset/);
+  assert.match(runtime, /Verified NAV asset|NAV asset/);
+  assert.match(runtime, /Settlement asset on PFTL|Settlement asset/);
+  assert.doesNotMatch(runtime, /Total balance/);
+  assert.doesNotMatch(runtime, /other or legacy issued asset/i);
 });
 
 test('retired browser workflow modules and proxy are absent', async () => {

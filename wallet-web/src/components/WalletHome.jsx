@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { formatBalance, formatAssetBalance, shortenAssetId, truncateMiddle, pftToAtoms } from '../lib/utils.js';
 import { displayAssetSymbol, navcoinMarketForAsset } from '../lib/navcoin-markets.js';
 import {
@@ -14,6 +14,11 @@ import {
   removeFastPayRecovery,
   saveFastPayRecovery,
 } from '../lib/fastpay-recovery-store.js';
+
+function formatUsdE8(value) {
+  const cents = (BigInt(value) + 500_000n) / 1_000_000n;
+  return `$${(cents / 100n).toLocaleString()}.${(cents % 100n).toString().padStart(2, '0')}`;
+}
 
 export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, address, publicKeyHex, chainStatus, chainCapabilities, liveSnapshot = null, walletFeedStatus = null, onCopy, go, visible = true }) {
   const fastpayEnabled = chainCapabilities?.owned_lane_enabled === true;
@@ -32,6 +37,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
   const [fastpayRecoveries, setFastpayRecoveries] = useState([]);
   const [fastpayRecoveryBusy, setFastpayRecoveryBusy] = useState('');
   const [assets, setAssets] = useState([]);
+  const [navByAssetId, setNavByAssetId] = useState({});
   const [refreshing, setRefreshing] = useState(false);
   const [txs, setTxs] = useState([]);
   const [wrapOpen, setWrapOpen] = useState(false);
@@ -40,7 +46,6 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
   const [wrapBusy, setWrapBusy] = useState(false);
   const [wrapError, setWrapError] = useState('');
   const [wrapSuccess, setWrapSuccess] = useState('');
-  const automaticActivationAttempt = useRef(null);
 
   const applyFastpaySnapshot = useCallback((snapshot) => {
     setFastpayBalance(snapshot.totalValue ?? snapshot.total_value ?? 0);
@@ -240,49 +245,6 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
 
   const handlePublishPublicKey = () => activatePublicKey({ automatic: false });
 
-  useEffect(() => {
-    if (automaticActivationAttempt.current?.address !== address) {
-      automaticActivationAttempt.current = null;
-    }
-    let hasFunds = false;
-    try { hasFunds = BigInt(balance ?? 0) > 0n; } catch (_) { hasFunds = Number(balance) > 0; }
-    if (
-      !visible
-      || publishedPublicKey !== false
-      || !!publishSuccess
-      || !hasFunds
-      || !rpc
-      || !txBuilder
-      || !backupJson
-      || !address
-      || !chainStatus
-      || !chainCapabilities
-      || chainCapabilities.read_only
-      || !fastpayEnabled
-      || publishBusy
-      || automaticActivationAttempt.current?.address === address
-    ) return;
-
-    // At most one automatic mutation per mounted wallet. A genuine failure is
-    // left visible for an explicit retry; live-feed rerenders never resubmit.
-    automaticActivationAttempt.current = { address };
-    void activatePublicKey({ automatic: true });
-  }, [
-    visible,
-    publishedPublicKey,
-    publishSuccess,
-    balance,
-    rpc,
-    txBuilder,
-    backupJson,
-    address,
-    chainStatus,
-    chainCapabilities,
-    fastpayEnabled,
-    publishBusy,
-    activatePublicKey,
-  ]);
-
   const closeWrap = () => {
     setWrapOpen(false);
     setFastpaySheetMode('wrap');
@@ -416,13 +378,43 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
     return () => document.removeEventListener('visibilitychange', handler);
   }, [visible, fetchAccount]);
 
-  const getAssetCode = (assetId) => {
-    return displayAssetSymbol(markets, assetId, shortenAssetId(assetId));
+  useEffect(() => {
+    if (!visible || !rpc || markets.length === 0) {
+      setNavByAssetId({});
+      return undefined;
+    }
+    let disposed = false;
+    let timer = null;
+    const refreshNav = async () => {
+      const entries = await Promise.all(markets.map(async market => {
+        try {
+          const response = await rpc.vaultBridgeStatus(market.navAssetId);
+          const nav = response?.ok === true ? response.result?.nav_per_unit : null;
+          return nav === null || nav === undefined ? null : [market.navAssetId, BigInt(String(nav))];
+        } catch (_) { return null; }
+      }));
+      if (!disposed) {
+        setNavByAssetId(Object.fromEntries(entries.filter(Boolean).map(([assetId, nav]) => [assetId, nav.toString()])));
+        timer = setTimeout(refreshNav, 30_000);
+      }
+    };
+    refreshNav();
+    return () => {
+      disposed = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [markets, rpc, visible]);
+
+  const normalizeCode = (code) => String(code || '').toUpperCase() === 'PFUSDC' ? 'pfUSDC' : String(code || '');
+  const getAssetCode = (assetOrId) => {
+    const asset = typeof assetOrId === 'object' ? assetOrId : null;
+    const assetId = asset ? (asset.asset_id || asset.id) : assetOrId;
+    return normalizeCode(displayAssetSymbol(markets, assetId, normalizeCode(asset?.code) || shortenAssetId(assetId)));
   };
   const getAssetBalance = (asset) => asset?.balance ?? asset?.amount ?? 0;
   const getAssetBalanceLabel = (asset) => {
     const id = asset?.asset_id || asset?.id;
-    const code = getAssetCode(id);
+    const code = getAssetCode(asset);
     return `${formatAssetBalance(id, getAssetBalance(asset))} ${code}`;
   };
   const settlementAssets = [...new Map(markets.map(market => [market.settlementAssetId, market])).values()];
@@ -431,16 +423,17 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
     ...settlementAssets.map(market => {
       const asset = assets.find(item => (item.asset_id || item.id) === market.settlementAssetId);
       return [
-        market.settlementSymbol,
-        `${formatAssetBalance(market.settlementAssetId, getAssetBalance(asset))} ${market.settlementSymbol}`,
-        asset ? 'Governed NAVCoin settlement asset' : 'Governed NAVCoin settlement asset · no balance',
+        normalizeCode(market.settlementSymbol),
+        `${formatAssetBalance(market.settlementAssetId, getAssetBalance(asset))} ${normalizeCode(market.settlementSymbol)}`,
+        asset ? 'Settlement asset on PFTL' : 'Settlement asset on PFTL · no balance',
       ];
     }),
     ...assets
       .filter(a => !settlementAssetIds.has(a.asset_id || a.id))
       .map(a => {
-        const code = getAssetCode(a.asset_id || a.id);
-        return [code, getAssetBalanceLabel(a), navcoinMarketForAsset(markets, a.asset_id || a.id) ? 'active NAVCoin fund share' : 'other or legacy issued asset'];
+        const code = getAssetCode(a);
+        const isLegacy = /^[a-z]/.test(String(a.code || ''));
+        return [code, getAssetBalanceLabel(a), navcoinMarketForAsset(markets, a.asset_id || a.id) ? 'Verified NAV asset on PFTL' : isLegacy ? 'Legacy issued asset on PFTL' : 'Issued asset on PFTL'];
       }),
   ];
 
@@ -473,6 +466,33 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
   const fastpayReadyLabel = walletFeedStatus?.status === 'live'
     ? 'Ready to go. Public key published; FastPay balance feed is live.'
     : 'Ready to go. Public key published; FastPay can receive transfers.';
+  const stableAsset = assets.find(asset => String(asset?.code || '').toUpperCase() === 'PFUSDC')
+    || assets.find(asset => settlementAssetIds.has(asset.asset_id || asset.id));
+  // Asset symbols are presentation metadata, not identity. The funded wallet
+  // also contains a lowercase legacy `a666`, so matching the label first can
+  // silently promote the wrong holding. Resolve the active governed asset by
+  // its registry-bound ID and use the symbol only as an offline fallback.
+  const navAsset = assets.find(asset => navcoinMarketForAsset(markets, asset.asset_id || asset.id))
+    || assets.find(asset => String(asset?.code || '') === 'A666');
+  const portfolioAssetCount = assets.length + 1;
+  const feeBalanceLow = accountKnown && BigInt(accountBalance) < 1_000n;
+  const knownPortfolioUsdE8 = assets.reduce((total, asset) => {
+    const assetId = asset.asset_id || asset.id;
+    const balanceAtoms = BigInt(String(getAssetBalance(asset)));
+    if (String(asset.code || '').toUpperCase() === 'PFUSDC') return total + balanceAtoms * 100n;
+    const market = navcoinMarketForAsset(markets, assetId);
+    const nav = market ? navByAssetId[assetId] : null;
+    return nav ? total + (balanceAtoms * BigInt(nav)) / (10n ** BigInt(market.decimals)) : total;
+  }, 0n);
+  const pricedAssetIds = new Set(assets.filter(asset => {
+    const assetId = asset.asset_id || asset.id;
+    return String(asset.code || '').toUpperCase() === 'PFUSDC'
+      || Boolean(navcoinMarketForAsset(markets, assetId) && navByAssetId[assetId]);
+  }).map(asset => asset.asset_id || asset.id));
+  const unpricedCount = assets.length - pricedAssetIds.size + 1;
+  const knownPortfolioLabel = knownPortfolioUsdE8 > 0n
+    ? formatUsdE8(knownPortfolioUsdE8)
+    : null;
 
   const getDirection = (tx) => {
     const from = tx.from || tx.sender;
@@ -495,26 +515,27 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
 
   return (
     <div className="pf-page">
-      {/* balance band */}
+      {/* portfolio band */}
       <div className="pf-band">
         <div>
-          <div className="pf-eyebrow">Total balance</div>
+          <div className="pf-eyebrow">Your portfolio</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginTop: 6 }}>
             <span style={{ fontSize: 58, fontWeight: 700, letterSpacing: '-0.045em', lineHeight: 1, color: 'var(--green)' }}>
-              {totalBalanceLabel}
+              {knownPortfolioLabel || portfolioAssetCount}
             </span>
-            <span style={{ fontFamily: 'var(--mono)', fontSize: 15, color: 'var(--muted)' }}>PFT</span>
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 15, color: 'var(--muted)' }}>{knownPortfolioLabel ? 'known value' : 'assets'}</span>
           </div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--dim)', marginTop: 6 }}>
-            {online ? `height ${chainStatus.block_height} · sequence ${sequence ?? '…'}` : 'rpc offline'}
-            {walletFeedStatus?.status === 'live' ? ' · live feed' : walletFeedStatus?.status === 'connecting' ? ' · connecting feed' : ''}
-            {refreshing ? ' · refreshing' : ''}
+          <div style={{ fontSize: 12.5, color: 'var(--dim)', marginTop: 8, maxWidth: 620 }}>
+            {knownPortfolioLabel
+              ? `Based on pfUSDC and verified A666 NAV. ${unpricedCount} ${unpricedCount === 1 ? 'holding is' : 'holdings are'} excluded because no reliable price is available.`
+              : 'Issued assets and the PFT network-fee balance are itemized below. Pricing is still loading.'}
           </div>
         </div>
         <div className="pf-actions">
           <button className="pf-ghost" onClick={() => { navigator.clipboard?.writeText(address || ''); onCopy('Address copied'); }}>Receive</button>
-          <button className="pf-ghost" onClick={() => go('send', { sendSource: 'account' })}>Send</button>
-          <button className="pf-ghost" onClick={() => go('swap')}>Process</button>
+          <button className="pf-ghost" onClick={() => go('send', { sendSource: assets.length ? 'asset' : 'account' })}>Send</button>
+          <button className="pf-ghost" onClick={() => go('market')}>Trade</button>
+          <button className="pf-ghost" onClick={() => go('bridge')}>Bridge</button>
         </div>
       </div>
 
@@ -528,8 +549,6 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
         <div className="pf-notice">Network has pending transactions at height {chainStatus.block_height} that haven't been processed.</div>
       )}
       {rpcError && <div className="pf-error">{rpcError}</div>}
-      {fastpayError && <div className="pf-warning">{fastpayError}</div>}
-      {fastpayRefreshing && <div className="pf-notice">Refreshing FastPay balance…</div>}
       {fastpayRecoveries.map(record => (
         <div className="pf-card" key={record.lock_id} style={{ marginTop: 14, display: 'grid', gap: 10, borderColor: 'var(--warning)' }}>
           <div style={{ fontSize: 14, fontWeight: 600 }}>FastPay recovery pending</div>
@@ -550,94 +569,31 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
         </div>
       ))}
 
-      {/* Public key publish status — FastPay cannot address this wallet until
-          its public key is recorded on the ledger (entrypoints.rs:341/589).
-          Wrapping to FastPay and receiving funds do NOT publish it; only the
-          first Account-lane transfer/payment does. */}
-      {fastpayEnabled && publishedPublicKey === false && !publishSuccess && !chainCapabilities?.read_only && (
-        <div className="pf-card" style={{ marginTop: 14, display: 'grid', gap: 10, borderColor: 'var(--green-border)', background: 'var(--green-soft)' }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{publishBusy ? 'Activating FastPay…' : 'FastPay activation needed'}</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
-            {publishBusy
-              ? 'The wallet is publishing its public key with a minimal signed self-transfer. The atom returns to you; only the quoted network fee is charged.'
-              : 'The wallet normally activates this automatically after its first funding. Other wallets cannot send you FastPay transfers until your public key is recorded on the ledger.'}
-          </div>
-          {publishError && <div className="pf-error">{publishError}</div>}
-          {publishSuccess && <div className="pf-success">{publishSuccess}</div>}
-          <button className="pf-primary" onClick={handlePublishPublicKey} disabled={publishBusy}>
-            {publishBusy ? 'Activating…' : 'Retry FastPay activation'}
-          </button>
-        </div>
-      )}
-      {publishSuccess && <div className="pf-success" style={{ marginTop: 14 }}>{publishSuccess}</div>}
-      {/* stats row */}
+      {/* most useful balances */}
       <div className="pf-stats">
         <div className="pf-tile">
-          <div className="pf-eyebrow" style={{ fontSize: 10 }}>Account</div>
+          <div className="pf-eyebrow" style={{ fontSize: 10 }}>Stable balance</div>
+          <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>
+            {stableAsset ? formatAssetBalance(stableAsset.asset_id || stableAsset.id, getAssetBalance(stableAsset)) : '0'}{' '}
+            <span style={{ fontSize: 14, color: 'var(--muted)' }}>pfUSDC</span>
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--dim)' }}>Spendable on PFTL</div>
+        </div>
+        <div className="pf-tile">
+          <div className="pf-eyebrow" style={{ fontSize: 10 }}>NAV asset</div>
+          <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>
+            {navAsset ? formatAssetBalance(navAsset.asset_id || navAsset.id, getAssetBalance(navAsset)) : '0'}{' '}
+            <span style={{ fontSize: 14, color: 'var(--muted)' }}>A666</span>
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--dim)' }}>{markets.length ? 'Verified NAV market available' : 'Market details unavailable'}</div>
+        </div>
+        <div className="pf-tile">
+          <div className="pf-eyebrow" style={{ fontSize: 10 }}>Network fees</div>
           <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>
             {accountBalanceLabel} <span style={{ fontSize: 14, color: 'var(--muted)' }}>PFT</span>
           </div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--dim)' }}>Cobalt certified</div>
-        </div>
-        <div className="pf-tile">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <div className="pf-eyebrow" style={{ fontSize: 10 }}>FastPay (experimental)</div>
-              {fastpayReady && (
-                <span
-                  className="pf-status-check"
-                  tabIndex={0}
-                  aria-label={fastpayReadyLabel}
-                  data-tip={fastpayReadyLabel}
-                >
-                  ✓
-                </span>
-              )}
-            </div>
-            <div className="pf-mini-actions">
-              <button
-                className="pf-mini-action"
-                onClick={() => openWrap('wrap')}
-                disabled={!fastpayEnabled || !publicKeyHex || (chainCapabilities?.read_only)}
-                title="Wrap Account PFT to FastPay"
-                aria-label="Wrap Account PFT to FastPay"
-              >
-                +
-              </button>
-              <button
-                className="pf-mini-action"
-                onClick={() => openWrap('unwrap')}
-                disabled={!fastpayEnabled || !publicKeyHex || !fastpayObjects.length || (chainCapabilities?.read_only)}
-                title="Move FastPay PFT to Account"
-                aria-label="Move FastPay PFT to Account"
-              >
-                ↙
-              </button>
-            </div>
-          </div>
-          <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>
-            {fastpayBalanceLabel}{' '}
-            <span style={{ fontSize: 14, color: 'var(--muted)' }}>PFT</span>
-          </div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--dim)' }}>
-            {!fastpayEnabled
-              ? 'remote mutations disabled: cancellation protocol incomplete'
-              : fastpayRefreshing
-              ? 'refreshing owned objects'
-              : fastpayStatus === 'ok'
-                ? `${fastpayObjects.length} owned objects`
-                : fastpayStatus === 'loading'
-                  ? '…'
-                  : fastpayStatus === 'error'
-                    ? 'balance unavailable'
-                    : 'no public key'}
-          </div>
-        </div>
-        <div className="pf-tile">
-          <div className="pf-eyebrow" style={{ fontSize: 10 }}>Assets</div>
-          <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>{assets.length}</div>
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--dim)' }}>
-            {assets.length > 0 ? assets.map(a => getAssetCode(a.asset_id || a.id)).join(', ') : 'no issued assets'}
+          <div style={{ fontSize: 11.5, color: feeBalanceLow ? 'var(--amber)' : 'var(--dim)' }}>
+            {feeBalanceLow ? 'Low balance — some transactions may not have enough PFT for fees' : 'Used to pay PFTL transaction fees'}
           </div>
         </div>
       </div>
@@ -647,12 +603,11 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
         <div className="pf-dash-col">
           {/* balances */}
           <div>
-            <div className="pf-eyebrow" style={{ marginBottom: 12 }}>Balances</div>
+            <div className="pf-eyebrow" style={{ marginBottom: 12 }}>All balances</div>
             <div className="pf-card" style={{ padding: '6px 18px' }}>
               {[
-                ['Account', rpcError && !accountKnown ? 'Unavailable' : `${accountBalanceLabel} PFT`, rpcError ? 'balance unavailable' : 'Cobalt certified'],
-                ['FastPay', fastpayStatus === 'ok' ? `${formatBalance(fastpayBalance)} PFT` : fastpayStatus === 'error' ? 'Unavailable' : '0 PFT', fastpayStatus === 'ok' ? `${fastpayObjects.length} owned objects` : fastpayStatus === 'error' ? 'balance unavailable' : 'no owned objects'],
                 ...issuedAssetRows,
+                ['PFT', rpcError && !accountKnown ? 'Unavailable' : `${accountBalanceLabel} PFT`, rpcError ? 'Balance unavailable' : 'PFTL network fees'],
               ].map(([k, v, note], i, arr) => (
                 <div key={i} className="pf-row" style={{ padding: '14px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-soft)' : 'none' }}>
                   <div>
@@ -665,32 +620,6 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
             </div>
           </div>
 
-          {/* quick links */}
-          <div>
-            <div className="pf-eyebrow" style={{ marginBottom: 12 }}>Quick links</div>
-            <div className="pf-card" style={{ padding: '6px 18px' }}>
-              {[
-                ['Bridge USDC', 'Ethereum mainnet → pfUSDC', () => go('bridge')],
-                ['NAVCoin Markets', 'mint / redeem at verified NAV', () => go('market')],
-                ['Private FX', 'pfUSDC → pNOK at demo fix', () => go('fx')],
-                ['Send Asset', 'issued assets', () => go('send', { sendSource: 'asset' })],
-                ['Process Status', 'current / unavailable legs', () => go('swap')],
-                ['Settings', 'network / backup', () => go('more')],
-              ].map(([label, note, onClick], i, arr) => (
-                <button key={i} onClick={onClick} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%',
-                  padding: '14px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-soft)' : 'none',
-                  background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
-                }}>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{label}</div>
-                    <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--dim)' }}>{note}</div>
-                  </div>
-                  <span style={{ color: 'var(--dim)' }}>→</span>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* activity */}
@@ -702,7 +631,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
             <div className="pf-feed">
               {txs.length === 0 ? (
                 <div style={{ padding: '20px 14px', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--dim)' }}>
-                  No account-lane transactions yet. NAVCoin mints, redemptions, and bridge claims are reflected in asset balances.
+                      No native PFT transfers returned. Open Activity for wallet-scoped USDC deposits; issued-asset and NAV history is not available from this network endpoint yet.
                 </div>
               ) : (
                 txs.map((tx, i) => {

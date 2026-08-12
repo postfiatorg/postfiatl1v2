@@ -9,6 +9,7 @@ import {
   navcoinMarketForAsset,
   navcoinMarketForSettlementAsset,
   navcoinMarketsFromRoutes,
+  loadNavcoinMarkets,
 } from './navcoin-markets.js';
 
 const route = {
@@ -118,9 +119,9 @@ test('route_live filter regression vector is structurally retained', () => {
 });
 
 test('governed NAVCoin registry rejects malformed and duplicate identities', () => {
-  assert.throws(() => navcoinMarketsFromRoutes({
+  assert.equal(navcoinMarketsFromRoutes({
     schema: 'postfiat-pftl-uniswap-routes-status-v1', route_count: 1, routes: [route],
-  }), /registry response is malformed/);
+  })[0].symbol, 'qNAV');
   assert.throws(() => navcoinMarketsFromRoutes({
     schema: 'postfiat-pftl-uniswap-routes-status-v2', route_count: 2, routes: [route, route],
   }), /duplicate identity/);
@@ -153,4 +154,43 @@ test('governed NAVCoin registry rejects malformed and duplicate identities', () 
     schema: 'postfiat-pftl-uniswap-routes-status-v2', route_count: 1,
     routes: [{ ...route, route_id: '-pftl-invalid-route' }],
   }), /route id/);
+});
+
+test('live v1 route identity is hydrated from verified asset_info responses', async () => {
+  const v1Route = { ...route };
+  delete v1Route.native_nav_asset_code;
+  delete v1Route.native_nav_asset_display_name;
+  delete v1Route.native_nav_asset_precision;
+  delete v1Route.settlement_asset_code;
+  delete v1Route.settlement_asset_display_name;
+  delete v1Route.settlement_asset_precision;
+  const infos = new Map([
+    [v1Route.native_nav_asset_id, { code: 'qNAV', display_name: 'Qualified NAVCoin', precision: 6 }],
+    [v1Route.settlement_asset_id, { code: 'qUSD', display_name: 'Qualified settlement asset', precision: 6 }],
+  ]);
+  const rpc = {
+    async navcoinBridgeRoutes() {
+      return { ok: true, result: { schema: 'postfiat-pftl-uniswap-routes-status-v1', route_count: 1, routes: [v1Route] } };
+    },
+    async assetInfo(assetId) {
+      return { ok: true, result: { found: true, asset: { asset_id: assetId, ...infos.get(assetId) } } };
+    },
+  };
+  const markets = await loadNavcoinMarkets(rpc);
+  assert.equal(markets.length, 1);
+  assert.equal(markets[0].symbol, 'qNAV');
+  assert.equal(markets[0].settlementSymbol, 'qUSD');
+  assert.equal(markets[0].name, 'Qualified NAVCoin');
+});
+
+test('live v1 route hydration fails closed when asset metadata is unavailable', async () => {
+  const v1Route = { ...route };
+  delete v1Route.native_nav_asset_code;
+  const rpc = {
+    async navcoinBridgeRoutes() {
+      return { ok: true, result: { schema: 'postfiat-pftl-uniswap-routes-status-v1', route_count: 1, routes: [v1Route] } };
+    },
+    async assetInfo() { return { ok: true, result: { found: false } }; },
+  };
+  await assert.rejects(() => loadNavcoinMarkets(rpc), /verified metadata/);
 });

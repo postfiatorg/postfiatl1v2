@@ -156,8 +156,13 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
     if (visible) fetchAssets();
   }, [visible, rpc, address]);
 
-  const getAssetCode = (assetId) => {
-    return displayAssetSymbol(markets, assetId, shortenAssetId(assetId));
+  const getAssetCode = (assetOrId) => {
+    const asset = typeof assetOrId === 'object' ? assetOrId : assets.find(row => (row.asset_id || row.id) === assetOrId);
+    const assetId = asset ? (asset.asset_id || asset.id) : assetOrId;
+    const chainCode = String(asset?.code || '');
+    const fallback = chainCode.toUpperCase() === 'PFUSDC' ? 'pfUSDC' : chainCode || shortenAssetId(assetId);
+    const code = displayAssetSymbol(markets, assetId, fallback);
+    return String(code).toUpperCase() === 'PFUSDC' ? 'pfUSDC' : code;
   };
 
   const currentMemos = () => ({
@@ -473,8 +478,7 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
     }
   };
 
-  const laneLabel = lane === 'account' ? 'Account lane' : lane === 'fastpay' ? 'FastPay lane' : 'Asset lane';
-  const settleLabel = lane === 'account' ? 'Cobalt finality · ~1.5s' : lane === 'fastpay' ? 'Sub-second' : 'Cobalt finality · ~1.5s';
+  const settleLabel = lane === 'fastpay' ? 'Experimental near-instant settlement' : 'PFTL finality · usually about 1.5 seconds';
   const accountBalanceLabel = accountStatus === 'loading'
     ? '…'
     : accountStatus === 'ok'
@@ -490,8 +494,8 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
   return (
     <div className="pf-page">
       <div className="pf-stage-inner" style={{ maxWidth: 900 }}>
-        <div className="pf-eyebrow">Send</div>
-        <h1 className="pf-h1" style={{ marginBottom: 22 }}>{laneLabel}</h1>
+        <div className="pf-eyebrow">Choose an asset and recipient</div>
+        <h1 className="pf-h1" style={{ marginBottom: 22 }}>Send</h1>
 
         {chainCapabilities && chainCapabilities.read_only && (
           <div className="pf-warning">RPC is read-only; transaction submission is disabled.</div>
@@ -505,14 +509,11 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
 
         <div className="pf-two">
           <div style={{ display: 'grid', gap: 16 }}>
-            {/* lane toggle */}
+            {/* asset type */}
             <div className="pf-even">
-              <button className={`pf-ghost${lane === 'account' ? ' on' : ''}`} onClick={() => setLaneSafe('account')}>Account</button>
-              {fastpayEnabled && <button className={`pf-ghost${lane === 'fastpay' ? ' on' : ''}`} onClick={() => setLaneSafe('fastpay')}>FastPay (experimental)</button>}
+              <button className={`pf-ghost${lane === 'account' ? ' on' : ''}`} onClick={() => setLaneSafe('account')}>PFT</button>
+              {assets.length > 0 && <button className={`pf-ghost${lane === 'asset' ? ' on' : ''}`} onClick={() => setLaneSafe('asset')}>Issued asset</button>}
             </div>
-            {assets.length > 0 && (
-              <button className={`pf-ghost${lane === 'asset' ? ' on' : ''}`} onClick={() => setLaneSafe('asset')}>Send Issued Asset</button>
-            )}
 
             {/* account balance info */}
             {lane === 'account' && (
@@ -531,6 +532,9 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
                 {accountStatus === 'ok' && (accountBalance ?? 0) === 0 && fastpayStatus === 'ok' && (fastpayBalance ?? 0) === 0 && (
                   <div className="pf-notice">No PFT available to send. Receive funds to your wallet address first.</div>
                 )}
+                {accountStatus === 'ok' && BigInt(accountBalance ?? 0) > 0n && BigInt(accountBalance ?? 0) < 1_000n && (
+                  <div className="pf-warning">This PFT balance is below the approximate 0.001 PFT network fee. Add PFT before attempting a transaction.</div>
+                )}
               </div>
             )}
 
@@ -542,7 +546,7 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
                   <option value="">Select asset…</option>
                   {assets.map((asset, i) => (
                     <option key={i} value={asset.asset_id || asset.id}>
-                      {getAssetCode(asset.asset_id || asset.id)} — {formatAssetBalance(asset.asset_id || asset.id, asset.balance || asset.amount)}
+                      {getAssetCode(asset)} — {formatAssetBalance(asset.asset_id || asset.id, asset.balance || asset.amount)}
                     </option>
                   ))}
                 </select>
@@ -653,8 +657,10 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
             </button>
 
             {/* add asset trustline */}
-            <div className="pf-card" style={{ display: 'grid', gap: 10 }}>
-              <div className="pf-eyebrow">Add asset</div>
+            <details className="pf-card">
+              <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 650 }}>Advanced: add an asset by ID</summary>
+              <div style={{ display: 'grid', gap: 10, paddingTop: 14 }}>
+              <div style={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.5 }}>Only use an asset ID and trust limit from an issuer you have independently verified.</div>
               <input
                 className="pf-input"
                 data-testid="add-asset-id"
@@ -678,22 +684,23 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
               >
                 {addAssetBusy ? 'Adding asset…' : 'Add asset'}
               </button>
-            </div>
+              </div>
+            </details>
           </div>
 
           {/* what happens panel */}
           <div className="pf-card" style={{ display: 'grid', gap: 14, background: 'var(--surface2)' }}>
             <div className="pf-eyebrow">What happens</div>
-            <div className="pf-row"><span className="pf-rk">Lane</span><span className="pf-rv">{lane === 'account' ? 'Account' : lane === 'fastpay' ? 'FastPay' : 'Asset'}</span></div>
-            <div className="pf-row"><span className="pf-rk">Settles in</span><span className="pf-rv">{settleLabel}</span></div>
-            <div className="pf-row"><span className="pf-rk">Visibility</span><span className="pf-rv">Public on the explorer</span></div>
+            <div className="pf-row"><span className="pf-rk">Asset</span><span className="pf-rv">{lane === 'account' ? 'PFT' : lane === 'fastpay' ? 'FastPay PFT' : selectedAsset ? getAssetCode(selectedAsset) : 'Choose an asset'}</span></div>
+            <div className="pf-row"><span className="pf-rk">Settlement</span><span className="pf-rv">{settleLabel}</span></div>
+            <div className="pf-row"><span className="pf-rk">Privacy</span><span className="pf-rv">Public PFTL transaction</span></div>
             <div className="pf-row"><span className="pf-rk">Network fee</span><span className="pf-rv">≈ 0.001 PFT</span></div>
             <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 12, fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
               {lane === 'account'
-                ? 'The account lane carries the full balance and finalizes through Cobalt certification. Use it for any standard transfer.'
+                ? 'The recipient receives PFT after the transaction reaches PFTL finality.'
                 : lane === 'fastpay'
                   ? 'FastPay moves owned objects directly for near-instant settlement. Best for small, frequent payments.'
-                  : 'Send settlement assets or native NAVCoins to another PFTL account. Settles with authenticated asset finality.'}
+                  : `The recipient receives ${selectedAsset ? getAssetCode(selectedAsset) : 'the selected asset'} on PFTL after finality.`}
             </div>
           </div>
         </div>
