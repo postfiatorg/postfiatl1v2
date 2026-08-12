@@ -200,35 +200,42 @@ jq -e '.verdict=="PASS"' "$phase_dir/return/summary.json" >/dev/null
 jq -e --argjson amount "$return_amount" '.amount_atoms==$amount' \
   "$phase_dir/return/ethereum-burn/burn.json" >/dev/null
 
-ssh -o BatchMode=yes "root@$validator2_host" \
-  "$remote_node navcoin-bridge-supply-status --data-dir /var/lib/postfiat/validator-2 --route-id pftl-a666-ethereum-wA666-usdc-v1" \
-  > "$phase_dir/route-status-before-redeem.json"
-current_height=$(ssh -o BatchMode=yes "root@$validator2_host" \
-  "$remote_node status --data-dir /var/lib/postfiat/validator-2" | jq -er '.block_height')
-python3 scripts/a666-build-transparent-redeem-op.py \
-  --route-status "$phase_dir/route-status-before-redeem.json" \
-  --nav-manifest "$nav_manifest" \
-  --nav-amount-atoms "$return_amount" \
-  --expires-at-height "$((current_height + 1000))" \
-  --output-dir "$phase_dir/primary-redeem"
-redeem_height=$((current_height + 1))
-python3 scripts/a666-ce22-remote-finality-op.py \
-  --node-bin "$local_node" \
-  --remote-runner scripts/a666-remote-sync-round.py \
-  --proposer-hosts-file "$hosts_file" \
-  --remote-binary "$remote_node" \
-  --remote-topology "$remote_topology" \
-  --ops-file "$phase_dir/primary-redeem/primary-redeem.ops.json" \
-  --artifact-dir "$phase_dir/primary-redeem/finality-h$redeem_height"
-jq -e --argjson height "$redeem_height" \
-  '.confirmed==true and .accepted==true and .end_height==$height' \
-  "$phase_dir/primary-redeem/finality-h$redeem_height/summary.json" >/dev/null
+redeem_summary=$(find "$phase_dir/primary-redeem" -mindepth 2 -maxdepth 2 \
+  -path '*/finality-h*/summary.json' -type f -print -quit 2>/dev/null || true)
+if ! test -s "$phase_dir/primary-redeem/primary-redeem-manifest.json" || \
+   ! test -s "$redeem_summary"; then
+  test ! -e "$phase_dir/primary-redeem"
+  ssh -o BatchMode=yes "root@$validator2_host" \
+    "$remote_node navcoin-bridge-supply-status --data-dir /var/lib/postfiat/validator-2 --route-id pftl-a666-ethereum-wA666-usdc-v1" \
+    > "$phase_dir/route-status-before-redeem.json"
+  current_height=$(ssh -o BatchMode=yes "root@$validator2_host" \
+    "$remote_node status --data-dir /var/lib/postfiat/validator-2" | jq -er '.block_height')
+  python3 scripts/a666-build-transparent-redeem-op.py \
+    --route-status "$phase_dir/route-status-before-redeem.json" \
+    --nav-manifest "$nav_manifest" \
+    --nav-amount-atoms "$return_amount" \
+    --expires-at-height "$((current_height + 1000))" \
+    --output-dir "$phase_dir/primary-redeem"
+  redeem_height=$((current_height + 1))
+  python3 scripts/a666-ce22-remote-finality-op.py \
+    --node-bin "$local_node" \
+    --remote-runner scripts/a666-remote-sync-round.py \
+    --proposer-hosts-file "$hosts_file" \
+    --remote-binary "$remote_node" \
+    --remote-topology "$remote_topology" \
+    --ops-file "$phase_dir/primary-redeem/primary-redeem.ops.json" \
+    --artifact-dir "$phase_dir/primary-redeem/finality-h$redeem_height"
+  redeem_summary="$phase_dir/primary-redeem/finality-h$redeem_height/summary.json"
+fi
+jq -e '.confirmed==true and .accepted==true' "$redeem_summary" >/dev/null
 settlement_output=$(jq -er '.settlement_output_atoms' "$phase_dir/primary-redeem/primary-redeem-manifest.json")
 
-bash scripts/a666-mainnet-pfusdc-proof-egress.sh \
-  --phase-dir "$phase_dir" \
-  --workflow-id "$workflow_id" \
-  --amount-atoms "$settlement_output"
+if ! test -s "$phase_dir/pfusdc-egress/summary.json"; then
+  bash scripts/a666-mainnet-pfusdc-proof-egress.sh \
+    --phase-dir "$phase_dir" \
+    --workflow-id "$workflow_id" \
+    --amount-atoms "$settlement_output"
+fi
 jq -e --argjson amount "$settlement_output" \
   '.verdict=="PASS" and .ethereum_withdrawal.amount_atoms==$amount' \
   "$phase_dir/pfusdc-egress/summary.json" >/dev/null
@@ -257,6 +264,8 @@ jq -n \
   --argjson protected_wa666 "$protected_wa666_baseline" \
   --argjson final_wa666 "$final_wa666" \
   --argjson final_usdc "$final_usdc" \
+  --argjson issue_nav_epoch "$(jq -er '.pricing_nav_epoch' "$phase_dir/a666/ops/manifest.json")" \
+  --argjson redeem_nav_epoch "$(jq -er '.epoch' "$nav_manifest")" \
   --slurpfile deposit "$phase_dir/deposit/deposit-result.json" \
   --slurpfile forward "$phase_dir/uniswap/forward-execution.json" \
   --slurpfile reverse "$phase_dir/uniswap/reverse-execution.json" \
@@ -269,10 +278,10 @@ jq -n \
     verdict:"PASS",
     workflow_id:$workflow_id,
     deposit:{tx:$deposit[0].deposit.tx_hash,deposit_id:$deposit[0].event.deposit_id,amount_atoms:$deposit[0].amount_atoms},
-    verified_nav_issue:{mint_amount_atoms:$mint_amount,pricing_source:"governed NAV epoch 6"},
+    verified_nav_issue:{mint_amount_atoms:$mint_amount,pricing_nav_epoch:$issue_nav_epoch},
     uniswap:{forward_tx:$forward[0].tx_hash,forward_usdc_atoms:$forward_usdc,reverse_tx:$reverse[0].tx_hash,returned_wa666_atoms:$return_amount},
     return_import:{pftl_height:$returned[0].pftl_height,amount_atoms:$return_amount},
-    verified_nav_redeem:{redemption_nonce:$redeem[0].redemption_nonce,pfusdc_output_atoms:$settlement_output},
+    verified_nav_redeem:{redemption_nonce:$redeem[0].redemption_nonce,pfusdc_output_atoms:$settlement_output,pricing_nav_epoch:$redeem_nav_epoch},
     successor_egress:{withdrawal_tx:$egress[0].ethereum_withdrawal.tx,amount_atoms:$settlement_output},
     protected_wa666:{baseline_atoms:$protected_wa666,final_atoms:$final_wa666},
     final_wallet_usdc_atoms:$final_usdc,

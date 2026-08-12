@@ -57,6 +57,7 @@ program_vkey=${A666_PFUSDC_EGRESS_PROGRAM_VKEY:-0x0026a156bfd82ce1d1bf3f966c77da
 manifest=${A666_PFUSDC_DEPLOYMENT_MANIFEST:-docs/evidence/a666-acceptance-20260728/phase-5-transparent-redeem-verify/pfusdc-egress/recovery-epoch5/deploy/manifest.postdeploy-enriched.json}
 manifest_sha256=${A666_PFUSDC_DEPLOYMENT_MANIFEST_SHA256:-b69417647e6a4bed5a3e7fa5069a0844b80a63f78020ba34f4796e373e92e904}
 stakehub_repo=${A666_STAKEHUB_REPO:-/home/postfiat/repos/StakeHub-master-e6}
+contract_artifact_root=${A666_CONTRACT_ARTIFACT_ROOT:-$repo}
 ethereum_rpc=${A666_ETHEREUM_RPC:-https://ethereum-rpc.publicnode.com}
 
 test -s "$hosts_file"
@@ -292,7 +293,8 @@ if ! test -s "$egress_dir/withdrawal-result.json"; then
     --expected-manifest-sha256 "$manifest_sha256" \
     --amount-atoms "$amount_atoms" \
     --recipient "$joe_evm" \
-    --stakehub-repo "$stakehub_repo"
+    --stakehub-repo "$stakehub_repo" \
+    --contract-artifact-root "$contract_artifact_root"
 fi
 jq -e --argjson amount "$amount_atoms" \
   '.amount_atoms==$amount

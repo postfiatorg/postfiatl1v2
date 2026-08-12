@@ -79,7 +79,10 @@ install -d -m 700 "$phase_dir/a666"
 ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node navcoin-bridge-supply-status --data-dir /var/lib/postfiat/validator-2 --route-id pftl-a666-ethereum-wA666-usdc-v1" \
   > "$phase_dir/route-status-before.json"
-jq -e '.invariant_holds==true and .paused==false and .pricing_nav_epoch==6' \
+jq -e --slurpfile nav "$nav_manifest" \
+  '.invariant_holds==true and .paused==false
+   and .pricing_nav_epoch==$nav[0].epoch
+   and .pricing_reserve_packet_hash==$nav[0].reserve_packet_hash' \
   "$phase_dir/route-status-before.json" >/dev/null
 python3 scripts/a666-mainnet-primary-issue-ops.py \
   --supply-status "$phase_dir/route-status-before.json" \
@@ -87,10 +90,10 @@ python3 scripts/a666-mainnet-primary-issue-ops.py \
   --holder-key-file "$holder_key" \
   --node-bin "$local_node" \
   --output-dir "$phase_dir/a666/ops" \
-  --mint-amount-atoms 11012575 \
-  --reservation-expires-at-height 2000
+  --settlement-value-atoms "$amount_atoms" \
+  --reservation-expires-at-height "$((start_height + 1000))"
 jq -e --argjson amount "$amount_atoms" \
-  '.settlement_value_atoms==$amount and .mint_amount_atoms==11012575' \
+  '.settlement_value_atoms==$amount and .mint_amount_atoms>0' \
   "$phase_dir/a666/ops/manifest.json" >/dev/null
 
 python3 scripts/a666-epoch6-successor-deposit-generic.py \

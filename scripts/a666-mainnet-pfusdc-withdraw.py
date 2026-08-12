@@ -34,6 +34,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("/home/postfiat/repos/StakeHub-master-e6"),
     )
+    parser.add_argument(
+        "--contract-artifact-root",
+        type=Path,
+        default=REPO,
+        help="repository containing the compiled epoch-bound contract ABIs",
+    )
     return parser.parse_args()
 
 
@@ -74,6 +80,7 @@ def main() -> None:
     spec.loader.exec_module(sender)
 
     sender.HERE = args.output.parent
+    sender.REPO = args.contract_artifact_root.resolve()
     sender.PROOF_DIR = args.proof_dir
     sender.RESULT = args.output
     sender.AMOUNT = args.amount_atoms

@@ -6,6 +6,12 @@
 > 74,161,443 atoms, the successor vault and obligations returned to zero, all six validators
 > converged, and the protected 103,000,000 wA666 baseline did not move. The closeout and
 > evidence index are in `docs/reports/A666-EGRESS-LANE-REDEPLOY-CLOSEOUT-20260810.md`.
+>
+> **Full-product wallet acceptance — PASS — 2026-08-12.** The distinct
+> USDC -> pfUSDC -> A666 -> wA666 -> Uniswap out/back -> A666 -> pfUSDC ->
+> USDC route passed with 10.000000 USDC and the protected 103.000000 wA666
+> baseline unchanged. See
+> `docs/evidence/a666-wallet-roundtrip-20260812/README.md`.
 
 Owner-authored after completing the settlement-binding code verification the 2200Z handoff
 required before any deployment. Supersedes the "fund new vault with 9,932,863 atoms and settle

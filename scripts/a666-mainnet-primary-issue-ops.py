@@ -30,7 +30,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--holder-key-file", type=Path, required=True)
     parser.add_argument("--node-bin", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--mint-amount-atoms", type=int, required=True)
+    amount = parser.add_mutually_exclusive_group(required=True)
+    amount.add_argument("--mint-amount-atoms", type=int)
+    amount.add_argument(
+        "--settlement-value-atoms",
+        type=int,
+        help="derive the largest mint amount whose rounded settlement is exact",
+    )
     parser.add_argument("--reservation-expires-at-height", type=int, default=2000)
     parser.add_argument("--refund-delay-blocks", type=int, default=100)
     parser.add_argument("--deadline-seconds", type=int)
@@ -80,6 +86,39 @@ def derive_issue_amounts(
         settlement_due_atoms,
         settlement_due_atoms - base_value_atoms,
     )
+
+
+def derive_mint_for_exact_settlement(
+    settlement_value_atoms: int,
+    nav_per_unit_usd_1e8: int,
+    issue_multiplier_bps: int,
+) -> int:
+    """Invert the protocol's two ceiling operations without approximation."""
+    if settlement_value_atoms <= 0:
+        raise RuntimeError("settlement value must be positive")
+    low = 1
+    high = checked_ceil_div(
+        settlement_value_atoms * NAV_USD_E8_SCALE * BPS_SCALE,
+        nav_per_unit_usd_1e8 * issue_multiplier_bps,
+        "mint search bound",
+    ) + 2
+    while low <= high:
+        candidate = (low + high) // 2
+        _, settlement, _ = derive_issue_amounts(
+            candidate, nav_per_unit_usd_1e8, issue_multiplier_bps
+        )
+        if settlement <= settlement_value_atoms:
+            low = candidate + 1
+        else:
+            high = candidate - 1
+    if high <= 0:
+        raise RuntimeError("settlement value cannot purchase one NAV atom")
+    _, settlement, _ = derive_issue_amounts(
+        high, nav_per_unit_usd_1e8, issue_multiplier_bps
+    )
+    if settlement != settlement_value_atoms:
+        raise RuntimeError("no mint amount settles to the exact requested atom value")
+    return high
 
 
 def validate_nav_binding(
@@ -152,14 +191,19 @@ def main() -> None:
         validate_nav_binding(status, nav)
     )
 
+    multiplier = int(status["issue_multiplier_bps"])
     amount = args.mint_amount_atoms
+    if args.settlement_value_atoms is not None:
+        amount = derive_mint_for_exact_settlement(
+            args.settlement_value_atoms, nav_per_unit, multiplier
+        )
+    assert amount is not None
     if amount <= 0:
         raise RuntimeError("--mint-amount-atoms must be positive")
     if not status["min_order_atoms"] <= amount <= status["max_order_atoms"]:
         raise RuntimeError("mint amount is outside the governed order bounds")
     if amount > status["available_issue_atoms"]:
         raise RuntimeError("mint amount exceeds available issue capacity")
-    multiplier = int(status["issue_multiplier_bps"])
     base_value, settlement, issue_spread = derive_issue_amounts(
         amount, nav_per_unit, multiplier
     )

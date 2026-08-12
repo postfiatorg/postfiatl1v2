@@ -61,6 +61,25 @@ class PrimaryIssueArithmeticTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     MODULE.derive_issue_amounts(*arguments)
 
+    def test_exact_settlement_inverse_tracks_live_nav(self) -> None:
+        mint = MODULE.derive_mint_for_exact_settlement(
+            10_000_000, 90_248_000, 10_050
+        )
+        base, settlement, spread = MODULE.derive_issue_amounts(
+            mint, 90_248_000, 10_050
+        )
+        self.assertEqual(mint, 11_025_449)
+        self.assertEqual(settlement, 10_000_000)
+        self.assertEqual(spread, settlement - base)
+        self.assertGreater(
+            MODULE.derive_issue_amounts(mint + 1, 90_248_000, 10_050)[1],
+            settlement,
+        )
+
+    def test_exact_settlement_inverse_rejects_unreachable_value(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "cannot purchase one NAV atom"):
+            MODULE.derive_mint_for_exact_settlement(2, 100_000_001, 20_000)
+
 
 class NavBindingTests(unittest.TestCase):
     def setUp(self) -> None:
