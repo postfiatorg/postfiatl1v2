@@ -3323,10 +3323,15 @@
         assert_eq!(overlay.value_nav_units, 20_400_000_000);
 
         ledger.pftl_uniswap_routes[0].settlement_reserve_atoms = 205_036_001;
-        let error = nav_subscription_reserve_overlay(
+        let impaired_overlay = nav_subscription_reserve_overlay(
             &ledger,
             ledger.nav_asset(&nav_asset_id).expect("A666 nav"),
         )
-        .expect_err("reserve above backing must fail");
-        assert_eq!(error.0, "primary_market_reserve_exceeds_vault_backing");
+        .expect("impaired overlay")
+        .expect("impaired overlay present");
+        assert_eq!(
+            impaired_overlay.value_nav_units,
+            20_503_600_000,
+            "NAV includes only active proof-backed reserve and excludes the excess"
+        );
     }

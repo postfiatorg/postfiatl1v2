@@ -317,23 +317,19 @@ fn nav_subscription_reserve_overlay(
         let committed = reserve_by_settlement_asset
             .entry(route.settlement_asset_id.clone())
             .or_default();
+        let available_active_backing_atoms = active_bucket_backing_atoms.saturating_sub(*committed);
+        let proof_backed_reserve_atoms =
+            route.settlement_reserve_atoms.min(available_active_backing_atoms);
         *committed = committed
-            .checked_add(route.settlement_reserve_atoms)
+            .checked_add(proof_backed_reserve_atoms)
             .ok_or_else(|| {
                 (
                     "primary_market_reserve_overflow",
                     "primary-market settlement reserve sum overflowed".to_string(),
                 )
             })?;
-        if *committed > active_bucket_backing_atoms {
-            return Err((
-                "primary_market_reserve_exceeds_vault_backing",
-                "primary-market settlement reserve exceeds active proof-backed vault bridge backing"
-                    .to_string(),
-            ));
-        }
         let value_nav_units = vault_bridge_atoms_to_nav_value(
-            route.settlement_reserve_atoms,
+            proof_backed_reserve_atoms,
             &nav_asset.valuation_unit,
             &settlement_nav_asset.valuation_unit,
             settlement_asset.precision,
@@ -342,7 +338,7 @@ fn nav_subscription_reserve_overlay(
             route_id: route.route_id.clone(),
             route_config_digest: route.route_config_digest.clone(),
             settlement_asset_id: route.settlement_asset_id.clone(),
-            settlement_reserve_atoms: route.settlement_reserve_atoms,
+            settlement_reserve_atoms: proof_backed_reserve_atoms,
             value_nav_units,
             active_bucket_backing_atoms,
             live_value_enabled: route.live_value_enabled,
