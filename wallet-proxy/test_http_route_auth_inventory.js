@@ -42,6 +42,7 @@ for (const route of publicReadOnlyPosts) {
 assert.strictEqual(httpRequestRequiresAuth('POST', '/api/future-unclassified-write'), true);
 assert.strictEqual(httpRequestRequiresAuth('GET', '/api/future-unclassified-write'), false);
 assert.strictEqual(httpRequestRequiresAuth('GET', '/api/bridge/jobs'), true);
+assert.strictEqual(httpRequestRequiresAuth('GET', '/api/a666-roundtrip/status'), true);
 assert.strictEqual(httpRequestRequiresAuth('GET', '/api/bridge/jobs/0xabc'), false);
 assert.strictEqual(httpRequestRequiresAuth('GET', '/api/pftl-private-swap/readiness'), true);
 assert.strictEqual(httpRequestRequiresAuth('GET', '/api/pftl-private-swap/jobs/a666-browser-issue-01'), true);

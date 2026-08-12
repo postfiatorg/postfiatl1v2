@@ -22,6 +22,7 @@ import NavDetail from './components/NavDetail.jsx';
 import More from './components/More.jsx';
 import NavcoinMarket from './components/NavcoinMarket.jsx';
 import PrivateFix from './components/PrivateFix.jsx';
+import A666RoundTrip from './components/A666RoundTrip.jsx';
 import { navcoinMarketByKey, navcoinMarketsFromRoutes } from './lib/navcoin-markets.js';
 
 const PROXY_AUTH_SESSION_KEY = 'postfiat.wallet_proxy_api_token';
@@ -48,6 +49,7 @@ async function loadControlledLocalProxySession() {
 const NAV_ITEMS = [
   { id: 'wallet', label: 'Wallet' }, { id: 'bridge', label: 'Bridge' },
   { id: 'market', label: 'NAV Markets' }, { id: 'send', label: 'Send' },
+  { id: 'roundtrip', label: 'A666 Loop' },
   { id: 'swap', label: 'Process' }, { id: 'fx', label: 'Private FX' },
   { id: 'nav', label: 'NavCoins' }, { id: 'more', label: 'More' },
 ];
@@ -669,6 +671,9 @@ export default function App() {
           )}
           {tab === 'fx' && (
             <PrivateFix rpc={rpc} proxyAuthToken={proxyAuthToken} />
+          )}
+          {tab === 'roundtrip' && (
+            <A666RoundTrip proxyAuthToken={proxyAuthToken} onAuthorize={() => go('more')} />
           )}
           {tab === 'market' && (
             <NavcoinMarket
