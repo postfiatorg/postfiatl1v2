@@ -150,6 +150,8 @@ wss } = runtime;
     const pftlPrivateSwapQuote = (...args) => runtime.pftlPrivateSwapQuote(...args);
     const pftlPrivateSwapSubmit = (...args) => runtime.pftlPrivateSwapSubmit(...args);
     const pftlPrivateSwapStatus = (...args) => runtime.pftlPrivateSwapStatus(...args);
+    const a666RoundtripStatus = (...args) => runtime.a666RoundtripStatus(...args);
+    const a666RoundtripStart = (...args) => runtime.a666RoundtripStart(...args);
     const addProxyRouteEvent = (...args) => runtime.addProxyRouteEvent(...args);
     const assertNoShieldedPrivateMaterial = (...args) => runtime.assertNoShieldedPrivateMaterial(...args);
     const assertVaultBridgeEvidenceMatches = (...args) => runtime.assertVaultBridgeEvidenceMatches(...args);
@@ -1531,6 +1533,19 @@ wss } = runtime;
         }
 
         try {
+            if (req.method === 'GET' && url.pathname === '/api/a666-roundtrip/status') {
+                const result = await a666RoundtripStatus();
+                sendJson(req, res, result.statusCode, result.payload);
+                return true;
+            }
+
+            if (req.method === 'POST' && url.pathname === '/api/a666-roundtrip/start') {
+                const body = await readJsonBody(req);
+                const result = await a666RoundtripStart(body);
+                sendJson(req, res, result.statusCode, result.payload);
+                return true;
+            }
+
             if (req.method === 'GET' && url.pathname === '/api/navswap/capabilities') {
                 sendJson(req, res, 200, await executeNavswapCapabilities());
                 return true;
@@ -1885,6 +1900,11 @@ wss } = runtime;
                 pftl_private_swap_private_material_rejected: 400,
                 pftl_private_swap_invalid_idempotency_key: 400,
                 pftl_private_swap_route_identity_mismatch: 502,
+                a666_roundtrip_invalid_request: 400,
+                a666_roundtrip_invalid_response: 502,
+                a666_roundtrip_response_too_large: 502,
+                a666_roundtrip_timeout: 504,
+                a666_roundtrip_unavailable: 502,
             };
             sendJson(req, res, errorStatuses[error.code] || 400, {
                 ok: false,

@@ -17,6 +17,7 @@
     reverse_proxy @shieldedNavSwap 127.0.0.1:8080
     reverse_proxy /api/bridge/* 127.0.0.1:8080
     reverse_proxy /api/a666/* 127.0.0.1:8080
+    reverse_proxy /api/a666-roundtrip/* 127.0.0.1:8080
 
     @ethRpc path /eth-rpc /eth-rpc/*
     handle @ethRpc {
@@ -38,7 +39,7 @@
     }
 
     @walletStatic {
-        not path /rpc /api/navswap/* /api/shielded-nav-swap /api/shielded-nav-swap/* /api/bridge/* /api/a666/* /eth-rpc /eth-rpc/* /api/fastswap-demo /api/fastswap-demo/* /api/fastswap /api/fastswap/*
+        not path /rpc /api/navswap/* /api/shielded-nav-swap /api/shielded-nav-swap/* /api/bridge/* /api/a666/* /api/a666-roundtrip/* /eth-rpc /eth-rpc/* /api/fastswap-demo /api/fastswap-demo/* /api/fastswap /api/fastswap/*
     }
     handle @walletStatic {
         root * /wallet/dist
