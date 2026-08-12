@@ -10,6 +10,7 @@ export default function Onboard({ wasmReady, onCreate, onImport, onImportBackup,
   const [passphraseConfirm, setPassphraseConfirm] = useState('');
   const [seedSaved, setSeedSaved] = useState(false);
   const [importSeed, setImportSeed] = useState('');
+  const [showImportSeed, setShowImportSeed] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const backupInputRef = useRef(null);
@@ -142,13 +143,13 @@ export default function Onboard({ wasmReady, onCreate, onImport, onImportBackup,
             <div style={{ fontSize: 14, color: 'var(--muted)' }}>
               {existingVault
                 ? 'A wallet already exists. Unlock it or remove it first from Settings.'
-                : 'No wallet found. Create a new self-custody wallet or import an existing seed.'}
+                : 'Choose how to open your PostFiat wallet on this browser. Restoring an existing wallet does not move any funds.'}
             </div>
-            <button className="pf-primary" onClick={handleCreateClick}>Create Wallet</button>
-            <button className="pf-ghost" onClick={handleImportClick}>Import Wallet</button>
+            <button className="pf-primary" onClick={handleImportClick}>Restore from recovery seed</button>
             <button className="pf-ghost" onClick={() => backupInputRef.current?.click()} disabled={busy}>
-              {busy ? 'Importing…' : 'Import Encrypted Backup'}
+              {busy ? 'Opening backup…' : 'Restore from encrypted backup'}
             </button>
+            <button className="pf-ghost" onClick={handleCreateClick}>Create a new wallet</button>
             <input
               ref={backupInputRef}
               type="file"
@@ -157,7 +158,7 @@ export default function Onboard({ wasmReady, onCreate, onImport, onImportBackup,
               onChange={handleImportBackupFile}
             />
             <div style={{ fontSize: 12, color: 'var(--dim)', lineHeight: 1.5 }}>
-              Use an exported wallet backup when you have its encryption passphrase but not the raw seed.
+              A recovery seed is the 64-character secret created with the wallet. An encrypted backup is a PostFiat JSON file and requires its unlock passphrase.
             </div>
           </div>
         )}
@@ -179,31 +180,47 @@ export default function Onboard({ wasmReady, onCreate, onImport, onImportBackup,
             <button className="pf-primary" onClick={handleSave} disabled={busy || !seedSaved}>
               {busy ? 'Creating…' : 'Create Wallet'}
             </button>
+            <button className="pf-ghost" onClick={() => setMode('none')} disabled={busy}>Back</button>
           </div>
         )}
 
         {mode === 'import' && (
           <div className="pf-card" style={{ display: 'grid', gap: 12 }}>
-            <div className="pf-eyebrow">Paste your 64-char hex master seed</div>
-            <input className="pf-input" placeholder="e.g. a1b2c3… (64 hex chars)"
+            <div className="pf-eyebrow">Restore from recovery seed</div>
+            <div className="pf-warning" style={{ fontSize: 12, lineHeight: 1.5 }}>
+              Enter this secret only on the PostFiat wallet you intended to open. PostFiat support will never ask you to send it. Validation happens in this browser.
+            </div>
+            <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.5 }}>
+              This is the 64-character hexadecimal recovery seed—not the passphrase used to unlock a wallet already stored in your browser.
+            </p>
+            <input className="pf-input" type={showImportSeed ? 'text' : 'password'} placeholder="64-character recovery seed"
               value={importSeed} onChange={e => setImportSeed(e.target.value)}
               spellCheck="false" autoCapitalize="none" autoCorrect="off"
               style={{ fontFamily: 'var(--mono)', fontSize: 12 }} />
-            <button className="pf-primary" onClick={handleImportSeed}>Validate Seed</button>
+            <label className="pf-checkbox">
+              <input type="checkbox" checked={showImportSeed} onChange={e => setShowImportSeed(e.target.checked)} />
+              <span>Show recovery seed</span>
+            </label>
+            <button className="pf-primary" onClick={handleImportSeed}>Continue and preview address</button>
+            <button className="pf-ghost" onClick={() => setMode('none')}>Back</button>
           </div>
         )}
 
         {mode === 'import-confirm' && (
           <div className="pf-card" style={{ display: 'grid', gap: 12 }}>
-            <div className="pf-eyebrow">Imported seed derives to address</div>
+            <div className="pf-eyebrow">Confirm the wallet address</div>
+            <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.5 }}>
+              Verify this is the public address you expected. The new passphrase below encrypts this wallet in this browser; it is not your recovery seed.
+            </p>
             <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--text)' }}>{address}</div>
             <input className="pf-input" type="password" placeholder="Encryption passphrase (min 10 chars)"
               autoComplete="new-password" value={passphrase} onChange={e => setPassphrase(e.target.value)} />
             <input className="pf-input" type="password" placeholder="Confirm passphrase"
               autoComplete="new-password" value={passphraseConfirm} onChange={e => setPassphraseConfirm(e.target.value)} />
             <button className="pf-primary" onClick={handleSave} disabled={busy}>
-              {busy ? 'Importing…' : 'Confirm Import'}
+              {busy ? 'Restoring…' : 'Restore this wallet'}
             </button>
+            <button className="pf-ghost" onClick={() => setMode('import')} disabled={busy}>Back</button>
           </div>
         )}
 

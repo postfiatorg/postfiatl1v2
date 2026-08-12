@@ -41,9 +41,11 @@ function marketIsVerified(market, route, nav) {
 export default function NavList({ markets = [], rpc, address, go }) {
   const [snapshot, setSnapshot] = useState(null);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     if (!rpc) return;
+    setLoading(true);
     setError('');
     try {
       const [marketStates, assetsResponse, statusResponse] = await Promise.all([
@@ -71,6 +73,8 @@ export default function NavList({ markets = [], rpc, address, go }) {
       });
     } catch (failure) {
       setError(failure.message || 'Unable to load current NAVCoins');
+    } finally {
+      setLoading(false);
     }
   }, [address, markets, rpc]);
 
@@ -93,31 +97,33 @@ export default function NavList({ markets = [], rpc, address, go }) {
       status: marketIsVerified(market, route, nav) ? `${formatNavcoinNav(nav?.nav_per_unit)} verified NAV` : 'NAV verification blocked',
     })),
     ...settlementMarkets.map(market => ({
-      id: market.settlementSymbol,
-      name: 'Governed NAVCoin settlement asset',
+      id: String(market.settlementSymbol).toUpperCase() === 'PFUSDC' ? 'pfUSDC' : market.settlementSymbol,
+      name: market.settlementName,
       holding: assetBalance(assets, market.settlementAssetId),
       assetId: market.settlementAssetId,
-      status: `Funds ${markets.filter(item => item.settlementAssetId === market.settlementAssetId).map(item => item.symbol).join(', ')} primary markets`,
+      status: `Spendable stablecoin · used to buy ${markets.filter(item => item.settlementAssetId === market.settlementAssetId).map(item => item.symbol).join(', ')}`,
     })),
     ...otherAssets.map(asset => {
       const assetId = String(asset?.asset_id || asset?.id || '');
+      const rawCode = String(asset?.code || '');
+      const code = rawCode.toUpperCase() === 'PFUSDC' ? 'pfUSDC' : rawCode;
+      const legacy = /^[a-z]/.test(rawCode);
       return {
-        id: shortenAssetId(assetId),
-        name: 'Other or legacy issued asset · send only',
+        id: code || 'Unknown asset',
+        name: legacy ? 'Legacy issued asset' : 'Issued asset',
         holding: String(asset?.balance ?? asset?.amount ?? 0),
         assetId,
-        status: 'Not part of a configured NAVCoin market',
+        status: legacy ? 'Legacy asset · send only' : 'No active market is registered for this asset',
       };
     }),
   ];
 
   return (
     <div className="pf-page">
-      <div className="pf-eyebrow">Governed proof-of-reserves assets</div>
-      <h1 className="pf-h1">NAVCoins</h1>
+      <div className="pf-eyebrow">This wallet</div>
+      <h1 className="pf-h1">Assets</h1>
       <p style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.55, marginTop: 10, maxWidth: 680 }}>
-        Each NAVCoin has its own governed route, verified NAV, settlement reserve, and Ethereum token.
-        Historical issued assets may remain visible in balances without being offered as current markets.
+        Every issued asset held by this address is listed here. Verified NAV and trading actions appear only for active markets; legacy assets remain visible and sendable.
       </p>
 
       {error && <div className="pf-error" style={{ marginTop: 16 }}>{error}</div>}
@@ -126,11 +132,20 @@ export default function NavList({ markets = [], rpc, address, go }) {
         <div className="pf-thead">
           <span className="pf-th" style={{ cursor: 'default' }}>Asset</span>
           <span className="pf-th r" style={{ cursor: 'default' }}>Held</span>
-          <span className="pf-th r" style={{ cursor: 'default' }}>Asset ID</span>
+          <span className="pf-th r" style={{ cursor: 'default' }}>Status</span>
           <span className="pf-th" style={{ cursor: 'default' }} />
           <span />
           <span />
         </div>
+        {loading && rows.length === 0 && (
+          <div style={{ padding: 24, color: 'var(--muted)' }}>Loading your assets…</div>
+        )}
+        {!loading && rows.length === 0 && (
+          <div style={{ padding: 24, display: 'grid', gap: 8 }}>
+            <strong>No issued assets found</strong>
+            <span style={{ color: 'var(--muted)', fontSize: 13 }}>This does not include the PFT network-fee balance shown on Home.</span>
+          </div>
+        )}
         {rows.map(row => (
           <React.Fragment key={row.assetId}>
             <div className="pf-trow-d" onClick={() => go('navDetail', row.assetId)}>
@@ -141,7 +156,7 @@ export default function NavList({ markets = [], rpc, address, go }) {
               <div className="pf-num" style={{ color: hasBalance(row.holding) ? 'var(--text)' : 'var(--dim)' }}>
                 {hasBalance(row.holding) ? formatAssetBalance(row.assetId, row.holding) : '—'}
               </div>
-              <div className="pf-num" style={{ color: 'var(--dim)', fontSize: 11 }}>{shortenAssetId(row.assetId)}</div>
+              <div className="pf-num" style={{ color: 'var(--dim)', fontSize: 11 }}>{row.status}</div>
               <div />
               <div />
               <span style={{ color: 'var(--dim)', textAlign: 'right' }}>→</span>

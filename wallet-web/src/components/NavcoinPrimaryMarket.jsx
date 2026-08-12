@@ -10,7 +10,7 @@ import {
   finalizeNavcoinIssueExportOperations,
   parseNavcoinUnits,
 } from '../lib/navcoin-primary-route.js';
-import { truncateMiddle } from '../lib/utils.js';
+import { ETH_MAINNET_USDC, truncateMiddle } from '../lib/utils.js';
 import { createNavcoinExportJob, loadNavcoinExportReadiness, waitForNavcoinExportJob } from '../lib/navcoin-export-relay.js';
 import {
   buildNavcoinReturnBurnCalldata,
@@ -58,10 +58,10 @@ function shortTx(value) {
 }
 
 function verificationCopy(trustClass) {
-  if (trustClass === 'TRUSTLESS_FINALITY') return 'cryptographic finality proof';
-  if (trustClass === 'BFT_CHECKPOINT') return 'BFT-checkpoint proof';
-  if (trustClass === 'CONTROLLED') return 'controlled operator proof';
-  return 'governed finality proof';
+  if (trustClass === 'TRUSTLESS_FINALITY') return 'automatic finality verification';
+  if (trustClass === 'BFT_CHECKPOINT') return 'validator-confirmed finality check';
+  if (trustClass === 'CONTROLLED') return 'operator-confirmed finality check';
+  return 'route finality check';
 }
 
 async function ensureEthereumMainnet() {
@@ -134,19 +134,17 @@ export default function NavcoinPrimaryMarket({
     if (!rpc || !address) return null;
     setLoading(true);
     try {
-      const [routeResponse, navResponse, assetsResponse, statusResponse, proofResponse] = await Promise.all([
+      const [routeResponse, navResponse, assetsResponse, statusResponse] = await Promise.all([
         rpc.navcoinBridgeSupplyStatus(market.routeId),
         rpc.vaultBridgeStatus(market.navAssetId),
         rpc.accountAssets(address),
         rpc.status(),
-        rpc.navReserveProofStatus?.(market.navAssetId).catch(() => null) ?? null,
       ]);
       const next = {
         route: responseResult(routeResponse, `${navSymbol} route`),
         nav: responseResult(navResponse, `${navSymbol} NAV`),
         assets: responseResult(assetsResponse, 'wallet assets'),
         chain: responseResult(statusResponse, 'chain status'),
-        proof: proofResponse?.ok ? proofResponse.result : null,
       };
       next.settlementBalance = assetBalance(next.assets, market.settlementAssetId);
       next.navcoinBalance = assetBalance(next.assets, market.navAssetId);
@@ -227,12 +225,6 @@ export default function NavcoinPrimaryMarket({
     () => parseNavcoinUnits(amount, market?.decimals),
     [amount, market?.decimals],
   );
-  const reserveProofPacket = useMemo(() => {
-    const packets = snapshot?.proof?.packets;
-    if (!Array.isArray(packets)) return null;
-    const pinned = String(snapshot?.route?.pricing_reserve_packet_hash || '').toLowerCase();
-    return packets.find(packet => String(packet?.reserve_packet_hash || '').toLowerCase() === pinned) || null;
-  }, [snapshot?.proof, snapshot?.route?.pricing_reserve_packet_hash]);
   const redeemBalance = redeemSource === 'ethereum' ? metamaskNavcoinBalance : snapshot?.navcoinBalance;
   const evaluation = useMemo(() => evaluateNavcoinResidentMarket({
     market,
@@ -591,13 +583,17 @@ export default function NavcoinPrimaryMarket({
     && navPacketMatches;
   const outboundProofLabel = verificationCopy(route?.outbound_verification_class);
   const returnProofLabel = verificationCopy(route?.return_verification_class);
+  const uniswapBuyUrl = `https://app.uniswap.org/swap?chain=mainnet&inputCurrency=${ETH_MAINNET_USDC}&outputCurrency=${market.wrappedToken}`;
+  const uniswapSellUrl = `https://app.uniswap.org/swap?chain=mainnet&inputCurrency=${market.wrappedToken}&outputCurrency=${ETH_MAINNET_USDC}`;
   const displayBlockers = evaluation.blockingReasons
     .filter(reason => reason !== `enter a positive ${navSymbol} amount`)
     .map(reason => {
       if (mode === 'redeem' && redeemSource === 'ethereum'
         && reason === `wallet ${navSymbol} balance is insufficient`) return `MetaMask ${wrappedSymbol} balance is insufficient or not connected`;
-      return reason;
-    });
+      if (/balance is insufficient|capacity is insufficient|exceeds|paused/i.test(reason)) return reason;
+      return 'Live NAV and backing could not be verified. Refresh the market before trying again.';
+    })
+    .filter((reason, index, reasons) => reasons.indexOf(reason) === index);
 
   return (
     <section
@@ -607,11 +603,11 @@ export default function NavcoinPrimaryMarket({
     >
       <header className="navcoin-primary-hero">
         <div>
-          <div className="fs-kicker"><span className="fs-live-dot" /> NAVCOIN PRIMARY MARKET · PFTL</div>
-          <h1>Mint or redeem {navSymbol}<br />at verified NAV.</h1>
+          <div className="fs-kicker"><span className="fs-live-dot" /> {navSymbol} · VERIFIED NAV</div>
+          <h1>Buy or redeem {navSymbol}<br /> at verified NAV.</h1>
           <p>
-            Mint new fund shares directly against {settlementSymbol}, or redeem shares against the on-chain {settlementSymbol} settlement reserve.
-            The Uniswap pool is a separate optional venue—this trade does not consume its liquidity.
+            Buy newly issued {navSymbol} with {settlementSymbol}, keep it on PFTL or deliver it as {wrappedSymbol} to Ethereum, and redeem PFTL or Ethereum holdings back to {settlementSymbol}.
+            These prices come from the verified NAV reserve, not the separate Uniswap market.
           </p>
         </div>
         <div style={{ display: 'grid', gap: 8, justifyItems: 'end' }}>
@@ -634,59 +630,42 @@ export default function NavcoinPrimaryMarket({
       {refreshError && <div className="pf-error">{refreshError}</div>}
 
       <div className="navcoin-primary-safety">
-        <div className={`navcoin-primary-shield ${routeHealthy ? '' : 'bad'}`}>
-          {routeHealthy ? '✓' : '!'}
+        <div className={`navcoin-primary-shield ${loading || routeHealthy ? '' : 'bad'}`}>
+          {loading ? '…' : routeHealthy ? '✓' : '!'}
         </div>
         <div>
-          <span>MARKET SAFETY</span>
-          <strong>{routeHealthy
-            ? 'Live route · invariant holds'
-            : 'Trading blocked'}</strong>
-          <small>Policy {route?.policy_epoch ?? '—'} · NAV epoch {route?.pricing_nav_epoch ?? '—'} · height {snapshot?.chain?.block_height ?? '—'}</small>
-          <small>Route trust: {route?.route_trust_class || 'unavailable'} · export: {route?.outbound_verification_class || 'unavailable'} · return: {route?.return_verification_class || 'unavailable'}</small>
+          <span>MARKET STATUS</span>
+          <strong>{loading
+            ? 'Checking live NAV and backing…'
+            : routeHealthy ? 'Ready · NAV and backing are verified' : 'Trading is unavailable'}</strong>
+          <small>{loading
+            ? 'The wallet is loading the latest finalized market state. No signature is requested.'
+            : routeHealthy ? 'The wallet rechecks the active route and NAV before signing.' : 'No funds will move while verification is unavailable.'}</small>
         </div>
         <div className="navcoin-primary-pins">
-          <span>RESERVE PACKET</span>
-          <strong>{route?.pricing_reserve_packet_hash ? truncateMiddle(route.pricing_reserve_packet_hash, 8) : '—'}</strong>
-          <small>{navPacketMatches ? 'matches finalized PFTL reserve proof' : 'packet unavailable or mismatched'}</small>
-          {reserveProofPacket && <small>
-            Quantity: {reserveProofPacket.quantity_trust_counts?.cryptographic ?? 0} cryptographic · {reserveProofPacket.quantity_trust_counts?.attested ?? 0} attested · {reserveProofPacket.quantity_trust_counts?.controlled ?? 0} controlled<br />
-            Valuation: {reserveProofPacket.valuation_trust_counts?.cryptographic ?? 0} cryptographic · {reserveProofPacket.valuation_trust_counts?.attested ?? 0} attested · {reserveProofPacket.valuation_trust_counts?.controlled ?? 0} controlled
-          </small>}
+          <span>BACKING AVAILABLE FOR REDEMPTION</span>
+          <strong>{formatNavcoinUnits(route?.settlement_reserve_atoms, market.settlementDecimals)} {settlementSymbol}</strong>
+          <small>{navPacketMatches ? 'Matched to the finalized backing record' : 'Backing verification unavailable'}</small>
         </div>
       </div>
 
       <div className="navcoin-primary-metrics">
         <div><span>Verified NAV</span><strong>{formatNavcoinNav(nav?.nav_per_unit)}</strong><small>USD per {navSymbol} · pre-inflow</small></div>
         <div><span>Reserve</span><strong>{formatNavcoinUnits(route?.settlement_reserve_atoms, market.settlementDecimals)}</strong><small>{settlementSymbol} counted on PFTL</small></div>
-        <div><span>Mint capacity</span><strong>{formatNavcoinUnits(route?.available_issue_atoms, market.decimals)}</strong><small>{navSymbol} available now</small></div>
-        <div><span>Redeem capacity</span><strong>{formatNavcoinUnits(route?.available_redeem_atoms, market.decimals)}</strong><small>{navSymbol} available now</small></div>
-      </div>
-
-      <div className="navcoin-primary-flow" aria-label={`${navSymbol} ${mode === 'redeem' ? 'redemption' : 'acquisition'} flow`}>
-        {mode === 'redeem' ? <>
-          <div className={redeemSource === 'ethereum' ? 'active' : ''}><span>1</span><strong>Return</strong><small>{wrappedSymbol} from MetaMask</small></div><i />
-          <div><span>2</span><strong>Prove</strong><small>Ethereum finality</small></div><i />
-          <div><span>3</span><strong>Restore</strong><small>{navSymbol} on PFTL</small></div><i />
-          <div className="active"><span>4</span><strong>Redeem</strong><small>{navSymbol} → {settlementSymbol}</small></div>
-        </> : <>
-          <div><span>1</span><strong>Fund</strong><small>USDC → {settlementSymbol}</small></div><i />
-          <div className="active"><span>2</span><strong>Mint</strong><small>{settlementSymbol} → {navSymbol}</small></div><i />
-          <div><span>3</span><strong>Export</strong><small>Proof-bound on PFTL</small></div><i />
-          <div className={delivery === 'ethereum' ? 'active' : ''}><span>4</span><strong>Hold</strong><small>{wrappedSymbol} in MetaMask</small></div>
-        </>}
+        <div><span>Available to buy</span><strong>{formatNavcoinUnits(route?.available_issue_atoms, market.decimals)}</strong><small>{navSymbol} at the current verified NAV</small></div>
+        <div><span>Available to redeem</span><strong>{formatNavcoinUnits(route?.available_redeem_atoms, market.decimals)}</strong><small>{navSymbol} against the reserve</small></div>
       </div>
 
       <div className="navcoin-primary-workspace">
         <div className="navcoin-primary-trade-card">
           <div className="navcoin-primary-tabs">
-            <button className={mode === 'issue' ? 'on' : ''} onClick={() => { setMode('issue'); setProgress([]); setActionError(''); }}>Mint {navSymbol}</button>
+            <button className={mode === 'issue' ? 'on' : ''} onClick={() => { setMode('issue'); setProgress([]); setActionError(''); }}>Buy at NAV</button>
             <button className={mode === 'redeem' ? 'on' : ''} onClick={() => {
               setMode('redeem');
               if (BigInt(snapshot?.navcoinBalance || 0) < BigInt(amountAtoms || 0)) setRedeemSource('ethereum');
               setProgress([]);
               setActionError('');
-            }}>Redeem</button>
+            }}>Redeem at NAV</button>
           </div>
 
           <label className="navcoin-primary-label" htmlFor="navcoin-amount">{navSymbol} amount</label>
@@ -704,9 +683,11 @@ export default function NavcoinPrimaryMarket({
           </div>
 
           <div className="navcoin-primary-quote">
+            <div><span>{mode === 'issue' ? 'You receive' : 'You redeem'}</span><strong>{amountAtoms ? formatNavcoinUnits(amountAtoms, market.decimals) : '—'} {navSymbol}</strong></div>
             <div><span>{mode === 'issue' ? 'You pay' : 'You receive at least'}</span><strong>{formatNavcoinUnits(quote?.settlementAtoms, market.settlementDecimals)} {settlementSymbol}</strong></div>
             <div><span>NAV reserve value</span><strong>{formatNavcoinUnits(quote?.baseReserveAtoms, market.settlementDecimals)} {settlementSymbol}</strong></div>
-            <div><span>{mode === 'issue' ? 'Issuance spread' : 'Redemption spread'}</span><strong>{formatNavcoinUnits(quote?.spreadAtoms, market.settlementDecimals)} {settlementSymbol}</strong></div>
+            <div><span>{mode === 'issue' ? 'Purchase spread' : 'Redemption spread'}</span><strong>{formatNavcoinUnits(quote?.spreadAtoms, market.settlementDecimals)} {settlementSymbol}</strong></div>
+            <div><span>PFTL network fees</span><strong>Quoted and checked before each local signature</strong></div>
           </div>
 
           {mode === 'issue' && (
@@ -718,7 +699,7 @@ export default function NavcoinPrimaryMarket({
               <div>
                 <label className="navcoin-primary-label" htmlFor="navcoin-eth-recipient">Ethereum recipient</label>
                 <small>{delivery === 'ethereum'
-                  ? `The ${outboundProofLabel} export mints ${wrappedSymbol} directly to this MetaMask account.`
+                  ? `After PFTL finalizes the export, ${wrappedSymbol} is minted directly to this MetaMask account.`
                   : `Bound for recovery safety; the purchased ${navSymbol} remains native on PFTL.`}</small>
               </div>
               <button className="pf-button secondary" onClick={connectEthereum} disabled={executing}>Connect MetaMask</button>
@@ -742,7 +723,7 @@ export default function NavcoinPrimaryMarket({
               <div>
                 <label className="navcoin-primary-label" htmlFor="navcoin-return-account">Redemption source</label>
                 <small>{redeemSource === 'ethereum'
-                  ? `Return ${wrappedSymbol} to PFTL using the route's ${returnProofLabel}, then redeem it to ${settlementSymbol} in one guided flow.`
+                  ? `Burn ${wrappedSymbol} in MetaMask, wait for Ethereum confirmation, then redeem the restored ${navSymbol} to ${settlementSymbol} in one guided flow.`
                   : `Redeem native ${navSymbol} already held by this PFTL wallet.`}</small>
               </div>
               {redeemSource === 'ethereum' && <>
@@ -759,7 +740,7 @@ export default function NavcoinPrimaryMarket({
             </div>
           )}
 
-          {displayBlockers.length > 0 && (
+          {!loading && displayBlockers.length > 0 && (
             <div className="navcoin-primary-blockers">
               {displayBlockers.slice(0, 4).map(reason => <span key={reason}>• {reason}</span>)}
             </div>
@@ -769,13 +750,13 @@ export default function NavcoinPrimaryMarket({
               Add {settlementSymbol} from Ethereum
             </button>
           )}
-          {!finalityReady && <div className="navcoin-primary-blockers"><span>• Authenticated finality submission is not enabled for this wallet endpoint.</span></div>}
+          {!finalityReady && <div className="navcoin-primary-blockers"><span>• Transactions are temporarily unavailable. No funds will move.</span></div>}
           {actionError && <div className="pf-error">{actionError}</div>}
           {mode === 'issue' && delivery === 'ethereum' && !proxyAuthToken && (
-            <div className="navcoin-primary-blockers"><span>• Authenticated unattended export relay access is unavailable.</span></div>
+            <div className="navcoin-primary-blockers"><span>• Ethereum delivery is temporarily unavailable. Keep the purchase on PFTL or retry later.</span></div>
           )}
           {mode === 'redeem' && redeemSource === 'ethereum' && !proxyAuthToken && (
-            <div className="navcoin-primary-blockers"><span>• Authenticated unattended return relay access is unavailable.</span></div>
+            <div className="navcoin-primary-blockers"><span>• Returning {wrappedSymbol} from Ethereum is temporarily unavailable. No token has been burned.</span></div>
           )}
 
           <button className="pf-primary" disabled={!canExecute} onClick={execute}>
@@ -785,8 +766,8 @@ export default function NavcoinPrimaryMarket({
               : `${redeemSource === 'ethereum' ? 'Return & redeem' : 'Redeem'} ${amountAtoms ? formatNavcoinUnits(amountAtoms, market.decimals) : '—'} ${navSymbol}`}
           </button>
           <p className="navcoin-primary-signing">{mode === 'redeem' && redeemSource === 'ethereum'
-            ? `MetaMask signs the ${wrappedSymbol} return; your ML-DSA key signs the PFTL redemption locally.`
-            : 'Your ML-DSA key signs locally. The proxy receives only signed transactions.'}</p>
+            ? `MetaMask confirms the ${wrappedSymbol} return; this browser signs the PFTL redemption. Your recovery seed never leaves the browser.`
+            : 'This browser signs locally. Your recovery seed never leaves the browser.'}</p>
         </div>
 
         <aside className="navcoin-primary-side">
@@ -796,13 +777,30 @@ export default function NavcoinPrimaryMarket({
             <div className="navcoin-primary-balance"><span>{navSymbol}</span><strong>{formatNavcoinUnits(snapshot?.navcoinBalance, market.decimals)}</strong></div>
             <div className="navcoin-primary-balance"><span>{wrappedSymbol} · MetaMask</span><strong>{formatNavcoinUnits(metamaskNavcoinBalance, market.decimals)}</strong></div>
           </div>
-          <div className="pf-card navcoin-primary-details">
-            <div className="navcoin-primary-side-title"><span>EXECUTION DETAILS</span><small>pinned</small></div>
-            <div><span>Issue price</span><strong>{route?.issue_multiplier_bps ? `${(Number(route.issue_multiplier_bps) / 10000).toFixed(3)} × NAV` : '—'}</strong></div>
-            <div><span>Redeem price</span><strong>{route?.redeem_multiplier_bps ? `${(Number(route.redeem_multiplier_bps) / 10000).toFixed(4)} × NAV` : '—'}</strong></div>
-            <div><span>Route</span><strong title={route?.route_id}>{route?.route_id ? truncateMiddle(route.route_id, 12) : '—'}</strong></div>
-            <div><span>{wrappedSymbol}</span><strong title={route?.wrapped_navcoin_token}>{route?.wrapped_navcoin_token ? truncateMiddle(route.wrapped_navcoin_token, 8) : '—'}</strong></div>
+          <div className="pf-card" style={{ display: 'grid', gap: 12 }}>
+            <div className="navcoin-primary-side-title" style={{ marginBottom: 0 }}><span>SECONDARY MARKET</span><small>Ethereum</small></div>
+            <strong style={{ fontSize: 16 }}>Trade {wrappedSymbol} on Uniswap</strong>
+            <p style={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.55 }}>
+              Uniswap sets the live market price, slippage, and Ethereum gas. Review its quote before confirming in MetaMask.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <a className="pf-button" style={{ textDecoration: 'none' }} href={uniswapBuyUrl} target="_blank" rel="noopener noreferrer">Buy {wrappedSymbol}</a>
+              <a className="pf-button secondary" style={{ textDecoration: 'none' }} href={uniswapSellUrl} target="_blank" rel="noopener noreferrer">Sell {wrappedSymbol}</a>
+            </div>
+            <small style={{ color: 'var(--dim)', lineHeight: 1.5 }}>
+              To redeem a purchase at NAV, return here and choose Redeem at NAV → From MetaMask.
+            </small>
           </div>
+          <details className="pf-card navcoin-primary-details">
+            <summary style={{ cursor: 'pointer', fontWeight: 650 }}>Advanced verification details</summary>
+            <div style={{ display: 'grid', gap: 10, paddingTop: 14 }}>
+              <div><span>Buy price</span><strong>{route?.issue_multiplier_bps ? `${(Number(route.issue_multiplier_bps) / 10000).toFixed(3)} × NAV` : '—'}</strong></div>
+              <div><span>Redeem price</span><strong>{route?.redeem_multiplier_bps ? `${(Number(route.redeem_multiplier_bps) / 10000).toFixed(4)} × NAV` : '—'}</strong></div>
+              <div><span>Reserve proof</span><strong>{route?.pricing_reserve_packet_hash ? truncateMiddle(route.pricing_reserve_packet_hash, 8) : '—'}</strong></div>
+              <div><span>Route</span><strong title={route?.route_id}>{route?.route_id ? truncateMiddle(route.route_id, 12) : '—'}</strong></div>
+              <div><span>{wrappedSymbol}</span><strong title={route?.wrapped_navcoin_token}>{route?.wrapped_navcoin_token ? truncateMiddle(route.wrapped_navcoin_token, 8) : '—'}</strong></div>
+            </div>
+          </details>
         </aside>
       </div>
 

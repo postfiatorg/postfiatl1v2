@@ -17,6 +17,16 @@ function boundedPrecision(value, field) {
   return precision;
 }
 
+function metadataMap(rows = []) {
+  const map = new Map();
+  for (const row of rows) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+    const assetId = String(row.asset_id || '').toLowerCase();
+    if (HASH48_RE.test(assetId)) map.set(assetId, row);
+  }
+  return map;
+}
+
 function boundedDisplayName(value, fallback) {
   const text = String(value || '').trim();
   if (!text) return fallback;
@@ -26,7 +36,12 @@ function boundedDisplayName(value, fallback) {
   return text;
 }
 
-export function navcoinMarketFromRoute(row) {
+function canonicalSymbol(value) {
+  const symbol = String(value || '');
+  return symbol.toUpperCase() === 'PFUSDC' ? 'pfUSDC' : symbol;
+}
+
+export function navcoinMarketFromRoute(row, assetMetadata = []) {
   if (!row || typeof row !== 'object' || Array.isArray(row)) {
     throw new Error('NAVCoin route row is malformed');
   }
@@ -39,10 +54,13 @@ export function navcoinMarketFromRoute(row) {
   const routeConfigDigest = exactString(row.route_config_digest, 'route configuration digest', HASH48_RE);
   const wrappedToken = exactString(String(row.wrapped_navcoin_token || '').toLowerCase(), 'wrapped token', EVM_RE);
   const handoffController = exactString(String(row.handoff_controller || '').toLowerCase(), 'handoff controller', EVM_RE);
-  const symbol = exactString(row.native_nav_asset_code, 'NAVCoin symbol', ASSET_CODE_RE);
-  const settlementSymbol = exactString(row.settlement_asset_code, 'settlement symbol', ASSET_CODE_RE);
-  const decimals = boundedPrecision(row.native_nav_asset_precision, 'NAVCoin precision');
-  const settlementDecimals = boundedPrecision(row.settlement_asset_precision, 'settlement precision');
+  const metadata = metadataMap(assetMetadata);
+  const navAsset = metadata.get(navAssetId);
+  const settlementAsset = metadata.get(settlementAssetId);
+  const symbol = canonicalSymbol(exactString(row.native_nav_asset_code || navAsset?.code, 'NAVCoin symbol', ASSET_CODE_RE));
+  const settlementSymbol = canonicalSymbol(exactString(row.settlement_asset_code || settlementAsset?.code, 'settlement symbol', ASSET_CODE_RE));
+  const decimals = boundedPrecision(row.native_nav_asset_precision ?? navAsset?.precision, 'NAVCoin precision');
+  const settlementDecimals = boundedPrecision(row.settlement_asset_precision ?? settlementAsset?.precision, 'settlement precision');
   const ethereumChainId = Number(row.ethereum_chain_id);
   if (!Number.isSafeInteger(ethereumChainId) || ethereumChainId <= 0) {
     throw new Error('NAVCoin destination chain is malformed');
@@ -56,10 +74,10 @@ export function navcoinMarketFromRoute(row) {
     wrappedToken,
     handoffController,
     symbol,
-    name: boundedDisplayName(row.native_nav_asset_display_name, `${symbol} NAVCoin`),
+    name: boundedDisplayName(row.native_nav_asset_display_name || navAsset?.display_name, `${symbol} NAVCoin`),
     wrappedSymbol: `w${symbol}`.slice(0, 16),
     settlementSymbol,
-    settlementName: boundedDisplayName(row.settlement_asset_display_name, `${settlementSymbol} settlement asset`),
+    settlementName: boundedDisplayName(row.settlement_asset_display_name || settlementAsset?.display_name, `${settlementSymbol} settlement asset`),
     decimals,
     settlementDecimals,
     ethereumChainId,
@@ -70,8 +88,8 @@ export function navcoinMarketFromRoute(row) {
   });
 }
 
-export function navcoinMarketsFromRoutes(report) {
-  if (!report || report.schema !== 'postfiat-pftl-uniswap-routes-status-v2'
+export function navcoinMarketsFromRoutes(report, assetMetadata = []) {
+  if (!report || !['postfiat-pftl-uniswap-routes-status-v1', 'postfiat-pftl-uniswap-routes-status-v2'].includes(report.schema)
     || !Array.isArray(report.routes) || report.routes.length > 64
     || !Number.isSafeInteger(report.route_count)
     || report.route_count !== report.routes.length) {
@@ -83,7 +101,7 @@ export function navcoinMarketsFromRoutes(report) {
   }
   const markets = report.routes
     .filter(row => row.route_live === true)
-    .map(navcoinMarketFromRoute);
+    .map(row => navcoinMarketFromRoute(row, assetMetadata));
   markets.sort((left, right) => (left.routeId < right.routeId ? -1 : left.routeId > right.routeId ? 1 : 0));
   const routeIds = new Set();
   const navAssetIds = new Set();
@@ -99,6 +117,48 @@ export function navcoinMarketsFromRoutes(report) {
     wrappedTokens.add(market.wrappedToken);
   }
   return Object.freeze(markets);
+}
+
+function responseAsset(response, assetId) {
+  const asset = response?.ok === true && response?.result?.found === true
+    ? response.result.asset
+    : null;
+  if (!asset || String(asset.asset_id || '').toLowerCase() !== assetId) {
+    throw new Error(`verified metadata for asset ${assetId} is unavailable`);
+  }
+  return asset;
+}
+
+/**
+ * Load the governed market registry without assuming every deployed validator
+ * has already upgraded its status response from v1 to v2. The v1 response is
+ * missing display metadata, so identity is hydrated from the chain's
+ * asset_info RPC and then passed through the same strict parser. No symbol,
+ * precision, address, or route identity comes from browser-local configuration.
+ */
+export async function loadNavcoinMarkets(rpc) {
+  if (!rpc) throw new Error('wallet RPC is unavailable');
+  const response = await rpc.navcoinBridgeRoutes();
+  if (response?.ok !== true || !response.result) {
+    throw new Error(response?.error?.message || 'governed NAVCoin routes are unavailable');
+  }
+  const report = response.result;
+  if (report.schema === 'postfiat-pftl-uniswap-routes-status-v2') {
+    return navcoinMarketsFromRoutes(report);
+  }
+  if (report.schema !== 'postfiat-pftl-uniswap-routes-status-v1') {
+    return navcoinMarketsFromRoutes(report);
+  }
+
+  if (!Array.isArray(report.routes)) return navcoinMarketsFromRoutes(report);
+  const ids = [...new Set(report.routes
+    .filter(row => row?.route_live === true)
+    .flatMap(row => [row.native_nav_asset_id, row.settlement_asset_id])
+    .map(value => String(value || '').toLowerCase()))];
+  const metadata = await Promise.all(ids.map(async assetId => (
+    responseAsset(await rpc.assetInfo(assetId), assetId)
+  )));
+  return navcoinMarketsFromRoutes(report, metadata);
 }
 
 export function navcoinMarketByKey(markets, key) {

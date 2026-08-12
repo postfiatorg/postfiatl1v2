@@ -15,15 +15,13 @@ import Onboard from './components/Onboard.jsx';
 import LockScreen from './components/LockScreen.jsx';
 import WalletHome from './components/WalletHome.jsx';
 import Send from './components/Send.jsx';
-import Swap from './components/Swap.jsx';
 import Bridge from './components/Bridge.jsx';
 import NavList from './components/NavList.jsx';
 import NavDetail from './components/NavDetail.jsx';
 import More from './components/More.jsx';
 import NavcoinMarket from './components/NavcoinMarket.jsx';
-import PrivateFix from './components/PrivateFix.jsx';
-import A666RoundTrip from './components/A666RoundTrip.jsx';
-import { navcoinMarketByKey, navcoinMarketsFromRoutes } from './lib/navcoin-markets.js';
+import Activity from './components/Activity.jsx';
+import { loadNavcoinMarkets, navcoinMarketByKey } from './lib/navcoin-markets.js';
 
 const PROXY_AUTH_SESSION_KEY = 'postfiat.wallet_proxy_api_token';
 
@@ -47,11 +45,13 @@ async function loadControlledLocalProxySession() {
 }
 
 const NAV_ITEMS = [
-  { id: 'wallet', label: 'Wallet' }, { id: 'bridge', label: 'Bridge' },
-  { id: 'market', label: 'NAV Markets' }, { id: 'send', label: 'Send' },
-  { id: 'roundtrip', label: 'A666 Loop' },
-  { id: 'swap', label: 'Process' }, { id: 'fx', label: 'Private FX' },
-  { id: 'nav', label: 'NavCoins' }, { id: 'more', label: 'More' },
+  { id: 'wallet', label: 'Home', badge: 'H' },
+  { id: 'nav', label: 'Assets', badge: 'A' },
+  { id: 'market', label: 'Trade', badge: 'T' },
+  { id: 'bridge', label: 'Bridge', badge: 'B' },
+  { id: 'send', label: 'Send', badge: 'S' },
+  { id: 'activity', label: 'Activity', badge: 'R' },
+  { id: 'more', label: 'Settings', badge: '⚙' },
 ];
 const isOn = (tab, id) => tab === id || (id === 'nav' && tab === 'navDetail');
 
@@ -75,7 +75,7 @@ export default function App() {
   const [error, setError] = useState('');
   const [walletNotice, setWalletNotice] = useState('');
   const [toast, setToast] = useState('');
-  const [sendSource, setSendSource] = useState('account');
+  const [sendSource, setSendSource] = useState('asset');
   const [proxyAuthToken, setProxyAuthToken] = useState('');
   const [controlledLocalSession, setControlledLocalSession] = useState(false);
   const creatingRef = useRef(false);
@@ -127,8 +127,7 @@ export default function App() {
           setChainCapabilities(caps);
         } catch (e) { setChainCapabilities(null); }
         try {
-          const routes = await client.navcoinBridgeRoutes();
-          const discovered = navcoinMarketsFromRoutes(routes?.result);
+          const discovered = await loadNavcoinMarkets(client);
           setMarkets(discovered);
           setMarketKey(discovered[0]?.key || '');
         } catch (e) {
@@ -149,24 +148,18 @@ export default function App() {
 
     const refresh = async () => {
       try {
-        const [status, caps, routes] = await Promise.all([
+        const [status, caps, discoveredMarkets] = await Promise.all([
           rpc.status().catch(() => null),
           rpc.serverCapabilities().catch(() => null),
-          rpc.navcoinBridgeRoutes().catch(() => null),
+          loadNavcoinMarkets(rpc).catch(() => null),
         ]);
         if (disposed) return;
         setChainStatus(status?.ok ? status.result : null);
         setChainCapabilities(caps?.ok ? caps : null);
-        if (routes?.ok) {
-          try {
-            const discovered = navcoinMarketsFromRoutes(routes.result);
-            setMarkets(discovered);
-            setMarketKey(current => discovered.some(market => market.key === current)
-              ? current : (discovered[0]?.key || ''));
-          } catch (_) {
-            setMarkets([]);
-            setMarketKey('');
-          }
+        if (discoveredMarkets) {
+          setMarkets(discoveredMarkets);
+          setMarketKey(current => discoveredMarkets.some(market => market.key === current)
+            ? current : (discoveredMarkets[0]?.key || ''));
         } else {
           setMarkets([]);
           setMarketKey('');
@@ -426,6 +419,20 @@ export default function App() {
     setTab('onboard');
   };
 
+  const handleChangePassphrase = async (newPassphrase) => {
+    const seed = getDecryptedSeed();
+    if (!seed) throw new Error('Unlock the wallet before changing its passphrase');
+    if (String(newPassphrase || '').length < 10) throw new Error('New passphrase must be at least 10 characters');
+    const vault = await loadVault();
+    if (!vault) throw new Error('The browser wallet is missing');
+    const blob = await encryptVault(seed, newPassphrase);
+    await saveVault('default', blob, {
+      ...vault.metadata,
+      passphrase_changed_at: new Date().toISOString(),
+    });
+    resetAutoLock(handleLock);
+  };
+
   // --- Settings save ---
   const handleSaveSettings = async (newSettings) => {
     const nextProxyAuthToken = controlledLocalSession
@@ -584,16 +591,15 @@ export default function App() {
           </button>
           {NAV_ITEMS.map((x) => (
             <button key={x.id} className={`pf-nav${isOn(tab, x.id) ? ' on' : ''}`} onClick={() => go(x.id)}>
-              <span className="pf-nav-badge">{x.label[0]}</span>{x.label}
+              <span className="pf-nav-badge">{x.badge}</span>{x.label}
             </button>
           ))}
           <button className="pf-nav" onClick={handleLock} style={{ color: 'var(--dim)' }}>
             <span className="pf-nav-badge">L</span> Lock
           </button>
           <div className="pf-ledger">
-            {chainCapabilities?.chain_id || 'connecting…'}<br />
-            {online ? `height ${chainStatus.block_height}` : 'rpc offline'}<br />
-            {chainCapabilities?.validator_count ? `${chainCapabilities.validator_count} validators` : ''}
+            <strong style={{ color: online ? 'var(--mint)' : 'var(--red)' }}>{online ? 'Network connected' : 'Network unavailable'}</strong><br />
+            {chainCapabilities?.chain_id || 'Connecting…'}
           </div>
           <div style={{ fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--dim)', padding: '0 8px 8px', opacity: 0.7 }}>
             v{import.meta.env.VITE_APP_VERSION || 'dev'}
@@ -654,28 +660,7 @@ export default function App() {
               visible={tab === 'send'}
             />
           )}
-          {tab === 'swap' && (
-            <Swap
-              market={navcoinMarketByKey(markets, marketKey)}
-              rpc={rpc}
-              txBuilder={txBuilder}
-              backupJson={backupJson}
-              address={walletAddress}
-              proxyAuthToken={proxyAuthToken}
-              swapServer={swapServer}
-              onToast={showToast}
-              onNavigate={go}
-              chainCapabilities={chainCapabilities}
-              liveSnapshot={walletLiveSnapshot}
-              walletFeedStatus={walletFeedStatus}
-            />
-          )}
-          {tab === 'fx' && (
-            <PrivateFix rpc={rpc} proxyAuthToken={proxyAuthToken} />
-          )}
-          {tab === 'roundtrip' && (
-            <A666RoundTrip proxyAuthToken={proxyAuthToken} onAuthorize={() => go('more')} />
-          )}
+          {tab === 'activity' && <Activity rpc={rpc} address={walletAddress} proxyAuthToken={proxyAuthToken} />}
           {tab === 'market' && (
             <NavcoinMarket
               market={navcoinMarketByKey(markets, marketKey)}
@@ -725,6 +710,7 @@ export default function App() {
               controlledLocalSession={controlledLocalSession}
               onSave={handleSaveSettings}
               onRemove={handleRemoveWallet}
+              onChangePassphrase={handleChangePassphrase}
               onImportBackup={handleImportBackup}
               onExportBackup={async () => {
                 const vault = await loadVault();
@@ -744,7 +730,7 @@ export default function App() {
           <nav className="pf-bottomnav">
             {NAV_ITEMS.map((x) => (
               <button key={x.id} className={`pf-bnav${isOn(tab, x.id) ? ' on' : ''}`} onClick={() => go(x.id)}>
-                <span className="pf-bnav-badge">{x.label[0]}</span>
+                <span className="pf-bnav-badge">{x.badge}</span>
                 <span className="pf-bnav-l">{x.label}</span>
               </button>
             ))}

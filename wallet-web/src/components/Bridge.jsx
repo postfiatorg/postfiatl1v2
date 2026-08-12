@@ -557,7 +557,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
         ? 3
         : 4;
   const busy = ['connecting', 'approving', 'depositing', 'relaying'].includes(phase);
-  const status = routeStatus === 'error' ? 'error' : phase;
+  const status = routeStatus === 'error' ? 'error' : routeStatus === 'loading' ? 'checking' : phase;
   const canApprove = Boolean(
     connectedAddress && route && address && amountAtoms && amountAtoms > 0n
     && proxyAuthToken && !amountError && !busy,
@@ -568,25 +568,17 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
     <div className="pf-page pfb-page">
       <header className="pfb-hero">
         <div>
-          <div className="pf-eyebrow">MetaMask bridge-in · Ethereum mainnet</div>
-          <h1>Bridge USDC to pfUSDC</h1>
+          <div className="pf-eyebrow">Ethereum → PFTL</div>
+          <h1>Deposit USDC</h1>
           <p>
-            Deposit canonical Ethereum USDC into the governed PFTL vault. The confirmed deposit
-            is proof-verified and relayed into pfUSDC for this PFTL wallet.
+            Convert USDC in your Ethereum wallet into pfUSDC in this PostFiat wallet. You will review the amount and approve the Ethereum transactions in MetaMask.
           </p>
         </div>
         <div className={`pfb-status ${status}`}>
-          <span>{status === 'complete' ? 'Complete' : status === 'error' ? 'Blocked' : 'Ready'}</span>
+          <span>{status === 'complete' ? 'Complete' : status === 'error' ? 'Unavailable' : status === 'checking' ? 'Checking' : 'Ready'}</span>
           <small>{routeStatus === 'loading' ? 'Loading the governed route…' : STATUS_COPY[status] || STATUS_COPY.connected}</small>
         </div>
       </header>
-
-      <div className="pfb-banner">
-        <div>
-          <strong>Arbitrum is retired for new pfUSDC deposits.</strong>
-          Use USDC already on Ethereum mainnet. Do not bridge new USDC to Arbitrum for this flow.
-        </div>
-      </div>
 
       {routeStatus === 'error' && (
         <div className="pf-warning">
@@ -600,7 +592,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
       {recoveryWarning && <div className="pf-warning">{recoveryWarning}</div>}
       {!proxyAuthToken && (
         <div className="pf-warning">
-          Bridge deposits are blocked until the session-only proxy access token is entered in More.
+          Wallet transaction services are temporarily unavailable. Refresh the page or check the connection under Settings.
         </div>
       )}
 
@@ -646,10 +638,10 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
               <>
                 <div className="pfb-card-head"><Wallet size={15} /> Step 1 of 4</div>
                 <h2>Connect MetaMask</h2>
-                <p>Connect the wallet holding your Ethereum mainnet USDC. MetaMask will switch to Ethereum mainnet.</p>
+                <p>Connect the MetaMask account holding your Ethereum USDC. The wallet will verify that Ethereum mainnet is selected.</p>
                 <button className="pfb-primary" type="button" onClick={connect} disabled={!evm.hasMetaMask() || busy}>
                   {phase === 'connecting' ? <Loader2 size={16} className="pfb-spin" /> : <Wallet size={16} />}
-                  {evm.hasMetaMask() ? 'Connect MetaMask' : 'MetaMask not found'}
+                  {evm.hasMetaMask() ? 'Connect MetaMask' : 'Install or enable MetaMask to continue'}
                 </button>
               </>
             ) : phase === 'complete' ? (
@@ -728,9 +720,9 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
 
         <aside className="pfb-side">
           <div className="pfb-location">
-            <div className="pfb-location-head"><Landmark size={14} /> Current route</div>
+            <div className="pfb-location-head"><Landmark size={14} /> You are depositing</div>
             <h2>Ethereum USDC → PFTL pfUSDC</h2>
-            <p>One Ethereum vault deposit followed by the PFTL proof and claim relay. No Arbitrum hop.</p>
+            <p>USDC leaves the connected Ethereum account and the same amount is issued as pfUSDC to this PostFiat address, before Ethereum gas.</p>
           </div>
           <div className="pfb-side-section">
             <div className="pfb-side-title">
@@ -739,16 +731,15 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
                 <RefreshCw size={14} className={balanceLoading ? 'pfb-spin' : ''} />
               </button>
             </div>
-            <BalanceRow label="Ethereum USDC" value={balanceLoading ? '…' : usdcLabel(usdcBalance)} active={currentStep === 2 || currentStep === 3} />
-            <BalanceRow label="Ethereum gas" value={balanceLoading ? '…' : ethLabel(ethBalance)} />
+            <BalanceRow label="Ethereum USDC" value={!connectedAddress ? 'Connect wallet' : balanceLoading ? '…' : usdcLabel(usdcBalance)} active={currentStep === 2 || currentStep === 3} />
+            <BalanceRow label="Ethereum gas" value={!connectedAddress ? 'Connect wallet' : balanceLoading ? '…' : ethLabel(ethBalance)} />
             {pfusdcBalance !== null && <BalanceRow label="PFTL pfUSDC" value={pfusdcLabel(pfusdcBalance)} active={phase === 'complete'} />}
           </div>
           <div className="pfb-side-section">
-            <div className="pfb-side-title">Transaction context</div>
+            <div className="pfb-side-title">Accounts</div>
             <ContextRow label="MetaMask" value={connectedAddress ? compact(connectedAddress, 6) : 'not connected'} />
             <ContextRow label="Network" value={chainId === ETHEREUM_CHAIN_ID ? 'Ethereum mainnet' : chainId ? `Wrong chain (${chainId})` : 'not connected'} />
             <ContextRow label="PFTL recipient" value={address ? compact(address, 8) : 'wallet locked'} />
-            <ContextRow label="Vault" value={vault ? compact(vault, 6) : 'unavailable'} />
           </div>
           <details className="pfb-details">
             <summary><span><Info size={14} /> Verified route</span><ChevronDown size={14} /></summary>
@@ -757,6 +748,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
             <ContextRow label="Route epoch" value={route ? String(route.routeEpoch) : 'unavailable'} />
             <ContextRow label="Profile" value={route ? compact(route.profileHash, 8) : 'unavailable'} />
             <ContextRow label="Evidence" value={route?.evidenceTier || 'unavailable'} />
+            <ContextRow label="Vault" value={vault ? compact(vault, 6) : 'unavailable'} />
           </details>
           {(approvalTx || depositTx || relayTxs.length > 0) && (
             <div className="pfb-side-section">
