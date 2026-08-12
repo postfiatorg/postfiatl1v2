@@ -513,6 +513,7 @@ export default function App() {
           wasmReady={wasmReady}
           onCreate={handleCreateWallet}
           onImport={handleImportWallet}
+          onImportBackup={handleImportBackup}
           existingVault={walletAddress !== null}
         />
         {toast && <div className="pf-toast">{toast}</div>}

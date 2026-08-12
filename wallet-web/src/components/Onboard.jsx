@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
-import { CHAIN_ID, ACCOUNT_INDEX } from '../lib/utils.js';
+import React, { useRef, useState } from 'react';
+import { CHAIN_ID, ACCOUNT_INDEX, isValidAddress } from '../lib/utils.js';
 import { getWasm } from '../lib/wasm-loader.js';
 
-export default function Onboard({ wasmReady, onCreate, onImport, existingVault }) {
+export default function Onboard({ wasmReady, onCreate, onImport, onImportBackup, existingVault }) {
   const [mode, setMode] = useState('none');
   const [seed, setSeed] = useState('');
   const [address, setAddress] = useState('');
@@ -12,6 +12,7 @@ export default function Onboard({ wasmReady, onCreate, onImport, existingVault }
   const [importSeed, setImportSeed] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const backupInputRef = useRef(null);
 
   const normalizedImportSeed = () => importSeed.trim().toLowerCase();
 
@@ -60,6 +61,35 @@ export default function Onboard({ wasmReady, onCreate, onImport, existingVault }
       setPassphraseConfirm('');
     } catch (e) {
       setError('Invalid seed: ' + e.message);
+    }
+  };
+
+  const handleImportBackupFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError('');
+    setBusy(true);
+    try {
+      const backup = JSON.parse(await file.text());
+      if (!backup?.vault || !backup?.metadata) {
+        throw new Error('Invalid backup file — missing encrypted vault or metadata');
+      }
+      if (
+        typeof backup.vault.salt !== 'string'
+        || typeof backup.vault.iv !== 'string'
+        || typeof backup.vault.ciphertext !== 'string'
+      ) {
+        throw new Error('Invalid backup file — encrypted vault is malformed');
+      }
+      if (!isValidAddress(backup.metadata.address)) {
+        throw new Error('Invalid address in backup file');
+      }
+      await onImportBackup(backup, null);
+    } catch (failure) {
+      setError(`Backup import failed: ${failure?.message || 'unknown error'}`);
+    } finally {
+      event.target.value = '';
+      setBusy(false);
     }
   };
 
@@ -116,6 +146,19 @@ export default function Onboard({ wasmReady, onCreate, onImport, existingVault }
             </div>
             <button className="pf-primary" onClick={handleCreateClick}>Create Wallet</button>
             <button className="pf-ghost" onClick={handleImportClick}>Import Wallet</button>
+            <button className="pf-ghost" onClick={() => backupInputRef.current?.click()} disabled={busy}>
+              {busy ? 'Importing…' : 'Import Encrypted Backup'}
+            </button>
+            <input
+              ref={backupInputRef}
+              type="file"
+              accept=".json,application/json"
+              style={{ display: 'none' }}
+              onChange={handleImportBackupFile}
+            />
+            <div style={{ fontSize: 12, color: 'var(--dim)', lineHeight: 1.5 }}>
+              Use an exported wallet backup when you have its encryption passphrase but not the raw seed.
+            </div>
           </div>
         )}
 

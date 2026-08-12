@@ -30,6 +30,19 @@ test('mounted wallet navigation presents the current process in order', async ()
   assert.doesNotMatch(app, /FastSwapDemo|ProductPrivateSwap/);
 });
 
+test('empty-wallet onboarding can restore an encrypted wallet backup', async () => {
+  const [app, onboard] = await Promise.all([
+    source('App.jsx'),
+    source('components/Onboard.jsx'),
+  ]);
+
+  assert.match(app, /onImportBackup=\{handleImportBackup\}/);
+  assert.match(onboard, /Import Encrypted Backup/);
+  assert.match(onboard, /backup\.vault\.ciphertext/);
+  assert.match(onboard, /isValidAddress\(backup\.metadata\.address\)/);
+  assert.doesNotMatch(onboard, /decryptVault/);
+});
+
 test('bridge-in is Ethereum mainnet USDC and never executes a retired route', async () => {
   const [bridge, evm, utils] = await Promise.all([
     source('components/Bridge.jsx'),
