@@ -1,0 +1,16 @@
+{
+  "schema": "postfiat-asset-orchard-egress-report-v1",
+  "egress_file": "/var/lib/postfiat/validator-2/pfusdc-pool-repair-phase8-recovered-slice-1usdc/egress.json",
+  "note_file": "/var/lib/postfiat/validator-2/pfusdc-pool-repair-phase8-recovered-slice-1usdc/note.json",
+  "pool_id": "asset-orchard-v1",
+  "to": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+  "asset_id": "c6d2a21646091dc721332d114f6288ede715d0a6325b3cf41ec7b4865f9f2e85014e79445fb66a7141747e4f42584062",
+  "amount": 1000000,
+  "output_commitment": "1f01aa518e151de08b57050fea8320702dbd48b0bd0293446c32cee7121e912c",
+  "nullifier": "764f832cbfb67c5160832ec033013244384cd940a9c6969c7685120df9b52d2d",
+  "spend_auth_verification_key": "104c3ad399339851e7267431a05be644b5016d73b4a68f106bade0f477e531ab",
+  "randomized_verification_key": "b4247ef867bec9338338a299cd4719b7f66797a95c532b5eb2cba3dade42282f",
+  "sighash": "3e7d4434fb5c7c7e0def99cf66cebd9bc934998eae1f122db36bf9f9ea4c0623",
+  "verified": true,
+  "privacy": "disclosed_note_opening_whole_note_egress"
+}

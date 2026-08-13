@@ -1,0 +1,18 @@
+{
+  "schema": "postfiat-pfusdc-wallet-withdrawal-job-v1",
+  "job_id": "be8111af10b760f07028e4bab2879bfe184607b40eff66b1960fa522a1ce40a1",
+  "status": "accepted",
+  "stage": "Ethereum USDC received",
+  "request": {
+    "burn_tx_id": "b9f05a5e0848410fe69c562681ca10471cc04e4ea2275afe68d87cebe5f96f60deb71fc2c27fb7cec0fe6ce3ba67f606",
+    "owner": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+    "ethereum_recipient": "0x0c30d0a57f4f9bc035ca8e8be6bd2abae054b882",
+    "amount_atoms": "1000000",
+    "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b"
+  },
+  "attempts": 0,
+  "created_at_unix": 1786644757,
+  "updated_at_unix": 1786648927,
+  "ethereum_tx_hash": "b97d8c6d7c7856907875991d888c23167589fd61235caeaefbecca54a1d0d5d5",
+  "message": "Ethereum USDC was released and PFTL accounting was settled."
+}

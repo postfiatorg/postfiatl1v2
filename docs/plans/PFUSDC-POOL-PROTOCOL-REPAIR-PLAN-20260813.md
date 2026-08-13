@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-13
 
-**Status:** implementation in progress; consensus changes implemented locally and under test; no live activation or fund movement performed
+**Status:** implemented, governed active, deployed to six validators, and live-funds accepted
 
 **Severity:** P0 — live USDC accepted by the governed Ethereum vault, corresponding pfUSDC claim not executable by the deployed validator binary
 
@@ -722,7 +722,25 @@ Live deployment and recovery completed on 2026-08-13:
 - the wallet relay is healthy and reports the durable job as accepted.
 
 The complete recovery record is in
-`docs/evidence/pfusdc-pool-repair-20260813/LIVE-RECOVERY-REPORT.md`. The fresh
-Phase-8 1.000000-USDC user-authorized ingress/private-custody/egress loop is a
-separate remaining acceptance item and is not falsely claimed by the recovered
-15-USDC ingress.
+`docs/evidence/pfusdc-pool-repair-20260813/LIVE-RECOVERY-REPORT.md`.
+
+Phase-8 downstream acceptance also completed on 2026-08-13 using exactly
+1.000000 source-series pfUSDC from the recovered deposit:
+
+- Asset Orchard ingress accepted at height `907` and egress accepted at height
+  `908`, preserving the epoch-6 source-series asset identity;
+- source-specific redemption burn accepted at height `909`;
+- Ethereum transaction
+  `0xb97d8c6d7c7856907875991d888c23167589fd61235caeaefbecca54a1d0d5d5`
+  paid exactly 1.000000 USDC to the user's Ethereum wallet;
+- proof, burn and withdrawal replay were rejected;
+- PFTL accounting settled at height `910`, where all six validators converged
+  on state root
+  `661f2019d17c26540fc065f1ffaf658094457791013b6c207546d265c9b225eb15465f0502eba3671fe9bab0909e281e`.
+
+This acceptance deliberately reused one unit of the already recovered ingress
+rather than creating a second Ethereum deposit, consistent with Sections 1 and
+5's prohibition on another approval or deposit. It proves the private-custody
+and source-specific egress legs against the repaired live state. The evidence
+is in
+`docs/evidence/pfusdc-pool-repair-20260813/phase8-recovered-slice-1usdc/`.

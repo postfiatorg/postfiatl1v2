@@ -1,0 +1,19 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "batch_kind": "shielded",
+  "confirmed": true,
+  "end_height": 908,
+  "end_state_root": "666f6dad130c72e9ef5e141ba45eb28406a050c9faa33bb2f8273786dfebc911664c7314f050d28d06da3f1a7b1a79f2",
+  "label": "pfusdc-repair-phase8-orchard-egress",
+  "local_apply_verified": true,
+  "proposer": "validator-2",
+  "recovered_postflight": false,
+  "round_ok": true,
+  "runner_exit_code": 0,
+  "runner_stderr": null,
+  "schema": "postfiat-a666-ce22-remote-finality-batch-v1",
+  "start_height": 907,
+  "start_state_root": "7979b051dc2c0c47974e7915e48a0ac8ac5a8cf30896a26bca2b1b9511c1703641988fb273559670b5d734939662ee9d",
+  "vote_count": 5
+}

@@ -1,0 +1,32 @@
+{
+  "schema": "postfiat.a666.pfusdc_proof_egress_acceptance.v1",
+  "verdict": "PASS",
+  "pftl_burn_height": 909,
+  "proof": {
+    "program_vkey": "0x0015b046ba4b80c0ca7e2d9429a1f5fd88bc6d1d328cca6acec29ffdf48a9d87",
+    "proof_bytes": 356,
+    "proof_mode": "groth16",
+    "public_values_bytes": 1486,
+    "schema": "postfiat.pfusdc.egress_proof_report.v1",
+    "setup_and_prove_ms": 4070024
+  },
+  "proof_provenance": {
+    "schema": "postfiat.a666.pfusdc_cuda_proof_provenance.v1",
+    "verdict": "PASS",
+    "requested_backend": "cpu",
+    "prover_binary": "/home/postfiat/.local/state/postfiat-a666-wallet/bin/pfusdc-tier4-prover",
+    "prover_binary_sha256": "20eb02a8cc499a78918a2cbec7ed54b455346443ed8c9bae38c22b2bb4881549",
+    "expected_prover_binary_sha256": "",
+    "gpu_identity": "local 32-core CPU fallback",
+    "proof_report_sha256": "559ed147f0525c9b4cb4d8f93f477840939dd0280d9aafa8acdd23cf2c83da18",
+    "proof_calldata_sha256": "dbf9ddce834ab0fc19e28f12bd4311bf925cae81a204e02ad20d888a8adee992",
+    "program_vkey": "0x0015b046ba4b80c0ca7e2d9429a1f5fd88bc6d1d328cca6acec29ffdf48a9d87"
+  },
+  "ethereum_withdrawal": {
+    "tx": "b97d8c6d7c7856907875991d888c23167589fd61235caeaefbecca54a1d0d5d5",
+    "amount_atoms": 1000000,
+    "replay_rejected": true
+  },
+  "pftl_accounting_settle_height": 910,
+  "trust_boundary": "Ethereum payout is proof-gated and precedes PFTL issuer-signed accounting closure; settlement signature does not authorize or gate user funds"
+}

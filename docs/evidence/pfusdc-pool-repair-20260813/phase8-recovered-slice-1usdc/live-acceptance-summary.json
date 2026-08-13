@@ -1,0 +1,59 @@
+{
+  "schema": "postfiat.pfusdc.pool_repair.live_acceptance.v1",
+  "verdict": "PASS",
+  "date": "2026-08-13",
+  "scope": "one 1.000000-USDC slice of the recovered epoch-6 deposit",
+  "fresh_ethereum_deposit_performed": false,
+  "new_contract_deployed": false,
+  "wallet": {
+    "pftl": "pfab9b9228942e5c529633a13aa271d5297bec6353",
+    "ethereum": "0x0c30d0a57f4f9bc035ca8e8be6bd2abae054b882"
+  },
+  "source": {
+    "family_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+    "source_series_id": "c6d2a21646091dc721332d114f6288ede715d0a6325b3cf41ec7b4865f9f2e85014e79445fb66a7141747e4f42584062",
+    "bucket_id": "c4b2691e5e25df47ec1f9b9b2b977413de84f914e288a0547bdd9b607a3aaf5becdc3bad87c5b3134f0c1a3d9d5351e7",
+    "source_series_balance_before_atoms": 15000000,
+    "source_series_balance_after_atoms": 14000000,
+    "legacy_pooled_balance_before_atoms": 73097570,
+    "legacy_pooled_balance_after_atoms": 73097570
+  },
+  "orchard": {
+    "amount_atoms": 1000000,
+    "ingress_height": 907,
+    "ingress_state_root": "7979b051dc2c0c47974e7915e48a0ac8ac5a8cf30896a26bca2b1b9511c1703641988fb273559670b5d734939662ee9d",
+    "egress_height": 908,
+    "egress_state_root": "666f6dad130c72e9ef5e141ba45eb28406a050c9faa33bb2f8273786dfebc911664c7314f050d28d06da3f1a7b1a79f2",
+    "source_identity_preserved": true
+  },
+  "redemption": {
+    "amount_atoms": 1000000,
+    "burn_tx_id": "b9f05a5e0848410fe69c562681ca10471cc04e4ea2275afe68d87cebe5f96f60deb71fc2c27fb7cec0fe6ce3ba67f606",
+    "burn_height": 909,
+    "redemption_id": "c72809ca1cb0438426480f540b5104b5bb0f14c4b58f3eab8ea71eb59ed8ca103d128484720191d4e52c58b1a27b26b5",
+    "ethereum_tx": "0xb97d8c6d7c7856907875991d888c23167589fd61235caeaefbecca54a1d0d5d5",
+    "ethereum_receipt_status": 1,
+    "recipient_usdc_before_atoms": 733264791,
+    "recipient_usdc_after_atoms": 734264791,
+    "vault_usdc_before_atoms": 15081552,
+    "vault_usdc_after_atoms": 14081552,
+    "proof_mode": "groth16",
+    "proof_backend": "local_cpu",
+    "proof_setup_and_prove_ms": 4070024,
+    "replay_rejected": true,
+    "settle_height": 910,
+    "settle_state_root": "661f2019d17c26540fc065f1ffaf658094457791013b6c207546d265c9b225eb15465f0502eba3671fe9bab0909e281e"
+  },
+  "fees": {
+    "pft_balance_before_atoms": 100000010,
+    "pft_balance_after_atoms": 99999965,
+    "pft_fees_atoms": 45,
+    "ethereum_gas_paid_by_relayer_wei": 61416892746362
+  },
+  "fleet": {
+    "validator_count": 6,
+    "height": 910,
+    "state_root": "661f2019d17c26540fc065f1ffaf658094457791013b6c207546d265c9b225eb15465f0502eba3671fe9bab0909e281e",
+    "mempool_pending": 0
+  }
+}

@@ -155,7 +155,7 @@ function create(runtime = {}, options = {}) {
         if (!queued) return;
         const phaseDir = directoryFor(queued.job_id);
         queued.status = 'running';
-        queued.stage = 'Verifying the accepted PFTL burn and preparing Ethereum USDC (usually 20–40 minutes)';
+        queued.stage = 'Verifying the accepted PFTL burn and preparing Ethereum USDC (local proof may take an hour or longer)';
         queued.updated_at_unix = Math.floor(Date.now() / 1000);
         write(queued);
         const args = [script, '--phase-dir', phaseDir, '--workflow-id', `wallet-withdraw-${queued.job_id.slice(0, 12)}`,
