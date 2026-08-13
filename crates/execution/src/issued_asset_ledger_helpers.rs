@@ -744,6 +744,48 @@ pub fn issued_asset_supply(
         })
 }
 
+/// Complete non-Orchard supply for a display family. Ordinary assets count
+/// themselves; source-series assets count only when their immutable
+/// `asset_family_id` matches. This deliberately rejects a source-series ID as
+/// the family input so callers cannot accidentally omit sibling series.
+pub fn issued_asset_family_supply(
+    ledger: &LedgerState,
+    asset_family_id: &str,
+) -> Result<u64, (&'static str, String)> {
+    let family = ledger.asset_definition(asset_family_id).ok_or_else(|| {
+        (
+            "missing_asset",
+            format!("asset family `{asset_family_id}` does not exist"),
+        )
+    })?;
+    if !family.asset_family_id.is_empty() || !family.source_series_id.is_empty() {
+        return Err((
+            "invalid_asset_family",
+            "issued asset family supply requires an ordinary family asset ID".to_string(),
+        ));
+    }
+    let mut ids = vec![asset_family_id.to_string()];
+    ids.extend(
+        ledger
+            .asset_definitions
+            .iter()
+            .filter(|asset| asset.asset_family_id == asset_family_id)
+            .map(|asset| asset.asset_id.clone()),
+    );
+    ids.sort();
+    ids.dedup();
+    ids.into_iter().try_fold(0_u64, |total, asset_id| {
+        total
+            .checked_add(issued_asset_supply(ledger, &asset_id)?)
+            .ok_or_else(|| {
+                (
+                    "issued_supply_overflow",
+                    "issued asset family supply total overflowed".to_string(),
+                )
+            })
+    })
+}
+
 fn assert_issued_supply_ledger_inventory_complete(ledger: &LedgerState) {
     // Compile-time exhaustiveness: adding a ledger lane requires an explicit
     // issued-supply classification here and at the global node+Orchard boundary.

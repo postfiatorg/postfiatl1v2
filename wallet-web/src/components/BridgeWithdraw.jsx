@@ -35,9 +35,12 @@ function pftBalance(response) {
   return BigInt(result?.balance || 0);
 }
 
-function assetBalance(response) {
-  const rows = Array.isArray(response?.result) ? response.result : (response?.result?.assets || []);
-  const row = rows.find(item => String(item.asset_id || item.id).toLowerCase() === PFUSDC_ASSET_ID);
+function assetRows(response) {
+  return Array.isArray(response?.result) ? response.result : (response?.result?.assets || []);
+}
+
+function assetBalance(rows, assetId) {
+  const row = rows.find(item => String(item.asset_id || item.id).toLowerCase() === String(assetId || '').toLowerCase());
   return BigInt(row?.balance ?? row?.amount ?? 0);
 }
 
@@ -45,6 +48,8 @@ export default function BridgeWithdraw({ address, rpc, txBuilder, backupJson, pr
   const [ethereumAddress, setEthereumAddress] = useState('');
   const [amount, setAmount] = useState('0.1');
   const [pfusdc, setPfusdc] = useState(0n);
+  const [pftlAssets, setPftlAssets] = useState([]);
+  const [sourceSeriesId, setSourceSeriesId] = useState('');
   const [pft, setPft] = useState(0n);
   const [capacity, setCapacity] = useState(0n);
   const [serviceReady, setServiceReady] = useState(false);
@@ -72,10 +77,12 @@ export default function BridgeWithdraw({ address, rpc, txBuilder, backupJson, pr
     setPhase(current => current === 'running' ? current : 'loading');
     try {
       const [assetResponse, accountResponse] = await Promise.all([rpc.accountAssets(address), rpc.account(address)]);
-      setPfusdc(assetBalance(assetResponse)); setPft(pftBalance(accountResponse));
+      const rows = assetRows(assetResponse);
+      setPftlAssets(rows);
+      setPfusdc(assetBalance(rows, sourceSeriesId || PFUSDC_ASSET_ID)); setPft(pftBalance(accountResponse));
       setPhase(current => current === 'running' ? current : 'ready');
     } catch (_) { setError('PFTL balances are unavailable. Retry when the network reconnects.'); setPhase('error'); }
-  }, [address, rpc]);
+  }, [address, rpc, sourceSeriesId]);
 
   const loadCapacity = useCallback(async () => {
     if (!rpc || !proxyAuthToken) return;
@@ -86,6 +93,10 @@ export default function BridgeWithdraw({ address, rpc, txBuilder, backupJson, pr
       ]);
       if (statusResponse?.ok !== true) throw new Error('The active Ethereum reserve is unavailable.');
       const next = pfusdcWithdrawalCapacity({ status: statusResponse.result, route });
+      const nextSourceSeriesId = statusResponse.result?.source_series_enforced
+        ? String(next.bucket?.source_series_id || '').toLowerCase()
+        : PFUSDC_ASSET_ID;
+      setSourceSeriesId(nextSourceSeriesId);
       setCapacity(next.amountAtoms);
       try {
         const readiness = await loadPfusdcWithdrawalReadiness(proxyAuthToken);
@@ -102,6 +113,12 @@ export default function BridgeWithdraw({ address, rpc, txBuilder, backupJson, pr
       setAvailability(failure.message || 'The active Ethereum reserve is unavailable.');
     }
   }, [proxyAuthToken, rpc]);
+
+  useEffect(() => {
+    if (pftlAssets.length) {
+      setPfusdc(assetBalance(pftlAssets, sourceSeriesId || PFUSDC_ASSET_ID));
+    }
+  }, [pftlAssets, sourceSeriesId]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadCapacity(); }, [loadCapacity]);
@@ -231,11 +248,11 @@ export default function BridgeWithdraw({ address, rpc, txBuilder, backupJson, pr
         <div className="pfb-card-head"><Wallet size={15}/> {review ? 'Review withdrawal' : 'Choose amount'}</div><h2>{review ? `${units(review.operation.amount_atoms)} pfUSDC → ${units(review.operation.amount_atoms)} USDC` : 'Withdraw to Ethereum mainnet'}</h2>
         {!ethereumAddress ? <button className="pfb-secondary" onClick={connect}>Connect MetaMask</button> : <p>Destination: {truncateMiddle(ethereumAddress, 9)} on Ethereum mainnet</p>}
         <label className="pfb-field"><span>Amount to withdraw</span><div className="pfb-amount"><input inputMode="decimal" value={amount} disabled={!!review} onChange={event => setAmount(event.target.value.replace(/[^0-9.]/g, ''))}/><span>pfUSDC</span><button className="pfb-secondary small" disabled={!!review || maximum <= 0n} onClick={() => setAmount(units(maximum))}>Max</button></div></label>
-        <div className="pfb-progress-card"><strong>{availability}</strong><span>Your wallet has {units(pfusdc)} pfUSDC. The currently available amount is limited by USDC held in the active Ethereum reserve.</span></div>
+        <div className="pfb-progress-card"><strong>{availability}</strong><span>Your wallet has {units(pfusdc)} pfUSDC in the active vault's source series. Legacy pooled pfUSDC is not treated as a claim on this vault.</span></div>
         {review && <div className="pfb-readout"><span>You receive</span><strong>{units(review.operation.amount_atoms)} USDC</strong><span>PFTL network fee</span><strong>{formatBalance(review.fee)} PFT</strong><span>Ethereum gas</span><strong>Included</strong><span>Timing</span><strong>Local verification usually takes 20–40 minutes, then Ethereum confirms; progress is saved</strong></div>}
         <button className="pfb-primary" disabled={!ethereumAddress || phase === 'loading' || !jobsChecked || !serviceReady || maximum <= 0n} onClick={review ? execute : prepare}>{review ? 'Confirm and withdraw' : jobsChecked ? 'Review withdrawal' : 'Checking saved progress…'}</button>
         {review && <button className="pfb-secondary" onClick={() => { setReview(null); setPhase('ready'); }}>Back</button>}
       </>}
-    </section></main><aside className="pfb-side"><div className="pfb-location"><div className="pfb-location-head">You are withdrawing</div><h2>PFTL pfUSDC → Ethereum USDC</h2><p>The amount is 1:1. The PFTL burn is irreversible after acceptance, so the service saves progress and resumes automatically until Ethereum payout completes.</p></div><div className="pfb-side-section"><div className="pfb-side-title">Balances <button onClick={() => { load(); loadCapacity(); }}><RefreshCw size={14}/></button></div><div className="pfb-balance-row active"><span>PFTL pfUSDC</span><strong>{phase === 'loading' ? '…' : `${units(pfusdc)} pfUSDC`}</strong></div><div className="pfb-balance-row"><span>Available to withdraw</span><strong>{units(capacity)} USDC</strong></div><div className="pfb-balance-row"><span>PFTL network fees</span><strong>{formatBalance(pft)} PFT</strong></div></div><div className="pfb-side-section"><div className="pfb-side-title">Accounts</div><div className="pfb-context-row"><span>From</span><strong>{truncateMiddle(address, 8)}</strong></div><div className="pfb-context-row"><span>To</span><strong>{ethereumAddress ? truncateMiddle(ethereumAddress, 8) : 'Connect MetaMask'}</strong></div></div></aside></div>
+    </section></main><aside className="pfb-side"><div className="pfb-location"><div className="pfb-location-head">You are withdrawing</div><h2>Source-specific pfUSDC → Ethereum USDC</h2><p>The amount is 1:1 from the exact active vault series. The PFTL burn is irreversible after acceptance, so the service saves progress and resumes automatically until Ethereum payout completes.</p></div><div className="pfb-side-section"><div className="pfb-side-title">Balances <button onClick={() => { load(); loadCapacity(); }}><RefreshCw size={14}/></button></div><div className="pfb-balance-row active"><span>Active-vault pfUSDC</span><strong>{phase === 'loading' ? '…' : `${units(pfusdc)} pfUSDC`}</strong></div><div className="pfb-balance-row"><span>Available to withdraw</span><strong>{units(capacity)} USDC</strong></div><div className="pfb-balance-row"><span>PFTL network fees</span><strong>{formatBalance(pft)} PFT</strong></div></div><div className="pfb-side-section"><div className="pfb-side-title">Accounts</div><div className="pfb-context-row"><span>From</span><strong>{truncateMiddle(address, 8)}</strong></div><div className="pfb-context-row"><span>To</span><strong>{ethereumAddress ? truncateMiddle(ethereumAddress, 8) : 'Connect MetaMask'}</strong></div></div></aside></div>
   </div>;
 }

@@ -34,11 +34,11 @@
     "pinned_files": [
       {
         "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/wallet-proxy/eth-fast-lane-driver.js",
-        "sha256": "93666b94705a528eac32eb634edbce06e5684150143711849f1b69025635e1a6"
+        "sha256": "32441970cfd65b0cdefcf28be1dfa2651ac04ec95edb766a6fbb6fc29be00b59"
       },
       {
         "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/wallet-bridge-mainnet-20260730/driver-config.json",
-        "sha256": "2056911b955a5f93e6eae51fb6d72334c1876799a58d427628c15e058b975890"
+        "sha256": "27eb526b67c3f5857325881d934a75d90996ad7908dd8909dee94d12f347370b"
       }
     ],
     "cwd": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724",

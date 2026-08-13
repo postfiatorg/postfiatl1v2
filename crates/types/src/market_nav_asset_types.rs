@@ -1126,6 +1126,47 @@ pub fn vault_bridge_bucket_id(
     Ok(hash_hex_domain(VAULT_BRIDGE_BUCKET_ID_DOMAIN, preimage.as_bytes()))
 }
 
+pub const PFUSDC_SOURCE_SERIES_ID_DOMAIN: &str = "postfiat.pfusdc.source_series.v1";
+
+/// Canonical identity for one source-preserving pfUSDC claim series.
+///
+/// `pfUSDC` remains a display family.  This identifier is the consensus-safe
+/// identity of the backing source and therefore includes the complete route
+/// tuple that must survive transfer, private custody, and redemption.
+pub fn pfusdc_source_series_id(
+    pftl_chain_id: &str,
+    asset_family_id: &str,
+    source_chain_id: u64,
+    vault_address: &str,
+    token_address: &str,
+    route_epoch: u32,
+    policy_hash: &str,
+) -> Result<String, String> {
+    validate_chain_id(pftl_chain_id)?;
+    validate_lower_hex_len(
+        "pfusdc_source_series.asset_family_id",
+        asset_family_id,
+        ISSUED_ASSET_ID_HEX_LEN,
+    )?;
+    if source_chain_id == 0 {
+        return Err("pfusdc source series source_chain_id must be nonzero".to_string());
+    }
+    validate_evm_address_text("pfusdc_source_series.vault_address", vault_address)?;
+    validate_evm_address_text("pfusdc_source_series.token_address", token_address)?;
+    if route_epoch == 0 {
+        return Err("pfusdc source series route_epoch must be nonzero".to_string());
+    }
+    validate_vault_bridge_policy_hash("pfusdc_source_series.policy_hash", policy_hash)?;
+    let preimage = format!(
+        "pftl_chain_id_bytes={}\npftl_chain_id={pftl_chain_id}\nasset_family_id={asset_family_id}\nsource_chain_id={source_chain_id}\nvault_address={vault_address}\ntoken_address={token_address}\nroute_epoch={route_epoch}\npolicy_hash={policy_hash}\n",
+        pftl_chain_id.len(),
+    );
+    Ok(hash_hex_domain(
+        PFUSDC_SOURCE_SERIES_ID_DOMAIN,
+        preimage.as_bytes(),
+    ))
+}
+
 pub fn vault_bridge_allocation_id(
     chain_id: &str,
     receipt_id: &str,

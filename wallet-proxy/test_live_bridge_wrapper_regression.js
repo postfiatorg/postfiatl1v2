@@ -8,7 +8,7 @@ const capture = fs.readFileSync(
     'utf8',
 );
 const stage = fs.readFileSync(
-    path.join(root, 'scripts/a666-wallet-eth-bridge-stage.py'),
+    path.join(root, 'scripts/a666-wallet-eth-bridge-stage-serialized.py'),
     'utf8',
 );
 const relay = fs.readFileSync(
@@ -42,7 +42,11 @@ assert.match(relay, /runuser -u postfiat -- '\$node' pftl-submit-certified-asset
 assert.match(relay, /runuser -u postfiat -- '\$node' transport-peer-certified-mempool-round/);
 assert.match(relay, /--local-apply-before-certified-send \\\n+        --resume/);
 
+assert.match(relay, /--route-epoch '\$route_epoch'/);
+assert.ok(relay.includes('.asset_id == \\$family or .asset_family_id == \\$family'));
 assert.match(stage, /skip_finalize=deposit\.get\("status"\) == "finalized"/);
+assert.match(stage, /ROUTE_EPOCH = 6/);
+assert.match(stage, /"PFTL_ROUTE_EPOCH": str\(ROUTE_EPOCH\)/);
 assert.match(stage, /eth-l1-mainnet-fast-lane-p0-depositor-fix-20260731/);
 assert.match(bridge, /rpc\.accountAssets\(address\)/);
 assert.match(bridge, /function pfusdcLabel/);

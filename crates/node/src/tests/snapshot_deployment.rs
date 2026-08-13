@@ -1,6 +1,37 @@
 use super::*;
 
 #[test]
+fn consensus_v2_snapshot_reader_accepts_bounded_legacy_outer_snapshot() {
+    let root = unique_test_dir("postfiat-large-consensus-v2-snapshot-reader");
+    fs::create_dir_all(&root).expect("create test root");
+    let path = root.join("legacy-qcs.json");
+    let mut bytes = vec![b' '; (MAX_LOCAL_JSON_FILE_BYTES + 1) as usize];
+    bytes.extend_from_slice(
+        br#"{"schema":"postfiat.consensus_v2_artifact_snapshot.v1","directory":"consensus-v2-qcs","files":[]}"#,
+    );
+    atomic_write(&path, bytes).expect("write bounded legacy snapshot");
+    let snapshot = crate::batch_snapshot::read_consensus_v2_artifact_snapshot(&path)
+        .expect("legacy outer snapshot above the generic JSON bound must remain importable");
+    assert_eq!(snapshot.directory, CONSENSUS_V2_QC_DIR);
+    assert!(snapshot.files.is_empty());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn consensus_v2_snapshot_reader_rejects_outer_snapshot_above_compatibility_bound() {
+    let root = unique_test_dir("postfiat-oversized-consensus-v2-snapshot-reader");
+    fs::create_dir_all(&root).expect("create test root");
+    let path = root.join("oversized-qcs.json");
+    let file = fs::File::create(&path).expect("create sparse oversized snapshot");
+    file.set_len(crate::batch_snapshot::MAX_CONSENSUS_V2_ARTIFACT_SNAPSHOT_BYTES + 1)
+        .expect("extend sparse oversized snapshot");
+    let error = crate::batch_snapshot::read_consensus_v2_artifact_snapshot(&path)
+        .expect_err("outer snapshot above the compatibility bound must fail closed");
+    assert!(error.to_string().contains("exceeds"), "{error}");
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn local_transfer_builder_rejects_exhausted_sequence_without_panicking() {
     let data_dir = unique_test_dir("postfiat-transfer-builder-sequence-overflow-test");
     init(InitOptions {

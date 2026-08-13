@@ -347,11 +347,19 @@ pub(super) fn verify_global_issued_asset_supply_caps(
     }
 
     for definition in &ledger.asset_definitions {
-        let global_supply = issued_asset_global_supply_after_inventory(
-            ledger,
-            &orchard_by_asset,
-            &definition.asset_id,
-        )?;
+        let global_supply = if definition.asset_family_id.is_empty() {
+            issued_asset_family_global_supply_after_inventory(
+                ledger,
+                &orchard_by_asset,
+                &definition.asset_id,
+            )?
+        } else {
+            issued_asset_global_supply_after_inventory(
+                ledger,
+                &orchard_by_asset,
+                &definition.asset_id,
+            )?
+        };
         if definition
             .max_supply
             .is_some_and(|max_supply| global_supply > max_supply)
@@ -408,7 +416,45 @@ pub fn global_issued_asset_supply(
                 .collect::<BTreeMap<_, _>>()
         })
         .unwrap_or_default();
-    issued_asset_global_supply_after_inventory(ledger, &orchard_by_asset, asset_id)
+    let definition = ledger
+        .asset_definition(asset_id)
+        .expect("asset definition checked above");
+    if definition.asset_family_id.is_empty() {
+        issued_asset_family_global_supply_after_inventory(ledger, &orchard_by_asset, asset_id)
+    } else {
+        issued_asset_global_supply_after_inventory(ledger, &orchard_by_asset, asset_id)
+    }
+}
+
+fn issued_asset_family_global_supply_after_inventory(
+    ledger: &LedgerState,
+    orchard_by_asset: &BTreeMap<&str, u64>,
+    asset_family_id: &str,
+) -> io::Result<u64> {
+    let mut ids = vec![asset_family_id];
+    ids.extend(
+        ledger
+            .asset_definitions
+            .iter()
+            .filter(|definition| definition.asset_family_id == asset_family_id)
+            .map(|definition| definition.asset_id.as_str()),
+    );
+    ids.sort_unstable();
+    ids.dedup();
+    ids.into_iter().try_fold(0_u64, |total, asset_id| {
+        total
+            .checked_add(issued_asset_global_supply_after_inventory(
+                ledger,
+                orchard_by_asset,
+                asset_id,
+            )?)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "issued asset family global supply overflow",
+                )
+            })
+    })
 }
 
 fn issued_asset_global_supply_after_inventory(
@@ -1371,6 +1417,8 @@ fn assert_genesis_commitment_inventory_complete(genesis: &Genesis) {
         native_supply_atoms: _,
         replicated_state_v2_activation_height: _,
         bridge_verification_activation_height: _,
+        orchard_aware_bridge_claim_activation_height: _,
+        pfusdc_source_series_activation_height: _,
         atomic_swap_activation_height: _,
         consensus_v2_activation_height: _,
     } = genesis;
@@ -1505,6 +1553,25 @@ pub(super) fn append_account(bytes: &mut Vec<u8>, prefix: &str, account: &Accoun
 
 pub(super) fn append_asset_definition(bytes: &mut Vec<u8>, prefix: &str, asset: &AssetDefinition) {
     append_canonical_str(bytes, &format!("{prefix}.asset_id"), &asset.asset_id);
+    // Historical ordinary assets retain byte-identical commitment preimages.
+    // Source-series assets add both immutable identity links.
+    if !asset.source_series_id.is_empty() {
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.asset_family_id"),
+            &asset.asset_family_id,
+        );
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.source_series_id"),
+            &asset.source_series_id,
+        );
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.source_bucket_id"),
+            &asset.source_bucket_id,
+        );
+    }
     append_canonical_str(bytes, &format!("{prefix}.issuer"), &asset.issuer);
     append_canonical_str(bytes, &format!("{prefix}.code"), &asset.code);
     append_canonical_u32(bytes, &format!("{prefix}.version"), asset.version);

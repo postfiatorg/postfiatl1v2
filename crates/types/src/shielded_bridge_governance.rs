@@ -6,6 +6,10 @@ pub const GOVERNANCE_KIND_BRIDGE_WITNESS_EPOCH: &str = "bridge_witness_epoch";
 pub const GOVERNANCE_KIND_AUTHORITY_MODE: &str = "authority_mode";
 pub const GOVERNANCE_KIND_BRIDGE_VERIFICATION_ACTIVATION_HEIGHT: &str =
     "bridge_verification_activation_height";
+pub const GOVERNANCE_KIND_ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT: &str =
+    "orchard_aware_bridge_claim_activation_height";
+pub const GOVERNANCE_KIND_PFUSDC_SOURCE_SERIES_ACTIVATION_HEIGHT: &str =
+    "pfusdc_source_series_activation_height";
 pub const GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT: &str =
     "vault_bridge_route_authority_activation_height";
 pub const GOVERNANCE_VAULT_BRIDGE_ROUTE_KIND_PREFIX_V1: &str = "vault_bridge_route_v1";
@@ -959,6 +963,36 @@ impl GovernanceState {
             .map(|amendment| u64::from(amendment.value))
     }
 
+    /// Height at which transparent bridge-claim execution must include the
+    /// live Asset-Orchard balance in global issued-supply accounting.
+    ///
+    /// This is deliberately independent from bridge-proof verification: the
+    /// latter was activated before Asset-Orchard existed, so reusing that gate
+    /// would change historical execution when an upgraded validator replays
+    /// the chain.
+    pub fn orchard_aware_bridge_claim_activation_height(&self) -> Option<u64> {
+        self.amendments
+            .iter()
+            .rev()
+            .find(|amendment| {
+                amendment.kind
+                    == GOVERNANCE_KIND_ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT
+            })
+            .map(|amendment| u64::from(amendment.value))
+    }
+
+    /// Height at which new pfUSDC bridge claims mint the exact source-series
+    /// asset instead of increasing the pre-existing pooled/legacy ticker.
+    pub fn pfusdc_source_series_activation_height(&self) -> Option<u64> {
+        self.amendments
+            .iter()
+            .rev()
+            .find(|amendment| {
+                amendment.kind == GOVERNANCE_KIND_PFUSDC_SOURCE_SERIES_ACTIVATION_HEIGHT
+            })
+            .map(|amendment| u64::from(amendment.value))
+    }
+
     pub fn vault_bridge_route_authority_activation_height(&self) -> Option<u64> {
         self.amendments
             .iter()
@@ -1577,6 +1611,44 @@ mod shielded_bridge_governance_tests {
             512,
         ));
         assert_eq!(governance.bridge_verification_activation_height(), Some(512));
+    }
+
+    #[test]
+    fn orchard_aware_bridge_claim_activation_height_is_independent_and_latest_wins() {
+        let mut governance = GovernanceState::new(6);
+        assert_eq!(governance.orchard_aware_bridge_claim_activation_height(), None);
+        governance.apply(amendment(
+            GOVERNANCE_KIND_ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT,
+            901,
+        ));
+        governance.apply(amendment(GOVERNANCE_KIND_BRIDGE_WITNESS_EPOCH, 6));
+        governance.apply(amendment(
+            GOVERNANCE_KIND_ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT,
+            905,
+        ));
+        assert_eq!(
+            governance.orchard_aware_bridge_claim_activation_height(),
+            Some(905)
+        );
+    }
+
+    #[test]
+    fn pfusdc_source_series_activation_height_is_independent_and_latest_wins() {
+        let mut governance = GovernanceState::new(6);
+        assert_eq!(governance.pfusdc_source_series_activation_height(), None);
+        governance.apply(amendment(
+            GOVERNANCE_KIND_PFUSDC_SOURCE_SERIES_ACTIVATION_HEIGHT,
+            904,
+        ));
+        governance.apply(amendment(GOVERNANCE_KIND_BRIDGE_WITNESS_EPOCH, 6));
+        governance.apply(amendment(
+            GOVERNANCE_KIND_PFUSDC_SOURCE_SERIES_ACTIVATION_HEIGHT,
+            910,
+        ));
+        assert_eq!(
+            governance.pfusdc_source_series_activation_height(),
+            Some(910)
+        );
     }
 
     #[test]

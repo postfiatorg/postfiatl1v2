@@ -228,6 +228,62 @@ async function assertFailedReadinessRefreshesBeforeHealthyCacheExpiry() {
     }
 }
 
+async function assertSixValidatorIngressPreflight() {
+    const caseRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pft-bridge-claim-preflight-'));
+    const fleet = Array.from({ length: 6 }, (_, index) => ({
+        validatorId: `validator-${index}`,
+        host: '127.0.0.1',
+        port: 41000 + index,
+    }));
+    const request = {
+        route_id: routeRows[0].route_id,
+        pftl_recipient: `pf${'31'.repeat(20)}`,
+        depositor: `0x${'32'.repeat(20)}`,
+        amount_atoms: '15000000',
+    };
+    const report = {
+        schema: 'postfiat.pfusdc_ingress_preflight.v1',
+        ready: true,
+        code: 'ready',
+        explanation: 'exact claim passes',
+        route_id: routeRows[0].route_id,
+        asset_id: routeRows[0].asset_id,
+        route_profile_hash: routeRows[0].route_profile_hash,
+        pftl_recipient: request.pftl_recipient,
+        ethereum_depositor: request.depositor,
+        amount_atoms: 15000000,
+        state_root: '33'.repeat(48),
+        quote_digest: '34'.repeat(32),
+        quote_height: 900,
+        expires_at_height: 908,
+        orchard_aware_claim_active: true,
+        source_series_active: true,
+    };
+    const subject = create({}, {
+        root: caseRoot,
+        routes: [routeRows[0]],
+        execFileAsync,
+        spawn: spawnMock,
+        rpcFleet: fleet,
+        rpcRequester: async () => ({ ok: true, result: report }),
+        requireIngressPreflight: true,
+        readinessRefreshMs: 60_000,
+        readinessMaxAgeMs: 120_000,
+        watchdogMs: 60_000,
+    });
+    try {
+        await subject.refreshTrustlessBridgeReadiness(routeRows[0].route_id);
+        const result = await subject.pfusdcIngressPreflight(request);
+        assert.strictEqual(result.ready, true);
+        assert.strictEqual(result.validator_count, 6);
+        assert.strictEqual(result.quote_digest, report.quote_digest);
+        assert.deepStrictEqual(result.validator_ids, fleet.map((row) => row.validatorId));
+    } finally {
+        subject.closeTrustlessBridgeJobs();
+        fs.rmSync(caseRoot, { recursive: true, force: true });
+    }
+}
+
 async function assertConcurrentSubmissionSafety() {
     const caseRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pft-bridge-submit-race-'));
     const localSpawns = [];
@@ -488,6 +544,7 @@ const bridge = create({}, {
 });
 
 async function main() {
+    await assertSixValidatorIngressPreflight();
     await assertFailedReadinessRefreshesBeforeHealthyCacheExpiry();
     const ethReady = await bridge.refreshTrustlessBridgeReadiness('ethereum-mainnet-usdc-v1');
     const arbReady = await bridge.refreshTrustlessBridgeReadiness('arbitrum-one-usdc-v1');

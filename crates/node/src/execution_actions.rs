@@ -359,6 +359,24 @@ pub(super) fn bridge_verification_activation_height_for_chain(
         .or(genesis.bridge_verification_activation_height)
 }
 
+pub(super) fn orchard_aware_bridge_claim_activation_height_for_chain(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+) -> Option<u64> {
+    governance
+        .orchard_aware_bridge_claim_activation_height()
+        .or(genesis.orchard_aware_bridge_claim_activation_height)
+}
+
+pub(super) fn pfusdc_source_series_activation_height_for_chain(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+) -> Option<u64> {
+    governance
+        .pfusdc_source_series_activation_height()
+        .or(genesis.pfusdc_source_series_activation_height)
+}
+
 pub(super) fn atomic_swap_activation_height_for_chain(
     genesis: &Genesis,
     governance: &GovernanceState,
@@ -382,6 +400,12 @@ pub(super) fn asset_execution_compatibility_for_genesis_and_governance(
         .with_bridge_verification_activation_height(
             bridge_verification_activation_height_for_chain(genesis, governance),
         )
+        .with_orchard_aware_bridge_claim_activation_height(
+            orchard_aware_bridge_claim_activation_height_for_chain(genesis, governance),
+        )
+        .with_pfusdc_source_series_activation_height(
+            pfusdc_source_series_activation_height_for_chain(genesis, governance),
+        )
         .with_atomic_swap_activation_height(atomic_swap_activation_height_for_chain(
             genesis, governance,
         ))
@@ -396,6 +420,12 @@ pub(super) fn asset_execution_compatibility_with_chain_activation(
     compatibility
         .with_bridge_verification_activation_height(
             bridge_verification_activation_height_for_chain(genesis, governance),
+        )
+        .with_orchard_aware_bridge_claim_activation_height(
+            orchard_aware_bridge_claim_activation_height_for_chain(genesis, governance),
+        )
+        .with_pfusdc_source_series_activation_height(
+            pfusdc_source_series_activation_height_for_chain(genesis, governance),
         )
         .with_atomic_swap_activation_height(atomic_swap_activation_height_for_chain(
             genesis, governance,
@@ -1259,6 +1289,24 @@ pub(super) fn governance_amendment_lifecycle_rejection(
                 .to_string(),
         ));
     }
+    if amendment.kind == GOVERNANCE_KIND_ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT
+        && u64::from(amendment.value) <= block_height
+    {
+        return Some((
+            "invalid_orchard_aware_bridge_claim_activation_height",
+            "Orchard-aware bridge-claim activation must be scheduled strictly after the amendment block"
+                .to_string(),
+        ));
+    }
+    if amendment.kind == GOVERNANCE_KIND_PFUSDC_SOURCE_SERIES_ACTIVATION_HEIGHT
+        && u64::from(amendment.value) <= block_height
+    {
+        return Some((
+            "invalid_pfusdc_source_series_activation_height",
+            "pfUSDC source-series activation must be scheduled strictly after the amendment block"
+                .to_string(),
+        ));
+    }
     if amendment.paused {
         return Some((
             "governance_amendment_paused",
@@ -1374,6 +1422,14 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
             .bridge_verification_activation_height()
             .and_then(|height| u32::try_from(height).ok())
             .unwrap_or(0),
+        GOVERNANCE_KIND_ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT => governance
+            .orchard_aware_bridge_claim_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
+        GOVERNANCE_KIND_PFUSDC_SOURCE_SERIES_ACTIVATION_HEIGHT => governance
+            .pfusdc_source_series_activation_height()
+            .and_then(|height| u32::try_from(height).ok())
+            .unwrap_or(0),
         GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT => governance
             .atomic_swap_activation_height()
             .and_then(|height| u32::try_from(height).ok())
@@ -1404,6 +1460,8 @@ fn governance_amendment_has_materialized_current_value(kind: &str) -> bool {
             | GOVERNANCE_KIND_ORCHARD_POOL_PAUSE
             | GOVERNANCE_KIND_ATOMIC_SWAP_PAUSE
             | GOVERNANCE_KIND_BRIDGE_VERIFICATION_ACTIVATION_HEIGHT
+            | GOVERNANCE_KIND_ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT
+            | GOVERNANCE_KIND_PFUSDC_SOURCE_SERIES_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT

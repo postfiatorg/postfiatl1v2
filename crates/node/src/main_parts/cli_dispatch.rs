@@ -124,7 +124,8 @@ use postfiat_node::{
     vault_bridge_asset_id, vault_bridge_bootstrap_bundle, vault_bridge_burn_to_redeem_bundle,
     vault_bridge_conservation_audit, vault_bridge_deposit_intent, vault_bridge_deposit_plan,
     vault_bridge_deposit_relay_bundle, vault_bridge_deposit_relay_rpc_bundle,
-    vault_bridge_receipts, vault_bridge_route, vault_bridge_status, vault_bridge_withdrawal_plan,
+    pfusdc_ingress_preflight, vault_bridge_receipts, vault_bridge_route, vault_bridge_status,
+    vault_bridge_withdrawal_plan,
     vault_bridge_withdrawal_relay_bundle, vault_bridge_withdrawal_signature_bundle,
     verify_block_proposal_equivocation, verify_block_timeout_certificate_file,
     verify_block_vote_equivocation, verify_blocks, verify_bridge,
@@ -202,7 +203,8 @@ use postfiat_node::{
     OrchardPoolReportOptions, OrchardSpendActionOptions, OrchardTestVectorOptions,
     OrchardViewKeyExportOptions, OrchardWalletKeygenOptions, OrchardWalletScanOptions,
     OrchardWithdrawActionBatchOptions, OrchardWithdrawActionOptions, OwnedObjectsOptions,
-    PfUsdcCheckpointWitnessOptions, PfUsdcEgressWitnessOptions, PftlSwapDirection,
+    PfUsdcCheckpointWitnessOptions, PfUsdcEgressWitnessOptions, PfusdcIngressPreflightOptions,
+    PftlSwapDirection,
     PftlSwapOutputMode, PftlSwapQuoteOptions, PftlSwapQuoteRequestV1,
     PftlUniswapReceiptWitnessOptions, RatifyGovernanceOptions, RatifyValidatorSetOptions,
     ReceiptQueryOptions, RequiredBlockParent, ShieldMigrateBatchOptions, ShieldMintBatchOptions,
@@ -266,6 +268,8 @@ use postfiat_types::{
     GOVERNANCE_KIND_AUTHORITY_MODE, GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT,
     GOVERNANCE_KIND_BRIDGE_VERIFICATION_ACTIVATION_HEIGHT, GOVERNANCE_KIND_BRIDGE_WITNESS_EPOCH,
     GOVERNANCE_KIND_CRYPTO_POLICY, GOVERNANCE_KIND_ORCHARD_POOL_PAUSE,
+    GOVERNANCE_KIND_ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT,
+    GOVERNANCE_KIND_PFUSDC_SOURCE_SERIES_ACTIVATION_HEIGHT,
     GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT,
     GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT,
     GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,
@@ -429,6 +433,8 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "ratify-bridge-verification-activation-height"
         | "ratify-vault-bridge-route-authority-activation-height"
         | "ratify-atomic-swap-activation-height"
+        | "ratify-orchard-aware-bridge-claim-activation-height"
+        | "ratify-pfusdc-source-series-activation-height"
         | "ratify-replicated-state-v2-activation-height"
         | "ratify-bridge-exit-root-activation-height"
         | "ratify-shielded-atomic-batch-activation-height"
@@ -554,6 +560,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "market-ops-status"
         | "market-ops-operation-bundle"
         | "vault-bridge-status"
+        | "pfusdc-ingress-preflight"
         | "vault-bridge-conservation-audit"
         | "navcoin-bridge-routes"
         | "navcoin-bridge-packet"

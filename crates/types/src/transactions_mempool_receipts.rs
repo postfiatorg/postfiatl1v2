@@ -1746,6 +1746,10 @@ pub struct VaultBridgeDepositClaimOperation {
     pub asset_id: String,
     pub evidence_root: String,
     pub policy_hash: String,
+    /// Required by source-series claims. Zero is retained only for historical
+    /// replay; the route binding proves the supplied epoch exactly.
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub route_epoch: u32,
     pub recipient: String,
     pub amount_atoms: u64,
 }
@@ -1775,7 +1779,7 @@ impl VaultBridgeDepositClaimOperation {
     }
 
     fn signing_bytes(&self) -> Vec<u8> {
-        format!(
+        let mut bytes = format!(
             "claimer={}\nasset_id={}\nevidence_root={}\npolicy_hash={}\nrecipient={}\namount_atoms={}\n",
             self.claimer,
             self.asset_id,
@@ -1784,7 +1788,13 @@ impl VaultBridgeDepositClaimOperation {
             self.recipient,
             self.amount_atoms
         )
-        .into_bytes()
+        .into_bytes();
+        // Preserve byte-identical historical signing payloads. New
+        // source-series claims bind the route epoch explicitly.
+        if self.route_epoch != 0 {
+            bytes.extend_from_slice(format!("route_epoch={}\n", self.route_epoch).as_bytes());
+        }
+        bytes
     }
 }
 

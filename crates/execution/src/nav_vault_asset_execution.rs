@@ -37,6 +37,117 @@ fn nav_redemption_consumer_id(redemption_id: &str) -> String {
     format!("nav_redemption:{redemption_id}")
 }
 
+fn nav_redemption_supply_consumer_id(redemption_id: &str, receipt_id: &str) -> String {
+    format!("nav_redemption_supply:{redemption_id}:{receipt_id}")
+}
+
+fn release_vault_bridge_supply_allocations(
+    ledger: &mut LedgerState,
+    asset_family_id: &str,
+    bucket_id: &str,
+    release_atoms: u64,
+    block_height: u64,
+) -> Result<(), (&'static str, String)> {
+    if release_atoms == 0 {
+        return Ok(());
+    }
+    let mut indices = ledger
+        .vault_bridge_allocations
+        .iter()
+        .enumerate()
+        .filter(|(_, allocation)| {
+            allocation.asset_id == asset_family_id
+                && allocation.bucket_id == bucket_id
+                && allocation.purpose == VAULT_BRIDGE_ALLOCATION_PURPOSE_SUPPLY
+                && allocation.released_atoms < allocation.amount_atoms
+        })
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    indices.sort_by(|left, right| {
+        let left = &ledger.vault_bridge_allocations[*left];
+        let right = &ledger.vault_bridge_allocations[*right];
+        (left.created_at_height, left.allocation_id.as_str())
+            .cmp(&(right.created_at_height, right.allocation_id.as_str()))
+    });
+    let available = indices.iter().try_fold(0_u64, |total, index| {
+        let allocation = &ledger.vault_bridge_allocations[*index];
+        total
+            .checked_add(allocation.amount_atoms - allocation.released_atoms)
+            .ok_or((
+                "vault_bridge_allocation_overflow",
+                "source-bucket supply allocation capacity overflowed".to_string(),
+            ))
+    })?;
+    if available < release_atoms {
+        return Err((
+            "insufficient_vault_bridge_supply_allocation",
+            "source-bucket settlement exceeds its remaining supply allocations".to_string(),
+        ));
+    }
+    let mut remaining = release_atoms;
+    for index in indices {
+        if remaining == 0 {
+            break;
+        }
+        let allocation = &mut ledger.vault_bridge_allocations[index];
+        let capacity = allocation.amount_atoms - allocation.released_atoms;
+        let take = capacity.min(remaining);
+        allocation.released_atoms += take;
+        if allocation.released_atoms == allocation.amount_atoms {
+            allocation.retired_at_height = block_height;
+        }
+        allocation
+            .validate()
+            .map_err(|error| ("bad_vault_bridge_allocation", error))?;
+        remaining -= take;
+    }
+    debug_assert_eq!(remaining, 0);
+    Ok(())
+}
+
+fn reconcile_vault_bridge_supply_allocations(
+    ledger: &mut LedgerState,
+    bucket: &VaultBridgeBucketState,
+    block_height: u64,
+) -> Result<(), (&'static str, String)> {
+    let live_supply_claim = bucket
+        .outstanding_vault_bridge_atoms
+        .checked_add(bucket.redemption_queue_atoms)
+        .ok_or((
+            "vault_bridge_bucket_overflow",
+            "source-bucket outstanding plus redemption queue overflowed".to_string(),
+        ))?;
+    let recorded_remaining = ledger
+        .vault_bridge_allocations
+        .iter()
+        .filter(|allocation| {
+            allocation.asset_id == bucket.asset_id
+                && allocation.bucket_id == bucket.bucket_id
+                && allocation.purpose == VAULT_BRIDGE_ALLOCATION_PURPOSE_SUPPLY
+        })
+        .try_fold(0_u64, |total, allocation| {
+            total
+                .checked_add(allocation.amount_atoms - allocation.released_atoms)
+                .ok_or((
+                    "vault_bridge_allocation_overflow",
+                    "source-bucket supply allocation total overflowed".to_string(),
+                ))
+        })?;
+    if recorded_remaining < live_supply_claim {
+        return Err((
+            "vault_bridge_supply_allocation_deficit",
+            "source-bucket has more live supply claims than allocation capacity".to_string(),
+        ));
+    }
+    release_vault_bridge_supply_allocations(
+        ledger,
+        &bucket.asset_id,
+        &bucket.bucket_id,
+        recorded_remaining - live_supply_claim,
+        block_height,
+    )
+}
+
 fn valuation_unit_scale(valuation_unit: &str, asset_precision: u8) -> Option<u128> {
     let unit = valuation_unit.trim().to_ascii_lowercase();
     if let Some(scale) = unit.strip_prefix("usd_1e") {
@@ -462,6 +573,7 @@ fn apply_nav_redeem_vault_bridge_settlement(
     operation: &NavRedeemSettleOperation,
     redemption: &NavRedemption,
     block_height: u64,
+    compatibility: AssetExecutionCompatibility,
 ) -> Result<(), (&'static str, String)> {
     let settlement_nav_asset = ledger
         .nav_asset(&operation.settlement_asset_id)
@@ -473,7 +585,7 @@ fn apply_nav_redeem_vault_bridge_settlement(
                     .to_string(),
             )
         })?;
-    let settlement_asset = ledger
+    let settlement_family_asset = ledger
         .asset_definition(&operation.settlement_asset_id)
         .cloned()
         .ok_or_else(|| {
@@ -497,7 +609,7 @@ fn apply_nav_redeem_vault_bridge_settlement(
         redemption.nav_per_unit,
         &nav_asset.valuation_unit,
         &settlement_nav_asset.valuation_unit,
-        settlement_asset.precision,
+        settlement_family_asset.precision,
     )?;
     if operation.settlement_amount_atoms != required_settlement_atoms {
         return Err((
@@ -612,6 +724,29 @@ fn apply_nav_redeem_vault_bridge_settlement(
         &bucket.source_domain,
         &bucket.policy_hash,
     )?;
+    let settlement_asset = if compatibility.pfusdc_source_series_active(block_height) {
+        let mut matches = ledger.asset_definitions.iter().filter(|asset| {
+            asset.asset_family_id == operation.settlement_asset_id
+                && asset.source_bucket_id == operation.settlement_bucket_id
+                && asset.asset_id == asset.source_series_id
+        });
+        let asset = matches.next().cloned().ok_or_else(|| {
+            (
+                "pfusdc_source_series_asset_missing",
+                "NAV redemption requires the source-series settlement asset for its bucket"
+                    .to_string(),
+            )
+        })?;
+        if matches.next().is_some() {
+            return Err((
+                "pfusdc_source_series_asset_duplicate",
+                "multiple source-series assets reference the same settlement bucket".to_string(),
+            ));
+        }
+        asset
+    } else {
+        settlement_family_asset.clone()
+    };
     if bucket.nav_subscription_allocations_atoms < release_atoms {
         return Err((
             "vault_bridge_bucket_underflow",
@@ -696,6 +831,53 @@ fn apply_nav_redeem_vault_bridge_settlement(
         }
     }
 
+    let mut return_supply_by_receipt = std::collections::BTreeMap::<String, u64>::new();
+    if release_atoms != 0 {
+        return_supply_by_receipt.insert(allocation.receipt_id.clone(), release_atoms);
+    }
+    for (_, amount, top_up_allocation) in &top_up_plan {
+        let total = return_supply_by_receipt
+            .entry(top_up_allocation.receipt_id.clone())
+            .or_default();
+        *total = total.checked_add(*amount).ok_or_else(|| {
+            (
+                "vault_bridge_allocation_overflow",
+                "NAV redemption return supply allocation overflowed".to_string(),
+            )
+        })?;
+    }
+    let mut return_supply_allocations = Vec::new();
+    if compatibility.pfusdc_source_series_active(block_height) {
+        for (receipt_id, amount) in return_supply_by_receipt {
+            let supply_allocation = VaultBridgeAllocation::new(
+                &genesis.chain_id,
+                receipt_id.clone(),
+                operation.settlement_asset_id.clone(),
+                operation.settlement_bucket_id.clone(),
+                amount,
+                VAULT_BRIDGE_ALLOCATION_PURPOSE_SUPPLY,
+                nav_redemption_supply_consumer_id(&redemption.redemption_id, &receipt_id),
+                block_height,
+            )
+            .map_err(|error| ("bad_vault_bridge_allocation", error))?;
+            if ledger
+                .vault_bridge_allocation(&supply_allocation.allocation_id)
+                .is_some()
+                || return_supply_allocations.iter().any(
+                    |existing: &VaultBridgeAllocation| {
+                        existing.allocation_id == supply_allocation.allocation_id
+                    },
+                )
+            {
+                return Err((
+                    "duplicate_vault_bridge_allocation",
+                    "NAV redemption return supply allocation already exists".to_string(),
+                ));
+            }
+            return_supply_allocations.push(supply_allocation);
+        }
+    }
+
     let to_index = issued_asset_credit_recipient_line_index(
         ledger,
         &settlement_asset,
@@ -711,7 +893,7 @@ fn apply_nav_redeem_vault_bridge_settlement(
         operation.settlement_amount_atoms,
         "nav redeem settlement",
     )?;
-    let supply_after = issued_asset_supply(ledger, &operation.settlement_asset_id)?
+    let supply_after = issued_asset_family_supply(ledger, &operation.settlement_asset_id)?
         .checked_add(operation.settlement_amount_atoms)
         .ok_or_else(|| {
             (
@@ -719,7 +901,7 @@ fn apply_nav_redeem_vault_bridge_settlement(
                 "nav redeem settlement would overflow settlement asset supply".to_string(),
             )
         })?;
-    if let Some(max_supply) = settlement_asset.max_supply {
+    if let Some(max_supply) = settlement_family_asset.max_supply {
         if supply_after > max_supply {
             return Err((
                 "issued_supply_cap_exceeded",
@@ -758,7 +940,7 @@ fn apply_nav_redeem_vault_bridge_settlement(
         .validate()
         .map_err(|error| ("bad_vault_bridge_allocation", error))?;
 
-    for (top_up_receipt_index, top_up_amount, top_up_allocation) in top_up_plan {
+    for (top_up_receipt_index, top_up_amount, mut top_up_allocation) in top_up_plan {
         ledger.vault_bridge_receipts[top_up_receipt_index].allocated_value_atoms = ledger
             .vault_bridge_receipts[top_up_receipt_index]
             .allocated_value_atoms
@@ -772,8 +954,19 @@ fn apply_nav_redeem_vault_bridge_settlement(
         ledger.vault_bridge_receipts[top_up_receipt_index]
             .validate()
             .map_err(|error| ("bad_vault_bridge_receipt", error))?;
+        if compatibility.pfusdc_source_series_active(block_height) {
+            top_up_allocation.released_atoms = top_up_allocation.amount_atoms;
+            top_up_allocation.retired_at_height = block_height;
+            top_up_allocation
+                .validate()
+                .map_err(|error| ("bad_vault_bridge_allocation", error))?;
+        }
         ledger.vault_bridge_allocations.push(top_up_allocation);
     }
+
+    ledger
+        .vault_bridge_allocations
+        .extend(return_supply_allocations);
 
     ledger.vault_bridge_bucket_states[bucket_index] = bucket_after;
     apply_prepared_issued_asset_credit(ledger, to_index, recipient_after, recipient_required);
@@ -2014,6 +2207,7 @@ fn apply_vault_bridge_deposit_claim(
         ledger,
         operation,
         block_height,
+        AssetExecutionCompatibility::strict(),
         &[],
     )
 }
@@ -2023,6 +2217,7 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
     ledger: &mut LedgerState,
     operation: &VaultBridgeDepositClaimOperation,
     block_height: u64,
+    compatibility: AssetExecutionCompatibility,
     orchard_balances: &[AssetOrchardAssetBalance],
 ) -> Result<(), (&'static str, String)> {
     let nav_asset = ledger.nav_asset(&operation.asset_id).cloned().ok_or_else(|| {
@@ -2185,11 +2380,90 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
         ));
     }
     let claim_amount = operation.amount_atoms;
-    let ledger_supply = issued_asset_supply(ledger, &operation.asset_id)?;
+    let source_series_active = compatibility.pfusdc_source_series_active(block_height);
+    let (credit_asset, source_asset_to_create) = if source_series_active {
+        if operation.route_epoch == 0 {
+            return Err((
+                "pfusdc_source_series_route_epoch_missing",
+                "source-series pfUSDC claim requires its governed route epoch".to_string(),
+            ));
+        }
+        let expected_route_binding =
+            vault_bridge_route_binding(&operation.policy_hash, operation.route_epoch)
+                .map_err(|error| ("pfusdc_source_series_route_binding_invalid", error))?;
+        if record.evidence.route_binding != expected_route_binding {
+            return Err((
+                "pfusdc_source_series_route_epoch_mismatch",
+                "source-series route epoch does not match the proof-bound route binding"
+                    .to_string(),
+            ));
+        }
+        let source_series_id = pfusdc_source_series_id(
+            &genesis.chain_id,
+            &operation.asset_id,
+            record.evidence.source_chain_id,
+            &record.evidence.vault_address,
+            &record.evidence.token_address,
+            operation.route_epoch,
+            &operation.policy_hash,
+        )
+        .map_err(|error| ("pfusdc_source_series_invalid", error))?;
+        let source_bucket_id = vault_bridge_bucket_id(
+            &operation.asset_id,
+            &record.evidence.source_domain(),
+            &operation.policy_hash,
+        )
+        .map_err(|error| ("pfusdc_source_series_bucket_invalid", error))?;
+        if let Some(existing) = ledger.asset_definition(&source_series_id) {
+            if existing.asset_family_id != operation.asset_id
+                || existing.source_series_id != source_series_id
+                || existing.source_bucket_id != source_bucket_id
+                || existing.issuer != asset.issuer
+                || existing.precision != asset.precision
+            {
+                return Err((
+                    "pfusdc_source_series_asset_mismatch",
+                    "existing source-series asset does not match its immutable family and source"
+                        .to_string(),
+                ));
+            }
+            (existing.clone(), None)
+        } else {
+            let display_name = format!("{} · source epoch {}", asset.code, operation.route_epoch);
+            let source_asset = AssetDefinition::new_source_series(
+                &asset,
+                source_series_id,
+                source_bucket_id,
+                display_name,
+            )
+            .map_err(|error| ("pfusdc_source_series_asset_invalid", error))?;
+            (source_asset.clone(), Some(source_asset))
+        }
+    } else {
+        if operation.route_epoch != 0 {
+            return Err((
+                "pfusdc_source_series_not_active",
+                "route_epoch is forbidden before source-series activation".to_string(),
+            ));
+        }
+        (asset.clone(), None)
+    };
+
+    let ledger_supply = issued_asset_family_supply(ledger, &operation.asset_id)?;
     let orchard_live = orchard_balances
         .iter()
-        .find(|balance| balance.asset_id == operation.asset_id)
-        .map_or(0, |balance| balance.live_total);
+        .filter(|balance| {
+            balance.asset_id == operation.asset_id
+                || ledger
+                    .asset_definition(&balance.asset_id)
+                    .is_some_and(|definition| definition.asset_family_id == operation.asset_id)
+        })
+        .try_fold(0_u64, |total, balance| {
+            total.checked_add(balance.live_total).ok_or((
+                "issued_supply_orchard_overflow",
+                "vault bridge asset family Orchard supply overflowed".to_string(),
+            ))
+        })?;
     let current_supply = ledger_supply.checked_add(orchard_live).ok_or_else(|| {
         (
             "issued_supply_orchard_overflow",
@@ -2271,14 +2545,14 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
 
     let recipient_index = issued_asset_credit_recipient_line_index(
         ledger,
-        &asset,
+        &credit_asset,
         &recipient,
         claim_amount,
         "vault bridge asset bridge deposit claim",
     )?;
     let (recipient_after, recipient_required) = prepare_issued_asset_credit(
         ledger,
-        &asset,
+        &credit_asset,
         &recipient,
         recipient_index,
         claim_amount,
@@ -2421,6 +2695,22 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
                 .to_string(),
         ));
     }
+    if source_series_active {
+        let mut migration_buckets = ledger
+            .vault_bridge_bucket_states
+            .iter()
+            .filter(|bucket| bucket.asset_id == operation.asset_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        migration_buckets.sort_by(|left, right| left.bucket_id.cmp(&right.bucket_id));
+        for migration_bucket in migration_buckets {
+            reconcile_vault_bridge_supply_allocations(
+                ledger,
+                &migration_bucket,
+                block_height,
+            )?;
+        }
+    }
     if bucket_after.status != VAULT_BRIDGE_BUCKET_STATUS_ACTIVE {
         return Err((
             "vault_bridge_bucket_not_active",
@@ -2486,6 +2776,11 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
         ledger.vault_bridge_bucket_states.push(bucket_after);
     }
     ledger.vault_bridge_allocations.push(allocation);
+    if let Some(source_asset) = source_asset_to_create {
+        // The trustline may be prepared before the definition is inserted,
+        // but both become visible only in the successful outer transition.
+        ledger.asset_definitions.push(source_asset);
+    }
     apply_prepared_issued_asset_credit(
         ledger,
         recipient_index,
@@ -2524,6 +2819,35 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
             .map_err(|error| ("bad_nav_asset", error))?;
     }
     Ok(())
+}
+
+/// Execute the production bridge-claim transition against a cloned ledger.
+///
+/// This is the consensus-rule source for ingress quotes. Callers must insert
+/// the proof-bound finalized deposit they want to quote into `ledger` first.
+/// The returned ledger is never persisted by this function. Orchard custody
+/// is included only when the independently governed activation is live at the
+/// quoted height, preserving historical replay semantics.
+pub fn simulate_vault_bridge_deposit_claim(
+    genesis: &Genesis,
+    ledger: &LedgerState,
+    operation: &VaultBridgeDepositClaimOperation,
+    block_height: u64,
+    compatibility: AssetExecutionCompatibility,
+    orchard_balances: &[AssetOrchardAssetBalance],
+) -> Result<LedgerState, (&'static str, String)> {
+    let mut simulated = ledger.clone();
+    let orchard_balances =
+        orchard_balances_for_bridge_claim(compatibility, block_height, orchard_balances);
+    apply_vault_bridge_deposit_claim_with_orchard(
+        genesis,
+        &mut simulated,
+        operation,
+        block_height,
+        compatibility,
+        orchard_balances,
+    )?;
+    Ok(simulated)
 }
 
 fn apply_vault_bridge_fast_ingress_lifecycle(
@@ -3276,7 +3600,7 @@ fn apply_vault_bridge_nav_subscription_allocate_with_compatibility(
                     .to_string(),
             ));
         }
-        let settlement_asset = ledger
+        let settlement_family_asset = ledger
             .asset_definition(&operation.settlement_asset_id)
             .cloned()
             .ok_or_else(|| {
@@ -3286,12 +3610,36 @@ fn apply_vault_bridge_nav_subscription_allocate_with_compatibility(
                         .to_string(),
                 )
             })?;
+        let settlement_asset = if compatibility.pfusdc_source_series_active(block_height) {
+            let mut matches = ledger.asset_definitions.iter().filter(|asset| {
+                asset.asset_family_id == operation.settlement_asset_id
+                    && asset.source_bucket_id == operation.settlement_bucket_id
+                    && asset.asset_id == asset.source_series_id
+            });
+            let asset = matches.next().cloned().ok_or_else(|| {
+                (
+                    "pfusdc_source_series_asset_missing",
+                    "NAV subscription requires the source-series settlement asset for its bucket"
+                        .to_string(),
+                )
+            })?;
+            if matches.next().is_some() {
+                return Err((
+                    "pfusdc_source_series_asset_duplicate",
+                    "multiple source-series assets reference the same settlement bucket"
+                        .to_string(),
+                ));
+            }
+            asset
+        } else {
+            settlement_family_asset
+        };
         let owner_index =
-            trustline_index(ledger, supply_owner, &operation.settlement_asset_id).ok_or_else(
+            trustline_index(ledger, supply_owner, &settlement_asset.asset_id).ok_or_else(
                 || {
                     (
                         "missing_trustline",
-                        "vault bridge asset nav subscription supply owner has no settlement asset trustline"
+                        "vault bridge asset nav subscription supply owner has no selected source-series trustline"
                             .to_string(),
                     )
                 },
@@ -6573,7 +6921,7 @@ fn apply_vault_bridge_burn_to_redeem(
         block_height,
     )?;
 
-    let asset = ledger
+    let family_asset = ledger
         .asset_definition(&operation.asset_id)
         .cloned()
         .ok_or_else(|| {
@@ -6582,21 +6930,6 @@ fn apply_vault_bridge_burn_to_redeem(
                 format!("asset `{}` does not exist", operation.asset_id),
             )
         })?;
-    let owner_index =
-        trustline_index(ledger, &operation.owner, &operation.asset_id).ok_or_else(|| {
-            (
-                "missing_trustline",
-                "vault bridge asset redemption owner has no trustline for asset".to_string(),
-            )
-        })?;
-    ensure_line_can_move(&asset, &ledger.trustlines[owner_index])?;
-    if ledger.trustlines[owner_index].balance < operation.amount_atoms {
-        return Err((
-            "insufficient_issued_balance",
-            "vault bridge asset burn-to-redeem amount exceeds owner balance".to_string(),
-        ));
-    }
-
     let bucket_index = ledger
         .vault_bridge_bucket_states
         .iter()
@@ -6631,6 +6964,44 @@ fn apply_vault_bridge_burn_to_redeem(
         &bucket.policy_hash,
     )?;
     ensure_vault_bridge_source_policy(profile, &bucket.source_domain, &bucket.policy_hash)?;
+    let movement_asset = if compatibility.pfusdc_source_series_active(block_height) {
+        let mut matches = ledger.asset_definitions.iter().filter(|asset| {
+            asset.asset_family_id == operation.asset_id
+                && asset.source_bucket_id == operation.bucket_id
+                && asset.asset_id == asset.source_series_id
+        });
+        let asset = matches.next().cloned().ok_or_else(|| {
+            (
+                "pfusdc_source_series_asset_missing",
+                "source-specific redemption requires the source-series asset for its bucket"
+                    .to_string(),
+            )
+        })?;
+        if matches.next().is_some() {
+            return Err((
+                "pfusdc_source_series_asset_duplicate",
+                "multiple source-series assets reference the same backing bucket".to_string(),
+            ));
+        }
+        asset
+    } else {
+        family_asset
+    };
+    let owner_index = trustline_index(ledger, &operation.owner, &movement_asset.asset_id)
+        .ok_or_else(|| {
+            (
+                "missing_trustline",
+                "vault bridge redemption owner has no balance in the selected source series"
+                    .to_string(),
+            )
+        })?;
+    ensure_line_can_move(&movement_asset, &ledger.trustlines[owner_index])?;
+    if ledger.trustlines[owner_index].balance < operation.amount_atoms {
+        return Err((
+            "insufficient_issued_balance",
+            "vault bridge burn-to-redeem exceeds the selected source-series balance".to_string(),
+        ));
+    }
     if bucket.outstanding_vault_bridge_atoms < operation.amount_atoms {
         return Err((
             "vault_bridge_bucket_underflow",
@@ -6828,6 +7199,16 @@ fn apply_vault_bridge_redeem_settle_with_compatibility(
             "vault_bridge_bucket_underflow",
             "vault bridge asset settlement exceeds bucket redemption queue".to_string(),
         ));
+    }
+
+    if compatibility.pfusdc_source_series_active(block_height) {
+        release_vault_bridge_supply_allocations(
+            ledger,
+            &operation.asset_id,
+            &redemption.bucket_id,
+            operation.settled_atoms,
+            block_height,
+        )?;
     }
 
     let counted_value_after = ledger.vault_bridge_bucket_states[bucket_index]

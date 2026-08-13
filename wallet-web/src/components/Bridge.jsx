@@ -14,6 +14,8 @@ import {
 import * as evm from '../lib/evm.js';
 import * as utils from '../lib/utils.js';
 import {
+  assertBridgeIngressPreflight,
+  loadBridgeIngressPreflight,
   loadBridgeJobs,
   relayVaultDeposit,
   waitForBridgeJob,
@@ -117,10 +119,12 @@ function accountPftlBalance(response) {
   const assets = Array.isArray(response.result)
     ? response.result
     : (response.result.assets || []);
-  const row = assets.find((item) => (
-    String(item?.asset_id || item?.id || '').toLowerCase() === utils.PFUSDC_ASSET_ID
-  ));
-  return BigInt(row?.balance ?? row?.amount ?? 0);
+  return assets
+    .filter((item) => (
+      String(item?.asset_id || item?.id || '').toLowerCase() === utils.PFUSDC_ASSET_ID
+      || String(item?.asset_family_id || '').toLowerCase() === utils.PFUSDC_ASSET_ID
+    ))
+    .reduce((total, row) => total + BigInt(row?.balance ?? row?.amount ?? 0), 0n);
 }
 
 function BalanceRow({ label, value, active = false }) {
@@ -312,6 +316,20 @@ export default function Bridge({ address, rpc, txBuilder, backupJson, proxyAuthT
     return active;
   };
 
+  const exactIngressPreflight = async (active) => {
+    const request = {
+      pftlRecipient: String(address || '').toLowerCase(),
+      depositor: String(connectedAddress || '').toLowerCase(),
+      amountAtoms: amountAtoms?.toString() || '',
+    };
+    const preflight = await loadBridgeIngressPreflight({
+      routeId: active.profile.route_id,
+      ...request,
+      proxyAuthToken,
+    });
+    return assertBridgeIngressPreflight(preflight, active, request);
+  };
+
   const connect = async () => {
     setError('');
     try {
@@ -348,6 +366,7 @@ export default function Bridge({ address, rpc, txBuilder, backupJson, proxyAuthT
       assertAmountReady();
       setPhase('approving');
       const active = await refreshAndVerifyRoute();
+      await exactIngressPreflight(active);
       const existingAllowance = await evm.getEthereumUsdcAllowance(
         connectedAddress,
         active.vaultAddress,
@@ -447,7 +466,7 @@ export default function Bridge({ address, rpc, txBuilder, backupJson, proxyAuthT
     return () => controller.abort();
   }, [address, applyRelayResult, connectedAddress, proxyAuthToken]);
 
-  const relay = async ({ txHash, event, activeRoute }) => {
+  const relay = async ({ txHash, event, activeRoute, quoteDigest = '' }) => {
     setPhase('relaying');
     const routeBinding = evm.governedRouteBinding(activeRoute.profileHash, activeRoute.routeEpoch);
     const result = await relayVaultDeposit({
@@ -463,6 +482,7 @@ export default function Bridge({ address, rpc, txBuilder, backupJson, proxyAuthT
       routeId: activeRoute.profile.route_id,
       sourceChainId: activeRoute.profile.source_chain_id,
       proxyAuthToken,
+      quoteDigest,
       onStatus: (next) => {
         setRelayStatus(next.status || '');
       },
@@ -481,9 +501,13 @@ export default function Bridge({ address, rpc, txBuilder, backupJson, proxyAuthT
       }
       setPhase('depositing');
       const active = await refreshAndVerifyRoute();
+      const preflight = await exactIngressPreflight(active);
       const allowance = await evm.getEthereumUsdcAllowance(connectedAddress, active.vaultAddress);
       if (allowance < amountAtoms) throw new Error('The current USDC allowance is below the deposit amount.');
-      const nonce = evm.generateNonce();
+      // Bind the exact six-validator terminal-claim simulation into the
+      // Ethereum deposit event. A later relay can prove which accepted quote
+      // the wallet relied on without introducing a new vault contract.
+      const nonce = `0x${preflight.quote_digest}`;
       const routeBinding = evm.governedRouteBinding(active.profileHash, active.routeEpoch);
       const fee = await evm.estimateEthereumBridgeDepositFee(
         active.vaultAddress,
@@ -512,7 +536,12 @@ export default function Bridge({ address, rpc, txBuilder, backupJson, proxyAuthT
       setDepositId(event.deposit_id);
       setPhase('deposited');
       await refreshBalances(connectedAddress);
-      await relay({ txHash, event, activeRoute: active });
+      await relay({
+        txHash,
+        event,
+        activeRoute: active,
+        quoteDigest: preflight.quote_digest,
+      });
     } catch (failure) {
       setPhase('error');
       setError(`${confirmed ? 'Deposit confirmed, but relay failed' : 'Vault deposit failed'}: ${humanEvmError(failure)}`);
@@ -663,9 +692,9 @@ export default function Bridge({ address, rpc, txBuilder, backupJson, proxyAuthT
             ) : phase === 'complete' ? (
               <>
                 <div className="pfb-card-head"><Check size={15} /> Complete</div>
-                <h2>pfUSDC received on PFTL</h2>
-                <p>The Ethereum vault deposit was confirmed, verified, finalized, and claimed into this PFTL wallet.</p>
-                {pfusdcBalance !== null && <div className="pfb-readout"><span>PFTL balance</span><strong>{pfusdcLabel(pfusdcBalance)}</strong></div>}
+                <h2>Source-specific pfUSDC received on PFTL</h2>
+                <p>The Ethereum vault deposit was confirmed, verified, finalized, and claimed into the exact active-vault source series in this PFTL wallet.</p>
+                {pfusdcBalance !== null && <div className="pfb-readout"><span>Total pfUSDC family balance</span><strong>{pfusdcLabel(pfusdcBalance)}</strong></div>}
                 <button className="pfb-secondary" type="button" onClick={reset}>Make another deposit</button>
               </>
             ) : (

@@ -3662,6 +3662,7 @@ fn a666_successor_lifecycle_from_network(
             asset_id: PFUSDC_ASSET_ID.to_string(),
             evidence_root: pfusdc_bridge_evidence_root,
             policy_hash: pfusdc_bridge_policy_hash,
+            route_epoch: 0,
             recipient: holder.address.clone(),
             amount_atoms: PFUSDC_SUPPLY,
         }),

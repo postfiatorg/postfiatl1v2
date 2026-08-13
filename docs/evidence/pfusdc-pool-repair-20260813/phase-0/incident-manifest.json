@@ -1,0 +1,36 @@
+{
+  "schema": "postfiat.pfusdc_pool_repair_incident_manifest.v1",
+  "captured_date": "2026-08-13",
+  "chain_id": "postfiat-wan-devnet-2",
+  "height": 902,
+  "state_root": "78dd159fca28a6648acd32a74c720cef045bedd4ca094eff3d1c969c04a34c48dd3e9f9dcd29e9f7a944dcc0c63eaad7",
+  "block_tip_hash": "ea0d5dfddb56fdef63d59d6be67810e9cdbf4de1f1892ae3037c2d5608092cb2a4c2cfe71e4f1f01db79aa3e18a767c6",
+  "deployed_release": {
+    "release_id": "a666-nav-overlay-cbbf53e",
+    "git_revision": "cbbf53ec0415754562c3cb4f4a469a95a80a8298",
+    "binary_sha256": "983dcc11784c80bca937c55de6945bf40613aee239006779151f210401c1f95d"
+  },
+  "recovery_deposit": {
+    "amount_atoms": 15000000,
+    "ethereum_tx_hash": "0x7d91722c2e8071827a5d06144d30b2612af319fd9b0d76687bbb014c9ebc6364",
+    "deposit_id": "0xa0ce20f2cce4131b43dfa0108856e731a0be3c232f627a061d4e09ccf9f64266",
+    "vault": "0x4939a45caa85da31fb26d7dbe6477b45f7f08688",
+    "route_epoch": 6,
+    "route_policy_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+    "pftl_recipient": "pfab9b9228942e5c529633a13aa271d5297bec6353"
+  },
+  "snapshot_manifests": [
+    {"validator_id":"validator-0","sha256":"72c79bdc176ff0c1d38574ae86241240c6dd2a49f7dc9501a4805d7c0d59c7e2"},
+    {"validator_id":"validator-1","sha256":"22b581baaef021a91cea381ad0b59310a8606a9958e44b0683cf13e85cd77bf1"},
+    {"validator_id":"validator-2","sha256":"11af498369d08aea9b1f2bf746360e249899a2e3888f4b77ca50bfdd90b7f83c"},
+    {"validator_id":"validator-3","sha256":"78e60c25a1d1be2971c9531c0d39b42dded08fdb7a48192bd90e886d4be0c09c"},
+    {"validator_id":"validator-4","sha256":"ab57b508444fcfcab0bddec2d70633fd622b85003b1330d4f3964f9bd2660c7b"},
+    {"validator_id":"validator-5","sha256":"d572e48156b98edde650e47cc3922752b7f40462420d8fab4258988238d8c3fc"}
+  ],
+  "reconciliation": {
+    "conservation_audit_sha256": "36eb8cb1b14412e43b1db72db5b7cf42487fa95276a1844ed1b992cc8ebf9c9d",
+    "classification_sha256": "992080c3139fee5d32016b0daba2a41d724959506c0392ffb9d0355acc5899f1"
+  },
+  "custody_material_included": false,
+  "direct_state_mutation_performed": false
+}

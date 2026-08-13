@@ -3808,6 +3808,7 @@ fn rpc_serve_method_allowed_with_owned_lane(
             | "issuer_assets"
             | "market_ops_status"
             | "vault_bridge_status"
+            | "pfusdc_ingress_preflight"
             | "vault_bridge_route"
             | "navcoin_bridge_routes"
             | "navcoin_bridge_packet"
@@ -3940,6 +3941,16 @@ mod remote_method_policy_tests {
         ] {
             assert!(rpc_serve_method_allowed(method, false, false, false));
         }
+    }
+
+    #[test]
+    fn pfusdc_terminal_claim_preflight_is_a_public_read_method() {
+        assert!(rpc_serve_method_allowed(
+            "pfusdc_ingress_preflight",
+            false,
+            false,
+            false
+        ));
     }
 }
 

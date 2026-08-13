@@ -1,0 +1,1147 @@
+{
+  "schema": "postfiat-vault-bridge-conservation-v1",
+  "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
+  "current_height": 902,
+  "source_vault_atoms": 420990527,
+  "live_claim_atoms": 289700585,
+  "issued_supply_atoms": 289700595,
+  "wrapped_supply_atoms": 289700585,
+  "nav_subscription_claim_atoms": 0,
+  "other_claim_atoms": 0,
+  "uncredited_deposit_atoms": 15000000,
+  "recognized_but_unallocated_atoms": 0,
+  "observed_but_uncounted_atoms": 15000000,
+  "burned_unsettled_atoms": 37932373,
+  "released_unsettled_atoms": 27000000,
+  "expected_source_vault_atoms": 315632958,
+  "unexplained_delta_atoms": 105357569,
+  "conserved": false,
+  "route_count": 6,
+  "deposit_count": 68,
+  "redemption_count": 38,
+  "routes": [
+    {
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "route_id": "pfusdc-tier4-arbitrum-one-v1",
+      "route_epoch": 1,
+      "source_chain_id": 42161,
+      "vault_address": "0x850e4ceea147f3551c68c2251129e5945d0afb58",
+      "token_address": "0xaf88d065e77c8cc2239327c5edb3a432268e5831",
+      "vault_runtime_code_hash": "0x12b566433c726126ba812e5f21510420d6374b137181523e4030028012816fe2",
+      "vault_interface_abi_class": "camel_case_v2",
+      "token_runtime_code_hash": "0xad30d819dbc47814b7e6cb837fd7cc57fcb591479a38596ee93de4fc52e8c435",
+      "vault_balance_atoms": 6000020,
+      "balance_counted_once": true,
+      "activation_height": 64,
+      "expires_at_height": 100000,
+      "current_for_new_ingress": false
+    },
+    {
+      "profile_hash": "9a608601ded54a4892b28184a4505ac5fe6c94c926966115a893fb5ad360283c805b49572f382fcfaac83ced17e05001",
+      "route_id": "ethereum-sepolia-usdc-v1",
+      "route_epoch": 2,
+      "source_chain_id": 11155111,
+      "vault_address": "0xebacc5b43351f18ff605586afc7ddabc2ca09dff",
+      "token_address": "0x1c7d4b196cb0c7b01d743fbc6116a902379c7238",
+      "vault_runtime_code_hash": "0x4229aaa000168f82d842313d81d867f0350a2c05e5d49eaa9654da84039e8727",
+      "vault_interface_abi_class": "camel_case_v2",
+      "token_runtime_code_hash": "0xcd3f29e2ea9c61dadd48bfeaf8b2884b6de9dfee7bf45329452c4c33d0868ceb",
+      "vault_balance_atoms": 357559,
+      "balance_counted_once": true,
+      "activation_height": 314,
+      "expires_at_height": 1000000,
+      "current_for_new_ingress": false
+    },
+    {
+      "profile_hash": "1893c6d363122314268131211a96866aaf4c0af5a89f7a8b08a6b323811dc9d50073ff5e956bc7f5421cfe1fca205016",
+      "route_id": "ethereum-mainnet-usdc-v1",
+      "route_epoch": 3,
+      "source_chain_id": 1,
+      "vault_address": "0x47d54874a708c4bf25ffd547f61f695fff940af9",
+      "token_address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "vault_runtime_code_hash": "0x8c0699799a8e592d73813f3761101c9bb8e52f16f87a2ecb5eea3bdf6340c003",
+      "vault_interface_abi_class": "camel_case_v2",
+      "token_runtime_code_hash": "0xd80d4b7c890cb9d6a4893e6b52bc34b56b25335cb13716e0d1d31383e6b41505",
+      "vault_balance_atoms": 100000000,
+      "balance_counted_once": true,
+      "activation_height": 316,
+      "expires_at_height": 1000000,
+      "current_for_new_ingress": false
+    },
+    {
+      "profile_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+      "route_id": "ethereum-mainnet-usdc-v1",
+      "route_epoch": 4,
+      "source_chain_id": 1,
+      "vault_address": "0x8583409ddbac984ec195dfa06a21103d92403c1e",
+      "token_address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "vault_runtime_code_hash": "0xc6dbb722c23bfc841624bb909fcb54d84a65a2ea6ece96e2a28bf61d5dea6d05",
+      "vault_interface_abi_class": "camel_case_v2",
+      "token_runtime_code_hash": "0xd80d4b7c890cb9d6a4893e6b52bc34b56b25335cb13716e0d1d31383e6b41505",
+      "vault_balance_atoms": 104520000,
+      "balance_counted_once": true,
+      "activation_height": 318,
+      "expires_at_height": 1000000,
+      "current_for_new_ingress": false
+    },
+    {
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "route_id": "ethereum-mainnet-usdc-v1",
+      "route_epoch": 5,
+      "source_chain_id": 1,
+      "vault_address": "0xaaa78fda7062efce769e95cd72fc55e507bc8183",
+      "token_address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "vault_runtime_code_hash": "0xc6dbb722c23bfc841624bb909fcb54d84a65a2ea6ece96e2a28bf61d5dea6d05",
+      "vault_interface_abi_class": "camel_case_v2",
+      "token_runtime_code_hash": "0xd80d4b7c890cb9d6a4893e6b52bc34b56b25335cb13716e0d1d31383e6b41505",
+      "vault_balance_atoms": 195031396,
+      "balance_counted_once": true,
+      "activation_height": 387,
+      "expires_at_height": 1000000,
+      "current_for_new_ingress": false
+    },
+    {
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "route_id": "ethereum-mainnet-usdc-v1",
+      "route_epoch": 6,
+      "source_chain_id": 1,
+      "vault_address": "0x4939a45caa85da31fb26d7dbe6477b45f7f08688",
+      "token_address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "vault_runtime_code_hash": "0xc6dbb722c23bfc841624bb909fcb54d84a65a2ea6ece96e2a28bf61d5dea6d05",
+      "vault_interface_abi_class": "camel_case_v2",
+      "token_runtime_code_hash": "0xd80d4b7c890cb9d6a4893e6b52bc34b56b25335cb13716e0d1d31383e6b41505",
+      "vault_balance_atoms": 15081552,
+      "balance_counted_once": true,
+      "activation_height": 795,
+      "expires_at_height": 1000000,
+      "current_for_new_ingress": true
+    }
+  ],
+  "deposits": [
+    {
+      "evidence_root": "00437dfc96c78a70254aabd638f229342c61da3c37d2a656aa8cae28b0c329573f930d26710322eb282b720ca200c699",
+      "deposit_id": "86bbc86df9fda5d9ae4858469a9403b8174327e259965a99ee9567d5679e9b74",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 10000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "0d99defa50da8420d24985d49d1d7d54dc7b8b9e089982e26164693fca2508c9529ea6089717412c81ba2100dd77bbaf",
+      "deposit_id": "54b4a0ad661c79545319a518b548e36d9c22d2c7eeb10c3e467bd84e463d0105",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "0e9a333303909c9bdb9584260298b295365ac1b3995e9a5ec1c9655ddb5e360c8318dd52e28360b765052d0c48249094",
+      "deposit_id": "c1b73435029d42ebace223a0970d837736862da6569c9cf38cb7cef5c5ba5682",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1005000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1005000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "1d525deff84d3090eeb05f6bcab78ddb92dbeb73fd0380b819582d0b05914768e6c3650a59211eb84bf530247aabbf63",
+      "deposit_id": "f4c12a7390bf0af6895968923720f3ef9040d8943fda5a156bb13b9ea6b1e25b",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 90553629,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 90553629,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "1f8e3d6c7ef424d937c456c5a9520cd4af1b80ae089143c3f0fc8062027531983ab6722f48423f0cf9d2d7c12de00f07",
+      "deposit_id": "4586bd382915fe1ccafe007bb5d062a4a414578b6e852610b06514ff747a37ad",
+      "profile_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "1fc0cdbd68c0bcb3b5984eb15055713ba12dad8e2a5d4bb5639314dffc547664ff99f1039665e549487cd45c637243d4",
+      "deposit_id": "a8258833262f5ec82a57c36aa56ed7ccf539c6aeabbf8428127fd4bc002a72e1",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "21fe0ccf77e59b3d26ae7cc22aea694b10ebcf34278dd177249616b13be1d65bfd5a9f32a52eb4769a58476f0dd0214f",
+      "deposit_id": "89da2c0ff8268e780c3ca46a5a45e3c6f27f9325149c080d08460c9858577ffe",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "246767ebe1668ea1fbd7d3e1c6ba992065ef6c379bc51ee38908c455948ea2e89b9c49b6ec1ecd566a9c39a1b8c7e387",
+      "deposit_id": "08033be7899e13d94bef65b6a46cf95ccf24c264cc8c9575113be348289ada5d",
+      "profile_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+      "amount_atoms": 1005000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1005000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "251b88038a30e7641eee853e445598df30083d50c4cb6d11e57551bf5e0066cba5c02e8b80242ab486e6afab2740de93",
+      "deposit_id": "7857d13f2240e6ca74ce84f9b74254748190f732d2e958c0cfcc7ff0f3bd9967",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "27c0665193b63da40787c8916048d9f44759f28bee9da47ba092b18781e54181c19a9e4b1665e8a365f05e247abe051c",
+      "deposit_id": "11c974ca108bee1f5037863c8ff89d427656af405749c39ff966ae77779bf09a",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 10000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "2be5041a9f70634f6210b5d0d020c97237860163d84d03029c5e459c822ad5d8116adc909047cce280f346fcb1c4cbb6",
+      "deposit_id": "cfaab30d08d9b4e7b378521f5bffb1a07a526c7e653ef2d69c49c61a3a31aa87",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "33afc9cafc3a747e2e7ee2aaff3ceb0f4cc7c58836496d04db29f22144c628a68f8c6a1c26a89315422cafb5bce4f224",
+      "deposit_id": "253eab0d3e6c32e10c3c2d2121b27605153eaad45281c2abe61aa78a614939a5",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 10000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "33d79e68a7d3bdc8d35db91f2619e7f22270917977bf2ffdff9eea1d980a92293dc9515cbf5d90d795bd2795aee72532",
+      "deposit_id": "2f9257f87368c4d6f9553c4c20e02db05b09c42ef913205613d018b9c36572a2",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 10000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "349570d37172b631f241bd5003e3a17990843ea4504637cb6247489daad41facafa6e858c39f4aa6548b8706c80409f7",
+      "deposit_id": "cb6332f8f16edbfa71899fe4c7e951939fc653734a232fd7705f58ef958fe6df",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "369f92a5dc7e790a11a6a16ee35dd0cee95cd621dd49e7c34444a598331c878615744574423725dda162571f9040ae01",
+      "deposit_id": "46d0d1991338a7a68adf75a4d8b1d12a0816a3b11649992f59481d1e134525a0",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1005000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1005000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "3a2ae2144646916fef6faf7f7b1707e5d0ee08eccfd5b595202838b9fa2ddbf633bffe9605a1dbc1fc9176867add0410",
+      "deposit_id": "71d3e5ba8eae818de0776d1e3bcb76e27f9435c4897a8196f5d9bc6cad006fcb",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "40757263bc0fa2b6a40320f88e95c70d8807d0bc2db43c22d433d18c433650f7f94bed20ede3785a3e0c1162995c33ba",
+      "deposit_id": "a816f8caa80fb5a61ad093c0f925cfb830cc9f2db588cd1f14f2239e48174d22",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "482b2b49390a0961fea223fdeaefe00d2570eb08ca6d3050549c00eeeb0a7cd1405ab618dac7f15270e0e34b97abfb85",
+      "deposit_id": "af4ca85614b8602e4ee826da3a8963e132fbbdfde6bf7599aa6a92913fa062b3",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 10000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "536ad6bb2a9910899fc8cb5dbe03e1a849362accd556059337013e0311322031a944d176747ab735f2f30fb3890f5af2",
+      "deposit_id": "4ddc43224587676c8bc569a1fcdf188475b46ef9ada40a907862ec2d33a92964",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "662c8429df3f2e0a0ae7170e7606ef6769f9eec669856635b1ef46918fac314439f7e51426c9b472d635cef28ef8cf02",
+      "deposit_id": "af48cd8ab06bcd92bb38447189710291a8be77e8a3730c0003398f6181b6146d",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 10000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "68200a82b83f88013e28b312d287ad202ac46201b4eb94fac2dc98ed491a0fb5359f74be088f12a2cdf2ead4fa7c7734",
+      "deposit_id": "17a02d9f9c5e814754cd1c6f85254e7200fc1edb1bf741ba4a8db172f58de2fe",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "6a72d6ef542438b4bf44d724e5619aa087a3093abf00e1254cf7eb315402a1ede5918b88e3045c0bc07928b3aebf42d2",
+      "deposit_id": "c55e7c8d8d1234ab2b57c20718e248919d2db6ee789f266f3897e89f4f1d3d10",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "6bb70eb34d9fdbefec45ccaa8f17c0b0577b23eeb670532c241b848e2b8d5dcc04a77819bc009bca1536f3ab149c9fed",
+      "deposit_id": "c8ed4cbb5aef4ba8a6805d4c11cdc053b1dec5656cc6b20389529622b192a2e5",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 20000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 20000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "6d64b16c9d45d69fc603870c47eb4cacd38cf56d08762e426e0c579513accf4ae92b381d44620758acf50db879171e90",
+      "deposit_id": "79a804e600ffa3bf4ec3a2144b7b747973cce19917f308299954ff57d5bdca7e",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "70c963cf36555bd11e05e1685c1eddaffc77270786a6a65b9d8a0b11f77cf1a2a443bfe78142999432a5bb7ccd7d0fe9",
+      "deposit_id": "584ea77b0f539664cdec0c8285cffdc9139adf171ccfad97fbb1bf3cfae870e9",
+      "profile_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+      "amount_atoms": 1005000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1005000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "756b6fcc1a78002a75558ba8362875f533bba31bc75a49fdd5d77107aa6178438fbf1a124e2c1c0db73eae1e4dfb186b",
+      "deposit_id": "cbfb27f4523c00e27bb9b5fdc4cacd417b08ab2185a7f5fb5449b95731614609",
+      "profile_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+      "amount_atoms": 100500000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 100500000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "76dea48ead29705a8ff6df607c58f3f1f4d99076a6fe60dea71710016e32671e16df70e08370f6f4dbd5f79e2bb8734b",
+      "deposit_id": "715646551b5fee4f419fd8ee67c856c90c1d455a00bec8e20ed16c1d07160441",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "7b7f253bffe90e9aa66a17d30ba974673d7a824c8f71b86940f9488f4a08af666759f0622ff640767ac8be4a3afcba53",
+      "deposit_id": "5607ba24cd2c34f8f294fd4222613a06fe059f2bb2d7423d4f7ace891ef6a3f3",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 10000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "7c0f5a0c53faf43e4e24ad368ba533b2178378fa6d56dbda44b09388a200ca4ef6fc18c9f98243d72eac4d7b3ae3cada",
+      "deposit_id": "8519781e0f0416c84901bb0d8ff8576edb12fdc8d5c5ee4407802ad2b8a1d50f",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "7ccb61d45c79386d757131317b154169c6da83460d52d7a3684dd5f89306143df96c4beda2173b11241849fbe8484ffa",
+      "deposit_id": "3da0ea858e1c5caa36c3fb094bcf2c6de8ef2bce86e0fa014eccf8f81afaf20d",
+      "profile_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+      "amount_atoms": 1005000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1005000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "7e7540e23616682273ada9a1e37fbb421ad3469d0997b88795a81ce6e31c8135b7a1b80daef7f2bba5c9a1a1dd97dac9",
+      "deposit_id": "9a1fa1c0940b14daf7b7d80a72671ca4467de2460d8164b782feeb816bb7d4bc",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "7f6265bded4beab0e6b9227cb6148b520df9d3c68d2899248489e4443df84753a17e068bd491cdefec1a80305c09e0a6",
+      "deposit_id": "0ba1942366a5faa05df91da1509bc49cf4bff4421890bb2bd5dd1cda2d888356",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "860bcda978d620e5e87cc849dcf0df18b67534bdab3f3e3df7b74d0c88c42f3ae8a7ab0b299aca18838c93d42a74ad5e",
+      "deposit_id": "fb15ceae3416deb91d96eaa88ea1bf12bf97129eabe7a8ca6e534ea6c9544678",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "8865bf797d306281c5993595e0168b95a74fa88cd3c27288c0d8f8de1acf38abb37df5bf865984bddb22aaf3acc2c5ea",
+      "deposit_id": "d9c3f9ea9e36e1eaaf09582f484c57840b37fc9ca4c2759aaf872a74493bf055",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "8f149aed99ec457722b30ca3896d2504eaca57b9be6428dabbb7e38b66cbc954597ce3980fa0ed305ad5ed6ca6f28c2a",
+      "deposit_id": "eca730861e042b1b2d4c968fefe844cc89e8350f6c606897470504c6a341071c",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1005000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1005000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "8f6ea2300d823b06798b9767b56a0e55da5010b35d2bccc03d34bcc76711efc30638be88a61d7aba8c34f559b02be5c8",
+      "deposit_id": "1b9619c3e15064dddf02f0759c559d546026e67f80b45957563d4976ac84c2a7",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 1900000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1900000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "94ae1ca83d59e5c5dad38a329697cd71715eec4068486455c0b85feb7a166f54b374f20f88546c2b7d6e067fb6c9fbcb",
+      "deposit_id": "30c8176a18af41dffe60eb368e517c358d814f2b6973429e84e832f7729e5dfa",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 905538,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 905538,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "a19e2e2aa1eb62c65337206b158d705661efdb3978695b30df4c68ed15d4e6c9bc348d34b29510f0179d9eece8c4ddc4",
+      "deposit_id": "b3ff9187753ddf158acd91125e60b63167099aaea27c4eed5c497f2dd6cc1fe5",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 10000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "ae0b8490c43a60ea792f6506465916f0db4832b2d547d8470a600c10a55e42ab1ffad3eb703cf5ddfd08a17bd463054d",
+      "deposit_id": "bc67d1fe2cc5f12179214dd8582ef23f6a6d55dc15f53794566ac6156105998f",
+      "profile_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+      "amount_atoms": 1005000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1005000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "af4a15729b1aa8462acc3f880f9390140bcadd986c6797301b67e141515d16de2f210cacfa6ff3f2b4a88eae4ddedc6c",
+      "deposit_id": "3d9a8bb008f806062780dfc35c9ae117310d6fc19fc87400bc6a3cf23ab1137a",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "b3fc12d9b47d123aee010114c9eceabceec2e99d114df3a1c1210fb11e22897f676523ac635c5ec5ca4480118fc5fc53",
+      "deposit_id": "7197beaddf9af2f6bb3a8e0f155e3bdd8d9eb2bafe3ad853edb69e9434d5ff95",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "bb61b728a8942c637a73ffeeb37ceae4db658c24ed921912119b1f0c85f32c2afbd97b2890a7fa865f6f4d31f7f4fb90",
+      "deposit_id": "5d87814a7d5c5e265c89633c0467aa283082173a66a7ecdb791ee333c4a8476c",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "bff082abcb8db3d748827e732d07f69d7a15830e9550133df02f88c5e8b2c635afac7112fbeb21f4022fe512b5fe6684",
+      "deposit_id": "a0ce20f2cce4131b43dfa0108856e731a0be3c232f627a061d4e09ccf9f64266",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 15000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 0,
+      "uncredited_atoms": 15000000
+    },
+    {
+      "evidence_root": "c07d8ab17e83c05fae5f1aa8c716f20aa827695a0b1392ef04c8c3d570d829b63c8aee75497ddecfa9467c97412f466b",
+      "deposit_id": "e8868629634259ba6bc8e3767418cc412bfb6953ce46ef4ba7708eb2f6f5ac7a",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "c579fe83f63d2b51cba84aec863e9ec517d8b77be4c2a45529b2cd5df8f89405f97eae80edb5356949189af4ba77cf35",
+      "deposit_id": "b654acdeb28b2b7a196bb8726494d0642177989583acce1b72cc84630a67ff08",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "cf53bcebfa97426c55c2e5ceebd96860b7126a609d758133b89cf1cec2eae02ef2188edc08ac6efa4ff4c9fe9c0122f9",
+      "deposit_id": "0712af296ffea6d3a7eaeca6f02e9940804125096c8c1d95bcc1b487b18d2363",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "d2e16b3a05446e64bc4b13c30ac3537f035d935986f22c5cd600520438ca85fe82017e7965f52fefca1251a572ff9bf7",
+      "deposit_id": "64c174eef04d69eb9cbeb3af445797360fabc07fd40b36fd62e192d7a50300b5",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "d54c5701a645539669f2382ccc8f69d1c215fa562a9512adeee3efecc0d771fb122cce81797240fc57f3837a74c369b8",
+      "deposit_id": "9d6ac7c2386e2b23536e7cddc349683f1ce0c76089ffe853ce96c66e27745c5f",
+      "profile_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+      "amount_atoms": 25000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 25000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "d563846383e567498d9c0d8a63b700662b5d578965215a948f1594264a3ae6257a23d5816142ecabf7c19521fb9c07a2",
+      "deposit_id": "4547c3c51765b127125ad26f35a2b330166b2e9a6e4ce8b0e9c815a7e1f63e35",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 905538,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 905538,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "d628b4f8efa4f297df5c14803964c8bb85a79e4c8e98f28e347eee27740c3198220ebfdec3cfb7fa176ecb0d9d7f816e",
+      "deposit_id": "78fdb982d2cc2552baeabb648b53a9df86821891578fb970077c5f35e3724e9a",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "d83c3177d19657111495114dc15cbbd7228835e380ff6659ae2c4c8894f170de93dadb6a4c3a79339f40d7ad21c36e9e",
+      "deposit_id": "93f676cff0d898d359f0a81a95f701f15291902ac5d0b011c8a421a6e284c858",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "d85c84ecb3d97e165f971b6737a4e6b71a8ab4fd4140ac61edce599a6ebdc4a7470b77eeb4b714d49ad1bd74be773fdf",
+      "deposit_id": "d97b01117aa5e2fb4d9b74050c779d36aa0f58d6aa457e2621bf95d1041d7d2c",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 10000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "d864069823257bb84f07049bdfb1f82514a7293b7d42ca5e739011cefe80b4fe62cf9544fde2188fde087834cbfa32c9",
+      "deposit_id": "4579b25460e58b5567eaf3cf61c93a9efe31dd63aac47ad442eac242657dc7da",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 20000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 20000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "dacf2bace136b05e8e8c90aa5487f1c9735dcce0b91545b342c28e5f8ad8231b2c4938ccb314a096c518fcc6e3512812",
+      "deposit_id": "228f2bb3ad01ac99077c50f1d05d383f489fbefe8e9603c6b9b4c201d9909a93",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 100500000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 100500000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "db287f0a2aa4f608c4df65fabfa1c8fb8ab4d8dee0671b46b76b8c86f400ad82f2a216f6862c171121c044c8827ecea9",
+      "deposit_id": "2da8bdb0188b614adf15ee555f3afbcd95e579f9bc6de95fc10e7a3a7ff98e05",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "ddc3a7005f21b0c570af59eb78448694d1bfcd7692cb26eaa3a7c91079f859238ddf27997f48d9fcd5d629cfa0e6a31b",
+      "deposit_id": "0f166978dec016eee90cd6a0b6090007edaa3163c79647e0e8d5ee03c63544cc",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "ddd787c55fca4f8a2eff817ad0e2841418a7d54c160d30d3a3ba21ca12f21a3e70bae4ff7bb35054ceede98b6e647bca",
+      "deposit_id": "7b2cfba6365beaba3722a70a84e744e6bc436262f34b5681b373ec1cb6e06dcc",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 10000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "e0a1ab76735a0470d6a913b508790a838ac026ff0c19b698cb0536da5d34ed5ff120912e1458992c5f2b4f54f6e6fe37",
+      "deposit_id": "d7eee478aa34b1563a91344c24b3a3b2cf5830280e7c878f00a11c973a97128d",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 905538,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 905538,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "e241335b8a1d0d4d2514f3b07a703663baebd8d9e66911d6098b43887674299f80616abb005e71a073afebbf9c425022",
+      "deposit_id": "80b894d0564b663d2eb8dbd50f2751cee2937edeaa956dccf9dd9a4e91e37eb4",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "e32a0c927ed89105c152d53a401cae2ca8139fa2b3724555ac9fd83a4a681a8a2b5f85a58d07aab75040499afaee4a93",
+      "deposit_id": "82a95b9b73a4a4de65be62c64da889c97d82825357bff99a5d95a9864f860dbc",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "e82092fb1f09d8df6c3824c728b3783fd8236dafc21a52b9b7caf3fdde37e3099c12fe24e8ea629515b27cccde74279e",
+      "deposit_id": "002af2fcdad2f2b4f0ef97447f472a9faecf8bc6dbb476775e648dae867dfc73",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 905538,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 905538,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "ecee32058e584df920aa1d93c5be99ed2ad6239c02ef67581370afda886b52d4c3f9d9fe36dce218faa26aafec935247",
+      "deposit_id": "c316eed0711d71c1fdb49860acc0c5097b3bedb78ebd1145450e32741d0282e3",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "f03a2fc70d3dc3f4046f29ffed47ef91b138fdea0463c749a9f2dc0e2473895eb1bc287e93d24ce435be420a4263b904",
+      "deposit_id": "42e64173aa1b3c408960c0328ce90d7f1587d78c024bf9defa6ec53ebb79a764",
+      "profile_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "f40160af42a2569a48e097f0d91b3e05465085cfdafbb5f35669a3e9e25185d5d26420623c90e5d2518bb9410a450645",
+      "deposit_id": "819b08995171cb165d6ed955af1b689ef956d5275bc45e3d89cf7e0bf12c8b21",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "f4af36bdbf8473b853bc47f05d7342e14930b0523882b5ea3793f5dc4baf01e944fe88696d3ef7a9c787427ae2198a74",
+      "deposit_id": "57c69be40ce1074dd87da8407b69c6a335f6de9e5120f34f291b80352cce8750",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "f72c42efd83058d93c7dabd518ea94b2e93ff9a5314e1824764c6c780bdbfd8dc5f3fb22ce8b441b4f3159c092755bb3",
+      "deposit_id": "e54713583c1bb46e908e8f01f1c996966dc5c82281365c91092a27ae0852d02b",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 10000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "fa242e86ca6c493603fdae1841adee3b8242c9d52be5a2f44780353e104814b2039ff23abb7010f3ab7623b83483b77e",
+      "deposit_id": "13e4f83d4e45e8ac3ea66606775fd8bd66ee37468325f6ad7987e6b125110780",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1000000,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 1000000,
+      "uncredited_atoms": 0
+    },
+    {
+      "evidence_root": "fc69f25c228cb238ac5fb707591ece1f9652016e53d4034f39d1e4b012527306f7774b7b638663ef74430b8a3cd2c4a5",
+      "deposit_id": "a913c04ffd8f68a1277a963369b07c209033660377dbd917867b09f7a0555109",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "status": "finalized",
+      "source_deposit_seen": true,
+      "counted_atoms": 10,
+      "uncredited_atoms": 0
+    }
+  ],
+  "redemptions": [
+    {
+      "redemption_id": "034dd3e81b94018b751f6e0a70ea2fe377ebf2ba043f8a7ef101f6d93c750db320a762261be94c4a1c475e76dfe02dc0",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 900581,
+      "settled_atoms": 900581,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "0e947cf5485c80002369c22ceae8b0f220f6d84374e7f1da9ca20ed3ca56f9b26771a29c45b1695c87c86b7d8c83f537",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 9932864,
+      "settled_atoms": 9932864,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "1315ddb977fc67750c409258b4502daa699c11807cee0dcc15244b83779e10c8113d0ab8b91c96d8cb15f7a1bd902834",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "settled_atoms": 10,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "1683e1d9ef472b55d9a822d507fa7eb4b197221982b05250ec5bf8e782d2a1d657904eafa98f723b5af3f2c89f18c032",
+      "profile_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+      "amount_atoms": 999500,
+      "settled_atoms": 0,
+      "burned_unsettled_atoms": 999500,
+      "source_withdrawal_claimed": false,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "18c19d7c3d1c85befe466214bac5d6b846511ad3ffb687bbbc8c9d9db37ed80632791db7632b84fee24cfe1a7a08810e",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 9932864,
+      "settled_atoms": 9932864,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "20019e247088b0ca147e3259ce0279046dff2de8af8bce83e81a45edadbb6e2bb8709835475268a0f19aaa01038ab788",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 900581,
+      "settled_atoms": 900581,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "21e8bf1fb2965d49fab507e68d9c49089c85b444bfb8dfdbbe252183e228bb0d208bfa82d50bf74926ec9e9f49c28f8d",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "settled_atoms": 10,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "2f1ae327ab75e88e32f87627c4eec30ca0866234fcc825b13fbd2e05775442953d4f72b1eb3bc5f9cadf9497d3709263",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 9932864,
+      "settled_atoms": 9932864,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "316ccbb79d8778a1cbae5e8e68103c30ec6690e314eb5e8c1eb4aa453bc16f11b057aa3119b52edb76eca2e4c057d4d7",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "settled_atoms": 0,
+      "burned_unsettled_atoms": 10,
+      "source_withdrawal_claimed": false,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "3ed7407ef01db1eff254611e995fb15e7f015fcc20d9a5e930cbc033ee13f355fad36603e4e21e22ecdf08f0d9a6ea95",
+      "profile_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+      "amount_atoms": 1000000,
+      "settled_atoms": 0,
+      "burned_unsettled_atoms": 1000000,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 1000000
+    },
+    {
+      "redemption_id": "413671380d5c21c2fbf77ee65bebe245e1cee3d5aad09659389bd0cbb05559e54436b00f0af43740ae16be9729f4d65f",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "settled_atoms": 10,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "4276406ce1147c747394154dcfd6ff2a2990282bd6aa490d21ebee34f6502eff02daf693765d86923219ca17b8f47863",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "settled_atoms": 10,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "437afaf17695c39d68dc24504a2ff8f2633af27ccfa006f7273dac76789f384115c3d66a4ea945d998f0528340bf78a9",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "settled_atoms": 10,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "4c6963f3fe3daee6a7a733517218421b1e230a5263ac7721a12f6c3b1ca12963b9b66eac83d9ac71045c84733a2e3f58",
+      "profile_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+      "amount_atoms": 1000000,
+      "settled_atoms": 0,
+      "burned_unsettled_atoms": 1000000,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 1000000
+    },
+    {
+      "redemption_id": "5cf8debeae6535c5d6f3c5b05aedd81fd6e0ba1d77692482e68d0a47eaec93fd124799511e4e3e74567412512f0a39fa",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 9932864,
+      "settled_atoms": 9932864,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "64fdf4e745e1bca0ed7d8622c7b642c28048358476866595201d7a3618a69e35abe6c7c7d3c7b5aa9477ff1e79a1d466",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 100000,
+      "settled_atoms": 100000,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "6963ae6bca61a3c73ac57621198085f5da79c13c15d3ab2a184a11a2c9964d4277113207245d02b0dbb6274c41e142a2",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 100000,
+      "settled_atoms": 100000,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "7007115a187804507a27c3080a46b42c533ef7db7769141a2bdfef2ddc11e47f56f248aa75748b4a28f9fc23df50cc91",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 999500,
+      "settled_atoms": 999500,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "73339aec6a8e39ab5287c33136d8d6700b34969321cb78e17eccf28772ceefef10eb0b73650f3d005c1a33e91fd28b4b",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "settled_atoms": 10,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "78158bb944f8c9ffe53378976585dbc6d0eddd97e60613a8c7779f3679f657c2aa37d44731a03d7b3c9cbf10571ebaa9",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "settled_atoms": 10,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "8f87afbe87933b2bcb56d3acaab782df8c7d6a9894e4cb753469b5fa7b56ac7de7df182158d737d984b99c77700b704c",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 1900000,
+      "settled_atoms": 1900000,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "98023c2f54d4d5f1cc49c66ea6b54bbc4de352a7cbafd4acb7029bfa36b7dd11c83c89a6f75e728b55c8c479893b9636",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 90058061,
+      "settled_atoms": 90058061,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "99dc7bee0a3bb5b385b88bc69f34300855574822a6a856f6aaec8fcc67c479742a781bf7338953f8e1491f2b465d8992",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 9921265,
+      "settled_atoms": 9921265,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "9b08c1fd47b48e6a3daa6f2067901cc28ee6c6a5057043ac1b6291cc2826aa7a0105e108829dd9cfd1c2ef7030b7786f",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 1,
+      "settled_atoms": 1,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "9b8b96f54aae0aa6428c33c6db6e12c2f56809e7699056b7bbb2daad7cc78f18a18529e0d55a02f7b2a869ffb6d44ca2",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 100000,
+      "settled_atoms": 100000,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "9d8cbc6b7fbbd05ea69a73b5617ac8d6b1fae12d462acac55369b8e533bf45710822ba16f1b8ec319042f03baab55c7f",
+      "profile_hash": "928eaf6cef31bd832f67a89e02b5c9195763c59505dadd46c7439679643b26a06e5a6269ae41de2bb2ef2960716a7c81",
+      "amount_atoms": 25000000,
+      "settled_atoms": 0,
+      "burned_unsettled_atoms": 25000000,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 25000000
+    },
+    {
+      "redemption_id": "a5e38cd1fbf9631ebab76c694d93e1388513e6c007f30c1af705ff7a4a3d28fd2a1139858abf83ec2420c5771b166d3e",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "settled_atoms": 10,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "b3651dd4d5b678a9baa6a63783396c761ddc5d50c4bb017f2da4f2ce0c30f2dd5c5b512c7561871bc2fb13b53a931d5b",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 9932863,
+      "settled_atoms": 0,
+      "burned_unsettled_atoms": 9932863,
+      "source_withdrawal_claimed": false,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "b8f6b9706e7d7edfd1a990257d08d0661b122a1a935d96e7536c789c7cf1e2e0c189e399b8bffb2d4887490f70cfccc0",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 999500,
+      "settled_atoms": 999500,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "bc204b886ca32b732f59080fc521f6500d20d976304a613991e367e13145b2cbacd016cd9c0d1dccb288c4f678e7c5ea",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 900580,
+      "settled_atoms": 900580,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "c56a0948ffebeda8e27850aeb5b64818cb83361bc5a741e37c012b23a0e41d42d133ece324b15f48e3ff98369d6c906d",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 9932864,
+      "settled_atoms": 9932864,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "cdd3ba04878f055f99dff20fbd221603f20858323dcf2513ef2ef5961e14ac133ae93bf1c31b11b0e92c138bc76cef66",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "settled_atoms": 10,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "dc565725df6c3746c217dc5447cf6f1ade7cd270ba7c1ed593cc4dfd360216cc2bb20f17a129c3756f1a33dfd44c4868",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "settled_atoms": 10,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "e0a1d2d1a46b3922dfcad258f136e236873e8669fdaec3a7dfa912070693afbffe2f3b158d6bad34d46fcd8c6b84b6fc",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 10000000,
+      "settled_atoms": 10000000,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "e10ef0d9ad4fff81f92def5c0132b3a8b7d6693f4d09d7cd417e4f5a6a1e4f76dc6383975711b449c703821299ddd140",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 9932863,
+      "settled_atoms": 9932863,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "e4a76d024c77542adcf5216db2c520a94fcbe0a1c90de049555b71712c18b97cd203d3cca0f1d0ac5d5725ef58e2f27d",
+      "profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
+      "amount_atoms": 100000,
+      "settled_atoms": 100000,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "ee2f278e07b6c7e2bde13d37193512247d2df17522d8faa6fe91b6a7fa8f76df0c4778d69892c5649bd32f411ab664a8",
+      "profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+      "amount_atoms": 900581,
+      "settled_atoms": 900581,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    },
+    {
+      "redemption_id": "fb1d471a203f94586b097f8af9ba97849239dac532b70608fddad2d8720f31a3b45739f0a6b6cdc66d6d2e028fce78bc",
+      "profile_hash": "d71eb53441627b41049e12481ac0f8f90f469b016648f85e626773fa8c2e6c057d181fbe42ff9f177dd5681260ba7332",
+      "amount_atoms": 10,
+      "settled_atoms": 10,
+      "burned_unsettled_atoms": 0,
+      "source_withdrawal_claimed": true,
+      "released_unsettled_atoms": 0
+    }
+  ],
+  "disclosure": "Exact source-vault conservation audit. V is fetched directly from the governed token contract; S is the complete live PFTL claim set; D separates recognized-unallocated and observed-uncounted deposits; B is the burned-unsettled redemption queue; R is independently read from the governed source vault claimed-withdrawal mapping. Any nonzero unexplained delta fails the audit."
+}

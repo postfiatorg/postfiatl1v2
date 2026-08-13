@@ -72,7 +72,6 @@ if (stage === 'proving') {
   out.program_vkey = '0x' + '6b'.repeat(32);
 }
 if (stage === 'verifying') out.proof_verified = true;
-if (stage === 'growing_backed_cap') out.backed_cap_ready = true;
 if (stage === 'claiming') {
   out.receipt_code = 'ACCEPTED'; out.receipt_id = '77'.repeat(48);
   out.tx_id = '0x' + '78'.repeat(32);
@@ -113,6 +112,9 @@ process.env.WALLET_PROXY_API_TOKEN = 'test-only-wallet-proxy-token-32-bytes-mini
 process.env.TRUSTLESS_BRIDGE_JOB_ROOT = root;
 process.env.TRUSTLESS_BRIDGE_READINESS_REFRESH_MS = '60000';
 process.env.TRUSTLESS_BRIDGE_READINESS_MAX_AGE_MS = '120000';
+// This fixture exercises the durable HTTP/job adapter in isolation. Exact
+// six-validator terminal-claim admission has its own deterministic unit test.
+process.env.TRUSTLESS_BRIDGE_REQUIRE_INGRESS_PREFLIGHT = 'false';
 process.env.TRUSTLESS_BRIDGE_ROUTES_JSON = JSON.stringify([{
     route_id: 'ethereum-mainnet-usdc-v1',
     source_chain_id: 1,

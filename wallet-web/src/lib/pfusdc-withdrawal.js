@@ -17,6 +17,11 @@ export function pfusdcWithdrawalCapacity({ status, route }) {
       ? 'No active Ethereum reserve bucket can fund this withdrawal.'
       : 'The Ethereum reserve route is ambiguous; withdrawal is paused safely.');
   }
+  if (status?.source_series_enforced === true
+    && (!HASH48_RE.test(String(buckets[0]?.source_series_id || ''))
+      || String(buckets[0].source_series_id).toLowerCase() === PFUSDC_ASSET_ID)) {
+    throw new Error('The active reserve has no valid source-series identity; withdrawal is paused safely.');
+  }
   const amountAtoms = BigInt(buckets[0]?.outstanding_vault_bridge_atoms || 0);
   if (amountAtoms <= 0n) throw new Error('The active Ethereum reserve bucket is empty.');
   return Object.freeze({ bucket: buckets[0], amountAtoms });

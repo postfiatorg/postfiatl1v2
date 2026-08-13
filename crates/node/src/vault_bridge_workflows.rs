@@ -814,6 +814,7 @@ pub fn vault_bridge_deposit_plan(
             asset_id: options.asset_id.clone(),
             evidence_root: evidence_root.clone(),
             policy_hash: options.policy_hash.clone(),
+            route_epoch: options.route_epoch,
             recipient: evidence.pftl_recipient.clone(),
             amount_atoms: evidence.amount_atoms,
         });

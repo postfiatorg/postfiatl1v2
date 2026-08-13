@@ -132,6 +132,7 @@ wss } = runtime;
     const acquireMutationAdmission = (...args) => runtime.acquireMutationAdmission(...args);
     const boundedHttpBodyLimit = (...args) => runtime.boundedHttpBodyLimit(...args);
     const trustlessBridgeReadiness = (...args) => runtime.trustlessBridgeReadiness(...args);
+    const pfusdcIngressPreflight = (...args) => runtime.pfusdcIngressPreflight(...args);
     const submitTrustlessBridgeJob = (...args) => runtime.submitTrustlessBridgeJob(...args);
     const trustlessBridgeJobStatus = (...args) => runtime.trustlessBridgeJobStatus(...args);
     const trustlessBridgeJobsForRecipient = (...args) => runtime.trustlessBridgeJobsForRecipient(...args);
@@ -1563,6 +1564,13 @@ wss } = runtime;
                 const result = await trustlessBridgeReadiness(routeId);
                 const status = result.code === 'unsupported_bridge_route' ? 404 : 200;
                 sendJson(req, res, status, result);
+                return true;
+            }
+
+            if (req.method === 'POST' && url.pathname === '/api/bridge/preflight') {
+                const body = await readJsonBody(req, 16 * 1024);
+                const result = await pfusdcIngressPreflight(body);
+                sendJson(req, res, 200, result);
                 return true;
             }
 

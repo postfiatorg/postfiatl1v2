@@ -738,6 +738,32 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 )],
             )
         }
+        "pfusdc_ingress_preflight" => {
+            let asset_id = flag_value(flags, "--asset-id").ok_or("missing --asset-id")?;
+            let recipient = flag_value(flags, "--recipient").ok_or("missing --recipient")?;
+            let depositor = flag_value(flags, "--depositor").ok_or("missing --depositor")?;
+            let amount_atoms = flag_value(flags, "--amount-atoms")
+                .ok_or("missing --amount-atoms")?
+                .parse::<u64>()
+                .map_err(|_| "--amount-atoms must be a u64".to_string())?;
+            let report = pfusdc_ingress_preflight(PfusdcIngressPreflightOptions {
+                data_dir,
+                asset_id: asset_id.to_string(),
+                pftl_recipient: recipient.to_string(),
+                ethereum_depositor: depositor.to_string(),
+                amount_atoms,
+            })
+            .map_err(|error| format!("rpc pfusdc_ingress_preflight failed: {error}"))?;
+            print_rpc_success(
+                id,
+                &report,
+                vec![RpcEvent::new(
+                    "pfusdc_ingress_preflight",
+                    report.quote_digest.clone(),
+                    report.code.clone(),
+                )],
+            )
+        }
         "vault_bridge_route" => {
             let asset_id = flag_value(flags, "--asset-id").ok_or("missing --asset-id")?;
             let report = vault_bridge_route(VaultBridgeRouteOptions {

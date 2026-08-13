@@ -102,7 +102,6 @@ if (stage === 'proving') {
   result.program_vkey = '0x' + '6b'.repeat(32);
 }
 if (stage === 'verifying') result.proof_verified = true;
-if (stage === 'growing_backed_cap') result.backed_cap_ready = true;
 if (stage === 'claiming') {
   result.receipt_code = 'ACCEPTED'; result.receipt_id = '77'.repeat(48);
   result.tx_id = '0x' + '78'.repeat(32);
@@ -217,7 +216,6 @@ async function main() {
         capturing_state_proof: 1,
         proving: 2,
         verifying: 1,
-        growing_backed_cap: 1,
         claiming: 1,
     });
 

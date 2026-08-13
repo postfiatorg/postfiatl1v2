@@ -2,12 +2,69 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  assertBridgeIngressPreflight,
   assertBridgeReadinessMatchesRoute,
+  loadBridgeIngressPreflight,
   loadBridgeJobs,
   loadBridgeReadiness,
   relayVaultDeposit,
   waitForBridgeReadiness,
 } from './bridge-relay.js';
+
+test('exact ingress preflight is authenticated and binds all six validators', async () => {
+  const previousFetch = globalThis.fetch;
+  let captured;
+  const profile = {
+    route_id: 'ethereum-mainnet-usdc-v1',
+    asset_id: '11'.repeat(48),
+  };
+  const route = { profile, profileHash: '22'.repeat(48) };
+  const request = {
+    pftlRecipient: `pf${'33'.repeat(20)}`,
+    depositor: `0x${'44'.repeat(20)}`,
+    amountAtoms: '15000000',
+  };
+  const response = {
+    ok: true,
+    ready: true,
+    validator_count: 6,
+    route_id: profile.route_id,
+    asset_id: profile.asset_id,
+    route_profile_hash: route.profileHash,
+    pftl_recipient: request.pftlRecipient,
+    ethereum_depositor: request.depositor,
+    amount_atoms: request.amountAtoms,
+    orchard_aware_claim_active: true,
+    source_series_active: true,
+    quote_digest: '55'.repeat(32),
+    quote_height: 900,
+    expires_at_height: 908,
+  };
+  globalThis.fetch = async (url, options = {}) => {
+    captured = { url, options };
+    return new Response(JSON.stringify(response), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  try {
+    const loaded = await loadBridgeIngressPreflight({
+      routeId: profile.route_id,
+      ...request,
+      proxyAuthToken: 'local-session-token',
+    });
+    assert.equal(captured.url, '/api/bridge/preflight');
+    assert.equal(captured.options.headers.Authorization, 'Bearer local-session-token');
+    assert.equal(assertBridgeIngressPreflight(loaded, route, request), loaded);
+    assert.throws(
+      () => assertBridgeIngressPreflight({ ...loaded, validator_count: 5 }, route, request),
+      /exact pfUSDC claim/,
+    );
+  } finally {
+    if (previousFetch === undefined) delete globalThis.fetch;
+    else globalThis.fetch = previousFetch;
+  }
+});
 
 test('vault relay carries the session proxy token outside the request body', async () => {
   const previousFetch = globalThis.fetch;
@@ -34,11 +91,13 @@ test('vault relay carries the session proxy token outside the request body', asy
       routeEpoch: 5,
       routeBinding: '0x' + '55'.repeat(32),
       proxyAuthToken: 'session-only-token',
+      quoteDigest: '77'.repeat(32),
     });
     assert.equal(captured[0].url, '/api/bridge/jobs');
     assert.equal(captured[0].options.headers.Authorization, 'Bearer session-only-token');
     assert.equal(captured[0].options.headers['Idempotency-Key'], 'vault-relay:test');
     assert.doesNotMatch(captured[0].options.body, /session-only-token/);
+    assert.equal(JSON.parse(captured[0].options.body).quote_digest, '77'.repeat(32));
     assert.match(captured[1].url, /^\/api\/bridge\/jobs\//);
     assert.equal(captured[1].options.method, undefined);
   } finally {

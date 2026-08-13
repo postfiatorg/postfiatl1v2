@@ -506,7 +506,16 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
       .map(a => {
         const code = getAssetCode(a);
         const isLegacy = /^[a-z]/.test(String(a.code || ''));
-        return [code, getAssetBalanceLabel(a), navcoinMarketForAsset(markets, a.asset_id || a.id) ? 'Verified NAV asset on PFTL' : isLegacy ? 'Legacy issued asset on PFTL' : 'Issued asset on PFTL'];
+        const isSourceSeries = Boolean(a.source_series_id);
+        const isLegacyPooledPfUsdc = String(a.code || '').toUpperCase() === 'PFUSDC' && !isSourceSeries;
+        const note = navcoinMarketForAsset(markets, a.asset_id || a.id)
+          ? 'Verified NAV asset on PFTL'
+          : isSourceSeries
+            ? `Source-specific pfUSDC · ${shortenAssetId(a.source_series_id)}`
+            : isLegacyPooledPfUsdc
+              ? 'Legacy pooled pfUSDC · backing is not uniformly redeemable at par'
+              : isLegacy ? 'Legacy issued asset on PFTL' : 'Issued asset on PFTL';
+        return [code, getAssetBalanceLabel(a), note];
       }),
   ];
 
@@ -539,8 +548,15 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
   const fastpayReadyLabel = walletFeedStatus?.status === 'live'
     ? 'Ready to go. Public key published; FastPay balance feed is live.'
     : 'Ready to go. Public key published; FastPay can receive transfers.';
-  const stableAsset = assets.find(asset => String(asset?.code || '').toUpperCase() === 'PFUSDC')
-    || assets.find(asset => settlementAssetIds.has(asset.asset_id || asset.id));
+  const stableAssets = assets.filter(asset => String(asset?.code || '').toUpperCase() === 'PFUSDC');
+  const stableBalanceAtoms = stableAssets.reduce(
+    (total, asset) => total + BigInt(String(getAssetBalance(asset))),
+    0n,
+  );
+  const sourceStableBalanceAtoms = stableAssets
+    .filter(asset => Boolean(asset.source_series_id))
+    .reduce((total, asset) => total + BigInt(String(getAssetBalance(asset))), 0n);
+  const legacyStableBalanceAtoms = stableBalanceAtoms - sourceStableBalanceAtoms;
   // Asset symbols are presentation metadata, not identity. The funded wallet
   // also contains a lowercase legacy `a666`, so matching the label first can
   // silently promote the wrong holding. Resolve the active governed asset by
@@ -553,7 +569,12 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
   const pftlPortfolioUsdE8 = assets.reduce((total, asset) => {
     const assetId = asset.asset_id || asset.id;
     const balanceAtoms = BigInt(String(getAssetBalance(asset)));
-    if (String(asset.code || '').toUpperCase() === 'PFUSDC') return total + balanceAtoms * 100n;
+    // The legacy pooled ticker spans an impaired source and has no defensible
+    // holder-level par valuation. Only explicit source-series claims are
+    // included at face value here.
+    if (String(asset.code || '').toUpperCase() === 'PFUSDC') {
+      return asset.source_series_id ? total + balanceAtoms * 100n : total;
+    }
     const market = navcoinMarketForAsset(markets, assetId);
     const nav = market ? navByAssetId[assetId] : null;
     return nav ? total + (balanceAtoms * BigInt(nav)) / (10n ** BigInt(market.decimals)) : total;
@@ -568,7 +589,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
   const knownPortfolioUsdE8 = pftlPortfolioUsdE8 + ethereumPortfolioUsdE8;
   const pricedAssetIds = new Set(assets.filter(asset => {
     const assetId = asset.asset_id || asset.id;
-    return String(asset.code || '').toUpperCase() === 'PFUSDC'
+    return (String(asset.code || '').toUpperCase() === 'PFUSDC' && Boolean(asset.source_series_id))
       || Boolean(navcoinMarketForAsset(markets, assetId) && navByAssetId[assetId]);
   }).map(asset => asset.asset_id || asset.id));
   const unpricedEthereumCount = ethereumStatus === 'ready'
@@ -659,10 +680,14 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
         <div className="pf-tile">
           <div className="pf-eyebrow" style={{ fontSize: 10 }}>Stable balance</div>
           <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>
-            {stableAsset ? formatAssetBalance(stableAsset.asset_id || stableAsset.id, getAssetBalance(stableAsset)) : '0'}{' '}
+            {stableAssets.length ? formatTokenUnits(stableBalanceAtoms, 6) : '0'}{' '}
             <span style={{ fontSize: 14, color: 'var(--muted)' }}>pfUSDC</span>
           </div>
-          <div style={{ fontSize: 11.5, color: 'var(--dim)' }}>Spendable on PFTL</div>
+          <div style={{ fontSize: 11.5, color: 'var(--dim)' }}>
+            {legacyStableBalanceAtoms > 0n
+              ? `${formatTokenUnits(sourceStableBalanceAtoms, 6)} source-backed · ${formatTokenUnits(legacyStableBalanceAtoms, 6)} legacy pooled`
+              : 'Source-backed and spendable on PFTL'}
+          </div>
         </div>
         <div className="pf-tile">
           <div className="pf-eyebrow" style={{ fontSize: 10 }}>NAV asset</div>

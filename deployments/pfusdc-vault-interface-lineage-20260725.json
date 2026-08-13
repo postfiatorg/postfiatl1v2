@@ -17,6 +17,22 @@
       "source_manifest_sha256": "6686ae9f67dcdc79c5e5a504015e92c8a68743a81bfbf341e79f25125b3e0243",
       "deployment_revision_label": "rev6-generated-nonce67-68",
       "verification_status": "live_verified"
+    },
+    {
+      "runtime_code_hash": "0x8c0699799a8e592d73813f3761101c9bb8e52f16f87a2ecb5eea3bdf6340c003",
+      "abi_class": "camel_case_v2",
+      "source_manifest_path": "deployments/pfusdc-eth-mainnet-20260726/manifest.mainnet-epoch3.json",
+      "source_manifest_sha256": "bf769e122a66274facd39023b3939e963cba4518044b22e4537bc351479471c2",
+      "deployment_revision_label": "pfusdc-ethereum-mainnet-epoch3",
+      "verification_status": "live_verified"
+    },
+    {
+      "runtime_code_hash": "0xc6dbb722c23bfc841624bb909fcb54d84a65a2ea6ece96e2a28bf61d5dea6d05",
+      "abi_class": "camel_case_v2",
+      "source_manifest_path": "deployments/pfusdc-eth-mainnet-20260809-epoch6-successor/manifest.mainnet-epoch6.json",
+      "source_manifest_sha256": "14c7c317c78c68cfaac27ba269a56c5fccc3af222a545d5d8d9fc535ccafddb4",
+      "deployment_revision_label": "pfusdc-ethereum-mainnet-epoch6-successor",
+      "verification_status": "live_verified"
     }
   ]
 }

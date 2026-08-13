@@ -125,6 +125,27 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "pfusdc-ingress-preflight" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let report = pfusdc_ingress_preflight(PfusdcIngressPreflightOptions {
+                data_dir: PathBuf::from(data_dir),
+                asset_id: flag_value(flags, "--asset-id")
+                    .ok_or("missing --asset-id")?
+                    .to_string(),
+                pftl_recipient: flag_value(flags, "--recipient")
+                    .ok_or("missing --recipient")?
+                    .to_string(),
+                ethereum_depositor: flag_value(flags, "--depositor")
+                    .ok_or("missing --depositor")?
+                    .to_string(),
+                amount_atoms: parse_u64_flag(flags, "--amount-atoms")?,
+            })
+            .map_err(|error| format!("pfusdc-ingress-preflight failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|error| format!("pfUSDC ingress preflight serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
         "vault-bridge-conservation-audit" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let asset_id = flag_value(flags, "--asset-id").ok_or("missing --asset-id")?;
@@ -736,6 +757,10 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                 token_address: flag_value(flags, "--token-address").map(str::to_string),
                 asset_id: asset_id.to_string(),
                 policy_hash: policy_hash.to_string(),
+                route_epoch: flag_value(flags, "--route-epoch")
+                    .unwrap_or("0")
+                    .parse::<u32>()
+                    .map_err(|_| "--route-epoch must be a u32".to_string())?,
                 proposer: proposer.to_string(),
                 finalizer: finalizer.to_string(),
                 claimer: claimer.to_string(),
@@ -791,6 +816,10 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                     token_address: flag_value(flags, "--token-address").map(str::to_string),
                     asset_id: asset_id.to_string(),
                     policy_hash: policy_hash.to_string(),
+                    route_epoch: flag_value(flags, "--route-epoch")
+                        .unwrap_or("0")
+                        .parse::<u32>()
+                        .map_err(|_| "--route-epoch must be a u32".to_string())?,
                     proposer: proposer.to_string(),
                     finalizer: finalizer.to_string(),
                     claimer: claimer.to_string(),
@@ -843,6 +872,10 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                         token_address: flag_value(flags, "--token-address").map(str::to_string),
                         asset_id: asset_id.to_string(),
                         policy_hash: policy_hash.to_string(),
+                        route_epoch: flag_value(flags, "--route-epoch")
+                            .unwrap_or("0")
+                            .parse::<u32>()
+                            .map_err(|_| "--route-epoch must be a u32".to_string())?,
                         proposer: proposer.to_string(),
                         finalizer: finalizer.to_string(),
                         claimer: claimer.to_string(),

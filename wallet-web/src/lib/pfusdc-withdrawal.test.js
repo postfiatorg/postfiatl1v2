@@ -23,6 +23,26 @@ test('fails before signing when the active route cannot cover the requested amou
   assert.throws(() => preparePfusdcWithdrawal({ status, route, owner: `pf${'77'.repeat(20)}`, ethereumRecipient: `0x${'88'.repeat(20)}`, amountAtoms: 2_000_001 }), /currently available/);
 });
 
+test('source-series enforcement requires and exposes the active bucket series', () => {
+  const sourceSeriesId = '99'.repeat(48);
+  const enforced = {
+    ...status,
+    source_series_enforced: true,
+    buckets: [{ ...status.buckets[0], source_series_id: sourceSeriesId }],
+  };
+  assert.equal(
+    pfusdcWithdrawalCapacity({ status: enforced, route }).bucket.source_series_id,
+    sourceSeriesId,
+  );
+  assert.throws(
+    () => pfusdcWithdrawalCapacity({
+      status: { ...enforced, buckets: [{ ...enforced.buckets[0], source_series_id: '' }] },
+      route,
+    }),
+    /no valid source-series identity/,
+  );
+});
+
 test('recovers only an unregistered pending burn bound to the current governed bucket', () => {
   const owner = `pf${'77'.repeat(20)}`;
   const currentBurn = '99'.repeat(48);

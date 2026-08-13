@@ -14,11 +14,11 @@
   "pinned_files": [
     {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage-serialized.py",
-      "sha256": "04f7f9579131466023b607b5812616f5655507768333daa160c915e65ae9086b"
+      "sha256": "fc9ade7071052541964401c51ad558d498beef83f8507ae8928900add4702457"
     },
     {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-mainnet-pfusdc-relay.sh",
-      "sha256": "f941fd7eda980536f59531c7272ea0c5ab648229b42334949d27e23b590f63bc"
+      "sha256": "a5662f36151e91b16c362bb43f2f01db449ddc61f43c23e91d4713fe2cfd3901"
     },
     {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/pfusdc-eth-mainnet-20260809-epoch6-successor/route-profile.mainnet-epoch6.json",
@@ -99,19 +99,6 @@
         "{job_file}"
       ],
       "timeout_ms": 900000
-    },
-    {
-      "stage": "growing_backed_cap",
-      "program": "/usr/bin/python3.12",
-      "program_sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118",
-      "args": [
-        "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage-serialized.py",
-        "--stage",
-        "growing_backed_cap",
-        "--job-file",
-        "{job_file}"
-      ],
-      "timeout_ms": 60000
     },
     {
       "stage": "claiming",

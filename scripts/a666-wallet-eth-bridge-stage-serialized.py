@@ -27,6 +27,7 @@ from web3 import Web3
 
 REPO = Path(__file__).resolve().parents[1]
 ROUTE_ID = "ethereum-mainnet-usdc-v1"
+ROUTE_EPOCH = 6
 SOURCE_CHAIN_ID = 1
 PROOF_KIND = "sp1-ethereum-finality-v1"
 PROGRAM_VKEY = "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e"
@@ -254,6 +255,10 @@ def load_job(path: Path) -> tuple[dict[str, Any], dict[str, Any], Path, str]:
         or not EVM_ADDRESS.fullmatch(str(request.get("depositor", "")))
         or not str(request.get("amount_atoms", "")).isdigit()
         or int(request["amount_atoms"]) <= 0
+        or (
+            request.get("quote_digest") is not None
+            and not re.fullmatch(r"[0-9a-f]{64}", str(request["quote_digest"]))
+        )
     ):
         raise RuntimeError("invalid immutable bridge job")
     return job, request, path.parent.resolve(), job_id[2:]
@@ -412,6 +417,8 @@ def confirmed_deposit(request: dict[str, Any], job_dir: Path) -> dict[str, Any]:
     for field, value in expected.items():
         if values[field] != value:
             raise RuntimeError(f"Ethereum deposit {field} does not match the durable job")
+    if request.get("quote_digest") and values["nonce"] != "0x" + request["quote_digest"]:
+        raise RuntimeError("Ethereum deposit nonce does not match its terminal-claim preflight")
     evidence = {
         "schema": "postfiat.a666.pfusdc_buyer_deposit.v1",
         "verdict": "PASS",
@@ -527,13 +534,14 @@ def pftl_balance(account: str) -> int:
     command = (
         f"{shlex.quote(PFTL_NODE)} account-assets "
         "--data-dir /var/lib/postfiat/validator-2 "
-        f"--account {shlex.quote(account)} --asset-id {ASSET_ID}"
+        f"--account {shlex.quote(account)}"
     )
     result = json.loads(ssh(VALIDATOR2_HOST, command))
     return sum(
         int(row["balance"])
         for row in result.get("assets", [])
         if row.get("asset_id") == ASSET_ID
+        or row.get("asset_family_id") == ASSET_ID
     )
 
 
@@ -617,6 +625,9 @@ def relay_phase(
             "PFTL_LOCAL_EVIDENCE": str(job_dir / "pftl"),
             "PFTL_RELAY_PHASE": phase,
             "PFTL_SKIP_FINALIZE": "true" if skip_finalize else "false",
+            "PFTL_POLICY_HASH": ROUTE_PROFILE_HASH,
+            "PFTL_ROUTE_EPOCH": str(ROUTE_EPOCH),
+            "PFTL_VAULT_ADDRESS": VAULT,
             "PFTL_HOLDER": request["pftl_recipient"],
             "PFTL_NODE_BIN": PFTL_NODE,
             "PFTL_TOPOLOGY": PFTL_TOPOLOGY,
@@ -696,11 +707,6 @@ def execute_stage(stage: str, job_file: Path) -> dict[str, Any]:
         ):
             raise RuntimeError("consensus proposal evidence root differs from SP1 output")
         result["proof_verified"] = True
-    elif stage == "growing_backed_cap":
-        deposit = pftl_deposit(request)
-        if deposit is None or deposit.get("status") not in {"pending", "finalized"}:
-            raise RuntimeError("proof-backed PFTL proposal was not finalized")
-        result["backed_cap_ready"] = True
     elif stage == "claiming":
         deposit = pftl_deposit(request)
         if deposit is None:

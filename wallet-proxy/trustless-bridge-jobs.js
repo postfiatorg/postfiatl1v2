@@ -40,6 +40,7 @@ const MAX_DEPOSIT_AMOUNT_ATOMS = (1n << 64n) - 1n;
 const FILE_HASH_RE = /^[0-9a-f]{64}$/;
 const PROGRAM_VKEY_RE = /^0x[0-9a-f]{64}$/;
 const HASH48_RE = /^[0-9a-f]{96}$/;
+const PLAIN_BYTES32_RE = /^[0-9a-f]{64}$/;
 const EVM_CODE_HASH_RE = /^0x[0-9a-f]{64}$/;
 const SEPOLIA_P0_PROGRAM_VKEY = '0x0077f479ed28535dbb5035f455a875334bae7d5a1eaa7c22c6f070a404eab31f';
 const SEPOLIA_P0_MANIFEST_HASH = 'dc409b424e7627b936d81a16d2fc8f4c17e21a108d654be6b992e552d7b0c6d3';
@@ -247,6 +248,15 @@ function create(runtime = {}, options = {}) {
     const clearIntervalImpl = options.clearInterval || clearInterval;
     const setTimeoutImpl = options.setTimeout || setTimeout;
     const clearTimeoutImpl = options.clearTimeout || clearTimeout;
+    const rpcFleet = options.rpcFleet || runtime.RPC_FLEET || [];
+    const rpcRequester = options.rpcRequester || runtime.rpcTcpRequest;
+    const ingressPreflightSetting = String(
+        env.TRUSTLESS_BRIDGE_REQUIRE_INGRESS_PREFLIGHT || '',
+    ).trim().toLowerCase();
+    const requireIngressPreflight = options.requireIngressPreflight
+        ?? (ingressPreflightSetting
+            ? ingressPreflightSetting !== 'false'
+            : typeof runtime.rpcTcpRequest === 'function');
     const root = path.resolve(options.root || env.TRUSTLESS_BRIDGE_JOB_ROOT
         || path.join(os.homedir(), '.postfiat', 'wallet-proxy-8080', 'bridge-jobs-v2'));
     const routeRows = options.routes || routeConfigFromEnvironment(env);
@@ -494,6 +504,142 @@ function create(runtime = {}, options = {}) {
         };
     }
 
+    function normalizeIngressPreflightRequest(body) {
+        const routeId = String(body?.route_id || '').trim().toLowerCase();
+        const route = routes.get(routeId);
+        const pftlRecipient = String(body?.pftl_recipient || '').trim().toLowerCase();
+        const depositor = String(body?.depositor || '').trim().toLowerCase();
+        const amountText = typeof body?.amount_atoms === 'string'
+            ? body.amount_atoms.trim()
+            : '';
+        const amountSyntaxValid = /^[1-9][0-9]{0,19}$/.test(amountText);
+        let amountAtoms = 0n;
+        if (amountSyntaxValid) amountAtoms = BigInt(amountText);
+        if (!route || !PFT_RE.test(pftlRecipient) || !EVM_RE.test(depositor)
+            || !amountSyntaxValid || amountAtoms > MAX_DEPOSIT_AMOUNT_ATOMS) {
+            throw Object.assign(new Error('invalid pfUSDC ingress preflight request'), {
+                code: 'invalid_pfusdc_ingress_preflight',
+            });
+        }
+        return {
+            route,
+            route_id: routeId,
+            pftl_recipient: pftlRecipient,
+            depositor,
+            amount_atoms: amountAtoms.toString(),
+        };
+    }
+
+    function preflightFailure(request, code, message, extra = {}) {
+        return {
+            ok: true,
+            ready: false,
+            schema: 'postfiat.wallet.pfusdc_ingress_preflight.v1',
+            code,
+            message,
+            route_id: request.route_id,
+            asset_id: request.route.asset_id,
+            pftl_recipient: request.pftl_recipient,
+            ethereum_depositor: request.depositor,
+            amount_atoms: request.amount_atoms,
+            ...extra,
+        };
+    }
+
+    function validateNodeIngressPreflight(request, endpoint, response) {
+        const report = response?.result;
+        if (response?.ok !== true || !report) {
+            throw new Error(response?.error?.message || `${endpoint.validatorId} rejected preflight`);
+        }
+        if (report.schema !== 'postfiat.pfusdc_ingress_preflight.v1'
+            || report.route_id !== request.route_id
+            || report.asset_id !== request.route.asset_id
+            || report.route_profile_hash !== request.route.route_profile_hash
+            || report.pftl_recipient !== request.pftl_recipient
+            || report.ethereum_depositor !== request.depositor
+            || String(report.amount_atoms) !== request.amount_atoms
+            || !HASH48_RE.test(String(report.state_root || ''))
+            || !PLAIN_BYTES32_RE.test(String(report.quote_digest || ''))
+            || !Number.isSafeInteger(Number(report.quote_height))
+            || !Number.isSafeInteger(Number(report.expires_at_height))
+            || Number(report.expires_at_height) <= Number(report.quote_height)) {
+            throw new Error(`${endpoint.validatorId} returned a malformed or mismatched preflight`);
+        }
+        return report;
+    }
+
+    async function ingressPreflight(body) {
+        const request = normalizeIngressPreflightRequest(body);
+        const routeReady = await routeReadiness(request.route_id);
+        if (routeReady.ready !== true) {
+            return preflightFailure(
+                request,
+                routeReady.code || 'trustless_ingress_unavailable',
+                routeReady.message || 'The governed proof relay is not ready.',
+            );
+        }
+        if (!rpcRequester || rpcFleet.length !== 6) {
+            return preflightFailure(
+                request,
+                'pfusdc_preflight_fleet_unavailable',
+                'The six-validator terminal-claim preflight fleet is unavailable.',
+                { validator_count: rpcFleet.length },
+            );
+        }
+        const calls = rpcFleet.map(async (endpoint) => {
+            const response = await rpcRequester(endpoint.host, endpoint.port, {
+                version: 'postfiat-local-rpc-v1',
+                id: `pfusdc-preflight-${endpoint.validatorId}`,
+                method: 'pfusdc_ingress_preflight',
+                params: {
+                    asset_id: request.route.asset_id,
+                    recipient: request.pftl_recipient,
+                    depositor: request.depositor,
+                    amount_atoms: request.amount_atoms,
+                },
+            }, 20_000, 'pfusdc-ingress-preflight');
+            return {
+                validator_id: endpoint.validatorId,
+                report: validateNodeIngressPreflight(request, endpoint, response),
+            };
+        });
+        const settled = await Promise.allSettled(calls);
+        const accepted = settled
+            .filter((entry) => entry.status === 'fulfilled')
+            .map((entry) => entry.value);
+        if (accepted.length !== rpcFleet.length) {
+            return preflightFailure(
+                request,
+                'pfusdc_preflight_fleet_incomplete',
+                `Only ${accepted.length}/6 validators returned a valid exact-claim preflight.`,
+                { validator_count: accepted.length },
+            );
+        }
+        const convergenceKeys = new Set(accepted.map(({ report }) => stableJson(report)));
+        if (convergenceKeys.size !== 1) {
+            return preflightFailure(
+                request,
+                'pfusdc_preflight_fleet_diverged',
+                'The six validators do not agree on the exact terminal-claim result.',
+                { validator_count: accepted.length },
+            );
+        }
+        const report = accepted[0].report;
+        const ready = report.ready === true
+            && report.orchard_aware_claim_active === true
+            && report.source_series_active === true;
+        return {
+            ok: true,
+            ...report,
+            ready,
+            schema: 'postfiat.wallet.pfusdc_ingress_preflight.v1',
+            node_report_schema: report.schema,
+            message: report.explanation,
+            validator_count: accepted.length,
+            validator_ids: accepted.map((entry) => entry.validator_id),
+        };
+    }
+
     function normalizeRequest(body) {
         const routeId = String(body?.route_id || '').trim().toLowerCase();
         const route = routes.get(routeId);
@@ -502,6 +648,7 @@ function create(runtime = {}, options = {}) {
         const depositId = String(body?.deposit_id || '').trim().toLowerCase();
         const pftlRecipient = String(body?.pftl_recipient || '').trim().toLowerCase();
         const depositor = String(body?.depositor || '').trim().toLowerCase();
+        const quoteDigest = String(body?.quote_digest || '').trim().toLowerCase();
         const idempotencyKey = String(body?.idempotency_key || '').trim();
         const amountText = typeof body?.amount_atoms === 'string'
             ? body.amount_atoms.trim()
@@ -513,6 +660,7 @@ function create(runtime = {}, options = {}) {
             || !TX_RE.test(depositTxHash) || !BYTES32_RE.test(depositId)
             || !PFT_RE.test(pftlRecipient) || !EVM_RE.test(depositor)
             || !amountSyntaxValid || amountAtoms > MAX_DEPOSIT_AMOUNT_ATOMS
+            || (quoteDigest && !PLAIN_BYTES32_RE.test(quoteDigest))
             || !/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) {
             throw Object.assign(new Error('invalid trustless bridge job request'), {
                 code: 'invalid_trustless_bridge_job',
@@ -526,6 +674,7 @@ function create(runtime = {}, options = {}) {
             pftl_recipient: pftlRecipient,
             depositor,
             amount_atoms: amountAtoms.toString(),
+            ...(quoteDigest ? { quote_digest: quoteDigest } : {}),
             idempotency_key: idempotencyKey,
         };
     }
@@ -823,6 +972,17 @@ function create(runtime = {}, options = {}) {
                 code: 'trustless_ingress_unavailable',
             });
         }
+        if (requireIngressPreflight) {
+            const terminalPreflight = await ingressPreflight(request);
+            if (terminalPreflight.ready !== true) {
+                throw Object.assign(new Error(
+                    terminalPreflight.message
+                    || 'The exact pfUSDC terminal claim is not currently executable.',
+                ), {
+                    code: terminalPreflight.code || 'pfusdc_ingress_preflight_failed',
+                });
+            }
+        }
         const jobId = canonicalJobKey(request);
         return withSubmissionLock(jobId, async () => {
             const lock = await acquireSubmissionLock(jobId);
@@ -889,6 +1049,7 @@ function create(runtime = {}, options = {}) {
 
     return {
         trustlessBridgeReadiness: routeReadiness,
+        pfusdcIngressPreflight: ingressPreflight,
         refreshTrustlessBridgeReadiness: refreshRouteReadiness,
         submitTrustlessBridgeJob: submit,
         trustlessBridgeJobStatus: status,

@@ -832,6 +832,25 @@ wss } = runtime;
         return total;
     }
 
+    function navswapSourceSeriesBalance(accountAssets, assetFamilyId, sourceBucketId) {
+        const matches = navswapAccountAssetItems(accountAssets).filter(item => (
+            item?.asset_family_id === assetFamilyId
+            && item?.source_bucket_id === sourceBucketId
+            && item?.asset_id === item?.source_series_id
+        ));
+        if (matches.length > 1) {
+            const err = new Error(`multiple source-series balances reference settlement bucket ${sourceBucketId}`);
+            err.code = 'transparent_navswap_source_series_ambiguous';
+            throw err;
+        }
+        if (matches.length === 0) return null;
+        return {
+            asset_id: matches[0].asset_id,
+            balance_atoms: BigInt(String(matches[0].balance ?? matches[0].amount ?? 0)),
+            source_bucket_id: sourceBucketId,
+        };
+    }
+
     function navswapNativeAccountBalanceAtoms(accountResult) {
         const account = accountResult?.account || accountResult || {};
         return BigInt(String(account.balance ?? account.pft_balance ?? account.native_balance ?? 0));
@@ -1292,6 +1311,7 @@ wss } = runtime;
                     },
                     vault_bridge_status: {
                         asset_id: settlementStatus.asset_id,
+                        source_series_active: settlementStatus.source_series_enforced === true,
                         finalized_epoch: settlementStatus.finalized_epoch,
                         valuation_unit: settlementStatus.valuation_unit,
                         bucket_count: settlementStatus.bucket_count,
@@ -2524,6 +2544,8 @@ wss } = runtime;
         let settlementIssuer = null;
         let nativeBalanceAtoms = '0';
         let settlementBalanceAtoms = '0';
+        let walletSpendAssetId = fromAsset;
+        let settlementSourceBucketId = null;
         const warnings = [];
 
         try {
@@ -2536,7 +2558,16 @@ wss } = runtime;
             ]);
             nativeBalanceAtoms = navswapNativeAccountBalanceAtoms(accountState).toString();
             settlementIssuer = settlementAssetInfo ? navswapAssetInfoIssuer(settlementAssetInfo) : null;
-            settlementBalanceAtoms = navswapAccountBalanceAtoms(accountAssets, fromAsset).toString();
+            const selectedBucketId = quote?.planner_inputs?.selected?.settlement_bucket_id || null;
+            const sourceSeriesActive = quote?.planner_inputs?.vault_bridge_status?.source_series_active === true;
+            if (quoteDirection === 'subscribe' && sourceSeriesActive && selectedBucketId) {
+                const sourceBalance = navswapSourceSeriesBalance(accountAssets, fromAsset, selectedBucketId);
+                settlementSourceBucketId = selectedBucketId;
+                walletSpendAssetId = sourceBalance?.asset_id || null;
+                settlementBalanceAtoms = (sourceBalance?.balance_atoms || 0n).toString();
+            } else {
+                settlementBalanceAtoms = navswapAccountBalanceAtoms(accountAssets, fromAsset).toString();
+            }
         } catch (error) {
             warnings.push({
                 code: error.code || 'transparent_navswap_readiness_state_unavailable',
@@ -2616,13 +2647,17 @@ wss } = runtime;
             required_settlement_atoms: requiredSettlementAtoms,
             required_wallet_spend_atoms: requiredWalletSpendAtoms,
             wallet_spend_asset: {
-                asset_id: fromAsset,
+                asset_id: walletSpendAssetId,
+                asset_family_id: fromAsset,
+                source_bucket_id: settlementSourceBucketId,
                 balance_atoms: settlementBalanceAtoms,
                 sufficient: settlementSufficient,
                 shortfall_atoms: settlementShortfallAtoms.toString(),
             },
             settlement_asset: {
                 asset_id: fromAsset,
+                wallet_spend_asset_id: walletSpendAssetId,
+                source_bucket_id: settlementSourceBucketId,
                 issuer: settlementIssuer,
                 balance_atoms: settlementBalanceAtoms,
                 sufficient: settlementSufficient,

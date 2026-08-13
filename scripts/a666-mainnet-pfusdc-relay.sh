@@ -16,6 +16,7 @@ relay_phase=${PFTL_RELAY_PHASE:-all}
 skip_finalize=${PFTL_SKIP_FINALIZE:-false}
 asset=02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b
 policy=${PFTL_POLICY_HASH:-5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158}
+route_epoch=${PFTL_ROUTE_EPOCH:-0}
 vault=${PFTL_VAULT_ADDRESS:-0xaaa78fda7062efce769e95cd72fc55e507bc8183}
 issuer=pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8
 holder=${PFTL_HOLDER:-pfab9b9228942e5c529633a13aa271d5297bec6353}
@@ -198,7 +199,19 @@ start_height=$(ssh_v2 \
   "'$node' status --data-dir /var/lib/postfiat/validator-2" | jq -er .block_height)
 relay_height=$((start_height + 1))
 
+build_relay_ops=false
 if test "$relay_phase" != claim; then
+  build_relay_ops=true
+elif ! ssh_v2 "test -s '$run/claim.ops.json' \
+  && test \"\$(jq -r '.operations[0].operation.route_epoch // 0' \
+    '$run/claim.ops.json')\" = '$route_epoch'"; then
+  # A finalized deposit may have an old durable claim signed before source
+  # series existed. Rebuild only the PFTL operations from the preserved proof;
+  # the Ethereum deposit, proof, proposal, and finalization are not repeated.
+  build_relay_ops=true
+fi
+
+if test "$build_relay_ops" = true; then
   ssh_v2 "set -euo pipefail
   test -x '$cast'
   test -s '$proof_dir/proof-calldata.bin'
@@ -213,6 +226,7 @@ if test "$relay_phase" != claim; then
     --token-address 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 \
     --asset-id '$asset' \
     --policy-hash '$policy' \
+    --route-epoch '$route_epoch' \
     --proposer '$issuer' \
     --finalizer '$issuer' \
     --claimer '$issuer' \
@@ -302,13 +316,15 @@ if test "$relay_phase" != propose; then
     --expect-height '$claim_height' > '$run/post-status.json'
   '$node' account-assets \
     --data-dir /var/lib/postfiat/validator-2 \
-    --account '$holder' \
-    --asset-id '$asset' > '$run/holder-after-claim.json'
-  jq -e --argjson expected '$expected_holder_atoms' \
-    '.assets|any(.balance == \$expected)' '$run/holder-after-claim.json' >/dev/null"
+    --account '$holder' > '$run/holder-after-claim.json'
+  jq -e --arg family '$asset' --argjson expected '$expected_holder_atoms' \
+    '[.assets[]
+      | select(.asset_id == \$family or .asset_family_id == \$family)
+      | .balance] | (add // 0) == \$expected' \
+    '$run/holder-after-claim.json' >/dev/null"
 fi
 
-if test "$relay_phase" != claim; then
+if test "$build_relay_ops" = true; then
   scp -q -i "$ssh_key" "root@$v2:$run/relay-bundle.report.json" \
     "$local_evidence/relay-bundle.report.json"
 fi

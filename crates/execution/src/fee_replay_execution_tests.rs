@@ -2249,6 +2249,7 @@
                 asset_id,
                 evidence_root,
                 policy_hash,
+                route_epoch: 0,
                 recipient,
                 amount_atoms: evidence.amount_atoms,
             }),

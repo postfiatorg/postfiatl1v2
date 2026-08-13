@@ -1,0 +1,108 @@
+{
+  "snapshot_version": 6,
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "protocol_version": 1,
+  "node_id": "validator-2",
+  "state_root": "78dd159fca28a6648acd32a74c720cef045bedd4ca094eff3d1c969c04a34c48dd3e9f9dcd29e9f7a944dcc0c63eaad7",
+  "block_height": 902,
+  "block_tip_hash": "ea0d5dfddb56fdef63d59d6be67810e9cdbf4de1f1892ae3037c2d5608092cb2a4c2cfe71e4f1f01db79aa3e18a767c6",
+  "exported_unix": 1786633032,
+  "files": [
+    {
+      "name": "genesis.json",
+      "bytes": 213,
+      "hash_hex": "779708d785e52dad190647d69ea61a90f808f97225f64aee0d87595b480603100183bc2f4222edc5c53b089c8004219c"
+    },
+    {
+      "name": "node_state.json",
+      "bytes": 85,
+      "hash_hex": "ea98e0868b58886453c1254149362974a3d8318790548bda8ab2e1563c4bccf1411d5085aaf3ae007b28a2aaaf24f82a"
+    },
+    {
+      "name": "governance.json",
+      "bytes": 809986,
+      "hash_hex": "fb3ff0e59e23f4de1bec3760429b2f4154ed2a201bf30673c06de07839f651ae36b6617e73ba37479d52f2bcc6d4c54d"
+    },
+    {
+      "name": "ledger.json",
+      "bytes": 3879709,
+      "hash_hex": "a5c0a3c2a6cc4e5a81852e74b738b54c5a2067e13f9dd74c8bf720cd18bd859ad83e50801889f9cd73a53fe009747a77"
+    },
+    {
+      "name": "blocks.json",
+      "bytes": 173612820,
+      "hash_hex": "e4b29c65e1bfdb9c8400780d0f933ac4f4021867334b5c89e3f7f98dbe5ce5e18401c4634e099704a223317d6e4fe475"
+    },
+    {
+      "name": "batch_archive.json",
+      "bytes": 19751527,
+      "hash_hex": "7717e6a062f9dafd47a19df89411b60a0dac9691a1c692f435f9f31d772a7b97f80508badc38d115af563c3d0d9d6bd6"
+    },
+    {
+      "name": "ordered_batches.json",
+      "bytes": 92007,
+      "hash_hex": "e53cdeca4d8376d1307a88fd43c50e93acc592f6757671211e31b03012719a5dd7d6706e770db25ffa301dca5980602c"
+    },
+    {
+      "name": "receipts.json",
+      "bytes": 350213,
+      "hash_hex": "dd27c4b66e385d03e67ca5ff919903b6ae426e2615f7dd5ba8d2a0d2b074e40c639e1cf2345947cbf861114892ffc30a"
+    },
+    {
+      "name": "mempool.json",
+      "bytes": 20,
+      "hash_hex": "6b7b9210d28c36890883d9fa89a48e64b09cb9568e9fb580ca0922a6d7dfa3e3d92c7e1a71d7d783176034b26c6ec4c7"
+    },
+    {
+      "name": "shielded.json",
+      "bytes": 508696,
+      "hash_hex": "418e8a306d96f0a088ed87bec16c52c549af85be5d32961757b221f5470672a3c183b5ee37a8a46950aa32789dafae6b"
+    },
+    {
+      "name": "bridge.json",
+      "bytes": 61,
+      "hash_hex": "d8bc2ca4b00ff411262f69eea4dc65adfdb6b62a8a004776c98758082a99bbbd76de21d096852591d8dd5949cee16a11"
+    },
+    {
+      "name": "faucet_account.json",
+      "bytes": 4032,
+      "hash_hex": "7bc67bb85ed1f8f90dc584c535e2e34da4f1437c14c7e3875514ee7186dd3400e689f8b7661a2ac49c04fc2b0c8b80e2"
+    },
+    {
+      "name": "validator_registry_genesis.json",
+      "bytes": 24091,
+      "hash_hex": "6838d4aac830f97ed897aff16a00137b046ae107aa498c5ecbb562986252f7c5b53cb1dcbf4b77db270b346262665dac"
+    },
+    {
+      "name": "validator_registry.json",
+      "bytes": 24091,
+      "hash_hex": "6838d4aac830f97ed897aff16a00137b046ae107aa498c5ecbb562986252f7c5b53cb1dcbf4b77db270b346262665dac"
+    },
+    {
+      "name": "consensus_v2_safety.snapshot.json",
+      "bytes": 5027944,
+      "hash_hex": "f6c3f1c389889dcce76d530067a0de2343b1813d9183968e6d89f8765eb7c5ffbd18001e674aa45906e3ca426df2bb51"
+    },
+    {
+      "name": "consensus_v2_qcs.snapshot.json",
+      "bytes": 140739958,
+      "hash_hex": "952ec5a5f2dfdbd8d2b5293b4acc3b27db681bac296ed2e97c24e05dc9c8025f011d06c48afa073f47d57a7598d27ff8"
+    },
+    {
+      "name": "owned_locks.json",
+      "bytes": 9687,
+      "hash_hex": "faac3054a7a87391e9c724d9c8a9fdc03f0e5b95a47421affd487a5622f8cd91fe47b2d98840069dd7ae4a7187ff693d"
+    },
+    {
+      "name": "owned_locks.wal",
+      "bytes": 0,
+      "hash_hex": "05bafcfe1ef3b6ab855da2422e842ea36b4ff5446111797e32b3dcfc0600ad3214eba660afc137f704425d7dc35d7d87"
+    },
+    {
+      "name": "fastpay_speculative_effects_v1.json",
+      "bytes": 55117,
+      "hash_hex": "6cd4a0451a3c71915d8829fc90f4fdec4a16465faea5b66369b9f2db01f73b72252501bc6a9653ad2463969f712ae161"
+    }
+  ]
+}

@@ -25,7 +25,6 @@ const STAGES = [
     'capturing_state_proof',
     'proving',
     'verifying',
-    'growing_backed_cap',
     'claiming',
 ];
 const RESULT_FIELDS = new Set([
@@ -36,7 +35,7 @@ const RESULT_FIELDS = new Set([
     'deposit_confirmed', 'ethereum_finalized', 'finalized_block_hash',
     'finalized_block_number', 'witness_sha256', 'evidence_root', 'nullifier',
     'proof_sha256', 'public_values_sha256', 'program_vkey', 'manifest_hash',
-    'proof_verified', 'backed_cap_ready', 'receipt_code', 'receipt_id', 'tx_id',
+    'proof_verified', 'receipt_code', 'receipt_id', 'tx_id',
 ]);
 
 function stableJson(value) {
@@ -247,7 +246,6 @@ function assertCommonBinding(result, stage, request, config) {
     if (stage === 'proving' && [result.proof_sha256, result.public_values_sha256, result.program_vkey]
         .some((value) => !HASH_RE.test(String(value || '')))) throw terminalError('SP1 proof artifacts missing');
     if (stage === 'verifying' && result.proof_verified !== true) throw terminalError('proof verification failed');
-    if (stage === 'growing_backed_cap' && result.backed_cap_ready !== true) throw terminalError('backed cap growth incomplete');
     if (stage === 'claiming' && (result.receipt_code !== 'ACCEPTED'
         || !RECEIPT_ID_RE.test(String(result.receipt_id || result.tx_id || '')))) throw terminalError('claim was not accepted');
 }

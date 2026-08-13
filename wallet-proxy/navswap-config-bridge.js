@@ -1423,6 +1423,8 @@ wss } = runtime;
             config.asset_id,
             '--policy-hash',
             config.policy_hash,
+            '--route-epoch',
+            String(config.route_epoch),
             '--proposer',
             config.relay_account,
             '--attestor',

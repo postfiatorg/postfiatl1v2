@@ -45,6 +45,56 @@ export async function loadBridgeReadiness(routeId = BRIDGE_ROUTE_ID) {
   return bridgeJson(`/api/bridge/readiness?route=${encodeURIComponent(routeId)}`);
 }
 
+export async function loadBridgeIngressPreflight({
+  routeId = BRIDGE_ROUTE_ID,
+  pftlRecipient = '',
+  depositor = '',
+  amountAtoms = '',
+  proxyAuthToken = '',
+} = {}) {
+  return bridgeJson('/api/bridge/preflight', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(proxyAuthToken ? { Authorization: `Bearer ${proxyAuthToken}` } : {}),
+    },
+    body: JSON.stringify({
+      route_id: routeId,
+      pftl_recipient: pftlRecipient,
+      depositor,
+      amount_atoms: String(amountAtoms || ''),
+    }),
+  });
+}
+
+export function assertBridgeIngressPreflight(preflight, route, request) {
+  const profile = route?.profile || {};
+  if (
+    preflight?.ready !== true
+    || preflight.validator_count !== 6
+    || preflight.route_id !== profile.route_id
+    || preflight.asset_id !== profile.asset_id
+    || preflight.route_profile_hash !== route.profileHash
+    || preflight.pftl_recipient !== String(request?.pftlRecipient || '').toLowerCase()
+    || preflight.ethereum_depositor !== String(request?.depositor || '').toLowerCase()
+    || String(preflight.amount_atoms) !== String(request?.amountAtoms || '')
+    || preflight.orchard_aware_claim_active !== true
+    || preflight.source_series_active !== true
+    || !/^[0-9a-f]{64}$/.test(String(preflight.quote_digest || ''))
+    || !Number.isSafeInteger(Number(preflight.quote_height))
+    || !Number.isSafeInteger(Number(preflight.expires_at_height))
+    || Number(preflight.expires_at_height) <= Number(preflight.quote_height)
+  ) {
+    const error = new Error(
+      preflight?.message || preflight?.explanation
+      || 'The exact pfUSDC claim is not currently executable on all six validators.',
+    );
+    error.payload = preflight;
+    throw error;
+  }
+  return preflight;
+}
+
 export function assertBridgeReadinessMatchesRoute(readiness, route) {
   const profile = route?.profile || {};
   if (
@@ -160,6 +210,7 @@ export async function relayVaultDeposit({
   routeId = BRIDGE_ROUTE_ID,
   sourceChainId = BRIDGE_SOURCE_CHAIN_ID,
   proxyAuthToken = '',
+  quoteDigest = '',
   onStatus = null,
   jobCreateOptions = {},
 } = {}) {
@@ -175,6 +226,7 @@ export async function relayVaultDeposit({
     route_profile_hash: routeProfileHash,
     route_epoch: routeEpoch,
     route_binding: routeBinding,
+    quote_digest: quoteDigest,
   };
   assertNoCustodyMaterial(body, 'wallet bridge relay request');
   const created = await createBridgeJob({

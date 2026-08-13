@@ -2764,6 +2764,7 @@ async function testTransparentReadinessReportsSettlementFundingBlocker() {
   const settlementAssetId = '8'.repeat(96);
   const wallet = 'pf124071fd53a12ca4556b7aa1f5ec98b585e73468';
   const bucketId = 'b'.repeat(96);
+  const sourceSeriesId = '9'.repeat(96);
   const receiptId = 'c'.repeat(96);
   const allocationId = 'a'.repeat(96);
   const calls = [];
@@ -2798,6 +2799,7 @@ async function testTransparentReadinessReportsSettlementFundingBlocker() {
           ok: true,
           result: {
             asset_id: settlementAssetId,
+            source_series_enforced: true,
             valuation_unit: 'SOURCE_UNIT',
             finalized_epoch: 7,
             bucket_count: 1,
@@ -2882,6 +2884,12 @@ async function testTransparentReadinessReportsSettlementFundingBlocker() {
             account: wallet,
             assets: [{
               asset_id: settlementAssetId,
+              balance: 900000,
+            }, {
+              asset_id: sourceSeriesId,
+              asset_family_id: settlementAssetId,
+              source_series_id: sourceSeriesId,
+              source_bucket_id: bucketId,
               balance: 100000,
             }],
           },
@@ -2914,6 +2922,10 @@ async function testTransparentReadinessReportsSettlementFundingBlocker() {
     assert.strictEqual(readiness.quote.ok, true);
     assert.strictEqual(readiness.required_settlement_atoms, '250000');
     assert.strictEqual(readiness.settlement_asset.balance_atoms, '100000');
+    assert.strictEqual(readiness.settlement_asset.wallet_spend_asset_id, sourceSeriesId);
+    assert.strictEqual(readiness.wallet_spend_asset.asset_id, sourceSeriesId);
+    assert.strictEqual(readiness.wallet_spend_asset.asset_family_id, settlementAssetId);
+    assert.strictEqual(readiness.wallet_spend_asset.source_bucket_id, bucketId);
     assert.strictEqual(readiness.settlement_asset.sufficient, false);
     assert.strictEqual(readiness.wallet_pft.balance_atoms, '1000000');
     assert.strictEqual(readiness.wallet_pft.sufficient_for_prepared_actions, true);
