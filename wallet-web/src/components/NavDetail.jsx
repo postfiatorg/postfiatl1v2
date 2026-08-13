@@ -196,7 +196,7 @@ export default function NavDetail({ markets = [], id, rpc, address, go }) {
               <div className="pf-row"><span className="pf-rk">Vault</span><span className="pf-rv">{truncateMiddle(route?.vaultAddress || '—', 7)}</span></div>
               <div className="pf-row"><span className="pf-rk">Evidence</span><span className="pf-rv">{route?.evidenceTier || '—'}</span></div>
               <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
-                Verified against the active governed Ethereum vault profile and its receipt-proof verifier.
+                Verified against the active governed Ethereum vault profile and its receipt-validated withdrawal contract.
               </div>
             </>
           )}

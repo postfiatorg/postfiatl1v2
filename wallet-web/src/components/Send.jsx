@@ -14,7 +14,7 @@ import { resolveFastpayRecipientPublicKey } from '../lib/fastpay.js';
 import { saveFastPayRecovery } from '../lib/fastpay-recovery-store.js';
 
 export default function Send({ markets = [], rpc, txBuilder, backupJson, address, publicKeyHex, initialSource = 'account', onToast, chainCapabilities, liveSnapshot = null, walletFeedStatus = null, visible = true }) {
-  const fastpayEnabled = chainCapabilities?.owned_lane_enabled === true;
+  const fastpayEnabled = false;
   const [lane, setLane] = useState(initialSource === 'asset' ? 'asset' : initialSource);
   const [amt, setAmt] = useState('');
   const [to, setTo] = useState('');
@@ -498,14 +498,9 @@ export default function Send({ markets = [], rpc, txBuilder, backupJson, address
         <h1 className="pf-h1" style={{ marginBottom: 22 }}>Send</h1>
 
         {chainCapabilities && chainCapabilities.read_only && (
-          <div className="pf-warning">RPC is read-only; transaction submission is disabled.</div>
-        )}
-        {chainCapabilities && !fastpayEnabled && (
-          <div className="pf-notice">Experimental FastPay mutations are disabled on this endpoint. Account and issued-asset sends remain available.</div>
+          <div className="pf-warning">This wallet is in view-only mode; sending is disabled.</div>
         )}
         {accountError && <div className="pf-error">{accountError}</div>}
-        {fastpayError && <div className="pf-warning">{fastpayError}</div>}
-        {fastpayRefreshing && <div className="pf-notice">Refreshing FastPay balance…</div>}
 
         <div className="pf-two">
           <div style={{ display: 'grid', gap: 16 }}>

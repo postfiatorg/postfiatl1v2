@@ -451,6 +451,17 @@ function createRoute(runtime = {}, options = {}) {
         return readJob(normalized);
     }
 
+    function jobsForRecipient(routeId, recipient, limit = 20) {
+        const normalized = String(recipient || '').trim().toLowerCase();
+        if (routeId !== config.route_id || !EVM_RE.test(normalized)) return [];
+        const boundedLimit = Math.min(100, Math.max(1, Number(limit) || 20));
+        return fs.readdirSync(jobsRoot).filter(name => /^[0-9a-f]{64}$/.test(name)).flatMap(name => {
+            try { return [readJob(`0x${name}`)]; } catch (_) { return []; }
+        }).filter(job => job?.request?.ethereum_recipient === normalized)
+            .sort((a, b) => Number(b.created_at_unix || 0) - Number(a.created_at_unix || 0))
+            .slice(0, boundedLimit);
+    }
+
     const watchdog = setIntervalImpl(pump, watchdogMs);
     watchdog.unref?.();
     refreshReadiness().catch(() => {});
@@ -469,6 +480,7 @@ function createRoute(runtime = {}, options = {}) {
         navcoinExportRelayReadiness: relayReadiness,
         submitNavcoinExportRelayJob: submit,
         navcoinExportRelayJobStatus: status,
+        navcoinExportRelayJobsForRecipient: jobsForRecipient,
         closeNavcoinExportRelayJobs: close,
         canonicalNavcoinExportRelayJobId: canonicalJobId,
         _pumpNavcoinExportJobsForTest: pump,
@@ -508,6 +520,7 @@ function create(runtime = {}, options = {}) {
                 new Error('NAVCoin export relay is not configured.'),
                 { code: 'navcoin_export_relay_not_configured' }); },
             navcoinExportRelayJobStatus: () => null,
+            navcoinExportRelayJobsForRecipient: () => [],
             closeNavcoinExportRelayJobs: () => {},
             canonicalNavcoinExportRelayJobId: canonicalJobId,
             _pumpNavcoinExportJobsForTest: () => {},
@@ -540,6 +553,8 @@ function create(runtime = {}, options = {}) {
         },
         navcoinExportRelayJobStatus: (routeId, jobId) =>
             routes.get(routeId)?.navcoinExportRelayJobStatus(routeId, jobId) || null,
+        navcoinExportRelayJobsForRecipient: (routeId, recipient, limit) =>
+            routes.get(routeId)?.navcoinExportRelayJobsForRecipient(routeId, recipient, limit) || [],
         closeNavcoinExportRelayJobs: () => {
             for (const route of routes.values()) route.closeNavcoinExportRelayJobs();
         },

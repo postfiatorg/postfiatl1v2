@@ -6,7 +6,9 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [features]
+default = ["sp1-native-gnark"]
 sp1-cuda = ["sp1-sdk/cuda"]
+sp1-native-gnark = ["sp1-sdk/native-gnark"]
 sp1-profiling = ["sp1-sdk/profiling"]
 
 [dependencies]

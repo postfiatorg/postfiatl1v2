@@ -142,6 +142,8 @@ function harness(root) {
         const second = await subject.submitNavcoinExportRelayJob(request(secondPacket));
         assert.strictEqual(second.source_height, null);
         assert.strictEqual(test.spawns.length, 1, 'global serialization must keep the later job queued');
+        assert.strictEqual(subject.navcoinExportRelayJobsForRecipient(ROUTE_ID, RECIPIENT, 20).length, 2);
+        assert.strictEqual(subject.navcoinExportRelayJobsForRecipient(ROUTE_ID, `0x${'99'.repeat(20)}`, 20).length, 0);
 
         assert.strictEqual(subject.navcoinExportRelayJobStatus(OTHER_ROUTE_ID, concurrent[0].job_id), null);
         subject.closeNavcoinExportRelayJobs();

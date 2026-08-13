@@ -142,6 +142,9 @@ enum Command {
     },
     /// Execute or Groth16-prove a canonical PFTL egress witness.
     Egress {
+        /// Optional frozen egress ELF. Defaults to the repository-embedded release.
+        #[arg(long)]
+        elf: Option<PathBuf>,
         #[arg(long)]
         witness: PathBuf,
         #[arg(long)]
@@ -219,10 +222,11 @@ async fn main() -> Result<()> {
             prove,
         } => prove_bonded_age_release(elf, witness, output_dir, prove).await,
         Command::Egress {
+            elf,
             witness,
             output_dir,
             prove,
-        } => prove_egress(witness, output_dir, prove).await,
+        } => prove_egress(elf, witness, output_dir, prove).await,
         Command::Checkpoint {
             witness,
             output_dir,
@@ -760,11 +764,23 @@ async fn prove_bonded_reversion(
     Ok(())
 }
 
-async fn prove_egress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -> Result<()> {
+async fn prove_egress(
+    elf_path: Option<PathBuf>,
+    witness_path: PathBuf,
+    output_dir: PathBuf,
+    prove: bool,
+) -> Result<()> {
     #[cfg(debug_assertions)]
     if prove {
         anyhow::bail!("Groth16 proving requires a --release build");
     }
+    let elf_bytes = elf_path
+        .as_ref()
+        .map(|path| fs::read(path).with_context(|| format!("read egress ELF {}", path.display())))
+        .transpose()?;
+    let elf = elf_bytes
+        .map(Elf::from)
+        .unwrap_or_else(|| EGRESS_ELF.clone());
     let witness_bytes = fs::read(&witness_path)
         .with_context(|| format!("read egress witness {}", witness_path.display()))?;
     let witness: PfUsdcEgressProofWitnessV1 = serde_json::from_slice(&witness_bytes)
@@ -781,7 +797,7 @@ async fn prove_egress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -
     );
     let client = ProverClient::from_env().await;
     let started = Instant::now();
-    let (executed_public_values, report) = client.execute(EGRESS_ELF, stdin.clone()).await?;
+    let (executed_public_values, report) = client.execute(elf.clone(), stdin.clone()).await?;
     let cycle_tracker = report
         .cycle_tracker
         .iter()
@@ -840,7 +856,7 @@ async fn prove_egress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -
     );
     if prove {
         let setup_started = Instant::now();
-        let pk = client.setup(EGRESS_ELF).await?;
+        let pk = client.setup(elf).await?;
         let proof = client.prove(&pk, stdin).groth16().await?;
         client.verify(&proof, pk.verifying_key(), None)?;
         anyhow::ensure!(

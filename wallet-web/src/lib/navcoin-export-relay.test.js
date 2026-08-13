@@ -1,7 +1,22 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { relayNavcoinExport } from './navcoin-export-relay.js';
+import { loadNavcoinExportJobs, relayNavcoinExport } from './navcoin-export-relay.js';
+
+test('export activity discovery is recipient-scoped and authenticated', async () => {
+  const previousFetch = globalThis.fetch;
+  let captured;
+  globalThis.fetch = async (url, options) => {
+    captured = { url, options };
+    return new Response(JSON.stringify({ ok: true, jobs: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    await loadNavcoinExportJobs('pftl-qnav-ethereum-wqnav-qusd-v1', `0x${'77'.repeat(20)}`, 'session-secret', 7);
+    assert.match(captured.url, /ethereum_recipient=0x7777/);
+    assert.match(captured.url, /limit=7/);
+    assert.equal(captured.options.headers.Authorization, 'Bearer session-secret');
+  } finally { globalThis.fetch = previousFetch; }
+});
 
 test('NAVCoin export is route-scoped, authenticated, idempotent, and carries no custody material', async () => {
   const previousFetch = globalThis.fetch;

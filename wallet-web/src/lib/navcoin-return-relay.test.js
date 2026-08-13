@@ -1,7 +1,22 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildNavcoinReturnBurnCalldata, createNavcoinReturnJob } from './navcoin-return-relay.js';
+import { buildNavcoinReturnBurnCalldata, createNavcoinReturnJob, loadNavcoinReturnJobs } from './navcoin-return-relay.js';
+
+test('return activity discovery is recipient-scoped and authenticated', async () => {
+  const previousFetch = globalThis.fetch;
+  let captured;
+  globalThis.fetch = async (url, options) => {
+    captured = { url, options };
+    return new Response(JSON.stringify({ ok: true, jobs: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    await loadNavcoinReturnJobs('pftl-qnav-ethereum-wqnav-qusd-v1', `pf${'66'.repeat(20)}`, 'session-secret', 9);
+    assert.match(captured.url, /pftl_recipient=pf6666/);
+    assert.match(captured.url, /limit=9/);
+    assert.equal(captured.options.headers.Authorization, 'Bearer session-secret');
+  } finally { globalThis.fetch = previousFetch; }
+});
 
 test('return burn calldata exactly matches the deployed Solidity ABI', () => {
   const calldata = buildNavcoinReturnBurnCalldata({

@@ -43,6 +43,14 @@ export async function loadNavcoinExportReadiness(routeId) {
   return relayJson(`${routePath(routeId)}/export-readiness`);
 }
 
+export async function loadNavcoinExportJobs(routeId, ethereumRecipient, proxyAuthToken, limit = 20) {
+  const recipient = String(ethereumRecipient || '').trim().toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(recipient)) throw new Error('Ethereum recipient is malformed');
+  return relayJson(`${routePath(routeId)}/export-jobs?ethereum_recipient=${encodeURIComponent(recipient)}&limit=${Math.min(100, Math.max(1, Number(limit) || 20))}`, {
+    headers: proxyAuthToken ? { Authorization: `Bearer ${proxyAuthToken}` } : {},
+  });
+}
+
 export async function waitForNavcoinExportJob(
   routeId, jobId,
   { pollIntervalMs = 5_000, timeoutMs = 4 * 60 * 60 * 1000, onStatus = null } = {},

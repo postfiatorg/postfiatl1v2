@@ -401,6 +401,17 @@ function createRoute(runtime = {}, options = {}) {
         return readJob(normalized);
     }
 
+    function jobsForRecipient(routeId, recipient, limit = 20) {
+        const normalized = String(recipient || '').trim().toLowerCase();
+        if (routeId !== config.route_id || !PFTL_RE.test(normalized)) return [];
+        const boundedLimit = Math.min(100, Math.max(1, Number(limit) || 20));
+        return fs.readdirSync(jobsRoot).filter(name => /^[0-9a-f]{64}$/.test(name)).flatMap(name => {
+            try { return [readJob(`0x${name}`)]; } catch (_) { return []; }
+        }).filter(job => job?.request?.pftl_recipient === normalized)
+            .sort((a, b) => Number(b.created_at_unix || 0) - Number(a.created_at_unix || 0))
+            .slice(0, boundedLimit);
+    }
+
     const watchdog = setIntervalImpl(pump, watchdogMs);
     watchdog.unref?.();
     refreshReadiness().catch(() => {});
@@ -417,6 +428,7 @@ function createRoute(runtime = {}, options = {}) {
         navcoinReturnRelayReadiness: relayReadiness,
         submitNavcoinReturnRelayJob: submit,
         navcoinReturnRelayJobStatus: status,
+        navcoinReturnRelayJobsForRecipient: jobsForRecipient,
         closeNavcoinReturnRelayJobs: close,
         canonicalNavcoinReturnRelayJobId: canonicalJobId,
         _pumpNavcoinReturnJobsForTest: pump,
@@ -456,6 +468,7 @@ function create(runtime = {}, options = {}) {
                 new Error('NAVCoin return relay is not configured.'),
                 { code: 'navcoin_return_relay_not_configured' }); },
             navcoinReturnRelayJobStatus: () => null,
+            navcoinReturnRelayJobsForRecipient: () => [],
             closeNavcoinReturnRelayJobs: () => {},
             canonicalNavcoinReturnRelayJobId: canonicalJobId,
             _pumpNavcoinReturnJobsForTest: () => {},
@@ -488,6 +501,8 @@ function create(runtime = {}, options = {}) {
         },
         navcoinReturnRelayJobStatus: (routeId, jobId) =>
             routes.get(routeId)?.navcoinReturnRelayJobStatus(routeId, jobId) || null,
+        navcoinReturnRelayJobsForRecipient: (routeId, recipient, limit) =>
+            routes.get(routeId)?.navcoinReturnRelayJobsForRecipient(routeId, recipient, limit) || [],
         closeNavcoinReturnRelayJobs: () => {
             for (const route of routes.values()) route.closeNavcoinReturnRelayJobs();
         },

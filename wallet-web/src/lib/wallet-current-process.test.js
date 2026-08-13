@@ -74,6 +74,37 @@ test('bridge-in is Ethereum mainnet USDC and never executes a retired route', as
   assert.doesNotMatch(runtime, /cctpBridgeUsdc|ensureEthereumSepolia/);
 });
 
+test('bridge-out is locally signed, exact, durable, and recoverable without pasted payloads', async () => {
+  const [bridge, withdrawal, activity] = await Promise.all([
+    source('components/BridgeWithdraw.jsx'),
+    source('lib/pfusdc-withdrawal.js'),
+    source('components/Activity.jsx'),
+  ]);
+  assert.match(bridge, /txBuilder\.sendAssetTransfer\(backupJson/);
+  assert.match(bridge, /loadPfusdcWithdrawalJobs/);
+  assert.match(bridge, /recoverablePfusdcWithdrawal/);
+  assert.match(bridge, /Retry payout/);
+  assert.match(bridge, /retryPfusdcWithdrawalJob/);
+  assert.match(bridge, /!jobsChecked/);
+  assert.match(bridge, /Checking saved progress/);
+  assert.match(bridge, /same amount of USDC/);
+  assert.match(withdrawal, /vault_bridge_burn_to_redeem/);
+  assert.match(withdrawal, /No active Ethereum reserve bucket/);
+  assert.match(withdrawal, /row\?\.state === 'pending'/);
+  assert.match(withdrawal, /\/retry/);
+  assert.doesNotMatch(`${bridge}\n${withdrawal}`, /seed|key_file|pasted payload/i);
+  assert.match(activity, /response\.result\.rows/);
+  assert.match(activity, /Withdrew pfUSDC to Ethereum/);
+  assert.doesNotMatch(activity, /issued-asset.*not available/i);
+});
+
+test('consumer Send keeps the experimental FastPay lane unmounted', async () => {
+  const send = await source('components/Send.jsx');
+  assert.match(send, /const fastpayEnabled = false;/);
+  assert.doesNotMatch(send, /Experimental FastPay mutations are disabled/);
+  assert.match(send, /This wallet is in view-only mode; sending is disabled/);
+});
+
 test('NAVCoin market UI is registry-driven and has no hard-coded asset identity', async () => {
   const [market, registry, route] = await Promise.all([
     source('components/NavcoinPrimaryMarket.jsx'),

@@ -336,13 +336,26 @@ export function generateNonce() {
 }
 
 export async function getEthereumUsdcBalance(evmAddress) {
+  return getEthereumTokenBalance(ETH_MAINNET_USDC, evmAddress);
+}
+
+export async function getEthereumTokenBalance(tokenAddress, evmAddress) {
   if (!hasMetaMask()) return 0n;
+  if (!/^0x[0-9a-f]{40}$/i.test(String(tokenAddress || ''))) {
+    throw new Error('Ethereum token address is malformed');
+  }
+  if (!/^0x[0-9a-f]{40}$/i.test(String(evmAddress || ''))) {
+    throw new Error('Ethereum wallet address is malformed');
+  }
   await ensureEthereumMainnet();
   const result = await window.ethereum.request({
     method: 'eth_call',
-    params: [{ to: ETH_MAINNET_USDC, data: encodeBalanceOf(evmAddress) }, 'latest'],
+    params: [{ to: tokenAddress, data: encodeBalanceOf(evmAddress) }, 'latest'],
   });
-  return BigInt(result || '0x0');
+  if (!/^0x[0-9a-f]+$/i.test(String(result || ''))) {
+    throw new Error('Ethereum returned a malformed token balance');
+  }
+  return BigInt(result);
 }
 
 export async function getEthereumEthBalance(evmAddress) {

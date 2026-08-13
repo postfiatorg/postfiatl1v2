@@ -282,7 +282,9 @@ function httpRequestRequiresAuth(method, pathname) {
     // Job discovery is account-scoped operational data. Require the local
     // wallet session even though it is read-only; individual job lookups stay
     // capability-addressed by their unguessable job IDs.
-    if (method === 'GET' && pathname === '/api/bridge/jobs') return true;
+    if (method === 'GET' && (pathname === '/api/bridge/jobs'
+        || pathname === '/api/bridge/withdrawals')) return true;
+    if (method === 'GET' && /^\/api\/navcoin\/[A-Za-z0-9][A-Za-z0-9._-]{0,63}\/(?:export-jobs|return-jobs)$/.test(pathname)) return true;
     if (method === 'GET' && pathname === '/api/a666-roundtrip/status') return true;
     if (method === 'GET' && (pathname === '/api/pftl-private-swap/readiness'
         || pathname.startsWith('/api/pftl-private-swap/jobs/'))) return true;
@@ -1192,9 +1194,11 @@ validateShieldedSwapSubmit } = walletProxyRuntime;
 Object.assign(walletProxyRuntime, require('./trustless-bridge-jobs').create(walletProxyRuntime));
 Object.assign(walletProxyRuntime, require('./navcoin-export-jobs').create(walletProxyRuntime));
 Object.assign(walletProxyRuntime, require('./navcoin-return-jobs').create(walletProxyRuntime));
+Object.assign(walletProxyRuntime, require('./pfusdc-withdrawal-jobs').create(walletProxyRuntime));
 Object.assign(walletProxyRuntime, require('./pnok-fix-jobs').create(walletProxyRuntime));
 Object.assign(walletProxyRuntime, require('./pftl-private-swap').create(walletProxyRuntime));
 Object.assign(walletProxyRuntime, require('./a666-roundtrip').create(walletProxyRuntime));
+Object.assign(walletProxyRuntime, require('./navcoin-market-data').create(walletProxyRuntime));
 Object.assign(walletProxyRuntime, require('./navswap-persistence-http').create(walletProxyRuntime));
 const { annotateNavswapIdempotency,
 buildNavswapRunResponse,
