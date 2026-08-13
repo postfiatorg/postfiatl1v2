@@ -4,25 +4,25 @@
   "source_chain_id": 1,
   "source_proof_kind": "sp1-ethereum-finality-v1",
   "program_vkey": "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e",
-  "manifest_hash": "541a43e1f2ad0f37f6d98ea437b57f502cb888e9bba8151a50e2e5bfe5ce57a5",
-  "route_profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+  "manifest_hash": "389a52d374b1ec5cb897aadaaf0d4db97df66a2f88b930c5fc783ccba19e95b6",
+  "route_profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
   "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
-  "vault_address": "0xaaa78fda7062efce769e95cd72fc55e507bc8183",
+  "vault_address": "0x4939a45caa85da31fb26d7dbe6477b45f7f08688",
   "vault_runtime_code_hash": "0xc6dbb722c23bfc841624bb909fcb54d84a65a2ea6ece96e2a28bf61d5dea6d05",
   "token_address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
   "token_runtime_code_hash": "0xd80d4b7c890cb9d6a4893e6b52bc34b56b25335cb13716e0d1d31383e6b41505",
   "pinned_files": [
     {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-wallet-eth-bridge-stage-serialized.py",
-      "sha256": "7dcc661b15708689a2e71f90d941c3f622761b37fc9cd62b8f9cb17da7328a22"
+      "sha256": "04f7f9579131466023b607b5812616f5655507768333daa160c915e65ae9086b"
     },
     {
       "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/scripts/a666-mainnet-pfusdc-relay.sh",
       "sha256": "f941fd7eda980536f59531c7272ea0c5ab648229b42334949d27e23b590f63bc"
     },
     {
-      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/pfusdc-eth-mainnet-20260728-epoch5/route-profile.mainnet-epoch5.json",
-      "sha256": "12440fa2d4b8c84d9b6363069ca4554379dd3bb78b6657e98c039ca006d66d25"
+      "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/pfusdc-eth-mainnet-20260809-epoch6-successor/route-profile.mainnet-epoch6.json",
+      "sha256": "ae66bd270500be2e44f39136f8d136506262e17f0b094ca38c41927f7bbabe80"
     }
   ],
   "readiness": {

@@ -32,6 +32,7 @@ if test ! -s "$token_file"; then
 fi
 chmod 600 "$token_file" "$routes" \
   "$repo/deployments/wallet-bridge-mainnet-20260730/driver-config.json" \
+  "$repo/deployments/pfusdc-eth-mainnet-20260809-epoch6-successor/route-profile.mainnet-epoch6.json" \
   "$a666_export_config" \
   "$repo/deployments/a666-export-relay-mainnet-20260731/driver-config.json" \
   "$a666_return_config" \

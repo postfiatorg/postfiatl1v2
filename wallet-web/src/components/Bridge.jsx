@@ -185,7 +185,11 @@ export default function Bridge({ address, rpc, txBuilder, backupJson, proxyAuthT
       if (expectedProfileHash && next.profileHash !== expectedProfileHash) {
         throw new Error('The governed bridge route changed. Review it before signing.');
       }
-      await waitForBridgeReadiness(next);
+      // Route discovery must either become usable or surface a concrete
+      // blocker immediately. The component already retries discovery every
+      // five seconds, so polling here only leaves the screen looking frozen
+      // for up to 90 seconds when readiness is unavailable.
+      await waitForBridgeReadiness(next, { attempts: 1 });
       setRoute(next);
       setRouteStatus('ready');
       return next;

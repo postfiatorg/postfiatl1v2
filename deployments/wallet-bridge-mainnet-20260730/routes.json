@@ -4,10 +4,10 @@
     "source_chain_id": 1,
     "source_proof_kind": "sp1-ethereum-finality-v1",
     "program_vkey": "0x00a9f8f037da18dd1aa5a7b0f478df0c7c9fae411ee62b339baf48dc2505076e",
-    "manifest_hash": "541a43e1f2ad0f37f6d98ea437b57f502cb888e9bba8151a50e2e5bfe5ce57a5",
-    "route_profile_hash": "5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158",
+    "manifest_hash": "389a52d374b1ec5cb897aadaaf0d4db97df66a2f88b930c5fc783ccba19e95b6",
+    "route_profile_hash": "f088876e4bc7f611fdf7199237f241a1bb91ffc1850a8b65cd50a4852cab2ec40a2fae18c6dbf0ee5dd4934b22107f1a",
     "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
-    "vault_address": "0xaaa78fda7062efce769e95cd72fc55e507bc8183",
+    "vault_address": "0x4939a45caa85da31fb26d7dbe6477b45f7f08688",
     "vault_runtime_code_hash": "0xc6dbb722c23bfc841624bb909fcb54d84a65a2ea6ece96e2a28bf61d5dea6d05",
     "token_address": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
     "token_runtime_code_hash": "0xd80d4b7c890cb9d6a4893e6b52bc34b56b25335cb13716e0d1d31383e6b41505",
@@ -38,7 +38,7 @@
       },
       {
         "path": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/deployments/wallet-bridge-mainnet-20260730/driver-config.json",
-        "sha256": "5179caa5ac8f16fcd6611cc7cf6ab88f1140ba0b8c1e705b9a4af4d73463503b"
+        "sha256": "2056911b955a5f93e6eae51fb6d72334c1876799a58d427628c15e058b975890"
       }
     ],
     "cwd": "/home/postfiat/repos/a666-eth-fast-lane-combined-20260724",
