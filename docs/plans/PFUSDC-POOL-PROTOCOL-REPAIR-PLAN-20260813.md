@@ -659,7 +659,7 @@ Anything less is partial remediation, not a working pfUSDC pool.
 
 ## 9. Implementation record (2026-08-13)
 
-The local candidate now implements the following parts of this plan:
+The deployed release now implements the following parts of this plan:
 
 - explicit governed activation heights for Orchard-aware bridge claims and
   pfUSDC source-series enforcement;
@@ -689,11 +689,7 @@ Current test evidence:
 - wallet proxy regression files: 35 passed;
 - wallet browser library tests: 262 passed;
 - wallet production build: passed;
-- full node library suite: 266 passed, one fixture failure, two ignored; the
-  only failure was caused by the Orchard-aware and source-series governance
-  amendments sharing a synthetic test ID and being deduplicated. The fixture
-  now includes the amendment kind in its ID, and the corrected exact test
-  passes. A clean full-suite rerun is required before release.
+- full node library suite: 267 passed, zero failed, two ignored;
 - the exact ingress preflight is exposed through the public read-only RPC
   allowlist, so the wallet can query it without validator administration
   credentials;
@@ -709,3 +705,24 @@ binary plus the two governed future-height activations. The immutable epoch-5
 vault cannot be repaired or drained by deploying a replacement contract; its
 claims remain explicitly impaired unless a valid old-vault proof path or real
 recapitalization is supplied.
+
+Live deployment and recovery completed on 2026-08-13:
+
+- all six validators run release `pfusdc-pool-repair-8a62cf9` with binary
+  SHA-256 `e6b31e715a025170747b4222f4afd703e0d9a4e7fe7f6ac998715848905d0ec5`;
+- Orchard-aware claims and source-series issuance activated at height `906`;
+- the existing 15.000000-USDC deposit was claimed at height `906` without a
+  second Ethereum transaction;
+- the recipient received exactly 15.000000 source-series pfUSDC while its
+  73.097570 legacy pooled balance remained unchanged;
+- all six validators converged at height `906` on state root
+  `d62ec7003ed36a90c767cbf6cf306184258104b5b0d2a72fe2bdb78f90e7f0c018042398cbfd319824ddb40d724d2cce`;
+- a replay admission attempt was rejected and left height, root, and mempool
+  unchanged;
+- the wallet relay is healthy and reports the durable job as accepted.
+
+The complete recovery record is in
+`docs/evidence/pfusdc-pool-repair-20260813/LIVE-RECOVERY-REPORT.md`. The fresh
+Phase-8 1.000000-USDC user-authorized ingress/private-custody/egress loop is a
+separate remaining acceptance item and is not falsely claimed by the recovered
+15-USDC ingress.

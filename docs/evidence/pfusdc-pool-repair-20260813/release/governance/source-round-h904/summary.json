@@ -1,0 +1,19 @@
+{
+  "accepted": true,
+  "all_sends_verified": true,
+  "batch_kind": "governance",
+  "confirmed": true,
+  "end_height": 904,
+  "end_state_root": "bf92f53b44017ea0718edc4fb23ae915f1a389d821989a0ad52b4ef8b20c7b191a509a0fada1c1500683769a52d86bc9",
+  "label": "pfusdc-repair-source-activation",
+  "local_apply_verified": true,
+  "proposer": "validator-4",
+  "recovered_postflight": false,
+  "round_ok": true,
+  "runner_exit_code": 0,
+  "runner_stderr": null,
+  "schema": "postfiat-a666-ce22-remote-finality-batch-v1",
+  "start_height": 903,
+  "start_state_root": "a2eb79bf36ffa9ecf4593e4483a2139bd02e4d171b8869fe5c2dd2c5df3f6fe745aebb83b60982be9e5f43c78df44a46",
+  "vote_count": 5
+}

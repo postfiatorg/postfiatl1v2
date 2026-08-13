@@ -1,0 +1,36 @@
+{
+  "schema": "postfiat-eth-fast-lane-checkpoint-migration-v1",
+  "migration_id": "remove-fake-cap-2056911b955a",
+  "request_fingerprint": "a0736e7a7708fc7b74cb0995a1a3cc1976dcbb636223a36cf8386eca4f7614b3",
+  "legacy_config_sha256": "2056911b955a5f93e6eae51fb6d72334c1876799a58d427628c15e058b975890",
+  "replacement_config_sha256": "09173d6344af5c05a1a219d9b56cf06c3a5caa5c1e964a4d034c0318e3f83599",
+  "archived_terminal_checkpoint_sha256": "f0ebff01544cf3aa173c9740a907a63f7b5035e1842ce4038fca5123ef62d246",
+  "archived_checkpoints": [
+    {
+      "stage": "confirming_deposit",
+      "checkpoint_sha256": "61e94d2501848048771e0b1b26d3be12894cf8c81b6fe22a3fc5037ef0d28f35"
+    },
+    {
+      "stage": "waiting_for_ethereum_finality",
+      "checkpoint_sha256": "04fcce082fb8f168a6b11b491230df71ac969fd2e09b331553c589123af66189"
+    },
+    {
+      "stage": "capturing_state_proof",
+      "checkpoint_sha256": "ccba30d425673d576d9e4d78b37b4b90d22ddbbbf3d9665854233735abb5370c"
+    },
+    {
+      "stage": "proving",
+      "checkpoint_sha256": "80b0f9a6931a9a082c34e966fcbef08a6ce9e829c63286900deeaa3918fb0b5e"
+    },
+    {
+      "stage": "verifying",
+      "checkpoint_sha256": "a1c7c68c111323982b1df8899ced08061a966b085ee7fa261ea59a35a48ea0a1"
+    },
+    {
+      "stage": "growing_backed_cap",
+      "checkpoint_sha256": "f0ebff01544cf3aa173c9740a907a63f7b5035e1842ce4038fca5123ef62d246"
+    }
+  ],
+  "replay_policy": "revalidate_idempotent_stages_then_submit_missing_claim",
+  "ethereum_transaction_replay_allowed": false
+}

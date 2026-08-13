@@ -1,0 +1,34 @@
+{
+  "schema": "postfiat.pfusdc_pool_repair_claim_and_replay.v1",
+  "claim": {
+    "verdict": "PASS",
+    "execution_mode": "claim",
+    "deposit_tx": "0x7d91722c2e8071827a5d06144d30b2612af319fd9b0d76687bbb014c9ebc6364",
+    "start_height": 905,
+    "finalized_height": 906,
+    "amount_atoms": 15000000,
+    "receipt_id": "0543772189803d79e1ed3e1b69ad6206cb4e6c0d230a0ac2d3b25d52f98cfcdd4964b9e24c79f6f8b240c91e53c66e88",
+    "receipt_status": "counted",
+    "receipt_counted_value_atoms": 15000000,
+    "receipt_allocated_value_atoms": 15000000,
+    "allocation_remaining_atoms": 15000000
+  },
+  "convergence": {
+    "validator_count": 6,
+    "height": 906,
+    "state_root": "d62ec7003ed36a90c767cbf6cf306184258104b5b0d2a72fe2bdb78f90e7f0c018042398cbfd319824ddb40d724d2cce",
+    "mempool_pending": 0,
+    "legacy_balance_atoms": 73097570,
+    "source_series_balance_atoms": 15000000,
+    "family_balance_atoms": 88097570
+  },
+  "replay": {
+    "admission_exit_code": 1,
+    "rejected": true,
+    "code": "proof_bounded_nav_cap_exceeded",
+    "message": "claim exceeds finalized unclaimed Ethereum SP1 backing",
+    "height_unchanged": true,
+    "state_root_unchanged": true,
+    "mempool_pending_after": 0
+  }
+}

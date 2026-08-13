@@ -1,0 +1,19 @@
+{
+  "accepted": false,
+  "all_sends_verified": false,
+  "batch_kind": "transparent",
+  "confirmed": true,
+  "end_height": 905,
+  "end_state_root": "4962def1af83df8093c8fdf45b6bb7ed2918f0b81731d9d8362c5570899eec0fb77b4f3457f7fc300a016311b3547cfc",
+  "label": "pfusdc-repair-activation-barrier-r1",
+  "local_apply_verified": false,
+  "proposer": "validator-5",
+  "recovered_postflight": false,
+  "round_ok": false,
+  "runner_exit_code": 1,
+  "runner_stderr": "Traceback (most recent call last):\n  File \"/usr/local/sbin/a666-remote-sync-batch-round.py\", line 95, in <module>\n    main()\n  File \"/usr/local/sbin/a666-remote-sync-batch-round.py\", line 91, in main\n    raise RuntimeError(\"certified batch round did not report round_ok=true\")\nRuntimeError: certified batch round did not report round_ok=true",
+  "schema": "postfiat-a666-ce22-remote-finality-batch-v1",
+  "start_height": 904,
+  "start_state_root": "bf92f53b44017ea0718edc4fb23ae915f1a389d821989a0ad52b4ef8b20c7b191a509a0fada1c1500683769a52d86bc9",
+  "vote_count": 5
+}
