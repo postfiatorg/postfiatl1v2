@@ -399,13 +399,20 @@ export default function Bridge({ address, rpc, txBuilder, backupJson, proxyAuthT
   }, [address, rpc]);
 
   useEffect(() => {
-    if (!address || !proxyAuthToken) return undefined;
+    // Recipient-scoped history can contain deposits made by other Ethereum
+    // accounts (or older wallet sessions). Never let such a record advance
+    // this MetaMask session to "deposit confirmed". Manual transaction-hash
+    // recovery remains available for deposits made from a different account.
+    if (!address || !connectedAddress || !proxyAuthToken) return undefined;
     const controller = new AbortController();
     const restore = async () => {
       try {
         setRecoveryWarning('');
         const listed = await loadBridgeJobs(address, proxyAuthToken, 20);
-        const latest = listed.jobs?.[0];
+        const ethereumOwner = connectedAddress.toLowerCase();
+        const latest = listed.jobs?.find((job) => (
+          String(job?.request?.depositor || '').toLowerCase() === ethereumOwner
+        ));
         if (!latest || controller.signal.aborted) return;
         const request = latest.request || {};
         setDepositTx(request.deposit_tx_hash || '');
@@ -438,7 +445,7 @@ export default function Bridge({ address, rpc, txBuilder, backupJson, proxyAuthT
     };
     restore();
     return () => controller.abort();
-  }, [address, applyRelayResult, proxyAuthToken]);
+  }, [address, applyRelayResult, connectedAddress, proxyAuthToken]);
 
   const relay = async ({ txHash, event, activeRoute }) => {
     setPhase('relaying');

@@ -4,7 +4,10 @@ set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
 state_dir=${A666_WALLET_STATE_DIR:-/home/postfiat/.local/state/postfiat-a666-wallet}
 token_file=$state_dir/proxy-tokens.json
-job_root=$state_dir/bridge-jobs
+# Route identity is part of a durable bridge job's meaning. Epoch-5 jobs must
+# remain available as historical evidence but must never be restarted under
+# the epoch-6 successor profile or surfaced as current wallet work.
+job_root=$state_dir/bridge-jobs-epoch6-successor
 a666_job_root=$state_dir/a666-export-jobs
 a666_return_job_root=$state_dir/a666-return-jobs
 pfusdc_withdrawal_job_root=$state_dir/pfusdc-withdrawal-jobs

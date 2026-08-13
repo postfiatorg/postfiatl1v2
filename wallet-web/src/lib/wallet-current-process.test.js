@@ -72,6 +72,9 @@ test('bridge-in is Ethereum mainnet USDC and never executes a retired route', as
   assert.match(utils, /ETH_MAINNET_CHAIN_ID = 1/);
   assert.doesNotMatch(runtime, /Arbitrum|ARBITRUM_CHAIN_ID|USDC_CONTRACT_ARBITRUM|ensureArbitrum|getArbitrum/);
   assert.doesNotMatch(runtime, /cctpBridgeUsdc|ensureEthereumSepolia/);
+  assert.match(bridge, /!address \|\| !connectedAddress \|\| !proxyAuthToken/);
+  assert.match(bridge, /job\?\.request\?\.depositor/);
+  assert.match(bridge, /=== ethereumOwner/);
 });
 
 test('bridge-out is locally signed, exact, durable, and recoverable without pasted payloads', async () => {
