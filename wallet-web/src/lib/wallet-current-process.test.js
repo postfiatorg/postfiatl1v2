@@ -144,6 +144,22 @@ test('visible asset surfaces contain no executable a651/a652 assumptions or fake
   assert.doesNotMatch(runtime, /other or legacy issued asset/i);
 });
 
+test('home polling preserves settled market and Ethereum balance rendering', async () => {
+  const [app, home] = await Promise.all([
+    source('App.jsx'),
+    source('components/WalletHome.jsx'),
+  ]);
+
+  assert.match(app, /retainEqualMarkets\(current, discoveredMarkets\)/);
+  assert.match(app, /JSON\.stringify\(current\) === JSON\.stringify\(discovered\)/);
+  assert.doesNotMatch(app, /if \(discoveredMarkets\)[\s\S]{0,300}else \{\s*setMarkets\(\[\]\)/);
+  assert.match(home, /current === 'ready' \? current : 'loading'/);
+  assert.match(home, /ethereumRefreshing \? 'Refreshing…' : 'Refresh'/);
+  assert.match(home, />PFT balance</);
+  assert.match(home, /Native PFTL asset · transferable and used for fees/);
+  assert.doesNotMatch(home, />Network fees</);
+});
+
 test('retired browser workflow modules and proxy are absent', async () => {
   const [app, vite] = await Promise.all([
     source('App.jsx'),

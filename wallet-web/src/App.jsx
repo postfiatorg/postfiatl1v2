@@ -25,6 +25,13 @@ import { loadNavcoinMarkets, navcoinMarketByKey } from './lib/navcoin-markets.js
 
 const PROXY_AUTH_SESSION_KEY = 'postfiat.wallet_proxy_api_token';
 
+function retainEqualMarkets(current, discovered) {
+  // Route discovery runs with the general five-second status poll. Preserve
+  // object identity when the governed registry has not changed so consumers
+  // do not mistake a routine poll for a market/network change.
+  return JSON.stringify(current) === JSON.stringify(discovered) ? current : discovered;
+}
+
 async function loadControlledLocalProxySession() {
   const response = await fetch('/api/bridge/local-session', {
     method: 'GET',
@@ -157,12 +164,9 @@ export default function App() {
         setChainStatus(status?.ok ? status.result : null);
         setChainCapabilities(caps?.ok ? caps : null);
         if (discoveredMarkets) {
-          setMarkets(discoveredMarkets);
+          setMarkets(current => retainEqualMarkets(current, discoveredMarkets));
           setMarketKey(current => discoveredMarkets.some(market => market.key === current)
             ? current : (discoveredMarkets[0]?.key || ''));
-        } else {
-          setMarkets([]);
-          setMarketKey('');
         }
       } catch (_) {
         if (!disposed) {

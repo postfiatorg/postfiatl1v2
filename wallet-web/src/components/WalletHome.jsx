@@ -53,6 +53,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
   const [ethereumUsdc, setEthereumUsdc] = useState(0n);
   const [wrappedBalances, setWrappedBalances] = useState({});
   const [ethereumStatus, setEthereumStatus] = useState(evm.hasMetaMask() ? 'disconnected' : 'unavailable');
+  const [ethereumRefreshing, setEthereumRefreshing] = useState(false);
   const [wrapOpen, setWrapOpen] = useState(false);
   const [fastpaySheetMode, setFastpaySheetMode] = useState('wrap');
   const [wrapAmt, setWrapAmt] = useState('');
@@ -426,7 +427,11 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
       setEthereumStatus(evm.hasMetaMask() ? 'disconnected' : 'unavailable');
       return;
     }
-    setEthereumStatus('loading');
+    // Keep already-rendered balances visible during background/manual
+    // refreshes. Replacing the whole panel with a loading placeholder caused
+    // a conspicuous blink whenever an upstream dependency was refreshed.
+    setEthereumStatus(current => current === 'ready' ? current : 'loading');
+    setEthereumRefreshing(true);
     try {
       await evm.ensureEthereumMainnet();
       const [usdc, ...wrapped] = await Promise.all([
@@ -440,6 +445,8 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
     } catch (_) {
       setEthereumOwner(owner);
       setEthereumStatus('error');
+    } finally {
+      setEthereumRefreshing(false);
     }
   }, [markets]);
 
@@ -666,12 +673,12 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
           <div style={{ fontSize: 11.5, color: 'var(--dim)' }}>{markets.length ? 'Verified NAV market available' : 'Market details unavailable'}</div>
         </div>
         <div className="pf-tile">
-          <div className="pf-eyebrow" style={{ fontSize: 10 }}>Network fees</div>
+          <div className="pf-eyebrow" style={{ fontSize: 10 }}>PFT balance</div>
           <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>
             {accountBalanceLabel} <span style={{ fontSize: 14, color: 'var(--muted)' }}>PFT</span>
           </div>
           <div style={{ fontSize: 11.5, color: feeBalanceLow ? 'var(--amber)' : 'var(--dim)' }}>
-            {feeBalanceLow ? 'Low balance — some transactions may not have enough PFT for fees' : 'Used to pay PFTL transaction fees'}
+            {feeBalanceLow ? 'Low balance — some transactions may not have enough PFT for fees' : 'Native PFTL asset · transferable and used for fees'}
           </div>
         </div>
       </div>
@@ -685,7 +692,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
             <div className="pf-card" style={{ padding: '6px 18px' }}>
               {[
                 ...issuedAssetRows,
-                ['PFT', rpcError && !accountKnown ? 'Unavailable' : `${accountBalanceLabel} PFT`, rpcError ? 'Balance unavailable' : 'PFTL network fees'],
+                ['PFT', rpcError && !accountKnown ? 'Unavailable' : `${accountBalanceLabel} PFT`, rpcError ? 'Balance unavailable' : 'Native PFTL asset'],
               ].map(([k, v, note], i, arr) => (
                 <div key={i} className="pf-row" style={{ padding: '14px 0', borderBottom: i < arr.length - 1 ? '1px solid var(--border-soft)' : 'none' }}>
                   <div>
@@ -704,7 +711,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
         <div>
           <div className="pf-row" style={{ marginBottom: 12 }}>
             <div className="pf-eyebrow">Ethereum mainnet</div>
-            {ethereumStatus === 'ready' && <button className="pf-ghost" style={{ width: 'auto', padding: '6px 10px' }} onClick={() => refreshEthereum(ethereumOwner)}>Refresh</button>}
+            {ethereumStatus === 'ready' && <button className="pf-ghost" style={{ width: 'auto', padding: '6px 10px' }} onClick={() => refreshEthereum(ethereumOwner)} disabled={ethereumRefreshing}>{ethereumRefreshing ? 'Refreshing…' : 'Refresh'}</button>}
           </div>
           <div className="pf-card pf-activity-card" style={{ height: 'calc(100% - 30px)' }}>
             {ethereumStatus === 'unavailable' && <div style={{ padding: 14, color: 'var(--muted)', fontSize: 13 }}>Install MetaMask to view and move Ethereum assets.</div>}
