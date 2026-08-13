@@ -11,6 +11,7 @@ const CONFIG_SCHEMA = 'postfiat-eth-fast-lane-driver-config-v1';
 const JOB_SCHEMA = 'postfiat-trustless-bridge-job-v2';
 const STATE_SCHEMA = 'postfiat-trustless-bridge-worker-state-v2';
 const CHECKPOINT_SCHEMA = 'postfiat-eth-fast-lane-stage-checkpoint-v1';
+const MIGRATION_SCHEMA = 'postfiat-eth-fast-lane-checkpoint-migration-v1';
 const ROUTE_ID = 'ethereum-mainnet-usdc-v1';
 const SOURCE_CHAIN_ID = 1;
 const SOURCE_PROOF_KIND = 'sp1-ethereum-finality-v1';
@@ -25,6 +26,16 @@ const STAGES = [
     'capturing_state_proof',
     'proving',
     'verifying',
+    'claiming',
+];
+const LEGACY_CAP_STAGE_CONFIG_SHA256 = '2056911b955a5f93e6eae51fb6d72334c1876799a58d427628c15e058b975890';
+const LEGACY_CAP_STAGES = [
+    'confirming_deposit',
+    'waiting_for_ethereum_finality',
+    'capturing_state_proof',
+    'proving',
+    'verifying',
+    'growing_backed_cap',
     'claiming',
 ];
 const RESULT_FIELDS = new Set([
@@ -276,6 +287,93 @@ function loadCheckpoint(file, expected) {
     return checkpoint;
 }
 
+function sameRouteIdentity(left, right) {
+    return [
+        'route_id', 'source_chain_id', 'source_proof_kind', 'program_vkey',
+        'manifest_hash', 'route_profile_hash', 'asset_id', 'vault_address',
+        'vault_runtime_code_hash', 'token_address', 'token_runtime_code_hash',
+    ].every((field) => String(left?.[field]) === String(right?.[field]));
+}
+
+function migrateLegacyCapJob(jobPath, configPath, dependencies = {}) {
+    const expectedLegacyConfigSha256 = dependencies.expectedLegacyConfigSha256
+        || LEGACY_CAP_STAGE_CONFIG_SHA256;
+    const job = loadJob(jobPath);
+    const current = loadConfig(configPath);
+    const snapshot = path.join(job.jobDir, 'driver-config.snapshot.json');
+    const checkpoints = path.join(job.jobDir, 'checkpoints');
+    const workerState = path.join(job.jobDir, 'worker-state.json');
+    const migrationId = `remove-fake-cap-${expectedLegacyConfigSha256.slice(0, 12)}`;
+    const migrationRoot = path.join(job.jobDir, 'migrations', migrationId);
+
+    if (fs.existsSync(migrationRoot)) {
+        if (!fs.existsSync(snapshot)) atomicWrite(snapshot, current.config);
+        fs.mkdirSync(checkpoints, { recursive: true, mode: 0o700 });
+        return JSON.parse(fs.readFileSync(path.join(migrationRoot, 'migration-report.json'), 'utf8'));
+    }
+
+    const legacyFile = secureRegularFile(snapshot, 'legacy driver config', true);
+    const legacyBytes = fs.readFileSync(legacyFile);
+    const legacyConfigSha256 = sha256(legacyBytes);
+    if (legacyConfigSha256 !== expectedLegacyConfigSha256) {
+        throw terminalError('legacy driver config is not an approved migration source', 'bridge_migration_source_invalid');
+    }
+    const legacy = JSON.parse(legacyBytes);
+    if (legacy?.schema !== CONFIG_SCHEMA
+        || !sameRouteIdentity(legacy, current.config)
+        || !Array.isArray(legacy.stages)
+        || stableJson(legacy.stages.map((row) => row?.stage)) !== stableJson(LEGACY_CAP_STAGES)) {
+        throw terminalError('legacy driver route identity or stage order changed', 'bridge_migration_binding_failed');
+    }
+    if (!fs.statSync(checkpoints).isDirectory()
+        || fs.existsSync(path.join(checkpoints, '06-claiming.json'))) {
+        throw terminalError('legacy job is not an unclaimed cap-stage job', 'bridge_migration_state_invalid');
+    }
+
+    let prior = '0'.repeat(64);
+    const checkpointHashes = [];
+    for (let index = 0; index < LEGACY_CAP_STAGES.length - 1; index += 1) {
+        const stage = LEGACY_CAP_STAGES[index];
+        const file = path.join(checkpoints, `${String(index).padStart(2, '0')}-${stage}.json`);
+        const checkpoint = JSON.parse(fs.readFileSync(secureRegularFile(file, `legacy ${stage} checkpoint`), 'utf8'));
+        if (checkpoint?.schema !== CHECKPOINT_SCHEMA
+            || checkpoint.stage !== stage
+            || checkpoint.stage_index !== index
+            || checkpoint.request_fingerprint !== job.fingerprint
+            || checkpoint.config_sha256 !== legacyConfigSha256
+            || checkpoint.prior_checkpoint_sha256 !== prior
+            || checkpoint.checkpoint_sha256 !== checkpointHash(checkpoint)) {
+            throw terminalError(`legacy checkpoint is invalid at ${stage}`, 'bridge_migration_checkpoint_invalid');
+        }
+        assertCommonBinding(checkpoint.result, stage, job.request, legacy);
+        prior = checkpoint.checkpoint_sha256;
+        checkpointHashes.push({ stage, checkpoint_sha256: prior });
+    }
+
+    const staging = `${migrationRoot}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+    fs.mkdirSync(path.dirname(migrationRoot), { recursive: true, mode: 0o700 });
+    fs.mkdirSync(staging, { mode: 0o700 });
+    const report = {
+        schema: MIGRATION_SCHEMA,
+        migration_id: migrationId,
+        request_fingerprint: job.fingerprint,
+        legacy_config_sha256: legacyConfigSha256,
+        replacement_config_sha256: current.configSha256,
+        archived_terminal_checkpoint_sha256: prior,
+        archived_checkpoints: checkpointHashes,
+        replay_policy: 'revalidate_idempotent_stages_then_submit_missing_claim',
+        ethereum_transaction_replay_allowed: false,
+    };
+    atomicWrite(path.join(staging, 'migration-report.json'), report);
+    fs.renameSync(snapshot, path.join(staging, 'driver-config.snapshot.json'));
+    fs.renameSync(checkpoints, path.join(staging, 'checkpoints'));
+    if (fs.existsSync(workerState)) fs.renameSync(workerState, path.join(staging, 'worker-state.json'));
+    fs.renameSync(staging, migrationRoot);
+    atomicWrite(snapshot, current.config);
+    fs.mkdirSync(checkpoints, { mode: 0o700 });
+    return report;
+}
+
 function writeWorkerState(context, status, extra = {}) {
     atomicWrite(path.join(context.jobDir, 'worker-state.json'), {
         schema: STATE_SCHEMA,
@@ -505,7 +603,12 @@ async function cli(argv = process.argv.slice(2)) {
         await runJob(option(argv, '--job-file'), option(argv, '--config'));
         return 0;
     }
-    throw Object.assign(new Error('expected validate-config, readiness, or run-job'), { terminal: true });
+    if (command === 'migrate-legacy-cap-job') {
+        const result = migrateLegacyCapJob(option(argv, '--job-file'), option(argv, '--config'));
+        process.stdout.write(`${JSON.stringify(result)}\n`);
+        return 0;
+    }
+    throw Object.assign(new Error('expected validate-config, readiness, run-job, or migrate-legacy-cap-job'), { terminal: true });
 }
 
 if (require.main === module) {
@@ -522,6 +625,7 @@ module.exports = {
     SOURCE_CHAIN_ID,
     SOURCE_PROOF_KIND,
     STAGES,
+    migrateLegacyCapJob,
     readiness,
     runJob,
     validateConfig,

@@ -7,7 +7,7 @@ const os = require('os');
 const path = require('path');
 const {
     CONFIG_SCHEMA, ROUTE_ID, SOURCE_CHAIN_ID, SOURCE_PROOF_KIND, STAGES,
-    readiness, runJob, validateConfig,
+    migrateLegacyCapJob, readiness, runJob, validateConfig,
 } = require('./eth-fast-lane-driver');
 const TEST_PROGRAM_VKEY = `0x${'6b'.repeat(32)}`;
 const TEST_MANIFEST_HASH = '6c'.repeat(32);
@@ -168,6 +168,78 @@ function makeJob(directory, suffix = '11') {
     return file;
 }
 
+function resultFor(stage, request) {
+    const result = {
+        ok: true, stage,
+        route_id: request.route_id, source_chain_id: request.source_chain_id,
+        source_proof_kind: SOURCE_PROOF_KIND,
+        program_vkey: TEST_PROGRAM_VKEY, manifest_hash: TEST_MANIFEST_HASH,
+        route_profile_hash: TEST_ROUTE_PROFILE_HASH, asset_id: TEST_ASSET_ID,
+        vault_address: TEST_VAULT, vault_runtime_code_hash: TEST_VAULT_CODE_HASH,
+        token_address: TEST_TOKEN, token_runtime_code_hash: TEST_TOKEN_CODE_HASH,
+        deposit_tx_hash: request.deposit_tx_hash, deposit_id: request.deposit_id,
+        pftl_recipient: request.pftl_recipient, depositor: request.depositor,
+        amount_atoms: request.amount_atoms,
+    };
+    if (stage === 'confirming_deposit') result.deposit_confirmed = true;
+    if (stage === 'waiting_for_ethereum_finality') {
+        result.ethereum_finalized = true;
+        result.finalized_block_hash = `0x${'55'.repeat(32)}`;
+        result.finalized_block_number = 123456;
+    }
+    if (stage === 'capturing_state_proof') {
+        result.witness_sha256 = '66'.repeat(32);
+        result.evidence_root = `0x${'67'.repeat(48)}`;
+        result.nullifier = `0x${'68'.repeat(32)}`;
+    }
+    if (stage === 'proving') {
+        result.proof_sha256 = '69'.repeat(32);
+        result.public_values_sha256 = '6a'.repeat(32);
+    }
+    if (stage === 'verifying') result.proof_verified = true;
+    return result;
+}
+
+function makeLegacyCapJob(directory, currentConfigFile) {
+    const jobFile = makeJob(directory, '13');
+    const job = JSON.parse(fs.readFileSync(jobFile, 'utf8'));
+    const current = JSON.parse(fs.readFileSync(currentConfigFile, 'utf8'));
+    const growing = {
+        ...current.stages.find((row) => row.stage === 'verifying'),
+        stage: 'growing_backed_cap',
+    };
+    growing.args = growing.args.map((arg) => (arg === 'verifying' ? 'growing_backed_cap' : arg));
+    const legacy = {
+        ...current,
+        stages: [
+            ...current.stages.slice(0, 5),
+            growing,
+            current.stages[5],
+        ],
+    };
+    const snapshot = path.join(directory, 'driver-config.snapshot.json');
+    writeJson(snapshot, legacy);
+    const configSha256 = fileSha256(snapshot);
+    let prior = '0'.repeat(64);
+    const legacyStages = legacy.stages.slice(0, 6).map((row) => row.stage);
+    legacyStages.forEach((stage, index) => {
+        const checkpoint = {
+            schema: 'postfiat-eth-fast-lane-stage-checkpoint-v1',
+            stage,
+            stage_index: index,
+            request_fingerprint: job.request_fingerprint,
+            config_sha256: configSha256,
+            prior_checkpoint_sha256: prior,
+            result: resultFor(stage, job.request),
+        };
+        checkpoint.checkpoint_sha256 = sha256(stableJson(checkpoint));
+        prior = checkpoint.checkpoint_sha256;
+        writeJson(path.join(directory, 'checkpoints', `${String(index).padStart(2, '0')}-${stage}.json`), checkpoint);
+    });
+    writeJson(path.join(directory, 'worker-state.json'), { status: 'claiming', retryable: true });
+    return { jobFile, configSha256 };
+}
+
 async function main() {
     const config = makeConfig(root);
     const configValidation = validateConfig(config);
@@ -239,6 +311,25 @@ async function main() {
     assert.strictEqual(state.retryable, false);
 
     makeConfig(root);
+    const migrationJobDir = path.join(root, 'job-cap-migration');
+    const migrationJob = makeLegacyCapJob(migrationJobDir, config);
+    const migration = migrateLegacyCapJob(migrationJob.jobFile, config, {
+        expectedLegacyConfigSha256: migrationJob.configSha256,
+    });
+    assert.strictEqual(migration.ethereum_transaction_replay_allowed, false);
+    assert.strictEqual(migration.archived_checkpoints.length, 6);
+    assert.deepStrictEqual(fs.readdirSync(path.join(migrationJobDir, 'checkpoints')), []);
+    assert.ok(fs.existsSync(path.join(
+        migrationJobDir, 'migrations', migration.migration_id, 'driver-config.snapshot.json',
+    )));
+    fs.writeFileSync(path.join(migrationJobDir, 'proving-failed-once'), '1');
+    const migratedAccepted = await runJob(migrationJob.jobFile, config);
+    assert.strictEqual(migratedAccepted.status, 'accepted');
+    assert.strictEqual(
+        JSON.parse(fs.readFileSync(path.join(migrationJobDir, 'worker-state.json'), 'utf8')).status,
+        'accepted',
+    );
+
     const badJobDir = path.join(root, 'job-b');
     const badJob = makeJob(badJobDir, '12');
     process.env.MOCK_BAD_STAGE = 'confirming_deposit';

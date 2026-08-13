@@ -62,9 +62,9 @@ A100_HASHES = {
     A100_PROVE: "f5b0edea1fe0380a2752244133bc80d9d406d02333ce8dfa359ed5347dfbc18b",
     A100_ELF: "0e59a0cf7723b9028aaa4c57f9e9c0da72119a552d62a5577223ba7b2df222d3",
 }
-PFTL_NODE = "/opt/postfiat/releases/pnok-private-fix-2246d25/postfiat-node"
-PFTL_NODE_HASH = "05330fb20a40b8a4536000ec57da1862d879bcdc4a21bc8c0657f5c56aa8e0f5"
-PFTL_TOPOLOGY = "/etc/postfiat/releases/pnok-private-fix-2246d25/topology.json"
+PFTL_NODE = "/opt/postfiat/releases/pfusdc-pool-repair-8a62cf9/postfiat-node"
+PFTL_NODE_HASH = "e6b31e715a025170747b4222f4afd703e0d9a4e7fe7f6ac998715848905d0ec5"
+PFTL_TOPOLOGY = "/etc/postfiat/releases/pfusdc-pool-repair-8a62cf9/topology.json"
 PFTL_ISSUER_KEY = "/var/lib/postfiat/validator-2/a666-joe-e2e-20260728/pfusdc-issuer-key.json"
 PFTL_CAST = "/var/lib/postfiat/validator-2/pfusdc-latency-20260727-run2/cast"
 PFTL_CAST_HASH = "ccd95a4607ca3ebfcb88bb90e7235cdb7f0564f5f1afa17478d5fccabbb222cb"

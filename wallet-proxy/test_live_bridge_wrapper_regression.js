@@ -47,6 +47,8 @@ assert.ok(relay.includes('.asset_id == \\$family or .asset_family_id == \\$famil
 assert.match(stage, /skip_finalize=deposit\.get\("status"\) == "finalized"/);
 assert.match(stage, /ROUTE_EPOCH = 6/);
 assert.match(stage, /"PFTL_ROUTE_EPOCH": str\(ROUTE_EPOCH\)/);
+assert.match(stage, /pfusdc-pool-repair-8a62cf9\/postfiat-node/);
+assert.match(stage, /e6b31e715a025170747b4222f4afd703e0d9a4e7fe7f6ac998715848905d0ec5/);
 assert.match(stage, /eth-l1-mainnet-fast-lane-p0-depositor-fix-20260731/);
 assert.match(bridge, /rpc\.accountAssets\(address\)/);
 assert.match(bridge, /function pfusdcLabel/);
