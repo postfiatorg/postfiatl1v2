@@ -20,6 +20,10 @@ import {
   loadNavcoinReturnReadiness,
   waitForNavcoinReturnJob,
 } from '../lib/navcoin-return-relay.js';
+import {
+  loadNavcoinSecondaryMarketData,
+  navDiscountPremiumBps,
+} from '../lib/navcoin-secondary-market.js';
 
 const EMPTY_PROGRESS = [];
 const ERC20_BALANCE_OF_SELECTOR = '0x70a08231';
@@ -58,10 +62,10 @@ function shortTx(value) {
 }
 
 function verificationCopy(trustClass) {
-  if (trustClass === 'TRUSTLESS_FINALITY') return 'automatic finality verification';
-  if (trustClass === 'BFT_CHECKPOINT') return 'validator-confirmed finality check';
-  if (trustClass === 'CONTROLLED') return 'operator-confirmed finality check';
-  return 'route finality check';
+  if (trustClass === 'TRUSTLESS_FINALITY') return 'automatic finality check';
+  if (trustClass === 'BFT_CHECKPOINT') return 'PFTL finality check';
+  if (trustClass === 'CONTROLLED') return 'finality check';
+  return 'finality check';
 }
 
 async function ensureEthereumMainnet() {
@@ -126,6 +130,8 @@ export default function NavcoinPrimaryMarket({
   const [metamaskNavcoinBalance, setMetamaskNavcoinBalance] = useState(null);
   const [pendingReturn, setPendingReturn] = useState(null);
   const [exportPacketHash, setExportPacketHash] = useState('');
+  const [secondaryMarket, setSecondaryMarket] = useState(null);
+  const [secondaryMarketError, setSecondaryMarketError] = useState('');
   const navSymbol = market.symbol;
   const wrappedSymbol = market.wrappedSymbol;
   const settlementSymbol = market.settlementSymbol;
@@ -164,6 +170,27 @@ export default function NavcoinPrimaryMarket({
     const timer = setInterval(refresh, 12_000);
     return () => clearInterval(timer);
   }, [refresh]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const next = await loadNavcoinSecondaryMarketData(market);
+        if (!cancelled) {
+          setSecondaryMarket(next);
+          setSecondaryMarketError('');
+        }
+      } catch (_) {
+        if (!cancelled) {
+          setSecondaryMarket(null);
+          setSecondaryMarketError('Live Uniswap price is temporarily unavailable.');
+        }
+      }
+    };
+    load();
+    const timer = setInterval(load, 15_000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [market]);
 
   useEffect(() => {
     const assets = liveSnapshot?.assets;
@@ -377,7 +404,7 @@ export default function NavcoinPrimaryMarket({
         setProgress(delivery === 'ethereum' ? [
           { label: 'Reserve order', state: 'pending', detail: 'Bind verified NAV, capacity, and MetaMask recipient' },
           { label: `Mint ${navSymbol}`, state: 'pending', detail: `Exchange ${settlementSymbol} and increase native supply` },
-          { label: `Export ${navSymbol}`, state: 'pending', detail: 'Consume the entitlement and finalize the proof packet' },
+          { label: `Export ${navSymbol}`, state: 'pending', detail: 'Consume the entitlement and finalize cross-chain verification' },
           { label: `Mint ${wrappedSymbol}`, state: 'pending', detail: `Waiting for the ${verificationCopy(fresh.route.outbound_verification_class)} on Ethereum` },
           { label: 'Verify MetaMask', state: 'pending', detail: 'Read the mainnet ERC-20 balance' },
         ] : [
@@ -585,6 +612,11 @@ export default function NavcoinPrimaryMarket({
   const returnProofLabel = verificationCopy(route?.return_verification_class);
   const uniswapBuyUrl = `https://app.uniswap.org/swap?chain=mainnet&inputCurrency=${ETH_MAINNET_USDC}&outputCurrency=${market.wrappedToken}`;
   const uniswapSellUrl = `https://app.uniswap.org/swap?chain=mainnet&inputCurrency=${market.wrappedToken}&outputCurrency=${ETH_MAINNET_USDC}`;
+  const navUsdcAtoms = nav?.nav_per_unit ? BigInt(nav.nav_per_unit) / 100n : 0n;
+  const secondaryBps = secondaryMarket
+    ? navDiscountPremiumBps(secondaryMarket.spotUsdcAtoms, navUsdcAtoms) : null;
+  const secondaryDifference = secondaryBps === null ? ''
+    : `${(Number(secondaryBps < 0n ? -secondaryBps : secondaryBps) / 100).toFixed(2)}% ${secondaryBps < 0n ? 'below' : secondaryBps > 0n ? 'above' : 'at'} verified NAV`;
   const displayBlockers = evaluation.blockingReasons
     .filter(reason => reason !== `enter a positive ${navSymbol} amount`)
     .map(reason => {
@@ -688,6 +720,8 @@ export default function NavcoinPrimaryMarket({
             <div><span>NAV reserve value</span><strong>{formatNavcoinUnits(quote?.baseReserveAtoms, market.settlementDecimals)} {settlementSymbol}</strong></div>
             <div><span>{mode === 'issue' ? 'Purchase spread' : 'Redemption spread'}</span><strong>{formatNavcoinUnits(quote?.spreadAtoms, market.settlementDecimals)} {settlementSymbol}</strong></div>
             <div><span>PFTL network fees</span><strong>Quoted and checked before each local signature</strong></div>
+            <div><span>Ethereum gas</span><strong>{(mode === 'issue' && delivery === 'ethereum') || (mode === 'redeem' && redeemSource === 'ethereum') ? 'Shown in MetaMask before confirmation' : 'None'}</strong></div>
+            <div><span>Timing</span><strong>{(mode === 'issue' && delivery === 'ethereum') || (mode === 'redeem' && redeemSource === 'ethereum') ? 'Ethereum confirmation + bridge relay; progress is saved' : 'PFTL finality after confirmation'}</strong></div>
           </div>
 
           {mode === 'issue' && (
@@ -780,8 +814,16 @@ export default function NavcoinPrimaryMarket({
           <div className="pf-card" style={{ display: 'grid', gap: 12 }}>
             <div className="navcoin-primary-side-title" style={{ marginBottom: 0 }}><span>SECONDARY MARKET</span><small>Ethereum</small></div>
             <strong style={{ fontSize: 16 }}>Trade {wrappedSymbol} on Uniswap</strong>
+            {secondaryMarket ? (
+              <div className="navcoin-primary-quote" style={{ margin: 0 }}>
+                <div><span>Uniswap spot price</span><strong>${formatNavcoinUnits(secondaryMarket.spotUsdcAtoms, 6)} USDC</strong></div>
+                <div><span>Verified NAV</span><strong>{formatNavcoinNav(nav?.nav_per_unit)}</strong></div>
+                <div><span>Market vs NAV</span><strong>{secondaryDifference}</strong></div>
+                <div><span>Observed</span><strong>Ethereum block {Number(secondaryMarket.ethereumBlockNumber).toLocaleString()}</strong></div>
+              </div>
+            ) : secondaryMarketError ? <div className="pf-notice">{secondaryMarketError}</div> : null}
             <p style={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.55 }}>
-              Uniswap sets the live market price, slippage, and Ethereum gas. Review its quote before confirming in MetaMask.
+              Spot price is a pool-state estimate, not a guaranteed fill. Uniswap shows the executable quote, LP fee, price impact, minimum received, and Ethereum gas before MetaMask confirmation.
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <a className="pf-button" style={{ textDecoration: 'none' }} href={uniswapBuyUrl} target="_blank" rel="noopener noreferrer">Buy {wrappedSymbol}</a>
@@ -796,7 +838,7 @@ export default function NavcoinPrimaryMarket({
             <div style={{ display: 'grid', gap: 10, paddingTop: 14 }}>
               <div><span>Buy price</span><strong>{route?.issue_multiplier_bps ? `${(Number(route.issue_multiplier_bps) / 10000).toFixed(3)} × NAV` : '—'}</strong></div>
               <div><span>Redeem price</span><strong>{route?.redeem_multiplier_bps ? `${(Number(route.redeem_multiplier_bps) / 10000).toFixed(4)} × NAV` : '—'}</strong></div>
-              <div><span>Reserve proof</span><strong>{route?.pricing_reserve_packet_hash ? truncateMiddle(route.pricing_reserve_packet_hash, 8) : '—'}</strong></div>
+              <div><span>Reserve evidence</span><strong>{route?.pricing_reserve_packet_hash ? truncateMiddle(route.pricing_reserve_packet_hash, 8) : '—'}</strong></div>
               <div><span>Route</span><strong title={route?.route_id}>{route?.route_id ? truncateMiddle(route.route_id, 12) : '—'}</strong></div>
               <div><span>{wrappedSymbol}</span><strong title={route?.wrapped_navcoin_token}>{route?.wrapped_navcoin_token ? truncateMiddle(route.wrapped_navcoin_token, 8) : '—'}</strong></div>
             </div>
@@ -808,7 +850,7 @@ export default function NavcoinPrimaryMarket({
         <div className="navcoin-primary-progress">
           <div className="navcoin-primary-progress-head">
             <strong>{lastCompleted ? (lastCompleted === 'ethereum' ? `${wrappedSymbol} delivered to MetaMask` : lastCompleted === 'issue' ? `${navSymbol} purchase complete` : `${navSymbol} redemption complete`) : 'Finality progress'}</strong>
-            <small>Proof relay jobs continue safely if this page closes.</small>
+            <small>Bridge relay jobs continue safely if this page closes.</small>
           </div>
           {progress.map((step, index) => (
             <div className={`navcoin-primary-progress-step ${step.state}`} key={`${step.label}-${index}`}>

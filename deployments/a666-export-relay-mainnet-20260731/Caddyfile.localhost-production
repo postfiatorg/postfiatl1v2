@@ -13,11 +13,15 @@
     }
 
     reverse_proxy /api/navswap/* 127.0.0.1:8080
+    reverse_proxy /api/navcoin/* 127.0.0.1:8080
     @shieldedNavSwap path /api/shielded-nav-swap /api/shielded-nav-swap/*
     reverse_proxy @shieldedNavSwap 127.0.0.1:8080
     reverse_proxy /api/bridge/* 127.0.0.1:8080
     reverse_proxy /api/a666/* 127.0.0.1:8080
     reverse_proxy /api/a666-roundtrip/* 127.0.0.1:8080
+
+    @retiredFastSwap path /api/fastswap /api/fastswap/* /api/fastswap-demo /api/fastswap-demo/*
+    respond @retiredFastSwap 404
 
     @ethRpc path /eth-rpc /eth-rpc/*
     handle @ethRpc {
@@ -27,19 +31,8 @@
         }
     }
 
-    # FastSwap demo backend (loopback :18830). The API token is injected
-    # server-side from the container env and is never shipped to browsers.
-    @fastswapDemoApi path /api/fastswap-demo /api/fastswap-demo/* /api/fastswap /api/fastswap/*
-    handle @fastswapDemoApi {
-        @demoAlias path /api/fastswap /api/fastswap/*
-        rewrite @demoAlias /api/fastswap-demo{uri}
-        reverse_proxy 127.0.0.1:18830 {
-            header_up x-fastswap-demo-token {$FASTSWAP_DEMO_API_TOKEN}
-        }
-    }
-
     @walletStatic {
-        not path /rpc /api/navswap/* /api/shielded-nav-swap /api/shielded-nav-swap/* /api/bridge/* /api/a666/* /api/a666-roundtrip/* /eth-rpc /eth-rpc/* /api/fastswap-demo /api/fastswap-demo/* /api/fastswap /api/fastswap/*
+        not path /rpc /api/navswap/* /api/navcoin/* /api/shielded-nav-swap /api/shielded-nav-swap/* /api/bridge/* /api/a666/* /api/a666-roundtrip/* /api/fastswap /api/fastswap/* /api/fastswap-demo /api/fastswap-demo/* /eth-rpc /eth-rpc/*
     }
     handle @walletStatic {
         root * /wallet/dist

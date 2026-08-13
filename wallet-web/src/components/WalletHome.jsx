@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import * as evm from '../lib/evm.js';
 import { formatBalance, formatAssetBalance, shortenAssetId, truncateMiddle, pftToAtoms } from '../lib/utils.js';
 import { displayAssetSymbol, navcoinMarketForAsset } from '../lib/navcoin-markets.js';
 import {
@@ -18,6 +19,14 @@ import {
 function formatUsdE8(value) {
   const cents = (BigInt(value) + 500_000n) / 1_000_000n;
   return `$${(cents / 100n).toLocaleString()}.${(cents % 100n).toString().padStart(2, '0')}`;
+}
+
+function formatTokenUnits(value, decimals) {
+  const atoms = BigInt(value || 0);
+  const scale = 10n ** BigInt(decimals);
+  const whole = atoms / scale;
+  const fraction = (atoms % scale).toString().padStart(decimals, '0').replace(/0+$/, '').slice(0, 6);
+  return `${whole.toLocaleString()}${fraction ? `.${fraction}` : ''}`;
 }
 
 export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, address, publicKeyHex, chainStatus, chainCapabilities, liveSnapshot = null, walletFeedStatus = null, onCopy, go, visible = true }) {
@@ -40,6 +49,10 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
   const [navByAssetId, setNavByAssetId] = useState({});
   const [refreshing, setRefreshing] = useState(false);
   const [txs, setTxs] = useState([]);
+  const [ethereumOwner, setEthereumOwner] = useState('');
+  const [ethereumUsdc, setEthereumUsdc] = useState(0n);
+  const [wrappedBalances, setWrappedBalances] = useState({});
+  const [ethereumStatus, setEthereumStatus] = useState(evm.hasMetaMask() ? 'disconnected' : 'unavailable');
   const [wrapOpen, setWrapOpen] = useState(false);
   const [fastpaySheetMode, setFastpaySheetMode] = useState('wrap');
   const [wrapAmt, setWrapAmt] = useState('');
@@ -126,7 +139,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
         try {
           const txResp = await rpc.accountTx(address, { limit: 20 });
           if (txResp.ok && txResp.result) {
-            const items = Array.isArray(txResp.result) ? txResp.result : (txResp.result.transactions || []);
+            const items = Array.isArray(txResp.result) ? txResp.result : (txResp.result.rows || txResp.result.transactions || []);
             setTxs(items);
           }
         } catch (e) { /* keep existing */ }
@@ -405,6 +418,59 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
     };
   }, [markets, rpc, visible]);
 
+  const refreshEthereum = useCallback(async (owner) => {
+    if (!owner) {
+      setEthereumOwner('');
+      setEthereumUsdc(0n);
+      setWrappedBalances({});
+      setEthereumStatus(evm.hasMetaMask() ? 'disconnected' : 'unavailable');
+      return;
+    }
+    setEthereumStatus('loading');
+    try {
+      await evm.ensureEthereumMainnet();
+      const [usdc, ...wrapped] = await Promise.all([
+        evm.getEthereumUsdcBalance(owner),
+        ...markets.map(market => evm.getEthereumTokenBalance(market.wrappedToken, owner)),
+      ]);
+      setEthereumOwner(owner);
+      setEthereumUsdc(usdc);
+      setWrappedBalances(Object.fromEntries(markets.map((market, index) => [market.routeId, wrapped[index]])));
+      setEthereumStatus('ready');
+    } catch (_) {
+      setEthereumOwner(owner);
+      setEthereumStatus('error');
+    }
+  }, [markets]);
+
+  const connectEthereum = useCallback(async () => {
+    try {
+      const owner = await evm.connectMetaMask();
+      await refreshEthereum(owner);
+    } catch (_) {
+      setEthereumStatus('error');
+    }
+  }, [refreshEthereum]);
+
+  useEffect(() => {
+    if (!visible || !evm.hasMetaMask()) return undefined;
+    let active = true;
+    window.ethereum.request({ method: 'eth_accounts' }).then(accounts => {
+      if (active) refreshEthereum(accounts?.[0] || '');
+    }).catch(() => { if (active) setEthereumStatus('error'); });
+    const accountsChanged = accounts => refreshEthereum(accounts?.[0] || '');
+    const chainChanged = () => {
+      if (ethereumOwner) refreshEthereum(ethereumOwner);
+    };
+    window.ethereum.on?.('accountsChanged', accountsChanged);
+    window.ethereum.on?.('chainChanged', chainChanged);
+    return () => {
+      active = false;
+      window.ethereum.removeListener?.('accountsChanged', accountsChanged);
+      window.ethereum.removeListener?.('chainChanged', chainChanged);
+    };
+  }, [ethereumOwner, refreshEthereum, visible]);
+
   const normalizeCode = (code) => String(code || '').toUpperCase() === 'PFUSDC' ? 'pfUSDC' : String(code || '');
   const getAssetCode = (assetOrId) => {
     const asset = typeof assetOrId === 'object' ? assetOrId : null;
@@ -474,9 +540,10 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
   // its registry-bound ID and use the symbol only as an offline fallback.
   const navAsset = assets.find(asset => navcoinMarketForAsset(markets, asset.asset_id || asset.id))
     || assets.find(asset => String(asset?.code || '') === 'A666');
-  const portfolioAssetCount = assets.length + 1;
+  const ethereumAssetCount = ethereumStatus === 'ready' ? 1 + markets.length : 0;
+  const portfolioAssetCount = assets.length + 1 + ethereumAssetCount;
   const feeBalanceLow = accountKnown && BigInt(accountBalance) < 1_000n;
-  const knownPortfolioUsdE8 = assets.reduce((total, asset) => {
+  const pftlPortfolioUsdE8 = assets.reduce((total, asset) => {
     const assetId = asset.asset_id || asset.id;
     const balanceAtoms = BigInt(String(getAssetBalance(asset)));
     if (String(asset.code || '').toUpperCase() === 'PFUSDC') return total + balanceAtoms * 100n;
@@ -484,12 +551,23 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
     const nav = market ? navByAssetId[assetId] : null;
     return nav ? total + (balanceAtoms * BigInt(nav)) / (10n ** BigInt(market.decimals)) : total;
   }, 0n);
+  const ethereumPortfolioUsdE8 = ethereumStatus === 'ready'
+    ? ethereumUsdc * 100n + markets.reduce((total, market) => {
+      const nav = navByAssetId[market.navAssetId];
+      const wrapped = wrappedBalances[market.routeId] || 0n;
+      return nav ? total + (wrapped * BigInt(nav)) / (10n ** BigInt(market.decimals)) : total;
+    }, 0n)
+    : 0n;
+  const knownPortfolioUsdE8 = pftlPortfolioUsdE8 + ethereumPortfolioUsdE8;
   const pricedAssetIds = new Set(assets.filter(asset => {
     const assetId = asset.asset_id || asset.id;
     return String(asset.code || '').toUpperCase() === 'PFUSDC'
       || Boolean(navcoinMarketForAsset(markets, assetId) && navByAssetId[assetId]);
   }).map(asset => asset.asset_id || asset.id));
-  const unpricedCount = assets.length - pricedAssetIds.size + 1;
+  const unpricedEthereumCount = ethereumStatus === 'ready'
+    ? markets.filter(market => !navByAssetId[market.navAssetId]).length
+    : 0;
+  const unpricedCount = assets.length - pricedAssetIds.size + 1 + unpricedEthereumCount;
   const knownPortfolioLabel = knownPortfolioUsdE8 > 0n
     ? formatUsdE8(knownPortfolioUsdE8)
     : null;
@@ -527,7 +605,7 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
           </div>
           <div style={{ fontSize: 12.5, color: 'var(--dim)', marginTop: 8, maxWidth: 620 }}>
             {knownPortfolioLabel
-              ? `Based on pfUSDC and verified A666 NAV. ${unpricedCount} ${unpricedCount === 1 ? 'holding is' : 'holdings are'} excluded because no reliable price is available.`
+              ? `Includes PFTL pfUSDC, Ethereum USDC, and NAV assets valued at verified NAV. ${unpricedCount} ${unpricedCount === 1 ? 'holding is' : 'holdings are'} excluded because no reliable price is available.`
               : 'Issued assets and the PFT network-fee balance are itemized below. Pricing is still loading.'}
           </div>
         </div>
@@ -541,12 +619,12 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
 
       {/* warnings */}
       {chainCapabilities && chainCapabilities.read_only && (
-        <div className="pf-warning">RPC is read-only; transaction submission is disabled.</div>
+        <div className="pf-warning">This wallet is in view-only mode; transactions are disabled.</div>
       )}
       {chainCapabilities && !chainCapabilities.read_only && chainStatus && chainStatus.mempool_pending > 0 &&
         chainCapabilities.last_run_unix &&
         Date.now() / 1000 - chainCapabilities.last_run_unix > 300 && (
-        <div className="pf-notice">Network has pending transactions at height {chainStatus.block_height} that haven't been processed.</div>
+        <div className="pf-notice">The network is still processing recent transactions.</div>
       )}
       {rpcError && <div className="pf-error">{rpcError}</div>}
       {fastpayRecoveries.map(record => (
@@ -622,32 +700,23 @@ export default function WalletHome({ markets = [], rpc, txBuilder, backupJson, a
 
         </div>
 
-        {/* activity */}
+        {/* Ethereum holdings */}
         <div>
           <div className="pf-row" style={{ marginBottom: 12 }}>
-            <div className="pf-eyebrow">Recent activity</div>
+            <div className="pf-eyebrow">Ethereum mainnet</div>
+            {ethereumStatus === 'ready' && <button className="pf-ghost" style={{ width: 'auto', padding: '6px 10px' }} onClick={() => refreshEthereum(ethereumOwner)}>Refresh</button>}
           </div>
           <div className="pf-card pf-activity-card" style={{ height: 'calc(100% - 30px)' }}>
-            <div className="pf-feed">
-              {txs.length === 0 ? (
-                <div style={{ padding: '20px 14px', fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--dim)' }}>
-                      No native PFT transfers returned. Open Activity for wallet-scoped USDC deposits; issued-asset and NAV history is not available from this network endpoint yet.
-                </div>
-              ) : (
-                txs.map((tx, i) => {
-                  const a = formatActivity(tx);
-                  return (
-                    <div key={i} className="pf-act">
-                      <div className="pf-act-l">
-                        <div className="pf-act-t">{a.k}</div>
-                        <div className="pf-act-s">{a.d} · {a.t}</div>
-                      </div>
-                      <div className="pf-act-v" style={{ color: a.dir === 'in' ? 'var(--mint)' : 'var(--muted)' }}>{a.v}</div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            {ethereumStatus === 'unavailable' && <div style={{ padding: 14, color: 'var(--muted)', fontSize: 13 }}>Install MetaMask to view and move Ethereum assets.</div>}
+            {ethereumStatus === 'disconnected' && <div style={{ padding: 14, display: 'grid', gap: 12 }}><span style={{ color: 'var(--muted)', fontSize: 13 }}>Connect the Ethereum wallet that controls your USDC and wrapped NAV assets.</span><button className="pf-primary" onClick={connectEthereum}>Connect MetaMask</button></div>}
+            {ethereumStatus === 'loading' && <div style={{ padding: 14, color: 'var(--muted)', fontSize: 13 }}>Loading Ethereum balances…</div>}
+            {ethereumStatus === 'error' && <div style={{ padding: 14, display: 'grid', gap: 12 }}><span className="pf-error">Ethereum balances are unavailable. Select Ethereum mainnet in MetaMask and retry.</span><button className="pf-ghost" onClick={() => ethereumOwner ? refreshEthereum(ethereumOwner) : connectEthereum()}>Retry</button></div>}
+            {ethereumStatus === 'ready' && <div className="pf-feed">
+              <div className="pf-act"><div className="pf-act-l"><div className="pf-act-t">Connected wallet</div><div className="pf-act-s">Controls the Ethereum assets below</div></div><div className="pf-act-v">{truncateMiddle(ethereumOwner, 8)}</div></div>
+              <div className="pf-act"><div className="pf-act-l"><div className="pf-act-t">USDC</div><div className="pf-act-s">Ethereum mainnet</div></div><div className="pf-act-v">{formatTokenUnits(ethereumUsdc, 6)} USDC</div></div>
+              {markets.map(market => <div className="pf-act" key={market.routeId}><div className="pf-act-l"><div className="pf-act-t">{market.wrappedSymbol}</div><div className="pf-act-s">Ethereum mainnet · wrapped {market.symbol}</div></div><div className="pf-act-v">{formatTokenUnits(wrappedBalances[market.routeId] || 0n, market.decimals)} {market.wrappedSymbol}</div></div>)}
+              <div style={{ padding: 14 }}><button className="pf-ghost" onClick={() => go('activity')}>View all wallet activity</button></div>
+            </div>}
           </div>
         </div>
       </div>

@@ -138,9 +138,16 @@ wss } = runtime;
     const navcoinExportRelayReadiness = (...args) => runtime.navcoinExportRelayReadiness(...args);
     const submitNavcoinExportRelayJob = (...args) => runtime.submitNavcoinExportRelayJob(...args);
     const navcoinExportRelayJobStatus = (...args) => runtime.navcoinExportRelayJobStatus(...args);
+    const navcoinExportRelayJobsForRecipient = (...args) => runtime.navcoinExportRelayJobsForRecipient(...args);
     const navcoinReturnRelayReadiness = (...args) => runtime.navcoinReturnRelayReadiness(...args);
     const submitNavcoinReturnRelayJob = (...args) => runtime.submitNavcoinReturnRelayJob(...args);
     const navcoinReturnRelayJobStatus = (...args) => runtime.navcoinReturnRelayJobStatus(...args);
+    const navcoinReturnRelayJobsForRecipient = (...args) => runtime.navcoinReturnRelayJobsForRecipient(...args);
+    const pfusdcWithdrawalReadiness = (...args) => runtime.pfusdcWithdrawalReadiness(...args);
+    const submitPfusdcWithdrawalJob = (...args) => runtime.submitPfusdcWithdrawalJob(...args);
+    const retryPfusdcWithdrawalJob = (...args) => runtime.retryPfusdcWithdrawalJob(...args);
+    const pfusdcWithdrawalJobStatus = (...args) => runtime.pfusdcWithdrawalJobStatus(...args);
+    const pfusdcWithdrawalJobsForOwner = (...args) => runtime.pfusdcWithdrawalJobsForOwner(...args);
     const pnokFixWalletReadiness = (...args) => runtime.pnokFixWalletReadiness(...args);
     const submitPnokFixWalletJob = (...args) => runtime.submitPnokFixWalletJob(...args);
     const submitPnokFixRestoreJob = (...args) => runtime.submitPnokFixRestoreJob(...args);
@@ -1559,6 +1566,47 @@ wss } = runtime;
                 return true;
             }
 
+            if (req.method === 'GET' && url.pathname === '/api/bridge/withdrawals/readiness') {
+                const result = await pfusdcWithdrawalReadiness();
+                sendJson(req, res, result.ready === true ? 200 : 503, result);
+                return true;
+            }
+
+            if (req.method === 'POST' && url.pathname === '/api/bridge/withdrawals') {
+                const body = await readJsonBody(req, 16 * 1024);
+                const result = await submitPfusdcWithdrawalJob(body);
+                sendJson(req, res, 202, { ok: true, ...result });
+                return true;
+            }
+
+            if (req.method === 'GET' && url.pathname === '/api/bridge/withdrawals') {
+                const owner = String(url.searchParams.get('owner') || '').toLowerCase();
+                const jobs = pfusdcWithdrawalJobsForOwner(owner, Number(url.searchParams.get('limit') || 20));
+                sendJson(req, res, 200, { ok: true, schema: 'postfiat-pfusdc-wallet-withdrawal-job-list-v1', owner, jobs });
+                return true;
+            }
+
+            if (req.method === 'GET' && url.pathname.startsWith('/api/bridge/withdrawals/')) {
+                const id = decodeURIComponent(url.pathname.slice('/api/bridge/withdrawals/'.length));
+                const result = pfusdcWithdrawalJobStatus(id);
+                sendJson(req, res, result ? 200 : 404, result ? { ok: true, ...result } : { ok: false, code: 'pfusdc_withdrawal_job_not_found' });
+                return true;
+            }
+
+            const withdrawalRetryMatch = /^\/api\/bridge\/withdrawals\/([0-9a-f]{64})\/retry$/.exec(url.pathname);
+            if (req.method === 'POST' && withdrawalRetryMatch) {
+                const result = await retryPfusdcWithdrawalJob(withdrawalRetryMatch[1]);
+                sendJson(req, res, result ? 202 : 404, result ? { ok: true, ...result } : { ok: false, code: 'pfusdc_withdrawal_job_not_found' });
+                return true;
+            }
+
+            const marketDataMatch = /^\/api\/navcoin\/([A-Za-z0-9][A-Za-z0-9._-]{0,63})\/market-data$/.exec(url.pathname);
+            if (req.method === 'GET' && marketDataMatch) {
+                const result = await runtime.navcoinMarketData(marketDataMatch[1]);
+                sendJson(req, res, 200, result);
+                return true;
+            }
+
             if (req.method === 'POST' && url.pathname === '/api/bridge/jobs') {
                 const body = await readJsonBody(req);
                 const result = await submitTrustlessBridgeJob(body);
@@ -1620,6 +1668,12 @@ wss } = runtime;
                         result ? { ok: true, ...result } : { ok: false, code: 'navcoin_export_job_not_found' });
                     return true;
                 }
+                if (resource === 'export-jobs' && req.method === 'GET' && !jobId) {
+                    const recipient = String(url.searchParams.get('ethereum_recipient') || '').toLowerCase();
+                    const jobs = navcoinExportRelayJobsForRecipient(routeId, recipient, Number(url.searchParams.get('limit') || 20));
+                    sendJson(req, res, 200, { ok: true, schema: 'postfiat-navcoin-export-relay-job-list-v1', route_id: routeId, ethereum_recipient: recipient, jobs });
+                    return true;
+                }
                 if (resource === 'return-readiness' && req.method === 'GET' && !jobId) {
                     const result = await navcoinReturnRelayReadiness(routeId);
                     sendJson(req, res, result.ready === true ? 200
@@ -1639,6 +1693,12 @@ wss } = runtime;
                     const result = navcoinReturnRelayJobStatus(routeId, jobId);
                     sendJson(req, res, result ? 200 : 404,
                         result ? { ok: true, ...result } : { ok: false, code: 'navcoin_return_job_not_found' });
+                    return true;
+                }
+                if (resource === 'return-jobs' && req.method === 'GET' && !jobId) {
+                    const recipient = String(url.searchParams.get('pftl_recipient') || '').toLowerCase();
+                    const jobs = navcoinReturnRelayJobsForRecipient(routeId, recipient, Number(url.searchParams.get('limit') || 20));
+                    sendJson(req, res, 200, { ok: true, schema: 'postfiat-navcoin-return-relay-job-list-v1', route_id: routeId, pftl_recipient: recipient, jobs });
                     return true;
                 }
                 sendJson(req, res, 405, { ok: false, code: 'navcoin_relay_method_not_allowed' });

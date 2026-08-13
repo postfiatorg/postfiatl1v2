@@ -7,6 +7,9 @@ token_file=$state_dir/proxy-tokens.json
 job_root=$state_dir/bridge-jobs
 a666_job_root=$state_dir/a666-export-jobs
 a666_return_job_root=$state_dir/a666-return-jobs
+pfusdc_withdrawal_job_root=$state_dir/pfusdc-withdrawal-jobs
+pfusdc_prover_source=/home/postfiat/repos/postfiatl1v2-public-main-verification-20260717/tools/pfusdc-tier4-prover/target/release/pfusdc-tier4-prover
+pfusdc_prover_bin=$state_dir/bin/pfusdc-tier4-prover
 pnok_fix_job_root=$state_dir/pnok-fix-jobs
 routes=$repo/deployments/wallet-bridge-mainnet-20260730/routes.json
 a666_export_config=$repo/deployments/a666-export-relay-mainnet-20260731/service-config.json
@@ -14,7 +17,12 @@ a666_return_config=$repo/deployments/a666-export-relay-mainnet-20260731/return-s
 pnok_fix_config=$repo/deployments/pnok-private-fix-20260801/wallet-service-config.json
 
 umask 077
-install -d -m 700 "$state_dir" "$job_root" "$a666_job_root" "$a666_return_job_root" "$pnok_fix_job_root"
+install -d -m 700 "$state_dir" "$state_dir/bin" "$job_root" "$a666_job_root" "$a666_return_job_root" "$pfusdc_withdrawal_job_root" "$pnok_fix_job_root"
+test -x "$pfusdc_prover_source"
+if ! test -x "$pfusdc_prover_bin" || ! cmp -s "$pfusdc_prover_source" "$pfusdc_prover_bin"; then
+  install -m 700 "$pfusdc_prover_source" "$pfusdc_prover_bin.tmp"
+  mv "$pfusdc_prover_bin.tmp" "$pfusdc_prover_bin"
+fi
 if test ! -s "$token_file"; then
   token=$(openssl rand -hex 32)
   temporary=$token_file.$$.tmp
@@ -55,6 +63,21 @@ exec env \
   NAVCOIN_RETURN_RELAY_JOB_ROOT="$a666_return_job_root" \
   NAVCOIN_RETURN_RELAY_RETRY_BASE_MS=5000 \
   NAVCOIN_RETURN_RELAY_RETRY_MAX_MS=300000 \
+  PFUSDC_WITHDRAWAL_ENABLED=true \
+  PFUSDC_WITHDRAWAL_JOB_ROOT="$pfusdc_withdrawal_job_root" \
+  PFUSDC_WITHDRAWAL_SCRIPT="$repo/scripts/a666-mainnet-pfusdc-proof-egress.sh" \
+  PFUSDC_WITHDRAWAL_CONFIG_FILE=/home/postfiat/.config/stakehub/a666-roundtrip.json \
+  PFUSDC_WITHDRAWAL_LOCAL_PROVER_BIN="$pfusdc_prover_bin" \
+  PFUSDC_WITHDRAWAL_EGRESS_ELF="$repo/programs/pfusdc-egress/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/pfusdc-egress-program" \
+  PFUSDC_WITHDRAWAL_QUALIFICATION_REPORT=/home/postfiat/.local/state/pfusdc-withdrawal-qualification/proof-report.json \
+  A666_PFTL_RPC_PORTS=39650,39651,39652,39653,39654,39655 \
+  SHARD_SIZE=1048576 TRACE_CHUNK_SLOTS=2 GAS_TRACE_CHUNK_SLOTS=2 \
+  SP1_WORKER_NUM_SPLICING_WORKERS=1 SP1_WORKER_SPLICING_BUFFER_SIZE=1 \
+  SP1_WORKER_NUMBER_OF_SEND_SPLICE_WORKERS_PER_SPLICE=1 SP1_WORKER_SEND_SPLICE_INPUT_BUFFER_SIZE_PER_SPLICE=1 SP1_WORKER_GLOBAL_MEMORY_BUFFER_SIZE=1 \
+  SP1_WORKER_NUM_CORE_WORKERS=1 SP1_WORKER_CORE_BUFFER_SIZE=1 SP1_WORKER_NUM_SETUP_WORKERS=1 SP1_WORKER_SETUP_BUFFER_SIZE=1 SP1_WORKER_NORMALIZE_PROGRAM_CACHE_SIZE=1 \
+  SP1_WORKER_NUM_PREPARE_REDUCE_WORKERS=1 SP1_WORKER_PREPARE_REDUCE_BUFFER_SIZE=1 SP1_WORKER_NUM_RECURSION_EXECUTOR_WORKERS=1 SP1_WORKER_RECURSION_EXECUTOR_BUFFER_SIZE=1 \
+  SP1_WORKER_NUM_RECURSION_PROVER_WORKERS=1 SP1_WORKER_RECURSION_PROVER_BUFFER_SIZE=1 SP1_WORKER_NUM_DEFERRED_WORKERS=1 SP1_WORKER_DEFERRED_BUFFER_SIZE=1 \
+  SP1_WORKER_NUMBER_OF_GAS_EXECUTORS=1 SP1_WORKER_GAS_EXECUTOR_BUFFER_SIZE=1 RAYON_NUM_THREADS=20 \
   PNOK_FIX_WALLET_CONFIG_FILE="$pnok_fix_config" \
   PNOK_FIX_WALLET_JOB_ROOT="$pnok_fix_job_root" \
   PFTL_PRIVATE_SWAP_URL=http://127.0.0.1:39798 \

@@ -79,6 +79,8 @@ function request(amount = '5000000') {
         assert.notStrictEqual(canonicalJobId(ROUTE_ID, TX), canonicalJobId(OTHER_ROUTE_ID, TX));
         assert.deepStrictEqual(jobs.map(row => row.idempotent_replay).sort(), [false, true]);
         assert.strictEqual(spawns.length, 1, 'idempotent replay must launch one return worker');
+        assert.strictEqual(subject.navcoinReturnRelayJobsForRecipient(ROUTE_ID, request().pftl_recipient, 20).length, 1);
+        assert.strictEqual(subject.navcoinReturnRelayJobsForRecipient(ROUTE_ID, `pf${'99'.repeat(20)}`, 20).length, 0);
         await assert.rejects(subject.submitNavcoinReturnRelayJob(request('6000000')),
             error => error.code === 'navcoin_return_job_binding_conflict');
         assert.strictEqual(subject.navcoinReturnRelayJobStatus(OTHER_ROUTE_ID, jobs[0].job_id), null);

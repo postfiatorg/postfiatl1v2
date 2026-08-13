@@ -42,6 +42,9 @@ for (const route of publicReadOnlyPosts) {
 assert.strictEqual(httpRequestRequiresAuth('POST', '/api/future-unclassified-write'), true);
 assert.strictEqual(httpRequestRequiresAuth('GET', '/api/future-unclassified-write'), false);
 assert.strictEqual(httpRequestRequiresAuth('GET', '/api/bridge/jobs'), true);
+assert.strictEqual(httpRequestRequiresAuth('GET', '/api/bridge/withdrawals'), true);
+assert.strictEqual(httpRequestRequiresAuth('GET', '/api/navcoin/pftl-a666-ethereum-wA666-usdc-v1/export-jobs'), true);
+assert.strictEqual(httpRequestRequiresAuth('GET', '/api/navcoin/pftl-a666-ethereum-wA666-usdc-v1/return-jobs'), true);
 assert.strictEqual(httpRequestRequiresAuth('GET', '/api/a666-roundtrip/status'), true);
 assert.strictEqual(httpRequestRequiresAuth('GET', '/api/bridge/jobs/0xabc'), false);
 assert.strictEqual(httpRequestRequiresAuth('GET', '/api/pftl-private-swap/readiness'), true);

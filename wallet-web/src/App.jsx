@@ -135,7 +135,7 @@ export default function App() {
           setMarketKey('');
         }
       } catch (e) {
-        setError('RPC init failed: ' + e.message);
+        setError('Wallet connection failed: ' + e.message);
       }
     })();
   }, []);
@@ -660,7 +660,7 @@ export default function App() {
               visible={tab === 'send'}
             />
           )}
-          {tab === 'activity' && <Activity rpc={rpc} address={walletAddress} proxyAuthToken={proxyAuthToken} />}
+          {tab === 'activity' && <Activity rpc={rpc} address={walletAddress} markets={markets} proxyAuthToken={proxyAuthToken} />}
           {tab === 'market' && (
             <NavcoinMarket
               market={navcoinMarketByKey(markets, marketKey)}
@@ -682,6 +682,8 @@ export default function App() {
             <Bridge
               address={walletAddress}
               rpc={rpc}
+              txBuilder={txBuilder}
+              backupJson={backupJson}
               proxyAuthToken={proxyAuthToken}
             />
           )}

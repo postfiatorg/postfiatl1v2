@@ -7,6 +7,8 @@
 **Perspective:** A normal self-custody user who has never seen PostFiat, does not know its protocol vocabulary, and wants to understand and use their money.
 **Method:** Walk every exposed pane of the live wallet using the funded account, capture the rendered state, and evaluate what the interface actually communicates. Navigation and recovery-state inspection only; no transaction was submitted during this review.
 
+**Evidence scope:** The screenshots and criticism below intentionally preserve the broken pre-remediation experience. The implemented replacement and live-funds verification are recorded separately in [WALLET-UX-REMEDIATION-20260812.md](WALLET-UX-REMEDIATION-20260812.md).
+
 ## Executive verdict
 
 This is not presently a reasonable consumer wallet. It is an operator console, integration test harness, and protocol debugger wearing a wallet shell.

@@ -75,6 +75,14 @@ export async function loadNavcoinReturnReadiness(routeId) {
   return relayJson(`${routePath(routeId)}/return-readiness`);
 }
 
+export async function loadNavcoinReturnJobs(routeId, pftlRecipient, proxyAuthToken, limit = 20) {
+  const recipient = String(pftlRecipient || '').trim().toLowerCase();
+  if (!/^pf[0-9a-f]{40}$/.test(recipient)) throw new Error('PFTL recipient is malformed');
+  return relayJson(`${routePath(routeId)}/return-jobs?pftl_recipient=${encodeURIComponent(recipient)}&limit=${Math.min(100, Math.max(1, Number(limit) || 20))}`, {
+    headers: proxyAuthToken ? { Authorization: `Bearer ${proxyAuthToken}` } : {},
+  });
+}
+
 export async function createNavcoinReturnJob({
   routeId, routeConfigDigest, transactionHash, ethereumSender, pftlRecipient,
   nativeNavAssetId, amountAtoms, returnNonce, proxyAuthToken,

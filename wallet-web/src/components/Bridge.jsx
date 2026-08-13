@@ -21,6 +21,7 @@ import {
 } from '../lib/bridge-relay.js';
 import { loadGovernedVaultBridgeRoute } from '../lib/bridge-route.js';
 import { acquireAutoLockLease } from '../lib/vault.js';
+import BridgeWithdraw from './BridgeWithdraw.jsx';
 
 const ETHEREUM_CHAIN_ID = utils.ETH_MAINNET_CHAIN_ID || 1;
 const ETHEREUM_USDC = utils.ETH_MAINNET_USDC;
@@ -142,7 +143,8 @@ function ContextRow({ label, value, href = '' }) {
   );
 }
 
-export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
+export default function Bridge({ address, rpc, txBuilder, backupJson, proxyAuthToken = '' }) {
+  const [direction, setDirection] = useState('deposit');
   const [phase, setPhase] = useState('disconnected');
   const [connectedAddress, setConnectedAddress] = useState('');
   const [chainId, setChainId] = useState(0);
@@ -412,7 +414,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
         }
         if (latest.status === 'failed') {
           setPhase('error');
-          setError(latest.message || 'The proof-backed PFTL claim failed.');
+          setError(latest.message || 'The PFTL deposit relay failed.');
           return;
         }
         setPhase('relaying');
@@ -564,8 +566,11 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
   );
   const canDeposit = Boolean(canApprove && approvedAtoms !== null && approvedAtoms >= amountAtoms);
 
+  const directionTabs = <div className="pf-even" style={{ marginBottom: 18 }}><button className={`pf-ghost${direction === 'deposit' ? ' on' : ''}`} onClick={() => setDirection('deposit')}>Deposit to PFTL</button><button className={`pf-ghost${direction === 'withdraw' ? ' on' : ''}`} onClick={() => setDirection('withdraw')}>Withdraw to Ethereum</button></div>;
+  if (direction === 'withdraw') return <><div className="pf-page" style={{ paddingBottom: 0 }}>{directionTabs}</div><BridgeWithdraw address={address} rpc={rpc} txBuilder={txBuilder} backupJson={backupJson} proxyAuthToken={proxyAuthToken}/></>;
   return (
     <div className="pf-page pfb-page">
+      {directionTabs}
       <header className="pfb-hero">
         <div>
           <div className="pf-eyebrow">Ethereum → PFTL</div>
@@ -664,7 +669,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
                     ? 'Approve only the amount you want the current governed Ethereum vault to pull.'
                     : currentStep === 3
                       ? 'Submit the route-bound vault deposit. Do not send USDC directly to the vault address.'
-                      : 'The deposit is confirmed. The wallet is completing the proof-backed PFTL relay.'}
+                      : 'The deposit is confirmed. The wallet is completing the PFTL relay.'}
                 </p>
                 <label className="pfb-field">
                   <span>Amount to deposit</span>
@@ -706,7 +711,7 @@ export default function Bridge({ address, rpc, proxyAuthToken = '' }) {
                 )}
                 {currentStep === 4 && (
                   <div className="pfb-progress-card">
-                    <strong><Loader2 size={14} className="pfb-spin" /> Proof and relay in progress</strong>
+                    <strong><Loader2 size={14} className="pfb-spin" /> Deposit relay in progress</strong>
                     <span>
                       {relayStatus ? `Current stage: ${relayStatus.replaceAll('_', ' ')}. ` : ''}
                       The backend job is durable; a confirmed deposit can be resumed by transaction hash.
