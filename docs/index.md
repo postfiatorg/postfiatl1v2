@@ -1,10 +1,11 @@
 # PostFiat L1 Engineering Docs
 
 PostFiat is an XRP-style authority-validator Layer 1 rebuilt around Rust,
-post-quantum authorization, signed old-rule governance, Orchard/Halo2 privacy,
-fixed supply, fee burn, and no native validator reward schedule. Cobalt
-trust-graph and agreement machinery is present as a separately bounded research
-layer; it is not the live node's governance authorization oracle.
+post-quantum authorization, versioned validator governance, Orchard/Halo2
+privacy, fixed supply, fee burn, and no native validator reward schedule.
+Cobalt is a separately bounded validator-trust lane: Foundation authority
+remains active until its ML-DSA-65 quorum signs an exact, consensus-ordered
+handoff. Cobalt never replaces consensus v2 block finality.
 
 This site is the engineering front door. It is not a dump of internal notes. It
 points to the current code, scripts, reports, and operating runbooks that define
@@ -40,7 +41,7 @@ they are not listed one-by-one in the primary navigation.
 | Finality | Versioned certified ordering: legacy single-view mode and activated consensus v2 with durable prepare/precommit, timeout certificates, and proposer rotation. | [Finality](architecture/finality.md) |
 | Settlement lanes | Consensus transactions, W6 dual-authorized atomic swap, FastPay payments, FastSwap DvP, and Asset-Orchard private settlement have distinct finality and recovery boundaries. | [Settlement Lanes](architecture/settlement-lanes.md) |
 | Governance | Live amendments and registry transitions require distinct ML-DSA-65 old-rule authorizations. | [Validator Registry](governance/validator-registry.md) |
-| Cobalt research | Non-identical trust views, essential subsets, linkedness checks, non-uniform certificates, RBC, ABBA, MVBA, DABC, replay gates, and adversarial packets. These mechanics are not the live authorization path. | [Cobalt Governance](governance/cobalt.md) |
+| Cobalt governance | Trust-graph safety, durable shadow convergence, and a versioned Foundation-to-Cobalt handoff restricted to validator trust evolution. | [Cobalt Governance](governance/cobalt.md), [browser observatory](governance/cobalt.md#operator-interfaces) |
 | Verifiable Constitution | Canonical readable constitution for typed, replayable, challengeable model-assisted governance with no-live-effect authority boundaries. | [Constitution](governance/verifiable-constitution.md), Proof Summary |
 | Privacy | Orchard/Halo2 deposit, spend, withdraw, scan, disclose, pool report, and live validator evidence. | [Privacy](privacy/overview.md) |
 | Quantum auth | ML-DSA-style account and validator authorization with larger certificate economics accepted as a design cost. | [Quantum Authorization](quantum/authorization.md) |
