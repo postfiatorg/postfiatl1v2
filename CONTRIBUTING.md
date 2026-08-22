@@ -54,6 +54,19 @@ scripts/verify-cobalt-substrate
 That verifier emits a generated report under `reports/`. Its simulations and
 TCP drill are explicitly local/loopback evidence, not live-validator proof.
 
+The authenticated shadow-runtime gate writes a checksum-bound local packet to
+the output directory you provide:
+
+```bash
+scripts/verify-cobalt-shadow-runtime .tih/cobalt-shadow-runtime-local
+PYTHONPATH=python python3 -m postfiat_rpc.cobalt --endpoint 127.0.0.1:9700 probe
+PYTHONPATH=python python3 -m postfiat_rpc.cobalt --endpoints 127.0.0.1:9700,127.0.0.1:9701 fleet
+```
+
+Install `systemd/postfiat-cobalt-shadow.service.example` only as a separate
+unprivileged service with its own state directory. Shadow health never implies
+live governance authority or block-consensus control.
+
 ## Controlled Testnet
 
 Use the retained scripts for local controlled-testnet work:

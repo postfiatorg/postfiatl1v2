@@ -1,11 +1,20 @@
 use std::env;
+use std::fs;
 use std::io;
+use std::net::TcpListener;
 use std::path::PathBuf;
 
+use postfiat_consensus_cobalt::TrustGraph;
 use postfiat_node::cobalt_shadow::{
     run_cobalt_shadow_adversarial_drill, CobaltShadowIdentity, CobaltShadowLimits,
     CobaltShadowService,
 };
+use postfiat_node::cobalt_shadow_runtime::{
+    parse_endpoint, read_transcript, request, run_cobalt_shadow_network_drill, serve_listener,
+    validate_listen_address, CobaltShadowRpcRequest,
+};
+use serde::Deserialize;
+use std::collections::BTreeMap;
 
 fn main() {
     if let Err(error) = run() {
@@ -42,12 +51,84 @@ fn run() -> io::Result<()> {
             let status = CobaltShadowService::inspect(required_path(&args, "--data-dir")?)?;
             serde_json::to_value(status).map_err(json_error)?
         }
+        "bind" => {
+            let mut service = CobaltShadowService::open(required_path(&args, "--data-dir")?)?;
+            let binding: RegistryBinding = read_bounded_json(
+                &required_path(&args, "--registry-binding")?,
+                2 * 1024 * 1024,
+            )?;
+            service.bind_registry(binding.registry_root, &binding.trust_graph, binding.peers)?;
+            serde_json::to_value(service.status()).map_err(json_error)?
+        }
+        "reserve" => {
+            let mut service = CobaltShadowService::open(required_path(&args, "--data-dir")?)?;
+            let round = required_flag(&args, "--round")?
+                .parse::<u64>()
+                .map_err(|_| invalid("--round must be an integer"))?;
+            service.reserve_protocol_round(
+                round,
+                required_flag(&args, "--payload-hash")?.to_string(),
+            )?;
+            serde_json::to_value(service.status()).map_err(json_error)?
+        }
+        "run" => {
+            let data_dir = required_path(&args, "--data-dir")?;
+            let listen = parse_endpoint(required_flag(&args, "--listen")?)?;
+            validate_listen_address(listen, flag_present(&args, "--allow-private-network"))?;
+            let service = CobaltShadowService::open(data_dir)?;
+            let listener = TcpListener::bind(listen)?;
+            let bound = listener.local_addr()?;
+            println!(
+                "{}",
+                serde_json::to_string(&serde_json::json!({
+                    "schema": "postfiat-cobalt-shadow-listener-v1",
+                    "status": "ready",
+                    "listen": bound.to_string(),
+                    "live_authority": false,
+                    "controls_block_consensus": false
+                }))
+                .map_err(json_error)?
+            );
+            let _service = serve_listener(service, listener, false)?;
+            return Ok(());
+        }
+        "probe" | "snapshot" | "replay" => {
+            let endpoint = parse_endpoint(required_flag(&args, "--endpoint")?)?;
+            let request_body = match command {
+                "probe" => CobaltShadowRpcRequest::Probe,
+                "snapshot" => CobaltShadowRpcRequest::Snapshot,
+                "replay" => CobaltShadowRpcRequest::Replay,
+                _ => unreachable!(),
+            };
+            request(endpoint, &request_body)?
+        }
+        "commit" => {
+            let endpoint = parse_endpoint(required_flag(&args, "--endpoint")?)?;
+            let transcript = read_transcript(&required_path(&args, "--transcript")?)?;
+            request(
+                endpoint,
+                &CobaltShadowRpcRequest::Commit {
+                    transcript: Box::new(transcript),
+                },
+            )?
+        }
         "drill" => {
             let report = run_cobalt_shadow_adversarial_drill(required_path(&args, "--data-dir")?)?;
             if !report.ok {
                 return Err(invalid("adversarial drill did not converge"));
             }
             serde_json::to_value(report).map_err(json_error)?
+        }
+        "network-drill" => {
+            let report = run_cobalt_shadow_network_drill(required_path(&args, "--data-dir")?)?;
+            if !report.ok {
+                return Err(invalid("network drill did not converge"));
+            }
+            serde_json::to_value(report).map_err(json_error)?
+        }
+        "help" | "--help" | "-h" => {
+            println!("{}", usage_text());
+            return Ok(());
         }
         _ => return Err(usage()),
     };
@@ -64,6 +145,10 @@ fn optional_flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
         .map(|pair| pair[1].as_str())
 }
 
+fn flag_present(args: &[String], name: &str) -> bool {
+    args.iter().any(|arg| arg == name)
+}
+
 fn required_flag<'a>(args: &'a [String], name: &str) -> io::Result<&'a str> {
     optional_flag(args, name).ok_or_else(|| invalid(format!("{name} is required")))
 }
@@ -73,11 +158,37 @@ fn required_path(args: &[String], name: &str) -> io::Result<PathBuf> {
 }
 
 fn usage() -> io::Error {
-    invalid(
-        "usage: postfiat-cobalt-shadow init --data-dir PATH --node-id ID --chain-id ID \
-         --genesis-hash HASH [--protocol-version N] | status --data-dir PATH | \
-         drill --data-dir PATH",
-    )
+    invalid(usage_text())
+}
+
+fn usage_text() -> &'static str {
+    "usage:
+  postfiat-cobalt-shadow init --data-dir PATH --node-id ID --chain-id ID --genesis-hash HASH [--protocol-version N]
+  postfiat-cobalt-shadow status --data-dir PATH
+  postfiat-cobalt-shadow bind --data-dir PATH --registry-binding PATH
+  postfiat-cobalt-shadow reserve --data-dir PATH --round N --payload-hash HASH
+  postfiat-cobalt-shadow run --data-dir PATH --listen IP:PORT [--allow-private-network]
+  postfiat-cobalt-shadow probe --endpoint IP:PORT
+  postfiat-cobalt-shadow snapshot --endpoint IP:PORT
+  postfiat-cobalt-shadow replay --endpoint IP:PORT
+  postfiat-cobalt-shadow commit --endpoint IP:PORT --transcript PATH
+  postfiat-cobalt-shadow drill --data-dir PATH
+  postfiat-cobalt-shadow network-drill --data-dir PATH"
+}
+
+#[derive(Debug, Deserialize)]
+struct RegistryBinding {
+    registry_root: String,
+    trust_graph: TrustGraph,
+    peers: BTreeMap<String, String>,
+}
+
+fn read_bounded_json<T: for<'de> Deserialize<'de>>(path: &PathBuf, max: u64) -> io::Result<T> {
+    let metadata = fs::metadata(path)?;
+    if metadata.len() > max {
+        return Err(invalid("JSON input exceeds bound"));
+    }
+    serde_json::from_slice(&fs::read(path)?).map_err(json_error)
 }
 
 fn json_error(error: serde_json::Error) -> io::Error {

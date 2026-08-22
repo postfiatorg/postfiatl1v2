@@ -252,6 +252,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 pub mod cobalt_handoff;
 pub mod cobalt_shadow;
+pub mod cobalt_shadow_runtime;
 mod lifecycle_queries;
 pub use lifecycle_queries::*;
 mod atomic_swap_rpc;

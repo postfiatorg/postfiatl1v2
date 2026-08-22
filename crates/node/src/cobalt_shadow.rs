@@ -9,7 +9,21 @@ use std::io::{self, Read, Write};
 #[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
+use postfiat_consensus_cobalt::{
+    abba_strong_support, build_essential_subset, build_mvba_valid_input_set, build_trust_graph,
+    build_trust_view, evaluate_abba_finish_support_signed, evaluate_rbc_ready_support_signed,
+    mvba_candidate_from_rbc_accept, ratify_dabc_amendment, sign_abba_aux, sign_abba_conf,
+    sign_abba_finish, sign_abba_init, sign_dabc_full_knowledge_check, sign_rbc_accept,
+    sign_rbc_echo, sign_rbc_propose, sign_rbc_ready, validate_abba_aux_signed,
+    validate_abba_conf_signed, validate_abba_finish_signed, validate_abba_init_signed,
+    validate_dabc_full_knowledge_check_signed, validate_dabc_ratified_amendment,
+    validate_rbc_accept_signed, validate_rbc_echo_signed, validate_rbc_propose_signed,
+    validate_rbc_ready_signed, validate_trust_graph, AbbaAux, AbbaConf, AbbaFinish, AbbaInit,
+    CobaltDomain, CobaltSignatureCommittee, DabcFullKnowledgeCheck, DabcPendingPair,
+    DabcRatifiedAmendment, MvbaValidInputSet, RbcAccept, RbcEcho, RbcPropose, RbcReady, TrustGraph,
+};
 use postfiat_crypto_provider::{
     bytes_to_hex, hash_hex, hex_to_bytes, ml_dsa_65_keygen, ml_dsa_65_sign_with_context,
     ml_dsa_65_validate_public_key, ml_dsa_65_verify_with_context, ML_DSA_65_ALGORITHM,
@@ -17,7 +31,7 @@ use postfiat_crypto_provider::{
 };
 use serde::{Deserialize, Serialize};
 
-pub const COBALT_SHADOW_STATE_SCHEMA: &str = "postfiat-cobalt-shadow-state-v1";
+pub const COBALT_SHADOW_STATE_SCHEMA: &str = "postfiat-cobalt-shadow-state-v2";
 pub const COBALT_SHADOW_PRIVATE_SCHEMA: &str = "postfiat-cobalt-shadow-private-v1";
 pub const COBALT_SHADOW_MESSAGE_SCHEMA: &str = "postfiat-cobalt-shadow-message-v1";
 pub const COBALT_SHADOW_BEACON_COMMITMENT_SCHEMA: &str =
@@ -25,6 +39,8 @@ pub const COBALT_SHADOW_BEACON_COMMITMENT_SCHEMA: &str =
 pub const COBALT_SHADOW_BEACON_REVEAL_SCHEMA: &str = "postfiat-cobalt-shadow-beacon-reveal-v1";
 pub const COBALT_SHADOW_RANDOMNESS_SOURCE: &str = "ml-dsa65-threshold-commit-reveal-v1";
 pub const COBALT_SHADOW_AUTHORITY_MODE: &str = "shadow-advisory";
+pub const COBALT_SHADOW_PROTOCOL_TRANSCRIPT_SCHEMA: &str =
+    "postfiat-cobalt-shadow-protocol-transcript-v1";
 
 const STATE_FILE: &str = "state.json";
 const PRIVATE_FILE: &str = "signer-private.json";
@@ -144,6 +160,52 @@ pub struct CobaltShadowRandomnessRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CobaltShadowProtocolTranscript {
+    pub schema: String,
+    pub registry_root: String,
+    pub trust_graph: TrustGraph,
+    pub round: u64,
+    pub payload_hash: String,
+    pub agreement_id: String,
+    pub rbc_propose: RbcPropose,
+    pub rbc_echoes: Vec<RbcEcho>,
+    pub rbc_readies: Vec<RbcReady>,
+    pub rbc_accepts: Vec<RbcAccept>,
+    pub abba_inits: Vec<AbbaInit>,
+    pub abba_auxes: Vec<AbbaAux>,
+    pub abba_confs: Vec<AbbaConf>,
+    pub abba_finishes: Vec<AbbaFinish>,
+    pub mvba_input: MvbaValidInputSet,
+    pub ratification: DabcRatifiedAmendment,
+    pub full_knowledge_checks: Vec<DabcFullKnowledgeCheck>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CobaltShadowProtocolDecision {
+    pub round: u64,
+    pub transcript_hash: String,
+    pub payload_hash: String,
+    pub agreement_id: String,
+    pub output_candidate_id: String,
+    pub ratification_id: String,
+    pub registry_root: String,
+    pub trust_graph_root: String,
+    pub signed_message_count: usize,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CobaltShadowMetrics {
+    pub received_messages: u64,
+    pub received_bytes: u64,
+    pub transmitted_messages: u64,
+    pub transmitted_bytes: u64,
+    pub protocol_rounds: u64,
+    pub protocol_validation_micros: u64,
+    pub stage_validation_micros: BTreeMap<String, u64>,
+    pub replay_checks: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct PendingBeacon {
     entropy_hex: String,
     commitment: CobaltShadowBeaconCommitment,
@@ -173,12 +235,19 @@ pub struct CobaltShadowState {
     pub outbound_high_watermark: u64,
     pub inbound_high_watermarks: BTreeMap<String, u64>,
     pub peer_public_keys: BTreeMap<String, String>,
+    pub registry_root: String,
+    pub trust_graph_root: String,
     pub queued_messages: Vec<CobaltShadowMessage>,
     pub seen_message_ids: Vec<String>,
     pub accepted_messages: u64,
     pub duplicate_messages: u64,
     pub rejected_messages: u64,
     pub randomness_rounds: Vec<CobaltShadowRandomnessRecord>,
+    pub outbound_protocol_locks: BTreeMap<u64, String>,
+    pub ratification_locks: BTreeMap<u64, String>,
+    pub protocol_decisions: BTreeMap<u64, CobaltShadowProtocolDecision>,
+    pub protocol_high_watermark: u64,
+    pub metrics: CobaltShadowMetrics,
     pub limits: CobaltShadowLimits,
     pub governance_digest: String,
     pub state_hash: String,
@@ -197,12 +266,23 @@ pub struct CobaltShadowStatus {
     pub signer_private_key_loaded: bool,
     pub boot_count: u64,
     pub peer_count: usize,
+    pub registry_root: String,
+    pub trust_graph_root: String,
     pub queue_depth: usize,
     pub accepted_messages: u64,
     pub duplicate_messages: u64,
     pub rejected_messages: u64,
     pub outbound_high_watermark: u64,
     pub randomness_rounds: usize,
+    pub ratification_lock_count: usize,
+    pub protocol_decision_count: usize,
+    pub protocol_high_watermark: u64,
+    pub messages_received: u64,
+    pub bytes_received: u64,
+    pub messages_transmitted: u64,
+    pub bytes_transmitted: u64,
+    pub protocol_validation_micros: u64,
+    pub stage_validation_micros: BTreeMap<String, u64>,
     pub latest_randomness_hash: Option<String>,
     pub governance_digest: String,
     pub state_hash: String,
@@ -292,12 +372,19 @@ impl CobaltShadowService {
             outbound_high_watermark: 0,
             inbound_high_watermarks: BTreeMap::new(),
             peer_public_keys,
+            registry_root: String::new(),
+            trust_graph_root: String::new(),
             queued_messages: Vec::new(),
             seen_message_ids: Vec::new(),
             accepted_messages: 0,
             duplicate_messages: 0,
             rejected_messages: 0,
             randomness_rounds: Vec::new(),
+            outbound_protocol_locks: BTreeMap::new(),
+            ratification_locks: BTreeMap::new(),
+            protocol_decisions: BTreeMap::new(),
+            protocol_high_watermark: 0,
+            metrics: CobaltShadowMetrics::default(),
             limits,
             governance_digest: hash_hex("postfiat.cobalt.shadow.empty.v1", b""),
             state_hash: String::new(),
@@ -351,6 +438,10 @@ impl CobaltShadowService {
         &self.state
     }
 
+    pub fn data_dir(&self) -> &Path {
+        &self.data_dir
+    }
+
     pub fn status(&self) -> CobaltShadowStatus {
         CobaltShadowStatus {
             schema: "postfiat-cobalt-shadow-status-v1".to_string(),
@@ -366,12 +457,23 @@ impl CobaltShadowService {
             signer_private_key_loaded: !self.private.private_key_hex.is_empty(),
             boot_count: self.state.boot_count,
             peer_count: self.state.peer_public_keys.len(),
+            registry_root: self.state.registry_root.clone(),
+            trust_graph_root: self.state.trust_graph_root.clone(),
             queue_depth: self.state.queued_messages.len(),
             accepted_messages: self.state.accepted_messages,
             duplicate_messages: self.state.duplicate_messages,
             rejected_messages: self.state.rejected_messages,
             outbound_high_watermark: self.state.outbound_high_watermark,
             randomness_rounds: self.state.randomness_rounds.len(),
+            ratification_lock_count: self.state.ratification_locks.len(),
+            protocol_decision_count: self.state.protocol_decisions.len(),
+            protocol_high_watermark: self.state.protocol_high_watermark,
+            messages_received: self.state.metrics.received_messages,
+            bytes_received: self.state.metrics.received_bytes,
+            messages_transmitted: self.state.metrics.transmitted_messages,
+            bytes_transmitted: self.state.metrics.transmitted_bytes,
+            protocol_validation_micros: self.state.metrics.protocol_validation_micros,
+            stage_validation_micros: self.state.metrics.stage_validation_micros.clone(),
             latest_randomness_hash: self
                 .state
                 .randomness_rounds
@@ -400,6 +502,349 @@ impl CobaltShadowService {
         }
         self.state.peer_public_keys = peers;
         self.persist_state()
+    }
+
+    pub fn bind_registry(
+        &mut self,
+        registry_root: impl Into<String>,
+        graph: &TrustGraph,
+        peers: BTreeMap<String, String>,
+    ) -> io::Result<()> {
+        let registry_root = registry_root.into();
+        validate_hash("registry root", &registry_root)?;
+        validate_hash("trust graph root", &graph.trust_graph_root)?;
+        let domain = self.cobalt_domain();
+        validate_trust_graph(&domain, graph).map_err(consensus_error)?;
+        if graph.registry_root != registry_root {
+            return Err(invalid("trust graph is bound to a different registry root"));
+        }
+        let graph_validators = graph
+            .trust_views
+            .iter()
+            .map(|view| view.validator.clone())
+            .collect::<BTreeSet<_>>();
+        let peer_validators = peers.keys().cloned().collect::<BTreeSet<_>>();
+        if graph_validators != peer_validators {
+            return Err(invalid("trust graph validators do not match peer registry"));
+        }
+        self.replace_peer_registry(peers)?;
+        self.state.registry_root = registry_root;
+        self.state.trust_graph_root = graph.trust_graph_root.clone();
+        self.persist_state()
+    }
+
+    pub fn reserve_protocol_round(
+        &mut self,
+        round: u64,
+        payload_hash: impl Into<String>,
+    ) -> io::Result<()> {
+        if round == 0 {
+            return Err(invalid("protocol round must be nonzero"));
+        }
+        let payload_hash = payload_hash.into();
+        validate_hash("protocol payload", &payload_hash)?;
+        if self.state.registry_root.is_empty() || self.state.trust_graph_root.is_empty() {
+            return Err(invalid("validator registry is not bound"));
+        }
+        if let Some(existing) = self.state.outbound_protocol_locks.get(&round) {
+            if existing == &payload_hash {
+                return Ok(());
+            }
+            return Err(invalid("protocol round is locked to another payload"));
+        }
+        self.state
+            .outbound_protocol_locks
+            .insert(round, payload_hash);
+        // The payload lock is durable before any stage signature can leave the
+        // process. A restart can skip work but cannot sign a conflicting value.
+        self.persist_state()
+    }
+
+    pub fn commit_protocol_transcript(
+        &mut self,
+        transcript: &CobaltShadowProtocolTranscript,
+    ) -> io::Result<CobaltShadowProtocolDecision> {
+        let encoded = serde_json::to_vec(transcript).map_err(json_error)?;
+        if encoded.len() > self.state.limits.max_message_bytes.saturating_mul(32) {
+            return Err(invalid("protocol transcript exceeds transport bound"));
+        }
+        let started = Instant::now();
+        let (decision, stage_micros) = self.validate_protocol_transcript(transcript)?;
+        if let Some(existing) = self.state.ratification_locks.get(&transcript.round) {
+            if existing != &decision.ratification_id {
+                return Err(invalid("ratification lock conflict"));
+            }
+            return self
+                .state
+                .protocol_decisions
+                .get(&transcript.round)
+                .cloned()
+                .ok_or_else(|| invalid("ratification lock has no decision"));
+        }
+        self.state
+            .ratification_locks
+            .insert(transcript.round, decision.ratification_id.clone());
+        self.state
+            .protocol_decisions
+            .insert(transcript.round, decision.clone());
+        self.state.protocol_high_watermark =
+            self.state.protocol_high_watermark.max(transcript.round);
+        self.state.metrics.protocol_rounds = self.state.metrics.protocol_rounds.saturating_add(1);
+        self.state.metrics.protocol_validation_micros = self
+            .state
+            .metrics
+            .protocol_validation_micros
+            .saturating_add(started.elapsed().as_micros().try_into().unwrap_or(u64::MAX));
+        for (stage, micros) in stage_micros {
+            let total = self
+                .state
+                .metrics
+                .stage_validation_micros
+                .entry(stage)
+                .or_default();
+            *total = total.saturating_add(micros);
+        }
+        self.state.metrics.received_messages = self
+            .state
+            .metrics
+            .received_messages
+            .saturating_add(decision.signed_message_count as u64);
+        self.state.metrics.received_bytes = self
+            .state
+            .metrics
+            .received_bytes
+            .saturating_add(encoded.len() as u64);
+        self.state.governance_digest = hash_serialized(
+            "postfiat.cobalt.shadow.protocol-decisions.v1",
+            &self.state.protocol_decisions,
+        )?;
+        self.persist_state()?;
+        Ok(decision)
+    }
+
+    pub fn replay_protocol_state(&mut self) -> io::Result<Vec<CobaltShadowProtocolDecision>> {
+        self.validate_loaded()?;
+        for (round, decision) in &self.state.protocol_decisions {
+            if self.state.ratification_locks.get(round) != Some(&decision.ratification_id) {
+                return Err(invalid("protocol replay found a lock mismatch"));
+            }
+        }
+        self.state.metrics.replay_checks = self.state.metrics.replay_checks.saturating_add(1);
+        self.persist_state()?;
+        Ok(self.state.protocol_decisions.values().cloned().collect())
+    }
+
+    fn validate_protocol_transcript(
+        &self,
+        transcript: &CobaltShadowProtocolTranscript,
+    ) -> io::Result<(CobaltShadowProtocolDecision, BTreeMap<String, u64>)> {
+        if transcript.schema != COBALT_SHADOW_PROTOCOL_TRANSCRIPT_SCHEMA
+            || transcript.round == 0
+            || transcript.registry_root != self.state.registry_root
+            || transcript.trust_graph.registry_root != self.state.registry_root
+            || transcript.trust_graph.trust_graph_root != self.state.trust_graph_root
+            || transcript.payload_hash != transcript.rbc_propose.payload_hash
+        {
+            return Err(invalid("protocol transcript domain or root mismatch"));
+        }
+        if self.state.outbound_protocol_locks.get(&transcript.round)
+            != Some(&transcript.payload_hash)
+        {
+            return Err(invalid(
+                "protocol transcript has no matching durable outbound lock",
+            ));
+        }
+        let domain = self.cobalt_domain();
+        validate_trust_graph(&domain, &transcript.trust_graph).map_err(consensus_error)?;
+        let committee = self.signature_committee()?;
+        let mut stage_micros = BTreeMap::new();
+        let rbc_started = Instant::now();
+        validate_rbc_propose_signed(&domain, &committee, &transcript.rbc_propose)
+            .map_err(consensus_error)?;
+        for message in &transcript.rbc_echoes {
+            validate_rbc_echo_signed(&domain, &committee, message, &transcript.rbc_propose)
+                .map_err(consensus_error)?;
+        }
+        for message in &transcript.rbc_readies {
+            validate_rbc_ready_signed(&domain, &committee, message, &transcript.rbc_propose)
+                .map_err(consensus_error)?;
+        }
+        for message in &transcript.rbc_accepts {
+            validate_rbc_accept_signed(&domain, &committee, message, &transcript.rbc_propose)
+                .map_err(consensus_error)?;
+        }
+        let local_view = transcript
+            .trust_graph
+            .trust_views
+            .iter()
+            .find(|view| view.validator == self.state.identity.node_id)
+            .ok_or_else(|| invalid("local validator has no trust view"))?;
+        let ready_support = evaluate_rbc_ready_support_signed(
+            &domain,
+            &committee,
+            local_view,
+            &transcript.rbc_propose,
+            &transcript.rbc_readies,
+        )
+        .map_err(consensus_error)?;
+        if !ready_support.strong_support {
+            return Err(invalid("RBC ready strong support was not reached"));
+        }
+        stage_micros.insert(
+            "rbc".to_string(),
+            rbc_started
+                .elapsed()
+                .as_micros()
+                .try_into()
+                .unwrap_or(u64::MAX),
+        );
+        let abba_started = Instant::now();
+        for message in &transcript.abba_inits {
+            validate_abba_init_signed(&domain, &committee, message).map_err(consensus_error)?;
+        }
+        for message in &transcript.abba_auxes {
+            validate_abba_aux_signed(&domain, &committee, message).map_err(consensus_error)?;
+        }
+        for message in &transcript.abba_confs {
+            validate_abba_conf_signed(&domain, &committee, message).map_err(consensus_error)?;
+        }
+        for message in &transcript.abba_finishes {
+            validate_abba_finish_signed(&domain, &committee, message).map_err(consensus_error)?;
+        }
+        let finish_support = evaluate_abba_finish_support_signed(
+            &domain,
+            &committee,
+            local_view,
+            &transcript.agreement_id,
+            transcript.round,
+            true,
+            &transcript.abba_finishes,
+        )
+        .map_err(consensus_error)?;
+        if !abba_strong_support(&finish_support) {
+            return Err(invalid("ABBA finish strong support was not reached"));
+        }
+        stage_micros.insert(
+            "abba".to_string(),
+            abba_started
+                .elapsed()
+                .as_micros()
+                .try_into()
+                .unwrap_or(u64::MAX),
+        );
+        let mvba_started = Instant::now();
+        let first_accept = transcript
+            .rbc_accepts
+            .first()
+            .ok_or_else(|| invalid("protocol transcript has no RBC accept"))?;
+        let candidate =
+            mvba_candidate_from_rbc_accept(&domain, &transcript.rbc_propose, first_accept)
+                .map_err(consensus_error)?;
+        let input_view = transcript
+            .trust_graph
+            .trust_views
+            .iter()
+            .find(|view| view.trust_view_id == transcript.mvba_input.trust_view_id)
+            .ok_or_else(|| invalid("MVBA input trust view is not in graph"))?;
+        let expected_input = build_mvba_valid_input_set(
+            &domain,
+            input_view,
+            transcript.agreement_id.clone(),
+            vec![candidate],
+        )
+        .map_err(consensus_error)?;
+        if expected_input != transcript.mvba_input {
+            return Err(invalid("MVBA input set mismatch"));
+        }
+        stage_micros.insert(
+            "mvba".to_string(),
+            mvba_started
+                .elapsed()
+                .as_micros()
+                .try_into()
+                .unwrap_or(u64::MAX),
+        );
+        let dabc_started = Instant::now();
+        validate_dabc_ratified_amendment(
+            &domain,
+            &transcript.trust_graph,
+            &transcript.ratification,
+            None,
+        )
+        .map_err(consensus_error)?;
+        let expected_ratification = ratify_dabc_amendment(
+            &domain,
+            &transcript.trust_graph,
+            &transcript.mvba_input,
+            None,
+            transcript.ratification.activation_height,
+        )
+        .map_err(consensus_error)?;
+        if expected_ratification != transcript.ratification {
+            return Err(invalid("DABC ratification mismatch"));
+        }
+        for check in &transcript.full_knowledge_checks {
+            validate_dabc_full_knowledge_check_signed(&domain, &committee, check)
+                .map_err(consensus_error)?;
+        }
+        if transcript.full_knowledge_checks.len() != committee.len() {
+            return Err(invalid("DABC full-knowledge signer set is incomplete"));
+        }
+        stage_micros.insert(
+            "dabc".to_string(),
+            dabc_started
+                .elapsed()
+                .as_micros()
+                .try_into()
+                .unwrap_or(u64::MAX),
+        );
+        let transcript_hash =
+            hash_serialized("postfiat.cobalt.shadow.protocol-transcript.v1", transcript)?;
+        let signed_message_count = 1
+            + transcript.rbc_echoes.len()
+            + transcript.rbc_readies.len()
+            + transcript.rbc_accepts.len()
+            + transcript.abba_inits.len()
+            + transcript.abba_auxes.len()
+            + transcript.abba_confs.len()
+            + transcript.abba_finishes.len()
+            + transcript.full_knowledge_checks.len();
+        Ok((
+            CobaltShadowProtocolDecision {
+                round: transcript.round,
+                transcript_hash,
+                payload_hash: transcript.payload_hash.clone(),
+                agreement_id: transcript.agreement_id.clone(),
+                output_candidate_id: transcript.mvba_input.output_candidate_id.clone(),
+                ratification_id: transcript.ratification.ratification_id.clone(),
+                registry_root: transcript.registry_root.clone(),
+                trust_graph_root: transcript.trust_graph.trust_graph_root.clone(),
+                signed_message_count,
+            },
+            stage_micros,
+        ))
+    }
+
+    fn cobalt_domain(&self) -> CobaltDomain {
+        CobaltDomain {
+            chain_id: self.state.identity.chain_id.clone(),
+            genesis_hash: self.state.identity.genesis_hash.clone(),
+            protocol_version: self.state.identity.protocol_version,
+        }
+    }
+
+    fn signature_committee(&self) -> io::Result<CobaltSignatureCommittee> {
+        let mut committee = CobaltSignatureCommittee::default();
+        for (validator, public_key_hex) in &self.state.peer_public_keys {
+            committee
+                .insert_hex(validator.clone(), public_key_hex)
+                .map_err(consensus_error)?;
+        }
+        Ok(committee)
+    }
+
+    pub(crate) fn protocol_private_key(&self) -> io::Result<Vec<u8>> {
+        hex_to_bytes(&self.private.private_key_hex).map_err(crypto_error)
     }
 
     pub fn create_beacon_commitment(
@@ -640,6 +1085,15 @@ impl CobaltShadowService {
             &shadow_message_signing_bytes(&message)?,
             MESSAGE_SIGNATURE_CONTEXT,
         )?;
+        let encoded_len = serde_json::to_vec(&message).map_err(json_error)?.len() as u64;
+        self.state.metrics.transmitted_messages =
+            self.state.metrics.transmitted_messages.saturating_add(1);
+        self.state.metrics.transmitted_bytes = self
+            .state
+            .metrics
+            .transmitted_bytes
+            .saturating_add(encoded_len);
+        self.persist_state()?;
         Ok(message)
     }
 
@@ -716,6 +1170,13 @@ impl CobaltShadowService {
                 "Cobalt shadow transport queue is full",
             ));
         }
+        self.state.metrics.received_messages =
+            self.state.metrics.received_messages.saturating_add(1);
+        self.state.metrics.received_bytes = self
+            .state
+            .metrics
+            .received_bytes
+            .saturating_add(encoded.len() as u64);
         self.state.queued_messages.push(message);
         self.persist_state()?;
         Ok(CobaltShadowReceiveOutcome::Queued)
@@ -821,8 +1282,29 @@ impl CobaltShadowService {
             || self.state.queued_messages.len() > self.state.limits.max_queue_messages
             || self.state.seen_message_ids.len() > self.state.limits.max_seen_messages
             || self.state.randomness_rounds.len() > self.state.limits.max_randomness_rounds
+            || self.state.outbound_protocol_locks.len() > self.state.limits.max_randomness_rounds
+            || self.state.ratification_locks.len() > self.state.limits.max_randomness_rounds
+            || self.state.protocol_decisions.len() > self.state.limits.max_randomness_rounds
         {
             return Err(invalid("persisted collection exceeds bound"));
+        }
+        if self.state.registry_root.is_empty() != self.state.trust_graph_root.is_empty() {
+            return Err(invalid("persisted registry binding is incomplete"));
+        }
+        if !self.state.registry_root.is_empty() {
+            validate_hash("persisted registry root", &self.state.registry_root)?;
+            validate_hash("persisted trust graph root", &self.state.trust_graph_root)?;
+        }
+        if self
+            .state
+            .protocol_decisions
+            .iter()
+            .any(|(round, decision)| {
+                self.state.ratification_locks.get(round) != Some(&decision.ratification_id)
+                    || decision.round != *round
+            })
+        {
+            return Err(invalid("persisted protocol decision lock mismatch"));
         }
         let public_key = hex_to_bytes(&self.state.public_key_hex).map_err(crypto_error)?;
         ml_dsa_65_validate_public_key(&public_key).map_err(crypto_error)?;
@@ -859,6 +1341,220 @@ impl CobaltShadowService {
         }
         Ok(())
     }
+}
+
+pub fn build_signed_protocol_transcript(
+    services: &mut [CobaltShadowService],
+    round: u64,
+    payload_hash: impl Into<String>,
+) -> io::Result<CobaltShadowProtocolTranscript> {
+    if services.len() < 3 {
+        return Err(invalid(
+            "signed protocol transcript requires at least three validators",
+        ));
+    }
+    let payload_hash = payload_hash.into();
+    validate_hash("protocol payload", &payload_hash)?;
+    let identity = services[0].state.identity.clone();
+    if services.iter().any(|service| {
+        service.state.identity.chain_id != identity.chain_id
+            || service.state.identity.genesis_hash != identity.genesis_hash
+            || service.state.identity.protocol_version != identity.protocol_version
+    }) {
+        return Err(invalid("protocol fleet domain mismatch"));
+    }
+    let peers = services
+        .iter()
+        .map(|service| {
+            (
+                service.state.identity.node_id.clone(),
+                service.state.public_key_hex.clone(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    if peers.len() != services.len() {
+        return Err(invalid("protocol fleet contains duplicate validator ids"));
+    }
+    let registry_root = hash_serialized("postfiat.cobalt.shadow.validator-registry.v1", &peers)?;
+    let domain = CobaltDomain {
+        chain_id: identity.chain_id,
+        genesis_hash: identity.genesis_hash,
+        protocol_version: identity.protocol_version,
+    };
+    let validators = peers.keys().cloned().collect::<Vec<_>>();
+    let subset = build_essential_subset(
+        &domain,
+        validators.clone(),
+        0,
+        validators.len(),
+        vec!["local-socket-drill".to_string()],
+        1,
+        None,
+    )
+    .map_err(consensus_error)?;
+    let views = validators
+        .iter()
+        .map(|validator| build_trust_view(&domain, validator, 1, vec![subset.clone()], ""))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(consensus_error)?;
+    let graph = build_trust_graph(&domain, 1, registry_root.clone(), 1, None, views)
+        .map_err(consensus_error)?;
+    for service in services.iter_mut() {
+        service.bind_registry(registry_root.clone(), &graph, peers.clone())?;
+        service.reserve_protocol_round(round, payload_hash.clone())?;
+    }
+    let private_keys = services
+        .iter()
+        .map(CobaltShadowService::protocol_private_key)
+        .collect::<io::Result<Vec<_>>>()?;
+    let proposer = validators[0].clone();
+    let propose = sign_rbc_propose(
+        &domain,
+        graph.trust_graph_root.clone(),
+        proposer,
+        round,
+        payload_hash.clone(),
+        &private_keys[0],
+    )
+    .map_err(consensus_error)?;
+    let rbc_echoes = validators
+        .iter()
+        .zip(&private_keys)
+        .map(|(validator, key)| sign_rbc_echo(&domain, &propose, validator, key))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(consensus_error)?;
+    let rbc_readies = validators
+        .iter()
+        .zip(&private_keys)
+        .map(|(validator, key)| sign_rbc_ready(&domain, &propose, validator, key))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(consensus_error)?;
+    let rbc_accepts = validators
+        .iter()
+        .zip(&private_keys)
+        .map(|(validator, key)| sign_rbc_accept(&domain, &propose, validator, key))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(consensus_error)?;
+    let agreement_id = hash_serialized(
+        "postfiat.cobalt.shadow.agreement.v1",
+        &(round, &propose.message_id, &graph.trust_graph_root),
+    )?;
+    let abba_inits = validators
+        .iter()
+        .zip(&private_keys)
+        .map(|(validator, key)| {
+            sign_abba_init(
+                &domain,
+                graph.trust_graph_root.clone(),
+                validator,
+                agreement_id.clone(),
+                round,
+                true,
+                key,
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(consensus_error)?;
+    let abba_auxes = validators
+        .iter()
+        .zip(&private_keys)
+        .map(|(validator, key)| {
+            sign_abba_aux(
+                &domain,
+                graph.trust_graph_root.clone(),
+                validator,
+                agreement_id.clone(),
+                round,
+                true,
+                key,
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(consensus_error)?;
+    let abba_confs = validators
+        .iter()
+        .zip(&private_keys)
+        .map(|(validator, key)| {
+            sign_abba_conf(
+                &domain,
+                graph.trust_graph_root.clone(),
+                validator,
+                agreement_id.clone(),
+                round,
+                true,
+                key,
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(consensus_error)?;
+    let abba_finishes = validators
+        .iter()
+        .zip(&private_keys)
+        .map(|(validator, key)| {
+            sign_abba_finish(
+                &domain,
+                graph.trust_graph_root.clone(),
+                validator,
+                agreement_id.clone(),
+                round,
+                true,
+                key,
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(consensus_error)?;
+    let candidate = mvba_candidate_from_rbc_accept(&domain, &propose, &rbc_accepts[0])
+        .map_err(consensus_error)?;
+    let mvba_input = build_mvba_valid_input_set(
+        &domain,
+        &graph.trust_views[0],
+        agreement_id.clone(),
+        vec![candidate],
+    )
+    .map_err(consensus_error)?;
+    let activation_height = round
+        .checked_add(1)
+        .ok_or_else(|| invalid("protocol activation height overflow"))?;
+    let ratification = ratify_dabc_amendment(&domain, &graph, &mvba_input, None, activation_height)
+        .map_err(consensus_error)?;
+    let pending = vec![DabcPendingPair {
+        amendment_slot: round,
+        output_candidate_id: mvba_input.output_candidate_id.clone(),
+    }];
+    let full_knowledge_checks = validators
+        .iter()
+        .zip(&private_keys)
+        .map(|(validator, key)| {
+            sign_dabc_full_knowledge_check(
+                &domain,
+                graph.trust_graph_root.clone(),
+                validator,
+                activation_height,
+                pending.clone(),
+                key,
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(consensus_error)?;
+    Ok(CobaltShadowProtocolTranscript {
+        schema: COBALT_SHADOW_PROTOCOL_TRANSCRIPT_SCHEMA.to_string(),
+        registry_root,
+        trust_graph: graph,
+        round,
+        payload_hash,
+        agreement_id,
+        rbc_propose: propose,
+        rbc_echoes,
+        rbc_readies,
+        rbc_accepts,
+        abba_inits,
+        abba_auxes,
+        abba_confs,
+        abba_finishes,
+        mvba_input,
+        ratification,
+        full_knowledge_checks,
+    })
 }
 
 pub fn run_cobalt_shadow_adversarial_drill(
@@ -1314,6 +2010,10 @@ fn crypto_error(error: impl std::fmt::Display) -> io::Error {
     invalid(error.to_string())
 }
 
+fn consensus_error(error: impl std::fmt::Display) -> io::Error {
+    invalid(format!("Cobalt protocol validation failed: {error}"))
+}
+
 fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())
 }
@@ -1452,6 +2152,80 @@ mod tests {
                 .mode();
             assert_eq!(mode & 0o077, 0);
         }
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn signed_protocol_transcript_converges_and_replays_after_restart() {
+        let root = test_dir("signed-protocol");
+        let mut fleet = (0..3)
+            .map(|index| {
+                CobaltShadowService::initialize(
+                    root.join(format!("validator-{index}")),
+                    identity(&format!("validator-{index}")),
+                    CobaltShadowLimits::default(),
+                )
+                .expect("initialize")
+            })
+            .collect::<Vec<_>>();
+        let transcript = build_signed_protocol_transcript(
+            &mut fleet,
+            7,
+            hash_hex("postfiat.cobalt.shadow.test.payload.v1", b"ratify"),
+        )
+        .expect("build signed transcript");
+        let decisions = fleet
+            .iter_mut()
+            .map(|service| {
+                service
+                    .commit_protocol_transcript(&transcript)
+                    .expect("commit transcript")
+            })
+            .collect::<Vec<_>>();
+        assert!(decisions.windows(2).all(|pair| pair[0] == pair[1]));
+        assert_eq!(decisions[0].signed_message_count, 25);
+        assert!(fleet.iter().all(|service| {
+            !service.status().live_authority
+                && !service.status().controls_block_consensus
+                && service.status().protocol_decision_count == 1
+        }));
+        drop(fleet);
+        let mut restarted =
+            CobaltShadowService::open(root.join("validator-1")).expect("restart service");
+        let replay = restarted.replay_protocol_state().expect("replay state");
+        assert_eq!(replay, vec![decisions[1].clone()]);
+        assert_eq!(restarted.status().ratification_lock_count, 1);
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn signed_protocol_transcript_rejects_tamper_and_wrong_root() {
+        let root = test_dir("signed-protocol-tamper");
+        let mut fleet = (0..3)
+            .map(|index| {
+                CobaltShadowService::initialize(
+                    root.join(format!("validator-{index}")),
+                    identity(&format!("validator-{index}")),
+                    CobaltShadowLimits::default(),
+                )
+                .expect("initialize")
+            })
+            .collect::<Vec<_>>();
+        let transcript = build_signed_protocol_transcript(
+            &mut fleet,
+            9,
+            hash_hex("postfiat.cobalt.shadow.test.payload.v1", b"tamper"),
+        )
+        .expect("build signed transcript");
+        let mut tampered = transcript.clone();
+        tampered.rbc_echoes[0]
+            .signature_hex
+            .replace_range(0..2, "00");
+        assert!(fleet[0].commit_protocol_transcript(&tampered).is_err());
+        let mut wrong_root = transcript;
+        wrong_root.registry_root = "ff".repeat(48);
+        assert!(fleet[0].commit_protocol_transcript(&wrong_root).is_err());
+        assert_eq!(fleet[0].status().protocol_decision_count, 0);
         fs::remove_dir_all(root).expect("cleanup");
     }
 }

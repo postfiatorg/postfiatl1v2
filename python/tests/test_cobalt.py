@@ -117,6 +117,53 @@ class CobaltCliTests(unittest.TestCase):
         self.assertIn("[PASS] restart recovered queue", rendered)
         self.assertIn("Live authority: no", rendered)
 
+    def test_runtime_probe_and_fleet_require_consistent_non_authoritative_state(self) -> None:
+        probe = {
+            "node_id": "validator-0",
+            "peer_health": "healthy",
+            "queue_health": "healthy",
+            "replay_posture": "consistent",
+            "registry_root": "aa" * 48,
+            "trust_graph_root": "bb" * 48,
+            "live_authority": False,
+            "controls_block_consensus": False,
+        }
+
+        self.assertTrue(cobalt.runtime_result("probe", probe)["ok"])
+        fleet = cobalt.fleet_result(
+            ["127.0.0.1:9700", "127.0.0.1:9701"], [probe, dict(probe)]
+        )
+        self.assertTrue(fleet["ok"])
+        self.assertTrue(fleet["summary"]["consistent_roots"])
+        changed = dict(probe, trust_graph_root="cc" * 48)
+        self.assertFalse(
+            cobalt.fleet_result(
+                ["127.0.0.1:9700", "127.0.0.1:9701"], [probe, changed]
+            )["ok"]
+        )
+
+    def test_runtime_snapshot_and_replay_human_output_are_plain_english(self) -> None:
+        snapshot = cobalt.runtime_result(
+            "snapshot",
+            {
+                "identity": {"node_id": "validator-0"},
+                "authority_mode": "shadow-advisory",
+                "live_authority": False,
+                "controls_block_consensus": False,
+                "registry_root": "aa" * 48,
+                "trust_graph_root": "bb" * 48,
+                "protocol_high_watermark": 4,
+                "protocol_decisions": {"4": {}},
+                "state_hash": "cc" * 48,
+            },
+        )
+        replay = cobalt.runtime_result(
+            "replay", [{"round": 4, "ratification_id": "dd" * 48}]
+        )
+
+        self.assertIn("Protocol high-water mark: 4", cobalt.render_human(snapshot))
+        self.assertIn("round 4", cobalt.render_human(replay))
+
     @mock.patch("postfiat_rpc.cobalt.subprocess.run")
     def test_shadow_runner_invokes_dedicated_binary_with_data_dir(
         self, run: mock.Mock

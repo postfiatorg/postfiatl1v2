@@ -1,0 +1,55 @@
+[Unit]
+Description=PostFiat Cobalt governance shadow sidecar
+After=network-online.target
+Wants=network-online.target
+
+# Deliberately no Requires=, Wants=, PartOf=, or BindsTo= relationship with
+# postfiat-node.service. A shadow-sidecar restart cannot restart the validator.
+
+[Service]
+Type=simple
+User=postfiat-cobalt
+Group=postfiat-cobalt
+EnvironmentFile=-/etc/postfiat/cobalt-shadow.env
+ExecStart=/usr/local/bin/postfiat-cobalt-shadow run --data-dir /var/lib/postfiat-cobalt-shadow --listen ${COBALT_SHADOW_LISTEN} --allow-private-network
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+
+StateDirectory=postfiat-cobalt-shadow
+StateDirectoryMode=0700
+WorkingDirectory=/var/lib/postfiat-cobalt-shadow
+ReadWritePaths=/var/lib/postfiat-cobalt-shadow
+InaccessiblePaths=/var/lib/postfiat-node /var/lib/postfiat-validator
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+NoNewPrivileges=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RemoveIPC=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_INET AF_INET6
+SystemCallArchitectures=native
+
+MemoryMax=512M
+MemorySwapMax=0
+CPUQuota=50%
+TasksMax=64
+LimitNOFILE=1024
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

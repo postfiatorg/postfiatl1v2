@@ -15,6 +15,7 @@ import argparse
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -54,6 +55,7 @@ SHADOW_COMMANDS = {
     "shadow-service-status": "status",
     "shadow-service-drill": "drill",
 }
+RUNTIME_COMMANDS = {"probe", "snapshot", "replay"}
 
 
 def repository_root(start: Path | None = None) -> Path:
@@ -222,6 +224,110 @@ def shadow_result(command: str, report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def runtime_request(
+    endpoint: str, operation: str, *, timeout_seconds: float
+) -> dict[str, Any] | list[Any]:
+    """Read one bounded JSON response from the Rust shadow socket service."""
+
+    host, separator, port_text = endpoint.rpartition(":")
+    if not separator or not host:
+        raise CobaltCliError("endpoint must be HOST:PORT")
+    try:
+        port = int(port_text)
+    except ValueError as error:
+        raise CobaltCliError("endpoint port must be an integer") from error
+    if not 1 <= port <= 65535:
+        raise CobaltCliError("endpoint port must be in 1..=65535")
+    request_body = json.dumps(
+        {"operation": operation}, separators=(",", ":")
+    ).encode("utf-8")
+    try:
+        with socket.create_connection((host, port), timeout=timeout_seconds) as connection:
+            connection.settimeout(timeout_seconds)
+            connection.sendall(request_body)
+            connection.shutdown(socket.SHUT_WR)
+            chunks: list[bytes] = []
+            size = 0
+            while True:
+                chunk = connection.recv(65536)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > MAX_REPORT_BYTES:
+                    raise CobaltCliError("Cobalt shadow response exceeded the read limit")
+                chunks.append(chunk)
+    except OSError as error:
+        raise CobaltCliError(f"could not reach Cobalt shadow service: {error}") from error
+    try:
+        envelope = json.loads(b"".join(chunks))
+    except json.JSONDecodeError as error:
+        raise CobaltCliError("Cobalt shadow service did not emit valid JSON") from error
+    if not isinstance(envelope, dict) or envelope.get("ok") is not True:
+        detail = envelope.get("error", "request failed") if isinstance(envelope, dict) else "request failed"
+        raise CobaltCliError(f"Cobalt shadow service rejected the request: {detail}")
+    result = envelope.get("result")
+    if not isinstance(result, (dict, list)):
+        raise CobaltCliError("Cobalt shadow response did not contain structured output")
+    return result
+
+
+def runtime_result(command: str, report: dict[str, Any] | list[Any]) -> dict[str, Any]:
+    if command == "probe":
+        ok = (
+            isinstance(report, dict)
+            and report.get("peer_health") == "healthy"
+            and report.get("queue_health") == "healthy"
+            and report.get("replay_posture") == "consistent"
+            and report.get("live_authority") is False
+            and report.get("controls_block_consensus") is False
+        )
+    elif command == "snapshot":
+        ok = (
+            isinstance(report, dict)
+            and report.get("authority_mode") == "shadow-advisory"
+            and report.get("live_authority") is False
+            and report.get("controls_block_consensus") is False
+        )
+    else:
+        ok = isinstance(report, list) and all(
+            isinstance(row, dict) and row.get("ratification_id") for row in report
+        )
+    return {
+        "schema": CLI_SCHEMA,
+        "command": command,
+        "ok": ok,
+        "authority": dict(AUTHORITY),
+        "source": {"service": "postfiat-cobalt-shadow", "operation": command},
+        "report": report,
+    }
+
+
+def fleet_result(endpoints: list[str], reports: list[dict[str, Any]]) -> dict[str, Any]:
+    roots = {
+        (report.get("registry_root"), report.get("trust_graph_root"))
+        for report in reports
+    }
+    ok = bool(reports) and len(roots) == 1 and all(
+        runtime_result("probe", report)["ok"] for report in reports
+    )
+    return {
+        "schema": CLI_SCHEMA,
+        "command": "fleet",
+        "ok": ok,
+        "authority": dict(AUTHORITY),
+        "summary": {
+            "reachable": len(reports),
+            "configured": len(endpoints),
+            "consistent_roots": len(roots) == 1,
+            "live_authority": False,
+        },
+        "nodes": [
+            {"endpoint": endpoint, "probe": report}
+            for endpoint, report in zip(endpoints, reports, strict=True)
+        ],
+    }
+
+
 def result_envelope(spec: ExampleSpec, report: dict[str, Any]) -> dict[str, Any]:
     if spec.command == "trust-graph":
         ok = bool(report.get("trust_graph_root")) and report.get("cobalt_mode") == "non_uniform"
@@ -282,7 +388,71 @@ def render_human(result: dict[str, Any]) -> str:
         "Authority: advisory only; live block consensus remains unchanged",
         "",
     ]
-    if command == "trust-graph":
+    if command == "fleet":
+        summary = result["summary"]
+        lines.extend(
+            [
+                "Cobalt shadow fleet",
+                f"  Reachable: {summary['reachable']}/{summary['configured']}",
+                f"  Registry/graph roots consistent: {'yes' if summary['consistent_roots'] else 'no'}",
+                "  Live authority: no",
+            ]
+        )
+        lines.extend(
+            f"  [{status_line(node['probe'].get('peer_health') == 'healthy')}] "
+            f"{node['probe'].get('node_id', node['endpoint'])} at {node['endpoint']}"
+            for node in result["nodes"]
+        )
+    elif command == "probe":
+        report = result["report"]
+        lines.extend(
+            [
+                "Cobalt shadow probe",
+                f"  Node: {report.get('node_id', 'unknown')}",
+                f"  Peers: {report.get('configured_peers', 'unknown')} ({report.get('peer_health', 'unknown')})",
+                f"  Queue: {report.get('queue_depth', 'unknown')} ({report.get('queue_health', 'unknown')})",
+                f"  Registry root: {short_hash(report.get('registry_root'))}",
+                f"  Trust graph root: {short_hash(report.get('trust_graph_root'))}",
+                f"  Ratification locks: {report.get('ratification_locks', 'unknown')}",
+                f"  Decisions: {report.get('protocol_decisions', 'unknown')}",
+                f"  Replay: {report.get('replay_posture', 'unknown')}",
+                f"  Signed traffic: {report.get('messages_received', 0)} messages / {report.get('bytes_received', 0)} bytes",
+                "  Stage validation: "
+                + ", ".join(
+                    f"{stage}={micros}us"
+                    for stage, micros in report.get("stage_validation_micros", {}).items()
+                ),
+                "  Live authority: no",
+            ]
+        )
+    elif command == "snapshot":
+        report = result["report"]
+        lines.extend(
+            [
+                "Cobalt shadow snapshot",
+                f"  Node: {report.get('identity', {}).get('node_id', 'unknown')}",
+                f"  Registry root: {short_hash(report.get('registry_root'))}",
+                f"  Trust graph root: {short_hash(report.get('trust_graph_root'))}",
+                f"  Protocol high-water mark: {report.get('protocol_high_watermark', 'unknown')}",
+                f"  Decisions: {len(report.get('protocol_decisions', {}))}",
+                f"  State hash: {short_hash(report.get('state_hash'))}",
+                "  Live authority: no",
+            ]
+        )
+    elif command == "replay":
+        report = result["report"]
+        lines.extend(
+            [
+                "Cobalt shadow replay",
+                f"  Decisions: {len(report)}",
+                "  Live authority: no",
+            ]
+        )
+        lines.extend(
+            f"  [PASS] round {row.get('round')}: {short_hash(row.get('ratification_id'))}"
+            for row in report
+        )
+    elif command == "trust-graph":
         report = result["report"]
         lines.extend(
             [
@@ -396,8 +566,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Cobalt shadow-service state directory (required for shadow-service commands)",
     )
     parser.add_argument(
+        "--endpoint",
+        help="Cobalt shadow service endpoint for probe, snapshot, or replay (HOST:PORT)",
+    )
+    parser.add_argument(
+        "--endpoints",
+        help="comma-separated Cobalt shadow endpoints for the fleet command",
+    )
+    parser.add_argument(
         "command",
-        choices=[*EXAMPLES, "shadow-readiness", *SHADOW_COMMANDS],
+        choices=[
+            *EXAMPLES,
+            "graph",
+            "fleet",
+            *RUNTIME_COMMANDS,
+            "shadow-status",
+            "shadow-readiness",
+            *SHADOW_COMMANDS,
+        ],
         help="governance check to run",
     )
     return parser
@@ -409,33 +595,60 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise SystemExit("--timeout must be greater than zero")
     try:
         root = repository_root()
-        cargo = resolve_cargo(args.cargo)
-
-        def runner(spec: ExampleSpec) -> dict[str, Any]:
-            return run_example(
-                spec,
-                root=root,
-                cargo=cargo,
-                target=args.target,
-                timeout_seconds=args.timeout,
+        command = {
+            "graph": "trust-graph",
+            "shadow-status": "shadow-service-status",
+        }.get(args.command, args.command)
+        if command in RUNTIME_COMMANDS:
+            if not args.endpoint:
+                raise CobaltCliError(f"--endpoint is required for {command}")
+            result = runtime_result(
+                command,
+                runtime_request(args.endpoint, command, timeout_seconds=args.timeout),
             )
-
-        if args.command in SHADOW_COMMANDS:
+        elif command == "fleet":
+            endpoints = [
+                value.strip()
+                for value in (args.endpoints or "").split(",")
+                if value.strip()
+            ]
+            if not endpoints:
+                raise CobaltCliError("--endpoints is required for fleet")
+            reports = []
+            for endpoint in endpoints:
+                report = runtime_request(endpoint, "probe", timeout_seconds=args.timeout)
+                if not isinstance(report, dict):
+                    raise CobaltCliError("fleet probe returned non-object output")
+                reports.append(report)
+            result = fleet_result(endpoints, reports)
+        elif command in SHADOW_COMMANDS:
             if args.data_dir is None:
                 raise CobaltCliError(
                     "--data-dir is required for shadow-service-status and shadow-service-drill"
                 )
+            cargo = resolve_cargo(args.cargo)
             report = run_shadow_service(
-                SHADOW_COMMANDS[args.command],
+                SHADOW_COMMANDS[command],
                 root=root,
                 data_dir=args.data_dir,
                 cargo=cargo,
                 target=args.target,
                 timeout_seconds=args.timeout,
             )
-            result = shadow_result(args.command, report)
+            result = shadow_result(command, report)
         else:
-            result = execute(args.command, runner)
+            cargo = resolve_cargo(args.cargo)
+
+            def runner(spec: ExampleSpec) -> dict[str, Any]:
+                return run_example(
+                    spec,
+                    root=root,
+                    cargo=cargo,
+                    target=args.target,
+                    timeout_seconds=args.timeout,
+                )
+
+            result = execute(command, runner)
     except CobaltCliError as error:
         print(f"cobalt governance check failed: {error}", file=sys.stderr)
         return 2
