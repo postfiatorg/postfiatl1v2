@@ -33,8 +33,8 @@ cannot rewrite finalized history. The result does not provide faster payments,
 automatic validator selection, or permission for a new set to authorize
 itself.
 
-**Status:** Retired after verified CLI and browser delivery; final Task Node closure in progress
-**Current task:** `task_79398d1434bcb45b06fccdf9d1de0c51`
+**Status:** Completed
+**Current task:** None
 **Locked specification:**
 [`cobalt-research-spec.md`](../../governance/cobalt-research-spec.md)
 **Decision boundary:** Cobalt governs validator trust evolution only. Consensus
@@ -48,7 +48,7 @@ The tasks are accepted and must run in this dependency order.
 2. [x] `task_a7464ea1e003c388845a43d7144360e0` — build the human-readable Python CLI for trust-graph checks, transition witnesses, protocol replay, and shadow readiness. **Rewarded: 1.5 PFT.**
 3. [x] `task_4588cb739847318708ad3ea844380e60` — build the complete Rust governance-only shadow service with durable state, bounded transport, production randomness, restart/replay safety, adversarial convergence, and CLI observability. **Rewarded: 0 PFT.**
 4. [x] `task_e936a36597bc83239e61400e455417e6` — implement the versioned controlled-testnet governance-authority handoff with old-registry ML-DSA-65 authorization and consensus ordering. **Rewarded: 2.7 PFT.**
-5. [ ] `task_79398d1434bcb45b06fccdf9d1de0c51` — build and verify the browser interface, refresh concise documentation, and retire this milestone only after the CLI and interface work.
+5. [x] `task_79398d1434bcb45b06fccdf9d1de0c51` — build and verify the browser interface, refresh concise documentation, and retire this milestone only after the CLI and interface work. **Rewarded: 4 PFT.**
 
 ## Milestones
 
@@ -82,7 +82,7 @@ The tasks are accepted and must run in this dependency order.
 
 ## Completion rule
 
-This milestone is complete only when all five Task Node tasks reach their final
-rewarded outcome and the CLI and browser interface work against real Cobalt and
-node surfaces. Until the versioned handoff is separately proven and activated,
-live governance remains under the old active registry.
+All five Task Node tasks reached their final rewarded outcome. The CLI and
+browser interface were verified against real Cobalt and node surfaces. The
+checked fresh node correctly remained under Foundation authority because no
+versioned handoff had been ordered into that node state.
