@@ -1,161 +1,83 @@
 # Cobalt Implementation
 
-The implementation lives in `crates/consensus_cobalt`.
+## Component Map
 
-## Core Mechanics
+| Component | Source | Responsibility |
+| --- | --- | --- |
+| Trust and agreement | `crates/consensus_cobalt` | Trust views, linkedness, safety cover, RBC, ABBA, MVBA, and DABC. |
+| Shadow service | `crates/node/src/cobalt_shadow.rs` | Durable signed transport, randomness, restart/replay safety, and advisory convergence. |
+| Authority handoff | `crates/node/src/cobalt_handoff.rs` | Versioned Foundation-to-Cobalt transition and Cobalt validator-trust authorization. |
+| Consensus admission | `crates/node/src/consensus_artifacts.rs` | Existing governance batch ID, signature, and consensus-ordering boundary. |
+| Committed state | `crates/node/src/state_commitment.rs` | Canonical transition and Cobalt authorization commitments. |
+| CLI | `python/postfiat_rpc/cobalt.py` | Human-readable and JSON inspection of the real Rust examples and shadow binary. |
+| Browser UI | `python/postfiat_rpc/cobalt_ui.py` | Read-only aggregation of CLI checks, validated node state, and signed shadow status. |
 
-| Mechanic | Meaning |
-| --- | --- |
-| Trust view | A validator's local view of trusted validators and subsets. |
-| Essential subset | A set with `t_S` and `q_S` thresholds. |
-| Linkedness | Safety property checked before graph activation. |
-| Non-uniform certificate | Certificate verified against local trust views rather than one global validator list. |
-| RBC | Reliable broadcast for governance payloads. |
-| ABBA | Binary agreement. |
-| MVBA | Multi-valued agreement over candidate amendments. |
-| DABC | Ordered democratic atomic broadcast for amendments. |
+## Authority Handoff
 
-## Safety Witness Checker
+`CobaltGovernanceAuthorityTransitionV1` binds one transition to:
 
-`verify_cobalt_safety_witness` turns validator-registry transition safety into a
-typed, hash-bound report. It validates the active parent graph, proposed child
-graph, registry roots, activation height, challenge state, bounded
-essential-subset cover, and every old/new subset intersection under the active
-Byzantine budget.
+- chain and genesis domain;
+- source and destination authority modes;
+- old registry root, Cobalt registry root, trust-graph root, and Cobalt lock;
+- previous transition, amendment sequence, activation height, and protocol
+  version;
+- validator-trust-only scope, active validators, quorum, and distinct
+  ML-DSA-65 approvals.
 
-`extract_cobalt_safety_cover` is the cover extractor used by the witness path.
-It takes the old and new rooted trust graphs, derives every active essential
-subset referenced by every trust view, deduplicates by subset id, rejects
-inactive or conflicting rows, and emits a `CobaltCoverExtractionReport`. The
-safety witness can be checked against that report with
-`verify_cobalt_cover_extraction_matches_safety_witness`; an omitted cover row is
-a deterministic verification failure.
+The active registry signs the exact transition. Existing consensus v2 orders
+the governance batch and the normal execution path commits it. After handoff,
+each Cobalt-authorized validator update must bind the active transition, parent
+lock, next sequence, and proposal slot. Mixed Foundation/Cobalt authorization,
+new-set self-authorization, replay, stale parents, and non-forward rollback are
+rejected.
 
-The checker accepts a bounded one-validator rotation and rejects:
+## Shadow Service
 
-- stale parent roots;
-- open challenge state;
-- oversized essential-subset covers;
-- a global Byzantine budget larger than the weakest covered subset's `t_S`;
-- stale, inactive, or omitted cover rows;
-- large simultaneous deltas whose old/new intersection can be entirely
-  Byzantine, including the `A,B,C,D,E,F,G -> A,B,H,I,J,K,L` counterexample.
-
-Run:
+`postfiat-cobalt-shadow` persists a mode-0600 ML-DSA-65 signer and signed public
+state. Its queues, peers, seen-message set, and randomness history are bounded.
+The adversarial drill covers restart recovery, duplicate delivery,
+equivocation, bad signatures, partition healing, censorship healing, member
+loss, and randomness failure. Every status explicitly reports
+`shadow-advisory`, `live_authority=false`, and
+`controls_block_consensus=false`.
 
 ```bash
-REPORT=reports/cobalt-safety-witness/20260526/cobalt-safety-witness-report.json \
-REPORT_ROOT="$PWD" \
-cargo run -p postfiat-consensus-cobalt --example cobalt_safety_witness
+cargo run -p postfiat-node --bin postfiat-cobalt-shadow -- \
+  drill --data-dir /path/to/shadow-fleet
 ```
+
+## Browser Data Boundary
+
+The browser service does not read arbitrary display fixtures:
+
+- trust and safety-witness panels execute the same functions used by
+  `postfiat_rpc.cobalt`;
+- the proposal panel runs the Rust node `status` command to validate the node
+  store, requires `governance.json` to remain byte-identical across that check,
+  and then parses its bounded `pftmac1` payload;
+- convergence calls the Rust shadow binary's `status` action for every
+  persisted validator directory;
+- activation is `HOLD` unless trust and witness checks pass, the shadow fleet
+  converges, and node state records the old-registry handoff plus Cobalt mode.
+
+Only GET and HEAD are implemented. POST returns `405 Method Not Allowed`.
+
+## Verification
 
 ```bash
-REPORT=reports/cobalt-cover-extractor-v1-report.json \
-REPORT_ROOT="$PWD" \
-cargo run -p postfiat-consensus-cobalt --example cobalt_cover_extractor
+PYTHONPATH=python python3 -m unittest -q \
+  python.tests.test_cobalt python.tests.test_cobalt_ui
+
+cargo test -p postfiat-node --lib cobalt_handoff
+cargo test -p postfiat-consensus-cobalt
+cargo clippy -p postfiat-types -p postfiat-consensus-cobalt \
+  -p postfiat-node --lib -- -D warnings
 ```
 
-```bash
-REPORT=reports/cobalt-cover-sizing-v1-report.json \
-REPORT_ROOT="$PWD" \
-cargo run -p postfiat-consensus-cobalt --example cobalt_cover_sizing
-```
+The checked browser evidence uses a freshly initialized four-validator node and
+the real four-validator adversarial shadow drill. It truthfully shows Foundation
+authority, zero recorded proposals, converged shadow state, and activation on
+`HOLD` because that node has no ordered handoff.
 
-The sizing example checks grouped trust graphs: 35 validators with five groups
-produce 12 old+new cover subsets, and 100 validators with ten groups produce
-22, both under the current `max_cover_subsets=64` profile.
-
-## Transition Safety Statement
-
-An accepted transition preserves agreement and transition validity when:
-
-- graph roots, registry roots, parent links, signatures, and challenge state
-  verify under the old active rules;
-- the extracted cover is complete and within the active cover bound;
-- each active essential subset satisfies the local Cobalt inequalities;
-- the active Byzantine budget is no larger than the smallest `t_S` in the
-  covered old/new subsets;
-- linkedness closure is safe for every signing view;
-- every covered old quorum and new quorum intersects in more validators than
-  the active Byzantine budget;
-- correct validators do not sign conflicting roots for the same height, view,
-  registry root, and transition root.
-
-The proof obligation is mechanical: the old active checker derives the cover,
-enumerates the old/new matrix, and accepts only if every cross-graph quorum pair
-shares at least one validator that cannot be entirely Byzantine. A proposed
-child graph cannot validate itself.
-
-Adversarial bounded covers are handled by construction. Adding subsets increases
-the matrix; conflicting subset ids fail validation; stale or inactive subset rows
-fail extraction. Undeclared social or hosting correlation is handled as
-validator evidence, not as a Cobalt cover edge, because Cobalt can only verify
-declared protocol trust.
-
-## Registry Evolution Flow
-
-Validator-list changes are protocol state, not social coordination. Each
-transition from `G_t` to `G_t+1` must pass the old active rules before the new
-registry can activate.
-
-```mermaid
-flowchart TD
-  Old[Old registry root G_t<br/>trust graph root<br/>checker root<br/>safety profile root]
-  Old --> Packet[Transition packet<br/>parent root<br/>delta root<br/>next root G_t+1<br/>evidence root<br/>safety witness<br/>activation epoch]
-  Packet --> Cover[Cover extraction<br/>proposer-independent<br/>all trust views<br/>deduplicated essential subsets<br/>bounded by max cover]
-  Cover --> Local[Local Cobalt inequalities<br/>for every essential subset S<br/>t_S < 2q_S - n_S<br/>2t_S < q_S]
-  Local --> Linked[Linkedness closure<br/>derived trust-view edges<br/>every pair of views linked]
-  Linked --> Matrix[Old-new quorum intersection<br/>for every old quorum and new quorum<br/>intersection exceeds Byzantine budget B]
-  Matrix -->|all checks pass| Accept[Accept transition<br/>G_t+1 activates at activation epoch]
-  Matrix -->|any check fails| Reject[Reject and fail closed<br/>G_t remains active<br/>failed packet retained as evidence]
-  Accept --> Cert[Cobalt certificate<br/>signed by old registry quorum<br/>under previous active rules]
-  Cert --> RBC[RBC]
-  RBC --> ABBA[ABBA]
-  ABBA --> MVBA[MVBA]
-  MVBA --> DABC[DABC amendment order]
-  DABC --> Replay[Replay bundle]
-```
-
-## Safety Witness Schema
-
-```mermaid
-flowchart LR
-  subgraph Witness[SafetyWitness]
-    Rows[local threshold rows<br/>n_S, q_S, t_S per essential subset]
-    CoverSet[essential subset cover<br/>old and new trust views]
-    Bounds[old-new intersection bounds<br/>every quorum pair]
-    Links[linkedness paths<br/>derived trust-view closure]
-    Counter[rejected counterexamples<br/>unsafe covers that failed]
-  end
-
-  Roots[Rooted old and new graphs] --> Recompute[Checker recomputes cover and matrix]
-  Witness --> Recompute
-  Recompute --> Complete{All witness rows complete<br/>and rooted in graph state?}
-  Complete -->|yes| Safe{Inequalities, linkedness,<br/>and old-new intersections hold?}
-  Complete -->|no| Reject[Reject transition]
-  Safe -->|yes| Accept[Accept safety witness]
-  Safe -->|no| Reject
-```
-
-## Source Anchors
-
-- `crates/consensus_cobalt/src/lib.rs`
-- `crates/consensus_cobalt/src/lib_parts/cobalt_cover_extractor.rs`
-- `crates/consensus_cobalt/src/lib_parts/trust_graph_governance.rs`
-- `crates/consensus_cobalt/examples/cobalt_cover_extractor.rs`
-- `crates/consensus_cobalt/examples/cobalt_cover_sizing.rs`
-- `crates/consensus_cobalt/examples/cobalt_safety_witness.rs`
-- `crates/consensus_cobalt/examples/current_trust_graph_root.rs`
-- `scripts/testnet-cobalt-full-local-harness` *(archived outside this repository; see `scripts/README.md`)*
-- `scripts/testnet-cobalt-full-remote-drill` *(archived outside this repository; see `scripts/README.md`)*
-- `scripts/testnet-cobalt-controlled-readiness-gate` *(archived outside this repository; see `scripts/README.md`)*
-- `docs/status/full-cobalt-burndown.md`
-
-## Current Evidence
-
-- `reports/testnet-cobalt-controlled-readiness-gate/amendment-replay-contract-clean-v0-20260519T145213Z/testnet-cobalt-controlled-readiness-gate.json`
-- `reports/testnet-cobalt-gate-selection/amendment-replay-contract-clean-v0-20260519T145213Z/testnet-cobalt-gate-selection-self-test.json`
-- `reports/testnet-cobalt-amendment-replay-bundle/cleanup-clean-v1-20260519T150324Z/testnet-cobalt-amendment-replay-bundle.json`
-- `reports/cobalt-safety-witness/20260526/cobalt-safety-witness-report.json`
-- `reports/cobalt-cover-extractor-v1-report.json`
-- `reports/cobalt-cover-sizing-v1-report.json`
+- [Desktop capture](../assets/cobalt-governance-observatory.png)
+- [Mobile capture](../assets/cobalt-governance-observatory-mobile.png)

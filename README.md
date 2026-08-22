@@ -8,7 +8,7 @@
 > transactional indexed production engine. Do not place real-value keys or
 > value on this controlled-devnet configuration.
 
-PostFiat is a Rust Layer 1 settlement system for post-quantum, privacy-aware institutional value transfer: transparent accounts use ML-DSA authorization from genesis, shielded settlement is built around Orchard/Halo2-style proofs, and quorum certificates provide deterministic finality. The current candidate admits live governance only through distinct ML-DSA-65 authorizations from the active old-rule registry; unsigned legacy governance artifacts are historical-replay-only. Cobalt RBC/ABBA remain separately signed research primitives and are not the node's authoritative governance admission path.
+PostFiat is a Rust Layer 1 settlement system for post-quantum, privacy-aware institutional value transfer: transparent accounts use ML-DSA authorization from genesis, shielded settlement is built around Orchard/Halo2-style proofs, and quorum certificates provide deterministic finality. Foundation governance is the default authority. A versioned, consensus-ordered handoff can grant Cobalt authority over validator trust evolution only after distinct ML-DSA-65 approval by the active registry. Cobalt never orders blocks or replaces consensus v2 finality.
 
 ```mermaid
 flowchart LR
@@ -19,10 +19,11 @@ flowchart LR
   Execution --> Storage[State, blocks, receipts]
   Storage --> Reads[Read RPC and history]
 
-  Governance[Old-rule signed governance] --> Registry[Validator registry]
+  Governance[Foundation signed governance] --> Registry[Validator registry]
   Registry --> Ordering
 
-  Cobalt[Cobalt RBC / ABBA research] -. validates transition designs .-> Governance
+  Governance -. signed versioned handoff .-> Cobalt[Cobalt validator-trust governance]
+  Cobalt --> Registry
 
   Shielded[Shielded Orchard/Halo2 actions] --> Ordering
   Execution --> Pool[Shielded pool roots and nullifiers]
@@ -38,9 +39,10 @@ flowchart LR
   verifying-key assembly loading. The patch does not intentionally change the
   proof algorithm, verifier equations, transcript, fields, curves, or proof
   encoding. See [Halo2 Dependency And Local Patch Boundary](docs/security/halo2-dependency.md).
-- Signed governance admission: live amendments and registry changes require a
-  quorum of distinct ML-DSA-65 authorizations from the active old-rule registry;
-  unsigned legacy artifacts are replay-only.
+- Versioned governance admission: Foundation mode requires distinct ML-DSA-65
+  authorization by the active registry. A separately signed handoff may enable
+  Cobalt validator-trust updates; mixed authority and new-set self-authorization
+  are rejected.
 - Versioned quorum-certified finality: legacy genesis retains the single-view fail-closed rule; networks with an explicit consensus-v2 activation height use durable prepare/precommit locks, signed timeout certificates, and deterministic proposer rotation.
 - Multiple settlement lanes: consensus-ordered account and issued-asset
   transactions, W6 dual-authorized atomic swaps, FastPay single-owner payments,
@@ -56,7 +58,7 @@ flowchart LR
 | FastPay | Implemented for prefunded single-owner PFT objects with signed admission, distinct-validator certificates, durable apply, and ordered consume-or-cancel recovery. |
 | FastSwap | Implemented for prefunded dual-owner objects with durable reservation, Confirm-or-Cancel certificates, conserved effects, catch-up, and restart recovery. Shared-network activation is a separate deployment decision. |
 | Asset-Orchard | Implemented private ingress, transfer/swap, recovery, and egress path; legacy cleartext note actions are historical-replay-only. |
-| Governance | Live mutation requires signed old-rule authorization. Cobalt trust-graph/RBC/ABBA machinery remains research and transition-validation work, not the node's live authorization oracle. |
+| Governance | Foundation is the default authority. The implemented Cobalt lane adds shadow operation and a versioned, replay-safe handoff for validator trust evolution only; consensus v2 remains the sole finality protocol. |
 
 See [Settlement Lanes](docs/architecture/settlement-lanes.md) for the protocol
 boundaries and [Public Launch Boundary](docs/security/public-launch-boundary.md)

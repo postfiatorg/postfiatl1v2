@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#10120f">
+    <title>Cobalt Governance Observatory</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#observatory">Skip to governance state</a>
+    <div class="scope-banner" role="status">
+      <span class="scope-banner__signal" aria-hidden="true"></span>
+      Advisory observatory · no mutation routes · consensus v2 finality unchanged
+    </div>
+
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">PostFiat Layer 1 / Control Room 04</p>
+        <h1>Cobalt<br><span>Governance Observatory</span></h1>
+      </div>
+      <div class="masthead__meta">
+        <p>Last real-data scan</p>
+        <time id="collected-at">Loading…</time>
+        <button id="refresh" type="button">Refresh surfaces</button>
+      </div>
+    </header>
+
+    <main id="observatory">
+      <section class="status-rail" aria-label="Governance activation sequence">
+        <div class="rail-node" data-rail="trust"><span>01</span><strong>Trust</strong><em>Checking</em></div>
+        <div class="rail-link" aria-hidden="true"></div>
+        <div class="rail-node" data-rail="proposals"><span>02</span><strong>Order</strong><em>Checking</em></div>
+        <div class="rail-link" aria-hidden="true"></div>
+        <div class="rail-node" data-rail="shadow"><span>03</span><strong>Converge</strong><em>Checking</em></div>
+        <div class="rail-link" aria-hidden="true"></div>
+        <div class="rail-node" data-rail="activation"><span>04</span><strong>Activate</strong><em>Checking</em></div>
+      </section>
+
+      <section class="instrument-grid" aria-label="Cobalt governance surfaces">
+        <article class="instrument instrument--trust" aria-labelledby="trust-title">
+          <header class="instrument__header">
+            <div><span class="index">01</span><h2 id="trust-title">Trust state</h2></div>
+            <span class="state-chip" id="trust-status">Loading</span>
+          </header>
+          <div class="trust-figure" aria-hidden="true">
+            <span class="orbit orbit--one"></span><span class="orbit orbit--two"></span>
+            <span class="trust-core">G<span id="graph-number">—</span></span>
+          </div>
+          <dl class="metrics metrics--three">
+            <div><dt>Mode</dt><dd id="trust-mode">—</dd></div>
+            <div><dt>Views</dt><dd id="trust-views">—</dd></div>
+            <div><dt>Height</dt><dd id="trust-height">—</dd></div>
+          </dl>
+          <div class="hash-line"><span>Root</span><code id="trust-root">—</code></div>
+          <p class="provenance" id="trust-source">Awaiting Python CLI</p>
+        </article>
+
+        <article class="instrument instrument--proposals" aria-labelledby="proposals-title">
+          <header class="instrument__header">
+            <div><span class="index">02</span><h2 id="proposals-title">Ordered proposals</h2></div>
+            <span class="state-chip" id="proposals-status">Loading</span>
+          </header>
+          <div class="authority-line">
+            <span>Current authority</span>
+            <strong id="authority-label">—</strong>
+          </div>
+          <dl class="metrics metrics--three">
+            <div><dt>Transitions</dt><dd id="transition-count">—</dd></div>
+            <div><dt>Registry</dt><dd id="registry-count">—</dd></div>
+            <div><dt>Amendments</dt><dd id="amendment-count">—</dd></div>
+          </dl>
+          <ol class="proposal-list" id="proposal-list" aria-live="polite"></ol>
+          <p class="provenance" id="proposal-source">Awaiting node governance state</p>
+        </article>
+
+        <article class="instrument instrument--shadow" aria-labelledby="shadow-title">
+          <header class="instrument__header">
+            <div><span class="index">03</span><h2 id="shadow-title">Shadow convergence</h2></div>
+            <span class="state-chip" id="shadow-status">Loading</span>
+          </header>
+          <div class="digest-band">
+            <span>Shared governance digest</span>
+            <code id="shadow-digest">—</code>
+          </div>
+          <div class="node-grid" id="node-grid" aria-live="polite"></div>
+          <p class="provenance" id="shadow-source">Awaiting signed node status</p>
+        </article>
+
+        <article class="instrument instrument--activation" aria-labelledby="activation-title">
+          <header class="instrument__header">
+            <div><span class="index">04</span><h2 id="activation-title">Activation readiness</h2></div>
+            <span class="state-chip" id="activation-status">Loading</span>
+          </header>
+          <div class="gate-readout">
+            <span>Decision</span>
+            <strong id="gate-decision">—</strong>
+            <p id="gate-copy">Evaluating protocol evidence.</p>
+          </div>
+          <ul class="check-list" id="activation-checks"></ul>
+          <div class="witness-line">
+            <span>Safety witness</span><strong id="witness-count">— scenarios</strong>
+            <code id="witness-hash">—</code>
+          </div>
+        </article>
+      </section>
+
+      <section class="error-console" id="error-console" hidden aria-live="polite">
+        <h2>Surface errors</h2><ul id="error-list"></ul>
+      </section>
+    </main>
+
+    <footer>
+      <p>Read-only local operator interface</p>
+      <p>Authority scope: validator trust evolution only</p>
+    </footer>
+  </body>
+</html>

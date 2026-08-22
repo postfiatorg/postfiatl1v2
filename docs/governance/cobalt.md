@@ -1,63 +1,79 @@
 # Cobalt Governance
 
-Cobalt supplies trust-graph checks and agreement research for validator trust
-evolution. It is not the current node's live governance authorization oracle.
-
-In XRP-style systems, the hard question is not only how validators order a
-payment. It is how the network changes who it trusts. PostFiat uses the Cobalt
-research lineage to make those trust changes explicit, signed, linked, ratified,
-and replayable.
+Cobalt is PostFiat's validator-trust governance lane. It does not order blocks,
+finalize transactions, or replace consensus v2.
 
 ## Plain English
 
-Validators can hold local trust views. A trust graph is acceptable only if the
-views overlap enough through essential subsets and thresholds. If a proposed
-graph is unsafe, it fails before activation. The target Cobalt design moves
-valid amendments through reliable broadcast, agreement, and democratic atomic
-broadcast mechanics. The implemented live boundary is narrower: a governance
-batch must carry distinct ML-DSA-65 authorizations from the active old-rule
-registry and then enter ordinary consensus ordering.
+PostFiat validators may hold different local trust views. Cobalt checks whether
+those views overlap safely and can agree on one ordered validator or trust-graph
+change. An unsafe graph is rejected before it can gain authority.
 
-## Why This Exists
+The current authority rule is explicit:
 
-An off-chain validator history service is not good enough as the long-term
-coordination mechanism for a settlement network. Validator-set changes should
-be part of the protocol evidence trail.
+1. A Cobalt shadow fleet may observe and agree on validator-trust changes, but
+   shadow output has no live authority.
+2. The active Foundation registry must sign one exact authority-transition
+   record with a distinct ML-DSA-65 quorum.
+3. Existing consensus v2 must order that record at its exact activation height.
+4. Only then may the Cobalt lane authorize validator-trust updates. A new
+   validator set cannot authorize itself.
+5. Rollback is another signed, forward-moving transition. It cannot rewrite
+   finalized history.
 
-## What PostFiat Runs
+A Cobalt failure can therefore pause validator governance. It cannot create a
+second block-finality protocol or change transaction success semantics.
 
-PostFiat separates live authority from Cobalt research:
+## What Is Implemented
 
-- ordinary transactions and signed governance batches use certified ordering;
-- the active old-rule registry authorizes live amendments and validator updates;
-- Cobalt mechanics validate and exercise a stronger future trust-evolution
-  design without silently acquiring live authority.
+- non-identical trust views, essential subsets, linkedness, and bounded
+  old/new safety witnesses;
+- RBC, ABBA, MVBA, and DABC governance mechanics;
+- a durable, authenticated, bounded four-node shadow service with production
+  randomness and restart/replay fault drills;
+- a versioned authority handoff binding the Cobalt lock, graph and registry
+  roots, sequence, activation height, protocol version, scope, and old-registry
+  ML-DSA-65 approvals;
+- strict Foundation/Cobalt exclusivity, replay protection, and forward-only
+  rollback;
+- a Python CLI and read-only browser observatory backed by the real CLI and
+  node state.
 
-## Current State
+## Operator Interfaces
 
-The controlled Cobalt mechanics are built:
+The CLI provides human-readable and JSON views:
 
-- non-identical trust views;
-- essential subsets with `t_S` and `q_S`;
-- linkedness checker;
-- complete cover extractor for old/new safety witnesses;
-- unsafe trust graph rejection;
-- non-uniform governance certificates;
-- RBC, ABBA, MVBA, and DABC amendment mechanics;
-- validator registry and trust graph transitions;
-- stale replay rejection;
-- amendment replay bundles;
-- adversarial packets;
-- controlled-readiness gate.
+```bash
+PYTHONPATH=python python3 -m postfiat_rpc.cobalt trust-graph
+PYTHONPATH=python python3 -m postfiat_rpc.cobalt transition-witness
+PYTHONPATH=python python3 -m postfiat_rpc.cobalt protocol-replay
+PYTHONPATH=python python3 -m postfiat_rpc.cobalt \
+  --data-dir /path/to/shadow/validator-0 shadow-service-status
+```
 
-The live signed-governance path separately covers complete action binding,
-distinct old-registry authorization, delayed activation, registry rotation,
-rollback, restart, and replay tests. It does not make the stronger Cobalt
-ratification claim. Current controlled Cobalt evidence uses project-controlled
-logical validators; strict public topology evidence is a public-launch
-requirement, not a source-publication blocker.
+The browser interface requires a node data directory and a persisted shadow
+fleet root:
+
+```bash
+PYTHONPATH=python python3 -m postfiat_rpc.cobalt_ui \
+  --node-data-dir /path/to/node \
+  --shadow-root /path/to/shadow-fleet
+```
+
+Open `http://127.0.0.1:8765`. The four surfaces show:
+
+- verified trust state from the Cobalt CLI;
+- recorded proposals and transitions from the node's MAC-validated
+  `governance.json`;
+- convergence from signed shadow-node status;
+- an activation decision derived from all three sources.
+
+The service has no governance mutation route. An empty node state is shown as
+zero recorded proposals rather than being filled with sample data.
+
+![Cobalt governance observatory](../assets/cobalt-governance-observatory.png)
 
 ## Read Next
 
-- [Cobalt Implementation](cobalt-implementation.md)
+- [Implementation and verification](cobalt-implementation.md)
 - [Validator Registry](validator-registry.md)
