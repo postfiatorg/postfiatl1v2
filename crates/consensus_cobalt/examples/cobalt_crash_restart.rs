@@ -31,6 +31,11 @@ struct CrashRestartScenario {
     ok: bool,
 }
 
+// This example is compiled only with `cobalt-unsafe-simulation`. The schema
+// requires a nonempty hex signature even when cryptographic verification is
+// intentionally outside the simulation boundary.
+const SIMULATION_SIGNATURE_HEX: &str = "00";
+
 fn root(byte: char) -> String {
     std::iter::repeat_n(byte, 96).collect()
 }
@@ -156,15 +161,15 @@ fn rbc_messages(
         "validator-0",
         701,
         root('a'),
-        "",
+        SIMULATION_SIGNATURE_HEX,
     )?;
     let echoes = validators(7)
         .iter()
-        .map(|sender| build_rbc_echo(domain, &propose, sender, ""))
+        .map(|sender| build_rbc_echo(domain, &propose, sender, SIMULATION_SIGNATURE_HEX))
         .collect::<Result<Vec<_>, _>>()?;
     let readies = validators(7)
         .iter()
-        .map(|sender| build_rbc_ready(domain, &propose, sender, ""))
+        .map(|sender| build_rbc_ready(domain, &propose, sender, SIMULATION_SIGNATURE_HEX))
         .collect::<Result<Vec<_>, _>>()?;
     Ok((propose, echoes, readies))
 }
@@ -181,9 +186,9 @@ fn atomic_swap_candidate(
         "validator-0",
         amendment_slot,
         payload_hash,
-        "",
+        SIMULATION_SIGNATURE_HEX,
     )?;
-    let accept = build_rbc_accept(domain, &propose, "validator-1", "")?;
+    let accept = build_rbc_accept(domain, &propose, "validator-1", SIMULATION_SIGNATURE_HEX)?;
     mvba_candidate_from_rbc_accept(domain, &propose, &accept)
 }
 
@@ -222,9 +227,9 @@ fn dabc_bundle(
         "validator-0",
         11,
         atomic_swap_payload_hash,
-        "",
+        SIMULATION_SIGNATURE_HEX,
     )?;
-    let accept_a = build_rbc_accept(domain, &propose_a, "validator-1", "")?;
+    let accept_a = build_rbc_accept(domain, &propose_a, "validator-1", SIMULATION_SIGNATURE_HEX)?;
     let candidate_a = mvba_candidate_from_rbc_accept(domain, &propose_a, &accept_a)?;
     let set_a = build_mvba_valid_input_set(domain, view_1, root('d'), vec![candidate_a])?;
     let first = ratify_dabc_amendment(domain, graph, &set_a, None, 20)?;
@@ -235,9 +240,9 @@ fn dabc_bundle(
         "validator-3",
         12,
         root('c'),
-        "",
+        SIMULATION_SIGNATURE_HEX,
     )?;
-    let accept_b = build_rbc_accept(domain, &propose_b, "validator-2", "")?;
+    let accept_b = build_rbc_accept(domain, &propose_b, "validator-2", SIMULATION_SIGNATURE_HEX)?;
     let candidate_b = mvba_candidate_from_rbc_accept(domain, &propose_b, &accept_b)?;
     let set_b = build_mvba_valid_input_set(domain, view_2, root('e'), vec![candidate_b])?;
     let second = ratify_dabc_amendment(domain, graph, &set_b, Some(&first), 21)?;
@@ -263,7 +268,7 @@ fn dabc_bundle(
                 sender,
                 height,
                 pending_pairs,
-                "",
+                SIMULATION_SIGNATURE_HEX,
             )?);
         }
     }
@@ -404,7 +409,7 @@ fn scenario_abba_restart(
         agreement_id.clone(),
         1,
         true,
-        "",
+        SIMULATION_SIGNATURE_HEX,
     )?);
     state.init_messages.push(build_abba_init(
         domain,
@@ -413,7 +418,7 @@ fn scenario_abba_restart(
         agreement_id,
         1,
         false,
-        "",
+        SIMULATION_SIGNATURE_HEX,
     )?);
     let restored = roundtrip(&state)?;
     let evidence = detect_abba_round_equivocations(domain, &restored)?;
@@ -568,9 +573,9 @@ fn scenario_validator_suspension_restart(
         "validator-0",
         51,
         payload_hash.clone(),
-        "",
+        SIMULATION_SIGNATURE_HEX,
     )?;
-    let accept = build_rbc_accept(domain, &propose, "validator-1", "")?;
+    let accept = build_rbc_accept(domain, &propose, "validator-1", SIMULATION_SIGNATURE_HEX)?;
     let candidate = mvba_candidate_from_rbc_accept(domain, &propose, &accept)?;
     let input_set = build_mvba_valid_input_set(
         domain,

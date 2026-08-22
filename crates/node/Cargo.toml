@@ -18,6 +18,10 @@ path = "src/main.rs"
 name = "asset-orchard-local-service"
 path = "src/bin/asset_orchard_local_service.rs"
 
+[[bin]]
+name = "postfiat-cobalt-shadow"
+path = "src/bin/postfiat_cobalt_shadow.rs"
+
 [dependencies]
 base64 = { workspace = true }
 flate2 = { workspace = true }

@@ -713,11 +713,29 @@ pub(super) fn execute_governance_batch(
     let mut receipts = Vec::with_capacity(
         batch.amendments.len()
             + batch.validator_registry_updates.len()
+            + batch.cobalt_authority_transitions.len()
             + batch.governance_agent_dry_runs.len()
             + batch.fastswap_bootstraps.len()
             + batch.fastpay_recovery_bootstraps.len()
             + batch.vault_bridge_route_profile_activations.len(),
     );
+    for transition in &batch.cobalt_authority_transitions {
+        match crate::cobalt_handoff::apply_cobalt_authority_transition(
+            governance,
+            transition,
+            block_height,
+        ) {
+            Ok(()) => receipts.push(Receipt::accepted(
+                transition.transition_id.clone(),
+                "Cobalt governance authority transition applied",
+            )),
+            Err(error) => receipts.push(Receipt::rejected(
+                transition.transition_id.clone(),
+                "cobalt_authority_transition_rejected",
+                error,
+            )),
+        }
+    }
     for amendment in &batch.amendments {
         if let Some((code, message)) =
             governance_amendment_lifecycle_rejection(amendment, block_height)

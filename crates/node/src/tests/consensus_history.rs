@@ -2807,7 +2807,6 @@ fn every_live_governance_amendment_kind_uses_the_signed_authorization_boundary()
     let cases = [
         (GOVERNANCE_KIND_CRYPTO_POLICY, 2),
         (GOVERNANCE_KIND_BRIDGE_WITNESS_EPOCH, 2),
-        (GOVERNANCE_KIND_AUTHORITY_MODE, 1),
         (GOVERNANCE_KIND_ORCHARD_POOL_PAUSE, 1),
         (GOVERNANCE_KIND_ORCHARD_POOL_PAUSE, 0),
         (GOVERNANCE_KIND_ATOMIC_SWAP_PAUSE, 1),
@@ -2895,7 +2894,7 @@ fn every_live_governance_amendment_kind_uses_the_signed_authorization_boundary()
         .expect("governance after signed kind matrix");
     assert_eq!(governance.crypto_policy_version, 2);
     assert_eq!(governance.bridge_witness_epoch, 2);
-    assert_eq!(governance.authority_mode, 1);
+    assert_eq!(governance.authority_mode, 0);
     assert!(!governance.orchard_pool_paused);
     assert!(!governance.atomic_swap_paused);
     assert_eq!(governance.bridge_verification_activation_height(), Some(1000));

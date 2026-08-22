@@ -1504,6 +1504,7 @@ pub fn certify_validator_registry_update(
         support,
         votes,
         signed_authorizations: Vec::new(),
+        cobalt_authorizations: Vec::new(),
         activation_height: request.activation_height,
         previous_registry_root: request.previous_registry_root,
         new_registry_root: request.new_registry_root,

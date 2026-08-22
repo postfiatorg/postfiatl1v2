@@ -777,6 +777,20 @@ pub(super) fn append_governance_state(bytes: &mut Vec<u8>, governance: &Governan
             record,
         );
     }
+    if !governance.cobalt_authority_transitions.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "governance.cobalt_authority_transition_count",
+            governance.cobalt_authority_transitions.len(),
+        );
+        for transition in &governance.cobalt_authority_transitions {
+            append_cobalt_authority_transition(
+                bytes,
+                "governance.cobalt_authority_transition",
+                transition,
+            );
+        }
+    }
     append_canonical_usize(
         bytes,
         "governance.activation_record_count",
@@ -1386,6 +1400,7 @@ fn assert_governance_state_commitment_inventory_complete(governance: &Governance
         orchard_pool_paused: _,
         atomic_swap_paused: _,
         validator_registry_updates: _,
+        cobalt_authority_transitions: _,
         amendment_activation_records: _,
         amendment_supersession_records: _,
         amendment_rollback_records: _,
@@ -4426,6 +4441,20 @@ pub(super) fn append_validator_registry_update_record(
     for vote in &record.votes {
         append_governance_vote(bytes, &format!("{prefix}.vote"), vote);
     }
+    if !record.cobalt_authorizations.is_empty() {
+        append_canonical_usize(
+            bytes,
+            &format!("{prefix}.cobalt_authorization_count"),
+            record.cobalt_authorizations.len(),
+        );
+        for authorization in &record.cobalt_authorizations {
+            append_signed_cobalt_validator_update_authorization(
+                bytes,
+                &format!("{prefix}.cobalt_authorization"),
+                authorization,
+            );
+        }
+    }
     append_canonical_u64(
         bytes,
         &format!("{prefix}.activation_height"),
@@ -4482,6 +4511,173 @@ pub(super) fn append_validator_registry_update_record(
         &format!("{prefix}.new_record"),
         record.new_record.as_ref(),
     );
+}
+
+pub(super) fn append_signed_cobalt_validator_update_authorization(
+    bytes: &mut Vec<u8>,
+    prefix: &str,
+    authorization: &postfiat_types::SignedCobaltValidatorUpdateAuthorizationV1,
+) {
+    append_canonical_str(bytes, &format!("{prefix}.schema"), &authorization.schema);
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.validator"),
+        &authorization.validator,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.authority_transition_id"),
+        &authorization.authority_transition_id,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.parent_cobalt_lock_hash"),
+        &authorization.parent_cobalt_lock_hash,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.amendment_sequence"),
+        authorization.amendment_sequence,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.proposal_slot"),
+        authorization.proposal_slot,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.expires_at_height"),
+        authorization.expires_at_height,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.algorithm_id"),
+        &authorization.algorithm_id,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.signature_hex"),
+        &authorization.signature_hex,
+    );
+}
+
+pub(super) fn append_cobalt_authority_transition(
+    bytes: &mut Vec<u8>,
+    prefix: &str,
+    transition: &postfiat_types::CobaltGovernanceAuthorityTransitionV1,
+) {
+    append_canonical_str(bytes, &format!("{prefix}.schema"), &transition.schema);
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.transition_id"),
+        &transition.transition_id,
+    );
+    append_canonical_str(bytes, &format!("{prefix}.chain_id"), &transition.chain_id);
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.genesis_hash"),
+        &transition.genesis_hash,
+    );
+    append_canonical_u32(
+        bytes,
+        &format!("{prefix}.from_authority_mode"),
+        transition.from_authority_mode,
+    );
+    append_canonical_u32(
+        bytes,
+        &format!("{prefix}.to_authority_mode"),
+        transition.to_authority_mode,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.transition_kind"),
+        &transition.transition_kind,
+    );
+    append_option_str(
+        bytes,
+        &format!("{prefix}.previous_transition_id"),
+        &transition.previous_transition_id,
+    );
+    for (field, value) in [
+        ("old_registry_root", &transition.old_registry_root),
+        ("cobalt_lock_hash", &transition.cobalt_lock_hash),
+        ("trust_graph_root", &transition.trust_graph_root),
+        ("cobalt_registry_root", &transition.cobalt_registry_root),
+    ] {
+        append_canonical_str(bytes, &format!("{prefix}.{field}"), value);
+    }
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.amendment_sequence"),
+        transition.amendment_sequence,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.activation_height"),
+        transition.activation_height,
+    );
+    append_canonical_u32(
+        bytes,
+        &format!("{prefix}.cobalt_protocol_version"),
+        transition.cobalt_protocol_version,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.authority_scope"),
+        &transition.authority_scope,
+    );
+    append_string_list(
+        bytes,
+        &format!("{prefix}.validator"),
+        &transition.validators,
+    );
+    append_canonical_usize(
+        bytes,
+        &format!("{prefix}.approval_quorum"),
+        transition.approval_quorum,
+    );
+    append_canonical_usize(
+        bytes,
+        &format!("{prefix}.approval_count"),
+        transition.approvals.len(),
+    );
+    for approval in &transition.approvals {
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.approval.schema"),
+            &approval.schema,
+        );
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.approval.validator"),
+            &approval.validator,
+        );
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.approval.old_registry_root"),
+            &approval.old_registry_root,
+        );
+        append_canonical_u64(
+            bytes,
+            &format!("{prefix}.approval.proposal_slot"),
+            approval.proposal_slot,
+        );
+        append_canonical_u64(
+            bytes,
+            &format!("{prefix}.approval.expires_at_height"),
+            approval.expires_at_height,
+        );
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.approval.algorithm_id"),
+            &approval.algorithm_id,
+        );
+        append_canonical_str(
+            bytes,
+            &format!("{prefix}.approval.signature_hex"),
+            &approval.signature_hex,
+        );
+    }
 }
 
 pub(super) fn append_option_validator_registry_entry(

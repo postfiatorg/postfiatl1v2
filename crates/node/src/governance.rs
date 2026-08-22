@@ -1988,6 +1988,7 @@ pub fn verify_governance_with_options(
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
     let governance = store.read_governance()?;
+    crate::cobalt_handoff::verify_cobalt_authority_history(&genesis, &governance)?;
     let mode = parse_cobalt_governance_mode(&options.cobalt_mode)?;
     let cobalt_mode = cobalt_governance_mode_name(mode).to_string();
     validate_cobalt_cutover_options(mode, options.trust_graph_root.as_deref())?;

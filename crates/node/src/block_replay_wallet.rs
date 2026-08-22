@@ -395,6 +395,7 @@ pub(super) fn verify_archived_payload(
                 block,
                 (batch.amendments.len()
                     + batch.validator_registry_updates.len()
+                    + batch.cobalt_authority_transitions.len()
                     + batch.governance_agent_dry_runs.len()
                     + batch.fastswap_bootstraps.len()
                     + batch.fastpay_recovery_bootstraps.len()

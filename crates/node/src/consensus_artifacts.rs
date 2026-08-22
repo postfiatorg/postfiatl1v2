@@ -1759,6 +1759,30 @@ pub(super) fn build_governance_action_batch_with_agent_dry_runs(
     ))
 }
 
+pub fn build_governance_action_batch_with_cobalt_authority_transition(
+    genesis: &Genesis,
+    transition: postfiat_types::CobaltGovernanceAuthorityTransitionV1,
+) -> io::Result<GovernanceActionBatch> {
+    let transitions = vec![transition.clone()];
+    let batch_id = chain_bound_action_batch_id(
+        genesis,
+        "postfiat.governance_action_batch.v1",
+        "governance",
+        &(
+            Vec::<GovernanceAmendment>::new(),
+            Vec::<ValidatorRegistryUpdateRecord>::new(),
+            &transitions,
+            Vec::<GovernanceAgentDryRunAmendment>::new(),
+            Vec::<postfiat_types::FastSwapGovernanceBootstrapV1>::new(),
+            Vec::<postfiat_types::FastPayRecoveryGovernanceBootstrapV1>::new(),
+            Vec::<postfiat_types::VaultBridgeRouteProfileActivationV1>::new(),
+        ),
+    )?;
+    Ok(GovernanceActionBatch::with_cobalt_authority_transition(
+        batch_id, transition,
+    ))
+}
+
 pub(super) fn build_governance_action_batch_with_fastswap_bootstraps(
     genesis: &Genesis,
     fastswap_bootstraps: Vec<postfiat_types::FastSwapGovernanceBootstrapV1>,
@@ -1781,6 +1805,7 @@ pub(super) fn build_governance_action_batch_with_fastswap_bootstraps(
         batch_id,
         amendments,
         validator_registry_updates: registry_updates,
+        cobalt_authority_transitions: Vec::new(),
         governance_agent_dry_runs,
         fastswap_bootstraps,
         fastpay_recovery_bootstraps: Vec::new(),
@@ -1906,10 +1931,25 @@ pub(super) fn verify_governance_action_batch_id(
     genesis: &Genesis,
     batch: &GovernanceActionBatch,
 ) -> io::Result<()> {
+    if !batch.cobalt_authority_transitions.is_empty()
+        && (batch.cobalt_authority_transitions.len() != 1
+            || !batch.amendments.is_empty()
+            || !batch.validator_registry_updates.is_empty()
+            || !batch.governance_agent_dry_runs.is_empty()
+            || !batch.fastswap_bootstraps.is_empty()
+            || !batch.fastpay_recovery_bootstraps.is_empty()
+            || !batch.vault_bridge_route_profile_activations.is_empty())
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Cobalt authority transition must be the only action in its batch",
+        ));
+    }
     if !batch.fastswap_bootstraps.is_empty()
         && (batch.fastswap_bootstraps.len() != 1
             || !batch.amendments.is_empty()
             || !batch.validator_registry_updates.is_empty()
+            || !batch.cobalt_authority_transitions.is_empty()
             || !batch.governance_agent_dry_runs.is_empty()
             || !batch.fastpay_recovery_bootstraps.is_empty()
             || !batch.vault_bridge_route_profile_activations.is_empty())
@@ -1923,6 +1963,7 @@ pub(super) fn verify_governance_action_batch_id(
         && (batch.vault_bridge_route_profile_activations.len() != 1
             || !batch.amendments.is_empty()
             || !batch.validator_registry_updates.is_empty()
+            || !batch.cobalt_authority_transitions.is_empty()
             || !batch.governance_agent_dry_runs.is_empty()
             || !batch.fastswap_bootstraps.is_empty()
             || !batch.fastpay_recovery_bootstraps.is_empty())
@@ -1936,6 +1977,7 @@ pub(super) fn verify_governance_action_batch_id(
         && (batch.fastpay_recovery_bootstraps.len() != 1
             || !batch.amendments.is_empty()
             || !batch.validator_registry_updates.is_empty()
+            || !batch.cobalt_authority_transitions.is_empty()
             || !batch.governance_agent_dry_runs.is_empty()
             || !batch.fastswap_bootstraps.is_empty()
             || !batch.vault_bridge_route_profile_activations.is_empty())
@@ -1952,6 +1994,19 @@ pub(super) fn verify_governance_action_batch_id(
     for update in &batch.validator_registry_updates {
         verify_cobalt_validator_registry_update(&domain, update)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    }
+    for transition in &batch.cobalt_authority_transitions {
+        if transition.schema != postfiat_types::COBALT_AUTHORITY_TRANSITION_SCHEMA_V1
+            || transition.chain_id != genesis.chain_id
+            || transition.genesis_hash != genesis_hash(genesis)
+            || transition.transition_id
+                != crate::cobalt_handoff::cobalt_authority_transition_id(transition)?
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Cobalt authority transition batch binding mismatch",
+            ));
+        }
     }
     for dry_run in &batch.governance_agent_dry_runs {
         if dry_run.chain_id != genesis.chain_id
@@ -1979,6 +2034,7 @@ pub(super) fn verify_governance_action_batch_id(
     }
     if batch.amendments.is_empty()
         && batch.validator_registry_updates.is_empty()
+        && batch.cobalt_authority_transitions.is_empty()
         && batch.governance_agent_dry_runs.is_empty()
         && batch.fastswap_bootstraps.is_empty()
         && batch.fastpay_recovery_bootstraps.is_empty()
@@ -1989,20 +2045,39 @@ pub(super) fn verify_governance_action_batch_id(
             "governance batch has no actions",
         ));
     }
-    let expected = chain_bound_action_batch_id(
-        genesis,
-        "postfiat.governance_action_batch.v1",
-        "governance",
-        &(
-            &batch.amendments,
-            &batch.validator_registry_updates,
-            &batch.governance_agent_dry_runs,
-            &batch.fastswap_bootstraps,
-            &batch.fastpay_recovery_bootstraps,
-            &batch.vault_bridge_route_profile_activations,
-        ),
-    )?;
-    let five_tuple_expected = if batch.fastpay_recovery_bootstraps.is_empty() {
+    let expected = if batch.cobalt_authority_transitions.is_empty() {
+        chain_bound_action_batch_id(
+            genesis,
+            "postfiat.governance_action_batch.v1",
+            "governance",
+            &(
+                &batch.amendments,
+                &batch.validator_registry_updates,
+                &batch.governance_agent_dry_runs,
+                &batch.fastswap_bootstraps,
+                &batch.fastpay_recovery_bootstraps,
+                &batch.vault_bridge_route_profile_activations,
+            ),
+        )?
+    } else {
+        chain_bound_action_batch_id(
+            genesis,
+            "postfiat.governance_action_batch.v1",
+            "governance",
+            &(
+                &batch.amendments,
+                &batch.validator_registry_updates,
+                &batch.cobalt_authority_transitions,
+                &batch.governance_agent_dry_runs,
+                &batch.fastswap_bootstraps,
+                &batch.fastpay_recovery_bootstraps,
+                &batch.vault_bridge_route_profile_activations,
+            ),
+        )?
+    };
+    let five_tuple_expected = if batch.cobalt_authority_transitions.is_empty()
+        && batch.fastpay_recovery_bootstraps.is_empty()
+    {
         Some(chain_bound_action_batch_id(
             genesis,
             "postfiat.governance_action_batch.v1",
@@ -2018,7 +2093,8 @@ pub(super) fn verify_governance_action_batch_id(
     } else {
         None
     };
-    let four_tuple_expected = if batch.fastpay_recovery_bootstraps.is_empty()
+    let four_tuple_expected = if batch.cobalt_authority_transitions.is_empty()
+        && batch.fastpay_recovery_bootstraps.is_empty()
         && batch.vault_bridge_route_profile_activations.is_empty()
     {
         Some(chain_bound_action_batch_id(
@@ -2035,7 +2111,8 @@ pub(super) fn verify_governance_action_batch_id(
     } else {
         None
     };
-    let three_tuple_expected = if batch.fastswap_bootstraps.is_empty()
+    let three_tuple_expected = if batch.cobalt_authority_transitions.is_empty()
+        && batch.fastswap_bootstraps.is_empty()
         && batch.fastpay_recovery_bootstraps.is_empty()
         && batch.vault_bridge_route_profile_activations.is_empty()
     {
@@ -2052,7 +2129,8 @@ pub(super) fn verify_governance_action_batch_id(
     } else {
         None
     };
-    let two_tuple_expected = if batch.governance_agent_dry_runs.is_empty()
+    let two_tuple_expected = if batch.cobalt_authority_transitions.is_empty()
+        && batch.governance_agent_dry_runs.is_empty()
         && batch.fastswap_bootstraps.is_empty()
         && batch.fastpay_recovery_bootstraps.is_empty()
         && batch.vault_bridge_route_profile_activations.is_empty()
@@ -2066,7 +2144,8 @@ pub(super) fn verify_governance_action_batch_id(
     } else {
         None
     };
-    let legacy_expected = if batch.validator_registry_updates.is_empty()
+    let legacy_expected = if batch.cobalt_authority_transitions.is_empty()
+        && batch.validator_registry_updates.is_empty()
         && batch.governance_agent_dry_runs.is_empty()
         && batch.fastswap_bootstraps.is_empty()
         && batch.fastpay_recovery_bootstraps.is_empty()
@@ -2100,10 +2179,25 @@ pub(super) fn verify_archived_governance_action_batch_id(
     genesis: &Genesis,
     batch: &GovernanceActionBatch,
 ) -> io::Result<()> {
+    if !batch.cobalt_authority_transitions.is_empty()
+        && (batch.cobalt_authority_transitions.len() != 1
+            || !batch.amendments.is_empty()
+            || !batch.validator_registry_updates.is_empty()
+            || !batch.governance_agent_dry_runs.is_empty()
+            || !batch.fastswap_bootstraps.is_empty()
+            || !batch.fastpay_recovery_bootstraps.is_empty()
+            || !batch.vault_bridge_route_profile_activations.is_empty())
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Cobalt authority transition must be the only action in its batch",
+        ));
+    }
     if !batch.fastswap_bootstraps.is_empty()
         && (batch.fastswap_bootstraps.len() != 1
             || !batch.amendments.is_empty()
             || !batch.validator_registry_updates.is_empty()
+            || !batch.cobalt_authority_transitions.is_empty()
             || !batch.governance_agent_dry_runs.is_empty()
             || !batch.fastpay_recovery_bootstraps.is_empty()
             || !batch.vault_bridge_route_profile_activations.is_empty())
@@ -2117,6 +2211,7 @@ pub(super) fn verify_archived_governance_action_batch_id(
         && (batch.vault_bridge_route_profile_activations.len() != 1
             || !batch.amendments.is_empty()
             || !batch.validator_registry_updates.is_empty()
+            || !batch.cobalt_authority_transitions.is_empty()
             || !batch.governance_agent_dry_runs.is_empty()
             || !batch.fastswap_bootstraps.is_empty()
             || !batch.fastpay_recovery_bootstraps.is_empty())
@@ -2130,6 +2225,7 @@ pub(super) fn verify_archived_governance_action_batch_id(
         && (batch.fastpay_recovery_bootstraps.len() != 1
             || !batch.amendments.is_empty()
             || !batch.validator_registry_updates.is_empty()
+            || !batch.cobalt_authority_transitions.is_empty()
             || !batch.governance_agent_dry_runs.is_empty()
             || !batch.fastswap_bootstraps.is_empty()
             || !batch.vault_bridge_route_profile_activations.is_empty())
@@ -2144,6 +2240,19 @@ pub(super) fn verify_archived_governance_action_batch_id(
     }
     for update in &batch.validator_registry_updates {
         verify_historical_cobalt_validator_registry_update(genesis, update)?;
+    }
+    for transition in &batch.cobalt_authority_transitions {
+        if transition.schema != postfiat_types::COBALT_AUTHORITY_TRANSITION_SCHEMA_V1
+            || transition.chain_id != genesis.chain_id
+            || transition.genesis_hash != genesis_hash(genesis)
+            || transition.transition_id
+                != crate::cobalt_handoff::cobalt_authority_transition_id(transition)?
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "archived Cobalt authority transition binding mismatch",
+            ));
+        }
     }
     for dry_run in &batch.governance_agent_dry_runs {
         if dry_run.chain_id != genesis.chain_id
@@ -2171,6 +2280,7 @@ pub(super) fn verify_archived_governance_action_batch_id(
     }
     if batch.amendments.is_empty()
         && batch.validator_registry_updates.is_empty()
+        && batch.cobalt_authority_transitions.is_empty()
         && batch.governance_agent_dry_runs.is_empty()
         && batch.fastswap_bootstraps.is_empty()
         && batch.fastpay_recovery_bootstraps.is_empty()
@@ -2188,6 +2298,7 @@ pub(super) fn verify_archived_governance_action_batch_id(
         return Ok(());
     }
     if batch.amendments.is_empty()
+        && batch.cobalt_authority_transitions.is_empty()
         && batch.governance_agent_dry_runs.is_empty()
         && batch.fastswap_bootstraps.is_empty()
         && batch.fastpay_recovery_bootstraps.is_empty()
@@ -2230,6 +2341,7 @@ pub(super) fn pre_age_release_governance_action_batch_id(
 ) -> io::Result<Option<String>> {
     if !batch.amendments.is_empty()
         || !batch.validator_registry_updates.is_empty()
+        || !batch.cobalt_authority_transitions.is_empty()
         || !batch.governance_agent_dry_runs.is_empty()
         || !batch.fastswap_bootstraps.is_empty()
         || !batch.fastpay_recovery_bootstraps.is_empty()
@@ -2296,21 +2408,41 @@ pub(super) fn governance_action_batch_id_matches_genesis_hash(
     batch: &GovernanceActionBatch,
     genesis_hash_hex: &str,
 ) -> io::Result<bool> {
-    let expected = chain_bound_action_batch_id_for_genesis_hash(
-        genesis,
-        genesis_hash_hex,
-        "postfiat.governance_action_batch.v1",
-        "governance",
-        &(
-            &batch.amendments,
-            &batch.validator_registry_updates,
-            &batch.governance_agent_dry_runs,
-            &batch.fastswap_bootstraps,
-            &batch.fastpay_recovery_bootstraps,
-            &batch.vault_bridge_route_profile_activations,
-        ),
-    )?;
-    let five_tuple_expected = if batch.fastpay_recovery_bootstraps.is_empty() {
+    let expected = if batch.cobalt_authority_transitions.is_empty() {
+        chain_bound_action_batch_id_for_genesis_hash(
+            genesis,
+            genesis_hash_hex,
+            "postfiat.governance_action_batch.v1",
+            "governance",
+            &(
+                &batch.amendments,
+                &batch.validator_registry_updates,
+                &batch.governance_agent_dry_runs,
+                &batch.fastswap_bootstraps,
+                &batch.fastpay_recovery_bootstraps,
+                &batch.vault_bridge_route_profile_activations,
+            ),
+        )?
+    } else {
+        chain_bound_action_batch_id_for_genesis_hash(
+            genesis,
+            genesis_hash_hex,
+            "postfiat.governance_action_batch.v1",
+            "governance",
+            &(
+                &batch.amendments,
+                &batch.validator_registry_updates,
+                &batch.cobalt_authority_transitions,
+                &batch.governance_agent_dry_runs,
+                &batch.fastswap_bootstraps,
+                &batch.fastpay_recovery_bootstraps,
+                &batch.vault_bridge_route_profile_activations,
+            ),
+        )?
+    };
+    let five_tuple_expected = if batch.cobalt_authority_transitions.is_empty()
+        && batch.fastpay_recovery_bootstraps.is_empty()
+    {
         Some(chain_bound_action_batch_id_for_genesis_hash(
             genesis,
             genesis_hash_hex,
@@ -2327,7 +2459,8 @@ pub(super) fn governance_action_batch_id_matches_genesis_hash(
     } else {
         None
     };
-    let four_tuple_expected = if batch.fastpay_recovery_bootstraps.is_empty()
+    let four_tuple_expected = if batch.cobalt_authority_transitions.is_empty()
+        && batch.fastpay_recovery_bootstraps.is_empty()
         && batch.vault_bridge_route_profile_activations.is_empty()
     {
         Some(chain_bound_action_batch_id_for_genesis_hash(
@@ -2345,7 +2478,8 @@ pub(super) fn governance_action_batch_id_matches_genesis_hash(
     } else {
         None
     };
-    let three_tuple_expected = if batch.fastswap_bootstraps.is_empty()
+    let three_tuple_expected = if batch.cobalt_authority_transitions.is_empty()
+        && batch.fastswap_bootstraps.is_empty()
         && batch.fastpay_recovery_bootstraps.is_empty()
         && batch.vault_bridge_route_profile_activations.is_empty()
     {
@@ -2363,7 +2497,8 @@ pub(super) fn governance_action_batch_id_matches_genesis_hash(
     } else {
         None
     };
-    let two_tuple_expected = if batch.governance_agent_dry_runs.is_empty()
+    let two_tuple_expected = if batch.cobalt_authority_transitions.is_empty()
+        && batch.governance_agent_dry_runs.is_empty()
         && batch.fastswap_bootstraps.is_empty()
         && batch.fastpay_recovery_bootstraps.is_empty()
         && batch.vault_bridge_route_profile_activations.is_empty()
@@ -2378,7 +2513,8 @@ pub(super) fn governance_action_batch_id_matches_genesis_hash(
     } else {
         None
     };
-    let legacy_expected = if batch.validator_registry_updates.is_empty()
+    let legacy_expected = if batch.cobalt_authority_transitions.is_empty()
+        && batch.validator_registry_updates.is_empty()
         && batch.governance_agent_dry_runs.is_empty()
         && batch.fastswap_bootstraps.is_empty()
         && batch.fastpay_recovery_bootstraps.is_empty()
@@ -2604,6 +2740,19 @@ pub(super) fn verify_live_signed_governance_batch(
     batch: &GovernanceActionBatch,
     proposal_slot: u64,
 ) -> io::Result<()> {
+    match crate::cobalt_handoff::verify_governance_authority_batch(
+        genesis,
+        governance,
+        registry,
+        batch,
+        proposal_slot,
+    )? {
+        crate::cobalt_handoff::GovernanceAuthorityBatchKind::Foundation => {}
+        crate::cobalt_handoff::GovernanceAuthorityBatchKind::AuthorityTransition
+        | crate::cobalt_handoff::GovernanceAuthorityBatchKind::CobaltValidatorTrustUpdate => {
+            return Ok(())
+        }
+    }
     let validators = active_validator_ids(governance)?;
     let registry_root = validator_registry_root(registry, &validators)?;
     let committee_epoch = governance

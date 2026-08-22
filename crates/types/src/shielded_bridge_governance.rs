@@ -4,6 +4,16 @@ pub const GOVERNANCE_KIND_VALIDATOR_SET: &str = "validator_set";
 pub const GOVERNANCE_KIND_CRYPTO_POLICY: &str = "crypto_policy";
 pub const GOVERNANCE_KIND_BRIDGE_WITNESS_EPOCH: &str = "bridge_witness_epoch";
 pub const GOVERNANCE_KIND_AUTHORITY_MODE: &str = "authority_mode";
+pub const COBALT_AUTHORITY_TRANSITION_SCHEMA_V1: &str =
+    "postfiat.cobalt_governance_authority_transition.v1";
+pub const SIGNED_COBALT_AUTHORITY_TRANSITION_APPROVAL_SCHEMA_V1: &str =
+    "postfiat.signed_cobalt_authority_transition_approval.v1";
+pub const SIGNED_COBALT_VALIDATOR_UPDATE_AUTHORIZATION_SCHEMA_V1: &str =
+    "postfiat.signed_cobalt_validator_update_authorization.v1";
+pub const COBALT_AUTHORITY_TRANSITION_ACTIVATE: &str = "activate_cobalt";
+pub const COBALT_AUTHORITY_TRANSITION_ROLLBACK: &str = "rollback_to_foundation";
+pub const COBALT_AUTHORITY_SCOPE_VALIDATOR_TRUST_V1: &str =
+    "validator_trust_evolution_v1";
 pub const GOVERNANCE_KIND_BRIDGE_VERIFICATION_ACTIVATION_HEIGHT: &str =
     "bridge_verification_activation_height";
 pub const GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT: &str =
@@ -901,6 +911,8 @@ pub struct GovernanceState {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub validator_registry_updates: Vec<ValidatorRegistryUpdateRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cobalt_authority_transitions: Vec<CobaltGovernanceAuthorityTransitionV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub amendment_activation_records: Vec<GovernanceAmendmentActivationRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub amendment_supersession_records: Vec<GovernanceAmendmentSupersessionRecord>,
@@ -924,6 +936,7 @@ impl GovernanceState {
             orchard_pool_paused: false,
             atomic_swap_paused: false,
             validator_registry_updates: Vec::new(),
+            cobalt_authority_transitions: Vec::new(),
             amendment_activation_records: Vec::new(),
             amendment_supersession_records: Vec::new(),
             amendment_rollback_records: Vec::new(),
@@ -1286,6 +1299,53 @@ pub struct SignedGovernanceAuthorizationV2 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SignedCobaltAuthorityTransitionApprovalV1 {
+    pub schema: String,
+    pub validator: String,
+    pub old_registry_root: String,
+    pub proposal_slot: u64,
+    pub expires_at_height: u64,
+    pub algorithm_id: String,
+    pub signature_hex: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CobaltGovernanceAuthorityTransitionV1 {
+    pub schema: String,
+    pub transition_id: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub from_authority_mode: u32,
+    pub to_authority_mode: u32,
+    pub transition_kind: String,
+    pub previous_transition_id: Option<String>,
+    pub old_registry_root: String,
+    pub cobalt_lock_hash: String,
+    pub trust_graph_root: String,
+    pub cobalt_registry_root: String,
+    pub amendment_sequence: u64,
+    pub activation_height: u64,
+    pub cobalt_protocol_version: u32,
+    pub authority_scope: String,
+    pub validators: Vec<String>,
+    pub approval_quorum: usize,
+    pub approvals: Vec<SignedCobaltAuthorityTransitionApprovalV1>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SignedCobaltValidatorUpdateAuthorizationV1 {
+    pub schema: String,
+    pub validator: String,
+    pub authority_transition_id: String,
+    pub parent_cobalt_lock_hash: String,
+    pub amendment_sequence: u64,
+    pub proposal_slot: u64,
+    pub expires_at_height: u64,
+    pub algorithm_id: String,
+    pub signature_hex: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GovernanceAmendmentActivationRecord {
     pub schema: String,
     pub activation_record_id: String,
@@ -1353,6 +1413,8 @@ pub struct ValidatorRegistryUpdateRecord {
     pub votes: Vec<GovernanceVote>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub signed_authorizations: Vec<SignedGovernanceAuthorizationV2>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cobalt_authorizations: Vec<SignedCobaltValidatorUpdateAuthorizationV1>,
     pub activation_height: u64,
     pub previous_registry_root: String,
     pub new_registry_root: String,
@@ -1382,6 +1444,8 @@ pub struct GovernanceActionBatch {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub validator_registry_updates: Vec<ValidatorRegistryUpdateRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cobalt_authority_transitions: Vec<CobaltGovernanceAuthorityTransitionV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub governance_agent_dry_runs: Vec<GovernanceAgentDryRunAmendment>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fastswap_bootstraps: Vec<FastSwapGovernanceBootstrapV1>,
@@ -1397,6 +1461,7 @@ impl GovernanceActionBatch {
             batch_id: batch_id.into(),
             amendments,
             validator_registry_updates: Vec::new(),
+            cobalt_authority_transitions: Vec::new(),
             governance_agent_dry_runs: Vec::new(),
             fastswap_bootstraps: Vec::new(),
             fastpay_recovery_bootstraps: Vec::new(),
@@ -1413,6 +1478,7 @@ impl GovernanceActionBatch {
             batch_id: batch_id.into(),
             amendments,
             validator_registry_updates,
+            cobalt_authority_transitions: Vec::new(),
             governance_agent_dry_runs: Vec::new(),
             fastswap_bootstraps: Vec::new(),
             fastpay_recovery_bootstraps: Vec::new(),
@@ -1430,6 +1496,7 @@ impl GovernanceActionBatch {
             batch_id: batch_id.into(),
             amendments,
             validator_registry_updates,
+            cobalt_authority_transitions: Vec::new(),
             governance_agent_dry_runs,
             fastswap_bootstraps: Vec::new(),
             fastpay_recovery_bootstraps: Vec::new(),
@@ -1445,6 +1512,7 @@ impl GovernanceActionBatch {
             batch_id: batch_id.into(),
             amendments: Vec::new(),
             validator_registry_updates: Vec::new(),
+            cobalt_authority_transitions: Vec::new(),
             governance_agent_dry_runs: Vec::new(),
             fastswap_bootstraps: vec![bootstrap],
             fastpay_recovery_bootstraps: Vec::new(),
@@ -1460,6 +1528,7 @@ impl GovernanceActionBatch {
             batch_id: batch_id.into(),
             amendments: Vec::new(),
             validator_registry_updates: Vec::new(),
+            cobalt_authority_transitions: Vec::new(),
             governance_agent_dry_runs: Vec::new(),
             fastswap_bootstraps: Vec::new(),
             fastpay_recovery_bootstraps: Vec::new(),
@@ -1475,9 +1544,26 @@ impl GovernanceActionBatch {
             batch_id: batch_id.into(),
             amendments: Vec::new(),
             validator_registry_updates: Vec::new(),
+            cobalt_authority_transitions: Vec::new(),
             governance_agent_dry_runs: Vec::new(),
             fastswap_bootstraps: Vec::new(),
             fastpay_recovery_bootstraps: vec![bootstrap],
+            vault_bridge_route_profile_activations: Vec::new(),
+        }
+    }
+
+    pub fn with_cobalt_authority_transition(
+        batch_id: impl Into<String>,
+        transition: CobaltGovernanceAuthorityTransitionV1,
+    ) -> Self {
+        Self {
+            batch_id: batch_id.into(),
+            amendments: Vec::new(),
+            validator_registry_updates: Vec::new(),
+            cobalt_authority_transitions: vec![transition],
+            governance_agent_dry_runs: Vec::new(),
+            fastswap_bootstraps: Vec::new(),
+            fastpay_recovery_bootstraps: Vec::new(),
             vault_bridge_route_profile_activations: Vec::new(),
         }
     }
