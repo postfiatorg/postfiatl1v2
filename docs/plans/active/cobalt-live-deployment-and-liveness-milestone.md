@@ -19,12 +19,12 @@ After the real-validator shadow corpus passes, the same declared trust views and
 - [x] `task_50b08c9b22e2348237b65436d4be4fed` — write and lock the code-grounded research specification. Rewarded: 2.4 PFT.
 - [x] `task_4f13e8a9969df968d5a25e5613c6bdd6` — create and verify this active milestone journal. Rewarded: 2.5 PFT.
 - [x] `task_af9dbfab039b00a0b97ee061d3c96a71` — establish the validator-fleet baseline posture and reproduce the Cobalt substrate. Rewarded: 2.4 PFT. The submitted receipt failed closed on current fleet access; the first three section-1 checks remain open.
-- [ ] `task_5923e7dd509a438806e86f936495709b` — ship the authenticated shadow runtime, Python operator CLI, isolated sidecar, and local verifier packet. Accepted; initial evidence not yet submitted.
+- [x] `task_5923e7dd509a438806e86f936495709b` — ship the authenticated shadow runtime, Python operator CLI, isolated sidecar, and local verifier packet. Rewarded: 2 PFT.
 
 The remaining substantial task boundaries will receive Task Node IDs only when the prior gate is complete:
 
 - [x] **Live baseline and reproducible substrate Task Node work item:** `task_af9dbfab039b00a0b97ee061d3c96a71` rewarded 2.4 PFT. The reproducible substrate is green; the current live-fleet receipt remains a Gate 0 prerequisite below.
-- [ ] **Networked shadow runtime and operator CLI:** `task_5923e7dd509a438806e86f936495709b` accepted. Local authenticated socket execution and CLI verification are green; live-validator deployment remains gated.
+- [x] **Networked shadow runtime and operator CLI:** `task_5923e7dd509a438806e86f936495709b` rewarded 2 PFT. Local authenticated socket execution and CLI verification are green; live-validator deployment remains gated.
 - [ ] **Real-validator rollout and evidence corpus:** canary, roll out one validator at a time, run the full fault/restart/replay corpus, and publish verifier-backed evidence.
 - [ ] **Matched Cobalt/XRPL liveness benchmark:** run the common scenario manifest through both systems and publish the KPI comparison.
 - [ ] **Handoff rehearsal and user-facing interface:** rehearse activation and rollback on a disposable clone, expose the verified fleet packet in the browser UI, and prepare—but do not execute—the cutover decision.
@@ -80,6 +80,7 @@ Implementation journal, 2026-08-22:
 - `python/postfiat_rpc/cobalt.py` exposes human-readable `fleet`, `graph`, `shadow-status`, `probe`, `snapshot`, and `replay` commands against the same structured runtime output. The sidecar unit has no validator lifecycle dependency and cannot write validator state.
 - Local verifier packet `.tih/cobalt-shadow-runtime-20260822-v2` passes 8 focused Rust tests, 11 Python tests, strict Clippy, three socket nodes, 25 signed stage messages, restart-equivalent replay, tamper and oversized-frame rejection, and real Python-to-Rust probe/snapshot/replay calls. Manifest SHA-256: `f2bc94bcc839943d7b70ee3f96c11808fb5e995b4295fda19908f5df986ec274`.
 - This packet is explicitly local loopback evidence (`live_validator_evidence=false`). The live-registry binding check remains open until current fleet access is restored; no deployment or authority transfer occurred.
+- Task Node accepted the initial and follow-up verifier evidence and rewarded the work item 2 PFT. Transaction: `4A8293A5A9DDCA433A9250DF82F386DFE84C12A1BF13C230A18C2EE996F5CB63`.
 
 ### 3. Canary and complete the real-validator shadow corpus
 
