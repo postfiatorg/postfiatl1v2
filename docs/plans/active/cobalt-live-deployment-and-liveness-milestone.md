@@ -8,11 +8,11 @@ The first live state is an authenticated, always-on **shadow service** beside ea
 
 After the real-validator shadow corpus passes, the same declared trust views and faults are run through Cobalt and pinned RippleD simulations. The comparison measures conflicting decisions, safe halts, liveness, recovery, quorum/topology margin, message cost, and resource use. Only then is the existing Foundation-to-Cobalt handoff rehearsed on a disposable clone. This milestone does **not** authorize a live handoff.
 
-**Status:** Active — planning complete; implementation not started  
-**Locked specification:** [Live Cobalt Deployment and XRPL Liveness Research Specification](../../governance/cobalt-live-deployment-research-spec.md)  
-**Research task:** `task_50b08c9b22e2348237b65436d4be4fed` — rewarded  
-**Milestone-document task:** `task_4f13e8a9969df968d5a25e5613c6bdd6` — rewarded  
-**Decision boundary:** Cobalt governs validator-trust evolution only. Consensus v2 remains the only block-ordering and transaction-finality protocol.
+- **Status:** Active — planning complete; implementation not started
+- **Locked specification:** [Live Cobalt Deployment and XRPL Liveness Research Specification](../../governance/cobalt-live-deployment-research-spec.md)
+- **Research task:** `task_50b08c9b22e2348237b65436d4be4fed` — rewarded
+- **Milestone-document task:** `task_4f13e8a9969df968d5a25e5613c6bdd6` — rewarded
+- **Decision boundary:** Cobalt governs validator-trust evolution only. Consensus v2 remains the only block-ordering and transaction-finality protocol.
 
 ## Task Node ledger
 
