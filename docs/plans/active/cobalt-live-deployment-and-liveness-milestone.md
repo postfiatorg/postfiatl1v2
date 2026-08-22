@@ -8,7 +8,7 @@ The first live state is an authenticated, always-on **shadow service** beside ea
 
 After the real-validator shadow corpus passes, the same declared trust views and faults are run through Cobalt and pinned RippleD simulations. The comparison measures conflicting decisions, safe halts, liveness, recovery, quorum/topology margin, message cost, and resource use. Only then is the existing Foundation-to-Cobalt handoff rehearsed on a disposable clone. This milestone does **not** authorize a live handoff.
 
-- **Status:** Active — live-baseline and reproducible-substrate task in progress
+- **Status:** Active — substrate verified; current live-fleet Gate 0 access pending
 - **Locked specification:** [Live Cobalt Deployment and XRPL Liveness Research Specification](../../governance/cobalt-live-deployment-research-spec.md)
 - **Research task:** `task_50b08c9b22e2348237b65436d4be4fed` — rewarded
 - **Milestone-document task:** `task_4f13e8a9969df968d5a25e5613c6bdd6` — rewarded
@@ -18,11 +18,11 @@ After the real-validator shadow corpus passes, the same declared trust views and
 
 - [x] `task_50b08c9b22e2348237b65436d4be4fed` — write and lock the code-grounded research specification. Rewarded: 2.4 PFT.
 - [x] `task_4f13e8a9969df968d5a25e5613c6bdd6` — create and verify this active milestone journal. Rewarded: 2.5 PFT.
-- [ ] `task_af9dbfab039b00a0b97ee061d3c96a71` — establish the current validator-fleet baseline and reproduce the Cobalt substrate. Accepted; execution in progress.
+- [x] `task_af9dbfab039b00a0b97ee061d3c96a71` — establish the validator-fleet baseline posture and reproduce the Cobalt substrate. Rewarded: 2.4 PFT. The submitted receipt failed closed on current fleet access; the first three section-1 checks remain open.
 
 The remaining substantial task boundaries will receive Task Node IDs only when the prior gate is complete:
 
-- [ ] **Live baseline and reproducible substrate:** task `task_af9dbfab039b00a0b97ee061d3c96a71` is accepted and in progress.
+- [x] **Live baseline and reproducible substrate Task Node work item:** `task_af9dbfab039b00a0b97ee061d3c96a71` rewarded 2.4 PFT. The reproducible substrate is green; the current live-fleet receipt remains a Gate 0 prerequisite below.
 - [ ] **Networked shadow runtime and operator CLI:** implement authenticated WAN protocol execution, durable observability, service lifecycle, and a human-readable Python CLI.
 - [ ] **Real-validator rollout and evidence corpus:** canary, roll out one validator at a time, run the full fault/restart/replay corpus, and publish verifier-backed evidence.
 - [ ] **Matched Cobalt/XRPL liveness benchmark:** run the common scenario manifest through both systems and publish the KPI comparison.
@@ -58,6 +58,7 @@ Implementation journal, 2026-08-22:
 - The pinned Zig wrappers now translate Rust's vendor-qualified Linux target and provide both compiler and archiver entrypoints. They fail closed when `POSTFIAT_ZIG` does not resolve to an executable.
 - Current substrate verification passes 70 Cobalt tests, 70 unsafe-simulation tests, five node handoff tests, the current trust-root example, all partition scenarios, and the seven-worker TCP loopback drill. The two simulation examples were repaired to use an explicitly nonempty schema-only simulation signature under `cobalt-unsafe-simulation`; this is not message authentication.
 - Clean-build verifier manifest SHA-256: `8e9aac2f3ebfa84595bbcebb2f71ed3309a799078c962b2a2e418b198e413715`. Bound source SHA-256: `159f5cf0bd7d61a1cc1eefaf19f31e682a6c6decb44d9623975c50d7dcb121ff`. The generated packet is intentionally uncommitted under `.tih/`.
+- Task Node accepted the mixed evidence after requesting and receiving the raw clean-build excerpt. Final state: rewarded 2.4 PFT. This reward closes the work item, not the explicitly red live-fleet gate.
 
 ### 2. Run Cobalt as authenticated, non-authoritative WAN infrastructure
 
