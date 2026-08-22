@@ -10,6 +10,8 @@ use postfiat_consensus_cobalt::{
 use serde::Serialize;
 use serde_json::json;
 
+const SIMULATION_SIGNATURE_HEX: &str = "00";
+
 #[derive(Debug, Serialize)]
 struct PartitionScenario {
     name: &'static str,
@@ -130,7 +132,7 @@ fn propose(
         "validator-0",
         slot,
         root(payload_byte),
-        "",
+        SIMULATION_SIGNATURE_HEX,
     )
 }
 
@@ -140,11 +142,11 @@ fn messages(
 ) -> Result<(Vec<RbcEcho>, Vec<RbcReady>), String> {
     let echoes = validators(7)
         .iter()
-        .map(|sender| build_rbc_echo(domain, propose, sender, ""))
+        .map(|sender| build_rbc_echo(domain, propose, sender, SIMULATION_SIGNATURE_HEX))
         .collect::<Result<Vec<_>, _>>()?;
     let readies = validators(7)
         .iter()
-        .map(|sender| build_rbc_ready(domain, propose, sender, ""))
+        .map(|sender| build_rbc_ready(domain, propose, sender, SIMULATION_SIGNATURE_HEX))
         .collect::<Result<Vec<_>, _>>()?;
     Ok((echoes, readies))
 }
@@ -386,8 +388,8 @@ fn scenario_healed_conflict_replay_yields_evidence(
 ) -> Result<PartitionScenario, String> {
     let left = propose(domain, graph, 1006, '1')?;
     let right = propose(domain, graph, 1006, '2')?;
-    let left_accept = build_rbc_accept(domain, &left, "validator-1", "")?;
-    let right_accept = build_rbc_accept(domain, &right, "validator-2", "")?;
+    let left_accept = build_rbc_accept(domain, &left, "validator-1", SIMULATION_SIGNATURE_HEX)?;
+    let right_accept = build_rbc_accept(domain, &right, "validator-2", SIMULATION_SIGNATURE_HEX)?;
     let evidence =
         detect_rbc_conflicting_accept(domain, graph, &left, &left_accept, &right, &right_accept)?;
     Ok(PartitionScenario {

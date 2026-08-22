@@ -12,6 +12,8 @@ use postfiat_consensus_cobalt::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+const SIMULATION_SIGNATURE_HEX: &str = "00";
+
 #[derive(Clone, Serialize, Deserialize)]
 struct WorkerRequest {
     domain: CobaltDomain,
@@ -173,19 +175,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "validator-0",
         401,
         root('f'),
-        "",
+        SIMULATION_SIGNATURE_HEX,
     )?;
     let echoes = validator_ids
         .iter()
-        .map(|sender| build_rbc_echo(&domain, &propose, sender, ""))
+        .map(|sender| build_rbc_echo(&domain, &propose, sender, SIMULATION_SIGNATURE_HEX))
         .collect::<Result<Vec<_>, _>>()?;
     let readies = validator_ids
         .iter()
-        .map(|sender| build_rbc_ready(&domain, &propose, sender, ""))
+        .map(|sender| build_rbc_ready(&domain, &propose, sender, SIMULATION_SIGNATURE_HEX))
         .collect::<Result<Vec<_>, _>>()?;
     let accepts = validator_ids
         .iter()
-        .map(|sender| build_rbc_accept(&domain, &propose, sender, ""))
+        .map(|sender| build_rbc_accept(&domain, &propose, sender, SIMULATION_SIGNATURE_HEX))
         .collect::<Result<Vec<_>, _>>()?;
     let request = WorkerRequest {
         domain,

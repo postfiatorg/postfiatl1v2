@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -eu
+
+zig_bin=${POSTFIAT_ZIG:-}
+if [ -z "$zig_bin" ]; then
+    zig_bin=$(command -v zig || true)
+fi
+if [ -z "$zig_bin" ] || [ ! -x "$zig_bin" ]; then
+    echo "set POSTFIAT_ZIG to an executable pinned Zig binary" >&2
+    exit 2
+fi
+
+args=()
+for arg in "$@"; do
+    case "$arg" in
+        --target=x86_64-unknown-linux-gnu)
+            # Zig 0.17 rejects Rust's vendor-qualified triple. This is the
+            # equivalent Zig spelling and preserves the GNU ABI target.
+            args+=(--target=x86_64-linux-gnu)
+            ;;
+        *) args+=("$arg") ;;
+    esac
+done
+
+exec "$zig_bin" cc "${args[@]}"

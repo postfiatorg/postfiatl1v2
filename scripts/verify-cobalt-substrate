@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+for command in cargo date git python3 sha256sum; do
+  if ! command -v "$command" >/dev/null 2>&1; then
+    echo "missing required command: $command" >&2
+    exit 1
+  fi
+done
+
+if [[ -z "${POSTFIAT_ZIG:-}" || ! -x "$POSTFIAT_ZIG" ]]; then
+  echo "set POSTFIAT_ZIG to an executable pinned Zig binary" >&2
+  exit 2
+fi
+
+generated_utc="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+run_id="$(date -u +%Y%m%dT%H%M%SZ)"
+out_dir="${OUT_DIR:-reports/cobalt-substrate-$run_id}"
+manifest="$out_dir/manifest.json"
+if [[ -e "$manifest" ]]; then
+  echo "refusing to overwrite existing manifest: $manifest" >&2
+  exit 2
+fi
+mkdir -p "$out_dir"
+
+export CC="$ROOT/scripts/zig-cc"
+export AR="$ROOT/scripts/zig-ar"
+export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="$ROOT/scripts/zig-cc"
+
+cargo test -p postfiat-consensus-cobalt --locked \
+  >"$out_dir/consensus-tests.log" 2>&1
+cargo test -p postfiat-consensus-cobalt --features cobalt-unsafe-simulation --locked \
+  >"$out_dir/consensus-simulation-tests.log" 2>&1
+cargo test -p postfiat-node --lib cobalt_handoff --locked \
+  >"$out_dir/node-cobalt-handoff-tests.log" 2>&1
+
+cargo run -p postfiat-consensus-cobalt --example current_trust_graph_root --locked \
+  >"$out_dir/current-trust-graph-root.json" \
+  2>"$out_dir/current-trust-graph-root.log"
+cargo run -p postfiat-consensus-cobalt --example cobalt_partition_simulation \
+  --features cobalt-unsafe-simulation --locked \
+  >"$out_dir/partition-simulation.json" \
+  2>"$out_dir/partition-simulation.log"
+cargo run -p postfiat-consensus-cobalt --example rbc_nonuniform_tcp_drill \
+  --features cobalt-unsafe-simulation --locked \
+  >"$out_dir/rbc-loopback.json" \
+  2>"$out_dir/rbc-loopback.log"
+
+(
+  cd "$out_dir"
+  sha256sum \
+    consensus-tests.log \
+    consensus-simulation-tests.log \
+    node-cobalt-handoff-tests.log \
+    current-trust-graph-root.json \
+    partition-simulation.json \
+    rbc-loopback.json \
+    > SHA256SUMS
+)
+
+git_commit="$(git rev-parse HEAD)"
+source_hash="$(sha256sum scripts/zig-cc scripts/zig-ar scripts/verify-cobalt-substrate crates/consensus_cobalt/examples/cobalt_partition_simulation.rs crates/consensus_cobalt/examples/rbc_nonuniform_tcp_drill.rs | sha256sum | awk '{print $1}')"
+python3 - "$out_dir" "$generated_utc" "$git_commit" "$POSTFIAT_ZIG" "$source_hash" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+out_dir = Path(sys.argv[1])
+generated_utc, git_commit, zig_path, source_hash = sys.argv[2:]
+
+def load(name):
+    return json.loads((out_dir / name).read_text(encoding="utf-8"))
+
+def require(condition, message):
+    if not condition:
+        raise SystemExit(message)
+
+root = load("current-trust-graph-root.json")
+require(root["schema"] == "postfiat-cobalt-current-trust-graph-root-v1", "bad root schema")
+require(root["active_graph"] == "G1", "unexpected active graph")
+require(root["cobalt_mode"] == "non_uniform", "unexpected Cobalt mode")
+require(root["g1_trust_view_count"] == 7, "unexpected fixture trust-view count")
+
+partition = load("partition-simulation.json")
+require(
+    partition["schema"] == "postfiat-testnet-cobalt-partition-simulation-v1",
+    "bad partition schema",
+)
+require(partition["scope"] == "controlled-pre-testnet", "bad partition scope")
+require(partition["ok"] is True and partition["status"] == "passed", "partition failed")
+require(
+    partition["checks"]["outside_operators_required"] is False,
+    "local partition fixture incorrectly requires outside operators",
+)
+require(
+    all(
+        value is True
+        for key, value in partition["checks"].items()
+        if key != "outside_operators_required"
+    ),
+    "partition check failed",
+)
+
+rbc = load("rbc-loopback.json")
+require(
+    rbc["schema"] == "postfiat-testnet-cobalt-rbc-nonuniform-tcp-drill-v1",
+    "bad RBC drill schema",
+)
+require(rbc["transport"] == "tcp-loopback", "RBC drill is not loopback")
+require(all(value is True for value in rbc["checks"].values()), "RBC drill check failed")
+
+manifest = {
+    "schema": "postfiat-cobalt-substrate-verification-v1",
+    "generated_utc": generated_utc,
+    "status": "passed",
+    "git_commit": git_commit,
+    "source_hash": source_hash,
+    "toolchain": {
+        "zig_path": zig_path,
+        "cc_wrapper": "scripts/zig-cc",
+        "ar_wrapper": "scripts/zig-ar",
+    },
+    "checks": {
+        "consensus_tests": True,
+        "consensus_simulation_tests": True,
+        "node_cobalt_handoff_tests": True,
+        "current_trust_graph_example": True,
+        "partition_simulation": True,
+        "rbc_loopback": True,
+    },
+    "evidence_classification": {
+        "local_simulation_only": True,
+        "loopback_only": True,
+        "live_validator_evidence": False,
+    },
+    "hashes": "SHA256SUMS",
+}
+(out_dir / "manifest.json").write_text(
+    json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
+)
+PY
+
+echo "manifest=$manifest"

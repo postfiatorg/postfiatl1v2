@@ -40,6 +40,20 @@ The repository wrapper runs the standard local gate:
 scripts/check
 ```
 
+If the pinned Zig binary is the available C/C++ toolchain, use the repository
+compiler and archiver wrappers rather than pointing `cc` at raw `zig`:
+
+```bash
+export POSTFIAT_ZIG=/path/to/pinned/zig
+export CC="$PWD/scripts/zig-cc"
+export AR="$PWD/scripts/zig-ar"
+export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="$PWD/scripts/zig-cc"
+scripts/verify-cobalt-substrate
+```
+
+That verifier emits a generated report under `reports/`. Its simulations and
+TCP drill are explicitly local/loopback evidence, not live-validator proof.
+
 ## Controlled Testnet
 
 Use the retained scripts for local controlled-testnet work:
