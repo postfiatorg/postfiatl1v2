@@ -4,7 +4,7 @@ Only current execution plans and completed plans belong here.
 
 ## Active
 
-There are no active implementation plans in this directory.
+- [Cobalt Live Deployment and Liveness Milestone](active/cobalt-live-deployment-and-liveness-milestone.md)
 
 ## Completed
 

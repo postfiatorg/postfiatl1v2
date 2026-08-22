@@ -1,0 +1,126 @@
+# Cobalt Live Deployment and Liveness Milestone
+
+## What this plan does
+
+This plan puts Cobalt on the actual controlled-testnet validator machines and determines, from measured behavior, whether PostFiat should activate it for validator-governance decisions.
+
+The first live state is an authenticated, always-on **shadow service** beside each validator. It exchanges real Cobalt protocol messages, persists and replays them, survives planned faults, and produces the same ratification result across the fleet—but it cannot change governance. Consensus v2 continues to order blocks and finalize transactions. A Cobalt failure may pause validator-set evolution; it must not pause payments or create another block-finality rule.
+
+After the real-validator shadow corpus passes, the same declared trust views and faults are run through Cobalt and pinned RippleD simulations. The comparison measures conflicting decisions, safe halts, liveness, recovery, quorum/topology margin, message cost, and resource use. Only then is the existing Foundation-to-Cobalt handoff rehearsed on a disposable clone. This milestone does **not** authorize a live handoff.
+
+**Status:** Active — milestone journal created; implementation not started  
+**Locked specification:** [Live Cobalt Deployment and XRPL Liveness Research Specification](../../governance/cobalt-live-deployment-research-spec.md)  
+**Research task:** `task_50b08c9b22e2348237b65436d4be4fed` — rewarded  
+**Milestone-document task:** `task_4f13e8a9969df968d5a25e5613c6bdd6` — accepted  
+**Decision boundary:** Cobalt governs validator-trust evolution only. Consensus v2 remains the only block-ordering and transaction-finality protocol.
+
+## Task Node ledger
+
+- [x] `task_50b08c9b22e2348237b65436d4be4fed` — write and lock the code-grounded research specification. Rewarded: 2.4 PFT.
+- [ ] `task_4f13e8a9969df968d5a25e5613c6bdd6` — create and verify this active milestone journal. Accepted; verification pending.
+
+The following are the substantial future task boundaries. They are not yet requested or authorized and will receive Task Node IDs only when the prior gate is complete:
+
+- [ ] **Live baseline and reproducible substrate:** discover the current fleet, bind the graph to the live registry, repair the pinned build path, and reproduce current Cobalt tests.
+- [ ] **Networked shadow runtime and operator CLI:** implement authenticated WAN protocol execution, durable observability, service lifecycle, and a human-readable Python CLI.
+- [ ] **Real-validator rollout and evidence corpus:** canary, roll out one validator at a time, run the full fault/restart/replay corpus, and publish verifier-backed evidence.
+- [ ] **Matched Cobalt/XRPL liveness benchmark:** run the common scenario manifest through both systems and publish the KPI comparison.
+- [ ] **Handoff rehearsal and user-facing interface:** rehearse activation and rollback on a disposable clone, expose the verified fleet packet in the browser UI, and prepare—but do not execute—the cutover decision.
+
+## Current code boundary
+
+| Area | Current code | Milestone gap |
+| --- | --- | --- |
+| Governance authority | `crates/node/src/cobalt_handoff.rs` verifies Foundation, transition, and Cobalt validator-update batches. | Keep authority under Foundation during this milestone; rehearse the handoff only on a disposable clone. |
+| Local shadow state | `crates/node/src/cobalt_shadow.rs` authenticates, bounds, de-duplicates, persists, and replays shadow messages with `live_authority=false` and `controls_block_consensus=false`. | Drive signed RBC, ABBA, MVBA, and DABC over the authenticated WAN fleet rather than only local generic shadow input. |
+| Agreement and trust | `crates/consensus_cobalt/src/rbc_abba_mvba.rs`, `dabc_registry.rs`, and `trust_graph_governance.rs` provide agreement, replay, graph analysis, and transition witnesses. | Generate topology from the fresh validator registry and run it continuously on the real machines. |
+| Executable surface | `crates/node/src/bin/postfiat_cobalt_shadow.rs` exposes `init`, `status`, and `drill`. | Add operator-grade run/probe/snapshot/replay surfaces and a Python CLI that reads authenticated machine output. |
+| Existing fleet operations | `systemd/postfiat-validator-transport.service.example`, `scripts/testnet-monitor-snapshot`, and `python/postfiat_ops/safe_rollout.py`. | Reuse their authenticated topology, monitoring, and canary pattern; isolate Cobalt storage, service, port, logs, and restart domain. |
+| Existing user interface | `python/postfiat_rpc/cobalt.py` and `python/postfiat_rpc/cobalt_ui.py`. | Show the distributed fleet receipt and benchmark packet, with “shadow healthy” visibly distinct from “authority active.” |
+
+## Milestones
+
+### 1. Freeze the real validator baseline and reproduce current Cobalt
+
+- [ ] Collect a fresh, redacted receipt from every active validator: chain/genesis identity, commit and binary hash, height/tip/state root, registry root, quorum, transport and service health, resource headroom, stable placement/control labels, timestamp, and maximum age.
+- [ ] Fail closed on unreachable validators, chain divergence, stale inventory, unknown registry membership, reused keys, or missing topology labels.
+- [ ] Generate the Cobalt trust graph and thresholds from the discovered registry; do not reuse the old seven-validator fixtures.
+- [ ] Restore a working pinned C/C++ linker invocation and run the current locked Cobalt tests and examples from a clean build.
+- [ ] Label loopback and hard-coded-fixture results as local baseline evidence, never as live-validator proof.
+
+Evidence: `fleet-receipt.public.json`, private bound receipt, graph root, build manifest, test reports, hashes, and verifier result.
+
+### 2. Run Cobalt as authenticated, non-authoritative WAN infrastructure
+
+- [ ] Add long-running run/probe/snapshot/replay service surfaces around the durable shadow state in `crates/node/src/cobalt_shadow.rs`.
+- [ ] Bind each Cobalt signer to one live registry validator and the current registry root using the existing validator identity.
+- [ ] Carry canonical, domain-separated protocol messages through the authenticated private validator topology.
+- [ ] Drive and persist the real signed RBC, ABBA, MVBA, and DABC stages, including locks and high-water marks, before related signatures leave the process.
+- [ ] Expose structured peer, queue, stage-latency, graph-root, ratification-lock, replay, message/byte, and resource metrics.
+- [ ] Run as an unprivileged, bounded sidecar whose crash or restart cannot restart or degrade the block validator.
+- [ ] Prove every node reports `live_authority=false` and `controls_block_consensus=false`.
+
+Evidence: service configuration, signer-binding receipts, authenticated peer snapshots, restart/replay tests, bounded-resource tests, and machine-readable probe output.
+
+### 3. Canary and complete the real-validator shadow corpus
+
+- [ ] Deploy one canary and freeze resource/latency alert thresholds before adversarial tests.
+- [ ] Roll out one validator at a time, stopping on chain-health regression, identity mismatch, graph disagreement, or resource exhaustion.
+- [ ] Submit the fixed inert proposal corpus: no-op, validator add/remove, trust-view change, key rotation, invalid parent, and rollback.
+- [ ] Complete planned restart of every sidecar, replay from genesis, one-validator outage, one-region isolation, delay/loss/reorder injection, equivocation, stale replay, and partition healing.
+- [ ] Require identical accepted/rejected outcomes and ordered ratification digests across correct validators.
+- [ ] Confirm consensus v2 continues finalizing blocks throughout every Cobalt-only fault.
+
+Evidence: per-validator receipts, proposal and fault markers, ratification digests, block-finality continuity, recovery timing, raw reports, canonical checksums, and static verifier.
+
+### 4. Compare Cobalt with pinned RippleD under one scenario contract
+
+- [ ] Pin RippleD 3.1.3 at `46b241ace8b30d9c9775d60ffba7d24b21903896`; use upstream `src/test/csf` and `Consensus_test::testFork` as the native control.
+- [ ] Record local quorum from `ValidatorList::calculateQuorum`; do not treat local quorum as proof of global UNL overlap.
+- [ ] Keep AGTI’s UNL-overlap extension separately pinned and identified as a downstream test.
+- [ ] Run Cobalt trust analysis and signed agreement/replay from the same canonical scenario manifest.
+- [ ] Cover the actual fleet and 7-, 10-, and 20-validator controls across overlap, asymmetric views, declared Byzantine budgets, correlated loss, partitions/healing, delay/loss/reorder, list/graph drift, add/remove, and key rotation.
+- [ ] Publish failures and safe halts without averaging them away or comparing Cobalt governance latency to XRPL payment latency.
+
+Required KPI report:
+
+| KPI | Required interpretation |
+| --- | --- |
+| Conflicting decisions | Zero for the same domain/slot among correct validators inside each declared model. |
+| Safe halt and liveness | Separate correct halts from forks; require completion for no-fault and within-model scenarios. |
+| Stage latency and recovery | Report p50/p95/p99/max by stage and fault class; measure healed/restarted convergence without state edits. |
+| Quorum/topology margin | Report exact set intersections and the smallest validator or correlation-group loss that blocks progress or permits conflict. |
+| Trust safety and replay | Report unsafe validator pairs and require bit-identical live/replay roots and locks. |
+| Communication and resources | Signed messages, bytes, CPU, RSS, disk, queues, descriptors, and validator-service delta. |
+| Operational and evidence health | Probe availability, stale ages, restarts, required artifacts, hashes, markers, and verifier outcome. |
+
+### 5. Rehearse authority transfer; deliver human interfaces; decide
+
+- [ ] Rehearse the exact `cobalt_handoff.rs` transition on a disposable clone using current-registry ML-DSA approvals and a future activation height.
+- [ ] Prove early, stale, replayed, wrong-root, mixed-authority, and self-authorized handoffs fail.
+- [ ] Prove pre-activation abort keeps Foundation authority and post-activation rollback is a new forward transition.
+- [ ] Execute one validator-trust update under rehearsed Cobalt authority while unrelated governance kinds remain rejected.
+- [ ] Deliver a Python CLI that a human can run to inspect fleet, graph, shadow, scenario, replay, and readiness state.
+- [ ] Update the read-only browser interface to consume the same authenticated output and clearly distinguish shadow health, rehearsal readiness, and actual authority.
+- [ ] Refresh the concise operator/runbook documentation after the CLI and interface work.
+- [ ] Produce a separate go/no-go packet. A live controlled-testnet cutover requires explicit later authorization and its own Task Node-governed work.
+
+## Activation decision
+
+Recommend a later controlled-testnet authority cutover only if all of these are true:
+
+- [ ] Every current validator is represented by a fresh, consistent fleet receipt and safe trust graph.
+- [ ] Current-commit tests, live shadow operation, replay, restart, and the full fault corpus pass.
+- [ ] Conflicting-decision count is zero and safe-halt/liveness behavior matches the declared model.
+- [ ] Consensus v2 finality stays healthy through every Cobalt fault.
+- [ ] The matched XRPL/Cobalt packet has no unresolved methodology exception.
+- [ ] The disposable handoff, abort, forward rollback, and scoped-authority checks pass.
+- [ ] The Python CLI, browser UI, monitoring, alerts, verifier, and operator runbook reflect the live service.
+
+If any check fails, Cobalt stays live in shadow and Foundation authority remains active. The failed gate is repaired and rerun; observation does not need to stop.
+
+## Completion rule
+
+This milestone is complete only after all implementation tasks reach Task Node’s final rewarded state, the Python CLI and browser interface work against authenticated live-fleet evidence, and the cutover recommendation has a verifier-backed packet. At that point this journal moves to `docs/plans/completed/`.
+
+A recommendation to activate is not activation. Any authority cutover remains a separate, explicitly approved operation.
