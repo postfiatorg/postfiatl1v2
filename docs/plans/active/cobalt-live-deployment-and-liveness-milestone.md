@@ -8,7 +8,7 @@ The first live state is an authenticated, always-on **shadow service** beside ea
 
 After the real-validator shadow corpus passes, the same declared trust views and faults are run through Cobalt and pinned RippleD simulations. The comparison measures conflicting decisions, safe halts, liveness, recovery, quorum/topology margin, message cost, and resource use. Only then is the existing Foundation-to-Cobalt handoff rehearsed on a disposable clone. This milestone does **not** authorize a live handoff.
 
-- **Status:** Active — six-validator live shadow corpus complete; the current shadow wrapper requires quorum and history-sync remediation before the corpus is rerun
+- **Status:** Active — Section 4 five-of-six quorum and authenticated-history remediation is live-proven and rewarded; the matched Cobalt/RippleD benchmark is now in progress.
 - **Locked specification:** [Live Cobalt Deployment and XRPL Liveness Research Specification](../../governance/cobalt-live-deployment-research-spec.md)
 - **Research task:** `task_50b08c9b22e2348237b65436d4be4fed` — rewarded
 - **Milestone-document task:** `task_4f13e8a9969df968d5a25e5613c6bdd6` — rewarded
@@ -21,7 +21,7 @@ After the real-validator shadow corpus passes, the same declared trust views and
 - [x] `task_af9dbfab039b00a0b97ee061d3c96a71` — establish the validator-fleet baseline posture and reproduce the Cobalt substrate. Rewarded: 2.4 PFT. The submitted receipt failed closed on current fleet access; the first three section-1 checks remain open.
 - [x] `task_5923e7dd509a438806e86f936495709b` — ship the authenticated shadow runtime, Python operator CLI, isolated sidecar, and local verifier packet. Rewarded: 2 PFT.
 - [x] `task_1e38f226f10748cea1367ae883eb6193` — deploy Cobalt shadow to the six live WAN validators and run the full evidence corpus. Rewarded: 3.5 PFT.
-- [ ] `task_84c0561295204bcf5e7c389475e5fcdc` — repair five-of-six progress and authenticated history recovery as one coupled Section 4 task. Accepted: 4.5 PFT.
+- [x] `task_84c0561295204bcf5e7c389475e5fcdc` — repair five-of-six progress and authenticated history recovery as one coupled Section 4 task. Rewarded: 2.7 PFT.
 - [ ] `task_c6c02afcf8fd9bef26dae16bbc5b32ec` — execute the complete matched Cobalt/RippleD benchmark and comparison. Accepted: 4.5 PFT; gated on the Section 4 task reaching rewarded state.
 - [ ] `task_d0b0b9553d6eb09aef54b8b0b1e3aada` — rehearse Foundation-to-Cobalt handoff, abort, and forward rollback on a disposable clone. Accepted: 4.5 PFT; gated on remediation and benchmark evidence.
 - [ ] `task_a0ffacf2640f5f76ae72002b98d14978` — deliver the complete Python CLI, browser UI, concise operator docs, and final go/no-go packet. Accepted: 4.5 PFT; gated on the preceding three tasks.
@@ -148,7 +148,7 @@ Pre-remediation code findings, now closed by Sections 4.1–4.4:
 - [x] Roll the new binary canary-first to the existing six shadow sidecars. Repeat the exact one-validator outage and missed-round tests without manual state edits, while finalizing a Consensus v2 block inside each fault window.
 - [x] Pass only when any five-of-six correct validators can ratify, four cannot, a returning validator automatically reaches an identical chained history, all correct validators expose the same decision/governance digest, and both authority flags remain false.
 
-Task Node task: `task_84c0561295204bcf5e7c389475e5fcdc` is accepted and governs Sections 4.1–4.4 as one coupled consensus-and-recovery remediation.
+Task Node task: `task_84c0561295204bcf5e7c389475e5fcdc` governed Sections 4.1–4.4 as one coupled consensus-and-recovery remediation and was rewarded 2.7 PFT on 2026-08-23.
 
 Section 4 result, 2026-08-23:
 
@@ -179,7 +179,7 @@ Required KPI report:
 | Communication and resources | Signed messages, bytes, CPU, RSS, disk, queues, descriptors, and validator-service delta. |
 | Operational and evidence health | Probe availability, stale ages, restarts, required artifacts, hashes, markers, and verifier outcome. |
 
-Task Node task: `task_c6c02afcf8fd9bef26dae16bbc5b32ec` is accepted and begins only after `task_84c0561295204bcf5e7c389475e5fcdc` is rewarded.
+Task Node task: `task_c6c02afcf8fd9bef26dae16bbc5b32ec` is accepted and active; its Section 4 reward gate cleared on 2026-08-23.
 
 ### 6. Rehearse authority transfer; deliver human interfaces; decide
 
