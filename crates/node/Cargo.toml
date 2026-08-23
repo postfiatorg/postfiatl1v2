@@ -26,6 +26,10 @@ path = "src/bin/postfiat_cobalt_shadow.rs"
 name = "postfiat-cobalt-benchmark"
 path = "src/bin/postfiat_cobalt_benchmark.rs"
 
+[[bin]]
+name = "postfiat-cobalt-handoff-rehearsal"
+path = "src/bin/postfiat_cobalt_handoff_rehearsal.rs"
+
 [dependencies]
 base64 = { workspace = true }
 flate2 = { workspace = true }

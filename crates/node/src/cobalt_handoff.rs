@@ -190,6 +190,23 @@ pub(super) fn verify_governance_authority_batch(
     }
 }
 
+pub fn verify_cobalt_scoped_governance_batch(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    registry: &ValidatorRegistry,
+    batch: &GovernanceActionBatch,
+    proposal_slot: u64,
+) -> io::Result<()> {
+    verify_governance_authority_batch(genesis, governance, registry, batch, proposal_slot)
+        .map(|_| ())
+}
+
+pub fn cobalt_governance_state_commitment(governance: &GovernanceState) -> Vec<u8> {
+    let mut commitment = Vec::new();
+    append_governance_state(&mut commitment, governance);
+    commitment
+}
+
 pub fn verify_cobalt_authority_transition(
     genesis: &Genesis,
     governance: &GovernanceState,
