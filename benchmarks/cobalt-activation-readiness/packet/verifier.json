@@ -1,0 +1,31 @@
+{
+  "activation_performed": false,
+  "actual_authority": {
+    "block_finality": "consensus-v2",
+    "cobalt_active": false,
+    "observed_validator_count": 6,
+    "validator_trust": "foundation"
+  },
+  "checks": {
+    "checksum_manifest_passes": true,
+    "cli_ui_tests_pass": true,
+    "cutover_readiness_passes": true,
+    "decision_is_scoped_go_without_activation": true,
+    "http_surface_is_read_only": true,
+    "matched_scenario_passes": true,
+    "prior_evidence_roots_match": true,
+    "six_validator_shadow_health_passes": true,
+    "source_commit_hashes_match": true,
+    "ui_three_states_are_separate": true
+  },
+  "decision": "GO",
+  "evidence_roots": {
+    "benchmark_sha256sums": "7968a085033419255b52b844edd586346a1e85561394e52c69e6683b2561c50b",
+    "handoff_sha256sums": "b678b3f45eb2a14299b941101bd556d61795a1033f1f6e53557442b7e315807e",
+    "handoff_verifier": "dfb9000d272f71d6d1578b7d8332a844a142d8d08d561889da2b3842f62cc9e9",
+    "section4_live_sha256sums": "333c5abdc295ee785c719d58ea0835f5a502eb5759245d1ca6ee863e74239232"
+  },
+  "result": "passed",
+  "schema": "postfiat-cobalt-activation-readiness-verifier-v1",
+  "source_commit": "58d3acf6886a2a60fcaa57bc90084525c05bf946"
+}

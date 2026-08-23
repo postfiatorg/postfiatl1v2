@@ -1,0 +1,82 @@
+{
+  "activation_performed": false,
+  "actual_authority": {
+    "block_finality": "consensus-v2",
+    "cobalt_active": false,
+    "observed_validator_count": 6,
+    "validator_trust": "foundation"
+  },
+  "authority": {
+    "controls_block_consensus": false,
+    "live": false,
+    "mode": "advisory",
+    "writes_validator_registry": false
+  },
+  "checks": [
+    {
+      "key": "matched_scenario",
+      "label": "Matched Cobalt/RippleD scenario packet passes",
+      "ok": true,
+      "source": "7968a085033419255b52b844edd586346a1e85561394e52c69e6683b2561c50b"
+    },
+    {
+      "key": "zero_conflicts_and_replay",
+      "label": "Zero conflicting decisions and deterministic Cobalt replay",
+      "ok": true,
+      "source": "matched benchmark verifier"
+    },
+    {
+      "key": "handoff_rehearsal",
+      "label": "Disposable authority handoff verifier passes",
+      "ok": true,
+      "source": "b678b3f45eb2a14299b941101bd556d61795a1033f1f6e53557442b7e315807e"
+    },
+    {
+      "key": "negative_abort_rollback",
+      "label": "Unsafe handoffs reject; abort and forward rollback preserve rules",
+      "ok": true,
+      "source": "handoff negative/abort/rollback receipts"
+    },
+    {
+      "key": "scoped_validator_update",
+      "label": "Rehearsed Cobalt authority accepts only validator-trust update",
+      "ok": true,
+      "source": "disposable clone activation and update receipts"
+    },
+    {
+      "key": "live_authority_unchanged",
+      "label": "Live validators stayed on Foundation and Consensus v2",
+      "ok": true,
+      "source": "byte-identical live fleet receipts"
+    }
+  ],
+  "command": "readiness",
+  "decision_scope": "separately authorized controlled-testnet validator-trust cutover",
+  "ok": true,
+  "packets": {
+    "benchmark": {
+      "directory": "/home/postfiatchad/repos/postfiatl1v2/benchmarks/cobalt-rippled-liveness/packet",
+      "manifest_sha256": "7968a085033419255b52b844edd586346a1e85561394e52c69e6683b2561c50b",
+      "verifier_sha256": "cc0edec161cc9efb5d6b1d924e5677367eb6102fb270724772fd24b29f1a878e"
+    },
+    "handoff": {
+      "directory": "/home/postfiatchad/repos/postfiatl1v2/benchmarks/cobalt-handoff-rehearsal/packet",
+      "manifest_sha256": "b678b3f45eb2a14299b941101bd556d61795a1033f1f6e53557442b7e315807e",
+      "verifier_sha256": "dfb9000d272f71d6d1578b7d8332a844a142d8d08d561889da2b3842f62cc9e9"
+    }
+  },
+  "recommendation": "GO_FOR_SEPARATELY_AUTHORIZED_CONTROLLED_TESTNET_CUTOVER",
+  "scenario": {
+    "case_count": 80,
+    "cobalt_conflicting_decisions": 0,
+    "cobalt_passed": 80,
+    "cobalt_replay_equal": true,
+    "rippled_conflicting_decisions": 0,
+    "rippled_native_fork_control": true,
+    "rippled_passed": 80,
+    "safe_halt_outcomes": 37,
+    "unresolved_methodology_exception": false
+  },
+  "schema": "postfiat-cobalt-governance-cli-v2",
+  "status": "GO"
+}

@@ -1,0 +1,44 @@
+{
+  "authority": {
+    "controls_block_consensus": false,
+    "live": false,
+    "mode": "advisory",
+    "writes_validator_registry": false
+  },
+  "command": "scenario",
+  "methodology_boundaries": {
+    "agti_control": "AGTI report commit 81f6a7e8d6e0da8c2ab334209c133e85e617e6e2, _posts/2026-05-26-xrpl-rippled-open-p0-freeze-audit.md; the overlap sweep is report-derived downstream coverage, not an upstream XRPLF test.",
+    "authority": "Cobalt runs with live_authority=false and controls_block_consensus=false; no authority path changed.",
+    "latency": "Cobalt governance timings and RippleD in-memory CSF virtual/wall timings are reported separately; no payment-latency comparison is made.",
+    "local_quorum": "ValidatorList::calculateQuorum is local: max(ceil(0.8*effectiveUNL), ceil(0.6*localUNL)); it is not proof of global UNL overlap.",
+    "rippled_control": "XRPLF/rippled 3.1.3 at 46b241ace8b30d9c9775d60ffba7d24b21903896; upstream src/test/csf with native Consensus suite including testFork."
+  },
+  "ok": true,
+  "packet": {
+    "directory": "/home/postfiatchad/repos/postfiatl1v2/benchmarks/cobalt-rippled-liveness/packet",
+    "manifest_sha256": "7968a085033419255b52b844edd586346a1e85561394e52c69e6683b2561c50b",
+    "verifier_sha256": "cc0edec161cc9efb5d6b1d924e5677367eb6102fb270724772fd24b29f1a878e"
+  },
+  "schema": "postfiat-cobalt-governance-cli-v2",
+  "source_pins": {
+    "agti_downstream_control": "report-derived downstream overlap scenarios; not upstream XRPLF",
+    "agti_report_commit": "81f6a7e8d6e0da8c2ab334209c133e85e617e6e2",
+    "agti_report_path": "_posts/2026-05-26-xrpl-rippled-open-p0-freeze-audit.md",
+    "agti_report_section": "The Inherited Trust Model / UNL overlap implosion",
+    "postfiatl1v2_section4_commit": "38ddb4f667669ae191f038102566ea16e635b649",
+    "rippled_commit": "46b241ace8b30d9c9775d60ffba7d24b21903896",
+    "rippled_native_control": "src/test/csf and Consensus_test::testFork",
+    "rippled_version": "3.1.3"
+  },
+  "summary": {
+    "case_count": 80,
+    "cobalt_conflicting_decisions": 0,
+    "cobalt_passed": 80,
+    "cobalt_replay_equal": true,
+    "rippled_conflicting_decisions": 0,
+    "rippled_native_fork_control": true,
+    "rippled_passed": 80,
+    "safe_halt_outcomes": 37,
+    "unresolved_methodology_exception": false
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "activation_performed": false,
+  "actual_authority": {
+    "block_finality": "consensus-v2",
+    "cobalt_active": false,
+    "observed_validator_count": 6,
+    "validator_trust": "foundation"
+  },
+  "cutover_authorized_by_packet": false,
+  "decision": "GO",
+  "decision_scope": "later separately authorized controlled-testnet validator-trust cutover",
+  "next_cutover_controls": [
+    "Request and accept one separate Task Node task for the live cutover.",
+    "Refresh all six validator, shadow, registry-root, trust-root, and Consensus v2 receipts.",
+    "Choose a future activation height and obtain current-registry ML-DSA-65 approvals.",
+    "Canary the transition, stop on any root, history, finality, or resource regression.",
+    "Prepare the signed forward Foundation rollback before ordering activation."
+  ],
+  "rationale": "Five-of-six live progress, four-of-six rejection, signed gap catch-up, zero benchmark conflicts, deterministic replay, and the disposable handoff/abort/scoped-update/forward-rollback sequence all pass.",
+  "requires_explicit_user_authorization": true,
+  "requires_tasknode_governance": true,
+  "schema": "postfiat-cobalt-activation-readiness-decision-v1"
+}

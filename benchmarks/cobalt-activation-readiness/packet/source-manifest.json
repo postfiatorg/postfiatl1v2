@@ -1,0 +1,21 @@
+{
+  "evidence_roots": {
+    "benchmark_sha256sums": "7968a085033419255b52b844edd586346a1e85561394e52c69e6683b2561c50b",
+    "handoff_sha256sums": "b678b3f45eb2a14299b941101bd556d61795a1033f1f6e53557442b7e315807e",
+    "handoff_verifier": "dfb9000d272f71d6d1578b7d8332a844a142d8d08d561889da2b3842f62cc9e9",
+    "section4_live_sha256sums": "333c5abdc295ee785c719d58ea0835f5a502eb5759245d1ca6ee863e74239232"
+  },
+  "files": {
+    "docs/governance/cobalt-implementation.md": "9f1de0d8399400b571057da3443beb6b501d4b34aac6f9426d96602e2778b7a1",
+    "docs/governance/cobalt.md": "3957f26bccc45505a9716543d76f269933bcd7882c1d45b39485cd79b588075a",
+    "python/postfiat_rpc/cobalt.py": "548f262ca0d1489b2790c7ed8dc2eaa35121d6e172961c5a523982c0eec23b3a",
+    "python/postfiat_rpc/cobalt_ui.py": "0ad2fa6047d90ec4012f1c8f377992d237207ad49d7366955941fc7e5581e99a",
+    "python/postfiat_rpc/cobalt_ui_assets/app.js": "4c815d777612f95b3bf7917046de11c982bad4a6af7c19b1b144f543c1f1ec01",
+    "python/postfiat_rpc/cobalt_ui_assets/index.html": "84cfc29085596fc72af155ae046a4f6cf2a076ed18ac6f31ed974d0c26eed86b",
+    "python/postfiat_rpc/cobalt_ui_assets/styles.css": "e608acbfc6e292ed23986974bee9e3fd511579ba0bdbe8d8903280b8c71a65d7",
+    "python/tests/test_cobalt.py": "e31eddb0203c460796095e73aa100edf5669e55e6ce723eb5c3a6025b21cd9a7",
+    "python/tests/test_cobalt_ui.py": "22cfc1aaecab883356cc4964f7620f29a59f97a6a91706cc874136db5c50e0c6"
+  },
+  "schema": "postfiat-cobalt-activation-readiness-source-manifest-v1",
+  "source_commit": "58d3acf6886a2a60fcaa57bc90084525c05bf946"
+}

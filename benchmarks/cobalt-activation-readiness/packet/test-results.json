@@ -1,0 +1,9 @@
+{
+  "command": "PYTHONPATH=python python3 -m unittest -q python.tests.test_cobalt python.tests.test_cobalt_ui",
+  "output": "cobalt-ui: \"GET /api/snapshot?refresh=1 HTTP/1.1\" 200 -\ncobalt-ui: code 405, message read-only interface\ncobalt-ui: \"POST /api/snapshot HTTP/1.1\" 405 -\n----------------------------------------------------------------------\nRan 21 tests in 0.590s\n\nOK\n",
+  "output_sha256": "ec8289c8ba7bca3d362970279186db22fe6aaf438be6f1672a00da4203d63a96",
+  "passed": true,
+  "returncode": 0,
+  "schema": "postfiat-cobalt-interface-test-result-v1",
+  "test_count": 21
+}

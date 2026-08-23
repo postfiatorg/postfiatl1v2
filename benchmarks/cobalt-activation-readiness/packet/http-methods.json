@@ -1,0 +1,13 @@
+{
+  "allowed_methods": [
+    "GET",
+    "HEAD"
+  ],
+  "automated_test": "python.tests.test_cobalt_ui.CobaltUiTests.test_http_surface_allows_reads_and_rejects_mutation",
+  "mutation_routes": [],
+  "post_status": 405,
+  "read_only": true,
+  "schema": "postfiat-cobalt-read-only-http-proof-v1",
+  "security_headers_verified": true,
+  "test_passed": true
+}
