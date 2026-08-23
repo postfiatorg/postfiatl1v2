@@ -1,0 +1,13 @@
+{
+  "all_rejected": true,
+  "cases": {
+    "early": "Cobalt authority transition must be ordered at its exact activation height",
+    "mixed_authority": "Cobalt authority mode has no transition record",
+    "replayed": "Cobalt authority transition replay rejected",
+    "self_authorized": "Cobalt authority transition does not bind the active validator registry",
+    "stale": "Cobalt authority transition approval set is outside quorum bounds",
+    "wrong_root": "Cobalt authority transition does not bind the active validator registry"
+  },
+  "durable_state_unchanged": true,
+  "schema": "postfiat-cobalt-handoff-negative-result-v1"
+}

@@ -1,0 +1,51 @@
+{
+  "binary_sha256": "a5be9b750a42205863b596de4b1e3741e7e22573a66d53e166828c67575819ac",
+  "captured_at": "2026-08-23T20:56:35.694105+00:00",
+  "checks": {
+    "activation_clone_state_changed": true,
+    "activation_future_height": true,
+    "all_six_negative_cases_rejected": true,
+    "current_registry_and_validator_count": true,
+    "forward_history_two_transitions_one_update": true,
+    "forward_rollback_restored_foundation": true,
+    "live_authority_and_block_control_disabled": true,
+    "live_registry_and_trust_roots_unchanged": true,
+    "live_validator_processes_unchanged": true,
+    "pre_activation_abort_without_mutation": true,
+    "scoped_validator_update_accepted": true,
+    "unrelated_governance_rejected": true,
+    "validator_private_keys_never_left_validators": true
+  },
+  "clone_manifest_sha256": "cf19819e13f147e6c46c54df781683cb50095fc98bab91cda306068dbd077157",
+  "packet_files": {
+    "activation-approvals.json": "26edc6fd3d6c634155fc6b4411d7ebd414b4549402bdcba76eef4ada3a26ca2f",
+    "activation-result.json": "bf133b528a43e5144567ee45f53b878836ea86f03fd3a145dc358f10975e05c4",
+    "activation-transition-signed.json": "e21e9b874256a05efc7c2bf8cc27f5be92be3ce817f3e94ad29be543399e79f1",
+    "activation-transition-unsigned.json": "859b6dc4ae510c2f2c92e38899f7deb70521f9bcf53560a48a1c2fc46762df73",
+    "clone-manifest.json": "cf19819e13f147e6c46c54df781683cb50095fc98bab91cda306068dbd077157",
+    "forward-rollback-result.json": "833e65bdfd8ffadfcf9f24698fcfa6ee00b3322e441f7db4e4d2197b254bd5cd",
+    "live-fleet-after.json": "275bb9f00a76c0afafee0bed3c7a9fad45e3b1b8b80fede3cf5ea3ec380d0bac",
+    "live-fleet-before.json": "275bb9f00a76c0afafee0bed3c7a9fad45e3b1b8b80fede3cf5ea3ec380d0bac",
+    "negative-cases.json": "ef15f489caeff3ddf9105d0eabcba8c088e5cf8700bf9003b02979ff9f62f913",
+    "operator-sequence.md": "e475a88affeeb5df8939cf222adc181651c952fb8af90420cb5773a696102fa6",
+    "pre-activation-abort.json": "f63bf7d9d837e710d46abc789a482905e11dc077671d811ffea04801effdf8b1",
+    "rollback-approvals.json": "7d35c572881eb6b74fd28eab6b96872ce7ae8f49111955be431473dfbbd579c2",
+    "rollback-transition-unsigned.json": "59fafe9d1ce1655eb6f10e688c27b42632a30870310734290962305c9e0c5204",
+    "updated-registry.json": "c66f712549cdc461935ce5883e1bab239f7f9987f7b1683ddc33e6131d3a1fe7",
+    "validator-trust-update-unsigned.json": "e8f3f0157cc3b8b59761dc0f0e41f5405bdca28deb0ec35c434da78b00a6f953",
+    "validator-update-authorizations.json": "d26069234a8ca0cb206036fa975547e432b43461d4e90cd93b05b862ff7c87f3",
+    "validator-update-result.json": "248a9ec9e8ea413e0e20fab9c695fa06fbab6b636238d7db0f37849c120c3857"
+  },
+  "provider_identities": {
+    "validator-0": "d64dbde7ec2c2c6716fa7d76",
+    "validator-1": "0e79b7ef091eef0293dd22ff",
+    "validator-2": "7891c3d0b16ad5ed9fbaa2aa",
+    "validator-3": "53e769b366898ce2bd8c22f7",
+    "validator-4": "41c0dd0d4f8656c04b6014b2",
+    "validator-5": "105d13ca397adbbf642c85e1"
+  },
+  "result": "passed",
+  "schema": "postfiat-cobalt-handoff-rehearsal-verifier-v1",
+  "sha256sums_sha256": "b678b3f45eb2a14299b941101bd556d61795a1033f1f6e53557442b7e315807e",
+  "source_commit": "9a603be30f488d458dc1a9c4ccf9105a58858a23"
+}
