@@ -8,7 +8,7 @@ The first live state is an authenticated, always-on **shadow service** beside ea
 
 After the real-validator shadow corpus passes, the same declared trust views and faults are run through Cobalt and pinned RippleD simulations. The comparison measures conflicting decisions, safe halts, liveness, recovery, quorum/topology margin, message cost, and resource use. Only then is the existing Foundation-to-Cobalt handoff rehearsed on a disposable clone. This milestone does **not** authorize a live handoff.
 
-- **Status:** Active — six-validator live shadow corpus complete; activation gate failed on one-validator liveness and missed-round recovery
+- **Status:** Active — six-validator live shadow corpus complete; the current shadow wrapper requires quorum and history-sync remediation before the corpus is rerun
 - **Locked specification:** [Live Cobalt Deployment and XRPL Liveness Research Specification](../../governance/cobalt-live-deployment-research-spec.md)
 - **Research task:** `task_50b08c9b22e2348237b65436d4be4fed` — rewarded
 - **Milestone-document task:** `task_4f13e8a9969df968d5a25e5613c6bdd6` — rewarded
@@ -104,9 +104,55 @@ Live result, 2026-08-23:
 - A second failure is more serious for activation: validator 5 missed round 1004, accepted round 1005, and then could not ingest round 1004 because the high-water mark correctly rejected it as stale. Five nodes retain rounds 1001–1011; validator 5 retains the same history except round 1004. Manual state repair was deliberately not used.
 - Consensus v2 independently advanced from height 910 to 913 through three real one-atom devnet transfers: one after the corpus, one during the validator-5 Cobalt outage, and one during the validators-3/4 Cobalt partition. All six validators converged on one tip/state root with zero validator restarts. Sidecars use about 1.9–2.0 MiB each at rest.
 - Static packet: `.tih/cobalt-live-evidence-20260823`; verifier result `cobalt-live-packet-ok`; canonical packet SHA-256 `2e07ada7ba4f174e5c2ad24422ac503838544aa359b461ca6cb95f146815177a`.
-- **Decision: do not activate Cobalt.** Keep the six sidecars observational and Foundation authority unchanged until one-validator progress and missed-round catch-up are redesigned and rerun.
+- **Decision for the current binary:** keep the six sidecars observational and Foundation authority unchanged. This is a repair-and-rerun result, not a rejection of Cobalt: the failures are in the shadow integration described below.
 
-### 4. Compare Cobalt with pinned RippleD under one scenario contract
+### 4. Repair quorum progress and authenticated history catch-up
+
+The live test found two concrete integration defects. The Cobalt trust graph already says that five of six validators provide strong support, but the node wrapper separately demands all six contributions. The recovery path then stores only decision summaries, permits a node to advance over a missing round, and has no signed transcript journal from which to repair the gap. The next implementation segment fixes those boundaries and repeats the same live test.
+
+Current code findings:
+
+| Finding | Current code | Required ownership |
+| --- | --- | --- |
+| All-six assembly override | `assemble_protocol_transcript` compares contributor IDs with the entire active registry at `crates/node/src/cobalt_shadow.rs:1771`; transcript validation separately requires `full_knowledge_checks.len() == committee.len()` at line 1114. | Quorum and full-knowledge support rules belong in `consensus_cobalt`; `node` should compose and persist their certificates. |
+| Unchained ratifications | Both assembly and validation call `ratify_dabc_amendment(..., None, ...)` at `crates/node/src/cobalt_shadow.rs:1830` and line 1099, so every live round is treated as a sequence-1 child of the genesis parent even though `dabc_registry.rs` already supports parent-linked chains. | Build and validate every new ratification against the durable previous `DabcRatifiedAmendment`. |
+| No recoverable history | `CobaltShadowState` stores `CobaltShadowProtocolDecision` summaries but not the signed transcripts; `Replay` in `cobalt_shadow_runtime.rs:379` only returns those summaries. | Persist bounded signed proof material and expose authenticated range synchronization. |
+| High-water mark conflates safety with completeness | `commit_protocol_transcript` accepts a newer round and later rejects an unseen older round at `crates/node/src/cobalt_shadow.rs:892-915`. | Keep signer anti-equivocation locks, but track contiguous committed history separately and require catch-up before advancing across a gap. |
+
+#### 4.1 Make five-of-six a real protocol certificate
+
+- [ ] Replace the exact-active-set check in `assemble_protocol_transcript` with sorted, unique, registered contributors whose signed RBC, ABBA, and DABC support satisfies every relevant trust view through the existing `evaluate_*_support_signed` and `has_strong_support` rules. Do not add a second integer threshold in `node`.
+- [ ] Replace the all-committee full-knowledge count with committee-signed `DabcFullKnowledgeCheckpoint` validation using `build_dabc_full_knowledge_checkpoint_signed` and `validate_dabc_full_knowledge_checkpoint_signed`. For the current canonical graph, any valid five-of-six set must satisfy every validator view; four-of-six must fail.
+- [ ] Separate the canonical decision identity from its support-certificate hash. Two correct assemblers that see different valid five-signer subsets must derive the same decision ID, ratification ID, and governance digest even if their audit certificate bytes differ.
+- [ ] Preserve duplicate-signer elimination, equivocation exclusion, ML-DSA committee verification, registry/trust-root binding, transcript bounds, and durable outbound locks.
+
+#### 4.2 Chain every ratification and refuse silent gaps
+
+- [ ] Extend the transcript/state model so each ratification carries and validates the previous durable `DabcRatifiedAmendment`; only the explicit history anchor may use `dabc_genesis_parent_id()`.
+- [ ] Replace the single maximum `protocol_high_watermark` interpretation with distinct signer-safety and contiguous-history state. A transcript above the next expected sequence returns a bounded `catch_up_required` result and is not committed.
+- [ ] Make exact replay idempotent, conflicting replay fail closed, and parent/sequence/slot mismatch reject before any lock, decision, digest, or journal mutation.
+- [ ] Introduce an explicit state-schema migration. Existing shadow-v2 rounds are retained as historical evidence and linked into a migration receipt, but they are not relabeled as a valid DABC chain or repaired by editing state files.
+
+#### 4.3 Add proof-carrying catch-up
+
+- [ ] Persist each accepted signed transcript in a bounded append-only journal separate from `state.json`, with hashes indexed by round and crash recovery that reconciles journal and state without partial acceptance.
+- [ ] Add bounded `HistoryRange` and `CatchUp` RPC operations in `cobalt_shadow_runtime.rs`, plus `history export`, `history verify`, and `catch-up` commands in `postfiat-cobalt-shadow` and `python/postfiat_rpc/cobalt.py`.
+- [ ] A lagging validator must fetch the missing contiguous range from one or more peers, independently verify every domain, registry root, trust graph, ML-DSA signature, strong-support certificate, parent link, sequence, slot, and size bound, then atomically advance. Peer snapshots or claimed high-water marks are never trusted.
+- [ ] Reject truncated, oversized, reordered, conflicting-parent, wrong-root, stale-graph, duplicate, and partially valid catch-up batches without changing durable state.
+- [ ] Expose `history_head`, `contiguous_sequence`, `missing_ranges`, `catch_up_status`, and certificate signer count in probe, Python CLI, and the existing read-only Cobalt UI.
+
+#### 4.4 Prove the repair locally and on the same six validators
+
+- [ ] Add focused owner tests in `consensus_cobalt` and `node`: omit each validator in turn and complete with five; reject every four-signer set; converge across different valid five-signer certificates; exclude duplicates/equivocators; and preserve locks across restart.
+- [ ] Add recovery tests where a validator misses N, receives N+1, refuses to advance, imports N through signed catch-up, then accepts N+1 with the same ordered ratification chain and governance digest as its peers.
+- [ ] Add crash tests before journal write, after journal write but before state update, and after state update; restart must either complete the same commit or expose a recoverable pending record, never a fabricated decision.
+- [ ] Run formatting, strict Clippy, focused package tests, workspace checks/tests, Python CLI tests, and a static verifier packet.
+- [ ] Roll the new binary canary-first to the existing six shadow sidecars. Repeat the exact one-validator outage and missed-round tests without manual state edits, while finalizing a Consensus v2 block inside each fault window.
+- [ ] Pass only when any five-of-six correct validators can ratify, four cannot, a returning validator automatically reaches an identical chained history, all correct validators expose the same decision/governance digest, and both authority flags remain false.
+
+Task Node boundary: after `task_1e38f226f10748cea1367ae883eb6193` reaches a terminal review state, request one major personal task covering Sections 4.1–4.4 as a coupled consensus-and-recovery remediation. Do not split individual checks into microtasks.
+
+### 5. Compare Cobalt with pinned RippleD under one scenario contract
 
 - [ ] Pin RippleD 3.1.3 at `46b241ace8b30d9c9775d60ffba7d24b21903896`; use upstream `src/test/csf` and `Consensus_test::testFork` as the native control.
 - [ ] Record local quorum from `ValidatorList::calculateQuorum`; do not treat local quorum as proof of global UNL overlap.
@@ -127,7 +173,7 @@ Required KPI report:
 | Communication and resources | Signed messages, bytes, CPU, RSS, disk, queues, descriptors, and validator-service delta. |
 | Operational and evidence health | Probe availability, stale ages, restarts, required artifacts, hashes, markers, and verifier outcome. |
 
-### 5. Rehearse authority transfer; deliver human interfaces; decide
+### 6. Rehearse authority transfer; deliver human interfaces; decide
 
 - [ ] Rehearse the exact `cobalt_handoff.rs` transition on a disposable clone using current-registry ML-DSA approvals and a future activation height.
 - [ ] Prove early, stale, replayed, wrong-root, mixed-authority, and self-authorized handoffs fail.
@@ -144,6 +190,8 @@ Recommend a later controlled-testnet authority cutover only if all of these are 
 
 - [ ] Every current validator is represented by a fresh, consistent fleet receipt and safe trust graph.
 - [ ] Current-commit tests, live shadow operation, replay, restart, and the full fault corpus pass.
+- [ ] Any valid five-of-six signer set makes progress, every four-of-six set fails, and different valid support certificates resolve to one canonical decision identity.
+- [ ] A validator missing one or more rounds refuses to advance across the gap, catches up from independently verified signed history, and converges without manual state repair.
 - [ ] Conflicting-decision count is zero and safe-halt/liveness behavior matches the declared model.
 - [ ] Consensus v2 finality stays healthy through every Cobalt fault.
 - [ ] The matched XRPL/Cobalt packet has no unresolved methodology exception.
