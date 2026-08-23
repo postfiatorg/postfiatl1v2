@@ -20,12 +20,13 @@ After the real-validator shadow corpus passes, the same declared trust views and
 - [x] `task_4f13e8a9969df968d5a25e5613c6bdd6` — create and verify this active milestone journal. Rewarded: 2.5 PFT.
 - [x] `task_af9dbfab039b00a0b97ee061d3c96a71` — establish the validator-fleet baseline posture and reproduce the Cobalt substrate. Rewarded: 2.4 PFT. The submitted receipt failed closed on current fleet access; the first three section-1 checks remain open.
 - [x] `task_5923e7dd509a438806e86f936495709b` — ship the authenticated shadow runtime, Python operator CLI, isolated sidecar, and local verifier packet. Rewarded: 2 PFT.
+- [ ] `task_1e38f226f10748cea1367ae883eb6193` — deploy Cobalt shadow to the six live WAN validators and run the full evidence corpus. Accepted: 5 PFT.
 
 The remaining substantial task boundaries will receive Task Node IDs only when the prior gate is complete:
 
 - [x] **Live baseline and reproducible substrate Task Node work item:** `task_af9dbfab039b00a0b97ee061d3c96a71` rewarded 2.4 PFT. The reproducible substrate is green; the current live-fleet receipt remains a Gate 0 prerequisite below.
 - [x] **Networked shadow runtime and operator CLI:** `task_5923e7dd509a438806e86f936495709b` rewarded 2 PFT. Local authenticated socket execution and CLI verification are green; live-validator deployment remains gated.
-- [ ] **Real-validator rollout and evidence corpus:** canary, roll out one validator at a time, run the full fault/restart/replay corpus, and publish verifier-backed evidence.
+- [ ] **Real-validator rollout and evidence corpus:** `task_1e38f226f10748cea1367ae883eb6193` accepted. Canary, roll out one validator at a time, run the full fault/restart/replay corpus, and publish verifier-backed evidence.
 - [ ] **Matched Cobalt/XRPL liveness benchmark:** run the common scenario manifest through both systems and publish the KPI comparison.
 - [ ] **Handoff rehearsal and user-facing interface:** rehearse activation and rollback on a disposable clone, expose the verified fleet packet in the browser UI, and prepare—but do not execute—the cutover decision.
 
@@ -54,8 +55,8 @@ Evidence: `fleet-receipt.public.json`, private bound receipt, graph root, build 
 
 Implementation journal, 2026-08-22:
 
-- Current provider inventory is not yet provable from this operator host: the stored Vultr credential decrypts correctly, but the production API rejects this host under its API-key IP allowlist. No allowlist or validator state was changed.
-- A fresh redacted reachability probe used six historical endpoint candidates only as discovery hints: five accepted an SSH TCP connection, one did not, and none exposed direct RPC. This is not a current fleet registry or topology receipt, so the first three baseline checks remain open and Gate 0 fails closed.
+- Vultr provider authentication was restored on 2026-08-23. Fresh inventory proves all six prior WAN validator instance identities remain active within a 30-instance account inventory.
+- Operating-system access remains the live Gate 0 boundary: this workstation has no matching WAN SSH identity, direct RPC remains closed, and no validator registry, topology, or chain-health receipt has yet been collected. Deployment therefore remains stopped before the canary.
 - The pinned Zig wrappers now translate Rust's vendor-qualified Linux target and provide both compiler and archiver entrypoints. They fail closed when `POSTFIAT_ZIG` does not resolve to an executable.
 - Current substrate verification passes 70 Cobalt tests, 70 unsafe-simulation tests, five node handoff tests, the current trust-root example, all partition scenarios, and the seven-worker TCP loopback drill. The two simulation examples were repaired to use an explicitly nonempty schema-only simulation signature under `cobalt-unsafe-simulation`; this is not message authentication.
 - Clean-build verifier manifest SHA-256: `8e9aac2f3ebfa84595bbcebb2f71ed3309a799078c962b2a2e418b198e413715`. Bound source SHA-256: `159f5cf0bd7d61a1cc1eefaf19f31e682a6c6decb44d9623975c50d7dcb121ff`. The generated packet is intentionally uncommitted under `.tih/`.
