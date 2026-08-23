@@ -8,7 +8,7 @@ The first live state is an authenticated, always-on **shadow service** beside ea
 
 After the real-validator shadow corpus passes, the same declared trust views and faults are run through Cobalt and pinned RippleD simulations. The comparison measures conflicting decisions, safe halts, liveness, recovery, quorum/topology margin, message cost, and resource use. Only then is the existing Foundation-to-Cobalt handoff rehearsed on a disposable clone. This milestone does **not** authorize a live handoff.
 
-- **Status:** Active — Section 4 five-of-six quorum and authenticated-history remediation is live-proven and rewarded; the matched Cobalt/RippleD benchmark is now in progress.
+- **Status:** Active — Sections 1–5 are complete; the Section 5 matched benchmark is verifier-backed and rewarded, and Section 6 disposable-clone handoff rehearsal is next.
 - **Locked specification:** [Live Cobalt Deployment and XRPL Liveness Research Specification](../../governance/cobalt-live-deployment-research-spec.md)
 - **Research task:** `task_50b08c9b22e2348237b65436d4be4fed` — rewarded
 - **Milestone-document task:** `task_4f13e8a9969df968d5a25e5613c6bdd6` — rewarded
@@ -22,7 +22,7 @@ After the real-validator shadow corpus passes, the same declared trust views and
 - [x] `task_5923e7dd509a438806e86f936495709b` — ship the authenticated shadow runtime, Python operator CLI, isolated sidecar, and local verifier packet. Rewarded: 2 PFT.
 - [x] `task_1e38f226f10748cea1367ae883eb6193` — deploy Cobalt shadow to the six live WAN validators and run the full evidence corpus. Rewarded: 3.5 PFT.
 - [x] `task_84c0561295204bcf5e7c389475e5fcdc` — repair five-of-six progress and authenticated history recovery as one coupled Section 4 task. Rewarded: 2.7 PFT.
-- [ ] `task_c6c02afcf8fd9bef26dae16bbc5b32ec` — execute the complete matched Cobalt/RippleD benchmark and comparison. Accepted: 4.5 PFT; gated on the Section 4 task reaching rewarded state.
+- [x] `task_c6c02afcf8fd9bef26dae16bbc5b32ec` — execute the complete matched Cobalt/RippleD benchmark and comparison. Rewarded: 1.5 PFT after the complete verification response; the initial evidence write was an accidental placeholder and is disclosed in the Task Node event history.
 - [ ] `task_d0b0b9553d6eb09aef54b8b0b1e3aada` — rehearse Foundation-to-Cobalt handoff, abort, and forward rollback on a disposable clone. Accepted: 4.5 PFT; gated on remediation and benchmark evidence.
 - [ ] `task_a0ffacf2640f5f76ae72002b98d14978` — deliver the complete Python CLI, browser UI, concise operator docs, and final go/no-go packet. Accepted: 4.5 PFT; gated on the preceding three tasks.
 
@@ -160,12 +160,12 @@ Section 4 result, 2026-08-23:
 
 ### 5. Compare Cobalt with pinned RippleD under one scenario contract
 
-- [ ] Pin RippleD 3.1.3 at `46b241ace8b30d9c9775d60ffba7d24b21903896`; use upstream `src/test/csf` and `Consensus_test::testFork` as the native control.
-- [ ] Record local quorum from `ValidatorList::calculateQuorum`; do not treat local quorum as proof of global UNL overlap.
-- [ ] Keep AGTI’s UNL-overlap extension separately pinned and identified as a downstream test.
-- [ ] Run Cobalt trust analysis and signed agreement/replay from the same canonical scenario manifest.
-- [ ] Cover the actual fleet and 7-, 10-, and 20-validator controls across overlap, asymmetric views, declared Byzantine budgets, correlated loss, partitions/healing, delay/loss/reorder, list/graph drift, add/remove, and key rotation.
-- [ ] Publish failures and safe halts without averaging them away or comparing Cobalt governance latency to XRPL payment latency.
+- [x] Pin RippleD 3.1.3 at `46b241ace8b30d9c9775d60ffba7d24b21903896`; use upstream `src/test/csf` and `Consensus_test::testFork` as the native control.
+- [x] Record local quorum from `ValidatorList::calculateQuorum`; do not treat local quorum as proof of global UNL overlap.
+- [x] Keep AGTI’s UNL-overlap extension separately pinned and identified as a downstream test.
+- [x] Run Cobalt trust analysis and signed agreement/replay from the same canonical scenario manifest.
+- [x] Cover the actual fleet and 7-, 10-, and 20-validator controls across overlap, asymmetric views, declared Byzantine budgets, correlated loss, partitions/healing, delay/loss/reorder, list/graph drift, add/remove, and key rotation.
+- [x] Publish failures and safe halts without averaging them away or comparing Cobalt governance latency to XRPL payment latency.
 
 Required KPI report:
 
@@ -179,7 +179,14 @@ Required KPI report:
 | Communication and resources | Signed messages, bytes, CPU, RSS, disk, queues, descriptors, and validator-service delta. |
 | Operational and evidence health | Probe availability, stale ages, restarts, required artifacts, hashes, markers, and verifier outcome. |
 
-Task Node task: `task_c6c02afcf8fd9bef26dae16bbc5b32ec` is accepted and active; its Section 4 reward gate cleared on 2026-08-23.
+Section 5 result, 2026-08-23:
+
+- Commit `3f00cb32` adds the 80-case deterministic contract, signed Cobalt adapter, downstream RippleD CSF adapter, valid deterministic-network patch, reproducible packet builder, and full comparison packet. Canonical manifest SHA-256: `4c95d48eb8414cea304b82c6ce334481509d584b39a205b5d6de0cf3110a44d4`.
+- Both adapters passed all 80 declared outcomes with zero conflicting decisions. Cobalt contribution/assembly/commit p95 was 528,217/315,489/7,367,063 µs; RippleD native CSF convergence p95 was 46,000 virtual ms. Transport and cryptographic models remain separately labeled and are not ranked against each other.
+- The smallest observed blocking loss was budget-plus-one in every topology (two, two, three, and five validators). Every single-validator loss remained live; no tested loss or overlap case produced a conflict.
+- Native `ripple.consensus.Consensus`, including `testFork`, passed 13 cases and 1,370 elementary tests. `ValidatorList::calculateQuorum` is recorded as local only; the overlap sweep separately cites AGTI report commit `81f6a7e8d6e0da8c2ab334209c133e85e617e6e2` as downstream provenance.
+- Packet: `benchmarks/cobalt-rippled-liveness/packet`; verifier result `passed`; `SHA256SUMS` SHA-256 `7968a085033419255b52b844edd586346a1e85561394e52c69e6683b2561c50b`. All Cobalt authority flags remained false and neither adapter touched the live validator services.
+- Task Node reached rewarded state on 2026-08-23. The accidental placeholder initial write was followed by the complete verification response; reward was 1.5 PFT.
 
 ### 6. Rehearse authority transfer; deliver human interfaces; decide
 
@@ -215,3 +222,38 @@ If any check fails, Cobalt stays live in shadow and Foundation authority remains
 This milestone is complete only after all implementation tasks reach Task Node’s final rewarded state, the Python CLI and browser interface work against authenticated live-fleet evidence, and the cutover recommendation has a verifier-backed packet. At that point this journal moves to `docs/plans/completed/`.
 
 A recommendation to activate is not activation. Any authority cutover remains a separate, explicitly approved operation.
+
+## Historical pre-Section-5 handoff — 2026-08-23
+
+This was the handoff used to start Section 5 and is retained as build/failure provenance; Section 5 is now complete above. Continue with Section 6. Do not activate Cobalt or modify the live validator authority path. Consensus v2 remains the only block-finality mechanism and Foundation authority remains active. Section 6 is a disposable-clone rehearsal only unless the user later gives explicit cutover authorization.
+
+Task Node sequence:
+
+1. Complete and fully verify/reward `task_c6c02afcf8fd9bef26dae16bbc5b32ec` for the matched Cobalt/RippleD benchmark.
+2. Then complete `task_d0b0b9553d6eb09aef54b8b0b1e3aada` for the disposable handoff rehearsal.
+3. Then complete `task_a0ffacf2640f5f76ae72002b98d14978` for CLI, browser UI, concise documentation, and the go/no-go packet.
+4. Move this journal to `docs/plans/completed/` only after all three tasks reach final rewarded state and every completion gate above is satisfied.
+
+Section 5 worktree at handoff:
+
+- `benchmarks/cobalt-rippled-liveness/generate_scenarios.py` and `scenario-manifest.json` define 80 deterministic cases over the live six-validator topology plus 7-, 10-, and 20-validator controls. The corpus covers no-fault, one fault, within/beyond budget, correlated loss, partition/heal, delay/loss/reorder, asymmetric views, graph/list drift, validator add/remove, key rotation, equivocation, and overlap sweeps.
+- `crates/node/src/bin/postfiat_cobalt_benchmark.rs` is the native Cobalt adapter. `crates/node/Cargo.toml` registers it as `postfiat-cobalt-benchmark`. It uses the real signed Cobalt stages, trust analysis, durable locks, commit/reopen/replay, and resource/message accounting; it never enables authority.
+- `benchmarks/cobalt-rippled-liveness/rippled/MatchedLivenessBenchmark_test.cpp` is the downstream native CSF adapter. `csf-deterministic-network-faults.patch` is intended to add deterministic loss, duplication, reordering, and counters to upstream `BasicNetwork`.
+- RippleD is cloned at `.tih/rippled-3.1.3` and pinned to `46b241ace8b30d9c9775d60ffba7d24b21903896`. Conan state is under `.tih/conan-home`; the build directory is `.tih/rippled-build`.
+- The pinned Zig wrappers are `scripts/zig-cc`, `zig-cxx`, `zig-ar`, `zig-ranlib`, and `zig-ld`. They exist because the host `cc`/archive tools are not usable directly. Always set `POSTFIAT_ZIG=/home/postfiatchad/.local/zig-0.17.0-dev.1857/zig`.
+
+Section 5 blockers at handoff, all remediated:
+
+1. Cargo reaches the benchmark binary but stops at the large `serde_json::json!` expression around line 580 with a macro recursion-limit error. Add `#![recursion_limit = "256"]` at the top or split that report object, then rerun:
+   `CC=$PWD/scripts/zig-cc CXX=$PWD/scripts/zig-cxx AR=$PWD/scripts/zig-ar RANLIB=$PWD/scripts/zig-ranlib CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=$PWD/scripts/zig-cc cargo check -p postfiat-node --bin postfiat-cobalt-benchmark`.
+2. Conan now passes Boost feature detection, but Boost PCH linking fails with `pch.o: unknown file type`. Disable Boost PCH through the Conan Boost option or extra b2 flag and rerun the install. Do not install or replace the system compiler.
+3. `csf-deterministic-network-faults.patch` is malformed at its second hunk header. Apply the intended edits to the temporary pinned checkout, regenerate a valid patch from `git -C .tih/rippled-3.1.3 diff`, then apply-check that stored patch before building. The C++ test file has already been copied into the temporary checkout but has not compiled.
+4. After both adapters compile, run the same canonical manifest through each, aggregate the KPI table required above, and place the compact verifier-backed packet under `benchmarks/cobalt-rippled-liveness/packet/`, not in a new `docs/evidence` or handoff directory.
+5. Keep the RippleD 3.1.3 native CSF result, `ValidatorList::calculateQuorum` reading, and the AGTI report-derived overlap extension separately labeled. Do not present a local RippleD quorum as proof of global UNL overlap, and do not compare Cobalt governance latency with XRPL payment latency.
+
+Operational facts:
+
+- The same-day live receipts are `.tih/cobalt-sibling-baseline-20260823.json`, `.tih/cobalt-live-evidence-20260823/fleet-result.json`, and the rewarded Section 4 packets named above. The actual fleet is six validators with canonical quorum five, split across EWR, AMS, and SGP; validator keys remain local to each validator.
+- Vast API access was verified and showed no running validator machines. The latest Vultr refresh failed closed with HTTP 401 because this workstation's observed source address did not match the allowlist at that moment; do not invent current fleet state from that failure. Use the vault helper without printing secrets and record any refresh failure explicitly.
+- The repository has a very large user-owned dirty/staged cleanup. Never reset, restore, or broadly stage it. Commit milestone files only with `git commit --only -- <exact paths>`. Do not use a normal repository-wide commit.
+- Work locally in this thread. Do not spawn agents, extra terminals, tmux sessions, or external rewrite workers. Do not fabricate Task Node evidence; submit only committed code, actual command results, packet hashes, and verifier output.
