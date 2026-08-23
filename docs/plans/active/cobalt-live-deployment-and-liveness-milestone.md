@@ -190,16 +190,24 @@ Section 5 result, 2026-08-23:
 
 ### 6. Rehearse authority transfer; deliver human interfaces; decide
 
-- [ ] Rehearse the exact `cobalt_handoff.rs` transition on a disposable clone using current-registry ML-DSA approvals and a future activation height.
-- [ ] Prove early, stale, replayed, wrong-root, mixed-authority, and self-authorized handoffs fail.
-- [ ] Prove pre-activation abort keeps Foundation authority and post-activation rollback is a new forward transition.
-- [ ] Execute one validator-trust update under rehearsed Cobalt authority while unrelated governance kinds remain rejected.
+- [x] Rehearse the exact `cobalt_handoff.rs` transition on a disposable clone using current-registry ML-DSA approvals and a future activation height.
+- [x] Prove early, stale, replayed, wrong-root, mixed-authority, and self-authorized handoffs fail.
+- [x] Prove pre-activation abort keeps Foundation authority and post-activation rollback is a new forward transition.
+- [x] Execute one validator-trust update under rehearsed Cobalt authority while unrelated governance kinds remain rejected.
 - [ ] Deliver a Python CLI that a human can run to inspect fleet, graph, shadow, scenario, replay, and readiness state.
 - [ ] Update the read-only browser interface to consume the same authenticated output and clearly distinguish shadow health, rehearsal readiness, and actual authority.
 - [ ] Refresh the concise operator/runbook documentation after the CLI and interface work.
 - [ ] Produce a separate go/no-go packet. A live controlled-testnet cutover requires explicit later authorization and its own Task Node-governed work.
 
 Task Node tasks: `task_d0b0b9553d6eb09aef54b8b0b1e3aada` governs the disposable handoff rehearsal after the benchmark; `task_a0ffacf2640f5f76ae72002b98d14978` governs the complete CLI, browser UI, documentation, and decision packet after the rehearsal.
+
+Section 6 rehearsal result, 2026-08-23:
+
+- Commit `9a603be3` adds the disposable clone runner and a narrow Rust adapter over the production `cobalt_handoff.rs` verification and application paths. Five focused handoff tests passed and the rehearsal binary passed strict Clippy.
+- The clone was pinned to the six current validator identities, registry/trust roots, chain height 915, source commit `9a603be3`, and future activation height 1015. Five current-registry ML-DSA-65 approvals were produced with validator-local keys.
+- Early, stale, replayed, wrong-root, mixed-authority, and self-authorized cases all rejected without durable clone mutation. Pre-activation abort preserved Foundation mode; the valid transition changed only the disposable clone.
+- One validator-5 key rotation was accepted through scoped Cobalt authority with five authorizations, while an unrelated crypto-policy amendment rejected. A second forward transition restored Foundation authority; no state rewind was used.
+- Packet commit `d0af9c0f`: `benchmarks/cobalt-handoff-rehearsal/packet`; verifier result `passed`; `SHA256SUMS` SHA-256 `b678b3f45eb2a14299b941101bd556d61795a1033f1f6e53557442b7e315807e`. Byte-identical before/after live receipts prove validator processes, binaries, registry/trust roots, and both Cobalt authority flags were unchanged. Consensus v2 remained the only block-finality protocol.
 
 ## Activation decision
 
