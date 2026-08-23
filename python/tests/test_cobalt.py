@@ -123,6 +123,7 @@ class CobaltCliTests(unittest.TestCase):
             "peer_health": "healthy",
             "queue_health": "healthy",
             "replay_posture": "consistent",
+            "catch_up_status": "current",
             "registry_root": "aa" * 48,
             "trust_graph_root": "bb" * 48,
             "live_authority": False,

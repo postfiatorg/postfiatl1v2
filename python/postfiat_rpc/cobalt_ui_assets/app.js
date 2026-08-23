@@ -70,7 +70,7 @@ function renderShadow(shadow) {
   grid.replaceChildren();
   (shadow.nodes || []).forEach((node) => {
     const card = document.createElement("article");
-    const good = node.transport_healthy && !node.live_authority && !node.controls_block_consensus;
+    const good = node.transport_healthy && node.catch_up_status === "current" && node.contiguous_sequence === node.protocol_decision_count && !node.live_authority && !node.controls_block_consensus;
     card.className = `node-card${good ? " is-good" : ""}`;
     const header = document.createElement("header");
     const name = document.createElement("h3");
@@ -80,7 +80,7 @@ function renderShadow(shadow) {
     lamp.setAttribute("aria-label", good ? "healthy" : "unhealthy");
     header.append(name, lamp);
     const metrics = document.createElement("dl");
-    [["Accepted", node.accepted_messages], ["Queue", node.queue_depth], ["Boots", node.boot_count], ["Peers", node.peer_count]].forEach(([label, value]) => {
+    [["Accepted", node.accepted_messages], ["History", node.contiguous_sequence], ["Cert signers", node.certificate_signer_count], ["Catch-up", node.catch_up_status], ["Boots", node.boot_count], ["Peers", node.peer_count]].forEach(([label, value]) => {
       const cell = document.createElement("div");
       const term = document.createElement("dt");
       const description = document.createElement("dd");

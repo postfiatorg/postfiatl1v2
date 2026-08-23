@@ -24,7 +24,7 @@ export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="$root/scripts/zig-cc"
 cargo fmt --all -- --check >"$output_dir/fmt.log" 2>&1
 cargo test -p postfiat-node --lib cobalt_shadow --locked -- --nocapture     >"$output_dir/rust-tests.log" 2>&1
 cargo clippy -p postfiat-node --lib --bin postfiat-cobalt-shadow --locked --     -D warnings >"$output_dir/clippy.log" 2>&1
-PYTHONPATH=python python3 -m unittest python.tests.test_cobalt -v     >"$output_dir/python-tests.log" 2>&1
+PYTHONPATH=python python3 -m unittest python.tests.test_cobalt python.tests.test_cobalt_ui -v     >"$output_dir/python-tests.log" 2>&1
 PYTHONPATH=python python3 -m postfiat_rpc.cobalt --help     >"$output_dir/python-cli-help.txt"
 cargo run --quiet --locked -p postfiat-node --bin postfiat-cobalt-shadow -- help     >"$output_dir/rust-cli-help.txt"
 cargo run --quiet --locked -p postfiat-node --bin postfiat-cobalt-shadow --     network-drill --data-dir "$output_dir/network-state"     >"$output_dir/network-drill.json"
@@ -55,6 +55,7 @@ PY
 PYTHONPATH=python python3 -m postfiat_rpc.cobalt --json --endpoint "127.0.0.1:$probe_port" probe >"$output_dir/python-probe.json"
 PYTHONPATH=python python3 -m postfiat_rpc.cobalt --json --endpoint "127.0.0.1:$probe_port" snapshot >"$output_dir/python-snapshot.json"
 PYTHONPATH=python python3 -m postfiat_rpc.cobalt --json --endpoint "127.0.0.1:$probe_port" replay >"$output_dir/python-replay.json"
+PYTHONPATH=python python3 -m postfiat_rpc.cobalt --json --endpoint "127.0.0.1:$probe_port" --start-sequence 1 --limit 1 history-export >"$output_dir/python-history-export.json"
 cleanup_listener
 trap - EXIT
 
@@ -90,7 +91,13 @@ for probe in report.get("probes", []):
         raise SystemExit("probe peer health is not healthy")
     if probe.get("replay_posture") != "consistent":
         raise SystemExit("probe replay posture is inconsistent")
-for name in ["python-probe.json", "python-snapshot.json", "python-replay.json"]:
+    if probe.get("catch_up_status") != "current":
+        raise SystemExit("probe catch-up posture is not current")
+    if probe.get("contiguous_sequence") != 1:
+        raise SystemExit("probe did not expose one contiguous history entry")
+    if probe.get("certificate_signer_count") != 3:
+        raise SystemExit("probe certificate signer count mismatch")
+for name in ["python-probe.json", "python-snapshot.json", "python-replay.json", "python-history-export.json"]:
     cli = json.loads((output / name).read_text())
     if cli.get("ok") is not True:
         raise SystemExit(f"Python CLI command failed: {name}")
@@ -103,7 +110,10 @@ source_files = [
     "crates/node/src/bin/postfiat_cobalt_shadow.rs",
     "crates/node/src/lib.rs",
     "python/postfiat_rpc/cobalt.py",
+    "python/postfiat_rpc/cobalt_ui.py",
+    "python/postfiat_rpc/cobalt_ui_assets/app.js",
     "python/tests/test_cobalt.py",
+    "python/tests/test_cobalt_ui.py",
     "systemd/postfiat-cobalt-shadow.service.example",
     "scripts/verify-cobalt-shadow-runtime",
 ]
@@ -115,7 +125,7 @@ for name in source_files:
     digest.update(path.read_bytes())
     digest.update(b"\0")
 classification = {
-    "schema": "postfiat-cobalt-shadow-verification-v1",
+    "schema": "postfiat-cobalt-shadow-verification-v2",
     "status": "passed",
     "scope": "local-loopback-sockets",
     "local_simulation_only": True,
@@ -123,7 +133,7 @@ classification = {
     "live_authority": False,
     "controls_block_consensus": False,
     "source_sha256": digest.hexdigest(),
-    "task_id": "task_5923e7dd509a438806e86f936495709b",
+    "task_id": "task_84c0561295204bcf5e7c389475e5fcdc",
 }
 (output / "classification.json").write_text(
     json.dumps(classification, indent=2, sort_keys=True) + "\n"

@@ -4,12 +4,12 @@ use std::io;
 use std::net::TcpListener;
 use std::path::PathBuf;
 
-use postfiat_consensus_cobalt::RbcPropose;
+use postfiat_consensus_cobalt::{DabcRatifiedAmendment, RbcPropose};
 use postfiat_node::cobalt_shadow::{
-    assemble_protocol_transcript, build_registry_binding_manifest,
-    run_cobalt_shadow_adversarial_drill, CobaltShadowIdentity, CobaltShadowLimits,
-    CobaltShadowProtocolContribution, CobaltShadowRegistryBinding, CobaltShadowService,
-    CobaltShadowValidatorBinding,
+    assemble_protocol_transcript, assemble_protocol_transcript_extending,
+    build_registry_binding_manifest, run_cobalt_shadow_adversarial_drill, CobaltShadowHistoryRange,
+    CobaltShadowIdentity, CobaltShadowLimits, CobaltShadowProtocolContribution,
+    CobaltShadowRegistryBinding, CobaltShadowService, CobaltShadowValidatorBinding,
 };
 use postfiat_node::cobalt_shadow_runtime::{
     parse_endpoint, read_transcript, request, run_cobalt_shadow_network_drill, serve_listener,
@@ -130,7 +130,19 @@ fn run() -> io::Result<()> {
                 read_bounded_json(&required_path(&args, "--proposal")?, 2 * 1024 * 1024)?;
             let contributions: Vec<CobaltShadowProtocolContribution> =
                 read_bounded_json(&required_path(&args, "--contributions")?, 16 * 1024 * 1024)?;
-            let transcript = assemble_protocol_transcript(&binding, proposal, contributions)?;
+            let transcript = match optional_flag(&args, "--previous-ratification") {
+                Some(path) => {
+                    let previous: DabcRatifiedAmendment =
+                        read_bounded_json(&PathBuf::from(path), 2 * 1024 * 1024)?;
+                    assemble_protocol_transcript_extending(
+                        &binding,
+                        proposal,
+                        contributions,
+                        Some(&previous),
+                    )?
+                }
+                None => assemble_protocol_transcript(&binding, proposal, contributions)?,
+            };
             serde_json::to_value(transcript).map_err(json_error)?
         }
         "reserve" => {
@@ -174,6 +186,58 @@ fn run() -> io::Result<()> {
                 _ => unreachable!(),
             };
             request(endpoint, &request_body)?
+        }
+        "history-export" => {
+            let endpoint = parse_endpoint(required_flag(&args, "--endpoint")?)?;
+            let start_sequence = required_flag(&args, "--start-sequence")?
+                .parse::<u64>()
+                .map_err(|_| invalid("--start-sequence must be an integer"))?;
+            let limit = required_flag(&args, "--limit")?
+                .parse::<usize>()
+                .map_err(|_| invalid("--limit must be an integer"))?;
+            request(
+                endpoint,
+                &CobaltShadowRpcRequest::HistoryRange {
+                    start_sequence,
+                    limit,
+                },
+            )?
+        }
+        "history-verify" => {
+            let service = CobaltShadowService::open(required_path(&args, "--data-dir")?)?;
+            let range: CobaltShadowHistoryRange =
+                read_bounded_json(&required_path(&args, "--range")?, 16 * 1024 * 1024)?;
+            service.verify_history_range(&range)?;
+            serde_json::json!({
+                "verified": true,
+                "start_sequence": range.start_sequence,
+                "end_sequence": range.end_sequence,
+                "range_hash": range.range_hash,
+            })
+        }
+        "catch-up" => {
+            let source = parse_endpoint(required_flag(&args, "--source-endpoint")?)?;
+            let target = parse_endpoint(required_flag(&args, "--target-endpoint")?)?;
+            let start_sequence = required_flag(&args, "--start-sequence")?
+                .parse::<u64>()
+                .map_err(|_| invalid("--start-sequence must be an integer"))?;
+            let limit = required_flag(&args, "--limit")?
+                .parse::<usize>()
+                .map_err(|_| invalid("--limit must be an integer"))?;
+            let range: CobaltShadowHistoryRange = serde_json::from_value(request(
+                source,
+                &CobaltShadowRpcRequest::HistoryRange {
+                    start_sequence,
+                    limit,
+                },
+            )?)
+            .map_err(json_error)?;
+            request(
+                target,
+                &CobaltShadowRpcRequest::CatchUp {
+                    range: Box::new(range),
+                },
+            )?
         }
         "commit" => {
             let endpoint = parse_endpoint(required_flag(&args, "--endpoint")?)?;
@@ -243,12 +307,15 @@ fn usage_text() -> &'static str {
   postfiat-cobalt-shadow bind --data-dir PATH --registry-binding PATH
   postfiat-cobalt-shadow propose --data-dir PATH --registry-binding PATH --round N --payload-hash HASH
   postfiat-cobalt-shadow contribute --data-dir PATH --registry-binding PATH --proposal PATH
-  postfiat-cobalt-shadow assemble --registry-binding PATH --proposal PATH --contributions PATH
+  postfiat-cobalt-shadow assemble --registry-binding PATH --proposal PATH --contributions PATH [--previous-ratification PATH]
   postfiat-cobalt-shadow reserve --data-dir PATH --round N --payload-hash HASH
   postfiat-cobalt-shadow run --data-dir PATH --listen IP:PORT [--allow-private-network]
   postfiat-cobalt-shadow probe --endpoint IP:PORT
   postfiat-cobalt-shadow snapshot --endpoint IP:PORT
   postfiat-cobalt-shadow replay --endpoint IP:PORT
+  postfiat-cobalt-shadow history-export --endpoint IP:PORT --start-sequence N --limit N
+  postfiat-cobalt-shadow history-verify --data-dir PATH --range PATH
+  postfiat-cobalt-shadow catch-up --source-endpoint IP:PORT --target-endpoint IP:PORT --start-sequence N --limit N
   postfiat-cobalt-shadow commit --endpoint IP:PORT --transcript PATH
   postfiat-cobalt-shadow drill --data-dir PATH
   postfiat-cobalt-shadow network-drill --data-dir PATH"

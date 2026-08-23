@@ -56,6 +56,7 @@ SHADOW_COMMANDS = {
     "shadow-service-drill": "drill",
 }
 RUNTIME_COMMANDS = {"probe", "snapshot", "replay"}
+HISTORY_COMMANDS = {"history-export", "history-verify", "catch-up"}
 
 
 def repository_root(start: Path | None = None) -> Path:
@@ -225,7 +226,11 @@ def shadow_result(command: str, report: dict[str, Any]) -> dict[str, Any]:
 
 
 def runtime_request(
-    endpoint: str, operation: str, *, timeout_seconds: float
+    endpoint: str,
+    operation: str,
+    *,
+    timeout_seconds: float,
+    fields: dict[str, Any] | None = None,
 ) -> dict[str, Any] | list[Any]:
     """Read one bounded JSON response from the Rust shadow socket service."""
 
@@ -238,9 +243,12 @@ def runtime_request(
         raise CobaltCliError("endpoint port must be an integer") from error
     if not 1 <= port <= 65535:
         raise CobaltCliError("endpoint port must be in 1..=65535")
-    request_body = json.dumps(
-        {"operation": operation}, separators=(",", ":")
-    ).encode("utf-8")
+    request_object = {"operation": operation}
+    if fields:
+        request_object.update(fields)
+    request_body = json.dumps(request_object, separators=(",", ":")).encode("utf-8")
+    if len(request_body) > MAX_REPORT_BYTES:
+        raise CobaltCliError("Cobalt shadow request exceeded the write limit")
     try:
         with socket.create_connection((host, port), timeout=timeout_seconds) as connection:
             connection.settimeout(timeout_seconds)
@@ -278,6 +286,7 @@ def runtime_result(command: str, report: dict[str, Any] | list[Any]) -> dict[str
             and report.get("peer_health") == "healthy"
             and report.get("queue_health") == "healthy"
             and report.get("replay_posture") == "consistent"
+            and report.get("catch_up_status") == "current"
             and report.get("live_authority") is False
             and report.get("controls_block_consensus") is False
         )
@@ -415,6 +424,10 @@ def render_human(result: dict[str, Any]) -> str:
                 f"  Trust graph root: {short_hash(report.get('trust_graph_root'))}",
                 f"  Ratification locks: {report.get('ratification_locks', 'unknown')}",
                 f"  Decisions: {report.get('protocol_decisions', 'unknown')}",
+                f"  Contiguous history: {report.get('contiguous_sequence', 'unknown')}",
+                f"  History head: {short_hash(report.get('history_head'))}",
+                f"  Catch-up: {report.get('catch_up_status', 'unknown')}",
+                f"  Certificate signers: {report.get('certificate_signer_count', 'unknown')}",
                 f"  Replay: {report.get('replay_posture', 'unknown')}",
                 f"  Signed traffic: {report.get('messages_received', 0)} messages / {report.get('bytes_received', 0)} bytes",
                 "  Stage validation: "
@@ -451,6 +464,18 @@ def render_human(result: dict[str, Any]) -> str:
         lines.extend(
             f"  [PASS] round {row.get('round')}: {short_hash(row.get('ratification_id'))}"
             for row in report
+        )
+    elif command in HISTORY_COMMANDS:
+        report = result["report"]
+        lines.extend(
+            [
+                f"Cobalt shadow {command}",
+                f"  Start sequence: {report.get('start_sequence', 'unknown')}",
+                f"  End sequence: {report.get('end_sequence', report.get('contiguous_sequence', 'unknown'))}",
+                f"  History head: {short_hash(report.get('history_head', report.get('range_hash')))}",
+                f"  Catch-up status: {report.get('catch_up_status', 'verified' if report.get('verified') else 'exported')}",
+                "  Live authority: no",
+            ]
         )
     elif command == "trust-graph":
         report = result["report"]
@@ -573,6 +598,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--endpoints",
         help="comma-separated Cobalt shadow endpoints for the fleet command",
     )
+    parser.add_argument("--source-endpoint", help="source Cobalt shadow endpoint")
+    parser.add_argument("--target-endpoint", help="target Cobalt shadow endpoint")
+    parser.add_argument("--start-sequence", type=int, help="first history sequence")
+    parser.add_argument("--limit", type=int, default=64, help="bounded history range size")
+    parser.add_argument("--range", dest="range_path", type=Path, help="history range JSON file")
+    parser.add_argument("--output", type=Path, help="optional history export path")
     parser.add_argument(
         "command",
         choices=[
@@ -580,6 +611,7 @@ def build_parser() -> argparse.ArgumentParser:
             "graph",
             "fleet",
             *RUNTIME_COMMANDS,
+            *HISTORY_COMMANDS,
             "shadow-status",
             "shadow-readiness",
             *SHADOW_COMMANDS,
@@ -606,6 +638,83 @@ def main(argv: Sequence[str] | None = None) -> int:
                 command,
                 runtime_request(args.endpoint, command, timeout_seconds=args.timeout),
             )
+        elif command in HISTORY_COMMANDS:
+            if not 1 <= args.limit <= 1024:
+                raise CobaltCliError("--limit must be in 1..=1024")
+            if command == "history-export":
+                if not args.endpoint or args.start_sequence is None:
+                    raise CobaltCliError(
+                        "--endpoint and --start-sequence are required for history-export"
+                    )
+                report = runtime_request(
+                    args.endpoint,
+                    "history_range",
+                    timeout_seconds=args.timeout,
+                    fields={
+                        "start_sequence": args.start_sequence,
+                        "limit": args.limit,
+                    },
+                )
+                if not isinstance(report, dict):
+                    raise CobaltCliError("history export returned non-object output")
+                if args.output:
+                    args.output.write_text(
+                        json.dumps(report, indent=2, sort_keys=True) + "\n",
+                        encoding="utf-8",
+                    )
+                ok = bool(report.get("range_hash"))
+            else:
+                if command == "history-verify":
+                    if not args.endpoint or args.range_path is None:
+                        raise CobaltCliError(
+                            "--endpoint and --range are required for history-verify"
+                        )
+                    if args.range_path.stat().st_size > MAX_REPORT_BYTES:
+                        raise CobaltCliError("history range file exceeds the read limit")
+                    range_report = json.loads(args.range_path.read_text(encoding="utf-8"))
+                    report = runtime_request(
+                        args.endpoint,
+                        "verify_history_range",
+                        timeout_seconds=args.timeout,
+                        fields={"range": range_report},
+                    )
+                else:
+                    if (
+                        not args.source_endpoint
+                        or not args.target_endpoint
+                        or args.start_sequence is None
+                    ):
+                        raise CobaltCliError(
+                            "--source-endpoint, --target-endpoint, and --start-sequence "
+                            "are required for catch-up"
+                        )
+                    range_report = runtime_request(
+                        args.source_endpoint,
+                        "history_range",
+                        timeout_seconds=args.timeout,
+                        fields={
+                            "start_sequence": args.start_sequence,
+                            "limit": args.limit,
+                        },
+                    )
+                    report = runtime_request(
+                        args.target_endpoint,
+                        "catch_up",
+                        timeout_seconds=args.timeout,
+                        fields={"range": range_report},
+                    )
+                if not isinstance(report, dict):
+                    raise CobaltCliError(f"{command} returned non-object output")
+                ok = report.get("verified") is True if command == "history-verify" else (
+                    report.get("catch_up_status") == "current"
+                )
+            result = {
+                "schema": CLI_SCHEMA,
+                "command": command,
+                "ok": ok,
+                "authority": dict(AUTHORITY),
+                "report": report,
+            }
         elif command == "fleet":
             endpoints = [
                 value.strip()

@@ -12,9 +12,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::cobalt_shadow::{
-    build_signed_protocol_transcript, CobaltShadowIdentity, CobaltShadowLimits,
-    CobaltShadowMessage, CobaltShadowProtocolDecision, CobaltShadowProtocolTranscript,
-    CobaltShadowService, CobaltShadowState, CobaltShadowStatus,
+    build_signed_protocol_transcript, CobaltShadowHistoryRange, CobaltShadowIdentity,
+    CobaltShadowLimits, CobaltShadowMessage, CobaltShadowProtocolDecision,
+    CobaltShadowProtocolTranscript, CobaltShadowService, CobaltShadowState, CobaltShadowStatus,
 };
 
 pub const COBALT_SHADOW_RPC_SCHEMA: &str = "postfiat-cobalt-shadow-rpc-v1";
@@ -28,6 +28,16 @@ pub enum CobaltShadowRpcRequest {
     Probe,
     Snapshot,
     Replay,
+    HistoryRange {
+        start_sequence: u64,
+        limit: usize,
+    },
+    VerifyHistoryRange {
+        range: Box<CobaltShadowHistoryRange>,
+    },
+    CatchUp {
+        range: Box<CobaltShadowHistoryRange>,
+    },
     Submit {
         message: CobaltShadowMessage,
     },
@@ -50,6 +60,7 @@ pub struct CobaltShadowRpcResponse {
 pub struct CobaltShadowResourcePosture {
     pub state_bytes: u64,
     pub private_state_bytes: u64,
+    pub history_bytes: u64,
     pub frame_limit_bytes: usize,
     pub queue_limit_messages: usize,
     pub message_limit_bytes: usize,
@@ -68,6 +79,12 @@ pub struct CobaltShadowProbe {
     pub ratification_locks: usize,
     pub protocol_decisions: usize,
     pub protocol_high_watermark: u64,
+    pub protocol_signer_high_watermark: u64,
+    pub contiguous_sequence: u64,
+    pub history_head: Option<String>,
+    pub missing_ranges: Vec<crate::cobalt_shadow::CobaltShadowMissingRange>,
+    pub catch_up_status: String,
+    pub certificate_signer_count: usize,
     pub replay_posture: String,
     pub messages_received: u64,
     pub bytes_received: u64,
@@ -172,6 +189,9 @@ pub fn probe_service(service: &CobaltShadowService) -> io::Result<CobaltShadowPr
     let private_state_bytes = fs::metadata(data_dir.join("signer-private.json"))
         .map(|metadata| metadata.len())
         .unwrap_or(0);
+    let history_bytes = fs::metadata(data_dir.join("protocol-history.jsonl"))
+        .map(|metadata| metadata.len())
+        .unwrap_or(0);
     Ok(CobaltShadowProbe {
         schema: COBALT_SHADOW_PROBE_SCHEMA.to_string(),
         node_id: status.node_id.clone(),
@@ -194,7 +214,15 @@ pub fn probe_service(service: &CobaltShadowService) -> io::Result<CobaltShadowPr
         ratification_locks: status.ratification_lock_count,
         protocol_decisions: status.protocol_decision_count,
         protocol_high_watermark: status.protocol_high_watermark,
-        replay_posture: if status.ratification_lock_count == status.protocol_decision_count {
+        protocol_signer_high_watermark: status.protocol_signer_high_watermark,
+        contiguous_sequence: status.contiguous_sequence,
+        history_head: status.history_head.clone(),
+        missing_ranges: status.missing_ranges.clone(),
+        catch_up_status: status.catch_up_status.clone(),
+        certificate_signer_count: status.certificate_signer_count,
+        replay_posture: if status.ratification_lock_count == status.protocol_decision_count
+            && status.protocol_decision_count == status.contiguous_sequence as usize
+        {
             "consistent"
         } else {
             "inconsistent"
@@ -209,6 +237,7 @@ pub fn probe_service(service: &CobaltShadowService) -> io::Result<CobaltShadowPr
         resource_posture: CobaltShadowResourcePosture {
             state_bytes,
             private_state_bytes,
+            history_bytes,
             frame_limit_bytes: MAX_RPC_FRAME_BYTES,
             queue_limit_messages: service.state().limits.max_queue_messages,
             message_limit_bytes: service.state().limits.max_message_bytes,
@@ -379,6 +408,26 @@ fn handle_request(
         CobaltShadowRpcRequest::Replay => service
             .replay_protocol_state()
             .and_then(|records| serde_json::to_value(records).map_err(json_error)),
+        CobaltShadowRpcRequest::HistoryRange {
+            start_sequence,
+            limit,
+        } => service
+            .history_range(start_sequence, limit)
+            .and_then(|range| serde_json::to_value(range).map_err(json_error)),
+        CobaltShadowRpcRequest::VerifyHistoryRange { range } => {
+            service.verify_history_range(&range).and_then(|()| {
+                serde_json::to_value(json!({
+                    "verified": true,
+                    "start_sequence": range.start_sequence,
+                    "end_sequence": range.end_sequence,
+                    "range_hash": range.range_hash,
+                }))
+                .map_err(json_error)
+            })
+        }
+        CobaltShadowRpcRequest::CatchUp { range } => service
+            .catch_up_history(&range)
+            .and_then(|status| serde_json::to_value(status).map_err(json_error)),
         CobaltShadowRpcRequest::Submit { message } => service
             .receive(message)
             .and_then(|outcome| serde_json::to_value(outcome).map_err(json_error)),

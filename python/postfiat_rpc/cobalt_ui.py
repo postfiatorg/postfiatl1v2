@@ -298,6 +298,8 @@ class SnapshotCollector:
         shadow_converged = bool(shadow_nodes) and len(digests) == 1
         shadow_healthy = shadow_converged and all(
             node.get("transport_healthy") is True
+            and node.get("catch_up_status") == "current"
+            and node.get("contiguous_sequence") == node.get("protocol_decision_count")
             and node.get("live_authority") is False
             and node.get("controls_block_consensus") is False
             for node in shadow_nodes
