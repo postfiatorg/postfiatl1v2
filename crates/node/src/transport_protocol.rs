@@ -2177,6 +2177,7 @@ mod transport_cli_tests {
 
         let (event_tx, event_rx) = mpsc::channel::<&'static str>();
         let (release_prewarm_tx, release_prewarm_rx) = mpsc::channel::<()>();
+        let (release_ready_tx, release_ready_rx) = mpsc::channel::<()>();
         let prewarm_done = Arc::new(AtomicBool::new(false));
         let bind_done = Arc::new(AtomicBool::new(false));
 
@@ -2218,6 +2219,8 @@ mod transport_cli_tests {
                         "schema": "postfiat-test-transport-ready-v1",
                         "shielded_verifier_prewarm": shielded_verifier_prewarm,
                     });
+                    ready_event_tx.send("ready-started").unwrap();
+                    release_ready_rx.recv().unwrap();
                     write_transport_ready_file(
                         &ready_file_for_ready,
                         &ready_report,
@@ -2256,10 +2259,17 @@ mod transport_cli_tests {
                 .expect("bind must run after prewarm"),
             "bind"
         );
+        assert_eq!(
+            event_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("ready writer must wait until after bind"),
+            "ready-started"
+        );
         assert!(
             !ready_file.exists(),
             "ready file must not reappear before ready write"
         );
+        release_ready_tx.send(()).unwrap();
         assert_eq!(
             event_rx
                 .recv_timeout(Duration::from_secs(1))
