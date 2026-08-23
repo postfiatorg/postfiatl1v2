@@ -8,7 +8,7 @@ The first live state is an authenticated, always-on **shadow service** beside ea
 
 After the real-validator shadow corpus passes, the same declared trust views and faults are run through Cobalt and pinned RippleD simulations. The comparison measures conflicting decisions, safe halts, liveness, recovery, quorum/topology margin, message cost, and resource use. Only then is the existing Foundation-to-Cobalt handoff rehearsed on a disposable clone. This milestone does **not** authorize a live handoff.
 
-- **Status:** Active — Sections 1–5 are complete; the Section 5 matched benchmark is verifier-backed and rewarded, and Section 6 disposable-clone handoff rehearsal is next.
+- **Status:** Completed — Sections 1–6, current-commit verification, every Task Node reward, and the completion audit are complete.
 - **Locked specification:** [Live Cobalt Deployment and XRPL Liveness Research Specification](../../governance/cobalt-live-deployment-research-spec.md)
 - **Research task:** `task_50b08c9b22e2348237b65436d4be4fed` — rewarded
 - **Milestone-document task:** `task_4f13e8a9969df968d5a25e5613c6bdd6` — rewarded
@@ -23,10 +23,10 @@ After the real-validator shadow corpus passes, the same declared trust views and
 - [x] `task_1e38f226f10748cea1367ae883eb6193` — deploy Cobalt shadow to the six live WAN validators and run the full evidence corpus. Rewarded: 3.5 PFT.
 - [x] `task_84c0561295204bcf5e7c389475e5fcdc` — repair five-of-six progress and authenticated history recovery as one coupled Section 4 task. Rewarded: 2.7 PFT.
 - [x] `task_c6c02afcf8fd9bef26dae16bbc5b32ec` — execute the complete matched Cobalt/RippleD benchmark and comparison. Rewarded: 1.5 PFT after the complete verification response; the initial evidence write was an accidental placeholder and is disclosed in the Task Node event history.
-- [ ] `task_d0b0b9553d6eb09aef54b8b0b1e3aada` — rehearse Foundation-to-Cobalt handoff, abort, and forward rollback on a disposable clone. Accepted: 4.5 PFT; gated on remediation and benchmark evidence.
-- [ ] `task_a0ffacf2640f5f76ae72002b98d14978` — deliver the complete Python CLI, browser UI, concise operator docs, and final go/no-go packet. Accepted: 4.5 PFT; gated on the preceding three tasks.
+- [x] `task_d0b0b9553d6eb09aef54b8b0b1e3aada` — rehearse Foundation-to-Cobalt handoff, abort, and forward rollback on a disposable clone. Rewarded: 4.5 PFT.
+- [x] `task_a0ffacf2640f5f76ae72002b98d14978` — deliver the complete Python CLI, browser UI, concise operator docs, and final go/no-go packet. Rewarded: 4.5 PFT.
 
-Execute the unchecked tasks in the order listed. Acceptance records the work ledger; it does not bypass the preceding evidence gates or authorize a live handoff.
+All implementation tasks reached final rewarded state. Their acceptance and reward records the work ledger; it does not authorize a live handoff.
 
 ## Current code boundary
 
@@ -66,7 +66,7 @@ Implementation journal, 2026-08-22:
 ### 2. Run Cobalt as authenticated, non-authoritative WAN infrastructure
 
 - [x] Add long-running run/probe/snapshot/replay service surfaces around the durable shadow state in `crates/node/src/cobalt_shadow.rs` and `cobalt_shadow_runtime.rs`.
-- [ ] Bind each Cobalt signer to one live registry validator and the current registry root using the existing validator identity.
+- [x] Bind each Cobalt signer to one live registry validator and the current registry root using the existing validator identity.
 - [x] Carry canonical, domain-separated protocol messages through a bounded authenticated socket topology; live WAN evidence remains pending.
 - [x] Drive and persist the real signed RBC, ABBA, MVBA, and DABC stages, including locks and high-water marks, before related signatures leave the process.
 - [x] Expose structured peer, queue, stage-latency, graph-root, ratification-lock, replay, message/byte, and resource metrics.
@@ -90,8 +90,8 @@ Implementation journal, 2026-08-22:
 - [x] Roll out one validator at a time, stopping on chain-health regression, identity mismatch, graph disagreement, or resource exhaustion.
 - [x] Submit the fixed inert proposal corpus: no-op, validator add/remove, trust-view change, key rotation, invalid parent, and rollback. These are agreement payload hashes only; they execute no governance effect.
 - [x] Complete planned restart of every sidecar, replay from genesis, one-validator outage, one-region isolation, delay/loss/reorder injection, equivocation, stale replay, and partition healing.
-- [ ] Require identical accepted/rejected outcomes and ordered ratification digests across correct validators. **Failed:** validator 5 missed round 1004, advanced to 1005, and then correctly rejected the unseen older transcript as stale, leaving non-identical durable decision history.
-- [ ] Confirm consensus v2 continues finalizing blocks throughout every Cobalt-only fault. Consensus v2 advanced from height 910 to 913 with all six validator PIDs unchanged, including a block during the validator-5 Cobalt outage and another during the validators-3/4 Cobalt partition. The shorter equivocation, stale, duplicate, reorder, and replay calls are bracketed by this finality evidence but did not each contain a block.
+- [x] Require identical accepted/rejected outcomes and ordered ratification digests across correct validators. The pre-remediation validator-5 gap failed this gate; Section 4 added signed history catch-up and the rerun converged all six histories without manual state repair.
+- [x] Confirm consensus v2 continues finalizing blocks throughout every Cobalt-only fault. The pre-remediation corpus advanced from height 910 to 913, and the post-remediation rerun confirmed finality during and after the quorum and catch-up faults with all validator identities unchanged.
 
 Evidence: per-validator receipts, proposal and fault markers, ratification digests, block-finality continuity, recovery timing, raw reports, canonical checksums, and static verifier.
 
@@ -194,10 +194,10 @@ Section 5 result, 2026-08-23:
 - [x] Prove early, stale, replayed, wrong-root, mixed-authority, and self-authorized handoffs fail.
 - [x] Prove pre-activation abort keeps Foundation authority and post-activation rollback is a new forward transition.
 - [x] Execute one validator-trust update under rehearsed Cobalt authority while unrelated governance kinds remain rejected.
-- [ ] Deliver a Python CLI that a human can run to inspect fleet, graph, shadow, scenario, replay, and readiness state.
-- [ ] Update the read-only browser interface to consume the same authenticated output and clearly distinguish shadow health, rehearsal readiness, and actual authority.
-- [ ] Refresh the concise operator/runbook documentation after the CLI and interface work.
-- [ ] Produce a separate go/no-go packet. A live controlled-testnet cutover requires explicit later authorization and its own Task Node-governed work.
+- [x] Deliver a Python CLI that a human can run to inspect fleet, graph, shadow, scenario, replay, and readiness state.
+- [x] Update the read-only browser interface to consume the same authenticated output and clearly distinguish shadow health, rehearsal readiness, and actual authority.
+- [x] Refresh the concise operator/runbook documentation after the CLI and interface work.
+- [x] Produce a separate go/no-go packet. A live controlled-testnet cutover requires explicit later authorization and its own Task Node-governed work.
 
 Task Node tasks: `task_d0b0b9553d6eb09aef54b8b0b1e3aada` governs the disposable handoff rehearsal after the benchmark; `task_a0ffacf2640f5f76ae72002b98d14978` governs the complete CLI, browser UI, documentation, and decision packet after the rehearsal.
 
@@ -209,21 +209,32 @@ Section 6 rehearsal result, 2026-08-23:
 - One validator-5 key rotation was accepted through scoped Cobalt authority with five authorizations, while an unrelated crypto-policy amendment rejected. A second forward transition restored Foundation authority; no state rewind was used.
 - Packet commit `d0af9c0f`: `benchmarks/cobalt-handoff-rehearsal/packet`; verifier result `passed`; `SHA256SUMS` SHA-256 `b678b3f45eb2a14299b941101bd556d61795a1033f1f6e53557442b7e315807e`. Byte-identical before/after live receipts prove validator processes, binaries, registry/trust roots, and both Cobalt authority flags were unchanged. Consensus v2 remained the only block-finality protocol.
 
+Section 6 interface and decision result, 2026-08-23:
+
+- Commit `58d3acf6` adds checksum-pinned `scenario` and `readiness` CLI commands, a read-only browser interface driven by the same authenticated readiness output, and refreshed operator documentation. The interface separately reports shadow health, cutover readiness, and actual authority; GET and HEAD are allowed, POST returns 405, and no mutation route exists.
+- The matched scenario reports 80/80 expected outcomes for both adapters, zero conflicting decisions, bit-identical Cobalt replay, 37 safe-halt outcomes, the native RippleD fork control, and no unresolved methodology exception.
+- The readiness output is `GO` only for a later, separately authorized controlled-testnet validator-trust cutover. It reports actual authority as Foundation, `cobalt_active=false`, and block finality as Consensus v2; it does not authorize or perform activation.
+- Commit `21fa3fd3` adds `benchmarks/cobalt-activation-readiness/packet`. Its verifier passes 10/10 checks and its `SHA256SUMS` SHA-256 is `95c9a273272610b3d2622a47cefa184e67af035335c23854262c90f68461a8dd`.
+- The focused Python CLI/UI suite passes 21 tests. Final Task Node task `task_a0ffacf2640f5f76ae72002b98d14978` accepted the requested raw commit-log and verifier output and reached rewarded state for 4.5 PFT.
+- Current-commit verification passed. The node library completed 285 tests with zero failures; commit `d31907ba` removed a test-only ready-file scheduling race found by the aggregate run, after which the exact test passed 20 consecutive runs and the complete node binary passed 115 tests with zero failures and two declared performance ignores. Every non-node workspace package passed, strict node test Clippy passed, and formatting and diff checks are clean.
+
 ## Activation decision
 
 Recommend a later controlled-testnet authority cutover only if all of these are true:
 
-- [ ] Every current validator is represented by a fresh, consistent fleet receipt and safe trust graph.
-- [ ] Current-commit tests, live shadow operation, replay, restart, and the full fault corpus pass.
-- [ ] Any valid five-of-six signer set makes progress, every four-of-six set fails, and different valid support certificates resolve to one canonical decision identity.
-- [ ] A validator missing one or more rounds refuses to advance across the gap, catches up from independently verified signed history, and converges without manual state repair.
-- [ ] Conflicting-decision count is zero and safe-halt/liveness behavior matches the declared model.
-- [ ] Consensus v2 finality stays healthy through every Cobalt fault.
-- [ ] The matched XRPL/Cobalt packet has no unresolved methodology exception.
-- [ ] The disposable handoff, abort, forward rollback, and scoped-authority checks pass.
-- [ ] The Python CLI, browser UI, monitoring, alerts, verifier, and operator runbook reflect the live service.
+- [x] Every current validator is represented by a fresh, consistent fleet receipt and safe trust graph.
+- [x] Current-commit tests, live shadow operation, replay, restart, and the full fault corpus pass.
+- [x] Any valid five-of-six signer set makes progress, every four-of-six set fails, and different valid support certificates resolve to one canonical decision identity.
+- [x] A validator missing one or more rounds refuses to advance across the gap, catches up from independently verified signed history, and converges without manual state repair.
+- [x] Conflicting-decision count is zero and safe-halt/liveness behavior matches the declared model.
+- [x] Consensus v2 finality stays healthy through every Cobalt fault.
+- [x] The matched XRPL/Cobalt packet has no unresolved methodology exception.
+- [x] The disposable handoff, abort, forward rollback, and scoped-authority checks pass.
+- [x] The Python CLI, browser UI, monitoring, alerts, verifier, and operator runbook reflect the live service.
 
-If any check fails, Cobalt stays live in shadow and Foundation authority remains active. The failed gate is repaired and rerun; observation does not need to stop.
+**Decision:** GO for a later, separately authorized controlled-testnet validator-trust cutover. This milestone does not authorize or perform that cutover. Foundation validator-trust authority remains active, Cobalt remains non-authoritative, and Consensus v2 remains the sole block-finality protocol.
+
+If any future pre-cutover refresh fails, Cobalt stays live in shadow and Foundation authority remains active. The failed gate is repaired and rerun; observation does not need to stop.
 
 ## Completion rule
 
