@@ -20,13 +20,13 @@ After the real-validator shadow corpus passes, the same declared trust views and
 - [x] `task_4f13e8a9969df968d5a25e5613c6bdd6` — create and verify this active milestone journal. Rewarded: 2.5 PFT.
 - [x] `task_af9dbfab039b00a0b97ee061d3c96a71` — establish the validator-fleet baseline posture and reproduce the Cobalt substrate. Rewarded: 2.4 PFT. The submitted receipt failed closed on current fleet access; the first three section-1 checks remain open.
 - [x] `task_5923e7dd509a438806e86f936495709b` — ship the authenticated shadow runtime, Python operator CLI, isolated sidecar, and local verifier packet. Rewarded: 2 PFT.
-- [ ] `task_1e38f226f10748cea1367ae883eb6193` — deploy Cobalt shadow to the six live WAN validators and run the full evidence corpus. Accepted: 5 PFT.
+- [ ] `task_1e38f226f10748cea1367ae883eb6193` — deploy Cobalt shadow to the six live WAN validators and run the full evidence corpus. Verification response submitted; awaiting review. Offer: 5 PFT.
 
 The remaining substantial task boundaries will receive Task Node IDs only when the prior gate is complete:
 
 - [x] **Live baseline and reproducible substrate Task Node work item:** `task_af9dbfab039b00a0b97ee061d3c96a71` rewarded 2.4 PFT. The reproducible substrate is green; the current live-fleet receipt remains a Gate 0 prerequisite below.
 - [x] **Networked shadow runtime and operator CLI:** `task_5923e7dd509a438806e86f936495709b` rewarded 2 PFT. Local authenticated socket execution and CLI verification are green; live-validator deployment remains gated.
-- [ ] **Real-validator rollout and evidence corpus:** `task_1e38f226f10748cea1367ae883eb6193` accepted. Canary, roll out one validator at a time, run the full fault/restart/replay corpus, and publish verifier-backed evidence.
+- [ ] **Real-validator rollout and evidence corpus:** `task_1e38f226f10748cea1367ae883eb6193` is awaiting Task Node review after initial evidence and the requested verifier output were submitted.
 - [ ] **Matched Cobalt/XRPL liveness benchmark:** run the common scenario manifest through both systems and publish the KPI comparison.
 - [ ] **Handoff rehearsal and user-facing interface:** rehearse activation and rollback on a disposable clone, expose the verified fleet packet in the browser UI, and prepare—but do not execute—the cutover decision.
 
