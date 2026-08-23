@@ -532,9 +532,9 @@ mod tests {
     fn sidecar_policy_is_bounded_and_not_coupled_to_validator_lifecycle() {
         let unit = include_str!("../../../systemd/postfiat-cobalt-shadow.service.example");
         assert!(unit.contains("User=postfiat-cobalt"));
-        assert!(unit.contains("InaccessiblePaths=/var/lib/postfiat-node"));
-        assert!(unit.contains("MemoryMax=512M"));
-        assert!(unit.contains("TasksMax=64"));
+        assert!(unit.contains("InaccessiblePaths=/var/lib/postfiat"));
+        assert!(unit.contains("MemoryMax=128M"));
+        assert!(unit.contains("TasksMax=32"));
         assert!(unit.contains("CapabilityBoundingSet="));
         for forbidden in [
             "Requires=postfiat-node",

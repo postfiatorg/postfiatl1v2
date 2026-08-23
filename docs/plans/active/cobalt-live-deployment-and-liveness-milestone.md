@@ -8,7 +8,7 @@ The first live state is an authenticated, always-on **shadow service** beside ea
 
 After the real-validator shadow corpus passes, the same declared trust views and faults are run through Cobalt and pinned RippleD simulations. The comparison measures conflicting decisions, safe halts, liveness, recovery, quorum/topology margin, message cost, and resource use. Only then is the existing Foundation-to-Cobalt handoff rehearsed on a disposable clone. This milestone does **not** authorize a live handoff.
 
-- **Status:** Active — authenticated local shadow runtime verified; current live-fleet Gate 0 access pending
+- **Status:** Active — live canary deployed in shadow-only mode; five sibling validator credentials pending
 - **Locked specification:** [Live Cobalt Deployment and XRPL Liveness Research Specification](../../governance/cobalt-live-deployment-research-spec.md)
 - **Research task:** `task_50b08c9b22e2348237b65436d4be4fed` — rewarded
 - **Milestone-document task:** `task_4f13e8a9969df968d5a25e5613c6bdd6` — rewarded
@@ -56,7 +56,9 @@ Evidence: `fleet-receipt.public.json`, private bound receipt, graph root, build 
 Implementation journal, 2026-08-22:
 
 - Vultr provider authentication was restored on 2026-08-23. Fresh inventory proves all six prior WAN validator instance identities remain active within a 30-instance account inventory.
-- Operating-system access remains the live Gate 0 boundary: this workstation has no matching WAN SSH identity, direct RPC remains closed, and no validator registry, topology, or chain-health receipt has yet been collected. Deployment therefore remains stopped before the canary.
+- Canary OS access and read-only RPC are restored. `validator-1` is on `postfiat-wan-devnet-2`, protocol 1, with the expected genesis, six-validator registry, and registry root; its validator and RPC services are active. The other five machines remain fail-closed until their distinct vaulted recovery credentials are available.
+- The canary sidecar is live on the private WireGuard interface with a 128 MiB memory cap and no validator lifecycle relationship. It uses about 1.8 MiB at idle, survives a planned restart with durable state, reports `live_authority=false` and `controls_block_consensus=false`, and left the validator PID, start time, restart count, and binary hash unchanged. It remains deliberately unbound until all six live identity statements exist.
+- Fleet binding now requires a domain-separated ML-DSA statement made by each validator's existing key over its sidecar key and exact live registry root. Registry-manifest construction recomputes the live registry root and rejects missing, duplicated, tampered, cross-domain, or unregistered bindings before installing the trust graph.
 - The pinned Zig wrappers now translate Rust's vendor-qualified Linux target and provide both compiler and archiver entrypoints. They fail closed when `POSTFIAT_ZIG` does not resolve to an executable.
 - Current substrate verification passes 70 Cobalt tests, 70 unsafe-simulation tests, five node handoff tests, the current trust-root example, all partition scenarios, and the seven-worker TCP loopback drill. The two simulation examples were repaired to use an explicitly nonempty schema-only simulation signature under `cobalt-unsafe-simulation`; this is not message authentication.
 - Clean-build verifier manifest SHA-256: `8e9aac2f3ebfa84595bbcebb2f71ed3309a799078c962b2a2e418b198e413715`. Bound source SHA-256: `159f5cf0bd7d61a1cc1eefaf19f31e682a6c6decb44d9623975c50d7dcb121ff`. The generated packet is intentionally uncommitted under `.tih/`.

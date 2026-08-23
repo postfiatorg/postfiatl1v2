@@ -4,17 +4,17 @@ use std::io;
 use std::net::TcpListener;
 use std::path::PathBuf;
 
-use postfiat_consensus_cobalt::TrustGraph;
 use postfiat_node::cobalt_shadow::{
-    run_cobalt_shadow_adversarial_drill, CobaltShadowIdentity, CobaltShadowLimits,
-    CobaltShadowService,
+    build_registry_binding_manifest, run_cobalt_shadow_adversarial_drill, CobaltShadowIdentity,
+    CobaltShadowLimits, CobaltShadowRegistryBinding, CobaltShadowService,
+    CobaltShadowValidatorBinding,
 };
 use postfiat_node::cobalt_shadow_runtime::{
     parse_endpoint, read_transcript, request, run_cobalt_shadow_network_drill, serve_listener,
     validate_listen_address, CobaltShadowRpcRequest,
 };
+use postfiat_node::ValidatorRegistry;
 use serde::Deserialize;
-use std::collections::BTreeMap;
 
 fn main() {
     if let Err(error) = run() {
@@ -51,13 +51,45 @@ fn run() -> io::Result<()> {
             let status = CobaltShadowService::inspect(required_path(&args, "--data-dir")?)?;
             serde_json::to_value(status).map_err(json_error)?
         }
+        "validator-binding" => {
+            let service = CobaltShadowService::open(required_path(&args, "--data-dir")?)?;
+            let binding = service.create_validator_binding(
+                required_flag(&args, "--registry-root")?,
+                &required_path(&args, "--validator-key-file")?,
+            )?;
+            serde_json::to_value(binding).map_err(json_error)?
+        }
+        "build-binding" => {
+            let quorum = required_flag(&args, "--quorum")?
+                .parse::<usize>()
+                .map_err(|_| invalid("--quorum must be an integer"))?;
+            let activation_height = required_flag(&args, "--activation-height")?
+                .parse::<u64>()
+                .map_err(|_| invalid("--activation-height must be an integer"))?;
+            let validator_registry: ValidatorRegistry = read_bounded_json(
+                &required_path(&args, "--validator-registry")?,
+                2 * 1024 * 1024,
+            )?;
+            let validator_bindings: Vec<CobaltShadowValidatorBinding> = read_bounded_json(
+                &required_path(&args, "--validator-bindings")?,
+                4 * 1024 * 1024,
+            )?;
+            let binding = build_registry_binding_manifest(
+                required_flag(&args, "--registry-root")?,
+                validator_registry,
+                validator_bindings,
+                quorum,
+                activation_height,
+            )?;
+            serde_json::to_value(binding).map_err(json_error)?
+        }
         "bind" => {
             let mut service = CobaltShadowService::open(required_path(&args, "--data-dir")?)?;
-            let binding: RegistryBinding = read_bounded_json(
+            let binding: CobaltShadowRegistryBinding = read_bounded_json(
                 &required_path(&args, "--registry-binding")?,
                 2 * 1024 * 1024,
             )?;
-            service.bind_registry(binding.registry_root, &binding.trust_graph, binding.peers)?;
+            service.bind_registry_manifest(&binding)?;
             serde_json::to_value(service.status()).map_err(json_error)?
         }
         "reserve" => {
@@ -165,6 +197,8 @@ fn usage_text() -> &'static str {
     "usage:
   postfiat-cobalt-shadow init --data-dir PATH --node-id ID --chain-id ID --genesis-hash HASH [--protocol-version N]
   postfiat-cobalt-shadow status --data-dir PATH
+  postfiat-cobalt-shadow validator-binding --data-dir PATH --registry-root HASH --validator-key-file PATH
+  postfiat-cobalt-shadow build-binding --registry-root HASH --validator-registry PATH --validator-bindings PATH --quorum N --activation-height N
   postfiat-cobalt-shadow bind --data-dir PATH --registry-binding PATH
   postfiat-cobalt-shadow reserve --data-dir PATH --round N --payload-hash HASH
   postfiat-cobalt-shadow run --data-dir PATH --listen IP:PORT [--allow-private-network]
@@ -174,13 +208,6 @@ fn usage_text() -> &'static str {
   postfiat-cobalt-shadow commit --endpoint IP:PORT --transcript PATH
   postfiat-cobalt-shadow drill --data-dir PATH
   postfiat-cobalt-shadow network-drill --data-dir PATH"
-}
-
-#[derive(Debug, Deserialize)]
-struct RegistryBinding {
-    registry_root: String,
-    trust_graph: TrustGraph,
-    peers: BTreeMap<String, String>,
 }
 
 fn read_bounded_json<T: for<'de> Deserialize<'de>>(path: &PathBuf, max: u64) -> io::Result<T> {

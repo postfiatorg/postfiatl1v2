@@ -12,8 +12,9 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use postfiat_consensus_cobalt::{
-    abba_strong_support, build_essential_subset, build_mvba_valid_input_set, build_trust_graph,
-    build_trust_view, evaluate_abba_finish_support_signed, evaluate_rbc_ready_support_signed,
+    abba_strong_support, build_canonical_unl_trust_graph, build_essential_subset,
+    build_mvba_valid_input_set, build_trust_graph, build_trust_view,
+    evaluate_abba_finish_support_signed, evaluate_rbc_ready_support_signed,
     mvba_candidate_from_rbc_accept, ratify_dabc_amendment, sign_abba_aux, sign_abba_conf,
     sign_abba_finish, sign_abba_init, sign_dabc_full_knowledge_check, sign_rbc_accept,
     sign_rbc_echo, sign_rbc_propose, sign_rbc_ready, validate_abba_aux_signed,
@@ -30,6 +31,12 @@ use postfiat_crypto_provider::{
     ML_DSA_65_SIGNATURE_BYTES,
 };
 use serde::{Deserialize, Serialize};
+use zeroize::Zeroizing;
+
+use crate::{
+    read_validator_key_file, validator_key_record, validator_registry_record,
+    validator_registry_root, ValidatorRegistry,
+};
 
 pub const COBALT_SHADOW_STATE_SCHEMA: &str = "postfiat-cobalt-shadow-state-v2";
 pub const COBALT_SHADOW_PRIVATE_SCHEMA: &str = "postfiat-cobalt-shadow-private-v1";
@@ -41,6 +48,10 @@ pub const COBALT_SHADOW_RANDOMNESS_SOURCE: &str = "ml-dsa65-threshold-commit-rev
 pub const COBALT_SHADOW_AUTHORITY_MODE: &str = "shadow-advisory";
 pub const COBALT_SHADOW_PROTOCOL_TRANSCRIPT_SCHEMA: &str =
     "postfiat-cobalt-shadow-protocol-transcript-v1";
+pub const COBALT_SHADOW_VALIDATOR_BINDING_SCHEMA: &str =
+    "postfiat-cobalt-shadow-validator-binding-v1";
+pub const COBALT_SHADOW_REGISTRY_BINDING_SCHEMA: &str =
+    "postfiat-cobalt-shadow-registry-binding-v1";
 
 const STATE_FILE: &str = "state.json";
 const PRIVATE_FILE: &str = "signer-private.json";
@@ -49,6 +60,8 @@ const MESSAGE_SIGNATURE_CONTEXT: &[u8] = b"postfiat-l1-v2/cobalt-shadow/message/
 const BEACON_COMMITMENT_SIGNATURE_CONTEXT: &[u8] =
     b"postfiat-l1-v2/cobalt-shadow/beacon-commitment/v1";
 const BEACON_REVEAL_SIGNATURE_CONTEXT: &[u8] = b"postfiat-l1-v2/cobalt-shadow/beacon-reveal/v1";
+const VALIDATOR_BINDING_SIGNATURE_CONTEXT: &[u8] =
+    b"postfiat-l1-v2/cobalt-shadow/validator-binding/v1";
 const MAX_STATE_FILE_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_PRIVATE_FILE_BYTES: u64 = 4 * 1024 * 1024;
 const ENTROPY_BYTES: usize = 32;
@@ -111,6 +124,32 @@ pub struct CobaltShadowIdentity {
     pub chain_id: String,
     pub genesis_hash: String,
     pub protocol_version: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CobaltShadowValidatorBinding {
+    pub schema: String,
+    pub node_id: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub registry_root: String,
+    pub cobalt_public_key_hex: String,
+    pub validator_algorithm: String,
+    pub validator_public_key_hex: String,
+    pub statement_hash: String,
+    pub signature_hex: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CobaltShadowRegistryBinding {
+    pub schema: String,
+    pub registry_root: String,
+    pub active_validators: Vec<String>,
+    pub validator_registry: ValidatorRegistry,
+    pub trust_graph: TrustGraph,
+    pub peers: BTreeMap<String, String>,
+    pub validator_bindings: Vec<CobaltShadowValidatorBinding>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -484,6 +523,127 @@ impl CobaltShadowService {
             transport_healthy: self.state.queued_messages.len()
                 <= self.state.limits.max_queue_messages,
         }
+    }
+
+    pub fn create_validator_binding(
+        &self,
+        registry_root: impl Into<String>,
+        validator_key_file: &Path,
+    ) -> io::Result<CobaltShadowValidatorBinding> {
+        let registry_root = registry_root.into();
+        validate_hash("registry root", &registry_root)?;
+        let key_file = read_validator_key_file(validator_key_file)?;
+        let key_record = validator_key_record(&key_file, &self.state.identity.node_id)?;
+        if key_record.algorithm_id != ML_DSA_65_ALGORITHM {
+            return Err(invalid(
+                "validator binding requires an ML-DSA-65 validator key",
+            ));
+        }
+        let mut binding = CobaltShadowValidatorBinding {
+            schema: COBALT_SHADOW_VALIDATOR_BINDING_SCHEMA.to_string(),
+            node_id: self.state.identity.node_id.clone(),
+            chain_id: self.state.identity.chain_id.clone(),
+            genesis_hash: self.state.identity.genesis_hash.clone(),
+            protocol_version: self.state.identity.protocol_version,
+            registry_root,
+            cobalt_public_key_hex: self.state.public_key_hex.clone(),
+            validator_algorithm: key_record.algorithm_id.clone(),
+            validator_public_key_hex: key_record.public_key_hex.clone(),
+            statement_hash: String::new(),
+            signature_hex: String::new(),
+        };
+        binding.statement_hash = validator_binding_statement_hash(&binding)?;
+        let private_key =
+            Zeroizing::new(hex_to_bytes(&key_record.private_key_hex).map_err(crypto_error)?);
+        binding.signature_hex = bytes_to_hex(
+            &ml_dsa_65_sign_with_context(
+                private_key.as_slice(),
+                binding.statement_hash.as_bytes(),
+                VALIDATOR_BINDING_SIGNATURE_CONTEXT,
+            )
+            .map_err(crypto_error)?,
+        );
+        validate_validator_binding(&binding)?;
+        Ok(binding)
+    }
+
+    pub fn bind_registry_manifest(
+        &mut self,
+        binding: &CobaltShadowRegistryBinding,
+    ) -> io::Result<()> {
+        if binding.schema != COBALT_SHADOW_REGISTRY_BINDING_SCHEMA {
+            return Err(invalid("unsupported Cobalt shadow registry binding schema"));
+        }
+        if binding.active_validators.is_empty()
+            || binding.active_validators.len() > self.state.limits.max_peers
+        {
+            return Err(invalid("active validator set is empty or oversized"));
+        }
+        let mut active_validators = binding.active_validators.clone();
+        active_validators.sort();
+        active_validators.dedup();
+        if active_validators != binding.active_validators {
+            return Err(invalid("active validators must be sorted and unique"));
+        }
+        let computed_root =
+            validator_registry_root(&binding.validator_registry, &binding.active_validators)?;
+        if computed_root != binding.registry_root {
+            return Err(invalid("live validator registry root mismatch"));
+        }
+        let peer_ids = binding.peers.keys().cloned().collect::<Vec<_>>();
+        if peer_ids != binding.active_validators {
+            return Err(invalid("Cobalt peers do not match active validators"));
+        }
+        let graph_ids = binding
+            .trust_graph
+            .trust_views
+            .iter()
+            .map(|view| view.validator.clone())
+            .collect::<Vec<_>>();
+        if graph_ids != binding.active_validators {
+            return Err(invalid("trust graph does not match active validators"));
+        }
+        if binding.validator_bindings.len() != binding.active_validators.len() {
+            return Err(invalid("validator binding cardinality mismatch"));
+        }
+        let mut seen = BTreeSet::new();
+        for validator_binding in &binding.validator_bindings {
+            validate_validator_binding(validator_binding)?;
+            if !seen.insert(validator_binding.node_id.clone()) {
+                return Err(invalid("duplicate validator binding"));
+            }
+            if validator_binding.chain_id != self.state.identity.chain_id
+                || validator_binding.genesis_hash != self.state.identity.genesis_hash
+                || validator_binding.protocol_version != self.state.identity.protocol_version
+                || validator_binding.registry_root != binding.registry_root
+                || binding.peers.get(&validator_binding.node_id)
+                    != Some(&validator_binding.cobalt_public_key_hex)
+            {
+                return Err(invalid("validator binding domain or signer mismatch"));
+            }
+            let registry_record =
+                validator_registry_record(&binding.validator_registry, &validator_binding.node_id)?;
+            if registry_record.algorithm_id != validator_binding.validator_algorithm
+                || registry_record.public_key_hex != validator_binding.validator_public_key_hex
+            {
+                return Err(invalid(
+                    "validator binding is not anchored in the live registry",
+                ));
+            }
+        }
+        if seen.into_iter().collect::<Vec<_>>() != binding.active_validators {
+            return Err(invalid("validator bindings do not match active validators"));
+        }
+        if binding.peers.get(&self.state.identity.node_id) != Some(&self.state.public_key_hex) {
+            return Err(invalid(
+                "local Cobalt signer is absent from the live binding",
+            ));
+        }
+        self.bind_registry(
+            binding.registry_root.clone(),
+            &binding.trust_graph,
+            binding.peers.clone(),
+        )
     }
 
     pub fn replace_peer_registry(&mut self, peers: BTreeMap<String, String>) -> io::Result<()> {
@@ -1343,6 +1503,94 @@ impl CobaltShadowService {
     }
 }
 
+pub fn build_registry_binding_manifest(
+    registry_root: impl Into<String>,
+    validator_registry: ValidatorRegistry,
+    mut validator_bindings: Vec<CobaltShadowValidatorBinding>,
+    quorum: usize,
+    activation_height: u64,
+) -> io::Result<CobaltShadowRegistryBinding> {
+    let registry_root = registry_root.into();
+    validate_hash("registry root", &registry_root)?;
+    if validator_bindings.len() < 3 {
+        return Err(invalid(
+            "Cobalt registry binding requires at least three validators",
+        ));
+    }
+    validator_bindings.sort_by(|left, right| left.node_id.cmp(&right.node_id));
+    if validator_bindings
+        .windows(2)
+        .any(|pair| pair[0].node_id == pair[1].node_id)
+    {
+        return Err(invalid(
+            "Cobalt registry binding contains duplicate validators",
+        ));
+    }
+    let active_validators = validator_bindings
+        .iter()
+        .map(|binding| binding.node_id.clone())
+        .collect::<Vec<_>>();
+    if quorum == 0 || quorum > active_validators.len() {
+        return Err(invalid("Cobalt registry binding quorum is invalid"));
+    }
+    let computed_root = validator_registry_root(&validator_registry, &active_validators)?;
+    if computed_root != registry_root {
+        return Err(invalid(
+            "Cobalt registry binding does not match the live registry root",
+        ));
+    }
+    let first = validator_bindings
+        .first()
+        .ok_or_else(|| invalid("Cobalt registry binding is empty"))?;
+    let domain = CobaltDomain {
+        chain_id: first.chain_id.clone(),
+        genesis_hash: first.genesis_hash.clone(),
+        protocol_version: first.protocol_version,
+    };
+    let mut peers = BTreeMap::new();
+    for binding in &validator_bindings {
+        validate_validator_binding(binding)?;
+        if binding.chain_id != domain.chain_id
+            || binding.genesis_hash != domain.genesis_hash
+            || binding.protocol_version != domain.protocol_version
+            || binding.registry_root != registry_root
+        {
+            return Err(invalid("Cobalt validator binding domain mismatch"));
+        }
+        let registry_record = validator_registry_record(&validator_registry, &binding.node_id)?;
+        if registry_record.algorithm_id != binding.validator_algorithm
+            || registry_record.public_key_hex != binding.validator_public_key_hex
+        {
+            return Err(invalid(
+                "Cobalt validator binding is not anchored in the live registry",
+            ));
+        }
+        peers.insert(
+            binding.node_id.clone(),
+            binding.cobalt_public_key_hex.clone(),
+        );
+    }
+    let trust_graph = build_canonical_unl_trust_graph(
+        &domain,
+        1,
+        registry_root.clone(),
+        activation_height,
+        None,
+        active_validators.clone(),
+        quorum,
+    )
+    .map_err(consensus_error)?;
+    Ok(CobaltShadowRegistryBinding {
+        schema: COBALT_SHADOW_REGISTRY_BINDING_SCHEMA.to_string(),
+        registry_root,
+        active_validators,
+        validator_registry,
+        trust_graph,
+        peers,
+        validator_bindings,
+    })
+}
+
 pub fn build_signed_protocol_transcript(
     services: &mut [CobaltShadowService],
     round: u64,
@@ -1764,6 +2012,62 @@ pub fn run_cobalt_shadow_adversarial_drill(
     })
 }
 
+fn validator_binding_statement_hash(binding: &CobaltShadowValidatorBinding) -> io::Result<String> {
+    hash_serialized(
+        "postfiat.cobalt.shadow.validator-binding.v1",
+        &(
+            binding.schema.as_str(),
+            binding.node_id.as_str(),
+            binding.chain_id.as_str(),
+            binding.genesis_hash.as_str(),
+            binding.protocol_version,
+            binding.registry_root.as_str(),
+            binding.cobalt_public_key_hex.as_str(),
+            binding.validator_algorithm.as_str(),
+            binding.validator_public_key_hex.as_str(),
+        ),
+    )
+}
+
+fn validate_validator_binding(binding: &CobaltShadowValidatorBinding) -> io::Result<()> {
+    if binding.schema != COBALT_SHADOW_VALIDATOR_BINDING_SCHEMA {
+        return Err(invalid(
+            "unsupported Cobalt shadow validator binding schema",
+        ));
+    }
+    validate_node_id(&binding.node_id)?;
+    validate_identity(&CobaltShadowIdentity {
+        node_id: binding.node_id.clone(),
+        chain_id: binding.chain_id.clone(),
+        genesis_hash: binding.genesis_hash.clone(),
+        protocol_version: binding.protocol_version,
+    })?;
+    validate_hash("validator binding registry root", &binding.registry_root)?;
+    validate_hash("validator binding statement", &binding.statement_hash)?;
+    if binding.validator_algorithm != ML_DSA_65_ALGORITHM {
+        return Err(invalid("unsupported validator binding algorithm"));
+    }
+    let cobalt_public_key = hex_to_bytes(&binding.cobalt_public_key_hex).map_err(crypto_error)?;
+    ml_dsa_65_validate_public_key(&cobalt_public_key).map_err(crypto_error)?;
+    let validator_public_key =
+        hex_to_bytes(&binding.validator_public_key_hex).map_err(crypto_error)?;
+    ml_dsa_65_validate_public_key(&validator_public_key).map_err(crypto_error)?;
+    let expected_hash = validator_binding_statement_hash(binding)?;
+    if expected_hash != binding.statement_hash {
+        return Err(invalid("validator binding statement hash mismatch"));
+    }
+    let signature = hex_to_bytes(&binding.signature_hex).map_err(crypto_error)?;
+    if !ml_dsa_65_verify_with_context(
+        &validator_public_key,
+        binding.statement_hash.as_bytes(),
+        &signature,
+        VALIDATOR_BINDING_SIGNATURE_CONTEXT,
+    ) {
+        return Err(invalid("validator binding signature verification failed"));
+    }
+    Ok(())
+}
+
 fn validate_identity(identity: &CobaltShadowIdentity) -> io::Result<()> {
     validate_node_id(&identity.node_id)?;
     if identity.chain_id.is_empty() || identity.chain_id.len() > 128 {
@@ -2152,6 +2456,79 @@ mod tests {
                 .mode();
             assert_eq!(mode & 0o077, 0);
         }
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn live_registry_binding_requires_validator_signed_sidecar_keys() {
+        let root = test_dir("live-registry-binding");
+        let mut fleet = (0..3)
+            .map(|index| {
+                CobaltShadowService::initialize(
+                    root.join(format!("validator-{index}")),
+                    identity(&format!("validator-{index}")),
+                    CobaltShadowLimits::default(),
+                )
+                .expect("initialize")
+            })
+            .collect::<Vec<_>>();
+        let key_records = (0..3)
+            .map(|index| {
+                crate::create_validator_key_record(format!("validator-{index}"))
+                    .expect("validator key")
+            })
+            .collect::<Vec<_>>();
+        let registry = ValidatorRegistry {
+            validators: key_records
+                .iter()
+                .map(|record| crate::ValidatorRegistryRecord {
+                    node_id: record.node_id.clone(),
+                    algorithm_id: record.algorithm_id.clone(),
+                    public_key_hex: record.public_key_hex.clone(),
+                })
+                .collect(),
+        };
+        let active_validators = key_records
+            .iter()
+            .map(|record| record.node_id.clone())
+            .collect::<Vec<_>>();
+        let registry_root =
+            validator_registry_root(&registry, &active_validators).expect("registry root");
+        let bindings = fleet
+            .iter()
+            .zip(&key_records)
+            .map(|(service, record)| {
+                let key_path = root.join(format!("{}.validator-keys.json", record.node_id));
+                crate::write_validator_key_file(
+                    &key_path,
+                    &crate::ValidatorKeyFile {
+                        validators: vec![record.clone()],
+                    },
+                )
+                .expect("write validator key");
+                service
+                    .create_validator_binding(registry_root.clone(), &key_path)
+                    .expect("create validator binding")
+            })
+            .collect::<Vec<_>>();
+        let manifest = build_registry_binding_manifest(
+            registry_root.clone(),
+            registry,
+            bindings.clone(),
+            3,
+            911,
+        )
+        .expect("build registry binding");
+        for service in &mut fleet {
+            service
+                .bind_registry_manifest(&manifest)
+                .expect("bind live registry");
+            assert_eq!(service.status().registry_root, registry_root);
+            assert_eq!(service.status().peer_count, 3);
+        }
+        let mut tampered = manifest;
+        tampered.validator_bindings[0].cobalt_public_key_hex = "00".repeat(1952);
+        assert!(fleet[0].bind_registry_manifest(&tampered).is_err());
         fs::remove_dir_all(root).expect("cleanup");
     }
 

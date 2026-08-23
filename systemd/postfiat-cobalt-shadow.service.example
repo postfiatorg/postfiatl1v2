@@ -20,7 +20,7 @@ StateDirectory=postfiat-cobalt-shadow
 StateDirectoryMode=0700
 WorkingDirectory=/var/lib/postfiat-cobalt-shadow
 ReadWritePaths=/var/lib/postfiat-cobalt-shadow
-InaccessiblePaths=/var/lib/postfiat-node /var/lib/postfiat-validator
+InaccessiblePaths=/var/lib/postfiat
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
@@ -44,11 +44,11 @@ AmbientCapabilities=
 RestrictAddressFamilies=AF_INET AF_INET6
 SystemCallArchitectures=native
 
-MemoryMax=512M
+MemoryMax=128M
 MemorySwapMax=0
-CPUQuota=50%
-TasksMax=64
-LimitNOFILE=1024
+CPUQuota=25%
+TasksMax=32
+LimitNOFILE=256
 UMask=0077
 
 [Install]
