@@ -24,7 +24,7 @@ After the real-validator shadow corpus passes, the same declared trust views and
 - [x] `task_84c0561295204bcf5e7c389475e5fcdc` — repair five-of-six progress and authenticated history recovery as one coupled Section 4 task. Rewarded: 2.7 PFT.
 - [x] `task_c6c02afcf8fd9bef26dae16bbc5b32ec` — execute the complete matched Cobalt/RippleD benchmark and comparison. Rewarded: 1.5 PFT after the complete verification response; the initial evidence write was an accidental placeholder and is disclosed in the Task Node event history.
 - [x] `task_d0b0b9553d6eb09aef54b8b0b1e3aada` — rehearse Foundation-to-Cobalt handoff, abort, and forward rollback on a disposable clone. Rewarded: 4.5 PFT.
-- [x] `task_a0ffacf2640f5f76ae72002b98d14978` — deliver the complete Python CLI, browser UI, concise operator docs, and final go/no-go packet. Rewarded: 4.5 PFT.
+- [x] `task_a0ffacf2640f5f76ae72002b98d14978` — deliver the complete Python CLI, browser UI, concise operator docs, and final go/no-go packet. Rewarded: 2 PFT.
 
 All implementation tasks reached final rewarded state. Their acceptance and reward records the work ledger; it does not authorize a live handoff.
 
@@ -215,7 +215,7 @@ Section 6 interface and decision result, 2026-08-23:
 - The matched scenario reports 80/80 expected outcomes for both adapters, zero conflicting decisions, bit-identical Cobalt replay, 37 safe-halt outcomes, the native RippleD fork control, and no unresolved methodology exception.
 - The readiness output is `GO` only for a later, separately authorized controlled-testnet validator-trust cutover. It reports actual authority as Foundation, `cobalt_active=false`, and block finality as Consensus v2; it does not authorize or perform activation.
 - Commit `21fa3fd3` adds `benchmarks/cobalt-activation-readiness/packet`. Its verifier passes 10/10 checks and its `SHA256SUMS` SHA-256 is `95c9a273272610b3d2622a47cefa184e67af035335c23854262c90f68461a8dd`.
-- The focused Python CLI/UI suite passes 21 tests. Final Task Node task `task_a0ffacf2640f5f76ae72002b98d14978` accepted the requested raw commit-log and verifier output and reached rewarded state for 4.5 PFT.
+- The focused Python CLI/UI suite passes 21 tests. Final Task Node task `task_a0ffacf2640f5f76ae72002b98d14978` accepted the requested raw commit-log and verifier output and reached rewarded state for 2 PFT.
 - Current-commit verification passed. The node library completed 285 tests with zero failures; commit `d31907ba` removed a test-only ready-file scheduling race found by the aggregate run, after which the exact test passed 20 consecutive runs and the complete node binary passed 115 tests with zero failures and two declared performance ignores. Every non-node workspace package passed, strict node test Clippy passed, and formatting and diff checks are clean.
 
 ## Activation decision
