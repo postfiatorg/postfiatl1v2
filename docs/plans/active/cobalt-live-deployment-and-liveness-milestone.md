@@ -8,7 +8,7 @@ The first live state is an authenticated, always-on **shadow service** beside ea
 
 After the real-validator shadow corpus passes, the same declared trust views and faults are run through Cobalt and pinned RippleD simulations. The comparison measures conflicting decisions, safe halts, liveness, recovery, quorum/topology margin, message cost, and resource use. Only then is the existing Foundation-to-Cobalt handoff rehearsed on a disposable clone. This milestone does **not** authorize a live handoff.
 
-- **Status:** Active — four of six live validators run the shadow sidecar; two recovery credentials are present but rejected
+- **Status:** Active — six-validator live shadow corpus complete; activation gate failed on one-validator liveness and missed-round recovery
 - **Locked specification:** [Live Cobalt Deployment and XRPL Liveness Research Specification](../../governance/cobalt-live-deployment-research-spec.md)
 - **Research task:** `task_50b08c9b22e2348237b65436d4be4fed` — rewarded
 - **Milestone-document task:** `task_4f13e8a9969df968d5a25e5613c6bdd6` — rewarded
@@ -45,9 +45,9 @@ The remaining substantial task boundaries will receive Task Node IDs only when t
 
 ### 1. Freeze the real validator baseline and reproduce current Cobalt
 
-- [ ] Collect a fresh, redacted receipt from every active validator: chain/genesis identity, commit and binary hash, height/tip/state root, registry root, quorum, transport and service health, resource headroom, stable placement/control labels, timestamp, and maximum age.
-- [ ] Fail closed on unreachable validators, chain divergence, stale inventory, unknown registry membership, reused keys, or missing topology labels.
-- [ ] Generate the Cobalt trust graph and thresholds from the discovered registry; do not reuse the old seven-validator fixtures.
+- [x] Collect a fresh, redacted receipt from every active validator: chain/genesis identity, commit and binary hash, height/tip/state root, registry root, quorum, transport and service health, resource headroom, stable placement/control labels, timestamp, and maximum age.
+- [x] Fail closed on unreachable validators, chain divergence, stale inventory, unknown registry membership, reused keys, or missing topology labels.
+- [x] Generate the Cobalt trust graph and thresholds from the discovered registry; do not reuse the old seven-validator fixtures.
 - [x] Restore a working pinned C/C++ linker invocation and run the current locked Cobalt tests and examples from a clean build. (`scripts/zig-cc`, `scripts/zig-ar`, `scripts/verify-cobalt-substrate`)
 - [x] Label loopback and hard-coded-fixture results as local baseline evidence, never as live-validator proof. (`scripts/verify-cobalt-substrate` emits `live_validator_evidence=false`.)
 
@@ -56,12 +56,12 @@ Evidence: `fleet-receipt.public.json`, private bound receipt, graph root, build 
 Implementation journal, 2026-08-22:
 
 - Vultr provider authentication was restored on 2026-08-23. Fresh inventory proves all six prior WAN validator instance identities remain active within a 30-instance account inventory.
-- Canary OS access and read-only RPC are restored. `validator-1` is on `postfiat-wan-devnet-2`, protocol 1, with the expected genesis, six-validator registry, and registry root; its validator and RPC services are active. Distinct credentials for the other five machines are present, but the values for `wan-validator-0-pf` and `wan-validator-1-pf` are rejected by both hosts and remain fail-closed.
+- OS access is restored across all six validators. Fresh checks bind every machine to `postfiat-wan-devnet-2`, protocol 1, the expected genesis, the six-validator registry, and one registry root. Validator services remained active with zero restarts. Validator 0's separately installed RPC companion was started, without restarting its validator, when validator 0 was elected proposer for height 912.
 - The canary sidecar is live on the private WireGuard interface with a 128 MiB memory cap and no validator lifecycle relationship. It uses about 1.8 MiB at idle, survives a planned restart with durable state, reports `live_authority=false` and `controls_block_consensus=false`, and left the validator PID, start time, restart count, and binary hash unchanged. It remains deliberately unbound until all six live identity statements exist.
 - Fleet binding now requires a domain-separated ML-DSA statement made by each validator's existing key over its sidecar key and exact live registry root. Registry-manifest construction recomputes the live registry root and rejects missing, duplicated, tampered, cross-domain, or unregistered bindings before installing the trust graph.
 - The pinned Zig wrappers now translate Rust's vendor-qualified Linux target and provide both compiler and archiver entrypoints. They fail closed when `POSTFIAT_ZIG` does not resolve to an executable.
 - Current substrate verification passes 70 Cobalt tests, 70 unsafe-simulation tests, five node handoff tests, the current trust-root example, all partition scenarios, and the seven-worker TCP loopback drill. The two simulation examples were repaired to use an explicitly nonempty schema-only simulation signature under `cobalt-unsafe-simulation`; this is not message authentication.
-- The final live-rollout artifact was built from commit `1bce501bcef6` with SHA-256 `d311ad733bcecd7f87769264b745e60fd31c919f354af851fc56db85b5e99067`. Its CLI exposes validator-local proposal/contribution signing, transcript assembly, private-WAN commit delivery, status/probe/snapshot/replay, and fault drills. The artifact is live on validators 0, 1, 2, and 5 with validator-signed binding receipts. TCP/29651 is allowed only on `wg0` from `10.77.0.0/24`; the canary reaches all four sidecars over that private WAN. All four report `live_authority=false` and `controls_block_consensus=false`, and their validator PIDs and restart counts remained unchanged. Validators 3 and 4 are blocked only by rejected recovery credentials.
+- The final live-rollout artifact was built from commit `1bce501bcef6` with SHA-256 `d311ad733bcecd7f87769264b745e60fd31c919f354af851fc56db85b5e99067`. It is live on all six validators with validator-signed binding receipts and one six-validator trust manifest (quorum 5; trust-graph root `c872bf8a9628cb3b27f2c0826084beb540c645d0c9d06107643358a4df078fa919e88ba2aa6b376a904eb79d28d69e77`). TCP/29651 is allowed only on `wg0` from `10.77.0.0/24`. Every sidecar reports `live_authority=false` and `controls_block_consensus=false`; validator PIDs and restart counts remained unchanged.
 - Clean-build verifier manifest SHA-256: `8e9aac2f3ebfa84595bbcebb2f71ed3309a799078c962b2a2e418b198e413715`. Bound source SHA-256: `159f5cf0bd7d61a1cc1eefaf19f31e682a6c6decb44d9623975c50d7dcb121ff`. The generated packet is intentionally uncommitted under `.tih/`.
 - Task Node accepted the mixed evidence after requesting and receiving the raw clean-build excerpt. Final state: rewarded 2.4 PFT. This reward closes the work item, not the explicitly red live-fleet gate.
 
@@ -88,14 +88,23 @@ Implementation journal, 2026-08-22:
 
 ### 3. Canary and complete the real-validator shadow corpus
 
-- [ ] Deploy one canary and freeze resource/latency alert thresholds before adversarial tests.
-- [ ] Roll out one validator at a time, stopping on chain-health regression, identity mismatch, graph disagreement, or resource exhaustion.
-- [ ] Submit the fixed inert proposal corpus: no-op, validator add/remove, trust-view change, key rotation, invalid parent, and rollback.
-- [ ] Complete planned restart of every sidecar, replay from genesis, one-validator outage, one-region isolation, delay/loss/reorder injection, equivocation, stale replay, and partition healing.
-- [ ] Require identical accepted/rejected outcomes and ordered ratification digests across correct validators.
-- [ ] Confirm consensus v2 continues finalizing blocks throughout every Cobalt-only fault.
+- [x] Deploy one canary and freeze resource/latency alert thresholds before adversarial tests.
+- [x] Roll out one validator at a time, stopping on chain-health regression, identity mismatch, graph disagreement, or resource exhaustion.
+- [x] Submit the fixed inert proposal corpus: no-op, validator add/remove, trust-view change, key rotation, invalid parent, and rollback. These are agreement payload hashes only; they execute no governance effect.
+- [x] Complete planned restart of every sidecar, replay from genesis, one-validator outage, one-region isolation, delay/loss/reorder injection, equivocation, stale replay, and partition healing.
+- [ ] Require identical accepted/rejected outcomes and ordered ratification digests across correct validators. **Failed:** validator 5 missed round 1004, advanced to 1005, and then correctly rejected the unseen older transcript as stale, leaving non-identical durable decision history.
+- [ ] Confirm consensus v2 continues finalizing blocks throughout every Cobalt-only fault. Consensus v2 advanced from height 910 to 913 with all six validator PIDs unchanged, including a block during the validator-5 Cobalt outage and another during the validators-3/4 Cobalt partition. The shorter equivocation, stale, duplicate, reorder, and replay calls are bracketed by this finality evidence but did not each contain a block.
 
 Evidence: per-validator receipts, proposal and fault markers, ratification digests, block-finality continuity, recovery timing, raw reports, canonical checksums, and static verifier.
+
+Live result, 2026-08-23:
+
+- Clean WAN agreement, six-sidecar restart/replay, validator-5 outage/heal, validators-3/4 partition/heal, reordered and lost delivery, durable equivocation rejection, stale replay, duplicate idempotency, and rounds 1006–1011 of the inert corpus were executed on the real fleet. Each completed transcript carried 49 signed messages.
+- With validator 5 absent, five contributions did not assemble even though the trust graph declares quorum 5: the full-knowledge stage requires every active validator. The system safely halted and completed only after validator 5 returned.
+- A second failure is more serious for activation: validator 5 missed round 1004, accepted round 1005, and then could not ingest round 1004 because the high-water mark correctly rejected it as stale. Five nodes retain rounds 1001–1011; validator 5 retains the same history except round 1004. Manual state repair was deliberately not used.
+- Consensus v2 independently advanced from height 910 to 913 through three real one-atom devnet transfers: one after the corpus, one during the validator-5 Cobalt outage, and one during the validators-3/4 Cobalt partition. All six validators converged on one tip/state root with zero validator restarts. Sidecars use about 1.9–2.0 MiB each at rest.
+- Static packet: `.tih/cobalt-live-evidence-20260823`; verifier result `cobalt-live-packet-ok`; canonical packet SHA-256 `2e07ada7ba4f174e5c2ad24422ac503838544aa359b461ca6cb95f146815177a`.
+- **Decision: do not activate Cobalt.** Keep the six sidecars observational and Foundation authority unchanged until one-validator progress and missed-round catch-up are redesigned and rerun.
 
 ### 4. Compare Cobalt with pinned RippleD under one scenario contract
 
