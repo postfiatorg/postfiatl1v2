@@ -4,9 +4,11 @@ use std::io;
 use std::net::TcpListener;
 use std::path::PathBuf;
 
+use postfiat_consensus_cobalt::RbcPropose;
 use postfiat_node::cobalt_shadow::{
-    build_registry_binding_manifest, run_cobalt_shadow_adversarial_drill, CobaltShadowIdentity,
-    CobaltShadowLimits, CobaltShadowRegistryBinding, CobaltShadowService,
+    assemble_protocol_transcript, build_registry_binding_manifest,
+    run_cobalt_shadow_adversarial_drill, CobaltShadowIdentity, CobaltShadowLimits,
+    CobaltShadowProtocolContribution, CobaltShadowRegistryBinding, CobaltShadowService,
     CobaltShadowValidatorBinding,
 };
 use postfiat_node::cobalt_shadow_runtime::{
@@ -91,6 +93,45 @@ fn run() -> io::Result<()> {
             )?;
             service.bind_registry_manifest(&binding)?;
             serde_json::to_value(service.status()).map_err(json_error)?
+        }
+        "propose" => {
+            let mut service = CobaltShadowService::open(required_path(&args, "--data-dir")?)?;
+            let binding: CobaltShadowRegistryBinding = read_bounded_json(
+                &required_path(&args, "--registry-binding")?,
+                4 * 1024 * 1024,
+            )?;
+            let round = required_flag(&args, "--round")?
+                .parse::<u64>()
+                .map_err(|_| invalid("--round must be an integer"))?;
+            let proposal = service.create_protocol_proposal(
+                &binding,
+                round,
+                required_flag(&args, "--payload-hash")?,
+            )?;
+            serde_json::to_value(proposal).map_err(json_error)?
+        }
+        "contribute" => {
+            let mut service = CobaltShadowService::open(required_path(&args, "--data-dir")?)?;
+            let binding: CobaltShadowRegistryBinding = read_bounded_json(
+                &required_path(&args, "--registry-binding")?,
+                4 * 1024 * 1024,
+            )?;
+            let proposal: RbcPropose =
+                read_bounded_json(&required_path(&args, "--proposal")?, 2 * 1024 * 1024)?;
+            let contribution = service.create_protocol_contribution(&binding, &proposal)?;
+            serde_json::to_value(contribution).map_err(json_error)?
+        }
+        "assemble" => {
+            let binding: CobaltShadowRegistryBinding = read_bounded_json(
+                &required_path(&args, "--registry-binding")?,
+                4 * 1024 * 1024,
+            )?;
+            let proposal: RbcPropose =
+                read_bounded_json(&required_path(&args, "--proposal")?, 2 * 1024 * 1024)?;
+            let contributions: Vec<CobaltShadowProtocolContribution> =
+                read_bounded_json(&required_path(&args, "--contributions")?, 16 * 1024 * 1024)?;
+            let transcript = assemble_protocol_transcript(&binding, proposal, contributions)?;
+            serde_json::to_value(transcript).map_err(json_error)?
         }
         "reserve" => {
             let mut service = CobaltShadowService::open(required_path(&args, "--data-dir")?)?;
@@ -200,6 +241,9 @@ fn usage_text() -> &'static str {
   postfiat-cobalt-shadow validator-binding --data-dir PATH --registry-root HASH --validator-key-file PATH
   postfiat-cobalt-shadow build-binding --registry-root HASH --validator-registry PATH --validator-bindings PATH --quorum N --activation-height N
   postfiat-cobalt-shadow bind --data-dir PATH --registry-binding PATH
+  postfiat-cobalt-shadow propose --data-dir PATH --registry-binding PATH --round N --payload-hash HASH
+  postfiat-cobalt-shadow contribute --data-dir PATH --registry-binding PATH --proposal PATH
+  postfiat-cobalt-shadow assemble --registry-binding PATH --proposal PATH --contributions PATH
   postfiat-cobalt-shadow reserve --data-dir PATH --round N --payload-hash HASH
   postfiat-cobalt-shadow run --data-dir PATH --listen IP:PORT [--allow-private-network]
   postfiat-cobalt-shadow probe --endpoint IP:PORT

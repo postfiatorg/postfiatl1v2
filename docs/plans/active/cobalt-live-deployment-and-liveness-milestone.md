@@ -78,7 +78,7 @@ Evidence: service configuration, signer-binding receipts, authenticated peer sna
 
 Implementation journal, 2026-08-22:
 
-- `cobalt_shadow.rs` now binds validator keys to registry and trust-graph roots, persists outbound and ratification locks, validates real ML-DSA-signed RBC/ABBA/MVBA/DABC transcripts, and records replay-safe decisions and per-stage timing.
+- `cobalt_shadow.rs` now binds validator keys to registry and trust-graph roots, persists outbound and ratification locks, validates real ML-DSA-signed RBC/ABBA/MVBA/DABC transcripts, and records replay-safe decisions and per-stage timing. Distributed `propose`, `contribute`, and `assemble` commands keep each Cobalt private key on its validator while producing the common transcript delivered over the private WAN.
 - `cobalt_shadow_runtime.rs` and `postfiat-cobalt-shadow` expose bounded long-running `run`, `probe`, `snapshot`, `replay`, `commit`, binding, and reservation surfaces. Mutating message paths fail closed on membership, domain, root, signature, replay, and frame bounds.
 - `python/postfiat_rpc/cobalt.py` exposes human-readable `fleet`, `graph`, `shadow-status`, `probe`, `snapshot`, and `replay` commands against the same structured runtime output. The sidecar unit has no validator lifecycle dependency and cannot write validator state.
 - Local verifier packet `.tih/cobalt-shadow-runtime-20260822-v2` passes 8 focused Rust tests, 11 Python tests, strict Clippy, three socket nodes, 25 signed stage messages, restart-equivalent replay, tamper and oversized-frame rejection, and real Python-to-Rust probe/snapshot/replay calls. Manifest SHA-256: `f2bc94bcc839943d7b70ee3f96c11808fb5e995b4295fda19908f5df986ec274`.
