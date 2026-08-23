@@ -900,6 +900,11 @@ impl CobaltShadowService {
                 .cloned()
                 .ok_or_else(|| invalid("ratification lock has no decision"));
         }
+        if transcript.round < self.state.protocol_high_watermark {
+            return Err(invalid(
+                "stale protocol transcript is below the high-water mark",
+            ));
+        }
         self.state
             .ratification_locks
             .insert(transcript.round, decision.ratification_id.clone());
@@ -966,12 +971,12 @@ impl CobaltShadowService {
         {
             return Err(invalid("protocol transcript domain or root mismatch"));
         }
-        if self.state.outbound_protocol_locks.get(&transcript.round)
-            != Some(&transcript.payload_hash)
-        {
-            return Err(invalid(
-                "protocol transcript has no matching durable outbound lock",
-            ));
+        if let Some(outbound_lock) = self.state.outbound_protocol_locks.get(&transcript.round) {
+            if outbound_lock != &transcript.payload_hash {
+                return Err(invalid(
+                    "protocol transcript conflicts with the durable outbound lock",
+                ));
+            }
         }
         let domain = self.cobalt_domain();
         validate_trust_graph(&domain, &transcript.trust_graph).map_err(consensus_error)?;
@@ -2746,7 +2751,7 @@ mod tests {
     #[test]
     fn live_registry_binding_requires_validator_signed_sidecar_keys() {
         let root = test_dir("live-registry-binding");
-        let mut fleet = (0..3)
+        let mut fleet = (0..4)
             .map(|index| {
                 CobaltShadowService::initialize(
                     root.join(format!("validator-{index}")),
@@ -2756,7 +2761,7 @@ mod tests {
                 .expect("initialize")
             })
             .collect::<Vec<_>>();
-        let key_records = (0..3)
+        let key_records = (0..4)
             .map(|index| {
                 crate::create_validator_key_record(format!("validator-{index}"))
                     .expect("validator key")
@@ -2808,7 +2813,7 @@ mod tests {
                 .bind_registry_manifest(&manifest)
                 .expect("bind live registry");
             assert_eq!(service.status().registry_root, registry_root);
-            assert_eq!(service.status().peer_count, 3);
+            assert_eq!(service.status().peer_count, 4);
         }
         let payload_hash = hash_hex("postfiat.cobalt.shadow.test.payload.v1", b"distributed");
         let proposal = fleet[0]
@@ -2822,6 +2827,12 @@ mod tests {
                     .expect("create contribution")
             })
             .collect::<Vec<_>>();
+        assert!(assemble_protocol_transcript(
+            &manifest,
+            proposal.clone(),
+            contributions[..2].to_vec(),
+        )
+        .is_err());
         let transcript = assemble_protocol_transcript(&manifest, proposal, contributions)
             .expect("assemble transcript");
         let decisions = fleet
@@ -2833,7 +2844,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         assert!(decisions.windows(2).all(|pair| pair[0] == pair[1]));
-        assert_eq!(decisions[0].signed_message_count, 25);
+        assert_eq!(decisions[0].signed_message_count, 33);
         let mut tampered = manifest;
         tampered.validator_bindings[0].cobalt_public_key_hex = "00".repeat(1952);
         assert!(fleet[0].bind_registry_manifest(&tampered).is_err());
@@ -2907,10 +2918,22 @@ mod tests {
             .signature_hex
             .replace_range(0..2, "00");
         assert!(fleet[0].commit_protocol_transcript(&tampered).is_err());
+        let valid_old = transcript.clone();
         let mut wrong_root = transcript;
         wrong_root.registry_root = "ff".repeat(48);
         assert!(fleet[0].commit_protocol_transcript(&wrong_root).is_err());
         assert_eq!(fleet[0].status().protocol_decision_count, 0);
+        let newer = build_signed_protocol_transcript(
+            &mut fleet,
+            10,
+            hash_hex("postfiat.cobalt.shadow.test.payload.v1", b"newer"),
+        )
+        .expect("build newer transcript");
+        fleet[0]
+            .commit_protocol_transcript(&newer)
+            .expect("commit newer transcript");
+        assert!(fleet[0].commit_protocol_transcript(&valid_old).is_err());
+        assert_eq!(fleet[0].status().protocol_decision_count, 1);
         fs::remove_dir_all(root).expect("cleanup");
     }
 }
