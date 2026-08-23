@@ -1,0 +1,92 @@
+{
+  "checks": {
+    "both_adapter_hashes_match_manifest": true,
+    "case_order_matches": true,
+    "cobalt_authority_disabled": true,
+    "cobalt_passed": true,
+    "cobalt_replay_equal": true,
+    "cobalt_zero_conflicts": true,
+    "rippled_native_fork_control_present": true,
+    "rippled_passed": true,
+    "rippled_zero_conflicts": true,
+    "scenario_case_count": true,
+    "scenario_manifest_hash": true,
+    "scenario_manifest_schema": true
+  },
+  "commands": {
+    "aggregation": "python3 benchmarks/cobalt-rippled-liveness/aggregate_packet.py --output benchmarks/cobalt-rippled-liveness/packet",
+    "cobalt": "target/release/postfiat-cobalt-benchmark --manifest benchmarks/cobalt-rippled-liveness/scenario-manifest.json --work-dir .tih/cobalt-rippled-liveness-work-v5 --output .tih/cobalt-rippled-benchmark-run-v5.json",
+    "rippled_matched": "POSTFIAT_MATCHED_SCENARIO_MANIFEST=... POSTFIAT_RIPPLED_BENCHMARK_OUTPUT=... .tih/rippled-build/build/Release/rippled --unittest=ripple.consensus.MatchedLivenessBenchmark (final output .tih/rippled-matched-benchmark-run-v8.json)",
+    "rippled_native_control": ".tih/rippled-build/build/Release/rippled --unittest=ripple.consensus.Consensus",
+    "scenario_generation": "python3 benchmarks/cobalt-rippled-liveness/generate_scenarios.py --output benchmarks/cobalt-rippled-liveness/scenario-manifest.json"
+  },
+  "failure_ledger": {
+    "final_cobalt_status": "passed",
+    "first_complete_cobalt_run": {
+      "artifact": ".tih/cobalt-rippled-benchmark-run-v3.json",
+      "case_count": 80,
+      "passed_case_count": 49,
+      "sha256": "07f66b84c9ff0bb29107ca5919445edad8f87b6f39f9dc515a1ed0cdd003c21e",
+      "status": "failed"
+    },
+    "remediated_preflight_items": [
+      "Cobalt serde_json macro expansion required a higher recursion limit.",
+      "Candidate IDs are lexicographically sorted before registry-root computation.",
+      "The 20-validator transcript requires the maximum bounded 1 MiB message limit.",
+      "The original RippleD Boost build used PCH and produced an unusable pch.o; PCH is disabled.",
+      "The initial deterministic-network patch had an invalid hunk and was regenerated from the pinned checkout.",
+      "RippleD 1.50 gRPC needed a downstream warning suppression with Clang 22, and the executable link needed Zig's UBSan runtime.",
+      "The first complete Cobalt run classified characterization cases and two topology-scaling fault counts incorrectly.",
+      "The first RippleD completion sampler treated the fixed run deadline as completion time and inverted the partition predicate; both were corrected before the final run."
+    ],
+    "summary": "Build and preflight failures are retained; final artifacts identify the remediation."
+  },
+  "inputs": {
+    "cobalt": {
+      "path": ".tih/cobalt-rippled-benchmark-run-v5.json",
+      "sha256": "7d545b34dda703790a34f3dbb086d0e15620a2277f5fdcda3f1d42696d232a9a"
+    },
+    "cobalt_failed_run": {
+      "path": ".tih/cobalt-rippled-benchmark-run-v3.json",
+      "sha256": "07f66b84c9ff0bb29107ca5919445edad8f87b6f39f9dc515a1ed0cdd003c21e"
+    },
+    "manifest": {
+      "path": "benchmarks/cobalt-rippled-liveness/scenario-manifest.json",
+      "sha256": "215886e0101229e820e02d18fac0f43cfa92b2ac88c3ca2e7f865fdef763238a"
+    },
+    "native_log": {
+      "path": ".tih/rippled-native-fork.log",
+      "sha256": "c67d8507e8480c1621d66294bf369853a83f91b17a4bc04e0621f05d2e39c435"
+    },
+    "rippled": {
+      "path": ".tih/rippled-matched-benchmark-run-v8.json",
+      "sha256": "0214c1ef89024a0ed659b7df0ec6c85b46e8a89e9d0fd70c201ff94a19edec94"
+    }
+  },
+  "operational_health": {
+    "block_consensus_control_changed": false,
+    "live_authority_changed": false,
+    "packet_checksums": "541727a0e89908c469e4d88b360750367a6701c4d03f16bbf65c6c0678a44937",
+    "validator_service_touched": false
+  },
+  "packet_files": {
+    "cobalt-report.json": "7d545b34dda703790a34f3dbb086d0e15620a2277f5fdcda3f1d42696d232a9a",
+    "comparison.md": "3e880f444f23d5c4584b3e2a5eacb1df68eba152293fc2097c7f1b3f40a7b0aa",
+    "kpi-report.json": "74f3359e19549545c67341a93c72b37cf0ee32cc1037cf412b48f521c1013711",
+    "rippled-native-consensus.log": "c67d8507e8480c1621d66294bf369853a83f91b17a4bc04e0621f05d2e39c435",
+    "rippled-report.json": "0214c1ef89024a0ed659b7df0ec6c85b46e8a89e9d0fd70c201ff94a19edec94",
+    "scenario-manifest.json": "215886e0101229e820e02d18fac0f43cfa92b2ac88c3ca2e7f865fdef763238a"
+  },
+  "result": "passed",
+  "schema": "postfiat-cobalt-rippled-liveness-verifier-v1",
+  "source_pins": {
+    "agti_downstream_control": "report-derived downstream overlap scenarios; not upstream XRPLF",
+    "agti_report_commit": "81f6a7e8d6e0da8c2ab334209c133e85e617e6e2",
+    "agti_report_path": "_posts/2026-05-26-xrpl-rippled-open-p0-freeze-audit.md",
+    "agti_report_section": "The Inherited Trust Model / UNL overlap implosion",
+    "postfiatl1v2_section4_commit": "38ddb4f667669ae191f038102566ea16e635b649",
+    "rippled_commit": "46b241ace8b30d9c9775d60ffba7d24b21903896",
+    "rippled_native_control": "src/test/csf and Consensus_test::testFork",
+    "rippled_version": "3.1.3"
+  }
+}

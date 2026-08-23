@@ -1,0 +1,120 @@
+diff --git a/src/test/csf/BasicNetwork.h b/src/test/csf/BasicNetwork.h
+index a70ee6a36..356842d80 100644
+--- a/src/test/csf/BasicNetwork.h
++++ b/src/test/csf/BasicNetwork.h
+@@ -23,6 +23,10 @@
+ #include <test/csf/Digraph.h>
+ #include <test/csf/Scheduler.h>
+ 
++#include <cstdint>
++#include <memory>
++#include <type_traits>
++
+ namespace ripple {
+ namespace test {
+ namespace csf {
+@@ -105,6 +109,30 @@ class BasicNetwork
+     Scheduler& scheduler;
+     Digraph<Peer, link_type> links_;
+ 
++    struct FaultPolicy
++    {
++        std::uint64_t lossEvery = 0;
++        std::uint64_t duplicateEvery = 0;
++        std::uint64_t reorderEvery = 0;
++        duration reorderExtra{};
++    };
++
++    FaultPolicy faultPolicy_;
++    std::uint64_t messageSequence_ = 0;
++
++public:
++    struct FaultStats
++    {
++        std::uint64_t sent = 0;
++        std::uint64_t delivered = 0;
++        std::uint64_t dropped = 0;
++        std::uint64_t duplicated = 0;
++        std::uint64_t reordered = 0;
++    };
++
++private:
++    FaultStats faultStats_;
++
+ public:
+     BasicNetwork(BasicNetwork const&) = delete;
+     BasicNetwork&
+@@ -112,6 +140,23 @@ public:
+ 
+     BasicNetwork(Scheduler& s);
+ 
++    void
++    configureFaults(
++        std::uint64_t lossEvery,
++        std::uint64_t duplicateEvery,
++        std::uint64_t reorderEvery,
++        duration reorderExtra)
++    {
++        faultPolicy_ = FaultPolicy{
++            lossEvery, duplicateEvery, reorderEvery, reorderExtra};
++    }
++
++    FaultStats const&
++    faultStats() const
++    {
++        return faultStats_;
++    }
++
+     /** Connect two peers.
+ 
+         The link is directed, with `from` establishing
+@@ -239,16 +284,40 @@ BasicNetwork<Peer>::send(Peer const& from, Peer const& to, Function&& f)
+     auto link = links_.edge(from, to);
+     if (!link)
+         return;
++    auto const sequence = ++messageSequence_;
++    ++faultStats_.sent;
++    if (faultPolicy_.lossEvery > 0 &&
++        sequence % faultPolicy_.lossEvery == 0)
++    {
++        ++faultStats_.dropped;
++        return;
++    }
+     time_point const sent = scheduler.now();
+-    scheduler.in(
+-        link->delay, [from, to, sent, f = std::forward<Function>(f), this] {
+-            // only process if still connected and connection was
+-            // not broken since the message was sent
+-            if (auto l = links_.edge(from, to); l && l->established <= sent)
+-            {
+-                f();
+-            }
+-        });
++    auto delay = link->delay;
++    if (faultPolicy_.reorderEvery > 0 &&
++        sequence % faultPolicy_.reorderEvery == 0)
++    {
++        delay += faultPolicy_.reorderExtra;
++        ++faultStats_.reordered;
++    }
++    auto function =
++        std::make_shared<std::decay_t<Function>>(std::forward<Function>(f));
++    auto deliver = [from, to, sent, function, this] {
++        // only process if still connected and connection was
++        // not broken since the message was sent
++        if (auto l = links_.edge(from, to); l && l->established <= sent)
++        {
++            (*function)();
++            ++faultStats_.delivered;
++        }
++    };
++    scheduler.in(delay, deliver);
++    if (faultPolicy_.duplicateEvery > 0 &&
++        sequence % faultPolicy_.duplicateEvery == 0)
++    {
++        ++faultStats_.duplicated;
++        scheduler.in(delay + std::chrono::nanoseconds{1}, deliver);
++    }
+ }
+ 
+ }  // namespace csf

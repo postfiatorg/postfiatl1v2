@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -eu
+
+zig_bin=${POSTFIAT_ZIG:-}
+if [ -z "$zig_bin" ]; then
+    zig_bin=$(command -v zig || true)
+fi
+if [ -z "$zig_bin" ] || [ ! -x "$zig_bin" ]; then
+    echo "set POSTFIAT_ZIG to an executable pinned Zig binary" >&2
+    exit 2
+fi
+
+exec "$zig_bin" ranlib "$@"

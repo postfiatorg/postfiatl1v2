@@ -15,7 +15,6 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         --target=x86_64-unknown-linux-gnu|--target=x86_64-pc-linux)
             # Normalize vendor-qualified triples emitted by Rust and Boost.
-            # Zig's equivalent spelling preserves the x86_64 GNU ABI target.
             args+=(--target=x86_64-linux-gnu)
             shift
             ;;
@@ -39,4 +38,4 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
-exec "$zig_bin" cc "${args[@]}"
+exec "$zig_bin" c++ "${args[@]}"

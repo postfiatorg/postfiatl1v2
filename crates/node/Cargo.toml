@@ -22,6 +22,10 @@ path = "src/bin/asset_orchard_local_service.rs"
 name = "postfiat-cobalt-shadow"
 path = "src/bin/postfiat_cobalt_shadow.rs"
 
+[[bin]]
+name = "postfiat-cobalt-benchmark"
+path = "src/bin/postfiat_cobalt_benchmark.rs"
+
 [dependencies]
 base64 = { workspace = true }
 flate2 = { workspace = true }
