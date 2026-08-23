@@ -5,6 +5,7 @@ const shortHash = (value) => {
   const text = String(value || "unavailable");
   return text.length <= 28 ? text : `${text.slice(0, 16)}…${text.slice(-8)}`;
 };
+const yesNo = (value) => value ? "Yes" : "No";
 const setText = (id, value) => { byId(id).textContent = value ?? "—"; };
 const setChip = (id, label, state) => {
   const node = byId(id);
@@ -19,20 +20,17 @@ const setRail = (name, label, state) => {
 
 function renderTrust(trust) {
   setChip("trust-status", trust.ok ? "Verified" : "Unavailable", trust.ok ? "good" : "bad");
-  setRail("trust", trust.ok ? "Verified" : "Failed", trust.ok ? "good" : "hold");
   setText("trust-mode", String(trust.mode).replaceAll("_", " "));
   setText("trust-views", trust.view_count);
   setText("trust-height", trust.activation_height);
   setText("trust-root", shortHash(trust.root));
   setText("trust-source", trust.source);
-  const graph = String(trust.active_graph || "—").replace(/^G/, "");
-  setText("graph-number", graph);
+  setText("graph-number", String(trust.active_graph || "—").replace(/^G/, ""));
 }
 
 function renderProposals(proposals) {
   const total = (proposals.transition_count || 0) + (proposals.registry_update_count || 0) + (proposals.amendment_count || 0);
-  setChip("proposals-status", `${total} recorded`, total ? "good" : "hold");
-  setRail("proposals", total ? "Ordered" : "None recorded", total ? "good" : "hold");
+  setChip("proposals-status", `${total} recorded`, total ? "good" : "fact");
   setText("authority-label", proposals.authority_label);
   setText("transition-count", proposals.transition_count || 0);
   setText("registry-count", proposals.registry_update_count || 0);
@@ -44,7 +42,7 @@ function renderProposals(proposals) {
   if (!proposals.items || proposals.items.length === 0) {
     const item = document.createElement("li");
     item.className = "empty";
-    item.textContent = "No governance records are present in this node state. The interface does not invent a proposal or expose a creation action.";
+    item.textContent = "No governance records are present. This interface does not invent proposals or expose creation actions.";
     list.append(item);
     return;
   }
@@ -62,8 +60,9 @@ function renderProposals(proposals) {
 }
 
 function renderShadow(shadow) {
-  setChip("shadow-status", shadow.ok ? "Converged" : "Not converged", shadow.ok ? "good" : "bad");
-  setRail("shadow", shadow.ok ? "Converged" : "Failed", shadow.ok ? "good" : "hold");
+  const state = shadow.ok ? "good" : "bad";
+  setChip("shadow-status", shadow.ok ? "Healthy" : "Not healthy", state);
+  setRail("shadow", shadow.ok ? "Healthy" : "Failed", state);
   setText("shadow-digest", shortHash(shadow.digest));
   setText("shadow-source", shadow.source);
   const grid = byId("node-grid");
@@ -100,20 +99,24 @@ function renderShadow(shadow) {
   }
 }
 
-function renderActivation(activation) {
-  const state = activation.ready ? "good" : "hold";
-  setChip("activation-status", activation.status, state);
-  setRail("activation", activation.status, state);
-  setText("gate-decision", activation.status);
-  setText("gate-copy", activation.ready
-    ? "Every required protocol record is present. Scope remains validator trust evolution only."
-    : "Observation may continue, but Cobalt authority must not activate until every gate is evidenced in node state.");
-  const readout = document.querySelector(".gate-readout");
-  readout.className = `gate-readout${activation.ready ? " is-good" : ""}`;
+function renderReadiness(readiness, scenario) {
+  const state = readiness.ready ? "good" : "hold";
+  setChip("readiness-status", readiness.status, state);
+  setRail("readiness", readiness.status, state);
+  setText("readiness-decision", readiness.status);
+  setText("readiness-copy", readiness.ready
+    ? "Evidence supports a separately authorized controlled-testnet validator-trust cutover. No activation has occurred."
+    : "Evidence is incomplete or failed. Keep Foundation authority and remediate the failed checks.");
+  const readout = byId("readiness-readout");
+  readout.className = `gate-readout${readiness.ready ? " is-good" : ""}`;
 
-  const checks = byId("activation-checks");
+  setText("scenario-cases", scenario.case_count ?? "—");
+  setText("scenario-passes", scenario.case_count == null ? "—" : `${scenario.cobalt_passed}/${scenario.rippled_passed}`);
+  setText("scenario-conflicts", scenario.cobalt_conflicting_decisions == null ? "—" : `${scenario.cobalt_conflicting_decisions}/${scenario.rippled_conflicting_decisions}`);
+
+  const checks = byId("readiness-checks");
   checks.replaceChildren();
-  (activation.checks || []).forEach((check) => {
+  (readiness.checks || []).forEach((check) => {
     const item = document.createElement("li");
     if (check.ok) item.className = "is-good";
     const mark = document.createElement("b");
@@ -125,8 +128,21 @@ function renderActivation(activation) {
     item.append(mark, label, source);
     checks.append(item);
   });
-  setText("witness-count", `${activation.witness_scenarios || 0} scenarios`);
-  setText("witness-hash", shortHash(activation.witness_hash));
+  setText("benchmark-root", shortHash(readiness.packets?.benchmark?.manifest_sha256));
+  setText("handoff-root", shortHash(readiness.packets?.handoff?.manifest_sha256));
+}
+
+function renderAuthority(authority) {
+  const label = authority.known ? authority.label : "Unavailable";
+  setChip("actual-authority-status", label, authority.known ? "fact" : "bad");
+  setRail("authority", label, authority.known ? "fact" : "bad");
+  setText("actual-authority-label", label);
+  setText("foundation-active", authority.known ? yesNo(authority.foundation_active) : "Unknown");
+  setText("cobalt-active", authority.known ? yesNo(authority.cobalt_active) : "Unknown");
+  setText("block-finality", authority.block_finality || "Unknown");
+  setText("cobalt-block-control", yesNo(authority.controls_block_consensus));
+  setText("actual-transition-count", authority.transition_count);
+  setText("actual-authority-source", authority.source);
 }
 
 function renderErrors(errors) {
@@ -152,8 +168,9 @@ async function refresh(force = false) {
     setText("collected-at", new Date(snapshot.collected_at).toLocaleString());
     renderTrust(snapshot.trust);
     renderProposals(snapshot.proposals);
-    renderShadow(snapshot.shadow);
-    renderActivation(snapshot.activation);
+    renderShadow(snapshot.shadow_health);
+    renderReadiness(snapshot.rehearsal_readiness, snapshot.scenario);
+    renderAuthority(snapshot.actual_authority);
     renderErrors(snapshot.errors);
   } catch (error) {
     renderErrors([String(error)]);

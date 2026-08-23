@@ -3,106 +3,135 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#10120f">
-    <title>Cobalt Governance Observatory</title>
+    <meta name="color-scheme" content="dark">
+    <title>Cobalt Governance Control Room</title>
     <link rel="stylesheet" href="/styles.css">
     <script src="/app.js" defer></script>
   </head>
   <body>
-    <a class="skip-link" href="#observatory">Skip to governance state</a>
+    <a class="skip-link" href="#main">Skip to governance evidence</a>
     <div class="scope-banner" role="status">
       <span class="scope-banner__signal" aria-hidden="true"></span>
-      Advisory observatory · no mutation routes · consensus v2 finality unchanged
+      Observe only · no mutation routes · Consensus v2 remains block finality
     </div>
 
     <header class="masthead">
       <div>
-        <p class="eyebrow">PostFiat Layer 1 / Control Room 04</p>
-        <h1>Cobalt<br><span>Governance Observatory</span></h1>
+        <p class="eyebrow">Post Fiat controlled testnet / validator-trust governance</p>
+        <h1>Cobalt <span>control room</span></h1>
       </div>
       <div class="masthead__meta">
-        <p>Last real-data scan</p>
-        <time id="collected-at">Loading…</time>
+        <p>Last authenticated scan</p>
+        <time id="collected-at">Waiting for evidence</time>
         <button id="refresh" type="button">Refresh surfaces</button>
       </div>
     </header>
 
-    <main id="observatory">
-      <section class="status-rail" aria-label="Governance activation sequence">
-        <div class="rail-node" data-rail="trust"><span>01</span><strong>Trust</strong><em>Checking</em></div>
+    <main id="main">
+      <section class="status-rail" aria-label="Three distinct Cobalt governance states">
+        <div class="rail-node" data-rail="shadow"><span>01</span><strong>Shadow health</strong><em>Checking</em></div>
         <div class="rail-link" aria-hidden="true"></div>
-        <div class="rail-node" data-rail="proposals"><span>02</span><strong>Order</strong><em>Checking</em></div>
+        <div class="rail-node" data-rail="readiness"><span>02</span><strong>Cutover readiness</strong><em>Checking</em></div>
         <div class="rail-link" aria-hidden="true"></div>
-        <div class="rail-node" data-rail="shadow"><span>03</span><strong>Converge</strong><em>Checking</em></div>
-        <div class="rail-link" aria-hidden="true"></div>
-        <div class="rail-node" data-rail="activation"><span>04</span><strong>Activate</strong><em>Checking</em></div>
+        <div class="rail-node" data-rail="authority"><span>03</span><strong>Actual authority</strong><em>Checking</em></div>
       </section>
 
-      <section class="instrument-grid" aria-label="Cobalt governance surfaces">
-        <article class="instrument instrument--trust" aria-labelledby="trust-title">
+      <section class="state-legend" aria-label="How to read this interface">
+        <p><strong>Shadow health</strong> is current sidecar operation.</p>
+        <p><strong>Cutover readiness</strong> is authenticated rehearsal evidence.</p>
+        <p><strong>Actual authority</strong> is the validator-trust mode recorded by the node.</p>
+      </section>
+
+      <section class="instrument-grid" aria-label="Cobalt governance evidence">
+        <article class="instrument" aria-labelledby="trust-title">
           <header class="instrument__header">
-            <div><span class="index">01</span><h2 id="trust-title">Trust state</h2></div>
+            <div><span class="index">A</span><h2 id="trust-title">Trust graph</h2></div>
             <span class="state-chip" id="trust-status">Loading</span>
           </header>
           <div class="trust-figure" aria-hidden="true">
-            <span class="orbit orbit--one"></span><span class="orbit orbit--two"></span>
-            <span class="trust-core">G<span id="graph-number">—</span></span>
+            <div class="orbit"></div><div class="orbit orbit--two"></div>
+            <div class="trust-core" id="graph-number">—</div>
           </div>
           <dl class="metrics metrics--three">
             <div><dt>Mode</dt><dd id="trust-mode">—</dd></div>
             <div><dt>Views</dt><dd id="trust-views">—</dd></div>
-            <div><dt>Height</dt><dd id="trust-height">—</dd></div>
+            <div><dt>Activation height</dt><dd id="trust-height">—</dd></div>
           </dl>
-          <div class="hash-line"><span>Root</span><code id="trust-root">—</code></div>
-          <p class="provenance" id="trust-source">Awaiting Python CLI</p>
+          <div class="hash-line"><span>Graph root</span><code id="trust-root">—</code></div>
+          <p class="provenance" id="trust-source">—</p>
         </article>
 
-        <article class="instrument instrument--proposals" aria-labelledby="proposals-title">
+        <article class="instrument" aria-labelledby="proposals-title">
           <header class="instrument__header">
-            <div><span class="index">02</span><h2 id="proposals-title">Ordered proposals</h2></div>
+            <div><span class="index">B</span><h2 id="proposals-title">Governance record</h2></div>
             <span class="state-chip" id="proposals-status">Loading</span>
           </header>
           <div class="authority-line">
-            <span>Current authority</span>
+            <span>Node-recorded validator-trust authority</span>
             <strong id="authority-label">—</strong>
           </div>
           <dl class="metrics metrics--three">
             <div><dt>Transitions</dt><dd id="transition-count">—</dd></div>
-            <div><dt>Registry</dt><dd id="registry-count">—</dd></div>
+            <div><dt>Registry updates</dt><dd id="registry-count">—</dd></div>
             <div><dt>Amendments</dt><dd id="amendment-count">—</dd></div>
           </dl>
-          <ol class="proposal-list" id="proposal-list" aria-live="polite"></ol>
-          <p class="provenance" id="proposal-source">Awaiting node governance state</p>
+          <ul class="proposal-list" id="proposal-list"></ul>
+          <p class="provenance" id="proposal-source">—</p>
         </article>
 
         <article class="instrument instrument--shadow" aria-labelledby="shadow-title">
           <header class="instrument__header">
-            <div><span class="index">03</span><h2 id="shadow-title">Shadow convergence</h2></div>
+            <div><span class="index">C</span><h2 id="shadow-title">Shadow health</h2></div>
             <span class="state-chip" id="shadow-status">Loading</span>
           </header>
-          <div class="digest-band">
-            <span>Shared governance digest</span>
-            <code id="shadow-digest">—</code>
-          </div>
-          <div class="node-grid" id="node-grid" aria-live="polite"></div>
-          <p class="provenance" id="shadow-source">Awaiting signed node status</p>
+          <div class="digest-band"><span>Converged governance digest</span><code id="shadow-digest">—</code></div>
+          <div class="node-grid" id="node-grid"></div>
+          <p class="provenance" id="shadow-source">—</p>
         </article>
 
-        <article class="instrument instrument--activation" aria-labelledby="activation-title">
+        <article class="instrument instrument--readiness" aria-labelledby="readiness-title">
           <header class="instrument__header">
-            <div><span class="index">04</span><h2 id="activation-title">Activation readiness</h2></div>
-            <span class="state-chip" id="activation-status">Loading</span>
+            <div><span class="index">D</span><h2 id="readiness-title">Cutover readiness</h2></div>
+            <span class="state-chip" id="readiness-status">Loading</span>
           </header>
-          <div class="gate-readout">
-            <span>Decision</span>
-            <strong id="gate-decision">—</strong>
-            <p id="gate-copy">Evaluating protocol evidence.</p>
+          <div class="gate-readout" id="readiness-readout">
+            <span>Evidence recommendation</span>
+            <strong id="readiness-decision">—</strong>
+            <p id="readiness-copy">Authenticating benchmark and disposable handoff packets.</p>
           </div>
-          <ul class="check-list" id="activation-checks"></ul>
+          <dl class="metrics metrics--three">
+            <div><dt>Matched cases</dt><dd id="scenario-cases">—</dd></div>
+            <div><dt>Cobalt / RippleD</dt><dd id="scenario-passes">—</dd></div>
+            <div><dt>Conflicts</dt><dd id="scenario-conflicts">—</dd></div>
+          </dl>
+          <ul class="check-list" id="readiness-checks"></ul>
           <div class="witness-line">
-            <span>Safety witness</span><strong id="witness-count">— scenarios</strong>
-            <code id="witness-hash">—</code>
+            <span>Benchmark packet root</span><code id="benchmark-root">—</code>
           </div>
+          <div class="witness-line">
+            <span>Handoff packet root</span><code id="handoff-root">—</code>
+          </div>
+        </article>
+
+        <article class="instrument instrument--authority" aria-labelledby="actual-authority-title">
+          <header class="instrument__header">
+            <div><span class="index">E</span><h2 id="actual-authority-title">Actual authority</h2></div>
+            <span class="state-chip" id="actual-authority-status">Loading</span>
+          </header>
+          <div class="authority-readout">
+            <span>Validator-trust authority now</span>
+            <strong id="actual-authority-label">—</strong>
+            <p>This is observed node state, not a recommendation and not an activation control.</p>
+          </div>
+          <dl class="authority-matrix">
+            <div><dt>Foundation active</dt><dd id="foundation-active">—</dd></div>
+            <div><dt>Cobalt active</dt><dd id="cobalt-active">—</dd></div>
+            <div><dt>Block finality</dt><dd id="block-finality">—</dd></div>
+            <div><dt>Cobalt controls blocks</dt><dd id="cobalt-block-control">—</dd></div>
+            <div><dt>Recorded transitions</dt><dd id="actual-transition-count">—</dd></div>
+          </dl>
+          <p class="authority-warning">A GO recommendation permits only a later, separately authorized controlled-testnet cutover task. This interface cannot perform it.</p>
+          <p class="provenance" id="actual-authority-source">—</p>
         </article>
       </section>
 

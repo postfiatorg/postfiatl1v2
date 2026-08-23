@@ -32,7 +32,7 @@ from urllib.parse import parse_qs, urlparse
 from postfiat_rpc import cobalt
 
 
-UI_SCHEMA = "postfiat-cobalt-governance-ui-snapshot-v1"
+UI_SCHEMA = "postfiat-cobalt-governance-ui-snapshot-v2"
 MAX_GOVERNANCE_BYTES = 16 * 1024 * 1024
 ASSET_DIR = Path(__file__).with_name("cobalt_ui_assets")
 STATIC_ROUTES = {
@@ -144,6 +144,11 @@ class CollectorOptions:
     root: Path
     node_data_dir: Path
     shadow_root: Path
+    benchmark_packet: Path
+    handoff_packet: Path
+    benchmark_manifest_sha256: str
+    handoff_manifest_sha256: str
+    handoff_verifier_sha256: str
     cargo: str
     target: str | None
     timeout_seconds: float
@@ -241,7 +246,17 @@ class SnapshotCollector:
     def collect(self) -> dict[str, Any]:
         errors: list[str] = []
         trust: dict[str, Any] = {"ok": False, "report": {}, "source": {}}
-        witness: dict[str, Any] = {"ok": False, "report": {}, "source": {}}
+        readiness: dict[str, Any] = {
+            "ok": False,
+            "status": "HOLD",
+            "checks": [],
+            "scenario": {},
+            "packets": {},
+            "decision_scope": (
+                "separately authorized controlled-testnet validator-trust cutover"
+            ),
+            "recommendation": "HOLD_AND_REMEDIATE_FAILED_EVIDENCE",
+        }
         governance: dict[str, Any] = {"items": [], "source": "unavailable"}
         shadow_nodes: list[dict[str, Any]] = []
 
@@ -253,12 +268,15 @@ class SnapshotCollector:
         except (OSError, ValueError, cobalt.CobaltCliError) as error:
             errors.append(f"trust graph: {error}")
         try:
-            witness = cobalt.result_envelope(
-                cobalt.EXAMPLES["transition-witness"],
-                self.example_runner(cobalt.EXAMPLES["transition-witness"]),
+            readiness = cobalt.readiness_result(
+                self.options.benchmark_packet,
+                self.options.handoff_packet,
+                benchmark_manifest_sha256=self.options.benchmark_manifest_sha256,
+                handoff_manifest_sha256=self.options.handoff_manifest_sha256,
+                handoff_verifier_sha256=self.options.handoff_verifier_sha256,
             )
         except (OSError, ValueError, cobalt.CobaltCliError) as error:
-            errors.append(f"transition witness: {error}")
+            errors.append(f"readiness evidence: {error}")
         try:
             governance_path = self.options.node_data_dir / "governance.json"
             before = read_bounded_bytes(governance_path)
@@ -304,46 +322,33 @@ class SnapshotCollector:
             and node.get("controls_block_consensus") is False
             for node in shadow_nodes
         )
-        transition = governance.get("latest_transition")
-        handoff_recorded = isinstance(transition, dict)
-        cobalt_authority_active = governance.get("authority_mode") == 1 and handoff_recorded
-        checks = [
-            {
-                "key": "trust_graph",
-                "label": "Trust graph verifies",
-                "ok": trust.get("ok") is True,
-                "source": "Python CLI · current_trust_graph_root",
-            },
-            {
-                "key": "transition_witness",
-                "label": "Transition witness rejects unsafe changes",
-                "ok": witness.get("ok") is True,
-                "source": "Python CLI · cobalt_safety_witness",
-            },
-            {
-                "key": "shadow_convergence",
-                "label": "Persisted shadow fleet converged",
-                "ok": shadow_healthy,
-                "source": f"Rust node · {len(shadow_nodes)} signed status records",
-            },
-            {
-                "key": "old_registry_handoff",
-                "label": "Consensus-ordered old-registry handoff recorded",
-                "ok": handoff_recorded,
-                "source": "Node state · governance.json",
-            },
-            {
-                "key": "cobalt_scope",
-                "label": "Cobalt authority active for validator trust only",
-                "ok": cobalt_authority_active,
-                "source": "Node state · authority_mode + transition history",
-            },
-        ]
-        activation_ready = all(check["ok"] for check in checks)
         trust_report = trust.get("report", {}) if isinstance(trust.get("report"), dict) else {}
-        witness_report = (
-            witness.get("report", {}) if isinstance(witness.get("report"), dict) else {}
-        )
+        authority_mode = governance.get("authority_mode")
+        authority_known = authority_mode in {0, 1}
+        cobalt_authority_active = authority_mode == 1
+        actual_authority = {
+            "known": authority_known,
+            "mode": (
+                "cobalt-validator-trust"
+                if cobalt_authority_active
+                else "foundation-validator-trust"
+                if authority_mode == 0
+                else "unavailable"
+            ),
+            "label": (
+                "Cobalt validator-trust lane"
+                if cobalt_authority_active
+                else "Foundation registry"
+                if authority_mode == 0
+                else "Unavailable"
+            ),
+            "foundation_active": authority_mode == 0,
+            "cobalt_active": cobalt_authority_active,
+            "block_finality": "consensus-v2",
+            "controls_block_consensus": False,
+            "transition_count": governance.get("transition_count", 0),
+            "source": governance.get("source", "unavailable"),
+        }
         return {
             "schema": UI_SCHEMA,
             "collected_at": utc_timestamp(),
@@ -360,7 +365,7 @@ class SnapshotCollector:
                 "source": "PYTHONPATH=python python3 -m postfiat_rpc.cobalt trust-graph --json",
             },
             "proposals": governance,
-            "shadow": {
+            "shadow_health": {
                 "ok": shadow_healthy,
                 "converged": shadow_converged,
                 "node_count": len(shadow_nodes),
@@ -368,14 +373,17 @@ class SnapshotCollector:
                 "nodes": shadow_nodes,
                 "source": str(self.options.shadow_root.resolve()),
             },
-            "activation": {
-                "status": "ACTIVE" if activation_ready else "HOLD",
-                "ready": activation_ready,
-                "checks": checks,
-                "witness_scenarios": len(witness_report.get("scenarios", [])),
-                "witness_hash": witness_report.get("scenario_hash"),
-                "scope": "validator trust evolution only",
+            "rehearsal_readiness": {
+                "status": readiness.get("status", "HOLD"),
+                "ready": readiness.get("ok") is True,
+                "checks": readiness.get("checks", []),
+                "scope": readiness.get("decision_scope"),
+                "recommendation": readiness.get("recommendation"),
+                "activation_performed": False,
+                "packets": readiness.get("packets", {}),
             },
+            "scenario": readiness.get("scenario", {}),
+            "actual_authority": actual_authority,
             "errors": errors,
         }
 
@@ -462,6 +470,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--node-data-dir", required=True, type=Path)
     parser.add_argument("--shadow-root", required=True, type=Path)
+    parser.add_argument(
+        "--benchmark-packet",
+        type=Path,
+        default=Path("benchmarks/cobalt-rippled-liveness/packet"),
+    )
+    parser.add_argument(
+        "--benchmark-sha256", default=cobalt.DEFAULT_BENCHMARK_PACKET_SHA256
+    )
+    parser.add_argument(
+        "--handoff-packet",
+        type=Path,
+        default=Path("benchmarks/cobalt-handoff-rehearsal/packet"),
+    )
+    parser.add_argument("--handoff-sha256", default=cobalt.DEFAULT_HANDOFF_PACKET_SHA256)
+    parser.add_argument(
+        "--handoff-verifier-sha256",
+        default=cobalt.DEFAULT_HANDOFF_VERIFIER_SHA256,
+    )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--cargo")
@@ -482,6 +508,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         root=root,
         node_data_dir=args.node_data_dir,
         shadow_root=args.shadow_root,
+        benchmark_packet=(
+            args.benchmark_packet
+            if args.benchmark_packet.is_absolute()
+            else root / args.benchmark_packet
+        ),
+        handoff_packet=(
+            args.handoff_packet
+            if args.handoff_packet.is_absolute()
+            else root / args.handoff_packet
+        ),
+        benchmark_manifest_sha256=args.benchmark_sha256,
+        handoff_manifest_sha256=args.handoff_sha256,
+        handoff_verifier_sha256=args.handoff_verifier_sha256,
         cargo=cobalt.resolve_cargo(args.cargo),
         target=args.target,
         timeout_seconds=args.timeout,

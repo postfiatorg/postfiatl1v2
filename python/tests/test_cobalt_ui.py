@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import http.client
 import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -47,6 +49,7 @@ def shadow_report(path: Path) -> dict:
 
 class CobaltUiTests(unittest.TestCase):
     def make_collector(self, root: Path) -> cobalt_ui.SnapshotCollector:
+        repository = cobalt.repository_root(Path(__file__))
         node_dir = root / "node"
         shadow_root = root / "shadow"
         node_dir.mkdir()
@@ -72,6 +75,13 @@ class CobaltUiTests(unittest.TestCase):
                 root=root,
                 node_data_dir=node_dir,
                 shadow_root=shadow_root,
+                benchmark_packet=repository
+                / "benchmarks/cobalt-rippled-liveness/packet",
+                handoff_packet=repository
+                / "benchmarks/cobalt-handoff-rehearsal/packet",
+                benchmark_manifest_sha256=cobalt.DEFAULT_BENCHMARK_PACKET_SHA256,
+                handoff_manifest_sha256=cobalt.DEFAULT_HANDOFF_PACKET_SHA256,
+                handoff_verifier_sha256=cobalt.DEFAULT_HANDOFF_VERIFIER_SHA256,
                 cargo="cargo",
                 target=None,
                 timeout_seconds=1,
@@ -86,19 +96,24 @@ class CobaltUiTests(unittest.TestCase):
             },
         )
 
-    def test_snapshot_uses_real_surface_shapes_and_holds_without_handoff(self) -> None:
+    def test_snapshot_separates_ready_evidence_from_foundation_authority(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             snapshot = self.make_collector(Path(directory)).collect()
 
         self.assertTrue(snapshot["read_only"])
         self.assertTrue(snapshot["trust"]["ok"])
         self.assertEqual(snapshot["proposals"]["authority_label"], "Foundation registry")
-        self.assertEqual(snapshot["shadow"]["node_count"], 4)
-        self.assertTrue(snapshot["shadow"]["converged"])
-        self.assertEqual(snapshot["activation"]["status"], "HOLD")
-        self.assertFalse(snapshot["activation"]["ready"])
+        self.assertEqual(snapshot["shadow_health"]["node_count"], 4)
+        self.assertTrue(snapshot["shadow_health"]["converged"])
+        self.assertEqual(snapshot["rehearsal_readiness"]["status"], "GO")
+        self.assertTrue(snapshot["rehearsal_readiness"]["ready"])
+        self.assertFalse(snapshot["rehearsal_readiness"]["activation_performed"])
+        self.assertTrue(snapshot["actual_authority"]["foundation_active"])
+        self.assertFalse(snapshot["actual_authority"]["cobalt_active"])
+        self.assertEqual(snapshot["actual_authority"]["block_finality"], "consensus-v2")
+        self.assertEqual(snapshot["scenario"]["case_count"], 80)
 
-    def test_recorded_handoff_moves_activation_to_active(self) -> None:
+    def test_recorded_handoff_changes_actual_authority_not_readiness(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             collector = self.make_collector(Path(directory))
             governance_path = collector.options.node_data_dir / "governance.json"
@@ -116,8 +131,10 @@ class CobaltUiTests(unittest.TestCase):
             governance_path.write_text(json.dumps(governance), encoding="utf-8")
             snapshot = collector.collect()
 
-        self.assertEqual(snapshot["activation"]["status"], "ACTIVE")
-        self.assertTrue(snapshot["activation"]["ready"])
+        self.assertEqual(snapshot["rehearsal_readiness"]["status"], "GO")
+        self.assertTrue(snapshot["rehearsal_readiness"]["ready"])
+        self.assertTrue(snapshot["actual_authority"]["cobalt_active"])
+        self.assertFalse(snapshot["actual_authority"]["foundation_active"])
         self.assertEqual(snapshot["proposals"]["transition_count"], 1)
 
     def test_mixed_shadow_digests_fail_convergence(self) -> None:
@@ -132,8 +149,40 @@ class CobaltUiTests(unittest.TestCase):
             collector.shadow_runner = split_report
             snapshot = collector.collect()
 
-        self.assertFalse(snapshot["shadow"]["converged"])
-        self.assertFalse(snapshot["shadow"]["ok"])
+        self.assertFalse(snapshot["shadow_health"]["converged"])
+        self.assertFalse(snapshot["shadow_health"]["ok"])
+        self.assertEqual(snapshot["rehearsal_readiness"]["status"], "GO")
+
+    def test_http_surface_allows_reads_and_rejects_mutation(self) -> None:
+        class FixedCache:
+            def get(self, *, force: bool = False) -> dict:
+                return {"schema": cobalt_ui.UI_SCHEMA, "read_only": True, "force": force}
+
+        server = cobalt_ui.CobaltUiServer(("127.0.0.1", 0), cobalt_ui.CobaltUiHandler)
+        server.cache = FixedCache()  # type: ignore[assignment]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            connection = http.client.HTTPConnection(*server.server_address, timeout=2)
+            connection.request("GET", "/api/snapshot?refresh=1")
+            response = connection.getresponse()
+            payload = json.loads(response.read())
+            self.assertEqual(response.status, 200)
+            self.assertTrue(payload["read_only"])
+            self.assertTrue(payload["force"])
+            self.assertIn("default-src 'self'", response.getheader("content-security-policy"))
+            connection.close()
+
+            connection = http.client.HTTPConnection(*server.server_address, timeout=2)
+            connection.request("POST", "/api/snapshot", body=b"{}")
+            response = connection.getresponse()
+            response.read()
+            self.assertEqual(response.status, 405)
+            connection.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
 
     def test_governance_reader_rejects_oversized_state(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

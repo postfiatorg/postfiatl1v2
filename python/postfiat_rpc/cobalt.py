@@ -12,6 +12,7 @@ the validator registry.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -19,12 +20,70 @@ import socket
 import subprocess
 import sys
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Sequence
 
 
-CLI_SCHEMA = "postfiat-cobalt-governance-cli-v1"
+CLI_SCHEMA = "postfiat-cobalt-governance-cli-v2"
 MAX_REPORT_BYTES = 4 * 1024 * 1024
+MAX_CHECKSUM_MANIFEST_BYTES = 64 * 1024
+MAX_PACKET_FILES = 64
+BENCHMARK_PACKET_SCHEMA = "postfiat-cobalt-rippled-liveness-verifier-v1"
+HANDOFF_PACKET_SCHEMA = "postfiat-cobalt-handoff-rehearsal-verifier-v1"
+DEFAULT_BENCHMARK_PACKET_SHA256 = (
+    "7968a085033419255b52b844edd586346a1e85561394e52c69e6683b2561c50b"
+)
+DEFAULT_HANDOFF_PACKET_SHA256 = (
+    "b678b3f45eb2a14299b941101bd556d61795a1033f1f6e53557442b7e315807e"
+)
+DEFAULT_HANDOFF_VERIFIER_SHA256 = (
+    "dfb9000d272f71d6d1578b7d8332a844a142d8d08d561889da2b3842f62cc9e9"
+)
+BENCHMARK_REQUIRED_FILES = {
+    "cobalt-report.json",
+    "kpi-report.json",
+    "rippled-report.json",
+    "scenario-manifest.json",
+    "verifier.json",
+}
+HANDOFF_REQUIRED_FILES = {
+    "activation-result.json",
+    "forward-rollback-result.json",
+    "live-fleet-after.json",
+    "live-fleet-before.json",
+    "negative-cases.json",
+    "pre-activation-abort.json",
+    "validator-update-result.json",
+}
+BENCHMARK_REQUIRED_CHECKS = {
+    "both_adapter_hashes_match_manifest",
+    "case_order_matches",
+    "cobalt_authority_disabled",
+    "cobalt_passed",
+    "cobalt_replay_equal",
+    "cobalt_zero_conflicts",
+    "rippled_native_fork_control_present",
+    "rippled_passed",
+    "rippled_zero_conflicts",
+    "scenario_case_count",
+    "scenario_manifest_hash",
+    "scenario_manifest_schema",
+}
+HANDOFF_REQUIRED_CHECKS = {
+    "activation_clone_state_changed",
+    "activation_future_height",
+    "all_six_negative_cases_rejected",
+    "current_registry_and_validator_count",
+    "forward_history_two_transitions_one_update",
+    "forward_rollback_restored_foundation",
+    "live_authority_and_block_control_disabled",
+    "live_registry_and_trust_roots_unchanged",
+    "live_validator_processes_unchanged",
+    "pre_activation_abort_without_mutation",
+    "scoped_validator_update_accepted",
+    "unrelated_governance_rejected",
+    "validator_private_keys_never_left_validators",
+}
 AUTHORITY = {
     "mode": "advisory",
     "live": False,
@@ -71,6 +130,347 @@ def repository_root(start: Path | None = None) -> Path:
     raise CobaltCliError(
         "cannot find crates/consensus_cobalt; run this CLI from a postfiatl1v2 checkout"
     )
+
+
+def sha256_bytes(payload: bytes) -> str:
+    return hashlib.sha256(payload).hexdigest()
+
+
+def read_packet_bytes(path: Path, limit: int = MAX_REPORT_BYTES) -> bytes:
+    try:
+        if path.is_symlink() or not path.is_file():
+            raise CobaltCliError(f"packet file is missing or not regular: {path.name}")
+        size = path.stat().st_size
+    except OSError as error:
+        raise CobaltCliError(f"cannot inspect packet file {path.name}: {error}") from error
+    if size > limit:
+        raise CobaltCliError(f"packet file {path.name} exceeds the {limit}-byte read limit")
+    try:
+        return path.read_bytes()
+    except OSError as error:
+        raise CobaltCliError(f"cannot read packet file {path.name}: {error}") from error
+
+
+def read_packet_json(path: Path) -> dict[str, Any]:
+    payload = read_packet_bytes(path)
+    try:
+        value = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise CobaltCliError(f"packet file {path.name} is not valid JSON") from error
+    if not isinstance(value, dict):
+        raise CobaltCliError(f"packet file {path.name} is not a JSON object")
+    return value
+
+
+def verify_packet(
+    packet_dir: Path,
+    *,
+    expected_manifest_sha256: str,
+    expected_verifier_schema: str,
+    required_files: set[str],
+    required_checks: set[str],
+    expected_verifier_sha256: str | None = None,
+) -> dict[str, Any]:
+    """Verify a flat evidence packet against a pinned checksum-manifest root."""
+
+    packet_dir = packet_dir.resolve()
+    if not packet_dir.is_dir():
+        raise CobaltCliError(f"packet directory does not exist: {packet_dir}")
+    manifest_path = packet_dir / "SHA256SUMS"
+    manifest_payload = read_packet_bytes(manifest_path, MAX_CHECKSUM_MANIFEST_BYTES)
+    manifest_sha256 = sha256_bytes(manifest_payload)
+    if manifest_sha256 != expected_manifest_sha256:
+        raise CobaltCliError(
+            "packet checksum root mismatch: "
+            f"expected {expected_manifest_sha256}, received {manifest_sha256}"
+        )
+    try:
+        lines = manifest_payload.decode("ascii").splitlines()
+    except UnicodeDecodeError as error:
+        raise CobaltCliError("packet checksum manifest is not ASCII") from error
+    if not lines or len(lines) > MAX_PACKET_FILES:
+        raise CobaltCliError("packet checksum manifest has an invalid file count")
+
+    checksums: dict[str, str] = {}
+    for line in lines:
+        digest, separator, name = line.partition("  ")
+        path_name = PurePosixPath(name)
+        if (
+            separator != "  "
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+            or not name
+            or path_name.is_absolute()
+            or len(path_name.parts) != 1
+            or path_name.parts[0] in {".", ".."}
+            or name in checksums
+        ):
+            raise CobaltCliError("packet checksum manifest contains a malformed entry")
+        checksums[name] = digest
+
+    missing = sorted(required_files - checksums.keys())
+    if missing:
+        raise CobaltCliError(f"packet checksum manifest omits required files: {', '.join(missing)}")
+    for name, digest in checksums.items():
+        actual = sha256_bytes(read_packet_bytes(packet_dir / name))
+        if actual != digest:
+            raise CobaltCliError(f"packet checksum mismatch for {name}")
+
+    verifier_path = packet_dir / "verifier.json"
+    verifier_payload = read_packet_bytes(verifier_path)
+    verifier_sha256 = sha256_bytes(verifier_payload)
+    if expected_verifier_sha256 and verifier_sha256 != expected_verifier_sha256:
+        raise CobaltCliError(
+            "packet verifier hash mismatch: "
+            f"expected {expected_verifier_sha256}, received {verifier_sha256}"
+        )
+    verifier = read_packet_json(verifier_path)
+    if verifier.get("schema") != expected_verifier_schema:
+        raise CobaltCliError("packet verifier schema is not the expected version")
+    if verifier.get("result") != "passed":
+        raise CobaltCliError("packet verifier did not report passed")
+    verifier_checks = verifier.get("checks")
+    if not isinstance(verifier_checks, dict):
+        raise CobaltCliError("packet verifier checks are malformed")
+    if not required_checks.issubset(verifier_checks):
+        raise CobaltCliError("packet verifier omits required checks")
+    if not verifier_checks or any(value is not True for value in verifier_checks.values()):
+        raise CobaltCliError("packet verifier contains a failing check")
+    declared_root = verifier.get("sha256sums_sha256")
+    if declared_root is not None and declared_root != manifest_sha256:
+        raise CobaltCliError("packet verifier does not bind the checksum manifest")
+
+    return {
+        "directory": str(packet_dir),
+        "manifest_sha256": manifest_sha256,
+        "verifier_sha256": verifier_sha256,
+        "verifier": verifier,
+    }
+
+
+def scenario_result(
+    packet_dir: Path,
+    *,
+    expected_manifest_sha256: str = DEFAULT_BENCHMARK_PACKET_SHA256,
+) -> dict[str, Any]:
+    authenticated = verify_packet(
+        packet_dir,
+        expected_manifest_sha256=expected_manifest_sha256,
+        expected_verifier_schema=BENCHMARK_PACKET_SCHEMA,
+        required_files=BENCHMARK_REQUIRED_FILES,
+        required_checks=BENCHMARK_REQUIRED_CHECKS,
+    )
+    packet = Path(authenticated["directory"])
+    verifier = authenticated["verifier"]
+    cobalt_report = read_packet_json(packet / "cobalt-report.json")
+    rippled_report = read_packet_json(packet / "rippled-report.json")
+    kpi_report = read_packet_json(packet / "kpi-report.json")
+    scenario_manifest = read_packet_json(packet / "scenario-manifest.json")
+    headline = kpi_report.get("headline")
+    methodology = kpi_report.get("methodology_boundaries")
+    cases = scenario_manifest.get("cases")
+    non_decisions = kpi_report.get("first_class_non_decision_outcomes")
+    if (
+        not isinstance(headline, dict)
+        or not isinstance(methodology, dict)
+        or not isinstance(cases, list)
+        or not isinstance(non_decisions, list)
+    ):
+        raise CobaltCliError("benchmark KPI or scenario structure is malformed")
+    required_methodology = {
+        "agti_control",
+        "authority",
+        "latency",
+        "local_quorum",
+        "rippled_control",
+    }
+    methodology_complete = required_methodology.issubset(methodology) and all(
+        isinstance(methodology[key], str) and methodology[key].strip()
+        for key in required_methodology
+    )
+    case_count = len(cases)
+    cobalt_passed = cobalt_report.get("passed_case_count")
+    rippled_passed = rippled_report.get("passed_case_count")
+    cobalt_conflicts = cobalt_report.get("conflicting_decision_count")
+    rippled_conflicts = rippled_report.get("conflicting_decision_count")
+    counts_match = (
+        case_count > 0
+        and cobalt_report.get("case_count") == case_count
+        and rippled_report.get("case_count") == case_count
+        and headline.get("case_count") == case_count
+        and cobalt_passed == case_count
+        and rippled_passed == case_count
+    )
+    zero_conflicts = cobalt_conflicts == 0 and rippled_conflicts == 0
+    checks = verifier["checks"]
+    ok = (
+        counts_match
+        and zero_conflicts
+        and headline.get("all_declared_outcomes_passed") is True
+        and methodology_complete
+        and checks.get("cobalt_replay_equal") is True
+        and checks.get("rippled_native_fork_control_present") is True
+        and checks.get("cobalt_authority_disabled") is True
+    )
+    return {
+        "schema": CLI_SCHEMA,
+        "command": "scenario",
+        "ok": ok,
+        "authority": dict(AUTHORITY),
+        "summary": {
+            "case_count": case_count,
+            "cobalt_passed": cobalt_passed,
+            "rippled_passed": rippled_passed,
+            "cobalt_conflicting_decisions": cobalt_conflicts,
+            "rippled_conflicting_decisions": rippled_conflicts,
+            "cobalt_replay_equal": checks.get("cobalt_replay_equal") is True,
+            "rippled_native_fork_control": checks.get(
+                "rippled_native_fork_control_present"
+            )
+            is True,
+            "safe_halt_outcomes": sum(
+                1
+                for row in non_decisions
+                if isinstance(row, dict)
+                and (
+                    row.get("cobalt", {}).get("safe_halt") is True
+                    or row.get("rippled_csf", {}).get("safe_halt") is True
+                )
+            ),
+            "unresolved_methodology_exception": not methodology_complete,
+        },
+        "source_pins": verifier.get("source_pins", {}),
+        "methodology_boundaries": methodology,
+        "packet": {
+            key: authenticated[key]
+            for key in ("directory", "manifest_sha256", "verifier_sha256")
+        },
+    }
+
+
+def readiness_result(
+    benchmark_packet: Path,
+    handoff_packet: Path,
+    *,
+    benchmark_manifest_sha256: str = DEFAULT_BENCHMARK_PACKET_SHA256,
+    handoff_manifest_sha256: str = DEFAULT_HANDOFF_PACKET_SHA256,
+    handoff_verifier_sha256: str = DEFAULT_HANDOFF_VERIFIER_SHA256,
+) -> dict[str, Any]:
+    scenario = scenario_result(
+        benchmark_packet, expected_manifest_sha256=benchmark_manifest_sha256
+    )
+    authenticated = verify_packet(
+        handoff_packet,
+        expected_manifest_sha256=handoff_manifest_sha256,
+        expected_verifier_schema=HANDOFF_PACKET_SCHEMA,
+        required_files=HANDOFF_REQUIRED_FILES,
+        required_checks=HANDOFF_REQUIRED_CHECKS,
+        expected_verifier_sha256=handoff_verifier_sha256,
+    )
+    packet = Path(authenticated["directory"])
+    verifier = authenticated["verifier"]
+    activation = read_packet_json(packet / "activation-result.json")
+    update = read_packet_json(packet / "validator-update-result.json")
+    abort = read_packet_json(packet / "pre-activation-abort.json")
+    rollback = read_packet_json(packet / "forward-rollback-result.json")
+    negative = read_packet_json(packet / "negative-cases.json")
+    before_payload = read_packet_bytes(packet / "live-fleet-before.json")
+    after_payload = read_packet_bytes(packet / "live-fleet-after.json")
+    try:
+        live_before = json.loads(before_payload)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise CobaltCliError("live fleet receipt is not valid JSON") from error
+    if not isinstance(live_before, list) or not live_before:
+        raise CobaltCliError("live fleet receipt is empty or malformed")
+    live_authority_unchanged = before_payload == after_payload and all(
+        isinstance(node, dict)
+        and node.get("cobalt_shadow", {}).get("live_authority") is False
+        and node.get("cobalt_shadow", {}).get("controls_block_consensus") is False
+        for node in live_before
+    )
+    checks = [
+        {
+            "key": "matched_scenario",
+            "label": "Matched Cobalt/RippleD scenario packet passes",
+            "ok": scenario["ok"],
+            "source": scenario["packet"]["manifest_sha256"],
+        },
+        {
+            "key": "zero_conflicts_and_replay",
+            "label": "Zero conflicting decisions and deterministic Cobalt replay",
+            "ok": scenario["summary"]["cobalt_conflicting_decisions"] == 0
+            and scenario["summary"]["rippled_conflicting_decisions"] == 0
+            and scenario["summary"]["cobalt_replay_equal"] is True,
+            "source": "matched benchmark verifier",
+        },
+        {
+            "key": "handoff_rehearsal",
+            "label": "Disposable authority handoff verifier passes",
+            "ok": verifier.get("result") == "passed",
+            "source": authenticated["manifest_sha256"],
+        },
+        {
+            "key": "negative_abort_rollback",
+            "label": "Unsafe handoffs reject; abort and forward rollback preserve rules",
+            "ok": negative.get("all_rejected") is True
+            and negative.get("durable_state_unchanged") is True
+            and abort.get("accepted") is False
+            and abort.get("applied") is False
+            and abort.get("governance_commitment_before")
+            == abort.get("governance_commitment_after")
+            and rollback.get("accepted") is True
+            and rollback.get("authority_mode_after") == 0,
+            "source": "handoff negative/abort/rollback receipts",
+        },
+        {
+            "key": "scoped_validator_update",
+            "label": "Rehearsed Cobalt authority accepts only validator-trust update",
+            "ok": activation.get("accepted") is True
+            and activation.get("authority_mode_after") == 1
+            and update.get("accepted") is True
+            and update.get("operation") == "validator_trust_update"
+            and bool(update.get("unrelated_governance_rejected")),
+            "source": "disposable clone activation and update receipts",
+        },
+        {
+            "key": "live_authority_unchanged",
+            "label": "Live validators stayed on Foundation and Consensus v2",
+            "ok": live_authority_unchanged,
+            "source": "byte-identical live fleet receipts",
+        },
+    ]
+    ready = all(check["ok"] for check in checks)
+    return {
+        "schema": CLI_SCHEMA,
+        "command": "readiness",
+        "ok": ready,
+        "authority": dict(AUTHORITY),
+        "status": "GO" if ready else "HOLD",
+        "decision_scope": (
+            "separately authorized controlled-testnet validator-trust cutover"
+        ),
+        "recommendation": (
+            "GO_FOR_SEPARATELY_AUTHORIZED_CONTROLLED_TESTNET_CUTOVER"
+            if ready
+            else "HOLD_AND_REMEDIATE_FAILED_EVIDENCE"
+        ),
+        "activation_performed": False,
+        "actual_authority": {
+            "validator_trust": "foundation",
+            "cobalt_active": False,
+            "block_finality": "consensus-v2",
+            "observed_validator_count": len(live_before),
+        },
+        "checks": checks,
+        "scenario": scenario["summary"],
+        "packets": {
+            "benchmark": scenario["packet"],
+            "handoff": {
+                key: authenticated[key]
+                for key in ("directory", "manifest_sha256", "verifier_sha256")
+            },
+        },
+    }
 
 
 def resolve_cargo(requested: str | None) -> str:
@@ -521,6 +921,39 @@ def render_human(result: dict[str, Any]) -> str:
             f"  [{status_line(row.get('ok') is True)}] {row.get('name')}"
             for row in scenarios
         )
+    elif command == "scenario":
+        summary = result["summary"]
+        lines.extend(
+            [
+                "Matched Cobalt/RippleD scenario evidence",
+                f"  Cases: {summary['case_count']}",
+                f"  Cobalt passed: {summary['cobalt_passed']}/{summary['case_count']}",
+                f"  RippleD passed: {summary['rippled_passed']}/{summary['case_count']}",
+                f"  Conflicting decisions: Cobalt={summary['cobalt_conflicting_decisions']} "
+                f"RippleD={summary['rippled_conflicting_decisions']}",
+                f"  Deterministic Cobalt replay: {'yes' if summary['cobalt_replay_equal'] else 'no'}",
+                f"  RippleD native fork control: {'present' if summary['rippled_native_fork_control'] else 'missing'}",
+                f"  Safe-halt outcomes: {summary['safe_halt_outcomes']}",
+                f"  Methodology exception: {'unresolved' if summary['unresolved_methodology_exception'] else 'none'}",
+                f"  Packet root: {result['packet']['manifest_sha256']}",
+            ]
+        )
+    elif command == "readiness":
+        actual = result["actual_authority"]
+        lines.extend(
+            [
+                "Controlled-testnet Cobalt cutover decision",
+                f"  Recommendation: {result['status']}",
+                f"  Scope: {result['decision_scope']}",
+                f"  Validator-trust authority now: {actual['validator_trust']}",
+                f"  Block finality now: {actual['block_finality']}",
+                "  Activation performed by this command: no",
+            ]
+        )
+        lines.extend(
+            f"  [{status_line(check['ok'])}] {check['label']} · {check['source']}"
+            for check in result["checks"]
+        )
     elif command == "shadow-service-status":
         report = result["report"]
         lines.extend(
@@ -605,11 +1038,40 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--range", dest="range_path", type=Path, help="history range JSON file")
     parser.add_argument("--output", type=Path, help="optional history export path")
     parser.add_argument(
+        "--benchmark-packet",
+        type=Path,
+        default=Path("benchmarks/cobalt-rippled-liveness/packet"),
+        help="matched liveness packet directory",
+    )
+    parser.add_argument(
+        "--benchmark-sha256",
+        default=DEFAULT_BENCHMARK_PACKET_SHA256,
+        help="pinned SHA-256 of the benchmark SHA256SUMS file",
+    )
+    parser.add_argument(
+        "--handoff-packet",
+        type=Path,
+        default=Path("benchmarks/cobalt-handoff-rehearsal/packet"),
+        help="disposable handoff rehearsal packet directory",
+    )
+    parser.add_argument(
+        "--handoff-sha256",
+        default=DEFAULT_HANDOFF_PACKET_SHA256,
+        help="pinned SHA-256 of the handoff SHA256SUMS file",
+    )
+    parser.add_argument(
+        "--handoff-verifier-sha256",
+        default=DEFAULT_HANDOFF_VERIFIER_SHA256,
+        help="pinned SHA-256 of the handoff verifier",
+    )
+    parser.add_argument(
         "command",
         choices=[
             *EXAMPLES,
             "graph",
             "fleet",
+            "scenario",
+            "readiness",
             *RUNTIME_COMMANDS,
             *HISTORY_COMMANDS,
             "shadow-status",
@@ -631,7 +1093,30 @@ def main(argv: Sequence[str] | None = None) -> int:
             "graph": "trust-graph",
             "shadow-status": "shadow-service-status",
         }.get(args.command, args.command)
-        if command in RUNTIME_COMMANDS:
+        benchmark_packet = (
+            args.benchmark_packet
+            if args.benchmark_packet.is_absolute()
+            else root / args.benchmark_packet
+        )
+        handoff_packet = (
+            args.handoff_packet
+            if args.handoff_packet.is_absolute()
+            else root / args.handoff_packet
+        )
+        if command == "scenario":
+            result = scenario_result(
+                benchmark_packet,
+                expected_manifest_sha256=args.benchmark_sha256,
+            )
+        elif command == "readiness":
+            result = readiness_result(
+                benchmark_packet,
+                handoff_packet,
+                benchmark_manifest_sha256=args.benchmark_sha256,
+                handoff_manifest_sha256=args.handoff_sha256,
+                handoff_verifier_sha256=args.handoff_verifier_sha256,
+            )
+        elif command in RUNTIME_COMMANDS:
             if not args.endpoint:
                 raise CobaltCliError(f"--endpoint is required for {command}")
             result = runtime_result(

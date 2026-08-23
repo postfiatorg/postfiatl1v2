@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -164,6 +167,67 @@ class CobaltCliTests(unittest.TestCase):
 
         self.assertIn("Protocol high-water mark: 4", cobalt.render_human(snapshot))
         self.assertIn("round 4", cobalt.render_human(replay))
+
+    def test_scenario_command_authenticates_matched_packet(self) -> None:
+        root = cobalt.repository_root(Path(__file__))
+
+        result = cobalt.scenario_result(
+            root / "benchmarks/cobalt-rippled-liveness/packet"
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["summary"]["case_count"], 80)
+        self.assertEqual(result["summary"]["cobalt_passed"], 80)
+        self.assertEqual(result["summary"]["rippled_passed"], 80)
+        self.assertEqual(result["summary"]["cobalt_conflicting_decisions"], 0)
+        self.assertTrue(result["summary"]["cobalt_replay_equal"])
+        self.assertFalse(result["summary"]["unresolved_methodology_exception"])
+        rendered = cobalt.render_human(result)
+        self.assertIn("Cases: 80", rendered)
+        self.assertIn("Methodology exception: none", rendered)
+
+    def test_readiness_is_go_without_claiming_cobalt_is_active(self) -> None:
+        root = cobalt.repository_root(Path(__file__))
+
+        result = cobalt.readiness_result(
+            root / "benchmarks/cobalt-rippled-liveness/packet",
+            root / "benchmarks/cobalt-handoff-rehearsal/packet",
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], "GO")
+        self.assertFalse(result["activation_performed"])
+        self.assertEqual(result["actual_authority"]["validator_trust"], "foundation")
+        self.assertFalse(result["actual_authority"]["cobalt_active"])
+        self.assertEqual(result["actual_authority"]["block_finality"], "consensus-v2")
+        self.assertIn("Activation performed by this command: no", cobalt.render_human(result))
+
+    def test_packet_authentication_rejects_tampering(self) -> None:
+        root = cobalt.repository_root(Path(__file__))
+        source = root / "benchmarks/cobalt-rippled-liveness/packet"
+        with tempfile.TemporaryDirectory() as directory:
+            packet = Path(directory) / "packet"
+            shutil.copytree(source, packet)
+            (packet / "cobalt-report.json").write_text("{}\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(cobalt.CobaltCliError, "checksum mismatch"):
+                cobalt.scenario_result(packet)
+
+    def test_packet_authentication_rejects_manifest_path_traversal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            packet = Path(directory)
+            manifest = b"0" * 64 + b"  ../outside.json\n"
+            (packet / "SHA256SUMS").write_bytes(manifest)
+            expected = hashlib.sha256(manifest).hexdigest()
+
+            with self.assertRaisesRegex(cobalt.CobaltCliError, "malformed entry"):
+                cobalt.verify_packet(
+                    packet,
+                    expected_manifest_sha256=expected,
+                    expected_verifier_schema="test-v1",
+                    required_files=set(),
+                    required_checks=set(),
+                )
 
     @mock.patch("postfiat_rpc.cobalt.subprocess.run")
     def test_shadow_runner_invokes_dedicated_binary_with_data_dir(
