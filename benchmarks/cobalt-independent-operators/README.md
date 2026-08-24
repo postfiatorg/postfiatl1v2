@@ -1,21 +1,32 @@
 # Independent Cobalt Operator Onboarding
 
-This packet migrates the six controlled-testnet validator slots to six genuinely separate operators. With six validators and quorum five, one operator per validator is mandatory: an operator controlling two validators could halt quorum by withdrawing both.
+This packet migrates the six controlled-testnet validator slots to six genuinely separate operators. The chain uses six validators and quorum five, so each validator must have a different operator: any operator controlling two validators could halt quorum by withdrawing both.
 
-Private keys never leave the operator's machine. Post Fiat receives the public onboarding report, signed operator manifest, and redaction-safe provider/host/custody receipts only.
+The code verifies the evidence files themselves. Each operator signs three structured control attestations with the same ML-DSA master key that signs its manifest. The terminal topology check verifies every signature and binds the provider account, host administration, key custody, onboarding challenge, operator identity, source revision, release binary, Cobalt trust graph, and hot validator key.
 
-## Operator procedure
+Private keys never leave the operator's machine. Submit only the public keygen report, signed attestations, and signed manifest.
 
-Use the release declared in `onboarding-contract.json`. Verify its SHA-256 before doing anything else:
+## Release binding
+
+- Source commit: `3b01c2ad57fb0ce1c29e12edc88aece5b22548ae`
+- Release binary SHA-256: `e036033d437d85c4f60fc8e6689a771fdda01dd2ce88456571e6c9092faf4caf`
+- Build command: `cargo build --release -p postfiat-node --bin postfiat-node --locked`
+
+Verify the provided binary before using it:
 
 ```sh
 sha256sum postfiat-node
 ```
 
-Choose the assigned `validator_id`, `onboarding_challenge_id`, and `trust_view_id` from the contract. Generate independent ML-DSA master and validator keys locally:
+## Operator procedure
+
+Choose the assigned `validator_id`, `onboarding_challenge_id`, and `trust_view_id` from `onboarding-contract.json`.
+
+Generate independent ML-DSA master and validator keys locally:
 
 ```sh
 umask 077
+mkdir -p private public
 ./postfiat-node operator-onboarding-keygen \
   --validator-id VALIDATOR_ID \
   --master-key-file ./private/manifest-master-key.json \
@@ -23,17 +34,73 @@ umask 077
   > ./public/keygen-report.json
 ```
 
-The two files under `private/` must remain with the operator. The report is public-only and contains the hot public key needed for the governed registry rotation.
+The two files under `private/` remain with the operator. The public report contains the hot public key needed for the governed registry rotation.
 
-Create three short redaction-safe receipts:
+Create stable SHA-256 fingerprints for the provider account, selected host administrator key, host, and custody boundary. Fingerprints identify control boundaries without disclosing secrets. They must not be random labels.
 
-- provider receipt: provider name, stable account fingerprint, instance ID, region, timestamp, and a statement that this operator controls the account;
-- host-control receipt: host fingerprint, selected administrator public-key fingerprint, timestamp, and a statement that this operator controls root administration;
-- custody receipt: master public-key fingerprint, storage boundary, backup boundary, and a statement that no other validator operator holds the key.
+Create the provider attestation. `PROVIDER_NAME` and `REGION` must exactly match the manifest's `--provider-group` and `--region-group` values:
 
-Do not include API tokens, private keys, SSH private keys, recovery codes, invoices, addresses, or billing details. Hash the receipts with SHA-256. The provider-account, host-admin, and key-custody fingerprints must describe stable control identities, not random labels.
+```sh
+./postfiat-node operator-attestation-create \
+  --master-key-file ./private/manifest-master-key.json \
+  --validator-id VALIDATOR_ID \
+  --onboarding-challenge-id ASSIGNED_CHALLENGE_ID \
+  --operator OPERATOR_NAME \
+  --observed-at UTC_TIMESTAMP \
+  --kind provider \
+  --provider-name PROVIDER_NAME \
+  --provider-account-fingerprint PROVIDER_ACCOUNT_FINGERPRINT \
+  --instance-id INSTANCE_ID \
+  --region REGION \
+  --output ./public/VALIDATOR_ID.provider-attestation.json
+```
 
-Create the signed manifest using the exact contract values:
+Create the host-control attestation:
+
+```sh
+./postfiat-node operator-attestation-create \
+  --master-key-file ./private/manifest-master-key.json \
+  --validator-id VALIDATOR_ID \
+  --onboarding-challenge-id ASSIGNED_CHALLENGE_ID \
+  --operator OPERATOR_NAME \
+  --observed-at UTC_TIMESTAMP \
+  --kind host \
+  --host-fingerprint HOST_FINGERPRINT \
+  --host-admin-fingerprint HOST_ADMIN_FINGERPRINT \
+  --output ./public/VALIDATOR_ID.host-control-attestation.json
+```
+
+Create the custody attestation:
+
+```sh
+./postfiat-node operator-attestation-create \
+  --master-key-file ./private/manifest-master-key.json \
+  --validator-id VALIDATOR_ID \
+  --onboarding-challenge-id ASSIGNED_CHALLENGE_ID \
+  --operator OPERATOR_NAME \
+  --observed-at UTC_TIMESTAMP \
+  --kind custody \
+  --key-custody-fingerprint KEY_CUSTODY_FINGERPRINT \
+  --storage-boundary STORAGE_BOUNDARY \
+  --backup-boundary BACKUP_BOUNDARY \
+  --output ./public/VALIDATOR_ID.custody-attestation.json
+```
+
+`UTC_TIMESTAMP` uses the form `2026-08-24T06:57:20Z`. Do not include API tokens, private keys, SSH private keys, recovery codes, invoices, addresses, or billing details. The CLI rejects common private-material markers.
+
+Verify all three attestations locally and copy each returned `attestation_hash` into the manifest command:
+
+```sh
+for kind_file in \
+  ./public/VALIDATOR_ID.provider-attestation.json \
+  ./public/VALIDATOR_ID.host-control-attestation.json \
+  ./public/VALIDATOR_ID.custody-attestation.json
+do
+  ./postfiat-node operator-attestation-verify --attestation-file "$kind_file"
+done
+```
+
+Create the custody-bound signed manifest:
 
 ```sh
 ./postfiat-node operator-manifest-create \
@@ -54,14 +121,15 @@ Create the signed manifest using the exact contract values:
   --trust-view-id ASSIGNED_TRUST_VIEW_ID \
   --trust-view-version 1 \
   --section2-packet-root 40bc86c9416a1b468f5625a2ff83724c9268f9d49c41007e9b0c4bc70c43c1e1 \
-  --source-commit 2fb5fa08e9769ef928cd1149bea2c589d0228c22 \
-  --release-binary-sha256 a101e0bb407f891587517c91f3c2e15e97b4708509e75e1d0dc3184b0440da20 \
+  --source-commit 3b01c2ad57fb0ce1c29e12edc88aece5b22548ae \
+  --release-binary-sha256 e036033d437d85c4f60fc8e6689a771fdda01dd2ce88456571e6c9092faf4caf \
   --onboarding-challenge-id ASSIGNED_CHALLENGE_ID \
   --provider-account-fingerprint PROVIDER_ACCOUNT_FINGERPRINT \
   --host-admin-fingerprint HOST_ADMIN_FINGERPRINT \
   --key-custody-fingerprint KEY_CUSTODY_FINGERPRINT \
-  --provider-attestation-hash PROVIDER_RECEIPT_SHA256 \
-  --host-control-attestation-hash HOST_CONTROL_RECEIPT_SHA256 \
+  --provider-attestation-hash PROVIDER_ATTESTATION_HASH \
+  --host-control-attestation-hash HOST_ATTESTATION_HASH \
+  --custody-attestation-hash CUSTODY_ATTESTATION_HASH \
   --output ./public/VALIDATOR_ID.operator-manifest.json
 ```
 
@@ -72,24 +140,31 @@ Verify locally:
   --manifest-file ./public/VALIDATOR_ID.operator-manifest.json
 ```
 
-Submit only the keygen report, signed manifest, and redaction-safe receipts.
+Submit exactly these five public files:
+
+- `keygen-report.json`
+- `VALIDATOR_ID.provider-attestation.json`
+- `VALIDATOR_ID.host-control-attestation.json`
+- `VALIDATOR_ID.custody-attestation.json`
+- `VALIDATOR_ID.operator-manifest.json`
 
 ## Coordinator gate
 
-First verify each manifest signature. Then construct and rehearse the governed registry/key migration on a disposable clone. The terminal topology check runs against the post-migration registry:
+Place manifests and attestations in their respective directories using the exact filenames above. Rehearse the governed registry/key migration on a disposable state clone, then run:
 
 ```sh
 postfiat-node operator-independence-verify \
   --data-dir POST_MIGRATION_CLONE_DATA_DIR \
   --manifest-dir RECEIVED_MANIFEST_DIR \
+  --attestation-dir RECEIVED_ATTESTATION_DIR \
   --validators validator-0,validator-1,validator-2,validator-3,validator-4,validator-5 \
   --quorum 5 \
   --network controlled-testnet \
   --section2-packet-root 40bc86c9416a1b468f5625a2ff83724c9268f9d49c41007e9b0c4bc70c43c1e1 \
-  --source-commit 2fb5fa08e9769ef928cd1149bea2c589d0228c22 \
-  --release-binary-sha256 a101e0bb407f891587517c91f3c2e15e97b4708509e75e1d0dc3184b0440da20 \
+  --source-commit 3b01c2ad57fb0ce1c29e12edc88aece5b22548ae \
+  --release-binary-sha256 e036033d437d85c4f60fc8e6689a771fdda01dd2ce88456571e6c9092faf4caf \
   --min-operator-groups 6 \
   --min-infrastructure-domains 3
 ```
 
-A passing declaration packet is not enough. Completion requires all six independently controlled validators to be running, the post-migration registry to match their hot keys, and the live fault/transition exercises in the active milestone to pass.
+A declaration packet is not completion. Completion requires all six independently controlled validators running the pinned release, the governed registry matching their hot keys, and the live fault and transition exercises in the active Cobalt milestone passing.

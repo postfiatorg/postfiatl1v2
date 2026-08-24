@@ -1,6 +1,6 @@
 {
-  "schema": "postfiat-cobalt-independent-operator-onboarding-v1",
-  "generated_at": "2026-08-24T04:27:13Z",
+  "schema": "postfiat-cobalt-independent-operator-onboarding-v2",
+  "generated_at": "2026-08-24T06:57:20Z",
   "status": "awaiting_external_operator_receipts",
   "chain": {
     "chain_id": "postfiat-wan-devnet-2",
@@ -13,8 +13,9 @@
   },
   "evidence_binding": {
     "section2_packet_root": "40bc86c9416a1b468f5625a2ff83724c9268f9d49c41007e9b0c4bc70c43c1e1",
-    "source_commit": "2fb5fa08e9769ef928cd1149bea2c589d0228c22",
-    "release_binary_sha256": "a101e0bb407f891587517c91f3c2e15e97b4708509e75e1d0dc3184b0440da20",
+    "source_commit": "3b01c2ad57fb0ce1c29e12edc88aece5b22548ae",
+    "release_binary_sha256": "e036033d437d85c4f60fc8e6689a771fdda01dd2ce88456571e6c9092faf4caf",
+    "release_binary_size_bytes": 47466872,
     "current_registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
     "trust_graph_root": "c872bf8a9628cb3b27f2c0826084beb540c645d0c9d06107643358a4df078fa919e88ba2aa6b376a904eb79d28d69e77",
     "trust_graph_version": 1
@@ -28,40 +29,54 @@
     "every_operator_below_quorum": true,
     "every_operator_withdrawal_must_preserve_quorum": true
   },
+  "receipt_contract": {
+    "manifest_schema": "postfiat-operator-manifest-v2",
+    "control_attestation_schema": "postfiat-operator-control-attestation-v1",
+    "signature_algorithm": "ML-DSA-65",
+    "same_master_signer_required": true,
+    "same_onboarding_challenge_required": true,
+    "exclusive_control_required": true,
+    "required_files": [
+      "VALIDATOR_ID.provider-attestation.json",
+      "VALIDATOR_ID.host-control-attestation.json",
+      "VALIDATOR_ID.custody-attestation.json",
+      "VALIDATOR_ID.operator-manifest.json"
+    ]
+  },
   "slots": [
     {
       "validator_id": "validator-0",
-      "onboarding_challenge_id": "95267580199310b1817ea666609e55328ee017dc1700755f4b5f1314d63859d0",
+      "onboarding_challenge_id": "845cf10e35be22a3b88ac00c08f75b74ea19f5307b30553cd3adbbf71691bccf",
       "trust_view_id": "4682aa249728ee151477c1740869a6e090c1fd2749640ba539c070f8c4e565fb177513f62506e616141bbb25f53be0ab",
       "trust_view_version": 1
     },
     {
       "validator_id": "validator-1",
-      "onboarding_challenge_id": "9f9d15b25a7fc460d92b8eaff5526900be6f970f8d90f809def99ce8f3f13df4",
+      "onboarding_challenge_id": "4ef71f1ec39063b82d0e7eedb99ec2e9e7206df6d85827cbc0daa75741c71664",
       "trust_view_id": "80b39f41942a8d7ae5b08c98fb47944b216c0dc1b440e0cec6e4360ba85e003557459b214c3ba00e2778a5f363226428",
       "trust_view_version": 1
     },
     {
       "validator_id": "validator-2",
-      "onboarding_challenge_id": "194a57c6e0643362ae30f66c5b1f65376cff2121145f2288b848aa7e6f94bc5e",
+      "onboarding_challenge_id": "0490432f9609aeb0583fcec20ae6c930f14351fc2dab7b8dd761facfa87af998",
       "trust_view_id": "efd567f00b3c20b1dc7ebdb369a17b81827b9dc6e13679b35b047ac9e1809f4f71c64f5e740b3ea8de482b7fef6e16fd",
       "trust_view_version": 1
     },
     {
       "validator_id": "validator-3",
-      "onboarding_challenge_id": "7fe15dfeeaa85b82cb5208dfe61833da998ad4ac936b7f2d1995e7f122d50655",
+      "onboarding_challenge_id": "d93d070fb466424a4cf0986c98aaffaf66cd797b6fb118724eb3403fd25e0599",
       "trust_view_id": "223c00e39d03866c6bfc9229e038b6317170ff31183630a97de44792f56ea8c6e158745e81c7a97be7a4020d978bf78f",
       "trust_view_version": 1
     },
     {
       "validator_id": "validator-4",
-      "onboarding_challenge_id": "60a987841c8fcc99a3eb2d40928f2ccbdc688f53cdb50cbfecb86b8521f6dd8e",
+      "onboarding_challenge_id": "22295bb62fda2e7dff15b5332cfde984e47c5d93260c99c30d677764ab7fa571",
       "trust_view_id": "17b1d5949a95f968e695c7ad47d3d0496567bddc532ddbf67b3761aff814e417338e74d89a92333fe17c8a82fdcf2f1a",
       "trust_view_version": 1
     },
     {
       "validator_id": "validator-5",
-      "onboarding_challenge_id": "d2b5249ed8f80fbffe30a7264f7ea6e20dd2946646922145f27c5e052e66a4a3",
+      "onboarding_challenge_id": "fc898f9cbe71e5d7748797f41f8c6cc4cf61d34b56d4c1805636ee05041b76db",
       "trust_view_id": "d2ec18a6aae6ce9ab2b1ebd4e38b697ad3eeba524fa893d0bce87c2455a5b9054fde73b97eddba917b36e1c48d759135",
       "trust_view_version": 1
     }
