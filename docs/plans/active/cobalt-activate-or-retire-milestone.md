@@ -6,7 +6,7 @@ This milestone fixes Cobalt, proves its liveness capability against the failure 
 
 Cobalt does not replace Consensus v2. It controls validator-trust governance only.
 
-This is a protocol-capability milestone, not an operator-recruitment milestone. "Independent validators" in this plan means isolated simulated validator/operator domains with distinct identities, keys, trust views, message schedules, failures, durable state, and recovery paths. It does not require third-party operators, separate provider accounts, or external key custodians. Simulation results must be labeled as simulation evidence and must not be presented as proof that the controlled testnet is operationally decentralized.
+This is a protocol-capability milestone, not an operator-recruitment milestone. "Independent validators" in this plan means isolated simulated validator domains with distinct identities, keys, trust views, message schedules, failures, durable state, and recovery paths. It does not mean independent human operators and does not require third parties, separate provider accounts, or external key custodians. The test closes the original Cobalt evaluation gap by proving five-of-six progress, deterministic recovery, and consistent durable history under isolated-validator faults. Simulation results must be labeled as simulation evidence and must not be presented as proof that the controlled testnet is operationally decentralized.
 
 - **Status:** Active
 - **Specification:** [Cobalt Activation Research Specification](../../governance/cobalt-activate-or-retire-research-spec.md)
@@ -74,16 +74,11 @@ Task Node: `[x] task_690f0c63d1c0d175a4e47d947825402b — rewarded 2026-08-24 (2
 
 ### 3. Independent-validator liveness simulation
 
-- Superseded operator-establishment task: `[ ] task_46d1707cb9e11f04648ea54a7163fbee — accepted under the old real-operator scope; do not execute or use as a milestone gate`
-- Simulation task: `[ ] request a corrected substantial task covering the complete isolated-validator liveness simulation`
+- Superseded operator-establishment task: `[x] task_46d1707cb9e11f04648ea54a7163fbee — cancelled because real external operators are outside this milestone`
+- Simulation task: `[x] task_043e009b196aea0b685b3f09a6ebb45d — accepted; execute and verify the complete isolated-validator liveness simulation`
 
-- [x] Refresh the live-service inventory: all six validators and sidecars are active with zero restarts and one common chain/registry/trust-graph state. Their shared Vultr account and Post Fiat administration are disclosed but do not block this protocol-capability test.
-- [x] Give each operator a redaction-safe local key-generation command; private ML-DSA master and validator keys stay in separate mode-0600 files while stdout contains public material only. Code: [`operator-onboarding-keygen`](../../../crates/node/src/main_parts/cli_dispatch_parts/group_04.rs).
-- [x] Freeze the six-slot self-custody onboarding contract, exact release hash, unique challenges, current trust views, signed-receipt contract, and static verifier. Packet: [`benchmarks/cobalt-independent-operators`](../../../benchmarks/cobalt-independent-operators), `SHA256SUMS.txt` root `c8e6e40d98d40ab72dfbc11c665f092bd0c34a0035d9cc0fdb1c5ab505860786`.
-- [x] Publish the pinned binary, checksum manifest, and onboarding packet as GitHub release `cobalt-operator-v2-20260824`, verify clean downloads, and open operator recruitment issue `#36`.
-- [x] Bind each operator's custody-bound v2 manifest to the Cobalt trust view, Section 2 packet root, source commit, release-binary SHA-256, onboarding challenge, infrastructure-account fingerprint, host administrator, and ML-DSA custody evidence. Code: [`consensus_artifacts.rs`](../../../crates/node/src/consensus_artifacts.rs), [`operator-manifest-create`](../../../crates/node/src/main_parts/cli_dispatch_parts/group_04.rs).
-- [x] Add structured ML-DSA provider, host-control, and custody attestations; verify the actual files against their signed manifest bindings and reject missing, tampered, mismatched, or private-material-bearing receipts. Code: [`operator_attestations.rs`](../../../crates/node/src/operator_attestations.rs), commit `3b01c2ad57fb0ce1c29e12edc88aece5b22548ae`.
-- [x] Add an aggregate verifier that rejects mixed trust graphs, shared cross-operator control fingerprints, insufficient infrastructure domains, any operator that can reach quorum alone, and any operator withdrawal that can halt quorum. Code: [`verify_operator_independence`](../../../crates/node/src/governance.rs).
+Prior operator-onboarding artifacts remain available for a future decentralization program, but recruitment, external custody, separate provider accounts, and real third-party operation are not milestone work or activation gates here.
+
 - [ ] Instantiate at least six isolated simulated validator/operator domains. Each must have a distinct validator identity, ML-DSA key material, durable state directory, local trust view, transport endpoint, message schedule, and fault-control channel. No simulated operator may control more than one validator in the six-validator/quorum-five case.
 - [ ] Generate non-identical but formally compatible trust views and pass the same production topology and certificate validation paths used by Cobalt. Do not bypass production decision logic with a simulation-only acceptance rule.
 - [ ] Execute one validator addition, one removal, one ML-DSA key rotation, one compatible trust-view transition, one-validator outage, lagging-validator proof-carrying catch-up, and one incompatible safe halt.
@@ -92,8 +87,6 @@ Task Node: `[x] task_690f0c63d1c0d175a4e47d947825402b — rewarded 2026-08-24 (2
 - [ ] Compare the same proposed validator-governance decisions with the pinned RippleD 3.1.3 local-UNL adapter, keeping native RippleD ledger consensus separately labeled.
 - [ ] Prove Consensus v2 continues finalizing in the controlled integration run, p95 finality stays within 5% of the frozen same-fleet baseline, and no Cobalt recovery mutates durable history by hand.
 - [ ] Produce signed, redaction-safe simulation receipts and a verifier-backed packet that identifies every result as simulated-validator evidence. Do not claim real provider, administrator, custody, or geographic independence.
-
-The existing onboarding release and GitHub recruitment issue are optional inputs to a future real-operator program. They are not required to complete this milestone or activate Cobalt on the controlled testnet.
 
 ### 4. Live activation
 
