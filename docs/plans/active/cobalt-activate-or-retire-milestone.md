@@ -28,10 +28,9 @@ The isolated-validator capability simulation now passes against the production C
 
 Consensus v2 also passes the paired integration gate. A 50-round baseline and 50-round Cobalt integration run started from the same signed six-validator state. Client-visible p95 finality moved from 1617.88 ms to 1660.42 ms, a 2.63% increase inside the 5% budget, while Cobalt covered 99.9985% of the integration window under the production 25% CPU quota. This is simulated protocol-capability evidence and requires no external operators.
 
-The remaining work is operational:
+The predeployment release-lineage gate now passes. Release commit `caa0d5ba3a5ba39be1ac08579cece64fae08c7b0` replays the exact 915-block migrated quarantine archive to the expected tip and state root. Release-lineage head `2e25d347b88e5ea634b4ba32b83bedd11bfe5476` then completes the signed disposable-clone activation, six negative cases, scoped validator-key rotation, and separately authorized forward rollback. All 15 packet checks pass and the six live validator processes, restart counts, binaries, registry roots, trust-graph roots, authority flags, and block-control flags are unchanged. Evidence: [`release-qualification-v1.json`](https://github.com/postfiatorg/postfiatl1v2/blob/main/benchmarks/cobalt-handoff-rehearsal/release-qualification-v1.json) and [`packet-release-qualified-v1`](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/cobalt-handoff-rehearsal/packet-release-qualified-v1), `SHA256SUMS` root `f4f2f202111dc327ee590310ba65dc53e0611a578041ba878a3e23298e47a3e2`.
 
-- complete the release-lineage verification; and
-- keep Foundation authority active until the governed future-height Cobalt cutover.
+The milestone is deliberately stopped at the deployment boundary. Foundation authority remains active, Cobalt remains inactive for live block control, no validator service was restarted, and no live registry was mutated. Remaining work begins with a separately governed future-height controlled-testnet cutover task.
 
 ## Completed foundation
 
@@ -46,6 +45,7 @@ The remaining work is operational:
 - [x] Use the same canonical compact transcript for sidecar commit RPC instead of sending the expanded transcript. The 20-validator request is 590,087 bytes, below the 2 MiB RPC frame, and the socket drill commits and rejects a tampered signature through the compressed route. Code: [`cobalt_shadow_runtime.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/cobalt_shadow_runtime.rs), [`postfiat_cobalt_shadow.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/bin/postfiat_cobalt_shadow.rs).
 - [x] Roll source `bafc23fc424fdd78364928999038193b22d180db` to all six live advisory sidecars as binary `bd679b676c6be496635a5ffd02158cd772632a38da55f172734ebef4e768c6b4`, one node at a time. Every Consensus v2 PID, restart count, and binary hash remained unchanged; Cobalt authority and block control remained false.
 - [x] Re-run the full six-live-validator signed handoff/update/negative/forward-rollback rehearsal against that exact sidecar release. All 15 verifier checks pass; the canonical certified update is 329,883 bytes; the live fleet is identical before and after. Current packet: [`packet-authoritative-v5`](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/cobalt-handoff-rehearsal/packet-authoritative-v5), `SHA256SUMS` root `2858940ef188df9770584aaa5e8942f8a728da4b6c1a80775a9a0a1d6acec9df`. The v4 packet remains the evidence for source `2a9d449b`; v5 is authoritative for the deployed `bafc23fc` release.
+- [x] Qualify the final release lineage before deployment: focused archive-compatibility tests pass, the optimized node binary replays all 915 controlled-devnet blocks to the expected tip and state root, and the fresh signed disposable-clone handoff/update/negative/forward-rollback rehearsal passes all 15 gates without changing the live fleet. Evidence: [`release-qualification-v1.json`](https://github.com/postfiatorg/postfiatl1v2/blob/main/benchmarks/cobalt-handoff-rehearsal/release-qualification-v1.json) and [`packet-release-qualified-v1`](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/cobalt-handoff-rehearsal/packet-release-qualified-v1).
 - [x] Deliver the existing Python Cobalt CLI and read-only observatory. Code: [`python/postfiat_rpc/cobalt.py`](https://github.com/postfiatorg/postfiatl1v2/blob/main/python/postfiat_rpc/cobalt.py), [`cobalt_ui.py`](https://github.com/postfiatorg/postfiatl1v2/blob/main/python/postfiat_rpc/cobalt_ui.py).
 
 ## Major Task Node work
@@ -93,12 +93,14 @@ Prior operator-onboarding artifacts remain available for a future decentralizati
 
 ### 4. Live activation
 
-Task Node: `[ ] request and accept after the activation gates pass`
+Predeployment qualification Task Node: `[ ] task_3ff910558c03941dbc58f96ca8ef52d5 — accepted; evidence ready for verification`
+
+Live cutover Task Node: `[ ] not requested; operator stop-before-deploy boundary is active`
 
 - [x] Make a real Cobalt protocol decision certificate mandatory at the consensus admission boundary; validator signatures alone are insufficient.
 - [x] Verify the authoritative handoff/update/rollback flow with all six current validator identities on disposable signer-state clones while proving the live fleet unchanged.
 - [x] Pass the isolated-validator liveness simulation and bind its manifest, production source hash, scenario results, and verifier output into the activation packet. This gate requires simulated independence properties, not independent operators.
-- [ ] Verify a signed forward rollback on a disposable clone immediately before cutover.
+- [x] Verify a signed forward rollback on a disposable clone immediately before cutover. Release qualification packet: [`packet-release-qualified-v1`](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/cobalt-handoff-rehearsal/packet-release-qualified-v1).
 - [ ] Schedule and execute the future-height live controlled-testnet authority transition through [`cobalt_handoff.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/cobalt_handoff.rs).
 - [ ] Execute one real validator-registry change under active Cobalt authority.
 - [ ] Reject early, stale, replayed, wrong-root, mixed-authority, and self-authorized updates without mutation.

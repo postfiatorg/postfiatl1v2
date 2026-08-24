@@ -1,0 +1,69 @@
+{
+  "schema": "postfiat-cobalt-release-qualification-v1",
+  "captured_at": "2026-08-24T22:04:46Z",
+  "release_lineage": {
+    "qualified_candidate_head": "8694b99de22eaca53c80d1d6eae72915f339dd49",
+    "qualified_archive_replay_commit": "116bed84fe1b6c496b3a3b3bac184c49134d57d4",
+    "main_integration_head": "2e25d347b88e5ea634b4ba32b83bedd11bfe5476",
+    "main_archive_replay_commit": "caa0d5ba3a5ba39be1ac08579cece64fae08c7b0",
+    "release_node_binary_sha256": "431f194ba28391eba16c18a96d49c358bd2047d3b37eb0115216f46c6a6783f4",
+    "handoff_rehearsal_binary_sha256": "d98db7ae04a07bb834dc9282e58039e34f6c990b7cf2cb73e6eb51bbeac60f31",
+    "build_profile": "release"
+  },
+  "archive_replay": {
+    "data_source": "validator-0 migrated quarantine archive",
+    "live_data_used": false,
+    "verified": true,
+    "block_count": 915,
+    "tip_hash": "2333396826284869daaf47d93de5f14641e6fe8b0ebbe74fc3f5b910b5df66d4d81ed35ff3f7d7b2b776dce39d596450",
+    "state_root": "b8a0aef3f17b50c422e7cccf270c809a722587fd6af0cbff17fdcba7dd5c72edf2ba36b6ee00d20467c6a9e29d2bbe5a"
+  },
+  "focused_tests": [
+    {
+      "command": "cargo test -p postfiat-node --lib wan_devnet2_legacy_non_nav_spread_supply_window_is_chain_and_boundary_bound --locked -- --nocapture",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "command": "cargo test -p postfiat-node --lib wan_devnet2_ --locked -- --nocapture",
+      "passed": 8,
+      "failed": 0
+    },
+    {
+      "command": "cargo test -p postfiat-node --lib archive_replay --locked -- --nocapture",
+      "passed": 2,
+      "failed": 0
+    },
+    {
+      "command": "cargo test -p postfiat-execution --lib ar11_issued_asset_supply_counts_non_nav_spread_custody --locked -- --nocapture",
+      "passed": 1,
+      "failed": 0
+    },
+    {
+      "command": "cargo fmt --all -- --check",
+      "passed": 1,
+      "failed": 0
+    }
+  ],
+  "disposable_handoff": {
+    "packet": "benchmarks/cobalt-handoff-rehearsal/packet-release-qualified-v1",
+    "sha256sums_sha256": "f4f2f202111dc327ee590310ba65dc53e0611a578041ba878a3e23298e47a3e2",
+    "verifier_checks_passed": 15,
+    "activation_height": 1015,
+    "pre_activation_abort_without_mutation": true,
+    "six_negative_cases_rejected": true,
+    "signed_rbc_abba_mvba_dabc_decision_verified": true,
+    "scoped_validator_update_accepted": true,
+    "forward_rollback_restored_foundation": true,
+    "live_fleet_unchanged": true,
+    "cobalt_live_authority_after": false,
+    "cobalt_controls_block_consensus_after": false
+  },
+  "deployment": {
+    "performed": false,
+    "service_restart_performed": false,
+    "live_registry_mutated": false,
+    "stop_boundary": "predeployment qualification only"
+  },
+  "result": "passed"
+}
