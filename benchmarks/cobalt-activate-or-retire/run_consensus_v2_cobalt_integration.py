@@ -199,6 +199,12 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--rounds", type=int, default=50)
+    parser.add_argument(
+        "--cobalt-cpu-quota-percent",
+        type=int,
+        default=VALIDATORS * 25,
+        help="aggregate quota for six simulated sidecars; production unit is 25% each",
+    )
     args = parser.parse_args()
 
     node_bin = args.node_bin.resolve()
@@ -208,6 +214,10 @@ def main() -> int:
         raise ValueError("both binaries must be regular files")
     if args.rounds < 20:
         raise ValueError("--rounds must be at least 20 for a p95 gate")
+    if args.cobalt_cpu_quota_percent <= 0:
+        raise ValueError("--cobalt-cpu-quota-percent must be positive")
+    if shutil.which("systemd-run") is None:
+        raise ValueError("systemd-run is required to enforce the Cobalt CPU quota")
     if root.exists():
         raise ValueError(f"refusing to overwrite output directory: {root}")
     root.mkdir(parents=True)
@@ -503,8 +513,19 @@ def main() -> int:
                 stderr_path = logs / f"cobalt-{index:03}.stderr.log"
                 work_dir.mkdir(parents=True)
                 started = time.monotonic_ns()
+                unit = f"postfiat-cobalt-integration-{os.getpid()}-{index}"
                 completed = subprocess.run(
                     [
+                        "systemd-run",
+                        "--user",
+                        "--pipe",
+                        "--wait",
+                        "--collect",
+                        "--quiet",
+                        "-p",
+                        f"CPUQuota={args.cobalt_cpu_quota_percent}%",
+                        "--unit",
+                        unit,
                         str(cobalt_bin),
                         "--work-dir",
                         str(work_dir),
@@ -622,6 +643,10 @@ def main() -> int:
                 "consensus_v2_activation_height": ACTIVATION_HEIGHT,
                 "same_fleet": True,
                 "external_operators_required": False,
+                "production_cobalt_cpu_quota_percent_per_validator": 25,
+                "simulated_validator_domains": VALIDATORS,
+                "aggregate_cobalt_cpu_quota_percent": args.cobalt_cpu_quota_percent,
+                "quota_derivation": "six simulated sidecars times 25 percent per production service unit",
             },
             "metric": {
                 "name": metric,
