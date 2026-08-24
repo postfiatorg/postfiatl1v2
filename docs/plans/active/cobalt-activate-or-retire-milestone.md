@@ -26,9 +26,10 @@ The operator-admission boundary and published onboarding packet remain usable fo
 
 The isolated-validator capability simulation now passes against the production Cobalt decision and recovery code: six isolated validator domains, five-of-six progress, four-of-six safe halt, proof-carrying catch-up, byte-identical recovered history, all required fault schedules, and all four validator/trust transitions. The packet explicitly makes no independent-operator or operational-decentralization claim.
 
+Consensus v2 also passes the paired integration gate. A 50-round baseline and 50-round Cobalt integration run started from the same signed six-validator state. Client-visible p95 finality moved from 1617.88 ms to 1660.42 ms, a 2.63% increase inside the 5% budget, while Cobalt covered 99.9985% of the integration window under the production 25% CPU quota. This is simulated protocol-capability evidence and requires no external operators.
+
 The remaining work is operational:
 
-- measure Consensus v2 finality in a paired same-fleet baseline/integration run;
 - complete the release-lineage verification; and
 - keep Foundation authority active until the governed future-height Cobalt cutover.
 
@@ -87,8 +88,8 @@ Prior operator-onboarding artifacts remain available for a future decentralizati
 - [x] Reproduce the original Cobalt liveness-failure contract and demonstrate five-of-six progress plus gap refusal and exact durable-history recovery under the repaired implementation without conflicting roots.
 - [x] Run deterministic delay, loss, reorder, duplicate, stale-replay, equivocation, crash/restart, and partition/healing schedules against the isolated simulated validator domains.
 - [x] Compare the same proposed validator-governance decisions with the pinned RippleD 3.1.3 local-UNL adapter, keeping native RippleD ledger consensus separately labeled.
-- [ ] Prove Consensus v2 continues finalizing in the controlled integration run, p95 finality stays within 5% of the frozen same-fleet baseline, and no Cobalt recovery mutates durable history by hand.
-- [x] Produce signed-protocol, redaction-safe simulation receipts and a verifier-backed packet that identifies every result as simulated-validator evidence. Evidence: [`section3-packet`](../../../benchmarks/cobalt-activate-or-retire/section3-packet), `SHA256SUMS.txt` root `54bc5ebb445994dbc1c6c8c04ea8a9ce054af8438f04fd93554e776ac21a5c4c`. The packet makes no real provider, administrator, custody, geographic-independence, or decentralization claim.
+- [x] Prove Consensus v2 continues finalizing in the controlled integration run, p95 finality stays within 5% of the frozen same-fleet baseline, and no Cobalt recovery mutates durable history by hand. Result: 50 rounds per lane, 1617.88 ms baseline p95, 1660.42 ms integration p95, +2.63%, 99.9985% Cobalt coverage, production-matched 25% CPU quota.
+- [x] Produce signed-protocol, redaction-safe simulation receipts and a verifier-backed packet that identifies every result as simulated-validator evidence. Evidence: [`section3-packet`](../../../benchmarks/cobalt-activate-or-retire/section3-packet), `SHA256SUMS.txt` root `9a35119045698754ffdd11eea123bfad03bf2b3c23b700a55f0f539f5152bc18`. The packet makes no real provider, administrator, custody, geographic-independence, or decentralization claim.
 
 ### 4. Live activation
 
@@ -125,7 +126,7 @@ Governed inside the terminal-operation task; do not request microtasks.
 - [x] A fair, reproducible material safety distinction from RippleD local-UNL admission.
 - [x] Cobalt-authorized registry admission requires and verifies the actual signed protocol decision over the exact update.
 - [x] The isolated-validator simulation models independent validator identities, keys, trust views, schedules, failures, durable state, and recovery paths, and completes every liveness, fault, transition, recovery, determinism, and RippleD-comparison exercise without conflicting Cobalt roots. No real independent operator is required by this gate.
-- [ ] Consensus v2 stays live and within the 5% p95 finality budget.
+- [x] Consensus v2 stays live and within the 5% p95 finality budget in the paired, matched-state controlled integration simulation.
 - [ ] Live future-height handoff, real Cobalt-authorized registry change, CLI/UI readback, and forward rollback readiness all pass.
 
 Any unchecked item remains active P0 remediation work. It does not authorize retiring or deleting Cobalt.

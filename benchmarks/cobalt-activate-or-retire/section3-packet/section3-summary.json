@@ -1,6 +1,7 @@
 {
   "checks": {
     "compatible_nonuniform_views": true,
+    "consensus_v2_finality": true,
     "every_domain_recovers_exact_history": true,
     "fault_matrix": true,
     "five_of_six_progress": true,
@@ -20,7 +21,16 @@
     "rippled_cases": 18,
     "rippled_validator_governance_conflicting_roots": 1
   },
-  "consensus_v2_finality_gate": "measured separately; not inferred from Cobalt timing",
+  "consensus_v2_finality_gate": {
+    "baseline_p95_ms": 1617.883726,
+    "budget_percent": 5.0,
+    "cobalt_coverage_ratio": 0.9999850406923252,
+    "delta_percent": 2.6293158350243484,
+    "external_operators_required": false,
+    "integration_p95_ms": 1660.4229990000001,
+    "rounds_per_lane": 50,
+    "status": "PASS"
+  },
   "fault_classes": [
     "crash_restart",
     "delay",
@@ -41,7 +51,7 @@
   "rounds": 14,
   "schema": "postfiat-cobalt-section3-summary-v1",
   "scope": "protocol-capability simulation; no independent-operator claim",
-  "source_commit": "65674f1dab229cd759771b0718f663b696416ae8",
+  "source_commit": "eb1c84b3e88e710256ab09fce7a90ea501906925",
   "status": "PASS",
   "task_id": "task_043e009b196aea0b685b3f09a6ebb45d",
   "transitions": [

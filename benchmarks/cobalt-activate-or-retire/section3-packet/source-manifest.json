@@ -1,9 +1,21 @@
 {
+  "benchmark_files": {
+    "benchmarks/cobalt-activate-or-retire/run_consensus_v2_cobalt_integration.py": "e8c25fcb387ae0dae682dc0166affc7444457857e197f9ef01e8ed21cf901d51",
+    "crates/node/src/bin/postfiat_cobalt_liveness_simulation.rs": "bd3cc16958deb71370e7ef189137e2f2fcad0624ee136f34d7176030386e0eb2",
+    "crates/node/src/main.rs": "2e4f8dfb1a77a1fad320548a6886d71fac46f46dc3e23d39ce639b5b4a10b006",
+    "crates/node/src/main_parts/cli_dispatch.rs": "f73a5adc93d485873b0171adf8a71daf1859b45c6f2b289d6892b6785112b04d",
+    "crates/node/src/main_parts/cli_dispatch_parts/group_02.rs": "5f36af017a15521cd8ce9fdee63ed2a5a7f049e7c70979730f4a17678825b67f",
+    "crates/node/src/transport_cli.rs": "9e57d18ca982b58a0318204ffb413a4afaddf89c26b0292a8255e5f6fda20571"
+  },
+  "benchmark_source_commit": "e590a722c4e55607033b7f28b1bfe2cad0de429b",
+  "benchmark_source_ref": "e590a722",
+  "consensus_integration_report_sha256": "75ac7fdd8880e09cd5941eac375ec1769ed8f39ef2efb3794c9d0673ad7552be",
   "files": {
-    "benchmarks/cobalt-activate-or-retire/build_section3_packet.py": "25001849952f6eda95a9e4a5fa2e2a0ce18ad0e2700744eb03f74948c8d7e36d",
+    "benchmarks/cobalt-activate-or-retire/build_section3_packet.py": "8c77fd98ecb74f6fff62dfba79189ae9ca4efe495b1710a176962e86c26829fe",
+    "benchmarks/cobalt-activate-or-retire/run_consensus_v2_cobalt_integration.py": "e8c25fcb387ae0dae682dc0166affc7444457857e197f9ef01e8ed21cf901d51",
     "benchmarks/cobalt-activate-or-retire/section2-packet/SHA256SUMS.txt": "40bc86c9416a1b468f5625a2ff83724c9268f9d49c41007e9b0c4bc70c43c1e1",
     "benchmarks/cobalt-activate-or-retire/section2-packet/section2-summary.json": "8faee0b3fe68639ae65ccce8aa5ab37ac7353f54d02769ebf952e8fb67588101",
-    "benchmarks/cobalt-activate-or-retire/verify_section3_packet.py": "40112aeb9840358b5930b23c1dbb2f32b4306da05aa77bed311d77f332b9d4ba",
+    "benchmarks/cobalt-activate-or-retire/verify_section3_packet.py": "fa7b46f8bb05d1b97c1228e302d98ab08319852444434163ab0564ed2eb85a5b",
     "crates/consensus_cobalt/src/dabc_registry.rs": "d10b29dc2ac3929529d18f32d9e9d90b7df1c9593d0b1a1c8387dc0ef47fce8f",
     "crates/consensus_cobalt/src/internal_validation.rs": "c1427b51f17a57cc2efbbefe0101c41cb8ac48beee292b751675106c00fada19",
     "crates/node/Cargo.toml": "1312923f2b750a9f64e3c3a2be1a73a925141945c576f371704b5aae664aa677",
@@ -13,6 +25,6 @@
   "schema": "postfiat-cobalt-section3-source-manifest-v1",
   "section2_sha256sums_sha256": "40bc86c9416a1b468f5625a2ff83724c9268f9d49c41007e9b0c4bc70c43c1e1",
   "simulation_report_sha256": "081656bed4701c7783b023d6e38e4e50318942df72adf57d2d5372bc979093fd",
-  "source_commit": "65674f1dab229cd759771b0718f663b696416ae8",
+  "source_commit": "eb1c84b3e88e710256ab09fce7a90ea501906925",
   "task_id": "task_043e009b196aea0b685b3f09a6ebb45d"
 }

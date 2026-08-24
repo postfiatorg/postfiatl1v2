@@ -1,0 +1,86 @@
+{
+  "benchmark_source_commit": "e590a722c4e55607033b7f28b1bfe2cad0de429b",
+  "benchmark_source_ref": "e590a722",
+  "binaries": {
+    "cobalt_liveness_simulation_sha256": "2bb27cbaf6e6d2202c046370fa05d94b8b1641166c9ff112569009edda8ea2ea",
+    "postfiat_node_sha256": "1e89bf7207f4a0e0fe6bef1b20a5dde7f393d6edfa539980850d4c931230eb83"
+  },
+  "checks": {
+    "baseline_passed": true,
+    "cobalt_active_during_integration": true,
+    "consensus_v2_active_for_all_measured_rounds": true,
+    "durable_history_only_through_consensus": true,
+    "integration_passed": true,
+    "matched_same_fleet_configuration": true,
+    "p95_within_five_percent": true,
+    "simulation_only": true
+  },
+  "claims_not_made": [
+    "independent human operators",
+    "provider or geographic decentralization",
+    "public WAN latency",
+    "mainnet readiness"
+  ],
+  "cobalt_runs": [
+    {
+      "report_sha256": "c21d4da3db0f81a691ca6faf9f6068e4f23690a85859fd0c56adfd9605607747",
+      "rounds": 14,
+      "status": "passed"
+    }
+  ],
+  "config": {
+    "cobalt_simulation_process_cpu_quota_percent": 25,
+    "consensus_v2_activation_height": 2,
+    "external_operators_required": false,
+    "production_cobalt_service_cpu_quota_percent": 25,
+    "quota_matches_production_service_unit": true,
+    "rounds_per_lane": 50,
+    "same_fleet": "matched identities, keys, topology, binary, host, and initial state snapshot",
+    "simulated_validator_domains": 6,
+    "validators": 6,
+    "vote_policy": "full"
+  },
+  "heights": {
+    "baseline_final": 51,
+    "integration_final": 51
+  },
+  "matched_initial_state": {
+    "block_height": 1,
+    "block_tip_hash": "2f173504cf5dc22fafe75affdc26ca2aa17339f23df0cb12b0527fa0ff8214528b18579eceae912395b24e943bb0d3ed",
+    "equal": true,
+    "state_root": "148701ede284ad37f16601abb2daf9c7dd3bc30fc1b9a1e3df7758184e29990fda22775f9593b1e8f6b160c3cd7117d8",
+    "validators": 6
+  },
+  "metric": {
+    "baseline_p95_ms": 1617.883726,
+    "budget_percent": 5.0,
+    "delta_percent": 2.6293158350243484,
+    "integration_p95_ms": 1660.4229990000001,
+    "meaning": "client-visible Consensus v2 round finality",
+    "name": "consensus_round_ms"
+  },
+  "schema": "postfiat-consensus-v2-cobalt-finality-receipt-v1",
+  "scope": "six isolated simulated validator domains; no external operators",
+  "secondary_metrics": {
+    "admitted_to_finality_ms": {
+      "baseline_p95_ms": 1618.518574,
+      "integration_p95_ms": 1661.0675030000002
+    },
+    "wallet_to_finality_ms": {
+      "baseline_p95_ms": 1620.134043,
+      "integration_p95_ms": 1663.0512480000002
+    }
+  },
+  "source_aggregate_sha256": "75ac7fdd8880e09cd5941eac375ec1769ed8f39ef2efb3794c9d0673ad7552be",
+  "source_report_hashes": {
+    "baseline_report_sha256": "2599cf2294091a2138c64dab8280f11733b9888e006764a05b2ea4ea9b558a83",
+    "integration_report_sha256": "db7e8642745e16351249df72208b9f64078d766ab82b18094857549737fbca64",
+    "topology_sha256": "d7a8dc9dbcffb3dcc5040a98b23b23614e67ee002e7bf4a175e0443683a3cc6d"
+  },
+  "status": "PASS",
+  "timing": {
+    "baseline_duration_ms": 61456.582604,
+    "cobalt_coverage_ratio": 0.9999850406923252,
+    "integration_duration_ms": 61131.1713
+  }
+}
