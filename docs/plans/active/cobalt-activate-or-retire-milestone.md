@@ -93,7 +93,7 @@ Prior operator-onboarding artifacts remain available for a future decentralizati
 
 ### 4. Live activation
 
-Predeployment qualification Task Node: `[ ] task_3ff910558c03941dbc58f96ca8ef52d5 — accepted; evidence ready for verification`
+Predeployment qualification Task Node: `[x] task_3ff910558c03941dbc58f96ca8ef52d5 — rewarded 2026-08-24 (1 PFT)`
 
 Live cutover Task Node: `[ ] not requested; operator stop-before-deploy boundary is active`
 
