@@ -2963,11 +2963,11 @@ fn apply_asset_operation(
     }
 }
 
-fn orchard_balances_for_bridge_claim<'a>(
+fn orchard_balances_for_bridge_claim(
     compatibility: AssetExecutionCompatibility,
     block_height: u64,
-    orchard_balances: &'a [AssetOrchardAssetBalance],
-) -> &'a [AssetOrchardAssetBalance] {
+    orchard_balances: &[AssetOrchardAssetBalance],
+) -> &[AssetOrchardAssetBalance] {
     if compatibility.orchard_aware_bridge_claim_active(block_height) {
         orchard_balances
     } else {

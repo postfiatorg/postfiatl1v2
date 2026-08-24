@@ -430,8 +430,6 @@ use state_commitment::{
     LegacyJsonGovernanceState, LegacyJsonLedgerState, LegacyJsonShieldedState,
 };
 mod execution_actions;
-#[cfg(test)]
-use execution_actions::validate_asset_orchard_swap_pricing_against_ledger;
 #[allow(unused_imports)]
 use execution_actions::{
     apply_archived_wan_devnet2_pre_pricing_swap, apply_governance_amendment_with_lifecycle_records,
@@ -450,15 +448,14 @@ use execution_actions::{
     execute_asset_transaction_for_archive_replay, execute_bridge_batch, execute_governance_batch,
     execute_orchard_deposit_shielded_action, execute_orchard_shielded_action,
     execute_orchard_withdraw_shielded_action, execute_shielded_batch, execute_shielded_swap_action,
-    execute_transparent_batch, execute_transparent_batch_for_archive_replay,
-    execute_transparent_batch_with_orchard, expected_governance_amendment_rollbacks,
-    expected_governance_amendment_supersessions, governance_agent_dry_run_amendment_id,
-    governance_agent_dry_run_record, governance_agent_dry_run_record_id,
-    governance_agent_dry_run_rejection, governance_amendment_activation_record,
-    governance_amendment_activation_record_id, governance_amendment_current_value,
-    governance_amendment_lifecycle_rejection, governance_amendment_rollback_record,
-    governance_amendment_rollback_record_id, governance_amendment_supersession_record,
-    governance_amendment_supersession_record_id,
+    execute_transparent_batch_for_archive_replay, execute_transparent_batch_with_orchard,
+    expected_governance_amendment_rollbacks, expected_governance_amendment_supersessions,
+    governance_agent_dry_run_amendment_id, governance_agent_dry_run_record,
+    governance_agent_dry_run_record_id, governance_agent_dry_run_rejection,
+    governance_amendment_activation_record, governance_amendment_activation_record_id,
+    governance_amendment_current_value, governance_amendment_lifecycle_rejection,
+    governance_amendment_rollback_record, governance_amendment_rollback_record_id,
+    governance_amendment_supersession_record, governance_amendment_supersession_record_id,
     orchard_aware_bridge_claim_activation_height_for_chain,
     pfusdc_source_series_activation_height_for_chain, validate_governance_agent_dry_run_amendment,
     validate_governance_agent_dry_run_record, validate_vault_bridge_route_profile_against_ledger,
@@ -469,6 +466,10 @@ use execution_actions::{
     verify_governance_amendment_supersession_record_for_domain,
     verify_governance_amendment_supersession_records, ArchivedAssetOrchardSwapReplayAction,
     ASSET_ORCHARD_NAV_USD_E8_ACTIVATION_HEIGHT,
+};
+#[cfg(test)]
+use execution_actions::{
+    execute_transparent_batch, validate_asset_orchard_swap_pricing_against_ledger,
 };
 mod storage_commit;
 pub use storage_commit::*;
