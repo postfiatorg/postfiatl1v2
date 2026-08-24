@@ -13,6 +13,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 EXPECTED_FILES = {
+    "consensus-v2-finality-receipt.json",
     "isolated-validator-simulation.json",
     "section3-summary.json",
     "source-manifest.json",
@@ -84,6 +85,7 @@ def verify(packet: Path) -> dict[str, Any]:
     summary = read_json(packet / "section3-summary.json")
     source = read_json(packet / "source-manifest.json")
     report = read_json(packet / "isolated-validator-simulation.json")
+    finality = read_json(packet / "consensus-v2-finality-receipt.json")
     domains = report.get("validator_domains", [])
     omitted = report.get("omitted_domain_receipts", [])
     transitions = report.get("transition_receipts", [])
@@ -91,6 +93,8 @@ def verify(packet: Path) -> dict[str, Any]:
     report_checks = report.get("checks", {})
     source_commit = source.get("source_commit")
     source_files = source.get("files", {})
+    benchmark_source_commit = source.get("benchmark_source_commit")
+    benchmark_files = source.get("benchmark_files", {})
     source_hashes_ok = (
         isinstance(source_commit, str)
         and len(source_commit) == 40
@@ -105,6 +109,20 @@ def verify(packet: Path) -> dict[str, Any]:
             )
         except ValueError:
             source_hashes_ok = False
+    benchmark_hashes_ok = (
+        isinstance(benchmark_source_commit, str)
+        and len(benchmark_source_commit) == 40
+        and isinstance(benchmark_files, dict)
+        and bool(benchmark_files)
+    )
+    if benchmark_hashes_ok:
+        try:
+            benchmark_hashes_ok = all(
+                digest(git_blob(benchmark_source_commit, path)) == expected
+                for path, expected in benchmark_files.items()
+            )
+        except ValueError:
+            benchmark_hashes_ok = False
 
     expected_faults = {
         "delay",
@@ -116,12 +134,29 @@ def verify(packet: Path) -> dict[str, Any]:
         "crash_restart",
         "partition_healing",
     }
+    finality_config = finality.get("config", {})
+    finality_checks = finality.get("checks", {})
+    finality_metric = finality.get("metric", {})
+    finality_state = finality.get("matched_initial_state", {})
+    finality_runs = finality.get("cobalt_runs", [])
+    finality_hashes = [
+        *finality.get("binaries", {}).values(),
+        *finality.get("source_report_hashes", {}).values(),
+        *(row.get("report_sha256") for row in finality_runs),
+    ]
     checks = {
         "checksums": verify_checksums(packet),
         "task": source.get("task_id") == TASK_ID and summary.get("task_id") == TASK_ID,
-        "source_commit": source_hashes_ok and summary.get("source_commit") == source_commit,
+        "source_commit": (
+            source_hashes_ok
+            and benchmark_hashes_ok
+            and summary.get("source_commit") == source_commit
+            and finality.get("benchmark_source_commit") == benchmark_source_commit
+        ),
         "report_hash": source.get("simulation_report_sha256")
         == digest(read_bytes(packet / "isolated-validator-simulation.json")),
+        "finality_source_hash": source.get("consensus_integration_report_sha256")
+        == finality.get("source_aggregate_sha256"),
         "simulation_passed": (
             report.get("schema")
             == "postfiat-cobalt-isolated-validator-liveness-simulation-v1"
@@ -189,6 +224,60 @@ def verify(packet: Path) -> dict[str, Any]:
             "pre_fix_history_failure",
             "corrected_acceptance",
         },
+        "consensus_v2_finality": (
+            finality.get("schema")
+            == "postfiat-consensus-v2-cobalt-finality-receipt-v1"
+            and finality.get("status") == "PASS"
+            and finality.get("scope")
+            == "six isolated simulated validator domains; no external operators"
+            and finality_config.get("rounds_per_lane") == 50
+            and finality_config.get("validators") == 6
+            and finality_config.get("simulated_validator_domains") == 6
+            and finality_config.get("external_operators_required") is False
+            and finality_config.get("vote_policy") == "full"
+            and finality_config.get(
+                "cobalt_simulation_process_cpu_quota_percent"
+            )
+            == finality_config.get("production_cobalt_service_cpu_quota_percent")
+            == 25
+            and finality_config.get("quota_matches_production_service_unit") is True
+            and isinstance(finality_checks, dict)
+            and bool(finality_checks)
+            and all(finality_checks.values())
+            and finality_metric.get("name") == "consensus_round_ms"
+            and finality_metric.get("budget_percent") == 5.0
+            and isinstance(finality_metric.get("delta_percent"), (int, float))
+            and -100.0 < finality_metric["delta_percent"] <= 5.0
+            and finality_state.get("equal") is True
+            and finality_state.get("validators") == 6
+            and finality_state.get("block_height") == 1
+            and all(
+                isinstance(finality_state.get(field), str)
+                and len(finality_state[field]) == 96
+                for field in ("block_tip_hash", "state_root")
+            )
+            and finality.get("heights", {}).get("baseline_final") == 51
+            and finality.get("heights", {}).get("integration_final") == 51
+            and finality.get("timing", {}).get("cobalt_coverage_ratio", 0) >= 0.95
+            and len(finality_runs) >= 1
+            and all(
+                row.get("status") == "passed" and row.get("rounds") == 14
+                for row in finality_runs
+            )
+            and all(
+                isinstance(value, str)
+                and len(value) == 64
+                and all(char in "0123456789abcdef" for char in value)
+                for value in finality_hashes
+            )
+            and set(finality.get("claims_not_made", []))
+            >= {
+                "independent human operators",
+                "provider or geographic decentralization",
+                "public WAN latency",
+                "mainnet readiness",
+            }
+        ),
         "section2_comparison": (
             summary.get("comparison", {}).get("cobalt_cases") == 18
             and summary.get("comparison", {}).get("cobalt_conflicting_roots") == 0
@@ -203,8 +292,14 @@ def verify(packet: Path) -> dict[str, Any]:
             and summary.get("status") == "PASS"
             and isinstance(summary.get("checks"), dict)
             and all(summary["checks"].values())
-            and summary.get("consensus_v2_finality_gate")
-            == "measured separately; not inferred from Cobalt timing"
+            and summary.get("consensus_v2_finality_gate", {}).get("status")
+            == "PASS"
+            and summary.get("consensus_v2_finality_gate", {}).get(
+                "external_operators_required"
+            )
+            is False
+            and summary.get("consensus_v2_finality_gate", {}).get("delta_percent")
+            == finality_metric.get("delta_percent")
         ),
     }
     return {

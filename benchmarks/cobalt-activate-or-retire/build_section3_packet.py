@@ -15,10 +15,19 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 TASK_ID = "task_043e009b196aea0b685b3f09a6ebb45d"
 SECTION2_PACKET = HERE / "section2-packet"
+BENCHMARK_SOURCE_FILES = [
+    "benchmarks/cobalt-activate-or-retire/run_consensus_v2_cobalt_integration.py",
+    "crates/node/src/bin/postfiat_cobalt_liveness_simulation.rs",
+    "crates/node/src/main.rs",
+    "crates/node/src/main_parts/cli_dispatch.rs",
+    "crates/node/src/main_parts/cli_dispatch_parts/group_02.rs",
+    "crates/node/src/transport_cli.rs",
+]
 SOURCE_FILES = [
     "benchmarks/cobalt-activate-or-retire/section2-packet/SHA256SUMS.txt",
     "benchmarks/cobalt-activate-or-retire/section2-packet/section2-summary.json",
     "benchmarks/cobalt-activate-or-retire/build_section3_packet.py",
+    "benchmarks/cobalt-activate-or-retire/run_consensus_v2_cobalt_integration.py",
     "benchmarks/cobalt-activate-or-retire/verify_section3_packet.py",
     "crates/node/Cargo.toml",
     "crates/node/src/bin/postfiat_cobalt_liveness_simulation.rs",
@@ -71,6 +80,7 @@ def unique(domains: list[dict[str, Any]], field: str) -> bool:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--simulation-report", type=Path, required=True)
+    parser.add_argument("--consensus-integration-report", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -80,6 +90,7 @@ def main() -> int:
     output.mkdir(parents=True)
 
     report = read_json(args.simulation_report)
+    consensus = read_json(args.consensus_integration_report)
     section2 = read_json(SECTION2_PACKET / "section2-summary.json")
     domains = report.get("validator_domains", [])
     omitted = report.get("omitted_domain_receipts", [])
@@ -96,6 +107,84 @@ def main() -> int:
         "crash_restart",
         "partition_healing",
     }
+    consensus_config = consensus.get("config", {})
+    consensus_metric = consensus.get("metric", {})
+    consensus_checks = consensus.get("checks", {})
+    matched_state = consensus.get("matched_initial_state", {})
+    baseline_state = matched_state.get("baseline", [])
+    integration_state = matched_state.get("integration", [])
+    cobalt_runs = consensus.get("cobalt_runs", [])
+    consensus_evidence = consensus.get("evidence", {})
+    consensus_binaries = consensus.get("binaries", {})
+    benchmark_source_commit = consensus.get("source_commit")
+    hash_values = [
+        *consensus_evidence.values(),
+        *consensus_binaries.values(),
+        *(row.get("report_sha256") for row in cobalt_runs),
+    ]
+    consensus_gate = (
+        consensus.get("schema")
+        == "postfiat-consensus-v2-cobalt-paired-integration-v1"
+        and consensus.get("status") == "passed"
+        and consensus.get("scope")
+        == "six-validator local protocol-capability integration simulation"
+        and consensus_config.get("rounds_per_lane") == 50
+        and consensus_config.get("validators") == 6
+        and consensus_config.get("simulated_validator_domains") == 6
+        and consensus_config.get("external_operators_required") is False
+        and consensus_config.get("vote_policy") == "full"
+        and consensus_config.get("cobalt_simulation_process_cpu_quota_percent")
+        == consensus_config.get("production_cobalt_service_cpu_quota_percent")
+        == 25
+        and consensus_config.get("quota_matches_production_service_unit") is True
+        and consensus_metric.get("name") == "consensus_round_ms"
+        and consensus_metric.get("budget_percent") == 5.0
+        and isinstance(consensus_metric.get("delta_percent"), (int, float))
+        and -100.0 < consensus_metric["delta_percent"] <= 5.0
+        and isinstance(consensus_checks, dict)
+        and bool(consensus_checks)
+        and all(consensus_checks.values())
+        and matched_state.get("equal") is True
+        and len(baseline_state) == len(integration_state) == 6
+        and baseline_state == integration_state
+        and {row.get("node_id") for row in baseline_state}
+        == {f"validator-{index}" for index in range(6)}
+        and len(
+            {
+                (
+                    row.get("block_height"),
+                    row.get("block_tip_hash"),
+                    row.get("state_root"),
+                )
+                for row in baseline_state
+            }
+        )
+        == 1
+        and baseline_state[0].get("block_height") == 1
+        and consensus.get("heights", {}).get("baseline_final") == 51
+        and consensus.get("heights", {}).get("integration_final") == 51
+        and consensus.get("timing", {}).get("cobalt_coverage_ratio", 0) >= 0.95
+        and len(cobalt_runs) >= 1
+        and all(
+            row.get("status") == "passed" and row.get("rounds") == 14
+            for row in cobalt_runs
+        )
+        and isinstance(benchmark_source_commit, str)
+        and len(benchmark_source_commit) == 40
+        and all(
+            isinstance(value, str)
+            and len(value) == 64
+            and all(char in "0123456789abcdef" for char in value)
+            for value in hash_values
+        )
+        and set(consensus.get("claims_not_made", []))
+        >= {
+            "independent human operators",
+            "provider or geographic decentralization",
+            "public WAN latency",
+            "mainnet readiness",
+        }
+    )
     checks = {
         "simulation_passed": (
             report.get("schema")
@@ -189,6 +278,7 @@ def main() -> int:
             and report.get("round_count") == 14
             and report.get("final_contiguous_sequence") == 14
         ),
+        "consensus_v2_finality": consensus_gate,
         "section2_comparison_passed": (
             section2.get("status") == "PASS"
             and section2.get("cobalt", {}).get("cases") == 18
@@ -208,12 +298,54 @@ def main() -> int:
     source = {
         "schema": "postfiat-cobalt-section3-source-manifest-v1",
         "source_commit": source_commit,
+        "benchmark_source_commit": benchmark_source_commit,
         "task_id": TASK_ID,
         "simulation_report_sha256": digest(args.simulation_report.read_bytes()),
+        "consensus_integration_report_sha256": digest(
+            args.consensus_integration_report.read_bytes()
+        ),
         "section2_sha256sums_sha256": digest(
             (SECTION2_PACKET / "SHA256SUMS.txt").read_bytes()
         ),
         "files": {path: digest(git_blob(source_commit, path)) for path in SOURCE_FILES},
+        "benchmark_files": {
+            path: digest(git_blob(benchmark_source_commit, path))
+            for path in BENCHMARK_SOURCE_FILES
+        },
+    }
+    initial_state = baseline_state[0]
+    finality = {
+        "schema": "postfiat-consensus-v2-cobalt-finality-receipt-v1",
+        "status": "PASS",
+        "scope": "six isolated simulated validator domains; no external operators",
+        "benchmark_source_commit": benchmark_source_commit,
+        "source_aggregate_sha256": digest(
+            args.consensus_integration_report.read_bytes()
+        ),
+        "config": consensus_config,
+        "checks": consensus_checks,
+        "metric": consensus_metric,
+        "secondary_metrics": consensus.get("secondary_metrics", {}),
+        "heights": consensus.get("heights", {}),
+        "matched_initial_state": {
+            "equal": matched_state["equal"],
+            "validators": 6,
+            "block_height": initial_state["block_height"],
+            "block_tip_hash": initial_state["block_tip_hash"],
+            "state_root": initial_state["state_root"],
+        },
+        "timing": consensus.get("timing", {}),
+        "cobalt_runs": [
+            {
+                "report_sha256": row["report_sha256"],
+                "rounds": row["rounds"],
+                "status": row["status"],
+            }
+            for row in cobalt_runs
+        ],
+        "binaries": consensus_binaries,
+        "source_report_hashes": consensus_evidence,
+        "claims_not_made": consensus.get("claims_not_made", []),
     }
     summary = {
         "schema": "postfiat-cobalt-section3-summary-v1",
@@ -242,13 +374,24 @@ def main() -> int:
             "rippled_validator_governance_conflicting_roots": 1,
             "native_rippled_consensus_scope": "separate ledger-consensus control",
         },
-        "consensus_v2_finality_gate": "measured separately; not inferred from Cobalt timing",
+        "consensus_v2_finality_gate": {
+            "status": finality["status"],
+            "rounds_per_lane": consensus_config["rounds_per_lane"],
+            "baseline_p95_ms": consensus_metric["baseline_p95_ms"],
+            "integration_p95_ms": consensus_metric["integration_p95_ms"],
+            "delta_percent": consensus_metric["delta_percent"],
+            "budget_percent": consensus_metric["budget_percent"],
+            "cobalt_coverage_ratio": finality["timing"]["cobalt_coverage_ratio"],
+            "external_operators_required": False,
+        },
     }
 
     shutil.copyfile(args.simulation_report, output / "isolated-validator-simulation.json")
+    write_json(output / "consensus-v2-finality-receipt.json", finality)
     write_json(output / "section3-summary.json", summary)
     write_json(output / "source-manifest.json", source)
     names = [
+        "consensus-v2-finality-receipt.json",
         "isolated-validator-simulation.json",
         "section3-summary.json",
         "source-manifest.json",
