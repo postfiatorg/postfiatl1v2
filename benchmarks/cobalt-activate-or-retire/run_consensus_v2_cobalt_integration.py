@@ -309,7 +309,7 @@ def main() -> int:
                 "--to",
                 wallet_address,
                 "--amount",
-                "1000000000",
+                "100000000",
                 "--batch-file",
                 str(fund_batch),
             ],
@@ -340,6 +340,7 @@ def main() -> int:
             stdout_path=logs / "fund-certify.json",
             stderr_path=logs / "fund-certify.stderr",
         )
+        fund_apply_path = logs / "fund-apply.json"
         run(
             [
                 str(node_bin),
@@ -351,9 +352,19 @@ def main() -> int:
                 "--certificate-file",
                 str(fund_certificate),
             ],
-            stdout_path=logs / "fund-apply.json",
+            stdout_path=fund_apply_path,
             stderr_path=logs / "fund-apply.stderr",
         )
+        fund_receipts = json.loads(fund_apply_path.read_bytes())
+        if (
+            not isinstance(fund_receipts, list)
+            or not fund_receipts
+            or not all(
+                isinstance(receipt, dict) and receipt.get("accepted") is True
+                for receipt in fund_receipts
+            )
+        ):
+            raise RuntimeError("benchmark wallet funding receipt was not accepted")
 
         snapshot = private / "seed.snapshot"
         run(
