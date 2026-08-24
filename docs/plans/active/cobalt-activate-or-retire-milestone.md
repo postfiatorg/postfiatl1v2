@@ -74,7 +74,7 @@ Task Node: `[x] task_690f0c63d1c0d175a4e47d947825402b — rewarded 2026-08-24 (2
 - [x] Fix the owning non-uniform support boundary, add regression coverage, and rerun the unchanged oracle and corpus. Code commit: `01822ecc53ad1cdab50e6c55536fcc7b81aba02a`.
 - [x] Complete the corpus with zero per-node mismatches, zero Cobalt conflicts, resolved 90% support boundaries, deterministic replay, and the RippleD distinction. Evidence: [`section2-packet`](../../../benchmarks/cobalt-activate-or-retire/section2-packet), `SHA256SUMS.txt` root `40bc86c9416a1b468f5625a2ff83724c9268f9d49c41007e9b0c4bc70c43c1e1`.
 
-### 3. Independent-validator liveness simulation
+### 3. Isolated-validator liveness simulation
 
 - Superseded operator-establishment task: `[x] task_46d1707cb9e11f04648ea54a7163fbee — cancelled because real external operators are outside this milestone`
 - Simulation task: `[x] task_043e009b196aea0b685b3f09a6ebb45d — accepted; execution packet passes, Task Node verification pending`
@@ -96,7 +96,7 @@ Task Node: `[ ] request and accept after the activation gates pass`
 
 - [x] Make a real Cobalt protocol decision certificate mandatory at the consensus admission boundary; validator signatures alone are insufficient.
 - [x] Verify the authoritative handoff/update/rollback flow with all six current validator identities on disposable signer-state clones while proving the live fleet unchanged.
-- [ ] Pass the independent-validator liveness simulation and bind its manifest, production source hash, scenario results, and verifier output into the activation packet.
+- [ ] Pass the isolated-validator liveness simulation and bind its manifest, production source hash, scenario results, and verifier output into the activation packet. This gate requires simulated independence properties, not independent operators.
 - [ ] Verify a signed forward rollback on a disposable clone immediately before cutover.
 - [ ] Schedule and execute the future-height live controlled-testnet authority transition through [`cobalt_handoff.rs`](../../../crates/node/src/cobalt_handoff.rs).
 - [ ] Execute one real validator-registry change under active Cobalt authority.
@@ -124,7 +124,7 @@ Governed inside the terminal-operation task; do not request microtasks.
 - [x] Byte-identical decision-critical replay.
 - [x] A fair, reproducible material safety distinction from RippleD local-UNL admission.
 - [x] Cobalt-authorized registry admission requires and verifies the actual signed protocol decision over the exact update.
-- [x] The isolated independent-validator simulation completes every liveness, fault, transition, recovery, determinism, and RippleD-comparison exercise without conflicting Cobalt roots.
+- [x] The isolated-validator simulation models independent validator identities, keys, trust views, schedules, failures, durable state, and recovery paths, and completes every liveness, fault, transition, recovery, determinism, and RippleD-comparison exercise without conflicting Cobalt roots. No real independent operator is required by this gate.
 - [ ] Consensus v2 stays live and within the 5% p95 finality budget.
 - [ ] Live future-height handoff, real Cobalt-authorized registry change, CLI/UI readback, and forward rollback readiness all pass.
 
