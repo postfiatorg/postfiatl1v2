@@ -18,7 +18,8 @@ use crate::cobalt_authority_certificate::{
 use crate::cobalt_shadow::{
     build_signed_protocol_transcript, CobaltShadowHistoryRange, CobaltShadowIdentity,
     CobaltShadowLimits, CobaltShadowMessage, CobaltShadowProtocolDecision,
-    CobaltShadowProtocolTranscript, CobaltShadowService, CobaltShadowState, CobaltShadowStatus,
+    CobaltShadowProtocolTranscript, CobaltShadowRegistryBinding, CobaltShadowService,
+    CobaltShadowState, CobaltShadowStatus,
 };
 
 pub const COBALT_SHADOW_RPC_SCHEMA: &str = "postfiat-cobalt-shadow-rpc-v1";
@@ -41,6 +42,15 @@ pub enum CobaltShadowRpcRequest {
     },
     CatchUp {
         range: Box<CobaltShadowHistoryRange>,
+    },
+    CreateProposal {
+        binding: Box<CobaltShadowRegistryBinding>,
+        round: u64,
+        payload_hash: String,
+    },
+    CreateContribution {
+        binding: Box<CobaltShadowRegistryBinding>,
+        propose: Box<postfiat_consensus_cobalt::RbcPropose>,
     },
     Submit {
         message: CobaltShadowMessage,
@@ -433,6 +443,16 @@ fn handle_request(
         CobaltShadowRpcRequest::CatchUp { range } => service
             .catch_up_history(&range)
             .and_then(|status| serde_json::to_value(status).map_err(json_error)),
+        CobaltShadowRpcRequest::CreateProposal {
+            binding,
+            round,
+            payload_hash,
+        } => service
+            .create_protocol_proposal(&binding, round, payload_hash)
+            .and_then(|proposal| serde_json::to_value(proposal).map_err(json_error)),
+        CobaltShadowRpcRequest::CreateContribution { binding, propose } => service
+            .create_protocol_contribution(&binding, &propose)
+            .and_then(|contribution| serde_json::to_value(contribution).map_err(json_error)),
         CobaltShadowRpcRequest::Submit { message } => service
             .receive(message)
             .and_then(|outcome| serde_json::to_value(outcome).map_err(json_error)),

@@ -34,6 +34,10 @@ path = "src/bin/postfiat_cobalt_decisive_benchmark.rs"
 name = "postfiat-cobalt-handoff-rehearsal"
 path = "src/bin/postfiat_cobalt_handoff_rehearsal.rs"
 
+[[bin]]
+name = "postfiat-cobalt-liveness-simulation"
+path = "src/bin/postfiat_cobalt_liveness_simulation.rs"
+
 [dependencies]
 base64 = { workspace = true }
 flate2 = { workspace = true }
