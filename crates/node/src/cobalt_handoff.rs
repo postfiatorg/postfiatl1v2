@@ -149,11 +149,10 @@ pub(super) fn verify_governance_authority_batch(
 
     match governance.authority_mode {
         postfiat_types::GOVERNANCE_AUTHORITY_MODE_FOUNDATION => {
-            if batch
-                .validator_registry_updates
-                .iter()
-                .any(|update| !update.cobalt_authorizations.is_empty())
-            {
+            if batch.validator_registry_updates.iter().any(|update| {
+                !update.cobalt_authorizations.is_empty()
+                    || update.cobalt_decision_certificate.is_some()
+            }) {
                 return Err(permission(
                     "Cobalt validator authorization is inactive under Foundation authority",
                 ));
@@ -334,6 +333,42 @@ pub fn verify_cobalt_validator_trust_update(
     }
 
     let progress = current_cobalt_authority_progress(governance)?;
+    let decision_certificate = update.cobalt_decision_certificate.as_ref().ok_or_else(|| {
+        permission("Cobalt validator update requires a protocol decision certificate")
+    })?;
+    let expected_payload_hash =
+        crate::cobalt_authority_certificate::cobalt_validator_update_payload_hash(update)?;
+    let expected_round = proposal_slot
+        .checked_sub(1)
+        .ok_or_else(|| permission("Cobalt validator update proposal slot has no protocol round"))?;
+    let previous_ratification = governance
+        .validator_registry_updates
+        .iter()
+        .rev()
+        .find(|prior| !prior.cobalt_authorizations.is_empty())
+        .map(|prior| {
+            prior
+                .cobalt_decision_certificate
+                .as_ref()
+                .ok_or_else(|| {
+                    invalid("stored Cobalt validator update has no decision certificate")
+                })
+                .and_then(crate::cobalt_authority_certificate::cobalt_decision_ratification)
+        })
+        .transpose()?;
+    crate::cobalt_authority_certificate::verify_cobalt_validator_update_decision_certificate(
+        decision_certificate,
+        &domain,
+        registry,
+        &validators,
+        &registry_root,
+        &progress.trust_graph_root,
+        &expected_payload_hash,
+        expected_round,
+        proposal_slot,
+        previous_ratification.as_ref(),
+    )?;
+
     let expected_sequence = progress
         .amendment_sequence
         .checked_add(1)
@@ -408,16 +443,22 @@ pub fn verify_cobalt_authority_history(
                 "Cobalt authority mode has no versioned handoff record",
             ));
         }
-        if governance
-            .validator_registry_updates
-            .iter()
-            .any(|update| !update.cobalt_authorizations.is_empty())
-        {
+        if governance.validator_registry_updates.iter().any(|update| {
+            !update.cobalt_authorizations.is_empty() || update.cobalt_decision_certificate.is_some()
+        }) {
             return Err(invalid(
                 "Cobalt-authorized validator update predates the authority handoff",
             ));
         }
         return Ok(());
+    }
+
+    if governance.validator_registry_updates.iter().any(|update| {
+        !update.cobalt_authorizations.is_empty() && update.cobalt_decision_certificate.is_none()
+    }) {
+        return Err(invalid(
+            "stored Cobalt validator update has no protocol decision certificate",
+        ));
     }
 
     let mut previous: Option<&postfiat_types::CobaltGovernanceAuthorityTransitionV1> = None;
@@ -816,12 +857,17 @@ fn invalid(message: impl Into<String>) -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cobalt_shadow::{
+        assemble_protocol_transcript, build_registry_binding_manifest, CobaltShadowIdentity,
+        CobaltShadowLimits, CobaltShadowRegistryBinding, CobaltShadowService,
+    };
     use postfiat_consensus_cobalt::{
         trust_graph_transition_id, TrustGraphTransition, VALIDATOR_REGISTRY_OP_ROTATE_KEY,
     };
     use postfiat_types::{
-        CobaltGovernanceAuthorityTransitionV1, SignedCobaltAuthorityTransitionApprovalV1,
-        SignedCobaltValidatorUpdateAuthorizationV1, ValidatorRegistryEntry,
+        CobaltGovernanceAuthorityTransitionV1, CobaltValidatorUpdateDecisionCertificateV1,
+        SignedCobaltAuthorityTransitionApprovalV1, SignedCobaltValidatorUpdateAuthorizationV1,
+        ValidatorRegistryEntry, COBALT_VALIDATOR_UPDATE_DECISION_CERTIFICATE_SCHEMA_V1,
     };
 
     struct Fixture {
@@ -831,6 +877,8 @@ mod tests {
         keys: Vec<MlDsa65KeyPair>,
         validators: Vec<String>,
         registry_root: String,
+        cobalt_root: PathBuf,
+        cobalt_binding: CobaltShadowRegistryBinding,
     }
 
     fn fixture() -> Fixture {
@@ -854,6 +902,65 @@ mod tests {
         };
         let governance = GovernanceState::new(4);
         let registry_root = validator_registry_root(&registry, &validators).expect("registry root");
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let cobalt_root = std::env::temp_dir().join(format!(
+            "postfiat-cobalt-authority-certificate-{}-{nonce}",
+            std::process::id()
+        ));
+        let mut services = validators
+            .iter()
+            .map(|validator| {
+                CobaltShadowService::initialize(
+                    cobalt_root.join(validator),
+                    CobaltShadowIdentity {
+                        node_id: validator.clone(),
+                        chain_id: genesis.chain_id.clone(),
+                        genesis_hash: genesis_hash(&genesis),
+                        protocol_version: genesis.protocol_version,
+                    },
+                    CobaltShadowLimits::default(),
+                )
+                .expect("initialize Cobalt signer")
+            })
+            .collect::<Vec<_>>();
+        let validator_bindings = services
+            .iter()
+            .zip(validators.iter().zip(&keys))
+            .map(|(service, (validator, key))| {
+                let key_path = cobalt_root.join(format!("{validator}.validator-keys.json"));
+                crate::write_validator_key_file(
+                    &key_path,
+                    &ValidatorKeyFile {
+                        validators: vec![ValidatorKeyRecord {
+                            node_id: validator.clone(),
+                            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+                            public_key_hex: bytes_to_hex(&key.public_key),
+                            private_key_hex: bytes_to_hex(&key.private_key),
+                        }],
+                    },
+                )
+                .expect("write validator key");
+                service
+                    .create_validator_binding(registry_root.clone(), &key_path)
+                    .expect("create Cobalt key binding")
+            })
+            .collect::<Vec<_>>();
+        let cobalt_binding = build_registry_binding_manifest(
+            registry_root.clone(),
+            registry.clone(),
+            validator_bindings,
+            bft_quorum_threshold(validators.len()).expect("quorum"),
+            10,
+        )
+        .expect("build Cobalt registry binding");
+        for service in &mut services {
+            service
+                .bind_registry_manifest(&cobalt_binding)
+                .expect("bind Cobalt registry");
+        }
         Fixture {
             genesis,
             governance,
@@ -861,6 +968,8 @@ mod tests {
             keys,
             validators,
             registry_root,
+            cobalt_root,
+            cobalt_binding,
         }
     }
 
@@ -953,7 +1062,7 @@ mod tests {
             10,
             1,
             "11".repeat(48),
-            "22".repeat(48),
+            fixture.cobalt_binding.trust_graph.trust_graph_root.clone(),
         );
         verify_cobalt_authority_transition(
             &fixture.genesis,
@@ -1026,6 +1135,39 @@ mod tests {
             fixture.validators[..quorum].to_vec(),
         )
         .expect("update");
+        let payload_hash =
+            crate::cobalt_authority_certificate::cobalt_validator_update_payload_hash(&update)
+                .expect("Cobalt update payload hash");
+        let mut services = fixture
+            .validators
+            .iter()
+            .map(|validator| {
+                CobaltShadowService::open(fixture.cobalt_root.join(validator))
+                    .expect("open Cobalt signer")
+            })
+            .collect::<Vec<_>>();
+        let round = height.checked_sub(1).expect("Cobalt protocol round");
+        let proposal = services[0]
+            .create_protocol_proposal(&fixture.cobalt_binding, round, payload_hash)
+            .expect("create Cobalt proposal");
+        let contributions = services
+            .iter_mut()
+            .map(|service| {
+                service
+                    .create_protocol_contribution(&fixture.cobalt_binding, &proposal)
+                    .expect("create Cobalt contribution")
+            })
+            .collect::<Vec<_>>();
+        let transcript =
+            assemble_protocol_transcript(&fixture.cobalt_binding, proposal, contributions)
+                .expect("assemble Cobalt protocol transcript");
+        update.cobalt_decision_certificate = Some(CobaltValidatorUpdateDecisionCertificateV1 {
+            schema: COBALT_VALIDATOR_UPDATE_DECISION_CERTIFICATE_SCHEMA_V1.to_string(),
+            registry_binding: serde_json::to_value(&fixture.cobalt_binding)
+                .expect("serialize Cobalt registry binding"),
+            protocol_transcript: serde_json::to_value(transcript)
+                .expect("serialize Cobalt protocol transcript"),
+        });
         let sequence = progress.amendment_sequence + 1;
         update.cobalt_authorizations = fixture
             .validators
@@ -1174,6 +1316,63 @@ mod tests {
     }
 
     #[test]
+    fn cobalt_authority_rejects_quorum_only_and_tampered_protocol_decisions() {
+        let fixture = fixture();
+        let governance = activate(&fixture);
+        let update = signed_rotate_update(&fixture, &governance, 11);
+
+        let mut quorum_only = update.clone();
+        quorum_only.cobalt_decision_certificate = None;
+        assert!(verify_cobalt_validator_trust_update(
+            &fixture.genesis,
+            &governance,
+            &fixture.registry,
+            &quorum_only,
+            11,
+        )
+        .expect_err("quorum signatures without Cobalt decision must be rejected")
+        .to_string()
+        .contains("protocol decision certificate"));
+
+        let mut tampered = update;
+        tampered
+            .cobalt_decision_certificate
+            .as_mut()
+            .expect("decision certificate")
+            .protocol_transcript["payload_hash"] = serde_json::Value::String("ff".repeat(48));
+        assert!(verify_cobalt_validator_trust_update(
+            &fixture.genesis,
+            &governance,
+            &fixture.registry,
+            &tampered,
+            11,
+        )
+        .expect_err("tampered Cobalt decision must be rejected")
+        .to_string()
+        .contains("not bound"));
+
+        let mut wrong_domain = signed_rotate_update(&fixture, &governance, 12);
+        let certificate = wrong_domain
+            .cobalt_decision_certificate
+            .as_mut()
+            .expect("decision certificate");
+        certificate.registry_binding["trust_graph"]["chain_id"] =
+            serde_json::Value::String("another-chain".to_string());
+        certificate.protocol_transcript["trust_graph"]["chain_id"] =
+            serde_json::Value::String("another-chain".to_string());
+        assert!(verify_cobalt_validator_trust_update(
+            &fixture.genesis,
+            &governance,
+            &fixture.registry,
+            &wrong_domain,
+            12,
+        )
+        .expect_err("cross-chain Cobalt decision must be rejected")
+        .to_string()
+        .contains("live chain"));
+    }
+
+    #[test]
     fn transition_replay_and_non_forward_rollback_are_rejected() {
         let fixture = fixture();
         let mut governance = fixture.governance.clone();
@@ -1265,6 +1464,7 @@ mod tests {
         assert!(
             replay_error.to_string().contains("active trust graph")
                 || replay_error.to_string().contains("binding mismatch")
+                || replay_error.to_string().contains("trust graph")
         );
     }
 

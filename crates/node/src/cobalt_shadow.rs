@@ -3011,7 +3011,7 @@ fn validator_binding_statement_hash(binding: &CobaltShadowValidatorBinding) -> i
     )
 }
 
-fn validate_validator_binding(binding: &CobaltShadowValidatorBinding) -> io::Result<()> {
+pub fn validate_validator_binding(binding: &CobaltShadowValidatorBinding) -> io::Result<()> {
     if binding.schema != COBALT_SHADOW_VALIDATOR_BINDING_SCHEMA {
         return Err(invalid(
             "unsupported Cobalt shadow validator binding schema",

@@ -10,6 +10,8 @@ pub const SIGNED_COBALT_AUTHORITY_TRANSITION_APPROVAL_SCHEMA_V1: &str =
     "postfiat.signed_cobalt_authority_transition_approval.v1";
 pub const SIGNED_COBALT_VALIDATOR_UPDATE_AUTHORIZATION_SCHEMA_V1: &str =
     "postfiat.signed_cobalt_validator_update_authorization.v1";
+pub const COBALT_VALIDATOR_UPDATE_DECISION_CERTIFICATE_SCHEMA_V1: &str =
+    "postfiat.cobalt_validator_update_decision_certificate.v1";
 pub const COBALT_AUTHORITY_TRANSITION_ACTIVATE: &str = "activate_cobalt";
 pub const COBALT_AUTHORITY_TRANSITION_ROLLBACK: &str = "rollback_to_foundation";
 pub const COBALT_AUTHORITY_SCOPE_VALIDATOR_TRUST_V1: &str =
@@ -1397,6 +1399,13 @@ pub struct GovernanceAmendmentRollbackRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CobaltValidatorUpdateDecisionCertificateV1 {
+    pub schema: String,
+    pub registry_binding: serde_json::Value,
+    pub protocol_transcript: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValidatorRegistryUpdateRecord {
     pub schema: String,
     pub update_id: String,
@@ -1415,6 +1424,8 @@ pub struct ValidatorRegistryUpdateRecord {
     pub signed_authorizations: Vec<SignedGovernanceAuthorizationV2>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cobalt_authorizations: Vec<SignedCobaltValidatorUpdateAuthorizationV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cobalt_decision_certificate: Option<CobaltValidatorUpdateDecisionCertificateV1>,
     pub activation_height: u64,
     pub previous_registry_root: String,
     pub new_registry_root: String,

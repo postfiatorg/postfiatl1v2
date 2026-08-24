@@ -8,6 +8,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shlex
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -130,8 +131,18 @@ def upload_text(host: str, remote_path: str, text: str) -> None:
 
 
 def remote_sign(host: str, remote_binary: str, args: list[str]) -> dict[str, Any]:
-    command = " ".join([remote_binary, *args])
+    command = shlex.join([remote_binary, *args])
     return json.loads(ssh_text(host, command, timeout=120))
+
+
+def remote_shadow(host: str, args: list[str]) -> dict[str, Any]:
+    executable = ssh_text(
+        host,
+        "readlink -f /proc/$(systemctl show --property=MainPID --value postfiat-cobalt-shadow.service)/exe",
+    ).strip()
+    if not executable.startswith("/"):
+        raise RuntimeError("cannot resolve deployed Cobalt executable")
+    return json.loads(ssh_text(host, shlex.join([executable, *args]), timeout=180))
 
 
 def provider_hosts() -> dict[int, dict[str, str]]:
@@ -379,6 +390,128 @@ def main() -> int:
         timeout=60,
     )
 
+    payload_info = json.loads(
+        subprocess.run(
+            [str(BINARY), "update-payload-hash", "--update", str(update_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        ).stdout
+    )
+    protocol_round = int(payload_info["protocol_round"])
+    payload_hash = str(payload_info["payload_hash"])
+    binding_remote = f"/tmp/cobalt-handoff-binding-{binary_hash[:12]}.json"
+    proposal_remote = f"/tmp/cobalt-handoff-proposal-{protocol_round}.json"
+    contributions_remote = f"/tmp/cobalt-handoff-contributions-{protocol_round}.json"
+    shadow_clone_dirs: dict[int, str] = {}
+    for index in range(6):
+        host = hosts[index]["host"]
+        clone_dir = ssh_text(
+            host,
+            shlex.join(
+                [
+                    "mktemp",
+                    "-d",
+                    f"/tmp/postfiat-cobalt-authority-{protocol_round}-XXXXXX",
+                ]
+            ),
+        ).strip()
+        if not clone_dir.startswith("/tmp/postfiat-cobalt-authority-"):
+            raise RuntimeError("unexpected remote Cobalt clone path")
+        ssh_text(
+            host,
+            shlex.join(
+                ["cp", "-a", "/var/lib/postfiat-cobalt-shadow/.", f"{clone_dir}/"]
+            ),
+        )
+        shadow_clone_dirs[index] = clone_dir
+        upload_text(host, binding_remote, BINDING.read_text(encoding="utf-8"))
+
+    proposal = remote_shadow(
+        hosts[0]["host"],
+        [
+            "propose",
+            "--data-dir",
+            shadow_clone_dirs[0],
+            "--registry-binding",
+            binding_remote,
+            "--round",
+            str(protocol_round),
+            "--payload-hash",
+            payload_hash,
+        ],
+    )
+    proposal_path = output / "cobalt-update-proposal.json"
+    write_json(proposal_path, proposal)
+    contributions: list[dict[str, Any]] = []
+    for index in range(6):
+        host = hosts[index]["host"]
+        upload_text(host, proposal_remote, proposal_path.read_text(encoding="utf-8"))
+        contribution = remote_shadow(
+            host,
+            [
+                "contribute",
+                "--data-dir",
+                shadow_clone_dirs[index],
+                "--registry-binding",
+                binding_remote,
+                "--proposal",
+                proposal_remote,
+            ],
+        )
+        must(contribution.get("node_id") == f"validator-{index}", "Cobalt contributor mismatch")
+        contributions.append(contribution)
+    contributions_path = output / "cobalt-update-contributions.json"
+    write_json(contributions_path, contributions)
+    upload_text(
+        hosts[0]["host"],
+        contributions_remote,
+        contributions_path.read_text(encoding="utf-8"),
+    )
+    transcript = remote_shadow(
+        hosts[0]["host"],
+        [
+            "assemble",
+            "--registry-binding",
+            binding_remote,
+            "--proposal",
+            proposal_remote,
+            "--contributions",
+            contributions_remote,
+        ],
+    )
+    transcript_path = output / "cobalt-update-protocol-transcript.json"
+    write_json(transcript_path, transcript)
+    decision_certificate_path = output / "cobalt-update-decision-certificate.json"
+    write_json(
+        decision_certificate_path,
+        {
+            "schema": "postfiat.cobalt_validator_update_decision_certificate.v1",
+            "registry_binding": binding,
+            "protocol_transcript": transcript,
+        },
+    )
+    certified_update_path = output / "validator-trust-update-certified.json"
+    subprocess.run(
+        [
+            str(BINARY),
+            "attach-decision",
+            "--manifest",
+            str(manifest_path),
+            "--activation-result",
+            str(activation_path),
+            "--update",
+            str(update_path),
+            "--certificate",
+            str(decision_certificate_path),
+            "--output",
+            str(certified_update_path),
+        ],
+        check=True,
+        timeout=120,
+    )
+
     negative_path = output / "negative-cases.json"
     subprocess.run(
         [
@@ -389,19 +522,19 @@ def main() -> int:
             "--transition",
             str(signed_transition_path),
             "--update",
-            str(update_path),
+            str(certified_update_path),
             "--output",
             str(negative_path),
         ],
         check=True,
         timeout=60,
     )
-    update = json.loads(update_path.read_text(encoding="utf-8"))
-    update_remote = f"/tmp/{update_path.name}"
+    update = json.loads(certified_update_path.read_text(encoding="utf-8"))
+    update_remote = f"/tmp/{certified_update_path.name}"
     authorizations: list[dict[str, Any]] = []
     for index in range(5):
         host = hosts[index]["host"]
-        upload_text(host, update_remote, update_path.read_text(encoding="utf-8"))
+        upload_text(host, update_remote, certified_update_path.read_text(encoding="utf-8"))
         authorization = remote_sign(
             host,
             remote_binary,
@@ -439,7 +572,7 @@ def main() -> int:
             "--activation-result",
             str(activation_path),
             "--update",
-            str(update_path),
+            str(certified_update_path),
             "--authorizations",
             str(authorizations_path),
             "--output",
@@ -538,9 +671,10 @@ def main() -> int:
 3. Request five current-registry ML-DSA-65 transition approvals on the validators; keys never leave the validators.
 4. Verify the valid transition, then discard it and record `{abort_path.name}` with no clone mutation.
 5. Verify and apply the transition to the disposable clone, then run all six negative cases against the signed transition.
-6. Build a validator-5 key-rotation update, request five scoped Cobalt authorizations on the validators, verify it, apply it, and reject an unrelated crypto-policy amendment.
-7. Build a rollback that binds the update lock and new trust root, request five approvals under the updated registry, verify it, and apply it as a second forward transition.
-8. Capture live facts again and require validator process/binary/registry/trust/authority fields to be unchanged.
+6. Build a validator-5 key-rotation update, clone each live Cobalt signer state into a disposable directory, and run a six-validator signed RBC -> ABBA -> MVBA -> DABC decision over the exact update payload.
+7. Attach and verify that protocol decision before requesting five scoped validator authorizations; apply the certified update and reject an unrelated crypto-policy amendment.
+8. Build a rollback that binds the update lock and new trust root, request five approvals under the updated registry, verify it, and apply it as a second forward transition.
+9. Capture live facts again and require validator process/binary/registry/trust/authority fields to be unchanged.
 
 The live fleet is never restarted or written. Consensus v2 remains the only block-finality protocol; this packet does not authorize activation.
 """
@@ -555,6 +689,11 @@ The live fleet is never restarted or written. Consensus v2 remains the only bloc
         signed_transition_path,
         negative_path,
         update_path,
+        proposal_path,
+        contributions_path,
+        transcript_path,
+        decision_certificate_path,
+        certified_update_path,
         updated_registry_path,
         authorizations_path,
         update_result_path,
@@ -585,6 +724,8 @@ The live fleet is never restarted or written. Consensus v2 remains the only bloc
             "pre_activation_abort_without_mutation": True,
             "activation_clone_state_changed": True,
             "all_six_negative_cases_rejected": True,
+            "signed_rbc_abba_mvba_dabc_decision_verified": True,
+            "decision_payload_bound_to_exact_validator_update": True,
             "scoped_validator_update_accepted": True,
             "unrelated_governance_rejected": True,
             "forward_rollback_restored_foundation": True,
@@ -607,7 +748,30 @@ The live fleet is never restarted or written. Consensus v2 remains the only bloc
         host = hosts[index]["host"]
         subprocess.run(
             ssh_base(host)
-            + [f"rm -f {remote_binary} {transition_remote} {update_remote} {rollback_remote}"],
+            + [
+                shlex.join(
+                    [
+                        "rm",
+                        "-f",
+                        "--",
+                        remote_binary,
+                        transition_remote,
+                        update_remote,
+                        rollback_remote,
+                        binding_remote,
+                        proposal_remote,
+                        contributions_remote,
+                    ]
+                )
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+            check=False,
+        )
+        subprocess.run(
+            ssh_base(host)
+            + [shlex.join(["rm", "-rf", "--", shadow_clone_dirs[index]])],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=30,
