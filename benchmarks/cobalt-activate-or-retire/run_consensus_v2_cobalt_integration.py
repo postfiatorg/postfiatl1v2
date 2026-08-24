@@ -98,6 +98,148 @@ def wait_ready(path: Path, process: subprocess.Popen[bytes]) -> None:
     raise RuntimeError(f"timed out waiting for {path}")
 
 
+def stop_validators(
+    processes: list[subprocess.Popen[bytes]],
+    handles: list[tuple[Any, Any]],
+) -> None:
+    for process in processes:
+        if process.poll() is None:
+            process.terminate()
+    deadline = time.monotonic() + 5
+    for process in processes:
+        if process.poll() is None:
+            remaining = max(0.0, deadline - time.monotonic())
+            try:
+                process.wait(timeout=remaining)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+    for stdout_handle, stderr_handle in handles:
+        stdout_handle.close()
+        stderr_handle.close()
+    processes.clear()
+    handles.clear()
+
+
+def prepare_nodes(
+    node_bin: Path,
+    nodes: Path,
+    snapshot: Path,
+    seed: Path,
+    logs: Path,
+    lane: str,
+) -> None:
+    if nodes.exists():
+        shutil.rmtree(nodes)
+    nodes.mkdir()
+    for index in range(VALIDATORS):
+        node_id = f"validator-{index}"
+        data_dir = nodes / node_id
+        run(
+            [
+                str(node_bin),
+                "snapshot-import",
+                "--data-dir",
+                str(data_dir),
+                "--snapshot-dir",
+                str(snapshot),
+                "--node-id",
+                node_id,
+            ],
+            stdout_path=logs / f"{lane}.{node_id}.snapshot-import.json",
+            stderr_path=logs / f"{lane}.{node_id}.snapshot-import.stderr",
+        )
+        run(
+            [
+                str(node_bin),
+                "validator-key-stage",
+                "--data-dir",
+                str(data_dir),
+                "--source-key-file",
+                str(seed / "validator_keys.json"),
+                "--source-validator-id",
+                node_id,
+                "--validator-id",
+                node_id,
+            ],
+            stdout_path=logs / f"{lane}.{node_id}.key-stage.json",
+            stderr_path=logs / f"{lane}.{node_id}.key-stage.stderr",
+        )
+
+
+def fleet_status(node_bin: Path, nodes: Path) -> list[dict[str, Any]]:
+    statuses: list[dict[str, Any]] = []
+    for index in range(VALIDATORS):
+        node_id = f"validator-{index}"
+        completed = run(
+            [str(node_bin), "status", "--data-dir", str(nodes / node_id)]
+        )
+        status = json.loads(completed.stdout)
+        statuses.append(
+            {
+                "node_id": status["node_id"],
+                "block_height": status["block_height"],
+                "block_tip_hash": status["block_tip_hash"],
+                "state_root": status["state_root"],
+            }
+        )
+    return statuses
+
+
+def start_validators(
+    node_bin: Path,
+    nodes: Path,
+    topology: Path,
+    root: Path,
+    logs: Path,
+    lane: str,
+) -> tuple[list[subprocess.Popen[bytes]], list[tuple[Any, Any]]]:
+    processes: list[subprocess.Popen[bytes]] = []
+    handles: list[tuple[Any, Any]] = []
+    try:
+        for index in range(VALIDATORS):
+            node_id = f"validator-{index}"
+            data_dir = nodes / node_id
+            ready = logs / f"{lane}.{node_id}.ready.json"
+            stdout_handle = (logs / f"{lane}.{node_id}.stdout.log").open("wb")
+            stderr_handle = (logs / f"{lane}.{node_id}.stderr.log").open("wb")
+            handles.append((stdout_handle, stderr_handle))
+            env = os.environ.copy()
+            env["POSTFIAT_TRANSPORT_VALIDATOR_READY_FILE"] = str(ready)
+            env["POSTFIAT_PREWARM_SHIELDED_VERIFIER"] = "1"
+            env["POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER"] = "1"
+            env["POSTFIAT_PREWARM_ASSET_ORCHARD_PRIVATE_EGRESS_VERIFIER"] = "1"
+            process = subprocess.Popen(
+                [
+                    str(node_bin),
+                    "transport-validator-serve",
+                    "--unsafe-devnet-file-signer",
+                    "--unsafe-devnet-json-storage",
+                    "--data-dir",
+                    str(data_dir),
+                    "--topology",
+                    str(topology),
+                    "--key-file",
+                    str(data_dir / "validator_keys.json"),
+                    "--vote-dir",
+                    str(root / "votes" / lane / node_id),
+                    "--max-connections",
+                    "10000",
+                    "--timeout-ms",
+                    "90000",
+                ],
+                stdout=stdout_handle,
+                stderr=stderr_handle,
+                env=env,
+            )
+            processes.append(process)
+            wait_ready(ready, process)
+        return processes, handles
+    except Exception:
+        stop_validators(processes, handles)
+        raise
+
+
 def split_seed_validator_keys(seed: Path) -> None:
     combined = read_json(seed / "validator_keys.json")
     records = combined.get("validators")
@@ -113,6 +255,7 @@ def split_seed_validator_keys(seed: Path) -> None:
 def benchmark_command(
     node_bin: Path,
     root: Path,
+    nodes: Path,
     topology: Path,
     wallet_key_file: Path,
     wallet_address: str,
@@ -125,7 +268,7 @@ def benchmark_command(
         str(node_bin),
         "tx-latency-benchmark",
         "--base-dir",
-        str(root / "nodes"),
+        str(nodes),
         "--topology",
         str(topology),
         "--wallet-key-file",
@@ -202,8 +345,8 @@ def main() -> int:
     parser.add_argument(
         "--cobalt-cpu-quota-percent",
         type=int,
-        default=VALIDATORS * 25,
-        help="aggregate quota for six simulated sidecars; production unit is 25%% each",
+        default=25,
+        help="quota for the one Cobalt simulation process; production unit is 25%%",
     )
     args = parser.parse_args()
 
@@ -389,40 +532,7 @@ def main() -> int:
             stdout_path=logs / "snapshot-export.json",
             stderr_path=logs / "snapshot-export.stderr",
         )
-        nodes.mkdir()
-        for index in range(VALIDATORS):
-            node_id = f"validator-{index}"
-            data_dir = nodes / node_id
-            run(
-                [
-                    str(node_bin),
-                    "snapshot-import",
-                    "--data-dir",
-                    str(data_dir),
-                    "--snapshot-dir",
-                    str(snapshot),
-                    "--node-id",
-                    node_id,
-                ],
-                stdout_path=logs / f"{node_id}.snapshot-import.json",
-                stderr_path=logs / f"{node_id}.snapshot-import.stderr",
-            )
-            run(
-                [
-                    str(node_bin),
-                    "validator-key-stage",
-                    "--data-dir",
-                    str(data_dir),
-                    "--source-key-file",
-                    str(seed / "validator_keys.json"),
-                    "--source-validator-id",
-                    node_id,
-                    "--validator-id",
-                    node_id,
-                ],
-                stdout_path=logs / f"{node_id}.key-stage.json",
-                stderr_path=logs / f"{node_id}.key-stage.stderr",
-            )
+        prepare_nodes(node_bin, nodes, snapshot, seed, logs, "baseline")
 
         run(
             [
@@ -445,48 +555,15 @@ def main() -> int:
             stderr_path=logs / "topology.stderr",
         )
 
-        for index in range(VALIDATORS):
-            node_id = f"validator-{index}"
-            data_dir = nodes / node_id
-            ready = logs / f"{node_id}.ready.json"
-            stdout_handle = (logs / f"{node_id}.stdout.log").open("wb")
-            stderr_handle = (logs / f"{node_id}.stderr.log").open("wb")
-            validator_logs.append((stdout_handle, stderr_handle))
-            env = os.environ.copy()
-            env["POSTFIAT_TRANSPORT_VALIDATOR_READY_FILE"] = str(ready)
-            env["POSTFIAT_PREWARM_SHIELDED_VERIFIER"] = "1"
-            env["POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER"] = "1"
-            env["POSTFIAT_PREWARM_ASSET_ORCHARD_PRIVATE_EGRESS_VERIFIER"] = "1"
-            process = subprocess.Popen(
-                [
-                    str(node_bin),
-                    "transport-validator-serve",
-                    "--unsafe-devnet-file-signer",
-                    "--unsafe-devnet-json-storage",
-                    "--data-dir",
-                    str(data_dir),
-                    "--topology",
-                    str(topology),
-                    "--key-file",
-                    str(data_dir / "validator_keys.json"),
-                    "--vote-dir",
-                    str(root / "votes" / node_id),
-                    "--max-connections",
-                    "10000",
-                    "--timeout-ms",
-                    "90000",
-                ],
-                stdout=stdout_handle,
-                stderr=stderr_handle,
-                env=env,
-            )
-            validator_processes.append(process)
-            wait_ready(ready, process)
-
-        fleet_pids = [process.pid for process in validator_processes]
+        baseline_initial_status = fleet_status(node_bin, nodes)
+        validator_processes, validator_logs = start_validators(
+            node_bin, nodes, topology, root, logs, "baseline"
+        )
+        baseline_pids = [process.pid for process in validator_processes]
         baseline_command = benchmark_command(
             node_bin,
             root,
+            nodes,
             topology,
             wallet_key,
             wallet_address,
@@ -501,6 +578,17 @@ def main() -> int:
             stderr_path=logs / "baseline.stderr",
         )
         baseline_end_ns = time.monotonic_ns()
+        baseline_fleet_alive = all(
+            process.poll() is None for process in validator_processes
+        )
+        stop_validators(validator_processes, validator_logs)
+        prepare_nodes(node_bin, nodes, snapshot, seed, logs, "integration")
+        integration_initial_status = fleet_status(node_bin, nodes)
+        matched_initial_state = baseline_initial_status == integration_initial_status
+        validator_processes, validator_logs = start_validators(
+            node_bin, nodes, topology, root, logs, "integration"
+        )
+        integration_pids = [process.pid for process in validator_processes]
 
         def cobalt_loop() -> None:
             index = 0
@@ -562,6 +650,7 @@ def main() -> int:
         integration_command = benchmark_command(
             node_bin,
             root,
+            nodes,
             topology,
             wallet_key,
             wallet_address,
@@ -594,9 +683,11 @@ def main() -> int:
         coverage = interval_coverage(
             integration_start_ns, integration_end_ns, cobalt_intervals
         )
-        same_fleet_alive = all(
+        integration_fleet_alive = all(
             process.pid == expected and process.poll() is None
-            for process, expected in zip(validator_processes, fleet_pids, strict=True)
+            for process, expected in zip(
+                validator_processes, integration_pids, strict=True
+            )
         )
         baseline_checks = baseline.get("checks", {})
         integration_checks = integration.get("checks", {})
@@ -607,13 +698,19 @@ def main() -> int:
             "integration_passed": integration.get("status") == "passed"
             and isinstance(integration_checks, dict)
             and all(integration_checks.values()),
-            "same_six_validator_processes": same_fleet_alive
-            and len(fleet_pids) == VALIDATORS
-            and len(set(fleet_pids)) == VALIDATORS,
+            "matched_same_fleet_configuration": (
+                matched_initial_state
+                and baseline_fleet_alive
+                and integration_fleet_alive
+                and len(baseline_pids) == len(integration_pids) == VALIDATORS
+                and len(set(baseline_pids)) == len(set(integration_pids)) == VALIDATORS
+                and set(baseline_pids).isdisjoint(integration_pids)
+            ),
             "consensus_v2_active_for_all_measured_rounds": (
-                baseline.get("final_state", {}).get("height", 0) >= ACTIVATION_HEIGHT
-                and integration.get("final_state", {}).get("height", 0)
-                > baseline.get("final_state", {}).get("height", 0)
+                baseline.get("final_state", {}).get("height")
+                == integration.get("final_state", {}).get("height")
+                == 1 + args.rounds
+                and 2 >= ACTIVATION_HEIGHT
             ),
             "cobalt_active_during_integration": bool(cobalt_runs)
             and coverage >= 0.95
@@ -641,12 +738,12 @@ def main() -> int:
                 "rounds_per_lane": args.rounds,
                 "vote_policy": "full",
                 "consensus_v2_activation_height": ACTIVATION_HEIGHT,
-                "same_fleet": True,
+                "same_fleet": "matched identities, keys, topology, binary, host, and initial state snapshot",
                 "external_operators_required": False,
-                "production_cobalt_cpu_quota_percent_per_validator": 25,
+                "production_cobalt_service_cpu_quota_percent": 25,
+                "cobalt_simulation_process_cpu_quota_percent": args.cobalt_cpu_quota_percent,
+                "quota_matches_production_service_unit": args.cobalt_cpu_quota_percent == 25,
                 "simulated_validator_domains": VALIDATORS,
-                "aggregate_cobalt_cpu_quota_percent": args.cobalt_cpu_quota_percent,
-                "quota_derivation": "six simulated sidecars times 25 percent per production service unit",
             },
             "metric": {
                 "name": metric,
@@ -671,7 +768,15 @@ def main() -> int:
                 / 1_000_000,
                 "cobalt_coverage_ratio": coverage,
             },
-            "fleet_pids": fleet_pids,
+            "fleet_pids": {
+                "baseline": baseline_pids,
+                "integration": integration_pids,
+            },
+            "matched_initial_state": {
+                "equal": matched_initial_state,
+                "baseline": baseline_initial_status,
+                "integration": integration_initial_status,
+            },
             "cobalt_runs": cobalt_runs,
             "heights": {
                 "baseline_final": baseline.get("final_state", {}).get("height"),
@@ -697,21 +802,7 @@ def main() -> int:
         return 0 if report["status"] == "passed" else 1
     finally:
         cobalt_stop.set()
-        for process in validator_processes:
-            if process.poll() is None:
-                process.terminate()
-        deadline = time.monotonic() + 5
-        for process in validator_processes:
-            if process.poll() is None:
-                remaining = max(0.0, deadline - time.monotonic())
-                try:
-                    process.wait(timeout=remaining)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
-        for stdout_handle, stderr_handle in validator_logs:
-            stdout_handle.close()
-            stderr_handle.close()
+        stop_validators(validator_processes, validator_logs)
 
 
 if __name__ == "__main__":
