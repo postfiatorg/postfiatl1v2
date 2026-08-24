@@ -573,7 +573,7 @@ const WAN_DEVNET2_ARCHIVED_REJECTED_PRIVATE_PRIMARY_ISSUE:
     377,
     "aed030cd9716c15217cd371820c74bc88d589dc0dadf5e4cd4145d83ffe99197d613da52a72966bf0db5de6159f7d570",
     "4af10a87b60ce1343054b770d4b265e08ee2ca4a1cc0ee28894377de8c2c3d9f01e293adb39c0021407e3cf556daba9a",
-    "91c2e778f13c71939ad5bfb35d23bb8fa1a2815c941460f219ff0344fff66a4d9421e99194655ddb351674207cdda132",
+    "588d078c219ad6bebfa48669ee980d31ae27936981ba8335a2bfd8da246497f9598057413601b73eef9b63438c924bfb",
 );
 
 // Immutable, certificate-bound private-primary actions accepted before the
@@ -581,9 +581,8 @@ const WAN_DEVNET2_ARCHIVED_REJECTED_PRIVATE_PRIMARY_ISSUE:
 // still performs the complete proof, policy, capacity, supply, nullifier, and
 // state-root validation; these tuples only authorize entering that normal
 // deterministic transition for the historical batch at its committed height.
-// Retained as the immutable historical compatibility record; consumed by the
-// AR-10 allowlist-exactness regression in test builds only.
-#[allow(dead_code)]
+// Retained as the immutable historical compatibility record; consumed by
+// archive execution and receipt-ID replay compatibility.
 const WAN_DEVNET2_ARCHIVED_PRIVATE_PRIMARY_ISSUES: &[(u64, &str)] = &[
     (
         378,
@@ -671,7 +670,6 @@ const WAN_DEVNET2_ARCHIVED_PRIVATE_PRIMARY_ISSUES: &[(u64, &str)] = &[
     ),
 ];
 
-#[allow(dead_code)]
 const WAN_DEVNET2_ARCHIVED_PRIVATE_PRIMARY_REDEEMS: &[(u64, &str)] = &[
     (
         407,
@@ -815,6 +813,7 @@ pub(super) fn archived_wan_devnet2_legacy_receipt_id_drift_allowed(
         block.header.height,
         &block.header.batch_id,
     ) || archived_wan_devnet2_rejected_private_primary_issue_allowed(genesis, block)
+        || archived_wan_devnet2_private_primary_receipt_id_drift_allowed(genesis, block)
 }
 
 fn archived_wan_devnet2_rejected_private_primary_issue_allowed(
@@ -828,7 +827,6 @@ fn archived_wan_devnet2_rejected_private_primary_issue_allowed(
         && block.header.batch_id == batch_id
 }
 
-#[allow(dead_code)]
 pub(super) fn archived_wan_devnet2_private_primary_execution_allowed(
     genesis: &Genesis,
     height: u64,
@@ -844,6 +842,24 @@ pub(super) fn archived_wan_devnet2_private_primary_execution_allowed(
         && allowed.iter().any(|(allowed_height, allowed_batch_id)| {
             height == *allowed_height && batch_id == *allowed_batch_id
         })
+}
+
+fn archived_wan_devnet2_private_primary_receipt_id_drift_allowed(
+    genesis: &Genesis,
+    block: &BlockRecord,
+) -> bool {
+    block.header.batch_kind == BATCH_KIND_SHIELDED
+        && (archived_wan_devnet2_private_primary_execution_allowed(
+            genesis,
+            block.header.height,
+            &block.header.batch_id,
+            false,
+        ) || archived_wan_devnet2_private_primary_execution_allowed(
+            genesis,
+            block.header.height,
+            &block.header.batch_id,
+            true,
+        ))
 }
 
 pub(super) fn archived_wan_devnet_legacy_nav_profile_id_schema_allowed(
@@ -1426,6 +1442,162 @@ pub(super) fn verify_archived_payload_receipt_count(
     Ok(())
 }
 
+fn archived_replay_state_root(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    ordered_batches: &[String],
+    shielded: &ShieldedState,
+    bridge: &BridgeState,
+    block: Option<&BlockRecord>,
+) -> io::Result<String> {
+    match replicated_state_root(
+        genesis,
+        governance,
+        ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+    ) {
+        Ok(root) => Ok(root),
+        Err(_strict_error)
+            if block.is_some_and(|candidate| {
+                archived_wan_devnet2_legacy_non_nav_spread_supply_check_allowed(genesis, candidate)
+            }) =>
+        {
+            match legacy_non_nav_spread_supply_omitted_replicated_state_root(
+                genesis,
+                governance,
+                ledger,
+                ordered_batches,
+                shielded,
+                bridge,
+            ) {
+                Ok(root) => Ok(root),
+                Err(_legacy_spread_error)
+                    if block.is_some_and(|candidate| {
+                        archived_wan_devnet2_pre_orchard_supply_cap_enforcement_allowed(
+                            genesis, candidate,
+                        )
+                    }) =>
+                {
+                    legacy_pre_orchard_supply_cap_enforcement_replicated_state_root(
+                        genesis,
+                        governance,
+                        ledger,
+                        ordered_batches,
+                        shielded,
+                        bridge,
+                    )
+                    .map_err(|legacy_cap_error| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!(
+                                "block {} legacy pre-Orchard-cap replay failed: {legacy_cap_error}",
+                                block.expect("allowlisted replay block").header.height
+                            ),
+                        )
+                    })
+                }
+                Err(legacy_error) => Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "block {} legacy non-NAV-spread supply replay failed: {legacy_error}",
+                        block.expect("allowlisted replay block").header.height
+                    ),
+                )),
+            }
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn archived_legacy_nav_incomplete_state_root(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    ordered_batches: &[String],
+    shielded: &ShieldedState,
+    bridge: &BridgeState,
+    block: &BlockRecord,
+) -> io::Result<String> {
+    match legacy_nav_incomplete_replicated_state_root(
+        genesis,
+        governance,
+        ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+    ) {
+        Ok(root) => Ok(root),
+        Err(_strict_error)
+            if archived_wan_devnet2_pre_orchard_supply_cap_enforcement_allowed(genesis, block) =>
+        {
+            legacy_nav_incomplete_pre_orchard_supply_cap_replicated_state_root(
+                genesis,
+                governance,
+                ledger,
+                ordered_batches,
+                shielded,
+                bridge,
+            )
+            .map_err(|legacy_error| {
+                io::Error::new(
+                    legacy_error.kind(),
+                    format!(
+                        "block {} legacy NAV-incomplete pre-Orchard-cap replay failed: {legacy_error}",
+                        block.header.height
+                    ),
+                )
+            })
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn archived_legacy_vault_bridge_deposit_attestation_state_root(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    ordered_batches: &[String],
+    shielded: &ShieldedState,
+    bridge: &BridgeState,
+    block: &BlockRecord,
+) -> io::Result<String> {
+    match legacy_vault_bridge_deposit_attestation_replicated_state_root(
+        genesis,
+        governance,
+        ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+    ) {
+        Ok(root) => Ok(root),
+        Err(_strict_error)
+            if archived_wan_devnet2_pre_orchard_supply_cap_enforcement_allowed(genesis, block) =>
+        {
+            legacy_vault_bridge_deposit_attestation_pre_orchard_supply_cap_replicated_state_root(
+                genesis,
+                governance,
+                ledger,
+                ordered_batches,
+                shielded,
+                bridge,
+            )
+            .map_err(|legacy_error| {
+                io::Error::new(
+                    legacy_error.kind(),
+                    format!(
+                        "block {} legacy vault-deposit-attestation pre-Orchard-cap replay failed: {legacy_error}",
+                        block.header.height
+                    ),
+                )
+            })
+        }
+        Err(error) => Err(error),
+    }
+}
+
 pub(super) fn verify_replayed_blocks(
     store: &NodeStore,
     genesis: &Genesis,
@@ -1664,79 +1836,118 @@ pub(super) fn verify_replayed_blocks(
         }
 
         ordered_batches.push(block.header.batch_id.clone());
-        replay_state_root = replicated_state_root(
+        replay_state_root = archived_replay_state_root(
             genesis,
             &governance,
             &ledger,
             &ordered_batches,
             &shielded,
             &bridge,
-        )?;
+            Some(block),
+        )
+        .map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "block {} replay state validation failed: {error}",
+                    block.header.height
+                ),
+            )
+        })?;
         if replay_state_root != block.header.state_root {
-            let legacy_nav_state_root = legacy_nav_incomplete_replicated_state_root(
+            let legacy_nav_state_root = archived_legacy_nav_incomplete_state_root(
                 genesis,
                 &governance,
                 &ledger,
                 &ordered_batches,
                 &shielded,
                 &bridge,
-            )?;
+                block,
+            )
+            .map_err(|error| {
+                io::Error::new(
+                    error.kind(),
+                    format!(
+                        "block {} legacy NAV-incomplete state validation failed after primary root mismatch: {error}",
+                        block.header.height
+                    ),
+                )
+            })?;
             if legacy_nav_state_root == block.header.state_root {
                 continue;
             }
             let legacy_nav_profile_sp1_uncommitted_state_root =
-                legacy_nav_profile_sp1_uncommitted_replicated_state_root(
-                    genesis,
-                    &governance,
-                    &ledger,
-                    &ordered_batches,
-                    &shielded,
-                    &bridge,
-                )?;
-            if archived_wan_devnet_legacy_nav_profile_id_allowed(genesis, block)
-                && legacy_nav_profile_sp1_uncommitted_state_root == block.header.state_root
+                if archived_wan_devnet_legacy_nav_profile_id_allowed(genesis, block) {
+                    Some(legacy_nav_profile_sp1_uncommitted_replicated_state_root(
+                        genesis,
+                        &governance,
+                        &ledger,
+                        &ordered_batches,
+                        &shielded,
+                        &bridge,
+                    )?)
+                } else {
+                    None
+                };
+            if legacy_nav_profile_sp1_uncommitted_state_root.as_deref()
+                == Some(block.header.state_root.as_str())
             {
                 continue;
             }
             let legacy_nav_asset_uncommitted_state_root =
-                legacy_nav_asset_uncommitted_replicated_state_root(
-                    genesis,
-                    &governance,
-                    &ledger,
-                    &ordered_batches,
-                    &shielded,
-                    &bridge,
-                )?;
-            if archived_wan_devnet_legacy_nav_asset_commitment_allowed(genesis, block)
-                && legacy_nav_asset_uncommitted_state_root == block.header.state_root
+                if archived_wan_devnet_legacy_nav_asset_commitment_allowed(genesis, block) {
+                    Some(legacy_nav_asset_uncommitted_replicated_state_root(
+                        genesis,
+                        &governance,
+                        &ledger,
+                        &ordered_batches,
+                        &shielded,
+                        &bridge,
+                    )?)
+                } else {
+                    None
+                };
+            if legacy_nav_asset_uncommitted_state_root.as_deref()
+                == Some(block.header.state_root.as_str())
             {
                 continue;
             }
             let legacy_vault_bridge_domainless_withdrawal_state_root =
-                legacy_vault_bridge_domainless_withdrawal_replicated_state_root(
-                    genesis,
-                    &governance,
-                    &ledger,
-                    &ordered_batches,
-                    &shielded,
-                    &bridge,
-                )?;
-            if archived_wan_devnet_legacy_nav_profile_id_allowed(genesis, block)
-                && legacy_vault_bridge_domainless_withdrawal_state_root == block.header.state_root
+                if archived_wan_devnet_legacy_nav_profile_id_allowed(genesis, block) {
+                    Some(
+                        legacy_vault_bridge_domainless_withdrawal_replicated_state_root(
+                            genesis,
+                            &governance,
+                            &ledger,
+                            &ordered_batches,
+                            &shielded,
+                            &bridge,
+                        )?,
+                    )
+                } else {
+                    None
+                };
+            if legacy_vault_bridge_domainless_withdrawal_state_root.as_deref()
+                == Some(block.header.state_root.as_str())
             {
                 continue;
             }
             let legacy_vault_bridge_deposit_attestation_state_root =
-                legacy_vault_bridge_deposit_attestation_replicated_state_root(
-                    genesis,
-                    &governance,
-                    &ledger,
-                    &ordered_batches,
-                    &shielded,
-                    &bridge,
-                )?;
-            if bridge_verification_legacy_replay_allowed(&governance, block.header.height)
-                && legacy_vault_bridge_deposit_attestation_state_root == block.header.state_root
+                if bridge_verification_legacy_replay_allowed(&governance, block.header.height) {
+                    Some(archived_legacy_vault_bridge_deposit_attestation_state_root(
+                        genesis,
+                        &governance,
+                        &ledger,
+                        &ordered_batches,
+                        &shielded,
+                        &bridge,
+                        block,
+                    )?)
+                } else {
+                    None
+                };
+            if legacy_vault_bridge_deposit_attestation_state_root.as_deref()
+                == Some(block.header.state_root.as_str())
             {
                 continue;
             }
@@ -1791,10 +2002,10 @@ pub(super) fn verify_replayed_blocks(
                     block.header.height,
                     replay_state_root,
                     legacy_nav_state_root,
-                    legacy_nav_profile_sp1_uncommitted_state_root,
-                    legacy_nav_asset_uncommitted_state_root,
-                    legacy_vault_bridge_domainless_withdrawal_state_root,
-                    legacy_vault_bridge_deposit_attestation_state_root,
+                    legacy_nav_profile_sp1_uncommitted_state_root.as_deref().unwrap_or("not applicable"),
+                    legacy_nav_asset_uncommitted_state_root.as_deref().unwrap_or("not applicable"),
+                    legacy_vault_bridge_domainless_withdrawal_state_root.as_deref().unwrap_or("not applicable"),
+                    legacy_vault_bridge_deposit_attestation_state_root.as_deref().unwrap_or("not applicable"),
                     legacy_pre_age_release_state_root.as_deref().unwrap_or("not applicable"),
                     legacy_state_root,
                     block.header.state_root
@@ -1817,13 +2028,14 @@ pub(super) fn verify_replayed_blocks(
         &shielded,
         &tip_fastpay_effects,
     )?;
-    replay_state_root = replicated_state_root(
+    replay_state_root = archived_replay_state_root(
         genesis,
         &governance,
         &ledger,
         &ordered_batches,
         &shielded,
         &bridge,
+        blocks.blocks.last(),
     )?;
 
     Ok(replay_state_root)
@@ -2371,7 +2583,8 @@ pub(super) fn native_pft_fee_burn_total(
 
 pub(super) fn receipt_replay_summary(receipt: &Receipt) -> String {
     format!(
-        "accepted={} code={} message={:?} fee_charged={} fee_burned={} minimum_fee={} account_reserve={} state_expansion_fee={} offer_id={:?} offer_fills={}",
+        "tx_id={} accepted={} code={} message={:?} fee_charged={} fee_burned={} minimum_fee={} account_reserve={} state_expansion_fee={} nft_issuer_transfer_fee={} nft_issuer_transfer_fee_recipient={:?} nft_collection_flags={} offer_id={:?} offer_fills={} atomic_swap_legs={}",
+        receipt.tx_id,
         receipt.accepted,
         receipt.code,
         receipt.message,
@@ -2380,8 +2593,12 @@ pub(super) fn receipt_replay_summary(receipt: &Receipt) -> String {
         receipt.minimum_fee,
         receipt.account_reserve,
         receipt.state_expansion_fee,
+        receipt.nft_issuer_transfer_fee,
+        receipt.nft_issuer_transfer_fee_recipient,
+        receipt.nft_collection_flags,
         receipt.offer_id,
-        receipt.offer_fills.len()
+        receipt.offer_fills.len(),
+        receipt.atomic_swap_legs.as_ref().map_or(0, Vec::len)
     )
 }
 
@@ -2399,8 +2616,8 @@ pub(super) fn replayed_receipt_matches_persisted(
             WAN_DEVNET2_ARCHIVED_REJECTED_PRIVATE_PRIMARY_ISSUE;
         let expected_replayed = Receipt::rejected(
             replayed_receipt_id,
-            "asset_orchard_private_primary_issue_archive_unsupported",
-            "private-primary issue has no historical replay form",
+            "asset_orchard_private_primary_issue_apply_error",
+            "issued asset supply exceeds finalized NAV circulating supply for `02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b`: global supply 105520010 exceeds finalized supply 105005010",
         );
         let expected_persisted = Receipt::rejected(
             persisted_receipt_id,
@@ -2453,12 +2670,19 @@ pub(super) fn replay_archived_payload(
         "transparent" => {
             let batch: TransactionBatch = parse_archived_payload(block, archive_entry)?;
             verify_archived_transparent_batch_id(genesis, block, &batch)?;
+            let orchard_balances = state
+                .shielded
+                .orchard
+                .as_ref()
+                .map(|pool| pool.asset_orchard_balances.as_slice())
+                .unwrap_or_default();
             let receipts = execute_transparent_batch_for_archive_replay(
                 genesis,
                 state.ledger,
                 &batch,
                 block,
                 state.governance,
+                orchard_balances,
             )?;
             replay_legacy_wan_devnet_nav_profile_ids(genesis, block, state.ledger, &batch)?;
             Ok(receipts)

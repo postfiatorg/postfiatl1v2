@@ -110,6 +110,32 @@ pub(super) fn legacy_vault_bridge_deposit_attestation_replicated_state_root(
     )
 }
 
+pub(super) fn legacy_vault_bridge_deposit_attestation_pre_orchard_supply_cap_replicated_state_root(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    ordered_batches: &[String],
+    shielded: &ShieldedState,
+    bridge: &BridgeState,
+) -> io::Result<String> {
+    replicated_state_root_with_options(
+        genesis,
+        governance,
+        ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+        true,
+        true,
+        false,
+        true,
+        false,
+        false,
+        true,
+        false,
+    )
+}
+
 pub(super) fn legacy_pre_age_release_replicated_state_root(
     genesis: &Genesis,
     governance: &GovernanceState,
@@ -129,6 +155,8 @@ pub(super) fn legacy_pre_age_release_replicated_state_root(
         true,
         false,
         false,
+        true,
+        true,
         true,
         true,
     )
@@ -155,6 +183,8 @@ pub(super) fn legacy_pre_age_release_finality_replicated_state_root(
         false,
         true,
         false,
+        true,
+        true,
     )
 }
 
@@ -189,6 +219,154 @@ pub(super) fn archived_wan_devnet2_pre_age_release_state_root_allowed(
         && BLOCKS.iter().any(|(height, batch_id)| {
             block.header.height == *height && block.header.batch_id == *batch_id
         })
+}
+
+pub(super) fn archived_wan_devnet2_legacy_non_nav_spread_supply_check_allowed(
+    genesis: &Genesis,
+    block: &BlockRecord,
+) -> bool {
+    const GENESIS_HASH: &str =
+        "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9";
+    const FIRST_HEIGHT: u64 = 360;
+    const LAST_HEIGHT: u64 = 915;
+    const FIRST_BLOCK_HASH: &str =
+        "312f80de94d1d10b2049bb78d02351fe9aa00dfac7a18821e873d580eee77a86069b8165f9727d6c835ec9da0a937cb4";
+    const FIRST_BATCH_ID: &str =
+        "ff1b6e01ca8f103dd4c53b4e3e065d6b12a2cd2b47cbd242ab29a67e0d9cc4d6be92cd1f19771bec893ccfa68704cc5a";
+    const FIRST_STATE_ROOT: &str =
+        "7550f3d1d6107eda17870d3dc328fcbc50072223c9be622e3fea875a5b63f65a301f9a872db6f5456f8fc8f1c72cc664";
+    const FIRST_RECEIPT_IDS: [&str; 2] = [
+        "489ad9aa1f0390e17e3c42ab0abe1814e2c06f168ac1bab953b99d2a539ab4ff97cb38bb4a67bcc0c94f5d094a8d2608",
+        "3e9681402faecb913bc055bfea45f0d077e2ea645c70dde587e3c5a98d0dd1e1392553012f5edde301792359eb566e97",
+    ];
+    const LAST_BLOCK_HASH: &str =
+        "2333396826284869daaf47d93de5f14641e6fe8b0ebbe74fc3f5b910b5df66d4d81ed35ff3f7d7b2b776dce39d596450";
+    const LAST_BATCH_ID: &str =
+        "62b0426750964de44b813982b5ef91c7484c533a42273d5cbf591e736e54e9b9b30bd1a8a21c645ee90cddb73b92a35c";
+    const LAST_STATE_ROOT: &str =
+        "b8a0aef3f17b50c422e7cccf270c809a722587fd6af0cbff17fdcba7dd5c72edf2ba36b6ee00d20467c6a9e29d2bbe5a";
+    const LAST_RECEIPT_ID: &str =
+        "dfa29877ab0dbdd616fdfc7ad38a69b474b1f621ae62fe1f40b062f15963b6a9a63853169eb231a05d21c8c69d753731";
+
+    let height = block.header.height;
+    genesis.chain_id == "postfiat-wan-devnet-2"
+        && genesis_hash(genesis) == GENESIS_HASH
+        && (FIRST_HEIGHT..=LAST_HEIGHT).contains(&height)
+        && (height != FIRST_HEIGHT
+            || (block.header.block_hash == FIRST_BLOCK_HASH
+                && block.header.batch_id == FIRST_BATCH_ID
+                && block.header.state_root == FIRST_STATE_ROOT
+                && block
+                    .receipt_ids
+                    .iter()
+                    .map(String::as_str)
+                    .eq(FIRST_RECEIPT_IDS)))
+        && (height != LAST_HEIGHT
+            || (block.header.block_hash == LAST_BLOCK_HASH
+                && block.header.batch_id == LAST_BATCH_ID
+                && block.header.state_root == LAST_STATE_ROOT
+                && block.receipt_ids.as_slice() == [LAST_RECEIPT_ID]))
+}
+
+pub(super) fn archived_wan_devnet2_pre_orchard_supply_cap_enforcement_allowed(
+    genesis: &Genesis,
+    block: &BlockRecord,
+) -> bool {
+    const ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT: u64 = 906;
+    const ACTIVATION_BLOCK_HASH: &str =
+        "c3956e2d6d7285de4222632144f2d5038c5a7e83beb899b6234f8afc44255674cbb495f00ebc9559f4d78334bb41cbfd";
+    const ACTIVATION_BATCH_ID: &str =
+        "e57bd766ba843e9e30a908451874a50e3e9fd1e13e23830844808a105b54442a4cd50722a7ae29cdeb539ba42c1b0a94";
+    const ACTIVATION_STATE_ROOT: &str =
+        "d62ec7003ed36a90c767cbf6cf306184258104b5b0d2a72fe2bdb78f90e7f0c018042398cbfd319824ddb40d724d2cce";
+    const ACTIVATION_RECEIPT_ID: &str =
+        "60b6a5dc308b5665408336ff16d2b4f042112556e587394c517c59290cc871d93d29cb8429e617aa8c3e904eaeafa031";
+
+    archived_wan_devnet2_legacy_non_nav_spread_supply_check_allowed(genesis, block)
+        && (block.header.height < ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT
+            || (block.header.height == ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT
+                && block.header.block_hash == ACTIVATION_BLOCK_HASH
+                && block.header.batch_id == ACTIVATION_BATCH_ID
+                && block.header.state_root == ACTIVATION_STATE_ROOT
+                && block.receipt_ids.as_slice() == [ACTIVATION_RECEIPT_ID]))
+}
+
+pub(super) fn legacy_non_nav_spread_supply_omitted_replicated_state_root(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    ordered_batches: &[String],
+    shielded: &ShieldedState,
+    bridge: &BridgeState,
+) -> io::Result<String> {
+    replicated_state_root_with_options(
+        genesis,
+        governance,
+        ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true,
+    )
+}
+
+pub(super) fn legacy_pre_orchard_supply_cap_enforcement_replicated_state_root(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    ordered_batches: &[String],
+    shielded: &ShieldedState,
+    bridge: &BridgeState,
+) -> io::Result<String> {
+    replicated_state_root_with_options(
+        genesis,
+        governance,
+        ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+        true,
+        true,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+    )
+}
+
+pub(super) fn legacy_nav_incomplete_pre_orchard_supply_cap_replicated_state_root(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    ordered_batches: &[String],
+    shielded: &ShieldedState,
+    bridge: &BridgeState,
+) -> io::Result<String> {
+    replicated_state_root_with_options(
+        genesis,
+        governance,
+        ledger,
+        ordered_batches,
+        shielded,
+        bridge,
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+    )
 }
 
 pub(super) fn legacy_nav_asset_uncommitted_replicated_state_root(
@@ -247,6 +425,8 @@ pub(super) fn replicated_state_root_with_nav_completeness(
         legacy_vault_bridge_deposit_attestation_fields,
         false,
         false,
+        true,
+        true,
     )
 }
 
@@ -263,9 +443,22 @@ fn replicated_state_root_with_options(
     legacy_vault_bridge_deposit_attestation_fields: bool,
     pre_age_release_finality_commitments: bool,
     pre_age_release_campaign_commitments: bool,
+    include_non_nav_spread_in_supply_check: bool,
+    enforce_issued_asset_supply_caps: bool,
 ) -> io::Result<String> {
     assert_genesis_commitment_inventory_complete(genesis);
-    verify_global_issued_asset_supply_caps(ledger, shielded)?;
+    if enforce_issued_asset_supply_caps {
+        verify_global_issued_asset_supply_caps_with_non_nav_spread(
+            ledger,
+            shielded,
+            include_non_nav_spread_in_supply_check,
+        )?;
+    } else {
+        // Archive replay may hash a historically committed state from before
+        // Orchard-inclusive cap enforcement. Inventory validation remains
+        // mandatory; only the later cap invariant is omitted.
+        validate_issued_supply_custody_inventory(ledger, shielded)?;
+    }
     let state_height = u64::try_from(ordered_batches.len())
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "state height overflow"))?;
     let commit_fastlane_state = genesis
@@ -302,6 +495,21 @@ fn replicated_state_root_with_options(
 pub(super) fn verify_global_issued_asset_supply_caps(
     ledger: &LedgerState,
     shielded: &ShieldedState,
+) -> io::Result<()> {
+    verify_global_issued_asset_supply_caps_with_non_nav_spread(ledger, shielded, true)
+}
+
+pub(super) fn verify_global_issued_asset_supply_caps_legacy_non_nav_spread_omitted(
+    ledger: &LedgerState,
+    shielded: &ShieldedState,
+) -> io::Result<()> {
+    verify_global_issued_asset_supply_caps_with_non_nav_spread(ledger, shielded, false)
+}
+
+fn verify_global_issued_asset_supply_caps_with_non_nav_spread(
+    ledger: &LedgerState,
+    shielded: &ShieldedState,
+    include_non_nav_spread: bool,
 ) -> io::Result<()> {
     validate_issued_supply_custody_inventory(ledger, shielded)?;
     let orchard_balances = shielded
@@ -352,12 +560,14 @@ pub(super) fn verify_global_issued_asset_supply_caps(
                 ledger,
                 &orchard_by_asset,
                 &definition.asset_id,
+                include_non_nav_spread,
             )?
         } else {
             issued_asset_global_supply_after_inventory(
                 ledger,
                 &orchard_by_asset,
                 &definition.asset_id,
+                include_non_nav_spread,
             )?
         };
         if definition
@@ -420,9 +630,9 @@ pub fn global_issued_asset_supply(
         .asset_definition(asset_id)
         .expect("asset definition checked above");
     if definition.asset_family_id.is_empty() {
-        issued_asset_family_global_supply_after_inventory(ledger, &orchard_by_asset, asset_id)
+        issued_asset_family_global_supply_after_inventory(ledger, &orchard_by_asset, asset_id, true)
     } else {
-        issued_asset_global_supply_after_inventory(ledger, &orchard_by_asset, asset_id)
+        issued_asset_global_supply_after_inventory(ledger, &orchard_by_asset, asset_id, true)
     }
 }
 
@@ -430,6 +640,7 @@ fn issued_asset_family_global_supply_after_inventory(
     ledger: &LedgerState,
     orchard_by_asset: &BTreeMap<&str, u64>,
     asset_family_id: &str,
+    include_non_nav_spread: bool,
 ) -> io::Result<u64> {
     let mut ids = vec![asset_family_id];
     ids.extend(
@@ -447,6 +658,7 @@ fn issued_asset_family_global_supply_after_inventory(
                 ledger,
                 orchard_by_asset,
                 asset_id,
+                include_non_nav_spread,
             )?)
             .ok_or_else(|| {
                 io::Error::new(
@@ -461,11 +673,16 @@ fn issued_asset_global_supply_after_inventory(
     ledger: &LedgerState,
     orchard_by_asset: &BTreeMap<&str, u64>,
     asset_id: &str,
+    include_non_nav_spread: bool,
 ) -> io::Result<u64> {
-    let public_fastlane_external =
-        issued_asset_supply(ledger, asset_id).map_err(|(code, message)| {
-            io::Error::new(io::ErrorKind::InvalidData, format!("{code}: {message}"))
-        })?;
+    let supply = if include_non_nav_spread {
+        issued_asset_supply(ledger, asset_id)
+    } else {
+        issued_asset_supply_legacy_non_nav_spread_omitted(ledger, asset_id)
+    };
+    let public_fastlane_external = supply.map_err(|(code, message)| {
+        io::Error::new(io::ErrorKind::InvalidData, format!("{code}: {message}"))
+    })?;
     let orchard_live = orchard_by_asset.get(asset_id).copied().unwrap_or(0);
     public_fastlane_external
         .checked_add(orchard_live)

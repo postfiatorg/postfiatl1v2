@@ -559,6 +559,24 @@ pub fn issued_asset_supply(
     ledger: &LedgerState,
     asset_id: &str,
 ) -> Result<u64, (&'static str, String)> {
+    issued_asset_supply_with_non_nav_spread(ledger, asset_id, true)
+}
+
+/// Reproduces the pre-AR-11 archive supply calculation while retaining the
+/// spread in committed route state. Production admission must use
+/// [`issued_asset_supply`].
+pub fn issued_asset_supply_legacy_non_nav_spread_omitted(
+    ledger: &LedgerState,
+    asset_id: &str,
+) -> Result<u64, (&'static str, String)> {
+    issued_asset_supply_with_non_nav_spread(ledger, asset_id, false)
+}
+
+fn issued_asset_supply_with_non_nav_spread(
+    ledger: &LedgerState,
+    asset_id: &str,
+    include_non_nav_spread: bool,
+) -> Result<u64, (&'static str, String)> {
     assert_issued_supply_ledger_inventory_complete(ledger);
     let mut trustline_keys = std::collections::BTreeSet::new();
     for line in ledger
@@ -692,11 +710,15 @@ pub fn issued_asset_supply(
             let settlement_reserve = if route.settlement_asset_id == asset_id {
                 // Accumulated non-NAV spread is live settlement-asset custody
                 // alongside the subscription-funded reserve (AR-11).
-                let spread = route
-                    .v2
-                    .as_ref()
-                    .map(|v2| v2.non_nav_spread_atoms)
-                    .unwrap_or(0);
+                let spread = if include_non_nav_spread {
+                    route
+                        .v2
+                        .as_ref()
+                        .map(|v2| v2.non_nav_spread_atoms)
+                        .unwrap_or(0)
+                } else {
+                    0
+                };
                 route
                     .settlement_reserve_atoms
                     .checked_add(spread)
@@ -752,6 +774,14 @@ pub fn issued_asset_family_supply(
     ledger: &LedgerState,
     asset_family_id: &str,
 ) -> Result<u64, (&'static str, String)> {
+    issued_asset_family_supply_with_non_nav_spread(ledger, asset_family_id, true)
+}
+
+fn issued_asset_family_supply_with_non_nav_spread(
+    ledger: &LedgerState,
+    asset_family_id: &str,
+    include_non_nav_spread: bool,
+) -> Result<u64, (&'static str, String)> {
     let family = ledger.asset_definition(asset_family_id).ok_or_else(|| {
         (
             "missing_asset",
@@ -776,7 +806,11 @@ pub fn issued_asset_family_supply(
     ids.dedup();
     ids.into_iter().try_fold(0_u64, |total, asset_id| {
         total
-            .checked_add(issued_asset_supply(ledger, &asset_id)?)
+            .checked_add(issued_asset_supply_with_non_nav_spread(
+                ledger,
+                &asset_id,
+                include_non_nav_spread,
+            )?)
             .ok_or_else(|| {
                 (
                     "issued_supply_overflow",

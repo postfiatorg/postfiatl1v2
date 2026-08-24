@@ -357,9 +357,9 @@ fn wan_devnet2_rejected_private_primary_replay_drift_is_exactly_allowlisted() {
             .to_string();
 
     let replayed = Receipt::rejected(
-        "91c2e778f13c71939ad5bfb35d23bb8fa1a2815c941460f219ff0344fff66a4d9421e99194655ddb351674207cdda132",
-        "asset_orchard_private_primary_issue_archive_unsupported",
-        "private-primary issue has no historical replay form",
+        "588d078c219ad6bebfa48669ee980d31ae27936981ba8335a2bfd8da246497f9598057413601b73eef9b63438c924bfb",
+        "asset_orchard_private_primary_issue_apply_error",
+        "issued asset supply exceeds finalized NAV circulating supply for `02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b`: global supply 105520010 exceeds finalized supply 105005010",
     );
     let persisted = Receipt::rejected(
         "4af10a87b60ce1343054b770d4b265e08ee2ca4a1cc0ee28894377de8c2c3d9f01e293adb39c0021407e3cf556daba9a",
@@ -445,6 +445,20 @@ fn wan_devnet2_accepted_private_primary_replay_is_exactly_allowlisted() {
         redeem_batch,
         true,
     ));
+
+    let mut issue_block = dummy_block_record(issue_height);
+    issue_block.header.batch_kind = BATCH_KIND_SHIELDED.to_string();
+    issue_block.header.batch_id = issue_batch.to_string();
+    assert!(archived_wan_devnet2_legacy_receipt_id_drift_allowed(
+        &genesis,
+        &issue_block,
+    ));
+    issue_block.header.batch_kind = BATCH_KIND_TRANSPARENT.to_string();
+    assert!(!archived_wan_devnet2_legacy_receipt_id_drift_allowed(
+        &genesis,
+        &issue_block,
+    ));
+
     assert!(!archived_wan_devnet2_private_primary_execution_allowed(
         &genesis,
         issue_height,
@@ -661,6 +675,228 @@ fn wan_devnet2_incremental_age_release_is_exactly_allowlisted() {
     assert!(
         !archived_wan_devnet2_incremental_age_release_identity_allowed(
             &genesis, &block, TX_ID, true
+        )
+    );
+}
+
+#[test]
+fn wan_devnet2_legacy_non_nav_spread_supply_window_is_chain_and_boundary_bound() {
+    const FIRST_BLOCK_HASH: &str =
+        "312f80de94d1d10b2049bb78d02351fe9aa00dfac7a18821e873d580eee77a86069b8165f9727d6c835ec9da0a937cb4";
+    const FIRST_BATCH_ID: &str =
+        "ff1b6e01ca8f103dd4c53b4e3e065d6b12a2cd2b47cbd242ab29a67e0d9cc4d6be92cd1f19771bec893ccfa68704cc5a";
+    const LAST_BLOCK_HASH: &str =
+        "2333396826284869daaf47d93de5f14641e6fe8b0ebbe74fc3f5b910b5df66d4d81ed35ff3f7d7b2b776dce39d596450";
+    const LAST_BATCH_ID: &str =
+        "62b0426750964de44b813982b5ef91c7484c533a42273d5cbf591e736e54e9b9b30bd1a8a21c645ee90cddb73b92a35c";
+    let mut genesis =
+        Genesis::try_new_with_validator_count("postfiat-wan-devnet-2".to_string(), 6)
+            .expect("devnet-2 genesis");
+    genesis.consensus_v2_activation_height = Some(1);
+
+    let mut first = dummy_block_record(360);
+    first.header.block_hash = FIRST_BLOCK_HASH.to_string();
+    first.header.batch_id = FIRST_BATCH_ID.to_string();
+    first.header.state_root =
+        "7550f3d1d6107eda17870d3dc328fcbc50072223c9be622e3fea875a5b63f65a301f9a872db6f5456f8fc8f1c72cc664"
+            .to_string();
+    first.receipt_ids = vec![
+        "489ad9aa1f0390e17e3c42ab0abe1814e2c06f168ac1bab953b99d2a539ab4ff97cb38bb4a67bcc0c94f5d094a8d2608"
+            .to_string(),
+        "3e9681402faecb913bc055bfea45f0d077e2ea645c70dde587e3c5a98d0dd1e1392553012f5edde301792359eb566e97"
+            .to_string(),
+    ];
+    assert!(
+        archived_wan_devnet2_legacy_non_nav_spread_supply_check_allowed(&genesis, &first)
+    );
+
+    let middle = dummy_block_record(500);
+    assert!(
+        archived_wan_devnet2_legacy_non_nav_spread_supply_check_allowed(&genesis, &middle)
+    );
+    assert!(archived_wan_devnet2_pre_orchard_supply_cap_enforcement_allowed(
+        &genesis, &middle,
+    ));
+    assert!(archived_wan_devnet2_pre_orchard_supply_cap_enforcement_allowed(
+        &genesis,
+        &dummy_block_record(905),
+    ));
+    assert!(
+        !archived_wan_devnet2_pre_orchard_supply_cap_enforcement_allowed(
+            &genesis,
+            &dummy_block_record(906),
+        )
+    );
+    let mut activation_block = dummy_block_record(906);
+    activation_block.header.block_hash =
+        "c3956e2d6d7285de4222632144f2d5038c5a7e83beb899b6234f8afc44255674cbb495f00ebc9559f4d78334bb41cbfd"
+            .to_string();
+    activation_block.header.batch_id =
+        "e57bd766ba843e9e30a908451874a50e3e9fd1e13e23830844808a105b54442a4cd50722a7ae29cdeb539ba42c1b0a94"
+            .to_string();
+    activation_block.header.state_root =
+        "d62ec7003ed36a90c767cbf6cf306184258104b5b0d2a72fe2bdb78f90e7f0c018042398cbfd319824ddb40d724d2cce"
+            .to_string();
+    activation_block.receipt_ids = vec![
+        "60b6a5dc308b5665408336ff16d2b4f042112556e587394c517c59290cc871d93d29cb8429e617aa8c3e904eaeafa031"
+            .to_string(),
+    ];
+    assert!(archived_wan_devnet2_pre_orchard_supply_cap_enforcement_allowed(
+        &genesis,
+        &activation_block,
+    ));
+    activation_block.header.height += 1;
+    assert!(
+        !archived_wan_devnet2_pre_orchard_supply_cap_enforcement_allowed(
+            &genesis,
+            &activation_block,
+        )
+    );
+
+    let archived_orchard_aware_claims = [
+        (
+            779,
+            "7f503168661e3a74a21d11f28a0c9a3b53504ca5f64ab5e438dd65db59b82ee0b2fd7f0c9480e16625581344679303ec",
+            "866bdb4b0f71b57b8922a7f8fa265e64be7c1b5726b9386c7f0a0e10b948cd0883043055666502be22ee7d4dfea072e1",
+            "2a2a9bf6a7aca98b45e9daadd9b233045ffc225a26eda380233964a56c6e894ce598a198279a24bc52386fc597777b71",
+            "46dde341b0a5eb6dc9359e40bfbf0cc7f7dd489b9fc2bb915c17a8948f675917e635cf05557a5a53944039c7771b9afd",
+        ),
+        (
+            798,
+            "22c040bd695e69bc9e3c3529d4e2ce9fd8823c60229b95eb0d911f259a84a2328fdbdc2f1f2f25cda0e33aa3cb03b7f6",
+            "e5a40de9636c7916f320095ec810f460e67d70e2ad539476837a1f54a5e9cd1aaef37b510816f0c61b3f0bfc52e606f7",
+            "d5a1c417fd38a1d0d2d756f6ad2db26f9d91cce750785e184dd0e248e152a2261d024ee845d4209d418313ffee5b44f9",
+            "860e0f119d63723728526797c37f95ba40823d077939004d8467a618e5c657d3e2cee507dfc5e7a1f12657c47af9f3ca",
+        ),
+        (
+            803,
+            "a99df42c93f7f4ce439635abc770ae69675c46141f96c64497505b2c889f9b8bfcdc3a9f7eed3866bbb8d6a54c21ef41",
+            "df0c69990676a088f496d56df75b4d0913d21f940a4073797022212986103ac96963adabeab3ddac2116e293ea266229",
+            "af2ae716a63bb30cb4da41091a5fa99c1afb80cf625222e6dc7eda3cdd14eabe49292477dcf95578425dd8364822d3f4",
+            "debc3100cb7fd6ccea6fe7191ad1e69804d6630efc3f858868545f836e8b4b2e4c7d395e70aca6907a57a032391dd038",
+        ),
+        (
+            814,
+            "8258fc310d30031aed66381b5baf6170212c728bdbcb48bc358e94e6abc56597f2bf1bce303fd9be93f9fb6019ac9e54",
+            "ffe93862ab226c735a2ee205aa6baf7cae23ae8ced437e115f1d67108ff615e92a9883c64b7df1d45b40c5270f4f84ee",
+            "8ecdb30af9d58aedfe5638f8e5e016928226702a2dc78464ee83d7a1cea7c39095430de4dcbd61821042bed5e269697b",
+            "e31c2856843d31f2391020d4fa08cffaded5013553f06b8edca2ca87f5707c95332b5e279708ac7b69e590f4e383afc8",
+        ),
+        (
+            825,
+            "3d1e8f94749159ecf376da3e2ff2150c9a69742299b1100ff8f820ead8d5df6e565dc9b40e6bcf2f5a5c6952e3f3f731",
+            "4eb58508409980205adfa60eb846883c74f0045c751e560e799800d6137757c88dd969606936c8eef88e301afa88b96e",
+            "402ddf1ba58c83938c74d927d9e0d3988a80850bd81a70ea71f62257801003e6251d4c6d77e1fb5ce76bdc9377452080",
+            "42fea35a210f45a5d7109578284521a0b432734f6c8e64a08a1edcd61282ce36cd6657fa02f4e13c02195752a280278c",
+        ),
+        (
+            836,
+            "50dbb7c94c70252b2a0b032c9dedc7ecfc219f2ff489c7ab07cc1bb8c87e43df299764c6d1ea54d044a85dcdded8853e",
+            "229d4a401bb58c5dd9c823a6e45ac812eed0203cc00125886497fe209f6e8012bcf7fff2a2eed6cc12d8329268aba4f6",
+            "bd34512c026330c760e7c8700ab1cf0dcdfe4ac0892be99b6bc97e1ee9e74e23b84767c6b7f314970a28e7d521e4ab20",
+            "1ededdbc8e51e35f2c89c5774f55d593233a9f00354d3a11760f7402ed5e4f5d17465a00fa8e4b9199c963068d5a09df",
+        ),
+        (
+            847,
+            "190f50796f81fc1144ac037e2a2a99051b0af8c4b3a49704a9edc3c2268b19f68d57e577fda6661ba291841281128a5f",
+            "dbcb5d2995e5944ca340794b8afb443c8dcff5a95dd387dd055b18ee8161d1c3fa8061861aed898a03a6f40bef169829",
+            "cbc0185650ecfc3498ef3c7b59dd05b650e918b2ee7679a9bdacb477ca8b9cd963e91710802983e282e946eca922a177",
+            "c234668a61434b5e5fd4ecbf9983e3e5eda078a14f94c75d001a341b4beb43ac8b9a10522b30404af73b5c849a17a9e3",
+        ),
+        (
+            858,
+            "de6dcd069dac6b6f884ed0d22028791cb624aba71227e48f93e780680eaa9e2ac6b80b8925d7ed1c193a3659ceff6065",
+            "8573e09b5fef8319183217e2e90fdecb64e89014eea6eb320f3a89a1d5fb43b3d427fd817d9fa047925d1d9cf9b5fe41",
+            "6ac9bb1e0478585c440541ab9da16b0f4c288b2edf4d0c133eb6c14967b9098f218e3e98e91bbb5334ebed35f7ddabe0",
+            "a74474afc815f3cdd5fbfba80405932dec67e41b9a17c608127eb26b23ba17a302e3b4ae6ca193167501bf646472680c",
+        ),
+        (
+            878,
+            "7e3293c9f599ccff3ae077da193aa9de7d632539dc96e5a17b1298fc6cc4d3a6511bfa03d59df5620c7ae2f94d6415b2",
+            "3916cfe0fcba390c4c9705e5fade7f7fe495128c2af6df7c8ad863fa6c5598cd3a51c3e8a6e5a5587daf886be6a623fc",
+            "41bb05ac4259a00b79fce2ef13f36115060b58bd528a051e5aeb22878d822fc6a6958d274913493eee6a33600aeb264f",
+            "3e87d9ec1464dadd7d3c78673417bbf22b84f1c55e435761105b3dbd96ed839a12f352754194cae55630a2639a0877ee",
+        ),
+        (
+            906,
+            "c3956e2d6d7285de4222632144f2d5038c5a7e83beb899b6234f8afc44255674cbb495f00ebc9559f4d78334bb41cbfd",
+            "e57bd766ba843e9e30a908451874a50e3e9fd1e13e23830844808a105b54442a4cd50722a7ae29cdeb539ba42c1b0a94",
+            "d62ec7003ed36a90c767cbf6cf306184258104b5b0d2a72fe2bdb78f90e7f0c018042398cbfd319824ddb40d724d2cce",
+            "60b6a5dc308b5665408336ff16d2b4f042112556e587394c517c59290cc871d93d29cb8429e617aa8c3e904eaeafa031",
+        ),
+    ];
+    for (height, block_hash, batch_id, state_root, receipt_id) in
+        archived_orchard_aware_claims
+    {
+        let mut orchard_aware_claim = dummy_block_record(height);
+        orchard_aware_claim.header.block_hash = block_hash.to_string();
+        orchard_aware_claim.header.batch_id = batch_id.to_string();
+        orchard_aware_claim.header.state_root = state_root.to_string();
+        orchard_aware_claim.receipt_ids = vec![receipt_id.to_string()];
+        assert!(archived_wan_devnet2_orchard_aware_bridge_claim_identity_allowed(
+            &genesis,
+            &orchard_aware_claim,
+            true,
+        ));
+        assert!(!archived_wan_devnet2_orchard_aware_bridge_claim_identity_allowed(
+            &genesis,
+            &orchard_aware_claim,
+            false,
+        ));
+        orchard_aware_claim.header.block_hash = "00".repeat(48);
+        assert!(!archived_wan_devnet2_orchard_aware_bridge_claim_identity_allowed(
+            &genesis,
+            &orchard_aware_claim,
+            true,
+        ));
+    }
+
+    let mut last = dummy_block_record(915);
+    last.header.block_hash = LAST_BLOCK_HASH.to_string();
+    last.header.batch_id = LAST_BATCH_ID.to_string();
+    last.header.state_root =
+        "b8a0aef3f17b50c422e7cccf270c809a722587fd6af0cbff17fdcba7dd5c72edf2ba36b6ee00d20467c6a9e29d2bbe5a"
+            .to_string();
+    last.receipt_ids = vec![
+        "dfa29877ab0dbdd616fdfc7ad38a69b474b1f621ae62fe1f40b062f15963b6a9a63853169eb231a05d21c8c69d753731"
+            .to_string(),
+    ];
+    assert!(
+        archived_wan_devnet2_legacy_non_nav_spread_supply_check_allowed(&genesis, &last)
+    );
+
+    first.header.block_hash = "00".repeat(48);
+    assert!(
+        !archived_wan_devnet2_legacy_non_nav_spread_supply_check_allowed(&genesis, &first)
+    );
+    assert!(
+        !archived_wan_devnet2_legacy_non_nav_spread_supply_check_allowed(
+            &genesis,
+            &dummy_block_record(359),
+        )
+    );
+    assert!(
+        !archived_wan_devnet2_legacy_non_nav_spread_supply_check_allowed(
+            &genesis,
+            &dummy_block_record(916),
+        )
+    );
+    let wrong_chain =
+        Genesis::try_new_with_validator_count("postfiat-wan-devnet".to_string(), 6)
+            .expect("wrong chain genesis");
+    assert!(
+        !archived_wan_devnet2_legacy_non_nav_spread_supply_check_allowed(
+            &wrong_chain,
+            &middle,
+        )
+    );
+    let wrong_genesis =
+        Genesis::try_new_with_validator_count("postfiat-wan-devnet-2".to_string(), 5)
+            .expect("wrong devnet-2 genesis");
+    assert!(
+        !archived_wan_devnet2_legacy_non_nav_spread_supply_check_allowed(
+            &wrong_genesis,
+            &middle,
         )
     );
 }

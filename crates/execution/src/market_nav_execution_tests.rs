@@ -6561,6 +6561,16 @@ fn ar11_issued_asset_supply_counts_non_nav_spread_custody() {
         "settlement reserve and accumulated non-NAV spread are both live \
          settlement-asset custody"
     );
+    let historical_supply = super::issued_asset_supply_with_non_nav_spread(
+        &ledger,
+        &settlement_asset_id,
+        false,
+    )
+    .expect("historical supply without post-AR-11 spread custody");
+    assert_eq!(
+        historical_supply, 896_246,
+        "the identity-bound archive compatibility path reproduces pre-AR-11 supply"
+    );
 }
 
 /// AR-09: redemption submit against the production-shaped route policy
