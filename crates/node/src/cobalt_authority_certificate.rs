@@ -9,23 +9,34 @@ use crate::cobalt_shadow::{
     CobaltShadowRegistryBinding, COBALT_SHADOW_PROTOCOL_TRANSCRIPT_SCHEMA,
     COBALT_SHADOW_REGISTRY_BINDING_SCHEMA,
 };
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine as _;
+use flate2::read::DeflateDecoder;
+use flate2::write::DeflateEncoder;
+use flate2::Compression;
 use postfiat_consensus_cobalt::{
-    abba_strong_support, build_mvba_valid_input_set, evaluate_abba_finish_support_signed,
-    evaluate_rbc_ready_support_signed, mvba_candidate_from_rbc_accept, ratify_dabc_amendment,
-    validate_abba_aux_signed, validate_abba_conf_signed, validate_abba_finish_signed,
-    validate_abba_init_signed, validate_dabc_full_knowledge_checkpoint_signed,
-    validate_dabc_ratified_amendment, validate_rbc_accept_signed, validate_rbc_echo_signed,
-    validate_rbc_propose_signed, validate_rbc_ready_signed, validate_trust_graph,
-    CobaltSignatureCommittee, DabcFullKnowledgeCheck, DabcRatifiedAmendment,
+    abba_strong_support, build_mvba_valid_input_set, dabc_full_knowledge_checkpoint_id,
+    evaluate_abba_finish_support_signed, evaluate_rbc_ready_support_signed, has_strong_support,
+    mvba_candidate_from_rbc_accept, ratify_dabc_amendment, validate_abba_aux_signed,
+    validate_abba_conf_signed, validate_abba_finish_signed, validate_abba_init_signed,
+    validate_dabc_full_knowledge_checkpoint_signed, validate_dabc_ratified_amendment,
+    validate_rbc_accept_signed, validate_rbc_echo_signed, validate_rbc_propose_signed,
+    validate_rbc_ready_signed, validate_trust_graph, CobaltSignatureCommittee,
+    DabcFullKnowledgeCheck, DabcRatifiedAmendment,
 };
 use postfiat_types::{
     CobaltValidatorUpdateDecisionCertificateV1,
     COBALT_VALIDATOR_UPDATE_DECISION_CERTIFICATE_SCHEMA_V1,
 };
+use std::io::Read as _;
 
 const COBALT_AUTHORITY_COMPACT_TRANSCRIPT_SCHEMA_V1: &str =
     "postfiat.cobalt.authority_compact_protocol_transcript.v1";
+const COBALT_AUTHORITY_COMPRESSED_VALUE_SCHEMA_V1: &str =
+    "postfiat.cobalt.authority_compressed_value.v1";
+const COBALT_AUTHORITY_COMPRESSION_CODEC_V1: &str = "deflate-json-v1";
 pub const MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES: usize = 1024 * 1024;
+const MAX_COBALT_AUTHORITY_DECOMPRESSED_VALUE_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -33,6 +44,16 @@ struct CobaltAuthorityCompactProtocolTranscriptV1 {
     schema: String,
     transcript: CobaltShadowProtocolTranscript,
     full_knowledge_checks: Vec<DabcFullKnowledgeCheck>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CobaltAuthorityCompressedValueV1 {
+    schema: String,
+    codec: String,
+    decompressed_bytes: usize,
+    payload_hash: String,
+    payload_base64: String,
 }
 
 fn certificate_error(message: impl Into<String>) -> io::Error {
@@ -46,6 +67,72 @@ fn consensus_certificate_error(error: String) -> io::Error {
 fn hash_serialized<T: Serialize>(domain: &str, value: &T) -> io::Result<String> {
     let encoded = serde_json::to_vec(value).map_err(invalid_data)?;
     Ok(hash_hex(domain, &encoded))
+}
+
+fn compress_authority_value<T: Serialize>(value: &T) -> io::Result<serde_json::Value> {
+    let encoded = serde_json::to_vec(value).map_err(invalid_data)?;
+    if encoded.len() > MAX_COBALT_AUTHORITY_DECOMPRESSED_VALUE_BYTES {
+        return Err(certificate_error(format!(
+            "Cobalt authority value is {} bytes after expansion; maximum is {}",
+            encoded.len(),
+            MAX_COBALT_AUTHORITY_DECOMPRESSED_VALUE_BYTES
+        )));
+    }
+    let mut encoder = DeflateEncoder::new(Vec::new(), Compression::best());
+    encoder.write_all(&encoded)?;
+    let compressed = encoder.finish()?;
+    serde_json::to_value(CobaltAuthorityCompressedValueV1 {
+        schema: COBALT_AUTHORITY_COMPRESSED_VALUE_SCHEMA_V1.to_string(),
+        codec: COBALT_AUTHORITY_COMPRESSION_CODEC_V1.to_string(),
+        decompressed_bytes: encoded.len(),
+        payload_hash: hash_hex("postfiat.cobalt.authority-compressed-value.v1", &encoded),
+        payload_base64: BASE64_STANDARD.encode(compressed),
+    })
+    .map_err(invalid_data)
+}
+
+fn decompress_authority_value<T>(value: &serde_json::Value) -> io::Result<T>
+where
+    T: Serialize + for<'de> Deserialize<'de>,
+{
+    let packed: CobaltAuthorityCompressedValueV1 =
+        serde_json::from_value(value.clone()).map_err(invalid_data)?;
+    if packed.schema != COBALT_AUTHORITY_COMPRESSED_VALUE_SCHEMA_V1
+        || packed.codec != COBALT_AUTHORITY_COMPRESSION_CODEC_V1
+        || packed.decompressed_bytes == 0
+        || packed.decompressed_bytes > MAX_COBALT_AUTHORITY_DECOMPRESSED_VALUE_BYTES
+    {
+        return Err(certificate_error(
+            "Cobalt authority compressed value header is invalid",
+        ));
+    }
+    let compressed = BASE64_STANDARD
+        .decode(&packed.payload_base64)
+        .map_err(invalid_data)?;
+    let mut decoder = DeflateDecoder::new(compressed.as_slice());
+    let mut encoded = Vec::with_capacity(packed.decompressed_bytes);
+    decoder
+        .by_ref()
+        .take((MAX_COBALT_AUTHORITY_DECOMPRESSED_VALUE_BYTES + 1) as u64)
+        .read_to_end(&mut encoded)?;
+    if encoded.len() != packed.decompressed_bytes
+        || encoded.len() > MAX_COBALT_AUTHORITY_DECOMPRESSED_VALUE_BYTES
+        || hash_hex("postfiat.cobalt.authority-compressed-value.v1", &encoded)
+            != packed.payload_hash
+    {
+        return Err(certificate_error(
+            "Cobalt authority compressed value length or digest mismatch",
+        ));
+    }
+    let decoded: T = serde_json::from_slice(&encoded).map_err(invalid_data)?;
+    let canonical: CobaltAuthorityCompressedValueV1 =
+        serde_json::from_value(compress_authority_value(&decoded)?).map_err(invalid_data)?;
+    if canonical != packed {
+        return Err(certificate_error(
+            "Cobalt authority compressed value is not canonically encoded",
+        ));
+    }
+    Ok(decoded)
 }
 
 fn compact_protocol_transcript(
@@ -67,7 +154,110 @@ fn compact_protocol_transcript(
             "Cobalt DABC checkpoints must share one nonempty support certificate",
         ));
     }
+    let signer_set = transcript
+        .rbc_echoes
+        .iter()
+        .map(|message| message.sender.clone())
+        .collect::<BTreeSet<_>>();
+    let stage_signer_sets = [
+        transcript
+            .rbc_readies
+            .iter()
+            .map(|message| message.sender.clone())
+            .collect::<BTreeSet<_>>(),
+        transcript
+            .rbc_accepts
+            .iter()
+            .map(|message| message.sender.clone())
+            .collect::<BTreeSet<_>>(),
+        transcript
+            .abba_inits
+            .iter()
+            .map(|message| message.sender.clone())
+            .collect::<BTreeSet<_>>(),
+        transcript
+            .abba_auxes
+            .iter()
+            .map(|message| message.sender.clone())
+            .collect::<BTreeSet<_>>(),
+        transcript
+            .abba_confs
+            .iter()
+            .map(|message| message.sender.clone())
+            .collect::<BTreeSet<_>>(),
+        transcript
+            .abba_finishes
+            .iter()
+            .map(|message| message.sender.clone())
+            .collect::<BTreeSet<_>>(),
+        reference_checks
+            .iter()
+            .map(|message| message.sender.clone())
+            .collect::<BTreeSet<_>>(),
+    ];
+    if signer_set.is_empty() || stage_signer_sets.iter().any(|stage| stage != &signer_set) {
+        return Err(certificate_error(
+            "Cobalt authority transcript stages must share one signer set",
+        ));
+    }
+
+    let mut selected = signer_set.into_iter().collect::<Vec<_>>();
+    for candidate in selected.clone().into_iter().rev() {
+        let trial = selected
+            .iter()
+            .filter(|validator| *validator != &candidate)
+            .cloned()
+            .collect::<Vec<_>>();
+        let supports_every_view = transcript.trust_graph.trust_views.iter().all(|view| {
+            let local_support = trial
+                .iter()
+                .filter(|validator| view.derived_unl.binary_search(validator).is_ok())
+                .cloned()
+                .collect::<Vec<_>>();
+            has_strong_support(view, &local_support).unwrap_or(false)
+        });
+        if supports_every_view {
+            selected = trial;
+        }
+    }
+    let selected = selected.into_iter().collect::<BTreeSet<_>>();
+    let retain = |sender: &str| selected.contains(sender);
+    transcript
+        .rbc_echoes
+        .retain(|message| retain(&message.sender));
+    transcript
+        .rbc_readies
+        .retain(|message| retain(&message.sender));
+    transcript
+        .rbc_accepts
+        .retain(|message| retain(&message.sender));
+    transcript
+        .abba_inits
+        .retain(|message| retain(&message.sender));
+    transcript
+        .abba_auxes
+        .retain(|message| retain(&message.sender));
+    transcript
+        .abba_confs
+        .retain(|message| retain(&message.sender));
+    transcript
+        .abba_finishes
+        .retain(|message| retain(&message.sender));
+    let reference_checks = reference_checks
+        .into_iter()
+        .filter(|check| retain(&check.sender))
+        .collect::<Vec<_>>();
     for checkpoint in &mut transcript.full_knowledge_checkpoints {
+        checkpoint.checks = reference_checks.clone();
+        checkpoint.checkpoint_id = dabc_full_knowledge_checkpoint_id(
+            &postfiat_consensus_cobalt::CobaltDomain {
+                chain_id: transcript.trust_graph.chain_id.clone(),
+                genesis_hash: transcript.trust_graph.genesis_hash.clone(),
+                protocol_version: transcript.trust_graph.protocol_version,
+            },
+            checkpoint,
+        )
+        .map_err(consensus_certificate_error)?;
         checkpoint.checks.clear();
     }
     Ok(CobaltAuthorityCompactProtocolTranscriptV1 {
@@ -103,10 +293,13 @@ fn expand_protocol_transcript(
 pub fn compact_cobalt_validator_update_decision_certificate(
     mut certificate: CobaltValidatorUpdateDecisionCertificateV1,
 ) -> io::Result<CobaltValidatorUpdateDecisionCertificateV1> {
+    let binding: CobaltShadowRegistryBinding =
+        serde_json::from_value(certificate.registry_binding).map_err(invalid_data)?;
     let transcript: CobaltShadowProtocolTranscript =
         serde_json::from_value(certificate.protocol_transcript).map_err(invalid_data)?;
+    certificate.registry_binding = compress_authority_value(&binding)?;
     certificate.protocol_transcript =
-        serde_json::to_value(compact_protocol_transcript(transcript)?).map_err(invalid_data)?;
+        compress_authority_value(&compact_protocol_transcript(transcript)?)?;
     let encoded = serde_json::to_vec(&certificate).map_err(invalid_data)?;
     if encoded.len() > MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES {
         return Err(certificate_error(format!(
@@ -271,8 +464,16 @@ pub fn verify_cobalt_validator_update_decision_certificate(
         )));
     }
     let binding: CobaltShadowRegistryBinding =
-        serde_json::from_value(certificate.registry_binding.clone()).map_err(invalid_data)?;
-    let transcript = expand_protocol_transcript(&certificate.protocol_transcript)?;
+        decompress_authority_value(&certificate.registry_binding)?;
+    let compact: CobaltAuthorityCompactProtocolTranscriptV1 =
+        decompress_authority_value(&certificate.protocol_transcript)?;
+    let transcript =
+        expand_protocol_transcript(&serde_json::to_value(&compact).map_err(invalid_data)?)?;
+    if compact_protocol_transcript(transcript.clone())? != compact {
+        return Err(certificate_error(
+            "Cobalt authority transcript does not use the canonical minimal signer set",
+        ));
+    }
     let committee = validate_registry_binding(
         &binding,
         expected_domain,
@@ -386,6 +587,51 @@ pub fn verify_cobalt_validator_update_decision_certificate(
             .map(|message| message.sender.as_str()),
         active_validators,
     )?;
+    let contribution_signers = transcript
+        .rbc_echoes
+        .iter()
+        .map(|message| message.sender.as_str())
+        .collect::<Vec<_>>();
+    let stage_signers = [
+        transcript
+            .rbc_readies
+            .iter()
+            .map(|message| message.sender.as_str())
+            .collect::<Vec<_>>(),
+        transcript
+            .rbc_accepts
+            .iter()
+            .map(|message| message.sender.as_str())
+            .collect::<Vec<_>>(),
+        transcript
+            .abba_inits
+            .iter()
+            .map(|message| message.sender.as_str())
+            .collect::<Vec<_>>(),
+        transcript
+            .abba_auxes
+            .iter()
+            .map(|message| message.sender.as_str())
+            .collect::<Vec<_>>(),
+        transcript
+            .abba_confs
+            .iter()
+            .map(|message| message.sender.as_str())
+            .collect::<Vec<_>>(),
+        transcript
+            .abba_finishes
+            .iter()
+            .map(|message| message.sender.as_str())
+            .collect::<Vec<_>>(),
+    ];
+    if stage_signers
+        .iter()
+        .any(|stage| stage != &contribution_signers)
+    {
+        return Err(certificate_error(
+            "Cobalt authority transcript stages do not share one signer set",
+        ));
+    }
     for message in &transcript.abba_inits {
         validate_abba_init_signed(&domain, &committee, message)
             .map_err(consensus_certificate_error)?;
@@ -490,6 +736,17 @@ pub fn verify_cobalt_validator_update_decision_certificate(
             checkpoint.checks.iter().map(|check| check.sender.as_str()),
             active_validators,
         )?;
+        if checkpoint
+            .checks
+            .iter()
+            .map(|check| check.sender.as_str())
+            .collect::<Vec<_>>()
+            != contribution_signers
+        {
+            return Err(certificate_error(
+                "Cobalt DABC support signers do not match the protocol signer set",
+            ));
+        }
         if let Some(expected) = reference_checks {
             if checkpoint.checks.as_slice() != expected {
                 return Err(certificate_error(
@@ -565,6 +822,25 @@ pub fn verify_cobalt_validator_update_decision_certificate(
 pub fn cobalt_decision_ratification(
     certificate: &CobaltValidatorUpdateDecisionCertificateV1,
 ) -> io::Result<DabcRatifiedAmendment> {
-    let transcript = expand_protocol_transcript(&certificate.protocol_transcript)?;
+    let compact: CobaltAuthorityCompactProtocolTranscriptV1 =
+        decompress_authority_value(&certificate.protocol_transcript)?;
+    let transcript =
+        expand_protocol_transcript(&serde_json::to_value(compact).map_err(invalid_data)?)?;
     Ok(transcript.ratification)
+}
+
+#[cfg(test)]
+pub(super) fn rewrite_cobalt_certificate_domain_for_test(
+    certificate: &mut CobaltValidatorUpdateDecisionCertificateV1,
+    chain_id: &str,
+) -> io::Result<()> {
+    let mut binding: CobaltShadowRegistryBinding =
+        decompress_authority_value(&certificate.registry_binding)?;
+    binding.trust_graph.chain_id = chain_id.to_string();
+    certificate.registry_binding = compress_authority_value(&binding)?;
+    let mut compact: CobaltAuthorityCompactProtocolTranscriptV1 =
+        decompress_authority_value(&certificate.protocol_transcript)?;
+    compact.transcript.trust_graph.chain_id = chain_id.to_string();
+    certificate.protocol_transcript = compress_authority_value(&compact)?;
+    Ok(())
 }

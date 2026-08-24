@@ -881,12 +881,15 @@ mod tests {
         cobalt_binding: CobaltShadowRegistryBinding,
     }
 
-    fn fixture() -> Fixture {
-        let genesis = Genesis::new_with_validator_count("postfiat-cobalt-handoff-test", 4);
-        let validators = (0..4)
+    fn fixture_with_validator_count(validator_count: usize) -> Fixture {
+        let validator_count_u32 = u32::try_from(validator_count).expect("validator count fits u32");
+        let genesis =
+            Genesis::new_with_validator_count("postfiat-cobalt-handoff-test", validator_count_u32);
+        let mut validators = (0..validator_count)
             .map(|index| format!("validator-{index}"))
             .collect::<Vec<_>>();
-        let keys = (0..4)
+        validators.sort();
+        let keys = (0..validator_count)
             .map(|index| ml_dsa_65_keygen_from_seed(&[index as u8 + 41; 32]))
             .collect::<Vec<_>>();
         let registry = ValidatorRegistry {
@@ -900,7 +903,7 @@ mod tests {
                 })
                 .collect(),
         };
-        let governance = GovernanceState::new(4);
+        let governance = GovernanceState::new(validator_count_u32);
         let registry_root = validator_registry_root(&registry, &validators).expect("registry root");
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -971,6 +974,10 @@ mod tests {
             cobalt_root,
             cobalt_binding,
         }
+    }
+
+    fn fixture() -> Fixture {
+        fixture_with_validator_count(4)
     }
 
     fn signed_transition(
@@ -1344,38 +1351,35 @@ mod tests {
             .cobalt_decision_certificate
             .as_mut()
             .expect("decision certificate")
-            .protocol_transcript["transcript"]["payload_hash"] =
-            serde_json::Value::String("ff".repeat(48));
-        assert!(verify_cobalt_validator_trust_update(
+            .protocol_transcript["payload_base64"] =
+            serde_json::Value::String("tampered".to_string());
+        verify_cobalt_validator_trust_update(
             &fixture.genesis,
             &governance,
             &fixture.registry,
             &tampered,
             11,
         )
-        .expect_err("tampered Cobalt decision must be rejected")
-        .to_string()
-        .contains("not bound"));
+        .expect_err("tampered Cobalt decision must be rejected");
 
         let mut wrong_domain = signed_rotate_update(&fixture, &governance, 12);
         let certificate = wrong_domain
             .cobalt_decision_certificate
             .as_mut()
             .expect("decision certificate");
-        certificate.registry_binding["trust_graph"]["chain_id"] =
-            serde_json::Value::String("another-chain".to_string());
-        certificate.protocol_transcript["transcript"]["trust_graph"]["chain_id"] =
-            serde_json::Value::String("another-chain".to_string());
-        assert!(verify_cobalt_validator_trust_update(
+        crate::cobalt_authority_certificate::rewrite_cobalt_certificate_domain_for_test(
+            certificate,
+            "another-chain",
+        )
+        .expect("rewrite compressed certificate domain");
+        verify_cobalt_validator_trust_update(
             &fixture.genesis,
             &governance,
             &fixture.registry,
             &wrong_domain,
             12,
         )
-        .expect_err("cross-chain Cobalt decision must be rejected")
-        .to_string()
-        .contains("live chain"));
+        .expect_err("cross-chain Cobalt decision must be rejected");
     }
 
     #[test]
@@ -1512,6 +1516,76 @@ mod tests {
             11,
         )
         .expect("live governance batch authorization");
+    }
+
+    #[test]
+    fn twenty_validator_post_quantum_decision_certificate_fits_consensus_batch() {
+        let fixture = fixture_with_validator_count(20);
+        let mut services = fixture
+            .validators
+            .iter()
+            .map(|validator| {
+                CobaltShadowService::open(fixture.cobalt_root.join(validator))
+                    .expect("open Cobalt signer")
+            })
+            .collect::<Vec<_>>();
+        let payload_hash = "ab".repeat(48);
+        let proposal = services[0]
+            .create_protocol_proposal(&fixture.cobalt_binding, 1, payload_hash.clone())
+            .expect("create Cobalt proposal");
+        let contributions = services
+            .iter_mut()
+            .map(|service| {
+                service
+                    .create_protocol_contribution(&fixture.cobalt_binding, &proposal)
+                    .expect("create Cobalt contribution")
+            })
+            .collect::<Vec<_>>();
+        let transcript =
+            assemble_protocol_transcript(&fixture.cobalt_binding, proposal, contributions)
+                .expect("assemble Cobalt protocol transcript");
+        let expanded_bytes = serde_json::to_vec(&transcript)
+            .expect("serialize expanded transcript")
+            .len();
+        let certificate = crate::cobalt_authority_certificate::compact_cobalt_validator_update_decision_certificate(
+            CobaltValidatorUpdateDecisionCertificateV1 {
+                schema: COBALT_VALIDATOR_UPDATE_DECISION_CERTIFICATE_SCHEMA_V1.to_string(),
+                registry_binding: serde_json::to_value(&fixture.cobalt_binding)
+                    .expect("serialize registry binding"),
+                protocol_transcript: serde_json::to_value(transcript)
+                    .expect("serialize protocol transcript"),
+            },
+        )
+        .expect("compress 20-validator certificate");
+        let certificate_bytes = serde_json::to_vec(&certificate)
+            .expect("serialize compressed certificate")
+            .len();
+        assert!(
+            certificate_bytes
+                <= crate::cobalt_authority_certificate::MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES,
+            "20-validator certificate is {certificate_bytes} bytes; expanded transcript was {expanded_bytes} bytes"
+        );
+        let decision = crate::cobalt_authority_certificate::verify_cobalt_validator_update_decision_certificate(
+            &certificate,
+            &cobalt_domain(&fixture.genesis),
+            &fixture.registry,
+            &fixture.validators,
+            &fixture.registry_root,
+            &fixture.cobalt_binding.trust_graph.trust_graph_root,
+            &payload_hash,
+            1,
+            2,
+            None,
+        )
+        .expect("verify 20-validator compressed certificate");
+        assert_eq!(
+            decision.certificate_signer_count,
+            bft_quorum_threshold(fixture.validators.len()).expect("quorum")
+        );
+        eprintln!(
+            "20-validator Cobalt certificate: expanded_transcript_bytes={expanded_bytes} compressed_certificate_bytes={certificate_bytes} signers={}",
+            decision.certificate_signer_count
+        );
     }
 
     #[test]
