@@ -114,7 +114,7 @@ def verify(packet: Path) -> dict[str, Any]:
         "stale_replay",
         "equivocation",
         "crash_restart",
-        "partition_heal",
+        "partition_healing",
     }
     checks = {
         "checksums": verify_checksums(packet),

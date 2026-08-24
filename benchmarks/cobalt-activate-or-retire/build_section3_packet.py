@@ -84,7 +84,7 @@ def main() -> int:
         "stale_replay",
         "equivocation",
         "crash_restart",
-        "partition_heal",
+        "partition_healing",
     }
     checks = {
         "simulation_passed": (
