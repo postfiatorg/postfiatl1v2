@@ -41,6 +41,7 @@ fn genesis_bridge_verification_activation_height_is_backward_compatible() {
         GENESIS_NATIVE_SUPPLY_ATOMS
     );
     assert_eq!(parsed.bridge_verification_activation_height, None);
+    assert_eq!(parsed.orchard_aware_bridge_claim_activation_height, None);
     assert_eq!(parsed.atomic_swap_activation_height, None);
     assert_eq!(parsed.consensus_v2_activation_height, None);
 
@@ -50,6 +51,24 @@ fn genesis_bridge_verification_activation_height_is_backward_compatible() {
     assert!(json.contains("\"bridge_verification_activation_height\": 300"));
     let parsed = Genesis::from_json(&json).expect("parse activated genesis");
     assert_eq!(parsed.bridge_verification_activation_height, Some(300));
+
+    let mut orchard_aware = Genesis::new("postfiat-local");
+    orchard_aware.orchard_aware_bridge_claim_activation_height = Some(901);
+    let json = orchard_aware
+        .to_json()
+        .expect("serialize Orchard-aware claim activation genesis");
+    assert!(json.contains("\"orchard_aware_bridge_claim_activation_height\": 901"));
+    let parsed = Genesis::from_json(&json).expect("parse Orchard-aware activation genesis");
+    assert_eq!(parsed.orchard_aware_bridge_claim_activation_height, Some(901));
+
+    let mut source_series = Genesis::new("postfiat-local");
+    source_series.pfusdc_source_series_activation_height = Some(904);
+    let json = source_series
+        .to_json()
+        .expect("serialize source-series activation genesis");
+    assert!(json.contains("\"pfusdc_source_series_activation_height\": 904"));
+    let parsed = Genesis::from_json(&json).expect("parse source-series activation genesis");
+    assert_eq!(parsed.pfusdc_source_series_activation_height, Some(904));
 
     let mut atomic = Genesis::new("postfiat-local");
     atomic.atomic_swap_activation_height = Some(512);
@@ -68,6 +87,60 @@ fn genesis_bridge_verification_activation_height_is_backward_compatible() {
     assert!(json.contains("\"consensus_v2_activation_height\": 900"));
     let parsed = Genesis::from_json(&json).expect("parse consensus v2 activation genesis");
     assert_eq!(parsed.consensus_v2_activation_height, Some(900));
+}
+
+#[test]
+fn pfusdc_source_series_identity_binds_every_governed_source_field() {
+    let base = pfusdc_source_series_id(
+        "postfiat-wan-devnet-2",
+        &"11".repeat(48),
+        1,
+        &format!("0x{}", "22".repeat(20)),
+        &format!("0x{}", "33".repeat(20)),
+        6,
+        &"44".repeat(48),
+    )
+    .expect("source series");
+    assert_eq!(base.len(), 96);
+    let changed_epoch = pfusdc_source_series_id(
+        "postfiat-wan-devnet-2",
+        &"11".repeat(48),
+        1,
+        &format!("0x{}", "22".repeat(20)),
+        &format!("0x{}", "33".repeat(20)),
+        7,
+        &"44".repeat(48),
+    )
+    .expect("changed series");
+    assert_ne!(base, changed_epoch);
+
+    let family = AssetDefinition::new(
+        "postfiat-wan-devnet-2",
+        "pf1111111111111111111111111111111111111111",
+        "PFUSDC",
+        1,
+        6,
+    )
+    .expect("family asset");
+    let bucket_id = vault_bridge_bucket_id(
+        &family.asset_id,
+        "erc20_bridge_vault:1:0x2222222222222222222222222222222222222222:0x3333333333333333333333333333333333333333",
+        &"44".repeat(48),
+    )
+    .expect("bucket id");
+    let source_asset = AssetDefinition::new_source_series(
+        &family,
+        base.clone(),
+        bucket_id.clone(),
+        "pfUSDC · source epoch 6",
+    )
+    .expect("source-series asset");
+    assert_eq!(source_asset.asset_id, base);
+    assert_eq!(source_asset.asset_family_id, family.asset_id);
+    assert_eq!(source_asset.source_bucket_id, bucket_id);
+    source_asset
+        .validate_for_chain("postfiat-wan-devnet-2")
+        .expect("source-series asset validates");
 }
 
 #[test]

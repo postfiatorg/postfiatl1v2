@@ -1740,23 +1740,27 @@ pub(super) fn verify_replayed_blocks(
             {
                 continue;
             }
-            let legacy_pre_age_release_state_root = legacy_pre_age_release_replicated_state_root(
-                genesis,
-                &governance,
-                &ledger,
-                &ordered_batches,
-                &shielded,
-                &bridge,
-            )?;
+            let pre_age_release_root_allowed =
+                archived_wan_devnet2_pre_age_release_state_root_allowed(genesis, block);
+            let legacy_pre_age_release_state_root = if pre_age_release_root_allowed {
+                Some(legacy_pre_age_release_replicated_state_root(
+                    genesis,
+                    &governance,
+                    &ledger,
+                    &ordered_batches,
+                    &shielded,
+                    &bridge,
+                )?)
+            } else {
+                None
+            };
             if block.header.height <= 67
-                && archived_wan_devnet2_pre_age_release_state_root_allowed(genesis, block)
-                && legacy_pre_age_release_state_root == block.header.state_root
+                && legacy_pre_age_release_state_root.as_deref()
+                    == Some(block.header.state_root.as_str())
             {
                 continue;
             }
-            if block.header.height == 68
-                && archived_wan_devnet2_pre_age_release_state_root_allowed(genesis, block)
-            {
+            if block.header.height == 68 && pre_age_release_root_allowed {
                 let finality_only = legacy_pre_age_release_finality_replicated_state_root(
                     genesis,
                     &governance,
@@ -1791,7 +1795,7 @@ pub(super) fn verify_replayed_blocks(
                     legacy_nav_asset_uncommitted_state_root,
                     legacy_vault_bridge_domainless_withdrawal_state_root,
                     legacy_vault_bridge_deposit_attestation_state_root,
-                    legacy_pre_age_release_state_root,
+                    legacy_pre_age_release_state_root.as_deref().unwrap_or("not applicable"),
                     legacy_state_root,
                     block.header.state_root
                 ),

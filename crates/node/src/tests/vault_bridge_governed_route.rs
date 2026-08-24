@@ -8,7 +8,8 @@ use postfiat_types::{
     FastIngressMintRecordV1, FastIngressVerifierConfigV1, GovernanceActionBatch,
     GovernanceAmendment, GovernanceState, NavAssetRegisterOperation, NavAttestorRegisterOperation,
     NavEpochFinalizeOperation, NavProfileRegisterOperation, NavProofProfile,
-    NavReserveAttestOperation, NavReserveSubmitOperation, NavTrackedAsset, SignedAssetTransaction,
+    NavReserveAttestOperation, NavReserveSubmitOperation, NavTrackedAsset, OrchardPoolState,
+    ShieldedState, SignedAssetTransaction,
     TransactionBatch, TrustLine, UnsignedAssetTransaction, VaultBridgeDepositEvidence,
     VaultBridgeDepositFinalizeOperation, VaultBridgeDepositProposeOperation,
     VaultBridgeDepositRecord, VaultBridgeRedeemSettleOperation,
@@ -16,6 +17,7 @@ use postfiat_types::{
     VaultBridgeWithdrawalExecutionAttestation, VaultBridgeWithdrawalExecutionObservation,
     ADDRESS_NAMESPACE, ASSET_CREATE_TRANSACTION_KIND, ETHEREUM_ARBITRUM_FINALITY_STATE_SCHEMA_V2,
     GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,
+    GOVERNANCE_KIND_ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT,
     NAV_ASSET_REGISTER_TRANSACTION_KIND, NAV_ATTESTOR_REGISTER_TRANSACTION_KIND,
     NAV_EPOCH_FINALIZE_TRANSACTION_KIND, NAV_PROFILE_REGISTER_TRANSACTION_KIND,
     NAV_PROFILE_VERIFIER_MULTI_FETCH, NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1,
@@ -34,7 +36,7 @@ use super::*;
 
 fn amendment(kind: &str, value: u32, activation_height: u64) -> GovernanceAmendment {
     GovernanceAmendment {
-        amendment_id: format!("governed-vault-route:{value}:{activation_height}"),
+        amendment_id: format!("governed-vault-route:{kind}:{value}:{activation_height}"),
         chain_id: "postfiat-local".to_string(),
         genesis_hash: "11".repeat(48),
         protocol_version: 1,
@@ -1474,6 +1476,116 @@ fn route_discovery_returns_only_the_profile_authenticated_by_chain_state() {
 }
 
 #[test]
+fn pfusdc_ingress_preflight_runs_exact_claim_and_blocks_until_orchard_rule_activates() {
+    let data_dir = unique_test_dir("postfiat-pfusdc-ingress-preflight");
+    let store = NodeStore::new(&data_dir);
+    let genesis = Genesis::new("postfiat-local");
+    let issuer = "issuer".to_string();
+    let holder = "holder".to_string();
+    let asset = AssetDefinition::new(&genesis.chain_id, &issuer, "PFUSDC", 1, 6)
+        .expect("pfUSDC asset");
+    let mut route = ethereum_sepolia_p0_route(2);
+    route.asset_id = asset.asset_id.clone();
+    let mut ledger = route_ledger(&route);
+    ledger.asset_definitions.push(asset.clone());
+    ledger.accounts.push(Account::new(holder.clone(), 10_000, None));
+    let mut line = TrustLine::new(
+        holder.clone(),
+        issuer,
+        asset.asset_id.clone(),
+        u64::MAX,
+        0,
+    )
+    .expect("holder trustline");
+    // Exact complete pre-claim non-Orchard inventory from the frozen h902
+    // replay, including 2.166461 atoms of non-NAV spread custody.
+    line.balance = 269_700_595;
+    ledger.trustlines.push(line);
+    ledger.nav_assets[0].circulating_supply = 297_933_789;
+    ledger.nav_assets[0].finalized_epoch = 1;
+
+    let mut governance = GovernanceState::new(1);
+    governance.apply(amendment(
+        GOVERNANCE_KIND_VAULT_BRIDGE_ROUTE_AUTHORITY_ACTIVATION_HEIGHT,
+        1,
+        0,
+    ));
+    let route_receipt = activate_route(&mut governance, &mut ledger, &route);
+    assert!(route_receipt.accepted, "{route_receipt:?}");
+
+    let mut shielded = ShieldedState::empty();
+    let mut orchard = OrchardPoolState::empty(ASSET_ORCHARD_POOL_ID_V1);
+    orchard
+        .asset_orchard_balances
+        .push(postfiat_types::AssetOrchardAssetBalance {
+            asset_id: asset.asset_id.clone(),
+            ingress_total: 20_000_000,
+            egress_total: 0,
+            live_total: 20_000_000,
+        });
+    shielded.orchard = Some(orchard);
+    store.write_genesis(&genesis).expect("write genesis");
+    store.write_governance(&governance).expect("write governance");
+    store.write_ledger(&ledger).expect("write ledger");
+    store.write_shielded(&shielded).expect("write shielded");
+    store.write_bridge(&BridgeState::empty()).expect("write bridge");
+    store.write_ordered_batches(&[]).expect("write batches");
+    store
+        .write_chain_tip(&ChainTipState {
+            schema: CHAIN_TIP_SCHEMA.to_string(),
+            chain_id: genesis.chain_id.clone(),
+            genesis_hash: genesis_hash(&genesis),
+            protocol_version: genesis.protocol_version,
+            height: 2,
+            block_hash: "77".repeat(48),
+            state_root: "88".repeat(48),
+            ordered_batch_count: 0,
+            receipt_count: 0,
+            history_base_height: 0,
+        })
+        .expect("write chain tip");
+
+    let options = PfusdcIngressPreflightOptions {
+        data_dir: data_dir.clone(),
+        asset_id: asset.asset_id.clone(),
+        pftl_recipient: holder,
+        ethereum_depositor: "0x5555555555555555555555555555555555555555".to_string(),
+        amount_atoms: 15_000_000,
+    };
+    let blocked = pfusdc_ingress_preflight(options.clone()).expect("blocked quote");
+    assert!(!blocked.ready);
+    assert_eq!(blocked.code, "global_issued_supply_cap_exceeded");
+    assert_eq!(blocked.global_supply_before_atoms, 289_700_595);
+    assert_eq!(blocked.checkpoint_before_atoms, 297_933_789);
+
+    governance.apply(amendment(
+        GOVERNANCE_KIND_ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT,
+        3,
+        0,
+    ));
+    governance.apply(amendment(
+        GOVERNANCE_KIND_PFUSDC_SOURCE_SERIES_ACTIVATION_HEIGHT,
+        3,
+        0,
+    ));
+    store
+        .write_governance(&governance)
+        .expect("activate Orchard-aware claim rule");
+    let ready = pfusdc_ingress_preflight(options).expect("ready quote");
+    assert!(ready.ready, "{}: {}", ready.code, ready.explanation);
+    assert_eq!(ready.global_supply_after_atoms, Some(304_700_595));
+    assert_eq!(ready.checkpoint_after_atoms, Some(304_700_595));
+    assert_eq!(ready.source_counted_after_atoms, Some(15_000_000));
+    assert_eq!(ready.source_allocated_after_atoms, Some(15_000_000));
+    assert_eq!(ready.finalized_unclaimed_backing_after_deposit_atoms, 15_000_000);
+    assert_eq!(
+        ledger,
+        store.read_ledger().expect("preflight must remain read-only")
+    );
+    let _ = fs::remove_dir_all(data_dir);
+}
+
+#[test]
 fn route_discovery_promotes_verifier_without_changing_api_or_accounting() {
     let data_dir = unique_test_dir("postfiat-governed-route-stronger-verifier");
     let store = NodeStore::new(&data_dir);
@@ -2254,6 +2366,7 @@ fn governed_route_real_anvil_deposit_withdrawal_roundtrip() {
             token_address: Some(token_address.clone()),
             asset_id: asset.asset_id.clone(),
             policy_hash: route_hash.clone(),
+            route_epoch: route.route_epoch,
             proposer: holder.clone(),
             finalizer: holder.clone(),
             claimer: holder.clone(),

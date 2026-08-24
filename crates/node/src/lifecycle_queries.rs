@@ -2899,6 +2899,9 @@ pub(super) fn issued_asset_report(
         issued_asset_stats(ledger, &asset.asset_id)?;
     Ok(IssuedAssetReport {
         asset_id: asset.asset_id.clone(),
+        asset_family_id: asset.asset_family_id.clone(),
+        source_series_id: asset.source_series_id.clone(),
+        source_bucket_id: asset.source_bucket_id.clone(),
         issuer: asset.issuer.clone(),
         code: asset.code.clone(),
         version: asset.version,
@@ -2958,6 +2961,9 @@ pub(super) fn asset_line_report(line: &TrustLine, asset: &AssetDefinition) -> As
         account: line.account.clone(),
         issuer: line.issuer.clone(),
         asset_id: line.asset_id.clone(),
+        asset_family_id: asset.asset_family_id.clone(),
+        source_series_id: asset.source_series_id.clone(),
+        source_bucket_id: asset.source_bucket_id.clone(),
         code: asset.code.clone(),
         version: asset.version,
         precision: asset.precision,

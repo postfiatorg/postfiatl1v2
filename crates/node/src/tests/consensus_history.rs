@@ -2812,6 +2812,10 @@ fn every_live_governance_amendment_kind_uses_the_signed_authorization_boundary()
         (GOVERNANCE_KIND_ATOMIC_SWAP_PAUSE, 1),
         (GOVERNANCE_KIND_ATOMIC_SWAP_PAUSE, 0),
         (GOVERNANCE_KIND_BRIDGE_VERIFICATION_ACTIVATION_HEIGHT, 1000),
+        (
+            GOVERNANCE_KIND_ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT,
+            1004,
+        ),
         (GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT, 1001),
         (GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT, 1002),
         (GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT, 1003),
@@ -2898,6 +2902,10 @@ fn every_live_governance_amendment_kind_uses_the_signed_authorization_boundary()
     assert!(!governance.orchard_pool_paused);
     assert!(!governance.atomic_swap_paused);
     assert_eq!(governance.bridge_verification_activation_height(), Some(1000));
+    assert_eq!(
+        governance.orchard_aware_bridge_claim_activation_height(),
+        Some(1004)
+    );
     assert_eq!(governance.atomic_swap_activation_height(), Some(1001));
     assert_eq!(governance.replicated_state_v2_activation_height(), Some(1002));
     assert_eq!(governance.amendment_rollback_records.len(), 1);

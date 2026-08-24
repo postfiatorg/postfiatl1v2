@@ -2796,19 +2796,59 @@ pub fn verify_deployment_manifest(
 }
 
 const CONSENSUS_V2_ARTIFACT_SNAPSHOT_SCHEMA: &str = "postfiat.consensus_v2_artifact_snapshot.v1";
+// Snapshot v6 originally embedded every durable consensus-v2 artifact as hex.
+// A live h902 checkpoint produced a 134 MiB QC snapshot even though each
+// authenticated artifact remained below the ordinary 8 MiB JSON bound.  New
+// finalized-checkpoint exports are compact, but the importer must retain a
+// bounded compatibility path for already-exported recovery snapshots.
+pub(crate) const MAX_CONSENSUS_V2_ARTIFACT_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_CONSENSUS_V2_ARTIFACT_SNAPSHOT_FILES: usize = 8_192;
+const MAX_CONSENSUS_V2_ARTIFACT_SNAPSHOT_DECODED_BYTES: u64 = 256 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct ConsensusV2ArtifactSnapshot {
-    schema: String,
-    directory: String,
-    files: Vec<ConsensusV2ArtifactSnapshotFile>,
+pub(crate) struct ConsensusV2ArtifactSnapshot {
+    pub(crate) schema: String,
+    pub(crate) directory: String,
+    pub(crate) files: Vec<ConsensusV2ArtifactSnapshotFile>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct ConsensusV2ArtifactSnapshotFile {
+pub(crate) struct ConsensusV2ArtifactSnapshotFile {
     name: String,
     bytes_hex: String,
     hash_hex: String,
+}
+
+pub(crate) fn read_consensus_v2_artifact_snapshot(
+    path: &Path,
+) -> io::Result<ConsensusV2ArtifactSnapshot> {
+    let metadata = std::fs::metadata(path)?;
+    if metadata.len() > MAX_CONSENSUS_V2_ARTIFACT_SNAPSHOT_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "consensus v2 snapshot `{}` exceeds {} bytes",
+                path.display(),
+                MAX_CONSENSUS_V2_ARTIFACT_SNAPSHOT_BYTES
+            ),
+        ));
+    }
+    let bytes = std::fs::read(path)?;
+    if bytes.len() as u64 > MAX_CONSENSUS_V2_ARTIFACT_SNAPSHOT_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "consensus v2 snapshot grew while it was being read",
+        ));
+    }
+    let snapshot: ConsensusV2ArtifactSnapshot = serde_json::from_slice(&bytes)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    if snapshot.files.len() > MAX_CONSENSUS_V2_ARTIFACT_SNAPSHOT_FILES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "consensus v2 snapshot contains too many artifacts",
+        ));
+    }
+    Ok(snapshot)
 }
 
 fn consensus_v2_artifact_snapshot_bytes(data_dir: &Path, directory: &str) -> io::Result<Vec<u8>> {
@@ -2871,7 +2911,7 @@ fn restore_consensus_v2_artifact_snapshot(
     expected_directory: &str,
 ) -> io::Result<()> {
     let path = data_dir.join(snapshot_file);
-    let snapshot: ConsensusV2ArtifactSnapshot = read_json_file(&path, "consensus v2 snapshot")?;
+    let snapshot = read_consensus_v2_artifact_snapshot(&path)?;
     if snapshot.schema != CONSENSUS_V2_ARTIFACT_SNAPSHOT_SCHEMA
         || snapshot.directory != expected_directory
     {
@@ -2892,6 +2932,7 @@ fn restore_consensus_v2_artifact_snapshot(
     }
     std::fs::create_dir_all(&target)?;
     let mut prior_name = None::<String>;
+    let mut decoded_bytes = 0_u64;
     for file in snapshot.files {
         let candidate = Path::new(&file.name);
         if candidate.components().count() != 1
@@ -2904,6 +2945,20 @@ fn restore_consensus_v2_artifact_snapshot(
             ));
         }
         let bytes = hex_to_bytes(&file.bytes_hex).map_err(invalid_data)?;
+        decoded_bytes = decoded_bytes
+            .checked_add(bytes.len() as u64)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "consensus v2 snapshot decoded size overflowed",
+                )
+            })?;
+        if decoded_bytes > MAX_CONSENSUS_V2_ARTIFACT_SNAPSHOT_DECODED_BYTES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "consensus v2 snapshot decoded artifacts exceed the compatibility bound",
+            ));
+        }
         if bytes.len() as u64 > MAX_LOCAL_JSON_FILE_BYTES
             || hash_hex("postfiat.consensus_v2.snapshot_artifact.v1", &bytes) != file.hash_hex
         {

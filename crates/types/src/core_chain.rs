@@ -280,6 +280,10 @@ pub struct Genesis {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bridge_verification_activation_height: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub orchard_aware_bridge_claim_activation_height: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pfusdc_source_series_activation_height: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub atomic_swap_activation_height: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub consensus_v2_activation_height: Option<u64>,
@@ -294,6 +298,8 @@ impl Genesis {
             native_supply_atoms: Some(GENESIS_NATIVE_SUPPLY_ATOMS),
             replicated_state_v2_activation_height: Some(0),
             bridge_verification_activation_height: None,
+            orchard_aware_bridge_claim_activation_height: None,
+            pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             consensus_v2_activation_height: None,
         }
@@ -307,6 +313,8 @@ impl Genesis {
             native_supply_atoms: Some(GENESIS_NATIVE_SUPPLY_ATOMS),
             replicated_state_v2_activation_height: Some(0),
             bridge_verification_activation_height: None,
+            orchard_aware_bridge_claim_activation_height: None,
+            pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             consensus_v2_activation_height: None,
         }

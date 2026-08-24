@@ -400,6 +400,15 @@ impl Account {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AssetDefinition {
     pub asset_id: String,
+    /// Empty for ordinary issued assets. Source-series assets use the exact
+    /// `pfusdc_source_series_id` as their asset ID and retain the pooled
+    /// ticker's ID here only as a display/accounting family.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub asset_family_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_series_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_bucket_id: String,
     pub issuer: String,
     pub code: String,
     pub version: u32,
@@ -429,6 +438,9 @@ impl AssetDefinition {
         let asset_id = issued_asset_id(chain_id, &issuer, &code, version)?;
         let asset = Self {
             asset_id,
+            asset_family_id: String::new(),
+            source_series_id: String::new(),
+            source_bucket_id: String::new(),
             issuer,
             code,
             version,
@@ -463,11 +475,47 @@ impl AssetDefinition {
         if self.max_supply == Some(0) {
             return Err("asset.max_supply must be nonzero when present".to_string());
         }
+        if self.asset_family_id.is_empty() != self.source_series_id.is_empty()
+            || self.source_series_id.is_empty() != self.source_bucket_id.is_empty()
+        {
+            return Err(
+                "asset source series requires asset_family_id, source_series_id, and source_bucket_id"
+                    .to_string(),
+            );
+        }
+        if !self.source_series_id.is_empty() {
+            validate_lower_hex_len(
+                "asset.asset_family_id",
+                &self.asset_family_id,
+                ISSUED_ASSET_ID_HEX_LEN,
+            )?;
+            validate_lower_hex_len(
+                "asset.source_series_id",
+                &self.source_series_id,
+                ISSUED_ASSET_ID_HEX_LEN,
+            )?;
+            validate_lower_hex_len(
+                "asset.source_bucket_id",
+                &self.source_bucket_id,
+                VAULT_BRIDGE_BUCKET_ID_HEX_LEN,
+            )?;
+            if self.asset_id != self.source_series_id {
+                return Err(
+                    "source-series asset_id must equal source_series_id".to_string(),
+                );
+            }
+            if self.asset_family_id == self.asset_id {
+                return Err("source-series asset must differ from its family asset".to_string());
+            }
+        }
         Ok(())
     }
 
     pub fn validate_for_chain(&self, chain_id: &str) -> Result<(), String> {
         self.validate()?;
+        if !self.source_series_id.is_empty() {
+            return Ok(());
+        }
         let expected_asset_id = issued_asset_id(chain_id, &self.issuer, &self.code, self.version)?;
         if self.asset_id != expected_asset_id {
             return Err(
@@ -475,6 +523,42 @@ impl AssetDefinition {
             );
         }
         Ok(())
+    }
+
+    /// Construct the transferable issued-asset representation of one exact
+    /// proof-backed pfUSDC source. The source-series hash is itself the asset
+    /// ID, so generic transfers, escrows, offers, FastPay objects and Orchard
+    /// notes cannot erase or substitute the backing source.
+    pub fn new_source_series(
+        family: &Self,
+        source_series_id: impl Into<String>,
+        source_bucket_id: impl Into<String>,
+        display_name: impl Into<String>,
+    ) -> Result<Self, String> {
+        if !family.asset_family_id.is_empty()
+            || !family.source_series_id.is_empty()
+            || !family.source_bucket_id.is_empty()
+        {
+            return Err("source-series family must be an ordinary issued asset".to_string());
+        }
+        let source_series_id = source_series_id.into();
+        let asset = Self {
+            asset_id: source_series_id.clone(),
+            asset_family_id: family.asset_id.clone(),
+            source_series_id,
+            source_bucket_id: source_bucket_id.into(),
+            issuer: family.issuer.clone(),
+            code: family.code.clone(),
+            version: family.version,
+            precision: family.precision,
+            display_name: display_name.into(),
+            max_supply: family.max_supply,
+            requires_authorization: family.requires_authorization,
+            freeze_enabled: family.freeze_enabled,
+            clawback_enabled: family.clawback_enabled,
+        };
+        asset.validate()?;
+        Ok(asset)
     }
 }
 

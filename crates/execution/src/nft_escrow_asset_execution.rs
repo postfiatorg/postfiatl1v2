@@ -619,6 +619,8 @@ pub struct AssetExecutionCompatibility {
     pub allow_incremental_age_release_replay: bool,
     pub allow_legacy_pftl_uniswap_disabled_live_value_replay: bool,
     pub bridge_verification_activation_height: Option<u64>,
+    pub orchard_aware_bridge_claim_activation_height: Option<u64>,
+    pub pfusdc_source_series_activation_height: Option<u64>,
     pub atomic_swap_activation_height: Option<u64>,
     pub atomic_swap_paused: bool,
 }
@@ -634,6 +636,8 @@ impl AssetExecutionCompatibility {
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             bridge_verification_activation_height: Some(0),
+            orchard_aware_bridge_claim_activation_height: Some(0),
+            pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: Some(0),
             atomic_swap_paused: false,
         }
@@ -649,6 +653,8 @@ impl AssetExecutionCompatibility {
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             bridge_verification_activation_height: Some(0),
+            orchard_aware_bridge_claim_activation_height: Some(0),
+            pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
         }
@@ -664,6 +670,8 @@ impl AssetExecutionCompatibility {
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             bridge_verification_activation_height: Some(0),
+            orchard_aware_bridge_claim_activation_height: Some(0),
+            pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
         }
@@ -679,6 +687,8 @@ impl AssetExecutionCompatibility {
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             bridge_verification_activation_height: Some(0),
+            orchard_aware_bridge_claim_activation_height: Some(0),
+            pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
         }
@@ -694,6 +704,8 @@ impl AssetExecutionCompatibility {
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             bridge_verification_activation_height: Some(0),
+            orchard_aware_bridge_claim_activation_height: Some(0),
+            pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
         }
@@ -705,6 +717,32 @@ impl AssetExecutionCompatibility {
     ) -> Self {
         self.bridge_verification_activation_height = bridge_verification_activation_height;
         self
+    }
+
+    pub const fn with_orchard_aware_bridge_claim_activation_height(
+        mut self,
+        activation_height: Option<u64>,
+    ) -> Self {
+        self.orchard_aware_bridge_claim_activation_height = activation_height;
+        self
+    }
+
+    pub fn orchard_aware_bridge_claim_active(&self, block_height: u64) -> bool {
+        self.orchard_aware_bridge_claim_activation_height
+            .is_some_and(|activation_height| block_height >= activation_height)
+    }
+
+    pub const fn with_pfusdc_source_series_activation_height(
+        mut self,
+        activation_height: Option<u64>,
+    ) -> Self {
+        self.pfusdc_source_series_activation_height = activation_height;
+        self
+    }
+
+    pub fn pfusdc_source_series_active(&self, block_height: u64) -> bool {
+        self.pfusdc_source_series_activation_height
+            .is_some_and(|activation_height| block_height >= activation_height)
     }
 
     pub const fn with_incremental_age_release_replay(mut self) -> Self {
@@ -2364,6 +2402,7 @@ fn apply_asset_operation(
                     operation,
                     &redemption_snapshot,
                     block_height,
+                    compatibility,
                 )?;
             }
             let redemption = ledger
@@ -2556,11 +2595,17 @@ fn apply_asset_operation(
                     "vault_bridge_deposit_claim transaction kind mismatch".to_string(),
                 ));
             }
+            let orchard_balances = orchard_balances_for_bridge_claim(
+                compatibility,
+                block_height,
+                orchard_balances,
+            );
             apply_vault_bridge_deposit_claim_with_orchard(
                 genesis,
                 ledger,
                 operation,
                 block_height,
+                compatibility,
                 orchard_balances,
             )
         }
@@ -2915,5 +2960,17 @@ fn apply_asset_operation(
             }
             apply_pftl_uniswap_return_import(genesis, ledger, operation, block_height)
         }
+    }
+}
+
+fn orchard_balances_for_bridge_claim<'a>(
+    compatibility: AssetExecutionCompatibility,
+    block_height: u64,
+    orchard_balances: &'a [AssetOrchardAssetBalance],
+) -> &'a [AssetOrchardAssetBalance] {
+    if compatibility.orchard_aware_bridge_claim_active(block_height) {
+        orchard_balances
+    } else {
+        &[]
     }
 }

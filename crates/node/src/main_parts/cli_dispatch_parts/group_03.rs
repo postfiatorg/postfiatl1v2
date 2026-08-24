@@ -1826,6 +1826,8 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             Ok(())
         }
         "ratify-atomic-swap-activation-height"
+        | "ratify-orchard-aware-bridge-claim-activation-height"
+        | "ratify-pfusdc-source-series-activation-height"
         | "ratify-replicated-state-v2-activation-height"
         | "ratify-bridge-exit-root-activation-height"
         | "ratify-shielded-atomic-batch-activation-height"
@@ -1843,6 +1845,14 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
                 "ratify-atomic-swap-activation-height" => (
                     GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT,
                     "--atomic-swap-activation-height",
+                ),
+                "ratify-orchard-aware-bridge-claim-activation-height" => (
+                    GOVERNANCE_KIND_ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT,
+                    "--orchard-aware-bridge-claim-activation-height",
+                ),
+                "ratify-pfusdc-source-series-activation-height" => (
+                    GOVERNANCE_KIND_PFUSDC_SOURCE_SERIES_ACTIVATION_HEIGHT,
+                    "--pfusdc-source-series-activation-height",
                 ),
                 "ratify-replicated-state-v2-activation-height" => (
                     GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT,

@@ -466,6 +466,9 @@ pub fn vault_bridge_status(
     options: VaultBridgeStatusOptions,
 ) -> io::Result<VaultBridgeStatusReport> {
     let store = NodeStore::new(options.data_dir);
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let tip = store.read_chain_tip()?;
     let ledger = store.read_ledger()?;
     let shielded = store.read_shielded()?;
     let nav_asset = ledger.nav_asset(&options.asset_id).ok_or_else(|| {
@@ -476,6 +479,42 @@ pub fn vault_bridge_status(
     })?;
     let issued_supply_atoms =
         issued_asset_supply_for_status(&ledger, &shielded, &options.asset_id)?;
+    let orchard_supply_atoms = shielded
+        .orchard
+        .as_ref()
+        .map(|pool| {
+            pool.asset_orchard_balances
+                .iter()
+                .try_fold(0_u64, |total, balance| {
+                    let belongs_to_family =
+                        balance.asset_id == options.asset_id
+                            || ledger.asset_definition(&balance.asset_id).is_some_and(
+                                |definition| definition.asset_family_id == options.asset_id,
+                            );
+                    total
+                        .checked_add(if belongs_to_family {
+                            balance.live_total
+                        } else {
+                            0
+                        })
+                        .ok_or_else(|| {
+                            io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                "pfUSDC family Orchard supply overflow",
+                            )
+                        })
+                })
+        })
+        .transpose()?
+        .unwrap_or(0);
+    let transparent_supply_atoms = issued_supply_atoms
+        .checked_sub(orchard_supply_atoms)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Orchard supply exceeds global supply",
+            )
+        })?;
     let source_root =
         vault_bridge_source_root_for_asset(&ledger.vault_bridge_bucket_states, &options.asset_id)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
@@ -557,8 +596,38 @@ pub fn vault_bridge_status(
             } else {
                 0
             };
+            let route = governance
+                .authorized_vault_bridge_route_profile(&options.asset_id, &bucket.policy_hash)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            if route.profile.source_chain_id.to_string()
+                != bucket.source_domain.split(':').nth(1).unwrap_or_default()
+                || route.profile.vault_address
+                    != bucket.source_domain.split(':').nth(2).unwrap_or_default()
+                || route.profile.token_address
+                    != bucket.source_domain.split(':').nth(3).unwrap_or_default()
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "vault bridge bucket source domain does not match governed route",
+                ));
+            }
+            let source_series_id = pfusdc_source_series_id(
+                &genesis.chain_id,
+                &options.asset_id,
+                route.profile.source_chain_id,
+                &route.profile.vault_address,
+                &route.profile.token_address,
+                route.profile.route_epoch,
+                &bucket.policy_hash,
+            )
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+            let redeemable_claim_atoms = u64::try_from(
+                u128::from(allocated) * u128::from(bucket.impairment_factor_bps) / 10_000,
+            )
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "redeemable claim overflow"))?;
             Ok(VaultBridgeBucketStatusRow {
                 bucket_id: bucket.bucket_id.clone(),
+                source_series_id,
                 source_domain: bucket.source_domain.clone(),
                 policy_hash: bucket.policy_hash.clone(),
                 gross_receipt_atoms: bucket.gross_receipt_atoms,
@@ -569,12 +638,51 @@ pub fn vault_bridge_status(
                 other_allocations_atoms: bucket.other_allocations_atoms,
                 unallocated_counted_capacity_atoms: unallocated,
                 impairment_factor_bps: bucket.impairment_factor_bps,
+                redeemable_claim_atoms,
+                redeemable_at_par: bucket.status == VAULT_BRIDGE_BUCKET_STATUS_ACTIVE
+                    && bucket.impairment_factor_bps == 10_000,
                 status: bucket.status.clone(),
                 last_packet_epoch: bucket.last_packet_epoch,
                 last_updated_height: bucket.last_updated_height,
             })
         })
         .collect::<io::Result<Vec<_>>>()?;
+    let healthy_allocated_atoms = bucket_rows
+        .iter()
+        .filter(|row| row.redeemable_at_par)
+        .try_fold(0_u64, |total, row| {
+            total
+                .checked_add(
+                    row.outstanding_vault_bridge_atoms
+                        .checked_add(row.nav_subscription_allocations_atoms)
+                        .and_then(|value| value.checked_add(row.redemption_queue_atoms))
+                        .and_then(|value| value.checked_add(row.other_allocations_atoms))
+                        .ok_or_else(|| {
+                            io::Error::new(io::ErrorKind::InvalidData, "bucket allocation overflow")
+                        })?,
+                )
+                .ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidData, "healthy allocation overflow")
+                })
+        })?;
+    let impaired_allocated_atoms = bucket_rows
+        .iter()
+        .filter(|row| !row.redeemable_at_par)
+        .try_fold(0_u64, |total, row| {
+            total
+                .checked_add(
+                    row.outstanding_vault_bridge_atoms
+                        .checked_add(row.nav_subscription_allocations_atoms)
+                        .and_then(|value| value.checked_add(row.redemption_queue_atoms))
+                        .and_then(|value| value.checked_add(row.other_allocations_atoms))
+                        .ok_or_else(|| {
+                            io::Error::new(io::ErrorKind::InvalidData, "bucket allocation overflow")
+                        })?,
+                )
+                .ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidData, "impaired allocation overflow")
+                })
+        })?;
 
     let receipt_rows = receipts
         .iter()
@@ -723,6 +831,9 @@ pub fn vault_bridge_status(
         })
         .collect::<Vec<_>>();
 
+    let compatibility =
+        asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance);
+    let source_series_enforced = compatibility.pfusdc_source_series_active(tip.height);
     Ok(VaultBridgeStatusReport {
         schema: VAULT_BRIDGE_STATUS_REPORT_SCHEMA.to_string(),
         asset_id: options.asset_id,
@@ -734,7 +845,17 @@ pub fn vault_bridge_status(
         circulating_supply: nav_asset.circulating_supply,
         finalized_reserve_packet_hash: nav_asset.finalized_reserve_packet_hash.clone(),
         issued_supply_atoms,
+        transparent_supply_atoms,
+        orchard_supply_atoms,
         counted_value_atoms,
+        healthy_allocated_atoms,
+        impaired_allocated_atoms,
+        source_series_enforced,
+        display_family_classification: if source_series_enforced {
+            "mixed_legacy_pooled_and_source_series".to_string()
+        } else {
+            "legacy_pooled".to_string()
+        },
         unallocated_counted_capacity_atoms,
         source_root,
         bucket_count: bucket_rows.len() as u64,
@@ -748,6 +869,318 @@ pub fn vault_bridge_status(
         allocations: allocation_rows,
         redemptions: redemption_rows,
         disclosure: VAULT_BRIDGE_STATUS_DISCLOSURE.to_string(),
+    })
+}
+
+pub fn pfusdc_ingress_preflight(
+    options: PfusdcIngressPreflightOptions,
+) -> io::Result<PfusdcIngressPreflightReport> {
+    if options.amount_atoms == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "pfUSDC ingress amount must be positive",
+        ));
+    }
+    validate_lower_hex_len(
+        "pfUSDC ingress asset id",
+        &options.asset_id,
+        ISSUED_ASSET_ID_HEX_LEN,
+    )
+    .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+    validate_query_text_field("pfUSDC ingress recipient", &options.pftl_recipient)?;
+    if options.ethereum_depositor.len() != 42
+        || !options.ethereum_depositor.starts_with("0x")
+        || !options.ethereum_depositor[2..]
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "pfUSDC ingress Ethereum depositor must be a lowercase 0x-prefixed address",
+        ));
+    }
+
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let mut ledger = store.read_ledger()?;
+    let shielded = store.read_shielded()?;
+    let route = vault_bridge_route(VaultBridgeRouteOptions {
+        data_dir: options.data_dir.clone(),
+        asset_id: options.asset_id.clone(),
+    })?;
+    let quote_height = route
+        .current_height
+        .checked_add(1)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "quote height overflow"))?;
+    let expires_at_height = quote_height
+        .checked_add(8)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "quote expiry overflow"))?;
+    if expires_at_height >= route.profile.expires_at_height {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "governed route expires before the ingress quote",
+        ));
+    }
+    let nav_asset = ledger
+        .nav_asset(&options.asset_id)
+        .cloned()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "pfUSDC NAV asset is missing"))?;
+    let orchard_balances = shielded
+        .orchard
+        .as_ref()
+        .map_or(&[][..], |pool| pool.asset_orchard_balances.as_slice());
+    let orchard_supply_atoms = orchard_balances.iter().try_fold(0_u64, |total, balance| {
+        let belongs_to_family = balance.asset_id == options.asset_id
+            || ledger
+                .asset_definition(&balance.asset_id)
+                .is_some_and(|definition| definition.asset_family_id == options.asset_id);
+        total
+            .checked_add(if belongs_to_family {
+                balance.live_total
+            } else {
+                0
+            })
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "pfUSDC family Orchard supply overflow",
+                )
+            })
+    })?;
+    let global_supply_before_atoms =
+        issued_asset_supply_for_status(&ledger, &shielded, &options.asset_id)?;
+    let transparent_supply_atoms = global_supply_before_atoms
+        .checked_sub(orchard_supply_atoms)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Orchard supply exceeds global supply",
+            )
+        })?;
+    let state_root = current_replicated_state_root(&store, &genesis)?;
+    let compatibility =
+        asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance);
+    let activation_height =
+        orchard_aware_bridge_claim_activation_height_for_chain(&genesis, &governance);
+    let activation_active = compatibility.orchard_aware_bridge_claim_active(quote_height);
+    let source_series_activation_height =
+        pfusdc_source_series_activation_height_for_chain(&genesis, &governance);
+    let source_series_active = compatibility.pfusdc_source_series_active(quote_height);
+
+    let finalized_unclaimed_backing_before_atoms = ledger
+        .vault_bridge_route_backing(&options.asset_id)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?
+        .into_iter()
+        .find(|row| row.route_id == route.profile.route_id)
+        .map(|row| row.finalized_unclaimed())
+        .transpose()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?
+        .unwrap_or(0);
+    let finalized_unclaimed_backing_after_deposit_atoms = finalized_unclaimed_backing_before_atoms
+        .checked_add(options.amount_atoms)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "route backing overflow"))?;
+
+    let route_binding = vault_bridge_route_binding(&route.profile_hash, route.profile.route_epoch)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let mut evidence = VaultBridgeDepositEvidence {
+        source_chain_id: route.profile.source_chain_id,
+        vault_address: route.profile.vault_address.clone(),
+        token_address: route.profile.token_address.clone(),
+        depositor: options.ethereum_depositor.clone(),
+        pftl_recipient_hash: vault_bridge_pftl_recipient_hash(&options.pftl_recipient)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?,
+        pftl_recipient: options.pftl_recipient.clone(),
+        amount_atoms: options.amount_atoms,
+        nonce: "11".repeat(32),
+        route_binding,
+        deposit_id: String::new(),
+        block_hash: "22".repeat(32),
+        tx_hash: "33".repeat(32),
+        log_index: 0,
+    };
+    evidence.deposit_id = vault_bridge_deposit_id(&evidence)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let evidence_root = vault_bridge_deposit_evidence_root(&evidence)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let source_domain = evidence.source_domain();
+    let mut record = VaultBridgeDepositRecord::new_with_source_nullifier(
+        options.asset_id.clone(),
+        evidence_root.clone(),
+        evidence,
+        route.profile_hash.clone(),
+        SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1,
+        "44".repeat(48),
+        "55".repeat(48),
+        "66".repeat(32),
+        nav_asset.issuer.clone(),
+        quote_height,
+        route.profile.expires_at_height,
+    )
+    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    record.status = VAULT_BRIDGE_DEPOSIT_STATUS_FINALIZED.to_string();
+    record.finalized_at_height = quote_height;
+    record
+        .validate()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+
+    let source_series_id = pfusdc_source_series_id(
+        &genesis.chain_id,
+        &options.asset_id,
+        route.profile.source_chain_id,
+        &route.profile.vault_address,
+        &route.profile.token_address,
+        route.profile.route_epoch,
+        &route.profile_hash,
+    )
+    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let bucket_before = ledger.vault_bridge_bucket_states.iter().find(|bucket| {
+        bucket.asset_id == options.asset_id
+            && bucket.source_domain == source_domain
+            && bucket.policy_hash == route.profile_hash
+    });
+    let source_bucket_id = bucket_before.map(|bucket| bucket.bucket_id.clone());
+    let source_counted_before_atoms = bucket_before.map_or(0, |bucket| bucket.counted_value_atoms);
+    let source_allocated_before_atoms = bucket_before
+        .map(|bucket| bucket.allocated_atoms())
+        .transpose()
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?
+        .unwrap_or(0);
+
+    ledger.vault_bridge_deposits.push(record);
+    let operation = VaultBridgeDepositClaimOperation {
+        claimer: nav_asset.issuer.clone(),
+        asset_id: options.asset_id.clone(),
+        evidence_root,
+        policy_hash: route.profile_hash.clone(),
+        route_epoch: if compatibility.pfusdc_source_series_active(quote_height) {
+            route.profile.route_epoch
+        } else {
+            0
+        },
+        recipient: options.pftl_recipient.clone(),
+        amount_atoms: options.amount_atoms,
+    };
+    let simulation = simulate_vault_bridge_deposit_claim(
+        &genesis,
+        &ledger,
+        &operation,
+        quote_height,
+        compatibility,
+        orchard_balances,
+    );
+
+    let mut ready = false;
+    let mut code = "pfusdc_ingress_preflight_failed".to_string();
+    let mut explanation = "the exact pfUSDC claim transition is not executable".to_string();
+    let mut global_supply_after_atoms = None;
+    let mut checkpoint_after_atoms = None;
+    let mut source_counted_after_atoms = None;
+    let mut source_allocated_after_atoms = None;
+    let mut resulting_bucket_id = source_bucket_id;
+    if let Ok(simulated) = simulation {
+        let cap_result = verify_global_issued_asset_supply_caps(&simulated, &shielded);
+        match cap_result {
+            Ok(()) => {
+                let global_after =
+                    global_issued_asset_supply(&simulated, &shielded, &options.asset_id)?;
+                let bucket_after = simulated.vault_bridge_bucket_states.iter().find(|bucket| {
+                    bucket.asset_id == options.asset_id
+                        && bucket.source_domain == source_domain
+                        && bucket.policy_hash == route.profile_hash
+                });
+                global_supply_after_atoms = Some(global_after);
+                checkpoint_after_atoms = simulated
+                    .nav_asset(&options.asset_id)
+                    .map(|asset| asset.circulating_supply);
+                source_counted_after_atoms = bucket_after.map(|bucket| bucket.counted_value_atoms);
+                source_allocated_after_atoms = bucket_after
+                    .map(|bucket| bucket.allocated_atoms())
+                    .transpose()
+                    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+                resulting_bucket_id = bucket_after.map(|bucket| bucket.bucket_id.clone());
+                ready = activation_active && source_series_active;
+                if ready {
+                    code = "ready".to_string();
+                    explanation =
+                        "the exact proof-backed claim transition and global supply invariant pass"
+                            .to_string();
+                } else if !activation_active {
+                    code = "orchard_aware_bridge_claim_not_active".to_string();
+                    explanation = "the candidate binary contains the repair but its governed activation is not live"
+                        .to_string();
+                } else {
+                    code = "pfusdc_source_series_not_active".to_string();
+                    explanation = "the exact claim passes, but source-series issuance is not yet governed active"
+                        .to_string();
+                }
+            }
+            Err(error) => {
+                code = "global_issued_supply_cap_exceeded".to_string();
+                explanation = error.to_string();
+            }
+        }
+    } else if let Err((failure_code, message)) = simulation {
+        code = failure_code.to_string();
+        explanation = message;
+    }
+
+    let quote_preimage = format!(
+        "state_root={state_root}\nheight={quote_height}\nexpiry={expires_at_height}\nasset={}\nroute={}\nrecipient={}\ndepositor={}\namount={}\nready={}\ncode={}\n",
+        options.asset_id,
+        route.profile_hash,
+        options.pftl_recipient,
+        options.ethereum_depositor,
+        options.amount_atoms,
+        ready,
+        code,
+    );
+    // The digest is deliberately bytes32 so the wallet can bind the exact
+    // terminal-claim simulation into the Ethereum vault deposit nonce.  The
+    // domain separator and NUL byte match the protocol's other domain-hashed
+    // artifacts while retaining EVM bytes32 compatibility.
+    let mut quote_hasher = Sha256::new();
+    quote_hasher.update(b"postfiat.pfusdc.ingress_quote.v1");
+    quote_hasher.update([0]);
+    quote_hasher.update(quote_preimage.as_bytes());
+    let quote_digest = bytes_to_hex(&quote_hasher.finalize());
+    Ok(PfusdcIngressPreflightReport {
+        schema: "postfiat.pfusdc_ingress_preflight.v1".to_string(),
+        ready,
+        code,
+        explanation,
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        asset_id: options.asset_id,
+        route_id: route.profile.route_id,
+        route_profile_hash: route.profile_hash,
+        route_epoch: route.profile.route_epoch,
+        route_activation_height: route.profile.activation_height,
+        orchard_aware_claim_activation_height: activation_height,
+        orchard_aware_claim_active: activation_active,
+        source_series_activation_height,
+        source_series_active,
+        pftl_recipient: options.pftl_recipient,
+        ethereum_depositor: options.ethereum_depositor,
+        amount_atoms: options.amount_atoms,
+        quote_height,
+        expires_at_height,
+        state_root,
+        transparent_supply_atoms,
+        orchard_supply_atoms,
+        global_supply_before_atoms,
+        global_supply_after_atoms,
+        checkpoint_before_atoms: nav_asset.circulating_supply,
+        checkpoint_after_atoms,
+        source_series_id,
+        source_bucket_id: resulting_bucket_id,
+        source_counted_before_atoms,
+        source_allocated_before_atoms,
+        source_counted_after_atoms,
+        source_allocated_after_atoms,
+        finalized_unclaimed_backing_before_atoms,
+        finalized_unclaimed_backing_after_deposit_atoms,
+        quote_digest,
     })
 }
 

@@ -6,6 +6,8 @@ pub const VAULT_BRIDGE_CONSERVATION_REPORT_SCHEMA: &str = "postfiat-vault-bridge
 pub struct VaultBridgeConservationOptions {
     pub data_dir: PathBuf,
     pub asset_id: String,
+    /// Either one RPC URL for a single-chain route set, or a comma-separated
+    /// `chain_id=url` map when the governed history spans multiple chains.
     pub source_rpc_url: String,
     pub cast_binary: PathBuf,
     pub vault_interface_lineage_manifest: PathBuf,
@@ -110,6 +112,89 @@ impl VaultBridgeConservationReport {
 struct SourceRouteFacts {
     source_deposit_ids: BTreeSet<String>,
     source_claimed_withdrawal_ids: BTreeSet<String>,
+}
+
+fn source_rpc_urls_for_routes(
+    cast_binary: &Path,
+    source_rpc_url: &str,
+    records: &[postfiat_types::VaultBridgeRouteProfileRecordV1],
+) -> io::Result<BTreeMap<u64, String>> {
+    let required_chain_ids = records
+        .iter()
+        .map(|record| record.profile.source_chain_id)
+        .collect::<BTreeSet<_>>();
+    let mut rpc_urls = BTreeMap::new();
+    if source_rpc_url.contains('=') {
+        for entry in source_rpc_url.split(',') {
+            let (chain_id, rpc_url) = entry.split_once('=').ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "multi-chain source RPC entries must use chain_id=url",
+                )
+            })?;
+            let chain_id = chain_id.parse::<u64>().map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("invalid source RPC chain id `{chain_id}`"),
+                )
+            })?;
+            if rpc_url.is_empty() || rpc_urls.insert(chain_id, rpc_url.to_string()).is_some() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("invalid or duplicate source RPC entry for chain {chain_id}"),
+                ));
+            }
+        }
+    } else {
+        let observed_chain_id = cast_u64(
+            cast_binary,
+            &["chain-id", "--rpc-url", source_rpc_url],
+            "source chain id",
+        )?;
+        if required_chain_ids
+            .iter()
+            .any(|chain_id| *chain_id != observed_chain_id)
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "source RPC chain id {observed_chain_id} does not match every governed route"
+                ),
+            ));
+        }
+        rpc_urls.insert(observed_chain_id, source_rpc_url.to_string());
+    }
+    for chain_id in &required_chain_ids {
+        let rpc_url = rpc_urls.get(chain_id).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("missing source RPC URL for governed chain {chain_id}"),
+            )
+        })?;
+        let observed_chain_id = cast_u64(
+            cast_binary,
+            &["chain-id", "--rpc-url", rpc_url],
+            "source chain id",
+        )?;
+        if observed_chain_id != *chain_id {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "source RPC declared for chain {chain_id} returned chain id {observed_chain_id}"
+                ),
+            ));
+        }
+    }
+    if rpc_urls
+        .keys()
+        .any(|chain_id| !required_chain_ids.contains(chain_id))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "source RPC map contains a chain with no governed route",
+        ));
+    }
+    Ok(rpc_urls)
 }
 
 const VAULT_INTERFACE_LINEAGE_SCHEMA: &str = "postfiat.pfusdc.vault_interface_lineage.v1";
@@ -386,32 +471,23 @@ pub fn vault_bridge_conservation_audit(
     let interface_lineage =
         load_vault_interface_lineage(&options.vault_interface_lineage_manifest)?;
 
-    let source_chain_id = cast_u64(
-        &options.cast_binary,
-        &["chain-id", "--rpc-url", &options.source_rpc_url],
-        "source chain id",
-    )?;
-    if records
-        .iter()
-        .any(|record| record.profile.source_chain_id != source_chain_id)
-    {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("source RPC chain id {source_chain_id} does not match every governed route"),
-        ));
-    }
+    let source_rpc_urls =
+        source_rpc_urls_for_routes(&options.cast_binary, &options.source_rpc_url, &records)?;
 
     let mut route_rows = Vec::with_capacity(records.len());
     let mut route_interfaces = BTreeMap::new();
-    let mut unique_vault_balances = BTreeMap::<(String, String), u64>::new();
+    let mut unique_vault_balances = BTreeMap::<(u64, String, String), u64>::new();
     for record in &records {
+        let source_rpc_url = source_rpc_urls
+            .get(&record.profile.source_chain_id)
+            .expect("required source RPC URLs validated");
         let vault_code = cast_hex_bytes(
             &options.cast_binary,
             &[
                 "code",
                 &record.profile.vault_address,
                 "--rpc-url",
-                &options.source_rpc_url,
+                source_rpc_url,
             ],
             "vault runtime code",
         )?;
@@ -421,7 +497,7 @@ pub fn vault_bridge_conservation_audit(
                 "code",
                 &record.profile.token_address,
                 "--rpc-url",
-                &options.source_rpc_url,
+                source_rpc_url,
             ],
             "token runtime code",
         )?;
@@ -453,6 +529,7 @@ pub fn vault_bridge_conservation_audit(
         route_interfaces.insert(record.profile_hash.clone(), interface);
 
         let key = (
+            record.profile.source_chain_id,
             record.profile.vault_address.clone(),
             record.profile.token_address.clone(),
         );
@@ -468,7 +545,7 @@ pub fn vault_bridge_conservation_audit(
                     "balanceOf(address)(uint256)",
                     &record.profile.vault_address,
                     "--rpc-url",
-                    &options.source_rpc_url,
+                    source_rpc_url,
                 ],
                 "source vault token balance",
             )?;
@@ -497,6 +574,7 @@ pub fn vault_bridge_conservation_audit(
         .iter()
         .map(|record| {
             let key = (
+                record.profile.source_chain_id,
                 record.profile.vault_address.clone(),
                 record.profile.token_address.clone(),
             );
@@ -523,6 +601,9 @@ pub fn vault_bridge_conservation_audit(
         let interface = route_interfaces.get(&record.profile_hash).ok_or_else(|| {
             invalid_vault_interface_lineage("missing selected interface for governed deposit route")
         })?;
+        let source_rpc_url = source_rpc_urls
+            .get(&record.profile.source_chain_id)
+            .expect("required source RPC URLs validated");
         let seen = cast_bool(
             &options.cast_binary,
             &[
@@ -531,7 +612,7 @@ pub fn vault_bridge_conservation_audit(
                 interface.deposit_seen_selector(),
                 &format!("0x{}", deposit.evidence.deposit_id),
                 "--rpc-url",
-                &options.source_rpc_url,
+                source_rpc_url,
             ],
             "source deposit_seen",
         )?;
@@ -576,6 +657,9 @@ pub fn vault_bridge_conservation_audit(
                 "missing selected interface for governed redemption route",
             )
         })?;
+        let source_rpc_url = source_rpc_urls
+            .get(&record.profile.source_chain_id)
+            .expect("required source RPC URLs validated");
         let withdrawal_id = vault_bridge_hex_bytes_exact(
             "vault bridge redemption id",
             &redemption.redemption_id,
@@ -594,7 +678,7 @@ pub fn vault_bridge_conservation_audit(
                 interface.withdrawal_claimed_selector(),
                 &commitment,
                 "--rpc-url",
-                &options.source_rpc_url,
+                source_rpc_url,
             ],
             "source claimed_withdrawal_id",
         )?;
@@ -938,25 +1022,41 @@ fn ensure_redemption_matches_route(
 }
 
 fn cast_output(cast_binary: &Path, args: &[&str], description: &str) -> io::Result<String> {
-    let output = Command::new(cast_binary)
-        .args(args)
-        .output()
-        .map_err(|error| {
-            io::Error::new(
-                error.kind(),
-                format!("failed to run cast for {description}: {error}"),
-            )
-        })?;
-    if !output.status.success() {
-        return Err(io::Error::new(
+    const MAX_ATTEMPTS: u32 = 4;
+    let mut last_failure = None;
+    let mut successful_output = None;
+    for attempt in 1..=MAX_ATTEMPTS {
+        let output = Command::new(cast_binary)
+            .args(args)
+            .output()
+            .map_err(|error| {
+                io::Error::new(
+                    error.kind(),
+                    format!("failed to run cast for {description}: {error}"),
+                )
+            })?;
+        if output.status.success() {
+            successful_output = Some(output);
+            break;
+        }
+        last_failure = Some(format!(
+            "status {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+        if attempt < MAX_ATTEMPTS {
+            std::thread::sleep(std::time::Duration::from_millis(u64::from(attempt) * 250));
+        }
+    }
+    let output = successful_output.ok_or_else(|| {
+        io::Error::new(
             io::ErrorKind::Other,
             format!(
-                "cast {description} failed with status {}: {}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr).trim()
+                "cast {description} failed after {MAX_ATTEMPTS} attempt(s): {}",
+                last_failure.unwrap_or_else(|| "unknown failure".to_string())
             ),
-        ));
-    }
+        )
+    })?;
     if output.stdout.len() > 1024 * 1024 {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,

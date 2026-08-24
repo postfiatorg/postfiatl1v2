@@ -187,6 +187,15 @@ pub struct VaultBridgeStatusOptions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PfusdcIngressPreflightOptions {
+    pub data_dir: PathBuf,
+    pub asset_id: String,
+    pub pftl_recipient: String,
+    pub ethereum_depositor: String,
+    pub amount_atoms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NavcoinBridgeRoutesOptions {
     pub data_dir: PathBuf,
 }
@@ -490,6 +499,7 @@ pub struct VaultBridgeDepositPlanOptions {
     pub token_address: Option<String>,
     pub asset_id: String,
     pub policy_hash: String,
+    pub route_epoch: u32,
     pub proposer: String,
     pub finalizer: String,
     pub claimer: String,
@@ -639,6 +649,7 @@ pub struct VaultBridgeDepositStatusRow {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VaultBridgeBucketStatusRow {
     pub bucket_id: String,
+    pub source_series_id: String,
     pub source_domain: String,
     pub policy_hash: String,
     pub gross_receipt_atoms: u64,
@@ -649,6 +660,8 @@ pub struct VaultBridgeBucketStatusRow {
     pub other_allocations_atoms: u64,
     pub unallocated_counted_capacity_atoms: u64,
     pub impairment_factor_bps: u64,
+    pub redeemable_claim_atoms: u64,
+    pub redeemable_at_par: bool,
     pub status: String,
     pub last_packet_epoch: u64,
     pub last_updated_height: u64,
@@ -947,7 +960,13 @@ pub struct VaultBridgeStatusReport {
     pub circulating_supply: u64,
     pub finalized_reserve_packet_hash: String,
     pub issued_supply_atoms: u64,
+    pub transparent_supply_atoms: u64,
+    pub orchard_supply_atoms: u64,
     pub counted_value_atoms: u64,
+    pub healthy_allocated_atoms: u64,
+    pub impaired_allocated_atoms: u64,
+    pub source_series_enforced: bool,
+    pub display_family_classification: String,
     pub unallocated_counted_capacity_atoms: u64,
     pub source_root: String,
     pub bucket_count: u64,
@@ -961,6 +980,46 @@ pub struct VaultBridgeStatusReport {
     pub allocations: Vec<VaultBridgeAllocationStatusRow>,
     pub redemptions: Vec<VaultBridgeRedemptionStatusRow>,
     pub disclosure: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PfusdcIngressPreflightReport {
+    pub schema: String,
+    pub ready: bool,
+    pub code: String,
+    pub explanation: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub asset_id: String,
+    pub route_id: String,
+    pub route_profile_hash: String,
+    pub route_epoch: u32,
+    pub route_activation_height: u64,
+    pub orchard_aware_claim_activation_height: Option<u64>,
+    pub orchard_aware_claim_active: bool,
+    pub source_series_activation_height: Option<u64>,
+    pub source_series_active: bool,
+    pub pftl_recipient: String,
+    pub ethereum_depositor: String,
+    pub amount_atoms: u64,
+    pub quote_height: u64,
+    pub expires_at_height: u64,
+    pub state_root: String,
+    pub transparent_supply_atoms: u64,
+    pub orchard_supply_atoms: u64,
+    pub global_supply_before_atoms: u64,
+    pub global_supply_after_atoms: Option<u64>,
+    pub checkpoint_before_atoms: u64,
+    pub checkpoint_after_atoms: Option<u64>,
+    pub source_series_id: String,
+    pub source_bucket_id: Option<String>,
+    pub source_counted_before_atoms: u64,
+    pub source_allocated_before_atoms: u64,
+    pub source_counted_after_atoms: Option<u64>,
+    pub source_allocated_after_atoms: Option<u64>,
+    pub finalized_unclaimed_backing_before_atoms: u64,
+    pub finalized_unclaimed_backing_after_deposit_atoms: u64,
+    pub quote_digest: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2840,6 +2899,12 @@ pub struct AtomicSettlementTemplateReport {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IssuedAssetReport {
     pub asset_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub asset_family_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_series_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_bucket_id: String,
     pub issuer: String,
     pub code: String,
     pub version: u32,
@@ -2860,6 +2925,12 @@ pub struct AssetLineReport {
     pub account: String,
     pub issuer: String,
     pub asset_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub asset_family_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_series_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source_bucket_id: String,
     pub code: String,
     pub version: u32,
     pub precision: u8,

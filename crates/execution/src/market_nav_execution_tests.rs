@@ -1354,6 +1354,7 @@ fn vault_bridge_deposit_claim_mints_swappable_erc20_bridge_to_recipient() {
             asset_id: asset_id.clone(),
             evidence_root: bridge_evidence_root.clone(),
             policy_hash: policy_hash.clone(),
+            route_epoch: 0,
             recipient: holder.clone(),
             amount_atoms: deposit_amount,
         }),
@@ -1407,6 +1408,7 @@ fn vault_bridge_deposit_claim_mints_swappable_erc20_bridge_to_recipient() {
             asset_id: asset_id.clone(),
             evidence_root: bridge_evidence_root,
             policy_hash,
+            route_epoch: 0,
             recipient: holder.clone(),
             amount_atoms: deposit_amount,
         }),
@@ -2023,9 +2025,19 @@ fn ethereum_ingress_consensus_binding_rejects_route_manifest_and_domain_mutation
 fn ethereum_backed_claim_grows_cap_and_converges_across_six_replicas() {
     let genesis = Genesis::new("postfiat-ethereum-cap-growth-test");
     let issuer = "pf-ethereum-cap-growth-issuer".to_string();
-    let recipient = "pf-ethereum-cap-growth-recipient".to_string();
+    let recipient_key = ml_dsa_65_keygen().expect("recipient key");
+    let recipient = address_from_public_key(&recipient_key.public_key);
     let asset = AssetDefinition::new(&genesis.chain_id, &issuer, "PFUSDC", 1, 6).expect("asset");
-    let amount_atoms = 2_000_000;
+    // Exact 2026-08-13 replayed incident inventory. The complete non-Orchard
+    // total is 269.700595, including 2.166461 atoms held as non-NAV spread
+    // custody (covered independently by AR-11 below), and Asset-Orchard holds
+    // another 20.000000 atoms.
+    let amount_atoms = 15_000_000;
+    let transparent_supply_atoms = 269_700_595;
+    let orchard_supply_atoms = 20_000_000;
+    let checkpoint_atoms = 297_933_789;
+    let expected_post_claim_atoms = 304_700_595;
+    let route_policy_hash = "88".repeat(48);
     let mut evidence = VaultBridgeDepositEvidence {
         source_chain_id: ETHEREUM_MAINNET_CHAIN_ID,
         vault_address: "0x1111111111111111111111111111111111111111".to_string(),
@@ -2035,7 +2047,8 @@ fn ethereum_backed_claim_grows_cap_and_converges_across_six_replicas() {
         pftl_recipient: issuer.clone(),
         amount_atoms,
         nonce: "44".repeat(32),
-        route_binding: "55".repeat(32),
+        route_binding: vault_bridge_route_binding(&route_policy_hash, 6)
+            .expect("route binding"),
         deposit_id: String::new(),
         block_hash: "66".repeat(32),
         tx_hash: "77".repeat(32),
@@ -2043,7 +2056,6 @@ fn ethereum_backed_claim_grows_cap_and_converges_across_six_replicas() {
     };
     evidence.deposit_id = vault_bridge_deposit_id(&evidence).expect("deposit id");
     let evidence_root = vault_bridge_deposit_evidence_root(&evidence).expect("evidence root");
-    let route_policy_hash = "88".repeat(48);
     let profile = NavProofProfile::new(
         issuer.clone(),
         NAV_PROFILE_VERIFIER_SP1_GROTH16,
@@ -2088,11 +2100,26 @@ fn ethereum_backed_claim_grows_cap_and_converges_across_six_replicas() {
     )
     .expect("deposit");
 
-    let mut initial = LedgerState::new(vec![Account::new(recipient.clone(), 10_000, None)]);
+    let existing_holder = "pf-ethereum-cap-growth-existing-holder".to_string();
+    let mut initial = LedgerState::new(vec![
+        Account::new(recipient.clone(), 10_000, None),
+        Account::new(existing_holder.clone(), 10_000, None),
+    ]);
     initial.asset_definitions.push(asset.clone());
     initial.nav_proof_profiles.push(profile);
     initial.nav_assets.push(nav_asset);
-    initial.nav_assets[0].circulating_supply = 20_000_000;
+    initial.nav_assets[0].circulating_supply = checkpoint_atoms;
+    initial.nav_assets[0].nav_per_unit = 1_000_000;
+    let mut existing_line = TrustLine::new(
+        existing_holder,
+        issuer.clone(),
+        asset.asset_id.clone(),
+        u64::MAX,
+        0,
+    )
+    .expect("existing supply trustline");
+    existing_line.balance = transparent_supply_atoms;
+    initial.trustlines.push(existing_line);
     initial.vault_bridge_deposits.push(deposit);
     let challenge = VaultBridgeDepositChallengeOperation {
         challenger: recipient.clone(),
@@ -2120,6 +2147,7 @@ fn ethereum_backed_claim_grows_cap_and_converges_across_six_replicas() {
         asset_id: asset.asset_id.clone(),
         evidence_root,
         policy_hash: route_policy_hash,
+        route_epoch: 0,
         recipient: recipient.clone(),
         amount_atoms,
     };
@@ -2143,39 +2171,143 @@ fn ethereum_backed_claim_grows_cap_and_converges_across_six_replicas() {
     // custody already contributes 20M atoms, reproducing the production mismatch.
     let orchard_balances = vec![postfiat_types::AssetOrchardAssetBalance {
         asset_id: asset.asset_id.clone(),
-        ingress_total: 20_000_000,
+        ingress_total: orchard_supply_atoms,
         egress_total: 0,
-        live_total: 20_000_000,
+        live_total: orchard_supply_atoms,
     }];
+    let compatibility = AssetExecutionCompatibility::strict()
+        .with_orchard_aware_bridge_claim_activation_height(Some(10))
+        .with_pfusdc_source_series_activation_height(Some(10));
+    assert!(orchard_balances_for_bridge_claim(compatibility, 9, &orchard_balances).is_empty());
+    assert_eq!(
+        orchard_balances_for_bridge_claim(compatibility, 10, &orchard_balances),
+        orchard_balances.as_slice()
+    );
     let mut legacy = initial.clone();
     apply_vault_bridge_deposit_claim(&genesis, &mut legacy, &claim, 10)
         .expect("legacy claim still executes ledger-only");
-    assert_eq!(legacy.nav_assets[0].circulating_supply, 20_000_000);
-    assert!(issued_asset_supply(&legacy, &asset.asset_id).expect("legacy supply") + 20_000_000
+    assert_eq!(legacy.nav_assets[0].circulating_supply, checkpoint_atoms);
+    assert!(issued_asset_supply(&legacy, &asset.asset_id).expect("legacy supply") + orchard_supply_atoms
         > legacy.nav_assets[0].circulating_supply);
 
+    let mut source_claim = claim.clone();
+    source_claim.route_epoch = 6;
+    let expected_source_series_id = pfusdc_source_series_id(
+        &genesis.chain_id,
+        &asset.asset_id,
+        ETHEREUM_MAINNET_CHAIN_ID,
+        "0x1111111111111111111111111111111111111111",
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        6,
+        &source_claim.policy_hash,
+    )
+    .expect("source-series id");
     let mut replicas = Vec::new();
     for mut replica in std::iter::repeat_with(|| initial.clone()).take(6) {
         apply_vault_bridge_deposit_claim_with_orchard(
             &genesis,
             &mut replica,
-            &claim,
+            &source_claim,
             10,
+            compatibility,
             &orchard_balances,
         )
         .expect("proof-bounded claim can follow finalization in the same block");
-        assert_eq!(replica.nav_assets[0].circulating_supply, 22_000_000);
+        assert_eq!(
+            replica.nav_assets[0].circulating_supply,
+            expected_post_claim_atoms
+        );
         assert_eq!(replica.nav_assets[0].finalized_epoch, 1);
         assert_eq!(
             replica
                 .trustline_for_account_asset(&recipient, &asset.asset_id)
-                .expect("recipient trustline")
+                .map_or(0, |line| line.balance),
+            0
+        );
+        assert_eq!(
+            replica
+                .trustline_for_account_asset(&recipient, &expected_source_series_id)
+                .expect("recipient source-series trustline")
                 .balance,
             amount_atoms
         );
+        let source_definition = replica
+            .asset_definition(&expected_source_series_id)
+            .expect("source-series definition");
+        assert_eq!(source_definition.asset_family_id, asset.asset_id);
+        assert_eq!(source_definition.source_series_id, expected_source_series_id);
         replicas.push(replica);
     }
     assert!(replicas.windows(2).all(|pair| pair[0] == pair[1]));
+
+    let mut redemption_replica = replicas[0].clone();
+    let source_bucket_id = redemption_replica
+        .asset_definition(&expected_source_series_id)
+        .expect("source definition")
+        .source_bucket_id
+        .clone();
+    let burn_operation = VaultBridgeBurnToRedeemOperation {
+        owner: recipient.clone(),
+        issuer: issuer.clone(),
+        asset_id: asset.asset_id.clone(),
+        bucket_id: source_bucket_id.clone(),
+        amount_atoms: 1_000_000,
+        epoch: redemption_replica.nav_assets[0].finalized_epoch,
+        reserve_packet_hash: redemption_replica.nav_assets[0]
+            .finalized_reserve_packet_hash
+            .clone(),
+        destination_ref: "evm-erc20:1:0x4444444444444444444444444444444444444444"
+            .to_string(),
+    };
+    let burn_transaction = signed_asset_transaction_with_minimum_fee(
+        &genesis,
+        &redemption_replica,
+        &recipient_key,
+        VAULT_BRIDGE_BURN_TO_REDEEM_TRANSACTION_KIND,
+        1,
+        AssetTransactionOperation::VaultBridgeBurnToRedeem(burn_operation.clone()),
+    );
+    apply_vault_bridge_burn_to_redeem(
+        &genesis,
+        &mut redemption_replica,
+        &burn_transaction,
+        &burn_operation,
+        11,
+        compatibility,
+    )
+    .expect("source-specific burn succeeds");
+    assert_eq!(
+        redemption_replica
+            .trustline_for_account_asset(&recipient, &expected_source_series_id)
+            .expect("source-series balance")
+            .balance,
+        amount_atoms - 1_000_000
+    );
+    assert_eq!(
+        redemption_replica
+            .vault_bridge_bucket(&source_bucket_id)
+            .expect("source bucket")
+            .redemption_queue_atoms,
+        1_000_000
+    );
+    release_vault_bridge_supply_allocations(
+        &mut redemption_replica,
+        &asset.asset_id,
+        &source_bucket_id,
+        1_000_000,
+        12,
+    )
+    .expect("settlement releases source allocation");
+    let remaining_supply_allocation = redemption_replica
+        .vault_bridge_allocations
+        .iter()
+        .filter(|allocation| {
+            allocation.bucket_id == source_bucket_id
+                && allocation.purpose == VAULT_BRIDGE_ALLOCATION_PURPOSE_SUPPLY
+        })
+        .map(|allocation| allocation.amount_atoms - allocation.released_atoms)
+        .sum::<u64>();
+    assert_eq!(remaining_supply_allocation, amount_atoms - 1_000_000);
 }
 
 #[test]
@@ -2268,6 +2400,7 @@ fn lane_c_ethereum_finality_claim_credits_spendable_directly_and_skips_bonded_es
         asset_id: asset.asset_id.clone(),
         evidence_root: evidence_root.clone(),
         policy_hash: route_policy_hash.clone(),
+        route_epoch: 0,
         recipient: recipient.clone(),
         amount_atoms,
     };
@@ -2292,6 +2425,7 @@ fn lane_c_ethereum_finality_claim_credits_spendable_directly_and_skips_bonded_es
         asset_id: asset.asset_id.clone(),
         evidence_root,
         policy_hash: route_policy_hash,
+        route_epoch: 0,
         recipient: recipient.clone(),
         amount_atoms,
     };
@@ -7127,6 +7261,7 @@ fn ar01_pfusdc_reserve_account_identity_and_balance_matches_production_fixture()
             asset_id: asset_id.clone(),
             evidence_root: evidence_root.clone(),
             policy_hash: policy_hash.clone(),
+            route_epoch: 0,
             recipient: observer.clone(),
             amount_atoms: deposit_amount,
         }),

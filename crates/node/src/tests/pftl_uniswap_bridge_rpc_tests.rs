@@ -381,6 +381,9 @@
         ledger.asset_definitions.extend([
             AssetDefinition {
                 asset_id: legacy_ledger.native_nav_asset_id.clone(),
+                asset_family_id: String::new(),
+                source_series_id: String::new(),
+                source_bucket_id: String::new(),
                 issuer: "pf1111111111111111111111111111111111111111".to_string(),
                 code: "qNAV".to_string(),
                 version: 1,
@@ -393,6 +396,9 @@
             },
             AssetDefinition {
                 asset_id: legacy_ledger.settlement_asset_id.clone(),
+                asset_family_id: String::new(),
+                source_series_id: String::new(),
+                source_bucket_id: String::new(),
                 issuer: "pf2222222222222222222222222222222222222222".to_string(),
                 code: "qUSD".to_string(),
                 version: 1,
