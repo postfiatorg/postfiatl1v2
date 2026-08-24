@@ -203,7 +203,7 @@ def main() -> int:
         "--cobalt-cpu-quota-percent",
         type=int,
         default=VALIDATORS * 25,
-        help="aggregate quota for six simulated sidecars; production unit is 25% each",
+        help="aggregate quota for six simulated sidecars; production unit is 25%% each",
     )
     args = parser.parse_args()
 
