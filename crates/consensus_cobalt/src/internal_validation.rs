@@ -413,6 +413,15 @@ fn validate_support_in_view(view: &TrustView, support: &[String]) -> Result<(), 
     Ok(())
 }
 
+fn project_support_to_view(view: &TrustView, support: &[String]) -> Vec<String> {
+    let derived_unl: BTreeSet<&str> = view.derived_unl.iter().map(String::as_str).collect();
+    support
+        .iter()
+        .filter(|validator| derived_unl.contains(validator.as_str()))
+        .cloned()
+        .collect()
+}
+
 fn satisfied_subsets_for_view(
     view: &TrustView,
     support: &[String],
@@ -651,7 +660,7 @@ fn evaluate_rbc_support(
 ) -> Result<RbcSupportEvaluation, String> {
     let support = sorted_unique(&support);
     validate_support_scope(&support)?;
-    validate_support_in_view(view, &support)?;
+    let support = project_support_to_view(view, &support);
     let weak_support = has_weak_support(view, &support)?;
     let strong_support = has_strong_support(view, &support)?;
     let strong_satisfied_subsets = if strong_support {
@@ -828,7 +837,7 @@ fn evaluate_abba_support(
     }
     let support = sorted_unique(&support);
     validate_support_scope(&support)?;
-    validate_support_in_view(view, &support)?;
+    let support = project_support_to_view(view, &support);
     let weak_support = has_weak_support(view, &support)?;
     let strong_support = has_strong_support(view, &support)?;
     let strong_satisfied_subsets = if strong_support {

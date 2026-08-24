@@ -414,15 +414,12 @@ fn validate_dabc_full_knowledge_checkpoint_internal(
         if !covered.contains(&check.checkpoint_height) {
             return Err("DABC full-knowledge checkpoint check height is not covered".to_string());
         }
-        if !allowed.contains(check.sender.as_str()) {
-            return Err(
-                "DABC full-knowledge checkpoint check sender outside local view".to_string(),
-            );
+        if allowed.contains(check.sender.as_str()) {
+            support_by_height
+                .entry(check.checkpoint_height)
+                .or_default()
+                .push(check.sender.clone());
         }
-        support_by_height
-            .entry(check.checkpoint_height)
-            .or_default()
-            .push(check.sender.clone());
     }
 
     for height in &checkpoint.covered_heights {

@@ -1669,6 +1669,153 @@
     }
 
     #[test]
+    fn nonuniform_support_ignores_authenticated_messages_outside_local_view() {
+        let domain = test_domain();
+        let core = subset(
+            &domain,
+            &[
+                "validator-0",
+                "validator-1",
+                "validator-2",
+                "validator-3",
+                "validator-4",
+            ],
+            1,
+            4,
+        );
+        let edge = subset(
+            &domain,
+            &[
+                "validator-0",
+                "validator-1",
+                "validator-2",
+                "validator-3",
+                "validator-5",
+            ],
+            1,
+            4,
+        );
+        let mut views = validators(5)
+            .into_iter()
+            .map(|validator| {
+                build_trust_view(&domain, validator, 1, vec![core.clone()], "")
+                    .expect("core trust view")
+            })
+            .collect::<Vec<_>>();
+        views.push(
+            build_trust_view(&domain, "validator-5", 1, vec![core, edge], "")
+                .expect("edge trust view"),
+        );
+        let graph = build_trust_graph(&domain, 1, root('b'), 1, None, views)
+            .expect("non-uniform graph");
+        let committee = test_committee_for_graph(&graph);
+        let local_view = trust_view_for_validator(&graph, "validator-0").expect("local view");
+        assert_eq!(local_view.derived_unl, validators(5));
+
+        let propose = signed_rbc_propose(
+            &domain,
+            graph.trust_graph_root.clone(),
+            "validator-0",
+            1,
+            root('f'),
+        );
+        let global_ready = validators(6)
+            .iter()
+            .map(|sender| signed_rbc_ready(&domain, &propose, sender))
+            .collect::<Vec<_>>();
+        let ready = evaluate_rbc_ready_support_signed(
+            &domain,
+            &committee,
+            local_view,
+            &propose,
+            &global_ready,
+        )
+        .expect("global RBC support");
+        assert_eq!(ready.support, validators(5));
+        assert!(ready.strong_support);
+
+        let agreement_id = hash_hex("postfiat.test.abba.agreement", b"local-projection");
+        let global_finish = validators(6)
+            .iter()
+            .map(|sender| {
+                signed_abba_finish(
+                    &domain,
+                    graph.trust_graph_root.clone(),
+                    sender,
+                    agreement_id.clone(),
+                    1,
+                    true,
+                )
+            })
+            .collect::<Vec<_>>();
+        let finish = evaluate_abba_finish_support_signed(
+            &domain,
+            &committee,
+            local_view,
+            &agreement_id,
+            1,
+            true,
+            &global_finish,
+        )
+        .expect("global ABBA support");
+        assert_eq!(finish.support, validators(5));
+        assert!(abba_strong_support(&finish));
+
+        let checks = validators(6)
+            .iter()
+            .map(|sender| {
+                signed_dabc_check(
+                    &domain,
+                    graph.trust_graph_root.clone(),
+                    sender,
+                    10,
+                    Vec::new(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let checkpoint = build_dabc_full_knowledge_checkpoint_signed(
+            &domain,
+            &committee,
+            &graph,
+            "validator-0",
+            10,
+            10,
+            checks,
+        )
+        .expect("global DABC checkpoint");
+        assert_eq!(checkpoint.checks.len(), 6);
+        validate_dabc_full_knowledge_checkpoint_signed(
+            &domain,
+            &committee,
+            &graph,
+            &checkpoint,
+        )
+        .expect("validate global DABC checkpoint");
+
+        let forged_out_of_view = sign_rbc_ready(
+            &domain,
+            &propose,
+            "validator-5",
+            &test_validator_key("validator-4").private_key,
+        )
+        .expect("forged out-of-view ready");
+        let mut forged_batch = global_ready;
+        forged_batch[5] = forged_out_of_view;
+        let error = evaluate_rbc_ready_support_signed(
+            &domain,
+            &committee,
+            local_view,
+            &propose,
+            &forged_batch,
+        )
+        .expect_err("out-of-view signature must still verify");
+        assert!(
+            error.contains("does not verify against committee key"),
+            "{error}"
+        );
+    }
+
+    #[test]
     fn cobalt_committee_builds_from_registry_entries() {
         let entries = ["validator-0", "validator-1"]
             .iter()
