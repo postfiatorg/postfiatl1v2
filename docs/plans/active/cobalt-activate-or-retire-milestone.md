@@ -65,6 +65,7 @@ Task Node: `[x] task_690f0c63d1c0d175a4e47d947825402b — rewarded 2026-08-24 (2
 - Operator establishment task: `[ ] task_46d1707cb9e11f04648ea54a7163fbee — accepted`
 - Live transition/fault task: `[ ] request only after the independent topology verifier passes`
 
+- [x] Give each operator a redaction-safe local key-generation command; private ML-DSA master and validator keys stay in separate mode-0600 files while stdout contains public material only. Code: [`operator-onboarding-keygen`](../../../crates/node/src/main_parts/cli_dispatch_parts/group_04.rs).
 - [x] Bind each operator's signed manifest to the Cobalt trust view, Section 2 packet root, source commit, onboarding challenge, infrastructure-account fingerprint, host administrator, and ML-DSA custody evidence. Code: [`consensus_artifacts.rs`](../../../crates/node/src/consensus_artifacts.rs), [`operator-manifest-create`](../../../crates/node/src/main_parts/cli_dispatch_parts/group_04.rs).
 - [x] Add an aggregate verifier that rejects mixed trust graphs, shared cross-operator control fingerprints, insufficient infrastructure domains, any operator that can reach quorum alone, and any operator withdrawal that can halt quorum. Code: [`verify_operator_independence`](../../../crates/node/src/governance.rs).
 - [ ] Establish at least three operationally independent operator groups with separate host administration and signing-key custody, across at least three infrastructure domains.

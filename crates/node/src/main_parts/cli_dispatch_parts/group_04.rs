@@ -53,6 +53,25 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "operator-onboarding-keygen" => {
+            let validator_id =
+                flag_value(flags, "--validator-id").ok_or("missing --validator-id")?;
+            let master_key_file =
+                flag_value(flags, "--master-key-file").ok_or("missing --master-key-file")?;
+            let validator_key_file =
+                flag_value(flags, "--validator-key-file").ok_or("missing --validator-key-file")?;
+            let report = create_operator_onboarding_keys(OperatorOnboardingKeygenOptions {
+                validator_id: validator_id.to_string(),
+                master_key_file: PathBuf::from(master_key_file),
+                validator_key_file: PathBuf::from(validator_key_file),
+                overwrite: flag_present(flags, "--overwrite"),
+            })
+            .map_err(|error| format!("operator-onboarding-keygen failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|error| format!("operator onboarding serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
         "operator-manifest-create" => {
             let master_key_file =
                 flag_value(flags, "--master-key-file").ok_or("missing --master-key-file")?;

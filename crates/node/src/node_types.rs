@@ -4360,6 +4360,26 @@ pub struct GovernanceAmendmentReplayVerifyReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OperatorOnboardingKeygenOptions {
+    pub validator_id: String,
+    pub master_key_file: PathBuf,
+    pub validator_key_file: PathBuf,
+    pub overwrite: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OperatorOnboardingKeygenReport {
+    pub schema: String,
+    pub validator_id: String,
+    pub algorithm_id: String,
+    pub master_public_key_hex: String,
+    pub hot_public_key_hex: String,
+    pub master_key_file: String,
+    pub validator_key_file: String,
+    pub private_key_material_redacted: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OperatorManifestCreateOptions {
     pub master_key_file: PathBuf,
     pub chain_id: String,

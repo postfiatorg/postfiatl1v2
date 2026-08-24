@@ -63,6 +63,7 @@ use postfiat_node::{
     create_fastpay_recovery_governance_bootstrap, create_fastswap_governance_bootstrap,
     create_governance_batch, create_governance_genesis_bundle, create_governance_replay_package,
     create_history_archive_handoff, create_mempool_batch, create_operator_manifest,
+    create_operator_onboarding_keys,
     create_orchard_action_batch, create_orchard_deposit_action,
     create_orchard_deposit_action_batch, create_orchard_output_action, create_orchard_spend_action,
     create_orchard_withdraw_action, create_orchard_withdraw_action_batch,
@@ -196,7 +197,7 @@ use postfiat_node::{
     NavcoinBridgeRouteInitOptions, NavcoinBridgeRoutesOptions, NavcoinBridgeSupplyStatusOptions,
     NftFeeQuoteOptions, NftInfoOptions, NodeOptions, OfferFeeQuoteOptions, OfferFeeQuoteReport,
     OfferInfoOptions, OperatorIndependenceEvidence, OperatorIndependenceVerifyOptions,
-    OperatorManifestCreateOptions, OperatorManifestVerifyOptions,
+    OperatorManifestCreateOptions, OperatorManifestVerifyOptions, OperatorOnboardingKeygenOptions,
     OrchardActionBatchOptions, OrchardActionOptions, OrchardDepositActionBatchOptions,
     OrchardDepositActionOptions, OrchardDisclosureOptions, OrchardDisclosureVerifyOptions,
     OrchardFeeResourcePolicyOptions, OrchardOperatorPolicyOptions, OrchardOutputActionOptions,
@@ -450,6 +451,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "governance-replay-verify" => run_cli_group_03(command, flags),
         "governance-amendment-replay-verify"
         | "governance-replay-build"
+        | "operator-onboarding-keygen"
         | "operator-manifest-create"
         | "operator-manifest-verify"
         | "operator-independence-verify"

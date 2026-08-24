@@ -2164,6 +2164,65 @@
     }
 
     #[test]
+    fn operator_onboarding_keygen_keeps_private_material_off_stdout_report() {
+        let root_dir = unique_test_dir("postfiat-operator-onboarding-keygen-test");
+        fs::create_dir_all(&root_dir).expect("create operator onboarding dir");
+        let master_key_file = root_dir.join("validator-6.master-key.json");
+        let validator_key_file = root_dir.join("validator-6.validator-keys.json");
+        let options = OperatorOnboardingKeygenOptions {
+            validator_id: "validator-6".to_string(),
+            master_key_file: master_key_file.clone(),
+            validator_key_file: validator_key_file.clone(),
+            overwrite: false,
+        };
+        let report =
+            create_operator_onboarding_keys(options.clone()).expect("create operator onboarding keys");
+        assert!(report.private_key_material_redacted);
+        assert_eq!(report.validator_id, "validator-6");
+        let report_json = serde_json::to_string(&report).expect("serialize keygen report");
+        assert!(!report_json.contains("private_key_hex"));
+
+        let master_key = read_key_file(&master_key_file).expect("read onboarding master key");
+        let validator_keys =
+            read_validator_key_file(&validator_key_file).expect("read onboarding validator key");
+        assert_eq!(report.master_public_key_hex, master_key.public_key_hex);
+        assert_eq!(validator_keys.validators.len(), 1);
+        assert_eq!(validator_keys.validators[0].node_id, "validator-6");
+        assert_eq!(
+            report.hot_public_key_hex,
+            validator_keys.validators[0].public_key_hex
+        );
+        assert_ne!(report.master_public_key_hex, report.hot_public_key_hex);
+
+        let overwrite_error = create_operator_onboarding_keys(options)
+            .expect_err("existing onboarding keys require explicit overwrite");
+        assert_eq!(overwrite_error.kind(), io::ErrorKind::AlreadyExists);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(&master_key_file)
+                    .expect("master key metadata")
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o600
+            );
+            assert_eq!(
+                fs::metadata(&validator_key_file)
+                    .expect("validator key metadata")
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o600
+            );
+        }
+
+        std::fs::remove_dir_all(root_dir).expect("cleanup operator onboarding keygen test");
+    }
+
+    #[test]
     fn operator_manifest_verify_rejects_tamper_and_private_material() {
         let data_dir = unique_test_dir("postfiat-operator-manifest-test");
         let manifest_dir = data_dir.with_file_name("postfiat-operator-manifest-test-manifests");

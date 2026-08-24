@@ -1800,6 +1800,50 @@ pub fn verify_operator_independence(
     })
 }
 
+pub fn create_operator_onboarding_keys(
+    options: OperatorOnboardingKeygenOptions,
+) -> io::Result<OperatorOnboardingKeygenReport> {
+    validate_manifest_text_field("operator onboarding validator id", &options.validator_id)?;
+    if options.master_key_file == options.validator_key_file {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "operator onboarding master and validator key files must be distinct",
+        ));
+    }
+    ensure_output_can_be_written(
+        &options.master_key_file,
+        options.overwrite,
+        "operator onboarding master key",
+    )?;
+    ensure_output_can_be_written(
+        &options.validator_key_file,
+        options.overwrite,
+        "operator onboarding validator key",
+    )?;
+
+    let master_key = create_dev_key_file()?;
+    let hot_key = create_validator_key_record(options.validator_id.clone())?;
+    let hot_public_key_hex = hot_key.public_key_hex.clone();
+    write_key_file(&options.master_key_file, &master_key)?;
+    write_validator_key_file(
+        &options.validator_key_file,
+        &ValidatorKeyFile {
+            validators: vec![hot_key],
+        },
+    )?;
+
+    Ok(OperatorOnboardingKeygenReport {
+        schema: OPERATOR_ONBOARDING_KEYGEN_REPORT_SCHEMA.to_string(),
+        validator_id: options.validator_id,
+        algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        master_public_key_hex: master_key.public_key_hex,
+        hot_public_key_hex,
+        master_key_file: options.master_key_file.display().to_string(),
+        validator_key_file: options.validator_key_file.display().to_string(),
+        private_key_material_redacted: true,
+    })
+}
+
 pub fn create_operator_manifest(
     options: OperatorManifestCreateOptions,
 ) -> io::Result<OperatorManifest> {

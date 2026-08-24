@@ -68,6 +68,7 @@ pub const ORCHARD_FEE_BURN_FEE_PER_QUANTUM: u64 = 1;
 pub const DEFAULT_ORCHARD_VERIFIER_MAX_CONCURRENCY: usize = 1;
 pub const DEFAULT_ORCHARD_VERIFIER_TIMEOUT_MS: u64 = 30_000;
 pub const DEFAULT_ORCHARD_ROOT_RETENTION: u64 = 50_000;
+pub const OPERATOR_ONBOARDING_KEYGEN_REPORT_SCHEMA: &str = "postfiat-operator-onboarding-keygen-v1";
 pub const OPERATOR_MANIFEST_FILE_SCHEMA: &str = "postfiat-operator-manifest-v1";
 pub const GOVERNANCE_GENESIS_BUNDLE_SCHEMA: &str = "postfiat-governance-genesis-bundle-v1";
 pub const GOVERNANCE_GENESIS_VERIFY_REPORT_SCHEMA: &str = "postfiat-governance-genesis-verify-v1";
