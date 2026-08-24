@@ -78,7 +78,7 @@ Task Node: `[x] task_690f0c63d1c0d175a4e47d947825402b — rewarded 2026-08-24 (2
 ### 3. Isolated-validator liveness simulation
 
 - Superseded operator-establishment task: `[x] task_46d1707cb9e11f04648ea54a7163fbee — cancelled because real external operators are outside this milestone`
-- Simulation-only task: `[x] task_043e009b196aea0b685b3f09a6ebb45d — execution packet passes; initial evidence and verifier follow-up submitted, reward review pending`. Its acceptance contract is simulation-only: one controller may orchestrate every isolated validator domain. It must not require separate operators, provider accounts, machines, administrators, or custody boundaries.
+- Simulation-only task: `[x] task_043e009b196aea0b685b3f09a6ebb45d — rewarded 2026-08-24 (4.5 PFT)`. Its acceptance contract is simulation-only: one controller may orchestrate every isolated validator domain. It must not require separate operators, provider accounts, machines, administrators, or custody boundaries.
 
 Prior operator-onboarding artifacts remain available for a future decentralization program, but recruitment, external custody, separate provider accounts, separate machines, and real third-party operation are not milestone work or activation gates here.
 
