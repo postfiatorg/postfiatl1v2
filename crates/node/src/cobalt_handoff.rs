@@ -213,6 +213,166 @@ pub fn verify_cobalt_authority_transition(
     transition: &postfiat_types::CobaltGovernanceAuthorityTransitionV1,
     proposal_slot: u64,
 ) -> io::Result<()> {
+    let (validators, registry_root, expected_quorum) = verify_cobalt_authority_transition_binding(
+        genesis,
+        governance,
+        registry,
+        transition,
+        proposal_slot,
+    )?;
+
+    if transition.approvals.len() < expected_quorum || transition.approvals.len() > validators.len()
+    {
+        return Err(permission(
+            "Cobalt authority transition approval set is outside quorum bounds",
+        ));
+    }
+    let mut previous_validator: Option<&str> = None;
+    for approval in &transition.approvals {
+        if previous_validator.is_some_and(|previous| previous >= approval.validator.as_str()) {
+            return Err(permission(
+                "Cobalt authority transition approvals must be sorted unique",
+            ));
+        }
+        previous_validator = Some(approval.validator.as_str());
+        if approval.schema != postfiat_types::SIGNED_COBALT_AUTHORITY_TRANSITION_APPROVAL_SCHEMA_V1
+            || !validators.contains(&approval.validator)
+            || approval.old_registry_root != registry_root
+            || approval.proposal_slot != proposal_slot
+            || approval.expires_at_height < proposal_slot
+            || approval.algorithm_id != ML_DSA_65_ALGORITHM
+        {
+            return Err(permission(
+                "Cobalt authority transition approval binding mismatch",
+            ));
+        }
+        verify_registry_signature(
+            registry,
+            &approval.validator,
+            &approval.algorithm_id,
+            &cobalt_authority_transition_approval_signing_bytes(transition, approval)?,
+            &approval.signature_hex,
+            COBALT_AUTHORITY_TRANSITION_SIGNATURE_CONTEXT_V1,
+            "Cobalt authority transition approval",
+        )?;
+    }
+    Ok(())
+}
+
+pub fn verify_unsigned_cobalt_authority_transition(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    registry: &ValidatorRegistry,
+    transition: &postfiat_types::CobaltGovernanceAuthorityTransitionV1,
+) -> io::Result<()> {
+    if !transition.approvals.is_empty() {
+        return Err(permission(
+            "unsigned Cobalt authority transition must not contain approvals",
+        ));
+    }
+    verify_cobalt_authority_transition_binding(
+        genesis,
+        governance,
+        registry,
+        transition,
+        transition.activation_height,
+    )?;
+    Ok(())
+}
+
+pub fn build_unsigned_cobalt_authority_transition(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    registry: &ValidatorRegistry,
+    activation_height: u64,
+    requested_cobalt_lock_hash: Option<String>,
+    requested_trust_graph_root: Option<String>,
+) -> io::Result<postfiat_types::CobaltGovernanceAuthorityTransitionV1> {
+    verify_cobalt_authority_history(genesis, governance)?;
+    let validators = active_validator_ids(governance)?;
+    let registry_root = validator_registry_root(registry, &validators)?;
+    let approval_quorum =
+        bft_quorum_threshold(validators.len()).map_err(|error| invalid(error.to_string()))?;
+    let previous = governance.cobalt_authority_transitions.last();
+    let amendment_sequence = if previous.is_some() {
+        highest_cobalt_amendment_sequence(governance)
+            .checked_add(1)
+            .ok_or_else(|| invalid("Cobalt amendment sequence overflow"))?
+    } else {
+        1
+    };
+    let cobalt_protocol_version = previous
+        .map(|transition| transition.cobalt_protocol_version)
+        .unwrap_or(genesis.protocol_version)
+        .checked_add(1)
+        .ok_or_else(|| invalid("Cobalt protocol version overflow"))?;
+    let (to_authority_mode, transition_kind, cobalt_lock_hash, trust_graph_root) =
+        match governance.authority_mode {
+            postfiat_types::GOVERNANCE_AUTHORITY_MODE_FOUNDATION => (
+                postfiat_types::GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED,
+                postfiat_types::COBALT_AUTHORITY_TRANSITION_ACTIVATE,
+                requested_cobalt_lock_hash.ok_or_else(|| {
+                    invalid("Cobalt activation requires the decided Cobalt lock hash")
+                })?,
+                requested_trust_graph_root.ok_or_else(|| {
+                    invalid("Cobalt activation requires the decided trust graph root")
+                })?,
+            ),
+            postfiat_types::GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED => {
+                let progress = current_cobalt_authority_progress(governance)?;
+                if requested_cobalt_lock_hash
+                    .as_ref()
+                    .is_some_and(|value| value != &progress.parent_lock_hash)
+                    || requested_trust_graph_root
+                        .as_ref()
+                        .is_some_and(|value| value != &progress.trust_graph_root)
+                {
+                    return Err(permission(
+                        "Cobalt rollback inputs do not match the current authority lock",
+                    ));
+                }
+                (
+                    postfiat_types::GOVERNANCE_AUTHORITY_MODE_FOUNDATION,
+                    postfiat_types::COBALT_AUTHORITY_TRANSITION_ROLLBACK,
+                    progress.parent_lock_hash,
+                    progress.trust_graph_root,
+                )
+            }
+            _ => return Err(permission("unsupported governance authority mode")),
+        };
+    let mut transition = postfiat_types::CobaltGovernanceAuthorityTransitionV1 {
+        schema: postfiat_types::COBALT_AUTHORITY_TRANSITION_SCHEMA_V1.to_string(),
+        transition_id: String::new(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(genesis),
+        from_authority_mode: governance.authority_mode,
+        to_authority_mode,
+        transition_kind: transition_kind.to_string(),
+        previous_transition_id: previous.map(|transition| transition.transition_id.clone()),
+        old_registry_root: registry_root.clone(),
+        cobalt_lock_hash,
+        trust_graph_root,
+        cobalt_registry_root: registry_root,
+        amendment_sequence,
+        activation_height,
+        cobalt_protocol_version,
+        authority_scope: postfiat_types::COBALT_AUTHORITY_SCOPE_VALIDATOR_TRUST_V1.to_string(),
+        validators,
+        approval_quorum,
+        approvals: Vec::new(),
+    };
+    transition.transition_id = cobalt_authority_transition_id(&transition)?;
+    verify_unsigned_cobalt_authority_transition(genesis, governance, registry, &transition)?;
+    Ok(transition)
+}
+
+fn verify_cobalt_authority_transition_binding(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    registry: &ValidatorRegistry,
+    transition: &postfiat_types::CobaltGovernanceAuthorityTransitionV1,
+    proposal_slot: u64,
+) -> io::Result<(Vec<String>, String, usize)> {
     if transition.schema != postfiat_types::COBALT_AUTHORITY_TRANSITION_SCHEMA_V1
         || transition.chain_id != genesis.chain_id
         || transition.genesis_hash != genesis_hash(genesis)
@@ -258,43 +418,7 @@ pub fn verify_cobalt_authority_transition(
     if transition.transition_id != expected_id {
         return Err(permission("Cobalt authority transition id mismatch"));
     }
-
-    if transition.approvals.len() < expected_quorum || transition.approvals.len() > validators.len()
-    {
-        return Err(permission(
-            "Cobalt authority transition approval set is outside quorum bounds",
-        ));
-    }
-    let mut previous_validator: Option<&str> = None;
-    for approval in &transition.approvals {
-        if previous_validator.is_some_and(|previous| previous >= approval.validator.as_str()) {
-            return Err(permission(
-                "Cobalt authority transition approvals must be sorted unique",
-            ));
-        }
-        previous_validator = Some(approval.validator.as_str());
-        if approval.schema != postfiat_types::SIGNED_COBALT_AUTHORITY_TRANSITION_APPROVAL_SCHEMA_V1
-            || !validators.contains(&approval.validator)
-            || approval.old_registry_root != registry_root
-            || approval.proposal_slot != proposal_slot
-            || approval.expires_at_height < proposal_slot
-            || approval.algorithm_id != ML_DSA_65_ALGORITHM
-        {
-            return Err(permission(
-                "Cobalt authority transition approval binding mismatch",
-            ));
-        }
-        verify_registry_signature(
-            registry,
-            &approval.validator,
-            &approval.algorithm_id,
-            &cobalt_authority_transition_approval_signing_bytes(transition, approval)?,
-            &approval.signature_hex,
-            COBALT_AUTHORITY_TRANSITION_SIGNATURE_CONTEXT_V1,
-            "Cobalt authority transition approval",
-        )?;
-    }
-    Ok(())
+    Ok((validators, registry_root, expected_quorum))
 }
 
 pub fn verify_cobalt_validator_trust_update(
@@ -1653,5 +1777,138 @@ mod tests {
         assert_eq!(replay.len(), 1);
         assert!(!replay[0].accepted);
         assert_eq!(replay[0].code, "cobalt_authority_transition_rejected");
+    }
+
+    #[test]
+    fn production_operator_lifecycle_emits_an_applicable_cobalt_handoff_batch() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let data_dir = std::env::temp_dir().join(format!(
+            "postfiat-cobalt-authority-operator-lifecycle-{}-{nonce}",
+            std::process::id()
+        ));
+        crate::init(crate::InitOptions {
+            data_dir: data_dir.clone(),
+            chain_id: "postfiat-cobalt-authority-operator-lifecycle".to_string(),
+            node_id: "validator-0".to_string(),
+            validator_count: 4,
+        })
+        .expect("initialize operator lifecycle state");
+
+        let unsigned_file = data_dir.join("cobalt-authority-unsigned.json");
+        let signed_file = data_dir.join("cobalt-authority-signed.json");
+        let batch_file = data_dir.join("cobalt-authority-batch.json");
+        let stale_error = crate::create_cobalt_authority_transition(
+            crate::CobaltAuthorityTransitionCreateOptions {
+                data_dir: data_dir.clone(),
+                activation_height: 0,
+                cobalt_lock_hash: Some("11".repeat(48)),
+                trust_graph_root: Some("22".repeat(48)),
+                transition_file: data_dir.join("stale-cobalt-authority.json"),
+            },
+        )
+        .expect_err("stale authority transition must not be created");
+        assert!(
+            stale_error
+                .to_string()
+                .contains("is not after current height"),
+            "{stale_error}"
+        );
+        let transition = crate::create_cobalt_authority_transition(
+            crate::CobaltAuthorityTransitionCreateOptions {
+                data_dir: data_dir.clone(),
+                activation_height: 5,
+                cobalt_lock_hash: Some("11".repeat(48)),
+                trust_graph_root: Some("22".repeat(48)),
+                transition_file: unsigned_file.clone(),
+            },
+        )
+        .expect("create unsigned transition");
+        assert!(transition.approvals.is_empty());
+        assert_eq!(transition.amendment_sequence, 1);
+        assert_eq!(transition.cobalt_protocol_version, 2);
+
+        let validator_key_file = data_dir.join(crate::VALIDATOR_KEYS_FILE);
+        let mut approval_files = Vec::new();
+        for validator in transition
+            .validators
+            .iter()
+            .take(transition.approval_quorum)
+        {
+            let approval_file = data_dir.join(format!("{validator}.cobalt-approval.json"));
+            crate::sign_cobalt_authority_transition(crate::CobaltAuthorityTransitionSignOptions {
+                data_dir: data_dir.clone(),
+                transition_file: unsigned_file.clone(),
+                validator: validator.clone(),
+                validator_key_file: validator_key_file.clone(),
+                expires_at_height: 8,
+                approval_file: approval_file.clone(),
+            })
+            .expect("sign transition approval");
+            approval_files.push(approval_file);
+        }
+
+        let under_quorum_error = crate::assemble_cobalt_authority_transition(
+            crate::CobaltAuthorityTransitionAssembleOptions {
+                data_dir: data_dir.clone(),
+                transition_file: unsigned_file.clone(),
+                approval_files: approval_files[..transition.approval_quorum - 1].to_vec(),
+                output_file: signed_file.clone(),
+            },
+        )
+        .expect_err("under-quorum transition must be rejected");
+        assert!(
+            under_quorum_error
+                .to_string()
+                .contains("approval set is outside quorum bounds"),
+            "{under_quorum_error}"
+        );
+
+        let signed = crate::assemble_cobalt_authority_transition(
+            crate::CobaltAuthorityTransitionAssembleOptions {
+                data_dir: data_dir.clone(),
+                transition_file: unsigned_file,
+                approval_files,
+                output_file: signed_file.clone(),
+            },
+        )
+        .expect("assemble signed transition");
+        assert_eq!(signed.approvals.len(), signed.approval_quorum);
+        assert!(signed
+            .approvals
+            .windows(2)
+            .all(|pair| pair[0].validator < pair[1].validator));
+
+        let batch = crate::create_cobalt_authority_transition_batch(
+            crate::CobaltAuthorityTransitionBatchOptions {
+                data_dir: data_dir.clone(),
+                transition_file: signed_file,
+                batch_file,
+            },
+        )
+        .expect("create Cobalt authority governance batch");
+        assert_eq!(batch.cobalt_authority_transitions, vec![signed.clone()]);
+        assert_eq!(governance_batch_action_count(&batch), 1);
+
+        let store = NodeStore::new(&data_dir);
+        let genesis = store.read_genesis().expect("genesis");
+        let mut governance = store.read_governance().expect("governance");
+        let registry = read_validator_registry_file(&data_dir.join(VALIDATOR_REGISTRY_FILE))
+            .expect("validator registry");
+        verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, 5)
+            .expect("verify exact-height batch");
+        assert!(
+            verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, 4,)
+                .is_err()
+        );
+        let receipts = execute_governance_batch(&mut governance, None, &batch, 5);
+        assert_eq!(receipts.len(), 1);
+        assert!(receipts[0].accepted, "{receipts:?}");
+        assert_eq!(
+            governance.authority_mode,
+            postfiat_types::GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED
+        );
     }
 }

@@ -169,6 +169,181 @@ pub fn apply_amendment(options: ApplyAmendmentOptions) -> io::Result<GovernanceA
     ))
 }
 
+pub fn create_cobalt_authority_transition(
+    options: CobaltAuthorityTransitionCreateOptions,
+) -> io::Result<postfiat_types::CobaltGovernanceAuthorityTransitionV1> {
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let registry = read_validator_registry_file(&options.data_dir.join(VALIDATOR_REGISTRY_FILE))?;
+    ensure_cobalt_authority_transition_is_future(&store, &genesis, options.activation_height)?;
+    let transition = crate::cobalt_handoff::build_unsigned_cobalt_authority_transition(
+        &genesis,
+        &governance,
+        &registry,
+        options.activation_height,
+        options.cobalt_lock_hash,
+        options.trust_graph_root,
+    )?;
+    let json = serde_json::to_string_pretty(&transition).map_err(invalid_data)?;
+    atomic_write(&options.transition_file, format!("{json}\n"))?;
+    Ok(transition)
+}
+
+fn ensure_cobalt_authority_transition_is_future(
+    store: &NodeStore,
+    genesis: &Genesis,
+    activation_height: u64,
+) -> io::Result<()> {
+    let chain_tip = read_chain_tip_or_reconstruct_for_genesis(store, genesis)?;
+    if activation_height <= chain_tip.height {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+                "Cobalt authority activation height {activation_height} is not after current height {}",
+                chain_tip.height
+            ),
+        ));
+    }
+    Ok(())
+}
+
+pub fn sign_cobalt_authority_transition(
+    options: CobaltAuthorityTransitionSignOptions,
+) -> io::Result<postfiat_types::SignedCobaltAuthorityTransitionApprovalV1> {
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let registry = read_validator_registry_file(&options.data_dir.join(VALIDATOR_REGISTRY_FILE))?;
+    let transition: postfiat_types::CobaltGovernanceAuthorityTransitionV1 =
+        read_json_file(&options.transition_file, "unsigned Cobalt authority transition")?;
+    crate::cobalt_handoff::verify_unsigned_cobalt_authority_transition(
+        &genesis,
+        &governance,
+        &registry,
+        &transition,
+    )?;
+    ensure_cobalt_authority_transition_is_future(&store, &genesis, transition.activation_height)?;
+    if options.expires_at_height < transition.activation_height {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Cobalt authority approval expiry precedes activation height",
+        ));
+    }
+    if !transition.validators.contains(&options.validator) {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Cobalt authority signer is not in the active validator registry",
+        ));
+    }
+    let registry_record = validator_registry_record(&registry, &options.validator)?;
+    let key_file = read_validator_key_file(&options.validator_key_file)?;
+    validate_validator_key_file(&key_file)?;
+    let key_record = validator_key_record(&key_file, &options.validator)?;
+    if key_record.algorithm_id != registry_record.algorithm_id
+        || key_record.public_key_hex != registry_record.public_key_hex
+        || key_record.algorithm_id != ML_DSA_65_ALGORITHM
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "Cobalt authority signing key does not match the active ML-DSA registry entry",
+        ));
+    }
+    let mut approval = postfiat_types::SignedCobaltAuthorityTransitionApprovalV1 {
+        schema: postfiat_types::SIGNED_COBALT_AUTHORITY_TRANSITION_APPROVAL_SCHEMA_V1.to_string(),
+        validator: options.validator,
+        old_registry_root: transition.old_registry_root.clone(),
+        proposal_slot: transition.activation_height,
+        expires_at_height: options.expires_at_height,
+        algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        signature_hex: String::new(),
+    };
+    let signing_bytes = crate::cobalt_handoff::cobalt_authority_transition_approval_signing_bytes(
+        &transition,
+        &approval,
+    )?;
+    let private_key =
+        Zeroizing::new(hex_to_bytes(&key_record.private_key_hex).map_err(invalid_data)?);
+    approval.signature_hex = bytes_to_hex(
+        &ml_dsa_65_sign_with_context(
+            &private_key,
+            &signing_bytes,
+            crate::cobalt_handoff::COBALT_AUTHORITY_TRANSITION_SIGNATURE_CONTEXT_V1,
+        )
+        .map_err(invalid_data)?,
+    );
+    let json = serde_json::to_string_pretty(&approval).map_err(invalid_data)?;
+    atomic_write(&options.approval_file, format!("{json}\n"))?;
+    Ok(approval)
+}
+
+pub fn assemble_cobalt_authority_transition(
+    options: CobaltAuthorityTransitionAssembleOptions,
+) -> io::Result<postfiat_types::CobaltGovernanceAuthorityTransitionV1> {
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let registry = read_validator_registry_file(&options.data_dir.join(VALIDATOR_REGISTRY_FILE))?;
+    let mut transition: postfiat_types::CobaltGovernanceAuthorityTransitionV1 =
+        read_json_file(&options.transition_file, "unsigned Cobalt authority transition")?;
+    crate::cobalt_handoff::verify_unsigned_cobalt_authority_transition(
+        &genesis,
+        &governance,
+        &registry,
+        &transition,
+    )?;
+    ensure_cobalt_authority_transition_is_future(&store, &genesis, transition.activation_height)?;
+    let mut approvals = options
+        .approval_files
+        .iter()
+        .map(|path| read_json_file(path, "signed Cobalt authority transition approval"))
+        .collect::<io::Result<Vec<postfiat_types::SignedCobaltAuthorityTransitionApprovalV1>>>()?;
+    approvals.sort_by(|left, right| left.validator.cmp(&right.validator));
+    if approvals
+        .windows(2)
+        .any(|pair| pair[0].validator == pair[1].validator)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "duplicate Cobalt authority transition approval validator",
+        ));
+    }
+    transition.approvals = approvals;
+    crate::cobalt_handoff::verify_cobalt_authority_transition(
+        &genesis,
+        &governance,
+        &registry,
+        &transition,
+        transition.activation_height,
+    )?;
+    let json = serde_json::to_string_pretty(&transition).map_err(invalid_data)?;
+    atomic_write(&options.output_file, format!("{json}\n"))?;
+    Ok(transition)
+}
+
+pub fn create_cobalt_authority_transition_batch(
+    options: CobaltAuthorityTransitionBatchOptions,
+) -> io::Result<GovernanceActionBatch> {
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let registry = read_validator_registry_file(&options.data_dir.join(VALIDATOR_REGISTRY_FILE))?;
+    let transition: postfiat_types::CobaltGovernanceAuthorityTransitionV1 =
+        read_json_file(&options.transition_file, "signed Cobalt authority transition")?;
+    ensure_cobalt_authority_transition_is_future(&store, &genesis, transition.activation_height)?;
+    crate::cobalt_handoff::verify_cobalt_authority_transition(
+        &genesis,
+        &governance,
+        &registry,
+        &transition,
+        transition.activation_height,
+    )?;
+    let batch =
+        build_governance_action_batch_with_cobalt_authority_transition(&genesis, transition)?;
+    write_governance_action_batch_file(&options.batch_file, &batch)?;
+    Ok(batch)
+}
+
 pub fn create_governance_batch(
     options: GovernanceBatchOptions,
 ) -> io::Result<GovernanceActionBatch> {

@@ -803,6 +803,100 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "cobalt-authority-transition-create" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let activation_height = flag_value(flags, "--activation-height")
+                .ok_or("missing --activation-height")?
+                .parse::<u64>()
+                .map_err(|_| "--activation-height must be a u64".to_string())?;
+            let transition_file =
+                flag_value(flags, "--transition-file").ok_or("missing --transition-file")?;
+            let transition =
+                create_cobalt_authority_transition(CobaltAuthorityTransitionCreateOptions {
+                    data_dir: PathBuf::from(data_dir),
+                    activation_height,
+                    cobalt_lock_hash: flag_value(flags, "--cobalt-lock-hash").map(str::to_string),
+                    trust_graph_root: flag_value(flags, "--trust-graph-root").map(str::to_string),
+                    transition_file: PathBuf::from(transition_file),
+                })
+                .map_err(|error| format!("cobalt-authority-transition-create failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&transition)
+                .map_err(|error| format!("Cobalt transition serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "cobalt-authority-transition-sign" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let transition_file =
+                flag_value(flags, "--transition-file").ok_or("missing --transition-file")?;
+            let validator = flag_value(flags, "--validator").ok_or("missing --validator")?;
+            let validator_key_file =
+                flag_value(flags, "--validator-key-file").ok_or("missing --validator-key-file")?;
+            let expires_at_height = flag_value(flags, "--expires-at-height")
+                .ok_or("missing --expires-at-height")?
+                .parse::<u64>()
+                .map_err(|_| "--expires-at-height must be a u64".to_string())?;
+            let approval_file =
+                flag_value(flags, "--approval-file").ok_or("missing --approval-file")?;
+            let approval = sign_cobalt_authority_transition(
+                CobaltAuthorityTransitionSignOptions {
+                    data_dir: PathBuf::from(data_dir),
+                    transition_file: PathBuf::from(transition_file),
+                    validator: validator.to_string(),
+                    validator_key_file: PathBuf::from(validator_key_file),
+                    expires_at_height,
+                    approval_file: PathBuf::from(approval_file),
+                },
+            )
+            .map_err(|error| format!("cobalt-authority-transition-sign failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&approval)
+                .map_err(|error| format!("Cobalt approval serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "cobalt-authority-transition-assemble" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let transition_file =
+                flag_value(flags, "--transition-file").ok_or("missing --transition-file")?;
+            let approval_files = split_csv(
+                flag_value(flags, "--approval-files").ok_or("missing --approval-files")?,
+            )
+            .into_iter()
+            .map(PathBuf::from)
+            .collect::<Vec<_>>();
+            let output_file = flag_value(flags, "--output-file").ok_or("missing --output-file")?;
+            let transition = assemble_cobalt_authority_transition(
+                CobaltAuthorityTransitionAssembleOptions {
+                    data_dir: PathBuf::from(data_dir),
+                    transition_file: PathBuf::from(transition_file),
+                    approval_files,
+                    output_file: PathBuf::from(output_file),
+                },
+            )
+            .map_err(|error| format!("cobalt-authority-transition-assemble failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&transition)
+                .map_err(|error| format!("Cobalt transition serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "cobalt-authority-transition-batch" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let transition_file =
+                flag_value(flags, "--transition-file").ok_or("missing --transition-file")?;
+            let batch_file = flag_value(flags, "--batch-file").ok_or("missing --batch-file")?;
+            let batch = create_cobalt_authority_transition_batch(
+                CobaltAuthorityTransitionBatchOptions {
+                    data_dir: PathBuf::from(data_dir),
+                    transition_file: PathBuf::from(transition_file),
+                    batch_file: PathBuf::from(batch_file),
+                },
+            )
+            .map_err(|error| format!("cobalt-authority-transition-batch failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&batch)
+                .map_err(|error| format!("Cobalt governance batch serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
         "apply-amendment" => {
             require_direct_state_enabled("apply-amendment")?;
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);

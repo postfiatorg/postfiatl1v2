@@ -37,7 +37,8 @@ use postfiat_node::{
     apply_batch_with_verified_certificate_with_timings, apply_bridge_batch,
     apply_bridge_batch_with_replay, apply_governance_batch, apply_governance_batch_with_replay,
     apply_shielded_batch, apply_shielded_batch_with_replay, apply_validator_registry_update,
-    assemble_consensus_v2_commit, assemble_ethereum_checkpoint_certificate,
+    assemble_cobalt_authority_transition, assemble_consensus_v2_commit,
+    assemble_ethereum_checkpoint_certificate,
     assemble_signed_fastpay_recovery_governance_bootstrap,
     assemble_signed_fastswap_governance_bootstrap, assemble_signed_governance_amendment,
     assemble_signed_validator_registry_update,
@@ -59,6 +60,7 @@ use postfiat_node::{
     create_block_vote_with_timings, create_bridge_domain_batch, create_bridge_pause_batch,
     create_bridge_transfer_batch, create_consensus_v2_precommit_vote,
     create_consensus_v2_prepare_vote, create_consensus_v2_proposal_for_block,
+    create_cobalt_authority_transition, create_cobalt_authority_transition_batch,
     create_deployment_manifest, create_deployment_publisher_private_key,
     create_fastpay_recovery_governance_bootstrap, create_fastswap_governance_bootstrap,
     create_governance_batch, create_governance_genesis_bundle, create_governance_replay_package,
@@ -113,7 +115,8 @@ use postfiat_node::{
     replay_vault_bridge_reserve_bundle, run_once, shield_disclose, shield_mint, shield_scan,
     shield_spend, shield_turnstile, shielded_tree_root, sign_ethereum_checkpoint_vote,
     sign_verified_block_proposal,
-    sign_governance_amendment_authorization, sign_validator_registry_update_authorization,
+    sign_cobalt_authority_transition, sign_governance_amendment_authorization,
+    sign_validator_registry_update_authorization,
     simulate_shielded_batch, stage_deployment_validator_units, stage_validator_key, status,
     submit_signed_asset_transaction_json_to_mempool,
     submit_signed_atomic_swap_transaction_json_to_mempool,
@@ -164,6 +167,8 @@ use postfiat_node::{
     BlockVoteWithTimingsReport,
     BridgeDomainBatchOptions, BridgeDomainOptions, BridgePauseBatchOptions, BridgePauseOptions,
     BridgeTransferBatchOptions, BridgeTransferOptions, CertificateRoundPrivateKeyPolicy,
+    CobaltAuthorityTransitionAssembleOptions, CobaltAuthorityTransitionBatchOptions,
+    CobaltAuthorityTransitionCreateOptions, CobaltAuthorityTransitionSignOptions,
     DeploymentManifestCreateOptions, DeploymentManifestVerifyOptions,
     DeploymentPublisherKeyCreateOptions, DeploymentPublisherKeyExportOptions,
     DeploymentValidatorUnitsStageOptions, EscrowFeeQuoteOptions, EscrowFeeQuoteReport,
@@ -475,6 +480,10 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "governance-agent-evidence-lineage-audit"
         | "governance-agent-implementation-execution"
         | "apply-amendment"
+        | "cobalt-authority-transition-create"
+        | "cobalt-authority-transition-sign"
+        | "cobalt-authority-transition-assemble"
+        | "cobalt-authority-transition-batch"
         | "governance-batch"
         | "fastswap-governance-bootstrap"
         | "fastswap-governance-bootstrap-assemble"

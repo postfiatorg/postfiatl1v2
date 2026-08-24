@@ -4008,6 +4008,40 @@ pub struct GovernanceBatchOptions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CobaltAuthorityTransitionCreateOptions {
+    pub data_dir: PathBuf,
+    pub activation_height: u64,
+    pub cobalt_lock_hash: Option<String>,
+    pub trust_graph_root: Option<String>,
+    pub transition_file: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CobaltAuthorityTransitionSignOptions {
+    pub data_dir: PathBuf,
+    pub transition_file: PathBuf,
+    pub validator: String,
+    pub validator_key_file: PathBuf,
+    pub expires_at_height: u64,
+    pub approval_file: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CobaltAuthorityTransitionAssembleOptions {
+    pub data_dir: PathBuf,
+    pub transition_file: PathBuf,
+    pub approval_files: Vec<PathBuf>,
+    pub output_file: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CobaltAuthorityTransitionBatchOptions {
+    pub data_dir: PathBuf,
+    pub transition_file: PathBuf,
+    pub batch_file: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FastSwapGovernanceBootstrapOptions {
     pub data_dir: PathBuf,
     pub validators: Vec<String>,

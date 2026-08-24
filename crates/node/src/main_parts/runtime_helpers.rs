@@ -723,6 +723,10 @@ fn print_usage() {
   postfiat-node governance-agent-evidence-lineage-audit [--model-request PATH] [--gate-3_5-report PATH] [--gate-3_6-report PATH] [--gate-10_1-report PATH] [--gate-10_5-report PATH|--receipt-report PATH] [--gate-14-report PATH] [--gate-15-report PATH]
   postfiat-node governance-agent-implementation-execution [--work-item PATH] [--output PATH] [--overwrite]
   postfiat-node apply-amendment [--data-dir PATH] --amendment-file PATH
+  postfiat-node cobalt-authority-transition-create [--data-dir PATH] --activation-height H [--cobalt-lock-hash HASH --trust-graph-root HASH] --transition-file PATH
+  postfiat-node cobalt-authority-transition-sign [--data-dir PATH] --transition-file PATH --validator NODE_ID --validator-key-file PATH --expires-at-height H --approval-file PATH
+  postfiat-node cobalt-authority-transition-assemble [--data-dir PATH] --transition-file PATH --approval-files CSV --output-file PATH
+  postfiat-node cobalt-authority-transition-batch [--data-dir PATH] --transition-file PATH --batch-file PATH
   postfiat-node governance-batch [--data-dir PATH] [--amendment-file PATH] [--registry-update-file PATH] --batch-file PATH
   postfiat-node fastswap-governance-bootstrap [--data-dir PATH] --validators CSV [--support CSV] --payload-file PATH --amendment-file PATH --batch-file PATH [--governance-activation-height H] [--veto-until-height H] [--paused]
   postfiat-node fastswap-governance-bootstrap-assemble [--data-dir PATH] --payload-file PATH --signed-amendment-file PATH --proposal-slot H --batch-file PATH
