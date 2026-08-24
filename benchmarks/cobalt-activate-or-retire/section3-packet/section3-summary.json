@@ -1,0 +1,54 @@
+{
+  "checks": {
+    "compatible_nonuniform_views": true,
+    "every_domain_recovers_exact_history": true,
+    "fault_matrix": true,
+    "five_of_six_progress": true,
+    "four_of_six_safe_halt": true,
+    "original_failure_closed": true,
+    "production_protocol_paths": true,
+    "section2_comparison_passed": true,
+    "signed_transitions_verified": true,
+    "simulation_passed": true,
+    "simulation_scope_only": true,
+    "six_isolated_domains": true
+  },
+  "comparison": {
+    "cobalt_cases": 18,
+    "cobalt_conflicting_roots": 0,
+    "native_rippled_consensus_scope": "separate ledger-consensus control",
+    "rippled_cases": 18,
+    "rippled_validator_governance_conflicting_roots": 1
+  },
+  "consensus_v2_finality_gate": "measured separately; not inferred from Cobalt timing",
+  "fault_classes": [
+    "crash_restart",
+    "delay",
+    "duplicate",
+    "equivocation",
+    "loss",
+    "partition_healing",
+    "reorder",
+    "stale_replay"
+  ],
+  "history": {
+    "governance_digest": "4d38a78e6b97d957b9766e2635b14e5eb665703cc7011dd0d44bd67ff34ea54bd1efef52936d9cfb0ccfdc57bf151cae",
+    "head": "bfd8491f3c1899e072eb737a59fd934829b39ee69610506e50ae7636cc17158b64d7af331a8030e159ac033e048433ac",
+    "sequence": 14
+  },
+  "p95_cobalt_round_validation_wall_micros": 625238,
+  "quorum": 5,
+  "rounds": 14,
+  "schema": "postfiat-cobalt-section3-summary-v1",
+  "scope": "protocol-capability simulation; no independent-operator claim",
+  "source_commit": "65674f1dab229cd759771b0718f663b696416ae8",
+  "status": "PASS",
+  "task_id": "task_043e009b196aea0b685b3f09a6ebb45d",
+  "transitions": [
+    "admit",
+    "remove",
+    "rotate_key",
+    "trust_view_transition"
+  ],
+  "validator_count": 6
+}
