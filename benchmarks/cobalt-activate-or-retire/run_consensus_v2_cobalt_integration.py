@@ -135,7 +135,7 @@ def benchmark_command(
         "--recipient",
         recipient,
         "--amount",
-        "1",
+        "10",
         "--validators",
         str(VALIDATORS),
         "--rounds",
