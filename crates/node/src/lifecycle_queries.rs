@@ -69,12 +69,13 @@ pub const DEFAULT_ORCHARD_VERIFIER_MAX_CONCURRENCY: usize = 1;
 pub const DEFAULT_ORCHARD_VERIFIER_TIMEOUT_MS: u64 = 30_000;
 pub const DEFAULT_ORCHARD_ROOT_RETENTION: u64 = 50_000;
 pub const OPERATOR_ONBOARDING_KEYGEN_REPORT_SCHEMA: &str = "postfiat-operator-onboarding-keygen-v1";
-pub const OPERATOR_MANIFEST_FILE_SCHEMA: &str = "postfiat-operator-manifest-v1";
+pub const OPERATOR_MANIFEST_FILE_SCHEMA_V1: &str = "postfiat-operator-manifest-v1";
+pub const OPERATOR_MANIFEST_FILE_SCHEMA: &str = "postfiat-operator-manifest-v2";
 pub const GOVERNANCE_GENESIS_BUNDLE_SCHEMA: &str = "postfiat-governance-genesis-bundle-v1";
 pub const GOVERNANCE_GENESIS_VERIFY_REPORT_SCHEMA: &str = "postfiat-governance-genesis-verify-v1";
 pub const OPERATOR_MANIFEST_VERIFY_REPORT_SCHEMA: &str = "postfiat-operator-manifest-verify-v1";
 pub const OPERATOR_INDEPENDENCE_VERIFY_REPORT_SCHEMA: &str =
-    "postfiat-operator-independence-verify-v1";
+    "postfiat-operator-independence-verify-v2";
 pub const DEFAULT_HISTORY_MODE: &str = "partial";
 pub const DEFAULT_HISTORY_RETAIN_RECENT_BLOCKS: u64 = 50_000;
 pub const DEFAULT_HISTORY_RETAIN_RECENT_RECEIPTS: u64 = 50_000;
@@ -95,8 +96,10 @@ pub(super) const PROOF_LATENCY_METRICS_SCHEMA: &str = "postfiat.proof_latency_me
 
 pub(super) const MAX_LOCAL_JSON_FILE_BYTES: u64 = 8 * 1024 * 1024;
 pub(super) const MAX_OPERATOR_MANIFEST_TEXT_BYTES: usize = 256;
-pub(super) const OPERATOR_MANIFEST_SIGNATURE_CONTEXT: &[u8] =
+pub(super) const OPERATOR_MANIFEST_SIGNATURE_CONTEXT_V1: &[u8] =
     b"postfiat-l1-v2/operator-manifest/v1";
+pub(super) const OPERATOR_MANIFEST_SIGNATURE_CONTEXT: &[u8] =
+    b"postfiat-l1-v2/operator-manifest/v2";
 pub(super) const DEV_KEY_SELF_CHECK_CONTEXT: &[u8] = b"postfiat-l1-v2/dev-key-self-check/v1";
 pub(super) const DEV_KEY_SELF_CHECK_SEED: [u8; 32] = [23u8; 32];
 pub(super) const VALIDATOR_KEY_SELF_CHECK_CONTEXT: &[u8] =

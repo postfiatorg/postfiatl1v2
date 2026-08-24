@@ -4413,6 +4413,7 @@ pub struct OperatorManifestVerifyOptions {
 pub struct OperatorIndependenceVerifyOptions {
     pub data_dir: PathBuf,
     pub manifest_dir: PathBuf,
+    pub attestation_dir: PathBuf,
     pub validators: Vec<String>,
     pub quorum: usize,
     pub network: String,
@@ -4470,6 +4471,8 @@ pub struct OperatorIndependenceEvidence {
     pub key_custody_fingerprint: String,
     pub provider_attestation_hash: String,
     pub host_control_attestation_hash: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub custody_attestation_hash: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -4532,6 +4535,9 @@ pub struct OperatorIndependenceValidatorReport {
     pub onboarding_challenge_id: String,
     pub provider_attestation_hash: String,
     pub host_control_attestation_hash: String,
+    pub custody_attestation_hash: String,
+    pub provider_instance_id: String,
+    pub host_fingerprint: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

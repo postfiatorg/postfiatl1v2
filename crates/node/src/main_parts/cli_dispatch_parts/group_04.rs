@@ -124,6 +124,7 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                 flag_value(flags, "--key-custody-fingerprint"),
                 flag_value(flags, "--provider-attestation-hash"),
                 flag_value(flags, "--host-control-attestation-hash"),
+                flag_value(flags, "--custody-attestation-hash"),
             ];
             let independence_evidence = if independence_values.iter().any(Option::is_some) {
                 Some(OperatorIndependenceEvidence {
@@ -156,6 +157,11 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                     host_control_attestation_hash: independence_values[8]
                         .ok_or(
                             "operator independence evidence requires --host-control-attestation-hash",
+                        )?
+                        .to_string(),
+                    custody_attestation_hash: independence_values[9]
+                        .ok_or(
+                            "operator independence evidence requires --custody-attestation-hash",
                         )?
                         .to_string(),
                 })
@@ -204,10 +210,96 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "operator-attestation-create" => {
+            let master_key_file =
+                flag_value(flags, "--master-key-file").ok_or("missing --master-key-file")?;
+            let validator_id =
+                flag_value(flags, "--validator-id").ok_or("missing --validator-id")?;
+            let onboarding_challenge_id = flag_value(flags, "--onboarding-challenge-id")
+                .ok_or("missing --onboarding-challenge-id")?;
+            let operator = flag_value(flags, "--operator").ok_or("missing --operator")?;
+            let observed_at =
+                flag_value(flags, "--observed-at").ok_or("missing --observed-at")?;
+            let kind = flag_value(flags, "--kind").ok_or("missing --kind")?;
+            let body = match kind {
+                "provider" => OperatorControlAttestationBody::Provider {
+                    provider_name: flag_value(flags, "--provider-name")
+                        .ok_or("provider attestation requires --provider-name")?
+                        .to_string(),
+                    provider_account_fingerprint: flag_value(
+                        flags,
+                        "--provider-account-fingerprint",
+                    )
+                    .ok_or("provider attestation requires --provider-account-fingerprint")?
+                    .to_string(),
+                    instance_id: flag_value(flags, "--instance-id")
+                        .ok_or("provider attestation requires --instance-id")?
+                        .to_string(),
+                    region: flag_value(flags, "--region")
+                        .ok_or("provider attestation requires --region")?
+                        .to_string(),
+                    exclusive_control: true,
+                },
+                "host" => OperatorControlAttestationBody::Host {
+                    host_fingerprint: flag_value(flags, "--host-fingerprint")
+                        .ok_or("host attestation requires --host-fingerprint")?
+                        .to_string(),
+                    host_admin_fingerprint: flag_value(flags, "--host-admin-fingerprint")
+                        .ok_or("host attestation requires --host-admin-fingerprint")?
+                        .to_string(),
+                    exclusive_control: true,
+                },
+                "custody" => OperatorControlAttestationBody::Custody {
+                    key_custody_fingerprint: flag_value(flags, "--key-custody-fingerprint")
+                        .ok_or("custody attestation requires --key-custody-fingerprint")?
+                        .to_string(),
+                    storage_boundary: flag_value(flags, "--storage-boundary")
+                        .ok_or("custody attestation requires --storage-boundary")?
+                        .to_string(),
+                    backup_boundary: flag_value(flags, "--backup-boundary")
+                        .ok_or("custody attestation requires --backup-boundary")?
+                        .to_string(),
+                    exclusive_control: true,
+                },
+                _ => return Err("--kind must be provider, host, or custody".to_string()),
+            };
+            let output_file = flag_value(flags, "--output").ok_or("missing --output")?;
+            let attestation =
+                create_operator_control_attestation(OperatorControlAttestationCreateOptions {
+                    master_key_file: PathBuf::from(master_key_file),
+                    validator_id: validator_id.to_string(),
+                    onboarding_challenge_id: onboarding_challenge_id.to_string(),
+                    operator: operator.to_string(),
+                    observed_at: observed_at.to_string(),
+                    body,
+                    output_file: PathBuf::from(output_file),
+                    overwrite: flag_present(flags, "--overwrite"),
+                })
+                .map_err(|error| format!("operator-attestation-create failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&attestation)
+                .map_err(|error| format!("operator attestation serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "operator-attestation-verify" => {
+            let attestation_file =
+                flag_value(flags, "--attestation-file").ok_or("missing --attestation-file")?;
+            let report =
+                verify_operator_control_attestation(OperatorControlAttestationVerifyOptions {
+                    attestation_file: PathBuf::from(attestation_file),
+                })
+                .map_err(|error| format!("operator-attestation-verify failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|error| format!("operator attestation serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
         "operator-independence-verify" => {
             let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
             let manifest_dir =
                 flag_value(flags, "--manifest-dir").ok_or("missing --manifest-dir")?;
+            let attestation_dir =
+                flag_value(flags, "--attestation-dir").ok_or("missing --attestation-dir")?;
             let validators =
                 split_csv(flag_value(flags, "--validators").ok_or("missing --validators")?);
             let quorum = flag_value(flags, "--quorum")
@@ -233,6 +325,7 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             let report = verify_operator_independence(OperatorIndependenceVerifyOptions {
                 data_dir: PathBuf::from(data_dir),
                 manifest_dir: PathBuf::from(manifest_dir),
+                attestation_dir: PathBuf::from(attestation_dir),
                 validators,
                 quorum,
                 network: network.to_string(),

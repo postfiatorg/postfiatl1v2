@@ -3114,11 +3114,12 @@ pub(super) fn verify_operator_manifest_record(
     let signature =
         decode_ml_dsa_65_signature_hex("operator manifest signature", &manifest.signature_hex)?;
     let signing_payload = operator_manifest_signing_payload_bytes(manifest)?;
+    let signature_context = operator_manifest_signature_context(&manifest.schema)?;
     let signature_verified = ml_dsa_65_verify_with_context(
         &signer_public_key,
         &signing_payload,
         &signature,
-        OPERATOR_MANIFEST_SIGNATURE_CONTEXT,
+        signature_context,
     );
     if !signature_verified {
         return Err(io::Error::new(
@@ -3165,7 +3166,10 @@ pub(super) fn validate_operator_manifest_fields(manifest: &OperatorManifest) -> 
 pub(super) fn validate_operator_manifest_fields_for_signing(
     manifest: &OperatorManifest,
 ) -> io::Result<()> {
-    if manifest.schema != OPERATOR_MANIFEST_FILE_SCHEMA {
+    if !matches!(
+        manifest.schema.as_str(),
+        OPERATOR_MANIFEST_FILE_SCHEMA_V1 | OPERATOR_MANIFEST_FILE_SCHEMA
+    ) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!("unsupported operator manifest schema `{}`", manifest.schema),
@@ -3182,7 +3186,10 @@ pub(super) fn validate_operator_manifest_fields_for_signing(
         validate_operator_cobalt_trust_binding(cobalt_trust)?;
     }
     if let Some(evidence) = &manifest.independence_evidence {
-        validate_operator_independence_evidence(evidence)?;
+        validate_operator_independence_evidence(
+            evidence,
+            manifest.schema == OPERATOR_MANIFEST_FILE_SCHEMA,
+        )?;
     }
     validate_manifest_text_field(
         "operator manifest provider group",
@@ -3322,6 +3329,7 @@ pub(super) fn validate_operator_cobalt_trust_binding(
 
 pub(super) fn validate_operator_independence_evidence(
     evidence: &OperatorIndependenceEvidence,
+    require_custody_attestation: bool,
 ) -> io::Result<()> {
     validate_hex_string(
         "operator independence Section 2 packet root",
@@ -3366,7 +3374,25 @@ pub(super) fn validate_operator_independence_evidence(
     ] {
         validate_hex_string(label, value, Some(64))?;
     }
+    if require_custody_attestation || !evidence.custody_attestation_hash.is_empty() {
+        validate_hex_string(
+            "operator independence custody attestation hash",
+            &evidence.custody_attestation_hash,
+            Some(64),
+        )?;
+    }
     Ok(())
+}
+
+pub(super) fn operator_manifest_signature_context(schema: &str) -> io::Result<&'static [u8]> {
+    match schema {
+        OPERATOR_MANIFEST_FILE_SCHEMA_V1 => Ok(OPERATOR_MANIFEST_SIGNATURE_CONTEXT_V1),
+        OPERATOR_MANIFEST_FILE_SCHEMA => Ok(OPERATOR_MANIFEST_SIGNATURE_CONTEXT),
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("unsupported operator manifest schema `{schema}`"),
+        )),
+    }
 }
 
 pub(super) fn validate_operator_manifest_for_genesis(
@@ -3605,7 +3631,17 @@ pub(super) fn operator_manifest_hash(manifest: &OperatorManifest) -> io::Result<
         signature_hex: manifest.signature_hex.as_str(),
     };
     let encoded = serde_json::to_vec(&payload).map_err(invalid_data)?;
-    Ok(hash_hex("postfiat.operator_manifest.v1", &encoded))
+    let domain = match manifest.schema.as_str() {
+        OPERATOR_MANIFEST_FILE_SCHEMA_V1 => "postfiat.operator_manifest.v1",
+        OPERATOR_MANIFEST_FILE_SCHEMA => "postfiat.operator_manifest.v2",
+        schema => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unsupported operator manifest schema `{schema}`"),
+            ));
+        }
+    };
+    Ok(hash_hex(domain, &encoded))
 }
 
 pub(super) fn governance_genesis_bundle_hash(

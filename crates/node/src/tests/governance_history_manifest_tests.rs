@@ -2315,6 +2315,83 @@
     }
 
     #[test]
+    fn operator_control_attestation_rejects_tamper_and_private_material() {
+        let root_dir = unique_test_dir("postfiat-operator-control-attestation-test");
+        fs::create_dir_all(&root_dir).expect("create operator control attestation dir");
+        let master_key_file = root_dir.join("validator-0.master-key.json");
+        write_test_master_key(&master_key_file, [32u8; 32]);
+        let attestation_file = root_dir.join("validator-0.provider-attestation.json");
+        let attestation = create_operator_control_attestation(
+            OperatorControlAttestationCreateOptions {
+                master_key_file: master_key_file.clone(),
+                validator_id: "validator-0".to_string(),
+                onboarding_challenge_id: "a".repeat(64),
+                operator: "operator-zero".to_string(),
+                observed_at: "2026-08-24T00:00:00Z".to_string(),
+                body: OperatorControlAttestationBody::Provider {
+                    provider_name: "provider-a".to_string(),
+                    provider_account_fingerprint: "b".repeat(64),
+                    instance_id: "instance-a".to_string(),
+                    region: "region-a".to_string(),
+                    exclusive_control: true,
+                },
+                output_file: attestation_file.clone(),
+                overwrite: false,
+            },
+        )
+        .expect("create provider control attestation");
+        let report = verify_operator_control_attestation(
+            OperatorControlAttestationVerifyOptions {
+                attestation_file: attestation_file.clone(),
+            },
+        )
+        .expect("verify provider control attestation");
+        assert!(report.verified);
+        assert_eq!(report.attestation_hash, attestation.attestation_hash);
+        assert_eq!(report.kind, "provider");
+        assert!(report.exclusive_control);
+
+        let mut tampered = attestation;
+        if let OperatorControlAttestationBody::Provider { instance_id, .. } = &mut tampered.body {
+            *instance_id = "instance-tampered".to_string();
+        }
+        let tampered_json = serde_json::to_string_pretty(&tampered).expect("serialize tamper");
+        atomic_write(&attestation_file, format!("{tampered_json}\n"))
+            .expect("write tampered attestation");
+        let error = verify_operator_control_attestation(
+            OperatorControlAttestationVerifyOptions {
+                attestation_file: attestation_file.clone(),
+            },
+        )
+        .expect_err("tampered operator control attestation must fail");
+        assert!(error.to_string().contains("signature verification"), "{error}");
+
+        let private_material_file = root_dir.join("private-material-attestation.json");
+        let error = create_operator_control_attestation(
+            OperatorControlAttestationCreateOptions {
+                master_key_file,
+                validator_id: "validator-0".to_string(),
+                onboarding_challenge_id: "a".repeat(64),
+                operator: "operator-zero".to_string(),
+                observed_at: "2026-08-24T00:00:00Z".to_string(),
+                body: OperatorControlAttestationBody::Custody {
+                    key_custody_fingerprint: "c".repeat(64),
+                    storage_boundary: "private_key_hex".to_string(),
+                    backup_boundary: "offline-backup".to_string(),
+                    exclusive_control: true,
+                },
+                output_file: private_material_file.clone(),
+                overwrite: false,
+            },
+        )
+        .expect_err("private material marker must fail before attestation write");
+        assert!(error.to_string().contains("private material marker"), "{error}");
+        assert!(!private_material_file.exists());
+
+        std::fs::remove_dir_all(root_dir).expect("cleanup control attestation test");
+    }
+
+    #[test]
     fn operator_manifest_signs_cobalt_trust_and_independence_evidence() {
         let data_dir = unique_test_dir("postfiat-operator-manifest-cobalt-test");
         let manifest_dir =
@@ -2349,6 +2426,7 @@
             key_custody_fingerprint: "e".repeat(64),
             provider_attestation_hash: "f".repeat(64),
             host_control_attestation_hash: "1".repeat(64),
+            custody_attestation_hash: "2".repeat(64),
         };
         let manifest = create_operator_manifest(OperatorManifestCreateOptions {
             master_key_file,
@@ -2410,6 +2488,22 @@
             .independence_evidence
             .as_mut()
             .unwrap()
+            .custody_attestation_hash = "3".repeat(64);
+        write_test_operator_manifest(&manifest_file, &tampered);
+        let tamper_error = verify_operator_manifest(OperatorManifestVerifyOptions {
+            manifest_file: manifest_file.clone(),
+        })
+        .expect_err("tampered custody attestation hash should fail");
+        assert!(
+            tamper_error.to_string().contains("signature verification"),
+            "{tamper_error}"
+        );
+
+        let mut tampered = manifest.clone();
+        tampered
+            .independence_evidence
+            .as_mut()
+            .unwrap()
             .provider_account_fingerprint = "2".repeat(64);
         write_test_operator_manifest(&manifest_file, &tampered);
         let tamper_error = verify_operator_manifest(OperatorManifestVerifyOptions {
@@ -2427,10 +2521,82 @@
     }
 
     #[test]
+    fn operator_manifest_v1_remains_verifiable_after_custody_bound_v2() {
+        let root_dir = unique_test_dir("postfiat-operator-manifest-v1-compat-test");
+        let data_dir = root_dir.join("node");
+        let manifest_dir = root_dir.join("manifests");
+        fs::create_dir_all(&manifest_dir).expect("create legacy manifest dir");
+        init(InitOptions {
+            data_dir: data_dir.clone(),
+            chain_id: "postfiat-local".to_string(),
+            node_id: "validator-0".to_string(),
+            validator_count: 1,
+        })
+        .expect("init legacy operator manifest test");
+        let registry = read_validator_registry_file(&data_dir.join(VALIDATOR_REGISTRY_FILE))
+            .expect("validator registry");
+        let hot_key = validator_registry_record(&registry, "validator-0")
+            .expect("validator registry record")
+            .public_key_hex
+            .clone();
+        let seed = [37u8; 32];
+        let mut manifest = signed_test_operator_manifest_with_independence(
+            "postfiat-local",
+            "controlled-testnet",
+            "validator-0",
+            &hot_key,
+            seed,
+            "legacy-operator",
+            Some(test_cobalt_trust_binding("legacy-graph", 1, "legacy-view", 1)),
+            Some(OperatorIndependenceEvidence {
+                section2_packet_root: "4".repeat(64),
+                source_commit: "5".repeat(40),
+                release_binary_sha256: "6".repeat(64),
+                onboarding_challenge_id: "7".repeat(64),
+                provider_account_fingerprint: "8".repeat(64),
+                host_admin_fingerprint: "9".repeat(64),
+                key_custody_fingerprint: "a".repeat(64),
+                provider_attestation_hash: "b".repeat(64),
+                host_control_attestation_hash: "c".repeat(64),
+                custody_attestation_hash: String::new(),
+            }),
+        );
+        manifest.schema = OPERATOR_MANIFEST_FILE_SCHEMA_V1.to_string();
+        manifest.signature_hex.clear();
+        manifest.manifest_hash.clear();
+        let key_pair = ml_dsa_65_keygen_from_seed(&seed);
+        let payload =
+            operator_manifest_signing_payload_bytes(&manifest).expect("legacy signing payload");
+        let signature = ml_dsa_65_sign_with_context_seed(
+            &key_pair.private_key,
+            &payload,
+            OPERATOR_MANIFEST_SIGNATURE_CONTEXT_V1,
+            &[21u8; 32],
+        )
+        .expect("legacy operator manifest signature");
+        manifest.signature_hex = bytes_to_hex(&signature);
+        manifest.manifest_hash =
+            operator_manifest_hash(&manifest).expect("legacy operator manifest hash");
+
+        let manifest_file = manifest_dir.join("validator-0.operator-manifest.json");
+        write_test_operator_manifest(&manifest_file, &manifest);
+        let report = verify_operator_manifest(OperatorManifestVerifyOptions { manifest_file })
+            .expect("v1 operator manifest remains verifiable");
+        assert!(report.verified);
+        assert_eq!(
+            report.independence_evidence.unwrap().custody_attestation_hash,
+            ""
+        );
+
+        std::fs::remove_dir_all(root_dir).expect("cleanup legacy manifest test");
+    }
+
+    #[test]
     fn operator_independence_verifier_enforces_quorum_survivability() {
         let root_dir = unique_test_dir("postfiat-operator-independence-test");
         let data_dir = root_dir.join("node");
         let manifest_dir = root_dir.join("manifests");
+        let attestation_dir = root_dir.join("attestations");
         fs::create_dir_all(&manifest_dir).expect("create manifest dir");
         init(InitOptions {
             data_dir: data_dir.clone(),
@@ -2460,12 +2626,21 @@
             key_custody_fingerprint: format!("{:064x}", index + 301),
             provider_attestation_hash: format!("{:064x}", index + 401),
             host_control_attestation_hash: format!("{:064x}", index + 501),
+            custody_attestation_hash: format!("{:064x}", index + 601),
         };
         for (index, validator_id) in validators.iter().enumerate() {
             let hot_key = validator_registry_record(&registry, validator_id)
                 .expect("validator registry record")
                 .public_key_hex
                 .clone();
+            let evidence = write_test_operator_control_attestations(
+                &attestation_dir,
+                validator_id,
+                &format!("operator-{index}"),
+                [(index as u8) + 90; 32],
+                evidence_for(index),
+                false,
+            );
             let manifest = signed_test_operator_manifest_with_independence(
                 "postfiat-local",
                 "controlled-testnet",
@@ -2479,7 +2654,7 @@
                     &format!("activation-view-{index}"),
                     1,
                 )),
-                Some(evidence_for(index)),
+                Some(evidence),
             );
             write_test_operator_manifest(
                 &manifest_dir.join(format!("{validator_id}.operator-manifest.json")),
@@ -2490,6 +2665,7 @@
         let options = OperatorIndependenceVerifyOptions {
             data_dir: data_dir.clone(),
             manifest_dir: manifest_dir.clone(),
+            attestation_dir: attestation_dir.clone(),
             validators: validators.clone(),
             quorum: 5,
             network: "controlled-testnet".to_string(),
@@ -2511,11 +2687,75 @@
         assert!(report.every_operator_below_quorum);
         assert!(report.every_operator_withdrawal_preserves_quorum);
 
+        let custody_file = attestation_dir.join("validator-0.custody-attestation.json");
+        let custody_json = std::fs::read_to_string(&custody_file).expect("read custody receipt");
+        std::fs::remove_file(&custody_file).expect("remove custody receipt");
+        let missing_custody_error = verify_operator_independence(options.clone())
+            .expect_err("missing custody receipt must fail topology verification");
+        assert!(
+            missing_custody_error
+                .to_string()
+                .contains("custody-attestation.json"),
+            "{missing_custody_error}"
+        );
+        atomic_write(&custody_file, custody_json).expect("restore custody receipt");
+
         let validator_id = &validators[5];
         let hot_key = validator_registry_record(&registry, validator_id)
             .expect("validator registry record")
             .public_key_hex
             .clone();
+        let mut legacy = signed_test_operator_manifest_with_independence(
+            "postfiat-local",
+            "controlled-testnet",
+            validator_id,
+            &hot_key,
+            [95u8; 32],
+            "operator-5",
+            Some(test_cobalt_trust_binding(
+                "activation-graph",
+                1,
+                "activation-view-5",
+                1,
+            )),
+            Some(evidence_for(5)),
+        );
+        legacy.schema = OPERATOR_MANIFEST_FILE_SCHEMA_V1.to_string();
+        legacy.signature_hex.clear();
+        legacy.manifest_hash.clear();
+        let legacy_key = ml_dsa_65_keygen_from_seed(&[95u8; 32]);
+        let legacy_payload =
+            operator_manifest_signing_payload_bytes(&legacy).expect("legacy independence payload");
+        legacy.signature_hex = bytes_to_hex(
+            &ml_dsa_65_sign_with_context_seed(
+                &legacy_key.private_key,
+                &legacy_payload,
+                OPERATOR_MANIFEST_SIGNATURE_CONTEXT_V1,
+                &[22u8; 32],
+            )
+            .expect("legacy independence signature"),
+        );
+        legacy.manifest_hash =
+            operator_manifest_hash(&legacy).expect("legacy independence manifest hash");
+        write_test_operator_manifest(
+            &manifest_dir.join(format!("{validator_id}.operator-manifest.json")),
+            &legacy,
+        );
+        let legacy_error = verify_operator_independence(options.clone())
+            .expect_err("topology verification must require custody-bound v2 manifests");
+        assert!(
+            legacy_error.to_string().contains("custody-bound schema"),
+            "{legacy_error}"
+        );
+
+        let non_survivable_evidence = write_test_operator_control_attestations(
+            &attestation_dir,
+            validator_id,
+            "operator-0",
+            [95u8; 32],
+            evidence_for(5),
+            true,
+        );
         let non_survivable = signed_test_operator_manifest_with_independence(
             "postfiat-local",
             "controlled-testnet",
@@ -2529,7 +2769,7 @@
                 "activation-view-5",
                 1,
             )),
-            Some(evidence_for(5)),
+            Some(non_survivable_evidence),
         );
         write_test_operator_manifest(
             &manifest_dir.join(format!("{validator_id}.operator-manifest.json")),

@@ -1590,6 +1590,41 @@ fn record_operator_fingerprint_owner(
     Ok(())
 }
 
+fn verified_operator_control_attestation(
+    path: &Path,
+    manifest: &OperatorManifest,
+    evidence: &OperatorIndependenceEvidence,
+    expected_kind: &str,
+    expected_hash: &str,
+) -> io::Result<OperatorControlAttestation> {
+    let attestation = read_operator_control_attestation_file(path)?;
+    verify_operator_control_attestation_record(&attestation, path)?;
+    if attestation.body.kind() != expected_kind {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "operator control attestation `{}` must have kind `{expected_kind}`",
+                path.display()
+            ),
+        ));
+    }
+    if attestation.attestation_hash != expected_hash
+        || attestation.validator_id != manifest.validator_id
+        || attestation.operator != manifest.operator
+        || attestation.onboarding_challenge_id != evidence.onboarding_challenge_id
+        || attestation.manifest_signing_key_hex != manifest.master_public_key_hex
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "operator control attestation `{}` does not bind to its signed manifest",
+                path.display()
+            ),
+        ));
+    }
+    Ok(attestation)
+}
+
 pub fn verify_operator_independence(
     options: OperatorIndependenceVerifyOptions,
 ) -> io::Result<OperatorIndependenceVerifyReport> {
@@ -1630,6 +1665,9 @@ pub fn verify_operator_independence(
     let mut key_custody_owners = BTreeMap::<String, String>::new();
     let mut provider_attestation_owners = BTreeMap::<String, String>::new();
     let mut host_control_attestation_owners = BTreeMap::<String, String>::new();
+    let mut custody_attestation_owners = BTreeMap::<String, String>::new();
+    let mut provider_instance_owners = BTreeMap::<String, String>::new();
+    let mut host_fingerprint_owners = BTreeMap::<String, String>::new();
     let mut master_keys = BTreeSet::<String>::new();
     let mut hot_keys = BTreeSet::<String>::new();
     let mut onboarding_challenges = BTreeSet::<String>::new();
@@ -1643,6 +1681,14 @@ pub fn verify_operator_independence(
             .join(format!("{validator_id}.operator-manifest.json"));
         let manifest = read_operator_manifest_file(&manifest_file)?;
         verify_operator_manifest_record(&manifest, &manifest_file)?;
+        if manifest.schema != OPERATOR_MANIFEST_FILE_SCHEMA {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "operator manifest `{validator_id}` must use custody-bound schema `{OPERATOR_MANIFEST_FILE_SCHEMA}`"
+                ),
+            ));
+        }
         validate_operator_manifest_for_genesis(
             &manifest,
             &genesis,
@@ -1688,6 +1734,85 @@ pub fn verify_operator_independence(
                 format!("operator manifest `{validator_id}` lacks independence evidence"),
             )
         })?;
+        let provider_attestation_file = options
+            .attestation_dir
+            .join(format!("{validator_id}.provider-attestation.json"));
+        let provider_attestation = verified_operator_control_attestation(
+            &provider_attestation_file,
+            &manifest,
+            evidence,
+            "provider",
+            &evidence.provider_attestation_hash,
+        )?;
+        let host_attestation_file = options
+            .attestation_dir
+            .join(format!("{validator_id}.host-control-attestation.json"));
+        let host_attestation = verified_operator_control_attestation(
+            &host_attestation_file,
+            &manifest,
+            evidence,
+            "host",
+            &evidence.host_control_attestation_hash,
+        )?;
+        let custody_attestation_file = options
+            .attestation_dir
+            .join(format!("{validator_id}.custody-attestation.json"));
+        let custody_attestation = verified_operator_control_attestation(
+            &custody_attestation_file,
+            &manifest,
+            evidence,
+            "custody",
+            &evidence.custody_attestation_hash,
+        )?;
+        let (provider_instance_id, provider_account_fingerprint) =
+            match &provider_attestation.body {
+                OperatorControlAttestationBody::Provider {
+                    provider_name,
+                    provider_account_fingerprint,
+                    instance_id,
+                    region,
+                    ..
+                } => {
+                    if provider_name != &manifest.infrastructure.provider_group
+                        || region != &manifest.infrastructure.region_group
+                    {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!(
+                                "operator provider attestation `{validator_id}` infrastructure labels do not match its signed manifest"
+                            ),
+                        ));
+                    }
+                    (instance_id.clone(), provider_account_fingerprint.clone())
+                }
+                _ => unreachable!("attestation kind was checked"),
+            };
+        let (host_fingerprint, host_admin_fingerprint) = match &host_attestation.body {
+            OperatorControlAttestationBody::Host {
+                host_fingerprint,
+                host_admin_fingerprint,
+                ..
+            } => (host_fingerprint.clone(), host_admin_fingerprint.clone()),
+            _ => unreachable!("attestation kind was checked"),
+        };
+        let key_custody_fingerprint = match &custody_attestation.body {
+            OperatorControlAttestationBody::Custody {
+                key_custody_fingerprint,
+                ..
+            } => key_custody_fingerprint.clone(),
+            _ => unreachable!("attestation kind was checked"),
+        };
+        if provider_account_fingerprint != evidence.provider_account_fingerprint
+            || host_admin_fingerprint != evidence.host_admin_fingerprint
+            || key_custody_fingerprint != evidence.key_custody_fingerprint
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "operator control attestations for `{validator_id}` do not match manifest independence fingerprints"
+                ),
+            ));
+        }
         if evidence.section2_packet_root != options.expected_section2_packet_root {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -1756,6 +1881,24 @@ pub fn verify_operator_independence(
             &evidence.host_control_attestation_hash,
             &manifest.operator,
         )?;
+        record_operator_fingerprint_owner(
+            &mut custody_attestation_owners,
+            "custody attestation hash",
+            &evidence.custody_attestation_hash,
+            &manifest.operator,
+        )?;
+        record_operator_fingerprint_owner(
+            &mut provider_instance_owners,
+            "provider instance id",
+            &provider_instance_id,
+            &manifest.operator,
+        )?;
+        record_operator_fingerprint_owner(
+            &mut host_fingerprint_owners,
+            "host fingerprint",
+            &host_fingerprint,
+            &manifest.operator,
+        )?;
 
         *operator_counts.entry(manifest.operator.clone()).or_default() += 1;
         infrastructure_domains.insert(manifest.infrastructure.provider_group.clone());
@@ -1770,6 +1913,9 @@ pub fn verify_operator_independence(
             onboarding_challenge_id: evidence.onboarding_challenge_id.clone(),
             provider_attestation_hash: evidence.provider_attestation_hash.clone(),
             host_control_attestation_hash: evidence.host_control_attestation_hash.clone(),
+            custody_attestation_hash: evidence.custody_attestation_hash.clone(),
+            provider_instance_id,
+            host_fingerprint,
         });
     }
 

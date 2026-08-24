@@ -733,6 +733,70 @@
         key_file
     }
 
+    fn write_test_operator_control_attestations(
+        attestation_dir: &Path,
+        validator_id: &str,
+        operator: &str,
+        master_seed: [u8; 32],
+        mut evidence: OperatorIndependenceEvidence,
+        overwrite: bool,
+    ) -> OperatorIndependenceEvidence {
+        fs::create_dir_all(attestation_dir).expect("create operator attestation dir");
+        let master_key_file = attestation_dir.join(format!("{validator_id}.master-key.json"));
+        if overwrite && master_key_file.exists() {
+            std::fs::remove_file(&master_key_file).expect("replace test attestation master key");
+        }
+        write_test_master_key(&master_key_file, master_seed);
+        let common = |body, output_file| OperatorControlAttestationCreateOptions {
+            master_key_file: master_key_file.clone(),
+            validator_id: validator_id.to_string(),
+            onboarding_challenge_id: evidence.onboarding_challenge_id.clone(),
+            operator: operator.to_string(),
+            observed_at: "2026-08-24T00:00:00Z".to_string(),
+            body,
+            output_file,
+            overwrite,
+        };
+        let provider = create_operator_control_attestation(common(
+            OperatorControlAttestationBody::Provider {
+                provider_name: format!("{validator_id}-provider"),
+                provider_account_fingerprint: evidence.provider_account_fingerprint.clone(),
+                instance_id: format!("instance-{validator_id}"),
+                region: format!("{validator_id}-region"),
+                exclusive_control: true,
+            },
+            attestation_dir.join(format!("{validator_id}.provider-attestation.json")),
+        ))
+        .expect("create test provider attestation");
+        let host = create_operator_control_attestation(common(
+            OperatorControlAttestationBody::Host {
+                host_fingerprint: hash_hex(
+                    "postfiat.test.operator.host",
+                    validator_id.as_bytes(),
+                )[..64]
+                    .to_string(),
+                host_admin_fingerprint: evidence.host_admin_fingerprint.clone(),
+                exclusive_control: true,
+            },
+            attestation_dir.join(format!("{validator_id}.host-control-attestation.json")),
+        ))
+        .expect("create test host attestation");
+        let custody = create_operator_control_attestation(common(
+            OperatorControlAttestationBody::Custody {
+                key_custody_fingerprint: evidence.key_custody_fingerprint.clone(),
+                storage_boundary: format!("storage-{validator_id}"),
+                backup_boundary: format!("backup-{validator_id}"),
+                exclusive_control: true,
+            },
+            attestation_dir.join(format!("{validator_id}.custody-attestation.json")),
+        ))
+        .expect("create test custody attestation");
+        evidence.provider_attestation_hash = provider.attestation_hash;
+        evidence.host_control_attestation_hash = host.attestation_hash;
+        evidence.custody_attestation_hash = custody.attestation_hash;
+        evidence
+    }
+
     #[test]
     fn replicated_state_root_commits_to_chain_domain() {
         let governance = GovernanceState::new(1);
