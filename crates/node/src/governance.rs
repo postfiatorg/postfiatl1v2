@@ -1569,6 +1569,237 @@ pub fn verify_operator_manifest(
     verify_operator_manifest_record(&manifest, &options.manifest_file)
 }
 
+fn record_operator_fingerprint_owner(
+    owners: &mut BTreeMap<String, String>,
+    label: &str,
+    fingerprint: &str,
+    operator: &str,
+) -> io::Result<()> {
+    if let Some(existing_operator) = owners.get(fingerprint) {
+        if existing_operator != operator {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "operator independence {label} is shared by operators `{existing_operator}` and `{operator}`"
+                ),
+            ));
+        }
+    } else {
+        owners.insert(fingerprint.to_string(), operator.to_string());
+    }
+    Ok(())
+}
+
+pub fn verify_operator_independence(
+    options: OperatorIndependenceVerifyOptions,
+) -> io::Result<OperatorIndependenceVerifyReport> {
+    validate_active_validator_ids(&options.validators, "operator independence validators")?;
+    validate_governance_genesis_quorum(options.quorum, options.validators.len())?;
+    validate_manifest_text_field("operator independence network", &options.network)?;
+    validate_hex_string(
+        "operator independence expected Section 2 packet root",
+        &options.expected_section2_packet_root,
+        Some(64),
+    )?;
+    validate_hex_string(
+        "operator independence expected source commit",
+        &options.expected_source_commit,
+        Some(40),
+    )?;
+    if options.min_operator_groups == 0 || options.min_infrastructure_domains == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "operator independence minimum group and infrastructure-domain counts must be nonzero",
+        ));
+    }
+
+    let store = NodeStore::new(&options.data_dir);
+    let genesis = store.read_genesis()?;
+    let registry =
+        read_validator_registry_file(&options.data_dir.join(VALIDATOR_REGISTRY_FILE))?;
+
+    let mut operator_counts = BTreeMap::<String, usize>::new();
+    let mut infrastructure_domains = BTreeSet::<String>::new();
+    let mut provider_account_owners = BTreeMap::<String, String>::new();
+    let mut host_admin_owners = BTreeMap::<String, String>::new();
+    let mut key_custody_owners = BTreeMap::<String, String>::new();
+    let mut master_keys = BTreeSet::<String>::new();
+    let mut hot_keys = BTreeSet::<String>::new();
+    let mut onboarding_challenges = BTreeSet::<String>::new();
+    let mut trust_graph: Option<(String, u64)> = None;
+    let mut trust_view_ids = BTreeSet::<String>::new();
+    let mut rows = Vec::with_capacity(options.validators.len());
+
+    for validator_id in &options.validators {
+        let manifest_file = options
+            .manifest_dir
+            .join(format!("{validator_id}.operator-manifest.json"));
+        let manifest = read_operator_manifest_file(&manifest_file)?;
+        verify_operator_manifest_record(&manifest, &manifest_file)?;
+        validate_operator_manifest_for_genesis(
+            &manifest,
+            &genesis,
+            &options.network,
+            validator_id,
+            validator_registry_record(&registry, validator_id)?,
+        )?;
+
+        let cobalt_trust = manifest.cobalt_trust.as_ref().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("operator manifest `{validator_id}` lacks Cobalt trust binding"),
+            )
+        })?;
+        match &trust_graph {
+            Some((root, version))
+                if root != &cobalt_trust.trust_graph_root
+                    || version != &cobalt_trust.trust_graph_version =>
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "operator independence manifests contain mixed Cobalt trust graphs",
+                ));
+            }
+            None => {
+                trust_graph = Some((
+                    cobalt_trust.trust_graph_root.clone(),
+                    cobalt_trust.trust_graph_version,
+                ));
+            }
+            _ => {}
+        }
+        if !trust_view_ids.insert(cobalt_trust.trust_view_id.clone()) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "operator independence manifests contain duplicate Cobalt trust view ids",
+            ));
+        }
+
+        let evidence = manifest.independence_evidence.as_ref().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("operator manifest `{validator_id}` lacks independence evidence"),
+            )
+        })?;
+        if evidence.section2_packet_root != options.expected_section2_packet_root {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "operator manifest `{validator_id}` Section 2 packet root mismatch"
+                ),
+            ));
+        }
+        if evidence.source_commit != options.expected_source_commit {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("operator manifest `{validator_id}` source commit mismatch"),
+            ));
+        }
+        if !master_keys.insert(manifest.master_public_key_hex.clone()) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "operator independence manifests contain duplicate master keys",
+            ));
+        }
+        if !hot_keys.insert(manifest.hot_public_key_hex.clone()) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "operator independence manifests contain duplicate hot keys",
+            ));
+        }
+        if !onboarding_challenges.insert(evidence.onboarding_challenge_id.clone()) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "operator independence manifests contain duplicate onboarding challenge ids",
+            ));
+        }
+        record_operator_fingerprint_owner(
+            &mut provider_account_owners,
+            "provider account fingerprint",
+            &evidence.provider_account_fingerprint,
+            &manifest.operator,
+        )?;
+        record_operator_fingerprint_owner(
+            &mut host_admin_owners,
+            "host admin fingerprint",
+            &evidence.host_admin_fingerprint,
+            &manifest.operator,
+        )?;
+        record_operator_fingerprint_owner(
+            &mut key_custody_owners,
+            "key custody fingerprint",
+            &evidence.key_custody_fingerprint,
+            &manifest.operator,
+        )?;
+
+        *operator_counts.entry(manifest.operator.clone()).or_default() += 1;
+        infrastructure_domains.insert(manifest.infrastructure.provider_group.clone());
+        rows.push(OperatorIndependenceValidatorReport {
+            validator_id: validator_id.clone(),
+            operator: manifest.operator,
+            provider_group: manifest.infrastructure.provider_group,
+            manifest_hash: manifest.manifest_hash,
+            provider_account_fingerprint: evidence.provider_account_fingerprint.clone(),
+            host_admin_fingerprint: evidence.host_admin_fingerprint.clone(),
+            key_custody_fingerprint: evidence.key_custody_fingerprint.clone(),
+        });
+    }
+
+    if operator_counts.len() < options.min_operator_groups {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "operator independence requires at least {} operator groups; found {}",
+                options.min_operator_groups,
+                operator_counts.len()
+            ),
+        ));
+    }
+    if infrastructure_domains.len() < options.min_infrastructure_domains {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "operator independence requires at least {} infrastructure domains; found {}",
+                options.min_infrastructure_domains,
+                infrastructure_domains.len()
+            ),
+        ));
+    }
+    let max_operator_validator_count = operator_counts.values().copied().max().unwrap_or(0);
+    if max_operator_validator_count >= options.quorum {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "one operator group can reach quorum alone",
+        ));
+    }
+    let every_operator_withdrawal_preserves_quorum = operator_counts
+        .values()
+        .all(|count| options.validators.len().saturating_sub(*count) >= options.quorum);
+    if !every_operator_withdrawal_preserves_quorum {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "withdrawing one operator group's validators can halt quorum",
+        ));
+    }
+
+    Ok(OperatorIndependenceVerifyReport {
+        schema: OPERATOR_INDEPENDENCE_VERIFY_REPORT_SCHEMA.to_string(),
+        verified: true,
+        chain_id: genesis.chain_id,
+        network: options.network,
+        validator_count: options.validators.len(),
+        quorum: options.quorum,
+        operator_group_count: operator_counts.len(),
+        infrastructure_domain_count: infrastructure_domains.len(),
+        max_operator_validator_count,
+        every_operator_below_quorum: true,
+        every_operator_withdrawal_preserves_quorum,
+        section2_packet_root: options.expected_section2_packet_root,
+        source_commit: options.expected_source_commit,
+        validators: rows,
+    })
+}
+
 pub fn create_operator_manifest(
     options: OperatorManifestCreateOptions,
 ) -> io::Result<OperatorManifest> {
@@ -1607,6 +1838,7 @@ pub fn create_operator_manifest(
         rotation_state: options.rotation_state,
         effective_height: options.effective_height,
         cobalt_trust,
+        independence_evidence: options.independence_evidence,
         manifest_signing_key_hex: master_key.public_key_hex,
         signature_hex: String::new(),
         manifest_hash: String::new(),
@@ -1672,6 +1904,7 @@ pub fn create_governance_genesis_bundle(
             legal_domain_group: manifest.infrastructure.legal_domain_group.clone(),
             funding_domain_group: manifest.infrastructure.funding_domain_group.clone(),
             cobalt_trust: manifest.cobalt_trust.clone(),
+            independence_evidence: manifest.independence_evidence.clone(),
         });
     }
     validate_governance_genesis_cobalt_trust(&operator_manifests)?;

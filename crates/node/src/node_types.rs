@@ -4379,6 +4379,7 @@ pub struct OperatorManifestCreateOptions {
     pub trust_graph_version: Option<u64>,
     pub trust_view_id: Option<String>,
     pub trust_view_version: Option<u64>,
+    pub independence_evidence: Option<OperatorIndependenceEvidence>,
     pub output_file: PathBuf,
     pub overwrite: bool,
 }
@@ -4386,6 +4387,19 @@ pub struct OperatorManifestCreateOptions {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OperatorManifestVerifyOptions {
     pub manifest_file: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OperatorIndependenceVerifyOptions {
+    pub data_dir: PathBuf,
+    pub manifest_dir: PathBuf,
+    pub validators: Vec<String>,
+    pub quorum: usize,
+    pub network: String,
+    pub expected_section2_packet_root: String,
+    pub expected_source_commit: String,
+    pub min_operator_groups: usize,
+    pub min_infrastructure_domains: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -4425,6 +4439,19 @@ pub struct OperatorCobaltTrustBinding {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct OperatorIndependenceEvidence {
+    pub section2_packet_root: String,
+    pub source_commit: String,
+    pub onboarding_challenge_id: String,
+    pub provider_account_fingerprint: String,
+    pub host_admin_fingerprint: String,
+    pub key_custody_fingerprint: String,
+    pub provider_attestation_hash: String,
+    pub host_control_attestation_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct OperatorManifest {
     pub schema: String,
     pub chain_id: String,
@@ -4441,6 +4468,8 @@ pub struct OperatorManifest {
     pub effective_height: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cobalt_trust: Option<OperatorCobaltTrustBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub independence_evidence: Option<OperatorIndependenceEvidence>,
     pub manifest_signing_key_hex: String,
     pub signature_hex: String,
     pub manifest_hash: String,
@@ -4462,9 +4491,40 @@ pub struct OperatorManifestVerifyReport {
     pub hot_public_key_hex: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cobalt_trust: Option<OperatorCobaltTrustBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub independence_evidence: Option<OperatorIndependenceEvidence>,
     pub manifest_signer_matches_master: bool,
     pub signature_verified: bool,
     pub redaction_checked: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OperatorIndependenceValidatorReport {
+    pub validator_id: String,
+    pub operator: String,
+    pub provider_group: String,
+    pub manifest_hash: String,
+    pub provider_account_fingerprint: String,
+    pub host_admin_fingerprint: String,
+    pub key_custody_fingerprint: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OperatorIndependenceVerifyReport {
+    pub schema: String,
+    pub verified: bool,
+    pub chain_id: String,
+    pub network: String,
+    pub validator_count: usize,
+    pub quorum: usize,
+    pub operator_group_count: usize,
+    pub infrastructure_domain_count: usize,
+    pub max_operator_validator_count: usize,
+    pub every_operator_below_quorum: bool,
+    pub every_operator_withdrawal_preserves_quorum: bool,
+    pub section2_packet_root: String,
+    pub source_commit: String,
+    pub validators: Vec<OperatorIndependenceValidatorReport>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -4481,6 +4541,8 @@ pub struct GovernanceGenesisOperatorManifestRef {
     pub funding_domain_group: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cobalt_trust: Option<OperatorCobaltTrustBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub independence_evidence: Option<OperatorIndependenceEvidence>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -3076,6 +3076,8 @@ pub(super) struct OperatorManifestSigningPayload<'a> {
     pub(super) effective_height: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) cobalt_trust: Option<&'a OperatorCobaltTrustBinding>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) independence_evidence: Option<&'a OperatorIndependenceEvidence>,
     pub(super) manifest_signing_key_hex: &'a str,
 }
 
@@ -3145,6 +3147,7 @@ pub(super) fn verify_operator_manifest_record(
         effective_height: manifest.effective_height,
         hot_public_key_hex: manifest.hot_public_key_hex.clone(),
         cobalt_trust: manifest.cobalt_trust.clone(),
+        independence_evidence: manifest.independence_evidence.clone(),
         manifest_signer_matches_master: manifest.manifest_signing_key_hex
             == manifest.master_public_key_hex,
         signature_verified: true,
@@ -3177,6 +3180,9 @@ pub(super) fn validate_operator_manifest_fields_for_signing(
     validate_manifest_text_field("operator manifest rotation state", &manifest.rotation_state)?;
     if let Some(cobalt_trust) = &manifest.cobalt_trust {
         validate_operator_cobalt_trust_binding(cobalt_trust)?;
+    }
+    if let Some(evidence) = &manifest.independence_evidence {
+        validate_operator_independence_evidence(evidence)?;
     }
     validate_manifest_text_field(
         "operator manifest provider group",
@@ -3314,6 +3320,50 @@ pub(super) fn validate_operator_cobalt_trust_binding(
     Ok(())
 }
 
+pub(super) fn validate_operator_independence_evidence(
+    evidence: &OperatorIndependenceEvidence,
+) -> io::Result<()> {
+    validate_hex_string(
+        "operator independence Section 2 packet root",
+        &evidence.section2_packet_root,
+        Some(64),
+    )?;
+    validate_hex_string(
+        "operator independence source commit",
+        &evidence.source_commit,
+        Some(40),
+    )?;
+    for (label, value) in [
+        (
+            "operator independence onboarding challenge id",
+            &evidence.onboarding_challenge_id,
+        ),
+        (
+            "operator independence provider account fingerprint",
+            &evidence.provider_account_fingerprint,
+        ),
+        (
+            "operator independence host admin fingerprint",
+            &evidence.host_admin_fingerprint,
+        ),
+        (
+            "operator independence key custody fingerprint",
+            &evidence.key_custody_fingerprint,
+        ),
+        (
+            "operator independence provider attestation hash",
+            &evidence.provider_attestation_hash,
+        ),
+        (
+            "operator independence host-control attestation hash",
+            &evidence.host_control_attestation_hash,
+        ),
+    ] {
+        validate_hex_string(label, value, Some(64))?;
+    }
+    Ok(())
+}
+
 pub(super) fn validate_operator_manifest_for_genesis(
     manifest: &OperatorManifest,
     genesis: &Genesis,
@@ -3380,6 +3430,12 @@ pub(super) fn validate_governance_genesis_manifest_ref(
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "governance genesis operator manifest Cobalt trust metadata mismatch",
+        ));
+    }
+    if manifest.independence_evidence != manifest_ref.independence_evidence {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "governance genesis operator manifest independence evidence mismatch",
         ));
     }
     if manifest.infrastructure.provider_group != manifest_ref.provider_group
@@ -3533,6 +3589,7 @@ pub(super) fn operator_manifest_signing_payload(
         rotation_state: manifest.rotation_state.as_str(),
         effective_height: manifest.effective_height,
         cobalt_trust: manifest.cobalt_trust.as_ref(),
+        independence_evidence: manifest.independence_evidence.as_ref(),
         manifest_signing_key_hex: manifest.manifest_signing_key_hex.as_str(),
     }
 }

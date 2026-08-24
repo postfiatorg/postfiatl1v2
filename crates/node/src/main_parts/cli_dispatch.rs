@@ -133,8 +133,8 @@ use postfiat_node::{
     verify_finalized_checkpoint, verify_governance_amendment_replay_bundle,
     verify_governance_genesis_bundle, verify_governance_replay_package,
     verify_governance_with_options, verify_history_archive_handoff,
-    verify_history_archive_window_bundle, verify_mempool, verify_operator_manifest,
-    verify_or_apply_orchard_action, verify_shielded, verify_state,
+    verify_history_archive_window_bundle, verify_mempool, verify_operator_independence,
+    verify_operator_manifest, verify_or_apply_orchard_action, verify_shielded, verify_state,
     verify_validator_registry_lifecycle_replay_bundle, verify_validator_registry_update_file,
     wallet_keygen, wallet_restore, wallet_sign_asset_transaction, wallet_sign_escrow_transaction,
     wallet_sign_offer_transaction, wallet_sign_transfer, wallet_test_vector,
@@ -195,7 +195,8 @@ use postfiat_node::{
     NavcoinBridgeRefundSourceOptions, NavcoinBridgeReturnBurnRequestOptions,
     NavcoinBridgeRouteInitOptions, NavcoinBridgeRoutesOptions, NavcoinBridgeSupplyStatusOptions,
     NftFeeQuoteOptions, NftInfoOptions, NodeOptions, OfferFeeQuoteOptions, OfferFeeQuoteReport,
-    OfferInfoOptions, OperatorManifestCreateOptions, OperatorManifestVerifyOptions,
+    OfferInfoOptions, OperatorIndependenceEvidence, OperatorIndependenceVerifyOptions,
+    OperatorManifestCreateOptions, OperatorManifestVerifyOptions,
     OrchardActionBatchOptions, OrchardActionOptions, OrchardDepositActionBatchOptions,
     OrchardDepositActionOptions, OrchardDisclosureOptions, OrchardDisclosureVerifyOptions,
     OrchardFeeResourcePolicyOptions, OrchardOperatorPolicyOptions, OrchardOutputActionOptions,
@@ -451,6 +452,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "governance-replay-build"
         | "operator-manifest-create"
         | "operator-manifest-verify"
+        | "operator-independence-verify"
         | "governance-genesis-bundle"
         | "governance-genesis-verify"
         | "governance-agent-gate1-5"

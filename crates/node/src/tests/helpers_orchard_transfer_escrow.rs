@@ -633,6 +633,28 @@
         operator: &str,
         cobalt_trust: Option<OperatorCobaltTrustBinding>,
     ) -> OperatorManifest {
+        signed_test_operator_manifest_with_independence(
+            chain_id,
+            network,
+            validator_id,
+            hot_public_key_hex,
+            master_seed,
+            operator,
+            cobalt_trust,
+            None,
+        )
+    }
+
+    fn signed_test_operator_manifest_with_independence(
+        chain_id: &str,
+        network: &str,
+        validator_id: &str,
+        hot_public_key_hex: &str,
+        master_seed: [u8; 32],
+        operator: &str,
+        cobalt_trust: Option<OperatorCobaltTrustBinding>,
+        independence_evidence: Option<OperatorIndependenceEvidence>,
+    ) -> OperatorManifest {
         let master_key = ml_dsa_65_keygen_from_seed(&master_seed);
         let mut manifest = OperatorManifest {
             schema: OPERATOR_MANIFEST_FILE_SCHEMA.to_string(),
@@ -655,6 +677,7 @@
             rotation_state: "active".to_string(),
             effective_height: 0,
             cobalt_trust,
+            independence_evidence,
             manifest_signing_key_hex: bytes_to_hex(&master_key.public_key),
             signature_hex: String::new(),
             manifest_hash: String::new(),

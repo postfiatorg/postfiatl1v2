@@ -72,6 +72,8 @@ pub const OPERATOR_MANIFEST_FILE_SCHEMA: &str = "postfiat-operator-manifest-v1";
 pub const GOVERNANCE_GENESIS_BUNDLE_SCHEMA: &str = "postfiat-governance-genesis-bundle-v1";
 pub const GOVERNANCE_GENESIS_VERIFY_REPORT_SCHEMA: &str = "postfiat-governance-genesis-verify-v1";
 pub const OPERATOR_MANIFEST_VERIFY_REPORT_SCHEMA: &str = "postfiat-operator-manifest-verify-v1";
+pub const OPERATOR_INDEPENDENCE_VERIFY_REPORT_SCHEMA: &str =
+    "postfiat-operator-independence-verify-v1";
 pub const DEFAULT_HISTORY_MODE: &str = "partial";
 pub const DEFAULT_HISTORY_RETAIN_RECENT_BLOCKS: u64 = 50_000;
 pub const DEFAULT_HISTORY_RETAIN_RECENT_RECEIPTS: u64 = 50_000;

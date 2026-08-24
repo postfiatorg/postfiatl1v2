@@ -95,6 +95,50 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                         .map_err(|_| "--trust-view-version must be a u64".to_string())
                 })
                 .transpose()?;
+            let independence_values = [
+                flag_value(flags, "--section2-packet-root"),
+                flag_value(flags, "--source-commit"),
+                flag_value(flags, "--onboarding-challenge-id"),
+                flag_value(flags, "--provider-account-fingerprint"),
+                flag_value(flags, "--host-admin-fingerprint"),
+                flag_value(flags, "--key-custody-fingerprint"),
+                flag_value(flags, "--provider-attestation-hash"),
+                flag_value(flags, "--host-control-attestation-hash"),
+            ];
+            let independence_evidence = if independence_values.iter().any(Option::is_some) {
+                Some(OperatorIndependenceEvidence {
+                    section2_packet_root: independence_values[0]
+                        .ok_or("operator independence evidence requires --section2-packet-root")?
+                        .to_string(),
+                    source_commit: independence_values[1]
+                        .ok_or("operator independence evidence requires --source-commit")?
+                        .to_string(),
+                    onboarding_challenge_id: independence_values[2]
+                        .ok_or("operator independence evidence requires --onboarding-challenge-id")?
+                        .to_string(),
+                    provider_account_fingerprint: independence_values[3]
+                        .ok_or(
+                            "operator independence evidence requires --provider-account-fingerprint",
+                        )?
+                        .to_string(),
+                    host_admin_fingerprint: independence_values[4]
+                        .ok_or("operator independence evidence requires --host-admin-fingerprint")?
+                        .to_string(),
+                    key_custody_fingerprint: independence_values[5]
+                        .ok_or("operator independence evidence requires --key-custody-fingerprint")?
+                        .to_string(),
+                    provider_attestation_hash: independence_values[6]
+                        .ok_or("operator independence evidence requires --provider-attestation-hash")?
+                        .to_string(),
+                    host_control_attestation_hash: independence_values[7]
+                        .ok_or(
+                            "operator independence evidence requires --host-control-attestation-hash",
+                        )?
+                        .to_string(),
+                })
+            } else {
+                None
+            };
             let output_file = flag_value(flags, "--output").ok_or("missing --output")?;
             let manifest = create_operator_manifest(OperatorManifestCreateOptions {
                 master_key_file: PathBuf::from(master_key_file),
@@ -115,6 +159,7 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                 trust_graph_version,
                 trust_view_id,
                 trust_view_version,
+                independence_evidence,
                 output_file: PathBuf::from(output_file),
                 overwrite: flag_present(flags, "--overwrite"),
             })
@@ -133,6 +178,47 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             .map_err(|error| format!("operator-manifest-verify failed: {error}"))?;
             let json = serde_json::to_string_pretty(&report)
                 .map_err(|error| format!("operator manifest serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "operator-independence-verify" => {
+            let data_dir = flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR);
+            let manifest_dir =
+                flag_value(flags, "--manifest-dir").ok_or("missing --manifest-dir")?;
+            let validators =
+                split_csv(flag_value(flags, "--validators").ok_or("missing --validators")?);
+            let quorum = flag_value(flags, "--quorum")
+                .ok_or("missing --quorum")?
+                .parse::<usize>()
+                .map_err(|_| "--quorum must be a usize".to_string())?;
+            let network = flag_value(flags, "--network").ok_or("missing --network")?;
+            let expected_section2_packet_root = flag_value(flags, "--section2-packet-root")
+                .ok_or("missing --section2-packet-root")?;
+            let expected_source_commit =
+                flag_value(flags, "--source-commit").ok_or("missing --source-commit")?;
+            let min_operator_groups = flag_value(flags, "--min-operator-groups")
+                .unwrap_or("3")
+                .parse::<usize>()
+                .map_err(|_| "--min-operator-groups must be a usize".to_string())?;
+            let min_infrastructure_domains =
+                flag_value(flags, "--min-infrastructure-domains")
+                    .unwrap_or("3")
+                    .parse::<usize>()
+                    .map_err(|_| "--min-infrastructure-domains must be a usize".to_string())?;
+            let report = verify_operator_independence(OperatorIndependenceVerifyOptions {
+                data_dir: PathBuf::from(data_dir),
+                manifest_dir: PathBuf::from(manifest_dir),
+                validators,
+                quorum,
+                network: network.to_string(),
+                expected_section2_packet_root: expected_section2_packet_root.to_string(),
+                expected_source_commit: expected_source_commit.to_string(),
+                min_operator_groups,
+                min_infrastructure_domains,
+            })
+            .map_err(|error| format!("operator-independence-verify failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|error| format!("operator independence serialization failed: {error}"))?;
             println!("{json}");
             Ok(())
         }

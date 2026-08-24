@@ -2203,6 +2203,7 @@
             trust_graph_version: None,
             trust_view_id: None,
             trust_view_version: None,
+            independence_evidence: None,
             output_file: manifest_file.clone(),
             overwrite: false,
         })
@@ -2255,7 +2256,7 @@
     }
 
     #[test]
-    fn operator_manifest_signs_cobalt_trust_metadata() {
+    fn operator_manifest_signs_cobalt_trust_and_independence_evidence() {
         let data_dir = unique_test_dir("postfiat-operator-manifest-cobalt-test");
         let manifest_dir =
             data_dir.with_file_name("postfiat-operator-manifest-cobalt-test-manifests");
@@ -2277,6 +2278,18 @@
         let manifest_file = manifest_dir.join("validator-0.operator-manifest.json");
         write_test_master_key(&master_key_file, [33u8; 32]);
         let cobalt_trust = test_cobalt_trust_binding("graph-7", 7, "validator-0-view-3", 3);
+        let independence_evidence = OperatorIndependenceEvidence {
+            section2_packet_root:
+                "40bc86c9416a1b468f5625a2ff83724c9268f9d49c41007e9b0c4bc70c43c1e1"
+                    .to_string(),
+            source_commit: "a".repeat(40),
+            onboarding_challenge_id: "b".repeat(64),
+            provider_account_fingerprint: "c".repeat(64),
+            host_admin_fingerprint: "d".repeat(64),
+            key_custody_fingerprint: "e".repeat(64),
+            provider_attestation_hash: "f".repeat(64),
+            host_control_attestation_hash: "1".repeat(64),
+        };
         let manifest = create_operator_manifest(OperatorManifestCreateOptions {
             master_key_file,
             chain_id: "postfiat-local".to_string(),
@@ -2296,11 +2309,16 @@
             trust_graph_version: Some(cobalt_trust.trust_graph_version),
             trust_view_id: Some(cobalt_trust.trust_view_id.clone()),
             trust_view_version: Some(cobalt_trust.trust_view_version),
+            independence_evidence: Some(independence_evidence.clone()),
             output_file: manifest_file.clone(),
             overwrite: false,
         })
         .expect("create operator manifest with Cobalt trust");
         assert_eq!(manifest.cobalt_trust.as_ref(), Some(&cobalt_trust));
+        assert_eq!(
+            manifest.independence_evidence.as_ref(),
+            Some(&independence_evidence)
+        );
 
         let report = verify_operator_manifest(OperatorManifestVerifyOptions {
             manifest_file: manifest_file.clone(),
@@ -2308,6 +2326,10 @@
         .expect("verify operator manifest with Cobalt trust");
         assert!(report.verified);
         assert_eq!(report.cobalt_trust.as_ref(), Some(&cobalt_trust));
+        assert_eq!(
+            report.independence_evidence.as_ref(),
+            Some(&independence_evidence)
+        );
 
         let mut tampered = manifest.clone();
         tampered.cobalt_trust.as_mut().unwrap().trust_view_id =
@@ -2323,9 +2345,140 @@
             "{tamper_error}"
         );
 
+        let mut tampered = manifest.clone();
+        tampered
+            .independence_evidence
+            .as_mut()
+            .unwrap()
+            .provider_account_fingerprint = "2".repeat(64);
+        write_test_operator_manifest(&manifest_file, &tampered);
+        let tamper_error = verify_operator_manifest(OperatorManifestVerifyOptions {
+            manifest_file: manifest_file.clone(),
+        })
+        .expect_err("tampered independence evidence should fail");
+        assert!(
+            tamper_error.to_string().contains("signature verification"),
+            "{tamper_error}"
+        );
+
         std::fs::remove_dir_all(data_dir).expect("cleanup operator manifest Cobalt test data");
         std::fs::remove_dir_all(manifest_dir)
             .expect("cleanup operator manifest Cobalt test manifests");
+    }
+
+    #[test]
+    fn operator_independence_verifier_enforces_quorum_survivability() {
+        let root_dir = unique_test_dir("postfiat-operator-independence-test");
+        let data_dir = root_dir.join("node");
+        let manifest_dir = root_dir.join("manifests");
+        fs::create_dir_all(&manifest_dir).expect("create manifest dir");
+        init(InitOptions {
+            data_dir: data_dir.clone(),
+            chain_id: "postfiat-local".to_string(),
+            node_id: "validator-0".to_string(),
+            validator_count: 6,
+        })
+        .expect("init operator independence test");
+        let registry = read_validator_registry_file(&data_dir.join(VALIDATOR_REGISTRY_FILE))
+            .expect("validator registry");
+        let validators = local_validator_ids(6).expect("validator ids");
+        let section2_packet_root =
+            "40bc86c9416a1b468f5625a2ff83724c9268f9d49c41007e9b0c4bc70c43c1e1"
+                .to_string();
+        let source_commit = "bfb85475aaeb20e4cac56df7da9e1783a0df30a4".to_string();
+
+        let evidence_for = |index: usize| OperatorIndependenceEvidence {
+            section2_packet_root: section2_packet_root.clone(),
+            source_commit: source_commit.clone(),
+            onboarding_challenge_id: format!("{:064x}", index + 1),
+            provider_account_fingerprint: format!("{:064x}", index + 101),
+            host_admin_fingerprint: format!("{:064x}", index + 201),
+            key_custody_fingerprint: format!("{:064x}", index + 301),
+            provider_attestation_hash: format!("{:064x}", index + 401),
+            host_control_attestation_hash: format!("{:064x}", index + 501),
+        };
+        for (index, validator_id) in validators.iter().enumerate() {
+            let hot_key = validator_registry_record(&registry, validator_id)
+                .expect("validator registry record")
+                .public_key_hex
+                .clone();
+            let manifest = signed_test_operator_manifest_with_independence(
+                "postfiat-local",
+                "controlled-testnet",
+                validator_id,
+                &hot_key,
+                [(index as u8) + 90; 32],
+                &format!("operator-{index}"),
+                Some(test_cobalt_trust_binding(
+                    "activation-graph",
+                    1,
+                    &format!("activation-view-{index}"),
+                    1,
+                )),
+                Some(evidence_for(index)),
+            );
+            write_test_operator_manifest(
+                &manifest_dir.join(format!("{validator_id}.operator-manifest.json")),
+                &manifest,
+            );
+        }
+
+        let options = OperatorIndependenceVerifyOptions {
+            data_dir: data_dir.clone(),
+            manifest_dir: manifest_dir.clone(),
+            validators: validators.clone(),
+            quorum: 5,
+            network: "controlled-testnet".to_string(),
+            expected_section2_packet_root: section2_packet_root.clone(),
+            expected_source_commit: source_commit.clone(),
+            min_operator_groups: 3,
+            min_infrastructure_domains: 3,
+        };
+        let report =
+            verify_operator_independence(options.clone()).expect("verify independent topology");
+        assert!(report.verified);
+        assert_eq!(report.validator_count, 6);
+        assert_eq!(report.quorum, 5);
+        assert_eq!(report.operator_group_count, 6);
+        assert_eq!(report.infrastructure_domain_count, 6);
+        assert_eq!(report.max_operator_validator_count, 1);
+        assert!(report.every_operator_below_quorum);
+        assert!(report.every_operator_withdrawal_preserves_quorum);
+
+        let validator_id = &validators[5];
+        let hot_key = validator_registry_record(&registry, validator_id)
+            .expect("validator registry record")
+            .public_key_hex
+            .clone();
+        let non_survivable = signed_test_operator_manifest_with_independence(
+            "postfiat-local",
+            "controlled-testnet",
+            validator_id,
+            &hot_key,
+            [95u8; 32],
+            "operator-0",
+            Some(test_cobalt_trust_binding(
+                "activation-graph",
+                1,
+                "activation-view-5",
+                1,
+            )),
+            Some(evidence_for(5)),
+        );
+        write_test_operator_manifest(
+            &manifest_dir.join(format!("{validator_id}.operator-manifest.json")),
+            &non_survivable,
+        );
+        let error = verify_operator_independence(options)
+            .expect_err("two-of-six operator group must fail quorum survivability");
+        assert!(
+            error
+                .to_string()
+                .contains("withdrawing one operator group's validators can halt quorum"),
+            "{error}"
+        );
+
+        std::fs::remove_dir_all(root_dir).expect("cleanup operator independence test");
     }
 
     #[test]

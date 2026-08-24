@@ -51,7 +51,7 @@ Task Node: `[x] task_fd8342b57a6364f93953934c776080fc — rewarded 2026-08-24 (2
 
 ### 2. Decisive run and implementation remediation
 
-Task Node: `[x] task_690f0c63d1c0d175a4e47d947825402b — accepted; verification pending`
+Task Node: `[x] task_690f0c63d1c0d175a4e47d947825402b — rewarded 2026-08-24 (2.5 PFT)`
 
 - [x] Run the frozen corpus from clean state through both adapters.
 - [x] Report false accepts, false halts, conflicts, per-node results, decision latency, and byte-identical replay; no post-hoc reclassification.
@@ -62,10 +62,13 @@ Task Node: `[x] task_690f0c63d1c0d175a4e47d947825402b — accepted; verification
 
 ### 3. Independent live-validator proof
 
-Task Node: `[ ] request and accept only if Section 2 passes ACTIVATE gates`
+- Operator establishment task: `[ ] task_46d1707cb9e11f04648ea54a7163fbee — accepted`
+- Live transition/fault task: `[ ] request only after the independent topology verifier passes`
 
+- [x] Bind each operator's signed manifest to the Cobalt trust view, Section 2 packet root, source commit, onboarding challenge, infrastructure-account fingerprint, host administrator, and ML-DSA custody evidence. Code: [`consensus_artifacts.rs`](../../../crates/node/src/consensus_artifacts.rs), [`operator-manifest-create`](../../../crates/node/src/main_parts/cli_dispatch_parts/group_04.rs).
+- [x] Add an aggregate verifier that rejects mixed trust graphs, shared cross-operator control fingerprints, insufficient infrastructure domains, any operator that can reach quorum alone, and any operator withdrawal that can halt quorum. Code: [`verify_operator_independence`](../../../crates/node/src/governance.rs).
 - [ ] Establish at least three operationally independent operator groups with separate host administration and signing-key custody, across at least three infrastructure domains.
-- [ ] Ensure no operator can reach quorum alone or halt governance by withdrawing all validators it controls.
+- [ ] Pass the aggregate topology verifier. With the current six-validator/quorum-five topology this requires six one-validator operator groups; otherwise expand the validator set while preserving the no-single-operator-halt rule.
 - [ ] Deploy non-identical but formally compatible trust views.
 - [ ] Execute one validator addition, one removal, one ML-DSA key rotation, one compatible trust-view transition, one-validator outage, lagging-node catch-up, and one incompatible safe halt.
 - [ ] Prove Consensus v2 continues finalizing, p95 finality stays within 5% of the frozen same-fleet baseline, and no recovery mutates durable history by hand.
