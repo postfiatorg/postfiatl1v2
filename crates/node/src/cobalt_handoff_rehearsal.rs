@@ -11,7 +11,8 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 use crate::cobalt_authority_certificate::{
-    cobalt_validator_update_payload_hash, verify_cobalt_validator_update_decision_certificate,
+    cobalt_validator_update_payload_hash, compact_cobalt_validator_update_decision_certificate,
+    verify_cobalt_validator_update_decision_certificate,
 };
 use crate::cobalt_handoff::{
     apply_cobalt_authority_transition, cobalt_authority_transition_approval_signing_bytes,
@@ -698,6 +699,7 @@ fn attach_decision_certificate(
         ));
     }
     let certificate: CobaltValidatorUpdateDecisionCertificateV1 = read_json(certificate_path)?;
+    let certificate = compact_cobalt_validator_update_decision_certificate(certificate)?;
     let payload_hash = cobalt_validator_update_payload_hash(&update)?;
     let round = update
         .activation_height

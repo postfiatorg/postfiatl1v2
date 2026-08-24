@@ -16,14 +16,24 @@ use postfiat_consensus_cobalt::{
     validate_abba_init_signed, validate_dabc_full_knowledge_checkpoint_signed,
     validate_dabc_ratified_amendment, validate_rbc_accept_signed, validate_rbc_echo_signed,
     validate_rbc_propose_signed, validate_rbc_ready_signed, validate_trust_graph,
-    CobaltSignatureCommittee, DabcRatifiedAmendment,
+    CobaltSignatureCommittee, DabcFullKnowledgeCheck, DabcRatifiedAmendment,
 };
 use postfiat_types::{
     CobaltValidatorUpdateDecisionCertificateV1,
     COBALT_VALIDATOR_UPDATE_DECISION_CERTIFICATE_SCHEMA_V1,
 };
 
-const MAX_AUTHORITY_TRANSCRIPT_BYTES: usize = 32 * 1024 * 1024;
+const COBALT_AUTHORITY_COMPACT_TRANSCRIPT_SCHEMA_V1: &str =
+    "postfiat.cobalt.authority_compact_protocol_transcript.v1";
+pub const MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES: usize = 1024 * 1024;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CobaltAuthorityCompactProtocolTranscriptV1 {
+    schema: String,
+    transcript: CobaltShadowProtocolTranscript,
+    full_knowledge_checks: Vec<DabcFullKnowledgeCheck>,
+}
 
 fn certificate_error(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::PermissionDenied, message.into())
@@ -36,6 +46,76 @@ fn consensus_certificate_error(error: String) -> io::Error {
 fn hash_serialized<T: Serialize>(domain: &str, value: &T) -> io::Result<String> {
     let encoded = serde_json::to_vec(value).map_err(invalid_data)?;
     Ok(hash_hex(domain, &encoded))
+}
+
+fn compact_protocol_transcript(
+    mut transcript: CobaltShadowProtocolTranscript,
+) -> io::Result<CobaltAuthorityCompactProtocolTranscriptV1> {
+    let reference_checks = transcript
+        .full_knowledge_checkpoints
+        .first()
+        .ok_or_else(|| certificate_error("Cobalt protocol transcript has no DABC checkpoints"))?
+        .checks
+        .clone();
+    if reference_checks.is_empty()
+        || transcript
+            .full_knowledge_checkpoints
+            .iter()
+            .any(|checkpoint| checkpoint.checks != reference_checks)
+    {
+        return Err(certificate_error(
+            "Cobalt DABC checkpoints must share one nonempty support certificate",
+        ));
+    }
+    for checkpoint in &mut transcript.full_knowledge_checkpoints {
+        checkpoint.checks.clear();
+    }
+    Ok(CobaltAuthorityCompactProtocolTranscriptV1 {
+        schema: COBALT_AUTHORITY_COMPACT_TRANSCRIPT_SCHEMA_V1.to_string(),
+        transcript,
+        full_knowledge_checks: reference_checks,
+    })
+}
+
+fn expand_protocol_transcript(
+    value: &serde_json::Value,
+) -> io::Result<CobaltShadowProtocolTranscript> {
+    let mut compact: CobaltAuthorityCompactProtocolTranscriptV1 =
+        serde_json::from_value(value.clone()).map_err(invalid_data)?;
+    if compact.schema != COBALT_AUTHORITY_COMPACT_TRANSCRIPT_SCHEMA_V1
+        || compact.full_knowledge_checks.is_empty()
+        || compact
+            .transcript
+            .full_knowledge_checkpoints
+            .iter()
+            .any(|checkpoint| !checkpoint.checks.is_empty())
+    {
+        return Err(certificate_error(
+            "Cobalt authority transcript is not in canonical compact form",
+        ));
+    }
+    for checkpoint in &mut compact.transcript.full_knowledge_checkpoints {
+        checkpoint.checks = compact.full_knowledge_checks.clone();
+    }
+    Ok(compact.transcript)
+}
+
+pub fn compact_cobalt_validator_update_decision_certificate(
+    mut certificate: CobaltValidatorUpdateDecisionCertificateV1,
+) -> io::Result<CobaltValidatorUpdateDecisionCertificateV1> {
+    let transcript: CobaltShadowProtocolTranscript =
+        serde_json::from_value(certificate.protocol_transcript).map_err(invalid_data)?;
+    certificate.protocol_transcript =
+        serde_json::to_value(compact_protocol_transcript(transcript)?).map_err(invalid_data)?;
+    let encoded = serde_json::to_vec(&certificate).map_err(invalid_data)?;
+    if encoded.len() > MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES {
+        return Err(certificate_error(format!(
+            "Cobalt validator update decision certificate is {} bytes; maximum is {}",
+            encoded.len(),
+            MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES
+        )));
+    }
+    Ok(certificate)
 }
 
 fn sorted_unique_senders<'a>(
@@ -182,16 +262,17 @@ pub fn verify_cobalt_validator_update_decision_certificate(
             "Cobalt validator update decision certificate schema mismatch",
         ));
     }
+    let encoded_certificate = serde_json::to_vec(certificate).map_err(invalid_data)?;
+    if encoded_certificate.len() > MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES {
+        return Err(certificate_error(format!(
+            "Cobalt validator update decision certificate is {} bytes; maximum is {}",
+            encoded_certificate.len(),
+            MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES
+        )));
+    }
     let binding: CobaltShadowRegistryBinding =
         serde_json::from_value(certificate.registry_binding.clone()).map_err(invalid_data)?;
-    let transcript: CobaltShadowProtocolTranscript =
-        serde_json::from_value(certificate.protocol_transcript.clone()).map_err(invalid_data)?;
-    let encoded = serde_json::to_vec(&transcript).map_err(invalid_data)?;
-    if encoded.len() > MAX_AUTHORITY_TRANSCRIPT_BYTES {
-        return Err(certificate_error(
-            "Cobalt validator update decision certificate exceeds the consensus bound",
-        ));
-    }
+    let transcript = expand_protocol_transcript(&certificate.protocol_transcript)?;
     let committee = validate_registry_binding(
         &binding,
         expected_domain,
@@ -484,7 +565,6 @@ pub fn verify_cobalt_validator_update_decision_certificate(
 pub fn cobalt_decision_ratification(
     certificate: &CobaltValidatorUpdateDecisionCertificateV1,
 ) -> io::Result<DabcRatifiedAmendment> {
-    let transcript: CobaltShadowProtocolTranscript =
-        serde_json::from_value(certificate.protocol_transcript.clone()).map_err(invalid_data)?;
+    let transcript = expand_protocol_transcript(&certificate.protocol_transcript)?;
     Ok(transcript.ratification)
 }

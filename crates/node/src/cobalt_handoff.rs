@@ -1161,13 +1161,18 @@ mod tests {
         let transcript =
             assemble_protocol_transcript(&fixture.cobalt_binding, proposal, contributions)
                 .expect("assemble Cobalt protocol transcript");
-        update.cobalt_decision_certificate = Some(CobaltValidatorUpdateDecisionCertificateV1 {
+        update.cobalt_decision_certificate = Some(
+            crate::cobalt_authority_certificate::compact_cobalt_validator_update_decision_certificate(
+                CobaltValidatorUpdateDecisionCertificateV1 {
             schema: COBALT_VALIDATOR_UPDATE_DECISION_CERTIFICATE_SCHEMA_V1.to_string(),
             registry_binding: serde_json::to_value(&fixture.cobalt_binding)
                 .expect("serialize Cobalt registry binding"),
             protocol_transcript: serde_json::to_value(transcript)
                 .expect("serialize Cobalt protocol transcript"),
-        });
+                },
+            )
+            .expect("compact Cobalt protocol transcript"),
+        );
         let sequence = progress.amendment_sequence + 1;
         update.cobalt_authorizations = fixture
             .validators
@@ -1339,7 +1344,8 @@ mod tests {
             .cobalt_decision_certificate
             .as_mut()
             .expect("decision certificate")
-            .protocol_transcript["payload_hash"] = serde_json::Value::String("ff".repeat(48));
+            .protocol_transcript["transcript"]["payload_hash"] =
+            serde_json::Value::String("ff".repeat(48));
         assert!(verify_cobalt_validator_trust_update(
             &fixture.genesis,
             &governance,
@@ -1358,7 +1364,7 @@ mod tests {
             .expect("decision certificate");
         certificate.registry_binding["trust_graph"]["chain_id"] =
             serde_json::Value::String("another-chain".to_string());
-        certificate.protocol_transcript["trust_graph"]["chain_id"] =
+        certificate.protocol_transcript["transcript"]["trust_graph"]["chain_id"] =
             serde_json::Value::String("another-chain".to_string());
         assert!(verify_cobalt_validator_trust_update(
             &fixture.genesis,
@@ -1466,6 +1472,46 @@ mod tests {
                 || replay_error.to_string().contains("binding mismatch")
                 || replay_error.to_string().contains("trust graph")
         );
+    }
+
+    #[test]
+    fn cobalt_validator_update_fits_and_verifies_through_the_live_governance_batch_path() {
+        let fixture = fixture();
+        let governance = activate(&fixture);
+        let update = signed_rotate_update(&fixture, &governance, 11);
+        let certificate_bytes = serde_json::to_vec(
+            update
+                .cobalt_decision_certificate
+                .as_ref()
+                .expect("decision certificate"),
+        )
+        .expect("serialize decision certificate")
+        .len();
+        assert!(
+            certificate_bytes
+                <= crate::cobalt_authority_certificate::MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES,
+            "decision certificate must fit its consensus admission bound"
+        );
+
+        let batch = build_governance_action_batch(&fixture.genesis, Vec::new(), vec![update])
+            .expect("governance batch");
+        verify_governance_action_batch_id(&fixture.genesis, &batch).expect("batch id");
+        let batch_bytes = serde_json::to_vec(&batch)
+            .expect("serialize governance batch")
+            .len();
+        assert!(
+            batch_bytes <= postfiat_mempool_dag::MAX_BATCH_PAYLOAD_BYTES,
+            "Cobalt validator update governance batch is {batch_bytes} bytes; mempool maximum is {}",
+            postfiat_mempool_dag::MAX_BATCH_PAYLOAD_BYTES
+        );
+        verify_live_signed_governance_batch(
+            &fixture.genesis,
+            &governance,
+            &fixture.registry,
+            &batch,
+            11,
+        )
+        .expect("live governance batch authorization");
     }
 
     #[test]
