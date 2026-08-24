@@ -78,7 +78,7 @@ Task Node: `[x] task_690f0c63d1c0d175a4e47d947825402b — rewarded 2026-08-24 (2
 ### 3. Isolated-validator liveness simulation
 
 - Superseded operator-establishment task: `[x] task_46d1707cb9e11f04648ea54a7163fbee — cancelled because real external operators are outside this milestone`
-- Simulation task: `[x] task_043e009b196aea0b685b3f09a6ebb45d — accepted; execution packet passes, Task Node verification pending`
+- Simulation-only task: `[x] task_043e009b196aea0b685b3f09a6ebb45d — accepted; execution packet passes, Task Node verification pending`. It models independent validator domains and does not require independent operators.
 
 Prior operator-onboarding artifacts remain available for a future decentralization program, but recruitment, external custody, separate provider accounts, and real third-party operation are not milestone work or activation gates here.
 
@@ -97,7 +97,7 @@ Task Node: `[ ] request and accept after the activation gates pass`
 
 - [x] Make a real Cobalt protocol decision certificate mandatory at the consensus admission boundary; validator signatures alone are insufficient.
 - [x] Verify the authoritative handoff/update/rollback flow with all six current validator identities on disposable signer-state clones while proving the live fleet unchanged.
-- [ ] Pass the isolated-validator liveness simulation and bind its manifest, production source hash, scenario results, and verifier output into the activation packet. This gate requires simulated independence properties, not independent operators.
+- [x] Pass the isolated-validator liveness simulation and bind its manifest, production source hash, scenario results, and verifier output into the activation packet. This gate requires simulated independence properties, not independent operators.
 - [ ] Verify a signed forward rollback on a disposable clone immediately before cutover.
 - [ ] Schedule and execute the future-height live controlled-testnet authority transition through [`cobalt_handoff.rs`](../../../crates/node/src/cobalt_handoff.rs).
 - [ ] Execute one real validator-registry change under active Cobalt authority.
