@@ -1,0 +1,32 @@
+{
+  "governance_commitment_before": "772110f031808d471e4b61e8b3e5d2d0671d7669bea75aa74176ccb0018b4f5d2cad07277e1518919ef8f3e9c183dbe4",
+  "schema": "postfiat-cobalt-handoff-unsigned-rollback-v1",
+  "transition": {
+    "activation_height": 1017,
+    "amendment_sequence": 3,
+    "approval_quorum": 5,
+    "approvals": [],
+    "authority_scope": "validator_trust_evolution_v1",
+    "chain_id": "postfiat-wan-devnet-2",
+    "cobalt_lock_hash": "8ec8ac27f5b26c3cd24432ce715c7f8789e847a953eedcaf9338bb8b51132091df2560226fc4462d3c3522f0d18c12ce",
+    "cobalt_protocol_version": 3,
+    "cobalt_registry_root": "4efa00aed4c279f0ba87415be7b84343d3ed993dc26e33e5713768aadabe07344c847578a2a78978ab1c2347f674d7fe",
+    "from_authority_mode": 1,
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "old_registry_root": "4efa00aed4c279f0ba87415be7b84343d3ed993dc26e33e5713768aadabe07344c847578a2a78978ab1c2347f674d7fe",
+    "previous_transition_id": "81eaeb1ad0b426f5f34fe6990b6028f524bac2f7d2549d14f0382f80906f838f1bfbd6dc2c5abf3045a1e2b17cf11be6",
+    "schema": "postfiat.cobalt_governance_authority_transition.v1",
+    "to_authority_mode": 0,
+    "transition_id": "256524ceb007dd678419fbbeb9771f61b082078009ec683c2ba154bc6e19b63cd6a7c115ab79dc5666e8f34a8d7e8583",
+    "transition_kind": "rollback_to_foundation",
+    "trust_graph_root": "20d0aac59d201f1d4748b0aa0fe4f5782a612c1d558311edd4832a0a1e40b9377737118588f47896553658981bbb2131",
+    "validators": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+    ]
+  }
+}
