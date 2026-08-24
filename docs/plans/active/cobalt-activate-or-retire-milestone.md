@@ -42,7 +42,7 @@ Each segment is one substantial personal task, normally requested after the prev
 
 ### 1. Independent oracle and decisive corpus
 
-Task Node: `[ ] task_fd8342b57a6364f93953934c776080fc — implementation complete; verification pending`
+Task Node: `[x] task_fd8342b57a6364f93953934c776080fc — rewarded 2026-08-24 (2.7 PFT)`
 
 - [x] Write a versioned mathematical decision contract that defines compatible and incompatible trust configurations without importing or calling production Cobalt code. Evidence: [`oracle-contract.md`](../../../benchmarks/cobalt-activate-or-retire/oracle-contract.md).
 - [x] Implement the oracle in a separate benchmark crate with hand-worked boundary fixtures and no production protocol dependency. Code: [`cobalt_decision_oracle`](../../../crates/cobalt_decision_oracle).
