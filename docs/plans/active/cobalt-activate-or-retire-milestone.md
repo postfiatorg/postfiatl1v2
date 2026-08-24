@@ -18,6 +18,8 @@ The decisive implementation run now passes. The independent frozen oracle has no
 
 The matched RippleD 3.1.3 validator-governance adapter admits two conflicting registry roots in `six-divergent-local-quorums`; Cobalt rejects that unsafe trust graph before commitment. Native RippleD CSF ledger consensus remains separately labeled and synchronized in the control.
 
+The live admission gap is also fixed: a five-of-six signature set no longer qualifies by itself as a Cobalt decision. Cobalt authority now requires a validator-key-bound RBC -> ABBA -> MVBA -> DABC certificate over the exact registry update, current chain domain, registry root, and trust graph. A six-validator disposable-clone rehearsal passed without changing live validator state.
+
 The remaining work is operational:
 
 - the six current live machines still share one Post Fiat operator and provider;
@@ -30,7 +32,9 @@ The remaining work is operational:
 - [x] Prove five-of-six progress, four-of-six rejection, canonical decision identity, signed catch-up, restart recovery, and no manual history repair. Code: [`cobalt_shadow.rs`](../../../crates/node/src/cobalt_shadow.rs), [`cobalt_shadow_runtime.rs`](../../../crates/node/src/cobalt_shadow_runtime.rs).
 - [x] Keep Consensus v2 finality live during Cobalt outages and recovery. Existing live evidence finalized heights 913→914 and 914→915.
 - [x] Build the initial 80-case Cobalt/RippleD packet. Packet: [`benchmarks/cobalt-rippled-liveness/packet`](../../../benchmarks/cobalt-rippled-liveness/packet); `SHA256SUMS` root `7968a085033419255b52b844edd586346a1e85561394e52c69e6683b2561c50b`.
-- [x] Rehearse future-height activation, scoped validator-key rotation, negative cases, and forward rollback on a disposable clone. Code: [`cobalt_handoff.rs`](../../../crates/node/src/cobalt_handoff.rs), [`cobalt_handoff_rehearsal.rs`](../../../crates/node/src/cobalt_handoff_rehearsal.rs); packet root `b678b3f45eb2a14299b941101bd556d61795a1033f1f6e53557442b7e315807e`.
+- [x] Rehearse future-height activation, scoped validator-key rotation, negative cases, and forward rollback on a disposable clone. Code: [`cobalt_handoff.rs`](../../../crates/node/src/cobalt_handoff.rs), [`cobalt_handoff_rehearsal.rs`](../../../crates/node/src/cobalt_handoff_rehearsal.rs); initial packet root `b678b3f45eb2a14299b941101bd556d61795a1033f1f6e53557442b7e315807e`.
+- [x] Require the actual signed RBC -> ABBA -> MVBA -> DABC decision at Cobalt-authorized registry admission; reject quorum-only, tampered, replayed, wrong-root, and cross-chain certificates. Code: [`cobalt_authority_certificate.rs`](../../../crates/node/src/cobalt_authority_certificate.rs), commit `34540c540545d582c663d59aa05de452a9485a04`.
+- [x] Re-run the handoff with disposable copies of all six live validator signers and bind the exact update payload to six signed contributions and six full-knowledge checkpoints. Packet: [`packet-authoritative-v2`](../../../benchmarks/cobalt-handoff-rehearsal/packet-authoritative-v2), `SHA256SUMS` root `f056c891e034238c5523bfcaf6ab2e022884ea35d6569c9b501dca4fae388968`.
 - [x] Deliver the existing Python Cobalt CLI and read-only observatory. Code: [`python/postfiat_rpc/cobalt.py`](../../../python/postfiat_rpc/cobalt.py), [`cobalt_ui.py`](../../../python/postfiat_rpc/cobalt_ui.py).
 
 ## Major Task Node work
@@ -81,6 +85,8 @@ Task Node: `[x] task_690f0c63d1c0d175a4e47d947825402b — rewarded 2026-08-24 (2
 
 Task Node: `[ ] request and accept after the activation gates pass`
 
+- [x] Make a real Cobalt protocol decision certificate mandatory at the consensus admission boundary; validator signatures alone are insufficient.
+- [x] Verify the authoritative handoff/update/rollback flow with all six current validator identities on disposable signer-state clones while proving the live fleet unchanged.
 - [ ] Verify a signed forward rollback on a disposable clone immediately before cutover.
 - [ ] Schedule and execute the future-height live controlled-testnet authority transition through [`cobalt_handoff.rs`](../../../crates/node/src/cobalt_handoff.rs).
 - [ ] Execute one real validator-registry change under active Cobalt authority.
@@ -107,6 +113,7 @@ Governed inside the terminal-operation task; do not request microtasks.
 - [x] At least one compatible non-uniform decision and one incompatible safe halt.
 - [x] Byte-identical decision-critical replay.
 - [x] A fair, reproducible material safety distinction from RippleD local-UNL admission.
+- [x] Cobalt-authorized registry admission requires and verifies the actual signed protocol decision over the exact update.
 - [ ] Independent operators complete every live exercise.
 - [ ] Consensus v2 stays live and within the 5% p95 finality budget.
 - [ ] Live future-height handoff, real Cobalt-authorized registry change, CLI/UI readback, and forward rollback readiness all pass.
