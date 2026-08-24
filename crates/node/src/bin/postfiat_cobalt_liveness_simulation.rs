@@ -17,8 +17,11 @@ use std::thread::{self, JoinHandle};
 use std::time::Instant;
 
 use postfiat_consensus_cobalt::{
-    analyze_trust_graph, build_essential_subset, build_trust_graph, build_trust_view, CobaltDomain,
-    CobaltFaultModel, RbcPropose, TrustGraph,
+    analyze_trust_graph, build_essential_subset, build_trust_graph, build_trust_graph_transition,
+    build_trust_view, certify_validator_registry_update_with_trust_graph_transition,
+    verify_validator_registry_update, CobaltDomain, CobaltFaultModel, EssentialSubsetConfig,
+    RbcPropose, TrustGraph, ValidatorRegistryUpdateRequest, VALIDATOR_REGISTRY_OP_ADMIT,
+    VALIDATOR_REGISTRY_OP_REMOVE, VALIDATOR_REGISTRY_OP_ROTATE_KEY,
 };
 use postfiat_crypto_provider::{bytes_to_hex, hash_hex, ml_dsa_65_keygen, ML_DSA_65_ALGORITHM};
 use postfiat_node::cobalt_shadow::{
@@ -33,6 +36,7 @@ use postfiat_node::cobalt_shadow_runtime::{
 use postfiat_node::{
     ValidatorKeyFile, ValidatorKeyRecord, ValidatorRegistry, ValidatorRegistryRecord,
 };
+use postfiat_types::ValidatorRegistryEntry;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -166,10 +170,13 @@ fn simulation_domain() -> CobaltDomain {
     }
 }
 
-fn build_nonuniform_graph(
+fn build_nonuniform_graph_at(
     domain: &CobaltDomain,
     registry_root: &str,
     validators: &[String],
+    graph_version: u64,
+    activation_height: u64,
+    previous_trust_graph_root: Option<String>,
 ) -> io::Result<TrustGraph> {
     let core = build_essential_subset(
         domain,
@@ -177,7 +184,7 @@ fn build_nonuniform_graph(
         1,
         QUORUM,
         vec!["simulated-common-six-domain".to_string()],
-        1,
+        activation_height,
         None,
     )
     .map_err(invalid)?;
@@ -187,7 +194,7 @@ fn build_nonuniform_graph(
         0,
         4,
         vec!["simulated-supplemental-a".to_string()],
-        1,
+        activation_height,
         None,
     )
     .map_err(invalid)?;
@@ -203,7 +210,7 @@ fn build_nonuniform_graph(
         0,
         4,
         vec!["simulated-supplemental-b".to_string()],
-        1,
+        activation_height,
         None,
     )
     .map_err(invalid)?;
@@ -216,11 +223,33 @@ fn build_nonuniform_graph(
             } else {
                 supplemental_b.clone()
             };
-            build_trust_view(domain, validator, 1, vec![core.clone(), supplemental], "")
-                .map_err(invalid)
+            build_trust_view(
+                domain,
+                validator,
+                graph_version,
+                vec![core.clone(), supplemental],
+                "",
+            )
+            .map_err(invalid)
         })
         .collect::<io::Result<Vec<_>>>()?;
-    build_trust_graph(domain, 1, registry_root, 1, None, views).map_err(invalid)
+    build_trust_graph(
+        domain,
+        graph_version,
+        registry_root,
+        activation_height,
+        previous_trust_graph_root,
+        views,
+    )
+    .map_err(invalid)
+}
+
+fn build_nonuniform_graph(
+    domain: &CobaltDomain,
+    registry_root: &str,
+    validators: &[String],
+) -> io::Result<TrustGraph> {
+    build_nonuniform_graph_at(domain, registry_root, validators, 1, 1, None)
 }
 
 fn prepare_domains(
@@ -374,6 +403,228 @@ fn prepare_domains(
     Ok((domains, binding, domain_receipts))
 }
 
+fn registry_entry(record: &ValidatorRegistryRecord) -> ValidatorRegistryEntry {
+    ValidatorRegistryEntry {
+        node_id: record.node_id.clone(),
+        algorithm_id: record.algorithm_id.clone(),
+        public_key_hex: record.public_key_hex.clone(),
+        active: true,
+    }
+}
+
+struct TransitionCaseInput {
+    operation: &'static str,
+    subject_node_id: String,
+    activation_height: u64,
+    new_registry: ValidatorRegistry,
+    previous_validators: Vec<String>,
+    new_validators: Vec<String>,
+    previous_record: Option<ValidatorRegistryEntry>,
+    new_record: Option<ValidatorRegistryEntry>,
+}
+
+fn certify_transition_case(
+    binding: &CobaltShadowRegistryBinding,
+    input: TransitionCaseInput,
+) -> io::Result<Value> {
+    let TransitionCaseInput {
+        operation,
+        subject_node_id,
+        activation_height,
+        new_registry,
+        previous_validators,
+        new_validators,
+        previous_record,
+        new_record,
+    } = input;
+    let domain = simulation_domain();
+    let new_registry_root = registry_root(&new_registry, &new_validators)?;
+    let new_graph_root = hash_hex(
+        "postfiat.cobalt.simulation.transition-graph.v1",
+        format!("{operation}:{new_registry_root}:{activation_height}").as_bytes(),
+    );
+    let transition = build_trust_graph_transition(
+        &domain,
+        binding.registry_root.clone(),
+        new_registry_root.clone(),
+        binding.trust_graph.trust_graph_root.clone(),
+        new_graph_root,
+        activation_height,
+    )
+    .map_err(invalid)?;
+    let request = ValidatorRegistryUpdateRequest {
+        activation_height,
+        previous_registry_root: binding.registry_root.clone(),
+        new_registry_root: new_registry_root.clone(),
+        previous_trust_graph_root: None,
+        new_trust_graph_root: None,
+        trust_graph_transition_id: None,
+        previous_validators,
+        new_validators,
+        operation: operation.to_string(),
+        subject_node_id: subject_node_id.to_string(),
+        previous_record,
+        new_record,
+    };
+    let update = certify_validator_registry_update_with_trust_graph_transition(
+        &domain,
+        &EssentialSubsetConfig {
+            validators: binding.active_validators.clone(),
+            quorum: QUORUM,
+        },
+        request,
+        transition.clone(),
+        binding.active_validators[..QUORUM].to_vec(),
+    )
+    .map_err(invalid)?;
+    verify_validator_registry_update(&domain, &update).map_err(invalid)?;
+    Ok(json!({
+        "operation": operation,
+        "subject_node_id": subject_node_id,
+        "activation_height": activation_height,
+        "update_id": update.update_id,
+        "certificate_id": update.certificate_id,
+        "support": update.support,
+        "previous_registry_root": binding.registry_root,
+        "new_registry_root": new_registry_root,
+        "previous_trust_graph_root": binding.trust_graph.trust_graph_root,
+        "new_trust_graph_root": transition.new_trust_graph_root,
+        "trust_graph_transition_id": transition.transition_id,
+        "verified": true,
+    }))
+}
+
+fn build_transition_receipts(binding: &CobaltShadowRegistryBinding) -> io::Result<Vec<Value>> {
+    let current_validators = binding.active_validators.clone();
+    let current_registry = binding.validator_registry.clone();
+
+    let candidate_pair = ml_dsa_65_keygen().map_err(|error| invalid(error.to_string()))?;
+    let candidate_record = ValidatorRegistryRecord {
+        node_id: "validator-06".to_string(),
+        algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+        public_key_hex: bytes_to_hex(&candidate_pair.public_key),
+    };
+    let mut admitted_registry = current_registry.clone();
+    admitted_registry.validators.push(candidate_record.clone());
+    let mut admitted_validators = current_validators.clone();
+    admitted_validators.push(candidate_record.node_id.clone());
+    admitted_validators.sort();
+    let admit = certify_transition_case(
+        binding,
+        TransitionCaseInput {
+            operation: VALIDATOR_REGISTRY_OP_ADMIT,
+            subject_node_id: candidate_record.node_id.clone(),
+            activation_height: 2001,
+            new_registry: admitted_registry,
+            previous_validators: current_validators.clone(),
+            new_validators: admitted_validators,
+            previous_record: None,
+            new_record: Some(registry_entry(&candidate_record)),
+        },
+    )?;
+
+    let removed_record = current_registry
+        .validators
+        .iter()
+        .find(|record| record.node_id == "validator-05")
+        .cloned()
+        .ok_or_else(|| invalid("validator-05 missing from simulated registry"))?;
+    let mut removed_registry = current_registry.clone();
+    removed_registry
+        .validators
+        .retain(|record| record.node_id != removed_record.node_id);
+    let removed_validators = current_validators
+        .iter()
+        .filter(|node_id| *node_id != &removed_record.node_id)
+        .cloned()
+        .collect::<Vec<_>>();
+    let remove = certify_transition_case(
+        binding,
+        TransitionCaseInput {
+            operation: VALIDATOR_REGISTRY_OP_REMOVE,
+            subject_node_id: removed_record.node_id.clone(),
+            activation_height: 2002,
+            new_registry: removed_registry,
+            previous_validators: current_validators.clone(),
+            new_validators: removed_validators,
+            previous_record: Some(registry_entry(&removed_record)),
+            new_record: None,
+        },
+    )?;
+
+    let rotated_pair = ml_dsa_65_keygen().map_err(|error| invalid(error.to_string()))?;
+    let mut rotated_registry = current_registry.clone();
+    let rotated_record = rotated_registry
+        .validators
+        .iter_mut()
+        .find(|record| record.node_id == "validator-05")
+        .ok_or_else(|| invalid("validator-05 missing from simulated registry"))?;
+    let previous_rotated_record = rotated_record.clone();
+    rotated_record.public_key_hex = bytes_to_hex(&rotated_pair.public_key);
+    let new_rotated_record = rotated_record.clone();
+    let rotate = certify_transition_case(
+        binding,
+        TransitionCaseInput {
+            operation: VALIDATOR_REGISTRY_OP_ROTATE_KEY,
+            subject_node_id: new_rotated_record.node_id.clone(),
+            activation_height: 2003,
+            new_registry: rotated_registry,
+            previous_validators: current_validators.clone(),
+            new_validators: current_validators.clone(),
+            previous_record: Some(registry_entry(&previous_rotated_record)),
+            new_record: Some(registry_entry(&new_rotated_record)),
+        },
+    )?;
+
+    let domain = simulation_domain();
+    let next_graph = build_nonuniform_graph_at(
+        &domain,
+        &binding.registry_root,
+        &current_validators,
+        2,
+        2004,
+        Some(binding.trust_graph.trust_graph_root.clone()),
+    )?;
+    let linkage = analyze_trust_graph(
+        &domain,
+        &next_graph,
+        &CobaltFaultModel {
+            actively_byzantine: Vec::new(),
+        },
+    )
+    .map_err(invalid)?;
+    if !linkage.unsafe_pairs.is_empty()
+        || linkage.strongly_connected_validators.len() != current_validators.len()
+    {
+        return Err(invalid(
+            "compatible trust-view transition is not fully linked",
+        ));
+    }
+    let trust_view_transition = build_trust_graph_transition(
+        &domain,
+        binding.registry_root.clone(),
+        binding.registry_root.clone(),
+        binding.trust_graph.trust_graph_root.clone(),
+        next_graph.trust_graph_root.clone(),
+        2004,
+    )
+    .map_err(invalid)?;
+    let view_transition = json!({
+        "operation": "trust_view_transition",
+        "activation_height": 2004,
+        "previous_registry_root": binding.registry_root,
+        "new_registry_root": binding.registry_root,
+        "previous_trust_graph_root": binding.trust_graph.trust_graph_root,
+        "new_trust_graph_root": next_graph.trust_graph_root,
+        "trust_graph_transition_id": trust_view_transition.transition_id,
+        "unsafe_pairs": linkage.unsafe_pairs,
+        "strongly_connected_validators": linkage.strongly_connected_validators,
+        "verified": true,
+    });
+
+    Ok(vec![admit, remove, rotate, view_transition])
+}
+
 fn collect_contributions(
     domains: &[SimulatedDomain],
     binding: &CobaltShadowRegistryBinding,
@@ -439,6 +690,7 @@ fn run_simulation(
     let mut round = 1001_u64;
     let mut round_receipts = Vec::new();
     let mut validation_wall_micros = Vec::new();
+    let transition_receipts = build_transition_receipts(binding)?;
 
     let baseline_payload = hash_hex(
         "postfiat.cobalt.simulation.payload.v1",
@@ -782,6 +1034,8 @@ fn run_simulation(
             .collect::<BTreeSet<_>>()
             .len() > 1,
         "every_domain_omitted_and_recovered": omitted_domain_receipts.len() == DOMAIN_COUNT,
+        "validator_add_remove_rotation_verified": transition_receipts[..3].iter().all(|row| row["verified"] == true),
+        "compatible_trust_view_transition_verified": transition_receipts[3]["verified"] == true,
         "five_of_six_progress": omitted_domain_receipts.iter().all(|row| row["five_of_six_progress"] == true),
         "four_of_six_safe_halt": partition_safe_halt,
         "deterministic_reorder": true,
@@ -839,6 +1093,7 @@ fn run_simulation(
             "partition_healing",
         ],
         "checks": checks,
+        "transition_receipts": transition_receipts,
         "omitted_domain_receipts": omitted_domain_receipts,
         "round_receipts": round_receipts,
         "p95_round_validation_wall_micros": p95(validation_wall_micros),
