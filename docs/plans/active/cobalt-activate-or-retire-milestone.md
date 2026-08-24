@@ -1,18 +1,16 @@
-# Cobalt Activate-or-Retire Milestone
+# Cobalt Activation Milestone
 
 ## Plain-English outcome
 
-This milestone ends the Cobalt experiment.
-
-Cobalt will either become the live authority for validator-registry and trust-graph changes on the controlled testnet because it proves a material safety and decentralization advantage, or it will be removed from the production path. Shadow-only operation, another readiness recommendation, and indefinite evaluation are not completion states.
+This milestone fixes Cobalt and activates it as the live authority for validator-registry and trust-graph changes on the controlled testnet. Benchmark failures are P0 implementation work, not grounds to abandon the feature. Shadow-only operation and open-ended evaluation are not completion states.
 
 Cobalt does not replace Consensus v2. It controls validator-trust governance only.
 
 - **Status:** Active
-- **Locked specification:** [Cobalt Activate-or-Retire Research Specification](../../governance/cobalt-activate-or-retire-research-spec.md)
+- **Specification:** [Cobalt Activation Research Specification](../../governance/cobalt-activate-or-retire-research-spec.md)
 - **Specification lock task:** `task_a8ffc2885a6fbab8aa06c4b20e92f6b8` — rewarded 2026-08-23
 - **Milestone-document task:** `task_18b8d92d981221b88d0a38159ea1fd26` — accepted
-- **Terminal result:** `[ ] ACTIVATE` or `[ ] RETIRE`
+- **Required result:** `[ ] ACTIVATE`
 
 ## Current position
 
@@ -52,16 +50,16 @@ Task Node: `[x] task_fd8342b57a6364f93953934c776080fc — rewarded 2026-08-24 (2
 - [x] Add a pinned RippleD 3.1.3 adapter for the same proposed registry decision and each node’s local-UNL result, with native CSF ledger consensus separately labeled. Code: [`DecisiveGovernanceBenchmark_test.cpp`](../../../benchmarks/cobalt-activate-or-retire/rippled/DecisiveGovernanceBenchmark_test.cpp).
 - [x] Freeze the oracle, 18 scenarios, source pins, both adapter hashes, and expected per-node results before execution. Manifest: [`scenario-manifest.json`](../../../benchmarks/cobalt-activate-or-retire/scenario-manifest.json), canonical ID `78fc3f92d460f45a4941d40ef705af6c761e3782155a5b599dbd78c90396bde3`.
 
-### 2. Decisive run and bounded remediation
+### 2. Decisive run and implementation remediation
 
-Task Node: `[ ] request and accept after Section 1`
+Task Node: `[ ] request and accept a remediation-until-pass task`
 
 - [ ] Run the frozen corpus from clean state through both adapters.
 - [ ] Report false accepts, false halts, conflicts, per-node results, decision latency, and byte-identical replay; no post-hoc reclassification.
 - [ ] Trace the 90%-overlap result through essential subsets, linkage inequalities, cover extraction, certificate construction, and local validation.
 - [ ] Require at least one compatible non-uniform Cobalt decision, one incompatible Cobalt halt, and one fair material safety distinction from RippleD local-UNL admission.
-- [ ] If the first run fails, use the specification’s single remediation cycle, record the exact cause and diff, and rerun the unchanged oracle and corpus.
-- [ ] If the second run still has a false accept, false halt, unresolved 90% result, conflict, or no fair RippleD distinction, set the terminal path to RETIRE.
+- [ ] Treat every failed activation gate as P0 implementation work: fix the owning code, add regression coverage, and rerun the unchanged oracle and corpus.
+- [ ] Continue remediation until the corpus has zero false accepts, zero false halts, zero conflicts, a resolved 90% result, deterministic replay, and the fair RippleD distinction.
 
 ### 3. Independent live-validator proof
 
@@ -74,11 +72,9 @@ Task Node: `[ ] request and accept only if Section 2 passes ACTIVATE gates`
 - [ ] Prove Consensus v2 continues finalizing, p95 finality stays within 5% of the frozen same-fleet baseline, and no recovery mutates durable history by hand.
 - [ ] Collect signed, redaction-safe operator receipts. Geographic distribution under one operator is not independent operation.
 
-### 4. Terminal operation: activate or retire
+### 4. Live activation
 
-Task Node: `[ ] request and accept after the binary gate is known`
-
-#### ACTIVATE path
+Task Node: `[ ] request and accept after the activation gates pass`
 
 - [ ] Verify a signed forward rollback on a disposable clone immediately before cutover.
 - [ ] Schedule and execute the future-height live controlled-testnet authority transition through [`cobalt_handoff.rs`](../../../crates/node/src/cobalt_handoff.rs).
@@ -86,27 +82,20 @@ Task Node: `[ ] request and accept after the binary gate is known`
 - [ ] Reject early, stale, replayed, wrong-root, mixed-authority, and self-authorized updates without mutation.
 - [ ] Keep Cobalt active and Foundation validator-trust authority inactive after all gates pass.
 
-#### RETIRE path
-
-- [ ] Keep Foundation validator-trust authority active.
-- [ ] Disable and remove live Cobalt sidecar services.
-- [ ] Remove Cobalt activation/readiness controls and claims from the CLI, UI, operator docs, and public positioning.
-- [ ] Remove the production Cobalt authority path or isolate only historical-replay compatibility behind a non-production research feature.
-- [ ] Preserve the minimum safe historical decoder and verifier surface.
 
 ### 5. Human interfaces, packet, and documentation
 
 Governed inside the terminal-operation task; do not request microtasks.
 
 - [ ] Make the Python CLI display the actual terminal decision, authority, registry root, trust-graph root, transition history, and verifier result.
-- [ ] Make the browser interface consume the same authenticated output and display ACTIVATE or RETIRE without readiness language.
-- [ ] Produce one compact verifier-backed packet containing `decision.json`, frozen oracle and manifest, source pins, per-node results, KPI summaries, 90% trace, signed live receipts or retirement receipts, finality/resource metrics, authority/update/rollback records, CLI/UI output, and `SHA256SUMS.txt`.
-- [ ] Publish a concise first-page explanation of what Cobalt controls, the unique benefit tested, compatible/incompatible results, RippleD comparison, independent-validator result, and the final word ACTIVATE or RETIRE.
+- [ ] Make the browser interface consume the same authenticated output and display the activation state without readiness language.
+- [ ] Produce one compact verifier-backed packet containing `activation-status.json`, frozen oracle and manifest, source pins, per-node results, KPI summaries, 90% trace, signed live receipts, finality/resource metrics, authority/update/rollback records, CLI/UI output, and `SHA256SUMS.txt`.
+- [ ] Publish a concise first-page explanation of what Cobalt controls, the unique benefit tested, compatible/incompatible results, RippleD comparison, independent-validator result, and the live activation result.
 - [ ] Refresh [`README.md`](../../../README.md), [`STATUS.md`](../../../STATUS.md), architecture/governance docs, CLI help, and operator instructions to match the live result.
 
-## Binary completion gate
+## Activation completion gate
 
-### ACTIVATE only if every item passes
+### Activate only when every item passes
 
 - [ ] Zero conflicting Cobalt decisions.
 - [ ] Zero false halts in the frozen compatible corpus.
@@ -117,19 +106,11 @@ Governed inside the terminal-operation task; do not request microtasks.
 - [ ] Consensus v2 stays live and within the 5% p95 finality budget.
 - [ ] Live future-height handoff, real Cobalt-authorized registry change, CLI/UI readback, and forward rollback readiness all pass.
 
-### RETIRE if any item remains after one remediation
+Any unchecked item remains active P0 remediation work. It does not authorize retiring or deleting Cobalt.
 
-- [ ] Any conflict or unsafe accepted registry root.
-- [ ] Any formally compatible non-uniform false halt.
-- [ ] Unresolved or incorrect 90%-overlap behavior.
-- [ ] No fair material distinction from RippleD local-UNL admission.
-- [ ] Dependence on one operator, publisher, or shared signing-key custody.
-- [ ] Consensus v2 disruption or performance-budget failure.
-- [ ] Failed live handoff, real registry update, recovery, or rollback.
+## Completion
 
-## Completion and retirement
-
-- [ ] Write `decision.json` with exactly `ACTIVATE` or `RETIRE`.
+- [ ] Write `activation-status.json` with `ACTIVATED` and bind it to the live authority state.
 - [ ] Run the packet verifier, relevant Rust tests, Python CLI/UI tests, formatting, strict Clippy, workspace checks/tests, documentation build, and redaction checks.
 - [ ] Submit honest Task Node evidence and final verification for every accepted task.
 - [ ] Confirm every Task Node task reaches rewarded state.

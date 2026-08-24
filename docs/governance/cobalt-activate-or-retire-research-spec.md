@@ -1,4 +1,4 @@
-# Cobalt Activate-or-Retire Research Specification
+# Cobalt Activation Research Specification
 
 **Status:** Draft; pending Text Improvement Harness score and Task Node lock  
 **Date:** 2026-08-23  
@@ -9,12 +9,11 @@
 
 Cobalt has one remaining job: prove that it should control validator-trust governance on the live Post Fiat controlled testnet.
 
-This campaign has exactly two permitted outcomes:
+The required outcome is **ACTIVATE**: fix Cobalt until it can safely control validator-registry and trust-graph authority on the controlled testnet, then perform the live cutover.
 
-- **ACTIVATE:** hand validator-registry and trust-graph authority to Cobalt on the controlled testnet because it demonstrates a material safety and decentralization advantage without damaging liveness.
-- **RETIRE:** remove Cobalt from the production path because it cannot demonstrate that advantage reliably enough to justify its code, operational burden, and attack surface.
+A failed benchmark creates implementation work. It does not authorize retiring, deleting, or abandoning Cobalt. Only an explicit user instruction can change the activation objective.
 
-“Keep it in shadow mode,” “GO for a later cutover,” and “continue evaluating” are not terminal outcomes. The existing implementation has already earned a live decision, not another rehearsal.
+“Keep it in shadow mode,” “GO for a later cutover,” and open-ended evaluation are not completion states.
 
 ## What Cobalt must earn
 
@@ -27,7 +26,7 @@ Cobalt deserves to exist only if it gives the network all four of these properti
 3. **Independent operation:** the protocol works across independently controlled validators rather than depending on one publisher, one operator, or one shared trust-list file.
 4. **Operational isolation:** a Cobalt governance failure cannot stop Consensus v2 block production, and Cobalt recovery does not require rewriting durable history.
 
-These properties matter to a high-value network because validator admission and removal must be credible to operators, markets, and integrators. If Cobalt cannot make validator governance materially safer and less publisher-dependent than the inherited RippleD model, then it is complexity without network value and must be retired.
+These properties matter to a high-value network because validator admission and removal must be credible to operators, markets, and integrators. Any gap against them is a defect or missing capability that must be fixed and retested before activation.
 
 ## Existing evidence and unresolved defect
 
@@ -56,7 +55,7 @@ The answer must be proven against the code and a pre-registered oracle. It canno
 
 > Under one shared validator-governance threat model, does Post Fiat’s Cobalt implementation accept every tested compatible non-uniform trust configuration, reject every tested incompatible configuration, prevent conflicting validator-registry decisions where a RippleD-style local-UNL model does not, and operate safely across live independent validators?
 
-If yes, activate it on the controlled testnet. If no after the bounded remediation allowed below, retire it.
+When the answer is yes, activate it on the controlled testnet. Until then, fix the implementation and rerun the unchanged decision tests.
 
 ## Scope
 
@@ -76,7 +75,7 @@ If yes, activate it on the controlled testnet. If no after the bounded remediati
 - Repairing the RippleD defects catalogued in the earlier fork-inheritance audit.
 - Mainnet activation.
 - Claims that deterministic replay alone proves consensus safety.
-- Indefinite shadow operation after this decision.
+- Treating shadow operation as completion.
 
 ## Shared property under test
 
@@ -235,7 +234,7 @@ Activation fails if:
 - recovery requires manual mutation of durable history; or
 - any correct validator reaches a different authority, registry root, or decision history.
 
-## Binary decision gates
+## Activation gates
 
 ### ACTIVATE
 
@@ -255,44 +254,19 @@ The final decision is **ACTIVATE** only when all of the following are true:
 
 When these gates pass, leave Cobalt active on the controlled testnet and publish the evidence and operator instructions.
 
-### RETIRE
+## Required remediation
 
-The final decision is **RETIRE** if any of the following remains true after the bounded remediation allowance:
+Any failed activation gate creates P0 implementation work. Diagnose the owning code boundary, fix the defect, add regression coverage, and rerun the unchanged decisive corpus from clean state. Repeat until every activation gate passes.
 
-- a correct node accepts an unsafe or conflicting registry root;
-- a formally compatible non-uniform case halts;
-- the implementation cannot explain and resolve the 90% overlap result;
-- no material safety distinction from the RippleD local-UNL model can be reproduced fairly;
-- live operation depends on one publisher, one operator, or shared validator keys;
-- Cobalt disrupts Consensus v2 or exceeds the performance budget;
-- live handoff, real Cobalt-authorized update, recovery, or forward rollback fails; or
-- the claimed result depends on post-hoc expected outcomes.
+The oracle and decisive scenarios remain frozen unless an independently demonstrated oracle defect requires a separately reviewed correction. Implementation failures must never be hidden by changing expected outcomes after execution.
 
-On RETIRE:
-
-1. keep Foundation governance authoritative;
-2. disable and remove Cobalt sidecar services from the validator fleet;
-3. remove Cobalt activation controls and readiness claims from the CLI, UI, operator documentation, and public positioning;
-4. remove the Cobalt authority path from production builds, or isolate code needed for historical replay behind a non-production research feature after a compatibility review;
-5. preserve only the minimum data types and verification logic required to read existing history safely;
-6. archive one compact evidence packet and a plain-English retirement record; and
-7. delete obsolete active Cobalt plans and shadow-operation instructions.
-
-Cobalt must not survive as a permanently running experiment.
-
-## Bounded remediation
-
-The team gets one implementation-remediation cycle after the first frozen-corpus execution.
-
-The oracle and decisive scenarios remain frozen. A remediation may change implementation code, configuration generation, or an adapter defect, but it must record the exact cause and diff. The entire corpus and live pre-cutover exercise are then rerun from clean state.
-
-If a second execution still triggers a RETIRE condition, the decision is RETIRE. A new research program would require a new user mandate; this specification cannot extend itself.
+Benchmark or deployment failures do not authorize retiring, deleting, or abandoning Cobalt. Only an explicit user instruction can change the activation objective.
 
 ## Required evidence packet
 
 The final packet must contain:
 
-- `decision.json` with exactly `ACTIVATE` or `RETIRE`;
+- `activation-status.json` with the current state (`REMEDIATION_REQUIRED`, `READY_TO_ACTIVATE`, or `ACTIVATED`);
 - the frozen scenario manifest and oracle;
 - source commit identifiers for Post Fiat and RippleD;
 - per-node Cobalt and RippleD results;
@@ -316,21 +290,19 @@ The research output must be understandable without reading source code. Its firs
 - what happened in the compatible and incompatible trust cases;
 - what happened against the RippleD local-UNL model;
 - whether real independent validators completed the live exercise; and
-- the final word: **ACTIVATE** or **RETIRE**.
+- the activation state and any remaining code-level blockers.
 
-The conclusion may describe limitations, but it may not weaken the binary decision with “perhaps,” “later,” “candidate,” or “continued shadow evaluation.”
+The conclusion may describe limitations, but it may not weaken the activation objective with “perhaps,” “later,” “candidate,” or open-ended shadow evaluation.
 
 ## Work sequence
 
 1. Lock this research specification through the Task Node.
 2. Freeze the oracle, corpus, baselines, and source revisions.
-3. Run the first decisive corpus.
-4. Use the single remediation cycle if required.
-5. Run the decisive corpus again if remediated.
-6. Complete the independent live pre-cutover exercise.
-7. Apply the binary gates.
-8. If ACTIVATE, perform the live controlled-testnet cutover and real registry change.
-9. If RETIRE, execute the removal list.
-10. Publish the compact decision packet and update the active/completed plan state.
+3. Run the decisive corpus.
+4. Fix every implementation defect exposed by the corpus and add regression tests.
+5. Rerun the unchanged corpus from clean state until every activation gate passes.
+6. Complete the independent live pre-cutover exercise and remediate any failures.
+7. Perform the live controlled-testnet cutover and real registry change.
+8. Publish the compact activation packet and update the active/completed plan state.
 
 No implementation milestone may redefine the decision gates without a newly locked research specification.
