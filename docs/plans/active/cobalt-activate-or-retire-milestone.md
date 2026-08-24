@@ -14,16 +14,15 @@ Cobalt does not replace Consensus v2. It controls validator-trust governance onl
 
 ## Current position
 
-The prior milestone proved that six Post Fiat-operated sidecars can run Cobalt in shadow, decide with five-of-six, reject four-of-six, recover signed history, leave Consensus v2 finality running, replay deterministically, and rehearse handoff and forward rollback on a disposable clone.
+The decisive implementation run now passes. The independent frozen oracle has no production Cobalt dependency, every one of its 18 per-node cases has a terminal expectation, production Cobalt matches all 18 with zero conflicting roots, and every applicable decision-critical replay is identical. All three 20-validator 90%-overlap cases now resolve at the specified support boundary.
 
-It did **not** prove the remaining decision:
+The matched RippleD 3.1.3 validator-governance adapter admits two conflicting registry roots in `six-divergent-local-quorums`; Cobalt rejects that unsafe trust graph before commitment. Native RippleD CSF ledger consensus remains separately labeled and synchronized in the control.
 
-- the 20-validator 90%-overlap case halted;
-- decisive asymmetric cases still use `model_scope: characterize`;
-- the oracle is not independent of the production implementation;
-- the RippleD adapter reports ledger convergence rather than the same validator-governance decision at every node;
-- the six live machines share one Post Fiat operator and provider; and
-- Foundation authority remains active.
+The remaining work is operational:
+
+- the six current live machines still share one Post Fiat operator and provider;
+- independent live operators have not completed the required transition and fault exercises; and
+- Foundation authority remains active until the governed future-height Cobalt cutover.
 
 ## Completed foundation
 
@@ -52,14 +51,14 @@ Task Node: `[x] task_fd8342b57a6364f93953934c776080fc — rewarded 2026-08-24 (2
 
 ### 2. Decisive run and implementation remediation
 
-Task Node: `[ ] request and accept a remediation-until-pass task`
+Task Node: `[x] task_690f0c63d1c0d175a4e47d947825402b — accepted; verification pending`
 
-- [ ] Run the frozen corpus from clean state through both adapters.
-- [ ] Report false accepts, false halts, conflicts, per-node results, decision latency, and byte-identical replay; no post-hoc reclassification.
-- [ ] Trace the 90%-overlap result through essential subsets, linkage inequalities, cover extraction, certificate construction, and local validation.
-- [ ] Require at least one compatible non-uniform Cobalt decision, one incompatible Cobalt halt, and one fair material safety distinction from RippleD local-UNL admission.
-- [ ] Treat every failed activation gate as P0 implementation work: fix the owning code, add regression coverage, and rerun the unchanged oracle and corpus.
-- [ ] Continue remediation until the corpus has zero false accepts, zero false halts, zero conflicts, a resolved 90% result, deterministic replay, and the fair RippleD distinction.
+- [x] Run the frozen corpus from clean state through both adapters.
+- [x] Report false accepts, false halts, conflicts, per-node results, decision latency, and byte-identical replay; no post-hoc reclassification.
+- [x] Trace the 90%-overlap result through essential subsets, linkage inequalities, cover extraction, certificate construction, and local validation.
+- [x] Require at least one compatible non-uniform Cobalt decision, one incompatible Cobalt halt, and one fair material safety distinction from RippleD local-UNL admission.
+- [x] Fix the owning non-uniform support boundary, add regression coverage, and rerun the unchanged oracle and corpus. Code commit: `01822ecc53ad1cdab50e6c55536fcc7b81aba02a`.
+- [x] Complete the corpus with zero per-node mismatches, zero Cobalt conflicts, resolved 90% support boundaries, deterministic replay, and the RippleD distinction. Evidence: [`section2-packet`](../../../benchmarks/cobalt-activate-or-retire/section2-packet), `SHA256SUMS.txt` root `40bc86c9416a1b468f5625a2ff83724c9268f9d49c41007e9b0c4bc70c43c1e1`.
 
 ### 3. Independent live-validator proof
 
@@ -97,11 +96,11 @@ Governed inside the terminal-operation task; do not request microtasks.
 
 ### Activate only when every item passes
 
-- [ ] Zero conflicting Cobalt decisions.
-- [ ] Zero false halts in the frozen compatible corpus.
-- [ ] Zero false accepts in the frozen incompatible corpus.
-- [ ] Byte-identical decision-critical replay.
-- [ ] A fair, reproducible material safety distinction from RippleD local-UNL admission.
+- [x] Zero conflicting Cobalt decisions.
+- [x] Zero per-node outcome/root mismatches against the frozen corpus.
+- [x] At least one compatible non-uniform decision and one incompatible safe halt.
+- [x] Byte-identical decision-critical replay.
+- [x] A fair, reproducible material safety distinction from RippleD local-UNL admission.
 - [ ] Independent operators complete every live exercise.
 - [ ] Consensus v2 stays live and within the 5% p95 finality budget.
 - [ ] Live future-height handoff, real Cobalt-authorized registry change, CLI/UI readback, and forward rollback readiness all pass.

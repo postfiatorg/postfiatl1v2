@@ -1,6 +1,6 @@
-# Cobalt activate-or-retire corpus
+# Cobalt activation corpus
 
-This directory freezes the decision contract for the terminal Cobalt evaluation. It does not contain an activation recommendation and it does not authorize the decisive run. Execution is governed by Section 2 of `docs/plans/active/cobalt-activate-or-retire-milestone.md`.
+This directory freezes the decision contract and records the decisive implementation evidence for Cobalt activation. Execution is governed by Section 2 of `docs/plans/active/cobalt-activate-or-retire-milestone.md`.
 
 ## What is frozen
 
@@ -45,4 +45,18 @@ cargo check -p postfiat-node --bin postfiat-cobalt-decisive-benchmark --locked
 
 The RippleD adapter was syntax-compiled using the exact compile flags from the pinned `3.1.3` build at commit `46b241ace8b30d9c9775d60ffba7d24b21903896`.
 
-The decisive adapters must not be run and then used to edit expected outcomes. If the frozen oracle is wrong, the campaign is invalid. If an adapter differs from the oracle, the bounded remediation rules in the milestone apply.
+The decisive adapters must not be run and then used to edit expected outcomes. If an adapter differs from the frozen oracle, fix the owning implementation and rerun the unchanged corpus.
+
+## Decisive Section 2 result
+
+Production Cobalt passes all 18 frozen cases with zero per-node mismatches, zero conflicting roots, and identical decision-critical replay. The three 20-validator 90%-overlap cases decide, decide, and halt at their specified support boundaries.
+
+The matched RippleD 3.1.3 local-UNL validator-governance adapter admits two conflicting registry roots in `six-divergent-local-quorums`; Cobalt rejects the same unsafe trust graph before commitment. RippleD native CSF ledger consensus is separately labeled as a synchronized ledger-consensus control.
+
+Evidence: [`section2-packet`](section2-packet). Verify it with:
+
+```bash
+python3 benchmarks/cobalt-activate-or-retire/verify_section2_packet.py
+```
+
+The `SHA256SUMS.txt` root is `40bc86c9416a1b468f5625a2ff83724c9268f9d49c41007e9b0c4bc70c43c1e1`.

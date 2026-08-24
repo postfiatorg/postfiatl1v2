@@ -1,0 +1,90 @@
+{
+  "checks": {
+    "cobalt_all_cases_pass": true,
+    "cobalt_duplicate_rejection": true,
+    "cobalt_halts_divergent_graph_without_conflict": true,
+    "cobalt_oracle_not_called": true,
+    "cobalt_replay_deterministic": true,
+    "cobalt_schema": true,
+    "cobalt_shadow_authority_only": true,
+    "cobalt_zero_conflicts": true,
+    "cobalt_zero_node_mismatches": true,
+    "compatible_nonuniform_decides": true,
+    "incompatible_cobalt_halts": true,
+    "material_safety_delta_is_frozen_case": true,
+    "ninety_percent_cases_match_oracle": true,
+    "rippled_all_cases_pass": true,
+    "rippled_local_quorums_diverge": true,
+    "rippled_native_csf_control_stays_separate": true,
+    "rippled_one_expected_conflict": true,
+    "rippled_oracle_not_called": true,
+    "rippled_schema": true
+  },
+  "cobalt": {
+    "candidate_runs": 17,
+    "cases": 18,
+    "conflicting_roots": 0,
+    "deterministic_replays": 17,
+    "elapsed_micros": {
+      "max": 8984996,
+      "median": 559985,
+      "min": 166719
+    },
+    "node_mismatches": 0,
+    "passed": 18,
+    "wire_bytes": {
+      "max": 3983024,
+      "median": 588692,
+      "min": 0
+    }
+  },
+  "comparison_scope": "validator-governance decision; native RippleD CSF ledger consensus separately labeled",
+  "frozen_manifest": {
+    "canonical_id": "78fc3f92d460f45a4941d40ef705af6c761e3782155a5b599dbd78c90396bde3",
+    "raw_sha256": "3df59da71f0f52553bfa1d4919a50a180a4ec2aaf88a250bfb320c438932a14d"
+  },
+  "material_safety_delta": {
+    "case_id": "six-divergent-local-quorums",
+    "cobalt": "unsafe trust graph rejected before commitment; zero conflicting roots",
+    "rippled": "two local-UNL quorums admit two registry roots; one conflict"
+  },
+  "ninety_percent_overlap": [
+    {
+      "case_id": "twenty-overlap-090-compatible",
+      "conflicting_roots": 0,
+      "expectation_passed": true,
+      "graph_safe": true,
+      "outcomes": [
+        "decide"
+      ]
+    },
+    {
+      "case_id": "twenty-overlap-090-support-boundary",
+      "conflicting_roots": 0,
+      "expectation_passed": true,
+      "graph_safe": true,
+      "outcomes": [
+        "decide"
+      ]
+    },
+    {
+      "case_id": "twenty-overlap-090-below-boundary",
+      "conflicting_roots": 0,
+      "expectation_passed": true,
+      "graph_safe": true,
+      "outcomes": [
+        "halt"
+      ]
+    }
+  ],
+  "rippled": {
+    "cases": 18,
+    "native_csf_scope": "separate ledger-consensus control",
+    "passed": 18,
+    "validator_governance_conflicting_roots": 1
+  },
+  "schema": "postfiat-cobalt-section2-summary-v1",
+  "source_commit": "01822ecc53ad1cdab50e6c55536fcc7b81aba02a",
+  "status": "PASS",
+  "task_id": "task_690f0c63d1c0d175a4e47d947825402b"
+}

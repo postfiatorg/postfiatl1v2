@@ -1,0 +1,23 @@
+{
+  "files": {
+    "benchmarks/cobalt-activate-or-retire/oracle-contract.md": "750e1dad5315dfbda13745fef7a448641ceaffdb449c8d003bd1319e51e7190a",
+    "benchmarks/cobalt-activate-or-retire/rippled/DecisiveGovernanceBenchmark_test.cpp": "ec2bc295fc641fa133bb90c83534d2212b822eedb8c53b80fe0cf3a0b3effa9d",
+    "benchmarks/cobalt-activate-or-retire/scenario-manifest.json": "3df59da71f0f52553bfa1d4919a50a180a4ec2aaf88a250bfb320c438932a14d",
+    "crates/cobalt_decision_oracle/src/lib.rs": "0828b5a8acbe76a1aeb408c04281bd9f7e7425fe271bc5f240e7fcced7336f88",
+    "crates/consensus_cobalt/src/dabc_registry.rs": "1776908467f82bb4b33c5aa9deac88d5bdff8a1befe213dc759031f5e04e1f2c",
+    "crates/consensus_cobalt/src/internal_validation.rs": "c1427b51f17a57cc2efbbefe0101c41cb8ac48beee292b751675106c00fada19",
+    "crates/consensus_cobalt/src/tests.rs": "6f183665e3444be187d71a3fc44246d7a4b3c15180c1ac1c070aedfc28799923",
+    "crates/node/src/bin/postfiat_cobalt_decisive_benchmark.rs": "39d33aac6e74babb4042a38fcab6a29d63428bb34214d8fc5d2e28862497d511"
+  },
+  "frozen_manifest": {
+    "canonical_id": "78fc3f92d460f45a4941d40ef705af6c761e3782155a5b599dbd78c90396bde3",
+    "raw_sha256": "3df59da71f0f52553bfa1d4919a50a180a4ec2aaf88a250bfb320c438932a14d"
+  },
+  "rippled": {
+    "commit": "46b241ace8b30d9c9775d60ffba7d24b21903896",
+    "version": "3.1.3"
+  },
+  "schema": "postfiat-cobalt-section2-source-manifest-v1",
+  "source_commit": "01822ecc53ad1cdab50e6c55536fcc7b81aba02a",
+  "task_id": "task_690f0c63d1c0d175a4e47d947825402b"
+}

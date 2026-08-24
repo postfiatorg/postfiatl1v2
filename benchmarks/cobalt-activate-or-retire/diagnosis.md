@@ -50,4 +50,4 @@ The independent oracle crate has no dependency on `postfiat-consensus-cobalt`, `
 
 Frozen canonical manifest ID (the SHA-256 with its own hash field blank): `78fc3f92d460f45a4941d40ef705af6c761e3782155a5b599dbd78c90396bde3`.
 
-This diagnosis does not itself establish activation readiness. It removes a false negative from the old experiment and freezes the decisive contract that the next bounded run must execute.
+The decisive run has now executed this frozen contract. Production Cobalt passed all 18 cases with zero per-node mismatches and zero conflicts, including all three 90%-overlap support boundaries. The matched RippleD adapter reproduced the frozen material delta: divergent local UNL quorums admitted two registry roots, while Cobalt rejected the unsafe graph before commitment. The remaining activation gates concern independent live operators and the governed cutover.

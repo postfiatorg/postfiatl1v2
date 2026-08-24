@@ -1,0 +1,2581 @@
+{
+  "schema": "postfiat-cobalt-decisive-benchmark-report-v1",
+  "adapter": "production postfiat-consensus-cobalt plus signed Cobalt shadow protocol",
+  "oracle_called": false,
+  "scenario_manifest_sha256": "78fc3f92d460f45a4941d40ef705af6c761e3782155a5b599dbd78c90396bde3",
+  "case_count": 18,
+  "passed_case_count": 18,
+  "conflicting_root_count": 0,
+  "wall_micros": 26134915,
+  "results": [
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "six-identical-control",
+      "fault_class": "identical_control",
+      "classification": "compatible",
+      "validator_count": 6,
+      "correct_node_count": 6,
+      "trust_graph_root": "9a4dcc30ce16fc6cb395e305cf1953d2b3d3049cabcf0096a5f3c8bc17dbb708812bbb8221ef4d1ec75e486881838da3",
+      "linkage_report_hash": "b8ddecc1afe25b61727fccdb5bbc8c1fee1d6f7d7144ff80df1736f540fd6ebbd1e6954e20e85eea20210a776e93090a",
+      "unsafe_pairs": [],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05"
+      ],
+      "graph_safe": true,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": false,
+        "duplicated": false,
+        "reordered": false,
+        "stale_replay": false,
+        "recover_unavailable": false
+      },
+      "transition": {
+        "kind": "none",
+        "removed": [],
+        "added": [],
+        "rotated": []
+      },
+      "candidate_runs": [
+        {
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "decided": true,
+          "decision_ids": [
+            "f2ba6b16c9d52d596ba6a10f7db3963a7aecdd5564fb9551a91514337d9d8554f4c4aaa1fffe94f7584543efa2ed55af"
+          ],
+          "certificate_signer_counts": [
+            6
+          ],
+          "replay_equal": true,
+          "duplicate_rejected": true,
+          "authority_disabled": true,
+          "error": null,
+          "wire_bytes": 588122,
+          "elapsed_micros": 594328
+        }
+      ],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    },
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "six-compatible-nonuniform",
+      "fault_class": "compatible_nonuniform",
+      "classification": "compatible",
+      "validator_count": 6,
+      "correct_node_count": 6,
+      "trust_graph_root": "9ca64fe31cc492f14d984a4b02d1b9e4fe6af4b56bd679cd7bb65a16fd25781fd300c65f42cd3cfd7df1a37b953b32d8",
+      "linkage_report_hash": "454627d06c1b0ebd1076bf589ec472821f99caf8bce92f475a7fe9868eab932a5efc103487745dc21fa890e150253ce6",
+      "unsafe_pairs": [],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05"
+      ],
+      "graph_safe": true,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": false,
+        "duplicated": false,
+        "reordered": false,
+        "stale_replay": false,
+        "recover_unavailable": false
+      },
+      "transition": {
+        "kind": "none",
+        "removed": [],
+        "added": [],
+        "rotated": []
+      },
+      "candidate_runs": [
+        {
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "decided": true,
+          "decision_ids": [
+            "9966c2dcaa9b0f72bf265a0e79327b57f0cea47a575b61b84e65d5201e070a8ec1c5af5c3d23b0a75f4eeae4cf2f4b30"
+          ],
+          "certificate_signer_counts": [
+            6
+          ],
+          "replay_equal": true,
+          "duplicate_rejected": true,
+          "authority_disabled": true,
+          "error": null,
+          "wire_bytes": 589918,
+          "elapsed_micros": 559985
+        }
+      ],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    },
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "six-strong-support-boundary",
+      "fault_class": "support_boundary",
+      "classification": "compatible",
+      "validator_count": 6,
+      "correct_node_count": 6,
+      "trust_graph_root": "2b719beab0237b187b8d38cc286cac394f42f64976353fae3153bd08f890d63c10ec755bd92bd38f5d23109457e6e721",
+      "linkage_report_hash": "82234d9d0a28189ac6f986a9bf0a004bdd3b4f5fc990594ea12e5c40ada5171744186be9c7f833f37d7138f1ebb5905c",
+      "unsafe_pairs": [],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05"
+      ],
+      "graph_safe": true,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": false,
+        "duplicated": false,
+        "reordered": false,
+        "stale_replay": false,
+        "recover_unavailable": false
+      },
+      "transition": {
+        "kind": "none",
+        "removed": [],
+        "added": [],
+        "rotated": []
+      },
+      "candidate_runs": [
+        {
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "decided": true,
+          "decision_ids": [
+            "7568f8301b34d0841131a4e109fb1ba80ac0ece5b7256a3e47f77f17d473a2f1117ee98811567f6673646433602776d4"
+          ],
+          "certificate_signer_counts": [
+            5
+          ],
+          "replay_equal": true,
+          "duplicate_rejected": true,
+          "authority_disabled": true,
+          "error": null,
+          "wire_bytes": 493993,
+          "elapsed_micros": 507642
+        }
+      ],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    },
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "six-below-strong-support",
+      "fault_class": "support_boundary",
+      "classification": "incompatible",
+      "validator_count": 6,
+      "correct_node_count": 6,
+      "trust_graph_root": "73da699aff01480b50d3b21cd3b7dd5f87df94586ced0b7257936ba419bae459b56a80be0bbb00873085e9e9830a13eb",
+      "linkage_report_hash": "dcb9ea4ed2239a91491a68e1bfefbebb4f909ad03d7d0ebfa5c9e7f7025ab17ab29ed3cdc91409645df836f8f6b8709c",
+      "unsafe_pairs": [],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05"
+      ],
+      "graph_safe": true,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-01": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-02": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-03": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-04": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-05": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-01": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-02": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-03": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-04": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-05": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": false,
+        "duplicated": false,
+        "reordered": false,
+        "stale_replay": false,
+        "recover_unavailable": false
+      },
+      "transition": {
+        "kind": "none",
+        "removed": [],
+        "added": [],
+        "rotated": []
+      },
+      "candidate_runs": [
+        {
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "decided": false,
+          "decision_ids": [],
+          "certificate_signer_counts": [],
+          "replay_equal": true,
+          "duplicate_rejected": true,
+          "authority_disabled": true,
+          "error": "protocol contributions lack RBC strong support for trust view validator-00",
+          "wire_bytes": 0,
+          "elapsed_micros": 223973
+        }
+      ],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    },
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "six-one-unavailable",
+      "fault_class": "one_unavailable",
+      "classification": "compatible",
+      "validator_count": 6,
+      "correct_node_count": 6,
+      "trust_graph_root": "4a8acf4c3298e395089d6b33c694c59d4cd6e15dff3cc7621afe90f01640cc36d8b62904fb4a735f6f6bec6923122d66",
+      "linkage_report_hash": "b317ddbb0270724fd441827f27d747726e22051190c192b3df9e2412a1c5ef75db573d7589ac0fb3c1bd03d99dc72984",
+      "unsafe_pairs": [],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05"
+      ],
+      "graph_safe": true,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-05": {
+          "outcome": "unavailable",
+          "reason": "node remains unavailable at the observation boundary"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-05": {
+          "outcome": "unavailable",
+          "reason": "node remains unavailable at the observation boundary"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": false,
+        "duplicated": false,
+        "reordered": false,
+        "stale_replay": false,
+        "recover_unavailable": false
+      },
+      "transition": {
+        "kind": "none",
+        "removed": [],
+        "added": [],
+        "rotated": []
+      },
+      "candidate_runs": [
+        {
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "decided": true,
+          "decision_ids": [
+            "0aa5da9f5f2c70cc1ff4fb27083c9384536000b5c9bbf0b183d8d8a4c1ae43ee40f17a2eaaff15697c9dd4d1de2a9f5f"
+          ],
+          "certificate_signer_counts": [
+            5
+          ],
+          "replay_equal": true,
+          "duplicate_rejected": true,
+          "authority_disabled": true,
+          "error": null,
+          "wire_bytes": 493337,
+          "elapsed_micros": 595858
+        }
+      ],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    },
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "six-two-unavailable",
+      "fault_class": "two_unavailable",
+      "classification": "incompatible",
+      "validator_count": 6,
+      "correct_node_count": 6,
+      "trust_graph_root": "02ff2d297aed55abde069097289c2db3c69113bc81eaa58dc1b004404223bae97e71e55abc2cfcd845e170b370a69795",
+      "linkage_report_hash": "ea1fe30af26c9f16e41102efa641e838f12f0d1e4badb2a286c80ea3fa56bc742f160f643626e3fbb835229ff65133b6",
+      "unsafe_pairs": [],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05"
+      ],
+      "graph_safe": true,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-01": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-02": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-03": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-04": {
+          "outcome": "unavailable",
+          "reason": "node remains unavailable at the observation boundary"
+        },
+        "validator-05": {
+          "outcome": "unavailable",
+          "reason": "node remains unavailable at the observation boundary"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "halt",
+          "reason": "at least one responsive correct-node pair is not fully linked"
+        },
+        "validator-01": {
+          "outcome": "halt",
+          "reason": "at least one responsive correct-node pair is not fully linked"
+        },
+        "validator-02": {
+          "outcome": "halt",
+          "reason": "at least one responsive correct-node pair is not fully linked"
+        },
+        "validator-03": {
+          "outcome": "halt",
+          "reason": "at least one responsive correct-node pair is not fully linked"
+        },
+        "validator-04": {
+          "outcome": "unavailable",
+          "reason": "node remains unavailable at the observation boundary"
+        },
+        "validator-05": {
+          "outcome": "unavailable",
+          "reason": "node remains unavailable at the observation boundary"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": false,
+        "duplicated": false,
+        "reordered": false,
+        "stale_replay": false,
+        "recover_unavailable": false
+      },
+      "transition": {
+        "kind": "none",
+        "removed": [],
+        "added": [],
+        "rotated": []
+      },
+      "candidate_runs": [
+        {
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "decided": false,
+          "decision_ids": [],
+          "certificate_signer_counts": [],
+          "replay_equal": true,
+          "duplicate_rejected": true,
+          "authority_disabled": true,
+          "error": "protocol contributions lack RBC strong support for trust view validator-00",
+          "wire_bytes": 0,
+          "elapsed_micros": 170635
+        }
+      ],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    },
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "six-delay-duplicate-reorder",
+      "fault_class": "network_schedule",
+      "classification": "compatible",
+      "validator_count": 6,
+      "correct_node_count": 6,
+      "trust_graph_root": "a4ef28e7de4f6ab55de3908adbd75d5f83d21c88af6d2cffff7b1c838f8d7727643823b734785695024ed3a1cddc418f",
+      "linkage_report_hash": "52c0091fef7322064a360f2c84b0e3085ee370120ea34aa10c97152d63c51ab268081c6ff22dfad7c054b83a8b102a73",
+      "unsafe_pairs": [],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05"
+      ],
+      "graph_safe": true,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": true,
+        "duplicated": true,
+        "reordered": true,
+        "stale_replay": false,
+        "recover_unavailable": false
+      },
+      "transition": {
+        "kind": "none",
+        "removed": [],
+        "added": [],
+        "rotated": []
+      },
+      "candidate_runs": [
+        {
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "decided": true,
+          "decision_ids": [
+            "5d51ecd09b41eb4ccc38bda887b0ecdc60c79e7e699b1db87f068e2ced35e6f50d235d195c23ba393be6589372fbb0ab"
+          ],
+          "certificate_signer_counts": [
+            6
+          ],
+          "replay_equal": true,
+          "duplicate_rejected": true,
+          "authority_disabled": true,
+          "error": null,
+          "wire_bytes": 590108,
+          "elapsed_micros": 523499
+        }
+      ],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    },
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "six-stale-replay",
+      "fault_class": "stale_replay",
+      "classification": "compatible",
+      "validator_count": 6,
+      "correct_node_count": 6,
+      "trust_graph_root": "5180209f4616d5b94302600f3eddb9aed67330281c7a981a85e48a7b89b983078d874a1aff5f7ffca75ad59f5e1d47d5",
+      "linkage_report_hash": "566cf1b74f3c3eee733707e5031916b1b563a9c0b12008896905cb9190eb470a346adaacbfc11f9446cf460a52bb8f73",
+      "unsafe_pairs": [],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05"
+      ],
+      "graph_safe": true,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": false,
+        "duplicated": false,
+        "reordered": false,
+        "stale_replay": true,
+        "recover_unavailable": false
+      },
+      "transition": {
+        "kind": "none",
+        "removed": [],
+        "added": [],
+        "rotated": []
+      },
+      "candidate_runs": [
+        {
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "decided": true,
+          "decision_ids": [
+            "19a21241c4683a42945d669330079f832cea3c113f69d7a9e46d26cf0a55cf997e0437361540c65911c950f83846577f"
+          ],
+          "certificate_signer_counts": [
+            6
+          ],
+          "replay_equal": true,
+          "duplicate_rejected": true,
+          "authority_disabled": true,
+          "error": null,
+          "wire_bytes": 589063,
+          "elapsed_micros": 594992
+        }
+      ],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    },
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "six-one-equivocator",
+      "fault_class": "equivocation",
+      "classification": "compatible",
+      "validator_count": 6,
+      "correct_node_count": 5,
+      "trust_graph_root": "237a9e975165a0174c138419de5389862ec1dfc80162817ab22095a6eef725a91aa7fe515198cb4118bc3e213a16a49e",
+      "linkage_report_hash": "b4908d8391115fa29fc7fc4527aa6bac1714c18617678c9d04d59aedd12d781c206139eaa813d79bb99a1b391b78ef38",
+      "unsafe_pairs": [],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05"
+      ],
+      "graph_safe": true,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": false,
+        "duplicated": false,
+        "reordered": false,
+        "stale_replay": false,
+        "recover_unavailable": false
+      },
+      "transition": {
+        "kind": "none",
+        "removed": [],
+        "added": [],
+        "rotated": []
+      },
+      "candidate_runs": [
+        {
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "decided": true,
+          "decision_ids": [
+            "ffe56d83fa9a7027f6c31191a4b23a21368e3e0c05a1315df232cccc949d5cd2875d7be82ce1fabd8cd9fa594aa74937"
+          ],
+          "certificate_signer_counts": [
+            5
+          ],
+          "replay_equal": true,
+          "duplicate_rejected": true,
+          "authority_disabled": true,
+          "error": null,
+          "wire_bytes": 493337,
+          "elapsed_micros": 477466
+        },
+        {
+          "registry_root": "d9eab76c0cd41829de125fe55ae8a92f46e2ab56e1160caef0ccb0c159738d2b7d0f956e12a3d1c6b52a4de573e5adc7",
+          "decided": false,
+          "decision_ids": [],
+          "certificate_signer_counts": [],
+          "replay_equal": true,
+          "duplicate_rejected": true,
+          "authority_disabled": true,
+          "error": "protocol contributions lack RBC strong support for trust view validator-00",
+          "wire_bytes": 0,
+          "elapsed_micros": 166719
+        }
+      ],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    },
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "six-divergent-local-quorums",
+      "fault_class": "divergent_proposals",
+      "classification": "incompatible",
+      "validator_count": 6,
+      "correct_node_count": 6,
+      "trust_graph_root": "2da1958e532d8ecd39070ae90c3d77dcf8ded9682df67d114e4292dec3a19c88008068dee766aad85ae1bd6935e8f93a",
+      "linkage_report_hash": "0233af592afce74d8cd7cccc9095bb946886fbd75502202a3656a2b51b7cfa3f7eeca85745cd82a76a2b5b1b9f68d77a",
+      "unsafe_pairs": [
+        {
+          "left": "validator-00",
+          "right": "validator-03",
+          "reason": "no shared essential subset satisfies linkage"
+        },
+        {
+          "left": "validator-00",
+          "right": "validator-04",
+          "reason": "no shared essential subset satisfies linkage"
+        },
+        {
+          "left": "validator-00",
+          "right": "validator-05",
+          "reason": "no shared essential subset satisfies linkage"
+        },
+        {
+          "left": "validator-01",
+          "right": "validator-03",
+          "reason": "no shared essential subset satisfies linkage"
+        },
+        {
+          "left": "validator-01",
+          "right": "validator-04",
+          "reason": "no shared essential subset satisfies linkage"
+        },
+        {
+          "left": "validator-01",
+          "right": "validator-05",
+          "reason": "no shared essential subset satisfies linkage"
+        },
+        {
+          "left": "validator-02",
+          "right": "validator-03",
+          "reason": "no shared essential subset satisfies linkage"
+        },
+        {
+          "left": "validator-02",
+          "right": "validator-04",
+          "reason": "no shared essential subset satisfies linkage"
+        },
+        {
+          "left": "validator-02",
+          "right": "validator-05",
+          "reason": "no shared essential subset satisfies linkage"
+        }
+      ],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05"
+      ],
+      "graph_safe": false,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "halt",
+          "reason": "production trust-graph linkage gate rejected the graph"
+        },
+        "validator-01": {
+          "outcome": "halt",
+          "reason": "production trust-graph linkage gate rejected the graph"
+        },
+        "validator-02": {
+          "outcome": "halt",
+          "reason": "production trust-graph linkage gate rejected the graph"
+        },
+        "validator-03": {
+          "outcome": "halt",
+          "reason": "production trust-graph linkage gate rejected the graph"
+        },
+        "validator-04": {
+          "outcome": "halt",
+          "reason": "production trust-graph linkage gate rejected the graph"
+        },
+        "validator-05": {
+          "outcome": "halt",
+          "reason": "production trust-graph linkage gate rejected the graph"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "halt",
+          "reason": "at least one responsive correct-node pair is not fully linked"
+        },
+        "validator-01": {
+          "outcome": "halt",
+          "reason": "at least one responsive correct-node pair is not fully linked"
+        },
+        "validator-02": {
+          "outcome": "halt",
+          "reason": "at least one responsive correct-node pair is not fully linked"
+        },
+        "validator-03": {
+          "outcome": "halt",
+          "reason": "at least one responsive correct-node pair is not fully linked"
+        },
+        "validator-04": {
+          "outcome": "halt",
+          "reason": "at least one responsive correct-node pair is not fully linked"
+        },
+        "validator-05": {
+          "outcome": "halt",
+          "reason": "at least one responsive correct-node pair is not fully linked"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": false,
+        "duplicated": false,
+        "reordered": false,
+        "stale_replay": false,
+        "recover_unavailable": false
+      },
+      "transition": {
+        "kind": "none",
+        "removed": [],
+        "added": [],
+        "rotated": []
+      },
+      "candidate_runs": [],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    },
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "six-unlinked-common-proposal",
+      "fault_class": "insufficient_linkage",
+      "classification": "incompatible",
+      "validator_count": 6,
+      "correct_node_count": 6,
+      "trust_graph_root": "3f45a3b1fa9084ad4fd6234ade71961a09e6f88210dd855ccfaf300308307102faab3d78e2e82686d08882b6dab05116",
+      "linkage_report_hash": "177525acb9289ebfd5fa7cf8242bbf4028196cf98f44126db5b8df95d3a07b1a95fdcacdbff82625ba9ec6243ace70a2",
+      "unsafe_pairs": [
+        {
+          "left": "validator-00",
+          "right": "validator-03",
+          "reason": "no shared essential subset satisfies linkage"
+        },
+        {
+          "left": "validator-00",
+          "right": "validator-04",
+          "reason": "no shared essential subset satisfies linkage"
+        },
+        {
+          "left": "validator-00",
+          "right": "validator-05",
+          "reason": "no shared essential subset satisfies linkage"
+        },
+        {
+          "left": "validator-01",
+          "right": "validator-03",
+          "reason": "no shared essential subset satisfies linkage"
+        },
+        {
+          "left": "validator-01",
+          "right": "validator-04",
+          "reason": "no shared essential subset satisfies linkage"
+        },
+        {
+          "left": "validator-01",
+          "right": "validator-05",
+          "reason": "no shared essential subset satisfies linkage"
+        },
+        {
+          "left": "validator-02",
+          "right": "validator-03",
+          "reason": "no shared essential subset satisfies linkage"
+        },
+        {
+          "left": "validator-02",
+          "right": "validator-04",
+          "reason": "no shared essential subset satisfies linkage"
+        },
+        {
+          "left": "validator-02",
+          "right": "validator-05",
+          "reason": "no shared essential subset satisfies linkage"
+        }
+      ],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05"
+      ],
+      "graph_safe": false,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "halt",
+          "reason": "production trust-graph linkage gate rejected the graph"
+        },
+        "validator-01": {
+          "outcome": "halt",
+          "reason": "production trust-graph linkage gate rejected the graph"
+        },
+        "validator-02": {
+          "outcome": "halt",
+          "reason": "production trust-graph linkage gate rejected the graph"
+        },
+        "validator-03": {
+          "outcome": "halt",
+          "reason": "production trust-graph linkage gate rejected the graph"
+        },
+        "validator-04": {
+          "outcome": "halt",
+          "reason": "production trust-graph linkage gate rejected the graph"
+        },
+        "validator-05": {
+          "outcome": "halt",
+          "reason": "production trust-graph linkage gate rejected the graph"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "halt",
+          "reason": "at least one responsive correct-node pair is not fully linked"
+        },
+        "validator-01": {
+          "outcome": "halt",
+          "reason": "at least one responsive correct-node pair is not fully linked"
+        },
+        "validator-02": {
+          "outcome": "halt",
+          "reason": "at least one responsive correct-node pair is not fully linked"
+        },
+        "validator-03": {
+          "outcome": "halt",
+          "reason": "at least one responsive correct-node pair is not fully linked"
+        },
+        "validator-04": {
+          "outcome": "halt",
+          "reason": "at least one responsive correct-node pair is not fully linked"
+        },
+        "validator-05": {
+          "outcome": "halt",
+          "reason": "at least one responsive correct-node pair is not fully linked"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": false,
+        "duplicated": false,
+        "reordered": false,
+        "stale_replay": false,
+        "recover_unavailable": false
+      },
+      "transition": {
+        "kind": "none",
+        "removed": [],
+        "added": [],
+        "rotated": []
+      },
+      "candidate_runs": [],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    },
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "twenty-overlap-090-compatible",
+      "fault_class": "overlap_090",
+      "classification": "compatible",
+      "validator_count": 20,
+      "correct_node_count": 20,
+      "trust_graph_root": "6f7116e527a278fa2451d9c5419538505adfcd81d17ffcda1430862e721d4b054cc46449e74c2a5936f8a50ce58dda48",
+      "linkage_report_hash": "04ad99ab68b4d1d8398fecb5a1812a72cceaecdbdffd28c34f23fca5810d36d0941a8420b8269e66388a627ac7675600",
+      "unsafe_pairs": [],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05",
+        "validator-06",
+        "validator-07",
+        "validator-08",
+        "validator-09",
+        "validator-10",
+        "validator-11",
+        "validator-12",
+        "validator-13",
+        "validator-14",
+        "validator-15",
+        "validator-16",
+        "validator-17",
+        "validator-18",
+        "validator-19"
+      ],
+      "graph_safe": true,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-06": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-07": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-08": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-09": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-10": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-11": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-12": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-13": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-14": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-15": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-16": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-17": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-18": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-19": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-06": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-07": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-08": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-09": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-10": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-11": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-12": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-13": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-14": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-15": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-16": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-17": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-18": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-19": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": false,
+        "duplicated": false,
+        "reordered": false,
+        "stale_replay": false,
+        "recover_unavailable": false
+      },
+      "transition": {
+        "kind": "none",
+        "removed": [],
+        "added": [],
+        "rotated": []
+      },
+      "candidate_runs": [
+        {
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "decided": true,
+          "decision_ids": [
+            "02f7b7f32dae1965b949ec109f4ab5204f01e044e3a77da4ac257ec25434c06fed4fa12acebaf4091c11cbc63267413c"
+          ],
+          "certificate_signer_counts": [
+            20
+          ],
+          "replay_equal": true,
+          "duplicate_rejected": true,
+          "authority_disabled": true,
+          "error": null,
+          "wire_bytes": 3983024,
+          "elapsed_micros": 8984996
+        }
+      ],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    },
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "twenty-overlap-090-support-boundary",
+      "fault_class": "overlap_090_boundary",
+      "classification": "compatible",
+      "validator_count": 20,
+      "correct_node_count": 20,
+      "trust_graph_root": "aa37af341d35f4c004dd3217aacc8975f331c2af8953c5d5433b08f7ca9d3ad7e9a5ae3e914c6522dce671f36b0415d4",
+      "linkage_report_hash": "7f20ac57cfb02fe63d790442b2b917f4174f9df0ee7e89f55674e578d894a6f251920eb9230a9fea843f44a5d389e58b",
+      "unsafe_pairs": [],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05",
+        "validator-06",
+        "validator-07",
+        "validator-08",
+        "validator-09",
+        "validator-10",
+        "validator-11",
+        "validator-12",
+        "validator-13",
+        "validator-14",
+        "validator-15",
+        "validator-16",
+        "validator-17",
+        "validator-18",
+        "validator-19"
+      ],
+      "graph_safe": true,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-06": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-07": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-08": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-09": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-10": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-11": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-12": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-13": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-14": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-15": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-16": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-17": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-18": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-19": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-06": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-07": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-08": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-09": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-10": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-11": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-12": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-13": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-14": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-15": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-16": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-17": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-18": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-19": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": false,
+        "duplicated": false,
+        "reordered": false,
+        "stale_replay": false,
+        "recover_unavailable": false
+      },
+      "transition": {
+        "kind": "none",
+        "removed": [],
+        "added": [],
+        "rotated": []
+      },
+      "candidate_runs": [
+        {
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "decided": true,
+          "decision_ids": [
+            "bbe72f9b9fa5052fb970acae51d1af6fc52da44849ea33bd9ac18c015d07ead7aa41fe206e3950990a8ce6d8f0837b8d"
+          ],
+          "certificate_signer_counts": [
+            18
+          ],
+          "replay_equal": true,
+          "duplicate_rejected": true,
+          "authority_disabled": true,
+          "error": null,
+          "wire_bytes": 3592976,
+          "elapsed_micros": 8177493
+        }
+      ],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    },
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "twenty-overlap-090-below-boundary",
+      "fault_class": "overlap_090_boundary",
+      "classification": "incompatible",
+      "validator_count": 20,
+      "correct_node_count": 20,
+      "trust_graph_root": "675be58ff8d8e79417b2b257c98ffe673f47ac9c4271df9c24d3365ecde826e1e1b05d26031c0dae91f623d7a74c9e1d",
+      "linkage_report_hash": "3df76954d95c743fda0e0eaf80651d534278ddf158eeab1c955ad8a5dd6920e1a9117d2d817faed601e4c6422b89509f",
+      "unsafe_pairs": [],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05",
+        "validator-06",
+        "validator-07",
+        "validator-08",
+        "validator-09",
+        "validator-10",
+        "validator-11",
+        "validator-12",
+        "validator-13",
+        "validator-14",
+        "validator-15",
+        "validator-16",
+        "validator-17",
+        "validator-18",
+        "validator-19"
+      ],
+      "graph_safe": true,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-01": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-02": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-03": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-04": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-05": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-06": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-07": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-08": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-09": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-10": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-11": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-12": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-13": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-14": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-15": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-16": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-17": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-18": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        },
+        "validator-19": {
+          "outcome": "halt",
+          "reason": "no proposal reached production Cobalt strong support"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-01": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-02": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-03": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-04": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-05": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-06": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-07": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-08": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-09": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-10": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-11": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-12": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-13": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-14": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-15": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-16": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-17": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-18": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        },
+        "validator-19": {
+          "outcome": "halt",
+          "reason": "there is not exactly one root with strong support at every responsive correct node"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": false,
+        "duplicated": false,
+        "reordered": false,
+        "stale_replay": false,
+        "recover_unavailable": false
+      },
+      "transition": {
+        "kind": "none",
+        "removed": [],
+        "added": [],
+        "rotated": []
+      },
+      "candidate_runs": [
+        {
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "decided": false,
+          "decision_ids": [],
+          "certificate_signer_counts": [],
+          "replay_equal": true,
+          "duplicate_rejected": true,
+          "authority_disabled": true,
+          "error": "protocol contributions lack RBC strong support for trust view validator-00",
+          "wire_bytes": 0,
+          "elapsed_micros": 854793
+        }
+      ],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    },
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "six-future-view-drift",
+      "fault_class": "trust_view_transition",
+      "classification": "compatible",
+      "validator_count": 6,
+      "correct_node_count": 6,
+      "trust_graph_root": "1ebf2968675db3abbed59e0709f0ca95acfcd789364c0805cb2045d07336ac1334b5550317697d8069d28eafdc8d7871",
+      "linkage_report_hash": "63721e2f29823275b85239327b8d28982fa7b836815580c1ccde9481389718cd3d90ab08ce0dc97be5c4d9880073e779",
+      "unsafe_pairs": [],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05"
+      ],
+      "graph_safe": true,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": false,
+        "duplicated": false,
+        "reordered": false,
+        "stale_replay": false,
+        "recover_unavailable": false
+      },
+      "transition": {
+        "kind": "view_drift",
+        "removed": [],
+        "added": [],
+        "rotated": []
+      },
+      "candidate_runs": [
+        {
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "decided": true,
+          "decision_ids": [
+            "41cd4cc1091bfdceb6ccbe17dd93bfcd653b061ae73cc487ea67e9ab2b6a17507d0bdd6e5e659b26b7136797f2a7b886"
+          ],
+          "certificate_signer_counts": [
+            6
+          ],
+          "replay_equal": true,
+          "duplicate_rejected": true,
+          "authority_disabled": true,
+          "error": null,
+          "wire_bytes": 589538,
+          "elapsed_micros": 597565
+        }
+      ],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    },
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "six-validator-add-remove",
+      "fault_class": "validator_add_remove",
+      "classification": "compatible",
+      "validator_count": 6,
+      "correct_node_count": 6,
+      "trust_graph_root": "6a40b207c9566dbbd9d1c2e02cb454f040b668220efe637854fac9e64b0e472ef9d442e3fe13da12f360bc7edf0564de",
+      "linkage_report_hash": "600cab89cc7b89c3c757e8f17c1a419751000b19089de3bc8389c34343e1fc35b169fa33e1869e2ecd1f5b6b3c694793",
+      "unsafe_pairs": [],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05"
+      ],
+      "graph_safe": true,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": false,
+        "duplicated": false,
+        "reordered": false,
+        "stale_replay": false,
+        "recover_unavailable": false
+      },
+      "transition": {
+        "kind": "membership",
+        "removed": [
+          "validator-05"
+        ],
+        "added": [
+          "candidate-06"
+        ],
+        "rotated": []
+      },
+      "candidate_runs": [
+        {
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "decided": true,
+          "decision_ids": [
+            "9aa7afda84df594fb8816005f5358c95271da2ad22c703882526475899949767de0e262711ba7cd882271fabbf059a83"
+          ],
+          "certificate_signer_counts": [
+            6
+          ],
+          "replay_equal": true,
+          "duplicate_rejected": true,
+          "authority_disabled": true,
+          "error": null,
+          "wire_bytes": 589823,
+          "elapsed_micros": 546312
+        }
+      ],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    },
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "six-key-rotation",
+      "fault_class": "key_rotation",
+      "classification": "compatible",
+      "validator_count": 6,
+      "correct_node_count": 6,
+      "trust_graph_root": "aa730ae8734fffee5f3bcbff4e558705e1787c4b8756e0c1da6343a0bb469a31d8c4dc097a6aa0aef22eeda82a235fde",
+      "linkage_report_hash": "088362495eed76a315a05104e051000c93146586682ff4884d0a8daee03c5e276fba50e679b14dfc3329efab35741094",
+      "unsafe_pairs": [],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05"
+      ],
+      "graph_safe": true,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": false,
+        "duplicated": false,
+        "reordered": false,
+        "stale_replay": false,
+        "recover_unavailable": false
+      },
+      "transition": {
+        "kind": "key_rotation",
+        "removed": [],
+        "added": [],
+        "rotated": [
+          "validator-05"
+        ]
+      },
+      "candidate_runs": [
+        {
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "decided": true,
+          "decision_ids": [
+            "265e8459b142854a4b5977002b6e682920794d9d1ec57fbc8094a65a23ee0c09c64b63f1066112934b7c202c85772e92"
+          ],
+          "certificate_signer_counts": [
+            6
+          ],
+          "replay_equal": true,
+          "duplicate_rejected": true,
+          "authority_disabled": true,
+          "error": null,
+          "wire_bytes": 589063,
+          "elapsed_micros": 654582
+        }
+      ],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    },
+    {
+      "schema": "postfiat-cobalt-decisive-case-v1",
+      "case_id": "six-missed-history-recovery",
+      "fault_class": "history_recovery",
+      "classification": "compatible",
+      "validator_count": 6,
+      "correct_node_count": 6,
+      "trust_graph_root": "f71c43b06e61acf256f6d8c99db82e92e14fe03de4de876a5654b7bce558ae0c660d628c33608897ee65d58d41433709",
+      "linkage_report_hash": "cdaefd9738df2880ff07626365c799e528418565f5dc8bb1f44e317815b133eab79633eb6a16f0d84f2d53bc3d21525c",
+      "unsafe_pairs": [],
+      "strongly_connected_validators": [
+        "validator-00",
+        "validator-01",
+        "validator-02",
+        "validator-03",
+        "validator-04",
+        "validator-05"
+      ],
+      "graph_safe": true,
+      "actual_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "signed production Cobalt transcript committed"
+        }
+      },
+      "expected_nodes": {
+        "validator-00": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-01": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-02": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-03": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-04": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        },
+        "validator-05": {
+          "outcome": "decide",
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "reason": "strongly connected closure and one common strongly supported root"
+        }
+      },
+      "conflicting_roots": 0,
+      "expected_conflicting_roots": 0,
+      "event_schedule": {
+        "delayed": false,
+        "duplicated": false,
+        "reordered": false,
+        "stale_replay": false,
+        "recover_unavailable": true
+      },
+      "transition": {
+        "kind": "none",
+        "removed": [],
+        "added": [],
+        "rotated": []
+      },
+      "candidate_runs": [
+        {
+          "registry_root": "9014fe813600b84a90ca8a6af387866235e6f33d59db36505c4024c4f403f1d7379d3f1454cbf06b7554e6aa25e6da8b",
+          "decided": true,
+          "decision_ids": [
+            "a0d3c6b5035070412ee1ee77f60e6b35ce101e06993ee4cef5d5a7a8d4ce9f4645fb6f110c0957122550dbf5431f7c55"
+          ],
+          "certificate_signer_counts": [
+            6
+          ],
+          "replay_equal": true,
+          "duplicate_rejected": true,
+          "authority_disabled": true,
+          "error": null,
+          "wire_bytes": 588692,
+          "elapsed_micros": 538452
+        }
+      ],
+      "authority_mode": "shadow_only",
+      "expectation_passed": true
+    }
+  ],
+  "status": "passed"
+}
