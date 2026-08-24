@@ -69,17 +69,13 @@ def run(
 
 def find_ports() -> tuple[int, int]:
     for base in range(31_000, 54_000, 32):
-        rpc_base = base + 10_000
         listeners: list[socket.socket] = []
         try:
-            for port in [
-                *(base + index for index in range(VALIDATORS)),
-                *(rpc_base + index for index in range(VALIDATORS)),
-            ]:
+            for port in range(base, base + (VALIDATORS * 2)):
                 listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 listener.bind(("127.0.0.1", port))
                 listeners.append(listener)
-            return base, rpc_base
+            return base, base + 1
         except OSError:
             pass
         finally:
@@ -437,6 +433,9 @@ def main() -> int:
             validator_logs.append((stdout_handle, stderr_handle))
             env = os.environ.copy()
             env["POSTFIAT_TRANSPORT_VALIDATOR_READY_FILE"] = str(ready)
+            env["POSTFIAT_PREWARM_SHIELDED_VERIFIER"] = "1"
+            env["POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER"] = "1"
+            env["POSTFIAT_PREWARM_ASSET_ORCHARD_PRIVATE_EGRESS_VERIFIER"] = "1"
             process = subprocess.Popen(
                 [
                     str(node_bin),
