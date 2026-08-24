@@ -1646,6 +1646,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "postfiat-cobalt-decision-oracle"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "postfiat-consensus-cobalt"
 version = "0.1.0"
 dependencies = [

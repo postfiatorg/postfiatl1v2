@@ -27,6 +27,10 @@ name = "postfiat-cobalt-benchmark"
 path = "src/bin/postfiat_cobalt_benchmark.rs"
 
 [[bin]]
+name = "postfiat-cobalt-decisive-benchmark"
+path = "src/bin/postfiat_cobalt_decisive_benchmark.rs"
+
+[[bin]]
 name = "postfiat-cobalt-handoff-rehearsal"
 path = "src/bin/postfiat_cobalt_handoff_rehearsal.rs"
 

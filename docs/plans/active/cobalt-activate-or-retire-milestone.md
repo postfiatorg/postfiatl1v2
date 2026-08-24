@@ -42,15 +42,15 @@ Each segment is one substantial personal task, normally requested after the prev
 
 ### 1. Independent oracle and decisive corpus
 
-Task Node: `[ ] request and accept`
+Task Node: `[ ] task_fd8342b57a6364f93953934c776080fc — implementation complete; verification pending`
 
-- [ ] Write a versioned mathematical decision contract that defines compatible and incompatible trust configurations without importing or calling production Cobalt code.
-- [ ] Implement the oracle in a separate benchmark surface with hand-worked boundary fixtures and an explicit prohibition on shared decision logic.
-- [ ] Replace every decisive `model_scope: characterize` case in [`generate_scenarios.py`](../../../benchmarks/cobalt-rippled-liveness/generate_scenarios.py) with frozen per-node predictions.
-- [ ] Add positive non-identical essential-subset cases, immediate linkage-boundary cases, the 90%-overlap case, divergent registry roots, outage, equivocation, message faults, membership changes, rotation, and missed-history recovery.
-- [ ] Make the Cobalt adapter in [`postfiat_cobalt_benchmark.rs`](../../../crates/node/src/bin/postfiat_cobalt_benchmark.rs) report every correct node’s decision, root, certificate, timing, and rejection reason.
-- [ ] Make the RippleD adapter in [`MatchedLivenessBenchmark_test.cpp`](../../../benchmarks/cobalt-rippled-liveness/rippled/MatchedLivenessBenchmark_test.cpp) evaluate the same proposed registry decision and expose each node’s local-UNL admission result. Keep native ledger-consensus results separately labeled.
-- [ ] Freeze the oracle, scenarios, source pins, adapter hashes, and expected per-node results before execution.
+- [x] Write a versioned mathematical decision contract that defines compatible and incompatible trust configurations without importing or calling production Cobalt code. Evidence: [`oracle-contract.md`](../../../benchmarks/cobalt-activate-or-retire/oracle-contract.md).
+- [x] Implement the oracle in a separate benchmark crate with hand-worked boundary fixtures and no production protocol dependency. Code: [`cobalt_decision_oracle`](../../../crates/cobalt_decision_oracle).
+- [x] Replace permissive decisive expectations with a new frozen manifest containing a per-node prediction for every correct validator. The historical 80-case packet remains unchanged; the decisive generator is [`generate_inputs.py`](../../../benchmarks/cobalt-activate-or-retire/generate_inputs.py).
+- [x] Cover positive non-identical essential subsets, linkage and support boundaries, 90% overlap, divergent roots, outages, equivocation, message schedules, membership changes, rotation, and missed-history recovery.
+- [x] Add a production Cobalt adapter that reports every correct node’s decision and root plus certificate, timing, replay, authority, and rejection evidence. Code: [`postfiat_cobalt_decisive_benchmark.rs`](../../../crates/node/src/bin/postfiat_cobalt_decisive_benchmark.rs).
+- [x] Add a pinned RippleD 3.1.3 adapter for the same proposed registry decision and each node’s local-UNL result, with native CSF ledger consensus separately labeled. Code: [`DecisiveGovernanceBenchmark_test.cpp`](../../../benchmarks/cobalt-activate-or-retire/rippled/DecisiveGovernanceBenchmark_test.cpp).
+- [x] Freeze the oracle, 18 scenarios, source pins, both adapter hashes, and expected per-node results before execution. Manifest: [`scenario-manifest.json`](../../../benchmarks/cobalt-activate-or-retire/scenario-manifest.json), canonical ID `78fc3f92d460f45a4941d40ef705af6c761e3782155a5b599dbd78c90396bde3`.
 
 ### 2. Decisive run and bounded remediation
 
