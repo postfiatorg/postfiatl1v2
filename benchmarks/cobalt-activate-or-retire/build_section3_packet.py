@@ -116,7 +116,12 @@ def main() -> int:
     cobalt_runs = consensus.get("cobalt_runs", [])
     consensus_evidence = consensus.get("evidence", {})
     consensus_binaries = consensus.get("binaries", {})
-    benchmark_source_commit = consensus.get("source_commit")
+    benchmark_source_ref = consensus.get("source_commit")
+    benchmark_source_commit = (
+        git_output("rev-parse", "--verify", f"{benchmark_source_ref}^{{commit}}")
+        if isinstance(benchmark_source_ref, str)
+        else ""
+    )
     hash_values = [
         *consensus_evidence.values(),
         *consensus_binaries.values(),
@@ -298,6 +303,7 @@ def main() -> int:
     source = {
         "schema": "postfiat-cobalt-section3-source-manifest-v1",
         "source_commit": source_commit,
+        "benchmark_source_ref": benchmark_source_ref,
         "benchmark_source_commit": benchmark_source_commit,
         "task_id": TASK_ID,
         "simulation_report_sha256": digest(args.simulation_report.read_bytes()),
@@ -318,6 +324,7 @@ def main() -> int:
         "schema": "postfiat-consensus-v2-cobalt-finality-receipt-v1",
         "status": "PASS",
         "scope": "six isolated simulated validator domains; no external operators",
+        "benchmark_source_ref": benchmark_source_ref,
         "benchmark_source_commit": benchmark_source_commit,
         "source_aggregate_sha256": digest(
             args.consensus_integration_report.read_bytes()

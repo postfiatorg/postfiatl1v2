@@ -93,6 +93,7 @@ def verify(packet: Path) -> dict[str, Any]:
     report_checks = report.get("checks", {})
     source_commit = source.get("source_commit")
     source_files = source.get("files", {})
+    benchmark_source_ref = source.get("benchmark_source_ref")
     benchmark_source_commit = source.get("benchmark_source_commit")
     benchmark_files = source.get("benchmark_files", {})
     source_hashes_ok = (
@@ -151,6 +152,9 @@ def verify(packet: Path) -> dict[str, Any]:
             source_hashes_ok
             and benchmark_hashes_ok
             and summary.get("source_commit") == source_commit
+            and isinstance(benchmark_source_ref, str)
+            and benchmark_source_commit.startswith(benchmark_source_ref)
+            and finality.get("benchmark_source_ref") == benchmark_source_ref
             and finality.get("benchmark_source_commit") == benchmark_source_commit
         ),
         "report_hash": source.get("simulation_report_sha256")
