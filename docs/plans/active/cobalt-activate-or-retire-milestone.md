@@ -2,9 +2,11 @@
 
 ## Plain-English outcome
 
-This milestone fixes Cobalt and activates it as the live authority for validator-registry and trust-graph changes on the controlled testnet. Benchmark failures are P0 implementation work, not grounds to abandon the feature. Shadow-only operation and open-ended evaluation are not completion states.
+This milestone fixes Cobalt, proves its liveness capability against the failure demonstrated in the original Cobalt evaluation, and activates it as the live authority for validator-registry and trust-graph changes on the controlled testnet. Benchmark failures are P0 implementation work, not grounds to abandon the feature. Shadow-only operation and open-ended evaluation are not completion states.
 
 Cobalt does not replace Consensus v2. It controls validator-trust governance only.
+
+This is a protocol-capability milestone, not an operator-recruitment milestone. "Independent validators" in this plan means isolated simulated validator/operator domains with distinct identities, keys, trust views, message schedules, failures, durable state, and recovery paths. It does not require third-party operators, separate provider accounts, or external key custodians. Simulation results must be labeled as simulation evidence and must not be presented as proof that the controlled testnet is operationally decentralized.
 
 - **Status:** Active
 - **Specification:** [Cobalt Activation Research Specification](../../governance/cobalt-activate-or-retire-research-spec.md)
@@ -20,14 +22,12 @@ The matched RippleD 3.1.3 validator-governance adapter admits two conflicting re
 
 The live admission gap is also fixed: a five-of-six signature set no longer qualifies by itself as a Cobalt decision. Cobalt authority now requires a validator-key-bound RBC -> ABBA -> MVBA -> DABC certificate over the exact registry update, current chain domain, registry root, and trust graph. The authority certificate stores shared DABC checks once, deterministically retains the smallest signer set that has strong support in every trust view, requires that signer set at every protocol stage, uses bounded canonical compression, and is capped at the 1 MiB consensus-batch limit. A 20-validator regression produces a 938,032-byte certificate with the required 14 signers. The exact live release produces a 329,883-byte canonical certified update in the six-validator disposable-clone rehearsal and passes all 15 verifier gates without changing live state.
 
-The operator-admission boundary now verifies the signed evidence files, not only hashes named in manifests. Provider-account, host-control, and key-custody attestations use the same ML-DSA master signer and onboarding challenge as the custody-bound v2 manifest. Missing, tampered, cross-operator-shared, or mismatched evidence is rejected. The refreshed operator release is source `3b01c2ad57fb0ce1c29e12edc88aece5b22548ae`, binary SHA-256 `e036033d437d85c4f60fc8e6689a771fdda01dd2ce88456571e6c9092faf4caf`.
-
-The pinned binary and onboarding packet are published in GitHub release `cobalt-operator-v2-20260824`; a clean download verifies against its checksum manifest. Operator recruitment is tracked in GitHub issue `#36`. The full locked workspace test run passed after the receipt-boundary change, including 292 node-library tests, 115 node-binary tests, the long AssetOrchard proof cases, all remaining crates, and doc tests, with zero failures.
+The operator-admission boundary and published onboarding packet remain usable for a later real decentralization program, but they are not activation gates for this controlled-testnet milestone. The full locked workspace test run passed after the receipt-boundary change, including 292 node-library tests, 115 node-binary tests, the long AssetOrchard proof cases, all remaining crates, and doc tests, with zero failures.
 
 The remaining work is operational:
 
-- the six current live machines still share one Post Fiat operator and provider;
-- independent live operators have not completed the required transition and fault exercises; and
+- run the independent-validator simulation against the production Cobalt decision and recovery code;
+- prove the original liveness failure is corrected across isolated identities, trust views, outages, message schedules, and durable recovery; and
 - Foundation authority remains active until the governed future-height Cobalt cutover.
 
 ## Completed foundation
@@ -72,24 +72,28 @@ Task Node: `[x] task_690f0c63d1c0d175a4e47d947825402b — rewarded 2026-08-24 (2
 - [x] Fix the owning non-uniform support boundary, add regression coverage, and rerun the unchanged oracle and corpus. Code commit: `01822ecc53ad1cdab50e6c55536fcc7b81aba02a`.
 - [x] Complete the corpus with zero per-node mismatches, zero Cobalt conflicts, resolved 90% support boundaries, deterministic replay, and the RippleD distinction. Evidence: [`section2-packet`](../../../benchmarks/cobalt-activate-or-retire/section2-packet), `SHA256SUMS.txt` root `40bc86c9416a1b468f5625a2ff83724c9268f9d49c41007e9b0c4bc70c43c1e1`.
 
-### 3. Independent live-validator proof
+### 3. Independent-validator liveness simulation
 
-- Operator establishment task: `[ ] task_46d1707cb9e11f04648ea54a7163fbee — accepted`
-- Live transition/fault task: `[ ] request only after the independent topology verifier passes`
+- Superseded operator-establishment task: `[ ] task_46d1707cb9e11f04648ea54a7163fbee — accepted under the old real-operator scope; do not execute or use as a milestone gate`
+- Simulation task: `[ ] request a corrected substantial task covering the complete isolated-validator liveness simulation`
 
-- [x] Refresh the provider and live-service inventory: all six validators and sidecars are active with zero restarts and one common chain/registry/trust-graph state, but remain under the same Vultr account and Post Fiat administrator.
+- [x] Refresh the live-service inventory: all six validators and sidecars are active with zero restarts and one common chain/registry/trust-graph state. Their shared Vultr account and Post Fiat administration are disclosed but do not block this protocol-capability test.
 - [x] Give each operator a redaction-safe local key-generation command; private ML-DSA master and validator keys stay in separate mode-0600 files while stdout contains public material only. Code: [`operator-onboarding-keygen`](../../../crates/node/src/main_parts/cli_dispatch_parts/group_04.rs).
 - [x] Freeze the six-slot self-custody onboarding contract, exact release hash, unique challenges, current trust views, signed-receipt contract, and static verifier. Packet: [`benchmarks/cobalt-independent-operators`](../../../benchmarks/cobalt-independent-operators), `SHA256SUMS.txt` root `c8e6e40d98d40ab72dfbc11c665f092bd0c34a0035d9cc0fdb1c5ab505860786`.
 - [x] Publish the pinned binary, checksum manifest, and onboarding packet as GitHub release `cobalt-operator-v2-20260824`, verify clean downloads, and open operator recruitment issue `#36`.
 - [x] Bind each operator's custody-bound v2 manifest to the Cobalt trust view, Section 2 packet root, source commit, release-binary SHA-256, onboarding challenge, infrastructure-account fingerprint, host administrator, and ML-DSA custody evidence. Code: [`consensus_artifacts.rs`](../../../crates/node/src/consensus_artifacts.rs), [`operator-manifest-create`](../../../crates/node/src/main_parts/cli_dispatch_parts/group_04.rs).
 - [x] Add structured ML-DSA provider, host-control, and custody attestations; verify the actual files against their signed manifest bindings and reject missing, tampered, mismatched, or private-material-bearing receipts. Code: [`operator_attestations.rs`](../../../crates/node/src/operator_attestations.rs), commit `3b01c2ad57fb0ce1c29e12edc88aece5b22548ae`.
 - [x] Add an aggregate verifier that rejects mixed trust graphs, shared cross-operator control fingerprints, insufficient infrastructure domains, any operator that can reach quorum alone, and any operator withdrawal that can halt quorum. Code: [`verify_operator_independence`](../../../crates/node/src/governance.rs).
-- [ ] Establish at least three operationally independent operator groups with separate host administration and signing-key custody, across at least three infrastructure domains.
-- [ ] Pass the aggregate topology verifier. With the current six-validator/quorum-five topology this requires six one-validator operator groups; otherwise expand the validator set while preserving the no-single-operator-halt rule.
-- [ ] Deploy non-identical but formally compatible trust views.
-- [ ] Execute one validator addition, one removal, one ML-DSA key rotation, one compatible trust-view transition, one-validator outage, lagging-node catch-up, and one incompatible safe halt.
-- [ ] Prove Consensus v2 continues finalizing, p95 finality stays within 5% of the frozen same-fleet baseline, and no recovery mutates durable history by hand.
-- [ ] Collect signed, redaction-safe operator receipts. Geographic distribution under one operator is not independent operation.
+- [ ] Instantiate at least six isolated simulated validator/operator domains. Each must have a distinct validator identity, ML-DSA key material, durable state directory, local trust view, transport endpoint, message schedule, and fault-control channel. No simulated operator may control more than one validator in the six-validator/quorum-five case.
+- [ ] Generate non-identical but formally compatible trust views and pass the same production topology and certificate validation paths used by Cobalt. Do not bypass production decision logic with a simulation-only acceptance rule.
+- [ ] Execute one validator addition, one removal, one ML-DSA key rotation, one compatible trust-view transition, one-validator outage, lagging-validator proof-carrying catch-up, and one incompatible safe halt.
+- [ ] Reproduce the original Cobalt liveness-failure scenario, demonstrate the pre-fix outcome from the frozen evidence, and demonstrate progress under the repaired implementation without conflicting roots.
+- [ ] Run deterministic delay, loss, reorder, duplicate, stale-replay, equivocation, crash/restart, and partition/healing schedules independently against each simulated validator domain.
+- [ ] Compare the same proposed validator-governance decisions with the pinned RippleD 3.1.3 local-UNL adapter, keeping native RippleD ledger consensus separately labeled.
+- [ ] Prove Consensus v2 continues finalizing in the controlled integration run, p95 finality stays within 5% of the frozen same-fleet baseline, and no Cobalt recovery mutates durable history by hand.
+- [ ] Produce signed, redaction-safe simulation receipts and a verifier-backed packet that identifies every result as simulated-validator evidence. Do not claim real provider, administrator, custody, or geographic independence.
+
+The existing onboarding release and GitHub recruitment issue are optional inputs to a future real-operator program. They are not required to complete this milestone or activate Cobalt on the controlled testnet.
 
 ### 4. Live activation
 
@@ -97,6 +101,7 @@ Task Node: `[ ] request and accept after the activation gates pass`
 
 - [x] Make a real Cobalt protocol decision certificate mandatory at the consensus admission boundary; validator signatures alone are insufficient.
 - [x] Verify the authoritative handoff/update/rollback flow with all six current validator identities on disposable signer-state clones while proving the live fleet unchanged.
+- [ ] Pass the independent-validator liveness simulation and bind its manifest, production source hash, scenario results, and verifier output into the activation packet.
 - [ ] Verify a signed forward rollback on a disposable clone immediately before cutover.
 - [ ] Schedule and execute the future-height live controlled-testnet authority transition through [`cobalt_handoff.rs`](../../../crates/node/src/cobalt_handoff.rs).
 - [ ] Execute one real validator-registry change under active Cobalt authority.
@@ -110,8 +115,8 @@ Governed inside the terminal-operation task; do not request microtasks.
 
 - [ ] Make the Python CLI display the actual terminal decision, authority, registry root, trust-graph root, transition history, and verifier result.
 - [ ] Make the browser interface consume the same authenticated output and display the activation state without readiness language.
-- [ ] Produce one compact verifier-backed packet containing `activation-status.json`, frozen oracle and manifest, source pins, per-node results, KPI summaries, 90% trace, signed live receipts, finality/resource metrics, authority/update/rollback records, CLI/UI output, and `SHA256SUMS.txt`.
-- [ ] Publish a concise first-page explanation of what Cobalt controls, the unique benefit tested, compatible/incompatible results, RippleD comparison, independent-validator result, and the live activation result.
+- [ ] Produce one compact verifier-backed packet containing `activation-status.json`, frozen oracle and manifest, source pins, per-node results, KPI summaries, 90% trace, signed simulation receipts, controlled-testnet cutover receipts, finality/resource metrics, authority/update/rollback records, CLI/UI output, and `SHA256SUMS.txt`.
+- [ ] Publish a concise first-page explanation of what Cobalt controls, the unique benefit tested, compatible/incompatible results, RippleD comparison, simulated-independent-validator result, and the controlled-testnet activation result. State plainly that the result proves protocol capability, not real operator decentralization.
 - [ ] Refresh [`README.md`](../../../README.md), [`STATUS.md`](../../../STATUS.md), architecture/governance docs, CLI help, and operator instructions to match the live result.
 
 ## Activation completion gate
@@ -124,7 +129,7 @@ Governed inside the terminal-operation task; do not request microtasks.
 - [x] Byte-identical decision-critical replay.
 - [x] A fair, reproducible material safety distinction from RippleD local-UNL admission.
 - [x] Cobalt-authorized registry admission requires and verifies the actual signed protocol decision over the exact update.
-- [ ] Independent operators complete every live exercise.
+- [ ] The isolated independent-validator simulation completes every liveness, fault, transition, recovery, determinism, and RippleD-comparison exercise without conflicting Cobalt roots.
 - [ ] Consensus v2 stays live and within the 5% p95 finality budget.
 - [ ] Live future-height handoff, real Cobalt-authorized registry change, CLI/UI readback, and forward rollback readiness all pass.
 
