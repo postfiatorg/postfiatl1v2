@@ -1,0 +1,33 @@
+{
+  "clone_manifest_sha_input": "/home/postfiatchad/repos/postfiatl1v2/benchmarks/cobalt-handoff-rehearsal/packet-authoritative-v5/clone-manifest.json",
+  "governance_commitment_before": "9e5054e4e3aa24570ac79d88443217e197be69aba2302986e4c6d1cdf576869bcb10ea29a5765df601f8b3f5c60f66ef",
+  "schema": "postfiat-cobalt-handoff-unsigned-activation-v1",
+  "transition": {
+    "activation_height": 1015,
+    "amendment_sequence": 1,
+    "approval_quorum": 5,
+    "approvals": [],
+    "authority_scope": "validator_trust_evolution_v1",
+    "chain_id": "postfiat-wan-devnet-2",
+    "cobalt_lock_hash": "b30f041a29efad95e44cb5c30db2f34b1490ecc5e91dd8cee067a4933ae2fe816bcdd44969ee49b3271ce58a1771bdc8",
+    "cobalt_protocol_version": 2,
+    "cobalt_registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+    "from_authority_mode": 0,
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "old_registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+    "previous_transition_id": null,
+    "schema": "postfiat.cobalt_governance_authority_transition.v1",
+    "to_authority_mode": 1,
+    "transition_id": "81eaeb1ad0b426f5f34fe6990b6028f524bac2f7d2549d14f0382f80906f838f1bfbd6dc2c5abf3045a1e2b17cf11be6",
+    "transition_kind": "activate_cobalt",
+    "trust_graph_root": "c872bf8a9628cb3b27f2c0826084beb540c645d0c9d06107643358a4df078fa919e88ba2aa6b376a904eb79d28d69e77",
+    "validators": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+    ]
+  }
+}

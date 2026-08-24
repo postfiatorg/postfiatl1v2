@@ -1,0 +1,11 @@
+{
+  "accepted": false,
+  "applied": false,
+  "authority_mode_after": 0,
+  "governance_commitment_after": "9e5054e4e3aa24570ac79d88443217e197be69aba2302986e4c6d1cdf576869bcb10ea29a5765df601f8b3f5c60f66ef",
+  "governance_commitment_before": "9e5054e4e3aa24570ac79d88443217e197be69aba2302986e4c6d1cdf576869bcb10ea29a5765df601f8b3f5c60f66ef",
+  "operation": "pre_activation_abort",
+  "schema": "postfiat-cobalt-handoff-rehearsal-result-v1",
+  "transition_id": "81eaeb1ad0b426f5f34fe6990b6028f524bac2f7d2549d14f0382f80906f838f1bfbd6dc2c5abf3045a1e2b17cf11be6",
+  "verified_before_abort": true
+}
