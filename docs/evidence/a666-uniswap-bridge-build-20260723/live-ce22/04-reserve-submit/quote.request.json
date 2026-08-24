@@ -1,9 +1,0 @@
-{
-  "id": "a666-zero-reserve-submit-quote",
-  "method": "asset_fee_quote",
-  "params": {
-    "operation_json": "{\"operation\":\"nav_reserve_submit\",\"issuer\":\"pffcb93d9f87a843a8aa34e1adf241f5d58143e81b\",\"submitter\":\"pfd0c86d9084915e1fefd22eab891806397d5a5937\",\"asset_id\":\"300bf48a63a94770b6e67817f88cd1abf77e7f592a061e15682d7fd9973260af4c2e631e32df3c2c402b7d2fe272a293\",\"epoch\":1,\"nav_per_unit\":1000000,\"circulating_supply\":0,\"verified_net_assets\":0,\"proof_profile\":\"f0318291c1251067c92f6360830acadf0a02f865f62c85af387dfb28bdff7edd555deadf9e253351f729d253ea76aae0\",\"source_root\":\"0f5a6ab62fc62e3afe95e2dcf634aad0c3bc10e5aa65cff0c82310a8221aee255bb3e91e913564182bf6580539349d89\",\"attestor_root\":\"84e70832058166f6f7178d04718a20125719751ad52b2a6f06172609862dfbfcedff567146e119ee9f1d5d74fda36ea9\",\"reserve_packet_hash\":\"b57dc2b7b39b2a1449bfc810f0a90d279ae2f5d3ce19652c9a966a89ede84d92fd0b5433a9d9a10e030654701a09ed70\",\"reserve_accounts\":[\"aave-arbitrum-one\",\"evm-wallet-mainnet-and-arbitrum\",\"hyperliquid-signed-snapshot-with-perp-equity\",\"solana-finalized-stake\",\"near-finalized-stake\",\"monero-fresh-reserve-proof\"]}",
-    "source": "pfd0c86d9084915e1fefd22eab891806397d5a5937"
-  },
-  "version": "postfiat-local-rpc-v1"
-}

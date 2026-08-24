@@ -1,4 +1,0 @@
-NVIDIA A100-SXM4-40GB, 40960 MiB
-2e6017599d95e09541446b8e3054f2bbf3644dae24996a7327f50d3989d77fae  /workspace/a666-acceptance/bin/eth-l1-mainnet-fast-lane-p0-cuda-optimized
-933af6743541dce228a8ed64d96d3a807c2d8633e1ae5534ec1ee0611eed8c98  /workspace/a666-acceptance/bin/pftl-uniswap-prover-cuda
-495e46273337ce4ff035177825a605cc389ad82c05ead11d4874e349ba22cc3a  /workspace/a666-acceptance/witness/deployed-program-004e44.elf

@@ -31,7 +31,6 @@ then map those claims to the local PFTL implementation.
 | [a651 Uniswap Pool](uniswap-pool.md) | Legacy Ethereum a651/USDC venue, pool id, launch configuration, and migration caveats. |
 | [Current Infrastructure](../business/navcoin-current-infra.md) | Native NAV settlement rail and end-to-end smoke behavior. |
 | [Python Example](../business/navcoin-python-example.md) | Minimal Python reserve-packet and operation-builder walkthrough. |
-| [Proper Private NAV Swap Plan](../plans/proper-private-nav-swap-plan.md) | Historical pfUSDC/a651 private-swap plan and still-relevant privacy-boundary analysis. |
 | [Archive Summary](../evidence/navcoin-archive-summary.md) | Inventory of archived legacy NAV/VAN applications and contract context. |
 
 ## Local implementation references
@@ -48,7 +47,6 @@ or specs rather than public docs pages.
 | `docs/specs/asset-orchard-swap-circuit-design-v2.md` | Production-candidate Asset-Orchard swap circuit design. |
 | `docs/status/otc-swaps-mvp-proven-2026-06-19.md` | Proven WAN devnet round-trip evidence record. |
 | `docs/status/shielded-layer-map.md` | Current-state shielded layer map for private NAV OTC. |
-| `docs/status/pfusdc-bridge-handoff-2026-06-19.md` | Vault-bridge implementation handoff and current command list. |
 | `docs/status/arbitrum-contracts-code-review-2026-06-19.md` | Internal review record for the bridge and venue contracts. |
 | `docs/runbooks/wan-devnet-full-live-end-to-end-run.md` | Operator flow for the full live WAN devnet round trip. |
 | `crates/ethereum-contracts/src/` | Solidity bridge, verifier, market-operation, hook, and mint-controller contracts. |

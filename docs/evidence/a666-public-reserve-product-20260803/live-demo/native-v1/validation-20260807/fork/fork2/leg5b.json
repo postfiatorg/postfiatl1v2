@@ -1,7 +1,0 @@
-{
-  "leg": "5b",
-  "status": "UNVALIDATED",
-  "verdict": "UNVALIDATED",
-  "executed": false,
-  "reason": "packet has no resolvable EVM calldata; withdrawal depends on the missing leg5a finalized receipt, burn report, withdrawal signatures, and live custody; local fork cannot safely construct it"
-}

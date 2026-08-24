@@ -1,8 +1,0 @@
-{
-  "leg":"5b",
-  "executed":false,
-  "status":"UNVALIDATED",
-  "verdict":"UNVALIDATED",
-  "reason":"leg5b burn-to-redeem and withdrawal commands contain fire-time receipt/signature/data-dir fields; no local fork calldata can be constructed without prior leg5a receipt and live custody",
-  "packet_amount":"PENDING-FIRE-TIME:leg5a-receipt-pfUSDC-payout-atoms"
-}

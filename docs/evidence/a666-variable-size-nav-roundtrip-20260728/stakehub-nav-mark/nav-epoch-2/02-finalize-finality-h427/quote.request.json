@@ -1,9 +1,0 @@
-{
-  "id": "a666-live-nav-e2-epoch-finalize-quote",
-  "method": "asset_fee_quote",
-  "params": {
-    "operation_json": "{\"asset_id\":\"521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b62d20e18555642bec32174498cbee5e2c\",\"epoch\":2,\"issuer\":\"pffcb93d9f87a843a8aa34e1adf241f5d58143e81b\",\"operation\":\"nav_epoch_finalize\",\"reserve_packet_hash\":\"60334589ab27d9a7d9ef3c02b8b5f345ce6e13792c48af14b02e2cf219b638be9b14be6a938d0e406865ae64276887e7\"}",
-    "source": "pffcb93d9f87a843a8aa34e1adf241f5d58143e81b"
-  },
-  "version": "postfiat-local-rpc-v1"
-}

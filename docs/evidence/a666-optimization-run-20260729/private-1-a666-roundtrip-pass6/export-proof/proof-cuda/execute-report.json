@@ -1,9 +1,0 @@
-{
-  "elapsed_ms": 0,
-  "host_execute_skipped": true,
-  "instruction_count": null,
-  "proof_kind": "receipt",
-  "public_values_bytes": 1120,
-  "schema": "postfiat-pftl-uniswap-execute-report-v1",
-  "witness": "/workspace/a666-acceptance/live/a666-opt-pass6-20260729/export/receipt-witness.json"
-}

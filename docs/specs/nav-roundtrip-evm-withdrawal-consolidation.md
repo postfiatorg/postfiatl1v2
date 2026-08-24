@@ -5,7 +5,7 @@ Date: 2026-06-21
 Audience: Ethereum contracts engineer, PFTL bridge operator, StakeHub operator
 Related:
 
-- `docs/runbooks/nav-roundtrip-speedup-plan.md`
+- Completed historical benchmark plans retained in Git history
 - `docs/status/arbitrum-contracts-code-review-2026-06-19.md`
 - `crates/ethereum-contracts/src/PFTLWithdrawalVerifier.sol`
 - `crates/ethereum-contracts/src/ERC20BridgeVault.sol`

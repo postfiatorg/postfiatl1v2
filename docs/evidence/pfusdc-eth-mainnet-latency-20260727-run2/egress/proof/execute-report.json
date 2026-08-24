@@ -1,9 +1,0 @@
-{
-  "cycle_tracker": {},
-  "elapsed_ms": 3326,
-  "instruction_count": 74565050,
-  "invocation_tracker": {},
-  "public_values_bytes": 1486,
-  "schema": "postfiat.pfusdc.egress_execute_report.v1",
-  "witness": "/workspace/live-latency/run2-egress-witness.json"
-}

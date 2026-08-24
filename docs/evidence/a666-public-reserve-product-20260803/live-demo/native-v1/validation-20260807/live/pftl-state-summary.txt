@@ -1,8 +1,0 @@
-METHOD account_assets OK True
-{"account": "pfab9b9228942e5c529633a13aa271d5297bec6353", "assets": [{"account": "pfab9b9228942e5c529633a13aa271d5297bec6353", "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b", "authorized": true, "balance": 1358493, "code": "PFUSDC", "frozen": false, "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8", "limit": 2000000000000, "precision": 6, "reserve_paid": 0, "trustline_id": "e94b1634a7d6255aa12e3bd90fd81cb098577cd428c45010584a8c103044b029af8625873daa500d14250eccc46c2943", "version": 1}]}
-METHOD navcoin_bridge_supply_status OK True
-{"authorized_valid_supply_atoms": 31597197455, "ethereum_chain_id": 1, "ethereum_spendable_supply_atoms": 9000000, "live_supply_sum_atoms": 31597197455, "paused": false, "pftl_spendable_supply_atoms": 99000000, "policy_epoch": 6, "pricing_nav_epoch": 5, "pricing_reserve_packet_hash": "78c9fce35e0dc1ad9a7bd5b25b34e432c606fc38889e1543d5242cff12fe637bb0a508aff3655d2e2e27ac872f88f289", "route_epoch": 6, "route_id": "pftl-a666-ethereum-wA666-usdc-v1", "settlement_asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b"}
-METHOD receipts OK True
-receipts_result []
-ledger_ok True
-ledger_keys ['account_count', 'blocks', 'burned_fee_total', 'chain_id', 'genesis_hash', 'ledger_hash', 'ledger_index', 'protocol_version', 'receipt_count', 'returned_block_count', 'schema', 'state_root']

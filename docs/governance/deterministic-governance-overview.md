@@ -67,7 +67,7 @@ evidence.
 The broader plan for applying this pattern across model selection, validator
 evidence, Cobalt, privacy, ML-DSA authorization, monetary policy, storage,
 RPC, operator security, and release authority is tracked in
-[Verifiable Constitution Plan](verifiable-constitution-plan.md). That plan
+[Verifiable Constitution](verifiable-constitution.md). That document
 adds an upstream Qwen-authored evidence-request lane: the model may propose
 what evidence is needed to decide a protocol question, but the request itself
 must be typed, replayed, reviewed, and accepted before it can shape

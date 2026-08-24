@@ -1,8 +1,0 @@
-{
-  "schema": "postfiat.a666.pfusdc_relay.v1",
-  "verdict": "PASS",
-  "deposit_tx": "0x84d69a16dbe3ce687c45bf2e1a9658abf0094f6acf82f57ea771135ef769153f",
-  "start_height": 363,
-  "finalized_height": 365,
-  "amount_atoms": 1005000
-}

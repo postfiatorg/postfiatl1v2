@@ -1,6 +1,0 @@
-{
-  "version": "postfiat-local-rpc-v1",
-  "id": "rpc-doctor-validator-4-server-info",
-  "method": "server_info",
-  "params": {}
-}

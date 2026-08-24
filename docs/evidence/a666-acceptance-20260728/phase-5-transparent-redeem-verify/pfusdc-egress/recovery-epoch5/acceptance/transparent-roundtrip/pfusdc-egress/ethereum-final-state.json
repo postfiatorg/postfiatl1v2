@@ -1,8 +1,0 @@
-{
-  "schema": "postfiat.a666.epoch5_transparent_roundtrip_final.v1",
-  "verifier_latest_finalized_height": 397,
-  "verifier_latest_checkpoint_commitment": "0xb99e98d4a0b66d87c672fd0da43aee479ffe2ce462d80da847ac97e7891fd814",
-  "vault_total_obligations_atoms": 5500,
-  "vault_usdc_balance_atoms": 5500,
-  "joe_usdc_balance_atoms": 230187289
-}

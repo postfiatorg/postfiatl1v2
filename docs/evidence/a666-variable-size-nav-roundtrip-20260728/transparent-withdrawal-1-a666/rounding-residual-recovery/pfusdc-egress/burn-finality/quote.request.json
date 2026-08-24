@@ -1,9 +1,0 @@
-{
-  "id": "a666-var-transparent-rounding-pfusdc-burn-quote",
-  "method": "asset_fee_quote",
-  "params": {
-    "operation_json": "{\"operation\":\"vault_bridge_burn_to_redeem\",\"owner\":\"pfab9b9228942e5c529633a13aa271d5297bec6353\",\"issuer\":\"pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8\",\"asset_id\":\"02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b\",\"bucket_id\":\"5d5abc049bd1545e0d552e4176047e39d2151868ad7287384cbaf8db792330add44f625cfc631c8204413deb3665c536\",\"amount_atoms\":1,\"epoch\":17,\"reserve_packet_hash\":\"fa0acaff8b64f1d6636bdf0985ab8348979bd17bcaba10d843c1ba5fed7cc45e72db0c2693a0d956218d6f0939725943\",\"destination_ref\":\"evm-erc20:1:0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0\"}",
-    "source": "pfab9b9228942e5c529633a13aa271d5297bec6353"
-  },
-  "version": "postfiat-local-rpc-v1"
-}

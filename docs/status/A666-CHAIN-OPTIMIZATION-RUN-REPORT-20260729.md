@@ -395,13 +395,9 @@ Principal implementation commits:
 - `f58ec90` — pass-6 evidence and recovery;
 - `dcb1cae` — explicit retained-pfUSDC accounting.
 
-Primary evidence:
-
-- `docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-pass4/`
-- `docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-pass5/`
-- `docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-pass6/`
-- `docs/evidence/a666-optimization-run-20260729/private-1-a666-roundtrip-pass6/optimization-score.json`
-- `docs/plans/CHAIN-OPTIMIZATION-STACKED-RESEARCH-20260729.md`
+The completed pass-4 through pass-6 raw evidence and optimization plan remain
+available in Git history. The curated evidence front door is
+[`docs/evidence/index.md`](../evidence/index.md).
 
 ## Final status
 

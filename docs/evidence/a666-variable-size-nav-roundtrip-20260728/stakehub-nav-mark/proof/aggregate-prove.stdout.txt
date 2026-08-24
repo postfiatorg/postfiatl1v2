@@ -1,4 +1,0 @@
-proof: /home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-variable-size-nav-roundtrip-20260728/stakehub-nav-mark/proof/aggregate-proof.bin
-proof calldata: /home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-variable-size-nav-roundtrip-20260728/stakehub-nav-mark/proof/aggregate-proof-calldata.bin
-public values: /home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-variable-size-nav-roundtrip-20260728/stakehub-nav-mark/proof/aggregate-public-values.bin
-aggregate program vkey: 0x00f96064937f05d891b13a80667bdf5ecd62a7d5ed245724ab294bad311a2164

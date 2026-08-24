@@ -1,1 +1,0 @@
-SELF_CHECK PASS files=2 deterministic_sha_maps_match=true

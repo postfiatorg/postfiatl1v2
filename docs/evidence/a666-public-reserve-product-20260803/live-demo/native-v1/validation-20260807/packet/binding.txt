@@ -1,6 +1,0 @@
-cc1bd291543e45e59fa2ff89df7e5c041c8ed101d6f93fb7e0eac57dd134bf9c  /home/postfiat/repos/pftl-validation-20260807/docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/binding-S1.json
-9d6c226217c0b72ff881ca5004060492649057098e957ec519c8b6aa88b18a33  /home/postfiat/repos/pftl-validation-20260807/docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/values-S1.json
-54a7056568a8f863bb8c64634bf963580feac9588c25fac989ed1b761c538293  /home/postfiat/repos/pftl-validation-20260807/docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/resolution-rules.md
-f0679ac76e5194527cc62aded34e778dfdc23089eab16efcb803c45fe74588d5  /home/postfiat/repos/pftl-validation-20260807/docs/evidence/a666-public-reserve-product-20260803/live-demo/native-v1/fire-20260806/authorization-native-fire-20260806.json
-2a6a6e4155f07f76ca75dddbd32a4ef354f5f346d36142158c6c1ceeb92ea194  /home/postfiat/repos/pftl-validation-20260807/docs/runbooks/A666-END-TO-END-LIVE-FUNDS-RUNBOOK-20260807.md
-BINDING 16/16 OK

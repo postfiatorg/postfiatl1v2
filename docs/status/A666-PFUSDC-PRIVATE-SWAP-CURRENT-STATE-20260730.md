@@ -1,16 +1,14 @@
 # A666, pfUSDC, Private Swap, Bridge, and Uniswap Current State
 
 > **HISTORICAL DEPLOYED-STATE BASELINE.** This page remains authoritative for
-> the 2026-07-30 release it records. Current live-campaign state moved forward:
-> the orchard-aware fleet rollout and 10.000000 pfUSDC claim finalized at PFTL
-> height 779. For current operations use the
-> [live-funds runbook](../runbooks/A666-END-TO-END-LIVE-FUNDS-RUNBOOK-20260807.md)
-> and [current execution handoff](../handoffs/A666-LIVE-FUNDS-EXECUTION-HANDOFF-20260807.md).
+> the 2026-07-30 release it records. Current implementation and release
+> constraints are documented in the
+> [deferred production-hardening specification](../deferred-plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md).
 
 > **Architecture update (2026-08-01):** This remains the authoritative record
 > of the July 30 deployed state and evidence. New production work is governed
 > by the
-> [StakeHub decoupling and open reserve-proof plan](../plans/STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md).
+> [deferred StakeHub decoupling and open reserve-proof plan](../deferred-plans/STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md).
 > StakeHub is an internal operator product, not a wallet, consensus, signer, or
 > public proof dependency. Provider-named proof profiles and packets below are
 > immutable deployment history; the live A666 route must move only through an
@@ -21,11 +19,11 @@
 **Release determination:** functionally proven; limited availability only;
 not production GA
 **Governing economics:**
-`../plans/A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md`
+[Primary Market Accounting](../navcoins/primary-market-accounting.md)
 **Production release gate:**
-`../plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md`
-**Latest PFTL qualification evidence:**
-`../evidence/pftl-private-swap-p0-20260730/README.md`
+[Deferred A666 Private Swap Production Hardening](../deferred-plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md)
+**Evidence front door:**
+[Evidence Index](../evidence/index.md)
 
 This document answers four questions in one place:
 
@@ -607,39 +605,15 @@ gate.
 - “The 25-minute issue SLO is satisfied.”
 - “The 100/100 production campaign passed.”
 
-## 13. Documentation authority and supersession map
+## 13. Documentation authority
 
-| Document | Role after this update |
-|---|---|
-| `A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md` | Current program truth and index |
-| `../plans/A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md` | Binding economics and primary-market behavior |
-| `../plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md` | Binding remaining work and release gates |
-| `A666-MAINNET-DEPLOYMENT-20260727.md` | Historical deployment and transaction evidence |
-| `A666-PRIVATE-ROUNDTRIP-HANDOFF-20260728.md` | Historical first full private round-trip handoff |
-| `A666-CHAIN-OPTIMIZATION-RUN-REPORT-20260729.md` | Historical full-chain optimization result |
-| `PFTL-RESIDENT-SWAP-LIMITED-AVAILABILITY-20260729.md` | Resident-service implementation history through limited availability |
-| `../plans/PFTL-RESIDENT-PRIVATE-SWAP-SERVICE-SPEC-20260729.md` | Resident-service design and qualification history |
-| `../plans/PFTL-PRIVATE-SWAP-INFRASTRUCTURE-AND-LATENCY-DIAGNOSTIC-20260730.md` | Diagnostic and action checklist |
-| `../plans/PFUSDC-MAINNET-CAMPAIGN-HANDOFF-20260726.md` | pfUSDC/Arbitrum/Ethereum campaign history |
-| `../plans/PFUSDC-TIER4-IMPLEMENTATION-PLAN-20260717.md` | Historical Arbitrum design; not the current route |
-| `pfusdc-bridge-handoff-2026-06-19.md` | Historical generic bridge handoff |
-| `../navcoins/uniswap-pool.md` | Historical a651 venue details |
-| `../plans/pftl-uniswap-bridge-redeployment-spec.md` | Historical pre-A666 bridge/pool design |
+Use these retained documents:
 
-## 14. Evidence map
+- [Primary Market Accounting](../navcoins/primary-market-accounting.md) for
+  issuance, redemption, and conservation rules.
+- [Deferred A666 Private Swap Production Hardening](../deferred-plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md)
+  for unresolved release requirements.
+- [Evidence Index](../evidence/index.md) for curated proof references.
 
-| Claim | Primary repository evidence |
-|---|---|
-| Ethereum pfUSDC functional and latency runs | `../evidence/pfusdc-eth-campaign-20260725/` and `../evidence/pfusdc-eth-mainnet-latency-20260727-run2/` |
-| A666 deployment and opening export | `A666-MAINNET-DEPLOYMENT-20260727.md` and `../../deployments/a666-mainnet-20260727/` |
-| Transparent/private acceptance | `../evidence/a666-acceptance-20260728/` |
-| Variable-size issue, real reserve-aware NAV mark, and redemption | `../evidence/a666-variable-size-nav-roundtrip-20260728/README.md` |
-| Optimized full private round trip | `../evidence/a666-optimization-run-20260729/` and `A666-CHAIN-OPTIMIZATION-RUN-REPORT-20260729.md` |
-| Resident private service | `PFTL-RESIDENT-SWAP-LIMITED-AVAILABILITY-20260729.md` |
-| Latest view-aware observer and partial qualification | `../evidence/pftl-private-swap-p0-20260730/README.md` |
-| Remaining production work | `../plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md` |
-
-Evidence directories may contain restricted operational artifacts that are
-intentionally untracked. Public documentation must not copy private note
-openings, spend keys, nullifiers linked to a controlled identity, unrestricted
-host paths, or signing material into the repository.
+Completed execution plans, dated handoffs, and raw run artifacts are available
+through Git history rather than the active documentation tree.

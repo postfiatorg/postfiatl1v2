@@ -1,8 +1,0 @@
-{
-  "schema": "postfiat.a666.clip_ethereum_gas.v1",
-  "transaction_count": 10,
-  "total_gas_wei": 54866059140779,
-  "total_gas_eth": "0.000054866059140779",
-  "uniswap_buy_tx": "0xa06d4bb290914c3197f6ad567f1eab95241d1802bde73c3883b3019f52da2612",
-  "return_burn_tx": "0xba6aca4f7224037a7e873389e1bcc87dcb5e643c9b7d61049390237839292826"
-}

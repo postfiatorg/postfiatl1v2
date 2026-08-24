@@ -1,7 +1,0 @@
-{
-  "schema": "postfiat.a666.normalized_manifest.v1",
-  "packet_hash": "5564c9dde876bfefdf14469495205a04b4b02cd04c39ba2d135cc1499231223609703206a68808f5f95a729927d98272",
-  "route_id": "pftl-a666-ethereum-wA666-usdc-v1",
-  "mint_amount_atoms": 100000000,
-  "source": "docs/evidence/a666-joe-mainnet-e2e-20260728/export-proof/resolved-mint-packet.json"
-}

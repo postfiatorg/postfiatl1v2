@@ -1,8 +1,0 @@
-{
-  "schema": "postfiat.a666.replay_check.v1",
-  "action": "private_primary_redeem",
-  "exit_code": 1,
-  "rejected": true,
-  "no_state_advance": true,
-  "error": "shielded batch `7a494fc0cfa8f99b681fe8501ec2425e0307be771dfe4fcc26634586bbeb4675b77862d009d518ff1650e724a19fce01` already applied"
-}

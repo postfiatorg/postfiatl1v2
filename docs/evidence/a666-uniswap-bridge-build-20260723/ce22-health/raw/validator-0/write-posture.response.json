@@ -1,1 +1,0 @@
-{"version":"postfiat-local-rpc-v1","id":"rpc-doctor-validator-0-write-probe","ok":false,"result":null,"error":{"code":"rpc_method_not_allowed","message":"rpc method `mempool_submit_signed_transfer` is not enabled on the read-only remote server"},"events":[{"event_type":"rpc_serve","subject":"rpc_method_not_allowed","message":"remote rpc request rejected"}]}

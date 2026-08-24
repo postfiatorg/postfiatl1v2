@@ -749,5 +749,5 @@ If validators diverge:
 ## Related Documents
 
 - `docs/runbooks/wan-devnet-structural-fix.md`
-- `docs/runbooks/nav-roundtrip-speedup-plan.md`
+- Completed historical benchmark plans retained in Git history
 - `docs/runbooks/private-nav-otc-shielded-swap-wan-devnet.md`

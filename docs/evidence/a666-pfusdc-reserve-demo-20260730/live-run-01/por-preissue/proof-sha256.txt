@@ -1,5 +1,0 @@
-cb498b83ebdcf285b4281675d51db275b31466ffe7254b53dc89f360f7d13d83  docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/aggregate-witness.json
-e842676cc4a2b7f604651b6396559813b186d50c703942c45282e38c7523eb90  docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/aggregate-public-values.bin
-8646c38202fd4493eb59427dc85a6905d941c5d4b85cf31407186e440dd2f303  docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/aggregate-proof-calldata.bin
-35e44b5cef445fb8651c8112d7d600b2ad6145594eb3a957a9d8df95e62fd6fe  docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/aggregate-proof.bin
-dd743c3867140fa5b8824272fcaba6e5d91f036b4848494a7f93bf21bbeb249e  docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/governed-aggregate-program-00580ee8.elf

@@ -1,8 +1,0 @@
-0x
-simulation_exit=0
-probe_status=0x1
-probe_tx=0xefc72706e3375fad058f49e0d8351399bd9f64b915e1d807bb5c0f79f0be8392
-wA666_before=103000000
-wA666_after=114013374
-fresh_reverse_fill_wa666_atoms=11013374
-fresh_reverse_min_out_floor_97pct=10682972

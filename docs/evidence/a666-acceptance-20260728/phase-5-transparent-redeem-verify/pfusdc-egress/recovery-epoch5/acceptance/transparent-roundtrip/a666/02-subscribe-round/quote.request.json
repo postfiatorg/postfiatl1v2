@@ -1,9 +1,0 @@
-{
-  "id": "joe-a666-subscribe-quote",
-  "method": "asset_fee_quote",
-  "params": {
-    "operation_json": "{\"operation\":\"pftl_uniswap_primary_subscribe_v2\",\"pricing_nav_epoch\":1,\"pricing_reserve_packet_hash\":\"c8bbb35b7b0eb4a567f04945eb977b3fe5dc539cd7d845f1266d39959eb301ffbe263ebec9ceb985ef09370f314e5b3e\",\"reservation_id\":\"2f13fafc61b79a95752c25c1274d552aceee7c78e2aad6bf417dae5f56b52feeb89d952c29b95096a8264babd9f02d85\",\"route_id\":\"pftl-a666-ethereum-wA666-usdc-v1\",\"settlement_asset_id\":\"02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b\",\"settlement_value_atoms\":1005000,\"subscriber\":\"pfab9b9228942e5c529633a13aa271d5297bec6353\",\"subscription_nonce\":\"b659fe1748753269dee6280c8abaf1f39b8aa4e0dcace4ae112787d53f161e94\"}",
-    "source": "pfab9b9228942e5c529633a13aa271d5297bec6353"
-  },
-  "version": "postfiat-local-rpc-v1"
-}

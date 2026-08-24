@@ -11,18 +11,14 @@ This site is the engineering front door. It is not a dump of internal notes. It
 points to the current code, scripts, reports, and operating runbooks that define
 what has been built.
 
-For the current live-funds A666 campaign—including the finalized Ethereum
-USDC deposit, orchard-aware six-validator rollout, finalized PFTL claim, E6
-NAV refresh blocker, and remaining issue/swap/redeem/bridge-out legs—start with
-the [A666 live-funds runbook](runbooks/A666-END-TO-END-LIVE-FUNDS-RUNBOOK-20260807.md)
-and [current execution handoff](handoffs/A666-LIVE-FUNDS-EXECUTION-HANDOFF-20260807.md).
-Program-level sequencing lives in the
-[A666 unified execution plan](plans/A666-UNIFIED-EXECUTION-PLAN-20260808.md) with live
-gate state in the [execution tracker](status/A666-UNIFIED-EXECUTION-TRACKER-20260808.md).
-The [July 30 current-state page](status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md)
-remains the deployed-state baseline, not the current execution checkpoint.
-The proposed next-generation
-[NAVCoin Reserve Redemption System](plans/NAVCOIN-RESERVE-REDEMPTION-SYSTEM-SPEC-20260730.md)
+For the A666 implementation and operating boundary, start with the
+[July 30 deployed-state baseline](status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md)
+and the
+[deferred production-hardening specification](deferred-plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md).
+Completed campaign plans and dated execution handoffs are deliberately absent
+from the active documentation tree; Git history retains them when historical
+investigation is necessary. The proposed next-generation
+[NAVCoin Reserve Redemption System](deferred-plans/NAVCOIN-RESERVE-REDEMPTION-SYSTEM-SPEC-20260730.md)
 defines separately escrowed two-sided primary facilities for approved
 `pfUSD`, `pfXRP`, `pfETH`, `pfStakedETH`, and `pfBTC` assets; it is a
 specification, not a claim about currently deployed A666 functionality.
@@ -36,12 +32,12 @@ they are not listed one-by-one in the primary navigation.
 
 | Area | Current State | Where To Read |
 | --- | --- | --- |
-| A666 primary market | Mainnet components and full economic loop are functionally proven; resident private swaps remain limited availability and production GA is closed. Multi-asset reserve facilities are proposed, not deployed. | [A666 current state](status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md), [production hardening](plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md), [reserve redemption system](plans/NAVCOIN-RESERVE-REDEMPTION-SYSTEM-SPEC-20260730.md) |
+| A666 primary market | Mainnet components and full economic loop are functionally proven; resident private swaps remain limited availability and production GA is closed. Multi-asset reserve facilities are proposed, not deployed. | [A666 current state](status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md), [deferred production hardening](deferred-plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md), [deferred reserve redemption system](deferred-plans/NAVCOIN-RESERVE-REDEMPTION-SYSTEM-SPEC-20260730.md) |
 | Core chain | Rust L1 with accounts, signed transfers, fees, blocks, receipts, deterministic replay, and state roots. | [Architecture](architecture/overview.md) |
 | Finality | Versioned certified ordering: legacy single-view mode and activated consensus v2 with durable prepare/precommit, timeout certificates, and proposer rotation. | [Finality](architecture/finality.md) |
 | Settlement lanes | Consensus transactions, W6 dual-authorized atomic swap, FastPay payments, FastSwap DvP, and Asset-Orchard private settlement have distinct finality and recovery boundaries. | [Settlement Lanes](architecture/settlement-lanes.md) |
 | Governance | Live amendments and registry transitions require distinct ML-DSA-65 old-rule authorizations. | [Validator Registry](governance/validator-registry.md) |
-| Cobalt governance | Trust-graph safety, durable shadow convergence, and a versioned Foundation-to-Cobalt handoff restricted to validator trust evolution. | [Cobalt Governance](governance/cobalt.md), [browser observatory](governance/cobalt.md#operator-interfaces) |
+| Cobalt governance | Trust-graph safety, durable shadow convergence, and a versioned Foundation-to-Cobalt handoff restricted to validator trust evolution. | [Cobalt Governance](governance/cobalt.md), [browser observatory](governance/cobalt.md#read-only-browser-interface) |
 | Verifiable Constitution | Canonical readable constitution for typed, replayable, challengeable model-assisted governance with no-live-effect authority boundaries. | [Constitution](governance/verifiable-constitution.md), Proof Summary |
 | Privacy | Orchard/Halo2 deposit, spend, withdraw, scan, disclose, pool report, and live validator evidence. | [Privacy](privacy/overview.md) |
 | Quantum auth | ML-DSA-style account and validator authorization with larger certificate economics accepted as a design cost. | [Quantum Authorization](quantum/authorization.md) |

@@ -1,9 +1,0 @@
-{
-  "cycle_tracker": {},
-  "elapsed_ms": 5242,
-  "instruction_count": 201246086,
-  "invocation_tracker": {},
-  "public_values_bytes": 1486,
-  "schema": "postfiat.pfusdc.egress_execute_report.v1",
-  "witness": "/workspace/a666-acceptance/live/a666-phase8-private-redeem-pfusdc-egress-20260728/witness.json"
-}

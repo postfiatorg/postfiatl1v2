@@ -1,5 +1,0 @@
-   |
-   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: `postfiat-node` (lib) generated 1 warning
-    Finished `release` profile [optimized] target(s) in 2m 14s

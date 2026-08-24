@@ -4,7 +4,7 @@ Date: 2026-06-07 UTC
 Status: scope for goal execution
 Owner: benchmark worker / tmux injector
 Related blog: `postfiatorg.github.io/content/blog/postfiat-l1v2-private-xrpl-latency-benchmark.md`
-Primary Post Fiat evidence: `docs/status/real-transaction-latency-benchmark-plan-2026-06-07.md`
+Primary Post Fiat benchmark implementation and evidence remain available in Git history.
 
 ## Goal Directive
 

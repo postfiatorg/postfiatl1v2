@@ -9,7 +9,7 @@
 > The decision remains limited availability and `NO-GO` for the 100/100
 > production gate. See
 > [current state](A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md) and the
-> [latest evidence](../evidence/pftl-private-swap-p0-20260730/README.md).
+> curated [Evidence Index](../evidence/index.md).
 
 **Date:** 2026-07-29
 **Scope:** PFTL-resident pfUSDC/A666 issue and redemption

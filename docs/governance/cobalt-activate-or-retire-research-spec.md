@@ -91,15 +91,15 @@ The benchmark must report node-level votes, decisions, registry roots, timing, a
 
 ## Oracle and frozen corpus
 
-The existing benchmark uses `model_scope: characterize` for the asymmetric-view, list-drift, and overlap cases. In [`postfiat_cobalt_benchmark.rs`](../../crates/node/src/bin/postfiat_cobalt_benchmark.rs), that path does not require a substantive predicted decision. It therefore measures determinism and regression behavior, not independent correctness.
+The existing benchmark uses `model_scope: characterize` for the asymmetric-view, list-drift, and overlap cases. In [`postfiat_cobalt_benchmark.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/bin/postfiat_cobalt_benchmark.rs), that path does not require a substantive predicted decision. It therefore measures determinism and regression behavior, not independent correctness.
 
 Before any decisive execution:
 
 1. Replace every decisive `characterize` case with a pre-registered expected node-level result.
 2. Derive the Cobalt expectation from the formal essential-subset, strong-support, and linkage rules implemented in:
-   - [`trust_graph_governance.rs`](../../crates/consensus_cobalt/src/trust_graph_governance.rs), especially `has_strong_support`, `analyze_trust_graph`, and non-uniform certificate validation;
-   - [`cobalt_cover_extractor.rs`](../../crates/consensus_cobalt/src/cobalt_cover_extractor.rs); and
-   - [`rbc_abba_mvba.rs`](../../crates/consensus_cobalt/src/rbc_abba_mvba.rs).
+   - [`trust_graph_governance.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/consensus_cobalt/src/trust_graph_governance.rs), especially `has_strong_support`, `analyze_trust_graph`, and non-uniform certificate validation;
+   - [`cobalt_cover_extractor.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/consensus_cobalt/src/cobalt_cover_extractor.rs); and
+   - [`rbc_abba_mvba.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/consensus_cobalt/src/rbc_abba_mvba.rs).
 3. Derive the RippleD expectation from each node’s local UNL and quorum rule, not from the expected Cobalt result.
 4. Freeze the scenario manifest, oracle output, source revisions, and SHA-256 root before running either adapter.
 5. Make the packet verifier fail if execution inputs, expected results, or adapter revisions change after the freeze.
@@ -141,10 +141,10 @@ The comparison must test the same governance decision object and fault schedule.
 
 Extend the existing generator and adapters:
 
-- [`generate_scenarios.py`](../../benchmarks/cobalt-rippled-liveness/generate_scenarios.py) must emit frozen per-node trust views, candidate registry roots, event schedules, and expected per-node results.
-- [`postfiat_cobalt_benchmark.rs`](../../crates/node/src/bin/postfiat_cobalt_benchmark.rs) must expose every correct node’s Cobalt decision and remove the permissive `characterize` pass path from the decisive corpus.
-- [`MatchedLivenessBenchmark_test.cpp`](../../benchmarks/cobalt-rippled-liveness/rippled/MatchedLivenessBenchmark_test.cpp) must expose every simulated RippleD node’s local-quorum decision for the same inputs.
-- [`aggregate_packet.py`](../../benchmarks/cobalt-rippled-liveness/aggregate_packet.py) must calculate false accepts, false halts, conflicts, and decision latency for each model.
+- [`generate_scenarios.py`](https://github.com/postfiatorg/postfiatl1v2/blob/main/benchmarks/cobalt-rippled-liveness/generate_scenarios.py) must emit frozen per-node trust views, candidate registry roots, event schedules, and expected per-node results.
+- [`postfiat_cobalt_benchmark.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/bin/postfiat_cobalt_benchmark.rs) must expose every correct node’s Cobalt decision and remove the permissive `characterize` pass path from the decisive corpus.
+- [`MatchedLivenessBenchmark_test.cpp`](https://github.com/postfiatorg/postfiatl1v2/blob/main/benchmarks/cobalt-rippled-liveness/rippled/MatchedLivenessBenchmark_test.cpp) must expose every simulated RippleD node’s local-quorum decision for the same inputs.
+- [`aggregate_packet.py`](https://github.com/postfiatorg/postfiatl1v2/blob/main/benchmarks/cobalt-rippled-liveness/aggregate_packet.py) must calculate false accepts, false halts, conflicts, and decision latency for each model.
 
 The comparison succeeds only if it contains:
 
@@ -199,7 +199,7 @@ Consensus v2 must continue finalizing throughout. No result may require editing 
 
 ## Experiment 5 — perform the cutover, not another rehearsal
 
-After Experiments 1–4 pass, use the existing authority transition code in [`cobalt_handoff.rs`](../../crates/node/src/cobalt_handoff.rs) and the operational flow exercised by [`cobalt_handoff_rehearsal.rs`](../../crates/node/src/cobalt_handoff_rehearsal.rs) to schedule a future-height controlled-testnet transition.
+After Experiments 1–4 pass, use the existing authority transition code in [`cobalt_handoff.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/cobalt_handoff.rs) and the operational flow exercised by [`cobalt_handoff_rehearsal.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/cobalt_handoff_rehearsal.rs) to schedule a future-height controlled-testnet transition.
 
 The live cutover must:
 

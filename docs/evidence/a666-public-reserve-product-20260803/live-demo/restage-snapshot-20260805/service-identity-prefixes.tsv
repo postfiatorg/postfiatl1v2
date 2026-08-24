@@ -1,3 +1,0 @@
-endpoint	product_profile_sha256_prefix
-http://127.0.0.1:8787/api/status	NONE
-http://127.0.0.1:8788/api/status	91aa6c9d

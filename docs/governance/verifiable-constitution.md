@@ -1086,7 +1086,7 @@ Current supporting pages:
 - Verifiable Constitution Readiness Summary
 - Verifiable Constitution Proof Summary
 - Verifiable Constitution Attack-Hardness Readiness Summary
-- [Verifiable Constitution Plan](verifiable-constitution-plan.md)
+- The completed implementation plan is retained in Git history.
 
 Current supporting reports:
 

@@ -59,20 +59,9 @@ Not completed:
 - No production latency or production infrastructure cost has been
   established.
 
-The evidence paths for the current boundary are:
-
-- Ingress proof:
-  `docs/evidence/pfusdc-tier4-ingress-live-corrected/proof/`
-- Accepted ingress lifecycle:
-  `docs/evidence/pfusdc-tier4-ingress-pftl-live-corrected/summary.json`
-- Egress witness:
-  `docs/evidence/pfusdc-tier4-egress-live-corrected/witness.json`
-- Egress mutation audit:
-  `docs/evidence/pfusdc-tier4-egress-live-corrected/audit.json`
-- OOM-killed proof attempt:
-  `docs/evidence/pfusdc-tier4-egress-live-corrected/proof-oom-20260718T2037Z/`
-- Earlier interrupted proof attempt:
-  `docs/evidence/pfusdc-tier4-egress-live-corrected/proof-interrupted-20260718T1908Z/`
+The raw ingress, lifecycle, witness, mutation-audit, OOM, and interrupted-proof
+artifacts were removed from the working documentation tree. Git history
+retains the exact attempt records.
 
 ## Why the current egress proof is unacceptably slow
 
@@ -313,12 +302,7 @@ already ended in a second OOM failure. The service recorded peak memory of
 CPU time without producing `proof.bin`, `proof-calldata.bin`, or
 `proof-report.json`.
 
-The second attempt's partial output is preserved at
-`docs/evidence/pfusdc-tier4-egress-live-corrected/proof-abandoned-v1-20260718T214840Z/`.
-The earlier partial attempts remain at
-`docs/evidence/pfusdc-tier4-egress-live-corrected/proof-oom-20260718T2037Z/`
-and
-`docs/evidence/pfusdc-tier4-egress-live-corrected/proof-interrupted-20260718T1908Z/`.
+The second attempt and earlier partial outputs remain available in Git history.
 No V1 egress proof will be resumed, retried, or submitted.
 
 The V1 root cause is the standalone egress guest workspace's missing SP1

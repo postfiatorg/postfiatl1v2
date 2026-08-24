@@ -1,9 +1,0 @@
-{
-  "cycle_tracker": {},
-  "elapsed_ms": 5379,
-  "instruction_count": 215181042,
-  "invocation_tracker": {},
-  "public_values_bytes": 1486,
-  "schema": "postfiat.pfusdc.egress_execute_report.v1",
-  "witness": "/workspace/a666-acceptance/live/a666-opt-pass3-20260729-pfusdc-egress/witness.json"
-}

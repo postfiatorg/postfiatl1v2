@@ -1,2 +1,0 @@
-PENDING staging only; do not treat as completed validation evidence:
-none — all staged

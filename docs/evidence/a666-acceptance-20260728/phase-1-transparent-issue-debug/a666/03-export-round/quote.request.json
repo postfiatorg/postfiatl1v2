@@ -1,9 +1,0 @@
-{
-  "id": "joe-a666-export-quote",
-  "method": "asset_fee_quote",
-  "params": {
-    "operation_json": "{\"amount_atoms\":1000000,\"destination_deadline_seconds\":1785311404,\"ethereum_packet_digest\":\"8dbd308f439e3bed08e72e858c6d94e1f6b87e975d95aa63b2cb265383e113ef\",\"ethereum_packet_schema_version\":2,\"ethereum_recipient\":\"0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0\",\"export_nonce\":\"ce99cfffa937471847f3fe3b300979a721cd7d6f7802887be0a5ff656b8fab99\",\"operation\":\"pftl_uniswap_export_debit\",\"owner\":\"pfab9b9228942e5c529633a13aa271d5297bec6353\",\"packet_hash\":\"72b2ccf189370d1a6012fd5a3fce3835612289a71f34b9807d3eea0655d0811b207e9b548c67a02b8178bd1581c1fd8d\",\"refund_delay_blocks\":100,\"reservation_id\":\"bb66508bf3b97b633c86f81caf5bbf8aa4874cc07a350e885a7428b97c5a428998162febeb77363637cabd59cbfbd873\",\"route_id\":\"pftl-a666-ethereum-wA666-usdc-v1\",\"settlement_value_atoms\":1005000}",
-    "source": "pfab9b9228942e5c529633a13aa271d5297bec6353"
-  },
-  "version": "postfiat-local-rpc-v1"
-}

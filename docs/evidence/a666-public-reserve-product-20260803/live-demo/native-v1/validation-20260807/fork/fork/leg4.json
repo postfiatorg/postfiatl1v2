@@ -1,9 +1,0 @@
-{
-  "leg":"4",
-  "executed":false,
-  "status":"UNVALIDATED",
-  "verdict":"UNVALIDATED",
-  "reason":"phase-1 constrained-signer burn leaf is deliberately not invoked in this local fork run; packet amount is receipt-chained from leg3h and live signer custody is excluded",
-  "packet_amount":"PENDING-FIRE-TIME:leg3h-wa666-output-atoms",
-  "expected_receipt":{"status":"0x1","to":"0x9A0262C0572fb4DB08765408eB225E207F40c3d9","value_wei":"0"}
-}

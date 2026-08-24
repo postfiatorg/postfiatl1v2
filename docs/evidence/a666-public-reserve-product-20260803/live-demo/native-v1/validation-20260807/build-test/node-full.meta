@@ -1,2 +1,0 @@
-start=2026-08-07T14:58:27+00:00 pid=3949076 cmd=cargo test -p postfiat-node
-end=2026-08-07T15:43:44+00:00 rc=0

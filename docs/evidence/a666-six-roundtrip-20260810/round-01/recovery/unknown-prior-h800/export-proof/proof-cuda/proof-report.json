@@ -1,9 +1,0 @@
-{
-  "program_vkey": "0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9",
-  "proof_bytes": 356,
-  "proof_kind": "receipt",
-  "proof_mode": "groth16",
-  "public_values_bytes": 1120,
-  "schema": "postfiat-pftl-uniswap-proof-report-v1",
-  "setup_and_prove_ms": 147805
-}

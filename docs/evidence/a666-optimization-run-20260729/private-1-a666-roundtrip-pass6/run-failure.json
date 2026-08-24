@@ -1,9 +1,0 @@
-{
-  "schema": "postfiat.a666.optimization_runner_failure.v1",
-  "verdict": "FAIL",
-  "workflow_id": "a666-opt-pass6-20260729",
-  "started_unix": 1785302436,
-  "failed_unix": 1785304601,
-  "exit_code": 1,
-  "intervention_free_after_deposit": false
-}

@@ -1,6 +1,0 @@
-{
-  "operation": "vault_bridge_deposit_finalize",
-  "finalizer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
-  "asset_id": "02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b",
-  "evidence_root": "d54c5701a645539669f2382ccc8f69d1c215fa562a9512adeee3efecc0d771fb122cce81797240fc57f3837a74c369b8"
-}

@@ -83,7 +83,7 @@ entering or leaving the shielded pool.
 1. [A666 Current State](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md)
    records the deployed pfUSDC/A666/private-swap/bridge/Uniswap product and
    exact remaining release gates.
-2. [NAVCoin Reserve Redemption System](../plans/NAVCOIN-RESERVE-REDEMPTION-SYSTEM-SPEC-20260730.md)
+2. [Deferred NAVCoin Reserve Redemption System](../deferred-plans/NAVCOIN-RESERVE-REDEMPTION-SYSTEM-SPEC-20260730.md)
    specifies the proposed registry-driven, trustlessly executable two-sided
    primary facilities for `pfUSD`, `pfXRP`, `pfETH`, `pfStakedETH`, and
    `pfBTC`. It is future architecture, not current deployment state.

@@ -1,2 +1,0 @@
-8ca2684b952d01119a2029dde20894dcad1bf2129d2dd796fd248e139d2a5a65  /opt/postfiat/services/asset-orchard-local-service
-/opt/postfiat/releases/a666-orchard-resident-e7179bd/asset-orchard-local-service

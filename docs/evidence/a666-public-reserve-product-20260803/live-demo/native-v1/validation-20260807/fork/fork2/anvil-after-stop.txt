@@ -1,7 +1,0 @@
-Error: error sending request for url (http://127.0.0.1:8547/)
-
-Context:
-- Error #0: client error (Connect)
-- Error #1: tcp connect error
-- Error #2: Connection refused (os error 111)
-cast_exit=1

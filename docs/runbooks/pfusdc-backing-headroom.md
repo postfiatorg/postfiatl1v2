@@ -1,9 +1,8 @@
 # pfUSDC backing headroom and Ethereum ingress
 
-> **Legacy backing migration:** The active
-> `deprecated-Arbitrum-legacy` lineage record is
-> `docs/evidence/pfusdc-eth-campaign-20260725/findings/legacy-arbitrum-one-active-route.md`.
-> Its campaign figures are **5,999,000 vault atoms** (`5999000`) against
+> **Legacy backing migration:** The retired `deprecated-Arbitrum-legacy`
+> lineage record remains available in Git history. Its campaign figures are
+> **5,999,000 vault atoms** (`5999000`) against
 > **1,000,010 circulating atoms** (`1000010`). The signed height-310 audit
 > attributes the active legacy source to chain **42161**, governed vault
 > `0x850e4ceea147f3551c68c2251129e5945d0afb58`, and PFTL finalized height
@@ -35,8 +34,7 @@ for a minting ingress route.
 
 Before any signing, require:
 
-- a 6/6 direct-host common parent read using the Lane A method documented in
-  `docs/evidence/pfusdc-eth-campaign-20260725/lane-a/live-state/collect.sh`;
+- a 6/6 direct-host common parent read;
 - the controlling lane's green decision for the deployed binary and fleet;
 - a frozen source-chain route/profile, exact source deposit receipt/evidence,
   finality reference, and proof/public-values files from the route owner;
@@ -135,8 +133,8 @@ jq -e '
 The packet must retain: source chain, vault/token route, source transaction and
 finality reference, asset and policy, deterministic evidence root, prior and
 proposed cap, prior and proposed epoch, proof/public-values hashes, and exact
-conservation arithmetic. `docs/evidence/pfusdc-eth-campaign-20260725/lane-b/packet-template.json`
-is the parameter schema.
+conservation arithmetic. The historical packet template remains available in
+Git history.
 
 Generate a one-operation request only after re-reading the 6/6 parent. This
 keeps unsigned, signed, and receipt records separate.
@@ -297,15 +295,10 @@ have a matching source-manifest digest and `live_verified` status; unknown,
 pending, digest-mismatched, duplicate, or getter-reverting entries fail closed.
 There is no try-another-selector fallback.
 
-The normal checker source is Ethereum-only. A historical
-`deprecated-Arbitrum-legacy` audit is a one-time explicit invocation with a
-route-owner supplied legacy RPC, `--legacy-source-label
-deprecated-Arbitrum-legacy`, and `--legacy-finding-file
-docs/evidence/pfusdc-eth-campaign-20260725/findings/legacy-arbitrum-one-active-route.md`.
-Its structured finding records the PFTL finalized height, chain ID,
-vault/token addresses, exact vault atoms, route activation/expiry, canonical
-finding hash, and audit evidence hash. It is not permitted as an E2E fallback
-for a new Ethereum claim.
+The normal checker source is Ethereum-only. The historical
+`deprecated-Arbitrum-legacy` audit path is retired and remains available only
+through Git history. It is not permitted as an E2E fallback for a new Ethereum
+claim.
 
 Before propose and after claim, run the source-vault conservation audit against
 the same asset and record exact integer atoms in separate files:

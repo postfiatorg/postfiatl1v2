@@ -1,2 +1,0 @@
-0x
-simulation_exit=0

@@ -397,17 +397,8 @@ Working targets:
 - Tuned remote target after persistent runtime/storage: 5-validator p50
   `1-3s`.
 
-Research inputs:
-
-- Request:
-  `docs/research-requests/consensus-finality-latency-research-request.md`.
-- Responses:
-  `docs/research-requests/claude_response.md` and
-  `docs/research-requests/gemini_response.md`.
-- CTO synthesis: use the Claude response as the stronger base, with a
-  conservative implementation order. Do not start with a full protocol rewrite.
-  First make the current peer-certified path production-shaped enough to
-  measure honestly.
+Earlier latency research has been incorporated into the tracked work below.
+The active checklist and source implementation are authoritative.
 
 | ID | Item | Status | Exit Condition |
 | --- | --- | --- | --- |

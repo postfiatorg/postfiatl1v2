@@ -29,6 +29,14 @@ work_archive/
 docs/archive/
 docs/pfterminal/
 docs/ai-handoff.md
+
+# Internal handoffs, research prompts, and raw evidence do not belong in docs.
+docs/handoffs/*
+!docs/handoffs/README.md
+!docs/handoffs/????-??-??___*__*.md
+docs/research-requests/
+docs/evidence/**
+!docs/evidence/*.md
 whip.md
 WHITEPAPER_REWRITE_REQUEST.md
 NAVCOIN_RESEARCH_REQUEST.md

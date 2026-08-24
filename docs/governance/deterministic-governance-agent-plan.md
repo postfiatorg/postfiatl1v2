@@ -25,7 +25,7 @@ The current repository is not starting from zero.
 | Rust L1 | Accounts, blocks, receipts, deterministic replay, state roots, fees, and RPC surfaces exist. | Built for controlled testnet |
 | Cobalt governance | Validator registry, trust graph transitions, non-uniform certificates, RBC, ABBA, MVBA, DABC, stale replay rejection, and adversarial packets exist. | Built for controlled testnet |
 | Validator registry | Registry transitions are already modeled as governed state rather than informal operator notes. | Built |
-| Deterministic inference research | `docs/research-requests/heavy_redesign.md` defines the governance-agent direction and gates. | Planning source |
+| Deterministic governance direction | This plan defines the governance-agent direction and gates. | Planning source |
 | Provider automation | `scripts/gov-inference-provider` can bootstrap RunPod/Vast tooling, verify inventory, and launch deterministic SGLang endpoints only when `--execute` is passed. | Ready |
 | Provider access | Local RunPod and Vast access has been verified through the wrapper. Secret material stays outside docs and reports. | Ready for operator-controlled use |
 | Live paid GPU state | RunPod inventory was reachable with zero running pods. Vast inventory was reachable with zero active instances. | Clean |
@@ -595,5 +595,4 @@ The full state is reached only when all of the following are true:
 - [Validator Registry](validator-registry.md)
 - [Cobalt Implementation](cobalt-implementation.md)
 - Deterministic Governance Agent Burndown
-- Source plan: `docs/research-requests/heavy_redesign.md`
 - Provider bringup: `docs/status/gov-inference-provider-bringup-2026-05-23.md`

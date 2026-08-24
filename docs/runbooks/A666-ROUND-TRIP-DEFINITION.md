@@ -349,8 +349,6 @@ lineages.
 
 ## Authoritative source documents
 
-- [A666 Five-Demo Program](../plans/A666-FIVE-DEMO-PROGRAM-20260809.md)
-- [A666 Unified Execution Plan](../plans/A666-UNIFIED-EXECUTION-PLAN-20260808.md)
-- [A666 End-to-End Live-Funds Runbook](A666-END-TO-END-LIVE-FUNDS-RUNBOOK-20260807.md)
-- [A666 Variable-Size Real-NAV Round-Trip Execution Spec](../plans/A666-VARIABLE-SIZE-REAL-NAV-ROUNDTRIP-EXECUTION-SPEC-20260729.md)
-- [A666 End-to-End Mainnet Primary-Issuance Spec](../plans/A666-END-TO-END-MAINNET-PRIMARY-ISSUANCE-SPEC-20260727.md)
+- [Deferred A666 Private Swap Production Hardening](../deferred-plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md)
+- [Primary Market Accounting](../navcoins/primary-market-accounting.md)
+- [A666 Deployed-State Baseline](../status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md)

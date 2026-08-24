@@ -1,1 +1,0 @@
-cf9b436105a401f1af64dde1400a7eed8d73e46663abc30c25e90d50152a8675  /home/postfiat/.pft/a666-live-demo/deployment/deployment-manifest.json

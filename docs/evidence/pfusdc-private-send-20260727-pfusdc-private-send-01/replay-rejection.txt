@@ -1,1 +1,0 @@
-error: apply-shield-batch failed: shielded batch `0e927edb0d672c8e54f5426cf8be4c029d5815a5ff0be0952535b5e3ec24a2da4cd7b35a6bbbe93bbc072d3f0875a30b` already applied

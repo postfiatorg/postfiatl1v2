@@ -4,8 +4,8 @@ Status: provider automation ready; no paid GPU currently running.
 
 ## Purpose
 
-`docs/research-requests/heavy_redesign.md` adds deterministic governance-agent
-gates that need a pinned Qwen/SGLang endpoint for replay testing. The local
+The deterministic governance-agent plan includes replay gates that need a
+pinned Qwen/SGLang endpoint. The local
 operator path should not depend on manually driving provider CLIs.
 
 ## Local Automation

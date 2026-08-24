@@ -1,8 +1,0 @@
-{
-  "elapsed_ms": 5683,
-  "instruction_count": 219974081,
-  "proof_kind": "receipt",
-  "public_values_bytes": 1120,
-  "schema": "postfiat-pftl-uniswap-execute-report-v1",
-  "witness": "/workspace/a666-acceptance/live/a666-epoch5-transparent-20260728t1505z/export-receipt-witness.json"
-}

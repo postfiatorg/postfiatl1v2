@@ -7,7 +7,7 @@
 > a StakeHub dependency into a wallet, public proxy, validator, signer, or new
 > NAVCoin. A provider-neutral A666 successor requires the governed migration
 > in the
-> [StakeHub decoupling plan](../plans/STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md).
+> [deferred StakeHub decoupling plan](../deferred-plans/STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md).
 
 **Status:** executed through empty-pool initialization; proof-backed export,
 seeding, and public activation remain pending

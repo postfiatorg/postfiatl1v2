@@ -143,23 +143,10 @@ restarted, so its existing unlocked lifetime was not disturbed.
    bindings require it, proof rehearsal, and pause/drain/write-down disposition for the old
    lane before money flows.
 
-## 9. Durable evidence index
+## 9. Evidence retention
 
-The full receipt tree is under:
-
-`/home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-egress-lane-redeploy-20260809/epoch6-successor/`
-
-Principal closeout files:
-
-- `deploy/deploy-result.json` and `deploy/gas-accounting.json`
-- `governance/` and `pftl/h794-nav-bind/`
-- `roundtrip/deposit/deposit-result.json`
-- `roundtrip/pfusdc-claim-summary.json`
-- `roundtrip/pfusdc-egress/summary.json`
-- `roundtrip/pfusdc-egress/withdrawal-result.json`
-- `roundtrip/final-reconciliation.json`
-- `roundtrip/two-rpc-closeout.json`
-- `roundtrip/prover-runtime.json`
-- `custody/policy-request.json`
+The raw deployment, governance, round-trip, reconciliation, prover, and custody
+receipt tree was removed from the working documentation tree. Git history
+retains the exact closeout artifacts; this report is the curated summary.
 
 Task Node task: `task_0f8d57dcc1dab7228ce8ff8792b50fe3`.

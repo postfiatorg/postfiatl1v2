@@ -1,9 +1,0 @@
-{
-  "cycle_tracker": {},
-  "elapsed_ms": 15041,
-  "instruction_count": 744041727,
-  "invocation_tracker": {},
-  "public_values_bytes": 1486,
-  "schema": "postfiat.pfusdc.egress_execute_report.v1",
-  "witness": "docs/evidence/a666-acceptance-20260728/phase-5-transparent-redeem-verify/pfusdc-egress/witness.json"
-}

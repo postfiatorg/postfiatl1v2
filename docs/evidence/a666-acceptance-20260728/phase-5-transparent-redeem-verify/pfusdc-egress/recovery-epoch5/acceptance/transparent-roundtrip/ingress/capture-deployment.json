@@ -1,9 +1,0 @@
-{
-  "vault": "0xaaa78fda7062efce769e95cd72fc55e507bc8183",
-  "deposit_tx": "0xb72a5151be91e6e171ffa708f093539807e9e24d627cbf2f797c33fc6ce3304c",
-  "amount_atoms": 1005000,
-  "recipient": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
-  "route_binding": "caec1d48fd3112116a96ec6fcf4a1428a190957962dfb042b811a72ff0d02d93",
-  "nonce": "e8339e915c9d07fe8c11cd55beb56616c569aa70722b99aed4865769084b3f77",
-  "creation_bytecode_hash": "0xc02403a4d05a2b4400d21b360e5787ad560c1fccd293c1ad937840f986fdcd38"
-}

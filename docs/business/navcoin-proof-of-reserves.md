@@ -15,7 +15,7 @@
 > Existing provider-named profiles and packets remain immutable historical
 > state; wallets execute only from finalized PFTL proof, packet, and route
 > state. See the
-> [decoupling plan](../plans/STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md).
+> [deferred decoupling plan](../deferred-plans/STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md).
 
 Status: Phase 0 + Phase 1 live on devnet
 Plan: `NAVCOIN_POR_V2_PLAN.md` (repo root)

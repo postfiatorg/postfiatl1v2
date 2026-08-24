@@ -1,1 +1,0 @@
-b5a33e9dcca2d42c63b6d1d16a03061afd5172b36b571bcc9741f6a8294f2882  /home/postfiat/.pft/a666-live-demo/deployment/deployment.public.json

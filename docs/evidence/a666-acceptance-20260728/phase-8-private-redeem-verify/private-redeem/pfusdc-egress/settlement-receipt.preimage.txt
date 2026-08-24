@@ -1,4 +1,0 @@
-The operator-side settlement preimage was not retained in this public packet.
-The consensus-bound SHA3-384 receipt is in settlement-receipt.sha3-384 and
-settle.ops.json. The Ethereum withdrawal inputs and exact balance deltas are
-in withdrawal-result.json.

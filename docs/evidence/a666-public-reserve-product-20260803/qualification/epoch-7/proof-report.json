@@ -1,6 +1,0 @@
-{
-  "program_vkey": "0x00f3857f96ef97e00bd15b4030acd8d6b0a72740b28c6160d154bc2c9bb141bf",
-  "proof_bytes": 356,
-  "public_values_bytes": 584,
-  "schema": "postfiat.reserve_groth16_proof.v1"
-}

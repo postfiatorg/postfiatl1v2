@@ -11,8 +11,6 @@ accident.
 | Area | Report | What It Proves |
 | --- | --- | --- |
 | A666 current state | `docs/status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md` | Current combined deployment, economics, trust boundaries, live PFTL snapshot, qualification result, and release limitations. |
-| A666 variable-size mainnet flow | `docs/evidence/a666-variable-size-nav-roundtrip-20260728/README.md` | Transparent `1 A666` and private-middle `100 A666` issue, real StakeHub NAV refresh, both redemptions, and terminal conservation; business pass/release fail. |
-| PFTL private-swap P0 qualification | `docs/evidence/pftl-private-swap-p0-20260730/README.md` | Proposal-view-aware finality observer, four exact-once private issue/redeem cycles, latency samples, stale-NAV prepublication rejection, and final six-validator audit. |
 | FastSwap local release | `docs/specs/fastswap-v1-local-release-manifest-20260715.json` | Hash-bound local six-validator release manifest; the accompanying implementation record labels local latency separately from WAN claims. |
 | FastPay recovery | `docs/specs/fastpay-payment-recovery-v1.md` | Ordered consume-or-cancel protocol, durable apply/replay boundary, and recovery verification contract. |
 | Controlled testnet | `reports/testnet-controlled-launch-evidence-pack/head-56db87a-optimized-latency/testnet-controlled-launch-evidence-pack.json` | Controlled transparent launch evidence pack for the optimized finality path. |

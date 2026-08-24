@@ -1,6 +1,0 @@
-217bc7bf2706a92c6c3a47619ec1c06398baae24b0449ccdd55ec76edc396fb6  scripts/a666-mainnet-transparent-issue-after-deposit.sh
-1d6112ac8e967ef7f7168ce35f2be75e83512f274ed7c2d3dac866961f5e753d  scripts/a666-mainnet-private-issue-middle.sh
-ae9b181de6f79552ac08dfb70a1f60d774b88e627f321240c3608ef3c66f937b  scripts/a666-mainnet-primary-issue-ops.py
-88a4beff902abad0daa84f973bfe1725197627350fc877a1d9fe5721b83539e4  scripts/a666-mainnet-pfusdc-deposit.py
-a646d0e1c0a1e3d963443b725e2b6dd317f2c9e9bb34b37e45c7226034a744e2  scripts/a666-build-live-nav-mark-ops.py
-bd0fae3a13529f2dc66cf46f1e485a544e1455aa98838b22dc64b1f607c37d54  /home/postfiat/repos/a666-eth-fast-lane-combined-20260724/docs/evidence/a666-variable-size-nav-roundtrip-20260728/campaign-manifest.json

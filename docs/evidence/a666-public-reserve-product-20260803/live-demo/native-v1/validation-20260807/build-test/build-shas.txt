@@ -1,3 +1,0 @@
-9adce9a474644af31b5e02bcdfb7d1fb1b8a51f11e6bf3f1c3a4a0f279d036ed  target/release/postfiat-node
-client sha = node sha (same binary, same commit lineage)
-client production sha: e1f84b1f42dc901b22bacb16196f8ff09609ddcbc5af862d62a44c5db60bf9d8

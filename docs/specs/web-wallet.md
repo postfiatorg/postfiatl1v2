@@ -6,7 +6,7 @@
 > services. StakeHub is not a wallet dependency or public proof service. Read
 > references below to StakeHub only as historical prototype lineage; new work
 > follows the
-> [open reserve-proof plan](../plans/STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md)
+> [deferred open reserve-proof plan](../deferred-plans/STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md)
 > and the
 > [generic export/return runbook](../runbooks/NAVCOIN-GENERIC-EXPORT-RETURN-RELAY-20260801.md).
 
