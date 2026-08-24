@@ -566,6 +566,7 @@ fn atomic_swap_archive_replay_rejects_preactivation_without_mutation() {
         &batch,
         &block,
         &governance,
+        &[],
     )
     .expect_err("preactivation archive swap replayed");
     assert!(error.to_string().contains("atomic_swap_not_active"));
@@ -580,6 +581,7 @@ fn atomic_swap_archive_replay_rejects_preactivation_without_mutation() {
         &batch,
         &block,
         &active_governance,
+        &[],
     )
     .expect("active archive swap failed");
     assert_eq!(receipts.len(), 1);

@@ -2446,7 +2446,11 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
         (asset.clone(), None)
     };
 
-    let ledger_supply = issued_asset_family_supply(ledger, &operation.asset_id)?;
+    let ledger_supply = issued_asset_family_supply_with_non_nav_spread(
+        ledger,
+        &operation.asset_id,
+        !compatibility.allow_legacy_non_nav_spread_supply_omission,
+    )?;
     let orchard_live = orchard_balances
         .iter()
         .filter(|balance| {

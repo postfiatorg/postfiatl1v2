@@ -1847,6 +1847,7 @@ fn apply_asset_orchard_private_primary_issue_action_to_state(
     shielded: &mut ShieldedState,
     payload: &AssetOrchardPrivatePrimaryIssueActionPayload,
     block_height: u64,
+    allow_legacy_non_nav_spread_supply_omission: bool,
 ) -> io::Result<Receipt> {
     apply_asset_orchard_private_primary_action_to_state(
         genesis,
@@ -1855,6 +1856,7 @@ fn apply_asset_orchard_private_primary_issue_action_to_state(
         payload,
         block_height,
         false,
+        allow_legacy_non_nav_spread_supply_omission,
     )
 }
 
@@ -1864,6 +1866,7 @@ fn apply_asset_orchard_private_primary_redeem_action_to_state(
     shielded: &mut ShieldedState,
     payload: &AssetOrchardPrivatePrimaryRedeemActionPayload,
     block_height: u64,
+    allow_legacy_non_nav_spread_supply_omission: bool,
 ) -> io::Result<Receipt> {
     apply_asset_orchard_private_primary_action_to_state(
         genesis,
@@ -1872,6 +1875,7 @@ fn apply_asset_orchard_private_primary_redeem_action_to_state(
         payload,
         block_height,
         true,
+        allow_legacy_non_nav_spread_supply_omission,
     )
 }
 
@@ -1904,6 +1908,7 @@ fn apply_asset_orchard_private_primary_action_to_state(
     payload: &AssetOrchardPrivatePrimaryIssueActionPayload,
     block_height: u64,
     is_redeem: bool,
+    allow_legacy_non_nav_spread_supply_omission: bool,
 ) -> io::Result<Receipt> {
     let reject = |code: &'static str, message: String| -> io::Result<Receipt> {
         Ok(Receipt::rejected(
@@ -2072,7 +2077,14 @@ fn apply_asset_orchard_private_primary_action_to_state(
         .validate_nav_state(&genesis.chain_id)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     verify_shielded_state(&trial_shielded)?;
-    verify_global_issued_asset_supply_caps(&trial_ledger, &trial_shielded)?;
+    if allow_legacy_non_nav_spread_supply_omission {
+        verify_global_issued_asset_supply_caps_legacy_non_nav_spread_omitted(
+            &trial_ledger,
+            &trial_shielded,
+        )?;
+    } else {
+        verify_global_issued_asset_supply_caps(&trial_ledger, &trial_shielded)?;
+    }
 
     *ledger = trial_ledger;
     *shielded = trial_shielded;

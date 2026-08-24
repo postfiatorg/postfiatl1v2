@@ -1657,6 +1657,24 @@
                 .contains("exceeds finalized NAV circulating supply"),
             "{error}"
         );
+        legacy_nav_incomplete_pre_orchard_supply_cap_replicated_state_root(
+            &genesis,
+            &governance,
+            &ledger,
+            &[],
+            &shielded,
+            &BridgeState::empty(),
+        )
+        .expect("archive-only NAV-incomplete commitment validates inventory without the later cap");
+        legacy_vault_bridge_deposit_attestation_pre_orchard_supply_cap_replicated_state_root(
+            &genesis,
+            &governance,
+            &ledger,
+            &[],
+            &shielded,
+            &BridgeState::empty(),
+        )
+        .expect("archive-only vault-deposit commitment validates inventory without the later cap");
     }
 
     #[test]

@@ -618,6 +618,7 @@ pub struct AssetExecutionCompatibility {
     pub allow_unverified_pftl_uniswap_bridge_replay: bool,
     pub allow_incremental_age_release_replay: bool,
     pub allow_legacy_pftl_uniswap_disabled_live_value_replay: bool,
+    pub allow_legacy_non_nav_spread_supply_omission: bool,
     pub bridge_verification_activation_height: Option<u64>,
     pub orchard_aware_bridge_claim_activation_height: Option<u64>,
     pub pfusdc_source_series_activation_height: Option<u64>,
@@ -635,6 +636,7 @@ impl AssetExecutionCompatibility {
             allow_unverified_pftl_uniswap_bridge_replay: false,
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
+            allow_legacy_non_nav_spread_supply_omission: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
             pfusdc_source_series_activation_height: None,
@@ -652,6 +654,7 @@ impl AssetExecutionCompatibility {
             allow_unverified_pftl_uniswap_bridge_replay: true,
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
+            allow_legacy_non_nav_spread_supply_omission: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
             pfusdc_source_series_activation_height: None,
@@ -669,6 +672,7 @@ impl AssetExecutionCompatibility {
             allow_unverified_pftl_uniswap_bridge_replay: true,
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
+            allow_legacy_non_nav_spread_supply_omission: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
             pfusdc_source_series_activation_height: None,
@@ -686,6 +690,7 @@ impl AssetExecutionCompatibility {
             allow_unverified_pftl_uniswap_bridge_replay: true,
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
+            allow_legacy_non_nav_spread_supply_omission: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
             pfusdc_source_series_activation_height: None,
@@ -703,6 +708,7 @@ impl AssetExecutionCompatibility {
             allow_unverified_pftl_uniswap_bridge_replay: true,
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
+            allow_legacy_non_nav_spread_supply_omission: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
             pfusdc_source_series_activation_height: None,
@@ -752,6 +758,11 @@ impl AssetExecutionCompatibility {
 
     pub const fn with_legacy_pftl_uniswap_disabled_live_value_replay(mut self) -> Self {
         self.allow_legacy_pftl_uniswap_disabled_live_value_replay = true;
+        self
+    }
+
+    pub const fn with_legacy_non_nav_spread_supply_omission(mut self) -> Self {
+        self.allow_legacy_non_nav_spread_supply_omission = true;
         self
     }
 
