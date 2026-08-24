@@ -117,6 +117,7 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
             let independence_values = [
                 flag_value(flags, "--section2-packet-root"),
                 flag_value(flags, "--source-commit"),
+                flag_value(flags, "--release-binary-sha256"),
                 flag_value(flags, "--onboarding-challenge-id"),
                 flag_value(flags, "--provider-account-fingerprint"),
                 flag_value(flags, "--host-admin-fingerprint"),
@@ -132,24 +133,27 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                     source_commit: independence_values[1]
                         .ok_or("operator independence evidence requires --source-commit")?
                         .to_string(),
-                    onboarding_challenge_id: independence_values[2]
+                    release_binary_sha256: independence_values[2]
+                        .ok_or("operator independence evidence requires --release-binary-sha256")?
+                        .to_string(),
+                    onboarding_challenge_id: independence_values[3]
                         .ok_or("operator independence evidence requires --onboarding-challenge-id")?
                         .to_string(),
-                    provider_account_fingerprint: independence_values[3]
+                    provider_account_fingerprint: independence_values[4]
                         .ok_or(
                             "operator independence evidence requires --provider-account-fingerprint",
                         )?
                         .to_string(),
-                    host_admin_fingerprint: independence_values[4]
+                    host_admin_fingerprint: independence_values[5]
                         .ok_or("operator independence evidence requires --host-admin-fingerprint")?
                         .to_string(),
-                    key_custody_fingerprint: independence_values[5]
+                    key_custody_fingerprint: independence_values[6]
                         .ok_or("operator independence evidence requires --key-custody-fingerprint")?
                         .to_string(),
-                    provider_attestation_hash: independence_values[6]
+                    provider_attestation_hash: independence_values[7]
                         .ok_or("operator independence evidence requires --provider-attestation-hash")?
                         .to_string(),
-                    host_control_attestation_hash: independence_values[7]
+                    host_control_attestation_hash: independence_values[8]
                         .ok_or(
                             "operator independence evidence requires --host-control-attestation-hash",
                         )?
@@ -215,6 +219,8 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                 .ok_or("missing --section2-packet-root")?;
             let expected_source_commit =
                 flag_value(flags, "--source-commit").ok_or("missing --source-commit")?;
+            let expected_release_binary_sha256 = flag_value(flags, "--release-binary-sha256")
+                .ok_or("missing --release-binary-sha256")?;
             let min_operator_groups = flag_value(flags, "--min-operator-groups")
                 .unwrap_or("3")
                 .parse::<usize>()
@@ -232,6 +238,7 @@ fn run_cli_group_04(command: &str, flags: &[String]) -> Result<(), String> {
                 network: network.to_string(),
                 expected_section2_packet_root: expected_section2_packet_root.to_string(),
                 expected_source_commit: expected_source_commit.to_string(),
+                expected_release_binary_sha256: expected_release_binary_sha256.to_string(),
                 min_operator_groups,
                 min_infrastructure_domains,
             })

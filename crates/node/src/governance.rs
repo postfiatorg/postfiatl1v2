@@ -1606,6 +1606,11 @@ pub fn verify_operator_independence(
         &options.expected_source_commit,
         Some(40),
     )?;
+    validate_hex_string(
+        "operator independence expected release binary SHA-256",
+        &options.expected_release_binary_sha256,
+        Some(64),
+    )?;
     if options.min_operator_groups == 0 || options.min_infrastructure_domains == 0 {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -1623,6 +1628,8 @@ pub fn verify_operator_independence(
     let mut provider_account_owners = BTreeMap::<String, String>::new();
     let mut host_admin_owners = BTreeMap::<String, String>::new();
     let mut key_custody_owners = BTreeMap::<String, String>::new();
+    let mut provider_attestation_owners = BTreeMap::<String, String>::new();
+    let mut host_control_attestation_owners = BTreeMap::<String, String>::new();
     let mut master_keys = BTreeSet::<String>::new();
     let mut hot_keys = BTreeSet::<String>::new();
     let mut onboarding_challenges = BTreeSet::<String>::new();
@@ -1695,6 +1702,12 @@ pub fn verify_operator_independence(
                 format!("operator manifest `{validator_id}` source commit mismatch"),
             ));
         }
+        if evidence.release_binary_sha256 != options.expected_release_binary_sha256 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("operator manifest `{validator_id}` release binary hash mismatch"),
+            ));
+        }
         if !master_keys.insert(manifest.master_public_key_hex.clone()) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -1731,6 +1744,18 @@ pub fn verify_operator_independence(
             &evidence.key_custody_fingerprint,
             &manifest.operator,
         )?;
+        record_operator_fingerprint_owner(
+            &mut provider_attestation_owners,
+            "provider attestation hash",
+            &evidence.provider_attestation_hash,
+            &manifest.operator,
+        )?;
+        record_operator_fingerprint_owner(
+            &mut host_control_attestation_owners,
+            "host-control attestation hash",
+            &evidence.host_control_attestation_hash,
+            &manifest.operator,
+        )?;
 
         *operator_counts.entry(manifest.operator.clone()).or_default() += 1;
         infrastructure_domains.insert(manifest.infrastructure.provider_group.clone());
@@ -1742,6 +1767,9 @@ pub fn verify_operator_independence(
             provider_account_fingerprint: evidence.provider_account_fingerprint.clone(),
             host_admin_fingerprint: evidence.host_admin_fingerprint.clone(),
             key_custody_fingerprint: evidence.key_custody_fingerprint.clone(),
+            onboarding_challenge_id: evidence.onboarding_challenge_id.clone(),
+            provider_attestation_hash: evidence.provider_attestation_hash.clone(),
+            host_control_attestation_hash: evidence.host_control_attestation_hash.clone(),
         });
     }
 
@@ -1796,6 +1824,7 @@ pub fn verify_operator_independence(
         every_operator_withdrawal_preserves_quorum,
         section2_packet_root: options.expected_section2_packet_root,
         source_commit: options.expected_source_commit,
+        release_binary_sha256: options.expected_release_binary_sha256,
         validators: rows,
     })
 }

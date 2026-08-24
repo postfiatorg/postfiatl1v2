@@ -2342,6 +2342,7 @@
                 "40bc86c9416a1b468f5625a2ff83724c9268f9d49c41007e9b0c4bc70c43c1e1"
                     .to_string(),
             source_commit: "a".repeat(40),
+            release_binary_sha256: "9".repeat(64),
             onboarding_challenge_id: "b".repeat(64),
             provider_account_fingerprint: "c".repeat(64),
             host_admin_fingerprint: "d".repeat(64),
@@ -2445,10 +2446,14 @@
             "40bc86c9416a1b468f5625a2ff83724c9268f9d49c41007e9b0c4bc70c43c1e1"
                 .to_string();
         let source_commit = "bfb85475aaeb20e4cac56df7da9e1783a0df30a4".to_string();
+        let release_binary_sha256 =
+            "e1ab5f2db977426d4582d0cb487f058f72e493230dbde1452fbcb3ebe69e2d7d"
+                .to_string();
 
         let evidence_for = |index: usize| OperatorIndependenceEvidence {
             section2_packet_root: section2_packet_root.clone(),
             source_commit: source_commit.clone(),
+            release_binary_sha256: release_binary_sha256.clone(),
             onboarding_challenge_id: format!("{:064x}", index + 1),
             provider_account_fingerprint: format!("{:064x}", index + 101),
             host_admin_fingerprint: format!("{:064x}", index + 201),
@@ -2490,6 +2495,7 @@
             network: "controlled-testnet".to_string(),
             expected_section2_packet_root: section2_packet_root.clone(),
             expected_source_commit: source_commit.clone(),
+            expected_release_binary_sha256: release_binary_sha256.clone(),
             min_operator_groups: 3,
             min_infrastructure_domains: 3,
         };
@@ -2501,6 +2507,7 @@
         assert_eq!(report.operator_group_count, 6);
         assert_eq!(report.infrastructure_domain_count, 6);
         assert_eq!(report.max_operator_validator_count, 1);
+        assert_eq!(report.release_binary_sha256, release_binary_sha256);
         assert!(report.every_operator_below_quorum);
         assert!(report.every_operator_withdrawal_preserves_quorum);
 

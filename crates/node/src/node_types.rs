@@ -4418,6 +4418,7 @@ pub struct OperatorIndependenceVerifyOptions {
     pub network: String,
     pub expected_section2_packet_root: String,
     pub expected_source_commit: String,
+    pub expected_release_binary_sha256: String,
     pub min_operator_groups: usize,
     pub min_infrastructure_domains: usize,
 }
@@ -4462,6 +4463,7 @@ pub struct OperatorCobaltTrustBinding {
 pub struct OperatorIndependenceEvidence {
     pub section2_packet_root: String,
     pub source_commit: String,
+    pub release_binary_sha256: String,
     pub onboarding_challenge_id: String,
     pub provider_account_fingerprint: String,
     pub host_admin_fingerprint: String,
@@ -4527,6 +4529,9 @@ pub struct OperatorIndependenceValidatorReport {
     pub provider_account_fingerprint: String,
     pub host_admin_fingerprint: String,
     pub key_custody_fingerprint: String,
+    pub onboarding_challenge_id: String,
+    pub provider_attestation_hash: String,
+    pub host_control_attestation_hash: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -4544,6 +4549,7 @@ pub struct OperatorIndependenceVerifyReport {
     pub every_operator_withdrawal_preserves_quorum: bool,
     pub section2_packet_root: String,
     pub source_commit: String,
+    pub release_binary_sha256: String,
     pub validators: Vec<OperatorIndependenceValidatorReport>,
 }
 

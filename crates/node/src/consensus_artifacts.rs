@@ -3333,6 +3333,11 @@ pub(super) fn validate_operator_independence_evidence(
         &evidence.source_commit,
         Some(40),
     )?;
+    validate_hex_string(
+        "operator independence release binary SHA-256",
+        &evidence.release_binary_sha256,
+        Some(64),
+    )?;
     for (label, value) in [
         (
             "operator independence onboarding challenge id",
