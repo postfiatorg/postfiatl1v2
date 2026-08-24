@@ -1547,6 +1547,15 @@ mod tests {
         let expanded_bytes = serde_json::to_vec(&transcript)
             .expect("serialize expanded transcript")
             .len();
+        let rpc_request = crate::cobalt_shadow_runtime::compressed_commit_request(&transcript)
+            .expect("compress 20-validator sidecar commit");
+        let rpc_request_bytes = serde_json::to_vec(&rpc_request)
+            .expect("serialize compressed sidecar request")
+            .len();
+        assert!(
+            rpc_request_bytes <= crate::cobalt_shadow_runtime::MAX_RPC_FRAME_BYTES,
+            "20-validator sidecar commit is {rpc_request_bytes} bytes"
+        );
         let certificate = crate::cobalt_authority_certificate::compact_cobalt_validator_update_decision_certificate(
             CobaltValidatorUpdateDecisionCertificateV1 {
                 schema: COBALT_VALIDATOR_UPDATE_DECISION_CERTIFICATE_SCHEMA_V1.to_string(),
@@ -1583,7 +1592,7 @@ mod tests {
             bft_quorum_threshold(fixture.validators.len()).expect("quorum")
         );
         eprintln!(
-            "20-validator Cobalt certificate: expanded_transcript_bytes={expanded_bytes} compressed_certificate_bytes={certificate_bytes} signers={}",
+            "20-validator Cobalt certificate: expanded_transcript_bytes={expanded_bytes} compressed_certificate_bytes={certificate_bytes} compressed_sidecar_request_bytes={rpc_request_bytes} signers={}",
             decision.certificate_signer_count
         );
     }

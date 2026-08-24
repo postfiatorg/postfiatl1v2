@@ -32,11 +32,10 @@ use std::io::Read as _;
 
 const COBALT_AUTHORITY_COMPACT_TRANSCRIPT_SCHEMA_V1: &str =
     "postfiat.cobalt.authority_compact_protocol_transcript.v1";
-const COBALT_AUTHORITY_COMPRESSED_VALUE_SCHEMA_V1: &str =
-    "postfiat.cobalt.authority_compressed_value.v1";
-const COBALT_AUTHORITY_COMPRESSION_CODEC_V1: &str = "deflate-json-v1";
+const COBALT_COMPRESSED_VALUE_SCHEMA_V1: &str = "postfiat.cobalt.compressed_value.v1";
+const COBALT_COMPRESSION_CODEC_V1: &str = "deflate-json-v1";
 pub const MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES: usize = 1024 * 1024;
-const MAX_COBALT_AUTHORITY_DECOMPRESSED_VALUE_BYTES: usize = 16 * 1024 * 1024;
+pub(super) const MAX_COBALT_DECOMPRESSED_VALUE_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -48,7 +47,7 @@ struct CobaltAuthorityCompactProtocolTranscriptV1 {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct CobaltAuthorityCompressedValueV1 {
+struct CobaltCompressedValueV1 {
     schema: String,
     codec: String,
     decompressed_bytes: usize,
@@ -69,21 +68,21 @@ fn hash_serialized<T: Serialize>(domain: &str, value: &T) -> io::Result<String> 
     Ok(hash_hex(domain, &encoded))
 }
 
-fn compress_authority_value<T: Serialize>(value: &T) -> io::Result<serde_json::Value> {
+pub(super) fn compress_cobalt_value<T: Serialize>(value: &T) -> io::Result<serde_json::Value> {
     let encoded = serde_json::to_vec(value).map_err(invalid_data)?;
-    if encoded.len() > MAX_COBALT_AUTHORITY_DECOMPRESSED_VALUE_BYTES {
+    if encoded.len() > MAX_COBALT_DECOMPRESSED_VALUE_BYTES {
         return Err(certificate_error(format!(
             "Cobalt authority value is {} bytes after expansion; maximum is {}",
             encoded.len(),
-            MAX_COBALT_AUTHORITY_DECOMPRESSED_VALUE_BYTES
+            MAX_COBALT_DECOMPRESSED_VALUE_BYTES
         )));
     }
     let mut encoder = DeflateEncoder::new(Vec::new(), Compression::best());
     encoder.write_all(&encoded)?;
     let compressed = encoder.finish()?;
-    serde_json::to_value(CobaltAuthorityCompressedValueV1 {
-        schema: COBALT_AUTHORITY_COMPRESSED_VALUE_SCHEMA_V1.to_string(),
-        codec: COBALT_AUTHORITY_COMPRESSION_CODEC_V1.to_string(),
+    serde_json::to_value(CobaltCompressedValueV1 {
+        schema: COBALT_COMPRESSED_VALUE_SCHEMA_V1.to_string(),
+        codec: COBALT_COMPRESSION_CODEC_V1.to_string(),
         decompressed_bytes: encoded.len(),
         payload_hash: hash_hex("postfiat.cobalt.authority-compressed-value.v1", &encoded),
         payload_base64: BASE64_STANDARD.encode(compressed),
@@ -91,16 +90,16 @@ fn compress_authority_value<T: Serialize>(value: &T) -> io::Result<serde_json::V
     .map_err(invalid_data)
 }
 
-fn decompress_authority_value<T>(value: &serde_json::Value) -> io::Result<T>
+pub(super) fn decompress_cobalt_value<T>(value: &serde_json::Value) -> io::Result<T>
 where
     T: Serialize + for<'de> Deserialize<'de>,
 {
-    let packed: CobaltAuthorityCompressedValueV1 =
+    let packed: CobaltCompressedValueV1 =
         serde_json::from_value(value.clone()).map_err(invalid_data)?;
-    if packed.schema != COBALT_AUTHORITY_COMPRESSED_VALUE_SCHEMA_V1
-        || packed.codec != COBALT_AUTHORITY_COMPRESSION_CODEC_V1
+    if packed.schema != COBALT_COMPRESSED_VALUE_SCHEMA_V1
+        || packed.codec != COBALT_COMPRESSION_CODEC_V1
         || packed.decompressed_bytes == 0
-        || packed.decompressed_bytes > MAX_COBALT_AUTHORITY_DECOMPRESSED_VALUE_BYTES
+        || packed.decompressed_bytes > MAX_COBALT_DECOMPRESSED_VALUE_BYTES
     {
         return Err(certificate_error(
             "Cobalt authority compressed value header is invalid",
@@ -113,10 +112,10 @@ where
     let mut encoded = Vec::with_capacity(packed.decompressed_bytes);
     decoder
         .by_ref()
-        .take((MAX_COBALT_AUTHORITY_DECOMPRESSED_VALUE_BYTES + 1) as u64)
+        .take((MAX_COBALT_DECOMPRESSED_VALUE_BYTES + 1) as u64)
         .read_to_end(&mut encoded)?;
     if encoded.len() != packed.decompressed_bytes
-        || encoded.len() > MAX_COBALT_AUTHORITY_DECOMPRESSED_VALUE_BYTES
+        || encoded.len() > MAX_COBALT_DECOMPRESSED_VALUE_BYTES
         || hash_hex("postfiat.cobalt.authority-compressed-value.v1", &encoded)
             != packed.payload_hash
     {
@@ -125,8 +124,8 @@ where
         ));
     }
     let decoded: T = serde_json::from_slice(&encoded).map_err(invalid_data)?;
-    let canonical: CobaltAuthorityCompressedValueV1 =
-        serde_json::from_value(compress_authority_value(&decoded)?).map_err(invalid_data)?;
+    let canonical: CobaltCompressedValueV1 =
+        serde_json::from_value(compress_cobalt_value(&decoded)?).map_err(invalid_data)?;
     if canonical != packed {
         return Err(certificate_error(
             "Cobalt authority compressed value is not canonically encoded",
@@ -290,6 +289,26 @@ fn expand_protocol_transcript(
     Ok(compact.transcript)
 }
 
+pub(super) fn compress_cobalt_protocol_transcript(
+    transcript: &CobaltShadowProtocolTranscript,
+) -> io::Result<serde_json::Value> {
+    compress_cobalt_value(&compact_protocol_transcript(transcript.clone())?)
+}
+
+pub(super) fn decompress_cobalt_protocol_transcript(
+    value: &serde_json::Value,
+) -> io::Result<CobaltShadowProtocolTranscript> {
+    let compact: CobaltAuthorityCompactProtocolTranscriptV1 = decompress_cobalt_value(value)?;
+    let transcript =
+        expand_protocol_transcript(&serde_json::to_value(&compact).map_err(invalid_data)?)?;
+    if compact_protocol_transcript(transcript.clone())? != compact {
+        return Err(certificate_error(
+            "Cobalt authority transcript does not use the canonical minimal signer set",
+        ));
+    }
+    Ok(transcript)
+}
+
 pub fn compact_cobalt_validator_update_decision_certificate(
     mut certificate: CobaltValidatorUpdateDecisionCertificateV1,
 ) -> io::Result<CobaltValidatorUpdateDecisionCertificateV1> {
@@ -297,9 +316,8 @@ pub fn compact_cobalt_validator_update_decision_certificate(
         serde_json::from_value(certificate.registry_binding).map_err(invalid_data)?;
     let transcript: CobaltShadowProtocolTranscript =
         serde_json::from_value(certificate.protocol_transcript).map_err(invalid_data)?;
-    certificate.registry_binding = compress_authority_value(&binding)?;
-    certificate.protocol_transcript =
-        compress_authority_value(&compact_protocol_transcript(transcript)?)?;
+    certificate.registry_binding = compress_cobalt_value(&binding)?;
+    certificate.protocol_transcript = compress_cobalt_protocol_transcript(&transcript)?;
     let encoded = serde_json::to_vec(&certificate).map_err(invalid_data)?;
     if encoded.len() > MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES {
         return Err(certificate_error(format!(
@@ -464,16 +482,8 @@ pub fn verify_cobalt_validator_update_decision_certificate(
         )));
     }
     let binding: CobaltShadowRegistryBinding =
-        decompress_authority_value(&certificate.registry_binding)?;
-    let compact: CobaltAuthorityCompactProtocolTranscriptV1 =
-        decompress_authority_value(&certificate.protocol_transcript)?;
-    let transcript =
-        expand_protocol_transcript(&serde_json::to_value(&compact).map_err(invalid_data)?)?;
-    if compact_protocol_transcript(transcript.clone())? != compact {
-        return Err(certificate_error(
-            "Cobalt authority transcript does not use the canonical minimal signer set",
-        ));
-    }
+        decompress_cobalt_value(&certificate.registry_binding)?;
+    let transcript = decompress_cobalt_protocol_transcript(&certificate.protocol_transcript)?;
     let committee = validate_registry_binding(
         &binding,
         expected_domain,
@@ -822,10 +832,7 @@ pub fn verify_cobalt_validator_update_decision_certificate(
 pub fn cobalt_decision_ratification(
     certificate: &CobaltValidatorUpdateDecisionCertificateV1,
 ) -> io::Result<DabcRatifiedAmendment> {
-    let compact: CobaltAuthorityCompactProtocolTranscriptV1 =
-        decompress_authority_value(&certificate.protocol_transcript)?;
-    let transcript =
-        expand_protocol_transcript(&serde_json::to_value(compact).map_err(invalid_data)?)?;
+    let transcript = decompress_cobalt_protocol_transcript(&certificate.protocol_transcript)?;
     Ok(transcript.ratification)
 }
 
@@ -835,12 +842,12 @@ pub(super) fn rewrite_cobalt_certificate_domain_for_test(
     chain_id: &str,
 ) -> io::Result<()> {
     let mut binding: CobaltShadowRegistryBinding =
-        decompress_authority_value(&certificate.registry_binding)?;
+        decompress_cobalt_value(&certificate.registry_binding)?;
     binding.trust_graph.chain_id = chain_id.to_string();
-    certificate.registry_binding = compress_authority_value(&binding)?;
+    certificate.registry_binding = compress_cobalt_value(&binding)?;
     let mut compact: CobaltAuthorityCompactProtocolTranscriptV1 =
-        decompress_authority_value(&certificate.protocol_transcript)?;
+        decompress_cobalt_value(&certificate.protocol_transcript)?;
     compact.transcript.trust_graph.chain_id = chain_id.to_string();
-    certificate.protocol_transcript = compress_authority_value(&compact)?;
+    certificate.protocol_transcript = compress_cobalt_value(&compact)?;
     Ok(())
 }

@@ -11,6 +11,10 @@ use postfiat_crypto_provider::hash_hex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::cobalt_authority_certificate::{
+    compress_cobalt_protocol_transcript, decompress_cobalt_protocol_transcript,
+    MAX_COBALT_DECOMPRESSED_VALUE_BYTES,
+};
 use crate::cobalt_shadow::{
     build_signed_protocol_transcript, CobaltShadowHistoryRange, CobaltShadowIdentity,
     CobaltShadowLimits, CobaltShadowMessage, CobaltShadowProtocolDecision,
@@ -44,6 +48,9 @@ pub enum CobaltShadowRpcRequest {
     Process,
     Commit {
         transcript: Box<CobaltShadowProtocolTranscript>,
+    },
+    CommitCompressed {
+        transcript: Value,
     },
     Shutdown,
 }
@@ -180,6 +187,14 @@ pub fn request(endpoint: SocketAddr, request: &CobaltShadowRpcRequest) -> io::Re
         .ok_or_else(|| invalid("RPC response did not contain a result"))
 }
 
+pub fn compressed_commit_request(
+    transcript: &CobaltShadowProtocolTranscript,
+) -> io::Result<CobaltShadowRpcRequest> {
+    Ok(CobaltShadowRpcRequest::CommitCompressed {
+        transcript: compress_cobalt_protocol_transcript(transcript)?,
+    })
+}
+
 pub fn probe_service(service: &CobaltShadowService) -> io::Result<CobaltShadowProbe> {
     let status = service.status();
     let data_dir = service.data_dir();
@@ -290,12 +305,7 @@ pub fn run_cobalt_shadow_network_drill(
 
     let mut decisions = Vec::new();
     for endpoint in &endpoints {
-        let value = request(
-            *endpoint,
-            &CobaltShadowRpcRequest::Commit {
-                transcript: Box::new(transcript.clone()),
-            },
-        )?;
+        let value = request(*endpoint, &compressed_commit_request(&transcript)?)?;
         decisions.push(
             serde_json::from_value::<CobaltShadowProtocolDecision>(value).map_err(json_error)?,
         );
@@ -310,13 +320,8 @@ pub fn run_cobalt_shadow_network_drill(
     tampered.rbc_echoes[0]
         .signature_hex
         .replace_range(0..2, replacement);
-    let tampered_signature_rejected = request(
-        endpoints[0],
-        &CobaltShadowRpcRequest::Commit {
-            transcript: Box::new(tampered),
-        },
-    )
-    .is_err();
+    let tampered_signature_rejected =
+        request(endpoints[0], &compressed_commit_request(&tampered)?).is_err();
 
     let oversized_frame_rejected = send_oversized_frame(endpoints[1])?;
 
@@ -437,6 +442,13 @@ fn handle_request(
         CobaltShadowRpcRequest::Commit { transcript } => service
             .commit_protocol_transcript(&transcript)
             .and_then(|decision| serde_json::to_value(decision).map_err(json_error)),
+        CobaltShadowRpcRequest::CommitCompressed { transcript } => {
+            decompress_cobalt_protocol_transcript(&transcript).and_then(|transcript| {
+                service
+                    .commit_protocol_transcript(&transcript)
+                    .and_then(|decision| serde_json::to_value(decision).map_err(json_error))
+            })
+        }
         CobaltShadowRpcRequest::Shutdown => Ok(json!({"stopping": true})),
     };
     match result {
@@ -524,8 +536,8 @@ pub fn parse_endpoint(value: &str) -> io::Result<SocketAddr> {
 
 pub fn read_transcript(path: &Path) -> io::Result<CobaltShadowProtocolTranscript> {
     let metadata = fs::metadata(path)?;
-    if metadata.len() > MAX_RPC_FRAME_BYTES as u64 {
-        return Err(invalid("transcript file exceeds frame bound"));
+    if metadata.len() > MAX_COBALT_DECOMPRESSED_VALUE_BYTES as u64 {
+        return Err(invalid("transcript file exceeds decompressed bound"));
     }
     let bytes = fs::read(path)?;
     serde_json::from_slice(&bytes).map_err(json_error)

@@ -12,8 +12,9 @@ use postfiat_node::cobalt_shadow::{
     CobaltShadowRegistryBinding, CobaltShadowService, CobaltShadowValidatorBinding,
 };
 use postfiat_node::cobalt_shadow_runtime::{
-    parse_endpoint, read_transcript, request, run_cobalt_shadow_network_drill, serve_listener,
-    validate_listen_address, CobaltShadowRpcRequest,
+    compressed_commit_request, parse_endpoint, read_transcript, request,
+    run_cobalt_shadow_network_drill, serve_listener, validate_listen_address,
+    CobaltShadowRpcRequest,
 };
 use postfiat_node::ValidatorRegistry;
 use serde::Deserialize;
@@ -242,12 +243,7 @@ fn run() -> io::Result<()> {
         "commit" => {
             let endpoint = parse_endpoint(required_flag(&args, "--endpoint")?)?;
             let transcript = read_transcript(&required_path(&args, "--transcript")?)?;
-            request(
-                endpoint,
-                &CobaltShadowRpcRequest::Commit {
-                    transcript: Box::new(transcript),
-                },
-            )?
+            request(endpoint, &compressed_commit_request(&transcript)?)?
         }
         "drill" => {
             let report = run_cobalt_shadow_adversarial_drill(required_path(&args, "--data-dir")?)?;
