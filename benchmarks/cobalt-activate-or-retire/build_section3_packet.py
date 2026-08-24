@@ -53,6 +53,16 @@ def git_output(*args: str) -> str:
     ).stdout.strip()
 
 
+def git_blob(commit: str, path: str) -> bytes:
+    completed = subprocess.run(
+        ["git", "show", f"{commit}:{path}"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    )
+    return completed.stdout
+
+
 def unique(domains: list[dict[str, Any]], field: str) -> bool:
     values = [row.get(field) for row in domains]
     return len(values) == 6 and None not in values and len(set(values)) == 6
@@ -203,7 +213,7 @@ def main() -> int:
         "section2_sha256sums_sha256": digest(
             (SECTION2_PACKET / "SHA256SUMS.txt").read_bytes()
         ),
-        "files": {path: digest((ROOT / path).read_bytes()) for path in SOURCE_FILES},
+        "files": {path: digest(git_blob(source_commit, path)) for path in SOURCE_FILES},
     }
     summary = {
         "schema": "postfiat-cobalt-section3-summary-v1",
