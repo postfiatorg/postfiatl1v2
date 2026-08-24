@@ -673,6 +673,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "snapshot-import-signed"
         | "snapshot-import-signed-finalized-checkpoint"
         | "verify-finalized-checkpoint"
+        | "storage-integrity-migrate-legacy"
         | "deployment-publisher-key-export"
         | "deployment-manifest-create"
         | "deployment-manifest-verify"

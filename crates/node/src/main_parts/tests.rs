@@ -17,6 +17,16 @@ fn fastpay_recovery_governance_commands_reach_their_cli_handler() {
     assert_eq!(assemble, "missing --payload-file");
 }
 
+#[test]
+fn storage_integrity_migration_requires_explicit_offline_confirmation() {
+    let error = run_cli(vec!["storage-integrity-migrate-legacy".to_string()])
+        .expect_err("migration without an offline confirmation must fail");
+    assert_eq!(
+        error,
+        "storage-integrity-migrate-legacy requires --offline-confirmed after every process using the data directory has been stopped"
+    );
+}
+
 #[cfg(test)]
 mod replicated_state_activation_cli_tests {
     include!("tests/replicated_state_activation_cli_tests.rs");

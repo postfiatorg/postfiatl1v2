@@ -2658,6 +2658,26 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "storage-integrity-migrate-legacy" => {
+            if !flag_present(flags, "--offline-confirmed") {
+                return Err(
+                    "storage-integrity-migrate-legacy requires --offline-confirmed after every process using the data directory has been stopped"
+                        .to_string(),
+                );
+            }
+            let data_dir = PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
+            let store = NodeStore::try_new_for_legacy_migration(&data_dir)
+                .map_err(|error| format!("storage integrity migration open failed: {error}"))?;
+            store
+                .migrate_legacy_state()
+                .map_err(|error| format!("storage integrity migration failed: {error}"))?;
+            let report = status(NodeOptions { data_dir })
+                .map_err(|error| format!("post-migration status verification failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|error| format!("status serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
         "deployment-publisher-key-create" => {
             let publisher_key_file =
                 flag_value(flags, "--publisher-key-file").ok_or("missing --publisher-key-file")?;
