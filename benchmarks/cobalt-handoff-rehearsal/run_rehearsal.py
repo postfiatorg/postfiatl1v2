@@ -10,6 +10,7 @@ import json
 import os
 import shlex
 import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -82,14 +83,23 @@ def ssh_base(host: str) -> list[str]:
 
 
 def ssh_text(host: str, command: str, timeout: int = 60) -> str:
-    result = subprocess.run(
-        ssh_base(host) + [command],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=timeout,
-    )
-    return result.stdout
+    for attempt in range(5):
+        result = subprocess.run(
+            ssh_base(host) + [command],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+        )
+        if result.returncode == 0:
+            return result.stdout
+        if result.returncode != 255 or attempt == 4:
+            raise RuntimeError(
+                f"SSH command failed on {host} with status {result.returncode}: "
+                f"{result.stderr.strip()}"
+            )
+        time.sleep(2**attempt)
+    raise RuntimeError("unreachable SSH retry state")
 
 
 def scp_to(host: str, local: Path, remote: str) -> None:
