@@ -1,0 +1,65 @@
+{
+  "schema": "postfiat-cobalt-adversarial-e2-campaign-manifest-v1",
+  "campaign_id": "cobalt-e2-byzantine-validator-campaign-v1",
+  "frozen_at": "2026-08-25T16:29:14Z",
+  "live_binding": {
+    "chain_id": "postfiat-wan-devnet-2",
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "registry_root": "945768d593497541f59961d1ba3920560cfde7bf5037e40eb89dd5466637f221709bff05b69d2d40a36d5cff8505c37e",
+    "trust_graph_root": "9221316ae7f0f0e7e58d734700167f73f29aa1240377a8d61c637e7f36c5deb728203fcbb283c9f8f3398fc41d6b8b13",
+    "topology_trust_graph_root": "c872bf8a9628cb3b27f2c0826084beb540c645d0c9d06107643358a4df078fa919e88ba2aa6b376a904eb79d28d69e77",
+    "topology_source": {
+      "path": "benchmarks/cobalt-handoff-rehearsal/packet-release-qualified-v1/cobalt-update-decision-certificate.json",
+      "sha256": "656159cc4585bd966062b475a5f6c5886d5b71983b23f4e27fcde5da9d7130ad"
+    },
+    "activation_source": {
+      "path": "benchmarks/cobalt-activation-live/packet/activation-status.json",
+      "sha256": "625cbe7c2a265cebea4ce43779bde10d803ca240b383b106513acac10676e18c"
+    },
+    "validators": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+    ]
+  },
+  "fault_model": {
+    "validator_count": 6,
+    "quorum": 5,
+    "local_max_active_byzantine": 1,
+    "derived_f": 1,
+    "first_inequality": "1 < 2*5 - 6",
+    "second_inequality": "2*1 < 5"
+  },
+  "schedule_search": {
+    "seed_hex": "622dc53124f49f4c0f2ccac61177f7b7cac6df7e646ae99e971f847376a2408c",
+    "schedules_per_case": 4096,
+    "max_delay_steps": 7,
+    "max_partition_steps": 7,
+    "max_duplicate_copies": 3,
+    "synchrony_bound_steps": 40
+  },
+  "strategies": [
+    "rbc_propose_equivocation",
+    "rbc_echo_equivocation",
+    "rbc_ready_equivocation",
+    "rbc_accept_equivocation",
+    "abba_init_equivocation",
+    "abba_aux_equivocation",
+    "abba_conf_equivocation",
+    "abba_finish_equivocation",
+    "mvba_candidate_equivocation",
+    "dabc_full_knowledge_equivocation",
+    "combined_all_stages",
+    "selective_withholding",
+    "trust_view_lie",
+    "trust_view_change",
+    "competing_proposals",
+    "late_vote",
+    "reproposal",
+    "incompatible_trust_boundary"
+  ],
+  "expected_case_count": 108
+}

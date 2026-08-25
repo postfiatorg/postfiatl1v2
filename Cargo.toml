@@ -5,6 +5,7 @@ members = [
     "crates/cobalt_adversarial_oracle",
     "crates/cobalt_decision_oracle",
     "crates/cobalt_e1_harness",
+    "crates/cobalt_e2_harness",
     "crates/consensus_cobalt",
     "crates/crypto_provider",
     "crates/execution",

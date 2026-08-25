@@ -1676,6 +1676,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "postfiat-cobalt-e2-harness"
+version = "0.1.0"
+dependencies = [
+ "postfiat-consensus-cobalt",
+ "postfiat-crypto-provider",
+ "postfiat-node",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "postfiat-consensus-cobalt"
 version = "0.1.0"
 dependencies = [
