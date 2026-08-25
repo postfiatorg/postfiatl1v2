@@ -8,7 +8,7 @@ A failed benchmark or simulation creates P0 remediation and a rerun of the uncha
 
 The result proves protocol capability, not operator decentralization.
 
-- **Status:** Active — milestone document created; E1-E6 not started
+- **Status:** Active — E1 in progress; E2-E6 not started
 - **Specification:** [Cobalt Adversarial Verification Research Specification](../../governance/cobalt-adversarial-verification-research-spec.md)
 - **Specification lock task:** `task_158622307482e23fb4519889b53b475f` — rewarded 2026-08-25
 - **Milestone-document task:** `[ ] task_d28eb3465dcac9a32524c25bba996e1e — accepted 2026-08-25`
@@ -28,7 +28,7 @@ Each experiment is one substantial Task Node task, requested only after the prev
 
 ### E1. Independent oracle and generated corpus
 
-Task Node: `[ ] not requested`
+Task Node: `[ ] task_59460b82c134e725fd1c902e2c3417b8 — accepted 2026-08-25`
 
 - [ ] Build a second oracle from the formal essential-subset, strong-support, and linkage rules without importing production Cobalt or the first oracle.
 - [ ] Generate at least 10,000 trust graphs covering 6-20 validators and every linkage-inequality boundary.
