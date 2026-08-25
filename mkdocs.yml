@@ -106,6 +106,7 @@ nav:
   - Handoffs:
       - Standard: handoffs/README.md
       - Cobalt Governance Activation: handoffs/2026-08-25___postfiatchad__cobalt_governance_activation.md
+      - Cobalt Post-Activation Review: handoffs/2026-08-25___dravlic__cobalt_post_activation_review.md
   - Business:
       - Business Whitepaper: business/whitepaper.md
   - Start Here:
@@ -124,6 +125,7 @@ nav:
       - Cobalt: governance/cobalt.md
       - Cobalt Implementation: governance/cobalt-implementation.md
       - Cobalt Transition Safety Proof: governance/cobalt-transition-safety-proof.md
+      - Cobalt Adversarial Verification Spec (draft): governance/cobalt-adversarial-verification-research-spec.md
       - Verifiable Constitution: governance/verifiable-constitution.md
       - Validator Registry: governance/validator-registry.md
       - Validator Admission Bin Policy: governance/validator-admission-bin-policy.md
