@@ -1,0 +1,20 @@
+{
+  "schema": "postfiat-cobalt-adversarial-e1-comparison-v1",
+  "corpus_sha256": "42ed266ba207136eec560f8be14c904c2e63ffe305e188860e4ff04731cd5fd2",
+  "case_count": 10240,
+  "valid_case_count": 8534,
+  "invalid_boundary_case_count": 1706,
+  "compatible_case_count": 3889,
+  "incompatible_case_count": 4645,
+  "disagreement_count": 0,
+  "classification_sha256": "66ed6e8b2f7fd33927448b5b2e866ae4275263840128cbf1842d7460f3ca19cd",
+  "second_oracle": "postfiat-cobalt-adversarial-oracle (independent v2)",
+  "first_oracle": "postfiat-cobalt-decision-oracle (activation v1)",
+  "production_routes": [
+    "analyze_trust_graph",
+    "has_strong_support",
+    "verify_nonuniform_governance_certificate"
+  ],
+  "summary_only": false,
+  "pass": true
+}
