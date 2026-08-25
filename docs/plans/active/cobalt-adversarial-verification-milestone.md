@@ -36,6 +36,8 @@ Task Node: `[ ] task_59460b82c134e725fd1c902e2c3417b8 — accepted 2026-08-25`
 - [ ] Freeze every mismatch before fixes; review any oracle correction; add regression cases for production defects; rerun the unchanged corpus from clean state.
 - [ ] Pass with complete oracle agreement and production agreement on every generated graph.
 
+Initial comparison: 8,534 disagreements frozen before remediation; review found one harness-domain fixture defect and no oracle or production defect.
+
 Code references: `crates/cobalt_adversarial_oracle/src/lib.rs`, `crates/cobalt_e1_harness/src/main.rs`, `crates/cobalt_decision_oracle/src/lib.rs`, `crates/consensus_cobalt/src/trust_graph_governance.rs`, `crates/node/src/cobalt_authority_certificate.rs`.
 
 ### E2. Byzantine validator campaign

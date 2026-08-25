@@ -30,4 +30,4 @@ cargo run -p postfiat-cobalt-e1-harness -- compare \
   benchmarks/cobalt-adversarial-verification/e1/initial
 ```
 
-The initial comparison preserves every disagreement in `initial/disagreements.json` before remediation. A clean-state rerun uses the same manifest and writes a summary-only result under `clean-rerun`; its corpus and classification hashes must match the initial run.
+The initial comparison preserves every disagreement before remediation. Large generated artifacts are committed losslessly as `initial/classifications.jsonl.gz` and `initial/disagreements.json.gz`; their uncompressed hashes are recorded in `initial/summary.json`. A clean-state rerun uses the same manifest and writes a summary-only result under `clean-rerun`; its corpus and classification hashes must match the remediated comparison.
