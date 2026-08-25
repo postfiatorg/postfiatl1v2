@@ -109,6 +109,7 @@ Code references: `crates/cobalt_e3_harness/src/main.rs`, `crates/node/src/cobalt
 
 Execution: source and campaign frozen; checksum-bound 500+500 evidence run pending
 
+Frozen source revision: `0b2abdc5fde6ade172dc9a85b811330edc1cda2c`.
 Frozen manifest:
 `benchmarks/cobalt-adversarial-verification/e4/campaign-manifest.json`;
 SHA-256
