@@ -8,7 +8,7 @@ A failed benchmark or simulation creates P0 remediation and a rerun of the uncha
 
 The result proves protocol capability, not operator decentralization.
 
-- **Status:** Active — E1 in progress; E2-E6 not started
+- **Status:** Active — E1 technical work complete; Task Node reward pending; E2-E6 not started
 - **Specification:** [Cobalt Adversarial Verification Research Specification](../../governance/cobalt-adversarial-verification-research-spec.md)
 - **Specification lock task:** `task_158622307482e23fb4519889b53b475f` — rewarded 2026-08-25
 - **Milestone-document task:** `[ ] task_d28eb3465dcac9a32524c25bba996e1e — accepted 2026-08-25`
@@ -33,10 +33,10 @@ Task Node: `[ ] task_59460b82c134e725fd1c902e2c3417b8 — accepted 2026-08-25`
 - [x] Build a second oracle from the formal essential-subset, strong-support, and linkage rules without importing production Cobalt or the first oracle.
 - [x] Generate at least 10,000 trust graphs covering 6-20 validators and every linkage-inequality boundary.
 - [x] Compare both oracles with production `analyze_trust_graph`, `has_strong_support`, and non-uniform certificate validation.
-- [ ] Freeze every mismatch before fixes; review any oracle correction; add regression cases for production defects; rerun the unchanged corpus from clean state.
-- [ ] Pass with complete oracle agreement and production agreement on every generated graph.
+- [x] Freeze every mismatch before fixes; review any oracle correction; add regression cases for production defects; rerun the unchanged corpus from clean state.
+- [x] Pass with complete oracle agreement and production agreement on every generated graph.
 
-Initial comparison: 8,534 disagreements frozen before remediation; review found one harness-domain fixture defect and no oracle or production defect. The reconciled full pass has zero disagreements across 10,240 cases; clean rerun pending.
+Initial comparison: 8,534 disagreements frozen before remediation; review found one harness-domain fixture defect and no oracle or production defect. Reconciled and clean-state passes agree on all 10,240 cases with identical corpus and classification hashes.
 
 Code references: `crates/cobalt_adversarial_oracle/src/lib.rs`, `crates/cobalt_e1_harness/src/main.rs`, `crates/cobalt_decision_oracle/src/lib.rs`, `crates/consensus_cobalt/src/trust_graph_governance.rs`, `crates/node/src/cobalt_authority_certificate.rs`.
 
@@ -104,7 +104,7 @@ Code references: `crates/node/src/cobalt_shadow.rs`, `crates/node/src/cobalt_aut
 
 ### KEEP ACTIVE
 
-- [ ] E1: production matches the reconciled independent oracle on every generated graph.
+- [x] E1: production matches the reconciled independent oracle on every generated graph.
 - [ ] E2: zero conflicting roots, zero false halts, and zero false accepts under the Byzantine campaign.
 - [ ] E3: every tampered state and forged catch-up is rejected; honest recovery is byte-identical.
 - [ ] E4: Consensus v2 never stops or forks; attack-lane p95 finality stays within 5% of baseline.
