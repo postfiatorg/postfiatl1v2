@@ -12,6 +12,7 @@ import sys
 import tempfile
 import time
 import urllib.request
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Sequence
@@ -287,6 +288,23 @@ def remote_hashes(
     return hashes
 
 
+@contextmanager
+def prefer_ipv4_dns() -> Iterable[None]:
+    """Use the provider ACL's IPv4 path without changing process-wide DNS permanently."""
+    original = socket.getaddrinfo
+
+    def ipv4_getaddrinfo(host: str, port: int, *args: Any, **kwargs: Any) -> list[Any]:
+        results = original(host, port, *args, **kwargs)
+        ipv4 = [result for result in results if result[0] == socket.AF_INET]
+        return ipv4 or results
+
+    socket.getaddrinfo = ipv4_getaddrinfo
+    try:
+        yield
+    finally:
+        socket.getaddrinfo = original
+
+
 def query_vultr_inventory(
     inventory: Sequence[InventoryEntry], api_key_file: Path
 ) -> list[dict[str, str]]:
@@ -294,34 +312,35 @@ def query_vultr_inventory(
     if not api_key or any(character.isspace() for character in api_key):
         raise SafetyError("Vultr API key file must contain exactly one non-empty token")
     verified: list[dict[str, str]] = []
-    for row in inventory:
-        request = urllib.request.Request(
-            f"https://api.vultr.com/v2/instances/{row.instance_id}",
-            headers={"Authorization": f"Bearer {api_key}"},
-        )
-        with urllib.request.urlopen(request, timeout=15) as response:
-            instance = json.load(response)["instance"]
-        observed = {
-            "validator_id": row.validator_id,
-            "instance_id": str(instance.get("id", "")),
-            "host": str(instance.get("main_ip", "")),
-            "region": str(instance.get("region", "")),
-            "status": str(instance.get("status", "")),
-            "power_status": str(instance.get("power_status", "")),
-        }
-        expected = (row.instance_id, row.host, row.region, "active", "running")
-        actual = (
-            observed["instance_id"],
-            observed["host"],
-            observed["region"],
-            observed["status"],
-            observed["power_status"],
-        )
-        if actual != expected:
-            raise SafetyError(
-                f"inventory mismatch for {row.validator_id}: expected {expected}, observed {actual}"
+    with prefer_ipv4_dns():
+        for row in inventory:
+            request = urllib.request.Request(
+                f"https://api.vultr.com/v2/instances/{row.instance_id}",
+                headers={"Authorization": f"Bearer {api_key}"},
             )
-        verified.append(observed)
+            with urllib.request.urlopen(request, timeout=15) as response:
+                instance = json.load(response)["instance"]
+            observed = {
+                "validator_id": row.validator_id,
+                "instance_id": str(instance.get("id", "")),
+                "host": str(instance.get("main_ip", "")),
+                "region": str(instance.get("region", "")),
+                "status": str(instance.get("status", "")),
+                "power_status": str(instance.get("power_status", "")),
+            }
+            expected = (row.instance_id, row.host, row.region, "active", "running")
+            actual = (
+                observed["instance_id"],
+                observed["host"],
+                observed["region"],
+                observed["status"],
+                observed["power_status"],
+            )
+            if actual != expected:
+                raise SafetyError(
+                    f"inventory mismatch for {row.validator_id}: expected {expected}, observed {actual}"
+                )
+            verified.append(observed)
     return verified
 
 
@@ -672,7 +691,8 @@ def _verify_and_record_backup(
         )
     verification_report_file = args.evidence_dir / "finalized-checkpoint-verification.json"
     atomic_write_json(verification_report_file, report)
-    chain_tip = json.loads((verify_dir / "chain_tip.json").read_text(encoding="utf-8"))
+    status_result = runner.run([str(binary), "status", "--data-dir", str(verify_dir)])
+    chain_tip = json.loads(status_result.stdout)
     state_root = str(chain_tip.get("state_root", ""))
     if not state_root:
         raise SafetyError("verified signed backup is missing its chain-tip state root")
@@ -692,8 +712,8 @@ def _verify_and_record_backup(
         "finalized_checkpoint_verification_sha256": sha256_file(
             verification_report_file
         ),
-        "height": chain_tip.get("height"),
-        "tip": chain_tip.get("block_hash", ""),
+        "height": chain_tip.get("block_height"),
+        "tip": chain_tip.get("block_tip_hash", ""),
         "state_root": state_root,
     }
     atomic_write_json(args.state_file, state)
@@ -761,21 +781,34 @@ def create_backup(args: argparse.Namespace, runner: Runner) -> dict[str, Any]:
         "active_binary=$(readlink -f \"/proc/$active_pid/exe\")\n"
         "case \"$active_binary\" in /opt/postfiat/releases/*/postfiat-node) ;; *) exit 98;; esac\n"
         "test -x \"$active_binary\"\n"
-        f"{shlex.quote(str(remote_candidate))} "
-        f"snapshot-export-finalized-checkpoint --data-dir /var/lib/postfiat/{canary} "
+        f"\"$active_binary\" snapshot-export-finalized-checkpoint "
+        f"--data-dir /var/lib/postfiat/{canary} "
         f"--snapshot-dir {shlex.quote(str(remote_dir))}\n"
     )
     runner.run(["ssh", "-o", "BatchMode=yes", target, "bash", "-s"], input_text=remote_script)
     unsigned = args.evidence_dir / "backup-unsigned"
+    migrated = args.evidence_dir / "backup-migrated-source"
     signed = args.evidence_dir / "backup-signed"
     args.evidence_dir.mkdir(parents=True, exist_ok=False)
     runner.run(["scp", "-q", "-r", f"{target}:{remote_dir}/.", str(unsigned)])
     runner.run(
         [
             str(binary),
+            "snapshot-import-finalized-checkpoint",
+            "--data-dir",
+            str(migrated),
+            "--snapshot-dir",
+            str(unsigned),
+            "--node-id",
+            canary,
+        ]
+    )
+    runner.run(
+        [
+            str(binary),
             "snapshot-export-signed-finalized-checkpoint",
             "--data-dir",
-            str(unsigned),
+            str(migrated),
             "--snapshot-dir",
             str(signed),
             "--publisher-key-file",
@@ -877,15 +910,28 @@ def apply_next(args: argparse.Namespace, runner: Runner) -> dict[str, Any]:
         f"--runtime-topology-file {config}/topology.json --runtime-swap-circuit-metadata-file {config}/swap.metadata.json "
         f"--runtime-private-egress-circuit-metadata-file {config}/private-egress.metadata.json"
     )
+    migration_report = (
+        f"/var/lib/postfiat/pre-rollout-snapshots/{release_id}-{validator_id}-storage-migration.json"
+    )
+    checkpoint_report = (
+        f"/var/lib/postfiat/pre-rollout-snapshots/{release_id}-{validator_id}-checkpoint.json"
+    )
     remote_script = (
         "set -eu\n"
         f"chmod 0755 {binary}\n"
         f"chmod 0644 {config}/* /etc/systemd/system/postfiat-{validator_id}.service /etc/systemd/system/postfiat-{validator_id}-rpc.service\n"
         f"{verify} >/dev/null\n"
+        f"systemctl stop postfiat-{validator_id}-rpc.service postfiat-{validator_id}.service\n"
+        f"! systemctl is-active --quiet postfiat-{validator_id}-rpc.service\n"
+        f"! systemctl is-active --quiet postfiat-{validator_id}.service\n"
+        "install -d -o root -g root -m 0700 /var/lib/postfiat/pre-rollout-snapshots\n"
+        f"runuser -u postfiat -- {binary} storage-integrity-migrate-legacy --data-dir /var/lib/postfiat/{validator_id} --offline-confirmed > {migration_report}\n"
+        f"test \"$(stat -c '%U:%G:%a' /var/lib/postfiat/{validator_id}/.integrity.key)\" = postfiat:postfiat:600\n"
+        f"runuser -u postfiat -- {binary} verify-finalized-checkpoint --data-dir /var/lib/postfiat/{validator_id} > {checkpoint_report}\n"
         "systemctl daemon-reload\n"
         f"systemctl enable postfiat-{validator_id}.service postfiat-{validator_id}-rpc.service >/dev/null\n"
-        f"systemctl restart postfiat-{validator_id}.service\n"
-        f"systemctl restart postfiat-{validator_id}-rpc.service\n"
+        f"systemctl start postfiat-{validator_id}.service\n"
+        f"systemctl start postfiat-{validator_id}-rpc.service\n"
         f"test \"$(systemctl is-active postfiat-{validator_id}.service)\" = active\n"
         f"test \"$(systemctl is-active postfiat-{validator_id}-rpc.service)\" = active\n"
         f"{binary} status --data-dir /var/lib/postfiat/{validator_id}\n"

@@ -95,7 +95,7 @@ Prior operator-onboarding artifacts remain available for a future decentralizati
 
 Predeployment qualification Task Node: `[x] task_3ff910558c03941dbc58f96ca8ef52d5 — rewarded 2026-08-24 (1 PFT)`
 
-Live cutover Task Node: `[ ] not requested; operator stop-before-deploy boundary is active`
+Live cutover Task Node: `[ ] task_40f389235be48756a9933f42d0d4dc6c — accepted 2026-08-25`
 
 - [x] Make a real Cobalt protocol decision certificate mandatory at the consensus admission boundary; validator signatures alone are insufficient.
 - [x] Verify the authoritative handoff/update/rollback flow with all six current validator identities on disposable signer-state clones while proving the live fleet unchanged.

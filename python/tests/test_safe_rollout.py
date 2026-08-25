@@ -22,6 +22,7 @@ from postfiat_ops.safe_rollout import (
     next_validator,
     parse_inventory,
     preflight,
+    query_vultr_inventory,
     reject_unsafe_cli_tokens,
     resume_backup_verification,
     rollout_order,
@@ -57,6 +58,17 @@ class FakeRunner:
             (destination / "chain_tip.json").write_text(
                 '{"height":600,"block_hash":"tip-a","state_root":"root-a"}\n',
                 encoding="utf-8",
+            )
+        if len(args) > 1 and args[1] == "status":
+            return completed(
+                args,
+                json.dumps(
+                    {
+                        "block_height": 600,
+                        "block_tip_hash": "tip-a",
+                        "state_root": "root-a",
+                    }
+                ),
             )
         if "verify-finalized-checkpoint" in args:
             return completed(
@@ -331,6 +343,39 @@ class SafeRolloutTests(unittest.TestCase):
         )
         self.assertEqual({"registry-a"}, {report["registry_root"] for report in reports})
 
+    def test_vultr_inventory_uses_ipv4_acl_path_and_restores_dns(self) -> None:
+        row = parse_inventory(self.inventory)[0]
+        api_key = self.root / "api-key"
+        api_key.write_text("test-token\n", encoding="utf-8")
+        records = [
+            (2, 1, 6, "", ("192.0.2.10", 443)),
+            (10, 1, 6, "", ("2001:db8::10", 443, 0, 0)),
+        ]
+        payload = json.dumps(
+            {
+                "instance": {
+                    "id": row.instance_id,
+                    "main_ip": row.host,
+                    "region": row.region,
+                    "status": "active",
+                    "power_status": "running",
+                }
+            }
+        ).encode()
+
+        def urlopen(_request, timeout):
+            self.assertEqual(15, timeout)
+            resolved = __import__("socket").getaddrinfo("api.vultr.com", 443)
+            self.assertEqual([2], [record[0] for record in resolved])
+            return __import__("io").BytesIO(payload)
+
+        with patch("postfiat_ops.safe_rollout.socket.getaddrinfo", return_value=records):
+            original = __import__("socket").getaddrinfo
+            with patch("postfiat_ops.safe_rollout.urllib.request.urlopen", side_effect=urlopen):
+                verified = query_vultr_inventory([row], api_key)
+            self.assertIs(original, __import__("socket").getaddrinfo)
+        self.assertEqual("validator-0", verified[0]["validator_id"])
+
     @patch("postfiat_ops.safe_rollout.query_vultr_inventory")
     @patch("postfiat_ops.safe_rollout.fleet_convergence")
     @patch("postfiat_ops.safe_rollout.remote_hashes")
@@ -398,15 +443,21 @@ class SafeRolloutTests(unittest.TestCase):
         self.assertTrue(state["backup"]["verified"])
         self.assertEqual("root-a", state["backup"]["state_root"])
         flattened = [argument for call, _ in runner.calls for argument in call]
+        self.assertIn("snapshot-import-finalized-checkpoint", flattened)
         self.assertIn("snapshot-export-signed-finalized-checkpoint", flattened)
         self.assertIn("snapshot-import-signed-finalized-checkpoint", flattened)
         self.assertIn("verify-finalized-checkpoint", flattened)
+        self.assertIn("status", flattened)
         remote_scripts = [
             script for call, script in runner.calls if call[0] == "ssh" and script
         ]
         self.assertEqual(1, len(remote_scripts))
         self.assertIn("systemctl show --property=MainPID", remote_scripts[0])
         self.assertIn('readlink -f "/proc/$active_pid/exe"', remote_scripts[0])
+        self.assertIn(
+            '"$active_binary" snapshot-export-finalized-checkpoint',
+            remote_scripts[0],
+        )
         self.assertIn(
             "mkdir /var/lib/postfiat/pre-rollout-snapshots/.release-safe-1-validator-1.lock",
             remote_scripts[0],
@@ -469,6 +520,7 @@ class SafeRolloutTests(unittest.TestCase):
         flattened = [argument for call, _ in runner.calls for argument in call]
         self.assertIn("snapshot-import-signed-finalized-checkpoint", flattened)
         self.assertIn("verify-finalized-checkpoint", flattened)
+        self.assertIn("status", flattened)
         self.assertNotIn("snapshot-export-finalized-checkpoint", flattened)
         self.assertFalse(any(call[0] in {"ssh", "scp"} for call, _ in runner.calls))
 
@@ -527,6 +579,19 @@ class SafeRolloutTests(unittest.TestCase):
             script for call, script in runner.calls if call and call[0] == "ssh" and script and "mv -T" in script
         ]
         self.assertEqual(1, len(promotion_scripts))
+        lifecycle_scripts = [
+            script
+            for call, script in runner.calls
+            if call and call[0] == "ssh" and script and "storage-integrity-migrate-legacy" in script
+        ]
+        self.assertEqual(1, len(lifecycle_scripts))
+        lifecycle = lifecycle_scripts[0]
+        self.assertLess(lifecycle.index("systemctl stop"), lifecycle.index("storage-integrity-migrate-legacy"))
+        self.assertIn("--offline-confirmed", lifecycle)
+        self.assertIn("runuser -u postfiat --", lifecycle)
+        self.assertIn("postfiat:postfiat:600", lifecycle)
+        self.assertLess(lifecycle.index("storage-integrity-migrate-legacy"), lifecycle.index("verify-finalized-checkpoint"))
+        self.assertLess(lifecycle.index("verify-finalized-checkpoint"), lifecycle.index("systemctl start"))
 
 
 if __name__ == "__main__":

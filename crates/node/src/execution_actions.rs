@@ -2234,10 +2234,12 @@ pub(super) fn verify_governance_amendment_activation_records(
 
     let active_validator_count_mismatch = governance.validator_registry_updates.is_empty()
         && replay.active_validator_count != governance.active_validator_count;
+    let authority_mode_mismatch = governance.cobalt_authority_transitions.is_empty()
+        && replay.authority_mode != governance.authority_mode;
     if active_validator_count_mismatch
         || replay.crypto_policy_version != governance.crypto_policy_version
         || replay.bridge_witness_epoch != governance.bridge_witness_epoch
-        || replay.authority_mode != governance.authority_mode
+        || authority_mode_mismatch
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,

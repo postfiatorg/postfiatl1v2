@@ -1910,5 +1910,10 @@ mod tests {
             governance.authority_mode,
             postfiat_types::GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED
         );
+        crate::execution_actions::verify_governance_amendment_activation_records(
+            &genesis,
+            &governance,
+        )
+        .expect("verify amendment replay after Cobalt authority activation");
     }
 }
