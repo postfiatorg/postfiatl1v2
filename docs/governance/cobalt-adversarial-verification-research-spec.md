@@ -1,6 +1,6 @@
 # Cobalt Adversarial Verification Research Specification
 
-**Status:** Draft; not scored by the Text Improvement Harness, not locked by Task Node
+**Status:** Locked — Text Improvement Harness average 89.27/100 (GPT 89.20, Fable 88.40, GLM 90.20; run group `round-20260825T124034Z`); scored content SHA-256 `b95308f9a320d962ea2a933353290bdb49105e5ae2fa33eb78ef327476ec88bc`; date 2026-08-25; Task Node `task_158622307482e23fb4519889b53b475f`
 **Date:** 2026-08-25
 **Decision owner:** Post Fiat
 **Author:** Domagoj Ravlić (`dravlic`)
