@@ -12,20 +12,23 @@ level commitments.
 The [Current State](docs/status/chain-state-current.md) page is authoritative for
 questions about the devnet, active binaries, repository state, and adversarial
 campaign. An authenticated read-only probe completed at
-`2026-08-25T15:37:40Z`:
+`2026-08-25T15:37:40Z` and observed:
 
-- all six validator, RPC, and Cobalt shadow services were active;
-- all six validators were equal at height 919 with empty mempools;
-- the active consensus release was `cobalt-activation-8694b99d`, binary SHA-256
-  `431f194b…783f4`;
-- the governance auditor and Cobalt shadow were separate binaries;
-- source baseline `c2de415d` and this later documentation-only reconciliation
-  were not deployed;
-- E1 was complete, while E2 had only a kickoff/status commit.
+- all six validator, RPC, and Cobalt shadow services active;
+- all six validators equal at height 919 with empty mempools;
+- active consensus release `cobalt-activation-8694b99d`, binary SHA-256
+  `431f194b…783f4`; and
+- separate governance-auditor and Cobalt-shadow binaries.
+
+The later repository/campaign state is distinct: E1 and E2 are complete; E3-E6
+have not started; the milestone-wide `KEEP_ACTIVE` gate remains open; and the
+E2 freeze `15ef2307`, evidence commit `b7880990`, and later documentation are
+not deployed.
 
 The older activation packet remains historical evidence. Its
 `cobalt-verifier-92b63f5a` label does not identify the active consensus service
-observed by the fresh probe.
+observed by the fresh probe. E2 was an isolated simulation bound to the recorded
+live topology; it did not re-probe or mutate the fleet.
 
 ## What Works
 
@@ -58,6 +61,8 @@ observed by the fresh probe.
 ## Evidence
 
 Performance and correctness evidence is curated in the
-[Evidence Index](docs/evidence/index.md). The terminal Cobalt result is in the
-[controlled-testnet activation packet](benchmarks/cobalt-activation-live/packet/README.md).
+[Evidence Index](docs/evidence/index.md). The live authority result is in the
+[controlled-testnet activation packet](benchmarks/cobalt-activation-live/packet/README.md);
+the passing Byzantine-validator campaign is in the
+[E2 packet](benchmarks/cobalt-adversarial-verification/e2/README.md).
 Each claim cites code paths, scripts, tests, or redaction-safe reports.

@@ -56,9 +56,19 @@ production comparison, reconciled rerun, and clean rerun agree across all 10,240
 generated trust graphs. E1 is off-chain verification tooling; it is not a node
 deployment.
 
-E2 is started in the active milestone, but source baseline `c2de415d` contains
-only the E2 kickoff/status update. This later documentation reconciliation adds
-no E2 implementation or evidence packet.
+E2 evidence is stored under
+`benchmarks/cobalt-adversarial-verification/e2/`. The frozen source revision
+`15ef2307732cf46ff3b921bf02f3ad096dda15f3` derives `f=1` from the pinned
+six-validator topology. The first run passed all 108 validator/strategy cases
+and 442,368 schedules without remediation; the clean rerun has the same
+classification SHA-256, and the signed-evidence verifier passes. The packet's
+`SHA256SUMS.txt` hash is
+`8742d9603621408339d99c3d9fcc1ba8cc43dafdc900acdfccbf86cc60d7cba3`.
+
+E2 uses simulation ML-DSA identities and production signed-message/transcript
+validation. It did not connect to or mutate the devnet, does not allege live
+operator misbehavior, and does not prove operator decentralization. E3-E6 and
+the milestone-wide `KEEP_ACTIVE` gate remain open.
 
 ## Historical And Supporting Evidence
 
