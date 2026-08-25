@@ -4,6 +4,13 @@ Status: locked — text-improvement score 89.93/100
 Date: 2026-08-22
 Decision scope: the role of Cobalt in PostFiat L1 consensus and governance
 
+!!! note "Historical design specification"
+
+    The implementation and activation milestones described below later passed;
+    Cobalt activated for validator-trust ratification at height 916. Preserve
+    this document as the original design boundary and use
+    [Current State](../status/chain-state-current.md) for operational claims.
+
 ## Decision
 
 PostFiat should retain its versioned prepare/precommit protocol as the only

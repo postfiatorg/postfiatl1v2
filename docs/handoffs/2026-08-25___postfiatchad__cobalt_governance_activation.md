@@ -3,6 +3,15 @@
 - **Operator:** Post Fiat Chad (`postfiatchad`)
 - **Date:** 2026-08-25 UTC
 
+!!! warning "Historical pre-activation snapshot"
+
+    This handoff records the state before the authorized cutover. It was
+    superseded later on 2026-08-25 by Cobalt activation at height 916 and the
+    key rotation at height 917. Do not use its “inactive” statements as current
+    state. See [Current State](../status/chain-state-current.md), the
+    [post-activation review](2026-08-25___dravlic__cobalt_post_activation_review.md),
+    and `benchmarks/cobalt-activation-live/packet/`.
+
 ## BLUF
 
 Today we moved Cobalt from an unresolved research feature to a release-qualified

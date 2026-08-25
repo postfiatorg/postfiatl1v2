@@ -1,5 +1,12 @@
 # Cobalt Governance Milestone
 
+!!! note "Historical implementation milestone"
+
+    This plan describes the pre-activation delivery boundary. Cobalt was later
+    activated for validator-trust ratification at height 916. See
+    [Current State](../../status/chain-state-current.md) for the active runtime,
+    repository, campaign, and freshness identities.
+
 ## What this milestone delivered
 
 PostFiat still orders transactions and finalizes blocks with consensus v2. This

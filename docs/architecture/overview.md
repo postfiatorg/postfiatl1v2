@@ -5,8 +5,10 @@ PostFiat has four protocol planes:
 1. consensus ordering for account, issued-asset, W6 atomic-swap, governance,
    bridge, and shielded batches;
 2. prefunded object-certificate lanes for FastPay and FastSwap;
-3. signed old-rule governance for live validator and protocol mutation, with
-   Cobalt mechanics kept as a separate research/transition-validation layer;
+3. versioned governance: Cobalt ratifies validator-registry and trust-graph
+   changes in the `2026-08-25T15:37:40Z` controlled-devnet observation, while
+   Foundation governance retains unrelated scopes and Consensus v2 orders every
+   mutation;
 4. privacy execution for Orchard/Halo2 shielded value.
 
 ```mermaid
@@ -18,10 +20,13 @@ flowchart LR
   Execution --> Storage[State, blocks, receipts]
   Storage --> ReadRPC[Read RPC]
 
-  GovInput[Signed governance amendment] --> OldRule[Old-rule authorization check]
-  OldRule --> Registry[Validator registry and protocol state]
+  Proposal[Foundation-administered proposal source] --> Scope{Governance scope}
+  Scope -->|validator registry / trust graph| Cobalt[Cobalt ratification]
+  Scope -->|unrelated governance| Foundation[Foundation authorization]
+  Cobalt --> GovOrdering[Consensus v2 ordering]
+  Foundation --> GovOrdering
+  GovOrdering --> Registry[Validator registry and protocol state]
   Registry --> Ordering
-  Cobalt[Cobalt trust / agreement research] -. transition analysis .-> OldRule
 
   FastWallet[FastPay / FastSwap wallet] --> ObjectLane[Prefunded object certificate lanes]
   ObjectLane --> Primary[FastLane deposits, exits, checkpoints]
@@ -40,7 +45,7 @@ flowchart LR
 | `crates/crypto_provider` | Signing and verification. |
 | `crates/execution` | State transition. |
 | `crates/ordering_fast` | Certified ordering path. |
-| `crates/consensus_cobalt` | Cobalt trust-graph and agreement research mechanics. |
+| `crates/consensus_cobalt` | Cobalt trust-graph and agreement rules used by the validator-trust ratification lane and its adversarial tooling. |
 | `crates/fastpay-prototype` | FastPay safety and recovery models. |
 | `crates/privacy_orchard` | PostFiat adapter over the upstream Rust/Zcash Orchard/Halo2 implementation. |
 | `crates/storage` | Persistent state and snapshots. |

@@ -1,22 +1,26 @@
 # Deterministic Governance Overview
 
-Status: target-design overview of the Cobalt plus DGA governance lane.
-Date: 2026-05-23
+Status: target-design overview of the DGA policy lane; current Cobalt state noted separately.
+Date: 2026-05-23; authority boundary corrected 2026-08-25
 
-> **Current authority boundary (July 2026):** model/DGA and Cobalt artifacts are
-> decision support and research. Live registry mutation requires distinct
-> ML-DSA-65 authorizations from the active old-rule registry over the complete
-> action, followed by consensus ordering. The target pipeline below cannot
-> bypass that boundary.
+> **Current authority boundary:** the `2026-08-25T15:37:40Z`
+> controlled-devnet probe found Cobalt active for validator-registry and
+> trust-graph ratification from height
+> 916. Foundation governance retains unrelated scopes and currently administers
+> proposals and validators; Consensus v2 orders and finalizes blocks. Model/DGA
+> artifacts remain decision support and cannot mutate state. See
+> [Current State](../status/chain-state-current.md) for the dated observation,
+> deployed lineage, and freshness boundary. The target DGA pipeline below cannot
+> bypass any of these boundaries.
 
 PostFiat governance is trying to make qualitative validator judgment
 deterministic, reviewable, and replayable.
 
 The short version:
 
-- Cobalt is the target ratification mechanism for changing validator trust and
-  registry state; it is not the live authorization oracle in this source
-  candidate.
+- Cobalt is the recorded controlled-devnet ratification authority for changing
+  validator trust and registry state. It does not decide who deserves trust,
+  originate proposals, or govern unrelated protocol scopes.
 - The Deterministic Governance Agent, or DGA, is the model-generated policy
   pipeline that can eventually propose bounded validator-governance actions.
 - Qwen/SGLang deterministic inference, currently `Qwen/Qwen3.6-27B-FP8`,
@@ -27,8 +31,10 @@ The short version:
 - The model never directly changes chain state.
 - Every important object is hashed, verified, and moved through Cobalt-facing
   gates before it can matter.
-- Live authority is the active validator registry's signed old-rule governance
-  path. Model-assisted/Cobalt-ratified authority transfer is not live.
+- Cobalt validator-trust ratification was active in the
+  `2026-08-25T15:37:40Z` devnet observation. Model-assisted policy authority and
+  a broader transfer away from Foundation proposal, administration, and
+  unrelated-governance control are not live.
 
 The design assumption is adversarial. Validator metadata, operator manifests,
 public URLs, topology labels, provider outputs, automation state, and replay
@@ -86,7 +92,7 @@ There are two different systems being connected.
 
 | System | What It Does | What It Does Not Do |
 | --- | --- | --- |
-| Cobalt governance target | Orders and ratifies trust graph and validator-registry transitions after activation of that profile. | Supply current live authority or decide qualitative validator policy by itself. |
+| Cobalt validator-trust lane | Ratifies trust-graph and validator-registry transitions after activation of that profile; it was active in the `2026-08-25T15:37:40Z` devnet observation. | Decide qualitative validator policy, originate proposals, govern unrelated scopes, or finalize blocks. |
 | DGA | Generates and verifies deterministic governance policy from governed inputs. | Directly mutate the validator registry. |
 
 The important boundary is that DGA output is only evidence and policy until
@@ -573,7 +579,7 @@ Current state:
 | Validator evidence operator pack gate | The no-spend operator gate pack embeds the lineage audit and blocks release packaging unless required report lineage matches the request. |
 | Lineaged Gate 3.5 replay lane | `reports/gov-inference-gate-3_5/dga-gate-3_5-validator-evidence-lineage-v1/gov-inference-gate-3_5-deterministic-ruleset-generation.json` verifies the current provider replay. |
 | Lineaged Gate 3.5 replay verifier | `reports/gov-inference-gate-3_5/dga-gate-3_5-validator-evidence-lineage-v1/lineaged-verify.json` verifies replay evidence, provider cleanup, retained-artifact redaction, lineage, and operator-pack readiness. |
-| Live validator authority transfer | Not active. |
+| DGA-driven Foundation-exit authority transfer | Not active; this is distinct from the already recorded activation of bounded Cobalt validator-trust ratification. |
 
 No automatic DGA continuation remains after DGA-344. Any live release, live
 collector deployment, registry mutation, Cobalt amendment, sidecar activation,
@@ -660,14 +666,16 @@ Governance Agent Burndown.
 
 ## What Is Not Live
 
-This distinction matters.
+This distinction concerns the DGA and broader Foundation-exit design. It does
+not negate the recorded height-916 activation of bounded Cobalt validator-trust
+ratification or the height-917 registry update.
 
-The completed gates do not mean:
+The completed DGA gates do not mean:
 
-- the validator registry changed;
-- a live Cobalt amendment was submitted;
+- DGA-generated policy changed the validator registry;
+- a DGA-generated Cobalt proposal was submitted;
 - generated policy now has validator-side authority;
-- sidecars are live;
+- shadow sidecars gained direct mutation authority;
 - commit-reveal is live;
 - tensor parallelism greater than one is admitted;
 - a criteria authoring authorization request is submitted;
@@ -694,7 +702,8 @@ The completed gates do not mean:
 - authority-transfer execution intent is declared or recorded;
 - authority-transfer execution authorization is granted or recorded;
 - authority-transfer execution schedule is recorded;
-- authority transferred away from the foundation;
+- DGA authority or proposal, validator-administration, and unrelated-governance
+  control transferred away from the Foundation;
 - paid replay evidence itself changed validator authority;
 - provider resources remain running after the replay window.
 

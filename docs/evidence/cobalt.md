@@ -1,14 +1,71 @@
 # Cobalt Evidence
 
-Cobalt evidence proves the controlled governance mechanics, not public operator
-decentralization.
+Cobalt evidence proves bounded controlled-devnet protocol behavior. It does not
+prove public operator decentralization, and every operational claim needs an
+observation time plus an exact binary identity.
 
-## Current Main Packet
+## Current Operational Observation
 
-`reports/testnet-cobalt-controlled-readiness-gate/amendment-replay-contract-clean-v0-20260519T145213Z/testnet-cobalt-controlled-readiness-gate.json`
+An authenticated, read-only probe completed at `2026-08-25T15:37:40Z`.
+It established:
 
-## Supporting Evidence
+- all six validator, RPC, and Cobalt shadow services were active;
+- every validator reported chain `postfiat-wan-devnet-2`, status `running`,
+  height 919, zero pending mempool items, and identical tip/state roots;
+- every active validator binary had SHA-256
+  `431f194ba28391eba16c18a96d49c358bd2047d3b37eb0115216f46c6a6783f4`
+  under release `cobalt-activation-8694b99d`;
+- every shadow binary had SHA-256
+  `43ac8a7df13f41d5cfdd783fc983de4e8e91b625e6a705ae342569c5771ad935`;
+- the separate governance auditor, SHA-256
+  `055077582342dd54af0212df82e626cc83aae8af119c09f1cd1309dad906293e`,
+  returned `ACTIVATED` on validator-0 with every `live-status` check passing;
+- Cobalt remained limited to validator trust, while Consensus v2 remained block
+  finality and the shadow runtime remained advisory.
 
+[Current State](../status/chain-state-current.md) contains the exact roots,
+runtime/auditor/shadow identities, repository HEAD, campaign status, probe scope,
+and freshness boundary. The fresh full authority audit was run on validator-0;
+all-six convergence was independently checked from each validator's status,
+service state, and binary hash.
+
+## Historical Activation Packet
+
+The checksum-bound activation artifact is
+`benchmarks/cobalt-activation-live/packet/`. It captured the initial height-919
+observation at `2026-08-25T05:13:45Z`, including activation at height 916, the
+validator-5 key rotation at height 917, and packet manifest root
+`b603b59d0245a7c73e766d0ba7fb19975f11e1e39bdd7263bf87e65250438bfb`.
+
+```bash
+python3 benchmarks/cobalt-activation-live/packet/verify_packet.py
+```
+
+A pass authenticates the committed packet and its selected source pins; it does
+not query the fleet. Its `source-pins.json` labels
+`cobalt-verifier-92b63f5a` as the live consensus binary, but that label does not
+match the active `cobalt-activation-8694b99d` validator services observed by the
+fresh probe. The packet is retained unchanged as historical evidence. Current
+operational claims must use the fresh runtime identities above.
+
+## Post-Activation Adversarial Evidence
+
+E1 evidence is stored under
+`benchmarks/cobalt-adversarial-verification/e1/`. The independent oracle,
+production comparison, reconciled rerun, and clean rerun agree across all 10,240
+generated trust graphs. E1 is off-chain verification tooling; it is not a node
+deployment.
+
+E2 is started in the active milestone, but source baseline `c2de415d` contains
+only the E2 kickoff/status update. This later documentation reconciliation adds
+no E2 implementation or evidence packet.
+
+## Historical And Supporting Evidence
+
+These artifacts remain useful qualification and regression evidence, but they
+predate the terminal activation:
+
+- `reports/testnet-cobalt-controlled-readiness-gate/amendment-replay-contract-clean-v0-20260519T145213Z/testnet-cobalt-controlled-readiness-gate.json`
 - `reports/cobalt-safety-witness/20260526/cobalt-safety-witness-report.json`
 - `reports/testnet-cobalt-gate-selection/amendment-replay-contract-clean-v0-20260519T145213Z/testnet-cobalt-gate-selection-self-test.json`
 - `reports/testnet-cobalt-amendment-replay-bundle/cleanup-clean-v1-20260519T150324Z/testnet-cobalt-amendment-replay-bundle.json`
@@ -17,14 +74,5 @@ decentralization.
 - `reports/cobalt-cover-extractor-v1-report.json`
 - `reports/cobalt-cover-sizing-v1-report.json`
 
-## Interpretation
-
-The Cobalt mechanics pass controlled readiness. The safety-witness checker also
-has a local consensus-crate report showing accepted bounded rotation and
-fail-closed rejection for stale roots, open challenges, oversized covers, and a
-large unsafe old/new registry delta. The cover-extractor report shows that the
-old/new cover is derived from the rooted trust graphs, not supplied by the
-proposer, and that the witness path can reject omitted cover rows. The strict
-public topology gate records the remaining public-placement deltas. The cover
-sizing report checks 35- and 100-validator grouped trust graphs under the
-current `max_cover_subsets=64` profile.
+These prove bounded readiness and regression properties. They do not establish
+the current network tip or replace a fresh fleet probe.

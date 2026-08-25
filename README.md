@@ -8,7 +8,9 @@
 > transactional indexed production engine. Do not place real-value keys or
 > value on this controlled-devnet configuration.
 
-PostFiat is a Rust Layer 1 settlement system for post-quantum, privacy-aware institutional value transfer: transparent accounts use ML-DSA authorization from genesis, shielded settlement is built around Orchard/Halo2-style proofs, and quorum certificates provide deterministic finality. On the controlled testnet, Cobalt has been the live authority for validator-registry and trust-graph changes since height 916. Foundation governance retains unrelated governance scope. Cobalt never orders blocks or replaces Consensus v2 finality.
+PostFiat is a Rust Layer 1 settlement system for post-quantum, privacy-aware institutional value transfer: transparent accounts use ML-DSA authorization from genesis, shielded settlement is built around Orchard/Halo2-style proofs, and quorum certificates provide deterministic finality. An authenticated read-only probe completed at `2026-08-25T15:37:40Z` with all six `postfiat-wan-devnet-2` validators active and equal at height 919. Cobalt is the validator-trust authority from height 916; Consensus v2 remains block finality and Foundation governance retains unrelated scope. Current Git HEAD is not the running validator release.
+
+See [Current State](docs/status/chain-state-current.md) for the exact live observation, deployed release lineage, repository HEAD, adversarial campaign status, and freshness boundary.
 
 ```mermaid
 flowchart LR
@@ -19,11 +21,13 @@ flowchart LR
   Execution --> Storage[State, blocks, receipts]
   Storage --> Reads[Read RPC and history]
 
-  Governance[Foundation signed governance] --> Registry[Validator registry]
-  Registry --> Ordering
-
-  Governance -->|ordered activation at height 916| Cobalt[Cobalt validator-trust governance]
-  Cobalt --> Registry
+  Proposal[Foundation-administered proposal source] --> Scope{Governance scope}
+  Scope -->|validator trust| Cobalt[Cobalt ratification]
+  Scope -->|unrelated governance| Foundation[Foundation authorization]
+  Cobalt --> GovAction[Authorized governance action]
+  Foundation --> GovAction
+  GovAction --> Mempool
+  Execution --> Registry[Validator registry state]
 
   Shielded[Shielded Orchard/Halo2 actions] --> Ordering
   Execution --> Pool[Shielded pool roots and nullifiers]
@@ -58,7 +62,7 @@ flowchart LR
 | FastPay | Implemented for prefunded single-owner PFT objects with signed admission, distinct-validator certificates, durable apply, and ordered consume-or-cancel recovery. |
 | FastSwap | Implemented for prefunded dual-owner objects with durable reservation, Confirm-or-Cancel certificates, conserved effects, catch-up, and restart recovery. Shared-network activation is a separate deployment decision. |
 | Asset-Orchard | Implemented private ingress, transfer/swap, recovery, and egress path; legacy cleartext note actions are historical-replay-only. |
-| Governance | Cobalt is live on the controlled testnet for validator trust evolution; Foundation governance retains other scopes. Consensus v2 remains the sole block-finality protocol. See the [activation packet](benchmarks/cobalt-activation-live/packet/README.md). |
+| Governance | The `2026-08-25T15:37:40Z` probe found Cobalt active for validator-trust evolution, with Foundation governance retaining other scopes and Consensus v2 remaining the sole block-finality protocol. The active validator release is `cobalt-activation-8694b99d`; current source HEAD is different and undeployed. See [Current State](docs/status/chain-state-current.md) and the historical [activation packet](benchmarks/cobalt-activation-live/packet/README.md). |
 
 See [Settlement Lanes](docs/architecture/settlement-lanes.md) for the protocol
 boundaries and [Public Launch Boundary](docs/security/public-launch-boundary.md)

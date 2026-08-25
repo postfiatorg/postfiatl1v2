@@ -8,15 +8,20 @@ A failed benchmark or simulation creates P0 remediation and a rerun of the uncha
 
 The result proves protocol capability, not operator decentralization.
 
-- **Status:** Active — E1 complete and rewarded; E2 accepted and in progress; E3-E6 not started
+- **Status:** Active — E1 complete; E2 accepted with only the kickoff/status commit recorded; E2 implementation and evidence not yet committed; E3-E6 not started
 - **Specification:** [Cobalt Adversarial Verification Research Specification](../../governance/cobalt-adversarial-verification-research-spec.md)
 - **Specification lock task:** `task_158622307482e23fb4519889b53b475f` — rewarded 2026-08-25
-- **Milestone-document task:** `[ ] task_d28eb3465dcac9a32524c25bba996e1e — accepted 2026-08-25`
+- **Milestone-document task:** `[x] task_d28eb3465dcac9a32524c25bba996e1e — rewarded 2026-08-25`
 - **Required result:** `[ ] KEEP ACTIVE`
 
 ## Current position
 
-- [x] Cobalt became the live controlled-testnet validator-trust authority at height 916; its first authorized validator-key rotation committed at height 917.
+Deployment, repository, campaign, and freshness identities are separated in
+[Current State](../../status/chain-state-current.md). An authenticated read-only
+six-validator probe completed at `2026-08-25T15:37:40Z`; current repository HEAD
+is still not the active validator release.
+
+- [x] Cobalt became the recorded controlled-testnet validator-trust authority at height 916; its first authorized validator-key rotation committed at height 917.
 - [x] The research specification passed the Text Improvement Harness at 89.27/100 and is locked.
 - [x] The public article now records the live authority state instead of saying Cobalt remains off.
 - [ ] The cooperative activation evidence has not yet passed the adversarial E1-E6 campaign.
@@ -43,6 +48,9 @@ Code references: `crates/cobalt_adversarial_oracle/src/lib.rs`, `crates/cobalt_e
 ### E2. Byzantine validator campaign
 
 Task Node: `[ ] task_91aebe5c632d90e03e7e151a6ffeb736 — accepted 2026-08-25`
+
+Repository state: kickoff/status recorded at `c2de415d`; no E2 harness,
+frozen corpus, or result packet is committed yet.
 
 - [ ] Derive and freeze the live six-validator fault bound `f` before execution.
 - [ ] Exercise up to `f` Byzantine domains across separate and combined RBC, ABBA, MVBA, and DABC equivocation; selective withholding; lying or changing trust views; competing proposals; late votes; and re-proposals.

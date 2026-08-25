@@ -13,6 +13,7 @@ exclude_docs: |
   review/**
   specs/**
   status/**
+  !status/chain-state-current.md
   !status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md
   ai-handoff.md
   cut.md
@@ -85,6 +86,7 @@ extra_css:
 
 nav:
   - Home: index.md
+  - Current State: status/chain-state-current.md
   - Whitepaper: whitepaper.md
   - NAVCoins:
       - Overview: navcoins/index.md
@@ -126,7 +128,7 @@ nav:
       - Cobalt: governance/cobalt.md
       - Cobalt Implementation: governance/cobalt-implementation.md
       - Cobalt Transition Safety Proof: governance/cobalt-transition-safety-proof.md
-      - Cobalt Adversarial Verification Spec (draft): governance/cobalt-adversarial-verification-research-spec.md
+      - Cobalt Adversarial Verification Spec (locked): governance/cobalt-adversarial-verification-research-spec.md
       - Verifiable Constitution: governance/verifiable-constitution.md
       - Validator Registry: governance/validator-registry.md
       - Validator Admission Bin Policy: governance/validator-admission-bin-policy.md

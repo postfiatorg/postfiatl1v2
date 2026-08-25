@@ -13,26 +13,37 @@ verify and import the signed gap before it can advance.
 
 Authority transfer is separate from agreement:
 
-1. Cobalt runs as an authenticated shadow service with no live authority.
-2. The active Foundation registry signs one exact transition with a distinct
-   ML-DSA-65 quorum.
-3. Consensus v2 orders that transition at its activation height.
-4. Only then may Cobalt authorize validator-trust updates. It cannot authorize
-   unrelated governance and a new validator set cannot authorize itself.
-5. Returning to Foundation authority is another signed forward transition; it
-   never rewrites finalized history.
+1. The Cobalt shadow services remain advisory and cannot mutate validator state.
+2. The Foundation-administered registry signed the exact Cobalt transition with
+   a distinct ML-DSA-65 quorum.
+3. Consensus v2 ordered that transition at height 916.
+4. The recorded authority state then allowed Cobalt to ratify validator-trust
+   updates only; a validator-5 key rotation committed at height 917. Cobalt
+   cannot authorize unrelated governance and a new validator set cannot
+   authorize itself.
+5. Returning to Foundation authority requires another signed forward transition;
+   it cannot rewrite finalized history.
 
 A Cobalt failure can pause validator governance. It cannot create a second
 block-finality protocol.
 
-## Current Decision
+## Current Controlled-Devnet State
 
-The authenticated benchmark and disposable handoff packets support **GO for a
-later, separately authorized controlled-testnet validator-trust cutover**.
-That is not an activation. Foundation validator-trust authority remains active
-and Consensus v2 remains the only block-finality protocol.
+An authenticated read-only probe completed at `2026-08-25T15:37:40Z` and
+returned **ACTIVATED** on `postfiat-wan-devnet-2`: all six validators were active
+and equal at height 919, Cobalt was the validator-trust authority, and Consensus
+v2 remained the only block-finality protocol. The active consensus service was
+release `cobalt-activation-8694b99d` with binary SHA-256
+`431f194b…783f4`. A separate governance-auditor binary verified the authority
+history, and the Cobalt shadow services remained advisory.
 
-Run the decision directly:
+See [Current State](../status/chain-state-current.md) for the exact roots, all
+runtime identities, the activation packet's stale consensus-label discrepancy,
+repository state, adversarial campaign, and freshness boundary. The earlier
+benchmark and handoff packets are qualification provenance; current Git HEAD is
+not deployed.
+
+Verify the qualification evidence directly:
 
 ```bash
 PYTHONPATH=python python3 -m postfiat_rpc.cobalt scenario
@@ -106,6 +117,9 @@ It has no proposal, transition, registry-update, or activation route.
 
 - Matched comparison: `benchmarks/cobalt-rippled-liveness/packet/`
 - Disposable handoff: `benchmarks/cobalt-handoff-rehearsal/packet/`
-- Final decision: `benchmarks/cobalt-activation-readiness/packet/`
+- Pre-activation decision: `benchmarks/cobalt-activation-readiness/packet/`
+- Terminal activation: `benchmarks/cobalt-activation-live/packet/`
+- Post-activation adversarial E1: `benchmarks/cobalt-adversarial-verification/e1/`
+- Current state and freshness: [Current State](../status/chain-state-current.md)
 - Implementation details: [Cobalt Implementation](cobalt-implementation.md)
 - Validator lifecycle: [Validator Registry](validator-registry.md)

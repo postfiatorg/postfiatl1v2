@@ -8,6 +8,13 @@ PostFiat baseline: `cde96f434ffa3d48afa0049cf55e1ad2e8779d9d`
 XRPL baseline: `rippled 3.1.3`, commit `46b241ace8b30d9c9775d60ffba7d24b21903896`
 Decision scope: live Cobalt governance on the controlled testnet and a reproducible Cobalt-versus-XRPL quorum/liveness comparison
 
+!!! note "Historical deployment specification"
+
+    The shadow deployment and later authority-cutover milestones are complete.
+    This locked specification remains the pre-activation decision record; use
+    [Current State](../status/chain-state-current.md) for current operational
+    identities and freshness.
+
 ## Plain-English decision
 
 PostFiat should deploy Cobalt now as an always-on **shadow governance service on the real devnet validators**. It should not transfer governance authority yet.

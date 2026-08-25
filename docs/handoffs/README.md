@@ -38,4 +38,16 @@ The decision to make or the next bounded action, including any constraints.
 ```
 
 Do not paste logs, speculate about unverified behavior, or describe shadow and
-simulation evidence as live authority.
+simulation evidence as live authority. For deployment claims, link
+[Current State](../status/chain-state-current.md) and distinguish all of the
+following explicitly:
+
+- last observed fleet state and capture time;
+- deployed binary and source lineage;
+- current repository branch and HEAD;
+- merged but undeployed work;
+- whether a live probe was performed in the session.
+
+A passing offline packet verifier is not a fresh fleet probe. Dated handoffs are
+historical snapshots and must link forward when a later event supersedes their
+operational state.

@@ -7,13 +7,33 @@ with local and remote multi-validator testnets but has not reached public mainne
 The numbers below are controlled-environment evidence, not public-mainnet service
 level commitments.
 
+## Operational State Boundary
+
+The [Current State](docs/status/chain-state-current.md) page is authoritative for
+questions about the devnet, active binaries, repository state, and adversarial
+campaign. An authenticated read-only probe completed at
+`2026-08-25T15:37:40Z`:
+
+- all six validator, RPC, and Cobalt shadow services were active;
+- all six validators were equal at height 919 with empty mempools;
+- the active consensus release was `cobalt-activation-8694b99d`, binary SHA-256
+  `431f194b…783f4`;
+- the governance auditor and Cobalt shadow were separate binaries;
+- source baseline `c2de415d` and this later documentation-only reconciliation
+  were not deployed;
+- E1 was complete, while E2 had only a kickoff/status commit.
+
+The older activation packet remains historical evidence. Its
+`cobalt-verifier-92b63f5a` label does not identify the active consensus service
+observed by the fresh probe.
+
 ## What Works
 
 - **HotStuff-style ordering**: local 5-validator submit-to-finality at p50 1.56s, p95 1.71s.
 - **Remote testnet**: 5-validator certified round at p50 1.03s over WAN.
 - **Transparent transactions**: XRP-style transfers with account history and finality RPC.
 - **Shielded settlement**: Orchard/Halo2 deposit, spend, and withdraw with nullifier set.
-- **Cobalt governance**: live controlled-testnet authority for validator-registry and trust-graph changes since height 916; the first Cobalt-authorized key rotation committed at height 917. Consensus v2 still finalizes blocks.
+- **Cobalt governance**: the `2026-08-25T15:37:40Z` probe verified Cobalt active for validator-registry and trust-graph changes from height 916; the first Cobalt-authorized key rotation committed at height 917. Consensus v2 still finalizes blocks. See [Current State](docs/status/chain-state-current.md).
 - **Post-quantum auth**: ML-DSA account and validator signatures from genesis.
 - **NAVCoins**: OTC swap primitives and proof-of-reserve on controlled testnet.
 - **RPC**: full read/write surface with account state, history, receipts, and finality queries.

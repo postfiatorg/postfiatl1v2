@@ -3,6 +3,16 @@
 - **Operator:** Domagoj Ravlić (`dravlic`)
 - **Date:** 2026-08-25 UTC
 
+!!! note "Historical post-activation snapshot"
+
+    This handoff predates the completed E1 run and E2 kickoff. The current
+    repository state advanced through `main` at `c2de415d`: E1 completed and E2
+    gained only a kickoff/status commit. A later authenticated six-validator
+    probe at `2026-08-25T15:37:40Z` confirmed the authority and roots below while
+    identifying the active runtime as `cobalt-activation-8694b99d`, not current
+    Git HEAD or the older packet's consensus label. See
+    [Current State](../status/chain-state-current.md).
+
 ## BLUF
 
 Took over after the 2026-08-25 Cobalt activation run. Confirmed from the repository and the packet verifier that Cobalt has been the live validator-trust authority on the controlled testnet since height 916, that the first Cobalt-authorized key rotation committed at height 917, and that no active plan remains. Two published documents now lag the live state: the earlier handoff still says deployment stopped before live mutation, and the blog still says Cobalt authority is off. Drafted the proposed next research specification, [Cobalt Adversarial Verification](../governance/cobalt-adversarial-verification-research-spec.md), which turns the open critique of the activation evidence into experiments. Nothing is committed, scored, or requested from Task Node yet.
@@ -53,3 +63,24 @@ Next bounded actions, in order: score the draft with the Text Improvement Harnes
 - Text Improvement Harness: 89.27 average (GPT 89.20, Fable 88.40, GLM 90.20).
 - Rewarded Task Node tasks: specification lock `task_158622307482e23fb4519889b53b475f`; milestone document `task_d28eb3465dcac9a32524c25bba996e1e`.
 - Current state: E1 is being started as a `/goal` run in tmux session `dravlic` on this machine and will update the milestone document as it progresses. E2 will not start automatically.
+
+## Repository-state reconciliation 2026-08-25
+
+This section supersedes the end-of-session state above for current readers.
+
+- E1 completed across the frozen 10,240-graph corpus. Repository HEAD advanced
+  to `c2de415d`, which records the E2 kickoff but contains no E2 implementation
+  or result packet.
+- An authenticated read-only probe completed at `2026-08-25T15:37:40Z`. All six
+  validator, RPC, and shadow services were active; every validator remained
+  equal at height 919 with the recorded tip/state roots and an empty mempool.
+- The active consensus runtime is `cobalt-activation-8694b99d`, binary SHA-256
+  `431f194b…783f4`. The governance auditor is the separate
+  `cobalt-live-governance-audit-05507758` binary, and the advisory shadow is
+  `cobalt-shadow-registry-reset-43ac8a7d`.
+- The activation packet's `cobalt-verifier-92b63f5a` consensus label does not
+  match the active validator services. The packet remains unchanged as
+  checksum-bound historical evidence.
+- [Current State](../status/chain-state-current.md) now owns the live runtime,
+  auditor, shadow, source HEAD, adversarial campaign, and freshness boundary.
+- The probe changed no fleet files or services and invoked no write RPC method.

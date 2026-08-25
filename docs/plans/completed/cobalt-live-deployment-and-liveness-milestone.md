@@ -1,5 +1,13 @@
 # Cobalt Live Deployment and Liveness Milestone
 
+!!! note "Historical pre-activation milestone"
+
+    This completed plan qualified the shadow deployment and a later cutover; it
+    did not itself activate Cobalt. The later activation at height 916 and the
+    current runtime identities are documented in
+    [Current State](../../status/chain-state-current.md). Preserve the body below
+    as execution history.
+
 ## What this plan does
 
 This plan puts Cobalt on the actual controlled-testnet validator machines and determines, from measured behavior, whether PostFiat should activate it for validator-governance decisions.

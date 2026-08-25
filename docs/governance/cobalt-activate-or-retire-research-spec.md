@@ -1,9 +1,16 @@
 # Cobalt Activation Research Specification
 
-**Status:** Draft; pending Text Improvement Harness score and Task Node lock  
+**Status:** Locked on 2026-08-23; completed by controlled-testnet activation on 2026-08-25
 **Date:** 2026-08-23  
 **Decision owner:** Post Fiat  
 **Prior work:** [Cobalt live-deployment research specification](cobalt-live-deployment-research-spec.md), [completed live-deployment milestone](../plans/completed/cobalt-live-deployment-and-liveness-milestone.md)
+
+!!! note "Historical decision specification"
+
+    This document defined the activation gates. It is preserved as decision
+    history, including requirements later scrutinized by the adversarial
+    campaign. Use [Current State](../status/chain-state-current.md) for the
+    observed network, active binaries, repository, and campaign status.
 
 ## Plain-English directive
 
