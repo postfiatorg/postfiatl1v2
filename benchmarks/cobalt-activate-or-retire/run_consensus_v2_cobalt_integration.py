@@ -322,9 +322,9 @@ def benchmark_command(
         "--timeout-ms",
         "90000",
         "--send-retries",
-        "2",
+        "16",
         "--retry-backoff-ms",
-        "25",
+        "100",
     ]
 
 

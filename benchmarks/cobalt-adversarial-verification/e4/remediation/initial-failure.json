@@ -1,0 +1,55 @@
+{
+  "schema": "postfiat-cobalt-adversarial-e4-initial-failure-v1",
+  "status": "remediated_rerun_required",
+  "observed_at": "2026-08-25T22:24:21Z",
+  "source_revision": "0b2abdc5fde6ade172dc9a85b811330edc1cda2c",
+  "frozen_manifest_sha256": "18d3d7966b1d3126f216a2b3e5151381f1e0ec8e81640053274081316f3e7b91",
+  "baseline": {
+    "status": "passed",
+    "iterations": 500,
+    "wallet_to_finality_p95_ms": 13768.840032999999,
+    "report_sha256": "c7bc313dcefc3fca286455d3a3685373280e4d0ca7032bc6c70e86d274cf50e9",
+    "iterations_sha256": "5347878f51d9368958c0a9182a1f844b49b3030300cb8ab8b896cc37247e8534"
+  },
+  "attack": {
+    "iterations": 0,
+    "failure_stage": "first_prepare_vote_collection",
+    "target_validator": "validator-5",
+    "rejection_reason": "transport block vote request to validator-5 failed after 3 attempts while the locked crash loop held the validator unavailable",
+    "stderr_sha256": "39cb03c51866a80a58361ee82a349b3b9cfe472821abe702a427031b6da348c8"
+  },
+  "diagnosis": {
+    "classification": "campaign_transport_retry_window_defect",
+    "protocol_safety_failure_observed": false,
+    "fork_observed": false,
+    "durable_state_divergence_observed": false,
+    "cause": "the harness used only three full-vote attempts across a 25 ms retry interval while intentionally crash-looping one validator; it therefore tested a shorter retry window than the injected restart outage",
+    "remediation": "use the existing bounded production transport retry path with 16 retries and a 100 ms backoff in both lanes; retain the frozen 500+500 rounds, full-vote policy, crash cadence, Cobalt quota, topology, and every adversarial input"
+  },
+  "remediation_validation": {
+    "status": "passed",
+    "scope": "two clean-state full-vote Consensus v2 rounds with three validator-5 crash/restarts",
+    "send_retries": 16,
+    "retry_backoff_ms": 100,
+    "restart_count": 3,
+    "round_count": 2,
+    "all_rounds_ok": true,
+    "converged": true,
+    "state_verified_after_run": true,
+    "report_sha256": "fe8c590ea12769145d5f3127ea8a3f7c254820c3549281bf7275f2ffe30e5305",
+    "iterations_sha256": "5bd0ebca2cf3219d27e0bda4e1ab0ccfd22aefd6afd62d1b835c876158c7d161",
+    "raw_smoke_artifacts_committed": false
+  },
+  "rerun": {
+    "required": true,
+    "from_clean_state": true,
+    "minimum_baseline_rounds": 500,
+    "minimum_attack_rounds": 500,
+    "corpus_parameters_unchanged": true
+  },
+  "redaction": {
+    "private_paths_included": false,
+    "private_key_material_included": false,
+    "raw_logs_included": false
+  }
+}
