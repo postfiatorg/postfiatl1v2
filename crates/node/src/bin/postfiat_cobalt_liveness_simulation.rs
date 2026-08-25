@@ -10,8 +10,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Write};
-use std::net::{SocketAddr, TcpListener};
+use std::io::{self, Read, Write};
+use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::thread::{self, JoinHandle};
 use std::time::Instant;
@@ -24,6 +24,9 @@ use postfiat_consensus_cobalt::{
     VALIDATOR_REGISTRY_OP_REMOVE, VALIDATOR_REGISTRY_OP_ROTATE_KEY,
 };
 use postfiat_crypto_provider::{bytes_to_hex, hash_hex, ml_dsa_65_keygen, ML_DSA_65_ALGORITHM};
+use postfiat_node::cobalt_authority_certificate::{
+    verify_cobalt_validator_update_decision_certificate, MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES,
+};
 use postfiat_node::cobalt_shadow::{
     assemble_protocol_transcript_extending, build_registry_binding_manifest,
     CobaltShadowHistoryRange, CobaltShadowIdentity, CobaltShadowLimits,
@@ -32,11 +35,15 @@ use postfiat_node::cobalt_shadow::{
 };
 use postfiat_node::cobalt_shadow_runtime::{
     compressed_commit_request, request, serve_listener, CobaltShadowProbe, CobaltShadowRpcRequest,
+    MAX_RPC_FRAME_BYTES,
 };
 use postfiat_node::{
     ValidatorKeyFile, ValidatorKeyRecord, ValidatorRegistry, ValidatorRegistryRecord,
 };
-use postfiat_types::ValidatorRegistryEntry;
+use postfiat_types::{
+    CobaltValidatorUpdateDecisionCertificateV1, ValidatorRegistryEntry,
+    COBALT_VALIDATOR_UPDATE_DECISION_CERTIFICATE_SCHEMA_V1,
+};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -669,6 +676,195 @@ fn probe(domain: &SimulatedDomain) -> io::Result<CobaltShadowProbe> {
     rpc(domain.endpoint, &CobaltShadowRpcRequest::Probe)
 }
 
+fn padded_certificate(
+    target_bytes: usize,
+) -> io::Result<CobaltValidatorUpdateDecisionCertificateV1> {
+    let mut certificate = CobaltValidatorUpdateDecisionCertificateV1 {
+        schema: COBALT_VALIDATOR_UPDATE_DECISION_CERTIFICATE_SCHEMA_V1.to_string(),
+        registry_binding: Value::String(String::new()),
+        protocol_transcript: Value::Null,
+    };
+    let base_bytes = serde_json::to_vec(&certificate)
+        .map_err(|error| invalid(error.to_string()))?
+        .len();
+    if target_bytes < base_bytes {
+        return Err(invalid("certificate padding target is too small"));
+    }
+    certificate.registry_binding = Value::String("x".repeat(target_bytes - base_bytes));
+    let encoded_bytes = serde_json::to_vec(&certificate)
+        .map_err(|error| invalid(error.to_string()))?
+        .len();
+    if encoded_bytes != target_bytes {
+        return Err(invalid(format!(
+            "certificate padding produced {encoded_bytes} bytes instead of {target_bytes}"
+        )));
+    }
+    Ok(certificate)
+}
+
+fn padded_contribution_request(
+    binding: &CobaltShadowRegistryBinding,
+    proposal: &RbcPropose,
+    target_bytes: usize,
+) -> io::Result<CobaltShadowRpcRequest> {
+    let mut padded_proposal = proposal.clone();
+    padded_proposal.payload_hash.clear();
+    let mut request_value = CobaltShadowRpcRequest::CreateContribution {
+        binding: Box::new(binding.clone()),
+        propose: Box::new(padded_proposal.clone()),
+    };
+    let base_bytes = serde_json::to_vec(&request_value)
+        .map_err(|error| invalid(error.to_string()))?
+        .len();
+    if target_bytes < base_bytes {
+        return Err(invalid("contribution padding target is too small"));
+    }
+    padded_proposal.payload_hash = "x".repeat(target_bytes - base_bytes);
+    request_value = CobaltShadowRpcRequest::CreateContribution {
+        binding: Box::new(binding.clone()),
+        propose: Box::new(padded_proposal),
+    };
+    let encoded_bytes = serde_json::to_vec(&request_value)
+        .map_err(|error| invalid(error.to_string()))?
+        .len();
+    if encoded_bytes != target_bytes {
+        return Err(invalid(format!(
+            "contribution padding produced {encoded_bytes} bytes instead of {target_bytes}"
+        )));
+    }
+    Ok(request_value)
+}
+
+fn send_raw_rpc_frame(endpoint: SocketAddr, bytes: usize) -> io::Result<String> {
+    let mut stream = TcpStream::connect_timeout(&endpoint, std::time::Duration::from_secs(5))?;
+    stream.set_read_timeout(Some(std::time::Duration::from_secs(10)))?;
+    stream.set_write_timeout(Some(std::time::Duration::from_secs(10)))?;
+    stream.write_all(&vec![b'x'; bytes])?;
+    stream.shutdown(Shutdown::Write)?;
+    let mut response_bytes = Vec::new();
+    stream
+        .take((MAX_RPC_FRAME_BYTES + 1) as u64)
+        .read_to_end(&mut response_bytes)?;
+    let response: Value =
+        serde_json::from_slice(&response_bytes).map_err(|error| invalid(error.to_string()))?;
+    if response.get("ok") != Some(&Value::Bool(false)) {
+        return Err(invalid("raw RPC attack did not receive a rejection"));
+    }
+    response
+        .get("error")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .ok_or_else(|| invalid("raw RPC rejection did not name an error"))
+}
+
+fn run_e4_boundary_and_flood_drill(
+    domain: &SimulatedDomain,
+    binding: &CobaltShadowRegistryBinding,
+    proposal: &RbcPropose,
+) -> io::Result<Value> {
+    const FLOOD_REQUESTS: usize = 16;
+
+    let before = probe(domain)?;
+    let expected_domain = simulation_domain();
+    let near_certificate =
+        padded_certificate(MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES.saturating_sub(1))?;
+    let near_certificate_raw_error = verify_cobalt_validator_update_decision_certificate(
+        &near_certificate,
+        &expected_domain,
+        &binding.validator_registry,
+        &binding.active_validators,
+        &binding.registry_root,
+        &binding.trust_graph.trust_graph_root,
+        &proposal.payload_hash,
+        proposal.amendment_slot,
+        1,
+        None,
+    )
+    .expect_err("near-limit malformed certificate must reject")
+    .to_string();
+    if !near_certificate_raw_error.contains("expected struct CobaltCompressedValueV1") {
+        return Err(invalid(
+            "near-limit certificate did not reach compressed-value structural validation",
+        ));
+    }
+    let near_certificate_error =
+        "Cobalt compressed certificate structure invalid below 1 MiB limit".to_string();
+
+    let oversized_certificate =
+        padded_certificate(MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES.saturating_add(1))?;
+    let oversized_certificate_error = verify_cobalt_validator_update_decision_certificate(
+        &oversized_certificate,
+        &expected_domain,
+        &binding.validator_registry,
+        &binding.active_validators,
+        &binding.registry_root,
+        &binding.trust_graph.trust_graph_root,
+        &proposal.payload_hash,
+        proposal.amendment_slot,
+        1,
+        None,
+    )
+    .expect_err("oversized certificate must reject")
+    .to_string();
+
+    let contribution_target = MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES.saturating_sub(1);
+    let contribution_request = padded_contribution_request(binding, proposal, contribution_target)?;
+    let contribution_error = request(domain.endpoint, &contribution_request)
+        .expect_err("near-limit forged contribution must reject")
+        .to_string();
+
+    let near_frame_bytes = MAX_RPC_FRAME_BYTES.saturating_sub(1);
+    let near_frame_error = send_raw_rpc_frame(domain.endpoint, near_frame_bytes)?;
+    let oversized_frame_bytes = MAX_RPC_FRAME_BYTES.saturating_add(1);
+    let oversized_frame_error = send_raw_rpc_frame(domain.endpoint, oversized_frame_bytes)?;
+    let flood_errors = (0..FLOOD_REQUESTS)
+        .map(|_| send_raw_rpc_frame(domain.endpoint, oversized_frame_bytes))
+        .collect::<io::Result<Vec<_>>>()?;
+    let after = probe(domain)?;
+
+    let oversized_certificate_named = oversized_certificate_error.contains(&format!(
+        "maximum is {MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES}"
+    ));
+    let oversized_frame_named = oversized_frame_error.contains("RPC request exceeds frame bound");
+    let flood_all_named = flood_errors
+        .iter()
+        .all(|error| error.contains("RPC request exceeds frame bound"));
+    let durable_state_unchanged = before.status.state_hash == after.status.state_hash
+        && before.history_head == after.history_head
+        && before.protocol_decisions == after.protocol_decisions;
+    if !oversized_certificate_named
+        || !oversized_frame_named
+        || !flood_all_named
+        || !durable_state_unchanged
+    {
+        return Err(invalid(
+            "E4 boundary/flood drill did not reject fail-closed without mutation",
+        ));
+    }
+
+    Ok(json!({
+        "adversarial_validator": domain.node_id,
+        "certificate_limit_bytes": MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES,
+        "near_certificate_bytes": MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES - 1,
+        "near_certificate_rejection": near_certificate_error,
+        "oversized_certificate_bytes": MAX_COBALT_AUTHORITY_CERTIFICATE_BYTES + 1,
+        "oversized_certificate_rejection": oversized_certificate_error,
+        "near_contribution_bytes": contribution_target,
+        "near_contribution_rejection": contribution_error,
+        "rpc_frame_limit_bytes": MAX_RPC_FRAME_BYTES,
+        "near_rpc_frame_bytes": near_frame_bytes,
+        "near_rpc_frame_rejection": near_frame_error,
+        "oversized_rpc_frame_bytes": oversized_frame_bytes,
+        "oversized_rpc_frame_rejection": oversized_frame_error,
+        "flood_request_count": FLOOD_REQUESTS,
+        "flood_rejection_count": flood_errors.len(),
+        "flood_rejections": flood_errors,
+        "durable_state_unchanged": durable_state_unchanged,
+        "boundary_rejection_count": 5 + FLOOD_REQUESTS,
+        "named_limit_rejection_count": 2 + FLOOD_REQUESTS,
+    }))
+}
+
 fn p95(mut values: Vec<u64>) -> u64 {
     if values.is_empty() {
         return 0;
@@ -698,6 +894,8 @@ fn run_simulation(
     );
     let (baseline_proposal, baseline_contributions) =
         collect_contributions(domains, binding, round, &baseline_payload, &all_indices)?;
+    let e4_stress_receipt =
+        run_e4_boundary_and_flood_drill(&domains[0], binding, &baseline_proposal)?;
     let baseline = assemble_protocol_transcript_extending(
         binding,
         baseline_proposal,
@@ -1045,6 +1243,9 @@ fn run_simulation(
         "crash_restart_recovered": omitted_domain_receipts.iter().all(|row| row["durable_history_equal_after_restart"] == true),
         "partition_healed": partition_healed,
         "consistent_durable_history": final_convergence,
+        "e4_boundary_and_flood_rejections_named": e4_stress_receipt["boundary_rejection_count"] == 21
+            && e4_stress_receipt["flood_rejection_count"] == 16
+            && e4_stress_receipt["durable_state_unchanged"] == true,
         "live_authority_not_required": probes.iter().all(|probe| !probe.live_authority && !probe.controls_block_consensus),
         "simulation_only": true,
     });
@@ -1082,6 +1283,15 @@ fn run_simulation(
         "validator_count": DOMAIN_COUNT,
         "quorum": QUORUM,
         "round_count": round_receipts.len(),
+        "governance_storm": {
+            "proposal_count": 20,
+            "safe_halt_count": DOMAIN_COUNT + 1,
+            "view_change_count": DOMAIN_COUNT + 1,
+            "transition_count": transition_receipts.len(),
+            "all_recovered": partition_healed
+                && omitted_domain_receipts.iter().all(|row| row["five_of_six_progress"] == true),
+        },
+        "e4_stress_receipt": e4_stress_receipt,
         "fault_classes": [
             "delay",
             "loss",

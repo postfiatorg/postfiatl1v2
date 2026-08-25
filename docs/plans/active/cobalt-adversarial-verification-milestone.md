@@ -8,7 +8,7 @@ A failed benchmark or simulation creates P0 remediation and a rerun of the uncha
 
 The result proves protocol capability, not operator decentralization.
 
-- **Status:** Active — E1-E3 complete; E4-E6 not started
+- **Status:** Active — E1-E3 complete; E4 in progress; E5-E6 not started
 - **Specification:** [Cobalt Adversarial Verification Research Specification](../../governance/cobalt-adversarial-verification-research-spec.md)
 - **Historical specification-lock record:** `task_158622307482e23fb4519889b53b475f` — rewarded 2026-08-25
 - **Historical milestone-document record:** `[x] task_d28eb3465dcac9a32524c25bba996e1e — rewarded 2026-08-25`
@@ -107,7 +107,12 @@ Code references: `crates/cobalt_e3_harness/src/main.rs`, `crates/node/src/cobalt
 
 ### E4. Finality isolation under governance stress
 
-Execution: not started
+Execution: source and campaign frozen; checksum-bound 500+500 evidence run pending
+
+Frozen manifest:
+`benchmarks/cobalt-adversarial-verification/e4/campaign-manifest.json`;
+SHA-256
+`18d3d7966b1d3126f216a2b3e5151381f1e0ec8e81640053274081316f3e7b91`.
 
 - [ ] Run at least 500 baseline and 500 attack-lane Consensus v2 rounds from the same signed state on the same fleet, binary, and CPU quota.
 - [ ] In the attack lane, combine governance storms, repeated halts and view changes, near-limit certificates and RPC frames, sidecar flooding, and one crash-looping validator.

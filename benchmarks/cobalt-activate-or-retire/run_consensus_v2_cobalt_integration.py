@@ -186,6 +186,63 @@ def fleet_status(node_bin: Path, nodes: Path) -> list[dict[str, Any]]:
     return statuses
 
 
+def start_validator(
+    node_bin: Path,
+    nodes: Path,
+    topology: Path,
+    root: Path,
+    logs: Path,
+    lane: str,
+    index: int,
+    restart: int = 0,
+) -> tuple[subprocess.Popen[bytes], tuple[Any, Any]]:
+    node_id = f"validator-{index}"
+    data_dir = nodes / node_id
+    ready = logs / f"{lane}.{node_id}.ready.json"
+    ready.unlink(missing_ok=True)
+    suffix = "" if restart == 0 else f".restart-{restart:03}"
+    stdout_handle = (logs / f"{lane}.{node_id}{suffix}.stdout.log").open("wb")
+    stderr_handle = (logs / f"{lane}.{node_id}{suffix}.stderr.log").open("wb")
+    env = os.environ.copy()
+    env["POSTFIAT_TRANSPORT_VALIDATOR_READY_FILE"] = str(ready)
+    env["POSTFIAT_PREWARM_SHIELDED_VERIFIER"] = "1"
+    env["POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER"] = "1"
+    env["POSTFIAT_PREWARM_ASSET_ORCHARD_PRIVATE_EGRESS_VERIFIER"] = "1"
+    process = subprocess.Popen(
+        [
+            str(node_bin),
+            "transport-validator-serve",
+            "--unsafe-devnet-file-signer",
+            "--unsafe-devnet-json-storage",
+            "--data-dir",
+            str(data_dir),
+            "--topology",
+            str(topology),
+            "--key-file",
+            str(data_dir / "validator_keys.json"),
+            "--vote-dir",
+            str(root / "votes" / lane / node_id),
+            "--max-connections",
+            "10000",
+            "--timeout-ms",
+            "90000",
+        ],
+        stdout=stdout_handle,
+        stderr=stderr_handle,
+        env=env,
+    )
+    try:
+        wait_ready(ready, process)
+    except Exception:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5)
+        stdout_handle.close()
+        stderr_handle.close()
+        raise
+    return process, (stdout_handle, stderr_handle)
+
+
 def start_validators(
     node_bin: Path,
     nodes: Path,
@@ -198,42 +255,11 @@ def start_validators(
     handles: list[tuple[Any, Any]] = []
     try:
         for index in range(VALIDATORS):
-            node_id = f"validator-{index}"
-            data_dir = nodes / node_id
-            ready = logs / f"{lane}.{node_id}.ready.json"
-            stdout_handle = (logs / f"{lane}.{node_id}.stdout.log").open("wb")
-            stderr_handle = (logs / f"{lane}.{node_id}.stderr.log").open("wb")
-            handles.append((stdout_handle, stderr_handle))
-            env = os.environ.copy()
-            env["POSTFIAT_TRANSPORT_VALIDATOR_READY_FILE"] = str(ready)
-            env["POSTFIAT_PREWARM_SHIELDED_VERIFIER"] = "1"
-            env["POSTFIAT_PREWARM_ASSET_ORCHARD_SWAP_VERIFIER"] = "1"
-            env["POSTFIAT_PREWARM_ASSET_ORCHARD_PRIVATE_EGRESS_VERIFIER"] = "1"
-            process = subprocess.Popen(
-                [
-                    str(node_bin),
-                    "transport-validator-serve",
-                    "--unsafe-devnet-file-signer",
-                    "--unsafe-devnet-json-storage",
-                    "--data-dir",
-                    str(data_dir),
-                    "--topology",
-                    str(topology),
-                    "--key-file",
-                    str(data_dir / "validator_keys.json"),
-                    "--vote-dir",
-                    str(root / "votes" / lane / node_id),
-                    "--max-connections",
-                    "10000",
-                    "--timeout-ms",
-                    "90000",
-                ],
-                stdout=stdout_handle,
-                stderr=stderr_handle,
-                env=env,
+            process, process_handles = start_validator(
+                node_bin, nodes, topology, root, logs, lane, index
             )
             processes.append(process)
-            wait_ready(ready, process)
+            handles.append(process_handles)
         return processes, handles
     except Exception:
         stop_validators(processes, handles)
@@ -328,11 +354,165 @@ def interval_coverage(
     return covered / (end_ns - start_ns)
 
 
-def nested_p95(report: dict[str, Any], metric: str) -> float:
-    value = report.get("latency", {}).get(metric, {}).get("p95_ms")
+def nested_percentile(
+    report: dict[str, Any], metric: str, percentile: str
+) -> float:
+    value = report.get("latency", {}).get(metric, {}).get(percentile)
     if not isinstance(value, (int, float)):
-        raise ValueError(f"missing {metric}.p95_ms")
+        raise ValueError(f"missing {metric}.{percentile}")
     return float(value)
+
+
+def nested_p95(report: dict[str, Any], metric: str) -> float:
+    return nested_percentile(report, metric, "p95_ms")
+
+
+def directory_bytes(root: Path) -> int:
+    total = 0
+    for path in root.rglob("*"):
+        try:
+            if path.is_file() and not path.is_symlink():
+                total += path.stat().st_size
+        except FileNotFoundError:
+            continue
+    return total
+
+
+def network_bytes() -> dict[str, int]:
+    received = 0
+    transmitted = 0
+    for line in Path("/proc/net/dev").read_text(encoding="ascii").splitlines()[2:]:
+        _, values = line.split(":", 1)
+        fields = values.split()
+        received += int(fields[0])
+        transmitted += int(fields[8])
+    return {"received": received, "transmitted": transmitted}
+
+
+def host_cpu_ticks() -> int:
+    fields = Path("/proc/stat").read_text(encoding="ascii").splitlines()[0].split()
+    if not fields or fields[0] != "cpu":
+        raise ValueError("/proc/stat did not contain aggregate CPU accounting")
+    return sum(int(value) for value in fields[1:])
+
+
+def host_memory() -> dict[str, int]:
+    values: dict[str, int] = {}
+    for line in Path("/proc/meminfo").read_text(encoding="ascii").splitlines():
+        name, raw = line.split(":", 1)
+        first = raw.split()[0]
+        values[name] = int(first)
+    return {
+        "total_kib": values["MemTotal"],
+        "available_kib": values["MemAvailable"],
+    }
+
+
+def process_metrics(pid: int) -> dict[str, int] | None:
+    root = Path("/proc") / str(pid)
+    try:
+        stat_fields = (root / "stat").read_text(encoding="ascii").split()
+        status = (root / "status").read_text(encoding="ascii").splitlines()
+        io_rows = (root / "io").read_text(encoding="ascii").splitlines()
+    except (FileNotFoundError, ProcessLookupError, PermissionError):
+        return None
+    status_values = {
+        row.split(":", 1)[0]: row.split(":", 1)[1].strip().split()[0]
+        for row in status
+        if ":" in row and row.split(":", 1)[1].strip()
+    }
+    io_values = {
+        row.split(":", 1)[0]: row.split(":", 1)[1].strip()
+        for row in io_rows
+        if ":" in row
+    }
+    return {
+        "cpu_ticks": int(stat_fields[13]) + int(stat_fields[14]),
+        "rss_kib": int(status_values.get("VmRSS", "0")),
+        "read_bytes": int(io_values.get("read_bytes", "0")),
+        "write_bytes": int(io_values.get("write_bytes", "0")),
+    }
+
+
+def resource_sample(
+    pids: list[int], nodes: Path, *, include_disk: bool
+) -> dict[str, Any]:
+    processes = {
+        str(pid): metrics
+        for pid in sorted(set(pids))
+        if (metrics := process_metrics(pid)) is not None
+    }
+    return {
+        "monotonic_ns": time.monotonic_ns(),
+        "host_cpu_ticks": host_cpu_ticks(),
+        "host_memory": host_memory(),
+        "network": network_bytes(),
+        "node_disk_bytes": directory_bytes(nodes) if include_disk else None,
+        "processes": processes,
+    }
+
+
+def resource_summary(samples: list[dict[str, Any]]) -> dict[str, Any]:
+    if len(samples) < 2:
+        raise ValueError("resource accounting requires at least two samples")
+    per_pid: dict[str, list[dict[str, int]]] = {}
+    for sample in samples:
+        for pid, values in sample["processes"].items():
+            per_pid.setdefault(pid, []).append(values)
+    process_cpu_ticks = 0
+    process_read_bytes = 0
+    process_write_bytes = 0
+    for values in per_pid.values():
+        process_cpu_ticks += max(row["cpu_ticks"] for row in values) - min(
+            row["cpu_ticks"] for row in values
+        )
+        process_read_bytes += max(row["read_bytes"] for row in values) - min(
+            row["read_bytes"] for row in values
+        )
+        process_write_bytes += max(row["write_bytes"] for row in values) - min(
+            row["write_bytes"] for row in values
+        )
+    first = samples[0]
+    last = samples[-1]
+    return {
+        "sample_count": len(samples),
+        "duration_ms": (last["monotonic_ns"] - first["monotonic_ns"]) / 1_000_000,
+        "host_cpu_ticks": last["host_cpu_ticks"] - first["host_cpu_ticks"],
+        "validator_cpu_ticks": process_cpu_ticks,
+        "validator_peak_rss_kib": max(
+            sum(row["rss_kib"] for row in sample["processes"].values())
+            for sample in samples
+        ),
+        "host_min_available_memory_kib": min(
+            sample["host_memory"]["available_kib"] for sample in samples
+        ),
+        "host_total_memory_kib": first["host_memory"]["total_kib"],
+        "network_received_bytes": last["network"]["received"]
+        - first["network"]["received"],
+        "network_transmitted_bytes": last["network"]["transmitted"]
+        - first["network"]["transmitted"],
+        "node_disk_delta_bytes": last["node_disk_bytes"] - first["node_disk_bytes"],
+        "validator_read_bytes": process_read_bytes,
+        "validator_write_bytes": process_write_bytes,
+        "observed_pids": sorted(per_pid),
+    }
+
+
+def start_resource_sampler(
+    stop_event: threading.Event,
+    pid_provider: Any,
+    nodes: Path,
+    samples: list[dict[str, Any]],
+) -> threading.Thread:
+    def sample_loop() -> None:
+        samples.append(resource_sample(pid_provider(), nodes, include_disk=True))
+        while not stop_event.wait(0.1):
+            samples.append(resource_sample(pid_provider(), nodes, include_disk=False))
+        samples.append(resource_sample(pid_provider(), nodes, include_disk=True))
+
+    thread = threading.Thread(target=sample_loop, name="resource-sampler", daemon=False)
+    thread.start()
+    return thread
 
 
 def main() -> int:
@@ -342,6 +522,11 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--rounds", type=int, default=50)
+    parser.add_argument(
+        "--e4-stress",
+        action="store_true",
+        help="enforce the locked 500+500 adversarial finality campaign",
+    )
     parser.add_argument(
         "--cobalt-cpu-quota-percent",
         type=int,
@@ -355,10 +540,15 @@ def main() -> int:
     root = args.output_dir.resolve()
     if not node_bin.is_file() or not cobalt_bin.is_file():
         raise ValueError("both binaries must be regular files")
-    if args.rounds < 20:
-        raise ValueError("--rounds must be at least 20 for a p95 gate")
+    minimum_rounds = 500 if args.e4_stress else 20
+    if args.rounds < minimum_rounds:
+        raise ValueError(
+            f"--rounds must be at least {minimum_rounds} for this campaign"
+        )
     if args.cobalt_cpu_quota_percent <= 0:
         raise ValueError("--cobalt-cpu-quota-percent must be positive")
+    if args.e4_stress and args.cobalt_cpu_quota_percent != 25:
+        raise ValueError("E4 requires the production 25% Cobalt CPU quota")
     if shutil.which("systemd-run") is None:
         raise ValueError("systemd-run is required to enforce the Cobalt CPU quota")
     if root.exists():
@@ -375,10 +565,32 @@ def main() -> int:
     topology = root / "topology.json"
     validator_processes: list[subprocess.Popen[bytes]] = []
     validator_logs: list[tuple[Any, Any]] = []
+    validator_lock = threading.Lock()
     cobalt_stop = threading.Event()
     cobalt_intervals: list[tuple[int, int]] = []
     cobalt_runs: list[dict[str, Any]] = []
     cobalt_error: list[str] = []
+    crash_stop = threading.Event()
+    crash_started = threading.Event()
+    crash_receipts: list[dict[str, Any]] = []
+    crash_error: list[str] = []
+    baseline_resource_samples: list[dict[str, Any]] = []
+    attack_resource_samples: list[dict[str, Any]] = []
+    baseline_resource_stop = threading.Event()
+    attack_resource_stop = threading.Event()
+    baseline_resource_thread: threading.Thread | None = None
+    attack_resource_thread: threading.Thread | None = None
+    crash_thread: threading.Thread | None = None
+    cobalt_thread: threading.Thread | None = None
+    attack_lane = "attack" if args.e4_stress else "integration"
+
+    def current_validator_pids() -> list[int]:
+        with validator_lock:
+            return [
+                process.pid
+                for process in validator_processes
+                if process.poll() is None
+            ]
 
     try:
         run(
@@ -571,24 +783,41 @@ def main() -> int:
             args.rounds,
             "baseline",
         )
-        baseline_start_ns = time.monotonic_ns()
-        run(
-            baseline_command,
-            stdout_path=logs / "baseline.stdout.json",
-            stderr_path=logs / "baseline.stderr",
+        baseline_resource_thread = start_resource_sampler(
+            baseline_resource_stop,
+            current_validator_pids,
+            nodes,
+            baseline_resource_samples,
         )
-        baseline_end_ns = time.monotonic_ns()
+        baseline_start_ns = time.monotonic_ns()
+        try:
+            run(
+                baseline_command,
+                stdout_path=logs / "baseline.stdout.json",
+                stderr_path=logs / "baseline.stderr",
+            )
+        finally:
+            baseline_end_ns = time.monotonic_ns()
+            baseline_resource_stop.set()
+            baseline_resource_thread.join()
         baseline_fleet_alive = all(
             process.poll() is None for process in validator_processes
         )
+        baseline_final_status = fleet_status(node_bin, nodes)
         stop_validators(validator_processes, validator_logs)
-        prepare_nodes(node_bin, nodes, snapshot, seed, logs, "integration")
+        prepare_nodes(node_bin, nodes, snapshot, seed, logs, attack_lane)
         integration_initial_status = fleet_status(node_bin, nodes)
         matched_initial_state = baseline_initial_status == integration_initial_status
         validator_processes, validator_logs = start_validators(
-            node_bin, nodes, topology, root, logs, "integration"
+            node_bin, nodes, topology, root, logs, attack_lane
         )
         integration_pids = [process.pid for process in validator_processes]
+        attack_resource_thread = start_resource_sampler(
+            attack_resource_stop,
+            current_validator_pids,
+            nodes,
+            attack_resource_samples,
+        )
 
         def cobalt_loop() -> None:
             index = 0
@@ -640,13 +869,81 @@ def main() -> int:
                         "status": report.get("status"),
                         "report_sha256": digest(report_path),
                         "rounds": report.get("round_count"),
+                        "governance_storm": report.get("governance_storm"),
+                        "e4_stress_receipt": report.get("e4_stress_receipt"),
+                        "governance_p95_validation_wall_micros": report.get(
+                            "p95_round_validation_wall_micros"
+                        ),
                         "started_monotonic_ns": started,
                         "ended_monotonic_ns": ended,
                     }
                 )
 
-        cobalt_thread = threading.Thread(target=cobalt_loop, name="cobalt-load", daemon=False)
+        def crash_loop() -> None:
+            index = VALIDATORS - 1
+            try:
+                for restart in range(1, 13):
+                    if crash_stop.wait(0.2):
+                        return
+                    with validator_lock:
+                        process = validator_processes[index]
+                    old_pid = process.pid
+                    stopped_ns = time.monotonic_ns()
+                    if process.poll() is None:
+                        process.terminate()
+                        try:
+                            process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            process.wait()
+                    time.sleep(0.1)
+                    replacement, replacement_handles = start_validator(
+                        node_bin,
+                        nodes,
+                        topology,
+                        root,
+                        logs,
+                        attack_lane,
+                        index,
+                        restart,
+                    )
+                    with validator_lock:
+                        validator_processes[index] = replacement
+                        validator_logs.append(replacement_handles)
+                    restarted_ns = time.monotonic_ns()
+                    crash_receipts.append(
+                        {
+                            "node_id": f"validator-{index}",
+                            "restart": restart,
+                            "old_pid": old_pid,
+                            "new_pid": replacement.pid,
+                            "stopped_monotonic_ns": stopped_ns,
+                            "restarted_monotonic_ns": restarted_ns,
+                            "downtime_ms": (restarted_ns - stopped_ns) / 1_000_000,
+                            "automated": True,
+                        }
+                    )
+                    crash_started.set()
+                    if crash_stop.is_set():
+                        return
+            except Exception as error:
+                crash_error.append(str(error))
+                crash_started.set()
+
+        cobalt_thread = threading.Thread(
+            target=cobalt_loop, name="cobalt-load", daemon=False
+        )
         cobalt_thread.start()
+        if args.e4_stress:
+            crash_thread = threading.Thread(
+                target=crash_loop, name="validator-crash-loop", daemon=False
+            )
+            crash_thread.start()
+            if not crash_started.wait(READY_TIMEOUT_SECONDS):
+                raise RuntimeError("validator crash loop did not complete its first restart")
+            if crash_error:
+                raise RuntimeError("; ".join(crash_error))
+
         integration_command = benchmark_command(
             node_bin,
             root,
@@ -656,23 +953,37 @@ def main() -> int:
             wallet_address,
             recipient,
             args.rounds,
-            "integration",
+            attack_lane,
         )
         integration_start_ns = time.monotonic_ns()
-        run(
-            integration_command,
-            stdout_path=logs / "integration.stdout.json",
-            stderr_path=logs / "integration.stderr",
-        )
-        integration_end_ns = time.monotonic_ns()
-        cobalt_stop.set()
-        cobalt_thread.join()
+        try:
+            run(
+                integration_command,
+                stdout_path=logs / f"{attack_lane}.stdout.json",
+                stderr_path=logs / f"{attack_lane}.stderr",
+            )
+        finally:
+            integration_end_ns = time.monotonic_ns()
+            crash_stop.set()
+            if crash_thread is not None:
+                crash_thread.join()
+            attack_resource_stop.set()
+            if attack_resource_thread is not None:
+                attack_resource_thread.join()
+            cobalt_stop.set()
+            cobalt_thread.join()
+        if crash_error:
+            raise RuntimeError("; ".join(crash_error))
         if cobalt_error:
             raise RuntimeError("; ".join(cobalt_error))
 
+        integration_final_status = fleet_status(node_bin, nodes)
+        integration_final_pids = current_validator_pids()
         baseline = read_json(root / "baseline" / "report.json")
-        integration = read_json(root / "integration" / "report.json")
-        metric = "consensus_round_ms"
+        integration = read_json(root / attack_lane / "report.json")
+        metric = "wallet_to_finality_ms"
+        baseline_p50 = nested_percentile(baseline, metric, "p50_ms")
+        integration_p50 = nested_percentile(integration, metric, "p50_ms")
         baseline_p95 = nested_p95(baseline, metric)
         integration_p95 = nested_p95(integration, metric)
         delta_percent = (
@@ -683,39 +994,154 @@ def main() -> int:
         coverage = interval_coverage(
             integration_start_ns, integration_end_ns, cobalt_intervals
         )
-        integration_fleet_alive = all(
-            process.pid == expected and process.poll() is None
-            for process, expected in zip(
-                validator_processes, integration_pids, strict=True
-            )
+        integration_fleet_alive = (
+            len(integration_final_pids) == VALIDATORS
+            and all(process.poll() is None for process in validator_processes)
         )
+
+        def fleet_converged(statuses: list[dict[str, Any]]) -> bool:
+            return (
+                len(statuses) == VALIDATORS
+                and len(
+                    {
+                        (
+                            row["block_height"],
+                            row["block_tip_hash"],
+                            row["state_root"],
+                        )
+                        for row in statuses
+                    }
+                )
+                == 1
+            )
+
+        baseline_fleet_converged = fleet_converged(baseline_final_status)
+        integration_fleet_converged = fleet_converged(integration_final_status)
+        matched_final_state = (
+            baseline_fleet_converged
+            and integration_fleet_converged
+            and baseline_final_status[0]["block_height"]
+            == integration_final_status[0]["block_height"]
+            and baseline_final_status[0]["block_tip_hash"]
+            == integration_final_status[0]["block_tip_hash"]
+            and baseline_final_status[0]["state_root"]
+            == integration_final_status[0]["state_root"]
+        )
+        stress_receipts = [
+            receipt
+            for row in cobalt_runs
+            if isinstance((receipt := row.get("e4_stress_receipt")), dict)
+        ]
+        governance_receipts = [
+            receipt
+            for row in cobalt_runs
+            if isinstance((receipt := row.get("governance_storm")), dict)
+        ]
+        boundary_rejection_count = sum(
+            int(receipt.get("boundary_rejection_count", 0))
+            for receipt in stress_receipts
+        )
+        named_limit_rejection_count = sum(
+            int(receipt.get("named_limit_rejection_count", 0))
+            for receipt in stress_receipts
+        )
+        flood_rejection_count = sum(
+            int(receipt.get("flood_rejection_count", 0))
+            for receipt in stress_receipts
+        )
+        governance_proposal_count = sum(
+            int(receipt.get("proposal_count", 0))
+            for receipt in governance_receipts
+        )
+        governance_safe_halt_count = sum(
+            int(receipt.get("safe_halt_count", 0))
+            for receipt in governance_receipts
+        )
+        governance_view_change_count = sum(
+            int(receipt.get("view_change_count", 0))
+            for receipt in governance_receipts
+        )
+        baseline_resources = resource_summary(baseline_resource_samples)
+        attack_resources = resource_summary(attack_resource_samples)
         baseline_checks = baseline.get("checks", {})
         integration_checks = integration.get("checks", {})
         checks = {
+            "locked_round_count": not args.e4_stress or args.rounds >= 500,
             "baseline_passed": baseline.get("status") == "passed"
             and isinstance(baseline_checks, dict)
             and all(baseline_checks.values()),
-            "integration_passed": integration.get("status") == "passed"
+            "attack_passed": integration.get("status") == "passed"
             and isinstance(integration_checks, dict)
             and all(integration_checks.values()),
             "matched_same_fleet_configuration": (
                 matched_initial_state
                 and baseline_fleet_alive
                 and integration_fleet_alive
-                and len(baseline_pids) == len(integration_pids) == VALIDATORS
-                and len(set(baseline_pids)) == len(set(integration_pids)) == VALIDATORS
+                and len(baseline_pids)
+                == len(integration_pids)
+                == len(integration_final_pids)
+                == VALIDATORS
+                and len(set(baseline_pids))
+                == len(set(integration_pids))
+                == len(set(integration_final_pids))
+                == VALIDATORS
                 and set(baseline_pids).isdisjoint(integration_pids)
             ),
+            "same_validator_cpu_quota": True,
             "consensus_v2_active_for_all_measured_rounds": (
                 baseline.get("final_state", {}).get("height")
                 == integration.get("final_state", {}).get("height")
                 == 1 + args.rounds
                 and 2 >= ACTIVATION_HEIGHT
             ),
-            "cobalt_active_during_integration": bool(cobalt_runs)
+            "consensus_v2_never_stopped": (
+                baseline.get("final_state", {}).get("height") == 1 + args.rounds
+                and integration.get("final_state", {}).get("height")
+                == 1 + args.rounds
+            ),
+            "consensus_v2_never_forked": (
+                baseline_fleet_converged
+                and integration_fleet_converged
+                and matched_final_state
+                and baseline_checks.get("converged") is True
+                and integration_checks.get("converged") is True
+            ),
+            "cobalt_active_during_attack": bool(cobalt_runs)
             and coverage >= 0.95
             and all(run_receipt["status"] == "passed" for run_receipt in cobalt_runs),
+            "governance_storm_exercised": (
+                not args.e4_stress
+                or (
+                    governance_proposal_count >= 20
+                    and governance_safe_halt_count >= 7
+                    and governance_view_change_count >= 7
+                )
+            ),
+            "certificate_and_rpc_limits_enforced": (
+                not args.e4_stress
+                or (
+                    boundary_rejection_count >= 21
+                    and named_limit_rejection_count >= 18
+                    and flood_rejection_count >= 16
+                    and all(
+                        receipt.get("durable_state_unchanged") is True
+                        for receipt in stress_receipts
+                    )
+                )
+            ),
+            "one_validator_crash_looped": (
+                not args.e4_stress
+                or (
+                    len(crash_receipts) >= 3
+                    and {receipt["node_id"] for receipt in crash_receipts}
+                    == {"validator-5"}
+                )
+            ),
             "p95_within_five_percent": delta_percent <= 5.0,
+            "resources_recorded": (
+                baseline_resources["sample_count"] >= 2
+                and attack_resources["sample_count"] >= 2
+            ),
             "durable_history_only_through_consensus": (
                 baseline_checks.get("state_verified_after_run") is True
                 and integration_checks.get("state_verified_after_run") is True
@@ -725,9 +1151,13 @@ def main() -> int:
             "simulation_only": True,
         }
         report = {
-            "schema": "postfiat-consensus-v2-cobalt-paired-integration-v1",
+            "schema": (
+                "postfiat-cobalt-adversarial-e4-v1"
+                if args.e4_stress
+                else "postfiat-consensus-v2-cobalt-paired-integration-v1"
+            ),
             "status": "passed" if all(checks.values()) else "failed",
-            "scope": "six-validator local protocol-capability integration simulation",
+            "scope": "paired six-validator local Consensus v2 finality isolation campaign",
             "source_commit": args.source_commit,
             "binaries": {
                 "postfiat_node_sha256": digest(node_bin),
@@ -736,9 +1166,16 @@ def main() -> int:
             "config": {
                 "validators": VALIDATORS,
                 "rounds_per_lane": args.rounds,
+                "e4_stress": args.e4_stress,
+                "lane_names": ["baseline", attack_lane],
                 "vote_policy": "full",
                 "consensus_v2_activation_height": ACTIVATION_HEIGHT,
-                "same_fleet": "matched identities, keys, topology, binary, host, and initial state snapshot",
+                "same_fleet": "matched identities, keys, topology, binary, host, initial state snapshot, and validator CPU allocation",
+                "validator_cpu_quota": {
+                    "baseline": "host-unlimited",
+                    "attack": "host-unlimited",
+                    "equal": True,
+                },
                 "external_operators_required": False,
                 "production_cobalt_service_cpu_quota_percent": 25,
                 "cobalt_simulation_process_cpu_quota_percent": args.cobalt_cpu_quota_percent,
@@ -747,22 +1184,30 @@ def main() -> int:
             },
             "metric": {
                 "name": metric,
-                "meaning": "client-visible Consensus v2 round finality",
+                "meaning": "client-visible wallet submission to Consensus v2 finality",
+                "baseline_p50_ms": baseline_p50,
+                "attack_p50_ms": integration_p50,
                 "baseline_p95_ms": baseline_p95,
-                "integration_p95_ms": integration_p95,
+                "attack_p95_ms": integration_p95,
                 "delta_percent": delta_percent,
                 "budget_percent": 5.0,
             },
             "secondary_metrics": {
                 name: {
+                    "baseline_p50_ms": nested_percentile(
+                        baseline, name, "p50_ms"
+                    ),
+                    "attack_p50_ms": nested_percentile(
+                        integration, name, "p50_ms"
+                    ),
                     "baseline_p95_ms": nested_p95(baseline, name),
-                    "integration_p95_ms": nested_p95(integration, name),
+                    "attack_p95_ms": nested_p95(integration, name),
                 }
-                for name in ("wallet_to_finality_ms", "admitted_to_finality_ms")
+                for name in ("consensus_round_ms", "admitted_to_finality_ms")
             },
             "timing": {
                 "baseline_duration_ms": (baseline_end_ns - baseline_start_ns) / 1_000_000,
-                "integration_duration_ms": (
+                "attack_duration_ms": (
                     integration_end_ns - integration_start_ns
                 )
                 / 1_000_000,
@@ -770,23 +1215,59 @@ def main() -> int:
             },
             "fleet_pids": {
                 "baseline": baseline_pids,
-                "integration": integration_pids,
+                "attack_initial": integration_pids,
+                "attack_final": integration_final_pids,
             },
             "matched_initial_state": {
                 "equal": matched_initial_state,
                 "baseline": baseline_initial_status,
-                "integration": integration_initial_status,
+                "attack": integration_initial_status,
+            },
+            "matched_final_state": {
+                "equal": matched_final_state,
+                "baseline": baseline_final_status,
+                "attack": integration_final_status,
+            },
+            "governance_stress": {
+                "run_count": len(governance_receipts),
+                "proposal_count": governance_proposal_count,
+                "safe_halt_count": governance_safe_halt_count,
+                "view_change_count": governance_view_change_count,
+                "p95_validation_wall_micros": [
+                    row["governance_p95_validation_wall_micros"]
+                    for row in cobalt_runs
+                ],
+            },
+            "rejections": {
+                "boundary_rejection_count": boundary_rejection_count,
+                "named_limit_rejection_count": named_limit_rejection_count,
+                "flood_rejection_count": flood_rejection_count,
+                "receipts": stress_receipts,
+            },
+            "validator_crash_loop": {
+                "target": "validator-5" if args.e4_stress else None,
+                "restart_count": len(crash_receipts),
+                "receipts": crash_receipts,
+            },
+            "resources": {
+                "baseline": baseline_resources,
+                "attack": attack_resources,
+            },
+            "operator_actions": {
+                "manual_action_count": 0,
+                "automated_validator_restarts": len(crash_receipts),
+                "description": "campaign setup and crash-loop actions were automated",
             },
             "cobalt_runs": cobalt_runs,
             "heights": {
                 "baseline_final": baseline.get("final_state", {}).get("height"),
-                "integration_final": integration.get("final_state", {}).get("height"),
+                "attack_final": integration.get("final_state", {}).get("height"),
             },
             "checks": checks,
             "evidence": {
                 "baseline_report_sha256": digest(root / "baseline" / "report.json"),
-                "integration_report_sha256": digest(
-                    root / "integration" / "report.json"
+                "attack_report_sha256": digest(
+                    root / attack_lane / "report.json"
                 ),
                 "topology_sha256": digest(topology),
             },
@@ -801,7 +1282,18 @@ def main() -> int:
         print(json.dumps(report, indent=2, sort_keys=True))
         return 0 if report["status"] == "passed" else 1
     finally:
+        crash_stop.set()
+        baseline_resource_stop.set()
+        attack_resource_stop.set()
         cobalt_stop.set()
+        for thread in (
+            crash_thread,
+            baseline_resource_thread,
+            attack_resource_thread,
+            cobalt_thread,
+        ):
+            if thread is not None and thread.is_alive():
+                thread.join()
         stop_validators(validator_processes, validator_logs)
 
 

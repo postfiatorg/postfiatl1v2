@@ -1,0 +1,115 @@
+{
+  "attack_lane": {
+    "cobalt_cpu_quota_percent": 25,
+    "crash_loop": {
+      "downtime_seconds": 0.1,
+      "interval_seconds": 0.2,
+      "maximum_restarts": 12,
+      "minimum_required_restarts": 3,
+      "target_validator": "validator-5"
+    },
+    "governance_storm_per_run": {
+      "minimum_proposals": 20,
+      "minimum_safe_halts": 7,
+      "minimum_view_changes": 7,
+      "transition_count": 4
+    },
+    "near_limit_inputs": {
+      "certificate_bytes": 1048575,
+      "certificate_limit_bytes": 1048576,
+      "contribution_bytes": 1048575,
+      "oversized_certificate_bytes": 1048577,
+      "oversized_rpc_frame_bytes": 2097153,
+      "rpc_frame_bytes": 2097151,
+      "rpc_frame_limit_bytes": 2097152
+    },
+    "sidecar_flood": {
+      "adversarial_validator": "validator-00",
+      "minimum_rejected_requests_per_run": 16
+    }
+  },
+  "campaign_id": "cobalt-e4-finality-isolation-v1",
+  "frozen_at": "2026-08-25T20:56:18Z",
+  "gates": {
+    "attack_p95_delta_budget_percent": 5.0,
+    "consensus_v2_never_forks": true,
+    "consensus_v2_never_stops": true,
+    "minimum_attack_rounds": 500,
+    "minimum_baseline_rounds": 500,
+    "oversized_and_flood_inputs_reject_with_named_limits": true,
+    "rejected_inputs_do_not_mutate_cobalt_durable_state": true
+  },
+  "lanes": {
+    "attack": {
+      "rounds": 500
+    },
+    "baseline": {
+      "rounds": 500
+    },
+    "consensus_v2_activation_height": 2,
+    "same_binary": true,
+    "same_host": true,
+    "same_initial_signed_snapshot": true,
+    "same_topology_and_keys": true,
+    "same_validator_cpu_allocation": {
+      "attack": "host-unlimited",
+      "baseline": "host-unlimited"
+    },
+    "validator_count": 6,
+    "vote_policy": "full"
+  },
+  "measurement": {
+    "governance": [
+      "proposal_count",
+      "safe_halt_count",
+      "view_change_count",
+      "p95_validation_wall_micros"
+    ],
+    "primary_finality_metric": "wallet_to_finality_ms",
+    "resources": [
+      "host_cpu_ticks",
+      "validator_cpu_ticks",
+      "validator_peak_rss_kib",
+      "host_min_available_memory_kib",
+      "network_received_bytes",
+      "network_transmitted_bytes",
+      "node_disk_delta_bytes",
+      "validator_read_bytes",
+      "validator_write_bytes"
+    ],
+    "secondary_finality_metrics": [
+      "consensus_round_ms",
+      "admitted_to_finality_ms"
+    ]
+  },
+  "scope": {
+    "devnet_queried_or_mutated": false,
+    "external_operator_claim": false,
+    "local_chain_id": "postfiat-cobalt-consensus-integration",
+    "protocol_capability_only": true
+  },
+  "schema": "postfiat-cobalt-adversarial-e4-campaign-manifest-v1",
+  "source_base_revision": "e41ac541916f4688c04ac9b49e5cbf0e6d9c43a5",
+  "source_files": [
+    {
+      "path": "docs/governance/cobalt-adversarial-verification-research-spec.md",
+      "sha256": "3e3d31c5d45283651e5174a3679510cbac6f51d33a730225a7bb92923957ba0d"
+    },
+    {
+      "path": "benchmarks/cobalt-activate-or-retire/run_consensus_v2_cobalt_integration.py",
+      "sha256": "591f898914078af86fc71e494d4f8074f99f6dc40e88b2db268884e8de545f9d"
+    },
+    {
+      "path": "crates/node/src/bin/postfiat_cobalt_liveness_simulation.rs",
+      "sha256": "b669ad302b35683efed928b37c0a99765eb565befe524ce175ce15a447a34586"
+    },
+    {
+      "path": "crates/node/src/cobalt_authority_certificate.rs",
+      "sha256": "c468cccc1a8ca77040b6dd46f2a5f7ebdfb7193ea379ff56bab7a488a0b9b234"
+    },
+    {
+      "path": "crates/node/src/cobalt_shadow_runtime.rs",
+      "sha256": "1b413428feed335a3a97ddc3520389518551ae3a1744bacce5a65e01c45cd7d2"
+    }
+  ]
+}
