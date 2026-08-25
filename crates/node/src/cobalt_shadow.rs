@@ -305,6 +305,21 @@ pub struct CobaltShadowHistoryEntry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CobaltShadowAuthorityLineageResetReceipt {
+    pub schema: String,
+    pub validator_id: String,
+    pub transition_id: String,
+    pub registry_root: String,
+    pub trust_graph_root: String,
+    pub archived_state_hash: String,
+    pub archived_protocol_high_watermark: u64,
+    pub archived_protocol_signer_high_watermark: u64,
+    pub archived_contiguous_sequence: u64,
+    pub archive_dir: String,
+    pub new_state_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CobaltShadowHistoryRange {
     pub schema: String,
     pub registry_root: String,
@@ -867,6 +882,96 @@ impl CobaltShadowService {
             &binding.trust_graph,
             binding.peers.clone(),
         )
+    }
+
+    pub fn reset_authority_lineage(
+        &mut self,
+        binding: &CobaltShadowRegistryBinding,
+        transition: &postfiat_types::CobaltGovernanceAuthorityTransitionV1,
+        archive_dir: impl Into<PathBuf>,
+    ) -> io::Result<CobaltShadowAuthorityLineageResetReceipt> {
+        if transition.schema != postfiat_types::COBALT_AUTHORITY_TRANSITION_SCHEMA_V1
+            || transition.transition_kind != postfiat_types::COBALT_AUTHORITY_TRANSITION_ACTIVATE
+            || transition.from_authority_mode
+                != postfiat_types::GOVERNANCE_AUTHORITY_MODE_FOUNDATION
+            || transition.to_authority_mode
+                != postfiat_types::GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED
+            || transition.authority_scope
+                != postfiat_types::COBALT_AUTHORITY_SCOPE_VALIDATOR_TRUST_V1
+            || transition.chain_id != self.state.identity.chain_id
+            || transition.genesis_hash != self.state.identity.genesis_hash
+            || transition.cobalt_registry_root != binding.registry_root
+            || transition.old_registry_root != binding.registry_root
+            || transition.trust_graph_root != binding.trust_graph.trust_graph_root
+            || transition.validators != binding.active_validators
+            || transition.cobalt_registry_root != self.state.registry_root
+            || transition.trust_graph_root != self.state.trust_graph_root
+            || !transition.validators.contains(&self.state.identity.node_id)
+        {
+            return Err(invalid(
+                "authority lineage reset is not bound to the active Cobalt transition",
+            ));
+        }
+        if transition.transition_id
+            != crate::cobalt_handoff::cobalt_authority_transition_id(transition)?
+        {
+            return Err(invalid("authority lineage reset transition id mismatch"));
+        }
+        self.bind_registry_manifest(binding)?;
+
+        let archive_dir = archive_dir.into();
+        if archive_dir.exists() {
+            return Err(invalid("authority lineage reset archive already exists"));
+        }
+        fs::create_dir(&archive_dir)?;
+        #[cfg(unix)]
+        fs::set_permissions(&archive_dir, fs::Permissions::from_mode(0o700))?;
+        let archived_state = archive_dir.join(STATE_FILE);
+        let archived_history = archive_dir.join(HISTORY_FILE);
+        fs::copy(self.data_dir.join(STATE_FILE), &archived_state)?;
+        fs::copy(self.data_dir.join(HISTORY_FILE), &archived_history)?;
+        #[cfg(unix)]
+        {
+            fs::set_permissions(&archived_state, fs::Permissions::from_mode(0o600))?;
+            fs::set_permissions(&archived_history, fs::Permissions::from_mode(0o600))?;
+        }
+
+        let archived_state_hash = self.state.state_hash.clone();
+        let archived_protocol_high_watermark = self.state.protocol_high_watermark;
+        let archived_protocol_signer_high_watermark = self.state.protocol_signer_high_watermark;
+        let archived_contiguous_sequence = self.state.contiguous_sequence;
+        let mut history_options = OpenOptions::new();
+        history_options.write(true).truncate(true);
+        let history_file = history_options.open(self.data_dir.join(HISTORY_FILE))?;
+        history_file.sync_all()?;
+
+        self.history.clear();
+        self.pending_missing_ranges.clear();
+        self.state.outbound_protocol_locks.clear();
+        self.state.ratification_locks.clear();
+        self.state.protocol_decisions.clear();
+        self.state.protocol_high_watermark = 0;
+        self.state.protocol_signer_high_watermark = 0;
+        self.state.contiguous_sequence = 0;
+        self.state.history_anchor_round = None;
+        self.state.history_head = None;
+        self.state.v2_migration = None;
+        self.state.governance_digest = protocol_governance_digest(&BTreeMap::new())?;
+        self.persist_state()?;
+
+        Ok(CobaltShadowAuthorityLineageResetReceipt {
+            schema: "postfiat-cobalt-shadow-authority-lineage-reset-v1".to_string(),
+            validator_id: self.state.identity.node_id.clone(),
+            transition_id: transition.transition_id.clone(),
+            registry_root: self.state.registry_root.clone(),
+            trust_graph_root: self.state.trust_graph_root.clone(),
+            archived_state_hash,
+            archived_protocol_high_watermark,
+            archived_protocol_signer_high_watermark,
+            archived_contiguous_sequence,
+            archive_dir: archive_dir.display().to_string(),
+            new_state_hash: self.state.state_hash.clone(),
+        })
     }
 
     pub fn replace_peer_registry(&mut self, peers: BTreeMap<String, String>) -> io::Result<()> {
@@ -3857,6 +3962,167 @@ mod tests {
         let mut tampered = manifest;
         tampered.validator_bindings[0].cobalt_public_key_hex = "00".repeat(1952);
         assert!(fleet[0].bind_registry_manifest(&tampered).is_err());
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn authority_lineage_reset_archives_drills_and_requires_active_transition_binding() {
+        let root = test_dir("authority-lineage-reset");
+        let mut fleet = (0..6)
+            .map(|index| {
+                CobaltShadowService::initialize(
+                    root.join(format!("validator-{index}")),
+                    identity(&format!("validator-{index}")),
+                    CobaltShadowLimits::default(),
+                )
+                .expect("initialize")
+            })
+            .collect::<Vec<_>>();
+        let key_records = (0..6)
+            .map(|index| {
+                crate::create_validator_key_record(format!("validator-{index}"))
+                    .expect("validator key")
+            })
+            .collect::<Vec<_>>();
+        let registry = ValidatorRegistry {
+            validators: key_records
+                .iter()
+                .map(|record| crate::ValidatorRegistryRecord {
+                    node_id: record.node_id.clone(),
+                    algorithm_id: record.algorithm_id.clone(),
+                    public_key_hex: record.public_key_hex.clone(),
+                })
+                .collect(),
+        };
+        let active_validators = key_records
+            .iter()
+            .map(|record| record.node_id.clone())
+            .collect::<Vec<_>>();
+        let registry_root =
+            validator_registry_root(&registry, &active_validators).expect("registry root");
+        let bindings = fleet
+            .iter()
+            .zip(&key_records)
+            .map(|(service, record)| {
+                let key_path = root.join(format!("{}.validator-keys.json", record.node_id));
+                crate::write_validator_key_file(
+                    &key_path,
+                    &crate::ValidatorKeyFile {
+                        validators: vec![record.clone()],
+                    },
+                )
+                .expect("write validator key");
+                service
+                    .create_validator_binding(registry_root.clone(), &key_path)
+                    .expect("create validator binding")
+            })
+            .collect::<Vec<_>>();
+        let manifest =
+            build_registry_binding_manifest(registry_root.clone(), registry, bindings, 5, 911)
+                .expect("build registry binding");
+        for service in &mut fleet {
+            service
+                .bind_registry_manifest(&manifest)
+                .expect("bind live registry");
+        }
+
+        let payload_hash = hash_hex("postfiat.cobalt.shadow.test.payload.v1", b"drill");
+        let proposal = fleet[0]
+            .create_protocol_proposal(&manifest, 1_203, payload_hash)
+            .expect("create drill proposal");
+        let contributions = fleet
+            .iter_mut()
+            .map(|service| {
+                service
+                    .create_protocol_contribution(&manifest, &proposal)
+                    .expect("create drill contribution")
+            })
+            .collect::<Vec<_>>();
+        let transcript =
+            assemble_protocol_transcript(&manifest, proposal, contributions).expect("transcript");
+        fleet[0]
+            .commit_protocol_transcript(&transcript)
+            .expect("commit drill transcript");
+        assert_eq!(fleet[0].state.protocol_high_watermark, 1_203);
+        assert_eq!(fleet[0].state.protocol_signer_high_watermark, 1_203);
+        assert_eq!(fleet[0].state.contiguous_sequence, 1);
+
+        let mut transition = postfiat_types::CobaltGovernanceAuthorityTransitionV1 {
+            schema: postfiat_types::COBALT_AUTHORITY_TRANSITION_SCHEMA_V1.to_string(),
+            transition_id: String::new(),
+            chain_id: fleet[0].state.identity.chain_id.clone(),
+            genesis_hash: fleet[0].state.identity.genesis_hash.clone(),
+            from_authority_mode: postfiat_types::GOVERNANCE_AUTHORITY_MODE_FOUNDATION,
+            to_authority_mode: postfiat_types::GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED,
+            transition_kind: postfiat_types::COBALT_AUTHORITY_TRANSITION_ACTIVATE.to_string(),
+            previous_transition_id: None,
+            old_registry_root: registry_root.clone(),
+            cobalt_lock_hash: "22".repeat(48),
+            trust_graph_root: manifest.trust_graph.trust_graph_root.clone(),
+            cobalt_registry_root: registry_root,
+            amendment_sequence: 1,
+            activation_height: 916,
+            cobalt_protocol_version: 1,
+            authority_scope: postfiat_types::COBALT_AUTHORITY_SCOPE_VALIDATOR_TRUST_V1.to_string(),
+            validators: active_validators,
+            approval_quorum: 5,
+            approvals: Vec::new(),
+        };
+        transition.transition_id =
+            crate::cobalt_handoff::cobalt_authority_transition_id(&transition)
+                .expect("transition id");
+
+        let state_hash_before_rejection = fleet[0].state.state_hash.clone();
+        let mut wrong_transition = transition.clone();
+        wrong_transition.trust_graph_root = "33".repeat(48);
+        wrong_transition.transition_id =
+            crate::cobalt_handoff::cobalt_authority_transition_id(&wrong_transition)
+                .expect("wrong transition id");
+        let rejected_archive = root.join("rejected-archive");
+        assert!(fleet[0]
+            .reset_authority_lineage(&manifest, &wrong_transition, &rejected_archive)
+            .is_err());
+        assert_eq!(fleet[0].state.state_hash, state_hash_before_rejection);
+        assert!(!rejected_archive.exists());
+
+        let archive = root.join("accepted-archive");
+        let receipt = fleet[0]
+            .reset_authority_lineage(&manifest, &transition, &archive)
+            .expect("reset authority lineage");
+        assert_eq!(receipt.archived_protocol_high_watermark, 1_203);
+        assert_eq!(receipt.archived_protocol_signer_high_watermark, 1_203);
+        assert_eq!(receipt.archived_contiguous_sequence, 1);
+        assert!(archive.join(STATE_FILE).is_file());
+        assert!(archive.join(HISTORY_FILE).is_file());
+        assert!(
+            fs::metadata(archive.join(HISTORY_FILE))
+                .expect("archive history metadata")
+                .len()
+                > 0
+        );
+        assert_eq!(fleet[0].state.protocol_high_watermark, 0);
+        assert_eq!(fleet[0].state.protocol_signer_high_watermark, 0);
+        assert_eq!(fleet[0].state.contiguous_sequence, 0);
+        assert!(fleet[0].state.protocol_decisions.is_empty());
+        assert!(fleet[0].history.is_empty());
+        assert_eq!(
+            fs::metadata(root.join("validator-0").join(HISTORY_FILE))
+                .expect("current history metadata")
+                .len(),
+            0
+        );
+        drop(fleet);
+
+        let mut reopened =
+            CobaltShadowService::open(root.join("validator-0")).expect("reopen reset service");
+        reopened
+            .create_protocol_proposal(
+                &manifest,
+                916,
+                hash_hex("postfiat.cobalt.shadow.test.payload.v1", b"live authority"),
+            )
+            .expect("lower first live authority round after reset");
+        assert_eq!(reopened.state.protocol_signer_high_watermark, 916);
         fs::remove_dir_all(root).expect("cleanup");
     }
 

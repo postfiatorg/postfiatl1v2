@@ -17,6 +17,9 @@ use postfiat_node::cobalt_shadow_runtime::{
     CobaltShadowRpcRequest,
 };
 use postfiat_node::ValidatorRegistry;
+use postfiat_types::{
+    GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED, GOVERNANCE_AUTHORITY_MODE_FOUNDATION,
+};
 use serde::Deserialize;
 
 fn main() {
@@ -94,6 +97,47 @@ fn run() -> io::Result<()> {
             )?;
             service.bind_registry_manifest(&binding)?;
             serde_json::to_value(service.status()).map_err(json_error)?
+        }
+        "authority-lineage-reset" => {
+            let data_dir = required_path(&args, "--data-dir")?;
+            let node_data_dir = required_path(&args, "--node-data-dir")?;
+            let binding: CobaltShadowRegistryBinding = read_bounded_json(
+                &required_path(&args, "--registry-binding")?,
+                4 * 1024 * 1024,
+            )?;
+            let store = postfiat_storage::NodeStore::try_new(&node_data_dir)?;
+            let genesis = store.read_genesis()?;
+            let governance = store.read_governance()?;
+            let registry: ValidatorRegistry = read_bounded_json(
+                &node_data_dir.join("validator_registry.json"),
+                2 * 1024 * 1024,
+            )?;
+            if governance.authority_mode != GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED
+                || governance.cobalt_authority_transitions.len() != 1
+                || !governance.validator_registry_updates.is_empty()
+            {
+                return Err(invalid(
+                    "authority lineage reset requires the first live Cobalt authority epoch before any registry update",
+                ));
+            }
+            let transition = governance.cobalt_authority_transitions[0].clone();
+            let mut prior_governance = governance.clone();
+            prior_governance.authority_mode = GOVERNANCE_AUTHORITY_MODE_FOUNDATION;
+            prior_governance.cobalt_authority_transitions.clear();
+            postfiat_node::cobalt_handoff::verify_cobalt_authority_transition(
+                &genesis,
+                &prior_governance,
+                &registry,
+                &transition,
+                transition.activation_height,
+            )?;
+            let mut service = CobaltShadowService::open(data_dir)?;
+            let receipt = service.reset_authority_lineage(
+                &binding,
+                &transition,
+                required_path(&args, "--archive-dir")?,
+            )?;
+            serde_json::to_value(receipt).map_err(json_error)?
         }
         "propose" => {
             let mut service = CobaltShadowService::open(required_path(&args, "--data-dir")?)?;
@@ -301,6 +345,7 @@ fn usage_text() -> &'static str {
   postfiat-cobalt-shadow validator-binding --data-dir PATH --registry-root HASH --validator-key-file PATH
   postfiat-cobalt-shadow build-binding --registry-root HASH --validator-registry PATH --validator-bindings PATH --quorum N --activation-height N
   postfiat-cobalt-shadow bind --data-dir PATH --registry-binding PATH
+  postfiat-cobalt-shadow authority-lineage-reset --data-dir PATH --node-data-dir PATH --registry-binding PATH --archive-dir PATH
   postfiat-cobalt-shadow propose --data-dir PATH --registry-binding PATH --round N --payload-hash HASH
   postfiat-cobalt-shadow contribute --data-dir PATH --registry-binding PATH --proposal PATH
   postfiat-cobalt-shadow assemble --registry-binding PATH --proposal PATH --contributions PATH [--previous-ratification PATH]
