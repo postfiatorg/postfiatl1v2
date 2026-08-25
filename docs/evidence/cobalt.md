@@ -85,8 +85,14 @@ follow-on milestone. The packet's `SHA256SUMS.txt` hash is
 It recruits no operators, authorizes no live migration, and does not prove
 operator decentralization.
 
-E4 remains in progress and E5 has not started. The milestone-wide
-`KEEP_ACTIVE` gate remains open.
+E4 remains in progress and E5 has not started. The first E4 frozen run passed
+all 500 baseline rounds but stopped before attack round 1 when the harness retry
+window was shorter than the locked validator restart. The redaction-safe
+failure receipt is under
+`benchmarks/cobalt-adversarial-verification/e4/remediation/`; the corpus was not
+changed, a focused full-vote crash/restart check passed, and the required clean
+500+500 rerun is in progress. The milestone-wide `KEEP_ACTIVE` gate remains
+open.
 
 ## Historical And Supporting Evidence
 

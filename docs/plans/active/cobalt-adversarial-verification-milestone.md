@@ -107,13 +107,24 @@ Code references: `crates/cobalt_e3_harness/src/main.rs`, `crates/node/src/cobalt
 
 ### E4. Finality isolation under governance stress
 
-Execution: source and campaign frozen; checksum-bound 500+500 evidence run pending
+Execution: P0 harness retry-window remediation complete; clean 500+500 evidence rerun in progress
 
-Frozen source revision: `0b2abdc5fde6ade172dc9a85b811330edc1cda2c`.
+Remediated frozen source revision: `451c2ad0e924f8be72feeac69c1356b3828a4f58`.
+The first frozen revision `0b2abdc5fde6ade172dc9a85b811330edc1cda2c`
+completed and passed all 500 baseline rounds, then stopped before attack round 1
+because the harness's three-attempt/25 ms retry window was shorter than the
+locked validator-5 restart outage. No fork or durable divergence was observed.
+The redaction-safe failure receipt is
+`benchmarks/cobalt-adversarial-verification/e4/remediation/initial-failure.json`.
+A focused clean-state remediation check passed two full-vote rounds through
+three validator-5 crash/restarts with six-node convergence. The 500+500 corpus,
+full-vote policy, crash cadence, topology, quota, and adversarial inputs are
+unchanged.
+
 Frozen manifest:
 `benchmarks/cobalt-adversarial-verification/e4/campaign-manifest.json`;
 SHA-256
-`18d3d7966b1d3126f216a2b3e5151381f1e0ec8e81640053274081316f3e7b91`.
+`838a0bccda40f13c6f999fd119706739d9384509bc9495165e0cd6f04fc4c68d`.
 
 - [ ] Run at least 500 baseline and 500 attack-lane Consensus v2 rounds from the same signed state on the same fleet, binary, and CPU quota.
 - [ ] In the attack lane, combine governance storms, repeated halts and view changes, near-limit certificates and RPC frames, sidecar flooding, and one crash-looping validator.
