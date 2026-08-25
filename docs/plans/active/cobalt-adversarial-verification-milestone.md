@@ -8,7 +8,7 @@ A failed benchmark or simulation creates P0 remediation and a rerun of the uncha
 
 The result proves protocol capability, not operator decentralization.
 
-- **Status:** Active — E1 and E2 complete; E3-E6 not started
+- **Status:** Active — E1-E3 complete; E4-E6 not started
 - **Specification:** [Cobalt Adversarial Verification Research Specification](../../governance/cobalt-adversarial-verification-research-spec.md)
 - **Historical specification-lock record:** `task_158622307482e23fb4519889b53b475f` — rewarded 2026-08-25
 - **Historical milestone-document record:** `[x] task_d28eb3465dcac9a32524c25bba996e1e — rewarded 2026-08-25`
@@ -24,13 +24,13 @@ is still not the active validator release.
 - [x] Cobalt became the recorded controlled-testnet validator-trust authority at height 916; its first authorized validator-key rotation committed at height 917.
 - [x] The research specification passed the Text Improvement Harness at 89.27/100 and is locked.
 - [x] The public article now records the live authority state instead of saying Cobalt remains off.
-- [ ] The cooperative activation evidence has passed E1-E2; E3-E6 remain open, so the full adversarial campaign is not complete.
+- [ ] The cooperative activation evidence has passed E1-E3; E4-E6 remain open, so the full adversarial campaign is not complete.
 - [ ] The current Foundation-administered proposal and authorization boundary remains explicit; no operator-decentralization result is claimed.
 
 ## Experiments
 
 Historical Task Node identifiers are retained only where they already existed.
-No Task Node interaction was used for E2 execution, verification, or completion.
+No Task Node interaction was used for E2 or E3 execution, verification, or completion.
 Each experiment closes from committed, checksum-bound repository evidence.
 
 ### E1. Independent oracle and generated corpus
@@ -77,13 +77,30 @@ Code references: `crates/cobalt_e2_harness/src/main.rs`,
 
 ### E3. Adversarial recovery
 
-Execution: source and corpus frozen; first isolated full-corpus dry run passed; checksum-bound initial and clean evidence runs pending
+Execution: complete
 
-- [ ] Test each validator in turn on a disposable clone bound to the live registry root.
-- [ ] Restart from truncated, padded, reordered, and one-entry-modified durable histories.
-- [ ] Reject fabricated transitions, wrong-root certificates, and catch-up histories that omit the latest update, each with a named reason.
-- [ ] Interrupt catch-up mid-transfer, resume from another peer, and reject inconsistent peer material before rejoin.
-- [ ] Restore byte-identical accepted history from honest peers without manual repair.
+Frozen source revision: `5c9e543ea0f56e7e6dda85d3a27093e810fdc111`.
+The checksum-bound packet is
+`benchmarks/cobalt-adversarial-verification/e3/`; its
+`SHA256SUMS.txt` hash is
+`bbab4cab151161dab7d7437c5e0b3f30dd4ceba2d409d68bbc26ea6df4a61372`.
+
+- [x] Test each validator in turn on a disposable clone bound to the live registry root.
+- [x] Restart from truncated, padded, reordered, and one-entry-modified durable histories.
+- [x] Reject fabricated transitions, wrong-root certificates, and catch-up histories that omit the latest update, each with a named reason.
+- [x] Interrupt catch-up mid-transfer, resume from another peer, and reject inconsistent peer material before rejoin.
+- [x] Restore byte-identical accepted history from honest peers without manual repair.
+
+Result: all 24 durable-history tamper cases and 18 forged catch-up cases
+rejected with named reasons and zero durable mutation. All six interrupted
+recoveries resumed from a second honest peer, reached sequence 4 without manual
+repair, and produced byte-identical accepted history. The initial and clean runs
+share classification SHA-256
+`ab53b5ddd5134e8fbbbb359b65c249ccbb1eb85a7ad034e496efa10bd85b90d3`.
+The campaign was isolated on disposable clones. It was bound to the exact live
+registry root while separately pinning the recorded live trust-transition root;
+because no post-rotation live TrustGraph object is committed, the harness used a
+canonical derived clone graph and does not claim it is the live sidecar graph.
 
 Code references: `crates/cobalt_e3_harness/src/main.rs`, `crates/node/src/cobalt_shadow.rs`, `crates/node/src/cobalt_shadow_runtime.rs`, `crates/node/src/bin/postfiat_cobalt_liveness_simulation.rs`.
 
@@ -129,7 +146,7 @@ Code references: `crates/node/src/cobalt_shadow.rs`, `crates/node/src/cobalt_aut
 
 - [x] E1: production matches the reconciled independent oracle on every generated graph.
 - [x] E2: zero conflicting roots, zero false halts, and zero false accepts under the Byzantine campaign.
-- [ ] E3: every tampered state and forged catch-up is rejected; honest recovery is byte-identical.
+- [x] E3: every tampered state and forged catch-up is rejected; honest recovery is byte-identical.
 - [ ] E4: Consensus v2 never stops or forks; attack-lane p95 finality stays within 5% of baseline.
 - [ ] E5: both live authority transitions commit; every live negative case and the stolen-key attempt reject.
 - [ ] E6: the proposal-path design and independent-operator decision are recorded and locked.

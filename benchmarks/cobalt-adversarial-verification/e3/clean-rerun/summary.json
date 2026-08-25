@@ -1,0 +1,34 @@
+{
+  "schema": "postfiat-cobalt-adversarial-e3-campaign-v1",
+  "summary": {
+    "schema": "postfiat-cobalt-adversarial-e3-summary-v1",
+    "manifest_sha256": "c23320d47d631efdd74c1e5c6c541951f452a4de9b14eb583f9d888b77167fa7",
+    "source_revision": "5c9e543ea0f56e7e6dda85d3a27093e810fdc111",
+    "validator_count": 6,
+    "tamper_case_count": 24,
+    "forged_catch_up_case_count": 18,
+    "recovery_case_count": 6,
+    "rejected_case_count": 42,
+    "durable_mutation_count": 0,
+    "signed_evidence_count": 18,
+    "signed_evidence_verified": true,
+    "byte_identical_recovery_count": 6,
+    "manual_repair_action_count": 0,
+    "classification_sha256": "ab53b5ddd5134e8fbbbb359b65c249ccbb1eb85a7ad034e496efa10bd85b90d3",
+    "summary_only": true,
+    "pass": true
+  },
+  "source_audit": {
+    "live_registry_root": "945768d593497541f59961d1ba3920560cfde7bf5037e40eb89dd5466637f221709bff05b69d2d40a36d5cff8505c37e",
+    "recorded_live_trust_graph_root": "9221316ae7f0f0e7e58d734700167f73f29aa1240377a8d61c637e7f36c5deb728203fcbb283c9f8f3398fc41d6b8b13",
+    "clone_trust_graph_root": "7f3e1562444863d6fd13dca26920f77de1d14b2b39f96e390cbfacdfe9d82e3abe4a6978d32c455d795ab8697c637879",
+    "live_registry_root_exact_match": true,
+    "activation_source_sha256": "625cbe7c2a265cebea4ce43779bde10d803ca240b383b106513acac10676e18c",
+    "state_source_sha256": "4779c14e552533561939e12bea7d84b3a140fce5b3efd135dd6dcc95f169f99d",
+    "source_files_verified": 5,
+    "validator_count": 6,
+    "quorum": 5
+  },
+  "cases": [],
+  "recoveries": []
+}

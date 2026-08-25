@@ -10,13 +10,19 @@ accident.
 
 | Area | Report | What It Proves |
 | --- | --- | --- |
+| A666 current state | `docs/status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md` | Current combined deployment, economics, trust boundaries, live PFTL snapshot, qualification result, and release limitations. |
 | FastSwap local release | `docs/specs/fastswap-v1-local-release-manifest-20260715.json` | Hash-bound local six-validator release manifest; the accompanying implementation record labels local latency separately from WAN claims. |
 | FastPay recovery | `docs/specs/fastpay-payment-recovery-v1.md` | Ordered consume-or-cancel protocol, durable apply/replay boundary, and recovery verification contract. |
 | Controlled testnet | `reports/testnet-controlled-launch-evidence-pack/head-56db87a-optimized-latency/testnet-controlled-launch-evidence-pack.json` | Controlled transparent launch evidence pack for the optimized finality path. |
 | Performance methodology | `reports/performance-methodology-policy/20260529T024012Z/performance-methodology-policy-report.json` | Artifact-bound labels for whitepaper performance claims, including local-only latency boundaries and unsupported-throughput rejection. |
 | Finality | `reports/testnet-tx-finality-latency-benchmark/local-gate-20round-20260514T142731Z/testnet-tx-finality-latency-benchmark.json` | Local 5-validator finality p50/p95/p99 evidence after the latency work. |
 | Remote finality | `reports/testnet-remote-ssh-smoke/optimized-latency-20260514T143534Z/testnet-remote-ssh-smoke.json` | Remote 5-validator certified round timing evidence. |
-| Cobalt | `reports/testnet-cobalt-controlled-readiness-gate/amendment-replay-contract-clean-v0-20260519T145213Z/testnet-cobalt-controlled-readiness-gate.json` | Full-Cobalt controlled-readiness gate with amendment replay contract. |
+| Cobalt current state | `docs/status/chain-state-current.md` | Authenticated six-validator read-only probe completed `2026-08-25T15:37:40Z`; records active runtime, auditor, shadow, roots, authority, source, and freshness boundaries. |
+| Cobalt activation packet | `benchmarks/cobalt-activation-live/packet/` | Checksum-bound historical activation observation: Cobalt at height 916, key rotation at 917, and convergence at 919. Its consensus-binary label is superseded by the fresh runtime probe. |
+| Cobalt adversarial E1 | `benchmarks/cobalt-adversarial-verification/e1/` | Independent-oracle and production agreement across the frozen 10,240-graph corpus; off-chain verification, not deployment evidence. |
+| Cobalt adversarial E2 | `benchmarks/cobalt-adversarial-verification/e2/` | Frozen `f=1` Byzantine campaign: all 108 validator/strategy cases and 442,368 schedules passed with zero conflicting roots, false accepts, false halts, synchrony violations, or rejected-state mutations; isolated simulation, not deployment evidence. |
+| Cobalt adversarial E3 | `benchmarks/cobalt-adversarial-verification/e3/` | Frozen recovery campaign: 24 durable-history tamper cases and 18 forged catch-up cases rejected with named reasons and zero durable mutation; all six interrupted recoveries reached byte-identical accepted history without manual repair; isolated clones, not deployment evidence. |
+| Cobalt historical readiness | `reports/testnet-cobalt-controlled-readiness-gate/amendment-replay-contract-clean-v0-20260519T145213Z/testnet-cobalt-controlled-readiness-gate.json` | Pre-activation controlled-readiness gate with amendment replay contract. |
 | Cobalt strict topology | `reports/testnet-cobalt-controlled-launch-gate/strict-expected-fail-clean-head-v0-20260519T1438Z/testnet-cobalt-strict-launch-expected-fail.json` | Strict public-topology gate fails only on known placement deltas. |
 | Privacy | `reports/testnet-live-orchard-full-flow/live-orchard-full-flow-20260515T183724Z/testnet-live-orchard-full-flow.json` | Live five-validator Orchard/Halo2 deposit, spend, withdraw, outage, and recovery flow. |
 | Privacy audit | `reports/testnet-orchard-privacy-audit-packet/orchard-privacy-audit-packet-20260515T185212Z/orchard-privacy-audit-packet.json` | Redaction-safe privacy audit packet. |
