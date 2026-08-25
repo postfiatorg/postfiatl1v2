@@ -46,3 +46,10 @@ Next bounded actions, in order: score the draft with the Text Improvement Harnes
 - Activation packet: [`benchmarks/cobalt-activation-live/packet`](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/cobalt-activation-live/packet)
 - Article: [Cobalt: Further Evaluation](https://postfiat.org/blog/cobalt-further-evaluation/)
 - Prior handoff: [`2026-08-25___postfiatchad__cobalt_governance_activation.md`](2026-08-25___postfiatchad__cobalt_governance_activation.md)
+
+## End of session 2026-08-25
+
+- Commits: `3d1c2ab4` added this handoff and the draft adversarial-verification specification; `e7d1fe4` corrected the Cobalt authority state in `postfiatorg.github.io`; `a6aaa4bb` locked the specification; `683eb3be` added the milestone document.
+- Text Improvement Harness: 89.27 average (GPT 89.20, Fable 88.40, GLM 90.20).
+- Rewarded Task Node tasks: specification lock `task_158622307482e23fb4519889b53b475f`; milestone document `task_d28eb3465dcac9a32524c25bba996e1e`.
+- Current state: E1 is being started as a `/goal` run in tmux session `dravlic` on this machine and will update the milestone document as it progresses. E2 will not start automatically.
