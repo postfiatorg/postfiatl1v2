@@ -92,11 +92,14 @@ fn write_json(path: &Path, value: &Value) -> io::Result<()> {
     Ok(())
 }
 
-fn required_arg(args: &[String], name: &str) -> io::Result<PathBuf> {
+fn optional_arg(args: &[String], name: &str) -> Option<PathBuf> {
     args.windows(2)
         .find(|pair| pair[0] == name)
         .map(|pair| PathBuf::from(&pair[1]))
-        .ok_or_else(|| invalid(format!("missing required argument {name}")))
+}
+
+fn required_arg(args: &[String], name: &str) -> io::Result<PathBuf> {
+    optional_arg(args, name).ok_or_else(|| invalid(format!("missing required argument {name}")))
 }
 
 fn required_u64(args: &[String], name: &str) -> io::Result<u64> {
@@ -559,25 +562,42 @@ fn negative_cases(
 fn prepare_update(
     manifest_path: &Path,
     activation_result_path: &Path,
+    replacement_record_path: Option<&Path>,
+    new_trust_graph_root: Option<&str>,
     output: &Path,
     registry_output: &Path,
 ) -> io::Result<()> {
     let manifest = read_json::<CloneManifest>(manifest_path)?;
     validate_manifest(&manifest)?;
     let activation: Value = read_json(activation_result_path)?;
-    let governance: GovernanceState = serde_json::from_value(
-        activation
-            .get("governance")
-            .cloned()
-            .ok_or_else(|| invalid("activation result has no governance state"))?,
-    )
-    .map_err(|error| invalid(error.to_string()))?;
+    let governance_value = activation.get("governance").cloned().unwrap_or(activation);
+    let governance: GovernanceState =
+        serde_json::from_value(governance_value).map_err(|error| invalid(error.to_string()))?;
     let transition = governance
         .cobalt_authority_transitions
         .last()
         .ok_or_else(|| invalid("activation result is not in Cobalt authority mode"))?;
     let height = transition.activation_height + 1;
-    let replacement = ml_dsa_65_keygen_from_seed(&[0xC0; 32]);
+    let replacement = match replacement_record_path {
+        Some(path) => read_json::<ValidatorRegistryEntry>(path)?,
+        None => {
+            let key = ml_dsa_65_keygen_from_seed(&[0xC0; 32]);
+            ValidatorRegistryEntry {
+                node_id: "validator-5".to_string(),
+                algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+                public_key_hex: bytes_to_hex(&key.public_key),
+                active: true,
+            }
+        }
+    };
+    if replacement.node_id != "validator-5"
+        || replacement.algorithm_id != ML_DSA_65_ALGORITHM
+        || !replacement.active
+    {
+        return Err(invalid(
+            "replacement record must be an active ML-DSA-65 validator-5 record",
+        ));
+    }
     let mut updated_registry = manifest.registry.clone();
     let subject_index = updated_registry
         .validators
@@ -585,14 +605,18 @@ fn prepare_update(
         .position(|record| record.node_id == "validator-5")
         .ok_or_else(|| invalid("clone lacks validator-5"))?;
     let previous_record = updated_registry.validators[subject_index].clone();
-    updated_registry.validators[subject_index].public_key_hex =
-        bytes_to_hex(&replacement.public_key);
+    if previous_record.public_key_hex == replacement.public_key_hex {
+        return Err(invalid("replacement validator key must change"));
+    }
+    updated_registry.validators[subject_index].public_key_hex = replacement.public_key_hex.clone();
     let validators = manifest.validators();
     let new_root = validator_registry_root(&updated_registry, &validators)?;
-    let new_graph_root = hash_hex(
-        "postfiat.cobalt.handoff-rehearsal.trust-graph.v1",
-        new_root.as_bytes(),
-    );
+    let new_graph_root = new_trust_graph_root.map(str::to_string).unwrap_or_else(|| {
+        hash_hex(
+            "postfiat.cobalt.handoff-rehearsal.trust-graph.v1",
+            new_root.as_bytes(),
+        )
+    });
     let mut graph_transition = TrustGraphTransition {
         previous_registry_root: manifest.registry_root.clone(),
         new_registry_root: new_root.clone(),
@@ -625,12 +649,7 @@ fn prepare_update(
             public_key_hex: previous_record.public_key_hex.clone(),
             active: true,
         }),
-        new_record: Some(ValidatorRegistryEntry {
-            node_id: "validator-5".to_string(),
-            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
-            public_key_hex: bytes_to_hex(&replacement.public_key),
-            active: true,
-        }),
+        new_record: Some(replacement),
     };
     let quorum = crate::bft_quorum_threshold(manifest.validators().len())
         .map_err(|error| invalid(error.to_string()))?;
@@ -986,7 +1005,7 @@ fn usage() -> ! {
          postfiat-cobalt-handoff-rehearsal abort --manifest PATH --transition PATH --approvals PATH --output PATH\n\
          postfiat-cobalt-handoff-rehearsal finalize-activation --manifest PATH --transition PATH --approvals PATH --output PATH\n\
          postfiat-cobalt-handoff-rehearsal negative --manifest PATH --transition PATH --update PATH --output PATH\n\
-         postfiat-cobalt-handoff-rehearsal prepare-update --manifest PATH --activation-result PATH --output PATH --registry-output PATH\n\
+         postfiat-cobalt-handoff-rehearsal prepare-update --manifest PATH --activation-result PATH [--replacement-record PATH] [--new-trust-graph-root HASH] --output PATH --registry-output PATH\n\
          postfiat-cobalt-handoff-rehearsal update-payload-hash --update PATH\n\
          postfiat-cobalt-handoff-rehearsal attach-decision --manifest PATH --activation-result PATH --update PATH --certificate PATH --output PATH\n\
          postfiat-cobalt-handoff-rehearsal sign-update --update PATH --key-file PATH --validator ID --authority-transition-id HASH --parent-lock-hash HASH --amendment-sequence N --proposal-slot N --expires-at-height N\n\
@@ -1027,12 +1046,18 @@ pub fn main() -> io::Result<()> {
             &required_arg(rest, "--update")?,
             &required_arg(rest, "--output")?,
         ),
-        "prepare-update" => prepare_update(
-            &required_arg(rest, "--manifest")?,
-            &required_arg(rest, "--activation-result")?,
-            &required_arg(rest, "--output")?,
-            &required_arg(rest, "--registry-output")?,
-        ),
+        "prepare-update" => {
+            let replacement_record = optional_arg(rest, "--replacement-record");
+            let new_trust_graph_root = optional_arg(rest, "--new-trust-graph-root");
+            prepare_update(
+                &required_arg(rest, "--manifest")?,
+                &required_arg(rest, "--activation-result")?,
+                replacement_record.as_deref(),
+                new_trust_graph_root.as_deref().and_then(Path::to_str),
+                &required_arg(rest, "--output")?,
+                &required_arg(rest, "--registry-output")?,
+            )
+        }
         "update-payload-hash" => print_update_payload_hash(&required_arg(rest, "--update")?),
         "attach-decision" => attach_decision_certificate(
             &required_arg(rest, "--manifest")?,
