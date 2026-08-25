@@ -30,13 +30,13 @@ Each experiment is one substantial Task Node task, requested only after the prev
 
 Task Node: `[ ] task_59460b82c134e725fd1c902e2c3417b8 — accepted 2026-08-25`
 
-- [ ] Build a second oracle from the formal essential-subset, strong-support, and linkage rules without importing production Cobalt or the first oracle.
-- [ ] Generate at least 10,000 trust graphs covering 6-20 validators and every linkage-inequality boundary.
+- [x] Build a second oracle from the formal essential-subset, strong-support, and linkage rules without importing production Cobalt or the first oracle.
+- [x] Generate at least 10,000 trust graphs covering 6-20 validators and every linkage-inequality boundary.
 - [ ] Compare both oracles with production `analyze_trust_graph`, `has_strong_support`, and non-uniform certificate validation.
 - [ ] Freeze every mismatch before fixes; review any oracle correction; add regression cases for production defects; rerun the unchanged corpus from clean state.
 - [ ] Pass with complete oracle agreement and production agreement on every generated graph.
 
-Code references: `crates/cobalt_decision_oracle/src/lib.rs`, `crates/consensus_cobalt/src/trust_graph_governance.rs`, `crates/node/src/cobalt_authority_certificate.rs`.
+Code references: `crates/cobalt_adversarial_oracle/src/lib.rs`, `crates/cobalt_e1_harness/src/main.rs`, `crates/cobalt_decision_oracle/src/lib.rs`, `crates/consensus_cobalt/src/trust_graph_governance.rs`, `crates/node/src/cobalt_authority_certificate.rs`.
 
 ### E2. Byzantine validator campaign
 

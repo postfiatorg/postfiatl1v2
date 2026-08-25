@@ -1,0 +1,20 @@
+[package]
+name = "postfiat-cobalt-e1-harness"
+version = "0.1.0"
+description = "Cross-classification harness for Cobalt adversarial verification E1"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "postfiat-cobalt-e1-harness"
+path = "src/main.rs"
+
+[dependencies]
+postfiat-cobalt-adversarial-oracle = { path = "../cobalt_adversarial_oracle" }
+postfiat-cobalt-decision-oracle = { path = "../cobalt_decision_oracle" }
+postfiat-consensus-cobalt = { path = "../consensus_cobalt" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }

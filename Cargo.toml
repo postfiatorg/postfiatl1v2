@@ -2,7 +2,9 @@
 members = [
     "crates/bench_harness",
     "crates/bridge",
+    "crates/cobalt_adversarial_oracle",
     "crates/cobalt_decision_oracle",
+    "crates/cobalt_e1_harness",
     "crates/consensus_cobalt",
     "crates/crypto_provider",
     "crates/execution",

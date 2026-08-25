@@ -1,0 +1,27 @@
+{
+  "schema": "postfiat-cobalt-adversarial-e1-corpus-v1",
+  "generator_version": "cobalt-adversarial-graph-generator-v1",
+  "oracle_version": "cobalt-independent-essential-subset-oracle-v2",
+  "seed": 13887437827794806017,
+  "case_count": 10240,
+  "validator_count_min": 6,
+  "validator_count_max": 20,
+  "boundary_case_counts": {
+    "active_faults_equal_t": 853,
+    "active_faults_equal_t_plus_one": 853,
+    "deterministic_random_local_views": 853,
+    "deterministic_random_multi_subset": 853,
+    "deterministic_random_partition": 853,
+    "deterministic_random_valid_parameters": 853,
+    "invalid_t_equals_2q_minus_n": 853,
+    "invalid_two_t_equals_q": 853,
+    "responsive_correct_equal_q": 853,
+    "responsive_correct_equal_q_minus_one": 853,
+    "t_equals_n_minus_q": 854,
+    "t_equals_n_minus_q_plus_one": 854,
+    "t_plus_one_equals_2q_minus_n": 854,
+    "two_t_plus_one_equals_q": 854
+  },
+  "corpus_sha256": "42ed266ba207136eec560f8be14c904c2e63ffe305e188860e4ff04731cd5fd2",
+  "manifest_sha256": "d1d41339792742f1f21b7d5671bda6efe6d7ef082574f176e135128ffe7d55fd"
+}

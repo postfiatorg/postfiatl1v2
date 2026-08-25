@@ -1646,9 +1646,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "postfiat-cobalt-adversarial-oracle"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "postfiat-cobalt-decision-oracle"
 version = "0.1.0"
 dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "postfiat-cobalt-e1-harness"
+version = "0.1.0"
+dependencies = [
+ "postfiat-cobalt-adversarial-oracle",
+ "postfiat-cobalt-decision-oracle",
+ "postfiat-consensus-cobalt",
  "serde",
  "serde_json",
  "sha2",

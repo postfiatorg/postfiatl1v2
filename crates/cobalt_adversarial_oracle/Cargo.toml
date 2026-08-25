@@ -1,0 +1,20 @@
+[package]
+name = "postfiat-cobalt-adversarial-oracle"
+version = "0.1.0"
+description = "Second implementation-independent oracle for Cobalt adversarial verification E1"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "postfiat-cobalt-adversarial-oracle"
+path = "src/main.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
