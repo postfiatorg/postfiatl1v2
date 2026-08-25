@@ -102,12 +102,19 @@ fn required_arg(args: &[String], name: &str) -> io::Result<PathBuf> {
     optional_arg(args, name).ok_or_else(|| invalid(format!("missing required argument {name}")))
 }
 
+fn optional_u64(args: &[String], name: &str) -> io::Result<Option<u64>> {
+    optional_arg(args, name)
+        .map(|value| {
+            value
+                .to_str()
+                .and_then(|value| value.parse().ok())
+                .ok_or_else(|| invalid(format!("invalid integer argument {name}")))
+        })
+        .transpose()
+}
+
 fn required_u64(args: &[String], name: &str) -> io::Result<u64> {
-    let value = required_arg(args, name)?;
-    value
-        .to_str()
-        .and_then(|value| value.parse().ok())
-        .ok_or_else(|| invalid(format!("invalid integer argument {name}")))
+    optional_u64(args, name)?.ok_or_else(|| invalid(format!("missing required argument {name}")))
 }
 
 fn validate_manifest(manifest: &CloneManifest) -> io::Result<()> {
@@ -564,6 +571,7 @@ fn prepare_update(
     activation_result_path: &Path,
     replacement_record_path: Option<&Path>,
     new_trust_graph_root: Option<&str>,
+    activation_height: Option<u64>,
     output: &Path,
     registry_output: &Path,
 ) -> io::Result<()> {
@@ -577,7 +585,16 @@ fn prepare_update(
         .cobalt_authority_transitions
         .last()
         .ok_or_else(|| invalid("activation result is not in Cobalt authority mode"))?;
-    let height = transition.activation_height + 1;
+    let minimum_height = transition
+        .activation_height
+        .checked_add(1)
+        .ok_or_else(|| invalid("Cobalt transition activation height overflow"))?;
+    let height = activation_height.unwrap_or(minimum_height);
+    if height < minimum_height {
+        return Err(invalid(
+            "validator update activation height must follow the Cobalt authority transition",
+        ));
+    }
     let replacement = match replacement_record_path {
         Some(path) => read_json::<ValidatorRegistryEntry>(path)?,
         None => {
@@ -1005,7 +1022,7 @@ fn usage() -> ! {
          postfiat-cobalt-handoff-rehearsal abort --manifest PATH --transition PATH --approvals PATH --output PATH\n\
          postfiat-cobalt-handoff-rehearsal finalize-activation --manifest PATH --transition PATH --approvals PATH --output PATH\n\
          postfiat-cobalt-handoff-rehearsal negative --manifest PATH --transition PATH --update PATH --output PATH\n\
-         postfiat-cobalt-handoff-rehearsal prepare-update --manifest PATH --activation-result PATH [--replacement-record PATH] [--new-trust-graph-root HASH] --output PATH --registry-output PATH\n\
+         postfiat-cobalt-handoff-rehearsal prepare-update --manifest PATH --activation-result PATH [--replacement-record PATH] [--new-trust-graph-root HASH] [--activation-height N] --output PATH --registry-output PATH\n\
          postfiat-cobalt-handoff-rehearsal update-payload-hash --update PATH\n\
          postfiat-cobalt-handoff-rehearsal attach-decision --manifest PATH --activation-result PATH --update PATH --certificate PATH --output PATH\n\
          postfiat-cobalt-handoff-rehearsal sign-update --update PATH --key-file PATH --validator ID --authority-transition-id HASH --parent-lock-hash HASH --amendment-sequence N --proposal-slot N --expires-at-height N\n\
@@ -1049,11 +1066,13 @@ pub fn main() -> io::Result<()> {
         "prepare-update" => {
             let replacement_record = optional_arg(rest, "--replacement-record");
             let new_trust_graph_root = optional_arg(rest, "--new-trust-graph-root");
+            let activation_height = optional_u64(rest, "--activation-height")?;
             prepare_update(
                 &required_arg(rest, "--manifest")?,
                 &required_arg(rest, "--activation-result")?,
                 replacement_record.as_deref(),
                 new_trust_graph_root.as_deref().and_then(Path::to_str),
+                activation_height,
                 &required_arg(rest, "--output")?,
                 &required_arg(rest, "--registry-output")?,
             )
