@@ -8,10 +8,10 @@ A failed benchmark or simulation creates P0 remediation and a rerun of the uncha
 
 The result proves protocol capability, not operator decentralization.
 
-- **Status:** Active — E1 complete; E2 accepted with only the kickoff/status commit recorded; E2 implementation and evidence not yet committed; E3-E6 not started
+- **Status:** Active — E1 and E2 complete; E3-E6 not started
 - **Specification:** [Cobalt Adversarial Verification Research Specification](../../governance/cobalt-adversarial-verification-research-spec.md)
-- **Specification lock task:** `task_158622307482e23fb4519889b53b475f` — rewarded 2026-08-25
-- **Milestone-document task:** `[x] task_d28eb3465dcac9a32524c25bba996e1e — rewarded 2026-08-25`
+- **Historical specification-lock record:** `task_158622307482e23fb4519889b53b475f` — rewarded 2026-08-25
+- **Historical milestone-document record:** `[x] task_d28eb3465dcac9a32524c25bba996e1e — rewarded 2026-08-25`
 - **Required result:** `[ ] KEEP ACTIVE`
 
 ## Current position
@@ -24,16 +24,18 @@ is still not the active validator release.
 - [x] Cobalt became the recorded controlled-testnet validator-trust authority at height 916; its first authorized validator-key rotation committed at height 917.
 - [x] The research specification passed the Text Improvement Harness at 89.27/100 and is locked.
 - [x] The public article now records the live authority state instead of saying Cobalt remains off.
-- [ ] The cooperative activation evidence has not yet passed the adversarial E1-E6 campaign.
+- [ ] The cooperative activation evidence has passed E1-E2; E3-E6 remain open, so the full adversarial campaign is not complete.
 - [ ] The current Foundation-administered proposal and authorization boundary remains explicit; no operator-decentralization result is claimed.
 
-## Major Task Node work
+## Experiments
 
-Each experiment is one substantial Task Node task, requested only after the previous experiment reaches its final rewarded outcome. Checklist items inside an experiment are not separate task requests. CLI and browser work stays governed inside these experiment tasks rather than becoming microtasks.
+Historical Task Node identifiers are retained only where they already existed.
+No Task Node interaction was used for E2 execution, verification, or completion.
+Each experiment closes from committed, checksum-bound repository evidence.
 
 ### E1. Independent oracle and generated corpus
 
-Task Node: `[x] task_59460b82c134e725fd1c902e2c3417b8 — rewarded 2026-08-25`
+Historical Task Node record: `[x] task_59460b82c134e725fd1c902e2c3417b8 — rewarded 2026-08-25`
 
 - [x] Build a second oracle from the formal essential-subset, strong-support, and linkage rules without importing production Cobalt or the first oracle.
 - [x] Generate at least 10,000 trust graphs covering 6-20 validators and every linkage-inequality boundary.
@@ -47,22 +49,35 @@ Code references: `crates/cobalt_adversarial_oracle/src/lib.rs`, `crates/cobalt_e
 
 ### E2. Byzantine validator campaign
 
-Task Node: `[ ] task_91aebe5c632d90e03e7e151a6ffeb736 — accepted 2026-08-25`
+Historical Task Node record: `task_91aebe5c632d90e03e7e151a6ffeb736`
+was accepted before this run; it was not used for execution or completion.
 
-Repository state: kickoff/status recorded at `c2de415d`; no E2 harness,
-frozen corpus, or result packet is committed yet.
+Frozen source revision: `15ef2307732cf46ff3b921bf02f3ad096dda15f3`.
+The first frozen run passed without remediation. The checksum-bound packet is
+`benchmarks/cobalt-adversarial-verification/e2/`; its
+`SHA256SUMS.txt` hash is
+`8742d9603621408339d99c3d9fcc1ba8cc43dafdc900acdfccbf86cc60d7cba3`.
 
-- [ ] Derive and freeze the live six-validator fault bound `f` before execution.
-- [ ] Exercise up to `f` Byzantine domains across separate and combined RBC, ABBA, MVBA, and DABC equivocation; selective withholding; lying or changing trust views; competing proposals; late votes; and re-proposals.
-- [ ] Search delay, drop, reorder, duplicate, and partition schedules for maximum disagreement or delay instead of replaying a fixed schedule list.
-- [ ] Prove zero conflicting roots, zero false accepts, compatible progress within the synchrony bound, and incompatible safe halt without registry mutation.
-- [ ] Bind every Byzantine attribution to signed misbehavior evidence.
+- [x] Derive and freeze the live six-validator fault bound `f=1` before execution from the pinned `n=6`, `q=5`, `t=1` topology and height-917 membership receipt.
+- [x] Exercise up to `f` Byzantine domains across separate and combined RBC, ABBA, MVBA, and DABC equivocation; selective withholding; lying or changing trust views; competing proposals; late votes; and re-proposals.
+- [x] Search delay, drop, reorder, duplicate, and partition schedules for maximum disagreement or delay instead of replaying a fixed schedule list.
+- [x] Prove zero conflicting roots, zero false accepts, compatible progress within the 40-step synchrony bound, and incompatible safe halt without registry mutation.
+- [x] Bind every Byzantine attribution to signed ML-DSA simulation evidence and revalidate it against the production signature paths.
 
-Code references: `crates/consensus_cobalt/src/rbc_abba_mvba.rs`, `crates/consensus_cobalt/examples/cobalt_adversarial_harness.rs`, `crates/node/src/bin/postfiat_cobalt_liveness_simulation.rs`, `crates/node/src/cobalt_shadow.rs`.
+Result: all 108 validator/strategy cases and 442,368 event schedules passed;
+120 signed evidence pairs verified; conflicting roots, false accepts, false halts,
+synchrony violations, and rejected-state mutations were all zero. The initial
+and clean runs share classification SHA-256
+`60ab419fc6cb165088c31e221a4d1a3247ad7e8d9fff9d9877bdf807b6590e93`.
+The campaign was isolated and did not mutate the devnet.
+
+Code references: `crates/cobalt_e2_harness/src/main.rs`,
+`crates/consensus_cobalt/src/rbc_abba_mvba.rs`, and
+`crates/node/src/cobalt_shadow.rs`.
 
 ### E3. Adversarial recovery
 
-Task Node: `[ ] not requested`
+Execution: not started
 
 - [ ] Test each validator in turn on a disposable clone bound to the live registry root.
 - [ ] Restart from truncated, padded, reordered, and one-entry-modified durable histories.
@@ -74,7 +89,7 @@ Code references: `crates/node/src/cobalt_shadow.rs`, `crates/node/src/cobalt_sha
 
 ### E4. Finality isolation under governance stress
 
-Task Node: `[ ] not requested`
+Execution: not started
 
 - [ ] Run at least 500 baseline and 500 attack-lane Consensus v2 rounds from the same signed state on the same fleet, binary, and CPU quota.
 - [ ] In the attack lane, combine governance storms, repeated halts and view changes, near-limit certificates and RPC frames, sidecar flooding, and one crash-looping validator.
@@ -86,7 +101,7 @@ Code references: `benchmarks/cobalt-activate-or-retire/run_consensus_v2_cobalt_i
 
 ### E5. Live authority drills
 
-Task Node: `[ ] not requested`
+Execution: not started
 
 - [ ] At scheduled live heights, execute the signed forward rollback to Foundation authority and the separately authorized return to Cobalt authority.
 - [ ] Run the early, stale, replayed, wrong-root, cross-chain, mixed-authority, self-authorized, and replayed-rollback negative cases live without mutation.
@@ -98,7 +113,7 @@ Code references: `crates/node/src/cobalt_handoff.rs`, `crates/node/src/cobalt_ha
 
 ### E6. Proposal source and independence decision
 
-Task Node: `[ ] not requested`
+Execution: not started
 
 - [ ] Document the current registry-proposal process, signing keys, validator authorizations, and custody boundaries.
 - [ ] Design a non-Foundation proposal path and trust graph in which no single administrator can reach quorum or block it alone.
@@ -113,7 +128,7 @@ Code references: `crates/node/src/cobalt_shadow.rs`, `crates/node/src/cobalt_aut
 ### KEEP ACTIVE
 
 - [x] E1: production matches the reconciled independent oracle on every generated graph.
-- [ ] E2: zero conflicting roots, zero false halts, and zero false accepts under the Byzantine campaign.
+- [x] E2: zero conflicting roots, zero false halts, and zero false accepts under the Byzantine campaign.
 - [ ] E3: every tampered state and forged catch-up is rejected; honest recovery is byte-identical.
 - [ ] E4: Consensus v2 never stops or forks; attack-lane p95 finality stays within 5% of baseline.
 - [ ] E5: both live authority transitions commit; every live negative case and the stolen-key attempt reject.
@@ -152,10 +167,10 @@ A failed benchmark or simulation alone does not trigger rollback.
 
 ## Completion
 
-- [ ] Every E1-E6 Task Node task has reached its final rewarded outcome.
+- [ ] Every E1-E6 experiment has a final checksum-bound repository evidence packet.
 - [ ] The final gate is recorded as `KEEP_ACTIVE`, `REMEDIATION_REQUIRED`, or `ROLLED_BACK` and matches the live authority state.
 - [ ] The packet verifier, focused Cobalt and governance tests, CLI and browser tests, strict documentation build, redaction checks, and one explicit final release gate pass.
 - [ ] The CLI and read-only browser interface work against the authenticated packet.
 - [ ] The adversarial results and precise public claims are published.
-- [ ] Honest Task Node evidence and final verification are complete.
+- [ ] Honest direct evidence and final verification are complete.
 - [ ] Move this journal to `docs/plans/completed/` only after the interfaces, publication, and selected completion gates pass.

@@ -1,0 +1,43 @@
+{
+  "summary": {
+    "schema": "postfiat-cobalt-adversarial-e2-campaign-v1",
+    "manifest_sha256": "dc5e6e4ff2b54726db090e118f2ce01f1b9e6b47b4cd4ab4b0fd73ddc057e9df",
+    "source_revision": "15ef2307732cf46ff3b921bf02f3ad096dda15f3",
+    "case_count": 108,
+    "compatible_case_count": 102,
+    "incompatible_case_count": 6,
+    "schedule_candidates": 442368,
+    "delivered_event_count": 104509400,
+    "duplicate_event_count": 62730200,
+    "pre_heal_blocked_event_count": 3433631,
+    "conflicting_root_schedule_count": 0,
+    "false_accept_schedule_count": 0,
+    "false_halt_schedule_count": 0,
+    "synchrony_violation_schedule_count": 0,
+    "signed_evidence_pairs": 120,
+    "signed_evidence_verified": true,
+    "conflicting_root_count": 0,
+    "false_accept_count": 0,
+    "false_halt_count": 0,
+    "synchrony_violation_count": 0,
+    "rejected_state_mutation_count": 0,
+    "classification_sha256": "60ab419fc6cb165088c31e221a4d1a3247ad7e8d9fff9d9877bdf807b6590e93",
+    "summary_only": true,
+    "pass": true
+  },
+  "source_audit": {
+    "topology_source_sha256": "656159cc4585bd966062b475a5f6c5886d5b71983b23f4e27fcde5da9d7130ad",
+    "activation_source_sha256": "625cbe7c2a265cebea4ce43779bde10d803ca240b383b106513acac10676e18c",
+    "matching_topology_graphs": 2,
+    "trust_view_count": 6,
+    "subset_validator_count": 6,
+    "subset_quorum": 5,
+    "subset_max_active_byzantine": 1,
+    "key_rotation_preserved_membership": true,
+    "current_registry_root": "945768d593497541f59961d1ba3920560cfde7bf5037e40eb89dd5466637f221709bff05b69d2d40a36d5cff8505c37e",
+    "current_trust_graph_root": "9221316ae7f0f0e7e58d734700167f73f29aa1240377a8d61c637e7f36c5deb728203fcbb283c9f8f3398fc41d6b8b13",
+    "derived_f": 1,
+    "inequalities_hold": true
+  },
+  "cases": []
+}
