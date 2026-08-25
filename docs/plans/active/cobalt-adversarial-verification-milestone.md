@@ -8,7 +8,7 @@ A failed benchmark or simulation creates P0 remediation and a rerun of the uncha
 
 The result proves protocol capability, not operator decentralization.
 
-- **Status:** Active — E1 complete and rewarded; E2-E6 not started
+- **Status:** Active — E1 complete and rewarded; E2 accepted and in progress; E3-E6 not started
 - **Specification:** [Cobalt Adversarial Verification Research Specification](../../governance/cobalt-adversarial-verification-research-spec.md)
 - **Specification lock task:** `task_158622307482e23fb4519889b53b475f` — rewarded 2026-08-25
 - **Milestone-document task:** `[ ] task_d28eb3465dcac9a32524c25bba996e1e — accepted 2026-08-25`
@@ -42,7 +42,7 @@ Code references: `crates/cobalt_adversarial_oracle/src/lib.rs`, `crates/cobalt_e
 
 ### E2. Byzantine validator campaign
 
-Task Node: `[ ] not requested`
+Task Node: `[ ] task_91aebe5c632d90e03e7e151a6ffeb736 — accepted 2026-08-25`
 
 - [ ] Derive and freeze the live six-validator fault bound `f` before execution.
 - [ ] Exercise up to `f` Byzantine domains across separate and combined RBC, ABBA, MVBA, and DABC equivocation; selective withholding; lying or changing trust views; competing proposals; late votes; and re-proposals.
