@@ -8,4 +8,5 @@
 - Oracle review: the first and second oracles agreed on validity, compatibility, fully linked pairs among correct validators, strong support, and strongly connected closures in every case; no oracle correction is indicated.
 - Production review: all 10,240 production attempts stopped before graph construction with `Cobalt domain genesis_hash must be 96 lowercase hex characters`.
 - Classification: the harness adapter supplied a 64-character genesis fixture. This is an adapter defect, not a production Cobalt defect.
-- Remediation: correct only the adapter fixture to the production-required 96 lowercase hex characters, add a focused regression test, and rerun this unchanged corpus.
+- Follow-up regression review: after correcting the genesis fixture, the focused production-graph construction test exposed the same 64-versus-96 width defect in the adapter's registry-root fixture.
+- Remediation: correct both adapter fixture hashes to the production-required 96 lowercase hex characters, retain the focused regression test, and rerun this unchanged corpus.

@@ -244,7 +244,7 @@ fn classify_first(case: &GraphCase) -> RouteResult {
 fn domain() -> CobaltDomain {
     CobaltDomain {
         chain_id: "postfiat-cobalt-e1".to_string(),
-        genesis_hash: "11".repeat(32),
+        genesis_hash: "11".repeat(48),
         protocol_version: 1,
     }
 }
@@ -269,7 +269,7 @@ fn build_production_graph(case: &GraphCase, domain: &CobaltDomain) -> Result<Tru
             .collect::<Result<Vec<_>, _>>()?;
         views.push(build_trust_view(domain, validator, 1, subsets, "")?);
     }
-    build_trust_graph(domain, 1, "22".repeat(32), 1, None, views)
+    build_trust_graph(domain, 1, "22".repeat(48), 1, None, views)
 }
 
 fn production_pairs(report: &LinkageReport) -> Vec<ValidatorPair> {
@@ -508,6 +508,22 @@ fn run(manifest_path: &Path, output_dir: &Path, summary_only: bool) -> io::Resul
     write_new_json(&output_dir.join("disagreements.json"), &disagreements)?;
     write_new_json(&output_dir.join("summary.json"), &summary)?;
     Ok(summary)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use postfiat_cobalt_adversarial_oracle::{generate_corpus, DEFAULT_SEED};
+
+    #[test]
+    fn production_domain_fixture_builds_and_analyzes_a_graph() {
+        let domain = domain();
+        assert_eq!(domain.genesis_hash.len(), 96);
+        let case = generate_corpus(DEFAULT_SEED, 1).remove(0);
+        let graph = build_production_graph(&case, &domain).expect("production graph");
+        analyze_trust_graph(&domain, &graph, &CobaltFaultModel::default())
+            .expect("production linkage report");
+    }
 }
 
 fn main() -> io::Result<()> {
