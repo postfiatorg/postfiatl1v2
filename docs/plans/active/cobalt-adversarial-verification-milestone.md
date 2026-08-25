@@ -8,7 +8,7 @@ A failed benchmark or simulation creates P0 remediation and a rerun of the uncha
 
 The result proves protocol capability, not operator decentralization.
 
-- **Status:** Active — E1-E3 complete; E4 in progress; E5-E6 not started
+- **Status:** Active — E1-E3 and E6 complete; E4 in progress; E5 not started
 - **Specification:** [Cobalt Adversarial Verification Research Specification](../../governance/cobalt-adversarial-verification-research-spec.md)
 - **Historical specification-lock record:** `task_158622307482e23fb4519889b53b475f` — rewarded 2026-08-25
 - **Historical milestone-document record:** `[x] task_d28eb3465dcac9a32524c25bba996e1e — rewarded 2026-08-25`
@@ -24,7 +24,7 @@ is still not the active validator release.
 - [x] Cobalt became the recorded controlled-testnet validator-trust authority at height 916; its first authorized validator-key rotation committed at height 917.
 - [x] The research specification passed the Text Improvement Harness at 89.27/100 and is locked.
 - [x] The public article now records the live authority state instead of saying Cobalt remains off.
-- [ ] The cooperative activation evidence has passed E1-E3; E4-E6 remain open, so the full adversarial campaign is not complete.
+- [ ] E1-E3 and the design-only E6 decision have passed; E4 and the live E5 drills remain open, so the full adversarial campaign is not complete.
 - [ ] The current Foundation-administered proposal and authorization boundary remains explicit; no operator-decentralization result is claimed.
 
 ## Experiments
@@ -137,15 +137,19 @@ Code references: `crates/node/src/cobalt_handoff.rs`, `crates/node/src/cobalt_ha
 
 ### E6. Proposal source and independence decision
 
-Execution: not started
+Execution: complete — design and decision only; no operators recruited and no live change authorized
 
-- [ ] Document the current registry-proposal process, signing keys, validator authorizations, and custody boundaries.
-- [ ] Design a non-Foundation proposal path and trust graph in which no single administrator can reach quorum or block it alone.
-- [ ] Reuse the retained operator-admission boundary and onboarding packet; do not recruit operators inside this experiment.
-- [ ] Record a dated decision to reinstate the locked activation specification's independent-operator gate as its own milestone or formally defer it.
-- [ ] Lock that decision through a new research specification; do not redefine the prior gate inside this milestone.
+Locked design: `docs/governance/cobalt-independent-operator-proposal-path-research-spec.md`; SHA-256 `91ad402672653f3e76489f7e7de719d5597553111985d939a9e90b52a1edec89`.
+Checksum-bound decision packet: `benchmarks/cobalt-adversarial-verification/e6`; packet root `52a4ef91a7ec1c8dad385344edf3b498a96d45f5a8568d8c1371e3f3d6d05c81`.
+Decision: reinstate the independent-operator gate as its own mandatory follow-on milestone.
 
-Code references: `crates/node/src/cobalt_shadow.rs`, `crates/node/src/cobalt_authority_certificate.rs`, `benchmarks/cobalt-independent-operators/onboarding-contract.json`.
+- [x] Document the current registry-proposal process, signing keys, validator authorizations, and custody boundaries.
+- [x] Design a non-Foundation proposal path and trust graph in which no single administrator can reach quorum or block it alone.
+- [x] Reuse the retained operator-admission boundary and onboarding packet; do not recruit operators inside this experiment.
+- [x] Record a dated decision to reinstate the locked activation specification's independent-operator gate as its own milestone or formally defer it.
+- [x] Lock that decision through a new research specification; do not redefine the prior gate inside this milestone.
+
+Code references: `crates/consensus_cobalt/src/trust_graph_governance.rs`, `crates/consensus_cobalt/src/dabc_registry.rs`, `crates/node/src/cobalt_handoff.rs`, `crates/node/src/cobalt_authority_certificate.rs`, `benchmarks/cobalt-independent-operators/onboarding-contract.json`.
 
 ## Gates
 
@@ -156,7 +160,7 @@ Code references: `crates/node/src/cobalt_shadow.rs`, `crates/node/src/cobalt_aut
 - [x] E3: every tampered state and forged catch-up is rejected; honest recovery is byte-identical.
 - [ ] E4: Consensus v2 never stops or forks; attack-lane p95 finality stays within 5% of baseline.
 - [ ] E5: both live authority transitions commit; every live negative case and the stolen-key attempt reject.
-- [ ] E6: the proposal-path design and independent-operator decision are recorded and locked.
+- [x] E6: the proposal-path design and independent-operator decision are recorded and locked.
 - [ ] The publication requirements are live.
 
 ### ROLL BACK

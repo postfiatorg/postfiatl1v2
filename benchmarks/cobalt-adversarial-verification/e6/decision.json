@@ -1,0 +1,110 @@
+{
+  "schema": "postfiat-cobalt-adversarial-e6-decision-v1",
+  "recorded_at": "2026-08-25",
+  "status": "locked",
+  "decision": "REINSTATE_INDEPENDENT_OPERATOR_GATE",
+  "decision_scope": "proposal origination, operator custody, trust topology, and the follow-on independence milestone",
+  "current_boundary": {
+    "network": "controlled-testnet",
+    "cobalt_role": "validator-registry and trust-graph ratification",
+    "block_finality": "consensus-v2",
+    "proposal_origin": "Foundation-administered process",
+    "protocol_and_authorization_signers": "six Foundation-administered validators",
+    "operator_decentralization_proven": false,
+    "protocol_capability_only": true
+  },
+  "quorum_design": {
+    "validator_count": 6,
+    "quorum": 5,
+    "tolerated_byzantine": 1,
+    "required_operator_groups": 6,
+    "maximum_validators_per_operator": 1,
+    "minimum_infrastructure_domains": 3,
+    "single_operator_can_reach_quorum": false,
+    "single_operator_can_block_quorum": false,
+    "single_operator_outage_remaining_validators": 5,
+    "first_cobalt_inequality": "1 < 2*5 - 6",
+    "second_cobalt_inequality": "2*1 < 5"
+  },
+  "proposal_path_design": {
+    "proposal_envelope": "canonical dual-signed operator-master and active-validator envelope",
+    "admission_is_ratification": false,
+    "transport": "bounded authenticated Cobalt RPC with byte-preserving untrusted relays",
+    "selection": "domain-separated deterministic proposer and view selection",
+    "ratification": "signed RBC -> ABBA -> MVBA -> DABC plus scoped current-registry quorum authorizations",
+    "ordering": "Consensus v2 governance batch finality",
+    "records_proposal_and_authorization_identities": true,
+    "foundation_coordinator_can_rewrite": false
+  },
+  "fail_closed_cases": [
+    "unregistered_proposer",
+    "wrong_chain",
+    "stale_authority_lineage",
+    "stale_registry_root",
+    "stale_trust_graph_root",
+    "reused_nonce",
+    "expired_slot",
+    "payload_mismatch",
+    "operator_manifest_mismatch",
+    "missing_signature",
+    "non_canonical_encoding",
+    "coordinator_rewrite",
+    "self_authorization"
+  ],
+  "follow_on": {
+    "own_milestone_required": true,
+    "begins_after_adversarial_verification": true,
+    "recruits_operators_in_e6": false,
+    "authorizes_live_migration": false,
+    "gates_mainnet_recommendation": true,
+    "gates_operator_decentralization_claim": true,
+    "gates_original_activation_program_compliance_claim": true,
+    "missing_independence_alone_triggers_live_rollback": false
+  },
+  "source_files": [
+    {
+      "path": "docs/governance/cobalt-independent-operator-proposal-path-research-spec.md",
+      "sha256": "91ad402672653f3e76489f7e7de719d5597553111985d939a9e90b52a1edec89"
+    },
+    {
+      "path": "docs/governance/cobalt-adversarial-verification-research-spec.md",
+      "sha256": "3e3d31c5d45283651e5174a3679510cbac6f51d33a730225a7bb92923957ba0d"
+    },
+    {
+      "path": "benchmarks/cobalt-independent-operators/onboarding-contract.json",
+      "sha256": "7d25c182abd08267cb47a3847035453445d27aaf5e1b4f7b432ff9c0a1c74143"
+    },
+    {
+      "path": "benchmarks/cobalt-activation-live/packet/activation-status.json",
+      "sha256": "625cbe7c2a265cebea4ce43779bde10d803ca240b383b106513acac10676e18c"
+    },
+    {
+      "path": "crates/consensus_cobalt/src/trust_graph_governance.rs",
+      "sha256": "abbed44850d26afae6abfa54e2f452b0120eb9ca7b3127c49c926297c4c52bf2"
+    },
+    {
+      "path": "crates/consensus_cobalt/src/dabc_registry.rs",
+      "sha256": "d10b29dc2ac3929529d18f32d9e9d90b7df1c9593d0b1a1c8387dc0ef47fce8f"
+    },
+    {
+      "path": "crates/node/src/cobalt_handoff.rs",
+      "sha256": "5413efd03c25bd2e07a403aa0a78bfc4a199ce251a3041bbd9b527e6ba95ffa2"
+    },
+    {
+      "path": "crates/node/src/cobalt_authority_certificate.rs",
+      "sha256": "c468cccc1a8ca77040b6dd46f2a5f7ebdfb7193ea379ff56bab7a488a0b9b234"
+    }
+  ],
+  "checks": {
+    "current_proposal_and_custody_path_documented": true,
+    "non_foundation_proposal_path_designed": true,
+    "no_single_administrator_can_reach_quorum": true,
+    "no_single_administrator_can_block_quorum": true,
+    "onboarding_boundary_reused": true,
+    "operator_recruitment_excluded": true,
+    "independent_operator_decision_explicit": true,
+    "independent_operator_gate_reinstated": true,
+    "new_research_spec_locked": true,
+    "no_live_change_authorized": true
+  }
+}

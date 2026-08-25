@@ -129,6 +129,7 @@ nav:
       - Cobalt Implementation: governance/cobalt-implementation.md
       - Cobalt Transition Safety Proof: governance/cobalt-transition-safety-proof.md
       - Cobalt Adversarial Verification Spec (locked): governance/cobalt-adversarial-verification-research-spec.md
+      - Cobalt Independent-Operator Proposal Path (locked): governance/cobalt-independent-operator-proposal-path-research-spec.md
       - Verifiable Constitution: governance/verifiable-constitution.md
       - Validator Registry: governance/validator-registry.md
       - Validator Admission Bin Policy: governance/validator-admission-bin-policy.md

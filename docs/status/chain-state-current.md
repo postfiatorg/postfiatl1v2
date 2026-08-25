@@ -1,6 +1,6 @@
 # PostFiat L1 Current State
 
-Updated: `2026-08-25T21:00:43Z`
+Updated: `2026-08-25T21:49:31Z`
 
 Status: authoritative operational-state reference
 
@@ -15,7 +15,8 @@ Those identities are different and must not be collapsed into “`main` is live.
     This is fresher than the committed activation packet, but it is still a
     point-in-time observation; re-probe the fleet before making a later “right
     now” claim. The later E2 and E3 campaigns were isolated; E4 is an isolated
-    local campaign now in progress. None queried or mutated the fleet.
+    local campaign now in progress, and E6 is a design-only decision. None
+    queried or mutated the fleet.
 
 ## State Summary
 
@@ -26,8 +27,8 @@ Those identities are different and must not be collapsed into “`main` is live.
 | Active consensus runtime | All six validator services run release `cobalt-activation-8694b99d` with the same binary hash. The release manifest names Git revision `8694b99d`; the binary's embedded build revision is `116bed84`. | Binary SHA-256 `431f194ba28391eba16c18a96d49c358bd2047d3b37eb0115216f46c6a6783f4`. |
 | Governance auditor | The full Cobalt authority/history verification uses a separate, read-only node binary. It is not the active validator service binary. | Release `cobalt-live-governance-audit-05507758`; SHA-256 `055077582342dd54af0212df82e626cc83aae8af119c09f1cd1309dad906293e`. |
 | Cobalt shadow runtime | All six shadow services were active with the same binary. Validator-0 reported healthy transport, six peers, current catch-up, and the live registry/trust roots. Shadow mode remains advisory and cannot mutate validator state or finalize blocks. | Release `cobalt-shadow-registry-reset-43ac8a7d`; SHA-256 `43ac8a7df13f41d5cfdd783fc983de4e8e91b625e6a705ae342569c5771ad935`. |
-| Repository | `main` contains the passing E2 and E3 packets plus the frozen E4 finality-stress source and manifest. These source/evidence descendants are later than the active runtime and are not deployed. | E3 evidence `2e63d6112de5ee7ef4d5ffdf82c4965b4f0956a8`; E4 freeze `0b2abdc5fde6ade172dc9a85b811330edc1cda2c`; use `git rev-parse HEAD` for the moving documentation HEAD. |
-| Adversarial verification | E1-E3 are complete. E4 is in progress: its source and manifest are frozen, and the checksum-bound 500-baseline/500-attack evidence run is pending. E5-E6 have not started, so the overall `KEEP_ACTIVE` gate remains open. | E1 completion `9ffa9992`; E2 packet root `8742d960…d7cba3`; E3 packet root `bbab4cab…a61372`; E4 freeze `0b2abdc5`; [active milestone](../plans/active/cobalt-adversarial-verification-milestone.md). |
+| Repository | `main` contains the passing E2 and E3 packets, the frozen E4 finality-stress source and manifest, and the design-only E6 decision. These source/evidence descendants are later than the active runtime and are not deployed. | E3 evidence `2e63d6112de5ee7ef4d5ffdf82c4965b4f0956a8`; E4 freeze `0b2abdc5fde6ade172dc9a85b811330edc1cda2c`; E6 packet root `52a4ef91…d6d05c81`; use `git rev-parse HEAD` for the moving documentation HEAD. |
+| Adversarial verification | E1-E3 and design-only E6 are complete. E4 is in progress: its source and manifest are frozen, and the checksum-bound 500-baseline/500-attack evidence run is running. E5 has not started, so the overall `KEEP_ACTIVE` gate remains open. | E1 completion `9ffa9992`; E2 packet root `8742d960…d7cba3`; E3 packet root `bbab4cab…a61372`; E4 freeze `0b2abdc5`; E6 packet root `52a4ef91…d6d05c81`; [active milestone](../plans/active/cobalt-adversarial-verification-milestone.md). |
 
 ## Observed Devnet State
 
@@ -84,8 +85,9 @@ identity of the active validator binary. The later E2 freeze
 `b78809908821b77ce0a9943f08ec3c7cae69bf84`, E3 source freeze
 `5c9e543ea0f56e7e6dda85d3a27093e810fdc111`, E3 evidence commit
 `2e63d6112de5ee7ef4d5ffdf82c4965b4f0956a8`, E4 source freeze
-`0b2abdc5fde6ade172dc9a85b811330edc1cda2c`, and this documentation
-descendant are also not deployed.
+`0b2abdc5fde6ade172dc9a85b811330edc1cda2c`, the E6 design packet root
+`52a4ef91a7ec1c8dad385344edf3b498a96d45f5a8568d8c1371e3f3d6d05c81`,
+and this documentation descendant are also not deployed.
 
 ## Probe And Evidence Boundary
 
@@ -119,8 +121,8 @@ That verifier proves internal packet consistency; it does not query the fleet.
 
 The current source branch contains the deployment history, later documentation,
 the off-chain E1 oracle/harness and evidence, the completed E2 and E3 packets,
-and the frozen E4 local campaign now in progress. None of those facts means the
-source HEAD is installed on validators.
+the frozen E4 local campaign now in progress, and the design-only E6 decision.
+None of those facts means the source HEAD is installed on validators.
 A deployment claim requires a service path, binary hash, and node observation;
 a source claim requires a branch and commit; an experiment claim requires its
 frozen corpus and result packet.

@@ -67,8 +67,26 @@ classification SHA-256, and the signed-evidence verifier passes. The packet's
 
 E2 uses simulation ML-DSA identities and production signed-message/transcript
 validation. It did not connect to or mutate the devnet, does not allege live
-operator misbehavior, and does not prove operator decentralization. E3-E6 and
-the milestone-wide `KEEP_ACTIVE` gate remain open.
+operator misbehavior, and does not prove operator decentralization.
+
+E3 evidence is stored under
+`benchmarks/cobalt-adversarial-verification/e3/`. All 24 durable-history tamper
+cases and 18 forged catch-up cases rejected with named reasons and zero durable
+mutation. All six interrupted recoveries restored byte-identical accepted
+history without manual repair. The packet's `SHA256SUMS.txt` hash is
+`bbab4cab822a17eaaad6a621740b65288cb0caad872e04326223d349a5a61372`.
+E3 ran on disposable clones and did not query or mutate the devnet.
+
+E6 evidence is stored under
+`benchmarks/cobalt-adversarial-verification/e6/`. It locks the design-only
+decision to reinstate the independent-operator gate as its own mandatory
+follow-on milestone. The packet's `SHA256SUMS.txt` hash is
+`52a4ef91a7ec1c8dad385344edf3b498a96d45f5a8568d8c1371e3f3d6d05c81`.
+It recruits no operators, authorizes no live migration, and does not prove
+operator decentralization.
+
+E4 remains in progress and E5 has not started. The milestone-wide
+`KEEP_ACTIVE` gate remains open.
 
 ## Historical And Supporting Evidence
 
