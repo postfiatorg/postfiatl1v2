@@ -53,6 +53,8 @@ pub const COBALT_SHADOW_PROTOCOL_TRANSCRIPT_SCHEMA: &str =
     "postfiat-cobalt-shadow-protocol-transcript-v2";
 pub const COBALT_SHADOW_HISTORY_ENTRY_SCHEMA: &str = "postfiat-cobalt-shadow-history-entry-v1";
 pub const COBALT_SHADOW_HISTORY_RANGE_SCHEMA: &str = "postfiat-cobalt-shadow-history-range-v1";
+pub const COBALT_SHADOW_SIGNED_HISTORY_RANGE_SCHEMA: &str =
+    "postfiat-cobalt-shadow-signed-history-range-v1";
 pub const COBALT_SHADOW_VALIDATOR_BINDING_SCHEMA: &str =
     "postfiat-cobalt-shadow-validator-binding-v1";
 pub const COBALT_SHADOW_REGISTRY_BINDING_SCHEMA: &str =
@@ -70,6 +72,7 @@ const BEACON_COMMITMENT_SIGNATURE_CONTEXT: &[u8] =
 const BEACON_REVEAL_SIGNATURE_CONTEXT: &[u8] = b"postfiat-l1-v2/cobalt-shadow/beacon-reveal/v1";
 const VALIDATOR_BINDING_SIGNATURE_CONTEXT: &[u8] =
     b"postfiat-l1-v2/cobalt-shadow/validator-binding/v1";
+const HISTORY_RANGE_SIGNATURE_CONTEXT: &[u8] = b"postfiat-l1-v2/cobalt-shadow/history-range/v1";
 const MAX_STATE_FILE_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_PRIVATE_FILE_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_HISTORY_FILE_BYTES: u64 = 64 * 1024 * 1024;
@@ -345,6 +348,18 @@ pub struct CobaltShadowHistoryRange {
     pub end_sequence: u64,
     pub entries: Vec<CobaltShadowHistoryEntry>,
     pub range_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CobaltShadowSignedHistoryRange {
+    pub schema: String,
+    pub sender: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub range: CobaltShadowHistoryRange,
+    pub statement_hash: String,
+    pub signature_hex: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1577,6 +1592,65 @@ impl CobaltShadowService {
         Ok(range)
     }
 
+    pub fn signed_history_range(
+        &self,
+        start_sequence: u64,
+        limit: usize,
+    ) -> io::Result<CobaltShadowSignedHistoryRange> {
+        let range = self.history_range(start_sequence, limit)?;
+        let mut signed = CobaltShadowSignedHistoryRange {
+            schema: COBALT_SHADOW_SIGNED_HISTORY_RANGE_SCHEMA.to_string(),
+            sender: self.state.identity.node_id.clone(),
+            chain_id: self.state.identity.chain_id.clone(),
+            genesis_hash: self.state.identity.genesis_hash.clone(),
+            protocol_version: self.state.identity.protocol_version,
+            range,
+            statement_hash: String::new(),
+            signature_hex: String::new(),
+        };
+        signed.statement_hash = signed_history_range_statement_hash(&signed)?;
+        let private_key = Zeroizing::new(self.protocol_private_key()?);
+        signed.signature_hex = bytes_to_hex(
+            &ml_dsa_65_sign_with_context(
+                private_key.as_slice(),
+                signed.statement_hash.as_bytes(),
+                HISTORY_RANGE_SIGNATURE_CONTEXT,
+            )
+            .map_err(crypto_error)?,
+        );
+        Ok(signed)
+    }
+
+    pub fn verify_signed_history_range(
+        &self,
+        signed: &CobaltShadowSignedHistoryRange,
+    ) -> io::Result<()> {
+        if signed.schema != COBALT_SHADOW_SIGNED_HISTORY_RANGE_SCHEMA
+            || signed.chain_id != self.state.identity.chain_id
+            || signed.genesis_hash != self.state.identity.genesis_hash
+            || signed.protocol_version != self.state.identity.protocol_version
+            || signed.statement_hash != signed_history_range_statement_hash(signed)?
+        {
+            return Err(invalid("signed history range domain or statement mismatch"));
+        }
+        verify_peer_signature(
+            &self.state,
+            &signed.sender,
+            signed.statement_hash.as_bytes(),
+            &signed.signature_hex,
+            HISTORY_RANGE_SIGNATURE_CONTEXT,
+        )?;
+        self.verify_history_range(&signed.range)
+    }
+
+    pub fn catch_up_signed_history(
+        &mut self,
+        signed: &CobaltShadowSignedHistoryRange,
+    ) -> io::Result<CobaltShadowStatus> {
+        self.verify_signed_history_range(signed)?;
+        self.catch_up_history(&signed.range)
+    }
+
     pub fn verify_history_range(&self, range: &CobaltShadowHistoryRange) -> io::Result<()> {
         let encoded = serde_json::to_vec(range).map_err(json_error)?;
         if encoded.len() > MAX_HISTORY_RANGE_BYTES {
@@ -1632,13 +1706,40 @@ impl CobaltShadowService {
         &mut self,
         range: &CobaltShadowHistoryRange,
     ) -> io::Result<CobaltShadowStatus> {
+        if let Some(required) = self.pending_missing_ranges.first() {
+            let required_entries = required
+                .end_sequence
+                .saturating_sub(required.start_sequence)
+                .saturating_add(1);
+            if range.start_sequence == required.start_sequence
+                && required_entries <= self.state.limits.max_history_range_entries as u64
+                && range.end_sequence < required.end_sequence
+            {
+                return Err(invalid("history range omits required latest update"));
+            }
+        }
         self.verify_history_range(range)?;
         self.append_history_entries(&range.entries)?;
         for entry in &range.entries {
             self.history.push(entry.clone());
             self.apply_history_entry(entry)?;
         }
-        self.pending_missing_ranges.clear();
+        self.pending_missing_ranges = self
+            .pending_missing_ranges
+            .iter()
+            .filter_map(|missing| {
+                if range.end_sequence < missing.start_sequence {
+                    Some(missing.clone())
+                } else if range.end_sequence < missing.end_sequence {
+                    Some(CobaltShadowMissingRange {
+                        start_sequence: range.end_sequence.saturating_add(1),
+                        end_sequence: missing.end_sequence,
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect();
         self.persist_state()?;
         Ok(self.status())
     }
@@ -2837,6 +2938,32 @@ pub fn build_signed_protocol_transcript_extending(
     payload_hash: impl Into<String>,
     previous: Option<&DabcRatifiedAmendment>,
 ) -> io::Result<CobaltShadowProtocolTranscript> {
+    build_signed_protocol_transcript_with_graph(services, None, round, payload_hash, previous)
+}
+
+pub fn build_signed_protocol_transcript_for_graph_extending(
+    services: &mut [CobaltShadowService],
+    graph: &TrustGraph,
+    round: u64,
+    payload_hash: impl Into<String>,
+    previous: Option<&DabcRatifiedAmendment>,
+) -> io::Result<CobaltShadowProtocolTranscript> {
+    build_signed_protocol_transcript_with_graph(
+        services,
+        Some(graph),
+        round,
+        payload_hash,
+        previous,
+    )
+}
+
+fn build_signed_protocol_transcript_with_graph(
+    services: &mut [CobaltShadowService],
+    supplied_graph: Option<&TrustGraph>,
+    round: u64,
+    payload_hash: impl Into<String>,
+    previous: Option<&DabcRatifiedAmendment>,
+) -> io::Result<CobaltShadowProtocolTranscript> {
     if services.len() < 3 {
         return Err(invalid(
             "signed protocol transcript requires at least three validators",
@@ -2864,30 +2991,49 @@ pub fn build_signed_protocol_transcript_extending(
     if peers.len() != services.len() {
         return Err(invalid("protocol fleet contains duplicate validator ids"));
     }
-    let registry_root = hash_serialized("postfiat.cobalt.shadow.validator-registry.v1", &peers)?;
     let domain = CobaltDomain {
         chain_id: identity.chain_id,
         genesis_hash: identity.genesis_hash,
         protocol_version: identity.protocol_version,
     };
     let validators = peers.keys().cloned().collect::<Vec<_>>();
-    let subset = build_essential_subset(
-        &domain,
-        validators.clone(),
-        0,
-        validators.len(),
-        vec!["local-socket-drill".to_string()],
-        1,
-        None,
-    )
-    .map_err(consensus_error)?;
-    let views = validators
-        .iter()
-        .map(|validator| build_trust_view(&domain, validator, 1, vec![subset.clone()], ""))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(consensus_error)?;
-    let graph = build_trust_graph(&domain, 1, registry_root.clone(), 1, None, views)
-        .map_err(consensus_error)?;
+    let graph = match supplied_graph {
+        Some(graph) => {
+            validate_trust_graph(&domain, graph).map_err(consensus_error)?;
+            let graph_validators = graph
+                .trust_views
+                .iter()
+                .map(|view| view.validator.clone())
+                .collect::<Vec<_>>();
+            if graph_validators != validators {
+                return Err(invalid(
+                    "supplied trust graph does not match protocol fleet",
+                ));
+            }
+            graph.clone()
+        }
+        None => {
+            let registry_root =
+                hash_serialized("postfiat.cobalt.shadow.validator-registry.v1", &peers)?;
+            let subset = build_essential_subset(
+                &domain,
+                validators.clone(),
+                0,
+                validators.len(),
+                vec!["local-socket-drill".to_string()],
+                1,
+                None,
+            )
+            .map_err(consensus_error)?;
+            let views = validators
+                .iter()
+                .map(|validator| build_trust_view(&domain, validator, 1, vec![subset.clone()], ""))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(consensus_error)?;
+            build_trust_graph(&domain, 1, registry_root, 1, None, views).map_err(consensus_error)?
+        }
+    };
+    let registry_root = graph.registry_root.clone();
     for service in services.iter_mut() {
         service.bind_registry(registry_root.clone(), &graph, peers.clone())?;
         service.reserve_protocol_round(round, payload_hash.clone())?;
@@ -3540,6 +3686,22 @@ fn history_range_hash(range: &CobaltShadowHistoryRange) -> io::Result<String> {
             range.start_sequence,
             range.end_sequence,
             &range.entries,
+        ),
+    )
+}
+
+fn signed_history_range_statement_hash(
+    signed: &CobaltShadowSignedHistoryRange,
+) -> io::Result<String> {
+    hash_serialized(
+        "postfiat.cobalt.shadow.signed-history-range.v1",
+        &(
+            &signed.schema,
+            &signed.sender,
+            &signed.chain_id,
+            &signed.genesis_hash,
+            signed.protocol_version,
+            &signed.range.range_hash,
         ),
     )
 }
@@ -4479,10 +4641,12 @@ mod tests {
         assert_eq!(fleet[2].state.contiguous_sequence, 0);
         assert_eq!(fleet[2].state.protocol_decisions.len(), 0);
         assert_eq!(fleet[2].status().missing_ranges.len(), 1);
-        let range = fleet[0].history_range(1, 1).expect("export first entry");
+        let range = fleet[0]
+            .signed_history_range(1, 1)
+            .expect("export signed first entry");
         fleet[2]
-            .catch_up_history(&range)
-            .expect("catch up first entry");
+            .catch_up_signed_history(&range)
+            .expect("catch up signed first entry");
         let recovered = fleet[2]
             .commit_protocol_transcript(&second)
             .expect("commit second after catch-up");
@@ -4540,6 +4704,20 @@ mod tests {
         let target_journal = root.join("validator-2").join(HISTORY_FILE);
         let initial_journal_bytes = fs::metadata(&target_journal).expect("target journal").len();
         let initial_state_hash = fleet[2].state.state_hash.clone();
+
+        let mut announced_latest = second.clone();
+        announced_latest.ratification.sequence = 3;
+        assert!(fleet[2]
+            .commit_protocol_transcript(&announced_latest)
+            .expect_err("future transcript must require catch-up")
+            .to_string()
+            .contains("catch_up_required"));
+        let omitted = fleet[0].history_range(1, 1).expect("omitted range");
+        assert!(fleet[2]
+            .catch_up_history(&omitted)
+            .expect_err("known latest update cannot be omitted")
+            .to_string()
+            .contains("omits required latest update"));
 
         let mut reordered = valid.clone();
         reordered.entries.swap(0, 1);

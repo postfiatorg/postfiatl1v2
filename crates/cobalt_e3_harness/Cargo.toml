@@ -1,0 +1,20 @@
+[package]
+name = "postfiat-cobalt-e3-harness"
+version = "0.1.0"
+description = "Adversarial durable-recovery campaign for Cobalt verification E3"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "postfiat-cobalt-e3-harness"
+path = "src/main.rs"
+
+[dependencies]
+postfiat-consensus-cobalt = { path = "../consensus_cobalt" }
+postfiat-crypto-provider = { path = "../crypto_provider" }
+postfiat-node = { path = "../node" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }

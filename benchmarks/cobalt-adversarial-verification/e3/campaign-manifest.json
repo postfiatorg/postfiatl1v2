@@ -1,0 +1,66 @@
+{
+  "schema": "postfiat-cobalt-adversarial-e3-campaign-manifest-v1",
+  "campaign_id": "cobalt-e3-adversarial-recovery-v1",
+  "frozen_at": "2026-08-25T18:35:56Z",
+  "live_binding": {
+    "chain_id": "postfiat-wan-devnet-2",
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "protocol_version": 1,
+    "registry_root": "945768d593497541f59961d1ba3920560cfde7bf5037e40eb89dd5466637f221709bff05b69d2d40a36d5cff8505c37e",
+    "recorded_trust_graph_root": "9221316ae7f0f0e7e58d734700167f73f29aa1240377a8d61c637e7f36c5deb728203fcbb283c9f8f3398fc41d6b8b13",
+    "clone_graph_version": 1,
+    "clone_activation_height": 917,
+    "clone_previous_trust_graph_root": null,
+    "validators": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+    ],
+    "quorum": 5,
+    "activation_source": {
+      "path": "benchmarks/cobalt-activation-live/packet/activation-status.json",
+      "sha256": "625cbe7c2a265cebea4ce43779bde10d803ca240b383b106513acac10676e18c"
+    },
+    "state_source": {
+      "path": "benchmarks/cobalt-activation-live/packet/state-verification.json",
+      "sha256": "4779c14e552533561939e12bea7d84b3a140fce5b3efd135dd6dcc95f169f99d"
+    }
+  },
+  "source_files": [
+    {
+      "path": "docs/governance/cobalt-adversarial-verification-research-spec.md",
+      "sha256": "3e3d31c5d45283651e5174a3679510cbac6f51d33a730225a7bb92923957ba0d"
+    },
+    {
+      "path": "crates/node/src/cobalt_shadow.rs",
+      "sha256": "8260190c221cda41054866448f61ecab727fd83136edeb0a905f7cbcd9502530"
+    },
+    {
+      "path": "crates/node/src/cobalt_shadow_runtime.rs",
+      "sha256": "1b413428feed335a3a97ddc3520389518551ae3a1744bacce5a65e01c45cd7d2"
+    },
+    {
+      "path": "crates/node/src/bin/postfiat_cobalt_liveness_simulation.rs",
+      "sha256": "bd3cc16958deb71370e7ef189137e2f2fcad0624ee136f34d7176030386e0eb2"
+    },
+    {
+      "path": "crates/cobalt_e3_harness/src/main.rs",
+      "sha256": "97b47ddfe956f484c038fc8ad642723c10587289ba07cf40b6e3ee606dcd62e0"
+    }
+  ],
+  "history_entry_count": 4,
+  "tamper_cases": [
+    "truncated",
+    "padded",
+    "reordered",
+    "one_entry_modified"
+  ],
+  "forged_catch_up_cases": [
+    "fabricated_transition",
+    "wrong_root_certificate",
+    "omitted_latest_update"
+  ]
+}

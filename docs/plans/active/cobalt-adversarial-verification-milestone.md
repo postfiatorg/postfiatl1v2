@@ -77,7 +77,7 @@ Code references: `crates/cobalt_e2_harness/src/main.rs`,
 
 ### E3. Adversarial recovery
 
-Execution: not started
+Execution: source and corpus frozen; first isolated full-corpus dry run passed; checksum-bound initial and clean evidence runs pending
 
 - [ ] Test each validator in turn on a disposable clone bound to the live registry root.
 - [ ] Restart from truncated, padded, reordered, and one-entry-modified durable histories.
@@ -85,7 +85,7 @@ Execution: not started
 - [ ] Interrupt catch-up mid-transfer, resume from another peer, and reject inconsistent peer material before rejoin.
 - [ ] Restore byte-identical accepted history from honest peers without manual repair.
 
-Code references: `crates/node/src/cobalt_shadow.rs`, `crates/node/src/cobalt_shadow_runtime.rs`, `crates/node/src/bin/postfiat_cobalt_liveness_simulation.rs`.
+Code references: `crates/cobalt_e3_harness/src/main.rs`, `crates/node/src/cobalt_shadow.rs`, `crates/node/src/cobalt_shadow_runtime.rs`, `crates/node/src/bin/postfiat_cobalt_liveness_simulation.rs`.
 
 ### E4. Finality isolation under governance stress
 
