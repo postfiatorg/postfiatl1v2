@@ -1,0 +1,20 @@
+{
+  "schema": "postfiat-cobalt-activation-source-pins-v1",
+  "base_commit": "0977484355169df6b6712e87e7bc4a6d2a6d3e07",
+  "sources": {
+    "crates/node/src/cobalt_shadow.rs": "c8b63f286b277cd095d3dc49619c34af10c09d8e5f57aad7019f8d6b9ef45d9e",
+    "crates/node/src/bin/postfiat_cobalt_shadow.rs": "34a7bc6167f10d26bd2de06f7cec16c2d86f9f9f5896dbcc42ade280e11abaca",
+    "crates/node/src/governance.rs": "02e17202352d5fc02bdf92af141d8b880c09c04f58302f08ff41e87128bc3ca3",
+    "python/postfiat_rpc/cobalt.py": "1122fbfa6f6c8e9eb3ba7aa8de63b8871f9654e144b5b46292a18b2dbd30e84e",
+    "python/postfiat_rpc/cobalt_ui.py": "6808a6b72512452afb7a152dc6cc634e463abec8777c5514647b34c8fea29021"
+  },
+  "deployed_binaries": {
+    "postfiat-node-live-consensus": "release cobalt-verifier-92b63f5a",
+    "postfiat-node-governance-auditor": "055077582342dd54af0212df82e626cc83aae8af119c09f1cd1309dad906293e",
+    "postfiat-cobalt-shadow": "43ac8a7df13f41d5cfdd783fc983de4e8e91b625e6a705ae342569c5771ad935"
+  },
+  "raw_live_receipts": {
+    "cobalt-live-cli.json": "873c125952cba63b3f5663935ac8d419bbb9f79db4dd466c477cb5d7a15ff1b5",
+    "cobalt-live-ui-snapshot.json": "c187e56c4a244d267c113d74bad5b1c1cf6a1f80515f8c34fd650fb015bdfca5"
+  }
+}

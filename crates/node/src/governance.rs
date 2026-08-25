@@ -2619,8 +2619,17 @@ pub fn verify_governance_with_options(
     let mode = parse_cobalt_governance_mode(&options.cobalt_mode)?;
     let cobalt_mode = cobalt_governance_mode_name(mode).to_string();
     validate_cobalt_cutover_options(mode, options.trust_graph_root.as_deref())?;
+    // GovernanceAmendment records remain canonical historical evidence after
+    // Cobalt takes authority over validator-registry transitions. Reinterpreting
+    // the pre-cutover amendment log under the current non-uniform registry mode
+    // makes an activated chain unverifiable. Registry updates are checked under
+    // the selected Cobalt mode separately below.
     for amendment in &governance.amendments {
-        verify_governance_amendment_evidence_for_mode(&genesis, amendment, mode)?;
+        verify_governance_amendment_evidence_for_mode(
+            &genesis,
+            amendment,
+            CobaltGovernanceMode::Canonical,
+        )?;
     }
     verify_governance_amendment_activation_records(&genesis, &governance)?;
     verify_governance_amendment_supersession_records(&genesis, &governance)?;

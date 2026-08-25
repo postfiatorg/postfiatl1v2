@@ -1,0 +1,19 @@
+{
+  "schema": "postfiat-cobalt-activation-prior-evidence-v1",
+  "frozen_oracle_and_decisive_corpus": {
+    "path": "benchmarks/cobalt-activate-or-retire/section2-packet",
+    "sha256sums_sha256": "40bc86c9416a1b468f5625a2ff83724c9268f9d49c41007e9b0c4bc70c43c1e1",
+    "result": "18 of 18 cases matched; zero conflicting Cobalt roots"
+  },
+  "isolated_validator_simulation": {
+    "path": "benchmarks/cobalt-activate-or-retire/section3-packet",
+    "sha256sums_sha256": "9a35119045698754ffdd11eea123bfad03bf2b3c23b700a55f0f539f5152bc18",
+    "result": "five-of-six progress, four-of-six safe halt, deterministic recovery, +2.63% p95 finality"
+  },
+  "release_qualification": {
+    "path": "benchmarks/cobalt-handoff-rehearsal/packet-release-qualified-v1",
+    "sha256sums_sha256": "f4f2f202111dc327ee590310ba65dc53e0611a578041ba878a3e23298e47a3e2",
+    "result": "15 of 15 handoff, update, negative-case, and rollback gates passed"
+  },
+  "scope": "Prior packets are checksum-bound dependencies; this live packet adds the terminal controlled-testnet receipts."
+}

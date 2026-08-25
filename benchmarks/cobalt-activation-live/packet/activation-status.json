@@ -1,0 +1,79 @@
+{
+  "schema": "postfiat-cobalt-governance-cli-v2",
+  "command": "live-status",
+  "ok": true,
+  "status": "ACTIVATED",
+  "terminal_decision": "ACTIVATE",
+  "authority": {
+    "mode": "cobalt-validator-trust",
+    "live": true,
+    "writes_validator_registry": true,
+    "controls_block_consensus": false
+  },
+  "block_finality": "consensus-v2",
+  "node": {
+    "node_id": "validator-0",
+    "chain_id": "postfiat-wan-devnet-2",
+    "height": 919,
+    "tip_hash": "3a8a117af9ed40728717005d03edf032719a3ca3d696365415a2d5b0d9aeef1c509d06d54029e6c34660e29aab43d0fb",
+    "state_root": "ffa16323555800df7a4ff7cd336b9b151b0edfcf60954c207b704749133ff4b31ebd24444696d67e652f6e94510f7e60"
+  },
+  "registry_root": "945768d593497541f59961d1ba3920560cfde7bf5037e40eb89dd5466637f221709bff05b69d2d40a36d5cff8505c37e",
+  "trust_graph_root": "9221316ae7f0f0e7e58d734700167f73f29aa1240377a8d61c637e7f36c5deb728203fcbb283c9f8f3398fc41d6b8b13",
+  "latest_transition": {
+    "transition_id": "8846d8f06b3ebf81b5695e11bfc69a0d228fcfc17cf25e82143a1ba4097209e83aa93be2e67b590e299a59183ecd9e3f",
+    "from_authority_mode": 0,
+    "to_authority_mode": 1,
+    "transition_kind": "activate_cobalt",
+    "activation_height": 916,
+    "approval_quorum": 5,
+    "authority_scope": "validator_trust_evolution_v1",
+    "cobalt_protocol_version": 2,
+    "cobalt_lock_hash": "b30f041a29efad95e44cb5c30db2f34b1490ecc5e91dd8cee067a4933ae2fe816bcdd44969ee49b3271ce58a1771bdc8",
+    "cobalt_registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+    "trust_graph_root": "c872bf8a9628cb3b27f2c0826084beb540c645d0c9d06107643358a4df078fa919e88ba2aa6b376a904eb79d28d69e77"
+  },
+  "latest_registry_update": {
+    "update_id": "518f543ea7a136a4fee5b6e8f969d47919f440f5040b9c8a0d0dfd97cd48a1f4ddc895bb3003a9042906bfab5610d749",
+    "operation": "rotate_key",
+    "subject_node_id": "validator-5",
+    "activation_height": 917,
+    "previous_registry_root": "c3322cb268de3956ac45815d4255aa1cd628b22a949d0a3d4b490d1531bebfd9715a2ccd44be50cbc5af212a2015e33a",
+    "new_registry_root": "945768d593497541f59961d1ba3920560cfde7bf5037e40eb89dd5466637f221709bff05b69d2d40a36d5cff8505c37e",
+    "previous_trust_graph_root": "c872bf8a9628cb3b27f2c0826084beb540c645d0c9d06107643358a4df078fa919e88ba2aa6b376a904eb79d28d69e77",
+    "new_trust_graph_root": "9221316ae7f0f0e7e58d734700167f73f29aa1240377a8d61c637e7f36c5deb728203fcbb283c9f8f3398fc41d6b8b13",
+    "trust_graph_transition_id": "1d088ae1561fe2fec7b2e425e82bd162ee1b08f4dbbb8edd57819560f1bd10b834e590704f09c71c81e6427144df53a3"
+  },
+  "verifier": {
+    "verified": true,
+    "cobalt_mode": "non_uniform",
+    "authority_mode": 1,
+    "active_validator_count": 6,
+    "active_validators": ["validator-0", "validator-1", "validator-2", "validator-3", "validator-4", "validator-5"],
+    "validator_registry_update_count": 1,
+    "latest_validator_registry_update_id": "518f543ea7a136a4fee5b6e8f969d47919f440f5040b9c8a0d0dfd97cd48a1f4ddc895bb3003a9042906bfab5610d749",
+    "trust_graph_root": "9221316ae7f0f0e7e58d734700167f73f29aa1240377a8d61c637e7f36c5deb728203fcbb283c9f8f3398fc41d6b8b13"
+  },
+  "sidecars": [
+    {
+      "node_id": "validator-0",
+      "authority_mode": "shadow-advisory",
+      "live_authority": false,
+      "controls_block_consensus": false,
+      "transport_healthy": true,
+      "catch_up_status": "current",
+      "peer_count": 6,
+      "registry_root": "945768d593497541f59961d1ba3920560cfde7bf5037e40eb89dd5466637f221709bff05b69d2d40a36d5cff8505c37e",
+      "trust_graph_root": "9221316ae7f0f0e7e58d734700167f73f29aa1240377a8d61c637e7f36c5deb728203fcbb283c9f8f3398fc41d6b8b13"
+    }
+  ],
+  "checks": [
+    {"key": "authority_mode", "label": "Cobalt is the recorded validator-trust authority", "ok": true},
+    {"key": "transition_live", "label": "Authority transition is active at the current height", "ok": true},
+    {"key": "registry_update_live", "label": "A Cobalt-authorized registry update is active", "ok": true},
+    {"key": "governance_verified", "label": "The Rust verifier accepts the Cobalt authority history", "ok": true},
+    {"key": "validator_set", "label": "The node and governance agree on six active validators", "ok": true},
+    {"key": "sidecar_binding", "label": "Observed sidecars are healthy and bound to the live roots", "ok": true},
+    {"key": "block_scope", "label": "Consensus v2 remains block finality", "ok": true}
+  ]
+}

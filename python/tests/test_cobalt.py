@@ -202,6 +202,89 @@ class CobaltCliTests(unittest.TestCase):
         self.assertEqual(result["actual_authority"]["block_finality"], "consensus-v2")
         self.assertIn("Activation performed by this command: no", cobalt.render_human(result))
 
+    @mock.patch("postfiat_rpc.cobalt.run_bounded_json_command")
+    def test_live_status_reports_terminal_activation_without_block_authority(
+        self, run_json: mock.Mock
+    ) -> None:
+        registry_root = "aa" * 48
+        trust_root = "bb" * 48
+        update_id = "cc" * 48
+        with tempfile.TemporaryDirectory() as directory:
+            data_dir = Path(directory)
+            (data_dir / "governance.json").write_text(
+                json.dumps(
+                    {
+                        "authority_mode": 1,
+                        "cobalt_authority_transitions": [
+                            {
+                                "transition_id": "dd" * 48,
+                                "to_authority_mode": 1,
+                                "activation_height": 916,
+                            }
+                        ],
+                        "validator_registry_updates": [
+                            {
+                                "update_id": update_id,
+                                "activation_height": 917,
+                                "new_registry_root": registry_root,
+                                "new_trust_graph_root": trust_root,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def command_result(command: list[str], **_kwargs: object) -> dict:
+                if "cobalt-shadow" in command[0]:
+                    return {
+                        "transport_healthy": True,
+                        "catch_up_status": "current",
+                        "registry_root": registry_root,
+                        "trust_graph_root": trust_root,
+                        "controls_block_consensus": False,
+                    }
+                if command[1] == "status":
+                    return {
+                        "node_id": "validator-0",
+                        "chain_id": "live-test",
+                        "block_height": 919,
+                        "block_tip_hash": "ee" * 48,
+                        "state_root": "ff" * 48,
+                        "validator_count": 6,
+                    }
+                if command[1] == "verify-governance":
+                    return {
+                        "verified": True,
+                        "cobalt_mode": "non_uniform",
+                        "trust_graph_root": trust_root,
+                        "active_validator_count": 6,
+                        "latest_validator_registry_update_id": update_id,
+                    }
+                return {
+                    "transport_healthy": True,
+                    "catch_up_status": "current",
+                    "registry_root": registry_root,
+                    "trust_graph_root": trust_root,
+                    "controls_block_consensus": False,
+                }
+
+            run_json.side_effect = command_result
+            result = cobalt.live_status_result(
+                data_dir,
+                node_bin=Path("/opt/postfiat/postfiat-node"),
+                shadow_bin=Path("/opt/postfiat/postfiat-cobalt-shadow"),
+                shadow_data_dirs=[Path("/var/lib/postfiat-cobalt-shadow")],
+                timeout_seconds=5,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], "ACTIVATED")
+        self.assertEqual(result["terminal_decision"], "ACTIVATE")
+        self.assertTrue(result["authority"]["writes_validator_registry"])
+        self.assertFalse(result["authority"]["controls_block_consensus"])
+        self.assertIn("Terminal decision: ACTIVATE", cobalt.render_human(result))
+
     def test_packet_authentication_rejects_tampering(self) -> None:
         root = cobalt.repository_root(Path(__file__))
         source = root / "benchmarks/cobalt-rippled-liveness/packet"

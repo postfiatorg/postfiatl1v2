@@ -1,0 +1,10 @@
+{
+  "schema": "postfiat-cobalt-live-fleet-status-v1",
+  "captured_at": "2026-08-25T05:13:45Z",
+  "validator_count": 6,
+  "all_equal": true,
+  "height": 919,
+  "tip_hash": "3a8a117af9ed40728717005d03edf032719a3ca3d696365415a2d5b0d9aeef1c509d06d54029e6c34660e29aab43d0fb",
+  "state_root": "ffa16323555800df7a4ff7cd336b9b151b0edfcf60954c207b704749133ff4b31ebd24444696d67e652f6e94510f7e60",
+  "validators": ["validator-0", "validator-1", "validator-2", "validator-3", "validator-4", "validator-5"]
+}

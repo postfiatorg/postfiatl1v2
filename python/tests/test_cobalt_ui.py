@@ -131,11 +131,74 @@ class CobaltUiTests(unittest.TestCase):
             governance_path.write_text(json.dumps(governance), encoding="utf-8")
             snapshot = collector.collect()
 
-        self.assertEqual(snapshot["rehearsal_readiness"]["status"], "GO")
+        self.assertEqual(snapshot["rehearsal_readiness"]["status"], "ACTIVATED")
         self.assertTrue(snapshot["rehearsal_readiness"]["ready"])
+        self.assertTrue(snapshot["rehearsal_readiness"]["activation_performed"])
         self.assertTrue(snapshot["actual_authority"]["cobalt_active"])
         self.assertFalse(snapshot["actual_authority"]["foundation_active"])
         self.assertEqual(snapshot["proposals"]["transition_count"], 1)
+
+    def test_activation_status_collector_renders_live_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            status_path = Path(directory) / "activation-status.json"
+            status_path.write_text(
+                json.dumps(
+                    {
+                        "schema": cobalt.CLI_SCHEMA,
+                        "command": "live-status",
+                        "ok": True,
+                        "status": "ACTIVATED",
+                        "terminal_decision": "ACTIVATE",
+                        "authority": {"mode": "cobalt-validator-trust"},
+                        "block_finality": "consensus-v2",
+                        "node": {
+                            "node_id": "validator-0",
+                            "chain_id": "cobalt-ui-test",
+                            "height": 919,
+                            "state_root": "01" * 48,
+                        },
+                        "trust_graph_root": "02" * 48,
+                        "latest_transition": {
+                            "transition_id": "03" * 48,
+                            "transition_kind": "activate_cobalt",
+                            "activation_height": 916,
+                        },
+                        "latest_registry_update": {
+                            "update_id": "04" * 48,
+                            "operation": "rotate_key",
+                            "subject_node_id": "validator-5",
+                            "activation_height": 917,
+                        },
+                        "transition_history": [{"transition_id": "03" * 48}],
+                        "verifier": {
+                            "verified": True,
+                            "authority_mode": 1,
+                            "cobalt_mode": "non_uniform",
+                            "active_validator_count": 6,
+                            "validator_registry_update_count": 1,
+                            "amendment_count": 19,
+                        },
+                        "sidecars": [
+                            {
+                                "node_id": "validator-0",
+                                "transport_healthy": True,
+                                "catch_up_status": "current",
+                                "controls_block_consensus": False,
+                                "state_hash": "05" * 48,
+                            }
+                        ],
+                        "checks": [{"key": "authority_mode", "label": "active", "ok": True}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            snapshot = cobalt_ui.ActivationStatusCollector(status_path).collect()
+
+        self.assertEqual(snapshot["rehearsal_readiness"]["status"], "ACTIVATED")
+        self.assertTrue(snapshot["rehearsal_readiness"]["activation_performed"])
+        self.assertTrue(snapshot["actual_authority"]["cobalt_active"])
+        self.assertEqual(snapshot["actual_authority"]["block_finality"], "consensus-v2")
+        self.assertEqual(snapshot["proposals"]["node_status"]["block_height"], 919)
 
     def test_mixed_shadow_digests_fail_convergence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

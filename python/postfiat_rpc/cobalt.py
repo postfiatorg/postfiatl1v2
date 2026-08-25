@@ -1,12 +1,16 @@
-"""Inspect Cobalt governance safety without granting it consensus authority.
+"""Inspect Cobalt validator-trust governance and its live authority state.
 
 Run from the repository root with::
 
-    PYTHONPATH=python python3 -m postfiat_rpc.cobalt trust-graph
+    PYTHONPATH=python python3 -m postfiat_rpc.cobalt live-status \
+      --node-data-dir /var/lib/postfiat/validator-0 \
+      --node-bin /opt/postfiat/current/postfiat-node \
+      --shadow-bin /opt/postfiat/current/postfiat-cobalt-shadow \
+      --shadow-data-dir /var/lib/postfiat-cobalt-shadow
 
-The CLI executes the existing ``postfiat-consensus-cobalt`` examples. It does
-not reimplement their safety rules, initialize a node, process blocks, or alter
-the validator registry.
+The CLI is read-only. It delegates consensus verification to the Rust node,
+reads bounded persisted state, and reports whether Cobalt is the terminal
+validator-trust authority. Consensus v2 remains the block-finality protocol.
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -160,6 +165,270 @@ def read_packet_json(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise CobaltCliError(f"packet file {path.name} is not a JSON object")
     return value
+
+
+def read_node_json(path: Path, limit: int = 16 * 1024 * 1024) -> dict[str, Any]:
+    """Read a bounded node JSON file with an optional integrity trailer."""
+
+    payload = read_packet_bytes(path, limit)
+    framed = payload[:-1] if payload.endswith(b"\n") else payload
+    if b"\npftmac1:" in framed:
+        framed, trailer = framed.rsplit(b"\n", 1)
+        if re.fullmatch(rb"pftmac1:[0-9a-f]{96}", trailer) is None:
+            raise CobaltCliError(f"{path.name} has a malformed integrity trailer")
+    try:
+        value = json.loads(framed)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise CobaltCliError(f"{path.name} does not contain valid node JSON") from error
+    if not isinstance(value, dict):
+        raise CobaltCliError(f"{path.name} does not contain a JSON object")
+    return value
+
+
+def run_bounded_json_command(
+    command: Sequence[str], *, timeout_seconds: float, label: str
+) -> dict[str, Any]:
+    try:
+        completed = subprocess.run(
+            list(command),
+            capture_output=True,
+            check=False,
+            text=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise CobaltCliError(f"{label} exceeded the execution limit") from error
+    except OSError as error:
+        raise CobaltCliError(f"could not execute {label}: {error}") from error
+    if len(completed.stdout) > MAX_REPORT_BYTES or len(completed.stderr) > MAX_REPORT_BYTES:
+        raise CobaltCliError(f"{label} exceeded the bounded output limit")
+    if completed.returncode != 0:
+        stderr = completed.stderr.decode("utf-8", errors="replace").strip()
+        detail = stderr.splitlines()[0] if stderr else "no diagnostic emitted"
+        raise CobaltCliError(f"{label} failed: {detail}")
+    try:
+        report = json.loads(completed.stdout)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise CobaltCliError(f"{label} did not emit valid JSON") from error
+    if not isinstance(report, dict):
+        raise CobaltCliError(f"{label} emitted a non-object report")
+    return report
+
+
+def live_status_result(
+    node_data_dir: Path,
+    *,
+    node_bin: Path,
+    shadow_bin: Path | None,
+    shadow_data_dirs: Sequence[Path],
+    timeout_seconds: float,
+) -> dict[str, Any]:
+    """Return the terminal live Cobalt authority decision from persisted state."""
+
+    governance = read_node_json(node_data_dir / "governance.json")
+    transitions = governance.get("cobalt_authority_transitions", [])
+    updates = governance.get("validator_registry_updates", [])
+    if not isinstance(transitions, list) or not isinstance(updates, list):
+        raise CobaltCliError("governance transition history is malformed")
+    latest_transition = transitions[-1] if transitions and isinstance(transitions[-1], dict) else {}
+    latest_update = updates[-1] if updates and isinstance(updates[-1], dict) else {}
+    trust_graph_root = latest_update.get("new_trust_graph_root")
+    registry_root = latest_update.get("new_registry_root")
+    if governance.get("authority_mode") == 1 and (
+        not isinstance(trust_graph_root, str) or not isinstance(registry_root, str)
+    ):
+        raise CobaltCliError("active Cobalt authority is missing its registry/trust roots")
+
+    status = run_bounded_json_command(
+        [str(node_bin), "status", "--data-dir", str(node_data_dir)],
+        timeout_seconds=timeout_seconds,
+        label="node status",
+    )
+    verifier: dict[str, Any]
+    if isinstance(trust_graph_root, str):
+        verifier = run_bounded_json_command(
+            [
+                str(node_bin),
+                "verify-governance",
+                "--data-dir",
+                str(node_data_dir),
+                "--cobalt-mode",
+                "non-uniform",
+                "--trust-graph-root",
+                trust_graph_root,
+            ],
+            timeout_seconds=timeout_seconds,
+            label="Cobalt governance verifier",
+        )
+    else:
+        verifier = run_bounded_json_command(
+            [str(node_bin), "verify-governance", "--data-dir", str(node_data_dir)],
+            timeout_seconds=timeout_seconds,
+            label="governance verifier",
+        )
+
+    sidecars: list[dict[str, Any]] = []
+    if shadow_data_dirs and shadow_bin is None:
+        raise CobaltCliError("--shadow-bin is required with --shadow-data-dir")
+    for data_dir in shadow_data_dirs:
+        sidecars.append(
+            run_bounded_json_command(
+                [str(shadow_bin), "status", "--data-dir", str(data_dir)],
+                timeout_seconds=timeout_seconds,
+                label=f"Cobalt sidecar status ({data_dir})",
+            )
+        )
+
+    height = status.get("block_height")
+    transition_height = latest_transition.get("activation_height")
+    update_height = latest_update.get("activation_height")
+    sidecars_match = bool(sidecars) and all(
+        row.get("transport_healthy") is True
+        and row.get("catch_up_status") == "current"
+        and row.get("registry_root") == registry_root
+        and row.get("trust_graph_root") == trust_graph_root
+        and row.get("controls_block_consensus") is False
+        for row in sidecars
+    )
+    checks = [
+        {
+            "key": "authority_mode",
+            "label": "Cobalt is the recorded validator-trust authority",
+            "ok": governance.get("authority_mode") == 1
+            and latest_transition.get("to_authority_mode") == 1,
+        },
+        {
+            "key": "transition_live",
+            "label": "Authority transition is active at the current height",
+            "ok": isinstance(height, int)
+            and isinstance(transition_height, int)
+            and transition_height <= height,
+        },
+        {
+            "key": "registry_update_live",
+            "label": "A Cobalt-authorized registry update is active",
+            "ok": isinstance(height, int)
+            and isinstance(update_height, int)
+            and update_height <= height
+            and latest_update.get("update_id")
+            == verifier.get("latest_validator_registry_update_id"),
+        },
+        {
+            "key": "governance_verified",
+            "label": "The Rust verifier accepts the Cobalt authority history",
+            "ok": verifier.get("verified") is True
+            and verifier.get("cobalt_mode") == "non_uniform"
+            and verifier.get("trust_graph_root") == trust_graph_root,
+        },
+        {
+            "key": "validator_set",
+            "label": "The node and governance agree on six active validators",
+            "ok": status.get("validator_count") == 6
+            and verifier.get("active_validator_count") == 6,
+        },
+        {
+            "key": "sidecar_binding",
+            "label": "Observed sidecars are healthy and bound to the live roots",
+            "ok": sidecars_match,
+        },
+        {
+            "key": "block_scope",
+            "label": "Consensus v2 remains block finality",
+            "ok": all(row.get("controls_block_consensus") is False for row in sidecars),
+        },
+    ]
+    activated = all(check["ok"] for check in checks)
+    return {
+        "schema": CLI_SCHEMA,
+        "command": "live-status",
+        "ok": activated,
+        "status": "ACTIVATED" if activated else "HOLD",
+        "terminal_decision": "ACTIVATE" if activated else "HOLD",
+        "authority": {
+            "mode": "cobalt-validator-trust"
+            if governance.get("authority_mode") == 1
+            else "foundation-validator-trust",
+            "live": governance.get("authority_mode") == 1,
+            "controls_block_consensus": False,
+            "writes_validator_registry": governance.get("authority_mode") == 1,
+        },
+        "block_finality": "consensus-v2",
+        "node": {
+            "node_id": status.get("node_id"),
+            "chain_id": status.get("chain_id"),
+            "height": height,
+            "tip_hash": status.get("block_tip_hash"),
+            "state_root": status.get("state_root"),
+        },
+        "registry_root": registry_root,
+        "trust_graph_root": trust_graph_root,
+        "latest_transition": {
+            key: latest_transition.get(key)
+            for key in (
+                "transition_id",
+                "from_authority_mode",
+                "to_authority_mode",
+                "transition_kind",
+                "activation_height",
+                "approval_quorum",
+                "authority_scope",
+                "cobalt_lock_hash",
+                "cobalt_protocol_version",
+                "cobalt_registry_root",
+                "trust_graph_root",
+            )
+        },
+        "latest_registry_update": {
+            key: latest_update.get(key)
+            for key in (
+                "update_id",
+                "operation",
+                "subject_node_id",
+                "activation_height",
+                "previous_registry_root",
+                "new_registry_root",
+                "previous_trust_graph_root",
+                "new_trust_graph_root",
+                "trust_graph_transition_id",
+            )
+        },
+        "transition_history": [
+            {
+                key: row.get(key)
+                for key in (
+                    "transition_id",
+                    "from_authority_mode",
+                    "to_authority_mode",
+                    "transition_kind",
+                    "activation_height",
+                    "trust_graph_root",
+                )
+            }
+            for row in transitions
+            if isinstance(row, dict)
+        ],
+        "verifier": verifier,
+        "sidecars": [
+            {
+                key: row.get(key)
+                for key in (
+                    "schema",
+                    "node_id",
+                    "authority_mode",
+                    "live_authority",
+                    "controls_block_consensus",
+                    "transport_healthy",
+                    "catch_up_status",
+                    "peer_count",
+                    "registry_root",
+                    "trust_graph_root",
+                    "state_hash",
+                )
+            }
+            for row in sidecars
+        ],
+        "checks": checks,
+    }
 
 
 def verify_packet(
@@ -791,13 +1060,42 @@ def status_line(ok: bool) -> str:
 
 def render_human(result: dict[str, Any]) -> str:
     command = result["command"]
+    authority_line = (
+        "Authority: Cobalt controls validator-trust governance; Consensus v2 controls blocks"
+        if command == "live-status" and result.get("authority", {}).get("live") is True
+        else "Authority: advisory only; live block consensus remains unchanged"
+    )
     lines = [
         "Cobalt governance check",
         f"Status: {status_line(bool(result['ok']))}",
-        "Authority: advisory only; live block consensus remains unchanged",
+        authority_line,
         "",
     ]
-    if command == "fleet":
+    if command == "live-status":
+        node = result["node"]
+        transition = result.get("latest_transition", {})
+        update = result.get("latest_registry_update", {})
+        lines.extend(
+            [
+                "Live controlled-testnet authority",
+                f"  Terminal decision: {result['terminal_decision']}",
+                f"  Authority state: {result['status']}",
+                f"  Node/height: {node.get('node_id', 'unknown')} / {node.get('height', 'unknown')}",
+                f"  Block finality: {result['block_finality']}",
+                f"  Registry root: {short_hash(result.get('registry_root'))}",
+                f"  Trust graph root: {short_hash(result.get('trust_graph_root'))}",
+                f"  Authority transition: {short_hash(transition.get('transition_id'))} "
+                f"at height {transition.get('activation_height', 'unknown')}",
+                f"  Registry update: {short_hash(update.get('update_id'))} "
+                f"at height {update.get('activation_height', 'unknown')}",
+                f"  Sidecars checked: {len(result.get('sidecars', []))}",
+            ]
+        )
+        lines.extend(
+            f"  [{status_line(check['ok'])}] {check['label']}"
+            for check in result["checks"]
+        )
+    elif command == "fleet":
         summary = result["summary"]
         lines.extend(
             [
@@ -1065,6 +1363,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="pinned SHA-256 of the handoff verifier",
     )
     parser.add_argument(
+        "--node-data-dir",
+        type=Path,
+        help="live node data directory for live-status",
+    )
+    parser.add_argument(
+        "--node-bin",
+        type=Path,
+        help="release postfiat-node binary for live verification",
+    )
+    parser.add_argument(
+        "--shadow-bin",
+        type=Path,
+        help="release postfiat-cobalt-shadow binary for live sidecar verification",
+    )
+    parser.add_argument(
+        "--shadow-data-dir",
+        action="append",
+        type=Path,
+        default=[],
+        help="observed sidecar state directory; repeat for multiple sidecars",
+    )
+    parser.add_argument(
         "command",
         choices=[
             *EXAMPLES,
@@ -1072,6 +1392,7 @@ def build_parser() -> argparse.ArgumentParser:
             "fleet",
             "scenario",
             "readiness",
+            "live-status",
             *RUNTIME_COMMANDS,
             *HISTORY_COMMANDS,
             "shadow-status",
@@ -1088,27 +1409,45 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.timeout <= 0:
         raise SystemExit("--timeout must be greater than zero")
     try:
-        root = repository_root()
         command = {
             "graph": "trust-graph",
             "shadow-status": "shadow-service-status",
         }.get(args.command, args.command)
-        benchmark_packet = (
-            args.benchmark_packet
-            if args.benchmark_packet.is_absolute()
-            else root / args.benchmark_packet
-        )
-        handoff_packet = (
-            args.handoff_packet
-            if args.handoff_packet.is_absolute()
-            else root / args.handoff_packet
-        )
-        if command == "scenario":
+        if command == "live-status":
+            if args.node_data_dir is None or args.node_bin is None:
+                raise CobaltCliError(
+                    "--node-data-dir and --node-bin are required for live-status"
+                )
+            result = live_status_result(
+                args.node_data_dir,
+                node_bin=args.node_bin,
+                shadow_bin=args.shadow_bin,
+                shadow_data_dirs=args.shadow_data_dir,
+                timeout_seconds=args.timeout,
+            )
+        elif command == "scenario":
+            root = repository_root()
+            benchmark_packet = (
+                args.benchmark_packet
+                if args.benchmark_packet.is_absolute()
+                else root / args.benchmark_packet
+            )
             result = scenario_result(
                 benchmark_packet,
                 expected_manifest_sha256=args.benchmark_sha256,
             )
         elif command == "readiness":
+            root = repository_root()
+            benchmark_packet = (
+                args.benchmark_packet
+                if args.benchmark_packet.is_absolute()
+                else root / args.benchmark_packet
+            )
+            handoff_packet = (
+                args.handoff_packet
+                if args.handoff_packet.is_absolute()
+                else root / args.handoff_packet
+            )
             result = readiness_result(
                 benchmark_packet,
                 handoff_packet,
@@ -1216,6 +1555,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 reports.append(report)
             result = fleet_result(endpoints, reports)
         elif command in SHADOW_COMMANDS:
+            root = repository_root()
             if args.data_dir is None:
                 raise CobaltCliError(
                     "--data-dir is required for shadow-service-status and shadow-service-drill"
@@ -1231,6 +1571,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             result = shadow_result(command, report)
         else:
+            root = repository_root()
             cargo = resolve_cargo(args.cargo)
 
             def runner(spec: ExampleSpec) -> dict[str, Any]:

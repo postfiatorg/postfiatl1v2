@@ -13,7 +13,7 @@ level commitments.
 - **Remote testnet**: 5-validator certified round at p50 1.03s over WAN.
 - **Transparent transactions**: XRP-style transfers with account history and finality RPC.
 - **Shielded settlement**: Orchard/Halo2 deposit, spend, and withdraw with nullifier set.
-- **Cobalt governance**: validator registry transitions with safety witness verification.
+- **Cobalt governance**: live controlled-testnet authority for validator-registry and trust-graph changes since height 916; the first Cobalt-authorized key rotation committed at height 917. Consensus v2 still finalizes blocks.
 - **Post-quantum auth**: ML-DSA account and validator signatures from genesis.
 - **NAVCoins**: OTC swap primitives and proof-of-reserve on controlled testnet.
 - **RPC**: full read/write surface with account state, history, receipts, and finality queries.
@@ -38,5 +38,6 @@ level commitments.
 ## Evidence
 
 Performance and correctness evidence is curated in the
-[Evidence Index](docs/evidence/index.md). Each claim cites code paths, scripts,
-tests, or redaction-safe reports.
+[Evidence Index](docs/evidence/index.md). The terminal Cobalt result is in the
+[controlled-testnet activation packet](benchmarks/cobalt-activation-live/packet/README.md).
+Each claim cites code paths, scripts, tests, or redaction-safe reports.

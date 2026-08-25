@@ -1,0 +1,21 @@
+{
+  "schema": "postfiat-cobalt-activation-live-verifier-v1",
+  "result": "passed",
+  "checks": {
+    "activation_terminal": true,
+    "authority_transition_live": true,
+    "registry_update_live": true,
+    "nonuniform_governance_verified": true,
+    "six_validator_convergence": true,
+    "view_change_recovery": true,
+    "negative_cases_rejected": true,
+    "full_state_replay_verified": true,
+    "consensus_v2_block_scope": true,
+    "cli_activated": true,
+    "ui_activated_read_only": true,
+    "prior_packets_bound": true,
+    "source_pins_match": true,
+    "redaction_safe": true,
+    "checksums_match": true
+  }
+}

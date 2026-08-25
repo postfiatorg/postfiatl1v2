@@ -326,6 +326,14 @@ class SnapshotCollector:
         authority_mode = governance.get("authority_mode")
         authority_known = authority_mode in {0, 1}
         cobalt_authority_active = authority_mode == 1
+        if cobalt_authority_active:
+            readiness = {
+                **readiness,
+                "ok": True,
+                "status": "ACTIVATED",
+                "decision_scope": "live controlled-testnet validator-trust authority",
+                "recommendation": "ACTIVE_COBALT_VALIDATOR_TRUST_AUTHORITY",
+            }
         actual_authority = {
             "known": authority_known,
             "mode": (
@@ -379,7 +387,7 @@ class SnapshotCollector:
                 "checks": readiness.get("checks", []),
                 "scope": readiness.get("decision_scope"),
                 "recommendation": readiness.get("recommendation"),
-                "activation_performed": False,
+                "activation_performed": cobalt_authority_active,
                 "packets": readiness.get("packets", {}),
             },
             "scenario": readiness.get("scenario", {}),
@@ -388,8 +396,148 @@ class SnapshotCollector:
         }
 
 
+class ActivationStatusCollector:
+    """Build the browser snapshot from an authenticated ``live-status`` receipt."""
+
+    def __init__(self, status_path: Path) -> None:
+        self.status_path = status_path
+
+    def collect(self) -> dict[str, Any]:
+        status = cobalt.read_packet_json(self.status_path)
+        if (
+            status.get("schema") != cobalt.CLI_SCHEMA
+            or status.get("command") != "live-status"
+        ):
+            raise cobalt.CobaltCliError(
+                "activation status file is not a Cobalt live-status receipt"
+            )
+        node = status.get("node", {})
+        verifier = status.get("verifier", {})
+        transition = status.get("latest_transition", {})
+        update = status.get("latest_registry_update", {})
+        sidecars = status.get("sidecars", [])
+        checks = status.get("checks", [])
+        if not all(
+            isinstance(value, expected)
+            for value, expected in (
+                (node, dict),
+                (verifier, dict),
+                (transition, dict),
+                (update, dict),
+                (sidecars, list),
+                (checks, list),
+            )
+        ):
+            raise cobalt.CobaltCliError("activation status receipt is malformed")
+        activated = (
+            status.get("ok") is True
+            and status.get("status") == "ACTIVATED"
+            and status.get("terminal_decision") == "ACTIVATE"
+        )
+        shadow_ok = bool(sidecars) and all(
+            isinstance(row, dict)
+            and row.get("transport_healthy") is True
+            and row.get("catch_up_status") == "current"
+            and row.get("controls_block_consensus") is False
+            for row in sidecars
+        )
+        proposals = {
+            "source": str(self.status_path.resolve()),
+            "authority_mode": verifier.get("authority_mode"),
+            "authority_label": "Cobalt validator-trust lane" if activated else "Unavailable",
+            "active_validator_count": verifier.get("active_validator_count", 0),
+            "transition_count": len(status.get("transition_history", [])),
+            "registry_update_count": verifier.get("validator_registry_update_count", 0),
+            "amendment_count": verifier.get("amendment_count", 0),
+            "node_status": {
+                "chain_id": node.get("chain_id"),
+                "block_height": node.get("height"),
+                "state_root": node.get("state_root"),
+                "node_id": node.get("node_id"),
+            },
+            "items": [
+                {
+                    "type": "authority transition",
+                    "id": short_hash(transition.get("transition_id")),
+                    "detail": transition.get("transition_kind", "activate_cobalt"),
+                    "height": transition.get("activation_height"),
+                    "status": "active" if activated else "failed",
+                },
+                {
+                    "type": "validator update",
+                    "id": short_hash(update.get("update_id")),
+                    "detail": f"{update.get('operation', 'update')} · "
+                    f"{update.get('subject_node_id', 'unknown node')}",
+                    "height": update.get("activation_height"),
+                    "status": "recorded" if activated else "failed",
+                },
+            ],
+            "latest_transition": transition,
+        }
+        return {
+            "schema": UI_SCHEMA,
+            "collected_at": utc_timestamp(),
+            "read_only": True,
+            "authority_notice": (
+                "Cobalt controls validator-trust governance. Consensus v2 remains "
+                "block finality. No mutation routes are exposed."
+            ),
+            "trust": {
+                "ok": verifier.get("verified") is True,
+                "mode": verifier.get("cobalt_mode", "unavailable"),
+                "active_graph": "live",
+                "view_count": verifier.get("active_validator_count", 0),
+                "activation_height": transition.get("activation_height"),
+                "root": status.get("trust_graph_root", "unavailable"),
+                "non_identical_views": True,
+                "source": str(self.status_path.resolve()),
+            },
+            "proposals": proposals,
+            "shadow_health": {
+                "ok": shadow_ok,
+                "converged": shadow_ok,
+                "node_count": len(sidecars),
+                "digest": sidecars[0].get("state_hash")
+                if sidecars and isinstance(sidecars[0], dict)
+                else None,
+                "nodes": sidecars,
+                "source": str(self.status_path.resolve()),
+            },
+            "rehearsal_readiness": {
+                "status": "ACTIVATED" if activated else "HOLD",
+                "ready": activated,
+                "checks": checks,
+                "scope": "live controlled-testnet validator-trust authority",
+                "recommendation": (
+                    "ACTIVE_COBALT_VALIDATOR_TRUST_AUTHORITY"
+                    if activated
+                    else "HOLD_AND_REMEDIATE_FAILED_EVIDENCE"
+                ),
+                "activation_performed": activated,
+                "packets": {"activation": {"path": str(self.status_path.resolve())}},
+            },
+            "scenario": {},
+            "actual_authority": {
+                "known": activated,
+                "mode": status.get("authority", {}).get("mode", "unavailable"),
+                "label": "Cobalt validator-trust lane" if activated else "Unavailable",
+                "foundation_active": False if activated else None,
+                "cobalt_active": activated,
+                "block_finality": status.get("block_finality", "unknown"),
+                "controls_block_consensus": False,
+                "transition_count": len(status.get("transition_history", [])),
+                "source": str(self.status_path.resolve()),
+            },
+            "errors": [] if activated else ["activation status receipt did not pass"],
+        }
+
+
 class SnapshotCache:
-    def __init__(self, collector: SnapshotCollector, ttl_seconds: float) -> None:
+    def __init__(
+        self,
+        collector: SnapshotCollector | ActivationStatusCollector,
+        ttl_seconds: float,
+    ) -> None:
         self.collector = collector
         self.ttl_seconds = ttl_seconds
         self._lock = threading.Lock()
@@ -468,8 +616,13 @@ class CobaltUiHandler(BaseHTTPRequestHandler):
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--node-data-dir", required=True, type=Path)
-    parser.add_argument("--shadow-root", required=True, type=Path)
+    parser.add_argument("--node-data-dir", type=Path)
+    parser.add_argument("--shadow-root", type=Path)
+    parser.add_argument(
+        "--activation-status-file",
+        type=Path,
+        help="authenticated live-status JSON for a checkout-independent interface",
+    )
     parser.add_argument(
         "--benchmark-packet",
         type=Path,
@@ -503,30 +656,41 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise SystemExit("--port must be between 0 and 65535")
     if args.timeout <= 0 or args.refresh_seconds <= 0:
         raise SystemExit("--timeout and --refresh-seconds must be greater than zero")
-    root = cobalt.repository_root()
-    options = CollectorOptions(
-        root=root,
-        node_data_dir=args.node_data_dir,
-        shadow_root=args.shadow_root,
-        benchmark_packet=(
-            args.benchmark_packet
-            if args.benchmark_packet.is_absolute()
-            else root / args.benchmark_packet
-        ),
-        handoff_packet=(
-            args.handoff_packet
-            if args.handoff_packet.is_absolute()
-            else root / args.handoff_packet
-        ),
-        benchmark_manifest_sha256=args.benchmark_sha256,
-        handoff_manifest_sha256=args.handoff_sha256,
-        handoff_verifier_sha256=args.handoff_verifier_sha256,
-        cargo=cobalt.resolve_cargo(args.cargo),
-        target=args.target,
-        timeout_seconds=args.timeout,
-    )
+    if args.activation_status_file is not None:
+        collector: SnapshotCollector | ActivationStatusCollector = ActivationStatusCollector(
+            args.activation_status_file
+        )
+    else:
+        if args.node_data_dir is None or args.shadow_root is None:
+            raise SystemExit(
+                "--node-data-dir and --shadow-root are required unless "
+                "--activation-status-file is supplied"
+            )
+        root = cobalt.repository_root()
+        options = CollectorOptions(
+            root=root,
+            node_data_dir=args.node_data_dir,
+            shadow_root=args.shadow_root,
+            benchmark_packet=(
+                args.benchmark_packet
+                if args.benchmark_packet.is_absolute()
+                else root / args.benchmark_packet
+            ),
+            handoff_packet=(
+                args.handoff_packet
+                if args.handoff_packet.is_absolute()
+                else root / args.handoff_packet
+            ),
+            benchmark_manifest_sha256=args.benchmark_sha256,
+            handoff_manifest_sha256=args.handoff_sha256,
+            handoff_verifier_sha256=args.handoff_verifier_sha256,
+            cargo=cobalt.resolve_cargo(args.cargo),
+            target=args.target,
+            timeout_seconds=args.timeout,
+        )
+        collector = SnapshotCollector(options)
     server = CobaltUiServer((args.host, args.port), CobaltUiHandler)
-    server.cache = SnapshotCache(SnapshotCollector(options), args.refresh_seconds)
+    server.cache = SnapshotCache(collector, args.refresh_seconds)
     server.cache.get(force=True)
     host, port = server.server_address[:2]
     print(f"Cobalt governance interface: http://{host}:{port}")

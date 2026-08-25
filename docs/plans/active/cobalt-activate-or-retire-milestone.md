@@ -12,7 +12,7 @@ This is a protocol-capability milestone, not an operator-recruitment milestone. 
 - **Specification:** [Cobalt Activation Research Specification](../../governance/cobalt-activate-or-retire-research-spec.md)
 - **Specification lock task:** `task_a8ffc2885a6fbab8aa06c4b20e92f6b8` — rewarded 2026-08-23
 - **Milestone-document task:** `task_18b8d92d981221b88d0a38159ea1fd26` — accepted
-- **Required result:** `[ ] ACTIVATE`
+- **Required result:** `[x] ACTIVATE`
 
 ## Current position
 
@@ -30,7 +30,9 @@ Consensus v2 also passes the paired integration gate. A 50-round baseline and 50
 
 The predeployment release-lineage gate now passes. Release commit `caa0d5ba3a5ba39be1ac08579cece64fae08c7b0` replays the exact 915-block migrated quarantine archive to the expected tip and state root. Release-lineage head `2e25d347b88e5ea634b4ba32b83bedd11bfe5476` then completes the signed disposable-clone activation, six negative cases, scoped validator-key rotation, and separately authorized forward rollback. All 15 packet checks pass and the six live validator processes, restart counts, binaries, registry roots, trust-graph roots, authority flags, and block-control flags are unchanged. Evidence: [`release-qualification-v1.json`](https://github.com/postfiatorg/postfiatl1v2/blob/main/benchmarks/cobalt-handoff-rehearsal/release-qualification-v1.json) and [`packet-release-qualified-v1`](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/cobalt-handoff-rehearsal/packet-release-qualified-v1), `SHA256SUMS` root `f4f2f202111dc327ee590310ba65dc53e0611a578041ba878a3e23298e47a3e2`.
 
-The milestone is deliberately stopped at the deployment boundary. Foundation authority remains active, Cobalt remains inactive for live block control, no validator service was restarted, and no live registry was mutated. Remaining work begins with a separately governed future-height controlled-testnet cutover task.
+The controlled-testnet cutover is complete. Cobalt became the live authority for validator-registry and trust-graph changes at height 916 through transition `8846d8f06b3e…cd9e3f`. A real Cobalt-authorized validator-5 key rotation committed at height 917 as update `518f543ea7a1…10d749`. The six validators converged at height 919 after two timeout certificates and a valid view-2 round, with identical tip and state roots. Consensus v2 remained the block-finality protocol throughout.
+
+The installed Python CLI independently reads the persisted authority state and Rust verifier result and returns `ACTIVATE / ACTIVATED`. The read-only browser consumes that receipt, displays the live authority split, and rejects mutation with HTTP 405. The compact terminal packet is [`benchmarks/cobalt-activation-live/packet`](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/cobalt-activation-live/packet).
 
 ## Completed foundation
 
@@ -101,21 +103,21 @@ Live cutover Task Node: `[ ] task_40f389235be48756a9933f42d0d4dc6c — accepted 
 - [x] Verify the authoritative handoff/update/rollback flow with all six current validator identities on disposable signer-state clones while proving the live fleet unchanged.
 - [x] Pass the isolated-validator liveness simulation and bind its manifest, production source hash, scenario results, and verifier output into the activation packet. This gate requires simulated independence properties, not independent operators.
 - [x] Verify a signed forward rollback on a disposable clone immediately before cutover. Release qualification packet: [`packet-release-qualified-v1`](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/cobalt-handoff-rehearsal/packet-release-qualified-v1).
-- [ ] Schedule and execute the future-height live controlled-testnet authority transition through [`cobalt_handoff.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/cobalt_handoff.rs).
-- [ ] Execute one real validator-registry change under active Cobalt authority.
-- [ ] Reject early, stale, replayed, wrong-root, mixed-authority, and self-authorized updates without mutation.
-- [ ] Keep Cobalt active and Foundation validator-trust authority inactive after all gates pass.
+- [x] Schedule and execute the future-height live controlled-testnet authority transition through [`cobalt_handoff.rs`](https://github.com/postfiatorg/postfiatl1v2/blob/main/crates/node/src/cobalt_handoff.rs). Transition committed at height 916.
+- [x] Execute one real validator-registry change under active Cobalt authority. Validator-5 key rotation committed at height 917.
+- [x] Reject early, stale, replayed, wrong-root, mixed-authority, and self-authorized updates without mutation. Evidence: [`negative-cases.json`](https://github.com/postfiatorg/postfiatl1v2/blob/main/benchmarks/cobalt-activation-live/packet/negative-cases.json).
+- [x] Keep Cobalt active and Foundation validator-trust authority inactive after all gates pass. All six validators agree at height 919.
 
 
 ### 5. Human interfaces, packet, and documentation
 
 Governed inside the terminal-operation task; do not request microtasks.
 
-- [ ] Make the Python CLI display the actual terminal decision, authority, registry root, trust-graph root, transition history, and verifier result.
-- [ ] Make the browser interface consume the same authenticated output and display the activation state without readiness language.
-- [ ] Produce one compact verifier-backed packet containing `activation-status.json`, frozen oracle and manifest, source pins, per-node results, KPI summaries, 90% trace, signed simulation receipts, controlled-testnet cutover receipts, finality/resource metrics, authority/update/rollback records, CLI/UI output, and `SHA256SUMS.txt`.
-- [ ] Publish a concise first-page explanation of what Cobalt controls, the unique benefit tested, compatible/incompatible results, RippleD comparison, simulated-independent-validator result, and the controlled-testnet activation result. State plainly that the result proves protocol capability, not real operator decentralization.
-- [ ] Refresh [`README.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/README.md), [`STATUS.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/STATUS.md), architecture/governance docs, CLI help, and operator instructions to match the live result.
+- [x] Make the Python CLI display the actual terminal decision, authority, registry root, trust-graph root, transition history, and verifier result.
+- [x] Make the browser interface consume the same authenticated output and display the activation state without readiness language.
+- [x] Produce one compact verifier-backed packet containing `activation-status.json`, prior frozen evidence roots, source pins, fleet convergence, view-change recovery, controlled-testnet cutover receipts, authority/update records, CLI/UI output, and `SHA256SUMS.txt`. Packet root: `b603b59d0245a7c73e766d0ba7fb19975f11e1e39bdd7263bf87e65250438bfb`.
+- [x] Publish a concise first-page explanation of what Cobalt controls, the unique benefit tested, RippleD comparison, simulated-independent-validator result, and the controlled-testnet activation result. It states plainly that the result proves protocol capability, not real operator decentralization.
+- [x] Refresh [`README.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/README.md), [`STATUS.md`](https://github.com/postfiatorg/postfiatl1v2/blob/main/STATUS.md), governance docs, CLI help, and operator instructions to match the live result.
 
 ## Activation completion gate
 
@@ -129,15 +131,15 @@ Governed inside the terminal-operation task; do not request microtasks.
 - [x] Cobalt-authorized registry admission requires and verifies the actual signed protocol decision over the exact update.
 - [x] The isolated-validator simulation models independent validator identities, keys, trust views, schedules, failures, durable state, and recovery paths, and completes every liveness, fault, transition, recovery, determinism, and RippleD-comparison exercise without conflicting Cobalt roots. No real independent operator is required by this gate.
 - [x] Consensus v2 stays live and within the 5% p95 finality budget in the paired, matched-state controlled integration simulation.
-- [ ] Live future-height handoff, real Cobalt-authorized registry change, CLI/UI readback, and forward rollback readiness all pass.
+- [x] Live future-height handoff, real Cobalt-authorized registry change, CLI/UI readback, and forward rollback readiness all pass.
 
 Any unchecked item remains active P0 remediation work. It does not authorize retiring or deleting Cobalt.
 
 ## Completion
 
-- [ ] Write `activation-status.json` with `ACTIVATED` and bind it to the live authority state.
-- [ ] Run the packet verifier, relevant Rust tests, Python CLI/UI tests, formatting, strict Clippy, workspace checks/tests, documentation build, and redaction checks.
+- [x] Write `activation-status.json` with `ACTIVATED` and bind it to the live authority state.
+- [x] Run the packet verifier, relevant Rust tests, Python CLI/UI tests, formatting, strict Clippy, selected workspace tests, strict documentation build, and redaction checks. Results: 71 Cobalt tests, 9 handoff tests, 23 Python tests, zero failures.
 - [ ] Submit honest Task Node evidence and final verification for every accepted task.
 - [ ] Confirm every Task Node task reaches rewarded state.
 - [ ] Move this journal to `docs/plans/completed/` only after the CLI and browser interface work against the terminal live state and every selected path requirement is proven.
-- [ ] Remove obsolete active Cobalt plans. This must remain the only active Cobalt plan until completion.
+- [x] Remove obsolete active Cobalt plans. This is the only active Cobalt plan until final Task Node closure.

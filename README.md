@@ -8,7 +8,7 @@
 > transactional indexed production engine. Do not place real-value keys or
 > value on this controlled-devnet configuration.
 
-PostFiat is a Rust Layer 1 settlement system for post-quantum, privacy-aware institutional value transfer: transparent accounts use ML-DSA authorization from genesis, shielded settlement is built around Orchard/Halo2-style proofs, and quorum certificates provide deterministic finality. Foundation governance is the default authority. A versioned, consensus-ordered handoff can grant Cobalt authority over validator trust evolution only after distinct ML-DSA-65 approval by the active registry. Cobalt never orders blocks or replaces consensus v2 finality.
+PostFiat is a Rust Layer 1 settlement system for post-quantum, privacy-aware institutional value transfer: transparent accounts use ML-DSA authorization from genesis, shielded settlement is built around Orchard/Halo2-style proofs, and quorum certificates provide deterministic finality. On the controlled testnet, Cobalt has been the live authority for validator-registry and trust-graph changes since height 916. Foundation governance retains unrelated governance scope. Cobalt never orders blocks or replaces Consensus v2 finality.
 
 ```mermaid
 flowchart LR
@@ -22,7 +22,7 @@ flowchart LR
   Governance[Foundation signed governance] --> Registry[Validator registry]
   Registry --> Ordering
 
-  Governance -. signed versioned handoff .-> Cobalt[Cobalt validator-trust governance]
+  Governance -->|ordered activation at height 916| Cobalt[Cobalt validator-trust governance]
   Cobalt --> Registry
 
   Shielded[Shielded Orchard/Halo2 actions] --> Ordering
@@ -39,10 +39,10 @@ flowchart LR
   verifying-key assembly loading. The patch does not intentionally change the
   proof algorithm, verifier equations, transcript, fields, curves, or proof
   encoding. See [Halo2 Dependency And Local Patch Boundary](docs/security/halo2-dependency.md).
-- Versioned governance admission: Foundation mode requires distinct ML-DSA-65
-  authorization by the active registry. A separately signed handoff may enable
-  Cobalt validator-trust updates; mixed authority and new-set self-authorization
-  are rejected.
+- Versioned governance admission: Cobalt-authorized validator-trust updates require
+  a key-bound RBC → ABBA → MVBA → DABC decision certificate. The controlled testnet
+  activated this authority at height 916 and committed its first validator-key
+  rotation at height 917. Mixed authority and new-set self-authorization are rejected.
 - Versioned quorum-certified finality: legacy genesis retains the single-view fail-closed rule; networks with an explicit consensus-v2 activation height use durable prepare/precommit locks, signed timeout certificates, and deterministic proposer rotation.
 - Multiple settlement lanes: consensus-ordered account and issued-asset
   transactions, W6 dual-authorized atomic swaps, FastPay single-owner payments,
@@ -58,7 +58,7 @@ flowchart LR
 | FastPay | Implemented for prefunded single-owner PFT objects with signed admission, distinct-validator certificates, durable apply, and ordered consume-or-cancel recovery. |
 | FastSwap | Implemented for prefunded dual-owner objects with durable reservation, Confirm-or-Cancel certificates, conserved effects, catch-up, and restart recovery. Shared-network activation is a separate deployment decision. |
 | Asset-Orchard | Implemented private ingress, transfer/swap, recovery, and egress path; legacy cleartext note actions are historical-replay-only. |
-| Governance | Foundation is the default authority. The implemented Cobalt lane adds shadow operation and a versioned, replay-safe handoff for validator trust evolution only; consensus v2 remains the sole finality protocol. |
+| Governance | Cobalt is live on the controlled testnet for validator trust evolution; Foundation governance retains other scopes. Consensus v2 remains the sole block-finality protocol. See the [activation packet](benchmarks/cobalt-activation-live/packet/README.md). |
 
 See [Settlement Lanes](docs/architecture/settlement-lanes.md) for the protocol
 boundaries and [Public Launch Boundary](docs/security/public-launch-boundary.md)

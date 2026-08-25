@@ -320,6 +320,23 @@ pub struct CobaltShadowAuthorityLineageResetReceipt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CobaltShadowRegistryLineageResetReceipt {
+    pub schema: String,
+    pub validator_id: String,
+    pub update_id: String,
+    pub previous_registry_root: String,
+    pub registry_root: String,
+    pub previous_trust_graph_root: String,
+    pub trust_graph_root: String,
+    pub archived_state_hash: String,
+    pub archived_protocol_high_watermark: u64,
+    pub archived_protocol_signer_high_watermark: u64,
+    pub archived_contiguous_sequence: u64,
+    pub archive_dir: String,
+    pub new_state_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CobaltShadowHistoryRange {
     pub schema: String,
     pub registry_root: String,
@@ -672,6 +689,58 @@ impl CobaltShadowService {
         Ok(service)
     }
 
+    pub fn open_for_registry_lineage_reset(
+        data_dir: impl Into<PathBuf>,
+        previous_binding: &CobaltShadowRegistryBinding,
+        next_binding: &CobaltShadowRegistryBinding,
+    ) -> io::Result<Self> {
+        let data_dir = data_dir.into();
+        let private = read_bounded_json(&data_dir.join(PRIVATE_FILE), MAX_PRIVATE_FILE_BYTES)?;
+        validate_private_file_permissions(&data_dir.join(PRIVATE_FILE))?;
+        let (state, migrated_v2) = read_or_migrate_state(&data_dir.join(STATE_FILE), &private)?;
+        if migrated_v2 {
+            return Err(invalid(
+                "legacy v2 state cannot perform a registry lineage reset",
+            ));
+        }
+        let history = read_history_file(&data_dir.join(HISTORY_FILE))?;
+        let mut service = Self {
+            data_dir,
+            private,
+            state,
+            history,
+            pending_missing_ranges: Vec::new(),
+        };
+        service.validate_loaded()?;
+        service.validate_registry_manifest(previous_binding)?;
+        service.validate_registry_manifest(next_binding)?;
+
+        let persisted_previous = service.state.registry_root == previous_binding.registry_root
+            && service.state.trust_graph_root == previous_binding.trust_graph.trust_graph_root
+            && service.state.peer_public_keys == previous_binding.peers;
+        let persisted_next = service.state.registry_root == next_binding.registry_root
+            && service.state.trust_graph_root == next_binding.trust_graph.trust_graph_root
+            && service.state.peer_public_keys == next_binding.peers;
+        if !persisted_previous && !persisted_next {
+            return Err(invalid(
+                "persisted Cobalt state matches neither registry lineage boundary",
+            ));
+        }
+
+        // A pre-reset `bind` from an older binary may have persisted the next
+        // roots before discovering that committed history is still bound to
+        // the previous roots. Validate the signed persisted state first, then
+        // restore the previous domain in memory so the journal can be checked
+        // before it is archived and reset atomically.
+        if persisted_next {
+            service.state.registry_root = previous_binding.registry_root.clone();
+            service.state.trust_graph_root = previous_binding.trust_graph.trust_graph_root.clone();
+            service.state.peer_public_keys = previous_binding.peers.clone();
+        }
+        service.validate_history_consistency()?;
+        Ok(service)
+    }
+
     pub fn inspect(data_dir: impl Into<PathBuf>) -> io::Result<CobaltShadowStatus> {
         let data_dir = data_dir.into();
         let private = read_bounded_json(&data_dir.join(PRIVATE_FILE), MAX_PRIVATE_FILE_BYTES)?;
@@ -805,10 +874,7 @@ impl CobaltShadowService {
         Ok(binding)
     }
 
-    pub fn bind_registry_manifest(
-        &mut self,
-        binding: &CobaltShadowRegistryBinding,
-    ) -> io::Result<()> {
+    fn validate_registry_manifest(&self, binding: &CobaltShadowRegistryBinding) -> io::Result<()> {
         if binding.schema != COBALT_SHADOW_REGISTRY_BINDING_SCHEMA {
             return Err(invalid("unsupported Cobalt shadow registry binding schema"));
         }
@@ -875,6 +941,24 @@ impl CobaltShadowService {
         if binding.peers.get(&self.state.identity.node_id) != Some(&self.state.public_key_hex) {
             return Err(invalid(
                 "local Cobalt signer is absent from the live binding",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn bind_registry_manifest(
+        &mut self,
+        binding: &CobaltShadowRegistryBinding,
+    ) -> io::Result<()> {
+        self.validate_registry_manifest(binding)?;
+        if (self.state.registry_root != binding.registry_root
+            || self.state.trust_graph_root != binding.trust_graph.trust_graph_root)
+            && (!self.history.is_empty()
+                || !self.state.protocol_decisions.is_empty()
+                || !self.state.ratification_locks.is_empty())
+        {
+            return Err(invalid(
+                "committed protocol history requires registry-lineage-reset before changing roots",
             ));
         }
         self.bind_registry(
@@ -964,6 +1048,94 @@ impl CobaltShadowService {
             validator_id: self.state.identity.node_id.clone(),
             transition_id: transition.transition_id.clone(),
             registry_root: self.state.registry_root.clone(),
+            trust_graph_root: self.state.trust_graph_root.clone(),
+            archived_state_hash,
+            archived_protocol_high_watermark,
+            archived_protocol_signer_high_watermark,
+            archived_contiguous_sequence,
+            archive_dir: archive_dir.display().to_string(),
+            new_state_hash: self.state.state_hash.clone(),
+        })
+    }
+
+    pub fn reset_registry_lineage(
+        &mut self,
+        previous_binding: &CobaltShadowRegistryBinding,
+        next_binding: &CobaltShadowRegistryBinding,
+        update: &postfiat_types::ValidatorRegistryUpdateRecord,
+        archive_dir: impl Into<PathBuf>,
+    ) -> io::Result<CobaltShadowRegistryLineageResetReceipt> {
+        self.validate_registry_manifest(previous_binding)?;
+        self.validate_registry_manifest(next_binding)?;
+        if self.state.registry_root != previous_binding.registry_root
+            || self.state.trust_graph_root != previous_binding.trust_graph.trust_graph_root
+            || update.chain_id != self.state.identity.chain_id
+            || update.genesis_hash != self.state.identity.genesis_hash
+            || update.protocol_version != self.state.identity.protocol_version
+            || update.previous_registry_root != previous_binding.registry_root
+            || update.new_registry_root != next_binding.registry_root
+            || update.previous_trust_graph_root.as_deref()
+                != Some(previous_binding.trust_graph.trust_graph_root.as_str())
+            || update.new_trust_graph_root.as_deref()
+                != Some(next_binding.trust_graph.trust_graph_root.as_str())
+            || update.new_validators != next_binding.active_validators
+            || update.cobalt_authorizations.len() < update.quorum
+            || update.cobalt_decision_certificate.is_none()
+        {
+            return Err(invalid(
+                "registry lineage reset is not bound to the active Cobalt validator update",
+            ));
+        }
+
+        let archive_dir = archive_dir.into();
+        if archive_dir.exists() {
+            return Err(invalid("registry lineage reset archive already exists"));
+        }
+        fs::create_dir(&archive_dir)?;
+        #[cfg(unix)]
+        fs::set_permissions(&archive_dir, fs::Permissions::from_mode(0o700))?;
+        let archived_state = archive_dir.join(STATE_FILE);
+        let archived_history = archive_dir.join(HISTORY_FILE);
+        fs::copy(self.data_dir.join(STATE_FILE), &archived_state)?;
+        fs::copy(self.data_dir.join(HISTORY_FILE), &archived_history)?;
+        #[cfg(unix)]
+        {
+            fs::set_permissions(&archived_state, fs::Permissions::from_mode(0o600))?;
+            fs::set_permissions(&archived_history, fs::Permissions::from_mode(0o600))?;
+        }
+
+        let archived_state_hash = self.state.state_hash.clone();
+        let archived_protocol_high_watermark = self.state.protocol_high_watermark;
+        let archived_protocol_signer_high_watermark = self.state.protocol_signer_high_watermark;
+        let archived_contiguous_sequence = self.state.contiguous_sequence;
+        let previous_registry_root = previous_binding.registry_root.clone();
+        let previous_trust_graph_root = previous_binding.trust_graph.trust_graph_root.clone();
+
+        let mut history_options = OpenOptions::new();
+        history_options.write(true).truncate(true);
+        let history_file = history_options.open(self.data_dir.join(HISTORY_FILE))?;
+        history_file.sync_all()?;
+        self.history.clear();
+        self.pending_missing_ranges.clear();
+        self.state.outbound_protocol_locks.clear();
+        self.state.ratification_locks.clear();
+        self.state.protocol_decisions.clear();
+        self.state.protocol_high_watermark = 0;
+        self.state.protocol_signer_high_watermark = 0;
+        self.state.contiguous_sequence = 0;
+        self.state.history_anchor_round = None;
+        self.state.history_head = None;
+        self.state.v2_migration = None;
+        self.state.governance_digest = protocol_governance_digest(&BTreeMap::new())?;
+        self.bind_registry_manifest(next_binding)?;
+
+        Ok(CobaltShadowRegistryLineageResetReceipt {
+            schema: "postfiat-cobalt-shadow-registry-lineage-reset-v1".to_string(),
+            validator_id: self.state.identity.node_id.clone(),
+            update_id: update.update_id.clone(),
+            previous_registry_root,
+            registry_root: self.state.registry_root.clone(),
+            previous_trust_graph_root,
             trust_graph_root: self.state.trust_graph_root.clone(),
             archived_state_hash,
             archived_protocol_high_watermark,
@@ -4046,6 +4218,23 @@ mod tests {
         assert_eq!(fleet[0].state.protocol_high_watermark, 1_203);
         assert_eq!(fleet[0].state.protocol_signer_high_watermark, 1_203);
         assert_eq!(fleet[0].state.contiguous_sequence, 1);
+
+        let next_manifest = build_registry_binding_manifest(
+            registry_root.clone(),
+            manifest.validator_registry.clone(),
+            manifest.validator_bindings.clone(),
+            5,
+            1_204,
+        )
+        .expect("build next registry binding");
+        assert_ne!(
+            manifest.trust_graph.trust_graph_root,
+            next_manifest.trust_graph.trust_graph_root
+        );
+        let bind_error = fleet[0]
+            .bind_registry_manifest(&next_manifest)
+            .expect_err("committed history must reject an ordinary root change");
+        assert!(bind_error.to_string().contains("registry-lineage-reset"));
 
         let mut transition = postfiat_types::CobaltGovernanceAuthorityTransitionV1 {
             schema: postfiat_types::COBALT_AUTHORITY_TRANSITION_SCHEMA_V1.to_string(),

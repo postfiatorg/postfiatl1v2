@@ -1,0 +1,20 @@
+{
+  "schema": "postfiat-cobalt-live-liveness-recovery-v1",
+  "block_height": 919,
+  "abandoned_views": [0, 1],
+  "timeout_certificates": [
+    "b27f4931f6b3af194153355921520360a700c60f63da4edb7827725462075cb45909290996e503673347d1c8ac51be70",
+    "63518d57fbfd149eb7438680659d9c89648cd18756e06b749f560d9a1641f9709c9ef7758a054692a868c7ccf86421"
+  ],
+  "committed_view": 2,
+  "proposer": "validator-3",
+  "vote_count": 6,
+  "remote_vote_count": 5,
+  "failed_vote_requests": 0,
+  "failed_certified_sends": 0,
+  "certificate_id": "a63df8c740810a82b0fe6648a955029ca19e6558e03699ca216fb2578198ec3376812cac25978780f8511c589577b964",
+  "round_ok": true,
+  "all_six_converged": true,
+  "durable_history_rewritten": false,
+  "operator_note": "Commands that persist validator safety state must run as the validator service user so validator-owned state remains writable."
+}

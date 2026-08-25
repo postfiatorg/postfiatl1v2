@@ -104,9 +104,12 @@ function renderReadiness(readiness, scenario) {
   setChip("readiness-status", readiness.status, state);
   setRail("readiness", readiness.status, state);
   setText("readiness-decision", readiness.status);
+  const activationCopy = readiness.activation_performed
+    ? "Cobalt is active for controlled-testnet validator-trust governance. Consensus v2 still finalizes blocks."
+    : "Evidence supports an authorized controlled-testnet validator-trust activation.";
   setText("readiness-copy", readiness.ready
-    ? "Evidence supports a separately authorized controlled-testnet validator-trust cutover. No activation has occurred."
-    : "Evidence is incomplete or failed. Keep Foundation authority and remediate the failed checks.");
+    ? activationCopy
+    : "Evidence is incomplete or failed. Hold authority changes and remediate the failed checks.");
   const readout = byId("readiness-readout");
   readout.className = `gate-readout${readiness.ready ? " is-good" : ""}`;
 

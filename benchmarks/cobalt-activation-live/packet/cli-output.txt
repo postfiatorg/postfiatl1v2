@@ -1,0 +1,21 @@
+Cobalt governance check
+Status: PASS
+Authority: Cobalt controls validator-trust governance; Consensus v2 controls blocks
+
+Live controlled-testnet authority
+  Terminal decision: ACTIVATE
+  Authority state: ACTIVATED
+  Node/height: validator-0 / 919
+  Block finality: consensus-v2
+  Registry root: 945768d59349…05c37e
+  Trust graph root: 9221316ae7f0…6b8b13
+  Authority transition: 8846d8f06b3e…cd9e3f at height 916
+  Registry update: 518f543ea7a1…10d749 at height 917
+  Sidecars checked: 1
+  [PASS] Cobalt is the recorded validator-trust authority
+  [PASS] Authority transition is active at the current height
+  [PASS] A Cobalt-authorized registry update is active
+  [PASS] The Rust verifier accepts the Cobalt authority history
+  [PASS] The node and governance agree on six active validators
+  [PASS] Observed sidecars are healthy and bound to the live roots
+  [PASS] Consensus v2 remains block finality

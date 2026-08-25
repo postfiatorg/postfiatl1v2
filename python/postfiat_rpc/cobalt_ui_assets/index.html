@@ -31,14 +31,14 @@
       <section class="status-rail" aria-label="Three distinct Cobalt governance states">
         <div class="rail-node" data-rail="shadow"><span>01</span><strong>Shadow health</strong><em>Checking</em></div>
         <div class="rail-link" aria-hidden="true"></div>
-        <div class="rail-node" data-rail="readiness"><span>02</span><strong>Cutover readiness</strong><em>Checking</em></div>
+        <div class="rail-node" data-rail="readiness"><span>02</span><strong>Activation evidence</strong><em>Checking</em></div>
         <div class="rail-link" aria-hidden="true"></div>
         <div class="rail-node" data-rail="authority"><span>03</span><strong>Actual authority</strong><em>Checking</em></div>
       </section>
 
       <section class="state-legend" aria-label="How to read this interface">
         <p><strong>Shadow health</strong> is current sidecar operation.</p>
-        <p><strong>Cutover readiness</strong> is authenticated rehearsal evidence.</p>
+        <p><strong>Activation evidence</strong> is authenticated rehearsal evidence.</p>
         <p><strong>Actual authority</strong> is the validator-trust mode recorded by the node.</p>
       </section>
 
@@ -91,13 +91,13 @@
 
         <article class="instrument instrument--readiness" aria-labelledby="readiness-title">
           <header class="instrument__header">
-            <div><span class="index">D</span><h2 id="readiness-title">Cutover readiness</h2></div>
+            <div><span class="index">D</span><h2 id="readiness-title">Activation evidence</h2></div>
             <span class="state-chip" id="readiness-status">Loading</span>
           </header>
           <div class="gate-readout" id="readiness-readout">
             <span>Evidence recommendation</span>
             <strong id="readiness-decision">—</strong>
-            <p id="readiness-copy">Authenticating benchmark and disposable handoff packets.</p>
+            <p id="readiness-copy">Reading authenticated live authority evidence.</p>
           </div>
           <dl class="metrics metrics--three">
             <div><dt>Matched cases</dt><dd id="scenario-cases">—</dd></div>
@@ -130,7 +130,7 @@
             <div><dt>Cobalt controls blocks</dt><dd id="cobalt-block-control">—</dd></div>
             <div><dt>Recorded transitions</dt><dd id="actual-transition-count">—</dd></div>
           </dl>
-          <p class="authority-warning">A GO recommendation permits only a later, separately authorized controlled-testnet cutover task. This interface cannot perform it.</p>
+          <p class="authority-warning">Cobalt is active for validator-trust governance. Consensus v2 still finalizes blocks. This interface is read-only.</p>
           <p class="provenance" id="actual-authority-source">—</p>
         </article>
       </section>

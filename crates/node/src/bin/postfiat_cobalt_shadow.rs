@@ -139,6 +139,59 @@ fn run() -> io::Result<()> {
             )?;
             serde_json::to_value(receipt).map_err(json_error)?
         }
+        "registry-lineage-reset" => {
+            let data_dir = required_path(&args, "--data-dir")?;
+            let node_data_dir = required_path(&args, "--node-data-dir")?;
+            let previous_binding: CobaltShadowRegistryBinding = read_bounded_json(
+                &required_path(&args, "--previous-registry-binding")?,
+                4 * 1024 * 1024,
+            )?;
+            let next_binding: CobaltShadowRegistryBinding = read_bounded_json(
+                &required_path(&args, "--registry-binding")?,
+                4 * 1024 * 1024,
+            )?;
+            let store = postfiat_storage::NodeStore::try_new(&node_data_dir)?;
+            let genesis = store.read_genesis()?;
+            let governance = store.read_governance()?;
+            let live_status = postfiat_node::status(postfiat_node::NodeOptions {
+                data_dir: node_data_dir.clone(),
+            })?;
+            let live_registry: ValidatorRegistry = read_bounded_json(
+                &node_data_dir.join("validator_registry.json"),
+                2 * 1024 * 1024,
+            )?;
+            if governance.authority_mode != GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED {
+                return Err(invalid(
+                    "registry lineage reset requires active Cobalt authority",
+                ));
+            }
+            postfiat_node::cobalt_handoff::verify_cobalt_authority_history(&genesis, &governance)?;
+            let update = governance
+                .validator_registry_updates
+                .last()
+                .ok_or_else(|| invalid("registry lineage reset requires a live validator update"))?
+                .clone();
+            if update.activation_height > live_status.block_height
+                || update.new_registry_root != next_binding.registry_root
+                || live_registry != next_binding.validator_registry
+            {
+                return Err(invalid(
+                    "registry lineage reset binding does not match live consensus state",
+                ));
+            }
+            let mut service = CobaltShadowService::open_for_registry_lineage_reset(
+                data_dir,
+                &previous_binding,
+                &next_binding,
+            )?;
+            let receipt = service.reset_registry_lineage(
+                &previous_binding,
+                &next_binding,
+                &update,
+                required_path(&args, "--archive-dir")?,
+            )?;
+            serde_json::to_value(receipt).map_err(json_error)?
+        }
         "propose" => {
             let mut service = CobaltShadowService::open(required_path(&args, "--data-dir")?)?;
             let binding: CobaltShadowRegistryBinding = read_bounded_json(
@@ -346,6 +399,7 @@ fn usage_text() -> &'static str {
   postfiat-cobalt-shadow build-binding --registry-root HASH --validator-registry PATH --validator-bindings PATH --quorum N --activation-height N
   postfiat-cobalt-shadow bind --data-dir PATH --registry-binding PATH
   postfiat-cobalt-shadow authority-lineage-reset --data-dir PATH --node-data-dir PATH --registry-binding PATH --archive-dir PATH
+  postfiat-cobalt-shadow registry-lineage-reset --data-dir PATH --node-data-dir PATH --previous-registry-binding PATH --registry-binding PATH --archive-dir PATH
   postfiat-cobalt-shadow propose --data-dir PATH --registry-binding PATH --round N --payload-hash HASH
   postfiat-cobalt-shadow contribute --data-dir PATH --registry-binding PATH --proposal PATH
   postfiat-cobalt-shadow assemble --registry-binding PATH --proposal PATH --contributions PATH [--previous-ratification PATH]

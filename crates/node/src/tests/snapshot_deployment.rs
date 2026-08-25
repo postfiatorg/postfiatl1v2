@@ -1086,17 +1086,17 @@ fn init_then_run_once() {
             .contains("requires --trust-graph-root"),
         "{nonuniform_missing_root}"
     );
-    let nonuniform_canonical_evidence = verify_governance_with_options(GovernanceVerifyOptions {
-        data_dir: data_dir.clone(),
-        cobalt_mode: "non-uniform".to_string(),
-        trust_graph_root: Some("a".repeat(96)),
-    })
-    .expect_err("non-uniform mode rejects canonical governance evidence");
-    assert!(
-        nonuniform_canonical_evidence
-            .to_string()
-            .contains("canonical governance amendment evidence"),
-        "{nonuniform_canonical_evidence}"
+    let nonuniform_historical_evidence =
+        verify_governance_with_options(GovernanceVerifyOptions {
+            data_dir: data_dir.clone(),
+            cobalt_mode: "non-uniform".to_string(),
+            trust_graph_root: Some("a".repeat(96)),
+        })
+        .expect("non-uniform mode preserves canonical historical amendment evidence");
+    assert!(nonuniform_historical_evidence.verified);
+    assert_eq!(
+        nonuniform_historical_evidence.cobalt_mode,
+        "non_uniform"
     );
     let governance_before_tamper = store.read_governance().expect("governance before tamper");
     let mut governance_with_tampered_vote = governance_before_tamper.clone();

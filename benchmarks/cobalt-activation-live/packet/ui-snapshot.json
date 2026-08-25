@@ -1,0 +1,45 @@
+{
+  "schema": "postfiat-cobalt-governance-ui-snapshot-v2",
+  "collected_at": "2026-08-25T05:13:45.676340Z",
+  "read_only": true,
+  "authority_notice": "Cobalt controls validator-trust governance. Consensus v2 remains block finality. No mutation routes are exposed.",
+  "trust": {
+    "ok": true,
+    "mode": "non_uniform",
+    "active_graph": "live",
+    "view_count": 6,
+    "activation_height": 916,
+    "root": "9221316ae7f0f0e7e58d734700167f73f29aa1240377a8d61c637e7f36c5deb728203fcbb283c9f8f3398fc41d6b8b13"
+  },
+  "proposals": {
+    "authority_mode": 1,
+    "authority_label": "Cobalt validator-trust lane",
+    "active_validator_count": 6,
+    "transition_count": 1,
+    "registry_update_count": 1,
+    "node_status": {
+      "chain_id": "postfiat-wan-devnet-2",
+      "block_height": 919,
+      "state_root": "ffa16323555800df7a4ff7cd336b9b151b0edfcf60954c207b704749133ff4b31ebd24444696d67e652f6e94510f7e60",
+      "node_id": "validator-0"
+    }
+  },
+  "shadow_health": {"ok": true, "node_count": 1},
+  "rehearsal_readiness": {
+    "status": "ACTIVATED",
+    "ready": true,
+    "activation_performed": true,
+    "recommendation": "ACTIVE_COBALT_VALIDATOR_TRUST_AUTHORITY"
+  },
+  "actual_authority": {
+    "known": true,
+    "mode": "cobalt-validator-trust",
+    "foundation_active": false,
+    "cobalt_active": true,
+    "block_finality": "consensus-v2",
+    "controls_block_consensus": false,
+    "transition_count": 1
+  },
+  "mutation_probe_http_status": 405,
+  "errors": []
+}
