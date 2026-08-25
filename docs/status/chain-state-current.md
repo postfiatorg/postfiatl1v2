@@ -1,6 +1,6 @@
 # PostFiat L1 Current State
 
-Updated: `2026-08-25T19:44:14Z`
+Updated: `2026-08-25T19:47:26Z`
 
 Status: authoritative operational-state reference
 
@@ -26,7 +26,7 @@ Those identities are different and must not be collapsed into “`main` is live.
 | Active consensus runtime | All six validator services run release `cobalt-activation-8694b99d` with the same binary hash. The release manifest names Git revision `8694b99d`; the binary's embedded build revision is `116bed84`. | Binary SHA-256 `431f194ba28391eba16c18a96d49c358bd2047d3b37eb0115216f46c6a6783f4`. |
 | Governance auditor | The full Cobalt authority/history verification uses a separate, read-only node binary. It is not the active validator service binary. | Release `cobalt-live-governance-audit-05507758`; SHA-256 `055077582342dd54af0212df82e626cc83aae8af119c09f1cd1309dad906293e`. |
 | Cobalt shadow runtime | All six shadow services were active with the same binary. Validator-0 reported healthy transport, six peers, current catch-up, and the live registry/trust roots. Shadow mode remains advisory and cannot mutate validator state or finalize blocks. | Release `cobalt-shadow-registry-reset-43ac8a7d`; SHA-256 `43ac8a7df13f41d5cfdd783fc983de4e8e91b625e6a705ae342569c5771ad935`. |
-| Repository | `main` contains the E2 packet and the frozen E3 recovery source plus its passing packet. These source/evidence descendants are later than the active runtime and are not deployed. | E2 evidence `b78809908821b77ce0a9943f08ec3c7cae69bf84`; E3 freeze `5c9e543ea0f56e7e6dda85d3a27093e810fdc111`; use `git rev-parse HEAD` for the moving documentation HEAD. |
+| Repository | `main` contains the E2 packet and the frozen E3 recovery source plus its passing packet. These source/evidence descendants are later than the active runtime and are not deployed. | E2 evidence `b78809908821b77ce0a9943f08ec3c7cae69bf84`; E3 freeze `5c9e543ea0f56e7e6dda85d3a27093e810fdc111`; E3 evidence `2e63d6112de5ee7ef4d5ffdf82c4965b4f0956a8`; use `git rev-parse HEAD` for the moving documentation HEAD. |
 | Adversarial verification | E1 is complete across 10,240 generated trust graphs. E2 is complete across 108 validator/strategy cases and 442,368 schedules. E3 is complete across 42 rejected recovery attacks and six byte-identical interrupted recoveries, with zero durable mutation. E4-E6 have not started, so the overall `KEEP_ACTIVE` gate remains open. | E1 completion `9ffa9992`; E2 packet root `8742d960…d7cba3`; E3 packet root `bbab4cab…a61372`; [active milestone](../plans/active/cobalt-adversarial-verification-milestone.md). |
 
 ## Observed Devnet State
@@ -82,8 +82,9 @@ describe the activation/audit source capture and receipts. They are not the
 identity of the active validator binary. The later E2 freeze
 `15ef2307732cf46ff3b921bf02f3ad096dda15f3`, E2 evidence commit
 `b78809908821b77ce0a9943f08ec3c7cae69bf84`, E3 source freeze
-`5c9e543ea0f56e7e6dda85d3a27093e810fdc111`, their evidence packets, and
-this documentation descendant are also not deployed.
+`5c9e543ea0f56e7e6dda85d3a27093e810fdc111`, E3 evidence commit
+`2e63d6112de5ee7ef4d5ffdf82c4965b4f0956a8`, and this documentation
+descendant are also not deployed.
 
 ## Probe And Evidence Boundary
 

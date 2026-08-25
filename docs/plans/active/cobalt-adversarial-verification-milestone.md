@@ -80,6 +80,7 @@ Code references: `crates/cobalt_e2_harness/src/main.rs`,
 Execution: complete
 
 Frozen source revision: `5c9e543ea0f56e7e6dda85d3a27093e810fdc111`.
+Evidence commit: `2e63d6112de5ee7ef4d5ffdf82c4965b4f0956a8`.
 The checksum-bound packet is
 `benchmarks/cobalt-adversarial-verification/e3/`; its
 `SHA256SUMS.txt` hash is
