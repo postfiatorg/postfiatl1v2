@@ -8,10 +8,10 @@ Cobalt does not replace Consensus v2. It controls validator-trust governance onl
 
 This is a protocol-capability milestone, not an operator-recruitment milestone. "Independent validators" in this plan means isolated simulated validator domains with distinct identities, keys, trust views, message schedules, failures, durable state, and recovery paths. One controlled harness may create, run, fault, restart, and inspect all simulated validators under a single test administrator on Post Fiat-controlled compute. Independence is enforced inside the simulation at the identity, state, trust-view, and message-delivery boundaries; it is not supplied by independent human operators, third parties, separate provider accounts, separate machines, or external key custodians. The original Cobalt article did not establish this liveness capability; this simulation must close that evaluation gap by proving five-of-six progress, deterministic recovery, and consistent durable history under isolated-validator faults. Simulation results must be labeled as simulation evidence and must not be presented as proof that the controlled testnet is operationally decentralized.
 
-- **Status:** Active
+- **Status:** Complete — activated on controlled testnet 2026-08-25
 - **Specification:** [Cobalt Activation Research Specification](../../governance/cobalt-activate-or-retire-research-spec.md)
 - **Specification lock task:** `task_a8ffc2885a6fbab8aa06c4b20e92f6b8` — rewarded 2026-08-23
-- **Milestone-document task:** `task_18b8d92d981221b88d0a38159ea1fd26` — accepted
+- **Milestone-document task:** `task_18b8d92d981221b88d0a38159ea1fd26` — rewarded
 - **Required result:** `[x] ACTIVATE`
 
 ## Current position
@@ -97,7 +97,7 @@ Prior operator-onboarding artifacts remain available for a future decentralizati
 
 Predeployment qualification Task Node: `[x] task_3ff910558c03941dbc58f96ca8ef52d5 — rewarded 2026-08-24 (1 PFT)`
 
-Live cutover Task Node: `[ ] task_40f389235be48756a9933f42d0d4dc6c — accepted 2026-08-25`
+Live cutover Task Node: `[x] task_40f389235be48756a9933f42d0d4dc6c — rewarded 2026-08-25 (4.5 PFT; tx F1BD02C1A93A98E28425F7B2C31BAF670A5EA1D008EB8EAE7A237A3086AC77E2)`
 
 - [x] Make a real Cobalt protocol decision certificate mandatory at the consensus admission boundary; validator signatures alone are insufficient.
 - [x] Verify the authoritative handoff/update/rollback flow with all six current validator identities on disposable signer-state clones while proving the live fleet unchanged.
@@ -139,7 +139,7 @@ Any unchecked item remains active P0 remediation work. It does not authorize ret
 
 - [x] Write `activation-status.json` with `ACTIVATED` and bind it to the live authority state.
 - [x] Run the packet verifier, relevant Rust tests, Python CLI/UI tests, formatting, strict Clippy, selected workspace tests, strict documentation build, and redaction checks. Results: 71 Cobalt tests, 9 handoff tests, 23 Python tests, zero failures.
-- [ ] Submit honest Task Node evidence and final verification for every accepted task.
-- [ ] Confirm every Task Node task reaches rewarded state.
-- [ ] Move this journal to `docs/plans/completed/` only after the CLI and browser interface work against the terminal live state and every selected path requirement is proven.
+- [x] Submit honest Task Node evidence and final verification for every accepted task.
+- [x] Confirm every Task Node task reaches rewarded state.
+- [x] Move this journal to `docs/plans/completed/` after the CLI and browser interface work against the terminal live state and every selected path requirement is proven.
 - [x] Remove obsolete active Cobalt plans. This is the only active Cobalt plan until final Task Node closure.

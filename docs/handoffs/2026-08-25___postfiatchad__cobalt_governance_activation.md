@@ -16,7 +16,7 @@ testnet lineage. Consensus v2 remains the only block-finality protocol.
 Deployment was deliberately stopped before live mutation. Foundation authority
 is still active, Cobalt authority is inactive, and no validator service or live
 registry changed. The active milestone remains
-[the Cobalt Activation Milestone](../plans/active/cobalt-activate-or-retire-milestone.md)
+[the Cobalt Activation Milestone](../plans/completed/cobalt-activate-or-retire-milestone.md)
 until the controlled-testnet cutover, one real Cobalt-authorized registry
 change, terminal CLI and browser verification, final packet, and documentation
 are complete.
@@ -174,7 +174,7 @@ because work stopped before deployment.
 
 ## References
 
-- [Active Cobalt Activation Milestone](../plans/active/cobalt-activate-or-retire-milestone.md)
+- [Completed Cobalt Activation Milestone](../plans/completed/cobalt-activate-or-retire-milestone.md)
 - [Locked Activation Research Specification](../governance/cobalt-activate-or-retire-research-spec.md)
 - [Deterministic Governance Overview](../governance/deterministic-governance-overview.md)
 - [Release qualification summary](https://github.com/postfiatorg/postfiatl1v2/blob/main/benchmarks/cobalt-handoff-rehearsal/release-qualification-v1.json)
