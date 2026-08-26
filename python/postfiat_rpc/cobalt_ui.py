@@ -51,10 +51,7 @@ def utc_timestamp() -> str:
 
 
 def read_bounded_bytes(path: Path, limit: int = MAX_GOVERNANCE_BYTES) -> bytes:
-    size = path.stat().st_size
-    if size > limit:
-        raise cobalt.CobaltCliError(f"{path.name} exceeds the {limit}-byte read limit")
-    return path.read_bytes()
+    return cobalt.read_packet_bytes(path, limit)
 
 
 def decode_node_json(path: Path, raw: bytes) -> dict[str, Any]:
@@ -489,7 +486,9 @@ class ActivationStatusCollector:
                 "view_count": verifier.get("active_validator_count", 0),
                 "activation_height": transition.get("activation_height"),
                 "root": status.get("trust_graph_root", "unavailable"),
-                "non_identical_views": True,
+                "non_identical_views": verifier.get(
+                    "g1_non_identical_trust_views", False
+                ),
                 "source": str(self.status_path.resolve()),
             },
             "proposals": proposals,
@@ -532,10 +531,194 @@ class ActivationStatusCollector:
         }
 
 
+class AdversarialPacketCollector:
+    """Build the read-only campaign panel from the authenticated final packet."""
+
+    def __init__(self, packet_dir: Path, manifest_sha256: str) -> None:
+        self.packet_dir = packet_dir
+        self.manifest_sha256 = manifest_sha256
+
+    def collect(self) -> dict[str, Any]:
+        result = cobalt.adversarial_result(
+            self.packet_dir,
+            expected_manifest_sha256=self.manifest_sha256,
+        )
+        live = result["live_authority"]
+        transitions = live.get("authority_transitions", [])
+        rotation = live.get("legitimate_rotation", {})
+        fleet = live.get("fleet", [])
+        rejected = result.get("rejected_cases", [])
+        experiments = result.get("experiments", {})
+        if not all(
+            isinstance(value, expected)
+            for value, expected in (
+                (transitions, list),
+                (rotation, dict),
+                (fleet, list),
+                (rejected, list),
+                (experiments, dict),
+            )
+        ):
+            raise cobalt.CobaltCliError("adversarial interface evidence is malformed")
+
+        items = [
+            {
+                "type": row.get("kind", "authority transition"),
+                "id": short_hash(row.get("transition_id")),
+                "detail": (
+                    f"proposal {short_hash(row.get('proposal_identity'))} · "
+                    f"{len(row.get('authorization_identities', []))} authorizers"
+                ),
+                "height": row.get("height"),
+                "status": "committed" if row.get("accepted") is True else "failed",
+            }
+            for row in transitions
+            if isinstance(row, dict)
+        ]
+        items.append(
+            {
+                "type": "legitimate validator rotation",
+                "id": short_hash(rotation.get("update_id")),
+                "detail": (
+                    f"{rotation.get('subject_node_id', 'unknown')} · proposal "
+                    f"{short_hash(rotation.get('proposal_identity'))}"
+                ),
+                "height": rotation.get("height"),
+                "status": "committed" if rotation.get("accepted") is True else "failed",
+            }
+        )
+        checks = result["checks"]
+        return {
+            "schema": UI_SCHEMA,
+            "collected_at": live.get("observed_at") or utc_timestamp(),
+            "read_only": True,
+            "authority_notice": (
+                "Cobalt controls validator-trust governance. Consensus v2 remains "
+                "block finality. The adversarial panel exposes no mutation route."
+            ),
+            "trust": {
+                "ok": True,
+                "mode": live.get("trust_model", "authenticated packet"),
+                "active_graph": live.get("trust_graph_profile", "recorded live graph"),
+                "view_count": live.get(
+                    "trust_view_count", live.get("validator_count", 0)
+                ),
+                "activation_height": transitions[-1].get("height")
+                if transitions and isinstance(transitions[-1], dict)
+                else None,
+                "root": live.get("trust_graph_root", "unavailable"),
+                "non_identical_views": live.get("non_identical_trust_views") is True,
+                "source": "authenticated adversarial packet",
+            },
+            "proposals": {
+                "source": "authenticated adversarial packet",
+                "authority_mode": 1,
+                "authority_label": "Cobalt validator-trust lane",
+                "active_validator_count": live.get("validator_count", 0),
+                "transition_count": len(transitions),
+                "registry_update_count": 1 if rotation.get("accepted") is True else 0,
+                "amendment_count": 0,
+                "node_status": {
+                    "chain_id": live.get("chain_id"),
+                    "block_height": live.get("height"),
+                    "state_root": live.get("state_root"),
+                    "node_id": "six-validator fleet",
+                },
+                "items": items,
+                "latest_transition": transitions[-1] if transitions else None,
+            },
+            "shadow_health": {
+                "ok": live.get("all_six_converged") is True,
+                "converged": live.get("all_six_converged") is True,
+                "node_count": len(fleet),
+                "digest": live.get("state_root"),
+                "nodes": fleet,
+                "source": "authenticated adversarial packet",
+            },
+            "rehearsal_readiness": {
+                "status": result["status"],
+                "ready": result["ok"] is True,
+                "checks": checks,
+                "scope": result.get("scope"),
+                "recommendation": result["status"],
+                "activation_performed": False,
+                "packets": {},
+            },
+            "scenario": {
+                "mode": "adversarial",
+                "case_count": len(rejected),
+                "rejected_count": sum(
+                    1
+                    for row in rejected
+                    if isinstance(row, dict) and row.get("rejected") is True
+                ),
+                "mutation_count": sum(
+                    1
+                    for row in rejected
+                    if isinstance(row, dict)
+                    and row.get("durable_state_unchanged") is not True
+                ),
+            },
+            "actual_authority": {
+                "known": True,
+                "mode": live.get("authority_mode"),
+                "label": "Cobalt validator-trust lane",
+                "foundation_active": False,
+                "cobalt_active": True,
+                "block_finality": live.get("block_finality"),
+                "controls_block_consensus": False,
+                "transition_count": len(transitions),
+                "source": "authenticated adversarial packet",
+            },
+            "adversarial": {
+                "gate": result["status"],
+                "campaign_complete": result.get("campaign_complete") is True,
+                "experiments": experiments,
+                "experiment_pass_count": sum(
+                    1
+                    for row in experiments.values()
+                    if isinstance(row, dict) and row.get("status") == "passed"
+                ),
+                "rejected_case_count": len(rejected),
+                "rejected_cases": rejected,
+                "proposal_identities": [
+                    row.get("proposal_identity")
+                    for row in transitions
+                    if isinstance(row, dict)
+                ]
+                + [rotation.get("proposal_identity")],
+                "authorization_identities": sorted(
+                    {
+                        identity
+                        for row in transitions
+                        if isinstance(row, dict)
+                        for identity in row.get("authorization_identities", [])
+                        if isinstance(identity, str)
+                    }
+                    | {
+                        identity
+                        for identity in rotation.get("authorization_identities", [])
+                        if isinstance(identity, str)
+                    }
+                ),
+                "protocol_capability_only": result["claims"].get(
+                    "protocol_capability_only"
+                ),
+                "operator_decentralization_proven": result["claims"].get(
+                    "operator_decentralization_proven"
+                ),
+                "proposal_origin": result["claims"].get("proposal_origin"),
+            },
+            "errors": [],
+        }
+
+
 class SnapshotCache:
     def __init__(
         self,
-        collector: SnapshotCollector | ActivationStatusCollector,
+        collector: SnapshotCollector
+        | ActivationStatusCollector
+        | AdversarialPacketCollector,
         ttl_seconds: float,
     ) -> None:
         self.collector = collector
@@ -624,6 +807,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="authenticated live-status JSON for a checkout-independent interface",
     )
     parser.add_argument(
+        "--adversarial-packet",
+        type=Path,
+        help="authenticated completed adversarial packet for the campaign panel",
+    )
+    parser.add_argument(
+        "--adversarial-sha256",
+        default=cobalt.DEFAULT_ADVERSARIAL_PACKET_SHA256,
+        help="pinned SHA-256 of the adversarial SHA256SUMS.txt file",
+    )
+    parser.add_argument(
         "--benchmark-packet",
         type=Path,
         default=Path("benchmarks/cobalt-rippled-liveness/packet"),
@@ -656,10 +849,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise SystemExit("--port must be between 0 and 65535")
     if args.timeout <= 0 or args.refresh_seconds <= 0:
         raise SystemExit("--timeout and --refresh-seconds must be greater than zero")
-    if args.activation_status_file is not None:
-        collector: SnapshotCollector | ActivationStatusCollector = ActivationStatusCollector(
-            args.activation_status_file
+    if args.adversarial_packet is not None and args.activation_status_file is not None:
+        raise SystemExit(
+            "--adversarial-packet and --activation-status-file are mutually exclusive"
         )
+    if args.adversarial_packet is not None:
+        root = cobalt.repository_root()
+        packet_dir = (
+            args.adversarial_packet
+            if args.adversarial_packet.is_absolute()
+            else root / args.adversarial_packet
+        )
+        collector: (
+            SnapshotCollector
+            | ActivationStatusCollector
+            | AdversarialPacketCollector
+        ) = AdversarialPacketCollector(packet_dir, args.adversarial_sha256)
+    elif args.activation_status_file is not None:
+        collector = ActivationStatusCollector(args.activation_status_file)
     else:
         if args.node_data_dir is None or args.shadow_root is None:
             raise SystemExit(

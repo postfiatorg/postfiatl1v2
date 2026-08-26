@@ -12,6 +12,265 @@ from unittest import mock
 from postfiat_rpc import cobalt
 
 
+def write_adversarial_packet(packet: Path, root: Path) -> str:
+    packet.mkdir(parents=True)
+    live_cases = sorted(cobalt.ADVERSARIAL_LIVE_CASES)
+    validators = list(cobalt.ADVERSARIAL_VALIDATORS)
+    authorizers = validators[:5]
+    observed_at = "2026-08-26T04:00:00Z"
+    tip_hash = "11" * 48
+    state_root = "aa" * 48
+    registry_root = "bb" * 48
+    trust_graph_root = "cc" * 48
+    ratification_anchor_id = "22" * 48
+
+    experiment_pins = []
+    experiment_rows = {}
+    for experiment, relative in cobalt.ADVERSARIAL_EXPERIMENT_PACKET_PATHS.items():
+        source = root / relative
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text(f"fixture {experiment}\n", encoding="ascii")
+        source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
+        experiment_pins.append(
+            {
+                "experiment": experiment,
+                "path": relative,
+                "sha256sums_sha256": source_hash,
+            }
+        )
+        experiment_rows[experiment] = {
+            "status": "passed",
+            "summary": "fixture",
+            "sha256sums_sha256": source_hash,
+        }
+
+    publication_documents = []
+    for relative in sorted(cobalt.ADVERSARIAL_PUBLICATION_PATHS):
+        source = root / relative
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text(f"fixture publication {relative}\n", encoding="utf-8")
+        publication_documents.append(
+            {
+                "path": relative,
+                "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+            }
+        )
+
+    transitions = [
+        {
+            "kind": "forward_rollback_to_foundation",
+            "accepted": True,
+            "height": 920,
+            "transition_id": "dd" * 48,
+            "proposal_identity": "validator-2",
+            "authorization_identities": authorizers,
+            "receipt_accepted": True,
+            "finality_confirmed": True,
+            "all_six_converged": True,
+        },
+        {
+            "kind": "return_to_cobalt",
+            "accepted": True,
+            "height": 921,
+            "transition_id": "ee" * 48,
+            "proposal_identity": "validator-3",
+            "authorization_identities": authorizers,
+            "receipt_accepted": True,
+            "finality_confirmed": True,
+            "all_six_converged": True,
+        },
+    ]
+    rotation = {
+        "accepted": True,
+        "stale_key_rejected": True,
+        "height": 922,
+        "update_id": "ff" * 48,
+        "subject_node_id": "validator-5",
+        "proposal_identity": "validator-4",
+        "authorization_identities": authorizers,
+        "receipt_accepted": True,
+        "finality_confirmed": True,
+        "all_six_converged": True,
+        "previous_public_key_sha256": "33" * 32,
+        "new_public_key_sha256": "44" * 32,
+        "ratification_anchor_sequence": 2,
+        "ratification_anchor_id": ratification_anchor_id,
+    }
+    finality_receipts = [
+        {
+            "height": height,
+            "block_hash": f"{height % 256:02x}" * 48,
+            "state_root": state_root,
+            "receipt_accepted": True,
+            "finality_confirmed": True,
+            "all_six_converged": True,
+        }
+        for height in (920, 921, 922)
+    ]
+    fleet = [
+        {
+            "node_id": validator,
+            "height": 922,
+            "tip_hash": tip_hash,
+            "state_root": state_root,
+            "registry_root": registry_root,
+            "trust_graph_root": trust_graph_root,
+            "authority_mode": "cobalt-validator-trust",
+            "ratification_anchor_sequence": 2,
+            "ratification_anchor_id": ratification_anchor_id,
+            "validator_service_active": True,
+            "rpc_service_active": True,
+            "shadow_service_active": True,
+        }
+        for validator in validators
+    ]
+    rejected_cases = []
+    for index, name in enumerate(live_cases):
+        row = {
+            "experiment": "E5",
+            "name": name,
+            "rejected": True,
+            "durable_state_unchanged": True,
+            "reason": "fixture rejection",
+            "verifier_node_id": validators[index % len(validators)],
+            "observed_height": 922,
+            "evidence_sha256": f"{index + 1:02x}" * 32,
+        }
+        if name == "stolen_key_rotation":
+            row.update(
+                {
+                    "signature_count": 1,
+                    "decision_certificate_present": True,
+                    "stolen_validator": "validator-5",
+                    "attempted_subject": "validator-5",
+                }
+            )
+        rejected_cases.append(row)
+
+    browser_snapshot = {
+        "schema": cobalt.ADVERSARIAL_BROWSER_SNAPSHOT_SCHEMA,
+        "collected_at": observed_at,
+        "read_only": True,
+        "actual_authority": {
+            "cobalt_active": True,
+            "controls_block_consensus": False,
+            "block_finality": "consensus-v2",
+        },
+        "adversarial": {
+            "gate": "KEEP_ACTIVE",
+            "campaign_complete": True,
+            "experiment_pass_count": 6,
+            "rejected_case_count": len(live_cases),
+        },
+    }
+    cli_output = (
+        "Final gate: KEEP_ACTIVE\n"
+        "Campaign complete: yes\n"
+        + "\n".join(live_cases)
+        + "\n"
+    )
+    objects = {
+        "adversarial-status.json": {
+            "gate": "KEEP_ACTIVE",
+            "campaign_complete": True,
+            "final_release_gate": "passed",
+            "scope": "protocol capability",
+            "proposal_origin": "Foundation-administered validators",
+            "protocol_capability_only": True,
+            "operator_decentralization_proven": False,
+            "cobalt_scope": "validator-registry ratification",
+            "trust_selection_is_separate": True,
+        },
+        "browser-snapshot.json": browser_snapshot,
+        "experiments.json": {"experiments": experiment_rows},
+        "interfaces.json": {
+            "cli": {
+                "passed": True,
+                "exit_code": 0,
+                "command": "python -m postfiat_rpc.cobalt adversarial",
+                "output_sha256": hashlib.sha256(cli_output.encode("utf-8")).hexdigest(),
+            },
+            "browser": {
+                "passed": True,
+                "read_only": True,
+                "snapshot_get_http_status": 200,
+                "snapshot_get_path": "/api/snapshot",
+                "snapshot_body_sha256": hashlib.sha256(
+                    (json.dumps(browser_snapshot, indent=2, sort_keys=True) + "\n").encode()
+                ).hexdigest(),
+                "mutation_probe_method": "POST",
+                "mutation_probe_path": "/api/snapshot",
+                "mutation_probe_http_status": 405,
+            },
+        },
+        "live-authority.json": {
+            "chain_id": "postfiat-wan-devnet-2",
+            "observed_at": observed_at,
+            "height": 922,
+            "tip_hash": tip_hash,
+            "state_root": state_root,
+            "registry_root": registry_root,
+            "trust_graph_root": trust_graph_root,
+            "ratification_anchor_sequence": 2,
+            "ratification_anchor_id": ratification_anchor_id,
+            "trust_model": "uniform full overlap",
+            "trust_graph_profile": "six validator canonical views",
+            "trust_view_count": 6,
+            "non_identical_trust_views": False,
+            "validator_count": 6,
+            "all_six_converged": True,
+            "authority_mode": "cobalt-validator-trust",
+            "block_finality": "consensus-v2",
+            "cobalt_controls_block_consensus": False,
+            "fleet": fleet,
+            "authority_transitions": transitions,
+            "legitimate_rotation": rotation,
+            "finality_receipts": finality_receipts,
+        },
+        "publication.json": {
+            "published": True,
+            "published_at": observed_at,
+            "operator_boundary_explicit": True,
+            "documents": publication_documents,
+            "article": {
+                "url": "https://postfiat.org/blog/cobalt-further-evaluation/",
+                "http_status": 200,
+                "content_sha256": "55" * 32,
+                "cobalt_active_since_height_916": True,
+                "authority_off_claim_absent": True,
+            },
+            "results": {
+                "path": "docs/governance/cobalt-adversarial-verification-results.md",
+                "published": True,
+                "public_url": "https://postfiat.org/docs/cobalt-adversarial-results/",
+            },
+        },
+        "rejected-cases.json": {"cases": rejected_cases},
+        "source-pins.json": {"experiment_packets": experiment_pins},
+        "verifier.json": {
+            "schema": cobalt.ADVERSARIAL_PACKET_SCHEMA,
+            "result": "passed",
+            "checks": {
+                name: True for name in cobalt.ADVERSARIAL_REQUIRED_CHECKS
+            },
+        },
+    }
+    for name, value in objects.items():
+        (packet / name).write_text(
+            json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+    (packet / "README.md").write_text("# Fixture\n", encoding="utf-8")
+    (packet / "cli-output.txt").write_text(cli_output, encoding="utf-8")
+    (packet / "verify_packet.py").write_text("print('fixture')\n", encoding="utf-8")
+    lines = [
+        f"{hashlib.sha256((packet / name).read_bytes()).hexdigest()}  {name}"
+        for name in sorted(cobalt.ADVERSARIAL_REQUIRED_FILES)
+    ]
+    manifest = ("\n".join(lines) + "\n").encode("ascii")
+    (packet / "SHA256SUMS.txt").write_bytes(manifest)
+    return hashlib.sha256(manifest).hexdigest()
+
+
 def report_for(spec: cobalt.ExampleSpec) -> dict:
     if spec.command == "trust-graph":
         return {
@@ -295,6 +554,60 @@ class CobaltCliTests(unittest.TestCase):
 
             with self.assertRaisesRegex(cobalt.CobaltCliError, "checksum mismatch"):
                 cobalt.scenario_result(packet)
+
+    def test_adversarial_command_authenticates_and_renders_complete_campaign(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "source"
+            packet = Path(directory) / "packet"
+            packet_root = write_adversarial_packet(packet, root)
+
+            with mock.patch.object(cobalt, "repository_root", return_value=root):
+                result = cobalt.adversarial_result(
+                    packet, expected_manifest_sha256=packet_root
+                )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["status"], "KEEP_ACTIVE")
+        self.assertEqual(len(result["rejected_cases"]), 9)
+        rendered = cobalt.render_human(result)
+        self.assertIn("Final gate: KEEP_ACTIVE", rendered)
+        self.assertIn("stolen_key_rotation: fixture rejection", rendered)
+
+    def test_adversarial_command_rejects_rehashed_semantic_tampering(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "source"
+            packet = Path(directory) / "packet"
+            write_adversarial_packet(packet, root)
+            status_path = packet / "adversarial-status.json"
+            status = json.loads(status_path.read_text(encoding="utf-8"))
+            status["gate"] = "ROLLED_BACK"
+            status_path.write_text(
+                json.dumps(status, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
+            lines = [
+                f"{hashlib.sha256((packet / name).read_bytes()).hexdigest()}  {name}"
+                for name in sorted(cobalt.ADVERSARIAL_REQUIRED_FILES)
+            ]
+            manifest = ("\n".join(lines) + "\n").encode("ascii")
+            (packet / "SHA256SUMS.txt").write_bytes(manifest)
+            packet_root = hashlib.sha256(manifest).hexdigest()
+
+            with mock.patch.object(cobalt, "repository_root", return_value=root):
+                with self.assertRaisesRegex(cobalt.CobaltCliError, "semantic verifier"):
+                    cobalt.adversarial_result(
+                        packet, expected_manifest_sha256=packet_root
+                    )
+
+    def test_packet_reader_rejects_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "target.json"
+            target.write_text("{}\n", encoding="utf-8")
+            link = root / "packet.json"
+            link.symlink_to(target)
+
+            with self.assertRaisesRegex(cobalt.CobaltCliError, "symlink|cannot open"):
+                cobalt.read_packet_bytes(link)
 
     def test_packet_authentication_rejects_manifest_path_traversal(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

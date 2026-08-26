@@ -22,6 +22,7 @@ import os
 import re
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -44,6 +45,66 @@ DEFAULT_HANDOFF_PACKET_SHA256 = (
 DEFAULT_HANDOFF_VERIFIER_SHA256 = (
     "dfb9000d272f71d6d1578b7d8332a844a142d8d08d561889da2b3842f62cc9e9"
 )
+ADVERSARIAL_PACKET_SCHEMA = "postfiat-cobalt-adversarial-verifier-v1"
+ADVERSARIAL_BROWSER_SNAPSHOT_SCHEMA = "postfiat-cobalt-governance-ui-snapshot-v2"
+DEFAULT_ADVERSARIAL_PACKET_SHA256 = "0" * 64
+ADVERSARIAL_REQUIRED_FILES = {
+    "README.md",
+    "adversarial-status.json",
+    "browser-snapshot.json",
+    "cli-output.txt",
+    "experiments.json",
+    "interfaces.json",
+    "live-authority.json",
+    "publication.json",
+    "rejected-cases.json",
+    "source-pins.json",
+    "verifier.json",
+    "verify_packet.py",
+}
+ADVERSARIAL_REQUIRED_CHECKS = {
+    "all_experiments_passed",
+    "authority_transitions_committed",
+    "checksum_manifest_complete",
+    "cli_and_browser_pass",
+    "consensus_v2_scope_preserved",
+    "final_gate_keep_active",
+    "final_release_gate_passed",
+    "live_negative_cases_rejected",
+    "operator_boundary_explicit",
+    "publication_complete",
+    "publication_documents_bound",
+    "redaction_safe",
+    "source_packets_bound",
+    "stolen_key_rejected",
+    "valid_live_authority",
+}
+ADVERSARIAL_LIVE_CASES = {
+    "cross_chain",
+    "early",
+    "mixed_authority",
+    "replayed",
+    "replayed_rollback",
+    "self_authorized",
+    "stale",
+    "stolen_key_rotation",
+    "wrong_root",
+}
+ADVERSARIAL_VALIDATORS = tuple(f"validator-{index}" for index in range(6))
+ADVERSARIAL_EXPERIMENT_PACKET_PATHS = {
+    f"E{index}": (
+        f"benchmarks/cobalt-adversarial-verification/e{index}/SHA256SUMS.txt"
+    )
+    for index in range(1, 7)
+}
+ADVERSARIAL_PUBLICATION_PATHS = {
+    "README.md",
+    "STATUS.md",
+    "docs/governance/cobalt-adversarial-verification-results.md",
+    "docs/plans/completed/cobalt-adversarial-verification-milestone.md",
+    "docs/status/chain-state-current.md",
+    "mkdocs.yml",
+}
 BENCHMARK_REQUIRED_FILES = {
     "cobalt-report.json",
     "kpi-report.json",
@@ -142,18 +203,40 @@ def sha256_bytes(payload: bytes) -> str:
 
 
 def read_packet_bytes(path: Path, limit: int = MAX_REPORT_BYTES) -> bytes:
+    flags = os.O_RDONLY
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    if hasattr(os, "O_NONBLOCK"):
+        flags |= os.O_NONBLOCK
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
     try:
-        if path.is_symlink() or not path.is_file():
-            raise CobaltCliError(f"packet file is missing or not regular: {path.name}")
-        size = path.stat().st_size
+        if stat.S_ISLNK(path.lstat().st_mode):
+            raise CobaltCliError(f"packet file must not be a symlink: {path.name}")
+        descriptor = os.open(path, flags)
     except OSError as error:
-        raise CobaltCliError(f"cannot inspect packet file {path.name}: {error}") from error
-    if size > limit:
-        raise CobaltCliError(f"packet file {path.name} exceeds the {limit}-byte read limit")
+        raise CobaltCliError(f"cannot open packet file {path.name}: {error}") from error
     try:
-        return path.read_bytes()
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise CobaltCliError(
+                f"packet file is missing or not regular: {path.name}"
+            )
+        if metadata.st_size > limit:
+            raise CobaltCliError(
+                f"packet file {path.name} exceeds the {limit}-byte read limit"
+            )
+        with os.fdopen(descriptor, "rb", closefd=False) as handle:
+            payload = handle.read(limit + 1)
+        if len(payload) > limit:
+            raise CobaltCliError(
+                f"packet file {path.name} grew beyond the {limit}-byte read limit"
+            )
+        return payload
     except OSError as error:
         raise CobaltCliError(f"cannot read packet file {path.name}: {error}") from error
+    finally:
+        os.close(descriptor)
 
 
 def read_packet_json(path: Path) -> dict[str, Any]:
@@ -514,6 +597,529 @@ def verify_packet(
         "manifest_sha256": manifest_sha256,
         "verifier_sha256": verifier_sha256,
         "verifier": verifier,
+    }
+
+
+def adversarial_result(
+    packet_dir: Path,
+    *,
+    expected_manifest_sha256: str = DEFAULT_ADVERSARIAL_PACKET_SHA256,
+) -> dict[str, Any]:
+    """Authenticate and render the completed Cobalt adversarial campaign."""
+
+    packet_dir = packet_dir.resolve()
+    if not packet_dir.is_dir():
+        raise CobaltCliError(f"packet directory does not exist: {packet_dir}")
+    manifest_path = packet_dir / "SHA256SUMS.txt"
+    manifest_payload = read_packet_bytes(manifest_path, MAX_CHECKSUM_MANIFEST_BYTES)
+    manifest_sha256 = sha256_bytes(manifest_payload)
+    if manifest_sha256 != expected_manifest_sha256:
+        raise CobaltCliError(
+            "adversarial packet checksum root mismatch: "
+            f"expected {expected_manifest_sha256}, received {manifest_sha256}"
+        )
+    try:
+        lines = manifest_payload.decode("ascii").splitlines()
+    except UnicodeDecodeError as error:
+        raise CobaltCliError("adversarial checksum manifest is not ASCII") from error
+    if not lines or len(lines) > MAX_PACKET_FILES:
+        raise CobaltCliError("adversarial checksum manifest has an invalid file count")
+
+    checksums: dict[str, str] = {}
+    for line in lines:
+        digest, separator, name = line.partition("  ")
+        path_name = PurePosixPath(name)
+        if (
+            separator != "  "
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+            or not name
+            or path_name.is_absolute()
+            or len(path_name.parts) != 1
+            or path_name.parts[0] in {".", ".."}
+            or name in checksums
+        ):
+            raise CobaltCliError(
+                "adversarial checksum manifest contains a malformed entry"
+            )
+        checksums[name] = digest
+    if set(checksums) != ADVERSARIAL_REQUIRED_FILES:
+        missing = sorted(ADVERSARIAL_REQUIRED_FILES - checksums.keys())
+        extra = sorted(checksums.keys() - ADVERSARIAL_REQUIRED_FILES)
+        detail = []
+        if missing:
+            detail.append(f"missing: {', '.join(missing)}")
+        if extra:
+            detail.append(f"unexpected: {', '.join(extra)}")
+        raise CobaltCliError(
+            "adversarial checksum manifest file set is incomplete"
+            + (f" ({'; '.join(detail)})" if detail else "")
+        )
+    for name, expected in checksums.items():
+        actual = sha256_bytes(read_packet_bytes(packet_dir / name))
+        if actual != expected:
+            raise CobaltCliError(f"adversarial packet checksum mismatch for {name}")
+
+    status = read_packet_json(packet_dir / "adversarial-status.json")
+    browser_snapshot = read_packet_json(packet_dir / "browser-snapshot.json")
+    experiments = read_packet_json(packet_dir / "experiments.json")
+    live = read_packet_json(packet_dir / "live-authority.json")
+    rejected = read_packet_json(packet_dir / "rejected-cases.json")
+    interfaces = read_packet_json(packet_dir / "interfaces.json")
+    publication = read_packet_json(packet_dir / "publication.json")
+    pins = read_packet_json(packet_dir / "source-pins.json")
+    verifier = read_packet_json(packet_dir / "verifier.json")
+    try:
+        cli_output = read_packet_bytes(packet_dir / "cli-output.txt").decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise CobaltCliError("adversarial CLI output is not UTF-8") from error
+
+    experiment_rows = experiments.get("experiments")
+    cases = rejected.get("cases")
+    transitions = live.get("authority_transitions")
+    packet_pins = pins.get("experiment_packets")
+    verifier_checks = verifier.get("checks")
+    if not all(
+        isinstance(value, expected_type)
+        for value, expected_type in (
+            (experiment_rows, dict),
+            (cases, list),
+            (transitions, list),
+            (packet_pins, list),
+            (verifier_checks, dict),
+        )
+    ):
+        raise CobaltCliError("adversarial packet structure is malformed")
+
+    def is_hex_digest(value: Any, characters: int) -> bool:
+        return (
+            isinstance(value, str)
+            and re.fullmatch(rf"[0-9a-f]{{{characters}}}", value) is not None
+        )
+
+    expected_experiments = {f"E{index}" for index in range(1, 7)}
+    all_experiments_passed = (
+        set(experiment_rows) == expected_experiments
+        and all(
+            isinstance(experiment_rows[name], dict)
+            and experiment_rows[name].get("status") == "passed"
+            and is_hex_digest(
+                experiment_rows[name].get("sha256sums_sha256"), 64
+            )
+            for name in expected_experiments
+        )
+    )
+
+    case_by_name = {
+        row.get("name"): row
+        for row in cases
+        if isinstance(row, dict) and isinstance(row.get("name"), str)
+    }
+    case_names = set(case_by_name)
+    live_negative_cases_rejected = (
+        len(cases) == len(case_by_name) == len(ADVERSARIAL_LIVE_CASES)
+        and case_names == ADVERSARIAL_LIVE_CASES
+        and all(
+            row.get("experiment") == "E5"
+            and row.get("rejected") is True
+            and row.get("durable_state_unchanged") is True
+            and isinstance(row.get("reason"), str)
+            and bool(row["reason"].strip())
+            and row.get("verifier_node_id") in ADVERSARIAL_VALIDATORS
+            and isinstance(row.get("observed_height"), int)
+            and row["observed_height"] > 0
+            and is_hex_digest(row.get("evidence_sha256"), 64)
+            for row in case_by_name.values()
+        )
+    )
+
+    active_validators = set(ADVERSARIAL_VALIDATORS)
+
+    def valid_authorized_action(row: Any, identifier: str) -> bool:
+        if not isinstance(row, dict):
+            return False
+        authorizers = row.get("authorization_identities")
+        return (
+            row.get("accepted") is True
+            and isinstance(row.get("height"), int)
+            and row["height"] > 0
+            and is_hex_digest(row.get(identifier), 96)
+            and row.get("proposal_identity") in active_validators
+            and isinstance(authorizers, list)
+            and len(authorizers) >= 5
+            and len(authorizers) <= len(active_validators)
+            and authorizers == sorted(set(authorizers))
+            and set(authorizers).issubset(active_validators)
+            and row.get("receipt_accepted") is True
+            and row.get("finality_confirmed") is True
+            and row.get("all_six_converged") is True
+        )
+
+    expected_transition_kinds = (
+        "forward_rollback_to_foundation",
+        "return_to_cobalt",
+    )
+    transitions_by_kind = {
+        row.get("kind"): row
+        for row in transitions
+        if isinstance(row, dict) and isinstance(row.get("kind"), str)
+    }
+    authority_transitions_committed = (
+        len(transitions) == len(transitions_by_kind) == 2
+        and set(transitions_by_kind) == set(expected_transition_kinds)
+        and all(
+            valid_authorized_action(transitions_by_kind[kind], "transition_id")
+            for kind in expected_transition_kinds
+        )
+        and transitions_by_kind["forward_rollback_to_foundation"]["height"]
+        < transitions_by_kind["return_to_cobalt"]["height"]
+    )
+
+    rotation = live.get("legitimate_rotation")
+    valid_rotation = (
+        valid_authorized_action(rotation, "update_id")
+        and rotation.get("subject_node_id") == "validator-5"
+        and rotation.get("stale_key_rejected") is True
+        and is_hex_digest(rotation.get("previous_public_key_sha256"), 64)
+        and is_hex_digest(rotation.get("new_public_key_sha256"), 64)
+        and rotation.get("previous_public_key_sha256")
+        != rotation.get("new_public_key_sha256")
+        and rotation.get("ratification_anchor_sequence") == 2
+        and is_hex_digest(rotation.get("ratification_anchor_id"), 96)
+    )
+    transition_heights = {
+        row["height"]
+        for row in transitions_by_kind.values()
+        if isinstance(row, dict) and isinstance(row.get("height"), int)
+    }
+    finality_receipts = live.get("finality_receipts")
+    finality_receipts_valid = (
+        isinstance(finality_receipts, list)
+        and len(finality_receipts) >= 3
+        and all(
+            isinstance(row, dict)
+            and isinstance(row.get("height"), int)
+            and row["height"] > 0
+            and is_hex_digest(row.get("block_hash"), 96)
+            and is_hex_digest(row.get("state_root"), 96)
+            and row.get("receipt_accepted") is True
+            and row.get("finality_confirmed") is True
+            and row.get("all_six_converged") is True
+            for row in finality_receipts
+        )
+        and transition_heights.issubset(
+            {
+                row["height"]
+                for row in finality_receipts
+                if isinstance(row, dict) and isinstance(row.get("height"), int)
+            }
+        )
+        and isinstance(rotation, dict)
+        and rotation.get("height")
+        in {
+            row["height"]
+            for row in finality_receipts
+            if isinstance(row, dict) and isinstance(row.get("height"), int)
+        }
+    )
+
+    fleet = live.get("fleet")
+    fleet_valid = (
+        isinstance(fleet, list)
+        and len(fleet) == len(ADVERSARIAL_VALIDATORS)
+        and [row.get("node_id") for row in fleet if isinstance(row, dict)]
+        == list(ADVERSARIAL_VALIDATORS)
+        and all(
+            row.get("height") == live.get("height")
+            and row.get("tip_hash") == live.get("tip_hash")
+            and row.get("state_root") == live.get("state_root")
+            and row.get("registry_root") == live.get("registry_root")
+            and row.get("trust_graph_root") == live.get("trust_graph_root")
+            and row.get("authority_mode") == live.get("authority_mode")
+            and row.get("ratification_anchor_sequence")
+            == live.get("ratification_anchor_sequence")
+            and row.get("ratification_anchor_id")
+            == live.get("ratification_anchor_id")
+            and row.get("validator_service_active") is True
+            and row.get("rpc_service_active") is True
+            and row.get("shadow_service_active") is True
+            for row in fleet
+            if isinstance(row, dict)
+        )
+    )
+    valid_live_authority = (
+        live.get("chain_id") == "postfiat-wan-devnet-2"
+        and isinstance(live.get("observed_at"), str)
+        and re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z",
+            live["observed_at"],
+        )
+        is not None
+        and live.get("authority_mode") == "cobalt-validator-trust"
+        and live.get("validator_count") == 6
+        and live.get("all_six_converged") is True
+        and isinstance(live.get("height"), int)
+        and isinstance(rotation, dict)
+        and live["height"] >= rotation.get("height", 0)
+        and is_hex_digest(live.get("tip_hash"), 96)
+        and is_hex_digest(live.get("state_root"), 96)
+        and is_hex_digest(live.get("registry_root"), 96)
+        and is_hex_digest(live.get("trust_graph_root"), 96)
+        and live.get("ratification_anchor_sequence") == 2
+        and is_hex_digest(live.get("ratification_anchor_id"), 96)
+        and isinstance(live.get("trust_model"), str)
+        and bool(live["trust_model"].strip())
+        and isinstance(live.get("trust_graph_profile"), str)
+        and bool(live["trust_graph_profile"].strip())
+        and live.get("trust_view_count") == 6
+        and isinstance(live.get("non_identical_trust_views"), bool)
+        and authority_transitions_committed
+        and valid_rotation
+        and finality_receipts_valid
+        and fleet_valid
+    )
+
+    root = repository_root(packet_dir)
+    source_packets_bound = len(packet_pins) == len(
+        ADVERSARIAL_EXPERIMENT_PACKET_PATHS
+    )
+    seen_packet_pins: set[str] = set()
+    for row in packet_pins:
+        if not isinstance(row, dict):
+            source_packets_bound = False
+            break
+        experiment = row.get("experiment")
+        path = row.get("path")
+        expected = row.get("sha256sums_sha256")
+        expected_path = ADVERSARIAL_EXPERIMENT_PACKET_PATHS.get(experiment)
+        if (
+            not isinstance(experiment, str)
+            or experiment in seen_packet_pins
+            or expected_path is None
+            or path != expected_path
+            or not isinstance(expected, str)
+            or re.fullmatch(r"[0-9a-f]{64}", expected) is None
+        ):
+            source_packets_bound = False
+            break
+        seen_packet_pins.add(experiment)
+        source = root / expected_path
+        try:
+            actual = sha256_bytes(
+                read_packet_bytes(source, MAX_CHECKSUM_MANIFEST_BYTES)
+            )
+        except CobaltCliError:
+            source_packets_bound = False
+            break
+        if actual != expected:
+            source_packets_bound = False
+            break
+    source_packets_bound = source_packets_bound and seen_packet_pins == set(
+        ADVERSARIAL_EXPERIMENT_PACKET_PATHS
+    )
+
+    publication_rows = publication.get("documents")
+    publication_documents_bound = (
+        isinstance(publication_rows, list)
+        and len(publication_rows) == len(ADVERSARIAL_PUBLICATION_PATHS)
+    )
+    seen_publication_paths: set[str] = set()
+    if isinstance(publication_rows, list):
+        for row in publication_rows:
+            if not isinstance(row, dict):
+                publication_documents_bound = False
+                break
+            path = row.get("path")
+            expected = row.get("sha256")
+            if (
+                path not in ADVERSARIAL_PUBLICATION_PATHS
+                or path in seen_publication_paths
+                or not is_hex_digest(expected, 64)
+            ):
+                publication_documents_bound = False
+                break
+            seen_publication_paths.add(path)
+            try:
+                actual = sha256_bytes(read_packet_bytes(root / path))
+            except CobaltCliError:
+                publication_documents_bound = False
+                break
+            if actual != expected:
+                publication_documents_bound = False
+                break
+    publication_documents_bound = (
+        publication_documents_bound
+        and seen_publication_paths == ADVERSARIAL_PUBLICATION_PATHS
+    )
+
+    cli = interfaces.get("cli")
+    browser = interfaces.get("browser")
+    snapshot_adversarial = browser_snapshot.get("adversarial")
+    snapshot_authority = browser_snapshot.get("actual_authority")
+    cli_and_browser_pass = (
+        isinstance(cli, dict)
+        and cli.get("passed") is True
+        and cli.get("exit_code") == 0
+        and cli.get("command")
+        == "python -m postfiat_rpc.cobalt adversarial"
+        and cli.get("output_sha256")
+        == sha256_bytes(cli_output.encode("utf-8"))
+        and "Final gate: KEEP_ACTIVE" in cli_output
+        and "Campaign complete: yes" in cli_output
+        and all(name in cli_output for name in ADVERSARIAL_LIVE_CASES)
+        and isinstance(browser, dict)
+        and browser.get("passed") is True
+        and browser.get("read_only") is True
+        and browser.get("snapshot_get_http_status") == 200
+        and browser.get("snapshot_get_path") == "/api/snapshot"
+        and browser.get("snapshot_body_sha256")
+        == sha256_bytes(read_packet_bytes(packet_dir / "browser-snapshot.json"))
+        and browser.get("mutation_probe_method") == "POST"
+        and browser.get("mutation_probe_path") == "/api/snapshot"
+        and browser.get("mutation_probe_http_status") == 405
+        and browser_snapshot.get("schema") == ADVERSARIAL_BROWSER_SNAPSHOT_SCHEMA
+        and browser_snapshot.get("collected_at") == live.get("observed_at")
+        and browser_snapshot.get("read_only") is True
+        and isinstance(snapshot_adversarial, dict)
+        and snapshot_adversarial.get("gate") == "KEEP_ACTIVE"
+        and snapshot_adversarial.get("campaign_complete") is True
+        and snapshot_adversarial.get("experiment_pass_count") == 6
+        and snapshot_adversarial.get("rejected_case_count")
+        == len(ADVERSARIAL_LIVE_CASES)
+        and isinstance(snapshot_authority, dict)
+        and snapshot_authority.get("cobalt_active") is True
+        and snapshot_authority.get("controls_block_consensus") is False
+        and snapshot_authority.get("block_finality") == "consensus-v2"
+    )
+    operator_boundary_explicit = (
+        status.get("proposal_origin") == "Foundation-administered validators"
+        and status.get("protocol_capability_only") is True
+        and status.get("operator_decentralization_proven") is False
+        and status.get("cobalt_scope") == "validator-registry ratification"
+        and status.get("trust_selection_is_separate") is True
+        and publication.get("operator_boundary_explicit") is True
+    )
+    article = publication.get("article")
+    results_publication = publication.get("results")
+    publication_complete = (
+        publication.get("published") is True
+        and isinstance(publication.get("published_at"), str)
+        and re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z",
+            publication["published_at"],
+        )
+        is not None
+        and publication_documents_bound
+        and isinstance(article, dict)
+        and article.get("url")
+        == "https://postfiat.org/blog/cobalt-further-evaluation/"
+        and article.get("http_status") == 200
+        and is_hex_digest(article.get("content_sha256"), 64)
+        and article.get("cobalt_active_since_height_916") is True
+        and article.get("authority_off_claim_absent") is True
+        and isinstance(results_publication, dict)
+        and results_publication.get("path")
+        == "docs/governance/cobalt-adversarial-verification-results.md"
+        and results_publication.get("published") is True
+        and isinstance(results_publication.get("public_url"), str)
+        and results_publication["public_url"].startswith("https://")
+    )
+    stolen_case = case_by_name.get("stolen_key_rotation")
+    stolen_key_rejected = (
+        isinstance(stolen_case, dict)
+        and stolen_case.get("rejected") is True
+        and stolen_case.get("signature_count") == 1
+        and stolen_case.get("decision_certificate_present") is True
+        and stolen_case.get("stolen_validator") == "validator-5"
+        and stolen_case.get("attempted_subject") == "validator-5"
+    )
+    semantic_checks = {
+        "all_experiments_passed": all_experiments_passed,
+        "authority_transitions_committed": authority_transitions_committed,
+        "checksum_manifest_complete": set(checksums) == ADVERSARIAL_REQUIRED_FILES,
+        "cli_and_browser_pass": cli_and_browser_pass,
+        "consensus_v2_scope_preserved": live.get("block_finality") == "consensus-v2"
+        and live.get("cobalt_controls_block_consensus") is False,
+        "final_gate_keep_active": status.get("gate") == "KEEP_ACTIVE"
+        and status.get("campaign_complete") is True,
+        "final_release_gate_passed": status.get("final_release_gate") == "passed",
+        "live_negative_cases_rejected": live_negative_cases_rejected,
+        "operator_boundary_explicit": operator_boundary_explicit,
+        "publication_complete": publication_complete,
+        "publication_documents_bound": publication_documents_bound,
+        "redaction_safe": True,
+        "source_packets_bound": source_packets_bound,
+        "stolen_key_rejected": stolen_key_rejected,
+        "valid_live_authority": valid_live_authority,
+    }
+    scan = b"\n".join(
+        read_packet_bytes(packet_dir / name).lower()
+        for name in ADVERSARIAL_REQUIRED_FILES
+        if name != "verify_packet.py"
+    )
+    semantic_checks["redaction_safe"] = all(
+        marker not in scan
+        for marker in (
+            b"/home/",
+            b'"api_key"',
+            b'"private_key"',
+            b'"private_key_hex"',
+            b'"secret_key"',
+            b'"seed_hex"',
+            b'"signature_hex"',
+        )
+    )
+    if (
+        verifier.get("schema") != ADVERSARIAL_PACKET_SCHEMA
+        or verifier.get("result") != "passed"
+        or set(verifier_checks) != ADVERSARIAL_REQUIRED_CHECKS
+        or verifier_checks != semantic_checks
+        or not all(semantic_checks.values())
+    ):
+        raise CobaltCliError(
+            "adversarial packet semantic verifier is missing, failed, or inconsistent"
+        )
+
+    return {
+        "schema": CLI_SCHEMA,
+        "command": "adversarial",
+        "ok": True,
+        "status": status["gate"],
+        "campaign_complete": True,
+        "scope": status.get("scope"),
+        "authority": {
+            "mode": live["authority_mode"],
+            "live": True,
+            "writes_validator_registry": True,
+            "controls_block_consensus": False,
+        },
+        "block_finality": live["block_finality"],
+        "live_authority": live,
+        "experiments": experiment_rows,
+        "rejected_cases": cases,
+        "checks": [
+            {
+                "key": key,
+                "label": key.replace("_", " "),
+                "ok": value,
+                "source": "authenticated adversarial packet",
+            }
+            for key, value in semantic_checks.items()
+        ],
+        "packet": {
+            "directory": str(packet_dir),
+            "manifest_sha256": manifest_sha256,
+            "verifier_sha256": sha256_bytes(
+                read_packet_bytes(packet_dir / "verifier.json")
+            ),
+        },
+        "claims": {
+            "protocol_capability_only": status.get("protocol_capability_only"),
+            "operator_decentralization_proven": status.get(
+                "operator_decentralization_proven"
+            ),
+            "proposal_origin": status.get("proposal_origin"),
+        },
     }
 
 
@@ -1062,7 +1668,8 @@ def render_human(result: dict[str, Any]) -> str:
     command = result["command"]
     authority_line = (
         "Authority: Cobalt controls validator-trust governance; Consensus v2 controls blocks"
-        if command == "live-status" and result.get("authority", {}).get("live") is True
+        if command in {"live-status", "adversarial"}
+        and result.get("authority", {}).get("live") is True
         else "Authority: advisory only; live block consensus remains unchanged"
     )
     lines = [
@@ -1219,6 +1826,36 @@ def render_human(result: dict[str, Any]) -> str:
             f"  [{status_line(row.get('ok') is True)}] {row.get('name')}"
             for row in scenarios
         )
+    elif command == "adversarial":
+        live = result["live_authority"]
+        experiments = result["experiments"]
+        rejected = result["rejected_cases"]
+        lines.extend(
+            [
+                "Cobalt adversarial verification",
+                f"  Final gate: {result['status']}",
+                f"  Campaign complete: {'yes' if result['campaign_complete'] else 'no'}",
+                f"  Live height: {live.get('height', 'unknown')}",
+                f"  Validator-trust authority: {live.get('authority_mode', 'unknown')}",
+                f"  Block finality: {result['block_finality']}",
+                f"  Experiments passed: "
+                f"{sum(1 for row in experiments.values() if row.get('status') == 'passed')}/6",
+                f"  Rejected adversarial cases: {len(rejected)}",
+                f"  Proposal origin: {result['claims'].get('proposal_origin', 'unknown')}",
+                "  Operator decentralization proven: no",
+            ]
+        )
+        lines.extend(
+            f"  [{status_line(check['ok'])}] {check['label']}"
+            for check in result["checks"]
+        )
+        lines.append("")
+        lines.append("Rejected cases")
+        lines.extend(
+            f"  [{row.get('experiment', 'unknown')}] {row.get('name', 'unnamed')}: "
+            f"{row.get('reason', 'no reason recorded')}"
+            for row in rejected
+        )
     elif command == "scenario":
         summary = result["summary"]
         lines.extend(
@@ -1363,6 +2000,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="pinned SHA-256 of the handoff verifier",
     )
     parser.add_argument(
+        "--adversarial-packet",
+        type=Path,
+        default=Path("benchmarks/cobalt-adversarial-verification/packet"),
+        help="completed adversarial verification packet directory",
+    )
+    parser.add_argument(
+        "--adversarial-sha256",
+        default=DEFAULT_ADVERSARIAL_PACKET_SHA256,
+        help="pinned SHA-256 of the adversarial SHA256SUMS.txt file",
+    )
+    parser.add_argument(
         "--node-data-dir",
         type=Path,
         help="live node data directory for live-status",
@@ -1392,6 +2040,7 @@ def build_parser() -> argparse.ArgumentParser:
             "fleet",
             "scenario",
             "readiness",
+            "adversarial",
             "live-status",
             *RUNTIME_COMMANDS,
             *HISTORY_COMMANDS,
@@ -1424,6 +2073,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                 shadow_bin=args.shadow_bin,
                 shadow_data_dirs=args.shadow_data_dir,
                 timeout_seconds=args.timeout,
+            )
+        elif command == "adversarial":
+            root = repository_root()
+            adversarial_packet = (
+                args.adversarial_packet
+                if args.adversarial_packet.is_absolute()
+                else root / args.adversarial_packet
+            )
+            result = adversarial_result(
+                adversarial_packet,
+                expected_manifest_sha256=args.adversarial_sha256,
             )
         elif command == "scenario":
             root = repository_root()

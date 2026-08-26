@@ -147,7 +147,7 @@ button:disabled { cursor: wait; opacity: .55; transform: none; }
   content: ""; position: absolute; right: 0; top: 0; width: 38px; height: 38px;
   border-top: 2px solid var(--signal); border-right: 2px solid var(--signal); opacity: .22;
 }
-.instrument--shadow { grid-column: 1 / -1; }
+.instrument--shadow, .instrument--adversarial { grid-column: 1 / -1; }
 .instrument__header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .instrument__header > div { display: flex; align-items: baseline; gap: .85rem; }
 h2 { margin: 0; font-size: clamp(1.2rem, 2vw, 1.75rem); letter-spacing: -.02em; text-transform: uppercase; }

@@ -69,7 +69,17 @@ function renderShadow(shadow) {
   grid.replaceChildren();
   (shadow.nodes || []).forEach((node) => {
     const card = document.createElement("article");
-    const good = node.transport_healthy && node.catch_up_status === "current" && node.contiguous_sequence === node.protocol_decision_count && !node.live_authority && !node.controls_block_consensus;
+    const advisoryGood = node.transport_healthy
+      && node.catch_up_status === "current"
+      && node.contiguous_sequence === node.protocol_decision_count
+      && !node.live_authority
+      && !node.controls_block_consensus;
+    const liveFleetRow = "validator_service_active" in node;
+    const liveFleetGood = liveFleetRow
+      && node.validator_service_active
+      && node.rpc_service_active
+      && node.shadow_service_active;
+    const good = advisoryGood || liveFleetGood;
     card.className = `node-card${good ? " is-good" : ""}`;
     const header = document.createElement("header");
     const name = document.createElement("h3");
@@ -79,12 +89,29 @@ function renderShadow(shadow) {
     lamp.setAttribute("aria-label", good ? "healthy" : "unhealthy");
     header.append(name, lamp);
     const metrics = document.createElement("dl");
-    [["Accepted", node.accepted_messages], ["History", node.contiguous_sequence], ["Cert signers", node.certificate_signer_count], ["Catch-up", node.catch_up_status], ["Boots", node.boot_count], ["Peers", node.peer_count]].forEach(([label, value]) => {
+    const rows = liveFleetRow
+      ? [
+        ["Height", node.height],
+        ["Validator", yesNo(node.validator_service_active)],
+        ["RPC", yesNo(node.rpc_service_active)],
+        ["Shadow", yesNo(node.shadow_service_active)],
+        ["Anchor", node.ratification_anchor_sequence],
+        ["Authority", node.authority_mode],
+      ]
+      : [
+        ["Accepted", node.accepted_messages],
+        ["History", node.contiguous_sequence],
+        ["Cert signers", node.certificate_signer_count],
+        ["Catch-up", node.catch_up_status],
+        ["Boots", node.boot_count],
+        ["Peers", node.peer_count],
+      ];
+    rows.forEach(([label, value]) => {
       const cell = document.createElement("div");
       const term = document.createElement("dt");
       const description = document.createElement("dd");
       term.textContent = label;
-      description.textContent = value;
+      description.textContent = value ?? "—";
       cell.append(term, description);
       metrics.append(cell);
     });
@@ -101,21 +128,43 @@ function renderShadow(shadow) {
 
 function renderReadiness(readiness, scenario) {
   const state = readiness.ready ? "good" : "hold";
+  const adversarialMode = scenario.mode === "adversarial";
   setChip("readiness-status", readiness.status, state);
   setRail("readiness", readiness.status, state);
+  setText("readiness-title", adversarialMode ? "Campaign verification" : "Activation evidence");
+  setText("readiness-kicker", adversarialMode ? "Authenticated campaign decision" : "Evidence recommendation");
   setText("readiness-decision", readiness.status);
-  const activationCopy = readiness.activation_performed
-    ? "Cobalt is active for controlled-testnet validator-trust governance. Consensus v2 still finalizes blocks."
-    : "Evidence supports an authorized controlled-testnet validator-trust activation.";
+  const activationCopy = adversarialMode
+    ? "Authenticated E1–E6 evidence supports the recorded final campaign decision."
+    : readiness.activation_performed
+      ? "Cobalt is active for controlled-testnet validator-trust governance. Consensus v2 still finalizes blocks."
+      : "Evidence supports an authorized controlled-testnet validator-trust activation.";
   setText("readiness-copy", readiness.ready
     ? activationCopy
     : "Evidence is incomplete or failed. Hold authority changes and remediate the failed checks.");
   const readout = byId("readiness-readout");
   readout.className = `gate-readout${readiness.ready ? " is-good" : ""}`;
 
+  setText("scenario-cases-label", adversarialMode ? "E5 cases" : "Matched cases");
+  setText("scenario-passes-label", adversarialMode ? "Rejected safely" : "Cobalt / RippleD");
+  setText("scenario-conflicts-label", adversarialMode ? "State mutations" : "Conflicts");
   setText("scenario-cases", scenario.case_count ?? "—");
-  setText("scenario-passes", scenario.case_count == null ? "—" : `${scenario.cobalt_passed}/${scenario.rippled_passed}`);
-  setText("scenario-conflicts", scenario.cobalt_conflicting_decisions == null ? "—" : `${scenario.cobalt_conflicting_decisions}/${scenario.rippled_conflicting_decisions}`);
+  setText(
+    "scenario-passes",
+    adversarialMode
+      ? scenario.rejected_count ?? "—"
+      : scenario.case_count == null
+        ? "—"
+        : `${scenario.cobalt_passed}/${scenario.rippled_passed}`,
+  );
+  setText(
+    "scenario-conflicts",
+    adversarialMode
+      ? scenario.mutation_count ?? "—"
+      : scenario.cobalt_conflicting_decisions == null
+        ? "—"
+        : `${scenario.cobalt_conflicting_decisions}/${scenario.rippled_conflicting_decisions}`,
+  );
 
   const checks = byId("readiness-checks");
   checks.replaceChildren();
@@ -148,6 +197,52 @@ function renderAuthority(authority) {
   setText("actual-authority-source", authority.source);
 }
 
+function renderAdversarial(adversarial) {
+  if (!adversarial) {
+    setChip("adversarial-status", "Unavailable", "bad");
+    setText("adversarial-gate", "—");
+    setText("adversarial-experiments", "—");
+    setText("adversarial-rejected", "—");
+    setText("adversarial-proposals", "—");
+    setText("adversarial-authorizers", "—");
+    setText("adversarial-boundary", "Supply --adversarial-packet to authenticate the campaign.");
+    byId("adversarial-experiment-list").replaceChildren();
+    return;
+  }
+  const passed = adversarial.gate === "KEEP_ACTIVE" && adversarial.campaign_complete;
+  setChip("adversarial-status", adversarial.gate, passed ? "good" : "bad");
+  setText("adversarial-gate", adversarial.gate);
+  setText("adversarial-experiments", `${adversarial.experiment_pass_count}/6`);
+  setText("adversarial-rejected", adversarial.rejected_case_count);
+  setText("adversarial-proposals", (adversarial.proposal_identities || []).filter(Boolean).length);
+  setText(
+    "adversarial-authorizers",
+    (adversarial.authorization_identities || []).join(", ") || "—",
+  );
+  const boundary = adversarial.operator_decentralization_proven
+    ? adversarial.proposal_origin
+    : `${adversarial.proposal_origin}; protocol capability only`;
+  setText("adversarial-boundary", boundary);
+  const readout = byId("adversarial-readout");
+  readout.className = `gate-readout${passed ? " is-good" : ""}`;
+
+  const list = byId("adversarial-experiment-list");
+  list.replaceChildren();
+  Object.entries(adversarial.experiments || {}).forEach(([name, experiment]) => {
+    const item = document.createElement("li");
+    const ok = experiment.status === "passed";
+    if (ok) item.className = "is-good";
+    const mark = document.createElement("b");
+    const label = document.createElement("strong");
+    const source = document.createElement("span");
+    mark.textContent = ok ? "✓" : "×";
+    label.textContent = name;
+    source.textContent = experiment.summary || experiment.status;
+    item.append(mark, label, source);
+    list.append(item);
+  });
+}
+
 function renderErrors(errors) {
   const consoleNode = byId("error-console");
   const list = byId("error-list");
@@ -174,6 +269,7 @@ async function refresh(force = false) {
     renderShadow(snapshot.shadow_health);
     renderReadiness(snapshot.rehearsal_readiness, snapshot.scenario);
     renderAuthority(snapshot.actual_authority);
+    renderAdversarial(snapshot.adversarial);
     renderErrors(snapshot.errors);
   } catch (error) {
     renderErrors([String(error)]);

@@ -95,14 +95,14 @@
             <span class="state-chip" id="readiness-status">Loading</span>
           </header>
           <div class="gate-readout" id="readiness-readout">
-            <span>Evidence recommendation</span>
+            <span id="readiness-kicker">Evidence recommendation</span>
             <strong id="readiness-decision">—</strong>
             <p id="readiness-copy">Reading authenticated live authority evidence.</p>
           </div>
           <dl class="metrics metrics--three">
-            <div><dt>Matched cases</dt><dd id="scenario-cases">—</dd></div>
-            <div><dt>Cobalt / RippleD</dt><dd id="scenario-passes">—</dd></div>
-            <div><dt>Conflicts</dt><dd id="scenario-conflicts">—</dd></div>
+            <div><dt id="scenario-cases-label">Matched cases</dt><dd id="scenario-cases">—</dd></div>
+            <div><dt id="scenario-passes-label">Cobalt / RippleD</dt><dd id="scenario-passes">—</dd></div>
+            <div><dt id="scenario-conflicts-label">Conflicts</dt><dd id="scenario-conflicts">—</dd></div>
           </dl>
           <ul class="check-list" id="readiness-checks"></ul>
           <div class="witness-line">
@@ -132,6 +132,31 @@
           </dl>
           <p class="authority-warning">Cobalt is active for validator-trust governance. Consensus v2 still finalizes blocks. This interface is read-only.</p>
           <p class="provenance" id="actual-authority-source">—</p>
+        </article>
+
+        <article class="instrument instrument--adversarial" aria-labelledby="adversarial-title">
+          <header class="instrument__header">
+            <div><span class="index">F</span><h2 id="adversarial-title">Adversarial gate</h2></div>
+            <span class="state-chip" id="adversarial-status">Loading</span>
+          </header>
+          <div class="gate-readout" id="adversarial-readout">
+            <span>Final campaign decision</span>
+            <strong id="adversarial-gate">—</strong>
+            <p>Authenticated E1–E6 evidence and live authority drills.</p>
+          </div>
+          <dl class="metrics metrics--three">
+            <div><dt>Experiments passed</dt><dd id="adversarial-experiments">—</dd></div>
+            <div><dt>Rejected cases</dt><dd id="adversarial-rejected">—</dd></div>
+            <div><dt>Proposal identities</dt><dd id="adversarial-proposals">—</dd></div>
+          </dl>
+          <div class="witness-line">
+            <span>Authorization identities</span><code id="adversarial-authorizers">—</code>
+          </div>
+          <div class="authority-line">
+            <span>Proposal and operator boundary</span>
+            <strong id="adversarial-boundary">—</strong>
+          </div>
+          <ul class="check-list" id="adversarial-experiment-list"></ul>
         </article>
       </section>
 

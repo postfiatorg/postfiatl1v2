@@ -6,6 +6,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from postfiat_rpc import cobalt, cobalt_ui
 
@@ -199,6 +200,94 @@ class CobaltUiTests(unittest.TestCase):
         self.assertTrue(snapshot["actual_authority"]["cobalt_active"])
         self.assertEqual(snapshot["actual_authority"]["block_finality"], "consensus-v2")
         self.assertEqual(snapshot["proposals"]["node_status"]["block_height"], 919)
+
+    @mock.patch("postfiat_rpc.cobalt_ui.cobalt.adversarial_result")
+    def test_adversarial_packet_collector_renders_read_only_gate(
+        self, adversarial_result: mock.Mock
+    ) -> None:
+        adversarial_result.return_value = {
+            "status": "KEEP_ACTIVE",
+            "ok": True,
+            "campaign_complete": True,
+            "scope": "protocol capability",
+            "block_finality": "consensus-v2",
+            "checks": [{"key": "final_gate_keep_active", "ok": True}],
+            "experiments": {
+                f"E{index}": {"status": "passed", "summary": "passed"}
+                for index in range(1, 7)
+            },
+            "rejected_cases": [
+                {
+                    "experiment": "E5",
+                    "name": "stolen_key_rotation",
+                    "rejected": True,
+                    "durable_state_unchanged": True,
+                    "reason": "quorum missing",
+                }
+            ],
+            "claims": {
+                "protocol_capability_only": True,
+                "operator_decentralization_proven": False,
+                "proposal_origin": "Foundation-administered validators",
+            },
+            "live_authority": {
+                "chain_id": "fixture-chain",
+                "height": 922,
+                "state_root": "11" * 48,
+                "registry_root": "22" * 48,
+                "trust_graph_root": "33" * 48,
+                "trust_model": "uniform full overlap",
+                "trust_graph_profile": "six validator canonical views",
+                "trust_view_count": 6,
+                "non_identical_trust_views": False,
+                "validator_count": 6,
+                "all_six_converged": True,
+                "block_finality": "consensus-v2",
+                "fleet": [
+                    {"node_id": f"validator-{index}"} for index in range(6)
+                ],
+                "authority_transitions": [
+                    {
+                        "kind": "return_to_cobalt",
+                        "transition_id": "44" * 48,
+                        "proposal_identity": "validator-3",
+                        "authorization_identities": [
+                            f"validator-{index}" for index in range(5)
+                        ],
+                        "height": 921,
+                        "accepted": True,
+                    }
+                ],
+                "legitimate_rotation": {
+                    "update_id": "55" * 48,
+                    "subject_node_id": "validator-5",
+                    "proposal_identity": "validator-4",
+                    "authorization_identities": [
+                        f"validator-{index}" for index in range(5)
+                    ],
+                    "height": 922,
+                    "accepted": True,
+                },
+            },
+        }
+
+        snapshot = cobalt_ui.AdversarialPacketCollector(
+            Path("/evidence/packet"), "aa" * 32
+        ).collect()
+
+        self.assertTrue(snapshot["read_only"])
+        self.assertEqual(snapshot["adversarial"]["gate"], "KEEP_ACTIVE")
+        self.assertEqual(snapshot["adversarial"]["experiment_pass_count"], 6)
+        self.assertEqual(snapshot["adversarial"]["rejected_case_count"], 1)
+        self.assertEqual(snapshot["scenario"]["mode"], "adversarial")
+        self.assertEqual(snapshot["scenario"]["rejected_count"], 1)
+        self.assertEqual(snapshot["scenario"]["mutation_count"], 0)
+        self.assertEqual(snapshot["trust"]["mode"], "uniform full overlap")
+        self.assertFalse(snapshot["trust"]["non_identical_views"])
+        self.assertFalse(
+            snapshot["adversarial"]["operator_decentralization_proven"]
+        )
+        self.assertTrue(snapshot["actual_authority"]["cobalt_active"])
 
     def test_mixed_shadow_digests_fail_convergence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
