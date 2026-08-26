@@ -1,0 +1,30 @@
+{
+  "benchmark_semantics_changed": false,
+  "evidence_digests_rebound_to_normalized_files": true,
+  "raw_run_root_sha256": "dfbc8c9fbe1e225110601cde67bec2e8302d98c90c2eefd18676a73bc0b642b7",
+  "replacement_token": "$E4_RUN_ROOT",
+  "reports": {
+    "attack-report.json": {
+      "normalized_sha256": "901e0d765f6b2cb39968582f7791cd5223df145fef6da2c589d3bb5cc7b29ff4",
+      "raw_sha256": "c15e23681dbba7ec9f6e4b9b08be41e75a87bda7e8588984901a8f3f0e9ab3a2",
+      "replacement_count": 4
+    },
+    "baseline-report.json": {
+      "normalized_sha256": "a582934dbb17b594e41b740970bbd1c0c88988dfd53e895e0b308f716ad24a52",
+      "raw_sha256": "fbe60733cfd6e51f79ba0524ca8780a0741a1333383f613c5abd4196c5b87bc5",
+      "replacement_count": 4
+    },
+    "consensus-v2-cobalt-integration.json": {
+      "normalized_sha256": "41dfaa20e173e3631a962eac6b12abfe175fa56db1857b0fe309a4483fafba20",
+      "raw_sha256": "6546195ee36ab23aad4a60db6d81d856c68eb3b31e4cf0dea684b7714df00f1b",
+      "replacement_count": 0
+    },
+    "topology.json": {
+      "normalized_sha256": "9a6385b63f8a20483faf6bce4b696cac84e987ed2fed273afbb722ee3bbe4614",
+      "raw_sha256": "d7a8dc9dbcffb3dcc5040a98b23b23614e67ee002e7bf4a175e0443683a3cc6d",
+      "replacement_count": 0
+    }
+  },
+  "schema": "postfiat-cobalt-adversarial-e4-path-normalization-v1",
+  "status": "passed"
+}

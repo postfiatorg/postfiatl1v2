@@ -311,7 +311,7 @@ assert listed == PACKET_FILES
 scan = b"\n".join(
     (PACKET / name).read_bytes().lower()
     for name in PACKET_FILES
-    if name not in {"README.md", "verify_packet.py"}
+    if name != "verify_packet.py"
 )
 for forbidden in (
     b"/home/",

@@ -1,0 +1,50 @@
+{
+  "chain_id": "postfiat-cobalt-consensus-integration",
+  "genesis_hash": "27553824059d18026eeb698d9ad290018d1aabf52245ca20e5f770fd128613c2717c0c2e838a613f5ff4050282b91029",
+  "peers": [
+    {
+      "host": "127.0.0.1",
+      "node_id": "validator-0",
+      "p2p_address": "/ip4/127.0.0.1/tcp/31000",
+      "p2p_port": 31000,
+      "rpc_port": 31001
+    },
+    {
+      "host": "127.0.0.1",
+      "node_id": "validator-1",
+      "p2p_address": "/ip4/127.0.0.1/tcp/31002",
+      "p2p_port": 31002,
+      "rpc_port": 31003
+    },
+    {
+      "host": "127.0.0.1",
+      "node_id": "validator-2",
+      "p2p_address": "/ip4/127.0.0.1/tcp/31004",
+      "p2p_port": 31004,
+      "rpc_port": 31005
+    },
+    {
+      "host": "127.0.0.1",
+      "node_id": "validator-3",
+      "p2p_address": "/ip4/127.0.0.1/tcp/31006",
+      "p2p_port": 31006,
+      "rpc_port": 31007
+    },
+    {
+      "host": "127.0.0.1",
+      "node_id": "validator-4",
+      "p2p_address": "/ip4/127.0.0.1/tcp/31008",
+      "p2p_port": 31008,
+      "rpc_port": 31009
+    },
+    {
+      "host": "127.0.0.1",
+      "node_id": "validator-5",
+      "p2p_address": "/ip4/127.0.0.1/tcp/31010",
+      "p2p_port": 31010,
+      "rpc_port": 31011
+    }
+  ],
+  "protocol_version": 1,
+  "topology_id": "f542ca4d0f99d869e3d10becc525e7bed00cc0a8a22d6a2402cb160a3f85565fdf6c4f2956a1f1c31ec8054a3f56f691"
+}
