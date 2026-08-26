@@ -63,26 +63,27 @@ state is otherwise valid.
 
 ## Active Runtime Identities
 
-A read-only six-validator probe completed at `2026-08-25T15:37:40Z`. It found
-three distinct deployed components:
+The most recent authenticated read-only validator/RPC probe ran from
+`2026-08-26T01:40:51Z` through `01:41:04Z`. The authority-auditor and shadow rows
+retain the older `2026-08-25T15:37:40Z` observation:
 
-| Role | Active identity |
-| --- | --- |
-| Consensus validator service | Release `cobalt-activation-8694b99d`; binary SHA-256 `431f194b…783f4`; deployment-manifest revision `8694b99d`; embedded build revision `116bed84`. |
-| Governance auditor used by `live-status` | Release `cobalt-live-governance-audit-05507758`; binary SHA-256 `05507758…6293e`. |
-| Advisory Cobalt shadow | Release `cobalt-shadow-registry-reset-43ac8a7d`; binary SHA-256 `43ac8a7d…d935`. |
+| Role | Last observed active identity | Freshness |
+| --- | --- | --- |
+| Consensus validator service | Release `cobalt-verifier-92b63f5a`; embedded revision `92b63f5a`; binary SHA-256 `c7cb0c25…9f6337`. | Direct all-six process/hash probe, 2026-08-26. |
+| Governance auditor used by `live-status` | Release `cobalt-live-governance-audit-05507758`; binary SHA-256 `05507758…6293e`. | Last checked on validator 0, 2026-08-25. |
+| Advisory Cobalt shadow | Release `cobalt-shadow-registry-reset-43ac8a7d`; binary SHA-256 `43ac8a7d…d935`. | Last checked across six services, 2026-08-25. |
 
-All six validator, RPC, and shadow services were active. Every validator reported
-height 919 with identical tip/state roots and an empty mempool. Auditor-backed
-`live-status` on validator-0 passed every authority, transition, registry,
-sidecar, validator-set, and finality-scope check.
+The latest validator/RPC probe found all six services active and every validator
+at height 919 with identical tip/state roots and an empty mempool. It did not
+re-run `live-status` or inspect the shadows. The prior auditor-backed
+`live-status` passed every authority, transition, registry, sidecar,
+validator-set, and finality-scope check.
 
-The frozen activation packet's `source-pins.json` labels
-`cobalt-verifier-92b63f5a` as the live consensus binary. That does not match the
-active validator services observed by the fresh probe. The packet remains
-unchanged because it is checksum-bound historical evidence. Use
-[Current State](../status/chain-state-current.md), not that field alone, for the
-current deployment boundary.
+The frozen activation packet's `source-pins.json` label for
+`cobalt-verifier-92b63f5a` agrees with the later all-six process observation.
+The packet remains checksum-bound historical evidence and does not substitute
+for a current fleet query. Use [Current State](../status/chain-state-current.md)
+for the deployment and freshness boundaries.
 
 ## Authenticated Decision Output
 

@@ -8,7 +8,7 @@ A failed benchmark or simulation creates P0 remediation and a rerun of the uncha
 
 The result proves protocol capability, not operator decentralization.
 
-- **Status:** Active — E1-E3 and E6 complete; E4 in progress; E5 not started
+- **Status:** Active — E1-E4 and E6 complete; E5 not started
 - **Specification:** [Cobalt Adversarial Verification Research Specification](../../governance/cobalt-adversarial-verification-research-spec.md)
 - **Historical specification-lock record:** `task_158622307482e23fb4519889b53b475f` — rewarded 2026-08-25
 - **Historical milestone-document record:** `[x] task_d28eb3465dcac9a32524c25bba996e1e — rewarded 2026-08-25`
@@ -18,14 +18,16 @@ The result proves protocol capability, not operator decentralization.
 
 Deployment, repository, campaign, and freshness identities are separated in
 [Current State](../../status/chain-state-current.md). An authenticated read-only
-six-validator probe completed at `2026-08-25T15:37:40Z`; current repository HEAD
-is still not the active validator release.
+six-validator/RPC probe ran from `2026-08-26T01:40:51Z` through
+`2026-08-26T01:41:04Z`; it did not re-run the older authority/shadow audit.
+Current repository HEAD is still not the active validator release.
 
 - [x] Cobalt became the recorded controlled-testnet validator-trust authority at height 916; its first authorized validator-key rotation committed at height 917.
 - [x] The research specification passed the Text Improvement Harness at 89.27/100 and is locked.
 - [x] The public article now records the live authority state instead of saying Cobalt remains off.
-- [ ] E1-E3 and the design-only E6 decision have passed; E4 and the live E5 drills remain open, so the full adversarial campaign is not complete.
-- [ ] The current Foundation-administered proposal and authorization boundary remains explicit; no operator-decentralization result is claimed.
+- [x] E1-E4 and the design-only E6 decision have passed.
+- [ ] The live E5 drills remain open, so the full adversarial campaign is not complete.
+- [x] The current Foundation-administered proposal and authorization boundary remains explicit; no operator-decentralization result is claimed.
 
 ## Experiments
 
@@ -84,7 +86,7 @@ Evidence commit: `2e63d6112de5ee7ef4d5ffdf82c4965b4f0956a8`.
 The checksum-bound packet is
 `benchmarks/cobalt-adversarial-verification/e3/`; its
 `SHA256SUMS.txt` hash is
-`bbab4cab151161dab7d7437c5e0b3f30dd4ceba2d409d68bbc26ea6df4a61372`.
+`9302b3555ab9091b2cae9b2d372d0548fe9f2fb1e67be43dfb3f63d89140b600`.
 
 - [x] Test each validator in turn on a disposable clone bound to the live registry root.
 - [x] Restart from truncated, padded, reordered, and one-entry-modified durable histories.
@@ -107,44 +109,49 @@ Code references: `crates/cobalt_e3_harness/src/main.rs`, `crates/node/src/cobalt
 
 ### E4. Finality isolation under governance stress
 
-Execution: second P0 harness remediation complete; unchanged clean 500+500 evidence rerun required
+Execution: complete — passing unchanged clean 500+500 rerun
 
-Remediated frozen source revision: `451c2ad0e924f8be72feeac69c1356b3828a4f58`.
-The first frozen revision `0b2abdc5fde6ade172dc9a85b811330edc1cda2c`
-completed and passed all 500 baseline rounds, then stopped before attack round 1
-because the harness's three-attempt/25 ms retry window was shorter than the
-locked validator-5 restart outage. No fork or durable divergence was observed.
-The redaction-safe failure receipt is
-`benchmarks/cobalt-adversarial-verification/e4/remediation/initial-failure.json`.
-A focused clean-state remediation check passed two full-vote rounds through
-three validator-5 crash/restarts with six-node convergence.
+Frozen campaign source revision:
+`451c2ad0e924f8be72feeac69c1356b3828a4f58`.
+Executed comparator source revision:
+`add07a7cce416daeaa61073085734937477f2b71`.
+Checksum-bound packet:
+`benchmarks/cobalt-adversarial-verification/e4/`; packet root
+`93ba3db0bcc145144713088b612606fbb3b92c0f542809f258da49a555c14508`.
 
-The clean rerun then completed all 500 baseline and 500 attack rounds. Both
-six-validator lanes converged independently at height 501, all lane checks
-passed, the attack p95 delta was `+0.4433232431564571%`, 45 governance stress
-runs exercised 900 proposals, 315 safe halts, and 315 view changes, and
-validator-5 restarted 12 times. The top-level report nevertheless failed because
-the postprocessor incorrectly required exact tip and state-root equality across
-two independent runs whose randomized ML-DSA transaction and consensus
-signatures necessarily change transaction IDs, certificates, hashes, and roots.
-That is a harness-oracle failure, not an observed fork. Its redaction-safe receipt
-is `benchmarks/cobalt-adversarial-verification/e4/remediation/cross-lane-hash-comparator-failure.json`.
-The corrected gate requires six-node convergence inside each lane and compares
-the signed-message-independent workload and round outcomes across lanes. The
-500+500 corpus, full-vote policy, crash cadence, topology, quota, binaries, and
-adversarial inputs remain unchanged; E4 stays open pending one clean rerun of
-that unchanged corpus.
+The final clean run passed all 500 baseline and 500 attack rounds. Both
+six-validator lanes converged independently at height 501; Consensus v2 never
+stopped or forked. Baseline wallet-to-finality was p50
+`7,471.082586 ms` and p95 `14,133.573682 ms`; attack was p50
+`7,500.377266 ms` and p95 `14,197.471440 ms`. The p95 delta was
+`+0.4520990899943289%`, inside the locked 5% budget.
+
+The attack lane completed 47 governance-stress runs covering 940 proposals,
+329 safe halts, and 329 view changes. It recorded 987 boundary rejections,
+846 named limit rejections, and 752 flood rejections with durable state
+unchanged. Validator 5 restarted automatically 12 times. CPU, memory, network,
+disk, finality, governance, rejection, restart, and operator-action receipts are
+included; no manual operator action was required.
+
+Two redaction-safe remediation receipts remain in the packet. The first records
+a retry window shorter than the deliberate restart outage. The second records
+an invalid cross-lane tip/root comparator for independent runs with randomized
+authentication. Neither failure observed a fork or durable divergence. The
+corrected oracle requires convergence inside each lane and equal
+signed-message-independent workload and round outcomes across lanes. The
+500+500 corpus, full-vote policy, topology, CPU allocation, crash cadence,
+binaries, and adversarial inputs remained unchanged.
 
 Frozen manifest:
 `benchmarks/cobalt-adversarial-verification/e4/campaign-manifest.json`;
 SHA-256
 `838a0bccda40f13c6f999fd119706739d9384509bc9495165e0cd6f04fc4c68d`.
 
-- [ ] Run at least 500 baseline and 500 attack-lane Consensus v2 rounds from the same signed state on the same fleet, binary, and CPU quota.
-- [ ] In the attack lane, combine governance storms, repeated halts and view changes, near-limit certificates and RPC frames, sidecar flooding, and one crash-looping validator.
-- [ ] Count and name every rejection at the 1 MiB certificate and 2 MiB RPC-frame boundaries.
-- [ ] Pass only if Consensus v2 never stops or forks and attack-lane p95 client-visible finality remains within 5% of baseline.
-- [ ] Record governance latency, p50/p95 finality, CPU, memory, network, disk, rejected inputs, restarts, and operator actions.
+- [x] Run at least 500 baseline and 500 attack-lane Consensus v2 rounds from the same signed state on the same fleet, binary, and CPU quota.
+- [x] In the attack lane, combine governance storms, repeated halts and view changes, near-limit certificates and RPC frames, sidecar flooding, and one crash-looping validator.
+- [x] Count and name every rejection at the 1 MiB certificate and 2 MiB RPC-frame boundaries.
+- [x] Pass only if Consensus v2 never stops or forks and attack-lane p95 client-visible finality remains within 5% of baseline.
+- [x] Record governance latency, p50/p95 finality, CPU, memory, network, disk, rejected inputs, restarts, and operator actions.
 
 Code references: `benchmarks/cobalt-activate-or-retire/run_consensus_v2_cobalt_integration.py`, `crates/node/src/consensus_v2_finality.rs`, `crates/node/src/cobalt_authority_certificate.rs`, `crates/node/src/cobalt_shadow_runtime.rs`.
 
@@ -183,7 +190,7 @@ Code references: `crates/consensus_cobalt/src/trust_graph_governance.rs`, `crate
 - [x] E1: production matches the reconciled independent oracle on every generated graph.
 - [x] E2: zero conflicting roots, zero false halts, and zero false accepts under the Byzantine campaign.
 - [x] E3: every tampered state and forged catch-up is rejected; honest recovery is byte-identical.
-- [ ] E4: Consensus v2 never stops or forks; attack-lane p95 finality stays within 5% of baseline.
+- [x] E4: Consensus v2 never stops or forks; attack-lane p95 finality stays within 5% of baseline.
 - [ ] E5: both live authority transitions commit; every live negative case and the stolen-key attempt reject.
 - [x] E6: the proposal-path design and independent-operator decision are recorded and locked.
 - [ ] The publication requirements are live.

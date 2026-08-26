@@ -5,13 +5,12 @@
 
 !!! note "Historical post-activation snapshot"
 
-    This handoff predates the completed E1 run and E2 kickoff. The current
-    repository state advanced through `main` at `c2de415d`: E1 completed and E2
-    gained only a kickoff/status commit. A later authenticated six-validator
-    probe at `2026-08-25T15:37:40Z` confirmed the authority and roots below while
-    identifying the active runtime as `cobalt-activation-8694b99d`, not current
-    Git HEAD or the older packet's consensus label. See
-    [Current State](../status/chain-state-current.md).
+    This handoff preserves a dated operational snapshot and is superseded by
+    [Current State](../status/chain-state-current.md). A later authenticated
+    all-six validator/RPC probe on `2026-08-26` identified the active runtime as
+    `cobalt-verifier-92b63f5a`, not `cobalt-activation-8694b99d` or current Git
+    HEAD. Its body is intentionally retained as history; do not use the mutable
+    runtime or campaign statements below as current state.
 
 ## BLUF
 

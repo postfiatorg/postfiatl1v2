@@ -3,11 +3,11 @@
 PostFiat is an XRP-style authority-validator Layer 1 rebuilt around Rust,
 post-quantum authorization, versioned validator governance, Orchard/Halo2
 privacy, fixed supply, fee burn, and no native validator reward schedule. An
-authenticated read-only `postfiat-wan-devnet-2` probe completed at
-`2026-08-25T15:37:40Z` with all six validators active and equal at height 919.
-Cobalt was active for the bounded validator-trust lane from height 916;
-Foundation governance retained unrelated scope and Consensus v2 remained the
-only block-finality protocol.
+authenticated read-only `postfiat-wan-devnet-2` validator/RPC probe ran from
+`2026-08-26T01:40:51Z` through `01:41:04Z` with all six validators active and
+equal at height 919. The last full authority audit records Cobalt active for the
+bounded validator-trust lane from height 916; Foundation governance retained
+unrelated scope and Consensus v2 remained the only block-finality protocol.
 
 Start with [Current State](status/chain-state-current.md). It separates the active
 consensus runtime, governance auditor, Cobalt shadow, current Git HEAD,
@@ -43,8 +43,8 @@ they are not listed one-by-one in the primary navigation.
 | Core chain | Rust L1 with accounts, signed transfers, fees, blocks, receipts, deterministic replay, and state roots. | [Architecture](architecture/overview.md) |
 | Finality | Versioned certified ordering: legacy single-view mode and activated consensus v2 with durable prepare/precommit, timeout certificates, and proposer rotation. | [Finality](architecture/finality.md) |
 | Settlement lanes | Consensus transactions, W6 dual-authorized atomic swap, FastPay payments, FastSwap DvP, and Asset-Orchard private settlement have distinct finality and recovery boundaries. | [Settlement Lanes](architecture/settlement-lanes.md) |
-| Governance | The fresh devnet probe verified Cobalt ratifying validator-registry and trust-graph changes; Foundation governance retains unrelated scopes and currently administers proposals and validators. | [Current State](status/chain-state-current.md), [Validator Registry](governance/validator-registry.md) |
-| Cobalt governance | Active at the `2026-08-25T15:37:40Z` observation for validator-trust evolution only; it does not choose trust, originate proposals, or control block finality. | [Cobalt Governance](governance/cobalt.md), [browser observatory](governance/cobalt.md#read-only-browser-interface) |
+| Governance | The last full authority audit verified Cobalt ratifying validator-registry and trust-graph changes; Foundation governance retains unrelated scopes and currently administers proposals and validators. The later validator/RPC probe confirmed six-node convergence but did not re-audit authority. | [Current State](status/chain-state-current.md), [Validator Registry](governance/validator-registry.md) |
+| Cobalt governance | Active at the last full authority audit for validator-trust evolution only; it does not choose trust, originate proposals, or control block finality. | [Cobalt Governance](governance/cobalt.md), [browser observatory](governance/cobalt.md#read-only-browser-interface) |
 | Verifiable Constitution | Canonical readable constitution for typed, replayable, challengeable model-assisted governance with no-live-effect authority boundaries. | [Constitution](governance/verifiable-constitution.md), Proof Summary |
 | Privacy | Orchard/Halo2 deposit, spend, withdraw, scan, disclose, pool report, and live validator evidence. | [Privacy](privacy/overview.md) |
 | Quantum auth | ML-DSA-style account and validator authorization with larger certificate economics accepted as a design cost. | [Quantum Authorization](quantum/authorization.md) |

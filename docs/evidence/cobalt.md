@@ -6,28 +6,27 @@ observation time plus an exact binary identity.
 
 ## Current Operational Observation
 
-An authenticated, read-only probe completed at `2026-08-25T15:37:40Z`.
-It established:
+An authenticated, read-only validator/RPC probe ran from
+`2026-08-26T01:40:51Z` through `01:41:04Z`. It established:
 
-- all six validator, RPC, and Cobalt shadow services were active;
+- all six validator and all six RPC services were active;
 - every validator reported chain `postfiat-wan-devnet-2`, status `running`,
-  height 919, zero pending mempool items, and identical tip/state roots;
+  height 919, zero pending mempool items, and identical tip/state roots; and
 - every active validator binary had SHA-256
-  `431f194ba28391eba16c18a96d49c358bd2047d3b37eb0115216f46c6a6783f4`
-  under release `cobalt-activation-8694b99d`;
-- every shadow binary had SHA-256
-  `43ac8a7df13f41d5cfdd783fc983de4e8e91b625e6a705ae342569c5771ad935`;
-- the separate governance auditor, SHA-256
-  `055077582342dd54af0212df82e626cc83aae8af119c09f1cd1309dad906293e`,
-  returned `ACTIVATED` on validator-0 with every `live-status` check passing;
-- Cobalt remained limited to validator trust, while Consensus v2 remained block
-  finality and the shadow runtime remained advisory.
+  `c7cb0c25001a0bfe22eba32ce870f3739f9710471906e27c32797670ea9f6337`
+  under release `cobalt-verifier-92b63f5a` with embedded revision `92b63f5a`.
+
+That probe did not inspect the shadow services or re-run the separate governance
+auditor. The last authenticated full audit at `2026-08-25T15:37:40Z` returned
+`ACTIVATED` on validator 0 with every `live-status` check passing and found all
+six advisory shadows active under binary SHA-256
+`43ac8a7df13f41d5cfdd783fc983de4e8e91b625e6a705ae342569c5771ad935`.
+Cobalt remained limited to validator trust while Consensus v2 remained block
+finality.
 
 [Current State](../status/chain-state-current.md) contains the exact roots,
-runtime/auditor/shadow identities, repository HEAD, campaign status, probe scope,
-and freshness boundary. The fresh full authority audit was run on validator-0;
-all-six convergence was independently checked from each validator's status,
-service state, and binary hash.
+runtime/auditor/shadow identities, repository state, campaign status, probe
+scope, and separate freshness boundaries.
 
 ## Historical Activation Packet
 
@@ -42,11 +41,10 @@ python3 benchmarks/cobalt-activation-live/packet/verify_packet.py
 ```
 
 A pass authenticates the committed packet and its selected source pins; it does
-not query the fleet. Its `source-pins.json` labels
-`cobalt-verifier-92b63f5a` as the live consensus binary, but that label does not
-match the active `cobalt-activation-8694b99d` validator services observed by the
-fresh probe. The packet is retained unchanged as historical evidence. Current
-operational claims must use the fresh runtime identities above.
+not query the fleet. Its `source-pins.json` label for
+`cobalt-verifier-92b63f5a` agrees with the later all-six process observation.
+The packet is retained unchanged as historical evidence. Current operational
+claims still require the newer observation and its capture time.
 
 ## Post-Activation Adversarial Evidence
 
@@ -74,7 +72,7 @@ E3 evidence is stored under
 cases and 18 forged catch-up cases rejected with named reasons and zero durable
 mutation. All six interrupted recoveries restored byte-identical accepted
 history without manual repair. The packet's `SHA256SUMS.txt` hash is
-`bbab4cab822a17eaaad6a621740b65288cb0caad872e04326223d349a5a61372`.
+`9302b3555ab9091b2cae9b2d372d0548fe9f2fb1e67be43dfb3f63d89140b600`.
 E3 ran on disposable clones and did not query or mutate the devnet.
 
 E6 evidence is stored under
@@ -85,14 +83,17 @@ follow-on milestone. The packet's `SHA256SUMS.txt` hash is
 It recruits no operators, authorizes no live migration, and does not prove
 operator decentralization.
 
-E4 remains in progress and E5 has not started. The first E4 frozen run passed
-all 500 baseline rounds but stopped before attack round 1 when the harness retry
-window was shorter than the locked validator restart. The redaction-safe
-failure receipt is under
-`benchmarks/cobalt-adversarial-verification/e4/remediation/`; the corpus was not
-changed, a focused full-vote crash/restart check passed, and the required clean
-500+500 rerun is in progress. The milestone-wide `KEEP_ACTIVE` gate remains
-open.
+E4 evidence is stored under
+`benchmarks/cobalt-adversarial-verification/e4/`. The final unchanged clean run
+passed 500 baseline and 500 attack rounds with six-validator convergence at
+height 501 in each lane, no Consensus v2 stop or fork, and a `+0.452099%`
+attack-lane p95 finality delta inside the locked 5% budget. The packet preserves
+two remediated harness-oracle receipts, full rejection and resource receipts,
+and packet root
+`93ba3db0bcc145144713088b612606fbb3b92c0f542809f258da49a555c14508`.
+It was an isolated local campaign and did not query or mutate devnet.
+
+E5 has not started. The milestone-wide `KEEP_ACTIVE` gate remains open.
 
 ## Historical And Supporting Evidence
 

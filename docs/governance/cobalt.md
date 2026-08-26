@@ -29,19 +29,19 @@ block-finality protocol.
 
 ## Current Controlled-Devnet State
 
-An authenticated read-only probe completed at `2026-08-25T15:37:40Z` and
-returned **ACTIVATED** on `postfiat-wan-devnet-2`: all six validators were active
-and equal at height 919, Cobalt was the validator-trust authority, and Consensus
-v2 remained the only block-finality protocol. The active consensus service was
-release `cobalt-activation-8694b99d` with binary SHA-256
-`431f194b…783f4`. A separate governance-auditor binary verified the authority
-history, and the Cobalt shadow services remained advisory.
+The last full authority audit at `2026-08-25T15:37:40Z` returned
+**ACTIVATED** on `postfiat-wan-devnet-2`: all six validators were equal at height
+919, Cobalt was the validator-trust authority, and Consensus v2 remained the only
+block-finality protocol. A later authenticated read-only validator/RPC probe ran
+from `2026-08-26T01:40:51Z` through `01:41:04Z` and again found all six validators
+equal at height 919. Every validator process used release
+`cobalt-verifier-92b63f5a`, binary SHA-256 `c7cb0c25…9f6337`. The later probe did
+not re-run the separate authority auditor or inspect the advisory shadows.
 
-See [Current State](../status/chain-state-current.md) for the exact roots, all
-runtime identities, the activation packet's stale consensus-label discrepancy,
-repository state, adversarial campaign, and freshness boundary. The earlier
-benchmark and handoff packets are qualification provenance; current Git HEAD is
-not deployed.
+See [Current State](../status/chain-state-current.md) for the exact roots,
+runtime identities, repository state, adversarial campaign, and separate
+freshness boundaries. The earlier benchmark and handoff packets are
+qualification provenance; current Git HEAD is not deployed.
 
 Verify the qualification evidence directly:
 
