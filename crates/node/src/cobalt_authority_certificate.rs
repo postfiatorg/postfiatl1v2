@@ -509,6 +509,11 @@ pub fn verify_cobalt_validator_update_decision_certificate(
             "Cobalt protocol transcript is not bound to this validator update",
         ));
     }
+    if binding.trust_graph.activation_height >= expected_activation_height {
+        return Err(certificate_error(
+            "Cobalt certificate trust graph was not active before this validator update",
+        ));
+    }
 
     validate_rbc_propose_signed(&domain, &committee, &transcript.rbc_propose)
         .map_err(consensus_certificate_error)?;
@@ -836,6 +841,27 @@ pub fn cobalt_decision_ratification(
     Ok(transcript.ratification)
 }
 
+pub fn cobalt_decision_registry_binding(
+    certificate: &CobaltValidatorUpdateDecisionCertificateV1,
+) -> io::Result<CobaltShadowRegistryBinding> {
+    decompress_cobalt_value(&certificate.registry_binding)
+}
+
+pub fn next_cobalt_decision_round(
+    activation_height: u64,
+    previous: Option<&DabcRatifiedAmendment>,
+) -> io::Result<u64> {
+    match previous {
+        Some(previous) => previous
+            .amendment_slot
+            .checked_add(1)
+            .ok_or_else(|| certificate_error("Cobalt DABC amendment slot overflow")),
+        None => activation_height.checked_sub(1).ok_or_else(|| {
+            certificate_error("first Cobalt activation height has no prior decision round")
+        }),
+    }
+}
+
 #[cfg(test)]
 pub(super) fn rewrite_cobalt_certificate_domain_for_test(
     certificate: &mut CobaltValidatorUpdateDecisionCertificateV1,
@@ -850,4 +876,35 @@ pub(super) fn rewrite_cobalt_certificate_domain_for_test(
     compact.transcript.trust_graph.chain_id = chain_id.to_string();
     certificate.protocol_transcript = compress_cobalt_value(&compact)?;
     Ok(())
+}
+
+#[cfg(test)]
+pub(super) fn rewrite_cobalt_certificate_trust_activation_for_test(
+    certificate: &mut CobaltValidatorUpdateDecisionCertificateV1,
+    activation_height: u64,
+) -> io::Result<String> {
+    let mut binding: CobaltShadowRegistryBinding =
+        decompress_cobalt_value(&certificate.registry_binding)?;
+    let domain = CobaltDomain {
+        chain_id: binding.trust_graph.chain_id.clone(),
+        genesis_hash: binding.trust_graph.genesis_hash.clone(),
+        protocol_version: binding.trust_graph.protocol_version,
+    };
+    binding.trust_graph.activation_height = activation_height;
+    binding.trust_graph.trust_graph_root = postfiat_consensus_cobalt::trust_graph_root(
+        &domain,
+        binding.trust_graph.graph_version,
+        &binding.trust_graph.registry_root,
+        binding.trust_graph.activation_height,
+        binding.trust_graph.previous_trust_graph_root.as_deref(),
+        &binding.trust_graph.trust_views,
+    )
+    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let trust_graph_root = binding.trust_graph.trust_graph_root.clone();
+    certificate.registry_binding = compress_cobalt_value(&binding)?;
+    let mut compact: CobaltAuthorityCompactProtocolTranscriptV1 =
+        decompress_cobalt_value(&certificate.protocol_transcript)?;
+    compact.transcript.trust_graph = binding.trust_graph;
+    certificate.protocol_transcript = compress_cobalt_value(&compact)?;
+    Ok(trust_graph_root)
 }

@@ -6,10 +6,10 @@ use std::path::PathBuf;
 
 use postfiat_consensus_cobalt::{DabcRatifiedAmendment, RbcPropose};
 use postfiat_node::cobalt_shadow::{
-    assemble_protocol_transcript, assemble_protocol_transcript_extending,
-    build_registry_binding_manifest, run_cobalt_shadow_adversarial_drill, CobaltShadowHistoryRange,
-    CobaltShadowIdentity, CobaltShadowLimits, CobaltShadowProtocolContribution,
-    CobaltShadowRegistryBinding, CobaltShadowService, CobaltShadowValidatorBinding,
+    assemble_protocol_transcript_at_activation_height_extending, build_registry_binding_manifest,
+    run_cobalt_shadow_adversarial_drill, CobaltShadowHistoryRange, CobaltShadowIdentity,
+    CobaltShadowLimits, CobaltShadowProtocolContribution, CobaltShadowRegistryBinding,
+    CobaltShadowService, CobaltShadowValidatorBinding,
 };
 use postfiat_node::cobalt_shadow_runtime::{
     compressed_commit_request, parse_endpoint, read_transcript, request,
@@ -17,9 +17,7 @@ use postfiat_node::cobalt_shadow_runtime::{
     CobaltShadowRpcRequest,
 };
 use postfiat_node::ValidatorRegistry;
-use postfiat_types::{
-    GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED, GOVERNANCE_AUTHORITY_MODE_FOUNDATION,
-};
+use postfiat_types::GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED;
 use serde::Deserialize;
 
 fn main() {
@@ -112,18 +110,34 @@ fn run() -> io::Result<()> {
                 &node_data_dir.join("validator_registry.json"),
                 2 * 1024 * 1024,
             )?;
-            if governance.authority_mode != GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED
-                || governance.cobalt_authority_transitions.len() != 1
-                || !governance.validator_registry_updates.is_empty()
-            {
+            if governance.authority_mode != GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED {
                 return Err(invalid(
-                    "authority lineage reset requires the first live Cobalt authority epoch before any registry update",
+                    "authority lineage reset requires an active Cobalt authority epoch",
                 ));
             }
-            let transition = governance.cobalt_authority_transitions[0].clone();
+            let transition = governance
+                .cobalt_authority_transitions
+                .last()
+                .cloned()
+                .ok_or_else(|| invalid("active Cobalt authority has no transition record"))?;
+            if transition.transition_kind != postfiat_types::COBALT_AUTHORITY_TRANSITION_ACTIVATE {
+                return Err(invalid(
+                    "authority lineage reset requires the latest transition to activate Cobalt",
+                ));
+            }
             let mut prior_governance = governance.clone();
-            prior_governance.authority_mode = GOVERNANCE_AUTHORITY_MODE_FOUNDATION;
-            prior_governance.cobalt_authority_transitions.clear();
+            let removed = prior_governance
+                .cobalt_authority_transitions
+                .pop()
+                .ok_or_else(|| invalid("active Cobalt authority has no transition record"))?;
+            if removed.transition_id != transition.transition_id {
+                return Err(invalid("authority transition history changed during reset"));
+            }
+            prior_governance.authority_mode = transition.from_authority_mode;
+            postfiat_node::cobalt_handoff::verify_cobalt_authority_history(
+                &genesis,
+                &prior_governance,
+            )?;
             postfiat_node::cobalt_handoff::verify_cobalt_authority_transition(
                 &genesis,
                 &prior_governance,
@@ -131,10 +145,24 @@ fn run() -> io::Result<()> {
                 &transition,
                 transition.activation_height,
             )?;
-            let mut service = CobaltShadowService::open(data_dir)?;
+            let governance_ratification_anchor = governance
+                .validator_registry_updates
+                .iter()
+                .rev()
+                .find(|update| !update.cobalt_authorizations.is_empty())
+                .map(|update| {
+                    postfiat_node::cobalt_authority_certificate::cobalt_decision_ratification(
+                        update.cobalt_decision_certificate.as_ref().ok_or_else(|| {
+                            invalid("stored Cobalt validator update has no decision certificate")
+                        })?,
+                    )
+                })
+                .transpose()?;
+            let mut service = CobaltShadowService::open_for_authority_lineage_reset(data_dir)?;
             let receipt = service.reset_authority_lineage(
                 &binding,
                 &transition,
+                governance_ratification_anchor.as_ref(),
                 required_path(&args, "--archive-dir")?,
             )?;
             serde_json::to_value(receipt).map_err(json_error)?
@@ -208,6 +236,24 @@ fn run() -> io::Result<()> {
             )?;
             serde_json::to_value(proposal).map_err(json_error)?
         }
+        "propose-rpc" => {
+            let endpoint = parse_endpoint(required_flag(&args, "--endpoint")?)?;
+            let binding: CobaltShadowRegistryBinding = read_bounded_json(
+                &required_path(&args, "--registry-binding")?,
+                4 * 1024 * 1024,
+            )?;
+            let round = required_flag(&args, "--round")?
+                .parse::<u64>()
+                .map_err(|_| invalid("--round must be an integer"))?;
+            request(
+                endpoint,
+                &CobaltShadowRpcRequest::CreateProposal {
+                    binding: Box::new(binding),
+                    round,
+                    payload_hash: required_flag(&args, "--payload-hash")?.to_string(),
+                },
+            )?
+        }
         "contribute" => {
             let mut service = CobaltShadowService::open(required_path(&args, "--data-dir")?)?;
             let binding: CobaltShadowRegistryBinding = read_bounded_json(
@@ -216,8 +262,47 @@ fn run() -> io::Result<()> {
             )?;
             let proposal: RbcPropose =
                 read_bounded_json(&required_path(&args, "--proposal")?, 2 * 1024 * 1024)?;
-            let contribution = service.create_protocol_contribution(&binding, &proposal)?;
+            let activation_height = optional_flag(&args, "--activation-height")
+                .map(|value| {
+                    value
+                        .parse::<u64>()
+                        .map_err(|_| invalid("--activation-height must be an integer"))
+                })
+                .transpose()?;
+            let contribution = match activation_height {
+                Some(activation_height) => service
+                    .create_protocol_contribution_at_activation_height(
+                        &binding,
+                        &proposal,
+                        activation_height,
+                    )?,
+                None => service.create_protocol_contribution(&binding, &proposal)?,
+            };
             serde_json::to_value(contribution).map_err(json_error)?
+        }
+        "contribute-rpc" => {
+            let endpoint = parse_endpoint(required_flag(&args, "--endpoint")?)?;
+            let binding: CobaltShadowRegistryBinding = read_bounded_json(
+                &required_path(&args, "--registry-binding")?,
+                4 * 1024 * 1024,
+            )?;
+            let proposal: RbcPropose =
+                read_bounded_json(&required_path(&args, "--proposal")?, 2 * 1024 * 1024)?;
+            let activation_height = optional_flag(&args, "--activation-height")
+                .map(|value| {
+                    value
+                        .parse::<u64>()
+                        .map_err(|_| invalid("--activation-height must be an integer"))
+                })
+                .transpose()?;
+            request(
+                endpoint,
+                &CobaltShadowRpcRequest::CreateContribution {
+                    binding: Box::new(binding),
+                    propose: Box::new(proposal),
+                    activation_height,
+                },
+            )?
         }
         "assemble" => {
             let binding: CobaltShadowRegistryBinding = read_bounded_json(
@@ -228,19 +313,24 @@ fn run() -> io::Result<()> {
                 read_bounded_json(&required_path(&args, "--proposal")?, 2 * 1024 * 1024)?;
             let contributions: Vec<CobaltShadowProtocolContribution> =
                 read_bounded_json(&required_path(&args, "--contributions")?, 16 * 1024 * 1024)?;
-            let transcript = match optional_flag(&args, "--previous-ratification") {
-                Some(path) => {
-                    let previous: DabcRatifiedAmendment =
-                        read_bounded_json(&PathBuf::from(path), 2 * 1024 * 1024)?;
-                    assemble_protocol_transcript_extending(
-                        &binding,
-                        proposal,
-                        contributions,
-                        Some(&previous),
-                    )?
-                }
-                None => assemble_protocol_transcript(&binding, proposal, contributions)?,
-            };
+            let activation_height = required_flag(&args, "--activation-height")?
+                .parse::<u64>()
+                .map_err(|_| invalid("--activation-height must be an integer"))?;
+            let previous = optional_flag(&args, "--previous-ratification")
+                .map(|path| {
+                    read_bounded_json::<DabcRatifiedAmendment>(
+                        &PathBuf::from(path),
+                        2 * 1024 * 1024,
+                    )
+                })
+                .transpose()?;
+            let transcript = assemble_protocol_transcript_at_activation_height_extending(
+                &binding,
+                proposal,
+                contributions,
+                previous.as_ref(),
+                activation_height,
+            )?;
             serde_json::to_value(transcript).map_err(json_error)?
         }
         "reserve" => {
@@ -401,8 +491,10 @@ fn usage_text() -> &'static str {
   postfiat-cobalt-shadow authority-lineage-reset --data-dir PATH --node-data-dir PATH --registry-binding PATH --archive-dir PATH
   postfiat-cobalt-shadow registry-lineage-reset --data-dir PATH --node-data-dir PATH --previous-registry-binding PATH --registry-binding PATH --archive-dir PATH
   postfiat-cobalt-shadow propose --data-dir PATH --registry-binding PATH --round N --payload-hash HASH
-  postfiat-cobalt-shadow contribute --data-dir PATH --registry-binding PATH --proposal PATH
-  postfiat-cobalt-shadow assemble --registry-binding PATH --proposal PATH --contributions PATH [--previous-ratification PATH]
+  postfiat-cobalt-shadow propose-rpc --endpoint IP:PORT --registry-binding PATH --round N --payload-hash HASH
+  postfiat-cobalt-shadow contribute --data-dir PATH --registry-binding PATH --proposal PATH [--activation-height N]
+  postfiat-cobalt-shadow contribute-rpc --endpoint IP:PORT --registry-binding PATH --proposal PATH [--activation-height N]
+  postfiat-cobalt-shadow assemble --registry-binding PATH --proposal PATH --contributions PATH --activation-height N [--previous-ratification PATH]
   postfiat-cobalt-shadow reserve --data-dir PATH --round N --payload-hash HASH
   postfiat-cobalt-shadow run --data-dir PATH --listen IP:PORT [--allow-private-network]
   postfiat-cobalt-shadow probe --endpoint IP:PORT

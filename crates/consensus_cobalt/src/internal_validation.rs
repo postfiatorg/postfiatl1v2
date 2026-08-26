@@ -1155,17 +1155,33 @@ fn validate_dabc_ratified_amendment_core(
 ) -> Result<(), String> {
     validate_domain(domain)?;
     validate_trust_graph(domain, graph)?;
+    if ratified.registry_root != graph.registry_root {
+        return Err("DABC ratified amendment registry root mismatch".to_string());
+    }
+    if ratified.trust_graph_root != graph.trust_graph_root {
+        return Err("DABC ratified amendment trust graph root mismatch".to_string());
+    }
+    validate_dabc_ratified_amendment_anchor(domain, ratified)
+}
+
+fn validate_dabc_ratified_amendment_anchor(
+    domain: &CobaltDomain,
+    ratified: &DabcRatifiedAmendment,
+) -> Result<(), String> {
+    validate_domain(domain)?;
     if ratified.chain_id != domain.chain_id
         || ratified.genesis_hash != domain.genesis_hash
         || ratified.protocol_version != domain.protocol_version
     {
         return Err("DABC ratified amendment domain mismatch".to_string());
     }
-    if ratified.registry_root != graph.registry_root {
-        return Err("DABC ratified amendment registry root mismatch".to_string());
-    }
-    if ratified.trust_graph_root != graph.trust_graph_root {
-        return Err("DABC ratified amendment trust graph root mismatch".to_string());
+    validate_hash_hex("DABC ratified registry root", &ratified.registry_root)?;
+    validate_hash_hex(
+        "DABC ratified trust graph root",
+        &ratified.trust_graph_root,
+    )?;
+    if ratified.sequence == 0 {
+        return Err("DABC ratified amendment sequence must be nonzero".to_string());
     }
     validate_hash_hex(
         "DABC parent ratification id",

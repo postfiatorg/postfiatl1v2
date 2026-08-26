@@ -2537,6 +2537,80 @@
     }
 
     #[test]
+    fn dabc_lineage_anchor_extends_across_registry_and_trust_graph_roots() {
+        let (domain, old_graph, new_graph) = canonical_transition_fixture(
+            ids(&["A", "B", "C", "D", "E", "F", "G"]),
+            ids(&["A", "B", "C", "D", "E", "F", "H"]),
+        );
+        let old_view = trust_view_for_validator(&old_graph, "A").expect("old view");
+        let old_propose = signed_rbc_propose(
+            &domain,
+            old_graph.trust_graph_root.clone(),
+            "A",
+            11,
+            root('c'),
+        );
+        let old_accept = signed_rbc_accept(&domain, &old_propose, "B");
+        let old_candidate = mvba_candidate_from_rbc_accept(&domain, &old_propose, &old_accept)
+            .expect("old candidate");
+        let old_input = build_mvba_valid_input_set(
+            &domain,
+            old_view,
+            hash_hex("postfiat.test.mvba.agreement", b"cross-root-11"),
+            vec![old_candidate],
+        )
+        .expect("old input");
+        let first = ratify_dabc_amendment(&domain, &old_graph, &old_input, None, 20)
+            .expect("first ratification");
+
+        let new_view = trust_view_for_validator(&new_graph, "B").expect("new view");
+        let new_propose = signed_rbc_propose(
+            &domain,
+            new_graph.trust_graph_root.clone(),
+            "B",
+            12,
+            root('d'),
+        );
+        let new_accept = signed_rbc_accept(&domain, &new_propose, "C");
+        let new_candidate = mvba_candidate_from_rbc_accept(&domain, &new_propose, &new_accept)
+            .expect("new candidate");
+        let new_input = build_mvba_valid_input_set(
+            &domain,
+            new_view,
+            hash_hex("postfiat.test.mvba.agreement", b"cross-root-12"),
+            vec![new_candidate],
+        )
+        .expect("new input");
+        let second = ratify_dabc_amendment(
+            &domain,
+            &new_graph,
+            &new_input,
+            Some(&first),
+            21,
+        )
+        .expect("cross-root ratification");
+
+        assert_eq!(second.sequence, first.sequence + 1);
+        assert_eq!(second.parent_ratification_id, first.ratification_id);
+        assert_ne!(second.registry_root, first.registry_root);
+        assert_ne!(second.trust_graph_root, first.trust_graph_root);
+        validate_dabc_ratified_amendment(&domain, &new_graph, &second, Some(&first))
+            .expect("validate cross-root lineage");
+
+        let mut tampered_anchor = first;
+        tampered_anchor.ratification_id = root('e');
+        let error = ratify_dabc_amendment(
+            &domain,
+            &new_graph,
+            &new_input,
+            Some(&tampered_anchor),
+            21,
+        )
+        .expect_err("tampered lineage anchor must fail");
+        assert!(error.contains("ratified amendment id mismatch"), "{error}");
+    }
+
+    #[test]
     fn full_knowledge_checkpoint_gates_dabc_activation() {
         let (domain, graph, first, second) = dabc_two_amendment_chain_fixture();
         let committee = test_committee_for_graph(&graph);

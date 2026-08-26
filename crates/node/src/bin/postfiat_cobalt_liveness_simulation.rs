@@ -658,6 +658,7 @@ fn collect_contributions(
                 &CobaltShadowRpcRequest::CreateContribution {
                     binding: Box::new(binding.clone()),
                     propose: Box::new(proposal.clone()),
+                    activation_height: None,
                 },
             )
         })
@@ -712,6 +713,7 @@ fn padded_contribution_request(
     let mut request_value = CobaltShadowRpcRequest::CreateContribution {
         binding: Box::new(binding.clone()),
         propose: Box::new(padded_proposal.clone()),
+        activation_height: None,
     };
     let base_bytes = serde_json::to_vec(&request_value)
         .map_err(|error| invalid(error.to_string()))?
@@ -723,6 +725,7 @@ fn padded_contribution_request(
     request_value = CobaltShadowRpcRequest::CreateContribution {
         binding: Box::new(binding.clone()),
         propose: Box::new(padded_proposal),
+        activation_height: None,
     };
     let encoded_bytes = serde_json::to_vec(&request_value)
         .map_err(|error| invalid(error.to_string()))?

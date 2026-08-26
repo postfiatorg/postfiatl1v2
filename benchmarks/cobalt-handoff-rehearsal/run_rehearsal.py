@@ -468,6 +468,8 @@ def main() -> int:
                 binding_remote,
                 "--proposal",
                 proposal_remote,
+                "--activation-height",
+                str(update["activation_height"]),
             ],
         )
         must(contribution.get("node_id") == f"validator-{index}", "Cobalt contributor mismatch")
@@ -489,6 +491,8 @@ def main() -> int:
             proposal_remote,
             "--contributions",
             contributions_remote,
+            "--activation-height",
+            str(update["activation_height"]),
         ],
     )
     transcript_path = output / "cobalt-update-protocol-transcript.json"

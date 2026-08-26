@@ -462,9 +462,6 @@ pub fn verify_cobalt_validator_trust_update(
     })?;
     let expected_payload_hash =
         crate::cobalt_authority_certificate::cobalt_validator_update_payload_hash(update)?;
-    let expected_round = proposal_slot
-        .checked_sub(1)
-        .ok_or_else(|| permission("Cobalt validator update proposal slot has no protocol round"))?;
     let previous_ratification = governance
         .validator_registry_updates
         .iter()
@@ -480,6 +477,10 @@ pub fn verify_cobalt_validator_trust_update(
                 .and_then(crate::cobalt_authority_certificate::cobalt_decision_ratification)
         })
         .transpose()?;
+    let expected_round = crate::cobalt_authority_certificate::next_cobalt_decision_round(
+        proposal_slot,
+        previous_ratification.as_ref(),
+    )?;
     crate::cobalt_authority_certificate::verify_cobalt_validator_update_decision_certificate(
         decision_certificate,
         &domain,
@@ -982,8 +983,9 @@ fn invalid(message: impl Into<String>) -> io::Error {
 mod tests {
     use super::*;
     use crate::cobalt_shadow::{
-        assemble_protocol_transcript, build_registry_binding_manifest, CobaltShadowIdentity,
-        CobaltShadowLimits, CobaltShadowRegistryBinding, CobaltShadowService,
+        assemble_protocol_transcript_at_activation_height_extending,
+        build_registry_binding_manifest, CobaltShadowIdentity, CobaltShadowLimits,
+        CobaltShadowRegistryBinding, CobaltShadowService,
     };
     use postfiat_consensus_cobalt::{
         trust_graph_transition_id, TrustGraphTransition, VALIDATOR_REGISTRY_OP_ROTATE_KEY,
@@ -1277,7 +1279,25 @@ mod tests {
                     .expect("open Cobalt signer")
             })
             .collect::<Vec<_>>();
-        let round = height.checked_sub(1).expect("Cobalt protocol round");
+        let previous_ratification = governance
+            .validator_registry_updates
+            .iter()
+            .rev()
+            .find(|prior| !prior.cobalt_authorizations.is_empty())
+            .map(|prior| {
+                crate::cobalt_authority_certificate::cobalt_decision_ratification(
+                    prior
+                        .cobalt_decision_certificate
+                        .as_ref()
+                        .expect("stored Cobalt certificate"),
+                )
+                .expect("stored Cobalt ratification")
+            });
+        let round = crate::cobalt_authority_certificate::next_cobalt_decision_round(
+            height,
+            previous_ratification.as_ref(),
+        )
+        .expect("Cobalt protocol round");
         let proposal = services[0]
             .create_protocol_proposal(&fixture.cobalt_binding, round, payload_hash)
             .expect("create Cobalt proposal");
@@ -1285,13 +1305,22 @@ mod tests {
             .iter_mut()
             .map(|service| {
                 service
-                    .create_protocol_contribution(&fixture.cobalt_binding, &proposal)
+                    .create_protocol_contribution_at_activation_height(
+                        &fixture.cobalt_binding,
+                        &proposal,
+                        height,
+                    )
                     .expect("create Cobalt contribution")
             })
             .collect::<Vec<_>>();
-        let transcript =
-            assemble_protocol_transcript(&fixture.cobalt_binding, proposal, contributions)
-                .expect("assemble Cobalt protocol transcript");
+        let transcript = assemble_protocol_transcript_at_activation_height_extending(
+            &fixture.cobalt_binding,
+            proposal,
+            contributions,
+            previous_ratification.as_ref(),
+            height,
+        )
+        .expect("assemble Cobalt protocol transcript");
         update.cobalt_decision_certificate = Some(
             crate::cobalt_authority_certificate::compact_cobalt_validator_update_decision_certificate(
                 CobaltValidatorUpdateDecisionCertificateV1 {
@@ -1452,6 +1481,39 @@ mod tests {
     }
 
     #[test]
+    fn subsequent_cobalt_decision_round_is_independent_of_activation_height_gap() {
+        let fixture = fixture();
+        let governance = activate(&fixture);
+        let first = signed_rotate_update(&fixture, &governance, 11);
+        let previous = crate::cobalt_authority_certificate::cobalt_decision_ratification(
+            first
+                .cobalt_decision_certificate
+                .as_ref()
+                .expect("first decision certificate"),
+        )
+        .expect("first ratification");
+
+        assert_eq!(previous.amendment_slot, 10);
+        assert_eq!(
+            crate::cobalt_authority_certificate::next_cobalt_decision_round(42, Some(&previous))
+                .expect("next logical DABC slot"),
+            11
+        );
+        assert_eq!(
+            crate::cobalt_authority_certificate::next_cobalt_decision_round(42, None)
+                .expect("first decision round"),
+            41
+        );
+        assert!(crate::cobalt_authority_certificate::next_cobalt_decision_round(0, None).is_err());
+        let mut overflow = previous;
+        overflow.amendment_slot = u64::MAX;
+        assert!(
+            crate::cobalt_authority_certificate::next_cobalt_decision_round(42, Some(&overflow),)
+                .is_err()
+        );
+    }
+
+    #[test]
     fn cobalt_authority_rejects_quorum_only_and_tampered_protocol_decisions() {
         let fixture = fixture();
         let governance = activate(&fixture);
@@ -1485,6 +1547,42 @@ mod tests {
             11,
         )
         .expect_err("tampered Cobalt decision must be rejected");
+
+        let mut not_yet_active = signed_rotate_update(&fixture, &governance, 11);
+        let payload_hash =
+            crate::cobalt_authority_certificate::cobalt_validator_update_payload_hash(
+                &not_yet_active,
+            )
+            .expect("payload hash");
+        let trust_graph_root =
+            crate::cobalt_authority_certificate::rewrite_cobalt_certificate_trust_activation_for_test(
+                not_yet_active
+                    .cobalt_decision_certificate
+                    .as_mut()
+                    .expect("decision certificate"),
+                11,
+            )
+            .expect("rewrite trust graph activation");
+        assert!(
+            crate::cobalt_authority_certificate::verify_cobalt_validator_update_decision_certificate(
+                not_yet_active
+                    .cobalt_decision_certificate
+                    .as_ref()
+                    .expect("decision certificate"),
+                &cobalt_domain(&fixture.genesis),
+                &fixture.registry,
+                &fixture.validators,
+                &fixture.registry_root,
+                &trust_graph_root,
+                &payload_hash,
+                10,
+                11,
+                None,
+            )
+            .expect_err("not-yet-active trust graph must be rejected")
+            .to_string()
+            .contains("was not active before")
+        );
 
         let mut wrong_domain = signed_rotate_update(&fixture, &governance, 12);
         let certificate = wrong_domain
@@ -1661,13 +1759,22 @@ mod tests {
             .iter_mut()
             .map(|service| {
                 service
-                    .create_protocol_contribution(&fixture.cobalt_binding, &proposal)
+                    .create_protocol_contribution_at_activation_height(
+                        &fixture.cobalt_binding,
+                        &proposal,
+                        11,
+                    )
                     .expect("create Cobalt contribution")
             })
             .collect::<Vec<_>>();
-        let transcript =
-            assemble_protocol_transcript(&fixture.cobalt_binding, proposal, contributions)
-                .expect("assemble Cobalt protocol transcript");
+        let transcript = assemble_protocol_transcript_at_activation_height_extending(
+            &fixture.cobalt_binding,
+            proposal,
+            contributions,
+            None,
+            11,
+        )
+        .expect("assemble Cobalt protocol transcript");
         let expanded_bytes = serde_json::to_vec(&transcript)
             .expect("serialize expanded transcript")
             .len();
@@ -1707,7 +1814,7 @@ mod tests {
             &fixture.cobalt_binding.trust_graph.trust_graph_root,
             &payload_hash,
             1,
-            2,
+            11,
             None,
         )
         .expect("verify 20-validator compressed certificate");

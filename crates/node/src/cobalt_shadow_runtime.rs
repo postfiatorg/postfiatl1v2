@@ -51,6 +51,7 @@ pub enum CobaltShadowRpcRequest {
     CreateContribution {
         binding: Box<CobaltShadowRegistryBinding>,
         propose: Box<postfiat_consensus_cobalt::RbcPropose>,
+        activation_height: Option<u64>,
     },
     Submit {
         message: CobaltShadowMessage,
@@ -450,9 +451,19 @@ fn handle_request(
         } => service
             .create_protocol_proposal(&binding, round, payload_hash)
             .and_then(|proposal| serde_json::to_value(proposal).map_err(json_error)),
-        CobaltShadowRpcRequest::CreateContribution { binding, propose } => service
-            .create_protocol_contribution(&binding, &propose)
-            .and_then(|contribution| serde_json::to_value(contribution).map_err(json_error)),
+        CobaltShadowRpcRequest::CreateContribution {
+            binding,
+            propose,
+            activation_height,
+        } => match activation_height {
+            Some(activation_height) => service.create_protocol_contribution_at_activation_height(
+                &binding,
+                &propose,
+                activation_height,
+            ),
+            None => service.create_protocol_contribution(&binding, &propose),
+        }
+        .and_then(|contribution| serde_json::to_value(contribution).map_err(json_error)),
         CobaltShadowRpcRequest::Submit { message } => service
             .receive(message)
             .and_then(|outcome| serde_json::to_value(outcome).map_err(json_error)),

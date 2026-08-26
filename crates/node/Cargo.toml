@@ -35,6 +35,10 @@ name = "postfiat-cobalt-handoff-rehearsal"
 path = "src/bin/postfiat_cobalt_handoff_rehearsal.rs"
 
 [[bin]]
+name = "postfiat-cobalt-e5-live-drill"
+path = "src/bin/postfiat_cobalt_e5_live_drill.rs"
+
+[[bin]]
 name = "postfiat-cobalt-liveness-simulation"
 path = "src/bin/postfiat_cobalt_liveness_simulation.rs"
 

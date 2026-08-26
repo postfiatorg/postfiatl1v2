@@ -14,7 +14,7 @@ pub fn ratify_dabc_amendment(
     }
     let (sequence, parent_ratification_id) = match previous {
         Some(previous) => {
-            validate_dabc_ratified_amendment_core(domain, graph, previous)?;
+            validate_dabc_ratification_anchor(domain, previous)?;
             (
                 previous
                     .sequence
@@ -54,6 +54,7 @@ pub fn validate_dabc_ratified_amendment(
     validate_dabc_ratified_amendment_core(domain, graph, ratified)?;
     match previous {
         Some(previous) => {
+            validate_dabc_ratification_anchor(domain, previous)?;
             let expected_sequence = previous
                 .sequence
                 .checked_add(1)
@@ -82,6 +83,20 @@ pub fn validate_dabc_ratified_amendment(
         }
     }
     Ok(())
+}
+
+/// Validates a durable DABC lineage anchor without requiring it to use the
+/// current registry and trust-graph roots.
+///
+/// Validator/trust updates are themselves DABC-ratified, so the ratification
+/// that anchors the next update necessarily belongs to the preceding graph.
+/// Its cryptographic identity and domain must remain valid even though its
+/// graph roots differ from the graph evaluating the next amendment.
+pub fn validate_dabc_ratification_anchor(
+    domain: &CobaltDomain,
+    ratified: &DabcRatifiedAmendment,
+) -> Result<(), String> {
+    validate_dabc_ratified_amendment_anchor(domain, ratified)
 }
 
 pub fn dabc_ratification_id(

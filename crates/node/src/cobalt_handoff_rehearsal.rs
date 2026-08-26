@@ -11,8 +11,9 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 use crate::cobalt_authority_certificate::{
+    cobalt_decision_ratification, cobalt_decision_registry_binding,
     cobalt_validator_update_payload_hash, compact_cobalt_validator_update_decision_certificate,
-    verify_cobalt_validator_update_decision_certificate,
+    next_cobalt_decision_round, verify_cobalt_validator_update_decision_certificate,
 };
 use crate::cobalt_handoff::{
     apply_cobalt_authority_transition, cobalt_authority_transition_approval_signing_bytes,
@@ -37,25 +38,27 @@ use postfiat_crypto_provider::{
     ML_DSA_65_ALGORITHM,
 };
 use postfiat_execution::genesis_hash;
+use postfiat_storage::NodeStore;
 use postfiat_types::{
     CobaltGovernanceAuthorityTransitionV1, CobaltValidatorUpdateDecisionCertificateV1, Genesis,
     GovernanceState, SignedCobaltAuthorityTransitionApprovalV1,
     SignedCobaltValidatorUpdateAuthorizationV1, ValidatorRegistryEntry,
     ValidatorRegistryUpdateRecord, COBALT_AUTHORITY_SCOPE_VALIDATOR_TRUST_V1,
     COBALT_AUTHORITY_TRANSITION_ACTIVATE, COBALT_AUTHORITY_TRANSITION_ROLLBACK,
-    COBALT_AUTHORITY_TRANSITION_SCHEMA_V1, GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED,
-    GOVERNANCE_AUTHORITY_MODE_FOUNDATION, GOVERNANCE_KIND_CRYPTO_POLICY,
-    SIGNED_COBALT_AUTHORITY_TRANSITION_APPROVAL_SCHEMA_V1,
+    COBALT_AUTHORITY_TRANSITION_SCHEMA_V1, COBALT_VALIDATOR_UPDATE_DECISION_CERTIFICATE_SCHEMA_V1,
+    GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED, GOVERNANCE_AUTHORITY_MODE_FOUNDATION,
+    GOVERNANCE_KIND_CRYPTO_POLICY, SIGNED_COBALT_AUTHORITY_TRANSITION_APPROVAL_SCHEMA_V1,
     SIGNED_COBALT_VALIDATOR_UPDATE_AUTHORIZATION_SCHEMA_V1,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use zeroize::Zeroizing;
 
 const MANIFEST_SCHEMA: &str = "postfiat-cobalt-handoff-clone-manifest-v1";
 const RESULT_SCHEMA: &str = "postfiat-cobalt-handoff-rehearsal-result-v1";
+const MAX_INPUT_JSON_BYTES: u64 = 16 * 1024 * 1024;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct CloneManifest {
     schema: String,
     source_commit: String,
@@ -78,8 +81,14 @@ fn invalid(message: impl Into<String>) -> io::Error {
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> io::Result<T> {
     let mut bytes = Vec::new();
     File::open(path)?
-        .take(16 * 1024 * 1024)
+        .take(MAX_INPUT_JSON_BYTES.saturating_add(1))
         .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_INPUT_JSON_BYTES {
+        return Err(invalid(format!(
+            "{} exceeds the input JSON limit",
+            path.display()
+        )));
+    }
     serde_json::from_slice(&bytes).map_err(|error| invalid(error.to_string()))
 }
 
@@ -637,7 +646,7 @@ fn prepare_update(
     let mut graph_transition = TrustGraphTransition {
         previous_registry_root: manifest.registry_root.clone(),
         new_registry_root: new_root.clone(),
-        previous_trust_graph_root: transition.trust_graph_root.clone(),
+        previous_trust_graph_root: manifest.trust_graph_root.clone(),
         new_trust_graph_root: new_graph_root.clone(),
         activation_height: height,
         transition_id: String::new(),
@@ -653,7 +662,7 @@ fn prepare_update(
         activation_height: height,
         previous_registry_root: manifest.registry_root.clone(),
         new_registry_root: new_root.clone(),
-        previous_trust_graph_root: Some(transition.trust_graph_root.clone()),
+        previous_trust_graph_root: Some(manifest.trust_graph_root.clone()),
         new_trust_graph_root: Some(new_graph_root.clone()),
         trust_graph_transition_id: Some(graph_transition.transition_id.clone()),
         previous_validators: validators.clone(),
@@ -692,17 +701,135 @@ fn prepare_update(
     Ok(())
 }
 
-fn print_update_payload_hash(update_path: &Path) -> io::Result<()> {
+fn print_update_payload_hash(
+    update_path: &Path,
+    previous_ratification_path: Option<&Path>,
+) -> io::Result<()> {
     let update: ValidatorRegistryUpdateRecord = read_json(update_path)?;
     let payload_hash = cobalt_validator_update_payload_hash(&update)?;
+    let previous = previous_ratification_path
+        .map(read_json::<postfiat_consensus_cobalt::DabcRatifiedAmendment>)
+        .transpose()?;
+    let protocol_round = next_cobalt_decision_round(update.activation_height, previous.as_ref())?;
     let encoded = serde_json::to_vec_pretty(&json!({
         "schema": "postfiat-cobalt-validator-update-payload-v1",
         "payload_hash": payload_hash,
-        "protocol_round": update.activation_height.checked_sub(1)
-            .ok_or_else(|| invalid("validator update activation height has no protocol round"))?,
+        "protocol_round": protocol_round,
         "activation_height": update.activation_height,
     }))
     .map_err(|error| invalid(error.to_string()))?;
+    io::stdout().write_all(&encoded)?;
+    io::stdout().write_all(b"\n")
+}
+
+fn prepare_live_update_context(args: &[String]) -> io::Result<()> {
+    let data_dir = required_arg(args, "--data-dir")?;
+    let activation_height = required_u64(args, "--activation-height")?;
+    let source_commit = required_arg(args, "--source-commit")?
+        .into_os_string()
+        .into_string()
+        .map_err(|_| invalid("source commit is not UTF-8"))?;
+    if source_commit.len() != 40 || !source_commit.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(invalid("source commit must be a full Git commit identity"));
+    }
+
+    let store = NodeStore::new(&data_dir);
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let registry =
+        crate::read_validator_registry_file(&data_dir.join(crate::VALIDATOR_REGISTRY_FILE))?;
+    let tip = store.read_chain_tip()?;
+    verify_cobalt_authority_history(&genesis, &governance)?;
+    if governance.authority_mode != GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED {
+        return Err(invalid(
+            "live update context requires active Cobalt validator-trust authority",
+        ));
+    }
+    if activation_height <= tip.height {
+        return Err(invalid(
+            "live update activation height must be after the current chain tip",
+        ));
+    }
+    let validators = governance.active_validators.clone();
+    let registry_root = validator_registry_root(&registry, &validators)?;
+    let transition = governance
+        .cobalt_authority_transitions
+        .last()
+        .ok_or_else(|| invalid("live Cobalt state has no authority transition"))?;
+    let mut cobalt_lock_hash = transition.cobalt_lock_hash.clone();
+    let mut trust_graph_root = transition.trust_graph_root.clone();
+    let mut amendment_sequence = transition.amendment_sequence;
+    for update in &governance.validator_registry_updates {
+        let Some(first) = update.cobalt_authorizations.first() else {
+            continue;
+        };
+        if first.authority_transition_id == transition.transition_id
+            && first.amendment_sequence > amendment_sequence
+        {
+            cobalt_lock_hash = update.update_id.clone();
+            trust_graph_root = update
+                .new_trust_graph_root
+                .clone()
+                .ok_or_else(|| invalid("live Cobalt update has no trust graph root"))?;
+            amendment_sequence = first.amendment_sequence;
+        }
+    }
+    let manifest = CloneManifest {
+        schema: MANIFEST_SCHEMA.to_string(),
+        source_commit,
+        genesis: genesis.clone(),
+        registry,
+        registry_root,
+        trust_graph_root,
+        cobalt_lock_hash,
+        anchor_height: tip.height,
+        anchor_genesis_hash: genesis_hash(&genesis),
+        anchor_block_hash: tip.block_hash,
+        anchor_state_root: tip.state_root,
+        activation_height,
+    };
+    validate_manifest(&manifest)?;
+    write_json(
+        &required_arg(args, "--manifest-output")?,
+        &serde_json::to_value(manifest).map_err(|error| invalid(error.to_string()))?,
+    )?;
+    write_json(
+        &required_arg(args, "--governance-output")?,
+        &json!({"governance": governance}),
+    )
+}
+
+fn build_decision_certificate(
+    registry_binding_path: &Path,
+    transcript_path: &Path,
+    output: &Path,
+) -> io::Result<()> {
+    let certificate = CobaltValidatorUpdateDecisionCertificateV1 {
+        schema: COBALT_VALIDATOR_UPDATE_DECISION_CERTIFICATE_SCHEMA_V1.to_string(),
+        registry_binding: read_json(registry_binding_path)?,
+        protocol_transcript: read_json(transcript_path)?,
+    };
+    let certificate = compact_cobalt_validator_update_decision_certificate(certificate)?;
+    write_json(
+        output,
+        &serde_json::to_value(certificate).map_err(|error| invalid(error.to_string()))?,
+    )
+}
+
+fn print_decision_ratification(certificate_path: &Path) -> io::Result<()> {
+    let certificate: CobaltValidatorUpdateDecisionCertificateV1 = read_json(certificate_path)?;
+    let ratification = cobalt_decision_ratification(&certificate)?;
+    let encoded =
+        serde_json::to_vec_pretty(&ratification).map_err(|error| invalid(error.to_string()))?;
+    io::stdout().write_all(&encoded)?;
+    io::stdout().write_all(b"\n")
+}
+
+fn print_decision_registry_binding(certificate_path: &Path) -> io::Result<()> {
+    let certificate: CobaltValidatorUpdateDecisionCertificateV1 = read_json(certificate_path)?;
+    let binding = cobalt_decision_registry_binding(&certificate)?;
+    let encoded =
+        serde_json::to_vec_pretty(&binding).map_err(|error| invalid(error.to_string()))?;
     io::stdout().write_all(&encoded)?;
     io::stdout().write_all(b"\n")
 }
@@ -724,7 +851,7 @@ fn attach_decision_certificate(
             .ok_or_else(|| invalid("activation result has no governance state"))?,
     )
     .map_err(|error| invalid(error.to_string()))?;
-    let transition = governance
+    governance
         .cobalt_authority_transitions
         .last()
         .ok_or_else(|| invalid("activation result has no Cobalt transition"))?;
@@ -737,10 +864,23 @@ fn attach_decision_certificate(
     let certificate: CobaltValidatorUpdateDecisionCertificateV1 = read_json(certificate_path)?;
     let certificate = compact_cobalt_validator_update_decision_certificate(certificate)?;
     let payload_hash = cobalt_validator_update_payload_hash(&update)?;
-    let round = update
-        .activation_height
-        .checked_sub(1)
-        .ok_or_else(|| invalid("validator update activation height has no protocol round"))?;
+    let previous_ratification = governance
+        .validator_registry_updates
+        .iter()
+        .rev()
+        .find(|prior| !prior.cobalt_authorizations.is_empty())
+        .map(|prior| {
+            prior
+                .cobalt_decision_certificate
+                .as_ref()
+                .ok_or_else(|| {
+                    invalid("stored Cobalt validator update has no decision certificate")
+                })
+                .and_then(cobalt_decision_ratification)
+        })
+        .transpose()?;
+    let round =
+        next_cobalt_decision_round(update.activation_height, previous_ratification.as_ref())?;
     verify_cobalt_validator_update_decision_certificate(
         &certificate,
         &postfiat_consensus_cobalt::CobaltDomain {
@@ -751,11 +891,11 @@ fn attach_decision_certificate(
         &manifest.registry,
         &manifest.validators(),
         &manifest.registry_root,
-        &transition.trust_graph_root,
+        &manifest.trust_graph_root,
         &payload_hash,
         round,
         update.activation_height,
-        None,
+        previous_ratification.as_ref(),
     )?;
     update.cobalt_decision_certificate = Some(certificate);
     write_json(
@@ -1022,8 +1162,12 @@ fn usage() -> ! {
          postfiat-cobalt-handoff-rehearsal abort --manifest PATH --transition PATH --approvals PATH --output PATH\n\
          postfiat-cobalt-handoff-rehearsal finalize-activation --manifest PATH --transition PATH --approvals PATH --output PATH\n\
          postfiat-cobalt-handoff-rehearsal negative --manifest PATH --transition PATH --update PATH --output PATH\n\
+         postfiat-cobalt-handoff-rehearsal prepare-live-update-context --data-dir PATH --activation-height N --source-commit COMMIT --manifest-output PATH --governance-output PATH\n\
          postfiat-cobalt-handoff-rehearsal prepare-update --manifest PATH --activation-result PATH [--replacement-record PATH] [--new-trust-graph-root HASH] [--activation-height N] --output PATH --registry-output PATH\n\
-         postfiat-cobalt-handoff-rehearsal update-payload-hash --update PATH\n\
+         postfiat-cobalt-handoff-rehearsal update-payload-hash --update PATH [--previous-ratification PATH]\n\
+         postfiat-cobalt-handoff-rehearsal build-decision-certificate --registry-binding PATH --transcript PATH --output PATH\n\
+         postfiat-cobalt-handoff-rehearsal decision-ratification --certificate PATH\n\
+         postfiat-cobalt-handoff-rehearsal decision-registry-binding --certificate PATH\n\
          postfiat-cobalt-handoff-rehearsal attach-decision --manifest PATH --activation-result PATH --update PATH --certificate PATH --output PATH\n\
          postfiat-cobalt-handoff-rehearsal sign-update --update PATH --key-file PATH --validator ID --authority-transition-id HASH --parent-lock-hash HASH --amendment-sequence N --proposal-slot N --expires-at-height N\n\
          postfiat-cobalt-handoff-rehearsal finalize-update --manifest PATH --activation-result PATH --update PATH --authorizations PATH --output PATH\n\
@@ -1063,6 +1207,7 @@ pub fn main() -> io::Result<()> {
             &required_arg(rest, "--update")?,
             &required_arg(rest, "--output")?,
         ),
+        "prepare-live-update-context" => prepare_live_update_context(rest),
         "prepare-update" => {
             let replacement_record = optional_arg(rest, "--replacement-record");
             let new_trust_graph_root = optional_arg(rest, "--new-trust-graph-root");
@@ -1077,7 +1222,21 @@ pub fn main() -> io::Result<()> {
                 &required_arg(rest, "--registry-output")?,
             )
         }
-        "update-payload-hash" => print_update_payload_hash(&required_arg(rest, "--update")?),
+        "update-payload-hash" => print_update_payload_hash(
+            &required_arg(rest, "--update")?,
+            optional_arg(rest, "--previous-ratification").as_deref(),
+        ),
+        "build-decision-certificate" => build_decision_certificate(
+            &required_arg(rest, "--registry-binding")?,
+            &required_arg(rest, "--transcript")?,
+            &required_arg(rest, "--output")?,
+        ),
+        "decision-ratification" => {
+            print_decision_ratification(&required_arg(rest, "--certificate")?)
+        }
+        "decision-registry-binding" => {
+            print_decision_registry_binding(&required_arg(rest, "--certificate")?)
+        }
         "attach-decision" => attach_decision_certificate(
             &required_arg(rest, "--manifest")?,
             &required_arg(rest, "--activation-result")?,

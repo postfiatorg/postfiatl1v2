@@ -23,9 +23,9 @@ use postfiat_execution::genesis_hash;
 use postfiat_storage::NodeStore;
 use postfiat_types::{
     SignedCobaltValidatorUpdateAuthorizationV1, ValidatorRegistryEntry,
-    COBALT_AUTHORITY_TRANSITION_ACTIVATE, COBALT_AUTHORITY_TRANSITION_ROLLBACK,
-    GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED, GOVERNANCE_AUTHORITY_MODE_FOUNDATION,
-    SIGNED_COBALT_VALIDATOR_UPDATE_AUTHORIZATION_SCHEMA_V1,
+    ValidatorRegistryUpdateRecord, COBALT_AUTHORITY_TRANSITION_ACTIVATE,
+    COBALT_AUTHORITY_TRANSITION_ROLLBACK, GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED,
+    GOVERNANCE_AUTHORITY_MODE_FOUNDATION, SIGNED_COBALT_VALIDATOR_UPDATE_AUTHORIZATION_SCHEMA_V1,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -56,6 +56,12 @@ fn required_arg(args: &[String], name: &str) -> io::Result<PathBuf> {
         .ok_or_else(|| invalid(format!("missing required argument {name}")))
 }
 
+fn optional_arg(args: &[String], name: &str) -> Option<PathBuf> {
+    args.windows(2)
+        .find(|pair| pair[0] == name)
+        .map(|pair| PathBuf::from(&pair[1]))
+}
+
 fn required_string(args: &[String], name: &str) -> io::Result<String> {
     required_arg(args, name)?
         .into_os_string()
@@ -63,17 +69,39 @@ fn required_string(args: &[String], name: &str) -> io::Result<String> {
         .map_err(|_| invalid(format!("argument {name} is not UTF-8")))
 }
 
-fn bounded_digest(path: &Path) -> io::Result<String> {
-    let mut file = fs::File::open(path)?;
-    if file.metadata()?.len() > MAX_STATE_BYTES {
+fn read_bounded_bytes(path: &Path) -> io::Result<Vec<u8>> {
+    let file = fs::File::open(path)?;
+    let metadata = file.metadata()?;
+    if metadata.len() > MAX_STATE_BYTES {
         return Err(invalid(format!(
             "{} exceeds the read-only drill limit",
             path.display()
         )));
     }
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)?;
-    Ok(bytes_to_hex(&Sha256::digest(bytes)))
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    file.take(MAX_STATE_BYTES.saturating_add(1))
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_STATE_BYTES {
+        return Err(invalid(format!(
+            "{} grew beyond the read-only drill limit",
+            path.display()
+        )));
+    }
+    Ok(bytes)
+}
+
+fn bounded_digest(path: &Path) -> io::Result<String> {
+    Ok(bytes_to_hex(&Sha256::digest(read_bounded_bytes(path)?)))
+}
+
+fn read_bounded_json<T: serde::de::DeserializeOwned>(path: &Path) -> io::Result<T> {
+    serde_json::from_slice(&read_bounded_bytes(path)?).map_err(|error| invalid(error.to_string()))
+}
+
+fn require_rejection(result: io::Result<()>, label: &str) -> io::Result<io::Error> {
+    result
+        .err()
+        .ok_or_else(|| invalid(format!("{label} unexpectedly accepted")))
 }
 
 fn rejection(error: io::Error) -> Value {
@@ -155,9 +183,10 @@ fn run(args: &[String]) -> io::Result<Value> {
         None,
     )?;
 
-    let early =
-        verify_cobalt_authority_transition(&genesis, &governance, &registry, &unsigned, tip.height)
-            .expect_err("early transition must reject");
+    let early = require_rejection(
+        verify_cobalt_authority_transition(&genesis, &governance, &registry, &unsigned, tip.height),
+        "early transition",
+    )?;
 
     let mut stale = unsigned.clone();
     stale.activation_height = governance
@@ -166,94 +195,116 @@ fn run(args: &[String]) -> io::Result<Value> {
         .ok_or_else(|| invalid("missing current transition"))?
         .activation_height;
     stale.transition_id = cobalt_authority_transition_id(&stale)?;
-    let stale_error = verify_cobalt_authority_transition(
-        &genesis,
-        &governance,
-        &registry,
-        &stale,
-        stale.activation_height,
-    )
-    .expect_err("stale transition must reject");
+    let stale_error = require_rejection(
+        verify_cobalt_authority_transition(
+            &genesis,
+            &governance,
+            &registry,
+            &stale,
+            stale.activation_height,
+        ),
+        "stale transition",
+    )?;
 
     let latest = governance
         .cobalt_authority_transitions
         .last()
         .ok_or_else(|| invalid("missing current transition"))?;
-    let replay_error =
-        verify_cobalt_authority_transition(&genesis, &governance, &registry, latest, next_height)
-            .expect_err("accepted transition replay must reject");
+    let replay_error = require_rejection(
+        verify_cobalt_authority_transition(
+            &genesis,
+            &governance,
+            &registry,
+            latest,
+            latest.activation_height,
+        ),
+        "accepted transition replay",
+    )?;
 
     let mut wrong_root = unsigned.clone();
     wrong_root.old_registry_root = "ff".repeat(48);
     wrong_root.cobalt_registry_root = wrong_root.old_registry_root.clone();
     wrong_root.transition_id = cobalt_authority_transition_id(&wrong_root)?;
-    let wrong_root_error = verify_cobalt_authority_transition(
-        &genesis,
-        &governance,
-        &registry,
-        &wrong_root,
-        next_height,
-    )
-    .expect_err("wrong-root transition must reject");
+    let wrong_root_error = require_rejection(
+        verify_cobalt_authority_transition(
+            &genesis,
+            &governance,
+            &registry,
+            &wrong_root,
+            next_height,
+        ),
+        "wrong-root transition",
+    )?;
 
     let mut cross_chain = unsigned.clone();
     cross_chain.chain_id.push_str("-adversarial");
     cross_chain.transition_id = cobalt_authority_transition_id(&cross_chain)?;
-    let cross_chain_error = verify_cobalt_authority_transition(
-        &genesis,
-        &governance,
-        &registry,
-        &cross_chain,
-        next_height,
-    )
-    .expect_err("cross-chain transition must reject");
+    let cross_chain_error = require_rejection(
+        verify_cobalt_authority_transition(
+            &genesis,
+            &governance,
+            &registry,
+            &cross_chain,
+            next_height,
+        ),
+        "cross-chain transition",
+    )?;
 
     let mut mixed_authority = unsigned.clone();
     mixed_authority.from_authority_mode = GOVERNANCE_AUTHORITY_MODE_FOUNDATION;
     mixed_authority.to_authority_mode = GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED;
     mixed_authority.transition_kind = COBALT_AUTHORITY_TRANSITION_ACTIVATE.to_string();
     mixed_authority.transition_id = cobalt_authority_transition_id(&mixed_authority)?;
-    let mixed_authority_error = verify_cobalt_authority_transition(
-        &genesis,
-        &governance,
-        &registry,
-        &mixed_authority,
-        next_height,
-    )
-    .expect_err("mixed-authority transition must reject");
+    let mixed_authority_error = require_rejection(
+        verify_cobalt_authority_transition(
+            &genesis,
+            &governance,
+            &registry,
+            &mixed_authority,
+            next_height,
+        ),
+        "mixed-authority transition",
+    )?;
 
     let mut self_authorized = unsigned.clone();
     self_authorized.validators.pop();
     self_authorized.approval_quorum = quorum - 1;
     self_authorized.transition_id = cobalt_authority_transition_id(&self_authorized)?;
-    let self_authorized_error = verify_cobalt_authority_transition(
-        &genesis,
-        &governance,
-        &registry,
-        &self_authorized,
-        next_height,
-    )
-    .expect_err("self-authorized transition must reject");
+    let self_authorized_error = require_rejection(
+        verify_cobalt_authority_transition(
+            &genesis,
+            &governance,
+            &registry,
+            &self_authorized,
+            next_height,
+        ),
+        "self-authorized transition",
+    )?;
 
-    let replayed_rollback = governance
+    let rollback = governance
         .cobalt_authority_transitions
         .iter()
         .rev()
         .find(|transition| transition.transition_kind == COBALT_AUTHORITY_TRANSITION_ROLLBACK)
-        .map(|rollback| {
-            rejection(
-                verify_cobalt_authority_transition(
-                    &genesis,
-                    &governance,
-                    &registry,
-                    rollback,
-                    next_height,
-                )
-                .expect_err("accepted rollback replay must reject"),
-            )
-        });
+        .ok_or_else(|| invalid("live history contains no accepted Cobalt rollback"))?;
+    let replayed_rollback = rejection(require_rejection(
+        verify_cobalt_authority_transition(
+            &genesis,
+            &governance,
+            &registry,
+            rollback,
+            rollback.activation_height,
+        ),
+        "accepted rollback replay",
+    )?);
 
     let (parent_lock_hash, trust_graph_root, amendment_sequence) = current_progress(&governance)?;
+    let next_amendment_sequence = amendment_sequence
+        .checked_add(1)
+        .ok_or_else(|| invalid("Cobalt amendment sequence overflow"))?;
+    let authorization_expiry = next_height
+        .checked_add(10)
+        .ok_or_else(|| invalid("authorization expiry height overflow"))?;
     let attacker_key = ml_dsa_65_keygen_from_seed(&[0xE5; 32]);
     let replacement = ValidatorRegistryEntry {
         node_id: stolen_validator.clone(),
@@ -338,10 +389,10 @@ fn run(args: &[String]) -> io::Result<Value> {
         schema: SIGNED_COBALT_VALIDATOR_UPDATE_AUTHORIZATION_SCHEMA_V1.to_string(),
         validator: stolen_validator.clone(),
         authority_transition_id: latest.transition_id.clone(),
-        parent_cobalt_lock_hash: parent_lock_hash,
-        amendment_sequence: amendment_sequence + 1,
+        parent_cobalt_lock_hash: parent_lock_hash.clone(),
+        amendment_sequence: next_amendment_sequence,
         proposal_slot: next_height,
-        expires_at_height: next_height + 10,
+        expires_at_height: authorization_expiry,
         algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
         signature_hex: String::new(),
     };
@@ -357,14 +408,66 @@ fn run(args: &[String]) -> io::Result<Value> {
         .map_err(|error| invalid(error.to_string()))?,
     );
     stolen_update.cobalt_authorizations = vec![authorization];
-    let stolen_key_error = verify_cobalt_validator_trust_update(
-        &genesis,
-        &governance,
-        &registry,
-        &stolen_update,
-        next_height,
-    )
-    .expect_err("one stolen key must not authorize a registry rotation");
+    let mut stolen_key_error = require_rejection(
+        verify_cobalt_validator_trust_update(
+            &genesis,
+            &governance,
+            &registry,
+            &stolen_update,
+            next_height,
+        ),
+        "one stolen key registry rotation",
+    )?;
+    let mut stolen_subject = stolen_validator.clone();
+    let mut decision_certificate_present = false;
+    if let Some(update_path) = optional_arg(args, "--certified-update") {
+        let mut decided_update: ValidatorRegistryUpdateRecord = read_bounded_json(&update_path)?;
+        if decided_update.activation_height != next_height
+            || decided_update.cobalt_decision_certificate.is_none()
+            || decided_update.operation != VALIDATOR_REGISTRY_OP_ROTATE_KEY
+            || decided_update.subject_node_id != stolen_validator
+        {
+            return Err(invalid(
+                "certified stolen-key drill update must decide the selected validator rotation at the next height",
+            ));
+        }
+        decided_update.cobalt_authorizations.clear();
+        let mut stolen_authorization = SignedCobaltValidatorUpdateAuthorizationV1 {
+            schema: SIGNED_COBALT_VALIDATOR_UPDATE_AUTHORIZATION_SCHEMA_V1.to_string(),
+            validator: stolen_validator.clone(),
+            authority_transition_id: latest.transition_id.clone(),
+            parent_cobalt_lock_hash: parent_lock_hash,
+            amendment_sequence: next_amendment_sequence,
+            proposal_slot: next_height,
+            expires_at_height: authorization_expiry,
+            algorithm_id: ML_DSA_65_ALGORITHM.to_string(),
+            signature_hex: String::new(),
+        };
+        stolen_authorization.signature_hex = bytes_to_hex(
+            &ml_dsa_65_sign_with_context(
+                &private_key,
+                &cobalt_validator_update_authorization_signing_bytes(
+                    &decided_update,
+                    &stolen_authorization,
+                )?,
+                COBALT_VALIDATOR_UPDATE_SIGNATURE_CONTEXT_V1,
+            )
+            .map_err(|error| invalid(error.to_string()))?,
+        );
+        stolen_subject = decided_update.subject_node_id.clone();
+        decided_update.cobalt_authorizations = vec![stolen_authorization];
+        stolen_key_error = require_rejection(
+            verify_cobalt_validator_trust_update(
+                &genesis,
+                &governance,
+                &registry,
+                &decided_update,
+                next_height,
+            ),
+            "one stolen key decided registry rotation",
+        )?;
+        decision_certificate_present = true;
+    }
 
     let governance_sha256_after = bounded_digest(&governance_path)?;
     let registry_sha256_after = bounded_digest(&registry_path)?;
@@ -386,8 +489,9 @@ fn run(args: &[String]) -> io::Result<Value> {
             "rejected": true,
             "reason": stolen_key_error.to_string(),
             "stolen_validator": stolen_validator,
+            "attempted_subject": stolen_subject,
             "signature_count": 1,
-            "decision_certificate_present": false,
+            "decision_certificate_present": decision_certificate_present,
             "attacker_replacement_public_key_sha256": bytes_to_hex(&Sha256::digest(attacker_key.public_key)),
         },
     });
@@ -425,8 +529,8 @@ fn run(args: &[String]) -> io::Result<Value> {
         },
         "claims_not_made": [
             "the adversary possessed more than one active validator key",
-            "the adversary produced a Cobalt protocol decision certificate",
             "the drill mutated live validator state",
+            "Cobalt controlled block consensus",
         ],
     }))
 }
@@ -446,7 +550,7 @@ fn previous_record_public_key(
 fn usage() -> ! {
     eprintln!(
         "usage: postfiat-cobalt-e5-live-drill --data-dir PATH --validator-key-file PATH \
-         --stolen-validator ID --source-commit COMMIT"
+         --stolen-validator ID --source-commit COMMIT [--certified-update PATH]"
     );
     std::process::exit(2);
 }
