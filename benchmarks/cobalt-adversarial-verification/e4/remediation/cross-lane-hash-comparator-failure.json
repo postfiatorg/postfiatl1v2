@@ -1,0 +1,74 @@
+{
+  "schema": "postfiat-cobalt-adversarial-e4-cross-lane-comparator-failure-v1",
+  "status": "remediated_rerun_required",
+  "observed_at": "2026-08-26T01:05:28Z",
+  "source_revision": "451c2ad0e924f8be72feeac69c1356b3828a4f58",
+  "campaign": {
+    "baseline": {
+      "status": "passed",
+      "iterations": 500,
+      "final_height": 501,
+      "six_validator_convergence": true,
+      "state_verified": true
+    },
+    "attack": {
+      "status": "passed",
+      "iterations": 500,
+      "final_height": 501,
+      "six_validator_convergence": true,
+      "state_verified": true
+    },
+    "matched_initial_state": true,
+    "matched_semantic_workload": true,
+    "wallet_to_finality_p95_delta_percent": 0.4433232431564571,
+    "wallet_to_finality_p95_budget_percent": 5.0,
+    "governance_runs": 45,
+    "governance_proposals": 900,
+    "safe_halts": 315,
+    "view_changes": 315,
+    "validator_5_restarts": 12
+  },
+  "failure": {
+    "stage": "post_campaign_cross_lane_final_state_comparison",
+    "top_level_report_status": "failed",
+    "failed_check": "consensus_v2_never_forked",
+    "baseline_and_attack_exact_hashes_equal": false,
+    "baseline_tip": "6e53c54394b5b368ff0d16ef35eaf817219ca04cf6033f79bdedb74133adb575813a232771c6df3ba9585ffa4688e7a2",
+    "attack_tip": "454ba74ea556db6f99bdb52d26dd09f3bf9f9a9221531a6fe3b55424ab939fbb5c4769eaea486f28c1c8163c32bc5f8e",
+    "baseline_state_root": "4ee1b566258a5dc67c4c6ec0f439c8c5a6d6d6badc0967d4e6a376afd5e00ab4c9b2c1c28ead852013c63fb8865bf0d4",
+    "attack_state_root": "8ed74ad01e791f36d14dbf61209c6ff5c8ba3faf2c25298a5e57c1afb757302f268c8971fc6b7323ee4b93e41005a0fc"
+  },
+  "diagnosis": {
+    "protocol_safety_failure_observed": false,
+    "fork_observed": false,
+    "durable_state_divergence_within_either_lane_observed": false,
+    "root_cause": "the harness treated exact hashes from two independent executions as a fork oracle even though each execution creates fresh randomized ML-DSA transaction and consensus signatures",
+    "cryptographic_binding": "wallet signing calls the randomized ML-DSA signing path and the transfer transaction ID hashes the signature; fresh consensus signatures also change certificates and block hashes",
+    "correct_fork_oracle": "each lane's six validators must converge on one height, tip, and state root and pass durable state verification",
+    "correct_cross_lane_oracle": "the lanes must begin from the same signed snapshot and match on unsigned workload configuration, per-round proposer and height, vote policy, quorum and vote count, accepted receipts, finality, and round outcomes"
+  },
+  "remediation": {
+    "corpus_parameters_changed": false,
+    "protocol_or_binary_changed": false,
+    "postprocessor_changed": true,
+    "change": "replace cross-lane tip/root equality with lane-local six-validator convergence and an explicit signed-message-independent semantic workload comparison; continue reporting whether cross-lane hashes happen to match without gating on them",
+    "regression_test": "benchmarks/cobalt-activate-or-retire/test_consensus_v2_cobalt_integration.py"
+  },
+  "rerun": {
+    "required": true,
+    "same_500_plus_500_rounds": true,
+    "same_full_vote_policy": true,
+    "same_crash_schedule": true,
+    "same_topology_and_keys": true,
+    "same_cpu_quota": true,
+    "same_adversarial_inputs": true
+  },
+  "raw_evidence": {
+    "baseline_report_sha256": "5f1ee81cf607bec2c2c0005cf017e4174f4a80ee2cb08925280b2bdfb001fd0c",
+    "attack_report_sha256": "13841fe1966353ab6ac26988910c4cfdc7218761eaba02730d589c0ceef339f2",
+    "integration_report_sha256": "bc1a45138deda13ae34e27cc27baab2218f7fe5683aa15c52b9cb3930c938248",
+    "topology_sha256": "d7a8dc9dbcffb3dcc5040a98b23b23614e67ee002e7bf4a175e0443683a3cc6d",
+    "postfiat_node_sha256": "634f08368c174a288bfc42211dc52ef0725c7f6933acc816e4a9006606189a41",
+    "cobalt_liveness_simulation_sha256": "6bef2df8a2ef18c11c774309713c878470f54819b98e15face09a9f9ffa62028"
+  }
+}

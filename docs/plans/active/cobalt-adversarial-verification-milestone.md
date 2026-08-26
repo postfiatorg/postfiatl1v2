@@ -107,7 +107,7 @@ Code references: `crates/cobalt_e3_harness/src/main.rs`, `crates/node/src/cobalt
 
 ### E4. Finality isolation under governance stress
 
-Execution: P0 harness retry-window remediation complete; clean 500+500 evidence rerun in progress
+Execution: second P0 harness remediation complete; unchanged clean 500+500 evidence rerun required
 
 Remediated frozen source revision: `451c2ad0e924f8be72feeac69c1356b3828a4f58`.
 The first frozen revision `0b2abdc5fde6ade172dc9a85b811330edc1cda2c`
@@ -117,9 +117,23 @@ locked validator-5 restart outage. No fork or durable divergence was observed.
 The redaction-safe failure receipt is
 `benchmarks/cobalt-adversarial-verification/e4/remediation/initial-failure.json`.
 A focused clean-state remediation check passed two full-vote rounds through
-three validator-5 crash/restarts with six-node convergence. The 500+500 corpus,
-full-vote policy, crash cadence, topology, quota, and adversarial inputs are
-unchanged.
+three validator-5 crash/restarts with six-node convergence.
+
+The clean rerun then completed all 500 baseline and 500 attack rounds. Both
+six-validator lanes converged independently at height 501, all lane checks
+passed, the attack p95 delta was `+0.4433232431564571%`, 45 governance stress
+runs exercised 900 proposals, 315 safe halts, and 315 view changes, and
+validator-5 restarted 12 times. The top-level report nevertheless failed because
+the postprocessor incorrectly required exact tip and state-root equality across
+two independent runs whose randomized ML-DSA transaction and consensus
+signatures necessarily change transaction IDs, certificates, hashes, and roots.
+That is a harness-oracle failure, not an observed fork. Its redaction-safe receipt
+is `benchmarks/cobalt-adversarial-verification/e4/remediation/cross-lane-hash-comparator-failure.json`.
+The corrected gate requires six-node convergence inside each lane and compares
+the signed-message-independent workload and round outcomes across lanes. The
+500+500 corpus, full-vote policy, crash cadence, topology, quota, binaries, and
+adversarial inputs remain unchanged; E4 stays open pending one clean rerun of
+that unchanged corpus.
 
 Frozen manifest:
 `benchmarks/cobalt-adversarial-verification/e4/campaign-manifest.json`;

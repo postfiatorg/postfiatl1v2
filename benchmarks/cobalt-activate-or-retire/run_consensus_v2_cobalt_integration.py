@@ -38,6 +38,68 @@ def write_json(path: Path, value: Any, mode: int = 0o644) -> None:
     path.chmod(mode)
 
 
+def fleet_converged(statuses: list[dict[str, Any]]) -> bool:
+    """Return whether all six validators expose one durable final state."""
+    return (
+        len(statuses) == VALIDATORS
+        and len(
+            {
+                (
+                    row["block_height"],
+                    row["block_tip_hash"],
+                    row["state_root"],
+                )
+                for row in statuses
+            }
+        )
+        == 1
+    )
+
+
+def benchmark_workload_fingerprint(report: dict[str, Any]) -> dict[str, Any]:
+    """Project a lane report onto signed-message-independent workload semantics.
+
+    ML-DSA signatures are randomized. Transaction IDs, certificates, block hashes,
+    and roots therefore differ between independent executions of the same unsigned
+    workload and must not be used as a cross-lane fork oracle.
+    """
+    config = report.get("config", {})
+    iterations = report.get("iterations", [])
+    return {
+        "config": {
+            key: config.get(key)
+            for key in (
+                "validators",
+                "rounds",
+                "vote_policy",
+                "wallet_address",
+                "recipient",
+                "amount",
+            )
+        },
+        "iterations": [
+            {
+                key: row.get(key)
+                for key in (
+                    "iteration",
+                    "source_node",
+                    "block_height",
+                    "vote_policy",
+                    "validators",
+                    "quorum",
+                    "vote_count",
+                    "receipt_accepted",
+                    "finality_confirmed",
+                    "round_ok",
+                    "all_vote_requests_verified",
+                    "all_sends_verified",
+                )
+            }
+            for row in iterations
+        ],
+    }
+
+
 def run(
     args: list[str],
     *,
@@ -999,29 +1061,23 @@ def main() -> int:
             and all(process.poll() is None for process in validator_processes)
         )
 
-        def fleet_converged(statuses: list[dict[str, Any]]) -> bool:
-            return (
-                len(statuses) == VALIDATORS
-                and len(
-                    {
-                        (
-                            row["block_height"],
-                            row["block_tip_hash"],
-                            row["state_root"],
-                        )
-                        for row in statuses
-                    }
-                )
-                == 1
-            )
-
         baseline_fleet_converged = fleet_converged(baseline_final_status)
         integration_fleet_converged = fleet_converged(integration_final_status)
-        matched_final_state = (
+        matched_semantic_workload = (
+            benchmark_workload_fingerprint(baseline)
+            == benchmark_workload_fingerprint(integration)
+        )
+        same_final_height = (
+            baseline_final_status[0]["block_height"]
+            == integration_final_status[0]["block_height"]
+        )
+        final_state_safety_passed = (
             baseline_fleet_converged
             and integration_fleet_converged
-            and baseline_final_status[0]["block_height"]
-            == integration_final_status[0]["block_height"]
+            and same_final_height
+        )
+        cross_lane_hashes_equal = (
+            same_final_height
             and baseline_final_status[0]["block_tip_hash"]
             == integration_final_status[0]["block_tip_hash"]
             and baseline_final_status[0]["state_root"]
@@ -1102,10 +1158,10 @@ def main() -> int:
             "consensus_v2_never_forked": (
                 baseline_fleet_converged
                 and integration_fleet_converged
-                and matched_final_state
                 and baseline_checks.get("converged") is True
                 and integration_checks.get("converged") is True
             ),
+            "matched_semantic_workload": matched_semantic_workload,
             "cobalt_active_during_attack": bool(cobalt_runs)
             and coverage >= 0.95
             and all(run_receipt["status"] == "passed" for run_receipt in cobalt_runs),
@@ -1152,7 +1208,7 @@ def main() -> int:
         }
         report = {
             "schema": (
-                "postfiat-cobalt-adversarial-e4-v1"
+                "postfiat-cobalt-adversarial-e4-v2"
                 if args.e4_stress
                 else "postfiat-consensus-v2-cobalt-paired-integration-v1"
             ),
@@ -1223,10 +1279,28 @@ def main() -> int:
                 "baseline": baseline_initial_status,
                 "attack": integration_initial_status,
             },
-            "matched_final_state": {
-                "equal": matched_final_state,
+            "final_state_safety": {
+                "passed": final_state_safety_passed,
+                "baseline_fleet_converged": baseline_fleet_converged,
+                "attack_fleet_converged": integration_fleet_converged,
+                "same_final_height": same_final_height,
+                "cross_lane_hashes_equal": cross_lane_hashes_equal,
+                "cross_lane_hash_equality_required": False,
+                "cross_lane_hash_exclusion": (
+                    "independent executions use randomized ML-DSA transaction and "
+                    "consensus signatures, so transaction IDs, certificates, block "
+                    "tips, and state roots are not a valid cross-lane fork oracle"
+                ),
                 "baseline": baseline_final_status,
                 "attack": integration_final_status,
+            },
+            "matched_semantic_workload": {
+                "equal": matched_semantic_workload,
+                "comparison": (
+                    "unsigned workload configuration and per-round consensus outcomes; "
+                    "excludes signatures, transaction IDs, certificates, hashes, roots, "
+                    "and timing"
+                ),
             },
             "governance_stress": {
                 "run_count": len(governance_receipts),
