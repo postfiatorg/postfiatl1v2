@@ -325,7 +325,7 @@ def main() -> int:
             ],
             "evidence_commit": "ee6707c4",
         },
-        "public_article_commit": "d4edd89",
+        "public_article_commit": "e4b2a19",
     }
     verifier = {
         "schema": cobalt.ADVERSARIAL_PACKET_SCHEMA,

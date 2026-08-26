@@ -78,7 +78,7 @@ E6 evidence is stored under
 `benchmarks/cobalt-adversarial-verification/e6/`. It locks the design-only
 decision to reinstate the independent-operator gate as its own mandatory
 follow-on milestone. The packet's `SHA256SUMS.txt` hash is
-`fa6255b5a5f31f2d7e8b2836eb005f894b815199ec1205a30fa99a6fb22de6e2`.
+`ee6848f516347a5e6f4a76b6d7c3bfbcede370010e548b9af4fe009a3121be0b`.
 It recruits no operators, authorizes no live migration, and does not prove
 operator decentralization.
 

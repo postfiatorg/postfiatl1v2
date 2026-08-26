@@ -22,7 +22,7 @@
     "experiment_pass_count": 6,
     "experiments": {
       "E1": {
-        "sha256sums_sha256": "9151c9b7f43e2c75f367416b9087e7255ca1c03ae734bfdd362fc79ff0cbbc05",
+        "sha256sums_sha256": "495a59a27d6deb9f9872ae583077ef31296a978a0841cd7345593f42e4dfcd90",
         "status": "passed",
         "summary": "Independent oracles and production agreed on all 10,240 frozen graph cases."
       },
@@ -47,7 +47,7 @@
         "summary": "Final live rollback and return committed; nine negatives rejected; legitimate rotation committed."
       },
       "E6": {
-        "sha256sums_sha256": "fa6255b5a5f31f2d7e8b2836eb005f894b815199ec1205a30fa99a6fb22de6e2",
+        "sha256sums_sha256": "ee6848f516347a5e6f4a76b6d7c3bfbcede370010e548b9af4fe009a3121be0b",
         "status": "passed",
         "summary": "Independent-operator proposal path retained as a mandatory follow-on milestone."
       }

@@ -65,11 +65,11 @@
   "source_files": [
     {
       "path": "docs/governance/cobalt-independent-operator-proposal-path-research-spec.md",
-      "sha256": "91ad402672653f3e76489f7e7de719d5597553111985d939a9e90b52a1edec89"
+      "sha256": "c16003dc852378d9fcd054eda6503baeb66440ea6c72843c2fe8364bca74cb23"
     },
     {
       "path": "docs/governance/cobalt-adversarial-verification-research-spec.md",
-      "sha256": "3e3d31c5d45283651e5174a3679510cbac6f51d33a730225a7bb92923957ba0d"
+      "sha256": "798dd183d8033ead11851b68ae074dadb7b7e37b9214a5a797f8d7f91e4f3812"
     },
     {
       "path": "benchmarks/cobalt-independent-operators/onboarding-contract.json",

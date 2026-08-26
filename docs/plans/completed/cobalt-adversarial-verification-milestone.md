@@ -193,7 +193,7 @@ Code references: `crates/node/src/cobalt_handoff.rs`,
 Execution: complete — design and decision only; no operators recruited and no live change authorized
 
 Locked design: `docs/governance/cobalt-independent-operator-proposal-path-research-spec.md`; SHA-256 `91ad402672653f3e76489f7e7de719d5597553111985d939a9e90b52a1edec89`.
-Checksum-bound decision packet: `benchmarks/cobalt-adversarial-verification/e6`; packet root `fa6255b5a5f31f2d7e8b2836eb005f894b815199ec1205a30fa99a6fb22de6e2`.
+Checksum-bound decision packet: `benchmarks/cobalt-adversarial-verification/e6`; packet root `ee6848f516347a5e6f4a76b6d7c3bfbcede370010e548b9af4fe009a3121be0b`.
 Decision: reinstate the independent-operator gate as its own mandatory follow-on milestone.
 
 - [x] Document the current registry-proposal process, signing keys, validator authorizations, and custody boundaries.

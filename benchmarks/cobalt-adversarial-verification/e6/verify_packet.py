@@ -9,13 +9,13 @@ from pathlib import Path
 
 PACKET = Path(__file__).resolve().parent
 REPO = PACKET.parents[2]
-DECISION_SHA256 = "e1def1b3507231f6182d13c6551c631ca41b50fbfda8aa6cb29fb25dd5886940"
+DECISION_SHA256 = "7d83f23d81bef4298b6bb16f5ab7bf4bafed00b767d6831d4e2a0c737a993366"
 PACKET_FILES = {"README.md", "decision.json", "verify_packet.py"}
 EXPECTED_SOURCES = {
     "docs/governance/cobalt-independent-operator-proposal-path-research-spec.md":
-        "91ad402672653f3e76489f7e7de719d5597553111985d939a9e90b52a1edec89",
+        "c16003dc852378d9fcd054eda6503baeb66440ea6c72843c2fe8364bca74cb23",
     "docs/governance/cobalt-adversarial-verification-research-spec.md":
-        "3e3d31c5d45283651e5174a3679510cbac6f51d33a730225a7bb92923957ba0d",
+        "798dd183d8033ead11851b68ae074dadb7b7e37b9214a5a797f8d7f91e4f3812",
     "benchmarks/cobalt-independent-operators/onboarding-contract.json":
         "7d25c182abd08267cb47a3847035453445d27aaf5e1b4f7b432ff9c0a1c74143",
     "benchmarks/cobalt-activation-live/packet/activation-status.json":
@@ -126,7 +126,8 @@ spec = (
     / "docs/governance/cobalt-independent-operator-proposal-path-research-spec.md"
 ).read_text(encoding="utf-8")
 normalized_spec = " ".join(spec.split())
-assert "**Status:** Locked on 2026-08-25" in normalized_spec
+assert "**Status:** Text Improvement Harness full gate passed on 2026-08-26" in normalized_spec
+assert "Task Node lock pending the operator's decision" in normalized_spec
 assert "**reinstated as a separate mandatory milestone**" in normalized_spec
 assert "one operator cannot reach quorum" in normalized_spec
 assert "one operator cannot block quorum alone" in normalized_spec

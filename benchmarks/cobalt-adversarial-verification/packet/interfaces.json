@@ -5,7 +5,7 @@
     "mutation_probe_path": "/api/snapshot",
     "passed": true,
     "read_only": true,
-    "snapshot_body_sha256": "c7917f90760fe24ccb7277d111ea42c00a5dc200d59f0cd65458ca254c65ef58",
+    "snapshot_body_sha256": "83977f869a7f7082a8cd42819f5b8f812ea24d1051ff4f86667d167dc7ab4c57",
     "snapshot_get_http_status": 200,
     "snapshot_get_path": "/api/snapshot"
   },

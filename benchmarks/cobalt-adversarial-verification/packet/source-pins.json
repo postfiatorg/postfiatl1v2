@@ -3,7 +3,7 @@
     {
       "experiment": "E1",
       "path": "benchmarks/cobalt-adversarial-verification/e1/SHA256SUMS.txt",
-      "sha256sums_sha256": "9151c9b7f43e2c75f367416b9087e7255ca1c03ae734bfdd362fc79ff0cbbc05"
+      "sha256sums_sha256": "495a59a27d6deb9f9872ae583077ef31296a978a0841cd7345593f42e4dfcd90"
     },
     {
       "experiment": "E2",
@@ -28,7 +28,7 @@
     {
       "experiment": "E6",
       "path": "benchmarks/cobalt-adversarial-verification/e6/SHA256SUMS.txt",
-      "sha256sums_sha256": "fa6255b5a5f31f2d7e8b2836eb005f894b815199ec1205a30fa99a6fb22de6e2"
+      "sha256sums_sha256": "ee6848f516347a5e6f4a76b6d7c3bfbcede370010e548b9af4fe009a3121be0b"
     }
   ],
   "live_drill_packet": {
@@ -37,5 +37,5 @@
     "path": "benchmarks/cobalt-adversarial-verification/e5/SHA256SUMS.txt",
     "sha256sums_sha256": "0695284a7b38ac0129c47e1242f4a2227ad25096147920e79569a924e5f3b3db"
   },
-  "public_article_commit": "d4edd89"
+  "public_article_commit": "e4b2a19"
 }

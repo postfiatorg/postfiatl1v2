@@ -31,3 +31,13 @@ cargo run -p postfiat-cobalt-e1-harness -- compare \
 ```
 
 The initial comparison preserves every disagreement before remediation. Large generated artifacts are committed losslessly as `initial/classifications.jsonl.gz` and `initial/disagreements.json.gz`; their uncompressed hashes are recorded in `initial/summary.json`. The remediated full pass is under `reconciled`, with lossless per-graph classifications in `classifications.jsonl.gz`. A clean-state rerun uses the same manifest and writes a summary-only result under `clean-rerun`; its corpus and classification hashes must match the reconciled comparison.
+
+Verify the complete packet from the repository root:
+
+```bash
+python3 benchmarks/cobalt-adversarial-verification/e1/verify_packet.py
+```
+
+The 2026-08-26 evidence review added the standalone verifier and re-bound every
+committed packet file in `SHA256SUMS.txt`; it did not change the frozen corpus,
+classification streams, disagreement record, or experiment result.

@@ -2,7 +2,7 @@
   "article": {
     "authority_off_claim_absent": true,
     "cobalt_active_since_height_916": true,
-    "content_sha256": "791ec73bc770129057c37651de15709f8dd51d03472eef554bb75f4a4314f387",
+    "content_sha256": "ec680d2c590b8f5c4ed565d94ebeb25218e0e3d37f1a445840f6ce8998f8c012",
     "http_status": 200,
     "url": "https://postfiat.org/blog/cobalt-further-evaluation/"
   },
@@ -17,19 +17,19 @@
     },
     {
       "path": "docs/governance/cobalt-adversarial-verification-results.md",
-      "sha256": "c4b313d6e2a8930bd8c787553b7ef9856ccd41132cfffca1749786044582ba3b"
+      "sha256": "ac46c38efe1735075bea8372a0f106f63bc39478f5ab70dacdb1ef845de20a1e"
     },
     {
       "path": "docs/plans/completed/cobalt-adversarial-verification-milestone.md",
-      "sha256": "0fb09937b1f096c37833fa9049490999ed4489f9164675ba046a978b3b418fa8"
+      "sha256": "51a51c8346a74b7118712038f5e5fef898f722f6f2eaf7d6f26de92b6fdaa022"
     },
     {
       "path": "docs/status/chain-state-current.md",
-      "sha256": "51ef229822ca80e02d864fa1e6479b2f04e5a00de3aa012ead180af562f570bb"
+      "sha256": "0266f31c43e43635884d89de38950ff24c8ce037d58f53af266f08df0a2ddd19"
     },
     {
       "path": "mkdocs.yml",
-      "sha256": "a03feb41a23a2b258116fc97484c335b97721ceb99b0494d06d7b61686656787"
+      "sha256": "ceb8507ca1ac1672edb8f00ed5876b15d59aacda15145696077c20e8ae3fd3bf"
     }
   ],
   "operator_boundary_explicit": true,
