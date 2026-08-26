@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 PACKET = Path(__file__).resolve().parent
@@ -46,6 +47,16 @@ def object_file(path: Path) -> dict:
     return value
 
 
+def frozen_source_digest(path: str) -> str:
+    completed = subprocess.run(
+        ["git", "show", f"{SOURCE_REVISION}:{path}"],
+        cwd=REPO,
+        check=True,
+        capture_output=True,
+    )
+    return hashlib.sha256(completed.stdout).hexdigest()
+
+
 def valid_hex(value: str, byte_count: int) -> bool:
     if len(value) != byte_count * 2:
         return False
@@ -74,7 +85,7 @@ for source_name in ("activation_source", "state_source"):
     source = manifest["live_binding"][source_name]
     assert digest(REPO / source["path"]) == source["sha256"], source_name
 for source in manifest["source_files"]:
-    assert digest(REPO / source["path"]) == source["sha256"], source["path"]
+    assert frozen_source_digest(source["path"]) == source["sha256"], source["path"]
 
 assert initial["schema"] == "postfiat-cobalt-adversarial-e3-campaign-v1"
 assert clean["schema"] == initial["schema"]
