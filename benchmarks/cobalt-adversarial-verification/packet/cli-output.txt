@@ -1,0 +1,40 @@
+Cobalt governance check
+Status: PASS
+Authority: Cobalt controls validator-trust governance; Consensus v2 controls blocks
+
+Cobalt adversarial verification
+  Final gate: KEEP_ACTIVE
+  Campaign complete: yes
+  Live height: 924
+  Validator-trust authority: cobalt-validator-trust
+  Block finality: consensus-v2
+  Experiments passed: 6/6
+  Rejected adversarial cases: 9
+  Proposal origin: Foundation-administered validators
+  Operator decentralization proven: no
+  [PASS] all experiments passed
+  [PASS] authority transitions committed
+  [PASS] checksum manifest complete
+  [PASS] cli and browser pass
+  [PASS] consensus v2 scope preserved
+  [PASS] final gate keep active
+  [PASS] final release gate passed
+  [PASS] live negative cases rejected
+  [PASS] operator boundary explicit
+  [PASS] publication complete
+  [PASS] publication documents bound
+  [PASS] redaction safe
+  [PASS] source packets bound
+  [PASS] stolen key rejected
+  [PASS] valid live authority
+
+Rejected cases
+  [E5] cross_chain: Cobalt authority transition domain mismatch
+  [E5] early: Cobalt authority transition must be ordered at its exact activation height
+  [E5] mixed_authority: Cobalt authority transition source mode mismatch
+  [E5] replayed: Cobalt authority transition source mode mismatch
+  [E5] replayed_rollback: Cobalt authority transition parent mismatch
+  [E5] self_authorized: Cobalt authority transition does not bind the active validator registry
+  [E5] stale: Cobalt authority transition must move height, sequence, and protocol version forward
+  [E5] stolen_key_rotation: Cobalt validator update requires one signed authorization for every support vote
+  [E5] wrong_root: Cobalt authority transition does not bind the active validator registry

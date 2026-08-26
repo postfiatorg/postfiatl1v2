@@ -11,22 +11,20 @@ level commitments.
 
 The [Current State](docs/status/chain-state-current.md) page is authoritative for
 questions about the devnet, active binaries, repository state, and adversarial
-campaign. An authenticated read-only validator/RPC probe ran from
-`2026-08-26T01:40:51Z` through `01:41:04Z` and observed:
+campaign. The final authenticated E5 observation ran from
+`2026-08-26T06:34:55Z` through `06:35:50Z` and observed:
 
-- all six validator and all six RPC services active;
-- all six validators equal at height 919 with empty mempools; and
-- active consensus release `cobalt-verifier-92b63f5a`, binary SHA-256
-  `c7cb0c25…9f6337` on every validator.
+- all six validator, RPC, and advisory shadow services active;
+- all six validators converged at height 924 with empty mempools;
+- Cobalt active for validator-trust governance after the signed rollback at 922
+  and return at 923;
+- the legitimate validator-5 rotation committed at 924; and
+- identical node binary SHA-256 `d5e5ef63…c2696caf` on every validator.
 
-That probe did not re-run the authority auditor or inspect the shadow services.
-The last full audit at `2026-08-25T15:37:40Z` records Cobalt validator-trust
-authority and all six advisory shadows active.
-
-The repository/campaign state is distinct: E1-E4 and design-only E6 are
-complete; E5 and publication remain open, so the milestone-wide `KEEP_ACTIVE`
-gate is not yet earned. Pushed E4 evidence commit `6c22f866` and every later
-source or documentation commit are not deployed without a new fleet receipt.
+The repository/campaign state is distinct. E1-E6, the interfaces, evidence, and
+publication are complete and the milestone-wide result is `KEEP_ACTIVE`.
+Repository commits after the embedded deployed revision `8cc7d15e` are not
+themselves deployed without a new fleet receipt.
 
 ## What Works
 
@@ -34,7 +32,7 @@ source or documentation commit are not deployed without a new fleet receipt.
 - **Remote testnet**: 5-validator certified round at p50 1.03s over WAN.
 - **Transparent transactions**: XRP-style transfers with account history and finality RPC.
 - **Shielded settlement**: Orchard/Halo2 deposit, spend, and withdraw with nullifier set.
-- **Cobalt governance**: the last full authority audit verified Cobalt active for validator-registry and trust-graph changes from height 916; the first Cobalt-authorized key rotation committed at height 917. The later 2026-08-26 validator/RPC probe preserved six-node convergence at height 919. Consensus v2 still finalizes blocks. See [Current State](docs/status/chain-state-current.md).
+- **Cobalt governance**: Cobalt is active for validator-registry and trust-graph changes. The signed final-gate rollback/return committed at heights 922/923, all nine live negative cases rejected without durable mutation, and the legitimate validator-5 rotation committed at 924. All six nodes converged; Consensus v2 still finalizes blocks. See [Current State](docs/status/chain-state-current.md) and the [adversarial results](docs/governance/cobalt-adversarial-verification-results.md).
 - **Post-quantum auth**: ML-DSA account and validator signatures from genesis.
 - **NAVCoins**: OTC swap primitives and proof-of-reserve on controlled testnet.
 - **RPC**: full read/write surface with account state, history, receipts, and finality queries.
@@ -61,6 +59,8 @@ source or documentation commit are not deployed without a new fleet receipt.
 Performance and correctness evidence is curated in the
 [Evidence Index](docs/evidence/index.md). The live authority result is in the
 [controlled-testnet activation packet](benchmarks/cobalt-activation-live/packet/README.md);
-the passing Byzantine-validator campaign is in the
-[E2 packet](benchmarks/cobalt-adversarial-verification/e2/README.md).
+the complete campaign is in the
+[adversarial results](docs/governance/cobalt-adversarial-verification-results.md),
+with the live drills in the
+[E5 packet](benchmarks/cobalt-adversarial-verification/e5/README.md).
 Each claim cites code paths, scripts, tests, or redaction-safe reports.

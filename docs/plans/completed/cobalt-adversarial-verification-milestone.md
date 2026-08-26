@@ -8,25 +8,26 @@ A failed benchmark or simulation creates P0 remediation and a rerun of the uncha
 
 The result proves protocol capability, not operator decentralization.
 
-- **Status:** Active — E1-E4 and E6 complete; E5 not started
+- **Status:** Complete — E1-E6, interfaces, publication, and final release gate passed
 - **Specification:** [Cobalt Adversarial Verification Research Specification](../../governance/cobalt-adversarial-verification-research-spec.md)
 - **Historical specification-lock record:** `task_158622307482e23fb4519889b53b475f` — rewarded 2026-08-25
 - **Historical milestone-document record:** `[x] task_d28eb3465dcac9a32524c25bba996e1e — rewarded 2026-08-25`
-- **Required result:** `[ ] KEEP ACTIVE`
+- **Required result:** `[x] KEEP_ACTIVE`
 
 ## Current position
 
 Deployment, repository, campaign, and freshness identities are separated in
-[Current State](../../status/chain-state-current.md). An authenticated read-only
-six-validator/RPC probe ran from `2026-08-26T01:40:51Z` through
-`2026-08-26T01:41:04Z`; it did not re-run the older authority/shadow audit.
-Current repository HEAD is still not the active validator release.
+[Current State](../../status/chain-state-current.md). The final authenticated E5
+observation ran from `2026-08-26T06:34:55Z` through
+`2026-08-26T06:35:50Z` and found all six validator, RPC, and shadow services
+active and converged at height 924. Current repository HEAD remains distinct
+from the deployed validator runtime.
 
-- [x] Cobalt became the recorded controlled-testnet validator-trust authority at height 916; its first authorized validator-key rotation committed at height 917.
+- [x] Cobalt became the recorded controlled-devnet validator-trust authority at height 916; its first authorized validator-key rotation committed at height 917.
 - [x] The research specification passed the Text Improvement Harness at 89.27/100 and is locked.
-- [x] The public article now records the live authority state instead of saying Cobalt remains off.
-- [x] E1-E4 and the design-only E6 decision have passed.
-- [ ] The live E5 drills remain open, so the full adversarial campaign is not complete.
+- [x] E1-E6 passed with checksum-bound repository packets.
+- [x] E5 committed the final rollback/return pair at heights 922/923, rejected all nine live negative cases, and committed the legitimate validator-5 rotation at height 924.
+- [x] The CLI, read-only browser panel, consolidated packet, results document, and public article are complete.
 - [x] The current Foundation-administered proposal and authorization boundary remains explicit; no operator-decentralization result is claimed.
 
 ## Experiments
@@ -157,22 +158,39 @@ Code references: `benchmarks/cobalt-activate-or-retire/run_consensus_v2_cobalt_i
 
 ### E5. Live authority drills
 
-Execution: not started
+Execution: complete — passing live controlled-devnet drill
 
-- [ ] At scheduled live heights, execute the signed forward rollback to Foundation authority and the separately authorized return to Cobalt authority.
-- [ ] Run the early, stale, replayed, wrong-root, cross-chain, mixed-authority, self-authorized, and replayed-rollback negative cases live without mutation.
-- [ ] Treat one validator key as stolen, reject its attempted Cobalt-authorized rotation, and commit the legitimate rotation path.
-- [ ] Record the proposal and authorization identities for every drill.
-- [ ] Prove one accepted history and uninterrupted Consensus v2 finality through both authority transitions.
+Checksum-bound packet:
+`benchmarks/cobalt-adversarial-verification/e5/`; packet root
+`0695284a7b38ac0129c47e1242f4a2227ad25096147920e79569a924e5f3b3db`.
 
-Code references: `crates/node/src/cobalt_handoff.rs`, `crates/node/src/cobalt_handoff_rehearsal.rs`, `crates/node/src/bin/postfiat_cobalt_handoff_rehearsal.rs`, `benchmarks/cobalt-activation-live/packet`.
+- [x] At scheduled live heights, execute the signed forward rollback to Foundation authority and the separately authorized return to Cobalt authority.
+- [x] Run the early, stale, replayed, wrong-root, cross-chain, mixed-authority, self-authorized, and replayed-rollback negative cases live without mutation.
+- [x] Treat one validator key as stolen, reject its attempted Cobalt-authorized rotation, and commit the legitimate rotation path.
+- [x] Record the proposal and authorization identities for every drill.
+- [x] Prove one accepted history and uninterrupted Consensus v2 finality through both authority transitions.
+
+The first accepted rollback/return pair at heights 920/921 is retained as
+remediation history. The height-921 return used a trust binding that did not
+match the protocol-native post-return graph. No conflicting root, fork, or
+finality interruption occurred. The signed corrective rollback and return at
+922/923 are the final-gate pair. The legitimate validator-5 rotation committed
+at 924 with authorizations from validators 0–4; the treated-as-stolen old
+validator-5 key did not authorize it. All six nodes converged on one
+height-920-through-924 Consensus v2 history, and all nine negative cases left
+durable governance and registry state unchanged.
+
+Code references: `crates/node/src/cobalt_handoff.rs`,
+`crates/node/src/cobalt_handoff_rehearsal.rs`,
+`crates/node/src/cobalt_e5_live_drill.rs`, and
+`benchmarks/cobalt-adversarial-verification/e5/`.
 
 ### E6. Proposal source and independence decision
 
 Execution: complete — design and decision only; no operators recruited and no live change authorized
 
 Locked design: `docs/governance/cobalt-independent-operator-proposal-path-research-spec.md`; SHA-256 `91ad402672653f3e76489f7e7de719d5597553111985d939a9e90b52a1edec89`.
-Checksum-bound decision packet: `benchmarks/cobalt-adversarial-verification/e6`; packet root `52a4ef91a7ec1c8dad385344edf3b498a96d45f5a8568d8c1371e3f3d6d05c81`.
+Checksum-bound decision packet: `benchmarks/cobalt-adversarial-verification/e6`; packet root `fa6255b5a5f31f2d7e8b2836eb005f894b815199ec1205a30fa99a6fb22de6e2`.
 Decision: reinstate the independent-operator gate as its own mandatory follow-on milestone.
 
 - [x] Document the current registry-proposal process, signing keys, validator authorizations, and custody boundaries.
@@ -191,9 +209,9 @@ Code references: `crates/consensus_cobalt/src/trust_graph_governance.rs`, `crate
 - [x] E2: zero conflicting roots, zero false halts, and zero false accepts under the Byzantine campaign.
 - [x] E3: every tampered state and forged catch-up is rejected; honest recovery is byte-identical.
 - [x] E4: Consensus v2 never stops or forks; attack-lane p95 finality stays within 5% of baseline.
-- [ ] E5: both live authority transitions commit; every live negative case and the stolen-key attempt reject.
+- [x] E5: both final-gate live authority transitions commit; every live negative case and the stolen-key attempt reject.
 - [x] E6: the proposal-path design and independent-operator decision are recorded and locked.
-- [ ] The publication requirements are live.
+- [x] The publication requirements are live.
 
 ### ROLL BACK
 
@@ -211,26 +229,26 @@ A failed benchmark or simulation alone does not trigger rollback.
 
 ## Human interfaces
 
-- [ ] Deliver `python -m postfiat_rpc.cobalt adversarial` to verify the packet, report the gate state, and list every rejected adversarial case with its reason. Code: `python/postfiat_rpc/cobalt.py`.
-- [ ] After the CLI works, add a read-only browser panel beside the Cobalt observatory for the gate state, live authority transitions, and proposal and authorization identities. Code: `python/postfiat_rpc/cobalt_ui.py`.
-- [ ] Make both interfaces consume the same authenticated packet and fail closed on missing, mutated, or inconsistent evidence.
-- [ ] Test the CLI and browser behavior inside the governing experiment tasks.
+- [x] Deliver `python -m postfiat_rpc.cobalt adversarial` to verify the packet, report the gate state, and list every rejected adversarial case with its reason. Code: `python/postfiat_rpc/cobalt.py`.
+- [x] Add a read-only browser panel beside the Cobalt observatory for the gate state, live authority transitions, and proposal and authorization identities. Code: `python/postfiat_rpc/cobalt_ui.py`.
+- [x] Make both interfaces consume the same authenticated packet and fail closed on missing, mutated, or inconsistent evidence.
+- [x] Test the CLI and browser behavior against the authenticated packet.
 
 ## Evidence and publication
 
-- [ ] Produce `adversarial-status.json` with `KEEP_ACTIVE`, `REMEDIATION_REQUIRED`, or `ROLLED_BACK`, bound to the live authority state.
-- [ ] Include the frozen threat model and `f`, both pinned oracles, corpus manifest and classifications, per-validator E2/E3 results, signed misbehavior evidence, finality and resource receipts, live drill receipts, and the E6 decision.
-- [ ] Include CLI and browser output, `SHA256SUMS.txt`, and a verifier that fails on missing, mutated, or inconsistent evidence.
-- [ ] Use “validator-registry ratification” or “validator-trust governance,” never bare “validator governance.”
-- [ ] State on the first page that Cobalt ratifies registry changes, a separate layer decides who deserves trust, and current proposals originate from Foundation-administered validators.
-- [ ] Publish what was attacked, what held, what was fixed, and what remains open, while stating that the result proves protocol capability rather than operator decentralization.
+- [x] Produce `adversarial-status.json` with `KEEP_ACTIVE`, bound to the live authority state.
+- [x] Include the frozen threat model and `f`, both pinned oracles, corpus manifest and classifications, per-validator E2/E3 results, signed misbehavior evidence, finality and resource receipts, live drill receipts, and the E6 decision.
+- [x] Include CLI and browser output, `SHA256SUMS.txt`, and a verifier that fails on missing, mutated, or inconsistent evidence.
+- [x] Use “validator-registry ratification” or “validator-trust governance,” never bare “validator governance.”
+- [x] State on the first page that Cobalt ratifies registry changes, a separate layer decides who deserves trust, and current proposals originate from Foundation-administered validators.
+- [x] Publish what was attacked, what held, what was fixed, and what remains open, while stating that the result proves protocol capability rather than operator decentralization.
 
 ## Completion
 
-- [ ] Every E1-E6 experiment has a final checksum-bound repository evidence packet.
-- [ ] The final gate is recorded as `KEEP_ACTIVE`, `REMEDIATION_REQUIRED`, or `ROLLED_BACK` and matches the live authority state.
-- [ ] The packet verifier, focused Cobalt and governance tests, CLI and browser tests, strict documentation build, redaction checks, and one explicit final release gate pass.
-- [ ] The CLI and read-only browser interface work against the authenticated packet.
-- [ ] The adversarial results and precise public claims are published.
-- [ ] Honest direct evidence and final verification are complete.
-- [ ] Move this journal to `docs/plans/completed/` only after the interfaces, publication, and selected completion gates pass.
+- [x] Every E1-E6 experiment has a final checksum-bound repository evidence packet.
+- [x] The final gate is recorded as `KEEP_ACTIVE` and matches the live authority state.
+- [x] The packet verifier, focused Cobalt and governance tests, CLI and browser tests, strict documentation build, redaction checks, and explicit final release gate pass.
+- [x] The CLI and read-only browser interface work against the authenticated packet.
+- [x] The adversarial results and precise public claims are published.
+- [x] Honest direct evidence and final verification are complete.
+- [x] Move this journal to `docs/plans/completed/` only after the interfaces, publication, and selected completion gates pass.

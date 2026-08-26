@@ -101,14 +101,14 @@ nav:
       - Python Example: business/navcoin-python-example.md
       - Archive Summary: evidence/navcoin-archive-summary.md
   - Plans:
-      - Cobalt Adversarial Verification: plans/active/cobalt-adversarial-verification-milestone.md
+      - Completed Cobalt Adversarial Verification: plans/completed/cobalt-adversarial-verification-milestone.md
       - Completed Cobalt Activation: plans/completed/cobalt-activate-or-retire-milestone.md
       - Completed Cobalt Milestone: plans/completed/cobalt-governance-milestone.md
       - Completed P0 Remediation: plans/completed/P0-COMPLETE-REMEDIATION-PLAN-20260716.md
       - Completed Capability Restoration: plans/completed/OPEN-SOURCE-CAPABILITY-RESTORATION-PLAN-20260716.md
   - Handoffs:
       - Standard: handoffs/README.md
-      - Cobalt Adversarial Verification Continuation: handoffs/2026-08-26___postfiatchad__cobalt_adversarial_verification.md
+      - Cobalt Adversarial Verification Final Handoff: handoffs/2026-08-26___postfiatchad__cobalt_adversarial_verification.md
       - Cobalt Post-Activation Review: handoffs/2026-08-25___dravlic__cobalt_post_activation_review.md
       - Cobalt Governance Activation: handoffs/2026-08-25___postfiatchad__cobalt_governance_activation.md
   - Business:
@@ -129,6 +129,7 @@ nav:
       - Cobalt: governance/cobalt.md
       - Cobalt Implementation: governance/cobalt-implementation.md
       - Cobalt Transition Safety Proof: governance/cobalt-transition-safety-proof.md
+      - Cobalt Adversarial Verification Results: governance/cobalt-adversarial-verification-results.md
       - Cobalt Adversarial Verification Spec (locked): governance/cobalt-adversarial-verification-research-spec.md
       - Cobalt Independent-Operator Proposal Path (locked): governance/cobalt-independent-operator-proposal-path-research-spec.md
       - Verifiable Constitution: governance/verifiable-constitution.md

@@ -2,7 +2,8 @@
 
 This checksum-bound packet records the design-only E6 decision. The
 independent-operator gate from the locked activation specification is
-reinstated as its own mandatory follow-on milestone.
+reinstated as its own mandatory follow-on milestone. Its source pins were
+revalidated on 2026-08-26 after the E5 authority-lineage hardening.
 
 The decision does not recruit operators, authorize a live migration, or claim
 that the controlled testnet is independently operated. Cobalt currently

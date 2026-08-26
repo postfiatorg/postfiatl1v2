@@ -1,0 +1,98 @@
+{
+  "cases": [
+    {
+      "durable_state_unchanged": true,
+      "evidence_sha256": "ae1d79e8bb312b83e7a08b5b831b6a791b3d221809b152f952e90a460cf2593d",
+      "experiment": "E5",
+      "name": "cross_chain",
+      "observed_height": 923,
+      "reason": "Cobalt authority transition domain mismatch",
+      "rejected": true,
+      "verifier_node_id": "validator-5"
+    },
+    {
+      "durable_state_unchanged": true,
+      "evidence_sha256": "3ecdfc59c11aa5cf407d84b14332577a42004a1ed441558fd8e701e3939bec78",
+      "experiment": "E5",
+      "name": "early",
+      "observed_height": 923,
+      "reason": "Cobalt authority transition must be ordered at its exact activation height",
+      "rejected": true,
+      "verifier_node_id": "validator-5"
+    },
+    {
+      "durable_state_unchanged": true,
+      "evidence_sha256": "8bfa8b6350e15e0fbfd3a570f740bb927fbe40bf67b2a119fad4e950963a72db",
+      "experiment": "E5",
+      "name": "mixed_authority",
+      "observed_height": 923,
+      "reason": "Cobalt authority transition source mode mismatch",
+      "rejected": true,
+      "verifier_node_id": "validator-5"
+    },
+    {
+      "durable_state_unchanged": true,
+      "evidence_sha256": "8bfa8b6350e15e0fbfd3a570f740bb927fbe40bf67b2a119fad4e950963a72db",
+      "experiment": "E5",
+      "name": "replayed",
+      "observed_height": 923,
+      "reason": "Cobalt authority transition source mode mismatch",
+      "rejected": true,
+      "verifier_node_id": "validator-5"
+    },
+    {
+      "durable_state_unchanged": true,
+      "evidence_sha256": "fc0e28b31220ed473cc5143229936b4ac046636de48ecbdb2553565505c01256",
+      "experiment": "E5",
+      "name": "replayed_rollback",
+      "observed_height": 923,
+      "reason": "Cobalt authority transition parent mismatch",
+      "rejected": true,
+      "verifier_node_id": "validator-5"
+    },
+    {
+      "durable_state_unchanged": true,
+      "evidence_sha256": "1f520ee157cb1643c051785d1b6032096bc22db2fb61b555c6f1ae76576b7c2f",
+      "experiment": "E5",
+      "name": "self_authorized",
+      "observed_height": 923,
+      "reason": "Cobalt authority transition does not bind the active validator registry",
+      "rejected": true,
+      "verifier_node_id": "validator-5"
+    },
+    {
+      "durable_state_unchanged": true,
+      "evidence_sha256": "b80a0606dd81fb2a5ec0707c54998d2f3985efdb2ee40001864b5e001bf7e1c4",
+      "experiment": "E5",
+      "name": "stale",
+      "observed_height": 923,
+      "reason": "Cobalt authority transition must move height, sequence, and protocol version forward",
+      "rejected": true,
+      "verifier_node_id": "validator-5"
+    },
+    {
+      "attempted_subject": "validator-5",
+      "decision_certificate_present": true,
+      "durable_state_unchanged": true,
+      "evidence_sha256": "302aecc535967a47c32d71b11fd3298cee55f818cfe8bd23d1b97486eeb8caed",
+      "experiment": "E5",
+      "name": "stolen_key_rotation",
+      "observed_height": 923,
+      "reason": "Cobalt validator update requires one signed authorization for every support vote",
+      "rejected": true,
+      "signature_count": 1,
+      "stolen_validator": "validator-5",
+      "verifier_node_id": "validator-5"
+    },
+    {
+      "durable_state_unchanged": true,
+      "evidence_sha256": "1f520ee157cb1643c051785d1b6032096bc22db2fb61b555c6f1ae76576b7c2f",
+      "experiment": "E5",
+      "name": "wrong_root",
+      "observed_height": 923,
+      "reason": "Cobalt authority transition does not bind the active validator registry",
+      "rejected": true,
+      "verifier_node_id": "validator-5"
+    }
+  ]
+}

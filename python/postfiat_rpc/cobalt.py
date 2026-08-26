@@ -47,7 +47,9 @@ DEFAULT_HANDOFF_VERIFIER_SHA256 = (
 )
 ADVERSARIAL_PACKET_SCHEMA = "postfiat-cobalt-adversarial-verifier-v1"
 ADVERSARIAL_BROWSER_SNAPSHOT_SCHEMA = "postfiat-cobalt-governance-ui-snapshot-v2"
-DEFAULT_ADVERSARIAL_PACKET_SHA256 = "0" * 64
+DEFAULT_ADVERSARIAL_PACKET_SHA256 = (
+    "a789372819c173d3c290f84b7ad10bea3ddef01ffc5a012e837ba3dc32d36368"
+)
 ADVERSARIAL_REQUIRED_FILES = {
     "README.md",
     "adversarial-status.json",

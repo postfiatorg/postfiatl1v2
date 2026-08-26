@@ -9,7 +9,7 @@ from pathlib import Path
 
 PACKET = Path(__file__).resolve().parent
 REPO = PACKET.parents[2]
-DECISION_SHA256 = "744ba0bba3b9286aa98c3591f73a71a0d695507af366234180f9ad616de0a980"
+DECISION_SHA256 = "e1def1b3507231f6182d13c6551c631ca41b50fbfda8aa6cb29fb25dd5886940"
 PACKET_FILES = {"README.md", "decision.json", "verify_packet.py"}
 EXPECTED_SOURCES = {
     "docs/governance/cobalt-independent-operator-proposal-path-research-spec.md":
@@ -23,11 +23,11 @@ EXPECTED_SOURCES = {
     "crates/consensus_cobalt/src/trust_graph_governance.rs":
         "abbed44850d26afae6abfa54e2f452b0120eb9ca7b3127c49c926297c4c52bf2",
     "crates/consensus_cobalt/src/dabc_registry.rs":
-        "d10b29dc2ac3929529d18f32d9e9d90b7df1c9593d0b1a1c8387dc0ef47fce8f",
+        "9724d351c921dc78c14f66f4d01e6ca0209c58ecc7361b68cde4c67e45a45c82",
     "crates/node/src/cobalt_handoff.rs":
-        "5413efd03c25bd2e07a403aa0a78bfc4a199ce251a3041bbd9b527e6ba95ffa2",
+        "811a6cc38fbf619448c6a53b59308c618661c8664e105fe89a9e30417e9e05b7",
     "crates/node/src/cobalt_authority_certificate.rs":
-        "c468cccc1a8ca77040b6dd46f2a5f7ebdfb7193ea379ff56bab7a488a0b9b234",
+        "a8bbbe4cd6ae0d0b061ccddf1ce9dc9c512465725d6703460e615091e04520ed",
 }
 FAIL_CLOSED_CASES = [
     "unregistered_proposer",
@@ -62,6 +62,7 @@ decision = object_file(PACKET / "decision.json")
 assert digest(PACKET / "decision.json") == DECISION_SHA256
 assert decision["schema"] == "postfiat-cobalt-adversarial-e6-decision-v1"
 assert decision["recorded_at"] == "2026-08-25"
+assert decision["source_revalidated_at"] == "2026-08-26"
 assert decision["status"] == "locked"
 assert decision["decision"] == "REINSTATE_INDEPENDENT_OPERATOR_GATE"
 

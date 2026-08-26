@@ -18,30 +18,35 @@ Authority transfer is separate from agreement:
    a distinct ML-DSA-65 quorum.
 3. Consensus v2 ordered that transition at height 916.
 4. The recorded authority state then allowed Cobalt to ratify validator-trust
-   updates only; a validator-5 key rotation committed at height 917. Cobalt
-   cannot authorize unrelated governance and a new validator set cannot
+   updates only; validator-5 key rotations committed at heights 917 and 924.
+   Cobalt cannot authorize unrelated governance and a new validator set cannot
    authorize itself.
 5. Returning to Foundation authority requires another signed forward transition;
-   it cannot rewrite finalized history.
+   it cannot rewrite finalized history. The adversarial drill committed the
+   final rollback/return pair at heights 922/923.
 
 A Cobalt failure can pause validator governance. It cannot create a second
 block-finality protocol.
 
 ## Current Controlled-Devnet State
 
-The last full authority audit at `2026-08-25T15:37:40Z` returned
-**ACTIVATED** on `postfiat-wan-devnet-2`: all six validators were equal at height
-919, Cobalt was the validator-trust authority, and Consensus v2 remained the only
-block-finality protocol. A later authenticated read-only validator/RPC probe ran
-from `2026-08-26T01:40:51Z` through `01:41:04Z` and again found all six validators
-equal at height 919. Every validator process used release
-`cobalt-verifier-92b63f5a`, binary SHA-256 `c7cb0c25…9f6337`. The later probe did
-not re-run the separate authority auditor or inspect the advisory shadows.
+The final authenticated E5 observation ran from
+`2026-08-26T06:34:55Z` through `06:35:50Z` on
+`postfiat-wan-devnet-2`. All six validators converged at height 924, Cobalt
+was active for validator-trust governance, Consensus v2 remained block finality,
+and all validator, RPC, and advisory shadow services were active. The final
+signed rollback/return pair committed at heights 922/923 and the legitimate
+validator-5 rotation committed at 924.
+
+Every validator used node binary SHA-256 `d5e5ef63…c2696caf`; every shadow
+used `d61e6d0f…b1a0a4a`. The observation is point-in-time evidence, not a
+real-time query now.
 
 See [Current State](../status/chain-state-current.md) for the exact roots,
-runtime identities, repository state, adversarial campaign, and separate
-freshness boundaries. The earlier benchmark and handoff packets are
-qualification provenance; current Git HEAD is not deployed.
+runtime identities, repository state, campaign decision, and freshness
+boundary. See the [adversarial results](cobalt-adversarial-verification-results.md)
+for what was attacked, fixed, and left open. Current Git HEAD is not itself
+deployment evidence.
 
 Verify the qualification evidence directly:
 
@@ -78,6 +83,9 @@ PYTHONPATH=python python3 -m postfiat_rpc.cobalt \
 PYTHONPATH=python python3 -m postfiat_rpc.cobalt \
   --endpoints 127.0.0.1:9700,127.0.0.1:9701 fleet
 
+# Completed adversarial campaign
+PYTHONPATH=python python3 -m postfiat_rpc.cobalt adversarial
+
 # Signed history recovery
 PYTHONPATH=python python3 -m postfiat_rpc.cobalt \
   --endpoint 127.0.0.1:9700 --start-sequence 1 \
@@ -96,19 +104,19 @@ parent, sequence, size bound, or replay check is a failure—not partial success
 
 ```bash
 PYTHONPATH=python python3 -m postfiat_rpc.cobalt_ui \
-  --node-data-dir /path/to/node \
-  --shadow-root /path/to/shadow-fleet
+  --adversarial-packet benchmarks/cobalt-adversarial-verification/packet
 ```
 
-Open the address printed by the process. The page deliberately separates three
-facts:
+Open the address printed by the process. The authenticated adversarial view deliberately separates:
 
-- **Shadow health:** current sidecar transport, signed history, convergence, and
-  non-authoritative flags.
-- **Cutover readiness:** the same checksum-pinned `readiness` result exposed by
-  the CLI.
-- **Actual authority:** the Foundation/Cobalt mode read from the validated node
-  governance state, with Consensus v2 shown separately as block finality.
+- **Campaign gate:** all six experiment results and all nine named live
+  rejections.
+- **Proposal and authorization identities:** the final rollback, return, and
+  legitimate rotation receipts.
+- **Actual authority:** Cobalt's bounded validator-trust role, with Consensus v2
+  shown separately as block finality.
+- **Operator boundary:** protocol capability passed; operator decentralization
+  is not claimed.
 
 The service implements GET and HEAD only. POST returns `405 Method Not Allowed`.
 It has no proposal, transition, registry-update, or activation route.
@@ -119,7 +127,9 @@ It has no proposal, transition, registry-update, or activation route.
 - Disposable handoff: `benchmarks/cobalt-handoff-rehearsal/packet/`
 - Pre-activation decision: `benchmarks/cobalt-activation-readiness/packet/`
 - Terminal activation: `benchmarks/cobalt-activation-live/packet/`
-- Post-activation adversarial E1: `benchmarks/cobalt-adversarial-verification/e1/`
+- Completed adversarial packets: `benchmarks/cobalt-adversarial-verification/e1/` through `e6/`
+- Consolidated adversarial packet: `benchmarks/cobalt-adversarial-verification/packet/`
+- Results: [Cobalt Adversarial Verification Results](cobalt-adversarial-verification-results.md)
 - Current state and freshness: [Current State](../status/chain-state-current.md)
 - Implementation details: [Cobalt Implementation](cobalt-implementation.md)
 - Validator lifecycle: [Validator Registry](validator-registry.md)

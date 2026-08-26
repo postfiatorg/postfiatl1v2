@@ -4,7 +4,7 @@ Only current execution plans and completed plans belong here.
 
 ## Active
 
-- [Cobalt Adversarial Verification Milestone](active/cobalt-adversarial-verification-milestone.md)
+- [Cobalt Adversarial Verification Milestone](completed/cobalt-adversarial-verification-milestone.md)
 
 ## Completed
 

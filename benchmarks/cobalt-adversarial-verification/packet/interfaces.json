@@ -1,0 +1,18 @@
+{
+  "browser": {
+    "mutation_probe_http_status": 405,
+    "mutation_probe_method": "POST",
+    "mutation_probe_path": "/api/snapshot",
+    "passed": true,
+    "read_only": true,
+    "snapshot_body_sha256": "c7917f90760fe24ccb7277d111ea42c00a5dc200d59f0cd65458ca254c65ef58",
+    "snapshot_get_http_status": 200,
+    "snapshot_get_path": "/api/snapshot"
+  },
+  "cli": {
+    "command": "python -m postfiat_rpc.cobalt adversarial",
+    "exit_code": 0,
+    "output_sha256": "a619f92d27eb4accf485c6847c818416c7ae6b58d096e2fa549b6278165917e9",
+    "passed": true
+  }
+}

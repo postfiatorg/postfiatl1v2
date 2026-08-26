@@ -1,6 +1,7 @@
 {
   "schema": "postfiat-cobalt-adversarial-e6-decision-v1",
   "recorded_at": "2026-08-25",
+  "source_revalidated_at": "2026-08-26",
   "status": "locked",
   "decision": "REINSTATE_INDEPENDENT_OPERATOR_GATE",
   "decision_scope": "proposal origination, operator custody, trust topology, and the follow-on independence milestone",
@@ -84,15 +85,15 @@
     },
     {
       "path": "crates/consensus_cobalt/src/dabc_registry.rs",
-      "sha256": "d10b29dc2ac3929529d18f32d9e9d90b7df1c9593d0b1a1c8387dc0ef47fce8f"
+      "sha256": "9724d351c921dc78c14f66f4d01e6ca0209c58ecc7361b68cde4c67e45a45c82"
     },
     {
       "path": "crates/node/src/cobalt_handoff.rs",
-      "sha256": "5413efd03c25bd2e07a403aa0a78bfc4a199ce251a3041bbd9b527e6ba95ffa2"
+      "sha256": "811a6cc38fbf619448c6a53b59308c618661c8664e105fe89a9e30417e9e05b7"
     },
     {
       "path": "crates/node/src/cobalt_authority_certificate.rs",
-      "sha256": "c468cccc1a8ca77040b6dd46f2a5f7ebdfb7193ea379ff56bab7a488a0b9b234"
+      "sha256": "a8bbbe4cd6ae0d0b061ccddf1ce9dc9c512465725d6703460e615091e04520ed"
     }
   ],
   "checks": {

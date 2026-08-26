@@ -1,0 +1,11 @@
+{
+  "campaign_complete": true,
+  "cobalt_scope": "validator-registry ratification",
+  "final_release_gate": "passed",
+  "gate": "KEEP_ACTIVE",
+  "operator_decentralization_proven": false,
+  "proposal_origin": "Foundation-administered validators",
+  "protocol_capability_only": true,
+  "scope": "controlled-devnet validator-trust protocol capability",
+  "trust_selection_is_separate": true
+}

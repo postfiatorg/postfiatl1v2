@@ -6,9 +6,9 @@ PostFiat has four protocol planes:
    bridge, and shielded batches;
 2. prefunded object-certificate lanes for FastPay and FastSwap;
 3. versioned governance: Cobalt ratifies validator-registry and trust-graph
-   changes in the `2026-08-25T15:37:40Z` controlled-devnet observation, while
+   changes in the final height-924 controlled-devnet observation, while
    Foundation governance retains unrelated scopes and Consensus v2 orders every
-   mutation;
+   mutation; see [Current State](../status/chain-state-current.md) for freshness;
 4. privacy execution for Orchard/Halo2 shielded value.
 
 ```mermaid

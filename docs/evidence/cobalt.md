@@ -6,23 +6,22 @@ observation time plus an exact binary identity.
 
 ## Current Operational Observation
 
-An authenticated, read-only validator/RPC probe ran from
-`2026-08-26T01:40:51Z` through `01:41:04Z`. It established:
+The final authenticated E5 observation ran from
+`2026-08-26T06:34:55Z` through `06:35:50Z`. It established:
 
-- all six validator and all six RPC services were active;
+- all six validator, RPC, and advisory shadow services were active;
 - every validator reported chain `postfiat-wan-devnet-2`, status `running`,
-  height 919, zero pending mempool items, and identical tip/state roots; and
-- every active validator binary had SHA-256
-  `c7cb0c25001a0bfe22eba32ce870f3739f9710471906e27c32797670ea9f6337`
-  under release `cobalt-verifier-92b63f5a` with embedded revision `92b63f5a`.
+  height 924, zero pending mempool items, and identical tip/state roots;
+- every canonical governance verifier returned Cobalt active with two recorded
+  validator-registry updates;
+- every validator registry and shadow reported the new registry and trust roots;
+  and
+- every validator binary had SHA-256 `d5e5ef63…c2696caf`; every shadow binary
+  had SHA-256 `d61e6d0f…b1a0a4a`.
 
-That probe did not inspect the shadow services or re-run the separate governance
-auditor. The last authenticated full audit at `2026-08-25T15:37:40Z` returned
-`ACTIVATED` on validator 0 with every `live-status` check passing and found all
-six advisory shadows active under binary SHA-256
-`43ac8a7df13f41d5cfdd783fc983de4e8e91b625e6a705ae342569c5771ad935`.
-Cobalt remained limited to validator trust while Consensus v2 remained block
-finality.
+Cobalt remained limited to validator-trust governance while Consensus v2
+remained block finality. This is a point-in-time observation, not a real-time
+query now.
 
 [Current State](../status/chain-state-current.md) contains the exact roots,
 runtime/auditor/shadow identities, repository state, campaign status, probe
@@ -51,7 +50,7 @@ claims still require the newer observation and its capture time.
 E1 evidence is stored under
 `benchmarks/cobalt-adversarial-verification/e1/`. The independent oracle,
 production comparison, reconciled rerun, and clean rerun agree across all 10,240
-generated trust graphs. E1 is off-chain verification tooling; it is not a node
+generated trust-graph cases. E1 is off-chain verification tooling; it is not a node
 deployment.
 
 E2 evidence is stored under
@@ -79,7 +78,7 @@ E6 evidence is stored under
 `benchmarks/cobalt-adversarial-verification/e6/`. It locks the design-only
 decision to reinstate the independent-operator gate as its own mandatory
 follow-on milestone. The packet's `SHA256SUMS.txt` hash is
-`52a4ef91a7ec1c8dad385344edf3b498a96d45f5a8568d8c1371e3f3d6d05c81`.
+`fa6255b5a5f31f2d7e8b2836eb005f894b815199ec1205a30fa99a6fb22de6e2`.
 It recruits no operators, authorizes no live migration, and does not prove
 operator decentralization.
 
@@ -93,7 +92,20 @@ and packet root
 `93ba3db0bcc145144713088b612606fbb3b92c0f542809f258da49a555c14508`.
 It was an isolated local campaign and did not query or mutate devnet.
 
-E5 has not started. The milestone-wide `KEEP_ACTIVE` gate remains open.
+E5 evidence is stored under
+`benchmarks/cobalt-adversarial-verification/e5/`. The final signed
+rollback/return pair committed at heights 922/923, all nine required negative
+cases rejected without durable mutation, and the legitimate validator-5
+rotation committed at 924 with authorizations from validators 0–4. All six
+validators accepted one height-920-through-924 Consensus v2 history. The packet
+root is
+`0695284a7b38ac0129c47e1242f4a2227ad25096147920e79569a924e5f3b3db`.
+
+The consolidated packet is under
+`benchmarks/cobalt-adversarial-verification/packet/`. It binds all E1–E6
+packet roots, the live authority state, CLI and browser receipts, publication,
+and the `KEEP_ACTIVE` final gate. See the
+[results](../governance/cobalt-adversarial-verification-results.md).
 
 ## Historical And Supporting Evidence
 

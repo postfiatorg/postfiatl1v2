@@ -8,7 +8,7 @@
 > transactional indexed production engine. Do not place real-value keys or
 > value on this controlled-devnet configuration.
 
-PostFiat is a Rust Layer 1 settlement system for post-quantum, privacy-aware institutional value transfer: transparent accounts use ML-DSA authorization from genesis, shielded settlement is built around Orchard/Halo2-style proofs, and quorum certificates provide deterministic finality. An authenticated read-only probe ran from `2026-08-26T01:40:51Z` through `01:41:04Z` with all six `postfiat-wan-devnet-2` validators active and equal at height 919. The last full authority audit records Cobalt as validator-trust authority from height 916; Consensus v2 remains block finality and Foundation governance retains unrelated scope. Current Git HEAD is not the running validator release.
+PostFiat is a Rust Layer 1 settlement system for post-quantum, privacy-aware institutional value transfer: transparent accounts use ML-DSA authorization from genesis, shielded settlement is built around Orchard/Halo2-style proofs, and quorum certificates provide deterministic finality. The final authenticated Cobalt drill observation ran from `2026-08-26T06:34:55Z` through `06:35:50Z` with all six `postfiat-wan-devnet-2` validators converged at height 924 and all validator, RPC, and shadow services active. Cobalt remains the bounded validator-trust authority; Consensus v2 remains block finality. The adversarial campaign closed `KEEP_ACTIVE`. Current Git HEAD is not itself proof of the running validator release.
 
 See [Current State](docs/status/chain-state-current.md) for the exact live observation, deployed release lineage, repository HEAD, adversarial campaign status, and freshness boundary.
 
@@ -45,8 +45,10 @@ flowchart LR
   encoding. See [Halo2 Dependency And Local Patch Boundary](docs/security/halo2-dependency.md).
 - Versioned governance admission: Cobalt-authorized validator-trust updates require
   a key-bound RBC → ABBA → MVBA → DABC decision certificate. The controlled testnet
-  activated this authority at height 916 and committed its first validator-key
-  rotation at height 917. Mixed authority and new-set self-authorization are rejected.
+  activated this authority at height 916, committed its first validator-key
+  rotation at height 917, and committed the adversarial drill rotation at height
+  924 after the signed rollback/return pair. Mixed authority and new-set
+  self-authorization are rejected.
 - Versioned quorum-certified finality: legacy genesis retains the single-view fail-closed rule; networks with an explicit consensus-v2 activation height use durable prepare/precommit locks, signed timeout certificates, and deterministic proposer rotation.
 - Multiple settlement lanes: consensus-ordered account and issued-asset
   transactions, W6 dual-authorized atomic swaps, FastPay single-owner payments,
@@ -62,7 +64,7 @@ flowchart LR
 | FastPay | Implemented for prefunded single-owner PFT objects with signed admission, distinct-validator certificates, durable apply, and ordered consume-or-cancel recovery. |
 | FastSwap | Implemented for prefunded dual-owner objects with durable reservation, Confirm-or-Cancel certificates, conserved effects, catch-up, and restart recovery. Shared-network activation is a separate deployment decision. |
 | Asset-Orchard | Implemented private ingress, transfer/swap, recovery, and egress path; legacy cleartext note actions are historical-replay-only. |
-| Governance | The last full audit found Cobalt active for validator-trust evolution, with Foundation governance retaining other scopes and Consensus v2 remaining the sole block-finality protocol. The 2026-08-26 all-six process probe found active validator release `cobalt-verifier-92b63f5a`, SHA-256 `c7cb0c25…9f6337`; current source HEAD is different and undeployed. See [Current State](docs/status/chain-state-current.md) and the historical [activation packet](benchmarks/cobalt-activation-live/packet/README.md). |
+| Governance | The final E5 audit found Cobalt active for validator-trust evolution with all six nodes converged at height 924 after the signed rollback/return drills and legitimate validator-5 rotation. Consensus v2 remains the sole block-finality protocol. The deployed node binary SHA-256 was `d5e5ef63…c2696caf`; current source HEAD is a separate evidence plane. See [Current State](docs/status/chain-state-current.md), the [adversarial results](docs/governance/cobalt-adversarial-verification-results.md), and the [E5 packet](benchmarks/cobalt-adversarial-verification/e5/README.md). |
 
 See [Settlement Lanes](docs/architecture/settlement-lanes.md) for the protocol
 boundaries and [Public Launch Boundary](docs/security/public-launch-boundary.md)

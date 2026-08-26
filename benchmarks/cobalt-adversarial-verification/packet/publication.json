@@ -1,0 +1,43 @@
+{
+  "article": {
+    "authority_off_claim_absent": true,
+    "cobalt_active_since_height_916": true,
+    "content_sha256": "791ec73bc770129057c37651de15709f8dd51d03472eef554bb75f4a4314f387",
+    "http_status": 200,
+    "url": "https://postfiat.org/blog/cobalt-further-evaluation/"
+  },
+  "documents": [
+    {
+      "path": "README.md",
+      "sha256": "378c2494df35c69fcfff6b0cb24a1842fcb8d0814ef22c6325029eabd6a0cca9"
+    },
+    {
+      "path": "STATUS.md",
+      "sha256": "4ba74ce02fb3a9e1f560c0ae80cad410ae2f225449e3a18985c4f247d0e7943b"
+    },
+    {
+      "path": "docs/governance/cobalt-adversarial-verification-results.md",
+      "sha256": "c4b313d6e2a8930bd8c787553b7ef9856ccd41132cfffca1749786044582ba3b"
+    },
+    {
+      "path": "docs/plans/completed/cobalt-adversarial-verification-milestone.md",
+      "sha256": "0fb09937b1f096c37833fa9049490999ed4489f9164675ba046a978b3b418fa8"
+    },
+    {
+      "path": "docs/status/chain-state-current.md",
+      "sha256": "51ef229822ca80e02d864fa1e6479b2f04e5a00de3aa012ead180af562f570bb"
+    },
+    {
+      "path": "mkdocs.yml",
+      "sha256": "a03feb41a23a2b258116fc97484c335b97721ceb99b0494d06d7b61686656787"
+    }
+  ],
+  "operator_boundary_explicit": true,
+  "published": true,
+  "published_at": "2026-08-26T06:55:30Z",
+  "results": {
+    "path": "docs/governance/cobalt-adversarial-verification-results.md",
+    "public_url": "https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/cobalt-adversarial-verification-results.md",
+    "published": true
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "experiments": {
+    "E1": {
+      "sha256sums_sha256": "9151c9b7f43e2c75f367416b9087e7255ca1c03ae734bfdd362fc79ff0cbbc05",
+      "status": "passed",
+      "summary": "Independent oracles and production agreed on all 10,240 frozen graph cases."
+    },
+    "E2": {
+      "sha256sums_sha256": "8742d9603621408339d99c3d9fcc1ba8cc43dafdc900acdfccbf86cc60d7cba3",
+      "status": "passed",
+      "summary": "All 108 Byzantine strategy cases and 442,368 searched schedules passed."
+    },
+    "E3": {
+      "sha256sums_sha256": "9302b3555ab9091b2cae9b2d372d0548fe9f2fb1e67be43dfb3f63d89140b600",
+      "status": "passed",
+      "summary": "All tampered and forged recovery inputs rejected; six honest recoveries were byte-identical."
+    },
+    "E4": {
+      "sha256sums_sha256": "93ba3db0bcc145144713088b612606fbb3b92c0f542809f258da49a555c14508",
+      "status": "passed",
+      "summary": "Both 500-round Consensus v2 lanes converged with no fork and a 0.452099 percent p95 delta."
+    },
+    "E5": {
+      "sha256sums_sha256": "0695284a7b38ac0129c47e1242f4a2227ad25096147920e79569a924e5f3b3db",
+      "status": "passed",
+      "summary": "Final live rollback and return committed; nine negatives rejected; legitimate rotation committed."
+    },
+    "E6": {
+      "sha256sums_sha256": "fa6255b5a5f31f2d7e8b2836eb005f894b815199ec1205a30fa99a6fb22de6e2",
+      "status": "passed",
+      "summary": "Independent-operator proposal path retained as a mandatory follow-on milestone."
+    }
+  }
+}

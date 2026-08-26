@@ -1,0 +1,21 @@
+{
+  "checks": {
+    "all_experiments_passed": true,
+    "authority_transitions_committed": true,
+    "checksum_manifest_complete": true,
+    "cli_and_browser_pass": true,
+    "consensus_v2_scope_preserved": true,
+    "final_gate_keep_active": true,
+    "final_release_gate_passed": true,
+    "live_negative_cases_rejected": true,
+    "operator_boundary_explicit": true,
+    "publication_complete": true,
+    "publication_documents_bound": true,
+    "redaction_safe": true,
+    "source_packets_bound": true,
+    "stolen_key_rejected": true,
+    "valid_live_authority": true
+  },
+  "result": "passed",
+  "schema": "postfiat-cobalt-adversarial-verifier-v1"
+}

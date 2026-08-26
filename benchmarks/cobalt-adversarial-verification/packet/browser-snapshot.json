@@ -1,0 +1,431 @@
+{
+  "actual_authority": {
+    "block_finality": "consensus-v2",
+    "cobalt_active": true,
+    "controls_block_consensus": false,
+    "foundation_active": false,
+    "known": true,
+    "label": "Cobalt validator-trust lane",
+    "mode": "cobalt-validator-trust",
+    "source": "authenticated adversarial packet",
+    "transition_count": 2
+  },
+  "adversarial": {
+    "authorization_identities": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4"
+    ],
+    "campaign_complete": true,
+    "experiment_pass_count": 6,
+    "experiments": {
+      "E1": {
+        "sha256sums_sha256": "9151c9b7f43e2c75f367416b9087e7255ca1c03ae734bfdd362fc79ff0cbbc05",
+        "status": "passed",
+        "summary": "Independent oracles and production agreed on all 10,240 frozen graph cases."
+      },
+      "E2": {
+        "sha256sums_sha256": "8742d9603621408339d99c3d9fcc1ba8cc43dafdc900acdfccbf86cc60d7cba3",
+        "status": "passed",
+        "summary": "All 108 Byzantine strategy cases and 442,368 searched schedules passed."
+      },
+      "E3": {
+        "sha256sums_sha256": "9302b3555ab9091b2cae9b2d372d0548fe9f2fb1e67be43dfb3f63d89140b600",
+        "status": "passed",
+        "summary": "All tampered and forged recovery inputs rejected; six honest recoveries were byte-identical."
+      },
+      "E4": {
+        "sha256sums_sha256": "93ba3db0bcc145144713088b612606fbb3b92c0f542809f258da49a555c14508",
+        "status": "passed",
+        "summary": "Both 500-round Consensus v2 lanes converged with no fork and a 0.452099 percent p95 delta."
+      },
+      "E5": {
+        "sha256sums_sha256": "0695284a7b38ac0129c47e1242f4a2227ad25096147920e79569a924e5f3b3db",
+        "status": "passed",
+        "summary": "Final live rollback and return committed; nine negatives rejected; legitimate rotation committed."
+      },
+      "E6": {
+        "sha256sums_sha256": "fa6255b5a5f31f2d7e8b2836eb005f894b815199ec1205a30fa99a6fb22de6e2",
+        "status": "passed",
+        "summary": "Independent-operator proposal path retained as a mandatory follow-on milestone."
+      }
+    },
+    "gate": "KEEP_ACTIVE",
+    "operator_decentralization_proven": false,
+    "proposal_identities": [
+      "validator-4",
+      "validator-5",
+      "validator-0"
+    ],
+    "proposal_origin": "Foundation-administered validators",
+    "protocol_capability_only": true,
+    "rejected_case_count": 9,
+    "rejected_cases": [
+      {
+        "durable_state_unchanged": true,
+        "evidence_sha256": "ae1d79e8bb312b83e7a08b5b831b6a791b3d221809b152f952e90a460cf2593d",
+        "experiment": "E5",
+        "name": "cross_chain",
+        "observed_height": 923,
+        "reason": "Cobalt authority transition domain mismatch",
+        "rejected": true,
+        "verifier_node_id": "validator-5"
+      },
+      {
+        "durable_state_unchanged": true,
+        "evidence_sha256": "3ecdfc59c11aa5cf407d84b14332577a42004a1ed441558fd8e701e3939bec78",
+        "experiment": "E5",
+        "name": "early",
+        "observed_height": 923,
+        "reason": "Cobalt authority transition must be ordered at its exact activation height",
+        "rejected": true,
+        "verifier_node_id": "validator-5"
+      },
+      {
+        "durable_state_unchanged": true,
+        "evidence_sha256": "8bfa8b6350e15e0fbfd3a570f740bb927fbe40bf67b2a119fad4e950963a72db",
+        "experiment": "E5",
+        "name": "mixed_authority",
+        "observed_height": 923,
+        "reason": "Cobalt authority transition source mode mismatch",
+        "rejected": true,
+        "verifier_node_id": "validator-5"
+      },
+      {
+        "durable_state_unchanged": true,
+        "evidence_sha256": "8bfa8b6350e15e0fbfd3a570f740bb927fbe40bf67b2a119fad4e950963a72db",
+        "experiment": "E5",
+        "name": "replayed",
+        "observed_height": 923,
+        "reason": "Cobalt authority transition source mode mismatch",
+        "rejected": true,
+        "verifier_node_id": "validator-5"
+      },
+      {
+        "durable_state_unchanged": true,
+        "evidence_sha256": "fc0e28b31220ed473cc5143229936b4ac046636de48ecbdb2553565505c01256",
+        "experiment": "E5",
+        "name": "replayed_rollback",
+        "observed_height": 923,
+        "reason": "Cobalt authority transition parent mismatch",
+        "rejected": true,
+        "verifier_node_id": "validator-5"
+      },
+      {
+        "durable_state_unchanged": true,
+        "evidence_sha256": "1f520ee157cb1643c051785d1b6032096bc22db2fb61b555c6f1ae76576b7c2f",
+        "experiment": "E5",
+        "name": "self_authorized",
+        "observed_height": 923,
+        "reason": "Cobalt authority transition does not bind the active validator registry",
+        "rejected": true,
+        "verifier_node_id": "validator-5"
+      },
+      {
+        "durable_state_unchanged": true,
+        "evidence_sha256": "b80a0606dd81fb2a5ec0707c54998d2f3985efdb2ee40001864b5e001bf7e1c4",
+        "experiment": "E5",
+        "name": "stale",
+        "observed_height": 923,
+        "reason": "Cobalt authority transition must move height, sequence, and protocol version forward",
+        "rejected": true,
+        "verifier_node_id": "validator-5"
+      },
+      {
+        "attempted_subject": "validator-5",
+        "decision_certificate_present": true,
+        "durable_state_unchanged": true,
+        "evidence_sha256": "302aecc535967a47c32d71b11fd3298cee55f818cfe8bd23d1b97486eeb8caed",
+        "experiment": "E5",
+        "name": "stolen_key_rotation",
+        "observed_height": 923,
+        "reason": "Cobalt validator update requires one signed authorization for every support vote",
+        "rejected": true,
+        "signature_count": 1,
+        "stolen_validator": "validator-5",
+        "verifier_node_id": "validator-5"
+      },
+      {
+        "durable_state_unchanged": true,
+        "evidence_sha256": "1f520ee157cb1643c051785d1b6032096bc22db2fb61b555c6f1ae76576b7c2f",
+        "experiment": "E5",
+        "name": "wrong_root",
+        "observed_height": 923,
+        "reason": "Cobalt authority transition does not bind the active validator registry",
+        "rejected": true,
+        "verifier_node_id": "validator-5"
+      }
+    ]
+  },
+  "authority_notice": "Cobalt controls validator-trust governance. Consensus v2 remains block finality. The adversarial panel exposes no mutation route.",
+  "collected_at": "2026-08-26T06:35:50Z",
+  "errors": [],
+  "proposals": {
+    "active_validator_count": 6,
+    "amendment_count": 0,
+    "authority_label": "Cobalt validator-trust lane",
+    "authority_mode": 1,
+    "items": [
+      {
+        "detail": "proposal validator-4 \u00b7 5 authorizers",
+        "height": 922,
+        "id": "941b4cdd9bd019\u202660ae552e",
+        "status": "committed",
+        "type": "forward_rollback_to_foundation"
+      },
+      {
+        "detail": "proposal validator-5 \u00b7 5 authorizers",
+        "height": 923,
+        "id": "fc0fe2f7660ab4\u2026e46cc62b",
+        "status": "committed",
+        "type": "return_to_cobalt"
+      },
+      {
+        "detail": "validator-5 \u00b7 proposal validator-0",
+        "height": 924,
+        "id": "a6b806eb304ffc\u2026aaf8f18a",
+        "status": "committed",
+        "type": "legitimate validator rotation"
+      }
+    ],
+    "latest_transition": {
+      "accepted": true,
+      "all_six_converged": true,
+      "authorization_identities": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4"
+      ],
+      "finality_confirmed": true,
+      "height": 923,
+      "kind": "return_to_cobalt",
+      "proposal_identity": "validator-5",
+      "receipt_accepted": true,
+      "transition_id": "fc0fe2f7660ab430fa06e0542ebceb0502b3467b6464ee813196eb62d739a40c25609888f874725c9e1de9d5e46cc62b"
+    },
+    "node_status": {
+      "block_height": 924,
+      "chain_id": "postfiat-wan-devnet-2",
+      "node_id": "six-validator fleet",
+      "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e"
+    },
+    "registry_update_count": 1,
+    "source": "authenticated adversarial packet",
+    "transition_count": 2
+  },
+  "read_only": true,
+  "rehearsal_readiness": {
+    "activation_performed": false,
+    "checks": [
+      {
+        "key": "all_experiments_passed",
+        "label": "all experiments passed",
+        "ok": true,
+        "source": "authenticated adversarial packet"
+      },
+      {
+        "key": "authority_transitions_committed",
+        "label": "authority transitions committed",
+        "ok": true,
+        "source": "authenticated adversarial packet"
+      },
+      {
+        "key": "checksum_manifest_complete",
+        "label": "checksum manifest complete",
+        "ok": true,
+        "source": "authenticated adversarial packet"
+      },
+      {
+        "key": "cli_and_browser_pass",
+        "label": "cli and browser pass",
+        "ok": true,
+        "source": "authenticated adversarial packet"
+      },
+      {
+        "key": "consensus_v2_scope_preserved",
+        "label": "consensus v2 scope preserved",
+        "ok": true,
+        "source": "authenticated adversarial packet"
+      },
+      {
+        "key": "final_gate_keep_active",
+        "label": "final gate keep active",
+        "ok": true,
+        "source": "authenticated adversarial packet"
+      },
+      {
+        "key": "final_release_gate_passed",
+        "label": "final release gate passed",
+        "ok": true,
+        "source": "authenticated adversarial packet"
+      },
+      {
+        "key": "live_negative_cases_rejected",
+        "label": "live negative cases rejected",
+        "ok": true,
+        "source": "authenticated adversarial packet"
+      },
+      {
+        "key": "operator_boundary_explicit",
+        "label": "operator boundary explicit",
+        "ok": true,
+        "source": "authenticated adversarial packet"
+      },
+      {
+        "key": "publication_complete",
+        "label": "publication complete",
+        "ok": true,
+        "source": "authenticated adversarial packet"
+      },
+      {
+        "key": "publication_documents_bound",
+        "label": "publication documents bound",
+        "ok": true,
+        "source": "authenticated adversarial packet"
+      },
+      {
+        "key": "redaction_safe",
+        "label": "redaction safe",
+        "ok": true,
+        "source": "authenticated adversarial packet"
+      },
+      {
+        "key": "source_packets_bound",
+        "label": "source packets bound",
+        "ok": true,
+        "source": "authenticated adversarial packet"
+      },
+      {
+        "key": "stolen_key_rejected",
+        "label": "stolen key rejected",
+        "ok": true,
+        "source": "authenticated adversarial packet"
+      },
+      {
+        "key": "valid_live_authority",
+        "label": "valid live authority",
+        "ok": true,
+        "source": "authenticated adversarial packet"
+      }
+    ],
+    "packets": {},
+    "ready": true,
+    "recommendation": "KEEP_ACTIVE",
+    "scope": "controlled-devnet validator-trust protocol capability",
+    "status": "KEEP_ACTIVE"
+  },
+  "scenario": {
+    "case_count": 9,
+    "mode": "adversarial",
+    "mutation_count": 0,
+    "rejected_count": 9
+  },
+  "schema": "postfiat-cobalt-governance-ui-snapshot-v2",
+  "shadow_health": {
+    "converged": true,
+    "digest": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+    "node_count": 6,
+    "nodes": [
+      {
+        "authority_mode": "cobalt-validator-trust",
+        "height": 924,
+        "node_id": "validator-0",
+        "ratification_anchor_id": "5eada38d23c83709a44f2cfa7eb7897d9d4b1da906e6ef66fc5dfec7e64102edda2e82b33d71346c1d8f75ccc21153c8",
+        "ratification_anchor_sequence": 2,
+        "registry_root": "08a451e07aeaf9ada41a69e7c26dfd3fd86fce11c02f5567127c598b3cf775ac054b2add85295cc8c0d429bb6d2b9b1d",
+        "rpc_service_active": true,
+        "shadow_service_active": true,
+        "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+        "tip_hash": "ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef",
+        "trust_graph_root": "89f18aef2c5726ae43043407eb4d638ee8f3b6027e58ec3553296478602232cf3c2fc5d1dfebc4058d720b16508f0307",
+        "validator_service_active": true
+      },
+      {
+        "authority_mode": "cobalt-validator-trust",
+        "height": 924,
+        "node_id": "validator-1",
+        "ratification_anchor_id": "5eada38d23c83709a44f2cfa7eb7897d9d4b1da906e6ef66fc5dfec7e64102edda2e82b33d71346c1d8f75ccc21153c8",
+        "ratification_anchor_sequence": 2,
+        "registry_root": "08a451e07aeaf9ada41a69e7c26dfd3fd86fce11c02f5567127c598b3cf775ac054b2add85295cc8c0d429bb6d2b9b1d",
+        "rpc_service_active": true,
+        "shadow_service_active": true,
+        "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+        "tip_hash": "ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef",
+        "trust_graph_root": "89f18aef2c5726ae43043407eb4d638ee8f3b6027e58ec3553296478602232cf3c2fc5d1dfebc4058d720b16508f0307",
+        "validator_service_active": true
+      },
+      {
+        "authority_mode": "cobalt-validator-trust",
+        "height": 924,
+        "node_id": "validator-2",
+        "ratification_anchor_id": "5eada38d23c83709a44f2cfa7eb7897d9d4b1da906e6ef66fc5dfec7e64102edda2e82b33d71346c1d8f75ccc21153c8",
+        "ratification_anchor_sequence": 2,
+        "registry_root": "08a451e07aeaf9ada41a69e7c26dfd3fd86fce11c02f5567127c598b3cf775ac054b2add85295cc8c0d429bb6d2b9b1d",
+        "rpc_service_active": true,
+        "shadow_service_active": true,
+        "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+        "tip_hash": "ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef",
+        "trust_graph_root": "89f18aef2c5726ae43043407eb4d638ee8f3b6027e58ec3553296478602232cf3c2fc5d1dfebc4058d720b16508f0307",
+        "validator_service_active": true
+      },
+      {
+        "authority_mode": "cobalt-validator-trust",
+        "height": 924,
+        "node_id": "validator-3",
+        "ratification_anchor_id": "5eada38d23c83709a44f2cfa7eb7897d9d4b1da906e6ef66fc5dfec7e64102edda2e82b33d71346c1d8f75ccc21153c8",
+        "ratification_anchor_sequence": 2,
+        "registry_root": "08a451e07aeaf9ada41a69e7c26dfd3fd86fce11c02f5567127c598b3cf775ac054b2add85295cc8c0d429bb6d2b9b1d",
+        "rpc_service_active": true,
+        "shadow_service_active": true,
+        "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+        "tip_hash": "ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef",
+        "trust_graph_root": "89f18aef2c5726ae43043407eb4d638ee8f3b6027e58ec3553296478602232cf3c2fc5d1dfebc4058d720b16508f0307",
+        "validator_service_active": true
+      },
+      {
+        "authority_mode": "cobalt-validator-trust",
+        "height": 924,
+        "node_id": "validator-4",
+        "ratification_anchor_id": "5eada38d23c83709a44f2cfa7eb7897d9d4b1da906e6ef66fc5dfec7e64102edda2e82b33d71346c1d8f75ccc21153c8",
+        "ratification_anchor_sequence": 2,
+        "registry_root": "08a451e07aeaf9ada41a69e7c26dfd3fd86fce11c02f5567127c598b3cf775ac054b2add85295cc8c0d429bb6d2b9b1d",
+        "rpc_service_active": true,
+        "shadow_service_active": true,
+        "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+        "tip_hash": "ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef",
+        "trust_graph_root": "89f18aef2c5726ae43043407eb4d638ee8f3b6027e58ec3553296478602232cf3c2fc5d1dfebc4058d720b16508f0307",
+        "validator_service_active": true
+      },
+      {
+        "authority_mode": "cobalt-validator-trust",
+        "height": 924,
+        "node_id": "validator-5",
+        "ratification_anchor_id": "5eada38d23c83709a44f2cfa7eb7897d9d4b1da906e6ef66fc5dfec7e64102edda2e82b33d71346c1d8f75ccc21153c8",
+        "ratification_anchor_sequence": 2,
+        "registry_root": "08a451e07aeaf9ada41a69e7c26dfd3fd86fce11c02f5567127c598b3cf775ac054b2add85295cc8c0d429bb6d2b9b1d",
+        "rpc_service_active": true,
+        "shadow_service_active": true,
+        "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+        "tip_hash": "ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef",
+        "trust_graph_root": "89f18aef2c5726ae43043407eb4d638ee8f3b6027e58ec3553296478602232cf3c2fc5d1dfebc4058d720b16508f0307",
+        "validator_service_active": true
+      }
+    ],
+    "ok": true,
+    "source": "authenticated adversarial packet"
+  },
+  "trust": {
+    "activation_height": 923,
+    "active_graph": "six protocol-native validator trust views",
+    "mode": "non-uniform essential-subset linkage",
+    "non_identical_views": true,
+    "ok": true,
+    "root": "89f18aef2c5726ae43043407eb4d638ee8f3b6027e58ec3553296478602232cf3c2fc5d1dfebc4058d720b16508f0307",
+    "source": "authenticated adversarial packet",
+    "view_count": 6
+  }
+}
