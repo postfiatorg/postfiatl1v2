@@ -1,0 +1,166 @@
+{
+  "all_six_histories_identical": true,
+  "blocks": [
+    {
+      "batch_id": "5d5e20cb3719e168dcd63a4b3912118232b1b430cdd6b20ea8e6525dc2ef7d8e3df53d2a4ae8287f1e1cdb8fc0674d0c",
+      "batch_kind": "governance",
+      "block_hash": "29d42a0c3c4292e03874137c1bd57f763db0f132f28e12333b06277c2c717dcce98ecce52e2a8cf7792a6ff29b1839cc",
+      "certificate_id": "506f55732b059f7ae4163a0c275560bedb7870b85e2b4b5e7aff0e45f5a30d655e58b78614acd0d706fbed3112cb11a8",
+      "certificate_quorum": 5,
+      "certificate_validators": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4",
+        "validator-5"
+      ],
+      "certificate_vote_validators": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4"
+      ],
+      "height": 920,
+      "parent_hash": "3a8a117af9ed40728717005d03edf032719a3ca3d696365415a2d5b0d9aeef1c509d06d54029e6c34660e29aab43d0fb",
+      "proposer": "validator-2",
+      "receipt_ids": [
+        "93647599a9b56265cb484939e3d611b0b79c500fe8fa1ffe21095c70da36aabc493af78ed8338c3089e6649d0fdfcf85"
+      ],
+      "state_root": "7fb947b54b5fb2b1a53b4a9e6dc63b353583c42b63a43269bcd666b6cd39e2ef2955e953c1a146a3d6c54eb1d828cf0f",
+      "view": 0
+    },
+    {
+      "batch_id": "57ad8800e4d644ea699989844ac4e1f987659fd72f70cf2b8b33a3303c7632fd9e55a41bd225304d680237ac630986f4",
+      "batch_kind": "governance",
+      "block_hash": "b4ce53807c02439d2ae87ce3584db48dc55659d1c7c5600362e3c24dddca7ea90467c0df6158cc6b2e8b3e689541d98b",
+      "certificate_id": "b000e148fc9460a3ca3ed5976f4e9a0dd3f82ffd1c0f62e2226768547e31dec667579dd0d6e1fbc02ef16a062094bd09",
+      "certificate_quorum": 5,
+      "certificate_validators": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4",
+        "validator-5"
+      ],
+      "certificate_vote_validators": [
+        "validator-0",
+        "validator-1",
+        "validator-3",
+        "validator-4",
+        "validator-5"
+      ],
+      "height": 921,
+      "parent_hash": "29d42a0c3c4292e03874137c1bd57f763db0f132f28e12333b06277c2c717dcce98ecce52e2a8cf7792a6ff29b1839cc",
+      "proposer": "validator-3",
+      "receipt_ids": [
+        "11e3cd3e47e8fe6b11ffdf7350888ca8ad982f92a18587583666a7f88ee926d0d1acf45745ca96aa1ac82362eb5eea9a"
+      ],
+      "state_root": "2a2dc05e880b164d1f68a9661f193a7d35d88410b33c226ba9b45530acced349fe1bb9cad320a011d82eca6e54d5a7ee",
+      "view": 0
+    },
+    {
+      "batch_id": "dfa9952af85750d7e17bc8eea8042190e3527f0f6c69a2a23bb05f24c170efe1778f40e24c1a955ba0e13bdce05c11cb",
+      "batch_kind": "governance",
+      "block_hash": "4960a471ffbbd3e91a480abf2ae29221b4a55176addfa6e1cfdf02987530869691733aa07575381328a76eb98c23250c",
+      "certificate_id": "b5d662df8cff22ced988030cc66ea1af63910efdd3556087c3c6ef2a371504fdad675fc91ff2ba8529b767ee89d4c7fb",
+      "certificate_quorum": 5,
+      "certificate_validators": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4",
+        "validator-5"
+      ],
+      "certificate_vote_validators": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-4",
+        "validator-5"
+      ],
+      "height": 922,
+      "parent_hash": "b4ce53807c02439d2ae87ce3584db48dc55659d1c7c5600362e3c24dddca7ea90467c0df6158cc6b2e8b3e689541d98b",
+      "proposer": "validator-4",
+      "receipt_ids": [
+        "941b4cdd9bd0196c85bcd38c15208e7e001c13a46c64c7d076bd7bf68a234adfb071be281462e43f74c9719260ae552e"
+      ],
+      "state_root": "51d99cec7e6b22153511c713acf7fd87217c5651379cc5fb6b4c65d8baba9f7c8c5312011404b130fd67f903092c4e74",
+      "view": 0
+    },
+    {
+      "batch_id": "433aa8232e19c00fe2f456c50bbf2efa9ae4040fd561420e7f6f287495efa3a8cbc15ecb04b33db100bd8bdda89360f0",
+      "batch_kind": "governance",
+      "block_hash": "19874bc2260fa9319e98504d5de73a1de1cfc6acf05441776eec9fd8861ed6bddc6c80f4240db81de39804d6d70d8e7e",
+      "certificate_id": "2b5971ebef5ff62d60d75038740f5d921ec9f41b17ef45ea2f235af8ca7f36eb5765bb96af9e9a980048b45647914be0",
+      "certificate_quorum": 5,
+      "certificate_validators": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4",
+        "validator-5"
+      ],
+      "certificate_vote_validators": [
+        "validator-0",
+        "validator-1",
+        "validator-3",
+        "validator-4",
+        "validator-5"
+      ],
+      "height": 923,
+      "parent_hash": "4960a471ffbbd3e91a480abf2ae29221b4a55176addfa6e1cfdf02987530869691733aa07575381328a76eb98c23250c",
+      "proposer": "validator-5",
+      "receipt_ids": [
+        "fc0fe2f7660ab430fa06e0542ebceb0502b3467b6464ee813196eb62d739a40c25609888f874725c9e1de9d5e46cc62b"
+      ],
+      "state_root": "a86581e741a56b3968d8a472f1f51d3ddd73f0f66400c4c7fbc25ee37f2000b4021ecb5b4aee5d6f3a877dc211e213ca",
+      "view": 0
+    },
+    {
+      "batch_id": "256323dc6b3feb2ce79f33a1ccf9500643992350dbdaeabc6770d2c1f1858d5655b19a26439603fcab780c928bfc4289",
+      "batch_kind": "governance",
+      "block_hash": "ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef",
+      "certificate_id": "482f174da04a7c1f93eb4329d3ce43058792e1088b51a48b403568bf0c7f3dc2452287d2bc9c57616f45e00e23a28bc9",
+      "certificate_quorum": 5,
+      "certificate_validators": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4",
+        "validator-5"
+      ],
+      "certificate_vote_validators": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4",
+        "validator-5"
+      ],
+      "height": 924,
+      "parent_hash": "19874bc2260fa9319e98504d5de73a1de1cfc6acf05441776eec9fd8861ed6bddc6c80f4240db81de39804d6d70d8e7e",
+      "proposer": "validator-0",
+      "receipt_ids": [
+        "a6b806eb304ffc5d4c329fc179fa628745a2e609724cd67d654805ebfc4cc12bc4338ed5fa1f3bf301384ca8aaf8f18a"
+      ],
+      "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+      "view": 0
+    }
+  ],
+  "node_history_sha256": {
+    "validator-0": "ec9d2a1eae6f5184f519b2a207eaa1b43c943d5d80ebddf01097d2b49265e7f0",
+    "validator-1": "71c7f1a8aa0b16122827cc70e9c508c1119bb83e6c058f42b94525d6ffb5e49e",
+    "validator-2": "4a4cc497acd4f03e1261b302181b4cdc4f11e935cf6f9b67820f0b5023eee980",
+    "validator-3": "f9d7247aebd473db3502ba446b849008efa1f1a2a5b47624b07e52c9836bfe88",
+    "validator-4": "ac69e7d718b7d04f9356cd05b725e3bf8792a89a40d825394aa17d81c1557aa0",
+    "validator-5": "85a1fee1096d9917da32abec1febf512c58be00922a444c65c6c74418261a2fe"
+  },
+  "schema": "postfiat-cobalt-adversarial-e5-finality-history-v1",
+  "status": "passed"
+}

@@ -1,0 +1,80 @@
+{
+  "authority": {
+    "approval_quorum": 5,
+    "mode": 1,
+    "registry_root": "945768d593497541f59961d1ba3920560cfde7bf5037e40eb89dd5466637f221709bff05b69d2d40a36d5cff8505c37e",
+    "transition_id": "fc0fe2f7660ab430fa06e0542ebceb0502b3467b6464ee813196eb62d739a40c25609888f874725c9e1de9d5e46cc62b",
+    "validator_count": 6
+  },
+  "cases": {
+    "cross_chain": {
+      "reason": "Cobalt authority transition domain mismatch",
+      "rejected": true
+    },
+    "early": {
+      "reason": "Cobalt authority transition must be ordered at its exact activation height",
+      "rejected": true
+    },
+    "mixed_authority": {
+      "reason": "Cobalt authority transition source mode mismatch",
+      "rejected": true
+    },
+    "replayed": {
+      "reason": "Cobalt authority transition source mode mismatch",
+      "rejected": true
+    },
+    "replayed_rollback": {
+      "reason": "Cobalt authority transition parent mismatch",
+      "rejected": true
+    },
+    "self_authorized": {
+      "reason": "Cobalt authority transition does not bind the active validator registry",
+      "rejected": true
+    },
+    "stale": {
+      "reason": "Cobalt authority transition must move height, sequence, and protocol version forward",
+      "rejected": true
+    },
+    "stolen_key_rotation": {
+      "attacker_replacement_public_key_sha256": "401fcf18b3d8f0c82f23582635b5bf7264fdf0291a5220f349eec18125e640e1",
+      "attempted_subject": "validator-5",
+      "decision_certificate_present": true,
+      "reason": "Cobalt validator update requires one signed authorization for every support vote",
+      "rejected": true,
+      "signature_count": 1,
+      "stolen_validator": "validator-5"
+    },
+    "wrong_root": {
+      "reason": "Cobalt authority transition does not bind the active validator registry",
+      "rejected": true
+    }
+  },
+  "chain": {
+    "block_tip_hash": "19874bc2260fa9319e98504d5de73a1de1cfc6acf05441776eec9fd8861ed6bddc6c80f4240db81de39804d6d70d8e7e",
+    "chain_id": "postfiat-wan-devnet-2",
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "observed_height": 923,
+    "state_root": "a86581e741a56b3968d8a472f1f51d3ddd73f0f66400c4c7fbc25ee37f2000b4021ecb5b4aee5d6f3a877dc211e213ca"
+  },
+  "checks": {
+    "all_required_pre_transition_cases_rejected": true,
+    "durable_state_unchanged": true,
+    "private_key_material_redacted": true,
+    "production_verifier_path": true,
+    "stolen_key_rotation_rejected": true
+  },
+  "claims_not_made": [
+    "the adversary possessed more than one active validator key",
+    "the drill mutated live validator state",
+    "Cobalt controlled block consensus"
+  ],
+  "schema": "postfiat-cobalt-adversarial-e5-live-negative-v1",
+  "source_commit": "8cc7d15edc58b5f5a0b745143fef2d45203465ff",
+  "state_files": {
+    "governance_sha256_after": "eb11b92aa14b8119fe6695d1272e7adc0bf9448e85a7cff930703375a6548681",
+    "governance_sha256_before": "eb11b92aa14b8119fe6695d1272e7adc0bf9448e85a7cff930703375a6548681",
+    "registry_sha256_after": "4761bddcd4f1562e9f4f91455dc35adceccafceae7ae9be7327d31fe8d629bf9",
+    "registry_sha256_before": "4761bddcd4f1562e9f4f91455dc35adceccafceae7ae9be7327d31fe8d629bf9"
+  },
+  "status": "passed"
+}

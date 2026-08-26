@@ -1,0 +1,18 @@
+{
+  "checks": {
+    "all_six_converged": true,
+    "authority_transitions_committed": true,
+    "canonical_governance_verified": true,
+    "consensus_v2_uninterrupted": true,
+    "decision_certificate_present": true,
+    "legitimate_rotation_committed": true,
+    "live_negative_cases_rejected": true,
+    "private_material_absent": true,
+    "shadow_lineage_converged": true,
+    "stolen_key_rejected": true,
+    "transition_signatures_present": true,
+    "updated_key_validated": true
+  },
+  "schema": "postfiat-cobalt-adversarial-e5-verifier-v1",
+  "status": "passed"
+}

@@ -1,0 +1,119 @@
+{
+  "chain_id": "postfiat-wan-devnet-2",
+  "corrective_pair": {
+    "accepted": true,
+    "authority_after": "cobalt-validator-trust",
+    "final_gate_pair": true,
+    "heights": [
+      922,
+      923
+    ]
+  },
+  "initial_rehearsal": {
+    "accepted": true,
+    "finality_interruption_observed": false,
+    "heights": [
+      920,
+      921
+    ],
+    "reason": "the first return used a trust binding that did not match the protocol-native post-return graph",
+    "remediation_required": true,
+    "safety_failure_observed": false
+  },
+  "schema": "postfiat-cobalt-adversarial-e5-authority-history-v1",
+  "status": "passed",
+  "transitions": [
+    {
+      "accepted": true,
+      "approval_identities": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4"
+      ],
+      "approval_quorum": 5,
+      "block_hash": "29d42a0c3c4292e03874137c1bd57f763db0f132f28e12333b06277c2c717dcce98ecce52e2a8cf7792a6ff29b1839cc",
+      "corrective": false,
+      "final_gate_transition": false,
+      "from_authority_mode": 1,
+      "height": 920,
+      "proposal_identity": "validator-2",
+      "receipt_id": "93647599a9b56265cb484939e3d611b0b79c500fe8fa1ffe21095c70da36aabc493af78ed8338c3089e6649d0fdfcf85",
+      "signed_artifact": "h920-transition.json",
+      "signed_artifact_sha256": "4c6adcfaad3ff2fb2622dfb8f2ba0567e135999531e9fc346d0064e7eeecb337",
+      "to_authority_mode": 0,
+      "transition_id": "93647599a9b56265cb484939e3d611b0b79c500fe8fa1ffe21095c70da36aabc493af78ed8338c3089e6649d0fdfcf85",
+      "transition_kind": "rollback_to_foundation"
+    },
+    {
+      "accepted": true,
+      "approval_identities": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4"
+      ],
+      "approval_quorum": 5,
+      "block_hash": "b4ce53807c02439d2ae87ce3584db48dc55659d1c7c5600362e3c24dddca7ea90467c0df6158cc6b2e8b3e689541d98b",
+      "corrective": false,
+      "final_gate_transition": false,
+      "from_authority_mode": 0,
+      "height": 921,
+      "proposal_identity": "validator-3",
+      "receipt_id": "11e3cd3e47e8fe6b11ffdf7350888ca8ad982f92a18587583666a7f88ee926d0d1acf45745ca96aa1ac82362eb5eea9a",
+      "signed_artifact": "h921-transition.json",
+      "signed_artifact_sha256": "8dc20f06e63f92dfdb22fcd8e981f34f3f62773aa2de9877cada6c99980a5408",
+      "to_authority_mode": 1,
+      "transition_id": "11e3cd3e47e8fe6b11ffdf7350888ca8ad982f92a18587583666a7f88ee926d0d1acf45745ca96aa1ac82362eb5eea9a",
+      "transition_kind": "activate_cobalt"
+    },
+    {
+      "accepted": true,
+      "approval_identities": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4"
+      ],
+      "approval_quorum": 5,
+      "block_hash": "4960a471ffbbd3e91a480abf2ae29221b4a55176addfa6e1cfdf02987530869691733aa07575381328a76eb98c23250c",
+      "corrective": true,
+      "final_gate_transition": true,
+      "from_authority_mode": 1,
+      "height": 922,
+      "proposal_identity": "validator-4",
+      "receipt_id": "941b4cdd9bd0196c85bcd38c15208e7e001c13a46c64c7d076bd7bf68a234adfb071be281462e43f74c9719260ae552e",
+      "signed_artifact": "h922-transition.json",
+      "signed_artifact_sha256": "4660c5b30116736c6ecbc23785374cf29e8bb49009cdf2ad824d5dae994ef5ce",
+      "to_authority_mode": 0,
+      "transition_id": "941b4cdd9bd0196c85bcd38c15208e7e001c13a46c64c7d076bd7bf68a234adfb071be281462e43f74c9719260ae552e",
+      "transition_kind": "rollback_to_foundation"
+    },
+    {
+      "accepted": true,
+      "approval_identities": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4"
+      ],
+      "approval_quorum": 5,
+      "block_hash": "19874bc2260fa9319e98504d5de73a1de1cfc6acf05441776eec9fd8861ed6bddc6c80f4240db81de39804d6d70d8e7e",
+      "corrective": true,
+      "final_gate_transition": true,
+      "from_authority_mode": 0,
+      "height": 923,
+      "proposal_identity": "validator-5",
+      "receipt_id": "fc0fe2f7660ab430fa06e0542ebceb0502b3467b6464ee813196eb62d739a40c25609888f874725c9e1de9d5e46cc62b",
+      "signed_artifact": "h923-transition.json",
+      "signed_artifact_sha256": "682eb3fbcea3a59f14480db0767832e2168f8398962560bec73fc88d111c3bff",
+      "to_authority_mode": 1,
+      "transition_id": "fc0fe2f7660ab430fa06e0542ebceb0502b3467b6464ee813196eb62d739a40c25609888f874725c9e1de9d5e46cc62b",
+      "transition_kind": "activate_cobalt"
+    }
+  ]
+}
