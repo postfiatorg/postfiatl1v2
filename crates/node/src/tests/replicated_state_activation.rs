@@ -30,12 +30,19 @@ fn activation_test_journal<T: serde::Serialize>(
     receipts: &[Receipt],
     write_governance: bool,
 ) -> OrderedCommitDeltaJournal {
-    let ordered_batches = store
-        .read_ordered_batches()
-        .expect("read activation ordered batches");
     let shielded = store.read_shielded().expect("read activation shielded state");
     let bridge = store.read_bridge().expect("read activation bridge state");
     let tip = store.read_chain_tip().expect("read activation chain tip");
+    let block_height = tip.height.checked_add(1).expect("activation height overflow");
+    let (proposed_ordered_batches, ordered_history) =
+        proposed_ordered_state(store, genesis, batch_id, block_height)
+            .expect("build activation ordered history");
+    let mut ordered_batches = proposed_ordered_batches;
+    if ordered_history.is_none() {
+        ordered_batches.pop();
+    } else {
+        ordered_batches.clear();
+    }
     let validator_keys = read_validator_key_file(&store.data_dir().join(VALIDATOR_KEYS_FILE))
         .expect("read activation validator keys");
     let certificate_validators =
@@ -45,9 +52,10 @@ fn activation_test_journal<T: serde::Serialize>(
         governance,
         ledger,
         ordered_batches: &ordered_batches,
+        ordered_history: ordered_history.as_ref(),
         shielded: &shielded,
         bridge: &bridge,
-        block_height: tip.height.checked_add(1).expect("activation height overflow"),
+        block_height,
         parent_hash: tip.block_hash,
         batch_kind,
         batch_id,
@@ -87,6 +95,7 @@ fn assert_activation_journal_recovers_every_prefix(
     let pre_archive = seed_store.read_batch_archive().expect("read seed archive");
     let pre_blocks = seed_store.read_blocks().expect("read seed blocks");
     let pre_tip = seed_store.read_chain_tip().expect("read seed chain tip");
+    let seed_genesis = seed_store.read_genesis().expect("read seed genesis");
 
     let mut expected_receipts = pre_receipts;
     expected_receipts.extend(journal.receipt_delta.clone());
@@ -142,6 +151,11 @@ fn assert_activation_journal_recovers_every_prefix(
             store
                 .append_ordered_batch_record(&journal.ordered_batch_id)
                 .expect("write activation ordered batch");
+            if seed_genesis.ordered_history_v2_activation_height.is_some() {
+                store
+                    .append_ordered_history_index_record(&journal.ordered_batch_id)
+                    .expect("write activation ordered-history index");
+            }
         }
         if write_prefix >= 7 {
             store
@@ -359,4 +373,186 @@ fn replicated_state_v2_activation_journal_recovers_every_persist_prefix() {
     })
     .expect("replay activation boundary");
     std::fs::remove_dir_all(seed_dir).expect("remove activation seed directory");
+}
+
+#[test]
+fn ordered_history_v2_activation_journal_recovers_every_persist_prefix() {
+    let seed_dir = unique_test_dir("postfiat-ordered-history-v2-activation-seed");
+    let mut genesis = Genesis::try_new_with_validator_count(
+        "postfiat-ordered-history-v2-activation",
+        1,
+    )
+    .expect("create ordered-history v2 genesis");
+    genesis.ordered_history_v2_activation_height = Some(1);
+    genesis.validate().expect("validate ordered-history v2 genesis");
+    lifecycle_queries::init_with_genesis(
+        seed_dir.clone(),
+        "validator-0".to_string(),
+        genesis.clone(),
+    )
+    .expect("initialize ordered-history v2 seed");
+    let store = NodeStore::new(&seed_dir);
+    assert_eq!(
+        store
+            .ordered_history_commitment()
+            .expect("read genesis ordered-history commitment")
+            .count,
+        0
+    );
+    let governance = store.read_governance().expect("read governance");
+    let ledger = store.read_ledger().expect("read ledger");
+    let batch = postfiat_mempool_dag::build_transaction_batch(
+        &mempool_batch_domain(&genesis),
+        Vec::new(),
+    )
+    .expect("build ordered-history activation batch")
+    .batch;
+    let journal = activation_test_journal(
+        &store,
+        &genesis,
+        &governance,
+        &ledger,
+        BATCH_KIND_TRANSPARENT,
+        &batch.batch_id,
+        &batch,
+        &[],
+        false,
+    );
+    assert_eq!(journal.block.header.height, 1);
+    let (proposal_ordered_batches, proposal_ordered_history) =
+        proposed_ordered_state(&store, &genesis, &batch.batch_id, 1)
+            .expect("build ordered-history v2 proposal state");
+    assert!(proposal_ordered_batches.is_empty());
+    let proposal = build_block_proposal_from_state(BlockProposalPlan {
+        genesis: &genesis,
+        governance: &governance,
+        ledger: &ledger,
+        ordered_batches: &proposal_ordered_batches,
+        ordered_history: proposal_ordered_history.as_ref(),
+        shielded: &store.read_shielded().expect("read shielded state"),
+        bridge: &store.read_bridge().expect("read bridge state"),
+        block_height: 1,
+        parent_hash: store.read_chain_tip().expect("read genesis tip").block_hash,
+        view: 0,
+        batch_kind: BATCH_KIND_TRANSPARENT,
+        batch_id: &batch.batch_id,
+        payload: &batch,
+        receipts: &[],
+        fastpay_pre_state_effects: Vec::new(),
+    })
+    .expect("build ordered-history v2 proposal");
+    assert_eq!(proposal.state_root, journal.block.header.state_root);
+    assert_activation_journal_recovers_every_prefix(
+        &seed_dir,
+        "ordered-history-v2-first-block",
+        &journal,
+    );
+    apply_activation_journal(&store, &journal);
+    assert_eq!(
+        store
+            .ordered_history_commitment()
+            .expect("read activated ordered-history commitment")
+            .count,
+        1
+    );
+    assert_eq!(
+        current_replicated_state_root(&store, &genesis)
+            .expect("read activated current state root"),
+        journal.block.header.state_root
+    );
+    verify_blocks(NodeOptions {
+        data_dir: seed_dir.clone(),
+    })
+    .expect("replay ordered-history v2 activation boundary");
+    std::fs::remove_dir_all(seed_dir).expect("remove ordered-history v2 activation seed");
+}
+
+#[test]
+fn ordered_history_v2_state_root_is_domain_bound_and_activation_gated() {
+    let data_dir = unique_test_dir("postfiat-ordered-history-v2-state-root");
+    init(InitOptions {
+        data_dir: data_dir.clone(),
+        chain_id: "postfiat-ordered-history-v2-state-root".to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: 1,
+    })
+    .expect("initialize ordered-history v2 fixture");
+    let store = NodeStore::new(&data_dir);
+    let mut genesis = store.read_genesis().expect("read genesis");
+    genesis.ordered_history_v2_activation_height = Some(1);
+    let genesis_hash_hex = genesis_hash(&genesis);
+    let empty = postfiat_storage::OrderedHistoryCommitment::genesis(
+        &genesis.chain_id,
+        &genesis_hash_hex,
+        genesis.protocol_version,
+    )
+    .expect("create empty ordered-history commitment");
+    let first = empty.append("batch-1").expect("append first batch");
+    let second = first.append("batch-2").expect("append second batch");
+    let governance = store.read_governance().expect("read governance");
+    let ledger = store.read_ledger().expect("read ledger");
+    let shielded = store.read_shielded().expect("read shielded state");
+    let bridge = store.read_bridge().expect("read bridge state");
+
+    let first_root = replicated_state_root_v2(
+        &genesis,
+        &governance,
+        &ledger,
+        &first,
+        &shielded,
+        &bridge,
+    )
+    .expect("compute first ordered-history v2 root");
+    assert_eq!(
+        first_root,
+        replicated_state_root_v2(
+            &genesis,
+            &governance,
+            &ledger,
+            &first,
+            &shielded,
+            &bridge,
+        )
+        .expect("recompute first ordered-history v2 root")
+    );
+    assert_ne!(
+        first_root,
+        replicated_state_root_v2(
+            &genesis,
+            &governance,
+            &ledger,
+            &second,
+            &shielded,
+            &bridge,
+        )
+        .expect("compute second ordered-history v2 root")
+    );
+    assert!(replicated_state_root_v2(
+        &genesis,
+        &governance,
+        &ledger,
+        &empty,
+        &shielded,
+        &bridge,
+    )
+    .is_err());
+
+    let wrong_domain = postfiat_storage::OrderedHistoryCommitment::genesis(
+        "postfiat-wrong-domain",
+        &genesis_hash_hex,
+        genesis.protocol_version,
+    )
+    .expect("create wrong-domain commitment")
+    .append("batch-1")
+    .expect("append wrong-domain batch");
+    assert!(replicated_state_root_v2(
+        &genesis,
+        &governance,
+        &ledger,
+        &wrong_domain,
+        &shielded,
+        &bridge,
+    )
+    .is_err());
+    std::fs::remove_dir_all(data_dir).expect("remove ordered-history v2 fixture");
 }

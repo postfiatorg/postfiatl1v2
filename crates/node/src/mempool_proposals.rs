@@ -2861,6 +2861,42 @@ pub(super) fn normalize_block_proposal_batch_kind(
     }
 }
 
+pub(super) fn proposed_ordered_state(
+    store: &NodeStore,
+    genesis: &Genesis,
+    batch_id: &str,
+    block_height: u64,
+) -> io::Result<(
+    Vec<String>,
+    Option<postfiat_storage::OrderedHistoryCommitment>,
+)> {
+    if genesis
+        .ordered_history_v2_activation_height
+        .is_some_and(|activation_height| block_height >= activation_height)
+    {
+        let commitment = store.next_ordered_history_commitment(batch_id)?;
+        if commitment.count != block_height {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "ordered-history commitment count {} does not match proposal height {block_height}",
+                    commitment.count
+                ),
+            ));
+        }
+        return Ok((Vec::new(), Some(commitment)));
+    }
+    let mut ordered_batches = store.read_ordered_batches()?;
+    if ordered_batches.iter().any(|existing| existing == batch_id) {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!("batch '{batch_id}' already applied"),
+        ));
+    }
+    ordered_batches.push(batch_id.to_owned());
+    Ok((ordered_batches, None))
+}
+
 #[allow(dead_code)]
 fn build_ordered_batch_proposal(
     store: &NodeStore,
@@ -2922,13 +2958,6 @@ fn build_transparent_batch_proposal(
         )
     })?;
 
-    let ordered_batches = store.read_ordered_batches()?;
-    if ordered_batches.contains(&ordered_reference.batch_id) {
-        return Err(io::Error::new(
-            io::ErrorKind::AlreadyExists,
-            format!("batch `{}` already applied", ordered_reference.batch_id),
-        ));
-    }
     let shielded = store.read_shielded()?;
     let bridge = store.read_bridge()?;
     let fastpay_pre_state_effects = match supplied_fastpay_effects {
@@ -2967,13 +2996,14 @@ fn build_transparent_batch_proposal(
         orchard_balances,
     );
     let batch_id = ordered_reference.batch_id;
-    let mut proposed_ordered_batches = ordered_batches;
-    proposed_ordered_batches.push(batch_id.clone());
+    let (proposed_ordered_batches, ordered_history) =
+        proposed_ordered_state(store, &genesis, &batch_id, block_height)?;
     build_block_proposal_from_state(BlockProposalPlan {
         genesis: &genesis,
         governance: &governance,
         ledger: &ledger,
         ordered_batches: &proposed_ordered_batches,
+        ordered_history: ordered_history.as_ref(),
         shielded: &shielded,
         bridge: &bridge,
         block_height,
@@ -2999,13 +3029,6 @@ fn build_governance_batch_proposal(
     let batch = read_governance_action_batch_file(batch_file)?;
     verify_governance_action_batch_id(&genesis, &batch)?;
 
-    let ordered_batches = store.read_ordered_batches()?;
-    if ordered_batches.contains(&batch.batch_id) {
-        return Err(io::Error::new(
-            io::ErrorKind::AlreadyExists,
-            format!("governance batch `{}` already applied", batch.batch_id),
-        ));
-    }
     let shielded = store.read_shielded()?;
     let bridge = store.read_bridge()?;
     let fastpay_pre_state_effects = match supplied_fastpay_effects {
@@ -3036,13 +3059,14 @@ fn build_governance_batch_proposal(
     ensure_governance_batch_lifecycle_ready(&batch, block_height)?;
     let receipts =
         execute_governance_batch(&mut governance, Some(&mut ledger), &batch, block_height);
-    let mut proposed_ordered_batches = ordered_batches;
-    proposed_ordered_batches.push(batch.batch_id.clone());
+    let (proposed_ordered_batches, ordered_history) =
+        proposed_ordered_state(store, &genesis, &batch.batch_id, block_height)?;
     build_block_proposal_from_state(BlockProposalPlan {
         genesis: &genesis,
         governance: &governance,
         ledger: &ledger,
         ordered_batches: &proposed_ordered_batches,
+        ordered_history: ordered_history.as_ref(),
         shielded: &shielded,
         bridge: &bridge,
         block_height,
@@ -3103,19 +3127,6 @@ fn build_shielded_batch_proposal_with_timings(
     timings.verify_batch_id_ms = node_timing_elapsed_ms(stage_start);
 
     let stage_start = std::time::Instant::now();
-    let ordered_batches = store.read_ordered_batches()?;
-    timings.read_ordered_batches_ms = node_timing_elapsed_ms(stage_start);
-
-    let stage_start = std::time::Instant::now();
-    if ordered_batches.contains(&batch.batch_id) {
-        return Err(io::Error::new(
-            io::ErrorKind::AlreadyExists,
-            format!("shielded batch `{}` already applied", batch.batch_id),
-        ));
-    }
-    timings.duplicate_check_ms = node_timing_elapsed_ms(stage_start);
-
-    let stage_start = std::time::Instant::now();
     let bridge = store.read_bridge()?;
     timings.read_bridge_ms = node_timing_elapsed_ms(stage_start);
 
@@ -3134,6 +3145,12 @@ fn build_shielded_batch_proposal_with_timings(
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?;
     let parent_hash = chain_tip.block_hash.clone();
     timings.chain_tip_ms = node_timing_elapsed_ms(stage_start);
+
+    let stage_start = std::time::Instant::now();
+    let (proposed_ordered_batches, ordered_history) =
+        proposed_ordered_state(store, &genesis, &batch.batch_id, block_height)?;
+    timings.read_ordered_batches_ms = node_timing_elapsed_ms(stage_start);
+    timings.duplicate_check_ms = 0.0;
 
     let stage_start = std::time::Instant::now();
     let _ = activate_due_validator_registry_updates_for_commit(
@@ -3177,14 +3194,13 @@ fn build_shielded_batch_proposal_with_timings(
     timings.private_egress_verifier_breakdown = private_egress_verifier_breakdown;
     timings.private_egress_state_breakdown = private_egress_state_breakdown;
 
-    let mut proposed_ordered_batches = ordered_batches;
-    proposed_ordered_batches.push(batch.batch_id.clone());
     let stage_start = std::time::Instant::now();
     let proposal = build_block_proposal_from_state(BlockProposalPlan {
         genesis: &genesis,
         governance: &governance,
         ledger: &ledger,
         ordered_batches: &proposed_ordered_batches,
+        ordered_history: ordered_history.as_ref(),
         shielded: &shielded,
         bridge: &bridge,
         block_height,
@@ -3223,13 +3239,6 @@ fn build_bridge_batch_proposal(
     let batch = read_bridge_action_batch_file(batch_file)?;
     verify_bridge_action_batch_id(&genesis, &batch)?;
 
-    let ordered_batches = store.read_ordered_batches()?;
-    if ordered_batches.contains(&batch.batch_id) {
-        return Err(io::Error::new(
-            io::ErrorKind::AlreadyExists,
-            format!("bridge batch `{}` already applied", batch.batch_id),
-        ));
-    }
     let chain_tip = read_chain_tip_or_reconstruct_for_genesis(store, &genesis)?;
     let block_height = chain_tip
         .height
@@ -3254,13 +3263,14 @@ fn build_bridge_batch_proposal(
         governance.bridge_witness_epoch,
         execution_validator_registry,
     );
-    let mut proposed_ordered_batches = ordered_batches;
-    proposed_ordered_batches.push(batch.batch_id.clone());
+    let (proposed_ordered_batches, ordered_history) =
+        proposed_ordered_state(store, &genesis, &batch.batch_id, block_height)?;
     build_block_proposal_from_state(BlockProposalPlan {
         genesis: &genesis,
         governance: &governance,
         ledger: &ledger,
         ordered_batches: &proposed_ordered_batches,
+        ordered_history: ordered_history.as_ref(),
         shielded: &shielded,
         bridge: &bridge,
         block_height,

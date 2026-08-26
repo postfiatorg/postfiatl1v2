@@ -2467,14 +2467,6 @@ fn apply_governance_batch_internal(
     let batch = read_governance_action_batch_file(&options.batch_file)?;
     verify_governance_action_batch_id(&genesis, &batch)?;
 
-    let ordered_batches = store.read_ordered_batches()?;
-    if ordered_batches.contains(&batch.batch_id) {
-        return Err(io::Error::new(
-            io::ErrorKind::AlreadyExists,
-            format!("governance batch `{}` already applied", batch.batch_id),
-        ));
-    }
-
     let mut governance = store.read_governance()?;
     let mut ledger = store.read_ledger()?;
     let shielded = store.read_shielded()?;
@@ -2485,6 +2477,14 @@ fn apply_governance_batch_internal(
         .checked_add(1)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?;
     let parent_hash = chain_tip.block_hash.clone();
+    let (proposed_ordered_batches, ordered_history) =
+        proposed_ordered_state(&store, &genesis, &batch.batch_id, block_height)?;
+    let mut ordered_batches = proposed_ordered_batches.clone();
+    if ordered_history.is_none() {
+        ordered_batches.pop();
+    } else {
+        ordered_batches.clear();
+    }
     let due_activations = activate_due_validator_registry_updates_for_commit(
         &store,
         &genesis,
@@ -2531,13 +2531,12 @@ fn apply_governance_batch_internal(
         &batch,
         block_height,
     );
-    let mut proposed_ordered_batches = ordered_batches.clone();
-    proposed_ordered_batches.push(batch.batch_id.clone());
     let consensus_proposal = build_block_proposal_from_state(BlockProposalPlan {
         genesis: &genesis,
         governance: &governance,
         ledger: &ledger,
         ordered_batches: &proposed_ordered_batches,
+        ordered_history: ordered_history.as_ref(),
         shielded: &shielded,
         bridge: &bridge,
         block_height,
@@ -2563,6 +2562,7 @@ fn apply_governance_batch_internal(
         governance: &governance,
         ledger: &ledger,
         ordered_batches: &ordered_batches,
+        ordered_history: ordered_history.as_ref(),
         shielded: &shielded,
         bridge: &bridge,
         block_height,

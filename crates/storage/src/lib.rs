@@ -3,6 +3,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(unix)]
@@ -23,10 +24,13 @@ use serde::{Deserialize, Serialize};
 
 pub mod fastswap_store;
 pub mod integrity;
+pub mod ordered_history;
+
+pub use ordered_history::{OrderedHistoryCommitment, OrderedHistoryIndexReport};
 
 use integrity::{
-    from_hex, macs_equal, to_hex, IntegrityKey, FILE_MAC_MARKER, JSONL_CHAIN_GENESIS,
-    JSONL_ENVELOPE_KIND, MAC_BYTES,
+    from_hex, legacy_checksum, macs_equal, to_hex, IntegrityKey, FILE_MAC_MARKER,
+    JSONL_CHAIN_GENESIS, JSONL_ENVELOPE_KIND, MAC_BYTES,
 };
 
 pub const GENESIS_FILE: &str = "genesis.json";
@@ -48,8 +52,8 @@ pub const BRIDGE_FILE: &str = "bridge.json";
 pub const ORDERED_COMMIT_JOURNAL_FILE: &str = "ordered_commit_journal.json";
 const MEMPOOL_MUTATION_LOCK_FILE: &str = ".mempool.mutation.lock";
 const ORDERED_COMMIT_MUTATION_LOCK_FILE: &str = ".ordered-commit.mutation.lock";
+const JSONL_LOCK_SUFFIX: &str = ".mutation.lock";
 const ATOMIC_WRITE_TEMP_ATTEMPTS: u32 = 128;
-const JSONL_REPAIR_SCAN_CHUNK: usize = 8192;
 pub const MAX_STATE_FILE_BYTES: u64 = 256 * 1024 * 1024;
 pub const MAX_JSONL_FILE_BYTES: u64 = 512 * 1024 * 1024;
 pub const MAX_JSONL_RECORD_BYTES: usize = 16 * 1024 * 1024;
@@ -61,6 +65,35 @@ pub struct NodeStore {
     data_dir: PathBuf,
     integrity_key: IntegrityKey,
     allow_legacy_migration: bool,
+    work_counters: Arc<StorageWorkCounterState>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct StorageWorkCounters {
+    pub jsonl_append_calls: u64,
+    pub checkpoint_bytes_read: u64,
+    pub crash_suffix_bytes_read: u64,
+    pub crash_suffix_records_verified: u64,
+    pub legacy_prefix_bytes_read: u64,
+    pub legacy_prefix_records_verified: u64,
+    pub ordered_index_bitmap_bytes_read: u64,
+    pub ordered_index_bitmap_bytes_written: u64,
+    pub ordered_index_slots_read: u64,
+    pub ordered_index_slots_written: u64,
+}
+
+#[derive(Debug, Default)]
+struct StorageWorkCounterState {
+    jsonl_append_calls: AtomicU64,
+    checkpoint_bytes_read: AtomicU64,
+    crash_suffix_bytes_read: AtomicU64,
+    crash_suffix_records_verified: AtomicU64,
+    legacy_prefix_bytes_read: AtomicU64,
+    legacy_prefix_records_verified: AtomicU64,
+    ordered_index_bitmap_bytes_read: AtomicU64,
+    ordered_index_bitmap_bytes_written: AtomicU64,
+    ordered_index_slots_read: AtomicU64,
+    ordered_index_slots_written: AtomicU64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,6 +111,7 @@ impl NodeStore {
             data_dir,
             integrity_key,
             allow_legacy_migration: false,
+            work_counters: Arc::new(StorageWorkCounterState::default()),
         }
     }
 
@@ -91,6 +125,7 @@ impl NodeStore {
             data_dir,
             integrity_key,
             allow_legacy_migration: false,
+            work_counters: Arc::new(StorageWorkCounterState::default()),
         })
     }
 
@@ -103,6 +138,7 @@ impl NodeStore {
             data_dir,
             integrity_key,
             allow_legacy_migration: true,
+            work_counters: Arc::new(StorageWorkCounterState::default()),
         })
     }
 
@@ -149,11 +185,94 @@ impl NodeStore {
             data_dir: data_dir.into(),
             integrity_key: IntegrityKey::load_or_create_at(key_path.as_ref())?,
             allow_legacy_migration: false,
+            work_counters: Arc::new(StorageWorkCounterState::default()),
         })
     }
 
     pub fn data_dir(&self) -> &Path {
         &self.data_dir
+    }
+
+    /// Return process-local work counters for the bounded JSONL append path.
+    /// These counters are telemetry only and never enter consensus state.
+    pub fn work_counters(&self) -> StorageWorkCounters {
+        StorageWorkCounters {
+            jsonl_append_calls: self
+                .work_counters
+                .jsonl_append_calls
+                .load(Ordering::Relaxed),
+            checkpoint_bytes_read: self
+                .work_counters
+                .checkpoint_bytes_read
+                .load(Ordering::Relaxed),
+            crash_suffix_bytes_read: self
+                .work_counters
+                .crash_suffix_bytes_read
+                .load(Ordering::Relaxed),
+            crash_suffix_records_verified: self
+                .work_counters
+                .crash_suffix_records_verified
+                .load(Ordering::Relaxed),
+            legacy_prefix_bytes_read: self
+                .work_counters
+                .legacy_prefix_bytes_read
+                .load(Ordering::Relaxed),
+            legacy_prefix_records_verified: self
+                .work_counters
+                .legacy_prefix_records_verified
+                .load(Ordering::Relaxed),
+            ordered_index_bitmap_bytes_read: self
+                .work_counters
+                .ordered_index_bitmap_bytes_read
+                .load(Ordering::Relaxed),
+            ordered_index_bitmap_bytes_written: self
+                .work_counters
+                .ordered_index_bitmap_bytes_written
+                .load(Ordering::Relaxed),
+            ordered_index_slots_read: self
+                .work_counters
+                .ordered_index_slots_read
+                .load(Ordering::Relaxed),
+            ordered_index_slots_written: self
+                .work_counters
+                .ordered_index_slots_written
+                .load(Ordering::Relaxed),
+        }
+    }
+
+    /// Reset process-local storage telemetry before a controlled measurement.
+    /// Callers must externally quiesce writers when they need an exact window.
+    pub fn reset_work_counters(&self) {
+        self.work_counters
+            .jsonl_append_calls
+            .store(0, Ordering::Relaxed);
+        self.work_counters
+            .checkpoint_bytes_read
+            .store(0, Ordering::Relaxed);
+        self.work_counters
+            .crash_suffix_bytes_read
+            .store(0, Ordering::Relaxed);
+        self.work_counters
+            .crash_suffix_records_verified
+            .store(0, Ordering::Relaxed);
+        self.work_counters
+            .legacy_prefix_bytes_read
+            .store(0, Ordering::Relaxed);
+        self.work_counters
+            .legacy_prefix_records_verified
+            .store(0, Ordering::Relaxed);
+        self.work_counters
+            .ordered_index_bitmap_bytes_read
+            .store(0, Ordering::Relaxed);
+        self.work_counters
+            .ordered_index_bitmap_bytes_written
+            .store(0, Ordering::Relaxed);
+        self.work_counters
+            .ordered_index_slots_read
+            .store(0, Ordering::Relaxed);
+        self.work_counters
+            .ordered_index_slots_written
+            .store(0, Ordering::Relaxed);
     }
 
     pub fn filesystem_capacity(&self) -> io::Result<FilesystemCapacity> {
@@ -579,8 +698,10 @@ impl NodeStore {
     }
 
     /// Append one record as a keyed, hash-chained JSONL envelope and fsync
-    /// the file (plus its parent directory on first create). See [`integrity`]
-    /// for the envelope format.
+    /// the file (plus its parent directory on first create). A v2 checkpoint
+    /// authenticates the accepted byte offset and MAC-chain tail, so the
+    /// normal path reads no accepted prefix. See [`integrity`] for the record
+    /// envelope format.
     fn append_jsonl_record<T: serde::Serialize + ?Sized>(
         &self,
         path: PathBuf,
@@ -589,31 +710,36 @@ impl NodeStore {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
+        let lock_name = Self::jsonl_lock_file_name(&path)?;
+        let _lock = acquire_mutation_lock(&self.data_dir, &lock_name)?;
+        self.work_counters
+            .jsonl_append_calls
+            .fetch_add(1, Ordering::Relaxed);
         let payload = serde_json::to_vec(value).map_err(invalid_data)?;
         enforce_serialized_size(
             "JSONL record",
             payload.len() as u64,
             MAX_JSONL_RECORD_BYTES as u64,
         )?;
-        let existing_len = match fs::metadata(&path) {
+        let on_disk_len = match fs::metadata(&path) {
             Ok(metadata) => metadata.len(),
             Err(error) if error.kind() == io::ErrorKind::NotFound => 0,
             Err(error) => return Err(error),
         };
-        // Fail closed on oversized logs before the repair pass can truncate
-        // them (mirrors the pre-integrity behaviour).
-        enforce_serialized_size("JSONL append file", existing_len, MAX_JSONL_FILE_BYTES)?;
-        repair_trailing_partial_jsonl(&path)?;
-        let (existing_len, chain, record_count) = self.read_jsonl_tail(&path)?;
-        enforce_serialized_size("JSONL append file", existing_len, MAX_JSONL_FILE_BYTES)?;
-        let envelope = self.jsonl_envelope(&chain, payload);
+        // Fail closed on oversized logs before bounded suffix recovery can
+        // truncate an unauthenticated partial record.
+        enforce_serialized_size("JSONL append file", on_disk_len, MAX_JSONL_FILE_BYTES)?;
+        let tail = self.read_jsonl_tail(&path)?;
+        enforce_serialized_size("JSONL append file", tail.byte_offset, MAX_JSONL_FILE_BYTES)?;
+        let envelope = self.jsonl_envelope(&tail.chain, payload);
         let envelope_json = serde_json::to_string(&envelope).map_err(invalid_data)?;
-        let new_len = existing_len
+        let new_len = tail
+            .byte_offset
             .checked_add(envelope_json.len() as u64)
             .and_then(|len| len.checked_add(1))
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "JSONL size overflow"))?;
         enforce_serialized_size("JSONL append file", new_len, MAX_JSONL_FILE_BYTES)?;
-        let existed = existing_len > 0;
+        let existed = tail.byte_offset > 0;
         let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
         file.write_all(envelope_json.as_bytes())?;
         file.write_all(b"\n")?;
@@ -622,7 +748,15 @@ impl NodeStore {
             // Persist the newly created directory entry, not just the data.
             sync_parent_dir(&path)?;
         }
-        self.write_jsonl_head(&path, record_count.saturating_add(1), &envelope.mac)?;
+        let context = self.jsonl_checkpoint_context()?;
+        self.write_jsonl_head(
+            &path,
+            tail.record_count.saturating_add(1),
+            new_len,
+            &envelope.mac,
+            &tail.chain,
+            &context,
+        )?;
         Ok(())
     }
 
@@ -655,10 +789,32 @@ impl NodeStore {
     ) -> io::Result<Vec<T>> {
         let file = match File::open(path) {
             Ok(file) => file,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                let head_path = Self::jsonl_head_path(path);
+                if head_path.exists() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "JSONL head `{}` exists without its log; possible rollback",
+                            head_path.display()
+                        ),
+                    ));
+                }
+                return Ok(Vec::new());
+            }
             Err(error) => return Err(error),
         };
-        enforce_serialized_size(label, file.metadata()?.len(), MAX_JSONL_FILE_BYTES)?;
+        let file_len = file.metadata()?.len();
+        enforce_serialized_size(label, file_len, MAX_JSONL_FILE_BYTES)?;
+        if file_len == 0 && Self::jsonl_head_path(path).exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "JSONL log `{}` is empty but retains an authenticated head; possible rollback",
+                    path.display()
+                ),
+            ));
+        }
         let mut reader = BufReader::new(file);
         let mut records = Vec::new();
         let mut raw_lines: Vec<Vec<u8>> = Vec::new();
@@ -668,6 +824,7 @@ impl NodeStore {
         let mut saw_envelope = false;
         let mut line = Vec::new();
         let mut line_index = 0_usize;
+        let mut complete_offset = 0_u64;
         loop {
             line.clear();
             let read = reader
@@ -689,8 +846,15 @@ impl NodeStore {
                 ));
             }
             if !line.ends_with(b"\n") {
-                break;
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "{label} `{}` has an unauthenticated partial JSONL suffix",
+                        path.display()
+                    ),
+                ));
             }
+            complete_offset = complete_offset.saturating_add(read as u64);
             while matches!(line.last(), Some(b'\n' | b'\r')) {
                 line.pop();
             }
@@ -791,8 +955,10 @@ impl NodeStore {
             );
             let mut body = Vec::new();
             let mut rewrite_chain = JSONL_CHAIN_GENESIS.to_owned();
+            let mut rewrite_previous_chain = JSONL_CHAIN_GENESIS.to_owned();
             for payload in &raw_lines {
                 let envelope = self.jsonl_envelope(&rewrite_chain, payload.clone());
+                rewrite_previous_chain = rewrite_chain;
                 rewrite_chain = envelope.mac.clone();
                 body.extend_from_slice(
                     serde_json::to_string(&envelope)
@@ -801,11 +967,27 @@ impl NodeStore {
                 );
                 body.push(b'\n');
             }
-            atomic_write(path, body)?;
+            let body_len = body.len() as u64;
+            atomic_write(path, &body)?;
             chain = rewrite_chain;
-            self.write_jsonl_head(path, records.len() as u64, &chain)?;
+            let context = self.jsonl_checkpoint_context()?;
+            self.write_jsonl_head(
+                path,
+                records.len() as u64,
+                body_len,
+                &chain,
+                &rewrite_previous_chain,
+                &context,
+            )?;
         } else if !records.is_empty() {
-            self.verify_jsonl_head(path, records.len() as u64, &chain, &previous_chain)?;
+            self.verify_jsonl_head(
+                path,
+                records.len() as u64,
+                complete_offset,
+                file_len,
+                &chain,
+                &previous_chain,
+            )?;
         }
         Ok(records)
     }
@@ -818,6 +1000,7 @@ impl NodeStore {
         envelope: &JsonlEnvelope,
         expected_chain: &str,
     ) -> io::Result<Vec<u8>> {
+        record_jsonl_envelope_verification();
         if envelope.pftmac != JSONL_ENVELOPE_KIND {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -870,25 +1053,168 @@ impl NodeStore {
         Ok(payload)
     }
 
-    /// Return the file length and the MAC-chain head (`"genesis"` when the
-    /// file is empty/missing or legacy-format, so the first keyed record
-    /// always chains from genesis).
-    fn read_jsonl_tail(&self, path: &Path) -> io::Result<(u64, String, u64)> {
-        let file = match File::open(path) {
-            Ok(file) => file,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                return Ok((0, JSONL_CHAIN_GENESIS.to_owned(), 0));
-            }
+    /// Return the authenticated append tail without reading the accepted
+    /// prefix. A v1 head is verified by one full scan and immediately upgraded;
+    /// all subsequent appends use the bounded v2 path.
+    fn read_jsonl_tail(&self, path: &Path) -> io::Result<JsonlTail> {
+        let len = match fs::metadata(path) {
+            Ok(metadata) => metadata.len(),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => 0,
             Err(error) => return Err(error),
         };
-        let len = file.metadata()?.len();
+        let head_path = Self::jsonl_head_path(path);
         if len == 0 {
-            return Ok((0, JSONL_CHAIN_GENESIS.to_owned(), 0));
+            if head_path.exists() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "JSONL head `{}` exists without its log; possible rollback",
+                        head_path.display()
+                    ),
+                ));
+            }
+            return Ok(JsonlTail::empty());
         }
+        let bytes = fs::read(&head_path).map_err(|error| {
+            if error.kind() == io::ErrorKind::NotFound {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "JSONL head `{}` is missing; possible tail rollback",
+                        head_path.display()
+                    ),
+                )
+            } else {
+                error
+            }
+        })?;
+        self.work_counters
+            .checkpoint_bytes_read
+            .fetch_add(bytes.len() as u64, Ordering::Relaxed);
+        let schema: JsonlHeadSchema = serde_json::from_slice(&bytes).map_err(invalid_data)?;
+        if schema.schema == JSONL_HEAD_SCHEMA_V1 {
+            let tail = self.read_jsonl_tail_full_v1(path)?;
+            let context = self.jsonl_checkpoint_context()?;
+            self.write_jsonl_head(
+                path,
+                tail.record_count,
+                tail.byte_offset,
+                &tail.chain,
+                &tail.previous_chain,
+                &context,
+            )?;
+            return Ok(tail);
+        }
+        if schema.schema != JSONL_HEAD_SCHEMA {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "JSONL head `{}` has unsupported schema `{}`",
+                    head_path.display(),
+                    schema.schema
+                ),
+            ));
+        }
+        let mut head: JsonlHead = serde_json::from_slice(&bytes).map_err(invalid_data)?;
+        self.verify_jsonl_head_integrity(path, &head)?;
+        let context = self.jsonl_checkpoint_context()?;
+        self.verify_jsonl_head_context(path, &head, &context)?;
+        if len < head.byte_offset {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "JSONL log `{}` is shorter than authenticated offset {}; possible rollback",
+                    path.display(),
+                    head.byte_offset
+                ),
+            ));
+        }
+        if len == head.byte_offset {
+            return Ok(JsonlTail::from_head(&head));
+        }
+
+        let suffix_len = len.saturating_sub(head.byte_offset);
+        enforce_serialized_size(
+            "JSONL crash suffix",
+            suffix_len,
+            MAX_JSONL_RECORD_BYTES as u64 + 1,
+        )?;
+        let mut file = OpenOptions::new().read(true).write(true).open(path)?;
+        file.seek(SeekFrom::Start(head.byte_offset))?;
+        let mut suffix = Vec::with_capacity(suffix_len as usize);
+        (&mut file)
+            .take(MAX_JSONL_RECORD_BYTES as u64 + 2)
+            .read_to_end(&mut suffix)?;
+        self.work_counters
+            .crash_suffix_bytes_read
+            .fetch_add(suffix.len() as u64, Ordering::Relaxed);
+        if suffix.len() as u64 != suffix_len {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "JSONL log `{}` has an oversized crash suffix",
+                    path.display()
+                ),
+            ));
+        }
+        if !suffix.ends_with(b"\n") {
+            file.set_len(head.byte_offset)?;
+            file.sync_all()?;
+            sync_parent_dir(path)?;
+            return Ok(JsonlTail::from_head(&head));
+        }
+        if suffix.iter().filter(|byte| **byte == b'\n').count() != 1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "JSONL log `{}` contains more than one record beyond its checkpoint",
+                    path.display()
+                ),
+            ));
+        }
+        let trimmed = suffix.strip_suffix(b"\n").unwrap_or(&suffix);
+        let trimmed = trimmed.strip_suffix(b"\r").unwrap_or(trimmed);
+        let envelope: JsonlEnvelope = serde_json::from_slice(trimmed).map_err(|error| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "JSONL log `{}` has an invalid complete crash suffix: {error}",
+                    path.display()
+                ),
+            )
+        })?;
+        self.verify_jsonl_envelope(
+            path,
+            "JSONL crash suffix",
+            head.record_count.saturating_add(1) as usize,
+            &envelope,
+            &head.chain,
+        )?;
+        self.work_counters
+            .crash_suffix_records_verified
+            .fetch_add(1, Ordering::Relaxed);
+        head.previous_chain = std::mem::replace(&mut head.chain, envelope.mac);
+        head.record_count = head.record_count.saturating_add(1);
+        head.byte_offset = len;
+        self.write_jsonl_head(
+            path,
+            head.record_count,
+            head.byte_offset,
+            &head.chain,
+            &head.previous_chain,
+            &context,
+        )?;
+        Ok(JsonlTail::from_head(&head))
+    }
+
+    fn read_jsonl_tail_full_v1(&self, path: &Path) -> io::Result<JsonlTail> {
+        let file = File::open(path)?;
+        let len = file.metadata()?.len();
         let mut reader = BufReader::new(file);
         let mut chain = JSONL_CHAIN_GENESIS.to_owned();
         let mut previous_chain = JSONL_CHAIN_GENESIS.to_owned();
         let mut record_count = 0_u64;
+        let mut complete_offset = 0_u64;
         let mut line = Vec::new();
         loop {
             line.clear();
@@ -896,9 +1222,16 @@ impl NodeStore {
                 .by_ref()
                 .take(MAX_JSONL_RECORD_BYTES as u64 + 2)
                 .read_until(b'\n', &mut line)?;
-            if read == 0 || !line.ends_with(b"\n") {
+            if read == 0 {
                 break;
             }
+            if !line.ends_with(b"\n") {
+                break;
+            }
+            complete_offset = complete_offset.saturating_add(read as u64);
+            self.work_counters
+                .legacy_prefix_bytes_read
+                .fetch_add(read as u64, Ordering::Relaxed);
             let mut trimmed: &[u8] = &line;
             while matches!(trimmed.last(), Some(b'\n' | b'\r')) {
                 trimmed = &trimmed[..trimmed.len() - 1];
@@ -922,12 +1255,37 @@ impl NodeStore {
                 &envelope,
                 &chain,
             )?;
+            self.work_counters
+                .legacy_prefix_records_verified
+                .fetch_add(1, Ordering::Relaxed);
             previous_chain = chain;
             chain = envelope.mac;
             record_count = record_count.saturating_add(1);
         }
-        self.verify_jsonl_head(path, record_count, &chain, &previous_chain)?;
-        Ok((len, chain, record_count))
+        self.verify_jsonl_head_v1(path, record_count, &chain, &previous_chain)?;
+        if complete_offset != len {
+            let head: JsonlHeadV1 = serde_json::from_slice(&fs::read(Self::jsonl_head_path(path))?)
+                .map_err(invalid_data)?;
+            if head.record_count != record_count || head.chain != chain {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "JSONL append `{}` has an ambiguous partial suffix",
+                        path.display()
+                    ),
+                ));
+            }
+            let file = OpenOptions::new().write(true).open(path)?;
+            file.set_len(complete_offset)?;
+            file.sync_all()?;
+            sync_parent_dir(path)?;
+        }
+        Ok(JsonlTail {
+            byte_offset: complete_offset,
+            record_count,
+            chain,
+            previous_chain,
+        })
     }
 
     fn jsonl_head_path(path: &Path) -> PathBuf {
@@ -939,28 +1297,170 @@ impl NodeStore {
         path.with_file_name(name)
     }
 
-    fn jsonl_head_mac(&self, count: u64, chain: &str) -> io::Result<[u8; MAC_BYTES]> {
+    fn jsonl_log_kind(path: &Path) -> io::Result<String> {
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .map(str::to_owned)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("JSONL path `{}` has no UTF-8 file name", path.display()),
+                )
+            })
+    }
+
+    fn jsonl_lock_file_name(path: &Path) -> io::Result<String> {
+        Ok(format!(
+            ".{}{}",
+            Self::jsonl_log_kind(path)?,
+            JSONL_LOCK_SUFFIX
+        ))
+    }
+
+    fn jsonl_checkpoint_context(&self) -> io::Result<JsonlCheckpointContext> {
+        let genesis = match self.read_genesis() {
+            Ok(genesis) => genesis,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                return Ok(JsonlCheckpointContext::unbound());
+            }
+            Err(error) => return Err(error),
+        };
+        let genesis_json = genesis.to_json().map_err(invalid_data)?;
+        let genesis_hash = to_hex(&legacy_checksum(
+            b"postfiat.genesis.v1",
+            genesis_json.as_bytes(),
+        ));
+        match self.read_chain_tip() {
+            Ok(tip) => {
+                if tip.chain_id != genesis.chain_id
+                    || tip.genesis_hash != genesis_hash
+                    || tip.protocol_version != genesis.protocol_version
+                {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "chain tip domain does not match genesis while binding JSONL checkpoint",
+                    ));
+                }
+                Ok(JsonlCheckpointContext {
+                    chain_id: genesis.chain_id,
+                    genesis_hash,
+                    protocol_version: genesis.protocol_version,
+                    finalized_height: tip.height,
+                    block_hash: tip.block_hash,
+                    state_root: tip.state_root,
+                })
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(JsonlCheckpointContext {
+                chain_id: genesis.chain_id,
+                genesis_hash: genesis_hash.clone(),
+                protocol_version: genesis.protocol_version,
+                finalized_height: 0,
+                block_hash: genesis_hash,
+                state_root: String::new(),
+            }),
+            Err(error) => Err(error),
+        }
+    }
+
+    fn jsonl_head_mac_v1(&self, count: u64, chain: &str) -> io::Result<[u8; MAC_BYTES]> {
         let payload =
-            serde_json::to_vec(&(JSONL_HEAD_SCHEMA, count, chain)).map_err(invalid_data)?;
+            serde_json::to_vec(&(JSONL_HEAD_SCHEMA_V1, count, chain)).map_err(invalid_data)?;
         Ok(self
             .integrity_key
             .mac(b"postfiat.storage.jsonl-head.v1", &payload))
     }
 
-    fn write_jsonl_head(&self, path: &Path, count: u64, chain: &str) -> io::Result<()> {
-        let head = JsonlHead {
+    fn jsonl_head_mac(&self, head: &JsonlHead) -> io::Result<[u8; MAC_BYTES]> {
+        let payload = serde_json::to_vec(&(
+            JSONL_HEAD_SCHEMA,
+            JSONL_STORAGE_FORMAT,
+            head.chain_id.as_str(),
+            head.genesis_hash.as_str(),
+            head.protocol_version,
+            head.log_kind.as_str(),
+            head.record_count,
+            head.byte_offset,
+            head.chain.as_str(),
+            head.previous_chain.as_str(),
+            head.finalized_height,
+            head.block_hash.as_str(),
+            head.state_root.as_str(),
+        ))
+        .map_err(invalid_data)?;
+        Ok(self
+            .integrity_key
+            .mac(b"postfiat.storage.jsonl-head.v2", &payload))
+    }
+
+    fn write_jsonl_head(
+        &self,
+        path: &Path,
+        count: u64,
+        byte_offset: u64,
+        chain: &str,
+        previous_chain: &str,
+        context: &JsonlCheckpointContext,
+    ) -> io::Result<()> {
+        let mut head = JsonlHead {
             schema: JSONL_HEAD_SCHEMA.to_owned(),
+            storage_format: JSONL_STORAGE_FORMAT.to_owned(),
+            chain_id: context.chain_id.clone(),
+            genesis_hash: context.genesis_hash.clone(),
+            protocol_version: context.protocol_version,
+            log_kind: Self::jsonl_log_kind(path)?,
             record_count: count,
+            byte_offset,
             chain: chain.to_owned(),
-            mac: to_hex(&self.jsonl_head_mac(count, chain)?),
+            previous_chain: previous_chain.to_owned(),
+            finalized_height: context.finalized_height,
+            block_hash: context.block_hash.clone(),
+            state_root: context.state_root.clone(),
+            mac: String::new(),
         };
+        head.mac = to_hex(&self.jsonl_head_mac(&head)?);
         atomic_write(
             Self::jsonl_head_path(path),
             serde_json::to_vec(&head).map_err(invalid_data)?,
         )
     }
 
-    fn verify_jsonl_head(
+    fn verify_jsonl_head_integrity(&self, path: &Path, head: &JsonlHead) -> io::Result<()> {
+        let expected_mac = self.jsonl_head_mac(head)?;
+        if head.schema != JSONL_HEAD_SCHEMA
+            || head.storage_format != JSONL_STORAGE_FORMAT
+            || head.log_kind != Self::jsonl_log_kind(path)?
+            || !macs_equal(&expected_mac, &from_hex(&head.mac).unwrap_or_default())
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "JSONL head `{}` failed integrity or domain verification",
+                    Self::jsonl_head_path(path).display()
+                ),
+            ));
+        }
+        Ok(())
+    }
+
+    fn verify_jsonl_head_context(
+        &self,
+        path: &Path,
+        head: &JsonlHead,
+        context: &JsonlCheckpointContext,
+    ) -> io::Result<()> {
+        if head.context() == *context {
+            return Ok(());
+        }
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "JSONL head `{}` does not match the current chain tip",
+                Self::jsonl_head_path(path).display()
+            ),
+        ))
+    }
+
+    fn verify_jsonl_head_v1(
         &self,
         path: &Path,
         count: u64,
@@ -968,12 +1468,67 @@ impl NodeStore {
         previous_chain: &str,
     ) -> io::Result<()> {
         let head_path = Self::jsonl_head_path(path);
+        let bytes = fs::read(&head_path)?;
+        let head: JsonlHeadV1 = serde_json::from_slice(&bytes).map_err(invalid_data)?;
+        let expected_mac = self.jsonl_head_mac_v1(head.record_count, &head.chain)?;
+        if head.schema != JSONL_HEAD_SCHEMA_V1
+            || !macs_equal(&expected_mac, &from_hex(&head.mac).unwrap_or_default())
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "JSONL head `{}` failed integrity verification",
+                    head_path.display()
+                ),
+            ));
+        }
+        if (head.record_count == count && head.chain == chain)
+            || (head.record_count.saturating_add(1) == count && head.chain == previous_chain)
+        {
+            return Ok(());
+        }
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "JSONL head `{}` does not match the authenticated log tail; possible rollback",
+                head_path.display()
+            ),
+        ))
+    }
+
+    fn verify_jsonl_head(
+        &self,
+        path: &Path,
+        count: u64,
+        complete_offset: u64,
+        file_len: u64,
+        chain: &str,
+        previous_chain: &str,
+    ) -> io::Result<()> {
+        if complete_offset != file_len {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "JSONL log `{}` has unauthenticated trailing bytes",
+                    path.display()
+                ),
+            ));
+        }
+        let head_path = Self::jsonl_head_path(path);
         let bytes = match fs::read(&head_path) {
             Ok(bytes) => bytes,
             Err(error)
                 if error.kind() == io::ErrorKind::NotFound && self.allow_legacy_migration =>
             {
-                self.write_jsonl_head(path, count, chain)?;
+                let context = self.jsonl_checkpoint_context()?;
+                self.write_jsonl_head(
+                    path,
+                    count,
+                    complete_offset,
+                    chain,
+                    previous_chain,
+                    &context,
+                )?;
                 return Ok(());
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
@@ -987,27 +1542,29 @@ impl NodeStore {
             }
             Err(error) => return Err(error),
         };
-        let head: JsonlHead = serde_json::from_slice(&bytes).map_err(invalid_data)?;
-        let expected_mac = self.jsonl_head_mac(head.record_count, &head.chain)?;
-        if head.schema != JSONL_HEAD_SCHEMA
-            || !macs_equal(&expected_mac, &from_hex(&head.mac).unwrap_or_default())
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "JSONL head `{}` failed integrity verification",
-                    head_path.display()
-                ),
-            ));
-        }
-        if head.record_count == count && head.chain == chain {
+        let schema: JsonlHeadSchema = serde_json::from_slice(&bytes).map_err(invalid_data)?;
+        if schema.schema == JSONL_HEAD_SCHEMA_V1 {
+            self.verify_jsonl_head_v1(path, count, chain, previous_chain)?;
+            let context = self.jsonl_checkpoint_context()?;
+            self.write_jsonl_head(
+                path,
+                count,
+                complete_offset,
+                chain,
+                previous_chain,
+                &context,
+            )?;
             return Ok(());
         }
-        // The log is fsynced before the head. A crash in that narrow interval
-        // leaves exactly one fully authenticated record beyond the old head;
-        // advance the head after verifying the complete chain.
-        if head.record_count.saturating_add(1) == count && head.chain == previous_chain {
-            self.write_jsonl_head(path, count, chain)?;
+        let head: JsonlHead = serde_json::from_slice(&bytes).map_err(invalid_data)?;
+        self.verify_jsonl_head_integrity(path, &head)?;
+        let context = self.jsonl_checkpoint_context()?;
+        self.verify_jsonl_head_context(path, &head, &context)?;
+        if head.record_count == count
+            && head.byte_offset == complete_offset
+            && head.chain == chain
+            && head.previous_chain == previous_chain
+        {
             return Ok(());
         }
         Err(io::Error::new(
@@ -1019,13 +1576,100 @@ impl NodeStore {
         ))
     }
 
+    pub fn bind_jsonl_checkpoints_to_chain_tip(
+        &self,
+        tip: &ChainTipState,
+        previous_block_hash: &str,
+    ) -> io::Result<()> {
+        let context = self.jsonl_checkpoint_context()?;
+        if context.finalized_height != tip.height
+            || context.block_hash != tip.block_hash
+            || context.state_root != tip.state_root
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "cannot bind JSONL checkpoints before publishing the matching chain tip",
+            ));
+        }
+        for file_name in [
+            RECEIPTS_APPEND_FILE,
+            ORDERED_BATCHES_APPEND_FILE,
+            BATCH_ARCHIVE_APPEND_FILE,
+            BLOCKS_APPEND_FILE,
+        ] {
+            let path = self.data_dir.join(file_name);
+            let head_path = Self::jsonl_head_path(&path);
+            let bytes = match fs::read(&head_path) {
+                Ok(bytes) => bytes,
+                Err(error) if error.kind() == io::ErrorKind::NotFound && !path.exists() => continue,
+                Err(error) => return Err(error),
+            };
+            let schema: JsonlHeadSchema = serde_json::from_slice(&bytes).map_err(invalid_data)?;
+            if schema.schema == JSONL_HEAD_SCHEMA_V1 {
+                continue;
+            }
+            let head: JsonlHead = serde_json::from_slice(&bytes).map_err(invalid_data)?;
+            self.verify_jsonl_head_integrity(&path, &head)?;
+            let already_bound = head.context() == context;
+            let previous_tip = head.chain_id == context.chain_id
+                && head.genesis_hash == context.genesis_hash
+                && head.protocol_version == context.protocol_version
+                && head.finalized_height.saturating_add(1) == context.finalized_height
+                && head.block_hash == previous_block_hash;
+            if !already_bound && !previous_tip {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "JSONL head `{}` cannot be rebound from an unrelated chain tip",
+                        head_path.display()
+                    ),
+                ));
+            }
+            if !already_bound {
+                self.write_jsonl_head(
+                    &path,
+                    head.record_count,
+                    head.byte_offset,
+                    &head.chain,
+                    &head.previous_chain,
+                    &context,
+                )?;
+            }
+        }
+        Ok(())
+    }
+
     fn remove_jsonl_log(&self, path: &Path) -> io::Result<()> {
         remove_optional_file(path.to_path_buf())?;
         remove_optional_file(Self::jsonl_head_path(path))
     }
 }
 
-const JSONL_HEAD_SCHEMA: &str = "postfiat-storage-jsonl-head-v1";
+#[cfg(test)]
+std::thread_local! {
+    static JSONL_ENVELOPE_VERIFICATIONS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+fn record_jsonl_envelope_verification() {
+    JSONL_ENVELOPE_VERIFICATIONS.with(|count| count.set(count.get().saturating_add(1)));
+}
+
+#[cfg(not(test))]
+fn record_jsonl_envelope_verification() {}
+
+#[cfg(test)]
+fn take_jsonl_envelope_verifications() -> u64 {
+    JSONL_ENVELOPE_VERIFICATIONS.with(|count| {
+        let value = count.get();
+        count.set(0);
+        value
+    })
+}
+
+const JSONL_HEAD_SCHEMA_V1: &str = "postfiat-storage-jsonl-head-v1";
+const JSONL_HEAD_SCHEMA: &str = "postfiat-storage-jsonl-head-v2";
+const JSONL_STORAGE_FORMAT: &str = "postfiat-bounded-jsonl-v2";
 
 #[derive(Debug, Serialize, Deserialize)]
 struct JsonlEnvelope {
@@ -1035,12 +1679,99 @@ struct JsonlEnvelope {
     mac: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct JsonlHeadSchema {
+    schema: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
-struct JsonlHead {
+struct JsonlHeadV1 {
     schema: String,
     record_count: u64,
     chain: String,
     mac: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct JsonlHead {
+    schema: String,
+    storage_format: String,
+    chain_id: String,
+    genesis_hash: String,
+    protocol_version: u32,
+    log_kind: String,
+    record_count: u64,
+    byte_offset: u64,
+    chain: String,
+    previous_chain: String,
+    finalized_height: u64,
+    block_hash: String,
+    state_root: String,
+    mac: String,
+}
+
+impl JsonlHead {
+    fn context(&self) -> JsonlCheckpointContext {
+        JsonlCheckpointContext {
+            chain_id: self.chain_id.clone(),
+            genesis_hash: self.genesis_hash.clone(),
+            protocol_version: self.protocol_version,
+            finalized_height: self.finalized_height,
+            block_hash: self.block_hash.clone(),
+            state_root: self.state_root.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct JsonlCheckpointContext {
+    chain_id: String,
+    genesis_hash: String,
+    protocol_version: u32,
+    finalized_height: u64,
+    block_hash: String,
+    state_root: String,
+}
+
+impl JsonlCheckpointContext {
+    fn unbound() -> Self {
+        Self {
+            chain_id: String::new(),
+            genesis_hash: String::new(),
+            protocol_version: 0,
+            finalized_height: 0,
+            block_hash: String::new(),
+            state_root: String::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct JsonlTail {
+    byte_offset: u64,
+    record_count: u64,
+    chain: String,
+    previous_chain: String,
+}
+
+impl JsonlTail {
+    fn empty() -> Self {
+        Self {
+            byte_offset: 0,
+            record_count: 0,
+            chain: JSONL_CHAIN_GENESIS.to_owned(),
+            previous_chain: JSONL_CHAIN_GENESIS.to_owned(),
+        }
+    }
+
+    fn from_head(head: &JsonlHead) -> Self {
+        Self {
+            byte_offset: head.byte_offset,
+            record_count: head.record_count,
+            chain: head.chain.clone(),
+            previous_chain: head.previous_chain.clone(),
+        }
+    }
 }
 
 fn file_mac_domain(label: &str) -> String {
@@ -1269,46 +2000,6 @@ fn merge_appended_ordered_batch(batch_ids: &mut Vec<String>, batch_id: String) -
     }
     batch_ids.push(batch_id);
     Ok(())
-}
-
-fn repair_trailing_partial_jsonl(path: &Path) -> io::Result<()> {
-    let mut file = match OpenOptions::new().read(true).write(true).open(path) {
-        Ok(file) => file,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
-        Err(error) => return Err(error),
-    };
-    let len = file.metadata()?.len();
-    if len == 0 {
-        return Ok(());
-    }
-
-    let mut last = [0_u8; 1];
-    file.seek(SeekFrom::End(-1))?;
-    file.read_exact(&mut last)?;
-    if last[0] == b'\n' {
-        return Ok(());
-    }
-
-    let retain_len = last_jsonl_line_boundary(&mut file, len)?;
-    file.set_len(retain_len as u64)?;
-    file.sync_all()?;
-    sync_parent_dir(path)
-}
-
-fn last_jsonl_line_boundary(file: &mut File, len: u64) -> io::Result<u64> {
-    let mut end = len;
-    let mut buffer = [0_u8; JSONL_REPAIR_SCAN_CHUNK];
-    while end > 0 {
-        let chunk_len = (end as usize).min(JSONL_REPAIR_SCAN_CHUNK);
-        let start = end - chunk_len as u64;
-        file.seek(SeekFrom::Start(start))?;
-        file.read_exact(&mut buffer[..chunk_len])?;
-        if let Some(index) = buffer[..chunk_len].iter().rposition(|byte| *byte == b'\n') {
-            return Ok(start + index as u64 + 1);
-        }
-        end = start;
-    }
-    Ok(0)
 }
 
 fn remove_optional_file(path: PathBuf) -> io::Result<()> {
@@ -1680,6 +2371,261 @@ mod tests {
             .write_ordered_batches(&["batch-1".to_string(), "batch-2".to_string()])
             .expect("compact ordered batches");
         assert!(!dir.join(ORDERED_BATCHES_APPEND_FILE).exists());
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn bounded_jsonl_append_does_not_verify_the_accepted_prefix() {
+        let dir = unique_test_dir("postfiat-storage-bounded-jsonl-test");
+        let store = NodeStore::new(&dir);
+        store.write_receipts(&[]).expect("write empty receipts");
+
+        take_jsonl_envelope_verifications();
+        store.reset_work_counters();
+        for index in 0..128_u64 {
+            store
+                .append_receipt_record(&sample_receipt(
+                    &format!("tx-bounded-{index}"),
+                    "tesSUCCESS",
+                ))
+                .expect("bounded append");
+        }
+        assert_eq!(
+            take_jsonl_envelope_verifications(),
+            0,
+            "a current v2 checkpoint must eliminate accepted-prefix verification"
+        );
+        let work = store.work_counters();
+        assert_eq!(work.jsonl_append_calls, 128);
+        assert!(work.checkpoint_bytes_read > 0);
+        assert_eq!(work.crash_suffix_records_verified, 0);
+        assert_eq!(work.legacy_prefix_records_verified, 0);
+        assert_eq!(work.legacy_prefix_bytes_read, 0);
+
+        let head: JsonlHead = serde_json::from_slice(
+            &fs::read(NodeStore::jsonl_head_path(&dir.join(RECEIPTS_APPEND_FILE)))
+                .expect("read checkpoint"),
+        )
+        .expect("parse checkpoint");
+        assert_eq!(head.schema, JSONL_HEAD_SCHEMA);
+        assert_eq!(head.storage_format, JSONL_STORAGE_FORMAT);
+        assert_eq!(head.record_count, 128);
+        assert_eq!(
+            head.byte_offset,
+            fs::metadata(dir.join(RECEIPTS_APPEND_FILE))
+                .expect("append metadata")
+                .len()
+        );
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    #[ignore = "manual height-scaling evidence; builds authenticated JSONL fixtures through height 5000"]
+    fn bounded_jsonl_work_is_constant_through_height_5000() {
+        for height in [50_u64, 100, 500, 1_000, 5_000] {
+            let dir = unique_test_dir(&format!("postfiat-storage-jsonl-height-{height}"));
+            let store = NodeStore::new(&dir);
+            store.write_receipts(&[]).expect("write empty receipts");
+            let path = dir.join(RECEIPTS_APPEND_FILE);
+            let mut body = Vec::new();
+            let mut chain = JSONL_CHAIN_GENESIS.to_owned();
+            let mut previous_chain = JSONL_CHAIN_GENESIS.to_owned();
+            for index in 0..height {
+                let payload = serde_json::to_vec(&sample_receipt(
+                    &format!("tx-height-{index}"),
+                    "tesSUCCESS",
+                ))
+                .expect("serialize receipt");
+                let envelope = store.jsonl_envelope(&chain, payload);
+                previous_chain = std::mem::replace(&mut chain, envelope.mac.clone());
+                body.extend_from_slice(
+                    serde_json::to_string(&envelope)
+                        .expect("serialize envelope")
+                        .as_bytes(),
+                );
+                body.push(b'\n');
+            }
+            atomic_write(&path, &body).expect("write authenticated fixture");
+            let context = store
+                .jsonl_checkpoint_context()
+                .expect("checkpoint context");
+            store
+                .write_jsonl_head(
+                    &path,
+                    height,
+                    body.len() as u64,
+                    &chain,
+                    &previous_chain,
+                    &context,
+                )
+                .expect("write authenticated checkpoint");
+            take_jsonl_envelope_verifications();
+            store.reset_work_counters();
+            let append_start = std::time::Instant::now();
+            store
+                .append_receipt_record(&sample_receipt(
+                    &format!("tx-height-{height}"),
+                    "tesSUCCESS",
+                ))
+                .expect("bounded append");
+            let append_ms = append_start.elapsed().as_secs_f64() * 1_000.0;
+            let work = store.work_counters();
+            assert_eq!(take_jsonl_envelope_verifications(), 0);
+            assert_eq!(work.jsonl_append_calls, 1);
+            assert_eq!(work.crash_suffix_bytes_read, 0);
+            assert_eq!(work.crash_suffix_records_verified, 0);
+            assert_eq!(work.legacy_prefix_bytes_read, 0);
+            assert_eq!(work.legacy_prefix_records_verified, 0);
+            println!(
+                "{}",
+                serde_json::json!({
+                    "height": height,
+                    "append_ms": append_ms,
+                    "work": work,
+                })
+            );
+            fs::remove_dir_all(dir).expect("cleanup");
+        }
+    }
+
+    #[test]
+    fn v1_jsonl_head_is_scanned_once_then_upgraded_to_bounded_v2() {
+        let dir = unique_test_dir("postfiat-storage-jsonl-v1-upgrade-test");
+        let store = NodeStore::new(&dir);
+        store.write_receipts(&[]).expect("write empty receipts");
+        for index in 0..3_u64 {
+            store
+                .append_receipt_record(&sample_receipt(
+                    &format!("tx-upgrade-{index}"),
+                    "tesSUCCESS",
+                ))
+                .expect("seed append");
+        }
+        let path = dir.join(RECEIPTS_APPEND_FILE);
+        let head_path = NodeStore::jsonl_head_path(&path);
+        let current: JsonlHead =
+            serde_json::from_slice(&fs::read(&head_path).expect("read current checkpoint"))
+                .expect("parse current checkpoint");
+        let legacy = JsonlHeadV1 {
+            schema: JSONL_HEAD_SCHEMA_V1.to_string(),
+            record_count: current.record_count,
+            chain: current.chain.clone(),
+            mac: to_hex(
+                &store
+                    .jsonl_head_mac_v1(current.record_count, &current.chain)
+                    .expect("legacy head MAC"),
+            ),
+        };
+        fs::write(
+            &head_path,
+            serde_json::to_vec(&legacy).expect("serialize legacy head"),
+        )
+        .expect("install legacy head");
+
+        take_jsonl_envelope_verifications();
+        store.reset_work_counters();
+        store
+            .append_receipt_record(&sample_receipt("tx-upgrade-3", "tesSUCCESS"))
+            .expect("migrating append");
+        assert_eq!(
+            take_jsonl_envelope_verifications(),
+            3,
+            "the authenticated v1 prefix is scanned exactly once during migration"
+        );
+        let migration_work = store.work_counters();
+        assert_eq!(migration_work.legacy_prefix_records_verified, 3);
+        assert!(migration_work.legacy_prefix_bytes_read > 0);
+        let upgraded: JsonlHead =
+            serde_json::from_slice(&fs::read(&head_path).expect("read upgraded checkpoint"))
+                .expect("parse upgraded checkpoint");
+        assert_eq!(upgraded.schema, JSONL_HEAD_SCHEMA);
+
+        store
+            .append_receipt_record(&sample_receipt("tx-upgrade-4", "tesSUCCESS"))
+            .expect("bounded append after migration");
+        assert_eq!(take_jsonl_envelope_verifications(), 0);
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn complete_jsonl_crash_suffix_is_verified_once_and_checkpointed() {
+        let dir = unique_test_dir("postfiat-storage-jsonl-crash-suffix-test");
+        let store = NodeStore::new(&dir);
+        store.write_receipts(&[]).expect("write empty receipts");
+        store
+            .append_receipt_record(&sample_receipt("tx-crash-1", "tesSUCCESS"))
+            .expect("first append");
+        let path = dir.join(RECEIPTS_APPEND_FILE);
+        let head: JsonlHead = serde_json::from_slice(
+            &fs::read(NodeStore::jsonl_head_path(&path)).expect("read checkpoint"),
+        )
+        .expect("parse checkpoint");
+        let payload = serde_json::to_vec(&sample_receipt("tx-crash-2", "tesSUCCESS"))
+            .expect("serialize receipt");
+        let envelope = store.jsonl_envelope(&head.chain, payload);
+        let mut file = OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .expect("open append log");
+        serde_json::to_writer(&mut file, &envelope).expect("write crash suffix");
+        file.write_all(b"\n").expect("finish crash suffix");
+        file.sync_all().expect("sync crash suffix");
+
+        take_jsonl_envelope_verifications();
+        store.reset_work_counters();
+        store
+            .append_receipt_record(&sample_receipt("tx-crash-3", "tesSUCCESS"))
+            .expect("recover and append");
+        assert_eq!(
+            take_jsonl_envelope_verifications(),
+            1,
+            "only the single complete crash suffix may be verified"
+        );
+        let work = store.work_counters();
+        assert_eq!(work.crash_suffix_records_verified, 1);
+        assert!(work.crash_suffix_bytes_read > 0);
+        assert_eq!(work.legacy_prefix_records_verified, 0);
+        assert_eq!(
+            store
+                .read_receipts()
+                .expect("read recovered receipts")
+                .len(),
+            3
+        );
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn jsonl_checkpoint_cannot_be_substituted_between_log_kinds() {
+        let dir = unique_test_dir("postfiat-storage-jsonl-domain-test");
+        let store = NodeStore::new(&dir);
+        store.write_receipts(&[]).expect("write empty receipts");
+        store
+            .write_ordered_batches(&[])
+            .expect("write empty ordered batches");
+        store
+            .append_receipt_record(&sample_receipt("tx-domain", "tesSUCCESS"))
+            .expect("append receipt");
+        store
+            .append_ordered_batch_record("batch-domain")
+            .expect("append batch");
+
+        let receipt_head = fs::read(NodeStore::jsonl_head_path(&dir.join(RECEIPTS_APPEND_FILE)))
+            .expect("read receipt checkpoint");
+        fs::write(
+            NodeStore::jsonl_head_path(&dir.join(ORDERED_BATCHES_APPEND_FILE)),
+            receipt_head,
+        )
+        .expect("substitute checkpoint");
+        let error = store
+            .append_ordered_batch_record("batch-domain-2")
+            .expect_err("cross-log checkpoint substitution must fail");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("domain verification"), "{error}");
 
         fs::remove_dir_all(dir).expect("cleanup");
     }
@@ -2166,6 +3112,25 @@ mod tests {
         let error = store
             .read_receipts()
             .expect_err("deleted final record must fail closed");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("possible rollback"), "{error}");
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn deleted_jsonl_log_is_rejected_when_authenticated_head_remains() {
+        let dir = unique_test_dir("postfiat-storage-deleted-jsonl-log-test");
+        let store = NodeStore::new(&dir);
+        store.write_receipts(&[]).expect("write empty receipts");
+        store
+            .append_receipt_record(&sample_receipt("tx-deleted-log", "tesSUCCESS"))
+            .expect("append receipt");
+        fs::remove_file(dir.join(RECEIPTS_APPEND_FILE)).expect("delete append log");
+
+        let error = store
+            .read_receipts()
+            .expect_err("an authenticated head without its log must fail closed");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         assert!(error.to_string().contains("possible rollback"), "{error}");
 

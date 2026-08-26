@@ -2691,6 +2691,24 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "ordered-history-index-rebuild" => {
+            if !flag_present(flags, "--offline-confirmed") {
+                return Err(
+                    "ordered-history-index-rebuild requires --offline-confirmed after every process using the data directory has been stopped"
+                        .to_string(),
+                );
+            }
+            let data_dir = PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
+            let store = NodeStore::try_new(&data_dir)
+                .map_err(|error| format!("ordered-history index open failed: {error}"))?;
+            let report = store
+                .rebuild_ordered_history_index()
+                .map_err(|error| format!("ordered-history index rebuild failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|error| format!("ordered-history index report serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
         "storage-integrity-migrate-legacy" => {
             if !flag_present(flags, "--offline-confirmed") {
                 return Err(

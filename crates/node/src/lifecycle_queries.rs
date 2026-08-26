@@ -316,7 +316,7 @@ pub fn init_consensus_v2(options: InitConsensusV2Options) -> io::Result<StatusRe
     init_with_genesis(options.data_dir, options.node_id, genesis)
 }
 
-fn init_with_genesis(
+pub(super) fn init_with_genesis(
     data_dir: PathBuf,
     node_id: String,
     genesis: Genesis,
@@ -335,7 +335,11 @@ fn init_with_genesis(
     write_key_file(&data_dir.join(FAUCET_KEY_FILE), &faucet_key)?;
     ensure_validator_keys(&store, genesis.validator_count)?;
     ensure_validator_registry_genesis(&store)?;
-    status(NodeOptions { data_dir })
+    let report = status(NodeOptions { data_dir })?;
+    if genesis.ordered_history_v2_activation_height.is_some() {
+        store.rebuild_ordered_history_index()?;
+    }
+    Ok(report)
 }
 
 pub fn validator_keys(options: ValidatorKeysOptions) -> io::Result<ValidatorKeyFile> {
@@ -843,17 +847,44 @@ pub(super) fn current_replicated_state_root(
 ) -> io::Result<String> {
     let governance = store.read_governance()?;
     let ledger = store.read_ledger()?;
-    let ordered_batches = store.read_ordered_batches()?;
     let shielded = store.read_shielded()?;
     let bridge = store.read_bridge()?;
-    replicated_state_root(
-        genesis,
-        &governance,
-        &ledger,
-        &ordered_batches,
-        &shielded,
-        &bridge,
-    )
+    let ordered_history_active = match (
+        genesis.ordered_history_v2_activation_height,
+        store.read_chain_tip(),
+    ) {
+        (Some(activation_height), Ok(tip)) if tip.height >= activation_height => Some(tip),
+        (_, Ok(_)) => None,
+        (_, Err(error)) if error.kind() == io::ErrorKind::NotFound => None,
+        (_, Err(error)) => return Err(error),
+    };
+    if let Some(tip) = ordered_history_active {
+        let ordered_history = store.ordered_history_commitment()?;
+        if ordered_history.count != tip.ordered_batch_count {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "ordered-history commitment count does not match current chain tip",
+            ));
+        }
+        replicated_state_root_v2(
+            genesis,
+            &governance,
+            &ledger,
+            &ordered_history,
+            &shielded,
+            &bridge,
+        )
+    } else {
+        let ordered_batches = store.read_ordered_batches()?;
+        replicated_state_root(
+            genesis,
+            &governance,
+            &ledger,
+            &ordered_batches,
+            &shielded,
+            &bridge,
+        )
+    }
 }
 
 pub(super) fn next_block_height_from_chain_tip(

@@ -1651,6 +1651,19 @@ pub(super) fn verify_replayed_blocks(
         shielded = ShieldedState::empty();
         bridge = BridgeState::empty();
     }
+    let mut ordered_history = if genesis.ordered_history_v2_activation_height.is_some() {
+        let mut commitment = postfiat_storage::OrderedHistoryCommitment::genesis(
+            &genesis.chain_id,
+            &genesis_hash(genesis),
+            genesis.protocol_version,
+        )?;
+        for batch_id in &ordered_batches {
+            commitment = commitment.append(batch_id)?;
+        }
+        Some(commitment)
+    } else {
+        None
+    };
     let initial_native_supply = native_pft_live_total(&ledger, &shielded)?;
     if initial_native_supply > u128::from(genesis.expected_native_supply_atoms()) {
         return Err(io::Error::new(
@@ -1836,15 +1849,37 @@ pub(super) fn verify_replayed_blocks(
         }
 
         ordered_batches.push(block.header.batch_id.clone());
-        replay_state_root = archived_replay_state_root(
-            genesis,
-            &governance,
-            &ledger,
-            &ordered_batches,
-            &shielded,
-            &bridge,
-            Some(block),
-        )
+        if let Some(commitment) = ordered_history.as_mut() {
+            *commitment = commitment.append(&block.header.batch_id)?;
+        }
+        let ordered_history_v2_active = genesis
+            .ordered_history_v2_activation_height
+            .is_some_and(|activation_height| block.header.height >= activation_height);
+        replay_state_root = if ordered_history_v2_active {
+            replicated_state_root_v2(
+                genesis,
+                &governance,
+                &ledger,
+                ordered_history.as_ref().ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "ordered-history replay commitment is missing after activation",
+                    )
+                })?,
+                &shielded,
+                &bridge,
+            )
+        } else {
+            archived_replay_state_root(
+                genesis,
+                &governance,
+                &ledger,
+                &ordered_batches,
+                &shielded,
+                &bridge,
+                Some(block),
+            )
+        }
         .map_err(|error| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -1855,6 +1890,15 @@ pub(super) fn verify_replayed_blocks(
             )
         })?;
         if replay_state_root != block.header.state_root {
+            if ordered_history_v2_active {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "block {} ordered-history v2 replay state root {} does not match header {}",
+                        block.header.height, replay_state_root, block.header.state_root
+                    ),
+                ));
+            }
             let legacy_nav_state_root = archived_legacy_nav_incomplete_state_root(
                 genesis,
                 &governance,

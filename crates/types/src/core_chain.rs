@@ -278,6 +278,8 @@ pub struct Genesis {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replicated_state_v2_activation_height: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ordered_history_v2_activation_height: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bridge_verification_activation_height: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub orchard_aware_bridge_claim_activation_height: Option<u64>,
@@ -297,6 +299,7 @@ impl Genesis {
             validator_count: 1,
             native_supply_atoms: Some(GENESIS_NATIVE_SUPPLY_ATOMS),
             replicated_state_v2_activation_height: Some(0),
+            ordered_history_v2_activation_height: None,
             bridge_verification_activation_height: None,
             orchard_aware_bridge_claim_activation_height: None,
             pfusdc_source_series_activation_height: None,
@@ -312,6 +315,7 @@ impl Genesis {
             validator_count,
             native_supply_atoms: Some(GENESIS_NATIVE_SUPPLY_ATOMS),
             replicated_state_v2_activation_height: Some(0),
+            ordered_history_v2_activation_height: None,
             bridge_verification_activation_height: None,
             orchard_aware_bridge_claim_activation_height: None,
             pfusdc_source_series_activation_height: None,
@@ -352,6 +356,9 @@ impl Genesis {
         }
         if self.consensus_v2_activation_height == Some(0) {
             return Err("genesis consensus_v2_activation_height must be positive".to_string());
+        }
+        if self.ordered_history_v2_activation_height == Some(0) {
+            return Err("genesis ordered_history_v2_activation_height must be positive".to_string());
         }
         Ok(())
     }

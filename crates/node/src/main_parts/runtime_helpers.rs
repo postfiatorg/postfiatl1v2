@@ -853,6 +853,7 @@ fn print_usage() {
   postfiat-node snapshot-import-signed [--data-dir PATH] --snapshot-dir PATH --trusted-publisher-key-file PATH [--node-id ID]
   postfiat-node snapshot-import-signed-finalized-checkpoint [--data-dir PATH] --snapshot-dir PATH --trusted-publisher-key-file PATH [--node-id ID]
   postfiat-node verify-finalized-checkpoint [--data-dir PATH]
+  postfiat-node ordered-history-index-rebuild [--data-dir PATH] --offline-confirmed
   postfiat-node storage-integrity-migrate-legacy [--data-dir PATH] --offline-confirmed
   postfiat-node deployment-publisher-key-create --publisher-key-file PATH
   postfiat-node deployment-publisher-key-export --publisher-key-file PATH --public-key-file PATH

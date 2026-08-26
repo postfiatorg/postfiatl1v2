@@ -1572,6 +1572,19 @@ fn build_history_checkpoint_state_from_sources(
         bridge = BridgeState::empty();
         registry_update_ids = HashSet::new();
     }
+    let mut ordered_history = if genesis.ordered_history_v2_activation_height.is_some() {
+        let mut commitment = postfiat_storage::OrderedHistoryCommitment::genesis(
+            &genesis.chain_id,
+            &genesis_hash_hex,
+            genesis.protocol_version,
+        )?;
+        for batch_id in &ordered_batches {
+            commitment = commitment.append(batch_id)?;
+        }
+        Some(commitment)
+    } else {
+        None
+    };
     let replay_base_native_supply = native_pft_live_total(&ledger, &shielded)?;
     if !has_existing_checkpoint
         && replay_base_native_supply != u128::from(genesis.expected_native_supply_atoms())
@@ -1670,14 +1683,36 @@ fn build_history_checkpoint_state_from_sources(
             ));
         }
         ordered_batches.push(block.header.batch_id.clone());
-        let replay_state_root = replicated_state_root(
-            &genesis,
-            &governance,
-            &ledger,
-            &ordered_batches,
-            &shielded,
-            &bridge,
-        )?;
+        if let Some(commitment) = ordered_history.as_mut() {
+            *commitment = commitment.append(&block.header.batch_id)?;
+        }
+        let replay_state_root = if genesis
+            .ordered_history_v2_activation_height
+            .is_some_and(|activation_height| block.header.height >= activation_height)
+        {
+            replicated_state_root_v2(
+                &genesis,
+                &governance,
+                &ledger,
+                ordered_history.as_ref().ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "ordered-history checkpoint commitment is missing after activation",
+                    )
+                })?,
+                &shielded,
+                &bridge,
+            )?
+        } else {
+            replicated_state_root(
+                &genesis,
+                &governance,
+                &ledger,
+                &ordered_batches,
+                &shielded,
+                &bridge,
+            )?
+        };
         if replay_state_root != block.header.state_root {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,

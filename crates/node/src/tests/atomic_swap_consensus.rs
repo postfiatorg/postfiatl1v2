@@ -1885,6 +1885,7 @@ fn atomic_swap_delta_journal_recovery_never_exposes_a_half_swap() {
         governance: &governance,
         ledger: &post_ledger,
         ordered_batches: &pre_ordered,
+        ordered_history: None,
         shielded: &shielded,
         bridge: &bridge,
         block_height: 2,

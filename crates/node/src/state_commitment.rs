@@ -22,6 +22,80 @@ pub(super) fn replicated_state_root(
     )
 }
 
+pub(super) fn replicated_state_root_v2(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+    ledger: &LedgerState,
+    ordered_history: &postfiat_storage::OrderedHistoryCommitment,
+    shielded: &ShieldedState,
+    bridge: &BridgeState,
+) -> io::Result<String> {
+    assert_genesis_commitment_inventory_complete(genesis);
+    verify_global_issued_asset_supply_caps_with_non_nav_spread(ledger, shielded, true)?;
+    let genesis_hash_hex = genesis_hash(genesis);
+    ordered_history.validate_domain(
+        &genesis.chain_id,
+        &genesis_hash_hex,
+        genesis.protocol_version,
+    )?;
+    let activation_height = genesis
+        .ordered_history_v2_activation_height
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "ordered-history v2 commitment has no activation height",
+            )
+        })?;
+    if ordered_history.count < activation_height {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "ordered-history v2 commitment is below its activation height",
+        ));
+    }
+    let commit_fastlane_state = genesis
+        .replicated_state_v2_activation_height
+        .or_else(|| governance.replicated_state_v2_activation_height())
+        .is_some_and(|height| ordered_history.count >= height);
+    let mut state_bytes = Vec::new();
+    append_canonical_str(&mut state_bytes, "chain_id", &genesis.chain_id);
+    append_canonical_str(&mut state_bytes, "genesis_hash", &genesis_hash_hex);
+    append_canonical_u32(
+        &mut state_bytes,
+        "protocol_version",
+        genesis.protocol_version,
+    );
+    append_governance_state(&mut state_bytes, governance);
+    append_ledger_state(
+        &mut state_bytes,
+        ledger,
+        true,
+        true,
+        false,
+        false,
+        commit_fastlane_state,
+        false,
+        false,
+    )?;
+    append_canonical_str(
+        &mut state_bytes,
+        "ordered_history_schema",
+        &ordered_history.schema,
+    );
+    append_canonical_u64(
+        &mut state_bytes,
+        "ordered_history_count",
+        ordered_history.count,
+    );
+    append_canonical_str(
+        &mut state_bytes,
+        "ordered_history_accumulator",
+        &ordered_history.accumulator,
+    );
+    append_shielded_state(&mut state_bytes, shielded);
+    append_bridge_state(&mut state_bytes, bridge);
+    Ok(hash_hex("postfiat.replicated_state.v2", &state_bytes))
+}
+
 pub(super) fn legacy_nav_incomplete_replicated_state_root(
     genesis: &Genesis,
     governance: &GovernanceState,
@@ -1647,6 +1721,7 @@ fn assert_genesis_commitment_inventory_complete(genesis: &Genesis) {
         validator_count: _,
         native_supply_atoms: _,
         replicated_state_v2_activation_height: _,
+        ordered_history_v2_activation_height: _,
         bridge_verification_activation_height: _,
         orchard_aware_bridge_claim_activation_height: _,
         pfusdc_source_series_activation_height: _,

@@ -18,6 +18,16 @@ fn fastpay_recovery_governance_commands_reach_their_cli_handler() {
 }
 
 #[test]
+fn ordered_history_index_rebuild_requires_explicit_offline_confirmation() {
+    let error = run_cli(vec!["ordered-history-index-rebuild".to_string()])
+        .expect_err("rebuild without an offline confirmation must fail");
+    assert_eq!(
+        error,
+        "ordered-history-index-rebuild requires --offline-confirmed after every process using the data directory has been stopped"
+    );
+}
+
+#[test]
 fn storage_integrity_migration_requires_explicit_offline_confirmation() {
     let error = run_cli(vec!["storage-integrity-migrate-legacy".to_string()])
         .expect_err("migration without an offline confirmation must fail");

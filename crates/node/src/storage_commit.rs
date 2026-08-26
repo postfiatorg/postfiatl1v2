@@ -1766,6 +1766,7 @@ pub(super) struct OrderedCommitPlan<'a, T> {
     pub(super) governance: &'a GovernanceState,
     pub(super) ledger: &'a LedgerState,
     pub(super) ordered_batches: &'a [String],
+    pub(super) ordered_history: Option<&'a postfiat_storage::OrderedHistoryCommitment>,
     pub(super) shielded: &'a ShieldedState,
     pub(super) bridge: &'a BridgeState,
     pub(super) block_height: u64,
@@ -1976,14 +1977,24 @@ pub(super) fn prepare_ordered_commit_timed<T: Serialize>(
     timings.ordered_batches_ms = apply_batch_elapsed_ms(stage_start);
 
     let stage_start = std::time::Instant::now();
-    let simulated_state_root = replicated_state_root(
-        plan.genesis,
-        plan.governance,
-        plan.ledger,
-        &ordered_batches,
-        plan.shielded,
-        plan.bridge,
-    )?;
+    let simulated_state_root = match plan.ordered_history {
+        Some(ordered_history) => replicated_state_root_v2(
+            plan.genesis,
+            plan.governance,
+            plan.ledger,
+            ordered_history,
+            plan.shielded,
+            plan.bridge,
+        )?,
+        None => replicated_state_root(
+            plan.genesis,
+            plan.governance,
+            plan.ledger,
+            &ordered_batches,
+            plan.shielded,
+            plan.bridge,
+        )?,
+    };
     timings.state_root_ms = apply_batch_elapsed_ms(stage_start);
 
     let stage_start = std::time::Instant::now();
@@ -2657,6 +2668,22 @@ pub(super) fn apply_ordered_commit_delta_journal_timed(
     let stage_start = std::time::Instant::now();
     if !already_committed {
         store.append_ordered_batch_record(&journal.ordered_batch_id)?;
+        if genesis.ordered_history_v2_activation_height.is_some() {
+            let commitment =
+                store.append_ordered_history_index_record(&journal.ordered_batch_id)?;
+            let expected_count = chain_tip
+                .ordered_batch_count
+                .checked_add(1)
+                .ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidData, "ordered batch count overflow")
+                })?;
+            if commitment.count != expected_count {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "ordered-history index count does not match the commit journal",
+                ));
+            }
+        }
     }
     timings.write_ordered_batches_ms = apply_batch_elapsed_ms(stage_start);
 
@@ -2667,11 +2694,19 @@ pub(super) fn apply_ordered_commit_delta_journal_timed(
     timings.write_batch_archive_ms = apply_batch_elapsed_ms(stage_start);
 
     let stage_start = std::time::Instant::now();
-    if !already_committed {
+    let committed_tip = if !already_committed {
         store.append_block_record(&journal.block)?;
         let next_tip = chain_tip_after_delta(&chain_tip, journal)?;
         store.write_chain_tip(&next_tip)?;
-    }
+        next_tip
+    } else {
+        chain_tip.clone()
+    };
+    store.bind_jsonl_checkpoints_to_chain_tip(&committed_tip, &journal.block.header.parent_hash)?;
+    store.bind_ordered_history_index_to_chain_tip(
+        &committed_tip,
+        &journal.block.header.parent_hash,
+    )?;
     timings.write_blocks_ms = apply_batch_elapsed_ms(stage_start);
 
     if let Some(registry) = journal.validator_registry.as_ref() {

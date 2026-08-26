@@ -314,7 +314,7 @@ pub use mempool_proposals::{
 use mempool_proposals::{admit_signed_atomic_swap_to_mempool, enforce_mempool_state_limits};
 use mempool_proposals::{
     build_ordered_batch_proposal_with_timings, ledger_after_executable_mempool,
-    mempool_pending_count_for_sender, normalize_block_proposal_batch_kind,
+    mempool_pending_count_for_sender, normalize_block_proposal_batch_kind, proposed_ordered_state,
 };
 #[cfg(test)]
 use mempool_proposals::{enforce_mempool_admission_limits, verify_mempool_state};
@@ -433,7 +433,8 @@ use state_commitment::{
     legacy_vault_bridge_deposit_attestation_pre_orchard_supply_cap_replicated_state_root,
     legacy_vault_bridge_deposit_attestation_replicated_state_root,
     legacy_vault_bridge_domainless_withdrawal_replicated_state_root, replicated_state_root,
-    replicated_state_root_with_nav_completeness, verify_global_issued_asset_supply_caps,
+    replicated_state_root_v2, replicated_state_root_with_nav_completeness,
+    verify_global_issued_asset_supply_caps,
     verify_global_issued_asset_supply_caps_legacy_non_nav_spread_omitted,
     LegacyJsonGovernanceState, LegacyJsonLedgerState, LegacyJsonShieldedState,
 };
