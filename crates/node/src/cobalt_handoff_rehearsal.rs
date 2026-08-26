@@ -750,7 +750,10 @@ fn prepare_live_update_context(args: &[String]) -> io::Result<()> {
             "live update activation height must be after the current chain tip",
         ));
     }
-    let validators = governance.active_validators.clone();
+    // Legacy/local validator sets intentionally omit the explicit ID vector and
+    // derive validator-0..N from active_validator_count.  Use the same resolver
+    // as live consensus so a post-activation context hashes the actual set.
+    let validators = crate::active_validator_ids(&governance)?;
     let registry_root = validator_registry_root(&registry, &validators)?;
     let transition = governance
         .cobalt_authority_transitions
@@ -834,6 +837,22 @@ fn print_decision_registry_binding(certificate_path: &Path) -> io::Result<()> {
     io::stdout().write_all(b"\n")
 }
 
+fn decision_certificate_is_raw(
+    certificate: &CobaltValidatorUpdateDecisionCertificateV1,
+) -> io::Result<bool> {
+    let raw_binding = certificate.registry_binding.get("registry_root").is_some();
+    let raw_transcript = certificate
+        .protocol_transcript
+        .get("registry_root")
+        .is_some();
+    if raw_binding != raw_transcript {
+        return Err(invalid(
+            "Cobalt decision certificate mixes raw and compact values",
+        ));
+    }
+    Ok(raw_binding)
+}
+
 fn attach_decision_certificate(
     manifest_path: &Path,
     activation_result_path: &Path,
@@ -862,7 +881,11 @@ fn attach_decision_certificate(
         ));
     }
     let certificate: CobaltValidatorUpdateDecisionCertificateV1 = read_json(certificate_path)?;
-    let certificate = compact_cobalt_validator_update_decision_certificate(certificate)?;
+    let certificate = if decision_certificate_is_raw(&certificate)? {
+        compact_cobalt_validator_update_decision_certificate(certificate)?
+    } else {
+        certificate
+    };
     let payload_hash = cobalt_validator_update_payload_hash(&update)?;
     let previous_ratification = governance
         .validator_registry_updates
@@ -1267,5 +1290,45 @@ pub fn main() -> io::Result<()> {
             &required_arg(rest, "--output")?,
         ),
         _ => usage(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn decision_certificate(
+        registry_binding: Value,
+        protocol_transcript: Value,
+    ) -> CobaltValidatorUpdateDecisionCertificateV1 {
+        CobaltValidatorUpdateDecisionCertificateV1 {
+            schema: COBALT_VALIDATOR_UPDATE_DECISION_CERTIFICATE_SCHEMA_V1.to_string(),
+            registry_binding,
+            protocol_transcript,
+        }
+    }
+
+    #[test]
+    fn decision_certificate_encoding_rejects_mixed_raw_and_compact_values() {
+        let raw = json!({"registry_root": "a"});
+        let compact = json!({"value_sha256": "b"});
+
+        assert!(
+            decision_certificate_is_raw(&decision_certificate(raw.clone(), raw))
+                .expect("raw decision certificate")
+        );
+        assert!(!decision_certificate_is_raw(&decision_certificate(
+            compact.clone(),
+            compact.clone(),
+        ))
+        .expect("compact decision certificate"));
+        let error = decision_certificate_is_raw(&decision_certificate(
+            compact,
+            json!({
+                "registry_root": "a"
+            }),
+        ))
+        .expect_err("mixed decision certificate must fail");
+        assert!(error.to_string().contains("mixes raw and compact values"));
     }
 }

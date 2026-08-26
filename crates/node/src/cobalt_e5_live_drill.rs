@@ -161,7 +161,7 @@ fn run(args: &[String]) -> io::Result<Value> {
     if governance.authority_mode != GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED {
         return Err(invalid("stolen-key drill requires live Cobalt authority"));
     }
-    let validators = governance.active_validators.clone();
+    let validators = crate::active_validator_ids(&governance)?;
     let quorum =
         bft_quorum_threshold(validators.len()).map_err(|error| invalid(error.to_string()))?;
     if validators.len() != 6 || quorum != 5 || !validators.contains(&stolen_validator) {
