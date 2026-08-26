@@ -27,6 +27,17 @@ binary to the running services.
 | Adversarial campaign | E1–E6 passed their locked gates. The consolidated decision is `KEEP_ACTIVE` for Cobalt's bounded controlled-devnet validator-trust role. | E1 `9151c9…cbbc05`; E2 `8742d960…d7cba3`; E3 `9302b355…40b600`; E4 `93ba3db0…c14508`; E5 `0695284a…f3b3db`; E6 `fa6255b5…22de6e2`. | Completed 2026-08-26 | [Completed milestone](../plans/completed/cobalt-adversarial-verification-milestone.md) and [results](../governance/cobalt-adversarial-verification-results.md). |
 | Operator boundary | The campaign proves protocol capability, not operator decentralization. Current proposals and authorizations originate from Foundation-administered validators. | E6 decision: independent-operator proposal path remains a mandatory follow-on milestone. | 2026-08-26 | No independent operators were recruited and no mainnet authority was granted. |
 
+## Baseline latency versus chain height
+
+E4's first 50 baseline rounds reproduce the activation run's
+`consensus_round_ms` p95: 1,664 ms versus 1,660 ms. Latency then rises almost
+linearly with height to about 14.9 s at round 500, with correlation approximately
+0.9998. The cause is chain-height amplification in the integrity-checked
+JSON/JSONL storage and proposal-rebuild paths: `read_jsonl_tail` in
+`crates/storage/src/lib.rs` rescans the hash chain on every append. The 5% gate
+remains valid as a paired, same-length A/B comparison, but the absolute latency
+numbers are not a finality SLA.
+
 ## Last observed devnet values
 
 | Field | Value |

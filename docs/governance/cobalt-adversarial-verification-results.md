@@ -29,6 +29,17 @@ published rollback stop conditions occurred, so the final gate is
 | E5 | Live authority transitions, negatives, and stolen-key drill | Final rollback/return committed at 922/923; all nine negative cases rejected; legitimate validator-5 rotation committed at 924; all six nodes converged. | 0695284a7b38ac0129c47e1242f4a2227ad25096147920e79569a924e5f3b3db |
 | E6 | Proposal source and operator independence | The independent-operator gate was reinstated as a separate mandatory follow-on milestone; no operator decentralization claim. | fa6255b5a5f31f2d7e8b2836eb005f894b815199ec1205a30fa99a6fb22de6e2 |
 
+## Baseline latency versus chain height
+
+E4's first 50 baseline rounds reproduce the activation run's
+`consensus_round_ms` p95: 1,664 ms versus 1,660 ms. Latency then rises almost
+linearly with height to about 14.9 s at round 500, with correlation approximately
+0.9998. The cause is chain-height amplification in the integrity-checked
+JSON/JSONL storage and proposal-rebuild paths: `read_jsonl_tail` in
+`crates/storage/src/lib.rs` rescans the hash chain on every append. The 5% gate
+remains valid as a paired, same-length A/B comparison, but the absolute latency
+numbers are not a finality SLA.
+
 ## What was attacked
 
 The frozen campaign covered:
