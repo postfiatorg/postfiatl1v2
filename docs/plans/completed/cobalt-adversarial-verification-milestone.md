@@ -122,10 +122,13 @@ Checksum-bound packet:
 
 The final clean run passed all 500 baseline and 500 attack rounds. Both
 six-validator lanes converged independently at height 501; Consensus v2 never
-stopped or forked. Baseline wallet-to-finality was p50
+stopped or forked. Baseline `wallet_to_finality_ms` was p50
 `7,471.082586 ms` and p95 `14,133.573682 ms`; attack was p50
 `7,500.377266 ms` and p95 `14,197.471440 ms`. The p95 delta was
-`+0.4520990899943289%`, inside the locked 5% budget.
+`+0.4520990899943289%`, inside the locked 5% budget. These 500+500-round
+adversarial-campaign measurements are not comparable to the activation
+milestone's `consensus_round_ms` p95 from its separate 50+50-round local
+integration run.
 
 The attack lane completed 47 governance-stress runs covering 940 proposals,
 329 safe halts, and 329 view changes. It recorded 987 boundary rejections,
@@ -151,8 +154,8 @@ SHA-256
 - [x] Run at least 500 baseline and 500 attack-lane Consensus v2 rounds from the same signed state on the same fleet, binary, and CPU quota.
 - [x] In the attack lane, combine governance storms, repeated halts and view changes, near-limit certificates and RPC frames, sidecar flooding, and one crash-looping validator.
 - [x] Count and name every rejection at the 1 MiB certificate and 2 MiB RPC-frame boundaries.
-- [x] Pass only if Consensus v2 never stops or forks and attack-lane p95 client-visible finality remains within 5% of baseline.
-- [x] Record governance latency, p50/p95 finality, CPU, memory, network, disk, rejected inputs, restarts, and operator actions.
+- [x] Pass only if Consensus v2 never stops or forks and attack-lane p95 `wallet_to_finality_ms` remains within 5% of the 500-round baseline lane.
+- [x] Record governance latency, p50/p95 `wallet_to_finality_ms`, CPU, memory, network, disk, rejected inputs, restarts, and operator actions.
 
 Code references: `benchmarks/cobalt-activate-or-retire/run_consensus_v2_cobalt_integration.py`, `crates/node/src/consensus_v2_finality.rs`, `crates/node/src/cobalt_authority_certificate.rs`, `crates/node/src/cobalt_shadow_runtime.rs`.
 
@@ -208,7 +211,7 @@ Code references: `crates/consensus_cobalt/src/trust_graph_governance.rs`, `crate
 - [x] E1: production matches the reconciled independent oracle on every generated graph.
 - [x] E2: zero conflicting roots, zero false halts, and zero false accepts under the Byzantine campaign.
 - [x] E3: every tampered state and forged catch-up is rejected; honest recovery is byte-identical.
-- [x] E4: Consensus v2 never stops or forks; attack-lane p95 finality stays within 5% of baseline.
+- [x] E4: Consensus v2 never stops or forks; attack-lane p95 `wallet_to_finality_ms` stays within 5% of the 500-round baseline lane.
 - [x] E5: both final-gate live authority transitions commit; every live negative case and the stolen-key attempt reject.
 - [x] E6: the proposal-path design and independent-operator decision are recorded and locked.
 - [x] The publication requirements are live.

@@ -26,7 +26,7 @@ Each row is one published claim, the evidence behind it, the gap, and the experi
 | Determinism and safety: zero conflicting roots, byte-identical replay | 18 frozen cases; oracle written by the implementing team; three 20-validator overlap cases | Small corpus; no independent oracle; no random or adversarially chosen trust graphs | E1 |
 | Liveness: five of six progress, four of six halt | Six isolated simulated domains; 14 governance rounds; scheduled delay, loss, reorder, duplicate, crash, partition, one equivocation | Faults are scheduled, not adversarial; one Byzantine strategy only; no lying trust views; no withholding at each protocol stage | E2 |
 | Recovery: a lagging validator restores the exact history | Proof-carrying catch-up from honest peers | No tampered durable state; no forged or truncated catch-up from a Byzantine peer | E3 |
-| Finality isolation: p95 finality +2.63%, inside 5% | 50 baseline rounds and 50 integration rounds | Fifty rounds; no governance storm; no certificate near the 1 MiB cap; no RPC frame flood | E4 |
+| Finality isolation: `consensus_round_ms` p95 +2.63%, inside 5% | 50 baseline rounds and 50 integration rounds | The 50+50-round activation metric and setup are not comparable to E4's 500+500-round `wallet_to_finality_ms` campaign; no governance storm; no certificate near the 1 MiB cap; no RPC frame flood | E4 |
 | Reversibility: a separately authorized transition restores Foundation authority | Forward rollback rehearsed on a disposable clone | Never executed live; authorized by the same six Foundation-run validators | E5 |
 | Independent operation | The locked activation specification required at least three independently controlled operator groups (Experiment 4 and the ACTIVATE gate). The milestone cancelled that task (`task_46d1707cb9e11f04648ea54a7163fbee`) and re-scoped independence to simulation. The specification states that no milestone may redefine the decision gates without a newly locked research specification. | Activation proceeded with a gate the locked specification did not allow to be redefined. This is a process gap as much as a technical one. | E6 and the decision in **Open decisions** |
 | "Cobalt controls validator-trust governance" | True in code: `controls_block_consensus: false`, `writes_validator_registry: true` in `activation-status.json` | The proposal for every live change came from the Foundation operator. Cobalt gates changes; it does not yet decentralize who asks for them. "Validator governance" in headlines reads as the whole governance. | E6 and **Required publication** |
@@ -142,7 +142,7 @@ Run at least 500 Consensus v2 rounds in a baseline lane and 500 in an attack lan
 ### Required result
 
 - Consensus v2 never stops and never forks.
-- p95 client-visible finality in the attack lane is within 5% of the baseline lane.
+- p95 `wallet_to_finality_ms` in the 500-round attack lane is within 5% of the 500-round baseline lane.
 - Every oversized certificate, frame, and flood is rejected at the documented limit, and the rejections are counted in the evidence.
 
 ## Experiment 5 — live authority drills
@@ -183,7 +183,7 @@ Cobalt stays live when all of the following hold:
 - E1: production matches the reconciled independent oracle on every generated graph.
 - E2: zero conflicting roots, zero false halts, zero false accepts under the Byzantine campaign.
 - E3: every tampered state and forged catch-up is rejected; honest recovery is byte-identical.
-- E4: Consensus v2 never stops or forks; p95 finality within 5% under attack.
+- E4: Consensus v2 never stops or forks; p95 `wallet_to_finality_ms` within 5% between the 500-round attack and baseline lanes.
 - E5: both live authority transitions commit; every live negative case rejects; the stolen-key drill rejects.
 - E6: the design and the independent-operator decision are recorded and locked.
 - The publication corrections below are live.

@@ -72,8 +72,10 @@ are complete.
   transition, delay, loss, reordering, duplication, stale replay, equivocation,
   crash/restart, and partition healing.
 - Paired 50 baseline Consensus v2 rounds with 50 Cobalt integration rounds.
-  Client-visible p95 finality moved from 1617.88 ms to 1660.42 ms, a 2.63%
-  increase inside the 5% budget. Cobalt covered 99.9985% of the integration
+  The primary `consensus_round_ms` p95 moved from 1617.88 ms to 1660.42 ms, a
+  2.63% increase inside the 5% budget. This 50+50-round local integration
+  result is not comparable to E4's `wallet_to_finality_ms` p95 from its separate
+  500+500-round adversarial campaign. Cobalt covered 99.9985% of the integration
   window under the production 25% CPU quota.
 
 ### Release qualification

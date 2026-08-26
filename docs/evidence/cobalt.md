@@ -86,8 +86,11 @@ E4 evidence is stored under
 `benchmarks/cobalt-adversarial-verification/e4/`. The final unchanged clean run
 passed 500 baseline and 500 attack rounds with six-validator convergence at
 height 501 in each lane, no Consensus v2 stop or fork, and a `+0.452099%`
-attack-lane p95 finality delta inside the locked 5% budget. The packet preserves
-two remediated harness-oracle receipts, full rejection and resource receipts,
+attack-lane p95 `wallet_to_finality_ms` delta inside the locked 5% budget. This
+500+500-round metric is not comparable to the activation run's
+`consensus_round_ms` p95 from 50 baseline and 50 integration rounds. The
+packet preserves two remediated harness-oracle receipts, full rejection and
+resource receipts,
 and packet root
 `93ba3db0bcc145144713088b612606fbb3b92c0f542809f258da49a555c14508`.
 It was an isolated local campaign and did not query or mutate devnet.

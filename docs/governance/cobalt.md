@@ -60,6 +60,24 @@ reporting outcomes. `readiness` additionally verifies the disposable handoff,
 negative cases, abort, forward rollback, scoped validator update, and
 byte-identical live-fleet receipts. Both commands support `--json`.
 
+## Operator Rules
+
+Before scheduling any live authority transition, operators must rehearse the
+exact transition and its surrounding sequence on a disposable clone bound to
+the current chain, registry, authority history, and trust state. This rule
+covers activation, rollback, and every return to Cobalt. A previous rehearsal
+that ends at rollback does not qualify for a later rollback-then-return
+sequence.
+
+For a return to Cobalt, the clone rehearsal must construct the protocol-native
+post-return trust graph, derive its trust root, bind the return transition to
+that root, and verify the resulting authority history before any live action.
+E5 is the reason for this standing rule: the accepted height-921 return used a
+trust binding that did not match the protocol-native post-return graph, so the
+signed corrective rollback/return at heights 922/923 was required. See
+[what E5 fixed](cobalt-adversarial-verification-results.md#what-was-fixed) and
+the [E5 evidence packet](https://github.com/postfiatorg/postfiatl1v2/blob/main/benchmarks/cobalt-adversarial-verification/e5/README.md).
+
 ## Operator CLI
 
 The CLI uses the Rust owners and the signed shadow service; it does not
