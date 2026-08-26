@@ -1,154 +1,144 @@
-# Cobalt adversarial verification continuation
+# Cobalt adversarial verification complete
 
 - **Operator:** Post Fiat Chad (`postfiatchad`)
 - **Date:** 2026-08-26 UTC
 
 ## BLUF
 
-Resume from the
-[active Cobalt adversarial-verification milestone](../plans/active/cobalt-adversarial-verification-milestone.md).
-E1-E4 and the design-only E6 decision are complete. E4 passed its unchanged
-500+500-round local finality-isolation rerun and its checksum-bound packet is
-pushed on `main` at `6c22f866e9ba56ec18f3a62fbf2b00ec9aa17103`.
-E5 has not been executed live, publication is not complete, and the overall
-`KEEP_ACTIVE` gate is still open.
+The locked Cobalt adversarial-verification milestone is complete. E1-E6,
+the live E5 authority drills, authenticated CLI/browser interfaces, public
+results, and release checks passed. The bounded controlled-devnet result is
+`KEEP_ACTIVE`: Cobalt remains active for validator-registry and trust-graph
+ratification, while Consensus v2 remains block finality. This proves protocol
+capability, not operator decentralization.
 
-The controlled devnet was not mutated by E4. Current Git is not the deployed
-runtime. Cobalt ratifies validator-registry and trust-graph changes; a separate
-layer decides who deserves trust, current proposals originate from
-Foundation-administered validators, and Consensus v2 remains block finality.
-The result proves protocol capability, not operator decentralization.
-
-Continue this work directly. The user explicitly instructed this session not to
-use Task Node and not to spawn parallel agents.
+Resume from this handoff. Use [Current State](../status/chain-state-current.md)
+for the canonical operational snapshot and the
+[completed milestone](../plans/completed/cobalt-adversarial-verification-milestone.md)
+for the experiment record. Do not resume from the superseded active-plan path.
+The completion continuation used neither Task Node nor subagents, per the
+operator's explicit instruction.
 
 ## Current state
 
-### Repository
+### Repository and publication
 
-- Branch: `main`
-- Latest pushed evidence commit: `6c22f866e9ba56ec18f3a62fbf2b00ec9aa17103`
-- E4 packet root:
-  `93ba3db0bcc145144713088b612606fbb3b92c0f542809f258da49a555c14508`
-- `origin/main` matched `6c22f866` immediately after the E4 push.
-- The worktree also contains intentional, uncommitted E5 protocol/runtime,
-  rehearsal, CLI, and browser changes. They are not qualified or deployed yet.
-  Preserve them; do not reset, check out, or stage everything blindly.
-
-[Current State](../status/chain-state-current.md) is the canonical operational
-reference. The active milestone is the authoritative execution plan. This
-handoff records the continuation boundary and must not replace either one.
+- Branch: `main`.
+- Pushed completion payload commit:
+  `7968b8da2876090f7319b007bb0a04bcd8eb42fe`.
+- `origin/main` matched that commit immediately after the completion push. The
+  commit containing this handoff is its immediate handoff-only descendant; use
+  `git rev-parse HEAD` for that checkout identity.
+- No uncommitted campaign work should remain after the handoff push.
+- The deployed runtime source is distinct:
+  `8cc7d15edc58b5f5a0b745143fef2d45203465ff`. Repository descendants are not
+  themselves proven deployed without another all-six fleet receipt.
+- E5 evidence commit:
+  `ee6707c41aec972c2ecc53349b7eafd6872b275a`.
+- Public article repository commit:
+  `d4edd89bb781c8b41ccc21a1a6034d9839c45b63`; the article is live at
+  <https://postfiat.org/blog/cobalt-further-evaluation/>.
 
 ### Last observed controlled devnet
 
-An authenticated read-only validator/RPC probe ran across all six hosts from
-`2026-08-26T01:40:51Z` through `2026-08-26T01:41:04Z`. It changed no fleet
-files or services and called no mutation RPC.
+The final authenticated live-drill and fleet observation ran from
+`2026-08-26T06:34:55Z` through `2026-08-26T06:35:50Z`. This is the last
+committed point-in-time observation, not a real-time probe when this handoff is
+read.
 
-- Chain: `postfiat-wan-devnet-2`
-- All six validator and all six RPC services: active
-- All validators: `running`, height 919, zero pending transactions
+- Chain: `postfiat-wan-devnet-2`.
+- All six validators converged at height 924; all validator, RPC, and advisory
+  shadow services were active.
 - Tip:
-  `3a8a117af9ed40728717005d03edf032719a3ca3d696365415a2d5b0d9aeef1c509d06d54029e6c34660e29aab43d0fb`
+  `ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef`.
 - State root:
-  `ffa16323555800df7a4ff7cd336b9b151b0edfcf60954c207b704749133ff4b31ebd24444696d67e652f6e94510f7e60`
-- Deployed validator release: `cobalt-verifier-92b63f5a`
-- Deployed validator binary SHA-256:
-  `c7cb0c25001a0bfe22eba32ce870f3739f9710471906e27c32797670ea9f6337`
+  `0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e`.
+- Registry root:
+  `08a451e07aeaf9ada41a69e7c26dfd3fd86fce11c02f5567127c598b3cf775ac054b2add85295cc8c0d429bb6d2b9b1d`.
+- Trust-graph root:
+  `89f18aef2c5726ae43043407eb4d638ee8f3b6027e58ec3553296478602232cf3c2fc5d1dfebc4058d720b16508f0307`.
+- Ratification anchor: sequence 2,
+  `5eada38d23c83709a44f2cfa7eb7897d9d4b1da906e6ef66fc5dfec7e64102edda2e82b33d71346c1d8f75ccc21153c8`.
+- All six node binaries had SHA-256
+  `d5e5ef630155e61b001b84edb404a4def7d29a9205f23d33d2ad9c37c2696caf`;
+  all six shadow binaries had SHA-256
+  `d61e6d0f6767998c4abfbf4f85e1f6bd5edfeef8a7a27cf965c17b676b1a0a4a`.
 
-That later probe did not re-run the governance auditor or inspect shadows. The
-last full authenticated audit at `2026-08-25T15:37:40Z` records Cobalt
-validator-trust authority from height 916, the first Cobalt-authorized key
-rotation at height 917, registry root
-`945768d593497541f59961d1ba3920560cfde7bf5037e40eb89dd5466637f221709bff05b69d2d40a36d5cff8505c37e`,
-and trust root
-`9221316ae7f0f0e7e58d734700167f73f29aa1240377a8d61c637e7f36c5deb728203fcbb283c9f8f3398fc41d6b8b13`.
-The same older audit found all six advisory shadow services active.
+The first rollback/return pair at heights 920/921 is preserved as remediation
+history because the height-921 return used a non-protocol-native trust binding.
+No fork or conflicting accepted root occurred. The corrective signed rollback
+at 922 and return to Cobalt at 923 are the final-gate pair. The legitimate
+validator-5 rotation committed at 924. Every block from 920 through 924 retained
+Consensus v2 finality, and all nine live negative cases rejected without durable
+state mutation.
 
-### E4 result
+### Evidence and result
 
-The final unchanged campaign ran 500 baseline and 500 attack rounds on the same
-local six-validator topology, signed initial state, binaries, full-vote policy,
-and CPU allocation.
+The consolidated authenticated packet root is
+`a789372819c173d3c290f84b7ad10bea3ddef01ffc5a012e837ba3dc32d36368`.
+Its verifier reports `adversarial-packet-ok`, `KEEP_ACTIVE`, six passed
+experiments, nine rejected live cases, and all 15 final checks passing.
 
-- Both lanes converged independently at height 501.
-- Consensus v2 never stopped or forked.
-- Baseline wallet-to-finality: p50 `7,471.082586 ms`, p95
-  `14,133.573682 ms`.
-- Attack wallet-to-finality: p50 `7,500.377266 ms`, p95
-  `14,197.471440 ms`.
-- Attack p95 delta: `+0.4520990899943289%`, inside the 5% budget.
-- Governance stress: 47 runs, 940 proposals, 329 safe halts, 329 view changes.
-- Rejections: 987 boundary, 846 named-limit, 752 flood; durable state unchanged.
-- Validator 5: 12 automated restarts; zero manual operator actions.
-- Source: `add07a7cce416daeaa61073085734937477f2b71`.
-- Packet verifier prints `e4-packet-ok` and the packet root above.
+Experiment roots:
 
-The packet preserves two harness remediations: a retry window shorter than the
-deliberate restart outage, and an invalid exact-hash comparator across
-independent randomized executions. Neither observed a fork or durable
-divergence. The corpus, topology, binaries, quota, crash cadence, and
-adversarial inputs remained unchanged. E4 was isolated local evidence; it did
-not query or mutate devnet.
+- E1: `9151c9b7f43e2c75f367416b9087e7255ca1c03ae734bfdd362fc79ff0cbbc05`.
+- E2: `8742d9603621408339d99c3d9fcc1ba8cc43dafdc900acdfccbf86cc60d7cba3`.
+- E3: `9302b3555ab9091b2cae9b2d372d0548fe9f2fb1e67be43dfb3f63d89140b600`.
+- E4: `93ba3db0bcc145144713088b612606fbb3b92c0f542809f258da49a555c14508`.
+- E5: `0695284a7b38ac0129c47e1242f4a2227ad25096147920e79569a924e5f3b3db`.
+- E6: `fa6255b5a5f31f2d7e8b2836eb005f894b815199ec1205a30fa99a6fb22de6e2`.
 
-### Uncommitted E5 and interface work
+E6's design decision did not change, but its source pins were revalidated after
+the E5 authority-lineage hardening so its standalone verifier matches the
+final repository sources.
 
-The intentional dirty tree covers:
+Final checks passed:
 
-- cross-root DABC ratification lineage and persisted shadow anchors;
-- full decision-certificate validation during registry reset;
-- forward rollback and separately authorized return preparation;
-- explicit activation-height handling for DABC updates;
-- a read-only nine-negative-case plus stolen-key E5 drill;
-- rehearsal helpers for live update/certificate assembly;
-- a fail-closed adversarial packet CLI and read-only browser panel; and
-- focused Rust and Python regression tests.
+- all E1-E6 and consolidated packet verifiers;
+- 27 Python Cobalt/observatory tests;
+- 72 `postfiat-consensus-cobalt` tests;
+- 29 focused `postfiat-node` Cobalt tests;
+- focused checks for both E5 live-drill binaries;
+- CLI rendering with 6/6 experiments, nine rejections, and 15 `[PASS]` checks;
+- real browser `GET /api/snapshot` and `GET /` responses at HTTP 200, with
+  mutation probe `POST /api/snapshot` rejected at HTTP 405;
+- strict MkDocs build, documentation redaction check, packet redaction scan,
+  formatting, and `git diff --check`.
 
-The major production issue under remediation is that a post-rotation DABC
-ratification must validate against the prior committed ratification/lineage
-anchor, not assume the current graph roots are also the previous decision roots.
-The changes have passed formatting and the Python unit subset previously
-recorded, but have not yet passed their focused Rust test suite, release build,
-rolling deployment, or live E5 drill. Do not describe them as validated.
+### Scope boundary
 
-The E3 packet verifier correction is already pushed at `ec3c3833`; its current
-packet root is
-`9302b3555ab9091b2cae9b2d372d0548fe9f2fb1e67be43dfb3f63d89140b600`.
+Current proposals and authorizations still originate from
+Foundation-administered validators. No independent operators were recruited,
+no mainnet authority was granted, and no claim of operator decentralization is
+supported. Cobalt ratifies bounded validator-trust changes; it does not select
+who deserves trust and does not control block consensus.
 
 ## Next decision or action
 
-1. Review and qualify the dirty E5 protocol/runtime diff off-chain. Run
-   formatting, focused Cobalt/governance tests, persisted-height-917 migration
-   coverage, cross-root lineage regressions, and a release build.
-2. Commit and push coherent E5 source changes before building deployment
-   evidence. Do not derive deployment identity from an uncommitted tree.
-3. Re-probe all six validators, RPCs, authority state, and shadows. Re-derive
-   every scheduled height from that fresh state; the prior 920/921/922 sketch is
-   provisional.
-4. Use the signed safe-rollout workflow one validator/RPC pair at a time, proving
-   convergence after each. Migrate shadow ratification anchors separately and
-   stop on any root, signer, lineage, service, or finality mismatch.
-5. Execute E5: signed forward rollback to Foundation, separately authorized
-   return to Cobalt, every named negative case without mutation, certified
-   stolen-key rejection, and the legitimate validator-5 rotation. Preserve one
-   accepted authority history and uninterrupted Consensus v2 finality.
-6. Build and verify the E5 and consolidated evidence packets, CLI/browser
-   snapshots, publication, canonical state, strict docs, redaction checks, and
-   the explicit final release gate.
-7. Move the milestone to `docs/plans/completed/` and record `KEEP_ACTIVE`,
-   `REMEDIATION_REQUIRED`, or `ROLLED_BACK` only when every completion gate
-   is supported by direct evidence. Then replace this checkpoint with the final
-   clean handoff and push it.
+The adversarial campaign itself has no remaining experiment. Do not restart E1
+or continue into another adversarial phase unless the locked specification is
+formally changed.
+
+The next bounded program decision is whether to open the separate
+independent-operator proposal-path milestone required by E6. That work must
+recruit genuinely independent operators, refresh admission and topology
+bindings to the live release and roots, prove no one operator can reach or block
+quorum, and repeat the live migration evidence gates. It is not authorized by
+this handoff.
+
+Before any later claim about what is live "right now," perform a new
+authenticated all-six fleet probe. Before any deployment, keep deployed binary,
+source, repository, and evidence identities separate and stop on a root,
+signer, lineage, service, or finality mismatch.
 
 ## References
 
 - [Current State](../status/chain-state-current.md)
-- [Active adversarial-verification milestone](../plans/active/cobalt-adversarial-verification-milestone.md)
+- [Completed adversarial-verification milestone](../plans/completed/cobalt-adversarial-verification-milestone.md)
 - [Locked adversarial-verification specification](../governance/cobalt-adversarial-verification-research-spec.md)
-- E4 packet: `benchmarks/cobalt-adversarial-verification/e4/`
-- E4 verifier:
-  `python3 benchmarks/cobalt-adversarial-verification/e4/verify_packet.py`
-- E3 packet: `benchmarks/cobalt-adversarial-verification/e3/`
-- E6 packet: `benchmarks/cobalt-adversarial-verification/e6/`
-- Historical activation packet: `benchmarks/cobalt-activation-live/packet/`
-- [Prior post-activation handoff](2026-08-25___dravlic__cobalt_post_activation_review.md)
+- [Final adversarial results](../governance/cobalt-adversarial-verification-results.md)
+- [Independent-operator proposal-path specification](../governance/cobalt-independent-operator-proposal-path-research-spec.md)
+- Final consolidated packet: `benchmarks/cobalt-adversarial-verification/packet/`
+- Live E5 packet: `benchmarks/cobalt-adversarial-verification/e5/`
+- E6 decision packet: `benchmarks/cobalt-adversarial-verification/e6/`
+- Public article: <https://postfiat.org/blog/cobalt-further-evaluation/>
