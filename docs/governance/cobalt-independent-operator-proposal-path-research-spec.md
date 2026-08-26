@@ -1,6 +1,6 @@
 # Cobalt Independent-Operator Proposal Path Research Specification
 
-**Status:** Locked on 2026-08-25 — decision: reinstate the independent-operator gate as its own mandatory milestone
+**Status:** Text Improvement Harness full gate passed on 2026-08-26 — average 88.73/100 (GPT 91.80, Fable 86.40, GLM 88.00; five runs per lane; run group `cobalt-independent-operator-proposal-path-research-spec`); scored content SHA-256 `91ad402672653f3e76489f7e7de719d5597553111985d939a9e90b52a1edec89`; Task Node lock pending the operator's decision
 **Date:** 2026-08-25
 **Decision owner:** Post Fiat
 **Prior work:** [Cobalt Activation Research Specification](cobalt-activate-or-retire-research-spec.md), [Cobalt Adversarial Verification Research Specification](cobalt-adversarial-verification-research-spec.md), [independent-operator onboarding contract](https://github.com/postfiatorg/postfiatl1v2/blob/main/benchmarks/cobalt-independent-operators/onboarding-contract.json)
