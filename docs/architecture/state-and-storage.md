@@ -48,6 +48,31 @@ flowchart LR
   ValidatorRegistry --> GovernanceReplay[Governance replay checks]
 ```
 
+## Bounded append and ordered-history candidate
+
+The active storage-scaling milestone replaces synchronous full-prefix JSONL
+verification with authenticated v2 tail checkpoints. A normal append verifies
+the node-keyed checkpoint and at most one crash-suffix record; explicit audit,
+index rebuild, migration, and replay retain the full-prefix verifier.
+
+For new chains that set an explicit ordered-history v2 activation height, a
+domain-separated append-only accumulator and authenticated fixed-slot index
+replace full ordered-batch list scans in proposal construction, validation, and
+state commitment. Legacy heights retain the exact list-based state root. The
+index is derived from canonical history and can be rebuilt offline with:
+
+```bash
+postfiat-node ordered-history-index-rebuild --data-dir PATH --offline-confirmed
+```
+
+This is an undeployed development candidate, not the selected production store.
+Synthetic counters are bounded through height 5,000, but the fixed bitmap has a
+high constant cost and the six-validator finality, exact replay, full tamper,
+and clone-migration gates remain open. See the
+[active milestone](../plans/active/storage-scaling-milestone.md) and
+[development evidence](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling). Public
+testnet remains blocked.
+
 ## Partial History
 
 Validators can have history roles. Full archive behavior and retained-history

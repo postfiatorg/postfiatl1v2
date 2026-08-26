@@ -2,8 +2,8 @@
 
 PostFiat is an XRP-style authority-validator Layer 1 rebuilt around Rust,
 post-quantum authorization, versioned validator governance, Orchard/Halo2
-privacy, fixed supply, fee burn, and no native validator reward schedule. An
-the final authenticated `postfiat-wan-devnet-2` E5 observation ran from
+privacy, fixed supply, fee burn, and no native validator reward schedule. The
+final authenticated `postfiat-wan-devnet-2` E5 observation ran from
 `2026-08-26T06:34:55Z` through `06:35:50Z` with all six validators converged
 at height 924 and all validator, RPC, and shadow services active. Cobalt remained
 active for the bounded validator-trust lane after the signed rollback/return
@@ -41,6 +41,7 @@ they are not listed one-by-one in the primary navigation.
 | --- | --- | --- |
 | A666 primary market | Mainnet components and full economic loop are functionally proven; resident private swaps remain limited availability and production GA is closed. Multi-asset reserve facilities are proposed, not deployed. | [A666 current state](status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md), [deferred production hardening](deferred-plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md), [deferred reserve redemption system](deferred-plans/NAVCOIN-RESERVE-REDEMPTION-SYSTEM-SPEC-20260730.md) |
 | Core chain | Rust L1 with accounts, signed transfers, fees, blocks, receipts, deterministic replay, and state roots. | [Architecture](architecture/overview.md) |
+| Storage scaling | An undeployed bounded-tail and ordered-history candidate has synthetic fixed-work evidence through height 5,000. Six-validator finality, exact replay, tamper, migration, and interface gates remain open; public testnet is blocked. | [Active milestone](plans/active/storage-scaling-milestone.md), [State and Storage](architecture/state-and-storage.md) |
 | Finality | Versioned certified ordering: legacy single-view mode and activated consensus v2 with durable prepare/precommit, timeout certificates, and proposer rotation. | [Finality](architecture/finality.md) |
 | Settlement lanes | Consensus transactions, W6 dual-authorized atomic swap, FastPay payments, FastSwap DvP, and Asset-Orchard private settlement have distinct finality and recovery boundaries. | [Settlement Lanes](architecture/settlement-lanes.md) |
 | Governance | The final E5 audit verified Cobalt ratifying validator-registry and trust-graph changes at height 924; unrelated scopes and the current proposal/authorization custody remain Foundation-administered. | [Current State](status/chain-state-current.md), [Validator Registry](governance/validator-registry.md) |
@@ -71,9 +72,10 @@ The implementation is a controlled-testnet L1. It is built to prove protocol
 correctness, replayability, validator behavior, wallet/RPC behavior, privacy
 flows, and operator runbooks before public launch.
 
-Public launch adds independent placement evidence, longer mixed soaks, external
-privacy review, production public write-edge policy, and custodian workflows.
-Those are launch tasks. They do not erase the controlled-testnet code and
+Public launch requires the active storage-scaling milestone to pass, plus
+independent placement evidence, longer mixed soaks, external privacy review,
+production public write-edge policy, and custodian workflows. Those are launch
+tasks. They do not erase the controlled-testnet code and
 evidence that already exist.
 
 ## Self-Hosted URL

@@ -101,6 +101,7 @@ nav:
       - Python Example: business/navcoin-python-example.md
       - Archive Summary: evidence/navcoin-archive-summary.md
   - Plans:
+      - Active Storage Scaling: plans/active/storage-scaling-milestone.md
       - Completed Cobalt Adversarial Verification: plans/completed/cobalt-adversarial-verification-milestone.md
       - Completed Cobalt Activation: plans/completed/cobalt-activate-or-retire-milestone.md
       - Completed Cobalt Milestone: plans/completed/cobalt-governance-milestone.md
@@ -108,6 +109,7 @@ nav:
       - Completed Capability Restoration: plans/completed/OPEN-SOURCE-CAPABILITY-RESTORATION-PLAN-20260716.md
   - Handoffs:
       - Standard: handoffs/README.md
+      - Storage Scaling Implementation: handoffs/2026-08-26___postfiatchad__storage_scaling_implementation.md
       - Evidence Review And Next Specifications: handoffs/2026-08-26___dravlic__evidence_review_and_next_specs.md
       - Cobalt Adversarial Verification Final Handoff: handoffs/2026-08-26___postfiatchad__cobalt_adversarial_verification.md
       - Cobalt Post-Activation Review: handoffs/2026-08-25___dravlic__cobalt_post_activation_review.md

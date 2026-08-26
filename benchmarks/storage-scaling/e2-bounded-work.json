@@ -1,0 +1,163 @@
+{
+  "schema": "postfiat-storage-scaling-development-evidence-v1",
+  "status": "PUBLIC_TESTNET_BLOCKED",
+  "captured_at": "2026-08-26T16:58:24Z",
+  "source_commit": "dfd0b9f11108b0b773d1e02bebae71685864228e",
+  "build": {
+    "profile": "test-unoptimized",
+    "rustc": "1.95.0 (59807616e 2026-04-14)",
+    "target": "x86_64-unknown-linux-gnu"
+  },
+  "host": {
+    "kernel": "Linux 7.0.0-29-generic x86_64",
+    "filesystem": "ext4",
+    "device": "/dev/sda1"
+  },
+  "scope": {
+    "claim": "Development-only controlling-complexity evidence for bounded JSONL append and ordered-history index work through synthetic height 5000.",
+    "not_proven": [
+      "six-validator finality p95 at any height",
+      "height-5000 versus height-50 finality within 10 percent",
+      "byte-identical replay of the 915-block archive and authenticated height-924 history",
+      "the complete original and extended E3 tamper corpus",
+      "disposable-clone migration, activation, rollback, restart, and catch-up",
+      "live deployment"
+    ]
+  },
+  "bounded_jsonl": {
+    "command": "cargo test -p postfiat-storage --locked bounded_jsonl_work_is_constant_through_height_5000 -- --ignored --nocapture",
+    "fixture": "Authenticated receipt JSONL streams synthesized with the production envelope and v2 checkpoint code; one normal append measured at each height.",
+    "rows": [
+      {
+        "height": 50,
+        "append_ms": 1.649762,
+        "checkpoint_bytes_read": 595,
+        "legacy_prefix_bytes_read": 0,
+        "legacy_prefix_records_verified": 0,
+        "crash_suffix_bytes_read": 0,
+        "crash_suffix_records_verified": 0
+      },
+      {
+        "height": 100,
+        "append_ms": 0.812156,
+        "checkpoint_bytes_read": 596,
+        "legacy_prefix_bytes_read": 0,
+        "legacy_prefix_records_verified": 0,
+        "crash_suffix_bytes_read": 0,
+        "crash_suffix_records_verified": 0
+      },
+      {
+        "height": 500,
+        "append_ms": 0.81477,
+        "checkpoint_bytes_read": 597,
+        "legacy_prefix_bytes_read": 0,
+        "legacy_prefix_records_verified": 0,
+        "crash_suffix_bytes_read": 0,
+        "crash_suffix_records_verified": 0
+      },
+      {
+        "height": 1000,
+        "append_ms": 0.819237,
+        "checkpoint_bytes_read": 598,
+        "legacy_prefix_bytes_read": 0,
+        "legacy_prefix_records_verified": 0,
+        "crash_suffix_bytes_read": 0,
+        "crash_suffix_records_verified": 0
+      },
+      {
+        "height": 5000,
+        "append_ms": 0.831685,
+        "checkpoint_bytes_read": 599,
+        "legacy_prefix_bytes_read": 0,
+        "legacy_prefix_records_verified": 0,
+        "crash_suffix_bytes_read": 0,
+        "crash_suffix_records_verified": 0
+      }
+    ]
+  },
+  "ordered_history_index": {
+    "command": "cargo test -p postfiat-storage --locked indexed_work_is_bounded_through_height_5000 -- --ignored --nocapture",
+    "fixture": "Authenticated ordered-batch state at each height, deterministic offline index rebuild, then one proposal lookup/accumulator update and one durable index append.",
+    "fixed_limits": {
+      "slot_count": 4194304,
+      "probe_limit": 64,
+      "bitmap_payload_bytes": 524288
+    },
+    "rows": [
+      {
+        "height": 50,
+        "rebuild_ms": 389.891919,
+        "proposal_lookup_and_accumulator_ms": 328.373446,
+        "index_append_ms": 653.989121,
+        "bitmap_bytes_read": 2099074,
+        "bitmap_bytes_written": 1049537,
+        "slots_read": 0,
+        "slots_written": 1,
+        "legacy_prefix_bytes_read": 0,
+        "legacy_prefix_records_verified": 0
+      },
+      {
+        "height": 100,
+        "rebuild_ms": 389.684505,
+        "proposal_lookup_and_accumulator_ms": 327.962867,
+        "index_append_ms": 641.572452,
+        "bitmap_bytes_read": 2099082,
+        "bitmap_bytes_written": 1049541,
+        "slots_read": 0,
+        "slots_written": 1,
+        "legacy_prefix_bytes_read": 0,
+        "legacy_prefix_records_verified": 0
+      },
+      {
+        "height": 500,
+        "rebuild_ms": 605.591878,
+        "proposal_lookup_and_accumulator_ms": 325.865731,
+        "index_append_ms": 639.324148,
+        "bitmap_bytes_read": 2099082,
+        "bitmap_bytes_written": 1049541,
+        "slots_read": 0,
+        "slots_written": 1,
+        "legacy_prefix_bytes_read": 0,
+        "legacy_prefix_records_verified": 0
+      },
+      {
+        "height": 1000,
+        "rebuild_ms": 885.221411,
+        "proposal_lookup_and_accumulator_ms": 321.071502,
+        "index_append_ms": 641.915299,
+        "bitmap_bytes_read": 2099090,
+        "bitmap_bytes_written": 1049544,
+        "slots_read": 0,
+        "slots_written": 1,
+        "legacy_prefix_bytes_read": 0,
+        "legacy_prefix_records_verified": 0
+      },
+      {
+        "height": 5000,
+        "rebuild_ms": 3086.37484,
+        "proposal_lookup_and_accumulator_ms": 327.666288,
+        "index_append_ms": 631.413445,
+        "bitmap_bytes_read": 2099090,
+        "bitmap_bytes_written": 1049545,
+        "slots_read": 0,
+        "slots_written": 1,
+        "legacy_prefix_bytes_read": 0,
+        "legacy_prefix_records_verified": 0
+      }
+    ]
+  },
+  "verification": {
+    "commands": [
+      "cargo test -p postfiat-storage --locked",
+      "cargo test -p postfiat-node --lib --locked replicated_state_activation",
+      "cargo test -p postfiat-node --bin postfiat-node --locked ordered_history_index_rebuild_requires_explicit_offline_confirmation",
+      "cargo check -p postfiat-node --all-targets --locked"
+    ],
+    "results": [
+      "postfiat-storage: 51 passed, 0 failed, 2 ignored manual evidence tests",
+      "replicated_state_activation: 3 passed, 0 failed",
+      "ordered-history rebuild CLI guard: 1 passed, 0 failed",
+      "postfiat-node all-target check: passed"
+    ]
+  }
+}

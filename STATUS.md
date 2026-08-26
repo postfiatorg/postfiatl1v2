@@ -45,6 +45,7 @@ themselves deployed without a new fleet receipt.
 - Orchard proof generation is CPU-intensive; not yet optimized for production latency.
 - Governance agent gates are implemented but not all are exercised in live testnet.
 - WAN devnet fleet operations require manual operator setup.
+- E4 exposed near-linear finality growth with chain height in the deployed JSON/JSONL lineage. Current source has an undeployed bounded-work candidate, but exact replay, full tamper recovery, six-validator height-5,000 finality, and clone migration are not yet qualified; public testnet remains blocked.
 
 ## Not Yet Implemented
 

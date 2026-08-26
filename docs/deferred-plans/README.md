@@ -9,4 +9,8 @@ requires an explicit decision and an updated active milestone.
 - StakeHub deprecation and public reserve verification
 - Asset-Orchard proxy Phase 1a extension
 - Transaction improvement process
-- Storage scaling: per-height append cost grows with chain length in the JSON/JSONL store; finality latency on long chains degrades linearly; needs an indexed store or bounded tail verification before any public testnet.
+
+Storage scaling was reactivated on 2026-08-26 and is tracked in the
+[active milestone](../plans/active/storage-scaling-milestone.md). Public testnet
+remains blocked while its replay, finality, tamper, and migration gates are
+open.
