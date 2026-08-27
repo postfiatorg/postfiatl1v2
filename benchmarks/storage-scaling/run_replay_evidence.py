@@ -121,11 +121,17 @@ def git_clean() -> bool:
 def run_json(command: list[str]) -> dict[str, Any]:
     completed = subprocess.run(
         command,
-        check=True,
+        check=False,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
     )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip().splitlines()
+        message = detail[0] if detail else "no diagnostic emitted"
+        raise RuntimeError(
+            f"{Path(command[0]).name} {command[1]} failed: {message}"
+        )
     try:
         value = json.loads(completed.stdout)
     except json.JSONDecodeError as error:
@@ -138,13 +144,19 @@ def run_json(command: list[str]) -> dict[str, Any]:
 
 
 def run_checked(command: list[str]) -> None:
-    subprocess.run(
+    completed = subprocess.run(
         command,
-        check=True,
+        check=False,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
         text=True,
     )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip().splitlines()
+        message = detail[0] if detail else "no diagnostic emitted"
+        raise RuntimeError(
+            f"{Path(command[0]).name} {command[1]} failed: {message}"
+        )
 
 
 def replay_source(

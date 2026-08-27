@@ -177,6 +177,11 @@ pub fn rebuild_transactional_storage(
         ));
     }
     let receipts_by_block = persisted_receipts_by_block(&genesis, &blocks, &receipts)?;
+    let canonical_receipts = receipts_by_block
+        .iter()
+        .flatten()
+        .cloned()
+        .collect::<Vec<_>>();
     let ledger = source.read_ledger()?;
     let governance = source.read_governance()?;
     let shielded = source.read_shielded()?;
@@ -366,7 +371,7 @@ pub fn rebuild_transactional_storage(
         &genesis,
         &source_tip,
         &blocks,
-        &receipts,
+        &canonical_receipts,
         &archive,
         &ordered_batches,
         &ordered_history,
@@ -382,9 +387,12 @@ pub fn rebuild_transactional_storage(
     let transactional_manifest =
         build_transactional_migration_manifest(&target, &genesis, &source_tip, logical_report)?;
     if manifest != transactional_manifest {
+        let fields = migration_manifest_mismatch_fields(&manifest, &transactional_manifest)?;
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "storage_migration_rebuilt_logical_mismatch: canonical transactional records differ from the authenticated legacy source",
+            format!(
+                "storage_migration_rebuilt_logical_mismatch: canonical transactional records differ from the authenticated legacy source; fields={fields}"
+            ),
         ));
     }
     manifest.migration_packet_root = migration_manifest_root(&manifest)?;
@@ -447,6 +455,10 @@ fn verify_existing_transactional_generation(
     let logical_store_report = target.verify_logical_integrity()?;
     let blocks = source.read_blocks()?;
     let receipts = source.read_receipts()?;
+    let canonical_receipts = persisted_receipts_by_block(genesis, &blocks, &receipts)?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
     let archive = source.read_batch_archive()?;
     let ordered_batches = source.read_ordered_batches()?;
     let ledger = source.read_ledger()?;
@@ -469,7 +481,7 @@ fn verify_existing_transactional_generation(
         genesis,
         source_tip,
         &blocks,
-        &receipts,
+        &canonical_receipts,
         &archive,
         &ordered_batches,
         &ordered_history,
@@ -492,9 +504,14 @@ fn verify_existing_transactional_generation(
     transactional_manifest.migration_packet_root =
         migration_manifest_root(&transactional_manifest)?;
     if manifest != expected_manifest || manifest != transactional_manifest {
+        let source_fields = migration_manifest_mismatch_fields(&manifest, &expected_manifest)?;
+        let transactional_fields =
+            migration_manifest_mismatch_fields(&manifest, &transactional_manifest)?;
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "storage_migration_manifest_logical_mismatch: manifest roots differ from the authenticated source or canonical transactional export",
+            format!(
+                "storage_migration_manifest_logical_mismatch: manifest roots differ from the authenticated source or canonical transactional export; source_fields={source_fields}; transactional_fields={transactional_fields}"
+            ),
         ));
     }
 
@@ -737,6 +754,35 @@ fn build_transactional_migration_manifest(
         &validator_registry,
         logical_store_report,
     )
+}
+
+fn migration_manifest_mismatch_fields(
+    expected: &StorageMigrationManifestV1,
+    observed: &StorageMigrationManifestV1,
+) -> io::Result<String> {
+    let expected = serde_json::to_value(expected).map_err(invalid_data)?;
+    let observed = serde_json::to_value(observed).map_err(invalid_data)?;
+    let expected = expected.as_object().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "storage migration manifest did not encode as an object",
+        )
+    })?;
+    let observed = observed.as_object().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "transactional migration manifest did not encode as an object",
+        )
+    })?;
+    let fields = expected
+        .iter()
+        .filter_map(|(field, value)| (observed.get(field) != Some(value)).then_some(field.as_str()))
+        .collect::<Vec<_>>();
+    Ok(if fields.is_empty() {
+        "none".to_owned()
+    } else {
+        fields.join(",")
+    })
 }
 
 fn logical_root<T: Serialize + ?Sized>(domain: &str, value: &T) -> io::Result<String> {
