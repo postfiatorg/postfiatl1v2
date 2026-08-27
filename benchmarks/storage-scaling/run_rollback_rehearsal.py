@@ -184,6 +184,7 @@ def main() -> int:
     (root / "snapshots").mkdir()
     (root / "receipts").mkdir()
     (root / "normalized").mkdir()
+    (root / "corpora").mkdir()
     base_port, rpc_base_port = CAMPAIGN.SHARED.find_ports()
     seed, height_one, wallet_key, wallet_address, recipient, topology = (
         CAMPAIGN.setup_seed(node_bin, root, base_port, rpc_base_port)
@@ -192,6 +193,18 @@ def main() -> int:
     current_binary = binary_identity(node_bin, seed, current_revision)
     rollback_binary = binary_identity(rollback_bin, seed, rollback_revision)
 
+    current_corpus = root / "corpora" / "current-post-activation.json"
+    CAMPAIGN.create_signed_transfer_corpus(
+        node_bin=node_bin,
+        source_snapshot=height_one,
+        wallet_key=wallet_key,
+        wallet_address=wallet_address,
+        recipient=recipient,
+        count=1,
+        output_file=current_corpus,
+        logs=root / "logs",
+        label="current-post-activation",
+    )
     current_result, height_two = CAMPAIGN.run_rounds(
         node_bin=node_bin,
         root=root,
@@ -201,8 +214,21 @@ def main() -> int:
         wallet_key=wallet_key,
         wallet_address=wallet_address,
         recipient=recipient,
+        signed_transfer_corpus=current_corpus,
         label="current-post-activation",
         rounds=1,
+    )
+    rollback_corpus = root / "corpora" / "compatible-rollback.json"
+    CAMPAIGN.create_signed_transfer_corpus(
+        node_bin=rollback_bin,
+        source_snapshot=height_two,
+        wallet_key=wallet_key,
+        wallet_address=wallet_address,
+        recipient=recipient,
+        count=1,
+        output_file=rollback_corpus,
+        logs=root / "logs",
+        label="compatible-rollback",
     )
     rollback_result, height_three = CAMPAIGN.run_rounds(
         node_bin=rollback_bin,
@@ -213,8 +239,21 @@ def main() -> int:
         wallet_key=wallet_key,
         wallet_address=wallet_address,
         recipient=recipient,
+        signed_transfer_corpus=rollback_corpus,
         label="compatible-rollback",
         rounds=1,
+    )
+    forward_corpus = root / "corpora" / "current-forward-recovery.json"
+    CAMPAIGN.create_signed_transfer_corpus(
+        node_bin=node_bin,
+        source_snapshot=height_three,
+        wallet_key=wallet_key,
+        wallet_address=wallet_address,
+        recipient=recipient,
+        count=1,
+        output_file=forward_corpus,
+        logs=root / "logs",
+        label="current-forward-recovery",
     )
     forward_result, _height_four = CAMPAIGN.run_rounds(
         node_bin=node_bin,
@@ -225,6 +264,7 @@ def main() -> int:
         wallet_key=wallet_key,
         wallet_address=wallet_address,
         recipient=recipient,
+        signed_transfer_corpus=forward_corpus,
         label="current-forward-recovery",
         rounds=1,
     )
