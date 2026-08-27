@@ -5,7 +5,7 @@
 **Decision owner:** Post Fiat
 **Research specification:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 **Implementation specification:** [Storage Scaling Fix](../../architecture/storage-scaling-fix-spec.md)
-**Implementation source:** fb2bf1ccdbf0ca066cc26b7b18997fd50edd13e5
+**Implementation source:** 70245c708234cf80ed3b9081b0de15fb165b7e4b
 
 The operator directly authorized implementation on 2026-08-26 and explicitly
 instructed this session not to use Task Node. This milestone records that
@@ -24,6 +24,28 @@ operator-directed exception to the repository's normal Task Node workflow.
   source/binary/snapshot identities, variance, and model residuals.
 
 Evidence: [development packet](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling).
+
+The paired release workflow is implemented on clean source `70245c70`. It
+runs the frozen legacy source `8cc7d15e`, bounded-JSONL source `dfd0b9f1`,
+and selected source under qualification with their exact owning release
+binaries. It binds one shared six-validator public-key identity, deterministic
+accounts and transfer semantics, host allocation, storage device, lane-native
+authenticated snapshots, literal receipts, full latency distributions,
+constant/logarithmic/linear cost models, and raw resource samples. Packet
+verification independently reconstructs CPU, RSS, disk, process I/O, host load,
+memory, and network totals and refuses any foreground benchmark process with
+fewer than two samples.
+
+A clean offline development smoke captured at `2026-08-27T09:43:18Z` passed
+one measured round at height 2 in all three lanes. Its report SHA-256 is
+`5f7a30b6a3cc29e2956c308a8615e7b4ba6d42400b5b6abb090440783325cd99`;
+legacy, bounded, and selected binary SHA-256 identities are
+`d2a91b11…f289b1ee`, `ab2e84b3…d1166679`, and
+`dfd71a02…532da25b`. The report explicitly records
+`evidence_eligible: false`, `offline: true`, `network_contacted: false`,
+and `devnet_queried_or_mutated: false`. This proves the paired mechanics and
+fail-closed evidence binding only; it does not close the five-height E1 window,
+either E3 latency ratio, or the height-relationship gate.
 
 ## E2 — bounded append and proposal history
 
@@ -125,6 +147,15 @@ Primary code:
   wallet_to_finality_ms are each at most 110% of height-50 p95.
 - [ ] Prove no material synchronous stage retains a positive linear
   relationship with height.
+
+Paired qualification code:
+
+- benchmarks/storage-scaling/run_paired_campaign.py
+- benchmarks/storage-scaling/run_campaign.py
+- benchmarks/storage-scaling/package_packet.py
+- python/postfiat_rpc/storage_scaling.py
+- python/tests/test_storage_scaling.py
+- python/tests/test_storage_scaling_packager.py
 
 ## E4 — migration and rollback rehearsal
 
