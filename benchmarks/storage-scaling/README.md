@@ -28,8 +28,11 @@ packet explicitly disclose that boundary and bind all three source revisions
 and binary hashes. The lanes use the same validator keys, deterministic wallet
 and recipient, semantic transfer input, six-validator loopback topology shape,
 full-vote policy, CPU affinity, host, filesystem device, resource sampler, and
-height/window cardinality. Snapshots are authenticated and identical across the
-five windows for a lane and height, but they are lane-native rather than
+height/window cardinality. All lanes use the same 900-second fail-closed
+request/server timeout so the known slow legacy curve can still be measured at
+height 5,000; timeout time is not reported as latency. Snapshots are
+authenticated and identical across the five windows for a lane and height, but
+they are lane-native rather than
 byte-identical across retired storage formats. ML-DSA signature randomness also
 means independently executed blocks are not byte-identical across lanes.
 

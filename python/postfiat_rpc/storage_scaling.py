@@ -56,6 +56,7 @@ PERFORMANCE_STORAGE_BEHAVIORS = {
 }
 RESOURCE_SAMPLE_SCHEMA = "postfiat-storage-resource-samples-v1"
 RESOURCE_SAMPLE_TARGET_INTERVAL_MS = 100
+PERFORMANCE_QUALIFICATION_TIMEOUT_MS = 900_000
 PERFORMANCE_RESOURCE_FIELDS = (
     "cpu_ticks",
     "peak_rss_kib",
@@ -1187,6 +1188,7 @@ def _verify_performance_lane(
                 "validators": 6,
                 "rounds": 50,
                 "vote_policy": "full",
+                "timeout_ms": PERFORMANCE_QUALIFICATION_TIMEOUT_MS,
                 "amount": 10,
                 "wallet_address": lane["wallet_address"],
                 "recipient": lane["recipient_address"],
@@ -1366,6 +1368,8 @@ def _verify_performance(
         _fail("performance window cardinality differs from the specification")
     if performance.get("lane_order") != list(PERFORMANCE_LANES):
         _fail("performance lane order differs from the closed comparison set")
+    if performance.get("timeout_ms") != PERFORMANCE_QUALIFICATION_TIMEOUT_MS:
+        _fail("performance timeout policy differs from the closed envelope")
     lanes = _object(performance.get("lanes"), "performance lanes")
     if set(lanes) != set(PERFORMANCE_LANES):
         _fail("performance report does not contain exactly three lanes")
@@ -1405,6 +1409,7 @@ def _verify_performance(
         "same_validator_keys",
         "same_height_window_cardinality",
         "same_full_vote_policy",
+        "same_timeout_policy",
         "same_host_allocation",
         "same_storage_medium",
         "same_wallet_and_recipient_accounts",

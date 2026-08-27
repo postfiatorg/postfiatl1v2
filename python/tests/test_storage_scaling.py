@@ -195,6 +195,7 @@ def _passing_packet(packet: Path) -> None:
                             "validators": 6,
                             "rounds": 50,
                             "vote_policy": "full",
+                            "timeout_ms": 900_000,
                             "amount": 10,
                             "wallet_address": "pf-test-wallet",
                             "recipient": "pf-test-recipient",
@@ -1093,6 +1094,7 @@ def _passing_packet(packet: Path) -> None:
             "validator_count": 6,
             "windows_per_height": 5,
             "rounds_per_window": 50,
+            "timeout_ms": 900_000,
             "lane_order": ["legacy-jsonl", "bounded-jsonl", "selected-indexed"],
             "lanes": performance_lanes,
             "legacy_height_50_baseline": {
@@ -1126,6 +1128,7 @@ def _passing_packet(packet: Path) -> None:
                 "same_validator_keys": True,
                 "same_height_window_cardinality": True,
                 "same_full_vote_policy": True,
+                "same_timeout_policy": True,
                 "same_host_allocation": True,
                 "same_storage_medium": True,
                 "same_wallet_and_recipient_accounts": True,
@@ -1399,6 +1402,21 @@ class StorageScalingVerifierTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 StorageScalingVerificationError,
                 "did not share one snapshot",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_timeout_policy_change(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def change_timeout(performance: dict[str, object]) -> None:
+                performance["timeout_ms"] = 90_000
+
+            _rewrite_performance(packet, change_timeout)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "timeout policy differs",
             ):
                 verify_packet(packet)
 

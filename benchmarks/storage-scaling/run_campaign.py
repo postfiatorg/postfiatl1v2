@@ -35,6 +35,7 @@ SELECTED_STORAGE_LANE = "selected-indexed"
 HISTORICAL_STORAGE_LANES = {"legacy-jsonl", "bounded-jsonl"}
 RESOURCE_SAMPLE_SCHEMA = "postfiat-storage-resource-samples-v1"
 RESOURCE_SAMPLE_TARGET_INTERVAL_MS = 100
+QUALIFICATION_TIMEOUT_MS = 900_000
 MAX_PROPOSAL_PAGE_READS_PER_ROUND = 64
 MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND = 64
 MAX_APPLY_PAGE_WRITES_PER_VALIDATOR_ROUND = 32
@@ -646,6 +647,7 @@ def run_rounds(
             label,
             index,
             restart=restart,
+            timeout_ms=QUALIFICATION_TIMEOUT_MS,
         )
         with services_lock:
             services[index] = (process, process_handles)
@@ -683,6 +685,15 @@ def run_rounds(
                 foreground_pids.add(process.pid)
             try:
                 return_code = process.wait()
+            except BaseException:
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+                raise
             finally:
                 ended_monotonic_ns = time.monotonic_ns()
                 with services_lock:
@@ -737,6 +748,7 @@ def run_rounds(
                 recipient,
                 1,
                 round_lane,
+                timeout_ms=QUALIFICATION_TIMEOUT_MS,
             )
             if selected_transactional:
                 command.extend(

@@ -517,6 +517,7 @@ def main() -> int:
         "validator_count": BASE.VALIDATORS,
         "windows_per_height": 1 if args.development_smoke else BASE.WINDOWS_PER_HEIGHT,
         "rounds_per_window": 1 if args.development_smoke else BASE.ROUNDS_PER_WINDOW,
+        "timeout_ms": BASE.QUALIFICATION_TIMEOUT_MS,
         "lane_order": list(LANE_ORDER),
         "lanes": lanes,
         "legacy_height_50_baseline": baseline,
@@ -535,6 +536,7 @@ def main() -> int:
             "same_validator_keys": len(validator_key_sets) == 1,
             "same_height_window_cardinality": True,
             "same_full_vote_policy": True,
+            "same_timeout_policy": True,
             "same_host_allocation": len(
                 {
                     tuple(lane["environment"]["cpu_affinity"])

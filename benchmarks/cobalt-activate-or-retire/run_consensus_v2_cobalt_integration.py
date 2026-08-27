@@ -257,6 +257,7 @@ def start_validator(
     lane: str,
     index: int,
     restart: int = 0,
+    timeout_ms: int = 90_000,
 ) -> tuple[subprocess.Popen[bytes], tuple[Any, Any]]:
     node_id = f"validator-{index}"
     data_dir = nodes / node_id
@@ -287,7 +288,7 @@ def start_validator(
             "--max-connections",
             "10000",
             "--timeout-ms",
-            "90000",
+            str(timeout_ms),
         ],
         stdout=stdout_handle,
         stderr=stderr_handle,
@@ -350,6 +351,7 @@ def benchmark_command(
     recipient: str,
     rounds: int,
     lane: str,
+    timeout_ms: int = 90_000,
 ) -> list[str]:
     lane_dir = root / lane
     return [
@@ -382,7 +384,7 @@ def benchmark_command(
         "--build-mode",
         "release",
         "--timeout-ms",
-        "90000",
+        str(timeout_ms),
         "--send-retries",
         "16",
         "--retry-backoff-ms",
