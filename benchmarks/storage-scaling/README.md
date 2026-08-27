@@ -46,8 +46,8 @@ corpus. The source revision, binary SHA-256, snapshot digest, signed transaction
 bytes, host
 allocation, storage device, full-vote policy, and 900-second fail-closed timeout
 are identical; only the authenticated backend mode changes. The height-5,000
-snapshot is built through one selected transactional advance, never through a
-legacy height-5,000 control.
+snapshot is built through selected transactional advance chunks, never through
+a legacy height-5,000 control.
 
 The runner atomically checkpoints every advance chunk, frozen height input, and
 completed window. `--resume` rehashes and refuses any changed source, binary,
@@ -55,11 +55,12 @@ runner, topology, validator identities, snapshot, corpus, timeout, completed
 report, resource stream, receipt, or result snapshot. A partial unit is moved
 to an `interrupted/` quarantine before retry, not overwritten. An exclusive
 campaign lock prevents concurrent resume. The release profile has a four-hour
-aggregate wall-clock limit. The height-50 to height-5,000 advance is one
-independently verifiable unit so the harness does not repeatedly replay-import
-an ever-larger full-history snapshot between artificial checkpoints. Operators
-must additionally wrap each unattended segment in the plan's two-hour hard
-timeout; a completed unit is durable and a partial unit is quarantined.
+aggregate wall-clock limit. Advances contain at most 1,500 rounds. Each
+completed chunk freezes both its portable snapshot and a content-hashed
+prepared fleet; the next chunk restores a verified copy at the canonical redb
+path instead of replay-importing six ever-larger histories. Operators must
+additionally wrap each unattended segment in the plan's two-hour hard timeout;
+a completed unit is durable and a partial unit is quarantined.
 
 The report derives the height-50 legacy baseline from raw observations,
 recomputes p50/p95/p99/max/mean/standard deviation, publishes per-window

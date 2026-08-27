@@ -6,7 +6,7 @@
 
 **Decision owner:** Post Fiat
 
-**Candidate lineage:** transactional `redb` source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`; release binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; evidence-runner lineage through `6d7cd3e9`
+**Candidate lineage:** transactional `redb` source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`; release binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; evidence-runner lineage through `81c35d5d`
 
 **Research basis:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 
@@ -128,7 +128,7 @@ independent local gates continue.
 | G1 — candidate freeze | **CANDIDATE PASS / G4 INPUT FREEZE ACTIVE** | Keep source `ae658441` and binary `891b…bf4` unchanged; G4 freezes its height-50 and height-5,000 materials. | A candidate source or binary change restarts G1–G4; evidence-runner-only changes are separately hash-bound. |
 | G2 — safety | **LOCAL PASS / PACKET BINDING OPEN** | Preserve the passing tamper and rollback receipts; commit only redaction-safe packet material after G4. | Do not rerun unless the candidate binary changes or independent verification rejects a receipt. |
 | G3 — exact replay | **HEIGHT 915 PASS / HEIGHT 924 WAITING FOR AUTHORIZED INPUT** | Preserve the passing 915 receipt. Run height 924 only from a separately authorized copy. | Never wait idle for the copy; finish G4 without it, but do not claim offline qualification. |
-| G4 — scaling | **IN PROGRESS — RUNNER REMEDIATED** | Restart the three-row selected-first matrix with runner `6d7cd3e9` and the unchanged G1 binary. | Four hours aggregate and two hours per unattended segment; stop on a selected-path failure or `TIME_BUDGET_EXCEEDED`. |
+| G4 — scaling | **IN PROGRESS — RUNNER REMEDIATED** | Restart the three-row selected-first matrix with runner `81c35d5d` and the unchanged G1 binary. | Four hours aggregate and two hours per unattended segment; stop on a selected-path failure or `TIME_BUDGET_EXCEEDED`. |
 | G5 — offline packet | **BLOCKED BY G1–G4** | Package only after every preceding evidence gate passes. | No qualification claim until the offline verifier passes the complete packet. |
 | G6 — six-clone rehearsal | **DEFERRED** | Nothing until offline qualification is complete and deployment is the next real decision. | Requires separate data-copy authorization and six distinct stopped directories. |
 | G7 — Dynamic UNL handoff | **DIRECTION RECORDED / IMPLEMENTATION DEFERRED** | Preserve the recorded architecture decision only. | Spend no implementation time before the stated storage boundary or a new operator priority decision. |
@@ -305,9 +305,9 @@ in total checkpoint wall time came from replay-importing an increasingly large
 portable full-history snapshot into six new nodes between every 100-height
 unit, not from the measured transactional append path.
 
-Runner lineage `260bb990` through `6d7cd3e9` removes that evidence-harness
-bottleneck without changing the candidate binary. It builds height 5,000 in one
-bounded selected-store advance,
+Runner lineage `260bb990` through `81c35d5d` removes that evidence-harness
+bottleneck without changing the candidate binary. It builds height 5,000 in
+bounded 1,500-round selected-store chunks,
 freezes a hash-bound six-node prepared fleet, and restores a content-verified
 copy at the canonical database path for each independent selected window. The
 legacy control still imports the shared portable height-50 snapshot. The packet
@@ -319,6 +319,11 @@ The stopped height-550 run is diagnostic only and is not evidence eligible.
 The campaign report records candidate source, embedded binary source, clean
 runner-checkout revision, and exact runner file hashes as distinct provenance;
 packet assembly preserves the same separation.
+Every completed advance chunk also freezes a content-hashed prepared fleet;
+the next chunk resumes from an independently verified copy at the canonical
+database path. A controlled stop after an advance and resume passed before the
+release rerun, so no chunk is both longer than the operator limit and
+all-or-nothing.
 
 - [ ] Complete the three required rows inside the 4-hour aggregate budget.
 - [ ] Verify literal accepted receipts and six-validator agreement on height,
