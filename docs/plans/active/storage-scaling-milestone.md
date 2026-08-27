@@ -5,7 +5,7 @@
 **Decision owner:** Post Fiat
 **Research specification:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 **Implementation specification:** [Storage Scaling Fix](../../architecture/storage-scaling-fix-spec.md)
-**Implementation source:** abf746684f2a85df7fe12c8116bbad923787629c
+**Implementation source:** fb2bf1ccdbf0ca066cc26b7b18997fd50edd13e5
 
 The operator directly authorized implementation on 2026-08-26 and explicitly
 instructed this session not to use Task Node. This milestone records that
@@ -74,6 +74,14 @@ byte-identical recoveries in report SHA-256 `10d081b6…e610cb7` with
 classification `ab53b5dd…b90d3`. This closes the source-level E2 tamper gate;
 final packet publication remains open.
 
+The same closed 69-case matrix passed again from the clean current source
+`fb2bf1cc` on 2026-08-27, through the same 37 nonzero test/campaign filters,
+with no uncovered requirement and no network contact. The current tamper report
+SHA-256 is `eb278d7a…b43cc6a`; its frozen-E3 campaign and rebound-manifest
+SHA-256 identities are `96b50b37…1a74dd6` and `de7cc292…19e40ed`. Case 64 is
+bound to the clean compatible-rollback rehearsal below rather than a synthetic
+success receipt.
+
 Primary code:
 
 - crates/storage/src/transactional.rs
@@ -127,14 +135,13 @@ Primary code:
 - [x] Write the versioned side-by-side migration, signing, cancellation, and
   rollback operator workflow in the storage-scaling evidence README.
 - [x] Rehearse compatible post-activation software rollback across two distinct
-  release binaries and six disposable local validators. Source `abf74668`
-  finalized height 2, ancestor `1985cd3f` resumed the exact certified tip and
-  finalized height 3, and `abf74668` resumed the exact height-3 tip and finalized
-  height 4. All six converged with literal accepted receipts, bounded page and
-  accumulator work, and zero full-history reads. Report SHA-256:
-  `51b93be075a92053f0e5721779a115e3c66ad36c4f91b82e0ce747396de58af7`;
-  current/rollback binary SHA-256: `093d56dc…b643c940` and
-  `f3a58e2e…b4b514a2`.
+  release binaries and six disposable local validators. Clean source
+  `fb2bf1cc` finalized height 2, compatible ancestor `20c95ec2` resumed the exact
+  certified tip and finalized height 3, and `fb2bf1cc` resumed the exact
+  height-3 tip and finalized height 4. All six converged with literal accepted
+  receipts, bounded page and accumulator work, and zero full-history reads.
+  Report SHA-256: `07a67e3c…fabd746`; current/rollback binary SHA-256:
+  `4e14999a…209062a9` and `affc6bac…e9a937`.
 - [x] Rehearse side-by-side rebuild, full replay, staggered restart, activation,
   post-activation finality, pre-activation rollback, forward recovery,
   catch-up, and convergence on six disposable clones.
