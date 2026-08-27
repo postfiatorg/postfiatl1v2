@@ -5,7 +5,7 @@
 **Decision owner:** Post Fiat
 **Research specification:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 **Implementation specification:** [Storage Scaling Fix](../../architecture/storage-scaling-fix-spec.md)
-**Implementation source:** 785806bdb13c417570b6676b39b1638bdc226517
+**Implementation source:** 69f9f14c26c26c69215eb7bdd5ad45c9d1b84303
 
 The operator directly authorized implementation on 2026-08-26 and explicitly
 instructed this session not to use Task Node. This milestone records that
@@ -25,16 +25,17 @@ operator-directed exception to the repository's normal Task Node workflow.
 
 Evidence: [development packet](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling).
 
-The paired release workflow is implemented on clean source `0fdcc2b3`. It
-runs the frozen legacy source `8cc7d15e`, bounded-JSONL source `dfd0b9f1`,
-and selected source under qualification with their exact owning release
-binaries. It binds one shared six-validator public-key identity, deterministic
-accounts and transfer semantics, host allocation, storage device, lane-native
-authenticated snapshots, literal receipts, full latency distributions,
-constant/logarithmic/linear cost models, and raw resource samples. Packet
-verification independently reconstructs CPU, RSS, disk, process I/O, host load,
-memory, and network totals and refuses any foreground benchmark process with
-fewer than two samples.
+The superseded paired workflow on clean source `0fdcc2b3` ran frozen legacy
+source `8cc7d15e`, bounded-JSONL source `dfd0b9f1`, and the selected source
+with three different release binaries and lane-native snapshots. It bound one
+shared six-validator public-key identity, deterministic accounts and transfer
+semantics, host allocation, storage device, literal receipts, full latency
+distributions, constant/logarithmic/linear cost models, and raw resource
+samples. Packet verification independently reconstructed CPU, RSS, disk,
+process I/O, host load, memory, and network totals and refused any foreground
+benchmark process with fewer than two samples. The later E3 audit established
+that the different binaries and snapshots violated the locked comparison
+boundary, so all runs from that workflow are development diagnostics only.
 
 The first clean full campaign attempt used source `71e539bb`. It completed the
 legacy advance to height 50 and three complete 50-round height-50 windows;
@@ -186,11 +187,38 @@ Primary code:
 - [ ] Prove no material synchronous stage retains a positive linear
   relationship with height.
 
-The current paired runner's three-binary, lane-native-snapshot policy does not
-satisfy the locked research specification's same-binary and same-authenticated-
-snapshot requirement. The partial runs above therefore remain development
-diagnostics even aside from the verifier bug. No new full release campaign may
-start until the runner and verifier enforce the locked comparison boundary.
+Source `69f9f14c` corrects the rejected comparison boundary. One
+release binary now exposes three authenticated node-local backend modes;
+comparison configuration is excluded from snapshots and consensus artifacts.
+At each height every lane and window imports the same authenticated snapshot
+and consumes the same pre-signed transfer corpus with the same topology, keys,
+accounts, host allocation, storage device, full-vote policy, and timeout. The
+runner aborts on any cross-lane height, final-state-root, transaction-ID, or
+signed-transfer mismatch. Mode-generic telemetry now covers proposer work,
+all five remote validator reconstructions, and all six finalized applies. The
+offline verifier independently recomputes those counters from every raw
+iteration and rejects a summary mismatch.
+
+This corrects the experiment mechanics only. The full five-height clean-source
+release campaign, its two latency ratios, and its height-relationship gate
+remain open; none of the superseded three-binary observations closes them.
+
+An offline pre-commit development smoke captured at `2026-08-27T14:45:29Z`
+passed one height-2 round in all three v3 lanes. Report SHA-256:
+`be7876a7d16a53dd4ed52af773847ac4bd3537888ef1899367acdcdf818017f9`;
+release-binary SHA-256:
+`0c05184a8f9ea2ad329ce1db742fbf4fd03a7dd16751567f065576fbdbaadf0b`;
+shared source-snapshot SHA-256:
+`368d833c16c6fc65da66fb0fa313f0ab9b1086fdb628582c8927c42e08ed0335`;
+shared signed-corpus SHA-256:
+`e43c6f52727ce6fc96b9f6c637ed4e7d72464f5708a3d35b2325a6d93f0a6e89`.
+Every lane finalized height 3 at state root
+`c164d59061a85ef527c3d9cb4dc8ca0f698f4676d64252440f65eb46ec49f32738b2be7f8c0342ec563592372bd1854d`.
+All five remote reconstruction records were present per lane, and independent
+raw-counter recomputation matched each window summary. The report explicitly
+records dirty source, `evidence_eligible: false`, `offline: true`,
+`network_contacted: false`, and `devnet_queried_or_mutated: false`; it proves
+the corrected mechanics and telemetry path only.
 
 Paired qualification code:
 
