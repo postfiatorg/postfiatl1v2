@@ -900,6 +900,33 @@ def setup_seed(
     return seed, seed_snapshot, wallet_key, wallet_address, recipient, topology
 
 
+def require_release_binary_identity(
+    node_bin: Path,
+    data_dir: Path,
+    expected_source_revision: str,
+) -> dict[str, str]:
+    completed = SHARED.run(
+        [
+            str(node_bin),
+            "status",
+            "--data-dir",
+            str(data_dir),
+        ]
+    )
+    status = json.loads(completed.stdout)
+    if not isinstance(status, dict):
+        raise RuntimeError("release binary status is not a JSON object")
+    revision = str(status.get("build_git_revision", ""))
+    profile = str(status.get("build_profile", ""))
+    if revision != expected_source_revision[:8]:
+        raise RuntimeError(
+            "release binary embedded revision does not match the requested source"
+        )
+    if profile != "release":
+        raise RuntimeError("qualification binary was not built with the release profile")
+    return {"git_revision": revision, "profile": profile}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--node-bin", type=Path, required=True)
@@ -936,6 +963,11 @@ def main() -> int:
     base_port, rpc_base_port = SHARED.find_ports()
     seed, current_snapshot, wallet_key, wallet_address, recipient, topology = (
         setup_seed(node_bin, root, base_port, rpc_base_port)
+    )
+    binary_build = require_release_binary_identity(
+        node_bin,
+        seed,
+        args.expected_source_revision,
     )
 
     current_height = 1
@@ -1053,6 +1085,7 @@ def main() -> int:
         "source_revision": args.expected_source_revision,
         "node_binary_sha256": digest(node_bin),
         "node_binary": node_bin.name,
+        "node_binary_build": binary_build,
         "spec_sha3_384": hashlib.sha3_384(
             (REPO / "docs/architecture/storage-scaling-fix-spec.md").read_bytes()
         ).hexdigest(),

@@ -174,6 +174,12 @@ def replay_source(
     )
     if status.get("block_height") != height:
         raise RuntimeError(f"{source_kind} source is not at exact height {height}")
+    if status.get("build_git_revision") != revision[:8]:
+        raise RuntimeError(
+            f"{source_kind} replay binary is not built from the requested source"
+        )
+    if status.get("build_profile") != "release":
+        raise RuntimeError(f"{source_kind} replay binary is not a release build")
     if status.get("chain_id") != CONTROLLED_CHAIN_ID:
         raise RuntimeError(f"{source_kind} source is not the controlled chain")
     if status.get("genesis_hash") != CONTROLLED_GENESIS_HASH:
@@ -307,6 +313,10 @@ def replay_source(
         "logical_store_report": logical_report,
         "source_revision": revision,
         "node_binary_sha256": sha256(node_bin),
+        "node_binary_build": {
+            "git_revision": status["build_git_revision"],
+            "profile": status["build_profile"],
+        },
         "offline": True,
         "network_contacted": False,
     }
@@ -409,6 +419,7 @@ def main() -> int:
         "receipts": references,
         "source_revision": revision,
         "node_binary_sha256": sha256(node_bin),
+        "node_binary_build": authenticated["node_binary_build"],
         "offline": True,
         "network_contacted": False,
     }

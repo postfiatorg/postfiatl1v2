@@ -148,7 +148,7 @@ pub(super) fn transport_batch_listen(
         let transactional_work = apply_result
             .local_apply_breakdown
             .as_ref()
-            .and_then(|timings| timings.storage_work.transactional.clone());
+            .and_then(|timings| timings.storage_work.transactional);
         let receipts = apply_result.receipts;
         let state_after = status(NodeOptions {
             data_dir: data_dir.clone(),
@@ -321,7 +321,7 @@ fn handle_transport_batch_service_line(
             let transactional_work = result
                 .local_apply_breakdown
                 .as_ref()
-                .and_then(|timings| timings.storage_work.transactional.clone());
+                .and_then(|timings| timings.storage_work.transactional);
             transport_batch_ack(
                 topology,
                 &local_status.node_id,
@@ -3454,7 +3454,7 @@ pub(super) fn transport_peer_certified_batch_round(
                         result: "ok".to_string(),
                         vote_request_breakdown: None,
                         storage: send.ack.storage.clone(),
-                        transactional_work: send.ack.transactional_work.clone(),
+                        transactional_work: send.ack.transactional_work,
                     });
                     sends.push(send);
                 }

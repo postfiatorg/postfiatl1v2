@@ -377,8 +377,16 @@ pub fn rebuild_transactional_storage(
         &node_state,
         history_checkpoint.as_ref(),
         &validator_registry,
-        logical_report,
+        logical_report.clone(),
     )?;
+    let transactional_manifest =
+        build_transactional_migration_manifest(&target, &genesis, &source_tip, logical_report)?;
+    if manifest != transactional_manifest {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "storage_migration_rebuilt_logical_mismatch: canonical transactional records differ from the authenticated legacy source",
+        ));
+    }
     manifest.migration_packet_root = migration_manifest_root(&manifest)?;
     let logical_store_report = target.verify_and_bind_migration(&manifest.migration_packet_root)?;
     write_migration_manifest(&options.output_dir, &manifest)?;
@@ -475,10 +483,18 @@ fn verify_existing_transactional_generation(
         logical_store_report.clone(),
     )?;
     expected_manifest.migration_packet_root = migration_manifest_root(&expected_manifest)?;
-    if manifest != expected_manifest {
+    let mut transactional_manifest = build_transactional_migration_manifest(
+        &target,
+        genesis,
+        source_tip,
+        logical_store_report.clone(),
+    )?;
+    transactional_manifest.migration_packet_root =
+        migration_manifest_root(&transactional_manifest)?;
+    if manifest != expected_manifest || manifest != transactional_manifest {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "storage_migration_manifest_logical_mismatch: manifest roots differ from authenticated source or rebuilt database",
+            "storage_migration_manifest_logical_mismatch: manifest roots differ from the authenticated source or canonical transactional export",
         ));
     }
 
@@ -635,6 +651,94 @@ fn build_migration_manifest(
     })
 }
 
+fn build_transactional_migration_manifest(
+    target: &postfiat_storage::TransactionalStore,
+    genesis: &Genesis,
+    source_tip: &ChainTipState,
+    logical_store_report: postfiat_storage::transactional::LogicalIntegrityReport,
+) -> io::Result<StorageMigrationManifestV1> {
+    fn required_state<T: serde::de::DeserializeOwned>(
+        target: &postfiat_storage::TransactionalStore,
+        domain: &str,
+    ) -> io::Result<T> {
+        target.current_state(domain)?.ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "storage_migration_transactional_state_missing: `{domain}` is absent from the rebuilt generation"
+                ),
+            )
+        })
+    }
+
+    let blocks = BlockLog {
+        blocks: target.blocks_in_height_order()?,
+    };
+    let receipts = target.receipts_in_block_order()?;
+    let archive = BatchArchive {
+        batches: target.archived_batches_in_block_order()?,
+    };
+    let ordered_batches = target.ordered_batches()?;
+    let ledger = target.ledger()?.ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "storage_migration_transactional_state_missing: `ledger` is absent from the rebuilt generation",
+        )
+    })?;
+    let governance = target.governance()?.ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "storage_migration_transactional_state_missing: `governance` is absent from the rebuilt generation",
+        )
+    })?;
+    let shielded = target.shielded()?.ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "storage_migration_transactional_state_missing: `shielded` is absent from the rebuilt generation",
+        )
+    })?;
+    let bridge = target.bridge()?.ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "storage_migration_transactional_state_missing: `bridge` is absent from the rebuilt generation",
+        )
+    })?;
+    let node_state = target.node_state()?.ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "storage_migration_transactional_state_missing: `node_state` is absent from the rebuilt generation",
+        )
+    })?;
+    let validator_registry: ValidatorRegistry = required_state(target, "validator_registry")?;
+    let history_checkpoint: Option<HistoryCheckpointState> =
+        target.current_state("retained_history_checkpoint")?;
+    let mut ordered_history = postfiat_storage::OrderedHistoryCommitment::genesis(
+        &genesis.chain_id,
+        &genesis_hash(genesis),
+        genesis.protocol_version,
+    )?;
+    for batch_id in &ordered_batches {
+        ordered_history = ordered_history.append(batch_id)?;
+    }
+    build_migration_manifest(
+        genesis,
+        source_tip,
+        &blocks,
+        &receipts,
+        &archive,
+        &ordered_batches,
+        &ordered_history,
+        &ledger,
+        &governance,
+        &shielded,
+        &bridge,
+        &node_state,
+        history_checkpoint.as_ref(),
+        &validator_registry,
+        logical_store_report,
+    )
+}
+
 fn logical_root<T: Serialize + ?Sized>(domain: &str, value: &T) -> io::Result<String> {
     let encoded = serde_json::to_vec(value).map_err(invalid_data)?;
     Ok(hash_hex(domain, &encoded))
@@ -758,8 +862,9 @@ fn available_disk_bytes(path: &Path) -> io::Result<u64> {
     }
     // SAFETY: statvfs returned success and initialized the output structure.
     let stats = unsafe { stats.assume_init() };
-    (stats.f_bavail as u64)
-        .checked_mul(stats.f_frsize as u64)
+    stats
+        .f_bavail
+        .checked_mul(stats.f_frsize)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "available disk overflow"))
 }
 

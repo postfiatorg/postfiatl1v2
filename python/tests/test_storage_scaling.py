@@ -85,6 +85,10 @@ def _passing_packet(packet: Path) -> None:
                 ),
                 "source_revision": revision,
                 "node_binary_sha256": _sha256(binary),
+                "node_binary_build": {
+                    "git_revision": revision[:8],
+                    "profile": "release",
+                },
             },
         )
         replay_receipts.append(_reference(packet, path))
@@ -233,6 +237,10 @@ def _passing_packet(packet: Path) -> None:
             "receipts": replay_receipts,
             "source_revision": revision,
             "node_binary_sha256": _sha256(binary),
+            "node_binary_build": {
+                "git_revision": revision[:8],
+                "profile": "release",
+            },
         },
         "performance": {
             "schema": ARTIFACT_SCHEMAS["performance"],
@@ -241,6 +249,10 @@ def _passing_packet(packet: Path) -> None:
             "evidence_eligible": True,
             "source_revision": revision,
             "node_binary_sha256": _sha256(binary),
+            "node_binary_build": {
+                "git_revision": revision[:8],
+                "profile": "release",
+            },
             "validator_count": 6,
             "windows_per_height": 5,
             "rounds_per_window": 50,
@@ -267,6 +279,10 @@ def _passing_packet(packet: Path) -> None:
             "schema": ARTIFACT_SCHEMAS["migration"],
             "source_revision": revision,
             "node_binary_sha256": _sha256(binary),
+            "node_binary_build": {
+                "git_revision": revision[:8],
+                "profile": "release",
+            },
             "source_height": 924,
             "chain_id": "postfiat-wan-devnet-2",
             "genesis_hash": (
@@ -411,6 +427,27 @@ class StorageScalingVerifierTests(unittest.TestCase):
             _write_checksums(packet)
             with self.assertRaisesRegex(
                 StorageScalingVerificationError, "artifacts"
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_unbound_binary_build(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+            performance_path = packet / "artifacts" / "performance.json"
+            performance = json.loads(performance_path.read_text(encoding="utf-8"))
+            performance["node_binary_build"]["git_revision"] = "0" * 8
+            _write_json(performance_path, performance)
+            manifest_path = packet / MANIFEST_FILE
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["artifacts"]["performance"]["sha256"] = _sha256(
+                performance_path
+            )
+            _write_json(manifest_path, manifest)
+            _write_checksums(packet)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "embedded binary revision",
             ):
                 verify_packet(packet)
 

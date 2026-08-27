@@ -6,7 +6,7 @@
 //! serializable transaction. Consensus code must never depend on redb page
 //! layout or backend iteration order.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::fs;
 use std::io;
@@ -29,7 +29,10 @@ use crate::integrity::{macs_equal, IntegrityKey, MAC_BYTES};
 use crate::ordered_history::ORDERED_HISTORY_COMMITMENT_SCHEMA;
 use crate::{NodeStore, OrderedHistoryCommitment};
 
+mod export;
 mod fastpay_index;
+
+pub use export::CanonicalHistoryIndexEntryV1;
 
 pub const TRANSACTIONAL_BACKEND: &str = "redb";
 pub const TRANSACTIONAL_BACKEND_VERSION: &str = "4.2.0";
@@ -1673,6 +1676,26 @@ impl TransactionalStore {
             )?;
         }
         {
+            let blocks = transaction
+                .open_table(BLOCKS_BY_HEIGHT)
+                .map_err(database_error)?;
+            for height in prune.new_history_base_height.saturating_add(1)..=meta.finalized_height {
+                let block: BlockRecord = required_json_record(
+                    &blocks,
+                    BLOCKS_BY_HEIGHT_TABLE,
+                    &ordered_u64_key(height),
+                    &self.integrity_key,
+                    &self.counters,
+                )?;
+                fastpay_index::write_block_anchors(
+                    &transaction,
+                    &block,
+                    &self.integrity_key,
+                    &self.counters,
+                )?;
+            }
+        }
+        {
             let mut current_state = transaction
                 .open_table(CURRENT_STATE)
                 .map_err(database_error)?;
@@ -1839,6 +1862,7 @@ impl TransactionalStore {
         }
 
         let mut referenced_receipts = BTreeSet::<(String, u64)>::new();
+        let mut expected_fastpay_anchors = BTreeMap::<String, StoredFastPayAnchorV1>::new();
         let mut previous_block_hash: Option<String> = None;
         for height in meta.history_base_height.saturating_add(1)..=meta.finalized_height {
             let height_key = ordered_u64_key(height);
@@ -1873,6 +1897,28 @@ impl TransactionalStore {
             validate_identifier("block hash", &block.header.block_hash)?;
             validate_identifier("batch kind", &block.header.batch_kind)?;
             validate_identifier("batch id", &block.header.batch_id)?;
+            for effect in &block.fastpay_pre_state_effects {
+                effect.validate_shape().map_err(|error| {
+                    StorageError::new(
+                        StorageErrorCode::CorruptRecord,
+                        format!("canonical block {height} has an invalid FastPay effect: {error}"),
+                    )
+                })?;
+                let record = StoredFastPayAnchorV1 {
+                    schema: STORED_FASTPAY_ANCHOR_SCHEMA.to_owned(),
+                    finalized_height: height,
+                    effect: effect.clone(),
+                };
+                if expected_fastpay_anchors
+                    .insert(effect.lock_id.clone(), record)
+                    .is_some()
+                {
+                    return Err(StorageError::new(
+                        StorageErrorCode::CorruptRecord,
+                        format!("canonical block {height} duplicates a retained FastPay anchor"),
+                    ));
+                }
+            }
 
             let hash_raw = read_authenticated(
                 &block_hashes,
@@ -2012,6 +2058,90 @@ impl TransactionalStore {
                 }
             }
             previous_block_hash = Some(block.header.block_hash);
+        }
+
+        let ledger_raw = read_authenticated(
+            &current_state,
+            CURRENT_STATE_TABLE,
+            STATE_LEDGER.as_bytes(),
+            MAX_CURRENT_STATE_BYTES,
+            &self.integrity_key,
+            &self.counters,
+        )?;
+        if let Some(ledger_raw) = ledger_raw {
+            let ledger: LedgerState = decode_json(&ledger_raw)?;
+            for effect in ledger.fastpay_version_fences.iter().filter(|effect| {
+                effect.origin == postfiat_types::FastPayFenceOriginV1::Consensusless
+                    && matches!(
+                        effect.decision,
+                        postfiat_types::FastPayRecoveryDecisionV1::Confirmed { .. }
+                    )
+            }) {
+                effect.validate_shape().map_err(|error| {
+                    StorageError::new(
+                        StorageErrorCode::CorruptRecord,
+                        format!("current ledger has an invalid FastPay effect: {error}"),
+                    )
+                })?;
+                if let Some(record) = expected_fastpay_anchors.get(&effect.lock_id) {
+                    if record.effect != *effect {
+                        return Err(StorageError::new(
+                            StorageErrorCode::CorruptRecord,
+                            "retained block and current ledger FastPay effects conflict",
+                        ));
+                    }
+                    continue;
+                }
+                if meta.history_base_height == 0 {
+                    return Err(StorageError::new(
+                        StorageErrorCode::CorruptRecord,
+                        "current ledger FastPay effect has no canonical block",
+                    ));
+                }
+                let record = StoredFastPayAnchorV1 {
+                    schema: STORED_FASTPAY_ANCHOR_SCHEMA.to_owned(),
+                    finalized_height: meta.history_base_height,
+                    effect: effect.clone(),
+                };
+                if expected_fastpay_anchors
+                    .insert(effect.lock_id.clone(), record)
+                    .is_some()
+                {
+                    return Err(StorageError::new(
+                        StorageErrorCode::CorruptRecord,
+                        "current ledger contains a duplicate FastPay anchor",
+                    ));
+                }
+            }
+        }
+        if history_indexes.len().map_err(database_error)? != expected_fastpay_anchors.len() as u64 {
+            return Err(StorageError::new(
+                StorageErrorCode::CountMismatch,
+                "history-index entries do not match canonical FastPay effects",
+            ));
+        }
+        for (lock_id, expected) in &expected_fastpay_anchors {
+            let raw = read_authenticated(
+                &history_indexes,
+                HISTORY_INDEXES_TABLE,
+                &fastpay_anchor_key(lock_id)?,
+                MAX_RECORD_BYTES,
+                &self.integrity_key,
+                &self.counters,
+            )?
+            .ok_or_else(|| {
+                StorageError::new(
+                    StorageErrorCode::CorruptRecord,
+                    format!("FastPay anchor `{lock_id}` is missing from the history index"),
+                )
+            })?;
+            let observed: StoredFastPayAnchorV1 = decode_json(&raw)?;
+            if observed != *expected {
+                return Err(StorageError::new(
+                    StorageErrorCode::CorruptRecord,
+                    format!("FastPay anchor `{lock_id}` conflicts with canonical history"),
+                ));
+            }
         }
 
         for entry in receipts.iter().map_err(database_error)? {
@@ -3483,7 +3613,7 @@ fn validate_state_domain(domain: &str, require_additional: bool) -> StorageResul
         STATE_LEDGER | STATE_GOVERNANCE | STATE_SHIELDED | STATE_BRIDGE | STATE_NODE
     );
     let additional = ALLOWED_ADDITIONAL_STATE_DOMAINS.contains(&domain);
-    if (require_additional && !additional) || (!require_additional && !typed && !additional) {
+    if !additional && (require_additional || !typed) {
         return Err(StorageError::new(
             StorageErrorCode::UnsupportedSchema,
             format!("unsupported current-state domain `{domain}`"),
@@ -4188,25 +4318,48 @@ mod tests {
 
     #[test]
     fn retained_history_prune_is_atomic_and_keeps_ordered_commitment() {
-        let (_dir, store) = committed_one_block("retained-prune");
+        let dir = TestDir::new("retained-prune");
+        let store = TransactionalStore::open(&dir.0).expect("open retained prune store");
+        let old_tip = genesis_tip();
+        let old_commitment = OrderedHistoryCommitment::genesis(
+            &old_tip.chain_id,
+            &old_tip.genesis_hash,
+            old_tip.protocol_version,
+        )
+        .expect("genesis commitment");
+        store
+            .initialize(&old_tip, &old_commitment, CurrentStateUpdate::default())
+            .expect("initialize retained prune store");
         let expected_tip = next_tip(1);
         let effect = confirmed_consensusless_fastpay_effect();
         let mut checkpoint_ledger = LedgerState::empty();
         checkpoint_ledger
             .fastpay_version_fences
             .push(effect.clone());
-        let transaction = store.begin_durable_write().expect("begin anchor fixture");
-        fastpay_index::write_checkpoint_anchors(
-            &transaction,
-            &checkpoint_ledger,
-            1,
-            &store.integrity_key,
-            &store.counters,
-        )
-        .expect("write anchor fixture");
+        let receipt = receipt("tx-1", true);
+        let mut block = block(vec![receipt.tx_id.clone()]);
+        block.fastpay_pre_state_effects.push(effect.clone());
+        let archive = archive();
+        let commitment = old_commitment
+            .append("batch-1")
+            .expect("append retained prune batch");
         store
-            .commit_durable_write(transaction)
-            .expect("commit anchor fixture");
+            .commit_finalized_block(CommitFinalizedBlock {
+                expected_tip: &old_tip,
+                new_tip: &expected_tip,
+                block: &block,
+                receipts: std::slice::from_ref(&receipt),
+                archive_entry: &archive,
+                batch_id: "batch-1",
+                ordered_history: &commitment,
+                current_state: CurrentStateUpdate {
+                    ledger: Some(&checkpoint_ledger),
+                    ..CurrentStateUpdate::default()
+                },
+                scheduled_activation_height: None,
+                allow_legacy_receipt_id_mismatch: false,
+            })
+            .expect("commit retained prune fixture");
         let bad_checkpoint =
             br#"{"schema":"postfiat-history-checkpoint-v2","pruned_up_to_height":0}"#;
         let original_meta = store.meta().expect("read original prune metadata");
@@ -4283,6 +4436,95 @@ mod tests {
             .expect("verify pruned logical store");
         assert_eq!(report.block_count, 0);
         assert_eq!(report.ordered_batch_count, 1);
+    }
+
+    #[test]
+    fn retained_history_prune_rebuilds_fastpay_anchors_from_retained_suffix() {
+        let (_dir, store) = committed_one_block("retained-suffix-fastpay-anchor");
+        let old_tip = next_tip(1);
+        let old_commitment = store
+            .meta()
+            .expect("read one-block metadata")
+            .ordered_history_commitment();
+        let effect = confirmed_consensusless_fastpay_effect();
+        let mut ledger = LedgerState::empty();
+        ledger.fastpay_version_fences.push(effect.clone());
+        let receipt = receipt("tx-2", true);
+        let new_tip = ChainTipState {
+            height: 2,
+            block_hash: "block-2".to_owned(),
+            state_root: "state-2".to_owned(),
+            ordered_batch_count: 2,
+            receipt_count: 2,
+            ..old_tip.clone()
+        };
+        let new_commitment = old_commitment
+            .append("batch-2")
+            .expect("append second batch");
+        let mut block = block(vec![receipt.tx_id.clone()]);
+        block.header.height = 2;
+        block.header.parent_hash = old_tip.block_hash.clone();
+        block.header.batch_id = "batch-2".to_owned();
+        block.header.state_root = new_tip.state_root.clone();
+        block.header.certificate_id = "certificate-2".to_owned();
+        block.header.block_hash = new_tip.block_hash.clone();
+        block.fastpay_pre_state_effects.push(effect.clone());
+        let mut archive = archive();
+        archive.batch_id = "batch-2".to_owned();
+        archive.payload_hash = "payload-hash-2".to_owned();
+        store
+            .commit_finalized_block(CommitFinalizedBlock {
+                expected_tip: &old_tip,
+                new_tip: &new_tip,
+                block: &block,
+                receipts: std::slice::from_ref(&receipt),
+                archive_entry: &archive,
+                batch_id: "batch-2",
+                ordered_history: &new_commitment,
+                current_state: CurrentStateUpdate {
+                    ledger: Some(&ledger),
+                    ..CurrentStateUpdate::default()
+                },
+                scheduled_activation_height: None,
+                allow_legacy_receipt_id_mismatch: false,
+            })
+            .expect("commit retained suffix FastPay effect");
+
+        let checkpoint = serde_json::to_vec(&serde_json::json!({
+            "schema": "postfiat-history-checkpoint-v2",
+            "pruned_up_to_height": 1,
+            "ledger": LedgerState::empty(),
+        }))
+        .expect("encode prefix checkpoint");
+        store
+            .prune_retained_history(PruneRetainedHistory {
+                expected_tip: &new_tip,
+                new_history_base_height: 1,
+                retained_checkpoint: &checkpoint,
+            })
+            .expect("prune prefix while retaining suffix");
+
+        assert!(store.block(1).expect("read pruned prefix").is_none());
+        assert_eq!(store.block(2).expect("read retained suffix"), Some(block));
+        assert_eq!(
+            store
+                .anchored_fastpay_effect(&effect.lock_id)
+                .expect("read rebuilt retained-suffix FastPay anchor"),
+            Some(effect)
+        );
+        let report = store
+            .verify_logical_integrity()
+            .expect("verify retained suffix after index rebuild");
+        assert_eq!(report.finalized_height, 2);
+        assert_eq!(
+            store
+                .meta()
+                .expect("read pruned metadata")
+                .history_base_height,
+            1
+        );
+        assert_eq!(report.block_count, 1);
+        assert_eq!(report.history_index_count, 1);
     }
 
     #[test]
@@ -5148,7 +5390,12 @@ mod tests {
 
     #[test]
     fn logical_scan_rejects_padded_reordered_duplicated_omitted_and_modified_history() {
-        let cases: [(&str, StorageErrorCode, Box<dyn FnOnce(&TransactionalStore)>); 5] = [
+        type TamperCase = (
+            &'static str,
+            StorageErrorCode,
+            Box<dyn FnOnce(&TransactionalStore)>,
+        );
+        let cases: [TamperCase; 5] = [
             (
                 "padded",
                 StorageErrorCode::CountMismatch,

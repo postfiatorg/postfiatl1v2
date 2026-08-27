@@ -19,6 +19,84 @@ fn copy_activation_test_dir(source: &Path, destination: &Path) {
     }
 }
 
+fn assert_transactional_logical_equivalence(
+    expected: &postfiat_storage::TransactionalStore,
+    observed: &postfiat_storage::TransactionalStore,
+) {
+    let expected_meta = expected.meta().expect("read expected transactional metadata");
+    let observed_meta = observed.meta().expect("read observed transactional metadata");
+    assert_eq!(
+        expected_meta.chain_tip(CHAIN_TIP_SCHEMA.to_owned()),
+        observed_meta.chain_tip(CHAIN_TIP_SCHEMA.to_owned()),
+        "transactional tips differ"
+    );
+    assert_eq!(
+        expected.blocks_in_height_order().expect("export expected blocks"),
+        observed.blocks_in_height_order().expect("export observed blocks"),
+        "canonical blocks differ"
+    );
+    assert_eq!(
+        expected
+            .receipts_in_block_order()
+            .expect("export expected receipts"),
+        observed
+            .receipts_in_block_order()
+            .expect("export observed receipts"),
+        "canonical receipts differ"
+    );
+    assert_eq!(
+        expected
+            .archived_batches_in_block_order()
+            .expect("export expected archives"),
+        observed
+            .archived_batches_in_block_order()
+            .expect("export observed archives"),
+        "canonical batch archives differ"
+    );
+    assert_eq!(
+        expected.ordered_batches().expect("export expected ordering"),
+        observed.ordered_batches().expect("export observed ordering"),
+        "canonical ordered-batch entries differ"
+    );
+    assert_eq!(
+        expected
+            .canonical_history_index_entries()
+            .expect("export expected history indexes"),
+        observed
+            .canonical_history_index_entries()
+            .expect("export observed history indexes"),
+        "canonical rebuildable history indexes differ"
+    );
+    for domain in [
+        "ledger",
+        "governance",
+        "shielded",
+        "bridge",
+        "validator_registry",
+        "storage_activation",
+        "retained_history_checkpoint",
+    ] {
+        assert_eq!(
+            expected
+                .current_state_raw(domain)
+                .expect("export expected current state"),
+            observed
+                .current_state_raw(domain)
+                .expect("export observed current state"),
+            "canonical current state differs for {domain}"
+        );
+    }
+    assert_eq!(
+        expected
+            .verify_logical_integrity()
+            .expect("verify expected transactional store"),
+        observed
+            .verify_logical_integrity()
+            .expect("verify observed transactional store"),
+        "logical integrity reports differ"
+    );
+}
+
 fn activation_test_journal<T: serde::Serialize>(
     store: &NodeStore,
     genesis: &Genesis,
@@ -596,15 +674,17 @@ fn ordered_history_v2_active_commit_uses_one_database_transaction_without_jsonl(
     assert!(restored_store
         .transactional_storage_active()
         .expect("restored new-chain snapshot activation status"));
+    let restored_transactional = restored_store
+        .transactional_store()
+        .expect("open restored new-chain transactional store");
     assert_eq!(
-        restored_store
-            .transactional_store()
-            .expect("open restored new-chain transactional store")
+        restored_transactional
             .verify_logical_integrity()
             .expect("verify restored new-chain transactional store")
             .finalized_height,
         1
     );
+    assert_transactional_logical_equivalence(&transactional, &restored_transactional);
 
     std::fs::remove_dir_all(data_dir).expect("remove transactional test directory");
     std::fs::remove_dir_all(snapshot_dir).expect("remove transactional snapshot");
@@ -1148,6 +1228,7 @@ fn existing_chain_governance_schedule_switches_only_at_the_recorded_height() {
         .current_state_raw("retained_history_checkpoint")
         .expect("read restored retained checkpoint")
         .is_some());
+    assert_transactional_logical_equivalence(&pruned_store, &restored_transactional);
     verify_blocks(NodeOptions {
         data_dir: restored_dir.clone(),
     })

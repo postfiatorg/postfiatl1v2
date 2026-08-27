@@ -84,7 +84,7 @@ impl OrderedHistoryCommitment {
             || self.chain_id != chain_id
             || self.genesis_hash != genesis_hash
             || self.protocol_version != protocol_version
-            || from_hex(&self.accumulator).map_or(true, |bytes| bytes.len() != MAC_BYTES)
+            || from_hex(&self.accumulator).is_none_or(|bytes| bytes.len() != MAC_BYTES)
         {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -684,8 +684,7 @@ fn lookup(
             return Ok(Lookup::Present(slot));
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(io::Error::other(
         "ordered-history index probe limit exhausted",
     ))
 }
@@ -723,8 +722,7 @@ fn find_build_slot(
             ));
         }
     }
-    Err(io::Error::new(
-        io::ErrorKind::Other,
+    Err(io::Error::other(
         "ordered-history probe limit exhausted during rebuild",
     ))
 }

@@ -273,6 +273,18 @@ def _verify_source(
             _fail(f"binary identity mismatch for {name}")
 
 
+def _verify_binary_build(
+    report: Mapping[str, Any],
+    label: str,
+    source_revision: str,
+) -> None:
+    build = _object(report.get("node_binary_build"), f"{label} binary build")
+    if build.get("git_revision") != source_revision[:8]:
+        _fail(f"{label} embedded binary revision disagrees with the packet source")
+    if build.get("profile") != "release":
+        _fail(f"{label} binary was not built with the release profile")
+
+
 def _verify_state_distinction(manifest: Mapping[str, Any]) -> None:
     states = _object(manifest.get("state_distinction"), "state distinction")
     for label in ("live", "deployed", "repository"):
@@ -299,6 +311,7 @@ def _verify_replay(
         _fail("replay source revision disagrees with the packet")
     if replay.get("node_binary_sha256") not in binary_digests:
         _fail("replay binary identity disagrees with the packet")
+    _verify_binary_build(replay, "replay", source_revision)
     if replay.get("quarantine_archive_blocks") != 915:
         _fail("quarantine archive block count is not 915")
     if replay.get("authenticated_history_height") != 924:
@@ -325,6 +338,7 @@ def _verify_replay(
             _fail("replay receipt source revision disagrees with the packet")
         if receipt.get("node_binary_sha256") not in binary_digests:
             _fail("replay receipt binary identity disagrees with the packet")
+        _verify_binary_build(receipt, "replay receipt", source_revision)
         height = receipt.get("source_height")
         if not isinstance(height, int) or expected.get(height) != receipt.get("source_kind"):
             _fail("replay receipt does not identify a required source")
@@ -493,6 +507,7 @@ def _verify_performance(
         _fail("performance source revision differs from the packet source")
     if performance.get("node_binary_sha256") not in binary_digests:
         _fail("performance binary identity differs from the packet source")
+    _verify_binary_build(performance, "performance", source_revision)
     if performance.get("validator_count") != 6:
         _fail("performance topology is not six validators")
     if performance.get("windows_per_height") != 5 or performance.get("rounds_per_window") != 50:
@@ -675,6 +690,7 @@ def _verify_migration(
         _fail("migration source revision disagrees with the packet")
     if migration.get("node_binary_sha256") not in binary_digests:
         _fail("migration binary identity disagrees with the packet")
+    _verify_binary_build(migration, "migration", source_revision)
     if migration.get("source_height") != 924:
         _fail("migration rehearsal did not start from exact height 924")
     if migration.get("chain_id") != CONTROLLED_CHAIN_ID:

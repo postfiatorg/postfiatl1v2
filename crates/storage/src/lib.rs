@@ -29,8 +29,8 @@ pub mod transactional;
 
 pub use ordered_history::{OrderedHistoryCommitment, OrderedHistoryIndexReport};
 pub use transactional::{
-    CommitFinalizedBlock, CommitOutcome, CurrentStateUpdate, PruneOutcome, PruneRetainedHistory,
-    TransactionalStore, TransactionalStoreMetaV1,
+    CanonicalHistoryIndexEntryV1, CommitFinalizedBlock, CommitOutcome, CurrentStateUpdate,
+    PruneOutcome, PruneRetainedHistory, TransactionalStore, TransactionalStoreMetaV1,
 };
 
 use integrity::{
