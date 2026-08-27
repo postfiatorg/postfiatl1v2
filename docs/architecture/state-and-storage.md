@@ -48,31 +48,38 @@ flowchart LR
   ValidatorRegistry --> GovernanceReplay[Governance replay checks]
 ```
 
-## Bounded append and ordered-history candidate
+## Transactional finality-path candidate
 
-The active storage-scaling milestone replaces synchronous full-prefix JSONL
-verification with authenticated v2 tail checkpoints. A normal append verifies
-the node-keyed checkpoint and at most one crash-suffix record; explicit audit,
-index rebuild, migration, and replay retain the full-prefix verifier.
+The active storage-scaling milestone selects an embedded transactional `redb`
+store for finalized blocks, receipts, archived batches, ordered membership,
+current state, history indexes, and chain-tip metadata. One finalized height is
+committed in one write transaction with an expected-parent check. Proposal,
+validation, state commitment, and finalized commit use a constant-size
+ordered-history accumulator and indexed membership instead of materializing the
+full ordered-batch history.
 
-For new chains that set an explicit ordered-history v2 activation height, a
-domain-separated append-only accumulator and authenticated fixed-slot index
-replace full ordered-batch list scans in proposal construction, validation, and
-state commitment. Legacy heights retain the exact list-based state root. The
-index is derived from canonical history and can be rebuilt offline with:
+Authenticated JSONL v2 heads remain available for bounded legacy import, audit,
+and comparison. The fixed-slot bitmap remains a superseded bounded-work
+experiment; neither is the selected primary finality-path store. Legacy heights
+retain their exact list-based state roots, and the transactional generation can
+be rebuilt or verified offline with:
 
 ```bash
-postfiat-node ordered-history-index-rebuild --data-dir PATH --offline-confirmed
+postfiat-node storage-rebuild-transactional --data-dir PATH --output-dir PATH \
+  --offline-confirmed
+postfiat-node storage-rebuild-transactional --data-dir PATH --output-dir PATH \
+  --expected-tip HASH --expected-state-root HASH --verify-only \
+  --offline-confirmed
 ```
 
-This is an undeployed development candidate, not the selected production store.
-Synthetic counters are bounded through height 5,000, but the fixed bitmap has a
-high constant cost and the six-validator finality, exact replay, full tamper,
-and clone-migration gates remain open. See the
-[Storage Scaling Fix implementation specification](storage-scaling-fix-spec.md),
+This source is an undeployed development candidate. Canonical snapshot/restore,
+rebuild, and retained-history equality pass, as does offline replay of the exact
+height-915 quarantine archive. Exact height 924, the complete tamper matrix,
+paired release-mode six-validator performance, and six-clone migration remain
+open. See the [Storage Scaling Fix implementation specification](storage-scaling-fix-spec.md),
 the [active milestone](../plans/active/storage-scaling-milestone.md), and
-[development evidence](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling). Public
-testnet remains blocked.
+[development evidence](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling).
+Public testnet remains blocked.
 
 ## Partial History
 

@@ -5,7 +5,7 @@
 **Decision owner:** Post Fiat
 **Research specification:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 **Implementation specification:** [Storage Scaling Fix](../../architecture/storage-scaling-fix-spec.md)
-**Implementation source:** cc9e32d71d697a6db97fac76744df26d320441b9
+**Implementation source:** 1985cd3f6addf4a3c271c8196e0b2fa205f5bd8c
 
 The operator directly authorized implementation on 2026-08-26 and explicitly
 instructed this session not to use Task Node. This milestone records that
@@ -60,13 +60,17 @@ Evidence: [development packet](https://github.com/postfiatorg/postfiatl1v2/tree/
   as required by the implementation specification.
 - [ ] Run every original E3 tamper case and the full new checkpoint, index-page,
   stale-head, journal disagreement, and crash-cut matrix.
-- [ ] Add snapshot/import behavior and prove clean and rebuilt indexes are
-  byte-identical.
+- [x] Add snapshot/import behavior and prove clean, restored, and rebuilt
+  canonical logical records and history-index entries are byte-identical.
 
 Primary code:
 
+- crates/storage/src/transactional.rs
+- crates/storage/src/transactional/export.rs
+- crates/storage/src/integrity.rs
 - crates/storage/src/lib.rs
 - crates/storage/src/ordered_history.rs
+- crates/node/src/storage_migration.rs
 - crates/node/src/mempool_proposals.rs
 - crates/node/src/batch_snapshot.rs
 - crates/node/src/storage_commit.rs
@@ -81,8 +85,17 @@ Primary code:
   a fixed bitmap and write one slot.
 - [x] Replace the fixed bitmap candidate with the transactional `redb` ordered
   index and constant-size ordered-history accumulator on the active path.
-- [ ] Replay the exact 915-block quarantine archive and authenticated
-  controlled-devnet history through height 924 byte for byte.
+- [x] Replay the exact 915-block quarantine archive below activation: all six
+  source verifiers, transactional rebuild, canonical logical comparison, and
+  independent verify-only passed offline on `1985cd3f`. Receipt SHA-256:
+  `2596d7874edc348fd232bf6d97b7880c339f31d0f3a4516892d913cbc54d207a`;
+  source-tree SHA-256:
+  `6c9c9c11955b761a9e7b80b5fbf5b482f307fa602bc6d139b27868b76135139a`;
+  release-binary SHA-256:
+  `811fb4921ec326bedeec88c37bc92730bd65943dcc795f542d0f5dd9065b7483`.
+- [ ] Replay the authenticated controlled-devnet history through exact height
+  924 byte for byte; no complete height-924 data directory is present in the
+  local archive, and no fleet access is authorized by this milestone.
 - [ ] Run paired legacy, bounded-JSONL, and selected indexed-store lanes at all
   five heights with six validators and literal receipt acceptance.
 - [ ] Prove height-5,000 p95 consensus_round_ms and

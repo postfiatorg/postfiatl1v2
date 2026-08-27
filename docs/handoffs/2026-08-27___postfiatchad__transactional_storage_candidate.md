@@ -74,7 +74,7 @@ The implementation commit adds:
   `benchmarks/storage-scaling/` and `python/postfiat_rpc/storage_scaling.py`.
 
 The operational sequence is documented in the
-[storage-scaling evidence README](../../benchmarks/storage-scaling/README.md).
+[storage-scaling evidence README](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling).
 The [active milestone](../plans/active/storage-scaling-milestone.md) now marks
 only the source-level boundaries that were actually implemented; release and
 existing-chain evidence gates remain unchecked.
@@ -159,7 +159,7 @@ and keep the public-testnet block in place.
 - [Locked storage-scaling fix specification](../architecture/storage-scaling-fix-spec.md)
 - [Active storage-scaling milestone](../plans/active/storage-scaling-milestone.md)
 - [Storage and state architecture](../architecture/state-and-storage.md)
-- [Storage-scaling evidence and operator workflow](../../benchmarks/storage-scaling/README.md)
+- [Storage-scaling evidence and operator workflow](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling)
 - Transactional store: `crates/storage/src/transactional.rs`
 - Atomic node commit and activation: `crates/node/src/storage_commit.rs`
 - Migration implementation: `crates/node/src/storage_migration.rs`
