@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Run the locked storage-scaling performance campaign on six local validators.
+"""Run the selected-store development smoke and shared lane helpers.
 
-The run directory contains private disposable keys and is not an evidence
-packet. Use package_packet.py only after this runner completes successfully.
-No external network or devnet endpoint is contacted.
+Release qualification is owned by run_paired_campaign.py. This module remains
+an executable one-round selected-store smoke and provides the common local
+six-validator mechanics used by the paired runner. No external network or
+devnet endpoint is contacted.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import shutil
 import subprocess
 import threading
 import time
@@ -29,10 +31,10 @@ STORAGE_ACTIVATION_HEIGHT = 1
 HEIGHTS = [50, 100, 500, 1000, 5000]
 WINDOWS_PER_HEIGHT = 5
 ROUNDS_PER_WINDOW = 50
-LEGACY_HEIGHT_50_BASELINE = {
-    "consensus_round_ms": 1675.622955,
-    "wallet_to_finality_ms": 1687.3746360000002,
-}
+SELECTED_STORAGE_LANE = "selected-indexed"
+HISTORICAL_STORAGE_LANES = {"legacy-jsonl", "bounded-jsonl"}
+RESOURCE_SAMPLE_SCHEMA = "postfiat-storage-resource-samples-v1"
+RESOURCE_SAMPLE_TARGET_INTERVAL_MS = 100
 MAX_PROPOSAL_PAGE_READS_PER_ROUND = 64
 MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND = 64
 MAX_APPLY_PAGE_WRITES_PER_VALIDATOR_ROUND = 32
@@ -75,6 +77,23 @@ SHARED = load_shared_runner()
 
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def directory_digest(root: Path) -> str:
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError(f"snapshot root is not a regular directory: {root}")
+    hasher = hashlib.sha256()
+    files = sorted(path for path in root.rglob("*") if path.is_file())
+    for path in files:
+        if path.is_symlink():
+            raise ValueError(f"snapshot contains a symlink: {path}")
+        relative = path.relative_to(root).as_posix().encode("utf-8")
+        hasher.update(len(relative).to_bytes(8, "big"))
+        hasher.update(relative)
+        file_digest = bytes.fromhex(digest(path))
+        hasher.update(len(file_digest).to_bytes(8, "big"))
+        hasher.update(file_digest)
+    return hasher.hexdigest()
 
 
 def write_json(path: Path, value: Any, mode: int = 0o644) -> None:
@@ -159,17 +178,36 @@ def nested_positive_float(value: dict[str, Any], path: tuple[str, ...]) -> float
     return parsed
 
 
-def ordinary_least_squares(points: list[tuple[float, float]]) -> dict[str, float]:
+def distribution_summary(values: list[float]) -> dict[str, float | int]:
+    if not values:
+        raise ValueError("cannot summarize an empty distribution")
+    mean = sum(values) / len(values)
+    return {
+        "count": len(values),
+        "min": min(values),
+        "p50": percentile(values, 0.50),
+        "p95": percentile(values, 0.95),
+        "p99": percentile(values, 0.99),
+        "max": max(values),
+        "mean": mean,
+        "population_stddev": math.sqrt(
+            sum((value - mean) ** 2 for value in values) / len(values)
+        ),
+    }
+
+
+def ordinary_least_squares(points: list[tuple[float, float]]) -> dict[str, Any]:
     if len(points) < 2:
         raise ValueError("linear model requires at least two observations")
     mean_x = sum(point[0] for point in points) / len(points)
     mean_y = sum(point[1] for point in points) / len(points)
     denominator = sum((x - mean_x) ** 2 for x, _ in points)
     if denominator <= 0:
-        raise ValueError("linear model requires distinct heights")
+        raise ValueError("linear model requires distinct x values")
     slope = sum((x - mean_x) * (y - mean_y) for x, y in points) / denominator
     intercept = mean_y - slope * mean_x
-    residuals = [y - (intercept + slope * x) for x, y in points]
+    predictions = [intercept + slope * x for x, _ in points]
+    residuals = [y - prediction for (_, y), prediction in zip(points, predictions)]
     residual_rmse = math.sqrt(
         sum(residual * residual for residual in residuals) / len(residuals)
     )
@@ -181,17 +219,35 @@ def ordinary_least_squares(points: list[tuple[float, float]]) -> dict[str, float
         else 0.0
     )
     return {
-        "slope_ms_per_height": slope,
+        "slope": slope,
         "intercept_ms": intercept,
+        "predictions_ms": predictions,
+        "residuals_ms": residuals,
         "residual_rmse_ms": residual_rmse,
         "r_squared": max(0.0, min(1.0, r_squared)),
+    }
+
+
+def constant_fit(values: list[float]) -> dict[str, Any]:
+    mean = sum(values) / len(values)
+    predictions = [mean for _ in values]
+    residuals = [value - mean for value in values]
+    return {
+        "intercept_ms": mean,
+        "predictions_ms": predictions,
+        "residuals_ms": residuals,
+        "residual_rmse_ms": math.sqrt(
+            sum(residual * residual for residual in residuals) / len(residuals)
+        ),
     }
 
 
 def height_relationship_models(
     rows: list[dict[str, Any]], root: Path
 ) -> dict[str, dict[str, Any]]:
-    stage_points = {stage: [] for stage in MATERIAL_STAGE_PATHS}
+    stage_observations: dict[str, list[dict[str, Any]]] = {
+        stage: [] for stage in MATERIAL_STAGE_PATHS
+    }
     height_50_p95: dict[str, list[float]] = {
         stage: [] for stage in MATERIAL_STAGE_PATHS
     }
@@ -215,30 +271,76 @@ def height_relationship_models(
                         f"height {height} performance window omitted stage {stage}"
                     )
                 window_p95 = percentile(values, 0.95)
-                stage_points[stage].append((float(height), window_p95))
+                stage_observations[stage].append(
+                    {
+                        "height": height,
+                        "window": str(window["label"]),
+                        "p95_ms": window_p95,
+                    }
+                )
                 if height == HEIGHTS[0]:
                     height_50_p95[stage].append(window_p95)
 
     models: dict[str, dict[str, Any]] = {}
-    for stage, points in stage_points.items():
-        model = ordinary_least_squares(points)
-        baseline = percentile(height_50_p95[stage], 0.50)
-        predicted_delta = model["slope_ms_per_height"] * (
-            HEIGHTS[-1] - HEIGHTS[0]
+    for stage, observations in stage_observations.items():
+        points = [
+            (float(observation["height"]), float(observation["p95_ms"]))
+            for observation in observations
+        ]
+        values = [point[1] for point in points]
+        linear = ordinary_least_squares(points)
+        logarithmic = ordinary_least_squares(
+            [(math.log(height), value) for height, value in points]
         )
+        constant = constant_fit(values)
+        baseline = percentile(height_50_p95[stage], 0.50)
+        predicted_delta = linear["slope"] * (HEIGHTS[-1] - HEIGHTS[0])
+        within_height_ranges = []
+        for height in HEIGHTS:
+            same_height = [
+                value for observed_height, value in points if observed_height == height
+            ]
+            within_height_ranges.append(max(same_height) - min(same_height))
+        same_height_variance_allowance = max(within_height_ranges)
         material_threshold = max(
             baseline * MODEL_RELATIVE_MATERIALITY,
-            model["residual_rmse_ms"] * MODEL_RESIDUAL_SIGMAS,
+            linear["residual_rmse_ms"] * MODEL_RESIDUAL_SIGMAS,
+            same_height_variance_allowance,
         )
         material_positive = (
-            model["slope_ms_per_height"] > 0
-            and predicted_delta > material_threshold
+            linear["slope"] > 0 and predicted_delta > material_threshold
         )
+        logarithmic_slope = logarithmic.pop("slope")
+        linear_slope = linear.pop("slope")
+        fits = {
+            "constant": constant,
+            "logarithmic": {
+                **logarithmic,
+                "slope_ms_per_log_height": logarithmic_slope,
+            },
+            "linear": {
+                **linear,
+                "slope_ms_per_height": linear_slope,
+            },
+        }
+        linear_fit = fits["linear"]
         models[stage] = {
-            **model,
+            "slope_ms_per_height": linear_fit["slope_ms_per_height"],
+            "intercept_ms": linear_fit["intercept_ms"],
+            "predictions_ms": linear_fit["predictions_ms"],
+            "residuals_ms": linear_fit["residuals_ms"],
+            "residual_rmse_ms": linear_fit["residual_rmse_ms"],
+            "r_squared": linear_fit["r_squared"],
+            "observations": observations,
+            "fits": fits,
+            "preferred_fit_by_rmse": min(
+                fits,
+                key=lambda name: float(fits[name]["residual_rmse_ms"]),
+            ),
             "sample_kind": "per_window_p95",
             "sample_count": len(points),
             "height_50_window_p95_median_ms": baseline,
+            "max_same_height_window_range_ms": same_height_variance_allowance,
             "predicted_delta_50_to_5000_ms": predicted_delta,
             "material_threshold_ms": material_threshold,
             "relative_materiality": MODEL_RELATIVE_MATERIALITY,
@@ -514,7 +616,11 @@ def run_rounds(
     recipient: str,
     label: str,
     rounds: int,
+    storage_lane: str = SELECTED_STORAGE_LANE,
 ) -> tuple[dict[str, Any], Path]:
+    if storage_lane not in HISTORICAL_STORAGE_LANES | {SELECTED_STORAGE_LANE}:
+        raise ValueError(f"unsupported storage lane: {storage_lane}")
+    selected_transactional = storage_lane == SELECTED_STORAGE_LANE
     logs = root / "logs"
     nodes = root / "nodes"
     SHARED.prepare_nodes(node_bin, nodes, source_snapshot, seed, logs, label)
@@ -522,8 +628,10 @@ def run_rounds(
     initial_height, _, _ = fleet_identity(before)
 
     services: dict[int, tuple[Any, tuple[Any, Any]]] = {}
+    foreground_pids: set[int] = set()
     services_lock = threading.Lock()
     samples: list[dict[str, Any]] = []
+    benchmark_processes: list[dict[str, int]] = []
     stop_event = threading.Event()
     sample_thread: threading.Thread | None = None
     round_reports: list[dict[str, Any]] = []
@@ -550,11 +658,47 @@ def run_rounds(
 
     def current_pids() -> list[int]:
         with services_lock:
-            return [
+            service_pids = [
                 process.pid
                 for process, _ in services.values()
                 if process.poll() is None
             ]
+            return sorted(set(service_pids) | foreground_pids)
+
+    def run_observed_benchmark(
+        command: list[str], stdout_path: Path, stderr_path: Path
+    ) -> None:
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        stderr_path.parent.mkdir(parents=True, exist_ok=True)
+        with stdout_path.open("wb") as stdout_handle, stderr_path.open(
+            "wb"
+        ) as stderr_handle:
+            started_monotonic_ns = time.monotonic_ns()
+            process = subprocess.Popen(
+                command,
+                stdout=stdout_handle,
+                stderr=stderr_handle,
+            )
+            with services_lock:
+                foreground_pids.add(process.pid)
+            try:
+                return_code = process.wait()
+            finally:
+                ended_monotonic_ns = time.monotonic_ns()
+                with services_lock:
+                    foreground_pids.discard(process.pid)
+                benchmark_processes.append(
+                    {
+                        "pid": process.pid,
+                        "started_monotonic_ns": started_monotonic_ns,
+                        "ended_monotonic_ns": ended_monotonic_ns,
+                    }
+                )
+        if return_code != 0:
+            raise RuntimeError(
+                f"{command[0]} {command[1]} failed with {return_code}; "
+                f"stdout={stdout_path} stderr={stderr_path}"
+            )
 
     try:
         for index in range(VALIDATORS):
@@ -576,11 +720,11 @@ def run_rounds(
                     f"height {next_height} proposer service is unavailable: {proposer}"
                 )
 
-            # redb enforces one process owner for a database. Pause only the
-            # deterministic proposer service; the benchmark subprocess then
-            # performs that validator's local vote/apply while the other five
-            # remain resident peers.
-            stop_service(proposer_index)
+            # redb enforces one process owner for a database. The selected lane
+            # pauses only the deterministic proposer service; historical JSONL
+            # lanes retain the original six-resident-validator topology.
+            if selected_transactional:
+                stop_service(proposer_index)
             round_lane = f"{label}/round-{round_index:06}"
             log_label = f"{label}.round-{round_index:06}"
             command = SHARED.benchmark_command(
@@ -594,20 +738,22 @@ def run_rounds(
                 1,
                 round_lane,
             )
-            command.extend(
-                [
-                    "--resident-transactional-store",
-                    "--expected-start-height",
-                    str(next_height - 1),
-                ]
-            )
-            SHARED.run(
+            if selected_transactional:
+                command.extend(
+                    [
+                        "--resident-transactional-store",
+                        "--expected-start-height",
+                        str(next_height - 1),
+                    ]
+                )
+            run_observed_benchmark(
                 command,
-                stdout_path=logs / f"{log_label}.stdout.json",
-                stderr_path=logs / f"{log_label}.stderr",
+                logs / f"{log_label}.stdout.json",
+                logs / f"{log_label}.stderr",
             )
             round_reports.append(read_json(root / round_lane / "report.json"))
-            start_service(proposer_index, restart=round_index)
+            if selected_transactional:
+                start_service(proposer_index, restart=round_index)
     finally:
         if sample_thread is not None:
             stop_event.set()
@@ -646,19 +792,81 @@ def run_rounds(
     ):
         raise RuntimeError(f"{label} contains a failed or non-final iteration")
 
-    counters, remote_storage = storage_work_from_report(report)
-    if (
-        counters["full_history_scans"] != 0
-        or counters["full_history_records_read"] != 0
-        or counters["full_history_bytes_read"] != 0
-    ):
-        raise RuntimeError(f"{label} performed full-history work: {counters}")
-    if counters["committed_write_transactions"] != rounds * VALIDATORS:
-        raise RuntimeError(
-            f"{label} durable commit count is not one per height and validator: {counters}"
-        )
+    counters: dict[str, Any]
+    remote_storage: dict[str, dict[str, Any]]
+    if selected_transactional:
+        counters, remote_storage = storage_work_from_report(report)
+        if (
+            counters["full_history_scans"] != 0
+            or counters["full_history_records_read"] != 0
+            or counters["full_history_bytes_read"] != 0
+        ):
+            raise RuntimeError(f"{label} performed full-history work: {counters}")
+        if counters["committed_write_transactions"] != rounds * VALIDATORS:
+            raise RuntimeError(
+                f"{label} durable commit count is not one per height and validator: {counters}"
+            )
+    else:
+        counters = {
+            "telemetry_available": False,
+            "reason": "historical release report predates transactional page counters",
+        }
+        remote_storage = {}
 
     resource = SHARED.resource_summary(samples)
+    if len(benchmark_processes) != rounds:
+        raise RuntimeError(
+            f"{label} resource sampler tracked {len(benchmark_processes)} "
+            f"foreground processes, expected {rounds}"
+        )
+    if not samples:
+        raise RuntimeError(f"{label} resource sampler emitted no samples")
+    sample_origin_ns = int(samples[0]["monotonic_ns"])
+    normalized_samples: list[dict[str, Any]] = []
+    for sample in samples:
+        normalized_sample = dict(sample)
+        normalized_sample["monotonic_offset_ns"] = (
+            int(normalized_sample.pop("monotonic_ns")) - sample_origin_ns
+        )
+        normalized_samples.append(normalized_sample)
+    normalized_benchmarks = [
+        {
+            "pid": process["pid"],
+            "started_offset_ns": process["started_monotonic_ns"] - sample_origin_ns,
+            "ended_offset_ns": process["ended_monotonic_ns"] - sample_origin_ns,
+        }
+        for process in benchmark_processes
+    ]
+    if len({process["pid"] for process in normalized_benchmarks}) != rounds:
+        raise RuntimeError(f"{label} reused a foreground process identifier")
+    foreground_sample_counts = {
+        str(process["pid"]): sum(
+            1
+            for sample in normalized_samples
+            if process["started_offset_ns"]
+            <= sample["monotonic_offset_ns"]
+            <= process["ended_offset_ns"]
+            and str(process["pid"]) in sample["processes"]
+        )
+        for process in normalized_benchmarks
+    }
+    foreground_min_sample_count = min(foreground_sample_counts.values())
+    if foreground_min_sample_count < 2:
+        raise RuntimeError(
+            f"{label} resource sampler observed a foreground benchmark fewer "
+            "than two times"
+        )
+    resource_samples_path = root / "resource-samples" / f"{label}.json"
+    write_json(
+        resource_samples_path,
+        {
+            "schema": RESOURCE_SAMPLE_SCHEMA,
+            "sample_target_interval_ms": RESOURCE_SAMPLE_TARGET_INTERVAL_MS,
+            "samples": normalized_samples,
+            "foreground_processes": normalized_benchmarks,
+            "foreground_sample_counts": foreground_sample_counts,
+        },
+    )
     normalized = normalize_report_paths(report, root)
     normalized_path = root / "normalized" / f"{label}.report.json"
     write_json(normalized_path, normalized)
@@ -673,19 +881,29 @@ def run_rounds(
     )
     result = {
         "label": label,
+        "storage_lane": storage_lane,
+        "source_snapshot_sha256": directory_digest(source_snapshot),
         "starting_height": initial_height,
         "rounds": rounds,
         "validators_converged": VALIDATORS,
         "literal_receipts_exact": True,
-        "zero_full_history_reads": True,
-        "bounded_index_pages": counters["page_reads"]
-        <= rounds
-        * (
-            MAX_PROPOSAL_PAGE_READS_PER_ROUND
-            + VALIDATORS * MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND
+        "zero_full_history_reads": True if selected_transactional else None,
+        "bounded_index_pages": (
+            counters["page_reads"]
+            <= rounds
+            * (
+                MAX_PROPOSAL_PAGE_READS_PER_ROUND
+                + VALIDATORS * MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND
+            )
+            if selected_transactional
+            else None
         ),
-        "constant_accumulator_work": counters["page_writes"]
-        <= rounds * VALIDATORS * MAX_APPLY_PAGE_WRITES_PER_VALIDATOR_ROUND,
+        "constant_accumulator_work": (
+            counters["page_writes"]
+            <= rounds * VALIDATORS * MAX_APPLY_PAGE_WRITES_PER_VALIDATOR_ROUND
+            if selected_transactional
+            else None
+        ),
         "final_height": final_height,
         "final_tip": final_tip,
         "final_state_root": final_root,
@@ -697,12 +915,17 @@ def run_rounds(
             "disk_growth_bytes": max(0, resource["node_disk_delta_bytes"]),
             "bytes_read": resource["validator_read_bytes"],
             "bytes_written": resource["validator_write_bytes"],
-            "page_reads": counters["page_reads"],
-            "page_writes": counters["page_writes"],
-            "fsync_count": counters["fsync_count"],
-            "fsync_micros": counters["durable_commit_micros"],
+            "page_reads": counters.get("page_reads"),
+            "page_writes": counters.get("page_writes"),
+            "fsync_count": counters.get("fsync_count"),
+            "fsync_micros": counters.get("durable_commit_micros"),
             "sample_count": resource["sample_count"],
+            "duration_ms": resource["duration_ms"],
+            "observed_pid_count": len(resource["observed_pids"]),
+            "foreground_process_count": len(benchmark_processes),
+            "foreground_min_sample_count": foreground_min_sample_count,
             "host_cpu_ticks": resource["host_cpu_ticks"],
+            "host_total_memory_kib": resource["host_total_memory_kib"],
             "host_min_available_memory_kib": resource[
                 "host_min_available_memory_kib"
             ],
@@ -711,6 +934,8 @@ def run_rounds(
         },
         "storage_telemetry_source": (
             "proposal/apply deltas plus in-process certified-send acknowledgements"
+            if selected_transactional
+            else "external process and filesystem resource sampler only"
         ),
         "remote_validator_storage_final": remote_storage,
         "initial_fleet": [
@@ -733,6 +958,9 @@ def run_rounds(
         ],
         "normalized_report": normalized_path.relative_to(root).as_posix(),
         "normalized_report_sha256": digest(normalized_path),
+        "resource_samples": resource_samples_path.relative_to(root).as_posix(),
+        "resource_samples_sha256": digest(resource_samples_path),
+        "result_snapshot_sha256": directory_digest(result_snapshot),
     }
     write_json(root / "receipts" / f"{label}.json", result)
     print(
@@ -744,31 +972,46 @@ def run_rounds(
 
 
 def setup_seed(
-    node_bin: Path, root: Path, base_port: int, rpc_base_port: int
+    node_bin: Path,
+    root: Path,
+    base_port: int,
+    rpc_base_port: int,
+    storage_activation_height: int | None = STORAGE_ACTIVATION_HEIGHT,
+    validator_key_file: Path | None = None,
 ) -> tuple[Path, Path, Path, str, str, Path]:
     private = root / "private"
     logs = root / "logs"
     seed = private / "seed"
     private.mkdir(mode=0o700)
     logs.mkdir()
+    if validator_key_file is not None:
+        if validator_key_file.is_symlink() or not validator_key_file.is_file():
+            raise ValueError("shared validator key file must be a regular file")
+        seed.mkdir(mode=0o700)
+        staged_validator_keys = seed / "validator_keys.json"
+        shutil.copyfile(validator_key_file, staged_validator_keys)
+        staged_validator_keys.chmod(0o600)
 
+    init_command = [
+        str(node_bin),
+        "init-consensus-v2",
+        "--data-dir",
+        str(seed),
+        "--chain-id",
+        CHAIN_ID,
+        "--node-id",
+        "validator-0",
+        "--validators",
+        str(VALIDATORS),
+        "--activation-height",
+        str(CONSENSUS_ACTIVATION_HEIGHT),
+    ]
+    if storage_activation_height is not None:
+        init_command.extend(
+            ["--storage-activation-height", str(storage_activation_height)]
+        )
     SHARED.run(
-        [
-            str(node_bin),
-            "init-consensus-v2",
-            "--data-dir",
-            str(seed),
-            "--chain-id",
-            CHAIN_ID,
-            "--node-id",
-            "validator-0",
-            "--validators",
-            str(VALIDATORS),
-            "--activation-height",
-            str(CONSENSUS_ACTIVATION_HEIGHT),
-            "--storage-activation-height",
-            str(STORAGE_ACTIVATION_HEIGHT),
-        ],
+        init_command,
         stdout_path=logs / "init.json",
         stderr_path=logs / "init.stderr",
     )
@@ -875,25 +1118,28 @@ def setup_seed(
     export_snapshot(node_bin, seed, seed_snapshot, logs, "height-1")
 
     topology = root / "topology.json"
+    topology_command = [
+        str(node_bin),
+        "topology-consensus-v2",
+        "--chain-id",
+        CHAIN_ID,
+        "--validators",
+        str(VALIDATORS),
+        "--base-port",
+        str(base_port),
+        "--rpc-base-port",
+        str(rpc_base_port),
+        "--activation-height",
+        str(CONSENSUS_ACTIVATION_HEIGHT),
+        "--output",
+        str(topology),
+    ]
+    if storage_activation_height is not None:
+        topology_command.extend(
+            ["--storage-activation-height", str(storage_activation_height)]
+        )
     SHARED.run(
-        [
-            str(node_bin),
-            "topology-consensus-v2",
-            "--chain-id",
-            CHAIN_ID,
-            "--validators",
-            str(VALIDATORS),
-            "--base-port",
-            str(base_port),
-            "--rpc-base-port",
-            str(rpc_base_port),
-            "--activation-height",
-            str(CONSENSUS_ACTIVATION_HEIGHT),
-            "--storage-activation-height",
-            str(STORAGE_ACTIVATION_HEIGHT),
-            "--output",
-            str(topology),
-        ],
+        topology_command,
         stdout_path=logs / "topology.stdout.json",
         stderr_path=logs / "topology.stderr",
     )
@@ -941,6 +1187,11 @@ def main() -> int:
         ),
     )
     args = parser.parse_args()
+    if not args.development_smoke:
+        raise ValueError(
+            "release qualification requires run_paired_campaign.py; "
+            "run_campaign.py is the selected-lane development-smoke helper"
+        )
 
     raw_node_bin = args.node_bin.expanduser()
     raw_root = args.output_dir.expanduser()
@@ -954,11 +1205,9 @@ def main() -> int:
         raise ValueError(f"refusing to overwrite output directory: {root}")
     if args.expected_source_revision != run_git_revision():
         raise ValueError("HEAD does not match --expected-source-revision")
-    if not args.development_smoke and not git_is_clean():
-        raise ValueError("storage scaling campaign requires a clean checkout")
-    heights = [2] if args.development_smoke else HEIGHTS
-    windows_per_height = 1 if args.development_smoke else WINDOWS_PER_HEIGHT
-    rounds_per_window = 1 if args.development_smoke else ROUNDS_PER_WINDOW
+    heights = [2]
+    windows_per_height = 1
+    rounds_per_window = 1
     root.mkdir(parents=True)
     (root / "snapshots").mkdir()
     (root / "receipts").mkdir()
@@ -1027,13 +1276,7 @@ def main() -> int:
                 for window in row["windows"]
                 for iteration in read_json(root / window["normalized_report"])["iterations"]
             ]
-            row.setdefault("aggregate", {})[metric] = {
-                "count": len(samples),
-                "p50": percentile(samples, 0.50),
-                "p95": percentile(samples, 0.95),
-                "p99": percentile(samples, 0.99),
-                "max": max(samples),
-            }
+            row.setdefault("aggregate", {})[metric] = distribution_summary(samples)
 
     window_gates_pass = all(
         window["literal_receipts_exact"] is True
@@ -1041,51 +1284,21 @@ def main() -> int:
         and window["bounded_index_pages"] is True
         and window["constant_accumulator_work"] is True
         and int(window["validators_converged"]) == VALIDATORS
+        and int(window["resources"]["foreground_process_count"]) == 1
+        and int(window["resources"]["foreground_min_sample_count"]) >= 2
         for row in rows
         for window in row["windows"]
     )
-    relationship_models = (
-        {}
-        if args.development_smoke
-        else height_relationship_models(rows, root)
+    status = (
+        "DEVELOPMENT SMOKE PASS"
+        if window_gates_pass
+        else "DEVELOPMENT SMOKE BLOCKED"
     )
-    no_positive_linear_height_relationship = (
-        None
-        if args.development_smoke
-        else all(
-            model["material_positive_linear_relationship"] is False
-            for model in relationship_models.values()
-        )
-    )
-    ratios: dict[str, float] = {}
-    if args.development_smoke:
-        status = (
-            "DEVELOPMENT SMOKE PASS"
-            if window_gates_pass
-            else "DEVELOPMENT SMOKE BLOCKED"
-        )
-    else:
-        for metric in ("consensus_round_ms", "wallet_to_finality_ms"):
-            height_50 = float(rows[0]["aggregate"][metric]["p95"])
-            height_5000 = float(rows[-1]["aggregate"][metric]["p95"])
-            ratios[f"{metric}_height50_vs_legacy"] = (
-                height_50 / LEGACY_HEIGHT_50_BASELINE[metric]
-            )
-            ratios[f"{metric}_height5000_vs_height50"] = height_5000 / height_50
-        status = (
-            "PASS"
-            if window_gates_pass
-            and no_positive_linear_height_relationship is True
-            and all(value <= 1.10 for value in ratios.values())
-            else "PUBLIC TESTNET BLOCKED"
-        )
     report = {
-        "schema": "postfiat-storage-scaling-six-validator-campaign-v1",
+        "schema": "postfiat-storage-scaling-selected-development-smoke-v1",
         "status": status,
-        "campaign_mode": (
-            "development-smoke" if args.development_smoke else "release-qualification"
-        ),
-        "evidence_eligible": not args.development_smoke,
+        "campaign_mode": "development-smoke",
+        "evidence_eligible": False,
         "source_revision": args.expected_source_revision,
         "node_binary_sha256": digest(node_bin),
         "node_binary": node_bin.name,
@@ -1098,31 +1311,25 @@ def main() -> int:
         "validator_count": VALIDATORS,
         "windows_per_height": windows_per_height,
         "rounds_per_window": rounds_per_window,
-        "legacy_height_50_baseline": LEGACY_HEIGHT_50_BASELINE,
         "rows": rows,
-        "ratios": ratios,
         "window_gates_pass": window_gates_pass,
         "page_bounds_per_round": {
             "proposal_reads": MAX_PROPOSAL_PAGE_READS_PER_ROUND,
             "apply_reads_per_validator": MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND,
             "apply_writes_per_validator": MAX_APPLY_PAGE_WRITES_PER_VALIDATOR_ROUND,
         },
-        "height_relationship_model": {
-            "schema": "postfiat-storage-height-relationship-model-v1",
-            "sample_kind": "per_window_p95",
-            "relative_materiality": MODEL_RELATIVE_MATERIALITY,
-            "residual_sigmas": MODEL_RESIDUAL_SIGMAS,
-            "stages": relationship_models,
-        },
-        "no_positive_linear_height_relationship": (
-            no_positive_linear_height_relationship
-        ),
+        "claims_not_made": [
+            "release qualification",
+            "legacy baseline comparison",
+            "height scaling relationship",
+            "public WAN or devnet performance",
+        ],
         "devnet_queried_or_mutated": False,
     }
     write_json(root / "campaign-report.json", report)
     print(f"storage-scaling-campaign={status}", flush=True)
     print(f"report={root / 'campaign-report.json'}", flush=True)
-    return 0 if status in {"PASS", "DEVELOPMENT SMOKE PASS"} else 1
+    return 0 if status == "DEVELOPMENT SMOKE PASS" else 1
 
 
 if __name__ == "__main__":

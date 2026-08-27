@@ -11,6 +11,11 @@ from postfiat_rpc.storage_scaling import (
     ARTIFACT_SCHEMAS,
     MANIFEST_FILE,
     MATERIAL_STAGE_PATHS,
+    PERFORMANCE_RESOURCE_FIELDS,
+    PERFORMANCE_SOURCE_REVISIONS,
+    PERFORMANCE_STORAGE_BEHAVIORS,
+    RESOURCE_SAMPLE_SCHEMA,
+    RESOURCE_SAMPLE_TARGET_INTERVAL_MS,
     REQUIRED_TAMPER_CASES,
     REQUIRED_TAMPER_REASONS,
     StorageScalingVerificationError,
@@ -50,10 +55,25 @@ def _reference(packet: Path, path: Path) -> dict[str, str]:
     }
 
 
+def _constant_distribution(value: float, count: int) -> dict[str, float | int]:
+    return {
+        "count": count,
+        "min": value,
+        "p50": value,
+        "p95": value,
+        "p99": value,
+        "max": value,
+        "mean": value,
+        "population_stddev": 0.0,
+    }
+
+
 def _passing_packet(packet: Path) -> None:
     packet.mkdir()
     digest96 = "a" * 96
     revision = "b" * 40
+    legacy_performance_revision = PERFORMANCE_SOURCE_REVISIONS["legacy-jsonl"]
+    bounded_performance_revision = PERFORMANCE_SOURCE_REVISIONS["bounded-jsonl"]
     binary = packet / "bin" / "postfiat-node"
     binary.parent.mkdir()
     binary.write_bytes(b"release-binary-identity")
@@ -61,6 +81,10 @@ def _passing_packet(packet: Path) -> None:
     rollback_binary.write_bytes(b"older-compatible-release-binary-identity")
     incompatible_binary = packet / "bin" / "postfiat-node-incompatible"
     incompatible_binary.write_bytes(b"older-incompatible-release-binary-identity")
+    legacy_performance_binary = packet / "bin" / "postfiat-node-performance-legacy"
+    legacy_performance_binary.write_bytes(b"legacy-performance-release-binary")
+    bounded_performance_binary = packet / "bin" / "postfiat-node-performance-bounded"
+    bounded_performance_binary.write_bytes(b"bounded-performance-release-binary")
     binaries = [
         {"path": "bin/postfiat-node", "sha256": _sha256(binary)},
         {
@@ -70,6 +94,14 @@ def _passing_packet(packet: Path) -> None:
         {
             "path": "bin/postfiat-node-incompatible",
             "sha256": _sha256(incompatible_binary),
+        },
+        {
+            "path": "bin/postfiat-node-performance-legacy",
+            "sha256": _sha256(legacy_performance_binary),
+        },
+        {
+            "path": "bin/postfiat-node-performance-bounded",
+            "sha256": _sha256(bounded_performance_binary),
         },
     ]
 
@@ -118,88 +150,297 @@ def _passing_packet(packet: Path) -> None:
         )
         replay_receipts.append(_reference(packet, path))
 
-    rows = []
-    for index, height in enumerate([50, 100, 500, 1000, 5000]):
-        consensus = 100.0 + index
-        wallet = 105.0 + index
-        windows = []
-        for window_index in range(5):
-            raw_path = (
-                packet
-                / "performance"
-                / f"height-{height}-window-{window_index + 1}.json"
-            )
-            _write_json(
-                raw_path,
-                {
-                    "schema": "postfiat-real-transaction-latency-benchmark-v1",
-                    "status": "passed",
-                    "iterations": [
-                        {
-                            "round_ok": True,
-                            "receipt_accepted": True,
-                            "finality_confirmed": True,
-                            "consensus_round_ms": consensus,
-                            "wallet_to_finality_ms": wallet,
-                            "round_timings": {
-                                "proposal_ms": 10.0,
-                                "verification_ms": 10.0,
-                                "vote_requests_ms": 10.0,
-                                "local_vote_ms": 10.0,
-                                "certificate_ms": 10.0,
-                                "local_apply_ms": 10.0,
-                                "certified_sends_ms": 10.0,
-                                "post_apply_status_ms": 10.0,
-                                "local_commit_publish_ms": 10.0,
-                                "local_apply_breakdown": {
-                                    "write_commit_ms": 10.0,
+    def performance_fleet(height: int, identity_seed: int) -> list[dict[str, object]]:
+        return [
+            {
+                "node_id": f"validator-{validator}",
+                "height": height,
+                "tip": f"{identity_seed:096x}",
+                "state_root": f"{identity_seed + 1:096x}",
+            }
+            for validator in range(6)
+        ]
+
+    def performance_rows(
+        lane_name: str,
+        consensus_base: float,
+        wallet_base: float,
+    ) -> list[dict[str, object]]:
+        selected = lane_name == "selected-indexed"
+        rows: list[dict[str, object]] = []
+        for index, height in enumerate([50, 100, 500, 1000, 5000]):
+            consensus = consensus_base + index
+            wallet = wallet_base + index
+            windows = []
+            for window_index in range(5):
+                raw_path = (
+                    packet
+                    / "performance"
+                    / lane_name
+                    / f"height-{height}-window-{window_index + 1}.json"
+                )
+                initial_identity_seed = (index + 1) * 100
+                result_identity_seed = initial_identity_seed + 10 + window_index * 2
+                _write_json(
+                    raw_path,
+                    {
+                        "schema": "postfiat-real-transaction-latency-benchmark-v1",
+                        "status": "passed",
+                        "config": {
+                            "mode": "wallet-to-finality",
+                            "build_mode": "release",
+                            "transport": (
+                                "local-loopback-persistent-validator-services"
+                            ),
+                            "validators": 6,
+                            "rounds": 50,
+                            "vote_policy": "full",
+                            "amount": 10,
+                            "wallet_address": "pf-test-wallet",
+                            "recipient": "pf-test-recipient",
+                            **(
+                                {
+                                    "resident_transactional_store": True,
+                                    "expected_start_height": height,
+                                }
+                                if selected
+                                else {}
+                            ),
+                        },
+                        "checks": {
+                            "all_receipts_accepted": True,
+                            "all_rounds_ok": True,
+                            "all_transactions_final": True,
+                            "all_vote_policies_match": True,
+                            "converged": True,
+                            "final_height_matches_rounds": True,
+                            "iteration_count_matches_rounds": True,
+                            "no_duplicate_receipts": True,
+                            "state_verified_after_run": True,
+                        },
+                        "final_state": {
+                            "height": height + 50,
+                            "block_tip_hash": f"{result_identity_seed:096x}",
+                            "state_root": f"{result_identity_seed + 1:096x}",
+                            "state_verification_count": 6,
+                        },
+                        "iterations": [
+                            {
+                                "iteration": iteration_index,
+                                "round_ok": True,
+                                "receipt_accepted": True,
+                                "finality_confirmed": True,
+                                "all_sends_verified": True,
+                                "all_vote_requests_verified": True,
+                                "block_height": height + iteration_index,
+                                "block_hash": f"{height + iteration_index:096x}",
+                                "certificate_id": f"{height + iteration_index + 1:096x}",
+                                "quorum": 5,
+                                "consensus_round_ms": consensus,
+                                "wallet_to_finality_ms": wallet,
+                                "round_timings": {
+                                    "proposal_ms": 10.0,
+                                    "verification_ms": 10.0,
+                                    "vote_requests_ms": 10.0,
+                                    "local_vote_ms": 10.0,
+                                    "certificate_ms": 10.0,
+                                    "local_apply_ms": 10.0,
+                                    "certified_sends_ms": 10.0,
+                                    "post_apply_status_ms": 10.0,
+                                    "local_commit_publish_ms": 10.0,
+                                    "local_apply_breakdown": {
+                                        "write_commit_ms": 10.0,
+                                    },
                                 },
+                            }
+                            for iteration_index in range(1, 51)
+                        ],
+                    },
+                )
+                resource_path = (
+                    packet
+                    / "performance"
+                    / "resources"
+                    / lane_name
+                    / f"height-{height}-window-{window_index + 1}.json"
+                )
+                foreground_pids = list(range(1000, 1050))
+                first_processes = {
+                    str(pid): {
+                        "cpu_ticks": 0,
+                        "rss_kib": 20 if pid == foreground_pids[0] else 0,
+                        "read_bytes": 0,
+                        "write_bytes": 0,
+                    }
+                    for pid in foreground_pids
+                }
+                last_processes = {
+                    str(pid): {
+                        "cpu_ticks": 10 if pid == foreground_pids[0] else 0,
+                        "rss_kib": 20 if pid == foreground_pids[0] else 0,
+                        "read_bytes": 40 if pid == foreground_pids[0] else 0,
+                        "write_bytes": 50 if pid == foreground_pids[0] else 0,
+                    }
+                    for pid in foreground_pids
+                }
+                _write_json(
+                    resource_path,
+                    {
+                        "schema": RESOURCE_SAMPLE_SCHEMA,
+                        "sample_target_interval_ms": (
+                            RESOURCE_SAMPLE_TARGET_INTERVAL_MS
+                        ),
+                        "samples": [
+                            {
+                                "monotonic_offset_ns": 0,
+                                "host_cpu_ticks": 100,
+                                "host_memory": {
+                                    "total_kib": 100,
+                                    "available_kib": 90,
+                                },
+                                "network": {
+                                    "received": 1000,
+                                    "transmitted": 2000,
+                                },
+                                "node_disk_bytes": 100,
+                                "processes": first_processes,
                             },
-                        }
-                        for _ in range(50)
-                    ],
-                },
-            )
-            windows.append(
-                {
-                    "rounds": 50,
-                    "validators_converged": 6,
-                    "literal_receipts_exact": True,
-                    "zero_full_history_reads": True,
-                    "bounded_index_pages": True,
-                    "constant_accumulator_work": True,
-                    "storage": {
+                            {
+                                "monotonic_offset_ns": 1_000_000_000,
+                                "host_cpu_ticks": 160,
+                                "host_memory": {
+                                    "total_kib": 100,
+                                    "available_kib": 70,
+                                },
+                                "network": {
+                                    "received": 1080,
+                                    "transmitted": 2090,
+                                },
+                                "node_disk_bytes": 130,
+                                "processes": last_processes,
+                            },
+                        ],
+                        "foreground_processes": [
+                            {
+                                "pid": pid,
+                                "started_offset_ns": 0,
+                                "ended_offset_ns": 1_000_000_000,
+                            }
+                            for pid in foreground_pids
+                        ],
+                        "foreground_sample_counts": {
+                            str(pid): 2 for pid in foreground_pids
+                        },
+                    },
+                )
+                resources = {
+                    "cpu_ticks": 10,
+                    "peak_rss_kib": 20,
+                    "disk_growth_bytes": 30,
+                    "bytes_read": 40,
+                    "bytes_written": 50,
+                    "page_reads": 6 if selected else None,
+                    "page_writes": 7 if selected else None,
+                    "fsync_count": 300 if selected else None,
+                    "fsync_micros": 8 if selected else None,
+                    "sample_count": 2,
+                    "duration_ms": 1000.0,
+                    "observed_pid_count": 50,
+                    "foreground_process_count": 50,
+                    "foreground_min_sample_count": 2,
+                    "host_cpu_ticks": 60,
+                    "host_total_memory_kib": 100,
+                    "host_min_available_memory_kib": 70,
+                    "network_received_bytes": 80,
+                    "network_transmitted_bytes": 90,
+                }
+                storage = (
+                    {
                         "committed_write_transactions": 300,
                         "fsync_count": 300,
                         "full_history_scans": 0,
                         "full_history_records_read": 0,
                         "full_history_bytes_read": 0,
+                    }
+                    if selected
+                    else {
+                        "telemetry_available": False,
+                        "reason": (
+                            "historical release report predates transactional "
+                            "page counters"
+                        ),
+                    }
+                )
+                windows.append(
+                    {
+                        "label": f"height-{height}-window-{window_index + 1}",
+                        "storage_lane": lane_name,
+                        "starting_height": height,
+                        "rounds": 50,
+                        "validators_converged": 6,
+                        "literal_receipts_exact": True,
+                        "zero_full_history_reads": True if selected else None,
+                        "bounded_index_pages": True if selected else None,
+                        "constant_accumulator_work": True if selected else None,
+                        "source_snapshot_sha256": f"{height + 10:064x}",
+                        "result_snapshot_sha256": f"{result_identity_seed:064x}",
+                        "initial_fleet": performance_fleet(
+                            height, initial_identity_seed
+                        ),
+                        "final_fleet": performance_fleet(
+                            height + 50, result_identity_seed
+                        ),
+                        "final_height": height + 50,
+                        "final_tip": f"{result_identity_seed:096x}",
+                        "final_state_root": f"{result_identity_seed + 1:096x}",
+                        "storage": storage,
+                        "resources": resources,
+                        "normalized_report": raw_path.relative_to(packet).as_posix(),
+                        "normalized_report_sha256": _sha256(raw_path),
+                        "resource_samples": resource_path.relative_to(packet).as_posix(),
+                        "resource_samples_sha256": _sha256(resource_path),
+                    }
+                )
+            resource_variance = {
+                field: _constant_distribution(
+                    float(windows[0]["resources"][field]), 5
+                )
+                for field in PERFORMANCE_RESOURCE_FIELDS
+            }
+            rows.append(
+                {
+                    "height": height,
+                    "windows": windows,
+                    "resource_variance": resource_variance,
+                    "aggregate": {
+                        "consensus_round_ms": {
+                            "count": 250,
+                            "min": consensus,
+                            "p50": consensus,
+                            "p95": consensus,
+                            "p99": consensus,
+                            "max": consensus,
+                            "mean": consensus,
+                            "population_stddev": 0.0,
+                        },
+                        "wallet_to_finality_ms": {
+                            "count": 250,
+                            "min": wallet,
+                            "p50": wallet,
+                            "p95": wallet,
+                            "p99": wallet,
+                            "max": wallet,
+                            "mean": wallet,
+                            "population_stddev": 0.0,
+                        },
                     },
-                    "resources": {
-                        "cpu_ticks": 10,
-                        "peak_rss_kib": 20,
-                        "disk_growth_bytes": 30,
-                        "bytes_read": 40,
-                        "bytes_written": 50,
-                        "page_reads": 6,
-                        "page_writes": 7,
-                        "fsync_count": 300,
-                        "fsync_micros": 8,
-                    },
-                    "normalized_report": raw_path.relative_to(packet).as_posix(),
-                    "normalized_report_sha256": _sha256(raw_path),
                 }
             )
-        rows.append(
-            {
-                "height": height,
-                "windows": windows,
-                "aggregate": {
-                    "consensus_round_ms": {"p95": consensus},
-                    "wallet_to_finality_ms": {"p95": wallet},
-                },
-            }
-        )
+        return rows
+
+    selected_rows = performance_rows("selected-indexed", 100.0, 105.0)
+    legacy_rows = performance_rows("legacy-jsonl", 110.0, 115.0)
+    bounded_rows = performance_rows("bounded-jsonl", 103.0, 108.0)
 
     e3_manifest_path = packet / "tamper" / "evidence" / "current-e3-manifest.json"
     _write_json(
@@ -431,15 +672,58 @@ def _passing_packet(packet: Path) -> None:
             }
         )
 
+    height_model_observations = [
+        {
+            "height": height,
+            "window": f"height-{height}-window-{window_index}",
+            "p95_ms": 10.0,
+        }
+        for height in (50, 100, 500, 1000, 5000)
+        for window_index in range(1, 6)
+    ]
+    height_model_predictions = [10.0 for _ in height_model_observations]
+    height_model_residuals = [0.0 for _ in height_model_observations]
+    constant_fit = {
+        "intercept_ms": 10.0,
+        "predictions_ms": height_model_predictions,
+        "residuals_ms": height_model_residuals,
+        "residual_rmse_ms": 0.0,
+    }
+    logarithmic_fit = {
+        "intercept_ms": 10.0,
+        "predictions_ms": height_model_predictions,
+        "residuals_ms": height_model_residuals,
+        "residual_rmse_ms": 0.0,
+        "r_squared": 0.0,
+        "slope_ms_per_log_height": 0.0,
+    }
+    linear_fit = {
+        "intercept_ms": 10.0,
+        "predictions_ms": height_model_predictions,
+        "residuals_ms": height_model_residuals,
+        "residual_rmse_ms": 0.0,
+        "r_squared": 0.0,
+        "slope_ms_per_height": 0.0,
+    }
     height_relationship_stages = {
         stage: {
             "slope_ms_per_height": 0.0,
             "intercept_ms": 10.0,
+            "predictions_ms": height_model_predictions,
+            "residuals_ms": height_model_residuals,
             "residual_rmse_ms": 0.0,
             "r_squared": 0.0,
+            "observations": height_model_observations,
+            "fits": {
+                "constant": constant_fit,
+                "logarithmic": logarithmic_fit,
+                "linear": linear_fit,
+            },
+            "preferred_fit_by_rmse": "constant",
             "sample_kind": "per_window_p95",
             "sample_count": 25,
             "height_50_window_p95_median_ms": 10.0,
+            "max_same_height_window_range_ms": 0.0,
             "predicted_delta_50_to_5000_ms": 0.0,
             "material_threshold_ms": 1.0,
             "relative_materiality": 0.10,
@@ -689,6 +973,82 @@ def _passing_packet(packet: Path) -> None:
         "clones": migration_clones,
     }
 
+    def performance_lane(
+        lane_name: str,
+        source_revision: str,
+        lane_binary: Path,
+        rows: list[dict[str, object]],
+    ) -> dict[str, object]:
+        selected = lane_name == "selected-indexed"
+        return {
+            "lane": lane_name,
+            "storage_behavior": PERFORMANCE_STORAGE_BEHAVIORS[lane_name],
+            "source_revision": source_revision,
+            "node_binary_sha256": _sha256(lane_binary),
+            "node_binary": lane_binary.name,
+            "node_binary_build": {
+                "git_revision": source_revision[:8],
+                "profile": "release",
+            },
+            "storage_activation_height": None if lane_name == "legacy-jsonl" else 1,
+            "chain_id": "postfiat-storage-scaling-local-v1",
+            "wallet_address": "pf-test-wallet",
+            "recipient_address": "pf-test-recipient",
+            "validator_public_identities": [
+                {
+                    "node_id": f"validator-{index}",
+                    "algorithm_id": "ML-DSA-65",
+                    "public_key_sha256": f"{index + 10:064x}",
+                }
+                for index in range(6)
+            ],
+            "topology_sha256": "1" * 64,
+            "environment": {
+                "cpu_affinity": [0, 1],
+                "filesystem_device": 1,
+                "filesystem_block_size_bytes": 4096,
+            },
+            "height_1_snapshot_sha256": "2" * 64,
+            "rows": rows,
+            "comparison_windows_pass": True,
+            "selected_storage_gates_pass": True if selected else None,
+            "height_relationship_model": {
+                "schema": "postfiat-storage-height-cost-model-v2",
+                "sample_kind": "per_window_p95",
+                "relative_materiality": 0.10,
+                "residual_sigmas": 2.0,
+                "stages": height_relationship_stages,
+            },
+            "no_positive_linear_height_relationship": True,
+        }
+
+    performance_lanes = {
+        "legacy-jsonl": performance_lane(
+            "legacy-jsonl",
+            legacy_performance_revision,
+            legacy_performance_binary,
+            legacy_rows,
+        ),
+        "bounded-jsonl": performance_lane(
+            "bounded-jsonl",
+            bounded_performance_revision,
+            bounded_performance_binary,
+            bounded_rows,
+        ),
+        "selected-indexed": performance_lane(
+            "selected-indexed",
+            revision,
+            binary,
+            selected_rows,
+        ),
+    }
+    performance_ratios = {
+        "consensus_round_ms_height50_vs_legacy": 100.0 / 110.0,
+        "consensus_round_ms_height5000_vs_height50": 104.0 / 100.0,
+        "wallet_to_finality_ms_height50_vs_legacy": 105.0 / 115.0,
+        "wallet_to_finality_ms_height5000_vs_height50": 109.0 / 105.0,
+    }
+
     reports = {
         "source": {
             "schema": ARTIFACT_SCHEMAS["source"],
@@ -731,19 +1091,45 @@ def _passing_packet(packet: Path) -> None:
             "validator_count": 6,
             "windows_per_height": 5,
             "rounds_per_window": 50,
+            "lane_order": ["legacy-jsonl", "bounded-jsonl", "selected-indexed"],
+            "lanes": performance_lanes,
             "legacy_height_50_baseline": {
-                "consensus_round_ms": 100.0,
-                "wallet_to_finality_ms": 105.0,
+                "consensus_round_ms": 110.0,
+                "wallet_to_finality_ms": 115.0,
             },
-            "rows": rows,
+            "rows": selected_rows,
+            "ratios": performance_ratios,
+            "comparison_windows_pass": True,
+            "window_gates_pass": True,
             "height_relationship_model": {
-                "schema": "postfiat-storage-height-relationship-model-v1",
+                "schema": "postfiat-storage-height-cost-model-v2",
                 "sample_kind": "per_window_p95",
                 "relative_materiality": 0.10,
                 "residual_sigmas": 2.0,
                 "stages": height_relationship_stages,
             },
             "no_positive_linear_height_relationship": True,
+            "host": {
+                "cpu_affinity": [0, 1],
+                "campaign_root_device": 1,
+                "filesystem_block_size_bytes": 4096,
+            },
+            "pairing": {
+                "same_host": True,
+                "same_chain_id": True,
+                "same_validator_count": True,
+                "same_validator_keys": True,
+                "same_height_window_cardinality": True,
+                "same_full_vote_policy": True,
+                "same_host_allocation": True,
+                "same_storage_medium": True,
+                "same_wallet_and_recipient_accounts": True,
+                "same_semantic_transfer_workload": True,
+                "same_binary": False,
+                "binary_policy": "three exact hash-bound release binaries",
+                "snapshot_policy": "lane-native snapshots at matching heights",
+                "signature_limit": "randomized signatures differ across lanes",
+            },
         },
         "tamper": {
             "schema": ARTIFACT_SCHEMAS["tamper"],
@@ -808,6 +1194,43 @@ def _rewrite_migration(
     _write_checksums(packet)
 
 
+def _rewrite_performance(
+    packet: Path,
+    mutation: Callable[[dict[str, object]], None],
+) -> None:
+    performance_path = packet / "artifacts" / "performance.json"
+    performance = json.loads(performance_path.read_text(encoding="utf-8"))
+    mutation(performance)
+    _write_json(performance_path, performance)
+    manifest_path = packet / MANIFEST_FILE
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["artifacts"]["performance"]["sha256"] = _sha256(performance_path)
+    _write_json(manifest_path, manifest)
+    _write_checksums(packet)
+
+
+def _rewrite_first_selected_resource_samples(
+    packet: Path,
+    mutation: Callable[[dict[str, object]], None],
+) -> None:
+    performance_path = packet / "artifacts" / "performance.json"
+    performance = json.loads(performance_path.read_text(encoding="utf-8"))
+    selected = performance["lanes"]["selected-indexed"]
+    window = selected["rows"][0]["windows"][0]
+    resource_path = packet / window["resource_samples"]
+    resource_report = json.loads(resource_path.read_text(encoding="utf-8"))
+    mutation(resource_report)
+    _write_json(resource_path, resource_report)
+    window["resource_samples_sha256"] = _sha256(resource_path)
+    performance["rows"] = selected["rows"]
+    _write_json(performance_path, performance)
+    manifest_path = packet / MANIFEST_FILE
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["artifacts"]["performance"]["sha256"] = _sha256(performance_path)
+    _write_json(manifest_path, manifest)
+    _write_checksums(packet)
+
+
 class StorageScalingVerifierTests(unittest.TestCase):
     def packet_dir(self, temporary: str) -> Path:
         return Path(temporary) / "packet"
@@ -823,6 +1246,243 @@ class StorageScalingVerifierTests(unittest.TestCase):
             self.assertEqual(
                 verified.report["tamper_case_count"], len(REQUIRED_TAMPER_CASES)
             )
+
+    def test_storage_scaling_packet_rejects_missing_performance_lane(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def remove_lane(performance: dict[str, object]) -> None:
+                lanes = performance["lanes"]
+                assert isinstance(lanes, dict)
+                lanes.pop("bounded-jsonl")
+
+            _rewrite_performance(packet, remove_lane)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "exactly three lanes",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_hard_coded_legacy_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def change_baseline(performance: dict[str, object]) -> None:
+                baseline = performance["legacy_height_50_baseline"]
+                assert isinstance(baseline, dict)
+                baseline["consensus_round_ms"] = 999.0
+
+            _rewrite_performance(packet, change_baseline)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "does not derive from the raw lane",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_historical_telemetry_overclaim(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def invent_gate(performance: dict[str, object]) -> None:
+                lanes = performance["lanes"]
+                assert isinstance(lanes, dict)
+                legacy = lanes["legacy-jsonl"]
+                assert isinstance(legacy, dict)
+                rows = legacy["rows"]
+                assert isinstance(rows, list)
+                rows[0]["windows"][0]["zero_full_history_reads"] = True
+
+            _rewrite_performance(packet, invent_gate)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "overclaims zero_full_history_reads",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_unbound_performance_lane_binary(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def swap_binary(performance: dict[str, object]) -> None:
+                lanes = performance["lanes"]
+                assert isinstance(lanes, dict)
+                legacy = lanes["legacy-jsonl"]
+                assert isinstance(legacy, dict)
+                legacy["node_binary_sha256"] = performance["node_binary_sha256"]
+
+            _rewrite_performance(packet, swap_binary)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "legacy-jsonl binary identity is unbound",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_unfrozen_historical_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def change_source(performance: dict[str, object]) -> None:
+                lanes = performance["lanes"]
+                assert isinstance(lanes, dict)
+                legacy = lanes["legacy-jsonl"]
+                assert isinstance(legacy, dict)
+                legacy["source_revision"] = "0" * 40
+
+            _rewrite_performance(packet, change_source)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "source revision is not frozen",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_mismatched_validator_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def change_key(performance: dict[str, object]) -> None:
+                lanes = performance["lanes"]
+                assert isinstance(lanes, dict)
+                bounded = lanes["bounded-jsonl"]
+                assert isinstance(bounded, dict)
+                identities = bounded["validator_public_identities"]
+                assert isinstance(identities, list)
+                identities[0]["public_key_sha256"] = "f" * 64
+
+            _rewrite_performance(packet, change_key)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "same validator keys",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_unpaired_window_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def change_snapshot(performance: dict[str, object]) -> None:
+                lanes = performance["lanes"]
+                assert isinstance(lanes, dict)
+                selected = lanes["selected-indexed"]
+                assert isinstance(selected, dict)
+                rows = selected["rows"]
+                assert isinstance(rows, list)
+                rows[0]["windows"][1]["source_snapshot_sha256"] = "f" * 64
+
+            _rewrite_performance(packet, change_snapshot)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "did not share one snapshot",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_unpaired_host_allocation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def change_affinity(performance: dict[str, object]) -> None:
+                lanes = performance["lanes"]
+                assert isinstance(lanes, dict)
+                bounded = lanes["bounded-jsonl"]
+                assert isinstance(bounded, dict)
+                environment = bounded["environment"]
+                assert isinstance(environment, dict)
+                environment["cpu_affinity"] = [0]
+
+            _rewrite_performance(packet, change_affinity)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "did not share one host allocation",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_cost_model_residual_tamper(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def change_residual(performance: dict[str, object]) -> None:
+                lanes = performance["lanes"]
+                assert isinstance(lanes, dict)
+                selected = lanes["selected-indexed"]
+                assert isinstance(selected, dict)
+                model = selected["height_relationship_model"]
+                assert isinstance(model, dict)
+                model["stages"]["proposal_ms"]["residuals_ms"][0] = 1.0
+
+            _rewrite_performance(packet, change_residual)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "height relationship stage proposal_ms",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_resource_variance_tamper(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def change_variance(performance: dict[str, object]) -> None:
+                lanes = performance["lanes"]
+                assert isinstance(lanes, dict)
+                selected = lanes["selected-indexed"]
+                assert isinstance(selected, dict)
+                rows = selected["rows"]
+                assert isinstance(rows, list)
+                rows[0]["resource_variance"]["cpu_ticks"]["mean"] = 999.0
+
+            _rewrite_performance(packet, change_variance)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "resource variance cpu_ticks",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_raw_resource_tamper(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def change_cpu_samples(resource_report: dict[str, object]) -> None:
+                samples = resource_report["samples"]
+                assert isinstance(samples, list)
+                processes = samples[-1]["processes"]
+                assert isinstance(processes, dict)
+                processes["1000"]["cpu_ticks"] = 999
+
+            _rewrite_first_selected_resource_samples(packet, change_cpu_samples)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "sampled resource cpu_ticks",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_redaction_allows_timing_field_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+            _write_json(packet / "timing.json", {"private_key_decode_ms": 1.0})
+            _write_checksums(packet)
+            self.assertIs(verify_packet(packet).report["verified"], True)
+
+    def test_storage_scaling_redaction_rejects_actual_private_key(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+            _write_json(packet / "leak.json", {"private_key": "not-safe"})
+            _write_checksums(packet)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "sensitive material marker",
+            ):
+                verify_packet(packet)
 
     def test_storage_scaling_packet_rejects_development_migration_smoke(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -978,13 +1638,21 @@ class StorageScalingVerifierTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             packet = self.packet_dir(temporary)
             _passing_packet(packet)
-            raw = packet / "performance" / "height-50-window-1.json"
+            raw = (
+                packet
+                / "performance"
+                / "selected-indexed"
+                / "height-50-window-1.json"
+            )
             report = json.loads(raw.read_text(encoding="utf-8"))
             report["iterations"][0]["round_ok"] = False
             _write_json(raw, report)
             performance_path = packet / "artifacts" / "performance.json"
             performance = json.loads(performance_path.read_text(encoding="utf-8"))
             performance["rows"][0]["windows"][0][
+                "normalized_report_sha256"
+            ] = _sha256(raw)
+            performance["lanes"]["selected-indexed"]["rows"][0]["windows"][0][
                 "normalized_report_sha256"
             ] = _sha256(raw)
             _write_json(performance_path, performance)

@@ -44,13 +44,42 @@ MATERIAL_STAGE_PATHS = {
 }
 MODEL_RELATIVE_MATERIALITY = 0.10
 MODEL_RESIDUAL_SIGMAS = 2.0
+PERFORMANCE_LANES = ("legacy-jsonl", "bounded-jsonl", "selected-indexed")
+PERFORMANCE_SOURCE_REVISIONS = {
+    "legacy-jsonl": "8cc7d15edc58b5f5a0b745143fef2d45203465ff",
+    "bounded-jsonl": "dfd0b9f11108b0b773d1e02bebae71685864228e",
+}
+PERFORMANCE_STORAGE_BEHAVIORS = {
+    "legacy-jsonl": "full-prefix JSON/JSONL and full ordered-history proposal path",
+    "bounded-jsonl": "authenticated JSONL v2 heads and fixed-slot ordered index candidate",
+    "selected-indexed": "transactional redb finality path and fixed-size accumulator",
+}
+RESOURCE_SAMPLE_SCHEMA = "postfiat-storage-resource-samples-v1"
+RESOURCE_SAMPLE_TARGET_INTERVAL_MS = 100
+PERFORMANCE_RESOURCE_FIELDS = (
+    "cpu_ticks",
+    "peak_rss_kib",
+    "disk_growth_bytes",
+    "bytes_read",
+    "bytes_written",
+    "sample_count",
+    "duration_ms",
+    "observed_pid_count",
+    "foreground_process_count",
+    "foreground_min_sample_count",
+    "host_cpu_ticks",
+    "host_total_memory_kib",
+    "host_min_available_memory_kib",
+    "network_received_bytes",
+    "network_transmitted_bytes",
+)
 MAX_PACKET_FILES = 4096
 MAX_FILE_BYTES = 512 * 1024 * 1024
 HEX40 = re.compile(r"[0-9a-f]{40}")
 HEX64 = re.compile(r"[0-9a-f]{64}")
 HEX96 = re.compile(r"[0-9a-f]{96}")
 SENSITIVE = re.compile(
-    r"private[-_ ]?key|secret|password|mnemonic|spending[-_ ]?key|"
+    r"private[-_ ]?key(?![A-Za-z0-9_])|secret|password|mnemonic|spending[-_ ]?key|"
     r"full[-_ ]?viewing[-_ ]?key|master[-_ ]?seed|rseed|ssh[-_ ]?cred",
     re.IGNORECASE,
 )
@@ -82,7 +111,7 @@ ORIGINAL_E3_FORGED_CASES = (
 ARTIFACT_SCHEMAS = {
     "source": "postfiat-storage-source-identity-v1",
     "replay": "postfiat-storage-scaling-replay-v1",
-    "performance": "postfiat-storage-scaling-six-validator-campaign-v1",
+    "performance": "postfiat-storage-scaling-paired-six-validator-campaign-v2",
     "tamper": "postfiat-storage-scaling-tamper-matrix-v1",
     "migration": "postfiat-storage-scaling-six-clone-migration-v1",
     "redaction": "postfiat-storage-scaling-redaction-v1",
@@ -342,6 +371,8 @@ def _verify_source(
         "bin/postfiat-node",
         "bin/postfiat-node-rollback",
         "bin/postfiat-node-incompatible",
+        "bin/postfiat-node-performance-legacy",
+        "bin/postfiat-node-performance-bounded",
     }
     observed_binaries: dict[str, str] = {}
     for index, value in enumerate(binaries):
@@ -355,7 +386,7 @@ def _verify_source(
             _fail(f"binary identity mismatch for {name}")
         observed_binaries[name] = expected
     if set(observed_binaries) != expected_binary_paths:
-        _fail("source binary roles do not match the required three-binary set")
+        _fail("source binary roles do not match the required five-binary set")
     if len(set(observed_binaries.values())) != len(expected_binary_paths):
         _fail("source binary roles are not distinct")
 
@@ -514,17 +545,36 @@ def _nested_stage_value(
     return float(current)
 
 
-def _ordinary_least_squares(points: list[tuple[float, float]]) -> dict[str, float]:
+def _distribution_summary(values: list[float]) -> dict[str, float | int]:
+    if not values:
+        _fail("cannot summarize an empty performance distribution")
+    mean = sum(values) / len(values)
+    return {
+        "count": len(values),
+        "min": min(values),
+        "p50": _percentile(values, 0.50),
+        "p95": _percentile(values, 0.95),
+        "p99": _percentile(values, 0.99),
+        "max": max(values),
+        "mean": mean,
+        "population_stddev": math.sqrt(
+            sum((value - mean) ** 2 for value in values) / len(values)
+        ),
+    }
+
+
+def _ordinary_least_squares(points: list[tuple[float, float]]) -> dict[str, Any]:
     if len(points) < 2:
         _fail("height relationship model has too few observations")
     mean_x = sum(point[0] for point in points) / len(points)
     mean_y = sum(point[1] for point in points) / len(points)
     denominator = sum((x - mean_x) ** 2 for x, _ in points)
     if denominator <= 0:
-        _fail("height relationship model has no distinct heights")
+        _fail("height relationship model has no distinct x values")
     slope = sum((x - mean_x) * (y - mean_y) for x, y in points) / denominator
     intercept = mean_y - slope * mean_x
-    residuals = [y - (intercept + slope * x) for x, y in points]
+    predictions = [intercept + slope * x for x, _ in points]
+    residuals = [y - prediction for (_, y), prediction in zip(points, predictions)]
     residual_rmse = math.sqrt(
         sum(residual * residual for residual in residuals) / len(residuals)
     )
@@ -536,23 +586,78 @@ def _ordinary_least_squares(points: list[tuple[float, float]]) -> dict[str, floa
         else 0.0
     )
     return {
-        "slope_ms_per_height": slope,
+        "slope": slope,
         "intercept_ms": intercept,
+        "predictions_ms": predictions,
+        "residuals_ms": residuals,
         "residual_rmse_ms": residual_rmse,
         "r_squared": max(0.0, min(1.0, r_squared)),
     }
 
 
+def _constant_fit(values: list[float]) -> dict[str, Any]:
+    mean = sum(values) / len(values)
+    predictions = [mean for _ in values]
+    residuals = [value - mean for value in values]
+    return {
+        "intercept_ms": mean,
+        "predictions_ms": predictions,
+        "residuals_ms": residuals,
+        "residual_rmse_ms": math.sqrt(
+            sum(residual * residual for residual in residuals) / len(residuals)
+        ),
+    }
+
+
+def _verify_numeric_structure(observed: Any, expected: Any, label: str) -> None:
+    if isinstance(expected, bool) or expected is None or isinstance(expected, str):
+        if observed != expected:
+            _fail(f"{label} differs")
+        return
+    if isinstance(expected, (int, float)):
+        if (
+            not isinstance(observed, (int, float))
+            or isinstance(observed, bool)
+            or not math.isclose(
+                float(observed), float(expected), rel_tol=1e-12, abs_tol=1e-9
+            )
+        ):
+            _fail(f"{label} differs")
+        return
+    if isinstance(expected, list):
+        if not isinstance(observed, list) or len(observed) != len(expected):
+            _fail(f"{label} differs")
+        for index, (observed_value, expected_value) in enumerate(
+            zip(observed, expected)
+        ):
+            _verify_numeric_structure(
+                observed_value, expected_value, f"{label}[{index}]"
+            )
+        return
+    if isinstance(expected, dict):
+        if not isinstance(observed, dict) or set(observed) != set(expected):
+            _fail(f"{label} differs")
+        for key, expected_value in expected.items():
+            _verify_numeric_structure(
+                observed[key], expected_value, f"{label}.{key}"
+            )
+        return
+    if observed != expected:
+        _fail(f"{label} differs")
+
+
 def _verify_height_relationship_models(
     performance: Mapping[str, Any],
-    points: Mapping[str, list[tuple[float, float]]],
+    observations_by_stage: Mapping[str, list[dict[str, Any]]],
     height_50_p95: Mapping[str, list[float]],
+    *,
+    reject_material_positive: bool = True,
 ) -> None:
     envelope = _object(
         performance.get("height_relationship_model"),
         "height relationship model",
     )
-    if envelope.get("schema") != "postfiat-storage-height-relationship-model-v1":
+    if envelope.get("schema") != "postfiat-storage-height-cost-model-v2":
         _fail("height relationship model schema is unsupported")
     if envelope.get("sample_kind") != "per_window_p95":
         _fail("height relationship model sample kind is unsupported")
@@ -565,150 +670,583 @@ def _verify_height_relationship_models(
         _fail("height relationship model does not cover the closed stage set")
 
     for stage in MATERIAL_STAGE_PATHS:
-        observed = _object(recorded.get(stage), f"height relationship stage {stage}")
-        model = _ordinary_least_squares(points[stage])
+        observations = observations_by_stage[stage]
+        points = [
+            (float(observation["height"]), float(observation["p95_ms"]))
+            for observation in observations
+        ]
+        values = [point[1] for point in points]
+        linear = _ordinary_least_squares(points)
+        logarithmic = _ordinary_least_squares(
+            [(math.log(height), value) for height, value in points]
+        )
+        constant = _constant_fit(values)
         baseline = _percentile(height_50_p95[stage], 0.50)
-        predicted_delta = model["slope_ms_per_height"] * (HEIGHTS[-1] - HEIGHTS[0])
+        predicted_delta = linear["slope"] * (HEIGHTS[-1] - HEIGHTS[0])
+        within_height_ranges = []
+        for height in HEIGHTS:
+            same_height = [
+                value for observed_height, value in points if observed_height == height
+            ]
+            within_height_ranges.append(max(same_height) - min(same_height))
+        same_height_variance_allowance = max(within_height_ranges)
         material_threshold = max(
             baseline * MODEL_RELATIVE_MATERIALITY,
-            model["residual_rmse_ms"] * MODEL_RESIDUAL_SIGMAS,
+            linear["residual_rmse_ms"] * MODEL_RESIDUAL_SIGMAS,
+            same_height_variance_allowance,
         )
         material_positive = (
-            model["slope_ms_per_height"] > 0
-            and predicted_delta > material_threshold
+            linear["slope"] > 0 and predicted_delta > material_threshold
         )
+        logarithmic_slope = logarithmic.pop("slope")
+        linear_slope = linear.pop("slope")
+        fits = {
+            "constant": constant,
+            "logarithmic": {
+                **logarithmic,
+                "slope_ms_per_log_height": logarithmic_slope,
+            },
+            "linear": {
+                **linear,
+                "slope_ms_per_height": linear_slope,
+            },
+        }
+        linear_fit = fits["linear"]
         expected: dict[str, Any] = {
-            **model,
+            "slope_ms_per_height": linear_fit["slope_ms_per_height"],
+            "intercept_ms": linear_fit["intercept_ms"],
+            "predictions_ms": linear_fit["predictions_ms"],
+            "residuals_ms": linear_fit["residuals_ms"],
+            "residual_rmse_ms": linear_fit["residual_rmse_ms"],
+            "r_squared": linear_fit["r_squared"],
+            "observations": observations,
+            "fits": fits,
+            "preferred_fit_by_rmse": min(
+                fits,
+                key=lambda name: float(fits[name]["residual_rmse_ms"]),
+            ),
             "sample_kind": "per_window_p95",
-            "sample_count": len(points[stage]),
+            "sample_count": len(points),
             "height_50_window_p95_median_ms": baseline,
+            "max_same_height_window_range_ms": same_height_variance_allowance,
             "predicted_delta_50_to_5000_ms": predicted_delta,
             "material_threshold_ms": material_threshold,
             "relative_materiality": MODEL_RELATIVE_MATERIALITY,
             "residual_sigmas": MODEL_RESIDUAL_SIGMAS,
             "material_positive_linear_relationship": material_positive,
         }
-        for key, value in expected.items():
-            recorded_value = observed.get(key)
-            if isinstance(value, float):
-                if (
-                    not isinstance(recorded_value, (int, float))
-                    or not math.isclose(
-                        float(recorded_value),
-                        value,
-                        rel_tol=1e-12,
-                        abs_tol=1e-9,
-                    )
-                ):
-                    _fail(f"height relationship stage {stage} disagrees on {key}")
-            elif recorded_value != value:
-                _fail(f"height relationship stage {stage} disagrees on {key}")
-        if material_positive:
+        observed = _object(recorded.get(stage), f"height relationship stage {stage}")
+        _verify_numeric_structure(
+            observed,
+            expected,
+            f"height relationship stage {stage}",
+        )
+        if material_positive and reject_material_positive:
             _fail(f"material stage {stage} retains a positive height relationship")
 
 
-def _verify_performance(
+def _verify_performance_fleet(
+    value: Any,
+    label: str,
+    expected_height: int,
+) -> tuple[str, str]:
+    fleet = _list(value, label)
+    if len(fleet) != 6:
+        _fail(f"{label} does not contain six validators")
+    node_ids: set[str] = set()
+    identities: set[tuple[int, str, str]] = set()
+    for row_value in fleet:
+        row = _object(row_value, label)
+        node_id = str(row.get("node_id", ""))
+        height = row.get("height")
+        tip = str(row.get("tip", ""))
+        state_root = str(row.get("state_root", ""))
+        if (
+            node_id not in {f"validator-{index}" for index in range(6)}
+            or node_id in node_ids
+            or height != expected_height
+            or HEX96.fullmatch(tip) is None
+            or HEX96.fullmatch(state_root) is None
+        ):
+            _fail(f"{label} contains an invalid validator identity")
+        node_ids.add(node_id)
+        identities.add((height, tip, state_root))
+    if len(identities) != 1:
+        _fail(f"{label} did not converge")
+    _, tip, state_root = next(iter(identities))
+    return tip, state_root
+
+
+def _verify_resource_samples(
     packet_dir: Path,
     checksums: Mapping[str, str],
-    performance: Mapping[str, Any],
-    source_revision: str,
-    current_binary_digest: str,
-) -> dict[str, float]:
-    if performance.get("status") != "PASS":
-        _fail("performance campaign did not pass")
-    if performance.get("campaign_mode") != "release-qualification":
-        _fail("performance campaign is not a release qualification")
-    if performance.get("evidence_eligible") is not True:
-        _fail("performance campaign is not evidence eligible")
-    if performance.get("source_revision") != source_revision:
-        _fail("performance source revision differs from the packet source")
-    if performance.get("node_binary_sha256") != current_binary_digest:
-        _fail("performance binary identity differs from the packet source")
-    _verify_binary_build(performance, "performance", source_revision)
-    if performance.get("validator_count") != 6:
-        _fail("performance topology is not six validators")
-    if performance.get("windows_per_height") != 5 or performance.get("rounds_per_window") != 50:
-        _fail("performance window cardinality differs from the specification")
-    rows = _list(performance.get("rows"), "performance rows")
+    window: Mapping[str, Any],
+    lane_name: str,
+    expected_rounds: int,
+) -> dict[str, int | float]:
+    report = _bound_json(
+        packet_dir,
+        checksums,
+        {
+            "path": window.get("resource_samples"),
+            "sha256": window.get("resource_samples_sha256"),
+        },
+        f"performance lane {lane_name} resource samples",
+    )
+    if (
+        report.get("schema") != RESOURCE_SAMPLE_SCHEMA
+        or report.get("sample_target_interval_ms")
+        != RESOURCE_SAMPLE_TARGET_INTERVAL_MS
+    ):
+        _fail(f"performance lane {lane_name} resource sample schema is invalid")
+    samples = _list(report.get("samples"), "performance resource samples")
+    if len(samples) < 2:
+        _fail(f"performance lane {lane_name} resource samples are incomplete")
+
+    normalized_samples: list[Mapping[str, Any]] = []
+    per_pid: dict[str, list[Mapping[str, Any]]] = {}
+    previous_offset = -1
+    for sample_value in samples:
+        sample = _object(sample_value, "performance resource sample")
+        if set(sample) != {
+            "monotonic_offset_ns",
+            "host_cpu_ticks",
+            "host_memory",
+            "network",
+            "node_disk_bytes",
+            "processes",
+        }:
+            _fail(f"performance lane {lane_name} resource sample fields differ")
+        offset = sample.get("monotonic_offset_ns")
+        host_cpu = sample.get("host_cpu_ticks")
+        if (
+            not isinstance(offset, int)
+            or isinstance(offset, bool)
+            or offset <= previous_offset
+            or not isinstance(host_cpu, int)
+            or isinstance(host_cpu, bool)
+            or host_cpu < 0
+        ):
+            _fail(f"performance lane {lane_name} resource sample timing is invalid")
+        previous_offset = offset
+        host_memory = _object(sample.get("host_memory"), "resource host memory")
+        network = _object(sample.get("network"), "resource network")
+        if set(host_memory) != {"total_kib", "available_kib"} or set(network) != {
+            "received",
+            "transmitted",
+        }:
+            _fail(f"performance lane {lane_name} resource host fields differ")
+        for value in (*host_memory.values(), *network.values()):
+            if (
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or value < 0
+            ):
+                _fail(f"performance lane {lane_name} resource host value is invalid")
+        node_disk = sample.get("node_disk_bytes")
+        if node_disk is not None and (
+            not isinstance(node_disk, int)
+            or isinstance(node_disk, bool)
+            or node_disk < 0
+        ):
+            _fail(f"performance lane {lane_name} resource disk value is invalid")
+        processes = _object(sample.get("processes"), "resource processes")
+        for pid, metrics_value in processes.items():
+            if not isinstance(pid, str) or not pid.isdigit() or int(pid) <= 0:
+                _fail(f"performance lane {lane_name} resource process id is invalid")
+            metrics = _object(metrics_value, "resource process metrics")
+            if set(metrics) != {"cpu_ticks", "rss_kib", "read_bytes", "write_bytes"}:
+                _fail(f"performance lane {lane_name} resource process fields differ")
+            if any(
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or value < 0
+                for value in metrics.values()
+            ):
+                _fail(f"performance lane {lane_name} resource process value is invalid")
+            per_pid.setdefault(pid, []).append(metrics)
+        normalized_samples.append(sample)
+
+    if normalized_samples[0]["monotonic_offset_ns"] != 0:
+        _fail(f"performance lane {lane_name} resource samples lack a zero origin")
+    first = normalized_samples[0]
+    last = normalized_samples[-1]
+    if not isinstance(first["node_disk_bytes"], int) or not isinstance(
+        last["node_disk_bytes"], int
+    ):
+        _fail(f"performance lane {lane_name} resource disk endpoints are missing")
+
+    foreground = _list(
+        report.get("foreground_processes"),
+        "performance foreground processes",
+    )
+    if len(foreground) != expected_rounds:
+        _fail(f"performance lane {lane_name} foreground process count differs")
+    expected_counts: dict[str, int] = {}
+    for process_value in foreground:
+        process = _object(process_value, "performance foreground process")
+        if set(process) != {"pid", "started_offset_ns", "ended_offset_ns"}:
+            _fail(f"performance lane {lane_name} foreground process fields differ")
+        pid = process.get("pid")
+        started = process.get("started_offset_ns")
+        ended = process.get("ended_offset_ns")
+        if (
+            not isinstance(pid, int)
+            or isinstance(pid, bool)
+            or pid <= 0
+            or not isinstance(started, int)
+            or isinstance(started, bool)
+            or not isinstance(ended, int)
+            or isinstance(ended, bool)
+            or started < 0
+            or ended <= started
+            or ended > last["monotonic_offset_ns"]
+            or str(pid) in expected_counts
+        ):
+            _fail(f"performance lane {lane_name} foreground process is invalid")
+        expected_counts[str(pid)] = sum(
+            1
+            for sample in normalized_samples
+            if started <= sample["monotonic_offset_ns"] <= ended
+            and str(pid) in sample["processes"]
+        )
+    recorded_counts = _object(
+        report.get("foreground_sample_counts"),
+        "performance foreground sample counts",
+    )
+    if dict(recorded_counts) != expected_counts or min(expected_counts.values()) < 2:
+        _fail(f"performance lane {lane_name} foreground sampling is incomplete")
+
+    process_cpu_ticks = 0
+    process_read_bytes = 0
+    process_write_bytes = 0
+    for values in per_pid.values():
+        process_cpu_ticks += max(row["cpu_ticks"] for row in values) - min(
+            row["cpu_ticks"] for row in values
+        )
+        process_read_bytes += max(row["read_bytes"] for row in values) - min(
+            row["read_bytes"] for row in values
+        )
+        process_write_bytes += max(row["write_bytes"] for row in values) - min(
+            row["write_bytes"] for row in values
+        )
+    return {
+        "cpu_ticks": process_cpu_ticks,
+        "peak_rss_kib": max(
+            sum(metrics["rss_kib"] for metrics in sample["processes"].values())
+            for sample in normalized_samples
+        ),
+        "disk_growth_bytes": max(
+            0, last["node_disk_bytes"] - first["node_disk_bytes"]
+        ),
+        "bytes_read": process_read_bytes,
+        "bytes_written": process_write_bytes,
+        "sample_count": len(normalized_samples),
+        "duration_ms": (
+            last["monotonic_offset_ns"] - first["monotonic_offset_ns"]
+        )
+        / 1_000_000,
+        "observed_pid_count": len(per_pid),
+        "foreground_process_count": len(foreground),
+        "foreground_min_sample_count": min(expected_counts.values()),
+        "host_cpu_ticks": last["host_cpu_ticks"] - first["host_cpu_ticks"],
+        "host_total_memory_kib": first["host_memory"]["total_kib"],
+        "host_min_available_memory_kib": min(
+            sample["host_memory"]["available_kib"]
+            for sample in normalized_samples
+        ),
+        "network_received_bytes": (
+            last["network"]["received"] - first["network"]["received"]
+        ),
+        "network_transmitted_bytes": (
+            last["network"]["transmitted"] - first["network"]["transmitted"]
+        ),
+    }
+
+
+def _verify_performance_lane(
+    packet_dir: Path,
+    checksums: Mapping[str, str],
+    lane: Mapping[str, Any],
+    lane_name: str,
+    expected_binary_digest: str,
+) -> list[Mapping[str, Any]]:
+    if lane.get("lane") != lane_name:
+        _fail(f"performance lane {lane_name} identifies the wrong mode")
+    source_revision = str(lane.get("source_revision", ""))
+    if HEX40.fullmatch(source_revision) is None:
+        _fail(f"performance lane {lane_name} source revision is invalid")
+    expected_historical_revision = PERFORMANCE_SOURCE_REVISIONS.get(lane_name)
+    if (
+        expected_historical_revision is not None
+        and source_revision != expected_historical_revision
+    ):
+        _fail(f"performance lane {lane_name} source revision is not frozen")
+    if lane.get("storage_behavior") != PERFORMANCE_STORAGE_BEHAVIORS[lane_name]:
+        _fail(f"performance lane {lane_name} storage behavior is unbound")
+    if lane.get("node_binary_sha256") != expected_binary_digest:
+        _fail(f"performance lane {lane_name} binary identity is unbound")
+    _verify_binary_build(lane, f"performance lane {lane_name}", source_revision)
+    if lane.get("chain_id") != "postfiat-storage-scaling-local-v1":
+        _fail(f"performance lane {lane_name} used the wrong local chain")
+    expected_activation = None if lane_name == "legacy-jsonl" else 1
+    if lane.get("storage_activation_height") != expected_activation:
+        _fail(f"performance lane {lane_name} used the wrong activation boundary")
+    for key in ("height_1_snapshot_sha256", "topology_sha256"):
+        if HEX64.fullmatch(str(lane.get(key, ""))) is None:
+            _fail(f"performance lane {lane_name} {key} is invalid")
+    environment = _object(
+        lane.get("environment"),
+        f"performance lane {lane_name} environment",
+    )
+    affinity = environment.get("cpu_affinity")
+    if (
+        set(environment)
+        != {"cpu_affinity", "filesystem_device", "filesystem_block_size_bytes"}
+        or not isinstance(affinity, list)
+        or not affinity
+        or any(
+            not isinstance(cpu, int) or isinstance(cpu, bool) or cpu < 0
+            for cpu in affinity
+        )
+        or len(set(affinity)) != len(affinity)
+        or not isinstance(environment.get("filesystem_device"), int)
+        or isinstance(environment.get("filesystem_device"), bool)
+        or environment["filesystem_device"] < 0
+        or not isinstance(environment.get("filesystem_block_size_bytes"), int)
+        or isinstance(environment.get("filesystem_block_size_bytes"), bool)
+        or environment["filesystem_block_size_bytes"] <= 0
+    ):
+        _fail(f"performance lane {lane_name} environment is unbound")
+    for key in ("wallet_address", "recipient_address"):
+        if not isinstance(lane.get(key), str) or not lane[key]:
+            _fail(f"performance lane {lane_name} {key} is missing")
+    validator_public_identities = _list(
+        lane.get("validator_public_identities"),
+        f"performance lane {lane_name} validator key identities",
+    )
+    if len(validator_public_identities) != 6:
+        _fail(f"performance lane {lane_name} validator key count is invalid")
+    expected_validator_ids = [f"validator-{index}" for index in range(6)]
+    observed_validator_ids: list[str] = []
+    for value in validator_public_identities:
+        identity = _object(value, f"performance lane {lane_name} validator key")
+        observed_validator_ids.append(str(identity.get("node_id", "")))
+        if (
+            identity.get("algorithm_id") != "ML-DSA-65"
+            or HEX64.fullmatch(str(identity.get("public_key_sha256", ""))) is None
+        ):
+            _fail(f"performance lane {lane_name} validator key identity is invalid")
+    if observed_validator_ids != expected_validator_ids:
+        _fail(f"performance lane {lane_name} validator key order is invalid")
+
+    rows = _list(lane.get("rows"), f"performance lane {lane_name} rows")
     if [row.get("height") if isinstance(row, dict) else None for row in rows] != HEIGHTS:
-        _fail("performance heights differ from the required sequence")
-    baseline = _object(performance.get("legacy_height_50_baseline"), "legacy height-50 baseline")
-    ratios: dict[str, float] = {}
-    stage_points: dict[str, list[tuple[float, float]]] = {
+        _fail(f"performance lane {lane_name} heights differ")
+    stage_observations: dict[str, list[dict[str, Any]]] = {
         stage: [] for stage in MATERIAL_STAGE_PATHS
     }
     height_50_stage_p95: dict[str, list[float]] = {
         stage: [] for stage in MATERIAL_STAGE_PATHS
     }
     for row_value in rows:
-        row = _object(row_value, "performance row")
-        windows = _list(row.get("windows"), f"height {row.get('height')} windows")
+        row = _object(row_value, f"performance lane {lane_name} row")
+        height = int(row["height"])
+        windows = _list(
+            row.get("windows"),
+            f"performance lane {lane_name} height {height} windows",
+        )
         if len(windows) != 5:
-            _fail(f"height {row.get('height')} does not contain five windows")
-        samples = {
+            _fail(f"performance lane {lane_name} height {height} lacks five windows")
+        samples: dict[str, list[float]] = {
             "consensus_round_ms": [],
             "wallet_to_finality_ms": [],
         }
-        for window in windows:
-            value = _object(window, "performance window")
-            if value.get("rounds") != 50 or value.get("validators_converged") != 6:
-                _fail("performance window lacks 50 converged six-validator rounds")
-            for key in (
-                "literal_receipts_exact",
-                "zero_full_history_reads",
-                "bounded_index_pages",
-                "constant_accumulator_work",
+        row_source_snapshots: set[str] = set()
+        row_initial_identities: set[tuple[str, str]] = set()
+        for window_value in windows:
+            window = _object(window_value, f"performance lane {lane_name} window")
+            if (
+                window.get("storage_lane") != lane_name
+                or window.get("starting_height") != height
+                or window.get("rounds") != 50
+                or window.get("validators_converged") != 6
             ):
-                _bool(value.get(key), f"performance window {key}")
-            storage = _object(value.get("storage"), "performance storage counters")
-            if storage.get("committed_write_transactions") != 300:
-                _fail("performance window did not commit once per validator and round")
-            if storage.get("fsync_count") != 300:
-                _fail("performance window fsync count differs from durable commits")
-            for key in (
-                "full_history_scans",
-                "full_history_records_read",
-                "full_history_bytes_read",
+                _fail(f"performance lane {lane_name} window cardinality is invalid")
+            _bool(
+                window.get("literal_receipts_exact"),
+                f"performance lane {lane_name} literal receipts",
+            )
+            for key in ("source_snapshot_sha256", "result_snapshot_sha256"):
+                if HEX64.fullmatch(str(window.get(key, ""))) is None:
+                    _fail(f"performance lane {lane_name} window {key} is invalid")
+            row_source_snapshots.add(str(window["source_snapshot_sha256"]))
+            initial_tip, initial_root = _verify_performance_fleet(
+                window.get("initial_fleet"),
+                f"performance lane {lane_name} initial fleet",
+                height,
+            )
+            final_tip, final_root = _verify_performance_fleet(
+                window.get("final_fleet"),
+                f"performance lane {lane_name} final fleet",
+                height + 50,
+            )
+            row_initial_identities.add((initial_tip, initial_root))
+            if (
+                window.get("final_height") != height + 50
+                or window.get("final_tip") != final_tip
+                or window.get("final_state_root") != final_root
+                or not initial_tip
+                or not initial_root
             ):
-                if storage.get(key) != 0:
-                    _fail(f"performance storage counter {key} is not zero")
-            resources = _object(value.get("resources"), "performance resources")
-            for key in (
-                "cpu_ticks",
-                "peak_rss_kib",
-                "disk_growth_bytes",
-                "bytes_read",
-                "bytes_written",
-                "page_reads",
-                "page_writes",
-                "fsync_count",
-                "fsync_micros",
-            ):
-                if not isinstance(resources.get(key), (int, float)) or resources[key] < 0:
-                    _fail(f"performance resource {key} is missing")
+                _fail(f"performance lane {lane_name} final identity is inconsistent")
+
+            storage = _object(
+                window.get("storage"), f"performance lane {lane_name} storage"
+            )
+            resources = _object(
+                window.get("resources"), f"performance lane {lane_name} resources"
+            )
+            for key in PERFORMANCE_RESOURCE_FIELDS:
+                if (
+                    not isinstance(resources.get(key), (int, float))
+                    or isinstance(resources.get(key), bool)
+                    or resources[key] < 0
+                ):
+                    _fail(f"performance lane {lane_name} resource {key} is missing")
+            expected_resources = _verify_resource_samples(
+                packet_dir,
+                checksums,
+                window,
+                lane_name,
+                expected_rounds=50,
+            )
+            for key, expected_value in expected_resources.items():
+                _verify_numeric_structure(
+                    resources.get(key),
+                    expected_value,
+                    f"performance lane {lane_name} sampled resource {key}",
+                )
+            if lane_name == "selected-indexed":
+                for key in (
+                    "zero_full_history_reads",
+                    "bounded_index_pages",
+                    "constant_accumulator_work",
+                ):
+                    _bool(window.get(key), f"performance selected window {key}")
+                if storage.get("committed_write_transactions") != 300:
+                    _fail("selected performance window did not commit once per validator")
+                if storage.get("fsync_count") != 300:
+                    _fail("selected performance fsync count differs from durable commits")
+                for key in (
+                    "full_history_scans",
+                    "full_history_records_read",
+                    "full_history_bytes_read",
+                ):
+                    if storage.get(key) != 0:
+                        _fail(f"selected performance storage counter {key} is not zero")
+                for key in ("page_reads", "page_writes", "fsync_count", "fsync_micros"):
+                    if not isinstance(resources.get(key), (int, float)) or resources[key] < 0:
+                        _fail(f"selected performance resource {key} is missing")
+            else:
+                for key in (
+                    "zero_full_history_reads",
+                    "bounded_index_pages",
+                    "constant_accumulator_work",
+                ):
+                    if window.get(key) is not None:
+                        _fail(f"historical performance lane {lane_name} overclaims {key}")
+                if (
+                    storage.get("telemetry_available") is not False
+                    or not isinstance(storage.get("reason"), str)
+                ):
+                    _fail(f"historical performance lane {lane_name} hides telemetry limits")
+                for key in ("page_reads", "page_writes", "fsync_count", "fsync_micros"):
+                    if resources.get(key) is not None:
+                        _fail(f"historical performance lane {lane_name} invented {key}")
 
             raw = _bound_json(
                 packet_dir,
                 checksums,
                 {
-                    "path": value.get("normalized_report"),
-                    "sha256": value.get("normalized_report_sha256"),
+                    "path": window.get("normalized_report"),
+                    "sha256": window.get("normalized_report_sha256"),
                 },
-                "performance window report",
+                f"performance lane {lane_name} window report",
             )
             if (
                 raw.get("schema") != "postfiat-real-transaction-latency-benchmark-v1"
                 or raw.get("status") != "passed"
             ):
-                _fail("normalized performance window did not pass")
+                _fail(f"performance lane {lane_name} normalized window did not pass")
+            config = _object(raw.get("config"), "performance raw configuration")
+            expected_config = {
+                "mode": "wallet-to-finality",
+                "build_mode": "release",
+                "transport": "local-loopback-persistent-validator-services",
+                "validators": 6,
+                "rounds": 50,
+                "vote_policy": "full",
+                "amount": 10,
+                "wallet_address": lane["wallet_address"],
+                "recipient": lane["recipient_address"],
+            }
+            for key, expected_value in expected_config.items():
+                if config.get(key) != expected_value:
+                    _fail(
+                        f"performance lane {lane_name} raw configuration {key} differs"
+                    )
+            if lane_name == "selected-indexed":
+                if (
+                    config.get("resident_transactional_store") is not True
+                    or config.get("expected_start_height") != height
+                ):
+                    _fail("selected performance raw storage mode is invalid")
+            elif config.get("resident_transactional_store") is not None:
+                _fail(f"historical performance lane {lane_name} used selected mode")
+            checks = _object(raw.get("checks"), "performance raw checks")
+            for key in (
+                "all_receipts_accepted",
+                "all_rounds_ok",
+                "all_transactions_final",
+                "all_vote_policies_match",
+                "converged",
+                "final_height_matches_rounds",
+                "iteration_count_matches_rounds",
+                "no_duplicate_receipts",
+                "state_verified_after_run",
+            ):
+                _bool(checks.get(key), f"performance raw check {key}")
+            raw_final = _object(raw.get("final_state"), "performance raw final state")
+            if (
+                raw_final.get("height") != height + 50
+                or raw_final.get("block_tip_hash") != final_tip
+                or raw_final.get("state_root") != final_root
+                or raw_final.get("state_verification_count") != 6
+            ):
+                _fail(f"performance lane {lane_name} raw final state differs")
             iterations = _list(raw.get("iterations"), "performance iterations")
             if len(iterations) != 50:
-                _fail("normalized performance window does not contain 50 iterations")
+                _fail(f"performance lane {lane_name} window lacks 50 iterations")
             stage_samples = {stage: [] for stage in MATERIAL_STAGE_PATHS}
-            for iteration_value in iterations:
+            for iteration_index, iteration_value in enumerate(iterations, start=1):
                 iteration = _object(iteration_value, "performance iteration")
-                for key in ("round_ok", "receipt_accepted", "finality_confirmed"):
+                for key in (
+                    "round_ok",
+                    "receipt_accepted",
+                    "finality_confirmed",
+                    "all_sends_verified",
+                    "all_vote_requests_verified",
+                ):
                     _bool(iteration.get(key), f"performance iteration {key}")
+                if (
+                    iteration.get("iteration") != iteration_index
+                    or iteration.get("block_height") != height + iteration_index
+                    or iteration.get("quorum") != 5
+                    or HEX96.fullmatch(str(iteration.get("block_hash", ""))) is None
+                    or HEX96.fullmatch(str(iteration.get("certificate_id", ""))) is None
+                ):
+                    _fail(f"performance lane {lane_name} iteration identity is invalid")
                 for metric in samples:
                     metric_value = iteration.get(metric)
                     if not isinstance(metric_value, (int, float)) or metric_value <= 0:
@@ -718,36 +1256,239 @@ def _verify_performance(
                     stage_samples[stage].append(
                         _nested_stage_value(iteration, stage, path)
                     )
-            height = float(row["height"])
             for stage, values in stage_samples.items():
                 window_p95 = _percentile(values, 0.95)
-                stage_points[stage].append((height, window_p95))
-                if row["height"] == HEIGHTS[0]:
+                stage_observations[stage].append(
+                    {
+                        "height": height,
+                        "window": str(window["label"]),
+                        "p95_ms": window_p95,
+                    }
+                )
+                if height == HEIGHTS[0]:
                     height_50_stage_p95[stage].append(window_p95)
 
+        if len(row_source_snapshots) != 1 or len(row_initial_identities) != 1:
+            _fail(
+                f"performance lane {lane_name} height {height} windows did not share one snapshot"
+            )
+        aggregate = _object(row.get("aggregate"), "performance aggregate")
         for metric, values in samples.items():
-            ordered = sorted(values)
-            observed_p95 = ordered[max(0, math.ceil(len(ordered) * 0.95) - 1)]
-            if abs(observed_p95 - _metric_p95(row, metric)) > 1e-9:
-                _fail(f"performance aggregate {metric} does not match raw iterations")
-    for metric in ("consensus_round_ms", "wallet_to_finality_ms"):
-        selected_50 = _metric_p95(rows[0], metric)
-        selected_5000 = _metric_p95(rows[-1], metric)
-        legacy_50 = baseline.get(metric)
-        if not isinstance(legacy_50, (int, float)) or legacy_50 <= 0:
-            _fail(f"legacy baseline {metric} is invalid")
-        baseline_ratio = selected_50 / float(legacy_50)
-        scaling_ratio = selected_5000 / selected_50
-        ratios[f"{metric}_height50_vs_legacy"] = baseline_ratio
-        ratios[f"{metric}_height5000_vs_height50"] = scaling_ratio
-        if baseline_ratio > 1.10 or scaling_ratio > 1.10:
-            _fail(f"performance ratio exceeds 110% for {metric}")
+            observed = _object(aggregate.get(metric), f"performance {metric} aggregate")
+            _verify_numeric_structure(
+                observed,
+                _distribution_summary(values),
+                f"performance lane {lane_name} aggregate {metric}",
+            )
+        resource_variance = _object(
+            row.get("resource_variance"),
+            f"performance lane {lane_name} resource variance",
+        )
+        if set(resource_variance) != set(PERFORMANCE_RESOURCE_FIELDS):
+            _fail(f"performance lane {lane_name} resource variance fields differ")
+        for field in PERFORMANCE_RESOURCE_FIELDS:
+            values = [
+                float(_object(window, "performance window")["resources"][field])
+                for window in windows
+            ]
+            _verify_numeric_structure(
+                resource_variance[field],
+                _distribution_summary(values),
+                f"performance lane {lane_name} resource variance {field}",
+            )
+
     _verify_height_relationship_models(
-        performance,
-        stage_points,
+        lane,
+        stage_observations,
         height_50_stage_p95,
+        reject_material_positive=lane_name == "selected-indexed",
     )
-    _bool(performance.get("no_positive_linear_height_relationship"), "height relationship gate")
+    stages = _object(
+        _object(lane.get("height_relationship_model"), "height relationship model").get(
+            "stages"
+        ),
+        "height relationship stages",
+    )
+    expected_no_positive = all(
+        _object(stages.get(stage), f"height relationship stage {stage}").get(
+            "material_positive_linear_relationship"
+        )
+        is False
+        for stage in MATERIAL_STAGE_PATHS
+    )
+    if lane.get("no_positive_linear_height_relationship") is not expected_no_positive:
+        _fail(f"performance lane {lane_name} height relationship summary differs")
+    if lane.get("comparison_windows_pass") is not True:
+        _fail(f"performance lane {lane_name} comparison windows did not pass")
+    expected_selected_gate = True if lane_name == "selected-indexed" else None
+    if lane.get("selected_storage_gates_pass") is not expected_selected_gate:
+        _fail(f"performance lane {lane_name} selected gate summary is invalid")
+    return rows
+
+
+def _verify_performance(
+    packet_dir: Path,
+    checksums: Mapping[str, str],
+    performance: Mapping[str, Any],
+    source_revision: str,
+    binary_digests: Mapping[str, str],
+) -> dict[str, float]:
+    if performance.get("status") != "PASS":
+        _fail("performance campaign did not pass")
+    if performance.get("campaign_mode") != "release-qualification":
+        _fail("performance campaign is not a release qualification")
+    if performance.get("evidence_eligible") is not True:
+        _fail("performance campaign is not evidence eligible")
+    if performance.get("source_revision") != source_revision:
+        _fail("performance source revision differs from the packet source")
+    current_binary_digest = binary_digests["bin/postfiat-node"]
+    if performance.get("node_binary_sha256") != current_binary_digest:
+        _fail("performance binary identity differs from the packet source")
+    _verify_binary_build(performance, "performance", source_revision)
+    if performance.get("validator_count") != 6:
+        _fail("performance topology is not six validators")
+    if performance.get("windows_per_height") != 5 or performance.get("rounds_per_window") != 50:
+        _fail("performance window cardinality differs from the specification")
+    if performance.get("lane_order") != list(PERFORMANCE_LANES):
+        _fail("performance lane order differs from the closed comparison set")
+    lanes = _object(performance.get("lanes"), "performance lanes")
+    if set(lanes) != set(PERFORMANCE_LANES):
+        _fail("performance report does not contain exactly three lanes")
+    lane_binary_paths = {
+        "legacy-jsonl": "bin/postfiat-node-performance-legacy",
+        "bounded-jsonl": "bin/postfiat-node-performance-bounded",
+        "selected-indexed": "bin/postfiat-node",
+    }
+    verified_rows: dict[str, list[Mapping[str, Any]]] = {}
+    lane_sources: set[str] = set()
+    lane_binaries: set[str] = set()
+    for lane_name in PERFORMANCE_LANES:
+        lane = _object(lanes.get(lane_name), f"performance lane {lane_name}")
+        expected_digest = binary_digests[lane_binary_paths[lane_name]]
+        verified_rows[lane_name] = _verify_performance_lane(
+            packet_dir,
+            checksums,
+            lane,
+            lane_name,
+            expected_digest,
+        )
+        lane_sources.add(str(lane.get("source_revision")))
+        lane_binaries.add(str(lane.get("node_binary_sha256")))
+    if len(lane_sources) != 3 or len(lane_binaries) != 3:
+        _fail("performance lane source and binary identities are not distinct")
+    selected_lane = _object(lanes["selected-indexed"], "selected performance lane")
+    if selected_lane.get("source_revision") != source_revision:
+        _fail("selected performance lane source differs from the packet source")
+    if performance.get("rows") != selected_lane.get("rows"):
+        _fail("top-level performance rows differ from the selected lane")
+
+    pairing = _object(performance.get("pairing"), "performance pairing")
+    for key in (
+        "same_host",
+        "same_chain_id",
+        "same_validator_count",
+        "same_validator_keys",
+        "same_height_window_cardinality",
+        "same_full_vote_policy",
+        "same_host_allocation",
+        "same_storage_medium",
+        "same_wallet_and_recipient_accounts",
+        "same_semantic_transfer_workload",
+    ):
+        _bool(pairing.get(key), f"performance pairing {key}")
+    if pairing.get("same_binary") is not False:
+        _fail("performance pairing must disclose distinct historical binaries")
+    if not isinstance(pairing.get("binary_policy"), str) or not pairing["binary_policy"]:
+        _fail("performance binary comparison policy is missing")
+    accounts = {
+        (lane.get("wallet_address"), lane.get("recipient_address"))
+        for lane in lanes.values()
+        if isinstance(lane, dict)
+    }
+    if len(accounts) != 1:
+        _fail("performance lanes did not use the same derived accounts")
+    validator_key_sets = {
+        json.dumps(lane.get("validator_public_identities"), sort_keys=True)
+        for lane in lanes.values()
+        if isinstance(lane, dict)
+    }
+    if len(validator_key_sets) != 1:
+        _fail("performance lanes did not use the same validator keys")
+    host = _object(performance.get("host"), "performance host identity")
+    if (
+        not isinstance(host.get("cpu_affinity"), list)
+        or not host["cpu_affinity"]
+        or not all(isinstance(cpu, int) and cpu >= 0 for cpu in host["cpu_affinity"])
+        or not isinstance(host.get("campaign_root_device"), int)
+        or not isinstance(host.get("filesystem_block_size_bytes"), int)
+        or host["filesystem_block_size_bytes"] <= 0
+    ):
+        _fail("performance host allocation or storage medium is unbound")
+    lane_environments = [
+        _object(lane.get("environment"), "performance lane environment")
+        for lane in lanes.values()
+        if isinstance(lane, dict)
+    ]
+    lane_affinities = {
+        tuple(environment["cpu_affinity"]) for environment in lane_environments
+    }
+    lane_storage_media = {
+        (
+            environment["filesystem_device"],
+            environment["filesystem_block_size_bytes"],
+        )
+        for environment in lane_environments
+    }
+    if (
+        len(lane_affinities) != 1
+        or len(lane_storage_media) != 1
+        or tuple(host["cpu_affinity"]) != next(iter(lane_affinities))
+        or (
+            host["campaign_root_device"],
+            host["filesystem_block_size_bytes"],
+        )
+        != next(iter(lane_storage_media))
+    ):
+        _fail("performance lanes did not share one host allocation and storage medium")
+
+    legacy_rows = verified_rows["legacy-jsonl"]
+    selected_rows = verified_rows["selected-indexed"]
+    baseline = _object(
+        performance.get("legacy_height_50_baseline"), "legacy height-50 baseline"
+    )
+    ratios: dict[str, float] = {}
+    for metric in ("consensus_round_ms", "wallet_to_finality_ms"):
+        legacy_50 = _metric_p95(legacy_rows[0], metric)
+        recorded_legacy = baseline.get(metric)
+        if not isinstance(recorded_legacy, (int, float)) or not math.isclose(
+            float(recorded_legacy), legacy_50, rel_tol=1e-12, abs_tol=1e-9
+        ):
+            _fail(f"legacy baseline {metric} does not derive from the raw lane")
+        selected_50 = _metric_p95(selected_rows[0], metric)
+        selected_5000 = _metric_p95(selected_rows[-1], metric)
+        ratios[f"{metric}_height50_vs_legacy"] = selected_50 / legacy_50
+        ratios[f"{metric}_height5000_vs_height50"] = selected_5000 / selected_50
+    recorded_ratios = _object(performance.get("ratios"), "performance ratios")
+    if set(recorded_ratios) != set(ratios):
+        _fail("performance ratio set differs from the required gates")
+    for key, expected in ratios.items():
+        recorded = recorded_ratios.get(key)
+        if not isinstance(recorded, (int, float)) or not math.isclose(
+            float(recorded), expected, rel_tol=1e-12, abs_tol=1e-9
+        ):
+            _fail(f"performance ratio {key} differs from raw lanes")
+        if expected > 1.10:
+            _fail(f"performance ratio exceeds 110% for {key}")
+    _bool(performance.get("comparison_windows_pass"), "comparison window gate")
+    _bool(performance.get("window_gates_pass"), "selected window gate")
+    _bool(
+        performance.get("no_positive_linear_height_relationship"),
+        "height relationship gate",
+    )
+    if performance.get("height_relationship_model") != selected_lane.get(
+        "height_relationship_model"
+    ):
+        _fail("top-level height relationship model differs from selected lane")
     return ratios
 
 
@@ -1542,7 +2283,7 @@ def verify_packet(packet: str | Path) -> VerifiedPacket:
         checksums,
         artifacts["performance"],
         source_revision,
-        current_binary_digest,
+        binaries,
     )
     tamper_case_count = _verify_tamper(
         packet_dir,

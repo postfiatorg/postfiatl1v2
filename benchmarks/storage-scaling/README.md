@@ -12,46 +12,73 @@ the fixed bitmap was rejected as the selected primary store.
 
 ## Release campaign harness
 
-`run_campaign.py` creates a fresh six-validator Consensus v2 chain with the
-transactional storage commitment active at height 1. It advances authenticated
-snapshots to starting heights 50, 100, 500, 1,000, and 5,000, then runs five
-independent 50-round full-vote windows from each height. Every measured window
-uses fresh nodes restored from the same height-bound snapshot.
+`run_paired_campaign.py` is the only release campaign entry point. It runs the
+closed three-lane comparison in this order:
 
-The runner fails closed unless:
+1. deployed-style full-prefix JSON/JSONL from source
+   `8cc7d15edc58b5f5a0b745143fef2d45203465ff`;
+2. authenticated JSONL v2 heads plus the fixed-slot index candidate from source
+   `dfd0b9f11108b0b773d1e02bebae71685864228e`; and
+3. the selected transactional `redb` store from the clean source under
+   qualification.
 
-- the checkout is clean and exactly matches the requested source revision;
-- all six validators converge before and after every window;
-- every receipt is accepted and finalized;
-- each validator performs exactly one durable database commit per height;
-- in-process telemetry reports zero full-history scans, records, and bytes
-  during measured rounds; and
-- logical page work remains within the locked per-round bound.
+The retired storage behaviors are not selectable modes in the current node, so
+each is measured with the exact release binary that owned it. The report and
+packet explicitly disclose that boundary and bind all three source revisions
+and binary hashes. The lanes use the same validator keys, deterministic wallet
+and recipient, semantic transfer input, six-validator loopback topology shape,
+full-vote policy, CPU affinity, host, filesystem device, resource sampler, and
+height/window cardinality. Snapshots are authenticated and identical across the
+five windows for a lane and height, but they are lane-native rather than
+byte-identical across retired storage formats. ML-DSA signature randomness also
+means independently executed blocks are not byte-identical across lanes.
 
-It records latency, CPU, RSS, disk growth, process I/O, network I/O, logical
-page work, database records/bytes, transaction count, and fsync count/time.
-The historical height-50 comparator is recomputed from the first 50 rounds of
-the checksum-bound Cobalt E4 baseline packet.
+At starting heights 50, 100, 500, 1,000, and 5,000, the harness runs five
+independent 50-round windows. It derives the height-50 legacy baseline from the
+raw legacy lane, recomputes p50/p95/p99/max/mean/standard deviation, publishes
+per-window resource variance, and fits constant, logarithmic, and linear models
+with raw observations, predictions, and residuals for every material stage.
+Each window also preserves a redaction-safe, checksum-bound sampler stream; the
+runner fails unless every foreground benchmark process appears in at least two
+samples, and the packet verifier independently reconstructs CPU, RSS, disk,
+process I/O, host load, memory, and network totals from that stream. The
+selected lane fails unless all six validators converge, every literal
+receipt is accepted and final, every finalized height uses one durable database
+transaction per validator, full-history work is zero, page work stays bounded,
+the two 110% latency gates pass, and no material stage retains a positive
+linear relationship after the repeated-window variance allowance.
 
-Build and run only from a clean committed checkout:
+Build all three binaries with the pinned toolchain in their exact clean
+worktrees. When Zig is the available linker, use the repository wrappers:
 
 ```bash
-CC=/home/postfiatchad/.local/bin/zig-cc \
-CFLAGS='--target=x86_64-linux-gnu' \
-AR=/home/postfiatchad/.local/zig-0.17.0-dev.1857/zig \
-ARFLAGS='ar' \
-RUSTFLAGS='-C linker=/home/postfiatchad/.local/bin/zig-cc' \
-cargo build --release -p postfiat-node
-
-python3 benchmarks/storage-scaling/run_campaign.py \
-  --node-bin target/release/postfiat-node \
-  --output-dir /explicit/disposable/storage-scaling-run \
-  --expected-source-revision "$(git rev-parse HEAD)"
+export POSTFIAT_ZIG=/path/to/pinned/zig
+export CC="$PWD/scripts/zig-cc"
+export AR="$PWD/scripts/zig-ar"
+export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="$PWD/scripts/zig-cc"
+cargo build --release --locked -p postfiat-node
 ```
 
-The run directory contains disposable private keys and must never be published.
-Only an explicitly selected, redaction-checked, checksum-bound packet is
-publishable. The harness never contacts or mutates the controlled devnet.
+Then run from the clean selected checkout:
+
+```bash
+python3 benchmarks/storage-scaling/run_paired_campaign.py \
+  --legacy-node-bin /LEGACY_WORKTREE/target/release/postfiat-node \
+  --legacy-source-revision 8cc7d15edc58b5f5a0b745143fef2d45203465ff \
+  --bounded-node-bin /BOUNDED_WORKTREE/target/release/postfiat-node \
+  --bounded-source-revision dfd0b9f11108b0b773d1e02bebae71685864228e \
+  --node-bin target/release/postfiat-node \
+  --expected-source-revision "$(git rev-parse HEAD)" \
+  --output-dir /explicit/disposable/storage-scaling-paired
+```
+
+`run_campaign.py --development-smoke` is only the one-round selected-store
+helper used while changing the harness. It cannot produce release evidence.
+The paired run directory contains disposable private keys and must never be
+published. Only the normalized latency reports and redaction-safe resource
+sample streams copied by packet assembly may be published after independent
+verification and redaction. Neither harness contacts or mutates the controlled
+devnet.
 
 ## Existing-chain migration and activation workflow
 
@@ -222,9 +249,10 @@ a derived manifest that changes only the five audited source hashes to the
 current revision. Both manifests' provenance, the derived manifest, and the
 full independently verified E3 report are checksum-bound. The runner rejects a
 zero-test filter and emits one checksum-bound receipt for every closed case.
-Packet assembly must include three distinct release binaries so the offline
+Packet assembly must include five distinct release binaries so the offline
 verifier can separately bind the current release, compatible rollback release,
-and deliberately incompatible activation-fence probe:
+deliberately incompatible activation-fence probe, frozen legacy performance
+lane, and frozen bounded-JSONL performance lane:
 
 ```bash
 python3 benchmarks/storage-scaling/package_packet.py \
@@ -234,6 +262,8 @@ python3 benchmarks/storage-scaling/package_packet.py \
   --node-bin /CURRENT_CHECKOUT/target/release/postfiat-node \
   --rollback-node-bin /OLDER_WORKTREE/target/release/postfiat-node \
   --incompatible-node-bin /V1_WORKTREE/target/release/postfiat-node \
+  --legacy-performance-node-bin /LEGACY_WORKTREE/target/release/postfiat-node \
+  --bounded-performance-node-bin /BOUNDED_WORKTREE/target/release/postfiat-node \
   --state-distinction /PATH/state-distinction.json \
   --replay-report /PATH/replay-report.json \
   --performance-report /PATH/performance-report.json \

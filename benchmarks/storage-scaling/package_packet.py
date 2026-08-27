@@ -20,13 +20,13 @@ SPEC = REPO / "docs" / "architecture" / "storage-scaling-fix-spec.md"
 ARTIFACT_SCHEMAS = {
     "source": "postfiat-storage-source-identity-v1",
     "replay": "postfiat-storage-scaling-replay-v1",
-    "performance": "postfiat-storage-scaling-six-validator-campaign-v1",
+    "performance": "postfiat-storage-scaling-paired-six-validator-campaign-v2",
     "tamper": "postfiat-storage-scaling-tamper-matrix-v1",
     "migration": "postfiat-storage-scaling-six-clone-migration-v1",
     "redaction": "postfiat-storage-scaling-redaction-v1",
 }
 SENSITIVE = re.compile(
-    r"private[-_ ]?key|secret|password|mnemonic|spending[-_ ]?key|"
+    r"private[-_ ]?key(?![A-Za-z0-9_])|secret|password|mnemonic|spending[-_ ]?key|"
     r"full[-_ ]?viewing[-_ ]?key|master[-_ ]?seed|rseed|ssh[-_ ]?cred",
     re.IGNORECASE,
 )
@@ -91,6 +91,32 @@ def copy_file(source: Path, destination: Path) -> None:
     shutil.copyfile(source, destination)
 
 
+def resolve_campaign_file(
+    campaign_root: Path,
+    raw: Any,
+    expected_sha256: Any,
+    label: str,
+) -> Path:
+    if not isinstance(raw, str) or not isinstance(expected_sha256, str):
+        raise ValueError(f"{label} omitted its bound file")
+    relative = PurePosixPath(raw)
+    if relative.is_absolute() or any(
+        part in {"", ".", ".."} for part in relative.parts
+    ):
+        raise ValueError(f"{label} path is unsafe")
+    candidate = campaign_root.joinpath(*relative.parts)
+    if candidate.is_symlink():
+        raise ValueError(f"{label} must not be a symlink")
+    source = candidate.resolve()
+    if not source.is_relative_to(campaign_root):
+        raise ValueError(f"{label} escaped campaign root")
+    if not source.is_file():
+        raise ValueError(f"{label} is not a regular file")
+    if sha256(source) != expected_sha256:
+        raise ValueError(f"{label} digest mismatch")
+    return source
+
+
 def copy_replay(packet: Path, source: Path) -> Path:
     report = read_json(source)
     if report.get("schema") != ARTIFACT_SCHEMAS["replay"]:
@@ -121,27 +147,54 @@ def copy_performance(packet: Path, source: Path) -> Path:
         or report.get("evidence_eligible") is not True
     ):
         raise ValueError("performance report is not an evidence-eligible PASS")
-    rows = report.get("rows")
-    if not isinstance(rows, list):
-        raise ValueError("performance report omitted rows")
-    for row in rows:
-        if not isinstance(row, dict) or not isinstance(row.get("windows"), list):
-            raise ValueError("performance row is malformed")
-        for window in row["windows"]:
-            if not isinstance(window, dict):
-                raise ValueError("performance window is malformed")
-            raw = window.get("normalized_report")
-            expected = window.get("normalized_report_sha256")
-            if not isinstance(raw, str) or not isinstance(expected, str):
-                raise ValueError("performance window omitted its normalized report")
-            raw_source = (source.parent / raw).resolve()
-            if sha256(raw_source) != expected:
-                raise ValueError("performance normalized report digest mismatch")
-            label = str(window.get("label", raw_source.stem))
-            destination = packet / "performance" / "windows" / f"{label}.json"
-            copy_file(raw_source, destination)
-            window["normalized_report"] = destination.relative_to(packet).as_posix()
-            window["normalized_report_sha256"] = sha256(destination)
+    lanes = report.get("lanes")
+    required_lanes = {"legacy-jsonl", "bounded-jsonl", "selected-indexed"}
+    if not isinstance(lanes, dict) or set(lanes) != required_lanes:
+        raise ValueError("performance report omitted the closed three-lane set")
+    for lane_name in sorted(required_lanes):
+        lane = lanes[lane_name]
+        if not isinstance(lane, dict) or not isinstance(lane.get("rows"), list):
+            raise ValueError(f"performance lane {lane_name} omitted rows")
+        for row in lane["rows"]:
+            if not isinstance(row, dict) or not isinstance(row.get("windows"), list):
+                raise ValueError("performance row is malformed")
+            height = row.get("height")
+            if height not in {50, 100, 500, 1000, 5000}:
+                raise ValueError("performance row height is outside the closed set")
+            for window_index, window in enumerate(row["windows"], start=1):
+                if not isinstance(window, dict):
+                    raise ValueError("performance window is malformed")
+                label = f"height-{height}-window-{window_index}"
+                if window.get("label") != label:
+                    raise ValueError("performance window label is not canonical")
+                campaign_root = source.parent.resolve()
+                raw_source = resolve_campaign_file(
+                    campaign_root,
+                    window.get("normalized_report"),
+                    window.get("normalized_report_sha256"),
+                    "performance normalized report",
+                )
+                resource_source = resolve_campaign_file(
+                    campaign_root,
+                    window.get("resource_samples"),
+                    window.get("resource_samples_sha256"),
+                    "performance resource samples",
+                )
+                destination = (
+                    packet / "performance" / "windows" / lane_name / f"{label}.json"
+                )
+                copy_file(raw_source, destination)
+                window["normalized_report"] = destination.relative_to(packet).as_posix()
+                window["normalized_report_sha256"] = sha256(destination)
+                resource_destination = (
+                    packet / "performance" / "resources" / lane_name / f"{label}.json"
+                )
+                copy_file(resource_source, resource_destination)
+                window["resource_samples"] = (
+                    resource_destination.relative_to(packet).as_posix()
+                )
+                window["resource_samples_sha256"] = sha256(resource_destination)
+    report["rows"] = lanes["selected-indexed"]["rows"]
     destination = packet / "artifacts" / "performance.json"
     write_json(destination, report)
     return destination
@@ -269,6 +322,8 @@ def main() -> int:
     parser.add_argument("--node-bin", type=Path, required=True)
     parser.add_argument("--rollback-node-bin", type=Path, required=True)
     parser.add_argument("--incompatible-node-bin", type=Path, required=True)
+    parser.add_argument("--legacy-performance-node-bin", type=Path, required=True)
+    parser.add_argument("--bounded-performance-node-bin", type=Path, required=True)
     parser.add_argument("--state-distinction", type=Path, required=True)
     parser.add_argument("--replay-report", type=Path, required=True)
     parser.add_argument("--performance-report", type=Path, required=True)
@@ -285,11 +340,15 @@ def main() -> int:
     raw_node_bin = args.node_bin.expanduser()
     raw_rollback_node_bin = args.rollback_node_bin.expanduser()
     raw_incompatible_node_bin = args.incompatible_node_bin.expanduser()
+    raw_legacy_performance_node_bin = args.legacy_performance_node_bin.expanduser()
+    raw_bounded_performance_node_bin = args.bounded_performance_node_bin.expanduser()
     if (
         raw_packet.is_symlink()
         or raw_node_bin.is_symlink()
         or raw_rollback_node_bin.is_symlink()
         or raw_incompatible_node_bin.is_symlink()
+        or raw_legacy_performance_node_bin.is_symlink()
+        or raw_bounded_performance_node_bin.is_symlink()
     ):
         raise ValueError("packet output and release binary paths must not be symlinks")
     packet = raw_packet.resolve()
@@ -303,6 +362,8 @@ def main() -> int:
     node_bin = raw_node_bin.resolve()
     rollback_node_bin = raw_rollback_node_bin.resolve()
     incompatible_node_bin = raw_incompatible_node_bin.resolve()
+    legacy_performance_node_bin = raw_legacy_performance_node_bin.resolve()
+    bounded_performance_node_bin = raw_bounded_performance_node_bin.resolve()
     if not node_bin.is_file() or node_bin.parent.name != "release":
         raise ValueError("--node-bin must identify a regular target/release binary")
     if (
@@ -324,14 +385,38 @@ def main() -> int:
         raise ValueError(
             "--incompatible-node-bin must identify a third regular target/release binary"
         )
+    existing_binary_digests = {
+        sha256(node_bin),
+        sha256(rollback_node_bin),
+        sha256(incompatible_node_bin),
+    }
+    performance_binary_digests: set[str] = set()
+    for label, binary in (
+        ("--legacy-performance-node-bin", legacy_performance_node_bin),
+        ("--bounded-performance-node-bin", bounded_performance_node_bin),
+    ):
+        if not binary.is_file() or binary.parent.name != "release":
+            raise ValueError(f"{label} must identify a regular target/release binary")
+        binary_digest = sha256(binary)
+        if binary_digest in existing_binary_digests | performance_binary_digests:
+            raise ValueError(f"{label} must identify a distinct release binary")
+        performance_binary_digests.add(binary_digest)
 
     performance = read_json(args.performance_report.resolve())
     migration = read_json(args.migration_report.resolve())
     binary_digest = sha256(node_bin)
     incompatible_binary_digest = sha256(incompatible_node_bin)
+    performance_lanes = performance.get("lanes")
     if (
         performance.get("source_revision") != args.source_revision
         or performance.get("node_binary_sha256") != binary_digest
+        or not isinstance(performance_lanes, dict)
+        or not isinstance(performance_lanes.get("legacy-jsonl"), dict)
+        or not isinstance(performance_lanes.get("bounded-jsonl"), dict)
+        or performance_lanes["legacy-jsonl"].get("node_binary_sha256")
+        != sha256(legacy_performance_node_bin)
+        or performance_lanes["bounded-jsonl"].get("node_binary_sha256")
+        != sha256(bounded_performance_node_bin)
     ):
         raise ValueError("performance report source or binary identity mismatch")
     incompatible = migration.get("incompatible_binary")
@@ -353,6 +438,14 @@ def main() -> int:
     copy_file(rollback_node_bin, rollback_binary_destination)
     incompatible_binary_destination = packet / "bin" / "postfiat-node-incompatible"
     copy_file(incompatible_node_bin, incompatible_binary_destination)
+    legacy_performance_binary_destination = (
+        packet / "bin" / "postfiat-node-performance-legacy"
+    )
+    copy_file(legacy_performance_node_bin, legacy_performance_binary_destination)
+    bounded_performance_binary_destination = (
+        packet / "bin" / "postfiat-node-performance-bounded"
+    )
+    copy_file(bounded_performance_node_bin, bounded_performance_binary_destination)
     binaries = [
         {
             "path": binary_destination.relative_to(packet).as_posix(),
@@ -365,6 +458,14 @@ def main() -> int:
         {
             "path": incompatible_binary_destination.relative_to(packet).as_posix(),
             "sha256": sha256(incompatible_binary_destination),
+        },
+        {
+            "path": legacy_performance_binary_destination.relative_to(packet).as_posix(),
+            "sha256": sha256(legacy_performance_binary_destination),
+        },
+        {
+            "path": bounded_performance_binary_destination.relative_to(packet).as_posix(),
+            "sha256": sha256(bounded_performance_binary_destination),
         },
     ]
     source_report = {
