@@ -2935,6 +2935,21 @@ pub(super) fn read_chain_tip_or_reconstruct_for_genesis(
     store: &NodeStore,
     genesis: &Genesis,
 ) -> io::Result<ChainTipState> {
+    read_chain_tip_or_reconstruct_for_genesis_with_repair(store, genesis, true)
+}
+
+pub(super) fn read_chain_tip_or_reconstruct_for_genesis_read_only(
+    store: &NodeStore,
+    genesis: &Genesis,
+) -> io::Result<ChainTipState> {
+    read_chain_tip_or_reconstruct_for_genesis_with_repair(store, genesis, false)
+}
+
+fn read_chain_tip_or_reconstruct_for_genesis_with_repair(
+    store: &NodeStore,
+    genesis: &Genesis,
+    repair: bool,
+) -> io::Result<ChainTipState> {
     match store.read_chain_tip() {
         Ok(tip) => {
             validate_chain_tip_domain(&tip, genesis)?;
@@ -2955,12 +2970,16 @@ pub(super) fn read_chain_tip_or_reconstruct_for_genesis(
                     "recorded chain tip conflicts with authenticated retained history",
                 ));
             }
-            store.write_chain_tip(&reconstructed)?;
+            if repair {
+                store.write_chain_tip(&reconstructed)?;
+            }
             Ok(reconstructed)
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             let tip = reconstruct_chain_tip_for_genesis(store, genesis)?;
-            store.write_chain_tip(&tip)?;
+            if repair {
+                store.write_chain_tip(&tip)?;
+            }
             Ok(tip)
         }
         Err(error) => Err(error),

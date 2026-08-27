@@ -72,6 +72,27 @@ impl IntegrityKey {
         Self::load_or_create_at(&data_dir.join(INTEGRITY_KEY_FILE))
     }
 
+    /// Load an existing node-local integrity key without creating a directory
+    /// or key file. Offline verification uses this path so a missing trust
+    /// anchor fails closed without mutating the inspected directory.
+    pub fn load_existing(data_dir: &Path) -> io::Result<Self> {
+        Self::load_existing_at(&data_dir.join(INTEGRITY_KEY_FILE))
+    }
+
+    /// Load an existing key from an operator-selected path without creating
+    /// any parent directory or file.
+    pub fn load_existing_at(path: &Path) -> io::Result<Self> {
+        read_key_file(path)?.ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "storage_integrity_key_missing: `{}` does not exist",
+                    path.display()
+                ),
+            )
+        })
+    }
+
     /// Load or create an integrity key at an operator-selected path. Placing
     /// this path outside the state directory establishes an independent trust
     /// anchor against whole-directory replacement.

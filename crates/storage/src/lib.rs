@@ -71,6 +71,7 @@ pub struct NodeStore {
     data_dir: PathBuf,
     integrity_key: IntegrityKey,
     allow_legacy_migration: bool,
+    read_only: bool,
     work_counters: Arc<StorageWorkCounterState>,
     transactional_store: Arc<Mutex<Option<Arc<TransactionalStore>>>>,
 }
@@ -118,6 +119,7 @@ impl NodeStore {
             data_dir,
             integrity_key,
             allow_legacy_migration: false,
+            read_only: false,
             work_counters: Arc::new(StorageWorkCounterState::default()),
             transactional_store: Arc::new(Mutex::new(None)),
         }
@@ -133,6 +135,23 @@ impl NodeStore {
             data_dir,
             integrity_key,
             allow_legacy_migration: false,
+            read_only: false,
+            work_counters: Arc::new(StorageWorkCounterState::default()),
+            transactional_store: Arc::new(Mutex::new(None)),
+        })
+    }
+
+    /// Open an existing store for non-mutating offline verification. Missing
+    /// directories and integrity keys fail closed rather than being created.
+    pub fn try_new_read_only(data_dir: impl Into<PathBuf>) -> io::Result<Self> {
+        let data_dir = data_dir.into();
+        let integrity_key = IntegrityKey::load_existing(&data_dir)?;
+        transactional::release_inactive_shared_transactional_stores()?;
+        Ok(Self {
+            data_dir,
+            integrity_key,
+            allow_legacy_migration: false,
+            read_only: true,
             work_counters: Arc::new(StorageWorkCounterState::default()),
             transactional_store: Arc::new(Mutex::new(None)),
         })
@@ -147,6 +166,7 @@ impl NodeStore {
             data_dir,
             integrity_key,
             allow_legacy_migration: true,
+            read_only: false,
             work_counters: Arc::new(StorageWorkCounterState::default()),
             transactional_store: Arc::new(Mutex::new(None)),
         })
@@ -159,6 +179,7 @@ impl NodeStore {
     /// Callers must ensure the node is offline and the legacy directory was
     /// obtained from a trusted source before using this migration path.
     pub fn migrate_legacy_state(&self) -> io::Result<()> {
+        self.ensure_writable()?;
         if !self.allow_legacy_migration {
             return Err(io::Error::new(
                 io::ErrorKind::PermissionDenied,
@@ -195,6 +216,7 @@ impl NodeStore {
             data_dir: data_dir.into(),
             integrity_key: IntegrityKey::load_or_create_at(key_path.as_ref())?,
             allow_legacy_migration: false,
+            read_only: false,
             work_counters: Arc::new(StorageWorkCounterState::default()),
             transactional_store: Arc::new(Mutex::new(None)),
         })
@@ -202,6 +224,16 @@ impl NodeStore {
 
     pub fn data_dir(&self) -> &Path {
         &self.data_dir
+    }
+
+    fn ensure_writable(&self) -> io::Result<()> {
+        if self.read_only {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "storage_read_only_write_refused: mutation requested from a read-only store",
+            ));
+        }
+        Ok(())
     }
 
     /// Return process-local work counters for the bounded JSONL append path.
@@ -291,6 +323,7 @@ impl NodeStore {
     }
 
     pub fn init(&self, genesis: &Genesis, node_state: &NodeState) -> io::Result<()> {
+        self.ensure_writable()?;
         fs::create_dir_all(&self.data_dir)?;
         self.write_genesis(genesis)?;
         self.write_node_state(node_state)?;
@@ -306,6 +339,7 @@ impl NodeStore {
     }
 
     pub fn write_genesis(&self, genesis: &Genesis) -> io::Result<()> {
+        self.ensure_writable()?;
         genesis
             .validate()
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
@@ -339,6 +373,7 @@ impl NodeStore {
     }
 
     pub fn write_node_state(&self, node_state: &NodeState) -> io::Result<()> {
+        self.ensure_writable()?;
         let json = node_state
             .to_json()
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
@@ -434,12 +469,17 @@ impl NodeStore {
     }
 
     pub fn write_mempool(&self, mempool: &MempoolState) -> io::Result<()> {
-        let _lock = acquire_mutation_lock(&self.data_dir, MEMPOOL_MUTATION_LOCK_FILE)?;
+        let _lock = self.lock_mempool_mutation()?;
         self.write_mempool_unlocked(mempool)
     }
 
     fn write_mempool_unlocked(&self, mempool: &MempoolState) -> io::Result<()> {
         self.write_json(self.data_dir.join(MEMPOOL_FILE), mempool)
+    }
+
+    fn lock_mempool_mutation(&self) -> io::Result<StorageMutationLock> {
+        self.ensure_writable()?;
+        acquire_mutation_lock(&self.data_dir, MEMPOOL_MUTATION_LOCK_FILE)
     }
 
     pub fn read_mempool(&self) -> io::Result<MempoolState> {
@@ -451,14 +491,14 @@ impl NodeStore {
     }
 
     pub fn append_mempool_entry(&self, entry: MempoolEntry) -> io::Result<()> {
-        let _lock = acquire_mutation_lock(&self.data_dir, MEMPOOL_MUTATION_LOCK_FILE)?;
+        let _lock = self.lock_mempool_mutation()?;
         let mut mempool = self.read_mempool()?;
         mempool.pending.push(entry);
         self.write_mempool_unlocked(&mempool)
     }
 
     pub fn append_mempool_payment_v2_entry(&self, entry: MempoolPaymentV2Entry) -> io::Result<()> {
-        let _lock = acquire_mutation_lock(&self.data_dir, MEMPOOL_MUTATION_LOCK_FILE)?;
+        let _lock = self.lock_mempool_mutation()?;
         let mut mempool = self.read_mempool()?;
         mempool.pending_payment_v2.push(entry);
         self.write_mempool_unlocked(&mempool)
@@ -468,7 +508,7 @@ impl NodeStore {
         &self,
         entry: MempoolAssetTransactionEntry,
     ) -> io::Result<()> {
-        let _lock = acquire_mutation_lock(&self.data_dir, MEMPOOL_MUTATION_LOCK_FILE)?;
+        let _lock = self.lock_mempool_mutation()?;
         let mut mempool = self.read_mempool()?;
         mempool.pending_asset_transactions.push(entry);
         self.write_mempool_unlocked(&mempool)
@@ -478,7 +518,7 @@ impl NodeStore {
         &self,
         entry: MempoolAtomicSwapEntry,
     ) -> io::Result<()> {
-        let _lock = acquire_mutation_lock(&self.data_dir, MEMPOOL_MUTATION_LOCK_FILE)?;
+        let _lock = self.lock_mempool_mutation()?;
         let mut mempool = self.read_mempool()?;
         mempool.pending_atomic_swaps.push(entry);
         self.write_mempool_unlocked(&mempool)
@@ -488,7 +528,7 @@ impl NodeStore {
         &self,
         entry: MempoolFastLanePrimaryEntry,
     ) -> io::Result<()> {
-        let _lock = acquire_mutation_lock(&self.data_dir, MEMPOOL_MUTATION_LOCK_FILE)?;
+        let _lock = self.lock_mempool_mutation()?;
         let mut mempool = self.read_mempool()?;
         mempool.pending_fastlane_primary.push(entry);
         self.write_mempool_unlocked(&mempool)
@@ -498,7 +538,7 @@ impl NodeStore {
         &self,
         entry: MempoolEscrowTransactionEntry,
     ) -> io::Result<()> {
-        let _lock = acquire_mutation_lock(&self.data_dir, MEMPOOL_MUTATION_LOCK_FILE)?;
+        let _lock = self.lock_mempool_mutation()?;
         let mut mempool = self.read_mempool()?;
         mempool.pending_escrow_transactions.push(entry);
         self.write_mempool_unlocked(&mempool)
@@ -508,7 +548,7 @@ impl NodeStore {
         &self,
         entry: MempoolNftTransactionEntry,
     ) -> io::Result<()> {
-        let _lock = acquire_mutation_lock(&self.data_dir, MEMPOOL_MUTATION_LOCK_FILE)?;
+        let _lock = self.lock_mempool_mutation()?;
         let mut mempool = self.read_mempool()?;
         mempool.pending_nft_transactions.push(entry);
         self.write_mempool_unlocked(&mempool)
@@ -518,7 +558,7 @@ impl NodeStore {
         &self,
         entry: MempoolOfferTransactionEntry,
     ) -> io::Result<()> {
-        let _lock = acquire_mutation_lock(&self.data_dir, MEMPOOL_MUTATION_LOCK_FILE)?;
+        let _lock = self.lock_mempool_mutation()?;
         let mut mempool = self.read_mempool()?;
         mempool.pending_offer_transactions.push(entry);
         self.write_mempool_unlocked(&mempool)
@@ -664,6 +704,7 @@ impl NodeStore {
     }
 
     pub fn remove_ordered_commit_journal(&self) -> io::Result<()> {
+        self.ensure_writable()?;
         let path = self.data_dir.join(ORDERED_COMMIT_JOURNAL_FILE);
         match fs::remove_file(&path) {
             Ok(()) => sync_parent_dir(&path),
@@ -673,6 +714,7 @@ impl NodeStore {
     }
 
     pub fn lock_ordered_commit(&self) -> io::Result<StorageMutationLock> {
+        self.ensure_writable()?;
         acquire_mutation_lock(&self.data_dir, ORDERED_COMMIT_MUTATION_LOCK_FILE)
     }
 
@@ -757,6 +799,7 @@ impl NodeStore {
     }
 
     fn write_json<T: serde::Serialize + ?Sized>(&self, path: PathBuf, value: &T) -> io::Result<()> {
+        self.ensure_writable()?;
         let json = serde_json::to_string_pretty(value).map_err(invalid_data)?;
         let bytes = self.write_json_with_mac("state file", json.as_bytes())?;
         atomic_write(path, bytes)
@@ -777,6 +820,7 @@ impl NodeStore {
         path: PathBuf,
         value: &T,
     ) -> io::Result<()> {
+        self.ensure_writable()?;
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -1017,6 +1061,7 @@ impl NodeStore {
             records.push(record);
         }
         if legacy_prefix && !records.is_empty() {
+            self.ensure_writable()?;
             eprintln!(
                 "warning: {label} `{}` contains {} untagged legacy record(s); \
                  re-writing with keyed MAC chain",
@@ -1209,7 +1254,9 @@ impl NodeStore {
             suffix_len,
             MAX_JSONL_RECORD_BYTES as u64 + 1,
         )?;
-        let mut file = OpenOptions::new().read(true).write(true).open(path)?;
+        let mut open_options = OpenOptions::new();
+        open_options.read(true).write(!self.read_only);
+        let mut file = open_options.open(path)?;
         file.seek(SeekFrom::Start(head.byte_offset))?;
         let mut suffix = Vec::with_capacity(suffix_len as usize);
         (&mut file)
@@ -1228,6 +1275,7 @@ impl NodeStore {
             ));
         }
         if !suffix.ends_with(b"\n") {
+            self.ensure_writable()?;
             file.set_len(head.byte_offset)?;
             file.sync_all()?;
             sync_parent_dir(path)?;
@@ -1345,6 +1393,7 @@ impl NodeStore {
                     ),
                 ));
             }
+            self.ensure_writable()?;
             let file = OpenOptions::new().write(true).open(path)?;
             file.set_len(complete_offset)?;
             file.sync_all()?;
@@ -1471,6 +1520,7 @@ impl NodeStore {
         previous_chain: &str,
         context: &JsonlCheckpointContext,
     ) -> io::Result<()> {
+        self.ensure_writable()?;
         let mut head = JsonlHead {
             schema: JSONL_HEAD_SCHEMA.to_owned(),
             storage_format: JSONL_STORAGE_FORMAT.to_owned(),
@@ -1630,15 +1680,17 @@ impl NodeStore {
         let schema: JsonlHeadSchema = serde_json::from_slice(&bytes).map_err(invalid_data)?;
         if schema.schema == JSONL_HEAD_SCHEMA_V1 {
             self.verify_jsonl_head_v1(path, count, chain, previous_chain)?;
-            let context = self.jsonl_checkpoint_context()?;
-            self.write_jsonl_head(
-                path,
-                count,
-                complete_offset,
-                chain,
-                previous_chain,
-                &context,
-            )?;
+            if !self.read_only {
+                let context = self.jsonl_checkpoint_context()?;
+                self.write_jsonl_head(
+                    path,
+                    count,
+                    complete_offset,
+                    chain,
+                    previous_chain,
+                    &context,
+                )?;
+            }
             return Ok(());
         }
         let head: JsonlHead = serde_json::from_slice(&bytes).map_err(invalid_data)?;
@@ -1666,6 +1718,7 @@ impl NodeStore {
         tip: &ChainTipState,
         previous_block_hash: &str,
     ) -> io::Result<()> {
+        self.ensure_writable()?;
         let context = self.jsonl_checkpoint_context()?;
         if context.finalized_height != tip.height
             || context.block_hash != tip.block_hash
@@ -1725,6 +1778,7 @@ impl NodeStore {
     }
 
     fn remove_jsonl_log(&self, path: &Path) -> io::Result<()> {
+        self.ensure_writable()?;
         remove_optional_file(path.to_path_buf())?;
         remove_optional_file(Self::jsonl_head_path(path))
     }
@@ -2610,11 +2664,23 @@ mod tests {
                     .expect("legacy head MAC"),
             ),
         };
-        fs::write(
-            &head_path,
-            serde_json::to_vec(&legacy).expect("serialize legacy head"),
-        )
-        .expect("install legacy head");
+        let legacy_bytes = serde_json::to_vec(&legacy).expect("serialize legacy head");
+        fs::write(&head_path, &legacy_bytes).expect("install legacy head");
+
+        let read_only = NodeStore::try_new_read_only(&dir).expect("open read-only v1 store");
+        assert_eq!(
+            read_only
+                .read_receipts()
+                .expect("verify v1 receipts read-only")
+                .len(),
+            3
+        );
+        assert_eq!(
+            fs::read(&head_path).expect("reread v1 checkpoint after read-only verification"),
+            legacy_bytes,
+            "read-only verification upgraded the v1 checkpoint"
+        );
+        drop(read_only);
 
         take_jsonl_envelope_verifications();
         store.reset_work_counters();
@@ -2686,6 +2752,51 @@ mod tests {
                 .expect("read recovered receipts")
                 .len(),
             3
+        );
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn read_only_jsonl_tail_recovery_refuses_without_truncating() {
+        let dir = unique_test_dir("postfiat-storage-read-only-jsonl-recovery-test");
+        let store = NodeStore::new(&dir);
+        store.write_receipts(&[]).expect("write empty receipts");
+        store
+            .append_receipt_record(&sample_receipt("tx-read-only", "tesSUCCESS"))
+            .expect("append accepted receipt");
+        let path = dir.join(RECEIPTS_APPEND_FILE);
+        let head_path = NodeStore::jsonl_head_path(&path);
+        let mut file = OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .expect("open append log for partial crash suffix");
+        file.write_all(b"partial-crash-suffix")
+            .expect("write partial crash suffix");
+        file.sync_all().expect("sync partial crash suffix");
+        drop(file);
+        drop(store);
+
+        let log_before = fs::read(&path).expect("read log before read-only recovery refusal");
+        let head_before =
+            fs::read(&head_path).expect("read head before read-only recovery refusal");
+        let read_only = NodeStore::try_new_read_only(&dir).expect("open read-only store");
+        let error = read_only
+            .read_jsonl_tail(&path)
+            .expect_err("read-only tail recovery must refuse truncation");
+        assert!(
+            error
+                .to_string()
+                .contains("storage_read_only_write_refused"),
+            "{error}"
+        );
+        assert_eq!(
+            fs::read(&path).expect("read log after read-only recovery refusal"),
+            log_before
+        );
+        assert_eq!(
+            fs::read(&head_path).expect("read head after read-only recovery refusal"),
+            head_before
         );
 
         fs::remove_dir_all(dir).expect("cleanup");

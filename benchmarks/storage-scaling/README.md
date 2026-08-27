@@ -113,9 +113,15 @@ checksum-bound migration manifest, writes the deterministic
 pointer. It refuses a non-empty output directory and reports required and
 available disk. The second command independently rechecks the published
 logical store, migration manifest, and canonical export against the
-authenticated database. A missing, truncated, or valid-but-foreign export fails
-closed without changing the database or published generation. Neither command
-schedules activation.
+authenticated database. `--verify-only` opens both the source and target
+read-only: it never creates a missing directory, integrity key, or database;
+never recovers or removes a pending ordered-commit journal; never persists a
+reconstructed chain tip, JSONL v1-head upgrade, or crash-suffix repair; and
+never rewrites the manifest or canonical export. A pending source journal and
+any state requiring repair fail closed so the operator can recover it through a
+separate writable workflow before retrying verification. A missing, truncated,
+or valid-but-foreign export likewise fails closed without changing the source,
+database, or published generation. Neither command schedules activation.
 
 Activation is a Foundation-governance workflow, not a Cobalt action. Run it
 only on six disposable clones until the complete packet passes. The signing

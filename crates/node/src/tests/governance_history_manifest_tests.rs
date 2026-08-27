@@ -3921,6 +3921,8 @@
             .current_state_raw("retained_history_checkpoint")
             .expect("read authenticated retained checkpoint")
             .is_some());
+        drop(transactional);
+        drop(store);
         let verified = rebuild_transactional_storage(StorageMigrationOptions {
             data_dir: data_dir.clone(),
             output_dir: output_dir.clone(),

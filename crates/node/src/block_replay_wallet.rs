@@ -1,8 +1,16 @@
 use super::*;
 
 pub fn verify_blocks(options: NodeOptions) -> io::Result<BlockVerificationReport> {
-    let store = NodeStore::new(&options.data_dir);
+    let store = NodeStore::try_new(&options.data_dir)?;
     recover_ordered_commit_journal(&store)?;
+    verify_blocks_from_store(&store)
+}
+
+pub(super) fn verify_blocks_read_only(store: &NodeStore) -> io::Result<BlockVerificationReport> {
+    verify_blocks_from_store(store)
+}
+
+fn verify_blocks_from_store(store: &NodeStore) -> io::Result<BlockVerificationReport> {
     let genesis = store.read_genesis()?;
     let blocks = store.read_blocks()?;
     let ordered_batches = store.read_ordered_batches()?;

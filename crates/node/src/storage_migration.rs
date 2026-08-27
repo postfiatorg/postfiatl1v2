@@ -71,10 +71,27 @@ pub fn rebuild_transactional_storage(
 ) -> io::Result<StorageMigrationReportV1> {
     validate_expected_digest("expected tip", &options.expected_tip)?;
     validate_expected_digest("expected state root", &options.expected_state_root)?;
-    let source = NodeStore::new(&options.data_dir);
-    recover_ordered_commit_journal(&source)?;
+    let source = if options.verify_only {
+        NodeStore::try_new_read_only(&options.data_dir)?
+    } else {
+        NodeStore::try_new(&options.data_dir)?
+    };
+    if options.verify_only {
+        if source.read_ordered_commit_journal_raw()?.is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "storage_migration_verify_source_recovery_required: --verify-only refuses a pending ordered-commit journal",
+            ));
+        }
+    } else {
+        recover_ordered_commit_journal(&source)?;
+    }
     let genesis = source.read_genesis()?;
-    let recorded_tip = read_chain_tip_or_reconstruct_for_genesis(&source, &genesis)?;
+    let recorded_tip = if options.verify_only {
+        read_chain_tip_or_reconstruct_for_genesis_read_only(&source, &genesis)?
+    } else {
+        read_chain_tip_or_reconstruct_for_genesis(&source, &genesis)?
+    };
     let source_governance = source.read_governance()?;
     let governed_activation_height = source_governance.storage_commitment_activation_height();
     let source_activation_height = genesis
@@ -91,9 +108,13 @@ pub fn rebuild_transactional_storage(
 
     // This authenticates every legacy history object and independently replays
     // execution, receipts, state roots, certificates, and the certified tip.
-    verify_blocks(NodeOptions {
-        data_dir: options.data_dir.clone(),
-    })?;
+    if options.verify_only {
+        verify_blocks_read_only(&source)?;
+    } else {
+        verify_blocks(NodeOptions {
+            data_dir: options.data_dir.clone(),
+        })?;
+    }
     let history_checkpoint = read_history_checkpoint_state_optional(&source)?;
     let mut source_tip = reconstruct_chain_tip_for_genesis(&source, &genesis)?;
     source_tip.receipt_count = source
@@ -461,10 +482,10 @@ fn verify_existing_transactional_generation(
     }
     let canonical_output = fs::canonicalize(output_dir)?;
     let target = match source.transactional_generation_pointer()? {
-        Some(pointer) if pointer.database_directory == canonical_output => {
+        Some(pointer) if fs::canonicalize(&pointer.database_directory)? == canonical_output => {
             source.transactional_store()?
         }
-        _ => Arc::new(source.open_transactional_store_at(output_dir)?),
+        _ => Arc::new(source.open_transactional_store_read_only_at(&canonical_output)?),
     };
     let logical_store_report = target.verify_logical_integrity()?;
     let blocks = source.read_blocks()?;

@@ -77,6 +77,15 @@ postfiat-node storage-rebuild-transactional --data-dir PATH --output-dir PATH \
   --offline-confirmed
 ```
 
+The verification form is strictly non-mutating. It requires existing source
+and target directories plus the existing source integrity key, opens the
+transactional database through `redb`'s read-only interface, and refuses a
+pending source journal instead of recovering it. In-memory chain-tip
+reconstruction is allowed, but chain-tip repair, JSONL v1-head upgrades,
+crash-suffix truncation/checkpointing, manifest writes, and export writes are
+not. Whole-directory mutation-sentinel tests cover successful verification and
+each repair/refusal boundary.
+
 This source is an undeployed development candidate. Canonical snapshot/restore,
 rebuild, retained-history equality, exact height-915 replay, the closed 69-case
 tamper/crash matrix, compatible two-binary rollback, and a development-only

@@ -19,6 +19,42 @@ fn copy_activation_test_dir(source: &Path, destination: &Path) {
     }
 }
 
+fn snapshot_activation_test_tree(root: &Path) -> BTreeMap<String, Vec<u8>> {
+    fn visit(root: &Path, directory: &Path, output: &mut BTreeMap<String, Vec<u8>>) {
+        let mut entries = std::fs::read_dir(directory)
+            .expect("read mutation-sentinel directory")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("read mutation-sentinel entries");
+        entries.sort_by_key(std::fs::DirEntry::file_name);
+        for entry in entries {
+            let path = entry.path();
+            let relative = path
+                .strip_prefix(root)
+                .expect("derive mutation-sentinel relative path")
+                .to_string_lossy()
+                .into_owned();
+            let file_type = entry.file_type().expect("read mutation-sentinel file type");
+            if file_type.is_dir() {
+                output.insert(format!("{relative}/"), Vec::new());
+                visit(root, &path, output);
+            } else if file_type.is_file() {
+                output.insert(
+                    relative,
+                    std::fs::read(&path).expect("read mutation-sentinel file"),
+                );
+            } else {
+                panic!("unexpected mutation-sentinel entry `{}`", path.display());
+            }
+        }
+    }
+
+    let mut output = BTreeMap::new();
+    if root.is_dir() {
+        visit(root, root, &mut output);
+    }
+    output
+}
+
 fn assert_transactional_logical_equivalence(
     expected: &postfiat_storage::TransactionalStore,
     observed: &postfiat_storage::TransactionalStore,
@@ -967,6 +1003,31 @@ fn ordered_history_v2_state_root_is_domain_bound_and_activation_gated() {
 }
 
 #[test]
+fn transactional_verify_only_does_not_create_missing_source_or_target() {
+    let data_dir = unique_test_dir("postfiat-transactional-verify-missing-source");
+    let output_dir = unique_test_dir("postfiat-transactional-verify-missing-output");
+    assert!(!data_dir.exists());
+    assert!(!output_dir.exists());
+
+    let error = rebuild_transactional_storage(StorageMigrationOptions {
+        data_dir: data_dir.clone(),
+        output_dir: output_dir.clone(),
+        expected_tip: "00".repeat(48),
+        expected_state_root: "11".repeat(48),
+        verify_only: true,
+    })
+    .expect_err("verify-only must not create a missing source or target");
+    assert!(
+        error
+            .to_string()
+            .contains("storage_integrity_key_missing"),
+        "{error}"
+    );
+    assert!(!data_dir.exists(), "verify-only created the source directory");
+    assert!(!output_dir.exists(), "verify-only created the target directory");
+}
+
+#[test]
 fn transactional_rebuild_replays_publishes_and_verifies_a_legacy_generation() {
     let data_dir = unique_test_dir("postfiat-transactional-rebuild-source");
     let output_dir = unique_test_dir("postfiat-transactional-rebuild-output");
@@ -1001,6 +1062,28 @@ fn transactional_rebuild_replays_publishes_and_verifies_a_legacy_generation() {
     apply_activation_journal(&store, &journal);
     let source_tip = store.read_chain_tip().expect("read rebuild source tip");
 
+    let source_before_missing_target = snapshot_activation_test_tree(&data_dir);
+    let missing_target_error = rebuild_transactional_storage(StorageMigrationOptions {
+        data_dir: data_dir.clone(),
+        output_dir: output_dir.clone(),
+        expected_tip: source_tip.block_hash.clone(),
+        expected_state_root: source_tip.state_root.clone(),
+        verify_only: true,
+    })
+    .expect_err("verify-only must refuse a missing target without creating it");
+    assert!(
+        missing_target_error
+            .to_string()
+            .contains("storage_migration_verify_output_missing"),
+        "{missing_target_error}"
+    );
+    assert_eq!(
+        snapshot_activation_test_tree(&data_dir),
+        source_before_missing_target,
+        "missing-target refusal mutated the source directory"
+    );
+    assert!(!output_dir.exists(), "verify-only created the missing target");
+
     let report = rebuild_transactional_storage(StorageMigrationOptions {
         data_dir: data_dir.clone(),
         output_dir: output_dir.clone(),
@@ -1018,6 +1101,8 @@ fn transactional_rebuild_replays_publishes_and_verifies_a_legacy_generation() {
             .is_file()
     );
 
+    let source_before_verify = snapshot_activation_test_tree(&data_dir);
+    let output_before_verify = snapshot_activation_test_tree(&output_dir);
     let verified = rebuild_transactional_storage(StorageMigrationOptions {
         data_dir: data_dir.clone(),
         output_dir: output_dir.clone(),
@@ -1030,14 +1115,88 @@ fn transactional_rebuild_replays_publishes_and_verifies_a_legacy_generation() {
     assert!(!verified.published);
     assert_eq!(verified.migration_packet_root, report.migration_packet_root);
     assert_eq!(
-        store
-            .transactional_store()
-            .expect("open published transactional generation")
-            .meta()
-            .expect("read published metadata")
-            .chain_tip(source_tip.schema.clone()),
-        source_tip
+        snapshot_activation_test_tree(&data_dir),
+        source_before_verify,
+        "successful --verify-only mutated the source directory"
     );
+    assert_eq!(
+        snapshot_activation_test_tree(&output_dir),
+        output_before_verify,
+        "successful --verify-only mutated the target directory"
+    );
+
+    let chain_tip_path = data_dir.join(postfiat_storage::CHAIN_TIP_FILE);
+    let chain_tip_bytes = std::fs::read(&chain_tip_path).expect("read chain tip before removal");
+    std::fs::remove_file(&chain_tip_path).expect("remove chain tip for read-only reconstruction");
+    let source_before_tip_reconstruction = snapshot_activation_test_tree(&data_dir);
+    let reconstructed = rebuild_transactional_storage(StorageMigrationOptions {
+        data_dir: data_dir.clone(),
+        output_dir: output_dir.clone(),
+        expected_tip: source_tip.block_hash.clone(),
+        expected_state_root: source_tip.state_root.clone(),
+        verify_only: true,
+    })
+    .expect("verify-only should reconstruct a missing chain tip in memory");
+    assert_eq!(reconstructed.source_tip, source_tip);
+    assert_eq!(
+        snapshot_activation_test_tree(&data_dir),
+        source_before_tip_reconstruction,
+        "read-only chain-tip reconstruction persisted a repair"
+    );
+    assert!(
+        !chain_tip_path.exists(),
+        "read-only verification recreated the chain-tip file"
+    );
+    std::fs::write(&chain_tip_path, chain_tip_bytes).expect("restore chain tip after read-only test");
+
+    store
+        .write_ordered_commit_journal(&journal)
+        .expect("write pending source journal for verify-only refusal");
+    let source_before_pending_refusal = snapshot_activation_test_tree(&data_dir);
+    let output_before_pending_refusal = snapshot_activation_test_tree(&output_dir);
+    let read_only_source =
+        NodeStore::try_new_read_only(&data_dir).expect("open pending source read-only");
+    let recovery_error = recover_ordered_commit_journal(&read_only_source)
+        .expect_err("read-only source must reject journal recovery before creating a lock");
+    assert!(
+        recovery_error
+            .to_string()
+            .contains("storage_read_only_write_refused"),
+        "{recovery_error}"
+    );
+    drop(read_only_source);
+    assert_eq!(
+        snapshot_activation_test_tree(&data_dir),
+        source_before_pending_refusal,
+        "read-only journal recovery refusal mutated the source directory"
+    );
+    let pending_error = rebuild_transactional_storage(StorageMigrationOptions {
+        data_dir: data_dir.clone(),
+        output_dir: output_dir.clone(),
+        expected_tip: source_tip.block_hash.clone(),
+        expected_state_root: source_tip.state_root.clone(),
+        verify_only: true,
+    })
+    .expect_err("verify-only must refuse rather than recover a pending source journal");
+    assert!(
+        pending_error
+            .to_string()
+            .contains("storage_migration_verify_source_recovery_required"),
+        "{pending_error}"
+    );
+    assert_eq!(
+        snapshot_activation_test_tree(&data_dir),
+        source_before_pending_refusal,
+        "pending-journal refusal mutated the source directory"
+    );
+    assert_eq!(
+        snapshot_activation_test_tree(&output_dir),
+        output_before_pending_refusal,
+        "pending-journal refusal mutated the target directory"
+    );
+    store
+        .remove_ordered_commit_journal()
+        .expect("remove pending source journal after refusal test");
 
     let manifest_path = output_dir.join(STORAGE_MIGRATION_MANIFEST_FILE);
     let original_manifest = std::fs::read(&manifest_path).expect("read migration manifest");
@@ -1527,13 +1686,19 @@ fn transactional_verify_only_rejects_a_valid_but_stale_generation_without_mutati
     assert_eq!(second.height, 2);
     apply_activation_journal(&legacy_only, &second);
     std::fs::write(&pointer_path, &stale_pointer).expect("restore valid stale pointer");
+    drop(legacy_only);
+    drop(store);
 
-    let current = NodeStore::new(&data_dir);
+    let current = NodeStore::try_new_read_only(&data_dir)
+        .expect("open current legacy source read-only before verification");
     let current_tip = current
         .read_chain_tip()
         .expect("read current legacy source tip");
     assert_eq!(current_tip.height, 2);
     let blocks_before = current.read_blocks().expect("read blocks before stale rejection");
+    drop(current);
+    let source_before = snapshot_activation_test_tree(&data_dir);
+    let target_before = snapshot_activation_test_tree(&output_dir);
     let error = rebuild_transactional_storage(StorageMigrationOptions {
         data_dir: data_dir.clone(),
         output_dir: output_dir.clone(),
@@ -1548,6 +1713,18 @@ fn transactional_verify_only_rejects_a_valid_but_stale_generation_without_mutati
             .contains("storage_migration_manifest_domain_mismatch"),
         "{error}"
     );
+    assert_eq!(
+        snapshot_activation_test_tree(&data_dir),
+        source_before,
+        "stale-generation rejection mutated the authenticated source"
+    );
+    assert_eq!(
+        snapshot_activation_test_tree(&output_dir),
+        target_before,
+        "stale-generation rejection mutated the verification target"
+    );
+    let current = NodeStore::try_new_read_only(&data_dir)
+        .expect("reopen current legacy source read-only after verification");
     assert_eq!(
         current.read_blocks().expect("read blocks after stale rejection"),
         blocks_before

@@ -20,8 +20,8 @@ use postfiat_types::{
     GovernanceState, LedgerState, NodeState, Receipt, ShieldedState,
 };
 use redb::{
-    Database, Durability, ReadTransaction, ReadableDatabase, ReadableTable, ReadableTableMetadata,
-    TableDefinition,
+    Database, Durability, ReadOnlyDatabase, ReadTransaction, ReadableDatabase, ReadableTable,
+    ReadableTableMetadata, TableDefinition,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
@@ -464,9 +464,23 @@ struct WorkCounterState {
     durable_commit_micros: AtomicU64,
 }
 
+enum TransactionalDatabase {
+    ReadWrite(Database),
+    ReadOnly(ReadOnlyDatabase),
+}
+
+impl TransactionalDatabase {
+    fn begin_read(&self) -> Result<ReadTransaction, redb::TransactionError> {
+        match self {
+            Self::ReadWrite(database) => database.begin_read(),
+            Self::ReadOnly(database) => database.begin_read(),
+        }
+    }
+}
+
 pub struct TransactionalStore {
     database_path: PathBuf,
-    database: Database,
+    database: TransactionalDatabase,
     integrity_key: IntegrityKey,
     counters: Arc<WorkCounterState>,
 }
@@ -506,7 +520,30 @@ impl TransactionalStore {
         let database = Database::create(&database_path).map_err(database_error)?;
         Ok(Self {
             database_path,
-            database,
+            database: TransactionalDatabase::ReadWrite(database),
+            integrity_key,
+            counters: Arc::new(WorkCounterState::default()),
+        })
+    }
+
+    fn open_read_only_with_integrity_key(
+        data_dir: &Path,
+        integrity_key: IntegrityKey,
+    ) -> StorageResult<Self> {
+        if !data_dir.is_dir() {
+            return Err(StorageError::new(
+                StorageErrorCode::Database,
+                format!(
+                    "storage_transactional_read_only_directory_missing: `{}` does not exist",
+                    data_dir.display()
+                ),
+            ));
+        }
+        let database_path = data_dir.join(TRANSACTIONAL_DATABASE_FILE);
+        let database = ReadOnlyDatabase::open(&database_path).map_err(database_error)?;
+        Ok(Self {
+            database_path,
+            database: TransactionalDatabase::ReadOnly(database),
             integrity_key,
             counters: Arc::new(WorkCounterState::default()),
         })
@@ -2366,7 +2403,15 @@ impl TransactionalStore {
     }
 
     pub fn check_database_integrity(&mut self) -> StorageResult<bool> {
-        self.database.check_integrity().map_err(database_error)
+        match &mut self.database {
+            TransactionalDatabase::ReadWrite(database) => {
+                database.check_integrity().map_err(database_error)
+            }
+            TransactionalDatabase::ReadOnly(_) => Err(StorageError::new(
+                StorageErrorCode::Database,
+                "storage_transactional_read_only_write_refused: database integrity repair requires a writable store",
+            )),
+        }
     }
 
     fn read_json_record<T: DeserializeOwned>(
@@ -2396,7 +2441,13 @@ impl TransactionalStore {
         self.counters
             .write_transactions
             .fetch_add(1, Ordering::Relaxed);
-        let mut transaction = self.database.begin_write().map_err(database_error)?;
+        let TransactionalDatabase::ReadWrite(database) = &self.database else {
+            return Err(StorageError::new(
+                StorageErrorCode::Database,
+                "storage_transactional_read_only_write_refused: write transaction requested from a read-only store",
+            ));
+        };
+        let mut transaction = database.begin_write().map_err(database_error)?;
         transaction
             .set_durability(Durability::Immediate)
             .map_err(database_error)?;
@@ -2598,6 +2649,23 @@ fn shared_transactional_store(
     )?);
     stores.insert(database_path, Arc::clone(&store));
     Ok(store)
+}
+
+/// Release process-cached writable handles that have no live consumer before
+/// an offline read-only verifier opens a database. Active handles remain in
+/// place, causing the read-only open to fail closed on redb's file lock.
+pub(crate) fn release_inactive_shared_transactional_stores() -> StorageResult<()> {
+    let Some(registry) = SHARED_STORES.get() else {
+        return Ok(());
+    };
+    let mut stores = registry.lock().map_err(|_| {
+        StorageError::new(
+            StorageErrorCode::Database,
+            "shared transactional store registry is poisoned",
+        )
+    })?;
+    stores.retain(|_, store| Arc::strong_count(store) > 1);
+    Ok(())
 }
 
 const STORED_RECEIPT_HISTORY_SCHEMA: &str = "postfiat-stored-receipt-history-v1";

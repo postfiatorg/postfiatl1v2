@@ -14,14 +14,33 @@ impl NodeStore {
         let directory = self
             .transactional_database_directory()
             .map_err(|error| StorageError::new(StorageErrorCode::Database, error.to_string()))?;
-        TransactionalStore::open_with_integrity_key(&directory, self.integrity_key.clone())
+        if self.read_only {
+            TransactionalStore::open_read_only_with_integrity_key(
+                &directory,
+                self.integrity_key.clone(),
+            )
+        } else {
+            TransactionalStore::open_with_integrity_key(&directory, self.integrity_key.clone())
+        }
     }
 
     pub fn open_transactional_store_at(
         &self,
         database_directory: impl AsRef<Path>,
     ) -> StorageResult<TransactionalStore> {
+        self.ensure_writable()
+            .map_err(|error| StorageError::new(StorageErrorCode::Database, error.to_string()))?;
         TransactionalStore::open_with_integrity_key(
+            database_directory.as_ref(),
+            self.integrity_key.clone(),
+        )
+    }
+
+    pub fn open_transactional_store_read_only_at(
+        &self,
+        database_directory: impl AsRef<Path>,
+    ) -> StorageResult<TransactionalStore> {
+        TransactionalStore::open_read_only_with_integrity_key(
             database_directory.as_ref(),
             self.integrity_key.clone(),
         )
@@ -45,6 +64,7 @@ impl NodeStore {
         database_directory: impl AsRef<Path>,
         migration_packet_root: &str,
     ) -> io::Result<TransactionalGenerationPointerV1> {
+        self.ensure_writable()?;
         let canonical_directory = fs::canonicalize(database_directory.as_ref())?;
         let store = TransactionalStore::open_with_integrity_key(
             &canonical_directory,
@@ -100,7 +120,14 @@ impl NodeStore {
             .as_ref()
             .map(|pointer| pointer.database_directory.clone())
             .unwrap_or_else(|| self.data_dir.clone());
-        let store = shared_transactional_store(&directory, self.integrity_key.clone())?;
+        let store = if self.read_only {
+            Arc::new(TransactionalStore::open_read_only_with_integrity_key(
+                &directory,
+                self.integrity_key.clone(),
+            )?)
+        } else {
+            shared_transactional_store(&directory, self.integrity_key.clone())?
+        };
         if let Some(pointer) = pointer.as_ref() {
             validate_generation_pointer_binding(pointer, &store.meta()?)?;
         }
