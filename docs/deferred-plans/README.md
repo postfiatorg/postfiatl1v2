@@ -9,6 +9,7 @@ requires an explicit decision and an updated active milestone.
 - StakeHub deprecation and public reserve verification
 - Asset-Orchard proxy Phase 1a extension
 - Transaction improvement process
+- [Dynamic UNL proposal source (milestone draft, awaiting the operator's milestone decision)](dynamic-unl-proposal-source-milestone.md)
 
 Storage scaling was reactivated on 2026-08-26 and is tracked in the
 [active milestone](../plans/active/storage-scaling-milestone.md). Public testnet
