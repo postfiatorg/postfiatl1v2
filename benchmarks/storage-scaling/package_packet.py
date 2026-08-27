@@ -165,18 +165,24 @@ def copy_tamper(packet: Path, source: Path) -> Path:
         if not isinstance(test_receipts, list) or not test_receipts:
             raise ValueError("tamper receipt omitted executable test evidence")
         for test_receipt in test_receipts:
-            if not isinstance(test_receipt, dict) or "report" not in test_receipt:
-                continue
-            evidence_source = resolve_report_reference(source, test_receipt["report"])
-            evidence_destination = (
-                packet / "tamper" / "evidence" / evidence_source.name
-            )
-            if evidence_destination.exists():
-                if sha256(evidence_destination) != sha256(evidence_source):
-                    raise ValueError("tamper evidence destination conflicts")
-            else:
-                copy_file(evidence_source, evidence_destination)
-            test_receipt["report"] = reference(packet, evidence_destination)
+            if not isinstance(test_receipt, dict):
+                raise ValueError("tamper test receipt is malformed")
+            for evidence_key in ("report", "manifest"):
+                if evidence_key not in test_receipt:
+                    continue
+                evidence_source = resolve_report_reference(
+                    source,
+                    test_receipt[evidence_key],
+                )
+                evidence_destination = (
+                    packet / "tamper" / "evidence" / evidence_source.name
+                )
+                if evidence_destination.exists():
+                    if sha256(evidence_destination) != sha256(evidence_source):
+                        raise ValueError("tamper evidence destination conflicts")
+                else:
+                    copy_file(evidence_source, evidence_destination)
+                test_receipt[evidence_key] = reference(packet, evidence_destination)
         write_json(destination, receipt)
         case["receipt"] = reference(packet, destination)
     destination = packet / "artifacts" / "tamper.json"

@@ -21,6 +21,27 @@ ORIGINAL_E3_MANIFEST = (
     / "e3"
     / "campaign-manifest.json"
 )
+ORIGINAL_E3_MANIFEST_SHA256 = (
+    "c23320d47d631efdd74c1e5c6c541951f452a4de9b14eb583f9d888b77167fa7"
+)
+ORIGINAL_E3_SOURCE_PATHS = (
+    "docs/governance/cobalt-adversarial-verification-research-spec.md",
+    "crates/node/src/cobalt_shadow.rs",
+    "crates/node/src/cobalt_shadow_runtime.rs",
+    "crates/node/src/bin/postfiat_cobalt_liveness_simulation.rs",
+    "crates/cobalt_e3_harness/src/main.rs",
+)
+ORIGINAL_E3_TAMPER_CASES = (
+    "truncated",
+    "padded",
+    "reordered",
+    "one_entry_modified",
+)
+ORIGINAL_E3_FORGED_CASES = (
+    "fabricated_transition",
+    "wrong_root_certificate",
+    "omitted_latest_update",
+)
 
 ORIGINAL_E3 = ("postfiat-cobalt-e3-harness", "__full_campaign__")
 COMPATIBLE_ROLLBACK = (
@@ -479,7 +500,51 @@ def run_cargo_test(package: str, test_filter: str) -> dict[str, str]:
     }
 
 
-def run_original_e3(output: Path, revision: str) -> dict[str, str]:
+def current_source_e3_manifest(output: Path, revision: str) -> Path:
+    if sha256(ORIGINAL_E3_MANIFEST) != ORIGINAL_E3_MANIFEST_SHA256:
+        raise RuntimeError("frozen original E3 manifest identity changed")
+    manifest = json.loads(ORIGINAL_E3_MANIFEST.read_text(encoding="utf-8"))
+    binding = manifest.get("live_binding")
+    sources = manifest.get("source_files")
+    if (
+        manifest.get("schema")
+        != "postfiat-cobalt-adversarial-e3-campaign-manifest-v1"
+        or manifest.get("campaign_id") != "cobalt-e3-adversarial-recovery-v1"
+        or manifest.get("history_entry_count") != 4
+        or tuple(manifest.get("tamper_cases", [])) != ORIGINAL_E3_TAMPER_CASES
+        or tuple(manifest.get("forged_catch_up_cases", []))
+        != ORIGINAL_E3_FORGED_CASES
+        or not isinstance(binding, dict)
+        or binding.get("validators")
+        != [f"validator-{index}" for index in range(6)]
+        or binding.get("quorum") != 5
+        or not isinstance(sources, list)
+        or tuple(
+            source.get("path") if isinstance(source, dict) else None
+            for source in sources
+        )
+        != ORIGINAL_E3_SOURCE_PATHS
+    ):
+        raise RuntimeError("frozen original E3 campaign boundary changed")
+
+    for source, relative in zip(sources, ORIGINAL_E3_SOURCE_PATHS, strict=True):
+        source_path = (REPO / relative).resolve()
+        if not source_path.is_relative_to(REPO) or not source_path.is_file():
+            raise RuntimeError(f"current E3 source path is unsafe or missing: {relative}")
+        source["sha256"] = sha256(source_path)
+    manifest["source_revision"] = revision
+    manifest["rebound_from"] = {
+        "path": ORIGINAL_E3_MANIFEST.relative_to(REPO).as_posix(),
+        "sha256": ORIGINAL_E3_MANIFEST_SHA256,
+        "policy": "same frozen cases and live binding, current source hashes",
+    }
+    destination = output / "original-e3-current-source-manifest.json"
+    write_json(destination, manifest)
+    return destination
+
+
+def run_original_e3(output: Path, revision: str) -> dict[str, Any]:
+    manifest = current_source_e3_manifest(output, revision)
     report = output / "original-e3-campaign.json"
     work = output / "original-e3-work"
     run_command = [
@@ -490,7 +555,7 @@ def run_original_e3(output: Path, revision: str) -> dict[str, str]:
         "--locked",
         "--",
         "run",
-        str(ORIGINAL_E3_MANIFEST),
+        str(manifest),
         str(report),
         str(work),
     ]
@@ -514,7 +579,7 @@ def run_original_e3(output: Path, revision: str) -> dict[str, str]:
         "--locked",
         "--",
         "verify",
-        str(ORIGINAL_E3_MANIFEST),
+        str(manifest),
         str(report),
     ]
     verify = subprocess.run(
@@ -544,6 +609,10 @@ def run_original_e3(output: Path, revision: str) -> dict[str, str]:
         "report": {
             "path": report.name,
             "sha256": sha256(report),
+        },
+        "manifest": {
+            "path": manifest.name,
+            "sha256": sha256(manifest),
         },
     }
 

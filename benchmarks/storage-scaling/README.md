@@ -182,10 +182,15 @@ python3 benchmarks/storage-scaling/run_tamper_evidence.py \
 
 The tamper runner executes the frozen original 48-case E3 campaign and every
 selected storage, node, crash, snapshot, migration, activation, catch-up, vote
-refusal, and compatible-rollback owner test. It rejects a zero-test filter and
-emits one checksum-bound receipt for every closed case. Packet assembly must
-include both release binaries so the offline verifier can bind the current and
-rollback identities:
+refusal, and compatible-rollback owner test. Because the original E3 manifest
+hash-binds an older source tree, the runner first verifies that frozen manifest
+by its fixed SHA-256, preserves its exact live binding and case lists, and emits
+a derived manifest that changes only the five audited source hashes to the
+current revision. Both manifests' provenance, the derived manifest, and the
+full independently verified E3 report are checksum-bound. The runner rejects a
+zero-test filter and emits one checksum-bound receipt for every closed case.
+Packet assembly must include both release binaries so the offline verifier can
+bind the current and rollback identities:
 
 ```bash
 python3 benchmarks/storage-scaling/package_packet.py \

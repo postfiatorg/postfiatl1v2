@@ -194,6 +194,98 @@ def _passing_packet(packet: Path) -> None:
             }
         )
 
+    e3_manifest_path = packet / "tamper" / "evidence" / "current-e3-manifest.json"
+    _write_json(
+        e3_manifest_path,
+        {
+            "schema": "postfiat-cobalt-adversarial-e3-campaign-manifest-v1",
+            "campaign_id": "cobalt-e3-adversarial-recovery-v1",
+            "source_revision": revision,
+            "live_binding": {
+                "validators": [f"validator-{index}" for index in range(6)],
+                "quorum": 5,
+            },
+            "source_files": [
+                {"path": path, "sha256": "1" * 64}
+                for path in (
+                    "docs/governance/cobalt-adversarial-verification-research-spec.md",
+                    "crates/node/src/cobalt_shadow.rs",
+                    "crates/node/src/cobalt_shadow_runtime.rs",
+                    "crates/node/src/bin/postfiat_cobalt_liveness_simulation.rs",
+                    "crates/cobalt_e3_harness/src/main.rs",
+                )
+            ],
+            "history_entry_count": 4,
+            "tamper_cases": [
+                "truncated",
+                "padded",
+                "reordered",
+                "one_entry_modified",
+            ],
+            "forged_catch_up_cases": [
+                "fabricated_transition",
+                "wrong_root_certificate",
+                "omitted_latest_update",
+            ],
+            "rebound_from": {
+                "path": (
+                    "benchmarks/cobalt-adversarial-verification/e3/"
+                    "campaign-manifest.json"
+                ),
+                "sha256": (
+                    "c23320d47d631efdd74c1e5c6c541951f452a4de9b14eb583f9d888b77167fa7"
+                ),
+                "policy": "same frozen cases and live binding, current source hashes",
+            },
+        },
+    )
+    e3_report_path = packet / "tamper" / "evidence" / "current-e3-report.json"
+    _write_json(
+        e3_report_path,
+        {
+            "schema": "postfiat-cobalt-adversarial-e3-campaign-v1",
+            "summary": {
+                "manifest_sha256": _sha256(e3_manifest_path),
+                "source_revision": revision,
+                "validator_count": 6,
+                "tamper_case_count": 24,
+                "forged_catch_up_case_count": 18,
+                "recovery_case_count": 6,
+                "rejected_case_count": 42,
+                "durable_mutation_count": 0,
+                "signed_evidence_count": 18,
+                "signed_evidence_verified": True,
+                "byte_identical_recovery_count": 6,
+                "manual_repair_action_count": 0,
+                "summary_only": False,
+                "pass": True,
+            },
+            "cases": [
+                {
+                    "ok": True,
+                    "detected_before_rejoin": True,
+                    "durable_state_mutated": False,
+                    "state_hash_before": "2" * 64,
+                    "state_hash_after": "2" * 64,
+                    "journal_sha256_before": "3" * 64,
+                    "journal_sha256_after": "3" * 64,
+                }
+                for _ in range(42)
+            ],
+            "recoveries": [
+                {
+                    "ok": True,
+                    "byte_identical": True,
+                    "restart_succeeded": True,
+                    "no_manual_repair": True,
+                    "honest_history_sha256": "4" * 64,
+                    "restored_history_sha256": "4" * 64,
+                }
+                for _ in range(6)
+            ],
+        },
+    )
+
     rollback_revision = "c" * 40
     rollback_report_path = packet / "tamper" / "evidence" / "compatible-rollback.json"
     _write_json(
@@ -283,6 +375,19 @@ def _passing_packet(packet: Path) -> None:
                 "command_sha256": "cd" * 32,
             },
         ]
+        if name == "history_truncated":
+            test_receipts.append(
+                {
+                    "package": "postfiat-cobalt-e3-harness",
+                    "test_filter": "__full_campaign__",
+                    "executed_case_count": 48,
+                    "result": "passed",
+                    "command_sha256": "de" * 32,
+                    "verify_command_sha256": "ad" * 32,
+                    "report": _reference(packet, e3_report_path),
+                    "manifest": _reference(packet, e3_manifest_path),
+                }
+            )
         if name == "compatible_post_activation_software_rollback":
             test_receipts = [
                 {
@@ -400,7 +505,7 @@ def _passing_packet(packet: Path) -> None:
             "uncovered_requirements": [],
             "source_revision": revision,
             "cases": tamper_cases,
-            "unique_test_count": len(REQUIRED_TAMPER_CASES) + 1,
+            "unique_test_count": len(REQUIRED_TAMPER_CASES) + 2,
             "offline": True,
             "network_contacted": False,
         },
@@ -602,6 +707,37 @@ class StorageScalingVerifierTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 StorageScalingVerificationError,
                 "canonical export is invalid",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_missing_original_e3_campaign(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+            name = "history_truncated"
+            receipt_path = packet / "tamper" / f"{name}.json"
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            receipt["test_receipts"] = [
+                test
+                for test in receipt["test_receipts"]
+                if test.get("test_filter") != "__full_campaign__"
+            ]
+            _write_json(receipt_path, receipt)
+
+            tamper_path = packet / "artifacts" / "tamper.json"
+            tamper = json.loads(tamper_path.read_text(encoding="utf-8"))
+            case = next(value for value in tamper["cases"] if value["name"] == name)
+            case["receipt"]["sha256"] = _sha256(receipt_path)
+            _write_json(tamper_path, tamper)
+
+            manifest_path = packet / MANIFEST_FILE
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["artifacts"]["tamper"]["sha256"] = _sha256(tamper_path)
+            _write_json(manifest_path, manifest)
+            _write_checksums(packet)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "omitted a required full-campaign",
             ):
                 verify_packet(packet)
 

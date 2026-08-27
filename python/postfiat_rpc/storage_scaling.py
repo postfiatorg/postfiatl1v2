@@ -57,6 +57,27 @@ LOCAL_PATH = re.compile(r"(?:/home/|/Users/|[A-Za-z]:\\\\Users\\\\)")
 NONLOCAL_IPV4 = re.compile(
     r"(?<![0-9.])(?!127\.0\.0\.1\b)(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?![0-9.])"
 )
+ORIGINAL_E3_MANIFEST_SHA256 = (
+    "c23320d47d631efdd74c1e5c6c541951f452a4de9b14eb583f9d888b77167fa7"
+)
+ORIGINAL_E3_SOURCE_PATHS = (
+    "docs/governance/cobalt-adversarial-verification-research-spec.md",
+    "crates/node/src/cobalt_shadow.rs",
+    "crates/node/src/cobalt_shadow_runtime.rs",
+    "crates/node/src/bin/postfiat_cobalt_liveness_simulation.rs",
+    "crates/cobalt_e3_harness/src/main.rs",
+)
+ORIGINAL_E3_TAMPER_CASES = (
+    "truncated",
+    "padded",
+    "reordered",
+    "one_entry_modified",
+)
+ORIGINAL_E3_FORGED_CASES = (
+    "fabricated_transition",
+    "wrong_root_certificate",
+    "omitted_latest_update",
+)
 ARTIFACT_SCHEMAS = {
     "source": "postfiat-storage-source-identity-v1",
     "replay": "postfiat-storage-scaling-replay-v1",
@@ -708,18 +729,61 @@ def _verify_performance(
     return ratios
 
 
+def _verify_original_e3_manifest(
+    manifest: Mapping[str, Any],
+    source_revision: str,
+    label: str,
+) -> None:
+    binding = _object(manifest.get("live_binding"), f"{label} live binding")
+    sources = _list(manifest.get("source_files"), f"{label} source files")
+    rebound = _object(manifest.get("rebound_from"), f"{label} rebound provenance")
+    if (
+        manifest.get("schema")
+        != "postfiat-cobalt-adversarial-e3-campaign-manifest-v1"
+        or manifest.get("campaign_id") != "cobalt-e3-adversarial-recovery-v1"
+        or manifest.get("source_revision") != source_revision
+        or manifest.get("history_entry_count") != 4
+        or tuple(_list(manifest.get("tamper_cases"), f"{label} tamper cases"))
+        != ORIGINAL_E3_TAMPER_CASES
+        or tuple(
+            _list(manifest.get("forged_catch_up_cases"), f"{label} forged cases")
+        )
+        != ORIGINAL_E3_FORGED_CASES
+        or binding.get("validators") != [f"validator-{index}" for index in range(6)]
+        or binding.get("quorum") != 5
+        or rebound.get("path")
+        != "benchmarks/cobalt-adversarial-verification/e3/campaign-manifest.json"
+        or rebound.get("sha256") != ORIGINAL_E3_MANIFEST_SHA256
+        or rebound.get("policy")
+        != "same frozen cases and live binding, current source hashes"
+    ):
+        _fail(f"{label} does not preserve the frozen E3 campaign boundary")
+    observed_paths: list[str] = []
+    for raw_source in sources:
+        source = _object(raw_source, f"{label} source file")
+        observed_paths.append(str(source.get("path", "")))
+        if HEX64.fullmatch(str(source.get("sha256", ""))) is None:
+            _fail(f"{label} source file hash is invalid")
+    if tuple(observed_paths) != ORIGINAL_E3_SOURCE_PATHS:
+        _fail(f"{label} source file set differs from the frozen boundary")
+
+
 def _verify_original_e3_campaign(
     packet_dir: Path,
     checksums: Mapping[str, str],
     reference: Any,
+    manifest: Mapping[str, Any],
+    manifest_sha256: str,
     source_revision: str,
     label: str,
 ) -> None:
+    _verify_original_e3_manifest(manifest, source_revision, f"{label} manifest")
     campaign = _bound_json(packet_dir, checksums, reference, label)
     if campaign.get("schema") != "postfiat-cobalt-adversarial-e3-campaign-v1":
         _fail(f"{label} schema is unsupported")
     summary = _object(campaign.get("summary"), f"{label} summary")
     expected_summary = {
+        "manifest_sha256": manifest_sha256,
         "source_revision": source_revision,
         "validator_count": 6,
         "tamper_case_count": 24,
@@ -911,6 +975,8 @@ def _verify_tamper(
             if not package or not test_filter or test.get("result") != "passed":
                 _fail(f"tamper receipt {name} contains an invalid test result")
             if test_filter == "__full_campaign__":
+                if package != "postfiat-cobalt-e3-harness":
+                    _fail(f"tamper receipt {name} E3 package identity is invalid")
                 if type(test.get("executed_case_count")) is not int or test.get(
                     "executed_case_count"
                 ) != 48:
@@ -919,10 +985,22 @@ def _verify_tamper(
                     str(test.get("verify_command_sha256", ""))
                 ) is None:
                     _fail(f"tamper receipt {name} E3 campaign proof is incomplete")
+                manifest_reference = _object(
+                    test.get("manifest"),
+                    f"tamper receipt {name} E3 manifest reference",
+                )
+                manifest = _bound_json(
+                    packet_dir,
+                    checksums,
+                    manifest_reference,
+                    f"tamper receipt {name} E3 manifest",
+                )
                 _verify_original_e3_campaign(
                     packet_dir,
                     checksums,
                     test.get("report"),
+                    manifest,
+                    str(manifest_reference.get("sha256", "")),
                     source_revision,
                     f"tamper receipt {name} E3 report",
                 )
@@ -971,6 +1049,15 @@ def _verify_tamper(
             f"missing={sorted(REQUIRED_TAMPER_CASES - observed)} "
             f"unexpected={sorted(observed - REQUIRED_TAMPER_CASES)}"
         )
+    required_evidence_tests = {
+        ("postfiat-cobalt-e3-harness", "__full_campaign__"),
+        (
+            "postfiat-storage-rollback-rehearsal",
+            "compatible_post_activation_software_rollback",
+        ),
+    }
+    if not required_evidence_tests.issubset(observed_tests):
+        _fail("tamper matrix omitted a required full-campaign evidence source")
     if matrix.get("unique_test_count") != len(observed_tests):
         _fail("tamper matrix unique test count is inconsistent")
     return len(cases)
