@@ -72,6 +72,13 @@ and final, every selected finalized height uses one durable database transaction
 per validator, full-history work is zero, page work stays bounded, both 110%
 latency gates pass, and the independent packet verifier recomputes the result.
 
+Candidate and harness provenance are separate. `--expected-source-revision`
+must name the source embedded in the qualification binary. The campaign also
+records the clean evidence-runner checkout revision and hashes the paired,
+selected, shared, and specification inputs. Packet assembly records its own
+clean checkout revision instead of falsely claiming that a later harness commit
+is the candidate binary source.
+
 Build the current binary from the exact clean source under qualification. When
 Zig is the available linker, use the repository wrappers:
 
