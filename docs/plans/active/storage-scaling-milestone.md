@@ -6,7 +6,7 @@
 
 **Decision owner:** Post Fiat
 
-**Candidate lineage:** transactional `redb` implementation through `f3907ad5`; G1 must pin the final clean source and binary
+**Candidate lineage:** transactional `redb` source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`; release binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; evidence-runner correction `260bb990`
 
 **Research basis:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 
@@ -125,10 +125,10 @@ independent local gates continue.
 | Gate | Current state | Work allowed now | Budget and advance rule |
 | --- | --- | --- | --- |
 | G0 — campaign control | **PASS** | None; do not rerun the old campaign. | Reopen only if checkpoint/resume itself changes. |
-| G1 — candidate freeze | **IN PROGRESS** | Pin clean source, build one binary, freeze inputs, and run focused regressions. | No command over 2 hours; any source or binary change restarts G1. |
-| G2 — safety | **QUEUED AFTER G1** | Tamper/crash, canonical equality, rollback, and read-only sentinels. | Split into independently verifiable units; stop on mutation, ambiguity, panic, or unverifiable output. |
-| G3 — exact replay | **PARTLY LOCAL / EXTERNAL INPUT OPEN** | Regenerate the height-915 evidence after G1. Run height 924 only from a separately authorized copy. | Never wait idle for the copy; record `WAITING_FOR_AUTHORIZED_INPUT` and continue to G4. |
-| G4 — scaling | **QUEUED AFTER G1** | Run the three-row selected-first matrix only. | Four hours aggregate; stop on a selected-path failure or `TIME_BUDGET_EXCEEDED`. |
+| G1 — candidate freeze | **CANDIDATE PASS / G4 INPUT FREEZE ACTIVE** | Keep source `ae658441` and binary `891b…bf4` unchanged; G4 freezes its height-50 and height-5,000 materials. | A candidate source or binary change restarts G1–G4; evidence-runner-only changes are separately hash-bound. |
+| G2 — safety | **LOCAL PASS / PACKET BINDING OPEN** | Preserve the passing tamper and rollback receipts; commit only redaction-safe packet material after G4. | Do not rerun unless the candidate binary changes or independent verification rejects a receipt. |
+| G3 — exact replay | **HEIGHT 915 PASS / HEIGHT 924 WAITING FOR AUTHORIZED INPUT** | Preserve the passing 915 receipt. Run height 924 only from a separately authorized copy. | Never wait idle for the copy; finish G4 without it, but do not claim offline qualification. |
+| G4 — scaling | **IN PROGRESS — RUNNER REMEDIATED** | Restart the three-row selected-first matrix with runner `260bb990` and the unchanged G1 binary. | Four hours aggregate and two hours per unattended segment; stop on a selected-path failure or `TIME_BUDGET_EXCEEDED`. |
 | G5 — offline packet | **BLOCKED BY G1–G4** | Package only after every preceding evidence gate passes. | No qualification claim until the offline verifier passes the complete packet. |
 | G6 — six-clone rehearsal | **DEFERRED** | Nothing until offline qualification is complete and deployment is the next real decision. | Requires separate data-copy authorization and six distinct stopped directories. |
 | G7 — Dynamic UNL handoff | **DIRECTION RECORDED / IMPLEMENTATION DEFERRED** | Preserve the recorded architecture decision only. | Spend no implementation time before the stated storage boundary or a new operator priority decision. |
@@ -181,14 +181,26 @@ checkpoints.
       only comparison switch.
 - [x] Make `storage-rebuild-transactional --verify-only` strictly read-only and
       fail closed when recovery or creation would be required.
-- [ ] Start from a clean checkout and record the exact source revision.
-- [ ] Build one release binary and record its SHA-256, Rust toolchain, locked
+- [x] Start from a clean checkout and record exact candidate source
+      `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`.
+- [x] Build one release binary and record its SHA-256, Rust toolchain, locked
       dependency identity, build command, host, and storage device.
 - [ ] Freeze topology, keys, accounts, transaction corpus, timeouts,
       instrumentation schema, and authenticated height-50 and height-5,000
       snapshot identities.
-- [ ] Run the focused storage/node regression suites, formatting, and
+- [x] Run the focused storage/node regression suites, formatting, and
       warnings-denied Clippy against that source.
+
+The pinned binary SHA-256 is
+`891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`.
+It embeds `build_git_revision: ae658441` and `profile: release`. The recorded
+toolchain is Rust 1.95.0, with `Cargo.lock` SHA-256
+`200cffda3ccd4a4a358c90077f2f94e654e1a95356b06b98aef826696e1d577f`.
+The storage suite passed 83 tests with two manual tests ignored; the process
+crash integration test, four bounded transport shutdown tests, 14 replicated
+state activation tests, formatting, and warnings-denied storage/node Clippy all
+passed. G4 owns the remaining synthetic input freeze, so this binary must not
+change while that gate runs.
 
 **Exit:** one clean source, one binary, and one frozen input set control G2
 through G5. Any source or binary change returns the plan to G1.
@@ -197,18 +209,18 @@ through G5. Any source or binary change returns the plan to G1.
 
 **Purpose:** prove the faster path did not weaken storage integrity.
 
-- [ ] Re-run the complete 69-case tamper/crash classification from the pinned
+- [x] Re-run the complete 69-case tamper/crash classification from the pinned
       source.
-- [ ] Prove every rejected case has a stable reason and produces zero durable
+- [x] Prove every rejected case has a stable reason and produces zero durable
       mutation.
-- [ ] Prove each crash cut recovers either the complete prior height or exactly
+- [x] Prove each crash cut recovers either the complete prior height or exactly
       one complete new height.
-- [ ] Prove clean build, snapshot restore, transactional rebuild, restart, and
+- [x] Prove clean build, snapshot restore, transactional rebuild, restart, and
       canonical export produce identical logical records, commitments, roots,
       and tips.
-- [ ] Re-run the compatible two-binary rollback path from the same certified tip
+- [x] Re-run the compatible two-binary rollback path from the same certified tip
       without deleting or reinterpreting finalized blocks.
-- [ ] Re-run whole-directory mutation sentinels for every `--verify-only`
+- [x] Re-run whole-directory mutation sentinels for every `--verify-only`
       success and refusal path.
 - [ ] Commit redaction-safe reports and receipts, bind them in
       `benchmarks/storage-scaling/SHA256SUMS.txt`, and make the independent
@@ -218,12 +230,19 @@ through G5. Any source or binary change returns the plan to G1.
 partial mutation, panic on untrusted storage, or unverifiable report is
 `REMEDIATION_REQUIRED`.
 
+Local receipts currently bind a passing 69-case tamper matrix SHA-256
+`67f5f30b3916eed18492e3b19cad52b43b92e7fdf8bde2a12df1e00b6b4ba62f`
+and compatible rollback report SHA-256
+`76a121c6a5529480f4f22101fba0f16d1ee4423489b11e5a50498414d7cbb59a`.
+They are not yet a G5 packet; the final unchecked G2 item is their redaction-safe
+packet binding and independent packet verification.
+
 ## G3 — exact replay
 
 **Purpose:** prove compatibility with real recorded history rather than only
 synthetic fixtures.
 
-- [ ] Publish or regenerate a verifier-bound report for the exact 915-block
+- [x] Publish or regenerate a verifier-bound report for the exact 915-block
       quarantine replay from the pinned source; an operator-reported digest
       without the report does not close this item.
 - [ ] Name the authorized custodian of one complete, quiescent height-924
@@ -244,6 +263,13 @@ synthetic fixtures.
 authorized height-924 directory is available, record `WAITING_FOR_AUTHORIZED_INPUT`;
 continue other local gates, but do not claim offline qualification or deployment
 readiness.
+
+The local height-915 replay passed from an immutable source tree SHA-256
+`276ea5dc9c43e42a36235b520cffd1d9a15eed842fa9a683b04024933b769403`.
+Its receipt SHA-256 is
+`7de050bf57c4d348f992aec11964a3b369546c7b6888e9e6a289dcf137d1680d`.
+No height-924 source exists locally, and this plan does not authorize obtaining
+one from the controlled devnet.
 
 ## G4 — time-budgeted scaling qualification
 
@@ -267,6 +293,28 @@ height 5,000 merely to demonstrate the already-known defect.
 Run order is selected height 50, selected height 5,000, then legacy height 50.
 Stop immediately when a selected-path safety, convergence, literal-receipt, or
 bounded-work gate fails.
+
+The first `ae658441` segment was stopped early at a durable height-550
+checkpoint after 1,740.9 seconds. Its selected path completed all five
+height-50 windows and 500 further finalized heights with literal receipts,
+six-validator convergence, zero full-history scans, and nearly flat measured
+round work. Across its completed advance units, mean `consensus_round_ms` was
+347.6, 376.0, 369.1, 376.2, 377.6, and 384.5 ms; the five 100-round resource
+windows were 122.3, 121.3, 122.0, 122.8, and 123.4 seconds. The apparent growth
+in total checkpoint wall time came from replay-importing an increasingly large
+portable full-history snapshot into six new nodes between every 100-height
+unit, not from the measured transactional append path.
+
+Runner `260bb990` removes that evidence-harness bottleneck without changing the
+candidate binary. It builds height 5,000 in one bounded selected-store advance,
+freezes a hash-bound six-node prepared fleet, and restores a content-verified
+copy at the canonical database path for each independent selected window. The
+legacy control still imports the shared portable height-50 snapshot. The packet
+verifier now requires every selected window's prepared-fleet digest to match
+the frozen height material. A real selected/legacy development smoke passed
+with exact cross-backend final state; report SHA-256 is
+`50d3d74edcc03e64c03293d54d20498fd73c54aaed1e4b24b6aacb84898f0994`.
+The stopped height-550 run is diagnostic only and is not evidence eligible.
 
 - [ ] Complete the three required rows inside the 4-hour aggregate budget.
 - [ ] Verify literal accepted receipts and six-validator agreement on height,

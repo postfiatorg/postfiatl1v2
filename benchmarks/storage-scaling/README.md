@@ -35,12 +35,18 @@ comparison mode requires both `--offline-confirmed` and
 clones.
 
 The runner creates one topology, validator-key set, deterministic wallet and
-recipient, and canonical transactional seed snapshot. It imports the same
-height-50 snapshot and signed corpus into both height-50 lanes. The source
-revision, binary SHA-256, snapshot digest, signed transaction bytes, host
+recipient, and canonical transactional seed snapshot. It freezes each selected
+height as both a portable authenticated snapshot and a content-hashed prepared
+six-node fleet. Every selected window restores a byte-for-byte file-content
+copy of that fleet at the canonical database path recorded by the transactional
+generation pointer. The legacy control imports the shared portable height-50
+snapshot instead, because its intentionally different backend must not inherit
+the selected redb generation. Both height-50 lanes consume the same signed
+corpus. The source revision, binary SHA-256, snapshot digest, signed transaction
+bytes, host
 allocation, storage device, full-vote policy, and 900-second fail-closed timeout
 are identical; only the authenticated backend mode changes. The height-5,000
-snapshot is built through checkpointed transactional advances, never through a
+snapshot is built through one selected transactional advance, never through a
 legacy height-5,000 control.
 
 The runner atomically checkpoints every advance chunk, frozen height input, and
@@ -49,8 +55,11 @@ runner, topology, validator identities, snapshot, corpus, timeout, completed
 report, resource stream, receipt, or result snapshot. A partial unit is moved
 to an `interrupted/` quarantine before retry, not overwritten. An exclusive
 campaign lock prevents concurrent resume. The release profile has a four-hour
-aggregate wall-clock limit, and advances are split into at most 100 rounds so
-no open-ended unit can consume the whole budget.
+aggregate wall-clock limit. The height-50 to height-5,000 advance is one
+independently verifiable unit so the harness does not repeatedly replay-import
+an ever-larger full-history snapshot between artificial checkpoints. Operators
+must additionally wrap each unattended segment in the plan's two-hour hard
+timeout; a completed unit is durable and a partial unit is quarantined.
 
 The report derives the height-50 legacy baseline from raw observations,
 recomputes p50/p95/p99/max/mean/standard deviation, publishes per-window
@@ -77,18 +86,20 @@ cargo build --release --locked -p postfiat-node
 Then run from the clean selected checkout:
 
 ```bash
-python3 benchmarks/storage-scaling/run_paired_campaign.py \
+timeout --signal=INT --kill-after=120s 7200s \
+python3 -u benchmarks/storage-scaling/run_paired_campaign.py \
   --node-bin target/release/postfiat-node \
-  --expected-source-revision "$(git rev-parse HEAD)" \
+  --expected-source-revision FULL_CANDIDATE_SOURCE_ID \
   --output-dir /explicit/disposable/storage-scaling-paired
 ```
 
 Resume only the same bound output after a clean interruption:
 
 ```bash
-python3 benchmarks/storage-scaling/run_paired_campaign.py \
+timeout --signal=INT --kill-after=120s 7200s \
+python3 -u benchmarks/storage-scaling/run_paired_campaign.py \
   --node-bin target/release/postfiat-node \
-  --expected-source-revision "$(git rev-parse HEAD)" \
+  --expected-source-revision FULL_CANDIDATE_SOURCE_ID \
   --output-dir /explicit/disposable/storage-scaling-paired \
   --resume
 ```
