@@ -6,7 +6,7 @@
 
 **Decision owner:** Post Fiat
 
-**Candidate lineage:** transactional `redb` source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`; release binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; evidence-runner lineage through `4f976290`
+**Candidate lineage:** transactional `redb` source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`; release binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; evidence-runner lineage through `f7b3d21d`
 
 **Research basis:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 
@@ -174,7 +174,7 @@ independent local gates continue.
 | G1 — candidate freeze | **CANDIDATE PASS / G4 INPUT FREEZE ACTIVE** | Keep source `ae658441` and binary `891b…bf4` unchanged; G4 freezes its height-50 and height-5,000 materials. | A candidate source or binary change restarts G1–G4; evidence-runner-only changes are separately hash-bound. |
 | G2 — safety | **LOCAL PASS / PACKET BINDING OPEN** | Preserve the passing tamper and rollback receipts; commit only redaction-safe packet material after G4. | Do not rerun unless the candidate binary changes or independent verification rejects a receipt. |
 | G3 — exact replay | **HEIGHT 915 PASS / HEIGHT 924 WAITING FOR AUTHORIZED INPUT** | Preserve the passing 915 receipt. Run height 924 only from a separately authorized copy. | Never wait idle for the copy; finish G4 without it, but do not claim offline qualification. |
-| G4 — scaling | **FAILED AT HARNESS SNAPSHOT BOUNDARY / REMEDIATION REQUIRED** | Preserve the valid height-1,550 prepared fleet; remove high-height full-history snapshot round trips; pass focused tests and a bounded smoke before a clean rerun. | 30 minutes for remediation proof, then one clean four-hour final run; stop on any selected-path failure or `TIME_BUDGET_EXCEEDED`. |
+| G4 — scaling | **G4A PASS / CLEAN RERUN READY** | Preserve the failed diagnostic run and passing G4A receipts; start exactly one clean qualification campaign from height 1. | One clean four-hour final run; stop on any selected-path failure or `TIME_BUDGET_EXCEEDED`. |
 | G5 — offline packet | **BLOCKED BY G1–G4** | Package only after every preceding evidence gate passes. | No qualification claim until the offline verifier passes the complete packet. |
 | G6 — six-clone rehearsal | **DEFERRED** | Nothing until offline qualification is complete and deployment is the next real decision. | Requires separate data-copy authorization and six distinct stopped directories. |
 | G7 — Dynamic UNL handoff | **DIRECTION RECORDED / IMPLEMENTATION DEFERRED** | Preserve the recorded architecture decision only. | Spend no implementation time before the stated storage boundary or a new operator priority decision. |
@@ -390,23 +390,42 @@ The completed prepared fleet is diagnostic input for remediation tests only.
       height-1,550-to-3,050 unit, not in transactional consensus or append.
 - [x] Confirm the failure is caused by portable full-history materialization,
       not by a positive full-history-read counter in the selected append path.
-- [ ] Make selected-lane corpus creation use a byte-verified disposable canonical
+- [x] Make selected-lane corpus creation use a byte-verified disposable canonical
       clone of a stopped, content-hashed prepared fleet. Prove the frozen source
       digest is unchanged, bind the scratch before/after digests and expected
       sequence, discard the scratch, and restore a pristine clone for measurement.
-- [ ] Stop exporting result snapshots for prepared-fleet selected runs. Bind the
+- [x] Stop exporting result snapshots for prepared-fleet selected runs. Bind the
       source and result prepared-fleet digests instead; retain full snapshot
       export/import only for the height-50 cross-backend control.
-- [ ] Make checkpoint/resume and the packet verifier reject a missing, changed,
+- [x] Make checkpoint/resume and the packet verifier reject a missing, changed,
       or ambiguously located prepared fleet, corpus, or runner binding.
-- [ ] Add focused tests for frozen-source corpus generation on a disposable
+- [x] Add focused tests for frozen-source corpus generation on a disposable
       scratch clone, no selected high-height snapshot dependency, tamper
       rejection, and safe interruption.
-- [ ] Pass one real six-validator smoke that crosses a deliberately lowered
-      snapshot-size threshold in at most 30 minutes and leaves no process alive.
+- [x] Pass one real six-validator smoke that crosses a snapshot-free selected
+      advance with portable snapshots forbidden, in at most 30 minutes, and
+      leaves no process alive.
 - [ ] Start exactly one clean qualification run from height 1 after all G4A
       checks pass. Do not mutate or waive the old checkpoint into compatibility
       with a changed runner.
+
+G4A closed on clean runner commit `f7b3d21d` without changing candidate source
+or binary. Fifty-nine focused Python tests passed. The clean six-validator smoke
+completed in 32.013 seconds with report SHA-256
+`6c233e999edf87a289879f9bda11052fbeaf61a33bb1076fd8a43c5e94a4155b`
+and checkpoint SHA-256
+`554d07912428e07dfc47a0f78893fab9971851b729d675851d6804fcfb63e85e`.
+Its height-3 material has null snapshot fields; its frozen prepared-fleet,
+corpus-source, and scratch-before digests are identical; the scratch-after
+digest differs and is recorded discarded; all selected windows passed literal
+receipt, convergence, and bounded-work gates; and no process survived. A clean
+controlled stop at snapshot-free height 3 resumed to report SHA-256
+`b23e0b9ff21336d2fc672b667b9436efef0ffb93087cc8b68f92c934ee72bec3`
+and checkpoint SHA-256
+`1af632169d7db42ea702f225cccd7d4a34c6e28314fb38d5617284d4d484183f`.
+Moving one file in a copied current prepared fleet made resume fail closed with
+`campaign current prepared fleet changed`. These are local development proofs,
+not release qualification evidence.
 
 **G4A exit:** high-height selected execution depends only on the verified
 transactional prepared fleet and bounded corpus, while the shared height-50
@@ -500,9 +519,9 @@ not deploy anything.
 
 1. Preserve the unchanged G1 candidate and the passing local G2 and height-915
    G3 receipts; do not rerun them while the binary is unchanged.
-2. Close G4A locally within its 30-minute remediation-proof budget. Do not query,
-   copy, stop, or modify the controlled devnet.
-3. After G4A passes, start one clean G4 selected-first run with a hard four-hour
+2. Preserve the passing G4A proof from runner `f7b3d21d`. Do not query, copy,
+   stop, or modify the controlled devnet.
+3. Start one clean G4 selected-first run with a hard four-hour
    campaign deadline and resumable advance chunks no longer than two hours.
 4. If G4 passes, bind the redaction-safe G2 and G4 artifacts and build everything
    locally available for G5.
