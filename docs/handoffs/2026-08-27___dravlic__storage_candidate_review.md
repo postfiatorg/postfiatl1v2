@@ -16,7 +16,9 @@ harness departs from the research specification's same-binary rule, and
 `--verify-only` is not read-only. The review itself changed only
 [the plans index](../plans/README.md) in `97afa8c6`. The other operator's
 `/goal` was running the paired release campaign on this host during the review;
-none of that active work was edited and no process was interrupted.
+none of that active work was edited and no process was interrupted. An
+end-of-session section below records the governance work done later the same
+day.
 
 ## Current state
 
@@ -182,3 +184,83 @@ Fleet copying requires separate authorization.
   [ordered history](https://github.com/postfiatorg/postfiatl1v2/blob/aa449bdd/crates/storage/src/ordered_history.rs)
 - Review basis `aa449bdd`; candidate `0fdcc2b3`; plans-index correction
   `97afa8c6`
+
+## End of session — validator evaluator for this L1
+
+### Context
+
+On this L1 the validator set is
+[governed registry state](../governance/validator-registry.md), and
+[Cobalt has ratified bounded registry and trust-graph changes since height 916](../governance/deterministic-governance-overview.md).
+The [current chain state](../status/chain-state-current.md) records that every
+proposal so far came from Foundation-administered validators, while the DGA
+step in which “a policy proposes bounded validator-registry actions” is not
+live. The second operator asked what should fill that evaluator/proposer slot
+if decentralization and the Dynamic UNL philosophy are the goal.
+
+### Delivered today
+
+All items below were pushed to `main`. This operator used no Task Node or Cargo
+and made no chain change for this work.
+
+- [Validator Evaluator Alternatives Decision Note](../governance/validator-evaluator-alternatives-note.md)
+  (`5e07f2c9`; harness 89.27: GPT 90.60, Fable 88.40, GLM 88.80;
+  one scoring loop) compares six candidates against eight criteria derived
+  from the Dynamic UNL philosophy: Dynamic UNL as content source; L1-native
+  DGA policy; a deterministic formula baseline; direct validator voting;
+  bond-gated admission plus formula; and the status quo. It recommends that
+  Dynamic UNL supply the ranked target and proposal content, the L1 DGA policy
+  supply the constitutional envelope and hard bounds, the independent-operator
+  path supply the submitter, Cobalt ratify, and Consensus v2 order. The
+  deterministic formula remains the published baseline and a separately
+  activated fail-closed fallback.
+- [Dynamic UNL L1 Evidence-Source Decision Note](../governance/dynamic-unl-l1-evidence-source-note.md)
+  (`054c6c4c`; harness 89.80: GPT 92.60, Fable 89.20, GLM 87.60;
+  one scoring loop) asks whose evidence scores L1 validators. Option A reuses
+  the sealed PFT Ledger result plus a governed identity binding; Option B runs
+  the pipeline on L1-native evidence and needs an L1 observer, anchor profile,
+  scoring replay, and sidecar convergence; Option C shadows A while building
+  B. It recommends Option C: use PFT Ledger results only for a governed-binding
+  `SHADOW_ONLY` adapter-to-Cobalt integration on the controlled devnet while
+  the L1-native path is built and qualified. Live authority still requires the
+  research specification's gates and separate authorization.
+- [Dynamic UNL Proposal Source Milestone](../deferred-plans/dynamic-unl-proposal-source-milestone.md)
+  (`10abc3d7`) is the research specification's E1–E5 milestone draft, with 57
+  unchecked boxes, gates, and human interfaces. It is listed in the
+  [deferred-plan index](../deferred-plans/README.md) and is not authorized work.
+- Earlier today, the [plans index](../plans/README.md) was corrected in
+  `97afa8c6`, and this storage review was published. The other operator's
+  [follow-up handoff](2026-08-27___postfiatchad__storage_verifier_and_campaign_reset.md)
+  already acted on the review: `--verify-only` became read-only in `785806bd`,
+  the interrupted campaign was declared evidence-ineligible, and a
+  single-binary boundary was planned.
+
+### Decisions for the operator
+
+1. Record Dynamic UNL as the canonical proposal-content source inside a
+   Cobalt-governed L1 DGA policy envelope, with the formula as a fail-closed
+   fallback, using the alternatives note's “Exact decision to record”; or
+   choose a different candidate.
+2. Record Option C as the evidence-source sequence, using the exact wording in
+   the evidence-source note; or choose Option A or B.
+3. Answer the questions that change the plan: do the same operators run
+   validators on both chains, and what share of each active set maps
+   one-to-one; is an L1 observer service planned, and who owns it; is the
+   bounded `payment_v2` memo lane acceptable for announcement and
+   commit/reveal anchors, or does the L1 need a dedicated data-carrying
+   transaction; and will enough independent operators bear pinned inference
+   cost?
+4. Confirm whether Dynamic UNL proposal source becomes the milestone after
+   storage and whether the Task Node lock of the research specification should
+   be requested. Task Node remains off under the operator's instruction.
+
+### Boundaries
+
+The devnet was not touched: no probe, deployment, or validator write occurred.
+The last observed fleet state remains unchanged from the storage section above.
+Nothing here grants authority or changes either chain.
+
+### References
+
+- [Validator Evaluator Alternatives Decision Note](../governance/validator-evaluator-alternatives-note.md)
+- [Dynamic UNL L1 Evidence-Source Decision Note](../governance/dynamic-unl-l1-evidence-source-note.md)
