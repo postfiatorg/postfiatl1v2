@@ -141,6 +141,7 @@ nav:
       - Cobalt Adversarial Verification Spec (locked): governance/cobalt-adversarial-verification-research-spec.md
       - Cobalt Independent-Operator Proposal Path (locked): governance/cobalt-independent-operator-proposal-path-research-spec.md
       - Dynamic UNL Proposal Source Research Specification: governance/dynamic-unl-proposal-source-research-spec.md
+      - Dynamic UNL L1 Evidence-Source Decision Note: governance/dynamic-unl-l1-evidence-source-note.md
       - Validator Evaluator Alternatives Decision Note: governance/validator-evaluator-alternatives-note.md
       - Verifiable Constitution: governance/verifiable-constitution.md
       - Validator Registry: governance/validator-registry.md
