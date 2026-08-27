@@ -20,7 +20,7 @@ SPEC = REPO / "docs" / "architecture" / "storage-scaling-fix-spec.md"
 ARTIFACT_SCHEMAS = {
     "source": "postfiat-storage-source-identity-v1",
     "replay": "postfiat-storage-scaling-replay-v1",
-    "performance": "postfiat-storage-scaling-paired-six-validator-campaign-v3",
+    "performance": "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v1",
     "tamper": "postfiat-storage-scaling-tamper-matrix-v1",
     "migration": "postfiat-storage-scaling-six-clone-migration-v1",
     "redaction": "postfiat-storage-scaling-redaction-v1",
@@ -149,7 +149,7 @@ def copy_performance(packet: Path, source: Path) -> Path:
         raise ValueError("performance report is not an evidence-eligible PASS")
     campaign_root = source.parent.resolve()
     snapshots = report.get("snapshots_by_height")
-    required_heights = [50, 100, 500, 1000, 5000]
+    required_heights = [50, 5000]
     if (
         not isinstance(snapshots, list)
         or [entry.get("height") if isinstance(entry, dict) else None for entry in snapshots]
@@ -176,19 +176,25 @@ def copy_performance(packet: Path, source: Path) -> Path:
         corpora_by_height[height] = (corpus_path, corpus_digest)
 
     lanes = report.get("lanes")
-    required_lanes = {"legacy-jsonl", "bounded-jsonl", "selected-indexed"}
-    if not isinstance(lanes, dict) or set(lanes) != required_lanes:
-        raise ValueError("performance report omitted the closed three-lane set")
-    for lane_name in sorted(required_lanes):
+    required_lane_heights = {
+        "selected-indexed": [50, 5000],
+        "legacy-jsonl": [50],
+    }
+    if not isinstance(lanes, dict) or set(lanes) != set(required_lane_heights):
+        raise ValueError("performance report omitted the time-budgeted lane set")
+    for lane_name in ("selected-indexed", "legacy-jsonl"):
         lane = lanes[lane_name]
         if not isinstance(lane, dict) or not isinstance(lane.get("rows"), list):
             raise ValueError(f"performance lane {lane_name} omitted rows")
+        if [
+            row.get("height") if isinstance(row, dict) else None
+            for row in lane["rows"]
+        ] != required_lane_heights[lane_name]:
+            raise ValueError("performance lane heights differ from the profile")
         for row in lane["rows"]:
             if not isinstance(row, dict) or not isinstance(row.get("windows"), list):
                 raise ValueError("performance row is malformed")
             height = row.get("height")
-            if height not in {50, 100, 500, 1000, 5000}:
-                raise ValueError("performance row height is outside the closed set")
             for window_index, window in enumerate(row["windows"], start=1):
                 if not isinstance(window, dict):
                     raise ValueError("performance window is malformed")
@@ -421,9 +427,8 @@ def main() -> int:
         or performance.get("node_binary_sha256") != binary_digest
         or not isinstance(performance_lanes, dict)
         or set(performance_lanes) != {
-            "legacy-jsonl",
-            "bounded-jsonl",
             "selected-indexed",
+            "legacy-jsonl",
         }
         or any(
             not isinstance(lane, dict)

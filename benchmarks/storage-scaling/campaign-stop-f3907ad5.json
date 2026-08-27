@@ -1,0 +1,65 @@
+{
+  "schema": "postfiat-storage-scaling-campaign-stop-receipt-v1",
+  "captured_at": "2026-08-27T18:59:47Z",
+  "campaign_started_at": "2026-08-27T14:55:01Z",
+  "campaign_stopped_at": "2026-08-27T18:59:13Z",
+  "elapsed_seconds": 14652,
+  "stop_reason": "operator-selected time-budgeted redb qualification superseded the exhaustive comparison matrix",
+  "source_revision": "f3907ad570084e666e48bb4cea6e694f759e7c04",
+  "node_binary_sha256": "97b0099d71dbf36f9fb9b6b4c3d70c8f8bc871f1141aee0704cf4a331701761f",
+  "campaign_schema": "postfiat-storage-scaling-paired-six-validator-campaign-v3",
+  "campaign_profile": {
+    "lanes": [
+      "legacy-jsonl",
+      "bounded-jsonl",
+      "selected-indexed"
+    ],
+    "heights": [
+      50,
+      100,
+      500,
+      1000,
+      5000
+    ],
+    "windows_per_lane_height": 5,
+    "rounds_per_window": 50
+  },
+  "completed_windows": {
+    "count": 32,
+    "by_lane_and_height": {
+      "bounded-jsonl/50": 5,
+      "bounded-jsonl/100": 5,
+      "legacy-jsonl/50": 5,
+      "legacy-jsonl/100": 5,
+      "legacy-jsonl/500": 2,
+      "selected-indexed/50": 5,
+      "selected-indexed/100": 5
+    }
+  },
+  "partial_window": {
+    "lane": "legacy-jsonl",
+    "height": 500,
+    "window": 3,
+    "completed_rounds": 7,
+    "required_rounds": 50
+  },
+  "measured_rounds_completed": 1607,
+  "full_windows_not_started": 42,
+  "measured_rounds_remaining_under_superseded_profile": 2143,
+  "canonical_setup_rounds_completed": 399,
+  "canonical_setup_rounds_remaining_under_superseded_profile": 4400,
+  "final_campaign_report_present": false,
+  "controller_processes_after_stop": 0,
+  "child_processes_after_stop": 0,
+  "output_size_at_inventory": "9.6 GiB",
+  "evidence_eligible": false,
+  "completed_window_reuse_policy": "A completed window may be reused only if the independent verifier binds its exact source, binary, snapshot, signed corpus, raw iterations, literal receipts, counters, resources, and final roots.",
+  "offline": true,
+  "network_contacted": false,
+  "devnet_queried_or_mutated": false,
+  "claims_not_made": [
+    "release qualification",
+    "performance gate pass or failure",
+    "deployment authorization"
+  ]
+}

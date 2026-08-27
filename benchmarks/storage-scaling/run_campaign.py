@@ -254,7 +254,11 @@ def constant_fit(values: list[float]) -> dict[str, Any]:
 
 
 def height_relationship_models(
-    rows: list[dict[str, Any]], root: Path
+    rows: list[dict[str, Any]],
+    root: Path,
+    *,
+    expected_heights: list[int] = HEIGHTS,
+    rounds_per_window: int = ROUNDS_PER_WINDOW,
 ) -> dict[str, dict[str, Any]]:
     stage_observations: dict[str, list[dict[str, Any]]] = {
         stage: [] for stage in MATERIAL_STAGE_PATHS
@@ -267,7 +271,7 @@ def height_relationship_models(
         for window in row["windows"]:
             report = read_json(root / window["normalized_report"])
             iterations = report.get("iterations")
-            if not isinstance(iterations, list) or len(iterations) != ROUNDS_PER_WINDOW:
+            if not isinstance(iterations, list) or len(iterations) != rounds_per_window:
                 raise RuntimeError(
                     f"height {height} performance window has the wrong round count"
                 )
@@ -277,7 +281,7 @@ def height_relationship_models(
                     for iteration in iterations
                     if isinstance(iteration, dict)
                 ]
-                if len(values) != ROUNDS_PER_WINDOW:
+                if len(values) != rounds_per_window:
                     raise RuntimeError(
                         f"height {height} performance window omitted stage {stage}"
                     )
@@ -289,7 +293,7 @@ def height_relationship_models(
                         "p95_ms": window_p95,
                     }
                 )
-                if height == HEIGHTS[0]:
+                if height == expected_heights[0]:
                     height_50_p95[stage].append(window_p95)
 
     models: dict[str, dict[str, Any]] = {}
@@ -305,9 +309,11 @@ def height_relationship_models(
         )
         constant = constant_fit(values)
         baseline = percentile(height_50_p95[stage], 0.50)
-        predicted_delta = linear["slope"] * (HEIGHTS[-1] - HEIGHTS[0])
+        predicted_delta = linear["slope"] * (
+            expected_heights[-1] - expected_heights[0]
+        )
         within_height_ranges = []
-        for height in HEIGHTS:
+        for height in expected_heights:
             same_height = [
                 value for observed_height, value in points if observed_height == height
             ]

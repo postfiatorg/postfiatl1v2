@@ -24,7 +24,7 @@ PACKET_SCHEMA = "postfiat-storage-scaling-evidence-packet-v1"
 REPORT_SCHEMA = "postfiat-storage-scaling-verification-v1"
 MANIFEST_FILE = "storage-scaling-packet.json"
 CHECKSUM_FILE = "SHA256SUMS.txt"
-HEIGHTS = [50, 100, 500, 1000, 5000]
+HEIGHTS = [50, 5000]
 CONTROLLED_CHAIN_ID = "postfiat-wan-devnet-2"
 CONTROLLED_GENESIS_HASH = (
     "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad255"
@@ -44,14 +44,15 @@ MATERIAL_STAGE_PATHS = {
 }
 MODEL_RELATIVE_MATERIALITY = 0.10
 MODEL_RESIDUAL_SIGMAS = 2.0
-PERFORMANCE_LANES = ("legacy-jsonl", "bounded-jsonl", "selected-indexed")
+PERFORMANCE_LANES = ("selected-indexed", "legacy-jsonl")
+PERFORMANCE_LANE_HEIGHTS = {
+    "selected-indexed": [50, 5000],
+    "legacy-jsonl": [50],
+}
 PERFORMANCE_STORAGE_BEHAVIORS = {
     "legacy-jsonl": (
         "authenticated JSONL with full-prefix append verification and full "
         "ordered-history proposal work"
-    ),
-    "bounded-jsonl": (
-        "authenticated JSONL v2 heads with the fixed-slot ordered index"
     ),
     "selected-indexed": (
         "transactional redb finality path with the fixed-size accumulator"
@@ -59,7 +60,6 @@ PERFORMANCE_STORAGE_BEHAVIORS = {
 }
 PERFORMANCE_BACKEND_MODES = {
     "legacy-jsonl": "legacy-jsonl",
-    "bounded-jsonl": "bounded-jsonl",
     "selected-indexed": "transactional",
 }
 TRANSACTIONAL_COUNTER_FIELDS = (
@@ -153,7 +153,7 @@ ORIGINAL_E3_FORGED_CASES = (
 ARTIFACT_SCHEMAS = {
     "source": "postfiat-storage-source-identity-v1",
     "replay": "postfiat-storage-scaling-replay-v1",
-    "performance": "postfiat-storage-scaling-paired-six-validator-campaign-v3",
+    "performance": "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v1",
     "tamper": "postfiat-storage-scaling-tamper-matrix-v1",
     "migration": "postfiat-storage-scaling-six-clone-migration-v1",
     "redaction": "postfiat-storage-scaling-redaction-v1",
@@ -1383,7 +1383,10 @@ def _verify_performance_lane(
         _fail(f"performance lane {lane_name} validator key order is invalid")
 
     rows = _list(lane.get("rows"), f"performance lane {lane_name} rows")
-    if [row.get("height") if isinstance(row, dict) else None for row in rows] != HEIGHTS:
+    expected_heights = PERFORMANCE_LANE_HEIGHTS[lane_name]
+    if [
+        row.get("height") if isinstance(row, dict) else None for row in rows
+    ] != expected_heights:
         _fail(f"performance lane {lane_name} heights differ")
     stage_observations: dict[str, list[dict[str, Any]]] = {
         stage: [] for stage in MATERIAL_STAGE_PATHS
@@ -1545,11 +1548,6 @@ def _verify_performance_lane(
                     + 6 * MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND
                 )
                 if lane_name == "selected-indexed"
-                else (
-                    legacy["ordered_index_bitmap_bytes_read"] > 0
-                    and legacy["ordered_index_bitmap_bytes_written"] > 0
-                )
-                if lane_name == "bounded-jsonl"
                 else False
             )
             if window.get("bounded_index_pages") is not expected_bounded_index:
@@ -1558,7 +1556,7 @@ def _verify_performance_lane(
                 transactional["page_writes"]
                 <= 50 * 6 * MAX_APPLY_PAGE_WRITES_PER_VALIDATOR_ROUND
                 if lane_name == "selected-indexed"
-                else lane_name == "bounded-jsonl"
+                else False
             )
             if (
                 window.get("constant_accumulator_work")
@@ -1580,17 +1578,6 @@ def _verify_performance_lane(
                     or transactional["full_history_scans"] != 0
                 ):
                     _fail("selected performance work gate differs")
-            elif lane_name == "bounded-jsonl":
-                if (
-                    legacy["legacy_prefix_records_verified"] != 0
-                    or legacy["legacy_prefix_bytes_read"] != 0
-                    or legacy["ordered_history_records_read"] != 0
-                    or legacy["ordered_history_bytes_read"] != 0
-                    or legacy["ordered_index_bitmap_bytes_read"] <= 0
-                    or legacy["ordered_index_bitmap_bytes_written"] <= 0
-                    or legacy["ordered_index_slots_written"] <= 0
-                ):
-                    _fail("bounded-JSONL performance work gate differs")
             elif (
                 legacy["legacy_prefix_records_verified"] <= 0
                 or legacy["legacy_prefix_bytes_read"] <= 0
@@ -1812,25 +1799,34 @@ def _verify_performance_lane(
                 f"performance lane {lane_name} resource variance {field}",
             )
 
-    _verify_height_relationship_models(
-        lane,
-        stage_observations,
-        height_50_stage_p95,
-        reject_material_positive=lane_name == "selected-indexed",
+    envelope = _object(
+        lane.get("height_relationship_model"), "height relationship model"
     )
-    stages = _object(
-        _object(lane.get("height_relationship_model"), "height relationship model").get(
-            "stages"
-        ),
-        "height relationship stages",
-    )
-    expected_no_positive = all(
-        _object(stages.get(stage), f"height relationship stage {stage}").get(
-            "material_positive_linear_relationship"
+    if lane_name == "selected-indexed":
+        _verify_height_relationship_models(
+            lane,
+            stage_observations,
+            height_50_stage_p95,
+            reject_material_positive=True,
         )
-        is False
-        for stage in MATERIAL_STAGE_PATHS
-    )
+        stages = _object(envelope.get("stages"), "height relationship stages")
+        expected_no_positive = all(
+            _object(stages.get(stage), f"height relationship stage {stage}").get(
+                "material_positive_linear_relationship"
+            )
+            is False
+            for stage in MATERIAL_STAGE_PATHS
+        )
+    else:
+        if (
+            envelope.get("schema") != "postfiat-storage-height-cost-model-v2"
+            or envelope.get("sample_kind") != "per_window_p95"
+            or envelope.get("relative_materiality") != MODEL_RELATIVE_MATERIALITY
+            or envelope.get("residual_sigmas") != MODEL_RESIDUAL_SIGMAS
+            or envelope.get("stages") != {}
+        ):
+            _fail("legacy performance lane unexpectedly fit a height model")
+        expected_no_positive = None
     if lane.get("no_positive_linear_height_relationship") is not expected_no_positive:
         _fail(f"performance lane {lane_name} height relationship summary differs")
     if lane.get("comparison_windows_pass") is not True:
@@ -1877,15 +1873,34 @@ def _verify_performance(
     _verify_binary_build(performance, "performance", source_revision)
     if performance.get("validator_count") != 6:
         _fail("performance topology is not six validators")
+    if performance.get("qualification_profile") != "time-budgeted-redb-v1":
+        _fail("performance qualification profile differs")
     if performance.get("windows_per_height") != 5 or performance.get("rounds_per_window") != 50:
         _fail("performance window cardinality differs from the specification")
     if performance.get("lane_order") != list(PERFORMANCE_LANES):
-        _fail("performance lane order differs from the closed comparison set")
+        _fail("performance lane order differs from the time-budgeted profile")
+    if performance.get("lane_height_matrix") != [
+        {"lane": "selected-indexed", "height": 50},
+        {"lane": "selected-indexed", "height": 5000},
+        {"lane": "legacy-jsonl", "height": 50},
+    ]:
+        _fail("performance lane/height matrix differs")
     if performance.get("timeout_ms") != PERFORMANCE_QUALIFICATION_TIMEOUT_MS:
         _fail("performance timeout policy differs from the closed envelope")
+    maximum = performance.get("max_wall_seconds")
+    elapsed = performance.get("elapsed_wall_seconds")
+    if (
+        maximum != 4 * 60 * 60
+        or not isinstance(elapsed, (int, float))
+        or isinstance(elapsed, bool)
+        or not math.isfinite(float(elapsed))
+        or float(elapsed) < 0
+        or float(elapsed) > maximum
+    ):
+        _fail("performance wall-clock budget differs or was exceeded")
     lanes = _object(performance.get("lanes"), "performance lanes")
     if set(lanes) != set(PERFORMANCE_LANES):
-        _fail("performance report does not contain exactly three lanes")
+        _fail("performance report does not contain exactly two lanes")
     selected_lane = _object(lanes["selected-indexed"], "selected performance lane")
     wallet_address = str(selected_lane.get("wallet_address", ""))
     recipient_address = str(selected_lane.get("recipient_address", ""))
@@ -1957,7 +1972,7 @@ def _verify_performance(
         lane_binaries.add(str(lane.get("node_binary_sha256")))
     if lane_sources != {source_revision} or lane_binaries != {current_binary_digest}:
         _fail("performance lanes did not use one source revision and binary")
-    for height in HEIGHTS:
+    for height in [50]:
         for window_index in range(5):
             compared = [
                 verified_windows[lane_name][height][window_index]
@@ -1996,22 +2011,28 @@ def _verify_performance(
         "same_validator_count",
         "same_validator_keys",
         "same_topology_file",
-        "same_authenticated_snapshot_at_each_height",
-        "same_signed_transactions",
+        "same_authenticated_snapshot_at_shared_height",
+        "same_signed_transactions_at_shared_height",
         "same_wallet_and_recipient_accounts",
-        "same_height_window_cardinality",
+        "same_window_cardinality_at_shared_height",
         "same_full_vote_policy",
         "same_timeout_policy",
         "same_host_allocation",
         "same_storage_medium",
         "same_final_state_for_identical_inputs",
     )
-    if set(pairing) != {*required_pairing_checks, "changed_input"}:
-        _fail("performance pairing field set differs from the locked comparison")
+    if set(pairing) != {
+        *required_pairing_checks,
+        "shared_comparison_height",
+        "changed_input_at_shared_height",
+    }:
+        _fail("performance pairing field set differs from the profile")
     for key in required_pairing_checks:
         _bool(pairing.get(key), f"performance pairing {key}")
+    if pairing.get("shared_comparison_height") != 50:
+        _fail("performance shared comparison height differs")
     if (
-        pairing.get("changed_input")
+        pairing.get("changed_input_at_shared_height")
         != "authenticated node-local storage backend mode only"
     ):
         _fail("performance comparison changed more than the backend selector")

@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parent
 MANIFEST = ROOT / "SHA256SUMS.txt"
 EXPECTED_FILES = {
     "README.md",
+    "campaign-stop-f3907ad5.json",
     "e2-bounded-work.json",
     "verify_development_evidence.py",
 }
@@ -62,6 +63,32 @@ def require_heights(rows: list[dict[str, object]], label: str) -> None:
 
 def main() -> None:
     load_manifest()
+    stop = json.loads(
+        (ROOT / "campaign-stop-f3907ad5.json").read_text(encoding="utf-8")
+    )
+    if stop.get("schema") != "postfiat-storage-scaling-campaign-stop-receipt-v1":
+        fail("campaign stop receipt schema differs")
+    if (
+        stop.get("evidence_eligible") is not False
+        or stop.get("final_campaign_report_present") is not False
+        or stop.get("controller_processes_after_stop") != 0
+        or stop.get("child_processes_after_stop") != 0
+        or stop.get("offline") is not True
+        or stop.get("network_contacted") is not False
+        or stop.get("devnet_queried_or_mutated") is not False
+    ):
+        fail("campaign stop receipt overstates or omits its boundary")
+    completed = stop.get("completed_windows")
+    partial = stop.get("partial_window")
+    if (
+        not isinstance(completed, dict)
+        or completed.get("count") != 32
+        or not isinstance(partial, dict)
+        or partial.get("completed_rounds") != 7
+        or stop.get("measured_rounds_completed") != 1607
+    ):
+        fail("campaign stop receipt inventory differs")
+
     evidence = json.loads((ROOT / "e2-bounded-work.json").read_text(encoding="utf-8"))
     if evidence.get("schema") != "postfiat-storage-scaling-development-evidence-v1":
         fail("unsupported evidence schema")

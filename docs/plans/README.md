@@ -4,7 +4,7 @@ Only current execution plans and completed plans belong here.
 
 ## Active
 
-- [Storage Scaling and Bounded Finality Milestone](active/storage-scaling-milestone.md)
+- [Storage Scaling: Time-Budgeted Qualification and Release Gates](active/storage-scaling-milestone.md)
 
 ## Completed
 

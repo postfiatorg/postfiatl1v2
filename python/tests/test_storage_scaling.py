@@ -191,7 +191,7 @@ def _passing_packet(packet: Path) -> None:
         replay_receipts.append(_reference(packet, path))
 
     performance_corpora: dict[int, dict[str, object]] = {}
-    for height_index, height in enumerate([50, 100, 500, 1000, 5000]):
+    for height_index, height in enumerate([50, 5000]):
         first_sequence = 10_000 + height_index * 100
         transfers: list[dict[str, object]] = []
         identities: list[tuple[str, str]] = []
@@ -296,17 +296,6 @@ def _passing_packet(packet: Path) -> None:
                     }
                 )
             transactional_value: dict[str, int] | None = transactional
-        elif lane_name == "bounded-jsonl":
-            legacy["ordered_index_bitmap_bytes_read"] = 2
-            if apply_stage:
-                legacy.update(
-                    {
-                        "jsonl_append_calls": 1,
-                        "ordered_index_bitmap_bytes_written": 2,
-                        "ordered_index_slots_written": 1,
-                    }
-                )
-            transactional_value = None
         else:
             if apply_stage:
                 legacy.update(
@@ -398,9 +387,12 @@ def _passing_packet(packet: Path) -> None:
     ) -> list[dict[str, object]]:
         selected = lane_name == "selected-indexed"
         rows: list[dict[str, object]] = []
-        for index, height in enumerate([50, 100, 500, 1000, 5000]):
-            consensus = consensus_base + index
-            wallet = wallet_base + index
+        heights = [50, 5000] if selected else [50]
+        for height in heights:
+            offset = 4 if height == 5000 else 0
+            consensus = consensus_base + offset
+            wallet = wallet_base + offset
+            index = 1 if height == 5000 else 0
             corpus = performance_corpora[height]
             transaction_identities = corpus["identities"]
             assert isinstance(transaction_identities, list)
@@ -608,18 +600,6 @@ def _passing_packet(packet: Path) -> None:
                     full_history_records = 0
                     full_history_bytes = 0
                     fsync_count = 300
-                elif lane_name == "bounded-jsonl":
-                    legacy.update(
-                        {
-                            "jsonl_append_calls": 300,
-                            "ordered_index_bitmap_bytes_read": 1200,
-                            "ordered_index_bitmap_bytes_written": 600,
-                            "ordered_index_slots_written": 300,
-                        }
-                    )
-                    full_history_records = 0
-                    full_history_bytes = 1200
-                    fsync_count = 300
                 else:
                     legacy.update(
                         {
@@ -735,7 +715,6 @@ def _passing_packet(packet: Path) -> None:
 
     selected_rows = performance_rows("selected-indexed", 100.0, 105.0)
     legacy_rows = performance_rows("legacy-jsonl", 110.0, 115.0)
-    bounded_rows = performance_rows("bounded-jsonl", 103.0, 108.0)
 
     e3_manifest_path = packet / "tamper" / "evidence" / "current-e3-manifest.json"
     _write_json(
@@ -973,7 +952,7 @@ def _passing_packet(packet: Path) -> None:
             "window": f"height-{height}-window-{window_index}",
             "p95_ms": 10.0,
         }
-        for height in (50, 100, 500, 1000, 5000)
+        for height in (50, 5000)
         for window_index in range(1, 6)
     ]
     height_model_predictions = [10.0 for _ in height_model_observations]
@@ -1016,7 +995,7 @@ def _passing_packet(packet: Path) -> None:
             },
             "preferred_fit_by_rmse": "constant",
             "sample_kind": "per_window_p95",
-            "sample_count": 25,
+            "sample_count": 10,
             "height_50_window_p95_median_ms": 10.0,
             "max_same_height_window_range_ms": 0.0,
             "predicted_delta_50_to_5000_ms": 0.0,
@@ -1285,7 +1264,6 @@ def _passing_packet(packet: Path) -> None:
             },
             "storage_backend_mode": {
                 "legacy-jsonl": "legacy-jsonl",
-                "bounded-jsonl": "bounded-jsonl",
                 "selected-indexed": "transactional",
             }[lane_name],
             "storage_activation_height": 1,
@@ -1315,15 +1293,14 @@ def _passing_packet(packet: Path) -> None:
                 "sample_kind": "per_window_p95",
                 "relative_materiality": 0.10,
                 "residual_sigmas": 2.0,
-                "stages": height_relationship_stages,
+                "stages": height_relationship_stages if selected else {},
             },
-            "no_positive_linear_height_relationship": True,
+            "no_positive_linear_height_relationship": True if selected else None,
         }
 
     performance_lanes = {
-        "legacy-jsonl": performance_lane("legacy-jsonl", legacy_rows),
-        "bounded-jsonl": performance_lane("bounded-jsonl", bounded_rows),
         "selected-indexed": performance_lane("selected-indexed", selected_rows),
+        "legacy-jsonl": performance_lane("legacy-jsonl", legacy_rows),
     }
     performance_ratios = {
         "consensus_round_ms_height50_vs_legacy": 100.0 / 110.0,
@@ -1365,6 +1342,7 @@ def _passing_packet(packet: Path) -> None:
             "status": "PASS",
             "captured_at": "2026-08-27T00:00:00Z",
             "campaign_mode": "release-qualification",
+            "qualification_profile": "time-budgeted-redb-v1",
             "evidence_eligible": True,
             "source_worktree_clean": True,
             "source_revision": revision,
@@ -1377,7 +1355,14 @@ def _passing_packet(packet: Path) -> None:
             "windows_per_height": 5,
             "rounds_per_window": 50,
             "timeout_ms": 900_000,
-            "lane_order": ["legacy-jsonl", "bounded-jsonl", "selected-indexed"],
+            "max_wall_seconds": 14_400,
+            "elapsed_wall_seconds": 120.0,
+            "lane_order": ["selected-indexed", "legacy-jsonl"],
+            "lane_height_matrix": [
+                {"lane": "selected-indexed", "height": 50},
+                {"lane": "selected-indexed", "height": 5000},
+                {"lane": "legacy-jsonl", "height": 50},
+            ],
             "lanes": performance_lanes,
             "snapshots_by_height": [
                 {
@@ -1392,7 +1377,7 @@ def _passing_packet(packet: Path) -> None:
                     "first_sequence": performance_corpora[height]["first_sequence"],
                     "last_sequence": performance_corpora[height]["last_sequence"],
                 }
-                for height in [50, 100, 500, 1000, 5000]
+                for height in [50, 5000]
             ],
             "legacy_height_50_baseline": {
                 "consensus_round_ms": 110.0,
@@ -1419,6 +1404,7 @@ def _passing_packet(packet: Path) -> None:
                 "filesystem_block_size_bytes": 4096,
             },
             "pairing": {
+                "shared_comparison_height": 50,
                 "same_host": True,
                 "same_source_revision": True,
                 "same_binary": True,
@@ -1426,16 +1412,16 @@ def _passing_packet(packet: Path) -> None:
                 "same_validator_count": True,
                 "same_validator_keys": True,
                 "same_topology_file": True,
-                "same_authenticated_snapshot_at_each_height": True,
-                "same_signed_transactions": True,
+                "same_authenticated_snapshot_at_shared_height": True,
+                "same_signed_transactions_at_shared_height": True,
                 "same_wallet_and_recipient_accounts": True,
-                "same_height_window_cardinality": True,
+                "same_window_cardinality_at_shared_height": True,
                 "same_full_vote_policy": True,
                 "same_timeout_policy": True,
                 "same_host_allocation": True,
                 "same_storage_medium": True,
                 "same_final_state_for_identical_inputs": True,
-                "changed_input": (
+                "changed_input_at_shared_height": (
                     "authenticated node-local storage backend mode only"
                 ),
             },
@@ -1601,12 +1587,12 @@ class StorageScalingVerifierTests(unittest.TestCase):
             def remove_lane(performance: dict[str, object]) -> None:
                 lanes = performance["lanes"]
                 assert isinstance(lanes, dict)
-                lanes.pop("bounded-jsonl")
+                lanes.pop("legacy-jsonl")
 
             _rewrite_performance(packet, remove_lane)
             with self.assertRaisesRegex(
                 StorageScalingVerificationError,
-                "exactly three lanes",
+                "exactly two lanes",
             ):
                 verify_packet(packet)
 
@@ -1694,9 +1680,9 @@ class StorageScalingVerifierTests(unittest.TestCase):
             def change_key(performance: dict[str, object]) -> None:
                 lanes = performance["lanes"]
                 assert isinstance(lanes, dict)
-                bounded = lanes["bounded-jsonl"]
-                assert isinstance(bounded, dict)
-                identities = bounded["validator_public_identities"]
+                legacy = lanes["legacy-jsonl"]
+                assert isinstance(legacy, dict)
+                identities = legacy["validator_public_identities"]
                 assert isinstance(identities, list)
                 identities[0]["public_key_sha256"] = "f" * 64
 
@@ -1822,9 +1808,9 @@ class StorageScalingVerifierTests(unittest.TestCase):
             def change_affinity(performance: dict[str, object]) -> None:
                 lanes = performance["lanes"]
                 assert isinstance(lanes, dict)
-                bounded = lanes["bounded-jsonl"]
-                assert isinstance(bounded, dict)
-                environment = bounded["environment"]
+                legacy = lanes["legacy-jsonl"]
+                assert isinstance(legacy, dict)
+                environment = legacy["environment"]
                 assert isinstance(environment, dict)
                 environment["cpu_affinity"] = [0]
 

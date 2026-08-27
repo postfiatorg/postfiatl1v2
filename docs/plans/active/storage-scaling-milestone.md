@@ -1,299 +1,373 @@
-# Storage Scaling and Bounded Finality Milestone
+# Storage Scaling: Time-Budgeted Qualification and Release Gates
 
-**Status:** Active — PUBLIC TESTNET BLOCKED
-**Started:** 2026-08-26
+**Status:** Active — `redb` selected; qualification incomplete; deployment and public testnet blocked
+
+**Decision date:** 2026-08-27
+
 **Decision owner:** Post Fiat
-**Research specification:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
-**Implementation specification:** [Storage Scaling Fix](../../architecture/storage-scaling-fix-spec.md)
-**Implementation source:** 69f9f14c26c26c69215eb7bdd5ad45c9d1b84303
 
-The operator directly authorized implementation on 2026-08-26 and explicitly
-instructed this session not to use Task Node. This milestone records that
-operator-directed exception to the repository's normal Task Node workflow.
+**Candidate lineage:** transactional `redb` implementation through `f3907ad5`; G1 must pin the final clean source and binary
 
-## E1 — freeze the cost boundary
+**Research basis:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 
-- [x] Attribute the E4 height curve to full-prefix JSONL verification and
-  full ordered-history proposal/state-root work.
-- [x] Add process-local counters for checkpoint bytes, crash-suffix work,
-  legacy-prefix work, index bitmap bytes, and index slots touched.
-- [x] Add reproducible manual measurements at heights 50, 100, 500, 1,000,
-  and 5,000.
-- [ ] Freeze five 50-round six-validator windows at every required height,
-  including raw receipts, host load, fsync time, CPU, RSS, disk, network,
-  source/binary/snapshot identities, variance, and model residuals.
+**Implementation contract:** [Storage Scaling Fix](../../architecture/storage-scaling-fix-spec.md)
 
-Evidence: [development packet](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling).
+**Independent review:** [Storage candidate review](../../handoffs/2026-08-27___dravlic__storage_candidate_review.md)
 
-The superseded paired workflow on clean source `0fdcc2b3` ran frozen legacy
-source `8cc7d15e`, bounded-JSONL source `dfd0b9f1`, and the selected source
-with three different release binaries and lane-native snapshots. It bound one
-shared six-validator public-key identity, deterministic accounts and transfer
-semantics, host allocation, storage device, literal receipts, full latency
-distributions, constant/logarithmic/linear cost models, and raw resource
-samples. Packet verification independently reconstructed CPU, RSS, disk,
-process I/O, host load, memory, and network totals and refused any foreground
-benchmark process with fewer than two samples. The later E3 audit established
-that the different binaries and snapshots violated the locked comparison
-boundary, so all runs from that workflow are development diagnostics only.
+## Plain-English decision
 
-The first clean full campaign attempt used source `71e539bb`. It completed the
-legacy advance to height 50 and three complete 50-round height-50 windows;
-window four reached round 12. The run was intentionally stopped before a final
-report existed because the shared 90-second request/server timeout could censor
-the known slow legacy curve at height 5,000 instead of measuring it. All child
-node processes exited. The partial directory is not evidence eligible and does
-not pass or fail a performance gate.
+Post Fiat selects the transactional `redb` store as the storage candidate. The
+source design is credible enough to stop comparing alternative storage designs:
+one finalized height commits atomically, post-activation proposal and commit
+paths use an indexed membership set plus a fixed-size accumulator, and the
+selected path does not intentionally rescan full history.
 
-Source `0fdcc2b3` gives every lane the same 900-second fail-closed timeout,
-binds that policy into packet verification, and cleans up a benchmark child on
-interruption. A clean offline development smoke captured at
-`2026-08-27T10:20:13Z` passed one measured round at height 2 in all three lanes.
-Its report SHA-256 is
-`fab4d28a7797658307d8bf47608e074da6a8cf935a275934faee9deb8d929328`;
-legacy, bounded, and selected binary SHA-256 identities are
-`d2a91b11…f289b1ee`, `ab2e84b3…d1166679`, and
-`c75637bf…c8d2b4`. All normalized lanes record the 900-second policy, and their
-raw resource streams rehash with foreground sample minima of six, seven, and
-four. The report explicitly records `evidence_eligible: false`, `offline: true`,
-`network_contacted: false`, and `devnet_queried_or_mutated: false`. This proves
-the corrected paired mechanics and fail-closed evidence binding only; it does
-not close the five-height E1 window, either E3 latency ratio, or the
-height-relationship gate.
+Selection is not qualification, qualification is not deployment, and deployment
+is not public-testnet authorization. The remaining work must prove the selected
+candidate's safety, exact replay, bounded scaling, and migration behavior.
 
-A subsequent full attempt from `0fdcc2b3` completed all five legacy height-50
-windows and all five legacy height-100 windows before entering the advance to
-height 500. The height-50 aggregate p95 values were `2924.249613 ms`
-(`consensus_round_ms`) and `2936.715555 ms` (`wallet_to_finality_ms`); the
-height-100 values were `4113.92018 ms` and `4129.366321 ms`. The run was
-intentionally stopped with no final report after independent review proved that
-`storage-rebuild-transactional --verify-only` could recover a source journal,
-persist a reconstructed tip, upgrade a v1 JSONL head, and create a missing
-target. The scratch output is private, incomplete, and evidence-ineligible; its
-measurements are observations only and close no gate.
+The exhaustive three-lane, five-height, five-window campaign is no longer the
+current release gate. It was a research campaign for choosing among candidates,
+but the candidate is now selected and the legacy lane becomes prohibitively slow
+by design. The current release gate measures only what can change the decision:
 
-Source `785806bd` corrects that verifier boundary. Source and target now open
-read-only, missing directories/keys/databases are never created, a pending
-source journal is refused instead of recovered, and chain-tip reconstruction,
-v1-head verification, and crash-suffix inspection cannot persist a repair.
-Whole-directory mutation sentinels cover missing source/target, successful
-verification, missing chain tip, pending journal, stale generation, v1 head,
-and partial crash suffix. The full storage suite passed 80 tests plus its
-process-crash integration test with two manual scaling tests ignored; the node
-library passed 315 tests with two unrelated Foundry-gated tests ignored;
-formatting and package-wide Clippy with warnings denied passed.
+1. `redb` at heights 50 and 5,000;
+2. legacy JSON/JSONL at height 50 only, as the low-height regression baseline;
+3. exact replay, tamper, crash, rollback, and read-only verification; and
+4. the six-clone rehearsal only when deployment is actually being considered.
 
-## E2 — bounded append and proposal history
+This is an operator-directed amendment to the execution breadth and order in the
+research and implementation specifications. It does **not** weaken deterministic
+replay, failure atomicity, tamper rejection, receipt acceptance, six-validator
+convergence, Consensus v2 safety, Cobalt authority boundaries, or the requirement
+for separate deployment authorization.
 
-- [x] Replace synchronous JSONL full-prefix scans with authenticated v2 heads
-  bound to chain, genesis, protocol, log kind, accepted byte offset, current
-  and previous MAC, finalized height, block hash, and state root.
-- [x] Keep v1 heads compatible through one authenticated full scan followed by
-  a v2 rewrite.
-- [x] Recover at most one complete crash-suffix record; truncate only a partial
-  suffix; reject longer, ambiguous, missing-log, rolled-back, substituted, or
-  cross-log states.
-- [x] Add per-log mutation locks and rebind affected checkpoints only after the
-  ordered chain tip commits.
-- [x] Add a deterministic authenticated ordered-batch index and fixed-size,
-  domain-separated append-only accumulator.
-- [x] Add the explicit genesis field
-  ordered_history_v2_activation_height; preserve legacy serialization and
-  state roots when it is absent.
-- [x] Keep the index synchronized before activation, switch proposal and state
-  commitment at the activation height, and reject count/domain mismatches.
-- [x] Remove full ordered-batch materialization from transparent, governance,
-  shielded, and bridge proposal/commit paths after activation.
-- [x] Replay legacy state roots below activation and v2 roots at and above it.
-- [x] Add the offline
-  postfiat-node ordered-history-index-rebuild --offline-confirmed
-  operator command.
-- [x] Prove all ordered-commit persistence prefixes recover to one accepted
-  activation block and that v2 proposal and commit roots agree.
-- [x] Implement the specification's embedded ordered B-tree candidate with
-  atomic write transactions. The selected `redb` path replaces the fixed-slot
-  candidate for active finality; release performance qualification remains E3.
-- [x] Move finalized blocks, receipts, archived batches, ordered membership,
-  current state, and chain-tip metadata into one atomic per-height transaction
-  as required by the implementation specification.
-- [x] Run every original E3 tamper case and the full new checkpoint, index-page,
-  stale-head, journal disagreement, and crash-cut matrix.
-- [x] Add snapshot/import behavior and prove clean, restored, and rebuilt
-  canonical logical records and history-index entries are byte-identical.
+## Decision space
 
-Clean offline qualification on source `abf74668` closed 69 classified cases
-through 37 nonzero test/campaign filters with no uncovered requirement. Tamper
-report SHA-256:
-`8bb4ee30f8b55d10ff41b66aa1163be9ca3afeead4b56b941b0ae1e47c61c9d6`.
-The runner preserved the frozen E3 manifest identity `c23320d4…7167fa7`,
-rebound only its five audited source hashes in manifest SHA-256
-`80fc5dfe…1a30350`, and independently verified 42 rejected attacks plus six
-byte-identical recoveries in report SHA-256 `10d081b6…e610cb7` with
-classification `ab53b5dd…b90d3`. This closes the source-level E2 tamper gate;
-final packet publication remains open.
+The current job is to qualify the selected storage implementation. It is **not**
+another storage-design search, a devnet deployment, a public-testnet launch, or a
+Dynamic UNL implementation. The only remaining operator decisions are the later
+authorization boundaries shown below; missing authorization must not leave local
+work idling.
 
-The same closed 69-case matrix passed again from the clean current source
-`fb2bf1cc` on 2026-08-27, through the same 37 nonzero test/campaign filters,
-with no uncovered requirement and no network contact. The current tamper report
-SHA-256 is `eb278d7a…b43cc6a`; its frozen-E3 campaign and rebound-manifest
-SHA-256 identities are `96b50b37…1a74dd6` and `de7cc292…19e40ed`. Case 64 is
-bound to the clean compatible-rollback rehearsal below rather than a synthetic
-success receipt.
+| Question | Recorded answer | State | Effect on current work |
+| --- | --- | --- | --- |
+| Which storage implementation? | Transactional `redb`. | Decided | Freeze and qualify this candidate; do not restart candidate research. |
+| Which performance campaign? | Selected `redb` at heights 50 and 5,000; same-binary legacy control at height 50. | Decided | Do not run the superseded three-lane/five-height matrix. |
+| Is one height-924 validator directory needed? | Yes, for exact replay only. | Authorization and custodian still required | Finish G1, G2, the height-915 part of G3, and G4 without waiting for it. |
+| Are six validator directories needed now? | No. They are needed only for G6 immediately before a deployment decision. | Deferred | Spend no time collecting or rehearsing six clones during offline qualification. |
+| May this plan touch the controlled devnet? | No. | Not authorized | No fleet query, copy, service action, deployment, or mutation. |
+| What follows storage? | Dynamic UNL supplies proposal content inside the DGA/Cobalt envelope; Option C is the evidence sequence. | Direction recorded; implementation deferred | Keep its milestone deferred until the storage boundary in G7. |
+| Does a passing packet deploy anything? | No. | Separate later decision required | G5 can establish only `OFFLINE QUALIFIED`; G6 and written deployment authorization remain separate. |
 
-Primary code:
+## Decisions recorded
 
-- crates/storage/src/transactional.rs
-- crates/storage/src/transactional/canonical_export.rs
-- crates/storage/src/transactional/generation.rs
-- crates/storage/src/transactional/tamper_tests.rs
-- crates/storage/src/transactional/export.rs
-- crates/storage/src/integrity.rs
-- crates/storage/src/lib.rs
-- crates/storage/src/ordered_history.rs
-- crates/node/src/storage_migration.rs
-- crates/node/src/storage_vote_guard.rs
-- crates/node/src/mempool_proposals.rs
-- crates/node/src/batch_snapshot.rs
-- crates/node/src/storage_commit.rs
-- crates/node/src/state_commitment.rs
-- crates/node/src/block_replay_wallet.rs
-- crates/node/src/history.rs
+- **Storage candidate:** transactional `redb`.
+- **Performance proof:** selected-path height 50 versus height 5,000, plus a
+  same-binary legacy-versus-selected comparison at height 50.
+- **Discarded release work:** bounded-JSONL performance qualification and
+  legacy runs at heights 100, 500, 1,000, and 5,000. They remain optional
+  diagnostics and cannot hold the release decision open.
+- **Real-chain replay input:** one complete, quiescent, read-only height-924
+  validator data directory is enough for exact replay.
+- **Deployment rehearsal input:** six distinct stopped validator directories
+  are required only for the final six-clone migration gate.
+- **Governance direction after storage:** Dynamic UNL is the intended canonical
+  proposal-content source inside hard L1 DGA limits; independent admitted
+  operators submit unchanged proposal bytes, Cobalt ratifies validator-trust
+  changes, and Consensus v2 orders them. The deterministic formula stays a
+  published shadow baseline and a separately activated fail-closed fallback.
+- **Dynamic UNL evidence sequence:** Option C. PFT Ledger results may exercise a
+  governed-binding adapter in `SHADOW_ONLY` mode while an L1-native observer,
+  evidence profile, scoring replay, and sidecar-convergence path are built.
+  Nothing receives registry-mutation authority without a later recorded
+  decision and the complete governance gates.
+- **Operations boundary:** no Task Node, fleet probe, data copy, service change,
+  deployment, or live mutation is authorized by this plan.
 
-## E3 — exact replay and paired scaling
+## Status vocabulary
 
-- [x] Synthetic work counters remain bounded through height 5,000: JSONL
-  append verifies zero accepted-prefix records; proposal/index operations read
-  a fixed bitmap and write one slot.
-- [x] Replace the fixed bitmap candidate with the transactional `redb` ordered
-  index and constant-size ordered-history accumulator on the active path.
-- [x] Replay the exact 915-block quarantine archive below activation: all six
-  source verifiers, transactional rebuild, canonical logical comparison, and
-  independent verify-only passed offline on `1985cd3f`. Receipt SHA-256:
-  `2596d7874edc348fd232bf6d97b7880c339f31d0f3a4516892d913cbc54d207a`;
-  source-tree SHA-256:
-  `6c9c9c11955b761a9e7b80b5fbf5b482f307fa602bc6d139b27868b76135139a`;
-  release-binary SHA-256:
-  `811fb4921ec326bedeec88c37bc92730bd65943dcc795f542d0f5dd9065b7483`.
-- [ ] Replay the authenticated controlled-devnet history through exact height
-  924 byte for byte; no complete height-924 data directory is present in the
-  local archive, and no fleet access is authorized by this milestone.
-- [ ] Run paired legacy, bounded-JSONL, and selected indexed-store lanes at all
-  five heights with six validators and literal receipt acceptance.
-- [ ] Prove selected-store height-50 p95 `consensus_round_ms` and
-  `wallet_to_finality_ms` are each at most 110% of the frozen legacy height-50
-  baseline.
-- [ ] Prove height-5,000 p95 consensus_round_ms and
-  wallet_to_finality_ms are each at most 110% of height-50 p95.
-- [ ] Prove no material synchronous stage retains a positive linear
-  relationship with height.
+| State | Meaning |
+| --- | --- |
+| **SELECTED** | Source review and existing tests justify concentrating qualification on `redb`. This is the current state. |
+| **OFFLINE QUALIFIED** | G0 through G5 pass from pinned clean source with a verifier-bound packet. |
+| **CLONE QUALIFIED** | G6 passes on six distinct, stopped, fleet-derived clones. |
+| **AUTHORIZED FOR CONTROLLED DEVNET** | A separate operator decision pins source, binary, data, packet, activation, and rollback identities. |
+| **DEPLOYED** | A later fleet receipt proves what actually runs. |
+| **PUBLIC TESTNET ELIGIBLE** | All release, operational, security, and launch gates—not only this storage plan—pass. |
 
-Source `69f9f14c` corrects the rejected comparison boundary. One
-release binary now exposes three authenticated node-local backend modes;
-comparison configuration is excluded from snapshots and consensus artifacts.
-At each height every lane and window imports the same authenticated snapshot
-and consumes the same pre-signed transfer corpus with the same topology, keys,
-accounts, host allocation, storage device, full-vote policy, and timeout. The
-runner aborts on any cross-lane height, final-state-root, transaction-ID, or
-signed-transfer mismatch. Mode-generic telemetry now covers proposer work,
-all five remote validator reconstructions, and all six finalized applies. The
-offline verifier independently recomputes those counters from every raw
-iteration and rejects a summary mismatch.
+No document or interface may collapse these states into “fixed” or “live.”
 
-This corrects the experiment mechanics only. The full five-height clean-source
-release campaign, its two latency ratios, and its height-relationship gate
-remain open; none of the superseded three-binary observations closes them.
+## Time controls
 
-An offline pre-commit development smoke captured at `2026-08-27T14:45:29Z`
-passed one height-2 round in all three v3 lanes. Report SHA-256:
-`be7876a7d16a53dd4ed52af773847ac4bd3537888ef1899367acdcdf818017f9`;
-release-binary SHA-256:
-`0c05184a8f9ea2ad329ce1db742fbf4fd03a7dd16751567f065576fbdbaadf0b`;
-shared source-snapshot SHA-256:
-`368d833c16c6fc65da66fb0fa313f0ab9b1086fdb628582c8927c42e08ed0335`;
-shared signed-corpus SHA-256:
-`e43c6f52727ce6fc96b9f6c637ed4e7d72464f5708a3d35b2325a6d93f0a6e89`.
-Every lane finalized height 3 at state root
-`c164d59061a85ef527c3d9cb4dc8ca0f698f4676d64252440f65eb46ec49f32738b2be7f8c0342ec563592372bd1854d`.
-All five remote reconstruction records were present per lane, and independent
-raw-counter recomputation matched each window summary. The report explicitly
-records dirty source, `evidence_eligible: false`, `offline: true`,
-`network_contacted: false`, and `devnet_queried_or_mutated: false`; it proves
-the corrected mechanics and telemetry path only.
+Every execution command must declare its expected duration and hard timeout
+before it starts.
 
-Paired qualification code:
+- Any command expected to exceed 30 minutes must support checkpoint/resume or be
+  split into independently verifiable units.
+- No single unattended command may run longer than 2 hours without a new,
+  evidence-backed operator decision.
+- G4 has a 4-hour aggregate wall-clock budget. Reaching the budget is a recorded
+  `TIME_BUDGET_EXCEEDED` result, not permission to continue silently.
+- A failed or timed-out gate is diagnosed once. It is not automatically restarted
+  with a larger matrix.
+- Run selected-path evidence before expensive legacy controls.
+- Preserve a stopped run only when its completed units are independently
+  verifiable. Partial output never becomes a fabricated final report.
 
-- benchmarks/storage-scaling/run_paired_campaign.py
-- benchmarks/storage-scaling/run_campaign.py
-- benchmarks/storage-scaling/package_packet.py
-- python/postfiat_rpc/storage_scaling.py
-- python/tests/test_storage_scaling.py
-- python/tests/test_storage_scaling_packager.py
+## Gated to-do list
 
-## E4 — migration and rollback rehearsal
+A gate passes only when every checkbox in its detailed section is closed and
+the independent verifier accepts the bound artifacts. A failed gate stops work
+that depends on it. An unavailable external input is recorded and skipped while
+independent local gates continue.
 
-- [x] Select a versioned Foundation-governance activation record for the
-  existing chain; the controlled genesis remains unchanged.
-- [x] Implement consensus-ordered storage-commitment activation and
-  pre-activation cancellation records without expanding Cobalt's authority.
-- [x] Write the versioned side-by-side migration, signing, cancellation, and
-  rollback operator workflow in the storage-scaling evidence README.
-- [x] Rehearse compatible post-activation software rollback across two distinct
-  release binaries and six disposable local validators. Clean source
-  `fb2bf1cc` finalized height 2, compatible ancestor `20c95ec2` resumed the exact
-  certified tip and finalized height 3, and `fb2bf1cc` resumed the exact
-  height-3 tip and finalized height 4. All six converged with literal accepted
-  receipts, bounded page and accumulator work, and zero full-history reads.
-  Report SHA-256: `07a67e3c…fabd746`; current/rollback binary SHA-256:
-  `4e14999a…209062a9` and `affc6bac…e9a937`.
-- [x] Rehearse side-by-side rebuild, full replay, staggered restart, activation,
-  post-activation finality, pre-activation rollback, forward recovery,
-  catch-up, and convergence on six disposable clones.
-- [x] Bind disk-capacity, mixed-version rejection, backups, stop conditions,
-  and unchanged Cobalt/Consensus v2 receipts.
-- [ ] Obtain separate authorization before any fleet probe, deployment,
-  service restart, or live mutation.
+| Gate | Current state | Work allowed now | Budget and advance rule |
+| --- | --- | --- | --- |
+| G0 — campaign control | **PASS** | None; do not rerun the old campaign. | Reopen only if checkpoint/resume itself changes. |
+| G1 — candidate freeze | **IN PROGRESS** | Pin clean source, build one binary, freeze inputs, and run focused regressions. | No command over 2 hours; any source or binary change restarts G1. |
+| G2 — safety | **QUEUED AFTER G1** | Tamper/crash, canonical equality, rollback, and read-only sentinels. | Split into independently verifiable units; stop on mutation, ambiguity, panic, or unverifiable output. |
+| G3 — exact replay | **PARTLY LOCAL / EXTERNAL INPUT OPEN** | Regenerate the height-915 evidence after G1. Run height 924 only from a separately authorized copy. | Never wait idle for the copy; record `WAITING_FOR_AUTHORIZED_INPUT` and continue to G4. |
+| G4 — scaling | **QUEUED AFTER G1** | Run the three-row selected-first matrix only. | Four hours aggregate; stop on a selected-path failure or `TIME_BUDGET_EXCEEDED`. |
+| G5 — offline packet | **BLOCKED BY G1–G4** | Package only after every preceding evidence gate passes. | No qualification claim until the offline verifier passes the complete packet. |
+| G6 — six-clone rehearsal | **DEFERRED** | Nothing until offline qualification is complete and deployment is the next real decision. | Requires separate data-copy authorization and six distinct stopped directories. |
+| G7 — Dynamic UNL handoff | **DIRECTION RECORDED / IMPLEMENTATION DEFERRED** | Preserve the recorded architecture decision only. | Spend no implementation time before the stated storage boundary or a new operator priority decision. |
 
-The fail-closed six-clone runner completed the full ten-phase sequence on the
-stopped local height-501 development fixture. The tightened current-format pass
-at `2026-08-27T08:09:48Z` used source `20c95ec2`, six distinct immutable source
-and backup roots, release binary SHA-256 `161f64d2…cab53187`, and incompatible
-binary SHA-256 `f3a58e2e…b4b514a2`. It finalized heights 502 through 511 with
-literal accepted receipts, retained Consensus v2 certificates, cancelled the
-first scheduled activation, restarted all six validators in three stages,
-formed the activation block from an exact five-vote quorum while validator-4
-was held back, caught validator-4 up from that certificate, and converged at
-tip `c68d3bfb…a0857d9e` and state root `20323b47…19863092`. Its source-stop
-receipt inspected 45 processes with zero unreadable or matching processes, and
-the incompatible binary failed with literal reason `storage_unsupported_schema`.
-The redaction-safe report SHA-256 is `62571689…2e618476`.
+## G0 — stop the open-ended campaign and make runs resumable
 
-This is development evidence only: the fixture is not the controlled height-924
-archive, the source worktree was dirty, and the report is explicitly ineligible
-for final packet publication. The exact clean-source height-924 rehearsal remains
-open with E3 replay and the final packet.
+**Purpose:** stop spending time on evidence that no longer changes the candidate
+decision.
 
-Primary code:
+- [x] Interrupt the current exhaustive paired campaign through its normal signal
+      path and verify that every child validator and benchmark process exits.
+- [x] Record source, binary, completed units, stop reason, elapsed time, and
+      remaining units in a redaction-safe stop receipt.
+- [x] Mark the interrupted campaign `evidence_eligible: false` as a whole.
+- [x] Retain a completed window only if the verifier can bind its source, binary,
+      snapshot, signed corpus, raw iterations, literal receipts, counters, and
+      final roots without inventing a missing campaign summary. No old window
+      is currently admitted as release evidence.
+- [x] Add checkpoint/resume plus an explicit frozen lane, height, and window task
+      plan to the runner.
+- [x] Make resume refuse a changed source, binary, runner, topology, validator
+      identity, host allocation, snapshot, corpus, timeout, completed artifact,
+      or output schema.
+- [x] Pass an interrupt/resume smoke test and prove there are no orphaned child
+      processes.
 
-- benchmarks/storage-scaling/run_migration_rehearsal.py
-- crates/node/src/transport_cli.rs
-- crates/node/src/transport_protocol.rs
-- crates/node/src/transport_runtime.rs
-- benchmarks/storage-scaling/package_packet.py
-- python/postfiat_rpc/storage_scaling.py
-- python/tests/test_storage_scaling.py
+Evidence: the checksum-bound
+[`campaign-stop-f3907ad5.json`](https://github.com/postfiatorg/postfiatl1v2/blob/main/benchmarks/storage-scaling/campaign-stop-f3907ad5.json)
+records 32 complete windows, one seven-round partial window, 1,607 measured
+rounds, no final report, and zero surviving processes after the four-hour stop.
+The development verifier checks that boundary. The final controlled
+checkpoint/resume smoke stopped after the height-2 advance, resumed the same
+bound output, completed selected and legacy windows, and emitted report SHA-256
+`9494dd8d…004b0` plus checkpoint SHA-256 `cd9eca58…a3540`, with no surviving
+campaign process. Five focused Python tests cover private atomic checkpoints,
+non-resumable completion, recoverable partial-unit quarantine, the frozen
+release matrix, and the two-height model.
 
-## Interfaces and completion
+**Exit:** G0 passed. The old campaign is stopped, no superseded output is
+release evidence, and future long work advances through independently verified
+checkpoints.
 
-- [x] Deliver `python -m postfiat_rpc.storage_scaling verify PACKET` with
-  independent checksum, replay, performance, tamper, migration, and redaction
-  verification.
-- [x] Deliver the loopback-only read-only browser view from the same verified
-  packet.
-- [ ] Publish the final checksum manifest, redaction result, replay identities,
-  paired curves, migration result, and remaining limits.
-- [ ] Run the proportional final release suite from a clean checkout.
-- [ ] Move this milestone to completed only when every PASS gate holds.
+## G1 — freeze the selected release candidate
 
-Until every unchecked PASS item closes, the controlled JSON/JSONL
-configuration remains research software and no public testnet or finality SLA
-is authorized.
+**Purpose:** bind every later claim to one reproducible candidate.
+
+- [x] Select transactional `redb` and retire the fixed bitmap and
+      bounded-JSONL performance lane from candidate selection.
+- [x] Use one release binary whose authenticated node-local storage mode is the
+      only comparison switch.
+- [x] Make `storage-rebuild-transactional --verify-only` strictly read-only and
+      fail closed when recovery or creation would be required.
+- [ ] Start from a clean checkout and record the exact source revision.
+- [ ] Build one release binary and record its SHA-256, Rust toolchain, locked
+      dependency identity, build command, host, and storage device.
+- [ ] Freeze topology, keys, accounts, transaction corpus, timeouts,
+      instrumentation schema, and authenticated height-50 and height-5,000
+      snapshot identities.
+- [ ] Run the focused storage/node regression suites, formatting, and
+      warnings-denied Clippy against that source.
+
+**Exit:** one clean source, one binary, and one frozen input set control G2
+through G5. Any source or binary change returns the plan to G1.
+
+## G2 — safety and failure atomicity
+
+**Purpose:** prove the faster path did not weaken storage integrity.
+
+- [ ] Re-run the complete 69-case tamper/crash classification from the pinned
+      source.
+- [ ] Prove every rejected case has a stable reason and produces zero durable
+      mutation.
+- [ ] Prove each crash cut recovers either the complete prior height or exactly
+      one complete new height.
+- [ ] Prove clean build, snapshot restore, transactional rebuild, restart, and
+      canonical export produce identical logical records, commitments, roots,
+      and tips.
+- [ ] Re-run the compatible two-binary rollback path from the same certified tip
+      without deleting or reinterpreting finalized blocks.
+- [ ] Re-run whole-directory mutation sentinels for every `--verify-only`
+      success and refusal path.
+- [ ] Commit redaction-safe reports and receipts, bind them in
+      `benchmarks/storage-scaling/SHA256SUMS.txt`, and make the independent
+      verifier reject a missing or altered artifact.
+
+**Exit:** all safety checks pass and are repository-verifiable. Any ambiguity,
+partial mutation, panic on untrusted storage, or unverifiable report is
+`REMEDIATION_REQUIRED`.
+
+## G3 — exact replay
+
+**Purpose:** prove compatibility with real recorded history rather than only
+synthetic fixtures.
+
+- [ ] Publish or regenerate a verifier-bound report for the exact 915-block
+      quarantine replay from the pinned source; an operator-reported digest
+      without the report does not close this item.
+- [ ] Name the authorized custodian of one complete, quiescent height-924
+      validator data directory.
+- [ ] Obtain separate authorization for the read-only copy; this plan does not
+      grant fleet access.
+- [ ] Hash the source tree before use, preserve it read-only, and perform all
+      replay work on a scratch copy.
+- [ ] Replay through exact height 924 and match the recorded chain, height, tip,
+      state root, blocks, receipts, archive, ordered history, and pre-activation
+      state commitments.
+- [ ] Run independent `--verify-only` against the result and prove both source
+      and target directory hashes remain unchanged.
+- [ ] Bind the redaction-safe replay report and verifier output into the packet
+      checksum manifest.
+
+**Exit:** both the 915 archive and real height-924 history replay exactly. If no
+authorized height-924 directory is available, record `WAITING_FOR_AUTHORIZED_INPUT`;
+continue other local gates, but do not claim offline qualification or deployment
+readiness.
+
+## G4 — time-budgeted scaling qualification
+
+**Purpose:** answer whether the selected store removes height-dependent work
+without spending hours re-measuring a deliberately rejected legacy design.
+
+**Required matrix:**
+
+| Lane | Starting height | Windows × rounds | Why it exists |
+| --- | ---: | ---: | --- |
+| Selected `redb` | 50 | 5 × 50 | Low-height performance and regression anchor |
+| Selected `redb` | 5,000 | 5 × 50 | Scaling decision |
+| Legacy JSON/JSONL | 50 | 5 × 50 | Same-binary low-height regression baseline |
+
+All rows use the G1 binary. At height 50, both lanes import the same authenticated
+snapshot and consume the same signed corpus, topology, keys, accounts, host,
+storage device, vote policy, timeout, and instrumentation. Build the height-5,000
+snapshot through the selected bounded path; do not advance legacy storage to
+height 5,000 merely to demonstrate the already-known defect.
+
+Run order is selected height 50, selected height 5,000, then legacy height 50.
+Stop immediately when a selected-path safety, convergence, literal-receipt, or
+bounded-work gate fails.
+
+- [ ] Complete the three required rows inside the 4-hour aggregate budget.
+- [ ] Verify literal accepted receipts and six-validator agreement on height,
+      block hash, and state root for every measured round.
+- [ ] Prove proposer construction, every remote validator reconstruction, and
+      every finalized apply report zero full-history records and bytes after
+      activation.
+- [ ] Prove indexed point work is `O(log n)` pages or better and the
+      ordered-history accumulator update is constant work.
+- [ ] Prove selected height-50 p95 `consensus_round_ms` and
+      `wallet_to_finality_ms` are each no more than 110% of the corresponding
+      legacy height-50 p95.
+- [ ] Prove selected height-5,000 p95 for both metrics is each no more than 110%
+      of selected height-50 p95.
+- [ ] Publish raw iterations, p50/p95, variance, counters, CPU, RSS, disk,
+      process I/O, host load, fsync, and network observations.
+- [ ] Make the verifier independently recompute identities, distributions,
+      ratios, counters, resource summaries, and all pass/fail decisions.
+
+**Exit:** every item passes inside budget. A timeout, censored sample, missing
+receipt, convergence failure, positive full-history counter, or failed ratio is
+a real failed gate requiring focused remediation—not a reason to start the
+exhaustive matrix.
+
+## G5 — offline qualification packet
+
+**Purpose:** make the result independently checkable and state exactly what it
+does and does not authorize.
+
+- [ ] Package G1 through G4 into one checksum-bound, redaction-safe packet.
+- [ ] Make `python -m postfiat_rpc.storage_scaling verify PACKET` pass without
+      network access and fail on every missing, changed, incomparable, stale, or
+      inconsistent required artifact.
+- [ ] Make the read-only browser consume only a successfully verified packet and
+      expose no migration, activation, rollback, or mutation action.
+- [ ] Run the proportional clean release suite and strict documentation,
+      redaction, and public-link checks.
+- [ ] Update Current State, State and Storage, the evidence index, and operator
+      runbooks with the exact source/binary/packet identities and remaining
+      boundaries.
+- [ ] Record `OFFLINE QUALIFIED` only after every G0–G5 item passes.
+
+**Exit:** the candidate may be described as offline qualified. Controlled-devnet
+deployment and public testnet remain blocked.
+
+## G6 — pre-deployment six-clone gate
+
+**Purpose:** spend the six-node migration cost only when deployment is the next
+real decision.
+
+- [ ] Obtain separate authorization and six distinct, complete, stopped
+      validator-0 through validator-5 data-directory copies.
+- [ ] Bind each source and backup root, required disk, source/binary identity,
+      activation record, cancellation boundary, and rollback binary.
+- [ ] Rehearse side-by-side migration, independent verification, staged restart,
+      pre-activation cancellation, activation, post-activation finality,
+      compatible rollback, catch-up, and all-six convergence.
+- [ ] Prove Cobalt authority and every Consensus v2 rule remain unchanged.
+- [ ] Package and independently verify the clone receipts.
+- [ ] Record `CLONE QUALIFIED` only after every G6 item passes.
+- [ ] Require a separate written deployment decision. It must pin source,
+      binary, packet, six source snapshots, activation height, rollback window,
+      stop conditions, owners, and fleet evidence requirements.
+
+**Exit:** passing G6 makes deployment eligible for a separate decision; it does
+not deploy anything.
+
+## G7 — next-milestone handoff
+
+- [x] Record Dynamic UNL inside the DGA/Cobalt envelope as the intended
+      proposal-content architecture, with the deterministic formula as a shadow
+      baseline and separately activated fail-closed fallback.
+- [x] Record Option C as the evidence-source sequence and keep all PFT-derived
+      integration `SHADOW_ONLY`.
+- [ ] Keep the [Dynamic UNL milestone](../../deferred-plans/dynamic-unl-proposal-source-milestone.md)
+      deferred until G5 closes, or until the decision owner explicitly
+      de-prioritizes storage after all locally executable gates finish.
+- [ ] When activated, update that milestone before implementation to remove Task
+      Node as a prerequisite, preserve the no-authority boundary, and name the
+      L1-observer and independent-operator owners.
+- [ ] Do not let governance work obscure an open storage deployment or
+      public-testnet blocker.
+
+## Immediate execution order
+
+1. Do not rerun G0: the old campaign is stopped and resumability is proven.
+2. Finish G1 and pin the clean candidate before generating qualification
+   evidence.
+3. Run G2 in independently verifiable units.
+4. Regenerate the local height-915 evidence for G3. If no authorized height-924
+   input exists, record that boundary and move directly to G4 instead of
+   waiting.
+5. Run G4 selected-first within its four-hour aggregate limit.
+6. Close the height-924 part of G3 only after the copy is separately authorized
+   and available.
+7. Build and verify the G5 packet only when G1 through G4 are closed.
+8. Run G6 only if controlled-devnet deployment is actually the next decision
+   and its separate authorization has been recorded.
+9. Activate the deferred Dynamic UNL milestone only at the G7 boundary or after
+   an explicit operator reprioritization.
+
+The plan is complete only when G0 through G6 pass and a separate decision either
+authorizes deployment or explicitly records why the qualified candidate remains
+undeployed. Until then, public testnet remains blocked.

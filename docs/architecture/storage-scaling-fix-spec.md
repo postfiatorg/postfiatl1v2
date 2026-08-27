@@ -5,7 +5,15 @@
 **Decision owner:** Post Fiat
 **Source baseline:** `b40c31a55dbe6b59330621de2cb409eb59461c0e`
 **Derived from:** [Storage Scaling and Bounded Finality Research Specification](storage-scaling-research-spec.md)
-**Tracked by:** [Storage Scaling and Bounded Finality Milestone](../plans/active/storage-scaling-milestone.md)
+**Tracked by:** [Storage Scaling: Time-Budgeted Qualification and Release Gates](../plans/active/storage-scaling-milestone.md)
+
+> **Execution-profile amendment (2026-08-27):** The active milestone selects
+> transactional `redb` and replaces the exhaustive three-lane/five-height
+> comparison with selected-store heights 50 and 5,000 plus a same-binary
+> legacy height-50 baseline. The amendment changes measurement breadth and
+> execution order only; replay, tamper, crash, rollback, convergence,
+> migration, and separate deployment-authorization requirements remain
+> mandatory.
 
 ## Purpose
 

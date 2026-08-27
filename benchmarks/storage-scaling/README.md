@@ -12,53 +12,56 @@ the fixed bitmap was rejected as the selected primary store.
 
 ## Release campaign harness
 
-`run_paired_campaign.py` is the only release campaign entry point. It runs the
-closed three-lane comparison with one exact release binary in this order:
+`run_paired_campaign.py` is the only release campaign entry point. The active
+profile selects transactional `redb` and runs only the evidence that can still
+change its qualification decision, in this order:
 
-1. `legacy-jsonl`, which intentionally reproduces full-prefix JSONL append
-   verification and full ordered-history proposal work;
-2. `bounded-jsonl`, which uses authenticated JSONL v2 heads and the fixed-slot
-   ordered index; and
-3. `transactional`, the selected `redb` finality path.
+1. transactional `redb` at height 50;
+2. transactional `redb` at height 5,000; and
+3. legacy JSON/JSONL at height 50 as the same-binary regression baseline.
+
+Each row contains five independent 50-round windows. The superseded
+three-lane/five-height campaign is not a release gate; its bounded-JSONL lane
+and legacy runs above height 50 are optional diagnostics. The stopped
+four-hour attempt is recorded in
+[`campaign-stop-f3907ad5.json`](campaign-stop-f3907ad5.json) and is explicitly
+not evidence eligible.
 
 The backend selector is an authenticated node-local record named
 `storage_backend_mode.json`. It is excluded from portable snapshots and every
-consensus artifact. Missing configuration selects `transactional`; the two
-comparison modes require both `--offline-confirmed` and
-`--unsafe-comparison-mode` and are permitted only on disposable qualification
+consensus artifact. Missing configuration selects `transactional`; legacy
+comparison mode requires both `--offline-confirmed` and
+`--unsafe-comparison-mode` and is permitted only on disposable qualification
 clones.
 
 The runner creates one topology, validator-key set, deterministic wallet and
-recipient, and canonical transactional seed snapshot. At each required height
-it pre-signs one exact 50-transfer corpus, then imports the same authenticated
-snapshot into every lane and window. The source revision, binary SHA-256,
-snapshot digest, signed transaction bytes, host allocation, storage device,
-full-vote policy, and 900-second fail-closed timeout are identical. The only
-changed input is the authenticated backend mode. A cross-lane mismatch in
-starting or final height, final state root, transaction ID, or canonical signed
-transfer SHA-256 aborts the campaign. Randomized validator signatures and
-certificate IDs are disclosed and are not falsely claimed to be byte-identical.
+recipient, and canonical transactional seed snapshot. It imports the same
+height-50 snapshot and signed corpus into both height-50 lanes. The source
+revision, binary SHA-256, snapshot digest, signed transaction bytes, host
+allocation, storage device, full-vote policy, and 900-second fail-closed timeout
+are identical; only the authenticated backend mode changes. The height-5,000
+snapshot is built through checkpointed transactional advances, never through a
+legacy height-5,000 control.
 
-At starting heights 50, 100, 500, 1,000, and 5,000, the harness runs five
-independent 50-round windows. It derives the height-50 legacy baseline from the
-raw legacy lane, recomputes p50/p95/p99/max/mean/standard deviation, publishes
-per-window resource variance, and fits constant, logarithmic, and linear models
-with raw observations, predictions, and residuals for every material stage.
+The runner atomically checkpoints every advance chunk, frozen height input, and
+completed window. `--resume` rehashes and refuses any changed source, binary,
+runner, topology, validator identities, snapshot, corpus, timeout, completed
+report, resource stream, receipt, or result snapshot. A partial unit is moved
+to an `interrupted/` quarantine before retry, not overwritten. An exclusive
+campaign lock prevents concurrent resume. The release profile has a four-hour
+aggregate wall-clock limit, and advances are split into at most 100 rounds so
+no open-ended unit can consume the whole budget.
+
+The report derives the height-50 legacy baseline from raw observations,
+recomputes p50/p95/p99/max/mean/standard deviation, publishes per-window
+resource variance, and fits the selected height-50/height-5,000 stage model.
 Mode-generic counters cover proposer construction, all five remote validator
 reconstructions, the local finalized apply, and all five certified remote
-applies. The offline packet verifier independently recomputes their exact
-records, bytes, pages, transactions, legacy scans, index work, and fsync count
-from every raw iteration before accepting a window summary.
-
-Each window also preserves a redaction-safe, checksum-bound sampler stream; the
-runner fails unless every foreground benchmark process appears in at least two
-samples, and the packet verifier independently reconstructs CPU, RSS, disk,
-process I/O, host load, memory, and network totals from that stream. The
-selected lane fails unless all six validators converge, every literal
-receipt is accepted and final, every finalized height uses one durable database
-transaction per validator, full-history work is zero, page work stays bounded,
-the two 110% latency gates pass, and no material stage retains a positive
-linear relationship after the repeated-window variance allowance.
+applies. Each window preserves a redaction-safe sampler stream. Qualification
+fails unless all six validators converge, every literal receipt is accepted
+and final, every selected finalized height uses one durable database transaction
+per validator, full-history work is zero, page work stays bounded, both 110%
+latency gates pass, and the independent packet verifier recomputes the result.
 
 Build the current binary from the exact clean source under qualification. When
 Zig is the available linker, use the repository wrappers:
@@ -80,10 +83,23 @@ python3 benchmarks/storage-scaling/run_paired_campaign.py \
   --output-dir /explicit/disposable/storage-scaling-paired
 ```
 
-`run_paired_campaign.py --development-smoke` runs one round in every lane from
-one shared height-2 snapshot and signed corpus. It verifies mechanics only and
-can never produce release evidence. `run_campaign.py --development-smoke`
-remains the narrower selected-store helper.
+Resume only the same bound output after a clean interruption:
+
+```bash
+python3 benchmarks/storage-scaling/run_paired_campaign.py \
+  --node-bin target/release/postfiat-node \
+  --expected-source-revision "$(git rev-parse HEAD)" \
+  --output-dir /explicit/disposable/storage-scaling-paired \
+  --resume
+```
+
+`run_paired_campaign.py --development-smoke` runs one round in the selected and
+legacy lanes from one shared height-2 snapshot and signed corpus. The
+`--development-stop-after-units N` hook creates a controlled checkpoint stop so
+interrupt/resume behavior can be exercised; neither mode can produce release
+evidence. `run_campaign.py --development-smoke` remains the narrower
+selected-store helper.
+
 The paired run directory contains disposable private keys and must never be
 published. Only the normalized latency reports and redaction-safe resource
 sample streams copied by packet assembly may be published after independent

@@ -25,7 +25,10 @@ def _load_packager() -> Any:
 
 
 PACKAGER = _load_packager()
-LANES = ("legacy-jsonl", "bounded-jsonl", "selected-indexed")
+LANE_HEIGHTS = {
+    "selected-indexed": [50, 5000],
+    "legacy-jsonl": [50],
+}
 
 
 def _sha256(path: Path) -> str:
@@ -42,7 +45,7 @@ def _write_json(path: Path, value: object) -> None:
 
 def _campaign(root: Path, *, label: str = "height-50-window-1") -> Path:
     corpora: dict[int, tuple[Path, str]] = {}
-    for height in (50, 100, 500, 1000, 5000):
+    for height in (50, 5000):
         corpus = root / "corpora" / f"height-{height}.json"
         _write_json(
             corpus,
@@ -52,23 +55,30 @@ def _campaign(root: Path, *, label: str = "height-50-window-1") -> Path:
             },
         )
         corpora[height] = (corpus, _sha256(corpus))
+
     lanes: dict[str, object] = {}
-    for lane in LANES:
-        normalized = root / "raw" / lane / "normalized.json"
-        resources = root / "raw" / lane / "resources.json"
-        _write_json(normalized, {"lane": lane, "kind": "normalized"})
-        _write_json(resources, {"lane": lane, "kind": "resources"})
-        lanes[lane] = {
-            "rows": [
+    for lane, heights in LANE_HEIGHTS.items():
+        rows = []
+        for height in heights:
+            normalized = root / "raw" / lane / f"height-{height}.normalized.json"
+            resources = root / "raw" / lane / f"height-{height}.resources.json"
+            _write_json(normalized, {"lane": lane, "height": height, "kind": "normalized"})
+            _write_json(resources, {"lane": lane, "height": height, "kind": "resources"})
+            window_label = (
+                label
+                if lane == "selected-indexed" and height == 50
+                else f"height-{height}-window-1"
+            )
+            rows.append(
                 {
-                    "height": 50,
+                    "height": height,
                     "windows": [
                         {
-                            "label": label,
-                            "signed_transfer_corpus": corpora[50][0]
+                            "label": window_label,
+                            "signed_transfer_corpus": corpora[height][0]
                             .relative_to(root)
                             .as_posix(),
-                            "signed_transfer_corpus_sha256": corpora[50][1],
+                            "signed_transfer_corpus_sha256": corpora[height][1],
                             "normalized_report": normalized.relative_to(root).as_posix(),
                             "normalized_report_sha256": _sha256(normalized),
                             "resource_samples": resources.relative_to(root).as_posix(),
@@ -76,8 +86,9 @@ def _campaign(root: Path, *, label: str = "height-50-window-1") -> Path:
                         }
                     ],
                 }
-            ]
-        }
+            )
+        lanes[lane] = {"rows": rows}
+
     report = {
         "schema": PACKAGER.ARTIFACT_SCHEMAS["performance"],
         "status": "PASS",
@@ -123,7 +134,7 @@ class StorageScalingPackagerTests(unittest.TestCase):
                 entry["height"]: entry
                 for entry in copied["snapshots_by_height"]
             }
-            self.assertEqual(set(corpora), {50, 100, 500, 1000, 5000})
+            self.assertEqual(set(corpora), {50, 5000})
             for entry in corpora.values():
                 corpus = packet / entry["signed_transfer_corpus"]
                 self.assertTrue(corpus.is_file())
@@ -131,22 +142,31 @@ class StorageScalingPackagerTests(unittest.TestCase):
                     _sha256(corpus),
                     entry["signed_transfer_corpus_sha256"],
                 )
-            for lane in LANES:
-                window = copied["lanes"][lane]["rows"][0]["windows"][0]
-                normalized = packet / window["normalized_report"]
-                resources = packet / window["resource_samples"]
-                self.assertTrue(normalized.is_file())
-                self.assertTrue(resources.is_file())
-                self.assertEqual(_sha256(normalized), window["normalized_report_sha256"])
-                self.assertEqual(_sha256(resources), window["resource_samples_sha256"])
-                self.assertEqual(
-                    window["signed_transfer_corpus"],
-                    corpora[50]["signed_transfer_corpus"],
-                )
-                self.assertEqual(
-                    window["signed_transfer_corpus_sha256"],
-                    corpora[50]["signed_transfer_corpus_sha256"],
-                )
+            for lane, heights in LANE_HEIGHTS.items():
+                for row in copied["lanes"][lane]["rows"]:
+                    height = row["height"]
+                    self.assertIn(height, heights)
+                    window = row["windows"][0]
+                    normalized = packet / window["normalized_report"]
+                    resources = packet / window["resource_samples"]
+                    self.assertTrue(normalized.is_file())
+                    self.assertTrue(resources.is_file())
+                    self.assertEqual(
+                        _sha256(normalized),
+                        window["normalized_report_sha256"],
+                    )
+                    self.assertEqual(
+                        _sha256(resources),
+                        window["resource_samples_sha256"],
+                    )
+                    self.assertEqual(
+                        window["signed_transfer_corpus"],
+                        corpora[height]["signed_transfer_corpus"],
+                    )
+                    self.assertEqual(
+                        window["signed_transfer_corpus_sha256"],
+                        corpora[height]["signed_transfer_corpus_sha256"],
+                    )
 
     def test_copy_performance_rejects_noncanonical_destination_label(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
