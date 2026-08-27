@@ -108,6 +108,7 @@ nav:
       - Completed P0 Remediation: plans/completed/P0-COMPLETE-REMEDIATION-PLAN-20260716.md
       - Completed Capability Restoration: plans/completed/OPEN-SOURCE-CAPABILITY-RESTORATION-PLAN-20260716.md
   - Handoffs:
+      - Storage Candidate Review: handoffs/2026-08-27___dravlic__storage_candidate_review.md
       - Standard: handoffs/README.md
       - Transactional Storage Candidate: handoffs/2026-08-27___postfiatchad__transactional_storage_candidate.md
       - Storage Scaling Prototype (Historical): handoffs/2026-08-26___postfiatchad__storage_scaling_implementation.md
