@@ -20,7 +20,7 @@ SPEC = REPO / "docs" / "architecture" / "storage-scaling-fix-spec.md"
 ARTIFACT_SCHEMAS = {
     "source": "postfiat-storage-source-identity-v1",
     "replay": "postfiat-storage-scaling-replay-v1",
-    "performance": "postfiat-storage-scaling-paired-six-validator-campaign-v2",
+    "performance": "postfiat-storage-scaling-paired-six-validator-campaign-v3",
     "tamper": "postfiat-storage-scaling-tamper-matrix-v1",
     "migration": "postfiat-storage-scaling-six-clone-migration-v1",
     "redaction": "postfiat-storage-scaling-redaction-v1",
@@ -147,6 +147,34 @@ def copy_performance(packet: Path, source: Path) -> Path:
         or report.get("evidence_eligible") is not True
     ):
         raise ValueError("performance report is not an evidence-eligible PASS")
+    campaign_root = source.parent.resolve()
+    snapshots = report.get("snapshots_by_height")
+    required_heights = [50, 100, 500, 1000, 5000]
+    if (
+        not isinstance(snapshots, list)
+        or [entry.get("height") if isinstance(entry, dict) else None for entry in snapshots]
+        != required_heights
+    ):
+        raise ValueError("performance report omitted the closed snapshot/corpus set")
+    corpora_by_height: dict[int, tuple[str, str]] = {}
+    for entry in snapshots:
+        if not isinstance(entry, dict):
+            raise ValueError("performance snapshot/corpus entry is malformed")
+        height = int(entry["height"])
+        corpus_source = resolve_campaign_file(
+            campaign_root,
+            entry.get("signed_transfer_corpus"),
+            entry.get("signed_transfer_corpus_sha256"),
+            f"performance height-{height} signed transfer corpus",
+        )
+        corpus_destination = packet / "performance" / "corpora" / f"height-{height}.json"
+        copy_file(corpus_source, corpus_destination)
+        corpus_path = corpus_destination.relative_to(packet).as_posix()
+        corpus_digest = sha256(corpus_destination)
+        entry["signed_transfer_corpus"] = corpus_path
+        entry["signed_transfer_corpus_sha256"] = corpus_digest
+        corpora_by_height[height] = (corpus_path, corpus_digest)
+
     lanes = report.get("lanes")
     required_lanes = {"legacy-jsonl", "bounded-jsonl", "selected-indexed"}
     if not isinstance(lanes, dict) or set(lanes) != required_lanes:
@@ -167,7 +195,13 @@ def copy_performance(packet: Path, source: Path) -> Path:
                 label = f"height-{height}-window-{window_index}"
                 if window.get("label") != label:
                     raise ValueError("performance window label is not canonical")
-                campaign_root = source.parent.resolve()
+                expected_corpus = corpora_by_height[int(height)]
+                if window.get("signed_transfer_corpus_sha256") != expected_corpus[1]:
+                    raise ValueError(
+                        "performance window used a different signed transfer corpus"
+                    )
+                window["signed_transfer_corpus"] = expected_corpus[0]
+                window["signed_transfer_corpus_sha256"] = expected_corpus[1]
                 raw_source = resolve_campaign_file(
                     campaign_root,
                     window.get("normalized_report"),
@@ -322,8 +356,6 @@ def main() -> int:
     parser.add_argument("--node-bin", type=Path, required=True)
     parser.add_argument("--rollback-node-bin", type=Path, required=True)
     parser.add_argument("--incompatible-node-bin", type=Path, required=True)
-    parser.add_argument("--legacy-performance-node-bin", type=Path, required=True)
-    parser.add_argument("--bounded-performance-node-bin", type=Path, required=True)
     parser.add_argument("--state-distinction", type=Path, required=True)
     parser.add_argument("--replay-report", type=Path, required=True)
     parser.add_argument("--performance-report", type=Path, required=True)
@@ -340,15 +372,11 @@ def main() -> int:
     raw_node_bin = args.node_bin.expanduser()
     raw_rollback_node_bin = args.rollback_node_bin.expanduser()
     raw_incompatible_node_bin = args.incompatible_node_bin.expanduser()
-    raw_legacy_performance_node_bin = args.legacy_performance_node_bin.expanduser()
-    raw_bounded_performance_node_bin = args.bounded_performance_node_bin.expanduser()
     if (
         raw_packet.is_symlink()
         or raw_node_bin.is_symlink()
         or raw_rollback_node_bin.is_symlink()
         or raw_incompatible_node_bin.is_symlink()
-        or raw_legacy_performance_node_bin.is_symlink()
-        or raw_bounded_performance_node_bin.is_symlink()
     ):
         raise ValueError("packet output and release binary paths must not be symlinks")
     packet = raw_packet.resolve()
@@ -362,8 +390,6 @@ def main() -> int:
     node_bin = raw_node_bin.resolve()
     rollback_node_bin = raw_rollback_node_bin.resolve()
     incompatible_node_bin = raw_incompatible_node_bin.resolve()
-    legacy_performance_node_bin = raw_legacy_performance_node_bin.resolve()
-    bounded_performance_node_bin = raw_bounded_performance_node_bin.resolve()
     if not node_bin.is_file() or node_bin.parent.name != "release":
         raise ValueError("--node-bin must identify a regular target/release binary")
     if (
@@ -385,23 +411,6 @@ def main() -> int:
         raise ValueError(
             "--incompatible-node-bin must identify a third regular target/release binary"
         )
-    existing_binary_digests = {
-        sha256(node_bin),
-        sha256(rollback_node_bin),
-        sha256(incompatible_node_bin),
-    }
-    performance_binary_digests: set[str] = set()
-    for label, binary in (
-        ("--legacy-performance-node-bin", legacy_performance_node_bin),
-        ("--bounded-performance-node-bin", bounded_performance_node_bin),
-    ):
-        if not binary.is_file() or binary.parent.name != "release":
-            raise ValueError(f"{label} must identify a regular target/release binary")
-        binary_digest = sha256(binary)
-        if binary_digest in existing_binary_digests | performance_binary_digests:
-            raise ValueError(f"{label} must identify a distinct release binary")
-        performance_binary_digests.add(binary_digest)
-
     performance = read_json(args.performance_report.resolve())
     migration = read_json(args.migration_report.resolve())
     binary_digest = sha256(node_bin)
@@ -411,12 +420,17 @@ def main() -> int:
         performance.get("source_revision") != args.source_revision
         or performance.get("node_binary_sha256") != binary_digest
         or not isinstance(performance_lanes, dict)
-        or not isinstance(performance_lanes.get("legacy-jsonl"), dict)
-        or not isinstance(performance_lanes.get("bounded-jsonl"), dict)
-        or performance_lanes["legacy-jsonl"].get("node_binary_sha256")
-        != sha256(legacy_performance_node_bin)
-        or performance_lanes["bounded-jsonl"].get("node_binary_sha256")
-        != sha256(bounded_performance_node_bin)
+        or set(performance_lanes) != {
+            "legacy-jsonl",
+            "bounded-jsonl",
+            "selected-indexed",
+        }
+        or any(
+            not isinstance(lane, dict)
+            or lane.get("source_revision") != args.source_revision
+            or lane.get("node_binary_sha256") != binary_digest
+            for lane in performance_lanes.values()
+        )
     ):
         raise ValueError("performance report source or binary identity mismatch")
     incompatible = migration.get("incompatible_binary")
@@ -438,14 +452,6 @@ def main() -> int:
     copy_file(rollback_node_bin, rollback_binary_destination)
     incompatible_binary_destination = packet / "bin" / "postfiat-node-incompatible"
     copy_file(incompatible_node_bin, incompatible_binary_destination)
-    legacy_performance_binary_destination = (
-        packet / "bin" / "postfiat-node-performance-legacy"
-    )
-    copy_file(legacy_performance_node_bin, legacy_performance_binary_destination)
-    bounded_performance_binary_destination = (
-        packet / "bin" / "postfiat-node-performance-bounded"
-    )
-    copy_file(bounded_performance_node_bin, bounded_performance_binary_destination)
     binaries = [
         {
             "path": binary_destination.relative_to(packet).as_posix(),
@@ -458,14 +464,6 @@ def main() -> int:
         {
             "path": incompatible_binary_destination.relative_to(packet).as_posix(),
             "sha256": sha256(incompatible_binary_destination),
-        },
-        {
-            "path": legacy_performance_binary_destination.relative_to(packet).as_posix(),
-            "sha256": sha256(legacy_performance_binary_destination),
-        },
-        {
-            "path": bounded_performance_binary_destination.relative_to(packet).as_posix(),
-            "sha256": sha256(bounded_performance_binary_destination),
         },
     ]
     source_report = {

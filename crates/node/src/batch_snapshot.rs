@@ -228,7 +228,7 @@ pub struct ApplyBatchWriteTimingReport {
     pub remove_journal_ms: f64,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ApplyBatchStorageWorkReport {
     pub transactional: Option<postfiat_storage::transactional::TransactionalWorkCounters>,
     pub legacy: postfiat_storage::StorageWorkCounters,
@@ -375,7 +375,7 @@ fn transactional_work_delta(
     }
 }
 
-fn legacy_work_delta(
+pub(super) fn legacy_work_delta(
     after: postfiat_storage::StorageWorkCounters,
     before: postfiat_storage::StorageWorkCounters,
 ) -> postfiat_storage::StorageWorkCounters {
@@ -398,6 +398,12 @@ fn legacy_work_delta(
         legacy_prefix_records_verified: after
             .legacy_prefix_records_verified
             .saturating_sub(before.legacy_prefix_records_verified),
+        ordered_history_bytes_read: after
+            .ordered_history_bytes_read
+            .saturating_sub(before.ordered_history_bytes_read),
+        ordered_history_records_read: after
+            .ordered_history_records_read
+            .saturating_sub(before.ordered_history_records_read),
         ordered_index_bitmap_bytes_read: after
             .ordered_index_bitmap_bytes_read
             .saturating_sub(before.ordered_index_bitmap_bytes_read),
@@ -410,6 +416,34 @@ fn legacy_work_delta(
         ordered_index_slots_written: after
             .ordered_index_slots_written
             .saturating_sub(before.ordered_index_slots_written),
+    }
+}
+
+pub(super) fn storage_work_report(
+    transactional: Option<postfiat_storage::transactional::TransactionalWorkCounters>,
+    legacy: postfiat_storage::StorageWorkCounters,
+) -> ApplyBatchStorageWorkReport {
+    let transactional_full_history_records = transactional
+        .as_ref()
+        .map(|work| work.full_history_records_read)
+        .unwrap_or(0);
+    let transactional_full_history_bytes = transactional
+        .as_ref()
+        .map(|work| work.full_history_bytes_read)
+        .unwrap_or(0);
+    ApplyBatchStorageWorkReport {
+        transactional,
+        full_history_records_read: transactional_full_history_records
+            .saturating_add(legacy.crash_suffix_records_verified)
+            .saturating_add(legacy.legacy_prefix_records_verified)
+            .saturating_add(legacy.ordered_history_records_read),
+        full_history_bytes_read: transactional_full_history_bytes
+            .saturating_add(legacy.checkpoint_bytes_read)
+            .saturating_add(legacy.crash_suffix_bytes_read)
+            .saturating_add(legacy.legacy_prefix_bytes_read)
+            .saturating_add(legacy.ordered_history_bytes_read)
+            .saturating_add(legacy.ordered_index_bitmap_bytes_read),
+        legacy,
     }
 }
 
@@ -460,10 +494,10 @@ fn apply_batch_with_timings_inner(
     let stage_start = std::time::Instant::now();
     let store = NodeStore::new(&options.data_dir);
     let store_init_ms = apply_batch_elapsed_ms(stage_start);
-    let transactional_work_store = store
-        .transactional_storage_configured()?
-        .then(|| store.transactional_store())
-        .transpose()?;
+    let transactional_work_store = (store.storage_backend_mode()?.is_transactional()
+        && store.transactional_storage_configured()?)
+    .then(|| store.transactional_store())
+    .transpose()?;
     let transactional_work_before = transactional_work_store
         .as_ref()
         .map(|transactional| transactional.work_counters());
@@ -684,26 +718,7 @@ fn apply_batch_with_timings_inner(
         .map(|(transactional, before)| {
             transactional_work_delta(transactional.work_counters(), before)
         });
-    let transactional_full_history_records = transactional_work
-        .as_ref()
-        .map(|work| work.full_history_records_read)
-        .unwrap_or(0);
-    let transactional_full_history_bytes = transactional_work
-        .as_ref()
-        .map(|work| work.full_history_bytes_read)
-        .unwrap_or(0);
-    let storage_work = ApplyBatchStorageWorkReport {
-        transactional: transactional_work,
-        full_history_records_read: transactional_full_history_records
-            .saturating_add(legacy_work.crash_suffix_records_verified)
-            .saturating_add(legacy_work.legacy_prefix_records_verified),
-        full_history_bytes_read: transactional_full_history_bytes
-            .saturating_add(legacy_work.checkpoint_bytes_read)
-            .saturating_add(legacy_work.crash_suffix_bytes_read)
-            .saturating_add(legacy_work.legacy_prefix_bytes_read)
-            .saturating_add(legacy_work.ordered_index_bitmap_bytes_read),
-        legacy: legacy_work,
-    };
+    let storage_work = storage_work_report(transactional_work, legacy_work);
 
     Ok(ApplyBatchWithTimingsReport {
         receipts,

@@ -464,6 +464,8 @@ struct TransportBatchAck {
     storage: Option<postfiat_types::StorageStatusReportV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     transactional_work: Option<postfiat_storage::transactional::TransactionalWorkCounters>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    storage_work: Option<postfiat_node::ApplyBatchStorageWorkReport>,
     state: TransportHello,
 }
 
@@ -849,6 +851,8 @@ struct TransportPeerTargetTimingReport {
     storage: Option<postfiat_types::StorageStatusReportV1>,
     #[serde(skip_serializing_if = "Option::is_none")]
     transactional_work: Option<postfiat_storage::transactional::TransactionalWorkCounters>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    storage_work: Option<postfiat_node::ApplyBatchStorageWorkReport>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -2224,6 +2228,7 @@ fn completed_durable_certified_send_report(
             }),
             storage: None,
             transactional_work: None,
+            storage_work: None,
             state: TransportHello {
                 schema: TRANSPORT_HELLO_SCHEMA.to_string(),
                 topology_id: job.topology_id.clone(),
@@ -2782,6 +2787,41 @@ struct TransportPeerCertifiedMempoolRoundReport {
     round_ok: bool,
 }
 
+const TX_LATENCY_SIGNED_TRANSFER_CORPUS_SCHEMA: &str =
+    "postfiat-tx-latency-signed-transfer-corpus-v1";
+const MAX_TX_LATENCY_SIGNED_TRANSFER_CORPUS_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_TX_LATENCY_SIGNED_TRANSFER_CORPUS_TRANSFERS: usize = 10_000;
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct TxLatencySignedTransferCorpusV1 {
+    schema: String,
+    transfers: Vec<postfiat_types::SignedTransfer>,
+}
+
+#[derive(Debug, Clone)]
+struct TxLatencySignedTransferCorpusCreateOptions {
+    data_dir: PathBuf,
+    wallet_key_file: PathBuf,
+    wallet_address: String,
+    recipient: String,
+    amount: u64,
+    count: usize,
+    output_file: PathBuf,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct TxLatencySignedTransferCorpusCreateReport {
+    schema: String,
+    output_file: String,
+    sha256: String,
+    transfer_count: usize,
+    first_sequence: u64,
+    last_sequence: u64,
+    wallet_address: String,
+    recipient: String,
+    amount: u64,
+}
+
 #[derive(Debug, Clone)]
 struct TxLatencyBenchmarkOptions {
     base_dir: PathBuf,
@@ -2805,6 +2845,8 @@ struct TxLatencyBenchmarkOptions {
     defer_certified_sends: bool,
     resident_transactional_store: bool,
     expected_start_height: Option<u64>,
+    signed_transfer_corpus: Option<PathBuf>,
+    signed_transfer_corpus_offset: usize,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -2812,6 +2854,10 @@ struct TxLatencyBenchmarkIterationReport {
     iteration: usize,
     source_node: String,
     tx_id: String,
+    input_source: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    signed_transfer_corpus_index: Option<usize>,
+    signed_transfer_sha256: String,
     block_height: u64,
     block_hash: String,
     certificate_id: String,
@@ -2996,6 +3042,216 @@ fn tx_latency_nested_f64(value: &serde_json::Value, path: &[&str]) -> f64 {
     cursor.as_f64().unwrap_or_default()
 }
 
+fn tx_latency_sha256_hex(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    bytes_to_hex(digest.as_slice())
+}
+
+fn tx_latency_read_signed_transfer_corpus(
+    path: &Path,
+    offset: usize,
+    rounds: usize,
+    wallet_address: &str,
+    recipient: &str,
+    amount: u64,
+) -> Result<(Vec<postfiat_types::SignedTransfer>, String), String> {
+    let metadata = std::fs::symlink_metadata(path).map_err(|error| {
+        format!(
+            "signed transfer corpus `{}` metadata failed: {error}",
+            path.display()
+        )
+    })?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err(format!(
+            "signed transfer corpus `{}` must be a regular non-symlink file",
+            path.display()
+        ));
+    }
+    if metadata.len() == 0 || metadata.len() > MAX_TX_LATENCY_SIGNED_TRANSFER_CORPUS_BYTES {
+        return Err(format!(
+            "signed transfer corpus `{}` has {} bytes; expected 1..={MAX_TX_LATENCY_SIGNED_TRANSFER_CORPUS_BYTES}",
+            path.display(),
+            metadata.len()
+        ));
+    }
+    let bytes = std::fs::read(path).map_err(|error| {
+        format!(
+            "signed transfer corpus `{}` read failed: {error}",
+            path.display()
+        )
+    })?;
+    let corpus: TxLatencySignedTransferCorpusV1 = serde_json::from_slice(&bytes).map_err(|error| {
+        format!(
+            "signed transfer corpus `{}` parse failed: {error}",
+            path.display()
+        )
+    })?;
+    if corpus.schema != TX_LATENCY_SIGNED_TRANSFER_CORPUS_SCHEMA {
+        return Err(format!(
+            "signed transfer corpus `{}` has unsupported schema `{}`",
+            path.display(),
+            corpus.schema
+        ));
+    }
+    if corpus.transfers.is_empty()
+        || corpus.transfers.len() > MAX_TX_LATENCY_SIGNED_TRANSFER_CORPUS_TRANSFERS
+    {
+        return Err(format!(
+            "signed transfer corpus `{}` contains {} transfers; expected 1..={MAX_TX_LATENCY_SIGNED_TRANSFER_CORPUS_TRANSFERS}",
+            path.display(),
+            corpus.transfers.len()
+        ));
+    }
+    let required_end = offset
+        .checked_add(rounds)
+        .ok_or_else(|| "signed transfer corpus range overflow".to_string())?;
+    if required_end > corpus.transfers.len() {
+        return Err(format!(
+            "signed transfer corpus range {offset}..{required_end} exceeds {} transfers",
+            corpus.transfers.len()
+        ));
+    }
+    let mut identities = BTreeSet::new();
+    for (index, transfer) in corpus.transfers.iter().enumerate() {
+        transfer.unsigned.validate().map_err(|error| {
+            format!("signed transfer corpus entry {index} is invalid: {error}")
+        })?;
+        if transfer.unsigned.from != wallet_address
+            || transfer.unsigned.to != recipient
+            || transfer.unsigned.amount != amount
+        {
+            return Err(format!(
+                "signed transfer corpus entry {index} does not match the benchmark wallet, recipient, and amount"
+            ));
+        }
+        let identity = postfiat_execution::transfer_tx_id(transfer);
+        if !identities.insert(identity) {
+            return Err(format!(
+                "signed transfer corpus entry {index} duplicates an earlier transaction"
+            ));
+        }
+    }
+    Ok((corpus.transfers, tx_latency_sha256_hex(&bytes)))
+}
+
+fn tx_latency_create_signed_transfer_corpus(
+    options: TxLatencySignedTransferCorpusCreateOptions,
+) -> Result<TxLatencySignedTransferCorpusCreateReport, String> {
+    if options.amount == 0 {
+        return Err("--amount must be positive".to_string());
+    }
+    if options.count == 0 || options.count > MAX_TX_LATENCY_SIGNED_TRANSFER_CORPUS_TRANSFERS {
+        return Err(format!(
+            "--count must be in 1..={MAX_TX_LATENCY_SIGNED_TRANSFER_CORPUS_TRANSFERS}"
+        ));
+    }
+    if options.output_file.exists() {
+        return Err(format!(
+            "refusing to overwrite signed transfer corpus `{}`",
+            options.output_file.display()
+        ));
+    }
+    if let Some(parent) = options.output_file.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "signed transfer corpus parent `{}` create failed: {error}",
+                parent.display()
+            )
+        })?;
+    }
+    let initial_quote = transfer_fee_quote(TransferFeeQuoteOptions {
+        data_dir: options.data_dir.clone(),
+        from: options.wallet_address.clone(),
+        to: options.recipient.clone(),
+        amount: options.amount,
+        sequence: None,
+        memo_type: None,
+        memo_format: None,
+        memo_data: None,
+    })
+    .map_err(|error| format!("initial signed transfer corpus quote failed: {error}"))?;
+    let first_sequence = initial_quote.sequence;
+    let mut transfers = Vec::with_capacity(options.count);
+    let mut identities = BTreeSet::new();
+    for index in 0..options.count {
+        let sequence = first_sequence
+            .checked_add(index as u64)
+            .ok_or_else(|| "signed transfer corpus sequence overflow".to_string())?;
+        let quote = transfer_fee_quote(TransferFeeQuoteOptions {
+            data_dir: options.data_dir.clone(),
+            from: options.wallet_address.clone(),
+            to: options.recipient.clone(),
+            amount: options.amount,
+            sequence: Some(sequence),
+            memo_type: None,
+            memo_format: None,
+            memo_data: None,
+        })
+        .map_err(|error| {
+            format!("signed transfer corpus quote for sequence {sequence} failed: {error}")
+        })?;
+        let signed = wallet_sign_transfer(WalletSignTransferOptions {
+            key_file: options.wallet_key_file.clone(),
+            chain_id: quote.chain_id,
+            genesis_hash: quote.genesis_hash,
+            protocol_version: quote.protocol_version,
+            to: quote.to,
+            amount: quote.amount,
+            fee: quote.minimum_fee,
+            sequence: quote.sequence,
+        })
+        .map_err(|error| {
+            format!("signed transfer corpus signing for sequence {sequence} failed: {error}")
+        })?;
+        if signed.unsigned.from != options.wallet_address {
+            return Err(format!(
+                "signed transfer corpus key produced `{}`, expected `{}`",
+                signed.unsigned.from, options.wallet_address
+            ));
+        }
+        let identity = postfiat_execution::transfer_tx_id(&signed);
+        if !identities.insert(identity) {
+            return Err(format!(
+                "signed transfer corpus produced a duplicate at sequence {sequence}"
+            ));
+        }
+        transfers.push(signed);
+    }
+    let corpus = TxLatencySignedTransferCorpusV1 {
+        schema: TX_LATENCY_SIGNED_TRANSFER_CORPUS_SCHEMA.to_string(),
+        transfers,
+    };
+    let mut bytes = serde_json::to_vec_pretty(&corpus)
+        .map_err(|error| format!("signed transfer corpus serialization failed: {error}"))?;
+    bytes.push(b'\n');
+    if bytes.len() as u64 > MAX_TX_LATENCY_SIGNED_TRANSFER_CORPUS_BYTES {
+        return Err(format!(
+            "signed transfer corpus has {} bytes, exceeding {MAX_TX_LATENCY_SIGNED_TRANSFER_CORPUS_BYTES}",
+            bytes.len()
+        ));
+    }
+    postfiat_storage::atomic_write(&options.output_file, &bytes).map_err(|error| {
+        format!(
+            "signed transfer corpus `{}` write failed: {error}",
+            options.output_file.display()
+        )
+    })?;
+    let last_sequence = first_sequence
+        .checked_add(options.count.saturating_sub(1) as u64)
+        .ok_or_else(|| "signed transfer corpus last sequence overflow".to_string())?;
+    Ok(TxLatencySignedTransferCorpusCreateReport {
+        schema: "postfiat-tx-latency-signed-transfer-corpus-create-report-v1".to_string(),
+        output_file: options.output_file.display().to_string(),
+        sha256: tx_latency_sha256_hex(&bytes),
+        transfer_count: options.count,
+        first_sequence,
+        last_sequence,
+        wallet_address: options.wallet_address,
+        recipient: options.recipient,
+        amount: options.amount,
+    })
+}
+
 fn tx_latency_benchmark(options: TxLatencyBenchmarkOptions) -> Result<TxLatencyBenchmarkReport, String> {
     if options.validators < 4 {
         return Err("--validators must be at least 4".to_string());
@@ -3006,6 +3262,26 @@ fn tx_latency_benchmark(options: TxLatencyBenchmarkOptions) -> Result<TxLatencyB
     if options.amount == 0 {
         return Err("--amount must be positive".to_string());
     }
+    if options.signed_transfer_corpus.is_none() && options.signed_transfer_corpus_offset != 0 {
+        return Err(
+            "--signed-transfer-corpus-offset requires --signed-transfer-corpus".to_string(),
+        );
+    }
+    let (signed_transfer_corpus, signed_transfer_corpus_sha256) =
+        match options.signed_transfer_corpus.as_deref() {
+            Some(path) => {
+                let (transfers, sha256) = tx_latency_read_signed_transfer_corpus(
+                    path,
+                    options.signed_transfer_corpus_offset,
+                    options.rounds,
+                    &options.wallet_address,
+                    &options.recipient,
+                    options.amount,
+                )?;
+                (Some(transfers), Some(sha256))
+            }
+            None => (None, None),
+        };
     let quorum_fast = match options.vote_policy.as_str() {
         "full" => false,
         "quorum-fast" => true,
@@ -3105,35 +3381,59 @@ fn tx_latency_benchmark(options: TxLatencyBenchmarkOptions) -> Result<TxLatencyB
         let key_file = source_data_dir.join(VALIDATOR_KEYS_FILE);
         let artifact_dir = options.artifact_root.join(format!("round-{iteration:06}"));
 
-        let quote_start = Instant::now();
-        let quote = transfer_fee_quote(TransferFeeQuoteOptions {
-            data_dir: source_data_dir.clone(),
-            from: options.wallet_address.clone(),
-            to: options.recipient.clone(),
-            amount: options.amount,
-            sequence: None,
-            memo_type: None,
-            memo_format: None,
-            memo_data: None,
-        })
-        .map_err(|error| format!("transfer fee quote for round {iteration} failed: {error}"))?;
-        let quote_ms = monotonic_elapsed_ms(quote_start);
+        let (signed, quote_ms, wallet_sign_ms, input_source, corpus_index) =
+            if let Some(corpus) = signed_transfer_corpus.as_ref() {
+                let index = options
+                    .signed_transfer_corpus_offset
+                    .checked_add(iteration.saturating_sub(1))
+                    .ok_or_else(|| "signed transfer corpus index overflow".to_string())?;
+                let signed = corpus
+                    .get(index)
+                    .cloned()
+                    .ok_or_else(|| format!("signed transfer corpus omitted index {index}"))?;
+                (signed, 0.0, 0.0, "signed-transfer-corpus", Some(index))
+            } else {
+                let quote_start = Instant::now();
+                let quote = transfer_fee_quote(TransferFeeQuoteOptions {
+                    data_dir: source_data_dir.clone(),
+                    from: options.wallet_address.clone(),
+                    to: options.recipient.clone(),
+                    amount: options.amount,
+                    sequence: None,
+                    memo_type: None,
+                    memo_format: None,
+                    memo_data: None,
+                })
+                .map_err(|error| {
+                    format!("transfer fee quote for round {iteration} failed: {error}")
+                })?;
+                let quote_ms = monotonic_elapsed_ms(quote_start);
 
-        let sign_start = Instant::now();
-        let signed = wallet_sign_transfer(WalletSignTransferOptions {
-            key_file: options.wallet_key_file.clone(),
-            chain_id: quote.chain_id.clone(),
-            genesis_hash: quote.genesis_hash.clone(),
-            protocol_version: quote.protocol_version,
-            to: quote.to.clone(),
-            amount: quote.amount,
-            fee: quote.minimum_fee,
-            sequence: quote.sequence,
-        })
-        .map_err(|error| format!("wallet sign transfer for round {iteration} failed: {error}"))?;
-        let wallet_sign_ms = monotonic_elapsed_ms(sign_start);
+                let sign_start = Instant::now();
+                let signed = wallet_sign_transfer(WalletSignTransferOptions {
+                    key_file: options.wallet_key_file.clone(),
+                    chain_id: quote.chain_id.clone(),
+                    genesis_hash: quote.genesis_hash.clone(),
+                    protocol_version: quote.protocol_version,
+                    to: quote.to.clone(),
+                    amount: quote.amount,
+                    fee: quote.minimum_fee,
+                    sequence: quote.sequence,
+                })
+                .map_err(|error| {
+                    format!("wallet sign transfer for round {iteration} failed: {error}")
+                })?;
+                (
+                    signed,
+                    quote_ms,
+                    monotonic_elapsed_ms(sign_start),
+                    "generated-per-round",
+                    None,
+                )
+            };
         let signed_transfer_json = serde_json::to_string(&signed)
             .map_err(|error| format!("signed transfer JSON serialization failed: {error}"))?;
+        let signed_transfer_sha256 = tx_latency_sha256_hex(signed_transfer_json.as_bytes());
 
         let round_return_start = Instant::now();
         let mempool_round = transport_peer_certified_mempool_round(
@@ -3201,6 +3501,9 @@ fn tx_latency_benchmark(options: TxLatencyBenchmarkOptions) -> Result<TxLatencyB
             iteration,
             source_node: source_node.clone(),
             tx_id: tx_id.clone(),
+            input_source: input_source.to_string(),
+            signed_transfer_corpus_index: corpus_index,
+            signed_transfer_sha256,
             block_height: finality.block.header.height,
             block_hash: finality.block.header.block_hash.clone(),
             certificate_id: finality.block.header.certificate_id.clone(),
@@ -3331,6 +3634,16 @@ fn tx_latency_benchmark(options: TxLatencyBenchmarkOptions) -> Result<TxLatencyB
     let all_vote_policies_match = iterations
         .iter()
         .all(|iteration| iteration.vote_policy == options.vote_policy);
+    let exact_input_binding = iterations.iter().enumerate().all(|(index, iteration)| {
+        if signed_transfer_corpus.is_some() {
+            iteration.input_source == "signed-transfer-corpus"
+                && iteration.signed_transfer_corpus_index
+                    == options.signed_transfer_corpus_offset.checked_add(index)
+        } else {
+            iteration.input_source == "generated-per-round"
+                && iteration.signed_transfer_corpus_index.is_none()
+        }
+    });
     let account_history_index_not_in_synchronous_finality = refresh_index_values
         .iter()
         .all(|value| *value == 0.0);
@@ -3343,6 +3656,7 @@ fn tx_latency_benchmark(options: TxLatencyBenchmarkOptions) -> Result<TxLatencyB
         && state_verified_after_run
         && all_rounds_ok
         && all_vote_policies_match
+        && exact_input_binding
         && account_history_index_not_in_synchronous_finality
         && converged;
 
@@ -3364,6 +3678,10 @@ fn tx_latency_benchmark(options: TxLatencyBenchmarkOptions) -> Result<TxLatencyB
             "timeout_ms": options.timeout_ms,
             "send_retries": options.send_retries,
             "retry_backoff_ms": options.retry_backoff_ms,
+            "input_source": if signed_transfer_corpus.is_some() { "signed-transfer-corpus" } else { "generated-per-round" },
+            "signed_transfer_corpus": options.signed_transfer_corpus.as_ref().map(|path| path.display().to_string()),
+            "signed_transfer_corpus_sha256": signed_transfer_corpus_sha256,
+            "signed_transfer_corpus_offset": options.signed_transfer_corpus_offset,
             "base_dir": options.base_dir.display().to_string(),
             "topology_file": options.topology_file.display().to_string(),
             "artifact_root": options.artifact_root.display().to_string(),
@@ -3386,6 +3704,7 @@ fn tx_latency_benchmark(options: TxLatencyBenchmarkOptions) -> Result<TxLatencyB
             "state_verified_after_run": state_verified_after_run,
             "all_rounds_ok": all_rounds_ok,
             "all_vote_policies_match": all_vote_policies_match,
+            "exact_input_binding": exact_input_binding,
             "account_history_index_not_in_synchronous_finality": account_history_index_not_in_synchronous_finality,
             "converged": converged
         }),

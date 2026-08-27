@@ -2246,6 +2246,14 @@ pub fn create_block_vote_with_timings(
     let stage_start = std::time::Instant::now();
     let store = NodeStore::new(&options.data_dir);
     timings.store_init_ms = node_timing_elapsed_ms(stage_start);
+    let legacy_work_before = store.work_counters();
+    let transactional_work_store = (store.storage_backend_mode()?.is_transactional()
+        && store.transactional_storage_configured()?)
+    .then(|| store.transactional_store())
+    .transpose()?;
+    let transactional_work_before = transactional_work_store
+        .as_ref()
+        .map(|transactional| transactional.work_counters());
 
     let stage_start = std::time::Instant::now();
     let genesis = store.read_genesis()?;
@@ -2264,7 +2272,7 @@ pub fn create_block_vote_with_timings(
     let target_breakdown = target.timings;
     let target = target.target;
 
-    let vote = create_block_vote_for_target_with_timings(
+    let mut vote = create_block_vote_for_target_with_timings(
         &store,
         &genesis,
         target,
@@ -2275,6 +2283,12 @@ pub fn create_block_vote_with_timings(
         timings,
         total_start,
     )?;
+    let transactional_work = transactional_work_store
+        .as_ref()
+        .zip(transactional_work_before)
+        .map(|(transactional, before)| transactional.work_counters().saturating_delta(before));
+    let legacy_work = legacy_work_delta(store.work_counters(), legacy_work_before);
+    vote.timings.storage_work = Some(storage_work_report(transactional_work, legacy_work));
     Ok(vote)
 }
 

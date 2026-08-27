@@ -2436,33 +2436,35 @@ pub(super) fn write_ordered_commit_with_journal_timed_locked(
     let journal = ordered_commit_delta_journal(write)?;
 
     let genesis = store.read_genesis()?;
+    let backend_mode = store.storage_backend_mode()?;
     let scheduled_activation_height =
         scheduled_storage_activation_after_journal(store, &genesis, &journal)?;
-    if let Some(activation_height) = scheduled_activation_height {
-        if journal.height >= activation_height {
-            if !store.transactional_storage_configured()? {
-                return Err(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "storage commitment activation requires a verified transactional store",
-                ));
-            }
-            let stage_start = std::time::Instant::now();
-            apply_transactional_ordered_commit_delta(store, &journal, scheduled_activation_height)?;
-            timings.write_blocks_ms = apply_batch_elapsed_ms(stage_start);
-            if let Some(registry) = journal.validator_registry.as_ref() {
-                // This file is a compatibility mirror for legacy operator
-                // commands. The authenticated transactional value committed
-                // above is the durable authority after activation.
-                let stage_start = std::time::Instant::now();
-                write_validator_registry_file(
-                    &store.data_dir().join(VALIDATOR_REGISTRY_FILE),
-                    registry,
-                )?;
-                timings.write_validator_registry_ms = apply_batch_elapsed_ms(stage_start);
-            }
-            timings.total_ms = apply_batch_elapsed_ms(total_start);
-            return Ok(timings);
+    if backend_mode.is_transactional()
+        && scheduled_activation_height
+            .is_some_and(|activation_height| journal.height >= activation_height)
+    {
+        if !store.transactional_storage_configured()? {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "storage commitment activation requires a verified transactional store",
+            ));
         }
+        let stage_start = std::time::Instant::now();
+        apply_transactional_ordered_commit_delta(store, &journal, scheduled_activation_height)?;
+        timings.write_blocks_ms = apply_batch_elapsed_ms(stage_start);
+        if let Some(registry) = journal.validator_registry.as_ref() {
+            // This file is a compatibility mirror for legacy operator
+            // commands. The authenticated transactional value committed above
+            // is the durable authority after activation.
+            let stage_start = std::time::Instant::now();
+            write_validator_registry_file(
+                &store.data_dir().join(VALIDATOR_REGISTRY_FILE),
+                registry,
+            )?;
+            timings.write_validator_registry_ms = apply_batch_elapsed_ms(stage_start);
+        }
+        timings.total_ms = apply_batch_elapsed_ms(total_start);
+        return Ok(timings);
     }
 
     let stage_start = std::time::Instant::now();
@@ -2471,7 +2473,7 @@ pub(super) fn write_ordered_commit_with_journal_timed_locked(
 
     apply_ordered_commit_delta_journal_timed(store, &journal, &mut timings)?;
 
-    if store.transactional_storage_configured()? {
+    if backend_mode.is_transactional() && store.transactional_storage_configured()? {
         let stage_start = std::time::Instant::now();
         apply_transactional_ordered_commit_delta(store, &journal, scheduled_activation_height)?;
         timings.write_blocks_ms += apply_batch_elapsed_ms(stage_start);
@@ -2653,13 +2655,14 @@ pub(super) fn recover_ordered_commit_journal_locked(
     match &journal {
         StoredOrderedCommitJournal::Delta(journal) => {
             let genesis = store.read_genesis()?;
+            let backend_mode = store.storage_backend_mode()?;
             let scheduled_activation_height =
                 scheduled_storage_activation_after_journal(store, &genesis, journal)?;
             let transactional_configured = store.transactional_storage_configured()?;
             let storage_commitment_active = scheduled_activation_height
                 .is_some_and(|activation_height| journal.height >= activation_height);
 
-            if storage_commitment_active {
+            if storage_commitment_active && backend_mode.is_transactional() {
                 if !transactional_configured {
                     return Err(io::Error::new(
                         io::ErrorKind::NotFound,
@@ -2670,7 +2673,7 @@ pub(super) fn recover_ordered_commit_journal_locked(
                 apply_ordered_commit_delta_journal(store, journal)?;
             }
 
-            if transactional_configured {
+            if backend_mode.is_transactional() && transactional_configured {
                 apply_transactional_ordered_commit_delta(
                     store,
                     journal,
@@ -2679,7 +2682,9 @@ pub(super) fn recover_ordered_commit_journal_locked(
             }
         }
         StoredOrderedCommitJournal::Full(journal) => {
-            if store.transactional_storage_configured()? {
+            if store.storage_backend_mode()?.is_transactional()
+                && store.transactional_storage_configured()?
+            {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     "legacy full ordered commit journal cannot be recovered while transactional storage is configured",
@@ -2829,6 +2834,10 @@ pub(super) fn apply_ordered_commit_delta_journal_timed(
     }
 
     let genesis = store.read_genesis()?;
+    let backend_mode = store.storage_backend_mode()?;
+    let bounded_index_active = backend_mode == postfiat_storage::StorageBackendMode::BoundedJsonl
+        && scheduled_storage_activation_after_journal(store, &genesis, journal)?
+            .is_some_and(|activation_height| journal.height >= activation_height);
     let chain_tip = read_chain_tip_or_reconstruct_for_genesis(store, &genesis)?;
     let already_committed = journal.block.header.height == chain_tip.height
         && journal.block.header.block_hash == chain_tip.block_hash;
@@ -2898,6 +2907,22 @@ pub(super) fn apply_ordered_commit_delta_journal_timed(
     let stage_start = std::time::Instant::now();
     if !already_committed {
         store.append_ordered_batch_record(&journal.ordered_batch_id)?;
+        if bounded_index_active {
+            let commitment =
+                store.append_ordered_history_index_record(&journal.ordered_batch_id)?;
+            let expected_count = chain_tip
+                .ordered_batch_count
+                .checked_add(1)
+                .ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidData, "ordered batch count overflow")
+                })?;
+            if commitment.count != expected_count {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "ordered-history index count does not match the commit journal",
+                ));
+            }
+        }
     }
     timings.write_ordered_batches_ms = apply_batch_elapsed_ms(stage_start);
 
@@ -2917,6 +2942,12 @@ pub(super) fn apply_ordered_commit_delta_journal_timed(
         chain_tip.clone()
     };
     store.bind_jsonl_checkpoints_to_chain_tip(&committed_tip, &journal.block.header.parent_hash)?;
+    if bounded_index_active {
+        store.bind_ordered_history_index_to_chain_tip(
+            &committed_tip,
+            &journal.block.header.parent_hash,
+        )?;
+    }
     timings.write_blocks_ms = apply_batch_elapsed_ms(stage_start);
 
     if let Some(registry) = journal.validator_registry.as_ref() {

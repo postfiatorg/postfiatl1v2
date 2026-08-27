@@ -145,6 +145,9 @@ impl NodeStore {
     }
 
     pub fn transactional_storage_active(&self) -> io::Result<bool> {
+        if !self.storage_backend_mode()?.is_transactional() {
+            return Ok(false);
+        }
         let directory = self.transactional_database_directory()?;
         if !directory.join(TRANSACTIONAL_DATABASE_FILE).exists() {
             return Ok(false);

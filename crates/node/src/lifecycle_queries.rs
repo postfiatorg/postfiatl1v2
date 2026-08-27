@@ -698,7 +698,8 @@ pub fn status(options: NodeOptions) -> io::Result<StatusReport> {
     } else {
         postfiat_types::STORAGE_COMMITMENT_LEGACY_VERSION_V1
     };
-    let storage = if store.transactional_storage_configured()? {
+    let backend_mode = store.storage_backend_mode()?;
+    let storage = if backend_mode.is_transactional() && store.transactional_storage_configured()? {
         let transactional = store.transactional_store()?;
         let meta = transactional.meta()?;
         let counters = transactional.work_counters();
@@ -747,38 +748,53 @@ pub fn status(options: NodeOptions) -> io::Result<StatusReport> {
             reason_code: (!fully_verified).then(|| "storage_full_verification_stale".to_owned()),
         }
     } else {
-        let commitment = match store.ordered_history_commitment() {
-            Ok(commitment) => commitment,
-            Err(error)
-                if error.kind() == io::ErrorKind::NotFound
-                    && chain_tip.ordered_batch_count == 0 =>
-            {
-                postfiat_storage::OrderedHistoryCommitment::genesis(
-                    &genesis.chain_id,
-                    &genesis_hash_hex,
-                    genesis.protocol_version,
-                )?
-            }
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                let mut commitment = postfiat_storage::OrderedHistoryCommitment::genesis(
-                    &genesis.chain_id,
-                    &genesis_hash_hex,
-                    genesis.protocol_version,
-                )?;
-                for batch_id in store.read_ordered_batches()? {
-                    commitment = commitment.append(&batch_id)?;
-                }
-                commitment
-            }
-            Err(error) => return Err(error),
+        let commitment = if scheduled_activation_height
+            .is_some_and(|activation_height| block_height >= activation_height)
+        {
+            store.backend_ordered_history_commitment()?
+        } else {
+            store.legacy_ordered_history_commitment()?
+        };
+        let (
+            storage_format,
+            storage_schema,
+            backend,
+            backend_version,
+            generation,
+            integrity_status,
+        ) = match backend_mode {
+            postfiat_storage::StorageBackendMode::LegacyJsonl => (
+                "postfiat-json-jsonl-legacy-comparison",
+                "postfiat-authenticated-jsonl-head-v2",
+                "filesystem-full-prefix",
+                "comparison-v1",
+                "legacy-comparison",
+                "legacy_authenticated_full_prefix",
+            ),
+            postfiat_storage::StorageBackendMode::BoundedJsonl => (
+                "postfiat-json-jsonl-bounded",
+                "postfiat-authenticated-jsonl-head-v2",
+                "filesystem-fixed-slot-index",
+                "comparison-v1",
+                "bounded-comparison",
+                "bounded_authenticated",
+            ),
+            postfiat_storage::StorageBackendMode::Transactional => (
+                "postfiat-json-jsonl-legacy",
+                "postfiat-authenticated-jsonl-head-v2",
+                "filesystem",
+                "legacy",
+                "legacy",
+                "legacy_authenticated",
+            ),
         };
         postfiat_types::StorageStatusReportV1 {
             schema: "postfiat-storage-status-v1".to_owned(),
-            storage_format: "postfiat-json-jsonl-legacy".to_owned(),
-            storage_schema: "postfiat-authenticated-jsonl-head-v2".to_owned(),
-            backend: "filesystem".to_owned(),
-            backend_version: "legacy".to_owned(),
-            generation: "legacy".to_owned(),
+            storage_format: storage_format.to_owned(),
+            storage_schema: storage_schema.to_owned(),
+            backend: backend.to_owned(),
+            backend_version: backend_version.to_owned(),
+            generation: generation.to_owned(),
             commitment_version: commitment_version.to_owned(),
             scheduled_activation_height,
             transactional_active: false,
@@ -804,10 +820,11 @@ pub fn status(options: NodeOptions) -> io::Result<StatusReport> {
             full_history_bytes_read: 0,
             fsync_count: 0,
             durable_commit_micros: 0,
-            integrity_status: "legacy_authenticated".to_owned(),
-            reason_code: scheduled_activation_height
-                .is_some_and(|activation_height| block_height >= activation_height)
-                .then(|| "storage_active_generation_missing".to_owned()),
+            integrity_status: integrity_status.to_owned(),
+            reason_code: (backend_mode.is_transactional()
+                && scheduled_activation_height
+                    .is_some_and(|activation_height| block_height >= activation_height))
+            .then(|| "storage_active_generation_missing".to_owned()),
         }
     };
     Ok(StatusReport {
@@ -1035,10 +1052,7 @@ pub(super) fn current_replicated_state_root(
         (_, Err(error)) => return Err(error),
     };
     if let Some(tip) = ordered_history_active {
-        let ordered_history = store
-            .transactional_store()?
-            .meta()?
-            .ordered_history_commitment();
+        let ordered_history = store.backend_ordered_history_commitment()?;
         if ordered_history.count != tip.ordered_batch_count {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,

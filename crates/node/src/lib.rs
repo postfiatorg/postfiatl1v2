@@ -321,6 +321,8 @@ use mempool_proposals::{
 use mempool_proposals::{enforce_mempool_admission_limits, verify_mempool_state};
 mod storage_activation_cli;
 pub use storage_activation_cli::*;
+mod storage_backend_config;
+pub use storage_backend_config::*;
 mod storage_migration;
 pub use storage_migration::*;
 mod batch_snapshot;
@@ -334,9 +336,9 @@ mod vault_bridge_workflows;
 use batch_snapshot::read_deployment_publisher_private_key;
 pub use batch_snapshot::*;
 use batch_snapshot::{
-    apply_batch_elapsed_ms, build_block_proposal_from_state,
-    read_deployment_validator_bindings_file, sha256_file_hex, validate_deployment_identifier,
-    BlockProposalPlan,
+    apply_batch_elapsed_ms, build_block_proposal_from_state, legacy_work_delta,
+    read_deployment_validator_bindings_file, sha256_file_hex, storage_work_report,
+    validate_deployment_identifier, BlockProposalPlan,
 };
 pub use market_bridge::*;
 pub use pfusdc_tier4::*;

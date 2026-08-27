@@ -145,10 +145,10 @@ pub(super) fn transport_batch_listen(
             None,
         )
         .map_err(|error| format!("transport batch apply failed: {error}"))?;
-        let transactional_work = apply_result
+        let storage_work = apply_result
             .local_apply_breakdown
             .as_ref()
-            .and_then(|timings| timings.storage_work.transactional);
+            .map(|timings| timings.storage_work.clone());
         let receipts = apply_result.receipts;
         let state_after = status(NodeOptions {
             data_dir: data_dir.clone(),
@@ -160,7 +160,7 @@ pub(super) fn transport_batch_listen(
             &envelope,
             &state_after,
             &receipts,
-            transactional_work,
+            storage_work,
         );
         write_json_line(&mut stream, &ack)?;
         accepted.push(ack);
@@ -318,17 +318,17 @@ fn handle_transport_batch_service_line(
     .map_err(|error| format!("transport batch service post-apply status failed: {error}"))?;
     let ack = match apply_result {
         Ok(result) => {
-            let transactional_work = result
+            let storage_work = result
                 .local_apply_breakdown
                 .as_ref()
-                .and_then(|timings| timings.storage_work.transactional);
+                .map(|timings| timings.storage_work.clone());
             transport_batch_ack(
                 topology,
                 &local_status.node_id,
                 &envelope,
                 &state_after,
                 &result.receipts,
-                transactional_work,
+                storage_work,
             )
         }
         Err(error) if error.contains("already applied") => transport_already_applied_ack(
@@ -3070,6 +3070,7 @@ pub(super) fn transport_peer_certified_batch_round(
                     vote_request_breakdown: None,
                     storage: None,
                     transactional_work: None,
+                    storage_work: None,
                 });
                 if quorum_early_vote_collection {
                     vote_request_failures.push(TransportPeerFailureReport {
@@ -3093,6 +3094,7 @@ pub(super) fn transport_peer_certified_batch_round(
                 vote_request_breakdown: Some(request.timings.clone()),
                 storage: None,
                 transactional_work: None,
+                storage_work: None,
             });
             if quorum_early_vote_collection {
                 vote_request_failures.push(TransportPeerFailureReport {
@@ -3123,6 +3125,7 @@ pub(super) fn transport_peer_certified_batch_round(
             vote_request_breakdown: Some(request.timings.clone()),
             storage: None,
             transactional_work: None,
+            storage_work: None,
         });
         remote_vote_files.push(outcome.vote_file);
         vote_requests.push(request);
@@ -3379,6 +3382,7 @@ pub(super) fn transport_peer_certified_batch_round(
                         vote_request_breakdown: None,
                         storage: None,
                         transactional_work: None,
+                    storage_work: None,
                     });
                     deferred_certified_send_jobs.push(job);
                 }
@@ -3390,6 +3394,7 @@ pub(super) fn transport_peer_certified_batch_round(
                         vote_request_breakdown: None,
                         storage: None,
                         transactional_work: None,
+                    storage_work: None,
                     });
                     send_failures.push(TransportPeerFailureReport {
                         to: target.clone(),
@@ -3455,6 +3460,7 @@ pub(super) fn transport_peer_certified_batch_round(
                         vote_request_breakdown: None,
                         storage: send.ack.storage.clone(),
                         transactional_work: send.ack.transactional_work,
+                        storage_work: send.ack.storage_work.clone(),
                     });
                     sends.push(send);
                 }
@@ -3466,6 +3472,7 @@ pub(super) fn transport_peer_certified_batch_round(
                         vote_request_breakdown: None,
                         storage: None,
                         transactional_work: None,
+                    storage_work: None,
                     });
                     if options.allow_peer_failures || options.local_apply_before_certified_send {
                         send_failures.push(TransportPeerFailureReport {

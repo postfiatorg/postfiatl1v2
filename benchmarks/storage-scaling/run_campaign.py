@@ -33,6 +33,16 @@ WINDOWS_PER_HEIGHT = 5
 ROUNDS_PER_WINDOW = 50
 SELECTED_STORAGE_LANE = "selected-indexed"
 HISTORICAL_STORAGE_LANES = {"legacy-jsonl", "bounded-jsonl"}
+STORAGE_BACKEND_MODES = {
+    "legacy-jsonl": "legacy-jsonl",
+    "bounded-jsonl": "bounded-jsonl",
+    "selected-indexed": "transactional",
+}
+STORAGE_BACKEND_IDENTITIES = {
+    "legacy-jsonl": ("filesystem-full-prefix", False),
+    "bounded-jsonl": ("filesystem-fixed-slot-index", False),
+    "selected-indexed": ("redb", True),
+}
 RESOURCE_SAMPLE_SCHEMA = "postfiat-storage-resource-samples-v1"
 RESOURCE_SAMPLE_TARGET_INTERVAL_MS = 100
 QUALIFICATION_TIMEOUT_MS = 900_000
@@ -457,18 +467,32 @@ TRANSACTIONAL_COUNTER_FIELDS = [
     "full_history_bytes_read",
     "durable_commit_micros",
 ]
+LEGACY_COUNTER_FIELDS = [
+    "jsonl_append_calls",
+    "checkpoint_bytes_read",
+    "crash_suffix_bytes_read",
+    "crash_suffix_records_verified",
+    "legacy_prefix_bytes_read",
+    "legacy_prefix_records_verified",
+    "ordered_history_bytes_read",
+    "ordered_history_records_read",
+    "ordered_index_bitmap_bytes_read",
+    "ordered_index_bitmap_bytes_written",
+    "ordered_index_slots_read",
+    "ordered_index_slots_written",
+]
 
 
-def add_transactional_counters(
-    totals: dict[str, int], counters: dict[str, Any]
+def add_counter_fields(
+    totals: dict[str, int], counters: dict[str, Any], fields: list[str], stage: str
 ) -> None:
-    for field in TRANSACTIONAL_COUNTER_FIELDS:
+    for field in fields:
         value = counters.get(field)
         if value is None:
-            raise RuntimeError(f"storage telemetry omitted {field}")
+            raise RuntimeError(f"{stage} storage telemetry omitted {field}")
         parsed = int(value)
         if parsed < 0:
-            raise RuntimeError(f"storage telemetry was negative: {field}")
+            raise RuntimeError(f"{stage} storage telemetry was negative: {field}")
         totals[field] += parsed
 
 
@@ -485,13 +509,59 @@ def require_bounded_pages(
 
 
 def storage_work_from_report(
-    report: dict[str, Any],
-) -> tuple[dict[str, int], dict[str, dict[str, Any]]]:
+    report: dict[str, Any], storage_lane: str
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     iterations = report.get("iterations")
     if not isinstance(iterations, list):
         raise RuntimeError("benchmark report omitted iterations")
-    totals = {field: 0 for field in TRANSACTIONAL_COUNTER_FIELDS}
+    transactional_totals = {field: 0 for field in TRANSACTIONAL_COUNTER_FIELDS}
+    legacy_totals = {field: 0 for field in LEGACY_COUNTER_FIELDS}
+    full_history_records_read = 0
+    full_history_bytes_read = 0
     remote_latest: dict[str, dict[str, Any]] = {}
+    selected_transactional = storage_lane == SELECTED_STORAGE_LANE
+    expected_backend, expected_transactional = STORAGE_BACKEND_IDENTITIES[storage_lane]
+
+    def add_storage_work(work: Any, stage: str, apply_stage: bool) -> None:
+        nonlocal full_history_records_read, full_history_bytes_read
+        if not isinstance(work, dict):
+            raise RuntimeError(f"{stage} omitted exact storage work")
+        records = int(work.get("full_history_records_read", -1))
+        byte_count = int(work.get("full_history_bytes_read", -1))
+        if records < 0 or byte_count < 0:
+            raise RuntimeError(f"{stage} reported invalid full-history work")
+        full_history_records_read += records
+        full_history_bytes_read += byte_count
+        legacy = work.get("legacy")
+        if not isinstance(legacy, dict):
+            raise RuntimeError(f"{stage} omitted legacy storage counters")
+        add_counter_fields(legacy_totals, legacy, LEGACY_COUNTER_FIELDS, stage)
+        transactional = work.get("transactional")
+        if selected_transactional:
+            if not isinstance(transactional, dict):
+                raise RuntimeError(f"{stage} omitted transactional storage counters")
+            require_bounded_pages(
+                transactional,
+                stage=stage,
+                max_reads=(
+                    MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND
+                    if apply_stage
+                    else MAX_PROPOSAL_PAGE_READS_PER_ROUND
+                ),
+                max_writes=(
+                    MAX_APPLY_PAGE_WRITES_PER_VALIDATOR_ROUND if apply_stage else 0
+                ),
+            )
+            add_counter_fields(
+                transactional_totals,
+                transactional,
+                TRANSACTIONAL_COUNTER_FIELDS,
+                stage,
+            )
+        elif transactional is not None:
+            raise RuntimeError(
+                f"{stage} unexpectedly reported transactional work in {storage_lane}"
+            )
 
     for iteration in iterations:
         if not isinstance(iteration, dict):
@@ -503,38 +573,36 @@ def storage_work_from_report(
         proposal = round_timings.get("proposal_breakdown")
         if not isinstance(proposal, dict):
             raise RuntimeError("benchmark iteration omitted proposal telemetry")
-        proposal_work = proposal.get("transactional_work")
-        if not isinstance(proposal_work, dict):
-            raise RuntimeError("proposal telemetry omitted transactional work")
-        require_bounded_pages(
-            proposal_work,
-            stage="proposal",
-            max_reads=MAX_PROPOSAL_PAGE_READS_PER_ROUND,
-            max_writes=0,
-        )
-        add_transactional_counters(totals, proposal_work)
+        add_storage_work(proposal.get("storage_work"), "proposal", False)
+
+        vote_targets = round_timings.get("vote_request_targets")
+        if not isinstance(vote_targets, list) or len(vote_targets) != VALIDATORS - 1:
+            raise RuntimeError("round did not report five validator reconstructions")
+        for target in vote_targets:
+            if not isinstance(target, dict) or target.get("result") != "ok":
+                raise RuntimeError("validator reconstruction target failed")
+            node_id = str(target.get("target", ""))
+            request = target.get("vote_request_breakdown")
+            remote = request.get("remote_handling") if isinstance(request, dict) else None
+            block_vote = (
+                remote.get("block_vote_breakdown")
+                if isinstance(remote, dict)
+                else None
+            )
+            if not isinstance(block_vote, dict):
+                raise RuntimeError(
+                    f"validator reconstruction {node_id} omitted remote storage telemetry"
+                )
+            add_storage_work(
+                block_vote.get("storage_work"),
+                f"validator reconstruction {node_id}",
+                False,
+            )
 
         local_apply = round_timings.get("local_apply_breakdown")
         if not isinstance(local_apply, dict):
             raise RuntimeError("benchmark iteration omitted local apply telemetry")
-        storage_work = local_apply.get("storage_work")
-        if not isinstance(storage_work, dict):
-            raise RuntimeError("local apply telemetry omitted storage work")
-        if (
-            int(storage_work.get("full_history_records_read", -1)) != 0
-            or int(storage_work.get("full_history_bytes_read", -1)) != 0
-        ):
-            raise RuntimeError("local apply performed full-history work")
-        transactional = storage_work.get("transactional")
-        if not isinstance(transactional, dict):
-            raise RuntimeError("local apply telemetry omitted transactional work")
-        require_bounded_pages(
-            transactional,
-            stage="local apply",
-            max_reads=MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND,
-            max_writes=MAX_APPLY_PAGE_WRITES_PER_VALIDATOR_ROUND,
-        )
-        add_transactional_counters(totals, transactional)
+        add_storage_work(local_apply.get("storage_work"), "local apply", True)
 
         targets = round_timings.get("certified_send_targets")
         if not isinstance(targets, list) or len(targets) != VALIDATORS - 1:
@@ -548,28 +616,30 @@ def storage_work_from_report(
                 raise RuntimeError(
                     f"certified-send target {node_id} omitted in-process storage telemetry"
                 )
-            if storage.get("transactional_active") is not True:
+            if (
+                storage.get("backend") != expected_backend
+                or storage.get("transactional_active") is not expected_transactional
+            ):
                 raise RuntimeError(
-                    f"certified-send target {node_id} was not transactionally active"
+                    f"certified-send target {node_id} reported the wrong backend"
                 )
-            transactional_work = target.get("transactional_work")
-            if not isinstance(transactional_work, dict):
-                raise RuntimeError(
-                    f"certified-send target {node_id} omitted exact apply telemetry"
-                )
-            require_bounded_pages(
-                transactional_work,
-                stage=f"certified apply {node_id}",
-                max_reads=MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND,
-                max_writes=MAX_APPLY_PAGE_WRITES_PER_VALIDATOR_ROUND,
-            )
-            add_transactional_counters(totals, transactional_work)
+            storage_work = target.get("storage_work")
+            add_storage_work(storage_work, f"certified apply {node_id}", True)
             remote_latest[node_id] = {
                 "storage": storage,
-                "last_apply_transactional_work": transactional_work,
+                "last_apply_storage_work": storage_work,
             }
 
-    totals["fsync_count"] = totals["committed_write_transactions"]
+    totals: dict[str, Any] = dict(transactional_totals)
+    totals["transactional"] = transactional_totals
+    totals["legacy"] = legacy_totals
+    totals["full_history_records_read"] = full_history_records_read
+    totals["full_history_bytes_read"] = full_history_bytes_read
+    totals["fsync_count"] = (
+        transactional_totals["committed_write_transactions"]
+        if selected_transactional
+        else legacy_totals["jsonl_append_calls"]
+    )
     return totals, remote_latest
 
 
@@ -605,6 +675,76 @@ def export_snapshot(
     )
 
 
+def create_signed_transfer_corpus(
+    *,
+    node_bin: Path,
+    source_snapshot: Path,
+    wallet_key: Path,
+    wallet_address: str,
+    recipient: str,
+    count: int,
+    output_file: Path,
+    logs: Path,
+    label: str,
+) -> dict[str, Any]:
+    if count <= 0:
+        raise ValueError("signed transfer corpus count must be positive")
+    if output_file.exists():
+        raise ValueError(f"refusing to overwrite corpus: {output_file}")
+    corpus_node = output_file.parent / f".{label}.corpus-node"
+    if corpus_node.exists():
+        raise ValueError(f"refusing to overwrite corpus node: {corpus_node}")
+    try:
+        SHARED.run(
+            [
+                str(node_bin),
+                "snapshot-import",
+                "--data-dir",
+                str(corpus_node),
+                "--snapshot-dir",
+                str(source_snapshot),
+                "--node-id",
+                "validator-0",
+            ],
+            stdout_path=logs / f"{label}.corpus-import.json",
+            stderr_path=logs / f"{label}.corpus-import.stderr",
+        )
+        completed = SHARED.run(
+            [
+                str(node_bin),
+                "tx-latency-corpus-create",
+                "--data-dir",
+                str(corpus_node),
+                "--wallet-key-file",
+                str(wallet_key),
+                "--wallet-address",
+                wallet_address,
+                "--recipient",
+                recipient,
+                "--amount",
+                "10",
+                "--count",
+                str(count),
+                "--output",
+                str(output_file),
+            ],
+            stdout_path=logs / f"{label}.corpus-create.json",
+            stderr_path=logs / f"{label}.corpus-create.stderr",
+        )
+    finally:
+        if corpus_node.exists():
+            shutil.rmtree(corpus_node)
+    report = json.loads(completed.stdout)
+    if not isinstance(report, dict):
+        raise RuntimeError("signed transfer corpus report is not an object")
+    if (
+        int(report.get("transfer_count", 0)) != count
+        or report.get("sha256") != digest(output_file)
+    ):
+        raise RuntimeError("signed transfer corpus report did not bind its output")
+    return report
+
+
 def run_rounds(
     *,
     node_bin: Path,
@@ -615,6 +755,7 @@ def run_rounds(
     wallet_key: Path,
     wallet_address: str,
     recipient: str,
+    signed_transfer_corpus: Path,
     label: str,
     rounds: int,
     storage_lane: str = SELECTED_STORAGE_LANE,
@@ -622,10 +763,42 @@ def run_rounds(
     if storage_lane not in HISTORICAL_STORAGE_LANES | {SELECTED_STORAGE_LANE}:
         raise ValueError(f"unsupported storage lane: {storage_lane}")
     selected_transactional = storage_lane == SELECTED_STORAGE_LANE
+    if signed_transfer_corpus.is_symlink() or not signed_transfer_corpus.is_file():
+        raise ValueError("signed transfer corpus must be a regular non-symlink file")
     logs = root / "logs"
     nodes = root / "nodes"
     SHARED.prepare_nodes(node_bin, nodes, source_snapshot, seed, logs, label)
+    backend_mode = STORAGE_BACKEND_MODES[storage_lane]
+    for index in range(VALIDATORS):
+        command = [
+            str(node_bin),
+            "storage-backend-configure",
+            "--data-dir",
+            str(nodes / f"validator-{index}"),
+            "--mode",
+            backend_mode,
+            "--offline-confirmed",
+        ]
+        if not selected_transactional:
+            command.append("--unsafe-comparison-mode")
+        SHARED.run(
+            command,
+            stdout_path=logs / f"{label}.validator-{index}.backend.json",
+            stderr_path=logs / f"{label}.validator-{index}.backend.stderr",
+        )
     before = full_fleet_status(node_bin, nodes)
+    expected_backend, expected_transactional = STORAGE_BACKEND_IDENTITIES[storage_lane]
+    for status in before:
+        storage = status.get("storage")
+        if not isinstance(storage, dict):
+            raise RuntimeError(f"{storage_lane} status omitted storage identity")
+        if (
+            storage.get("backend") != expected_backend
+            or storage.get("transactional_active") is not expected_transactional
+        ):
+            raise RuntimeError(
+                f"{storage_lane} configured the wrong backend: {storage}"
+            )
     initial_height, _, _ = fleet_identity(before)
 
     services: dict[int, tuple[Any, tuple[Any, Any]]] = {}
@@ -750,6 +923,14 @@ def run_rounds(
                 round_lane,
                 timeout_ms=QUALIFICATION_TIMEOUT_MS,
             )
+            command.extend(
+                [
+                    "--signed-transfer-corpus",
+                    str(signed_transfer_corpus),
+                    "--signed-transfer-corpus-offset",
+                    str(round_index - 1),
+                ]
+            )
             if selected_transactional:
                 command.extend(
                     [
@@ -804,26 +985,70 @@ def run_rounds(
     ):
         raise RuntimeError(f"{label} contains a failed or non-final iteration")
 
-    counters: dict[str, Any]
-    remote_storage: dict[str, dict[str, Any]]
-    if selected_transactional:
-        counters, remote_storage = storage_work_from_report(report)
+    corpus_sha256 = digest(signed_transfer_corpus)
+    for round_index, round_report in enumerate(round_reports):
+        config = round_report.get("config")
+        round_iterations = round_report.get("iterations")
+        if not isinstance(config, dict) or not isinstance(round_iterations, list):
+            raise RuntimeError(f"{label} round {round_index + 1} omitted input binding")
         if (
-            counters["full_history_scans"] != 0
-            or counters["full_history_records_read"] != 0
-            or counters["full_history_bytes_read"] != 0
+            config.get("input_source") != "signed-transfer-corpus"
+            or config.get("signed_transfer_corpus_sha256") != corpus_sha256
+            or int(config.get("signed_transfer_corpus_offset", -1)) != round_index
+            or len(round_iterations) != 1
+            or not isinstance(round_iterations[0], dict)
+            or round_iterations[0].get("input_source") != "signed-transfer-corpus"
+            or int(round_iterations[0].get("signed_transfer_corpus_index", -1))
+            != round_index
+            or not str(round_iterations[0].get("signed_transfer_sha256", ""))
         ):
-            raise RuntimeError(f"{label} performed full-history work: {counters}")
-        if counters["committed_write_transactions"] != rounds * VALIDATORS:
             raise RuntimeError(
-                f"{label} durable commit count is not one per height and validator: {counters}"
+                f"{label} round {round_index + 1} did not bind the exact corpus input"
             )
+
+    counters, remote_storage = storage_work_from_report(report, storage_lane)
+    legacy_work = counters["legacy"]
+    if selected_transactional:
+        backend_work_gate_pass = (
+            counters["full_history_scans"] == 0
+            and counters["full_history_records_read"] == 0
+            and counters["full_history_bytes_read"] == 0
+            and counters["committed_write_transactions"] == rounds * VALIDATORS
+        )
+        if not backend_work_gate_pass:
+            raise RuntimeError(f"{label} selected-store work gate failed: {counters}")
+    elif storage_lane == "bounded-jsonl":
+        backend_work_gate_pass = (
+            legacy_work["legacy_prefix_records_verified"] == 0
+            and legacy_work["legacy_prefix_bytes_read"] == 0
+            and legacy_work["ordered_history_records_read"] == 0
+            and legacy_work["ordered_history_bytes_read"] == 0
+            and legacy_work["ordered_index_bitmap_bytes_read"] > 0
+            and legacy_work["ordered_index_bitmap_bytes_written"] > 0
+            and legacy_work["ordered_index_slots_written"] > 0
+        )
+        if not backend_work_gate_pass:
+            raise RuntimeError(f"{label} bounded-JSONL work gate failed: {counters}")
     else:
-        counters = {
-            "telemetry_available": False,
-            "reason": "historical release report predates transactional page counters",
-        }
-        remote_storage = {}
+        prefix_rescan_observed = (
+            legacy_work["legacy_prefix_records_verified"] > 0
+            and legacy_work["legacy_prefix_bytes_read"] > 0
+        )
+        first_append_only = (
+            rounds == 1
+            and legacy_work["jsonl_append_calls"] > 0
+            and legacy_work["legacy_prefix_records_verified"] == 0
+            and legacy_work["legacy_prefix_bytes_read"] == 0
+        )
+        backend_work_gate_pass = (
+            (prefix_rescan_observed or first_append_only)
+            and legacy_work["ordered_history_records_read"] > 0
+            and legacy_work["ordered_history_bytes_read"] > 0
+            and legacy_work["ordered_index_slots_read"] == 0
+            and legacy_work["ordered_index_slots_written"] == 0
+        )
+        if not backend_work_gate_pass:
+            raise RuntimeError(f"{label} legacy work gate failed: {counters}")
 
     resource = SHARED.resource_summary(samples)
     if len(benchmark_processes) != rounds:
@@ -880,6 +1105,10 @@ def run_rounds(
         },
     )
     normalized = normalize_report_paths(report, root)
+    normalized_config = normalized.get("config")
+    if not isinstance(normalized_config, dict):
+        raise RuntimeError(f"{label} normalized report omitted configuration")
+    normalized_config["signed_transfer_corpus"] = "$SIGNED_TRANSFER_CORPUS"
     normalized_path = root / "normalized" / f"{label}.report.json"
     write_json(normalized_path, normalized)
 
@@ -895,26 +1124,33 @@ def run_rounds(
         "label": label,
         "storage_lane": storage_lane,
         "source_snapshot_sha256": directory_digest(source_snapshot),
+        "signed_transfer_corpus": signed_transfer_corpus.as_posix(),
+        "signed_transfer_corpus_sha256": corpus_sha256,
         "starting_height": initial_height,
         "rounds": rounds,
         "validators_converged": VALIDATORS,
         "literal_receipts_exact": True,
-        "zero_full_history_reads": True if selected_transactional else None,
+        "backend_work_gate_pass": backend_work_gate_pass,
+        "zero_full_history_reads": (
+            counters["full_history_records_read"] == 0
+            and counters["full_history_bytes_read"] == 0
+        ),
         "bounded_index_pages": (
             counters["page_reads"]
             <= rounds
             * (
                 MAX_PROPOSAL_PAGE_READS_PER_ROUND
+                + (VALIDATORS - 1) * MAX_PROPOSAL_PAGE_READS_PER_ROUND
                 + VALIDATORS * MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND
             )
             if selected_transactional
-            else None
+            else legacy_work["ordered_index_bitmap_bytes_read"] > 0
+            and legacy_work["ordered_index_bitmap_bytes_written"] > 0
+            if storage_lane == "bounded-jsonl"
+            else False
         ),
         "constant_accumulator_work": (
-            counters["page_writes"]
-            <= rounds * VALIDATORS * MAX_APPLY_PAGE_WRITES_PER_VALIDATOR_ROUND
-            if selected_transactional
-            else None
+            backend_work_gate_pass if storage_lane != "legacy-jsonl" else False
         ),
         "final_height": final_height,
         "final_tip": final_tip,
@@ -945,9 +1181,8 @@ def run_rounds(
             "network_transmitted_bytes": resource["network_transmitted_bytes"],
         },
         "storage_telemetry_source": (
-            "proposal/apply deltas plus in-process certified-send acknowledgements"
-            if selected_transactional
-            else "external process and filesystem resource sampler only"
+            "mode-generic proposer, remote validator reconstruction, local apply, "
+            "and in-process certified-apply deltas"
         ),
         "remote_validator_storage_final": remote_storage,
         "initial_fleet": [
@@ -1224,6 +1459,7 @@ def main() -> int:
     (root / "snapshots").mkdir()
     (root / "receipts").mkdir()
     (root / "normalized").mkdir()
+    (root / "corpora").mkdir()
 
     base_port, rpc_base_port = SHARED.find_ports()
     seed, current_snapshot, wallet_key, wallet_address, recipient, topology = (
@@ -1240,6 +1476,19 @@ def main() -> int:
     for target_height in heights:
         if current_height < target_height:
             advance_rounds = target_height - current_height
+            advance_label = f"advance-{current_height}-to-{target_height}"
+            advance_corpus = root / "corpora" / f"{advance_label}.json"
+            create_signed_transfer_corpus(
+                node_bin=node_bin,
+                source_snapshot=current_snapshot,
+                wallet_key=wallet_key,
+                wallet_address=wallet_address,
+                recipient=recipient,
+                count=advance_rounds,
+                output_file=advance_corpus,
+                logs=root / "logs",
+                label=advance_label,
+            )
             advance, current_snapshot = run_rounds(
                 node_bin=node_bin,
                 root=root,
@@ -1249,7 +1498,8 @@ def main() -> int:
                 wallet_key=wallet_key,
                 wallet_address=wallet_address,
                 recipient=recipient,
-                label=f"advance-{current_height}-to-{target_height}",
+                signed_transfer_corpus=advance_corpus,
+                label=advance_label,
                 rounds=advance_rounds,
             )
             current_height = int(advance["final_height"])
@@ -1257,6 +1507,18 @@ def main() -> int:
             raise RuntimeError("campaign snapshot height drifted")
 
         base_snapshot = current_snapshot
+        window_corpus = root / "corpora" / f"height-{target_height}.json"
+        create_signed_transfer_corpus(
+            node_bin=node_bin,
+            source_snapshot=base_snapshot,
+            wallet_key=wallet_key,
+            wallet_address=wallet_address,
+            recipient=recipient,
+            count=rounds_per_window,
+            output_file=window_corpus,
+            logs=root / "logs",
+            label=f"height-{target_height}",
+        )
         windows: list[dict[str, Any]] = []
         first_result_snapshot: Path | None = None
         for window_index in range(windows_per_height):
@@ -1269,6 +1531,7 @@ def main() -> int:
                 wallet_key=wallet_key,
                 wallet_address=wallet_address,
                 recipient=recipient,
+                signed_transfer_corpus=window_corpus,
                 label=f"height-{target_height}-window-{window_index + 1}",
                 rounds=rounds_per_window,
             )
@@ -1327,6 +1590,9 @@ def main() -> int:
         "window_gates_pass": window_gates_pass,
         "page_bounds_per_round": {
             "proposal_reads": MAX_PROPOSAL_PAGE_READS_PER_ROUND,
+            "vote_reconstruction_reads_per_validator": (
+                MAX_PROPOSAL_PAGE_READS_PER_ROUND
+            ),
             "apply_reads_per_validator": MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND,
             "apply_writes_per_validator": MAX_APPLY_PAGE_WRITES_PER_VALIDATOR_ROUND,
         },

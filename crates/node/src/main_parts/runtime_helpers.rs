@@ -140,6 +140,15 @@ fn require_transactional_or_unsafe_devnet_json_storage(
 
     let data_dir = PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
     let store = NodeStore::new(&data_dir);
+    if !store
+        .storage_backend_mode()
+        .map_err(|error| format!("{service} cannot authenticate storage backend mode: {error}"))?
+        .is_transactional()
+    {
+        return Err(format!(
+            "{service} selected a JSONL comparison backend; long-running operation requires the explicit --unsafe-devnet-json-storage acknowledgement"
+        ));
+    }
     if !store.transactional_storage_configured().map_err(|error| {
         format!(
             "{service} cannot establish the configured storage generation: {error}"
@@ -896,6 +905,7 @@ fn print_usage() {
   postfiat-node storage-cancellation-template [--data-dir PATH] --activation-id HASH --reason TEXT --record-file PATH
   postfiat-node storage-cancellation-ratify [--data-dir PATH] --record-file PATH --validators CSV [--support CSV] --amendment-file PATH
   postfiat-node storage-cancellation-batch [--data-dir PATH] --record-file PATH --authorization-amendment-file PATH --batch-file PATH
+  postfiat-node storage-backend-configure [--data-dir PATH] --mode transactional|bounded-jsonl|legacy-jsonl --offline-confirmed [--unsafe-comparison-mode]
   postfiat-node ordered-history-index-rebuild [--data-dir PATH] --offline-confirmed
   postfiat-node storage-rebuild-transactional [--data-dir PATH] --output-dir PATH --expected-tip HASH --expected-state-root HASH [--verify-only] --offline-confirmed
   postfiat-node storage-integrity-migrate-legacy [--data-dir PATH] --offline-confirmed

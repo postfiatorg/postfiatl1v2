@@ -2847,6 +2847,35 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "storage-backend-configure" => {
+            if !flag_present(flags, "--offline-confirmed") {
+                return Err(
+                    "storage-backend-configure requires --offline-confirmed after every process using the data directory has been stopped"
+                        .to_string(),
+                );
+            }
+            let mode = flag_value(flags, "--mode")
+                .ok_or("missing --mode")?
+                .parse::<postfiat_storage::StorageBackendMode>()
+                .map_err(|error| error.to_string())?;
+            if mode.is_comparison_only() && !flag_present(flags, "--unsafe-comparison-mode") {
+                return Err(
+                    "legacy-jsonl and bounded-jsonl require --unsafe-comparison-mode and are permitted only on disposable offline qualification clones"
+                        .to_string(),
+                );
+            }
+            let data_dir =
+                PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
+            let report = configure_storage_backend(StorageBackendConfigureOptions {
+                data_dir,
+                mode,
+            })
+            .map_err(|error| format!("storage backend configure failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|error| format!("storage backend report serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
         "ordered-history-index-rebuild" => {
             if !flag_present(flags, "--offline-confirmed") {
                 return Err(

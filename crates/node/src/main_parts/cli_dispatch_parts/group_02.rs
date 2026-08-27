@@ -1,5 +1,42 @@
 fn run_cli_group_02(command: &str, flags: &[String]) -> Result<(), String> {
     match command {
+        "tx-latency-corpus-create" => {
+            let data_dir = PathBuf::from(
+                flag_value(flags, "--data-dir").ok_or("missing --data-dir")?,
+            );
+            let wallet_key_file = PathBuf::from(
+                flag_value(flags, "--wallet-key-file").ok_or("missing --wallet-key-file")?,
+            );
+            let wallet_address =
+                flag_value(flags, "--wallet-address").ok_or("missing --wallet-address")?;
+            let recipient = flag_value(flags, "--recipient").ok_or("missing --recipient")?;
+            let amount = flag_value(flags, "--amount")
+                .ok_or("missing --amount")?
+                .parse::<u64>()
+                .map_err(|_| "--amount must be a u64".to_string())?;
+            let count = flag_value(flags, "--count")
+                .ok_or("missing --count")?
+                .parse::<usize>()
+                .map_err(|_| "--count must be a usize".to_string())?;
+            let output_file = PathBuf::from(
+                flag_value(flags, "--output").ok_or("missing --output")?,
+            );
+            let report = tx_latency_create_signed_transfer_corpus(
+                TxLatencySignedTransferCorpusCreateOptions {
+                    data_dir,
+                    wallet_key_file,
+                    wallet_address: wallet_address.to_string(),
+                    recipient: recipient.to_string(),
+                    amount,
+                    count,
+                    output_file,
+                },
+            )?;
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|error| format!("corpus report serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
         "tx-latency-benchmark" | "real-transaction-latency-benchmark" => {
             let base_dir = PathBuf::from(flag_value(flags, "--base-dir").ok_or("missing --base-dir")?);
             let topology_file =
@@ -59,6 +96,15 @@ fn run_cli_group_02(command: &str, flags: &[String]) -> Result<(), String> {
                         .map_err(|_| "--expected-start-height must be a u64".to_string())
                 })
                 .transpose()?;
+            let signed_transfer_corpus =
+                flag_value(flags, "--signed-transfer-corpus").map(PathBuf::from);
+            let signed_transfer_corpus_offset =
+                flag_value(flags, "--signed-transfer-corpus-offset")
+                    .unwrap_or("0")
+                    .parse::<usize>()
+                    .map_err(|_| {
+                        "--signed-transfer-corpus-offset must be a usize".to_string()
+                    })?;
             let report = tx_latency_benchmark(TxLatencyBenchmarkOptions {
                 base_dir,
                 topology_file,
@@ -81,6 +127,8 @@ fn run_cli_group_02(command: &str, flags: &[String]) -> Result<(), String> {
                 defer_certified_sends,
                 resident_transactional_store,
                 expected_start_height,
+                signed_transfer_corpus,
+                signed_transfer_corpus_offset,
             })?;
             let json = serde_json::to_string_pretty(&report)
                 .map_err(|error| format!("tx latency benchmark serialization failed: {error}"))?;

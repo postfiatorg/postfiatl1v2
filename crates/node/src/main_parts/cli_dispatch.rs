@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use flate2::read::GzDecoder;
 use serde::de::DeserializeOwned;
+use sha2::{Digest as Sha2Digest, Sha256};
 use zeroize::Zeroizing;
 
 #[cfg(test)]
@@ -113,7 +114,7 @@ use postfiat_node::{
     pfusdc_checkpoint_witness, pfusdc_egress_witness, propose_batch,
     propose_batch_with_required_parent_with_timings, ratify_governance, ratify_validator_set,
     read_block_vote_for_verified_proposal, read_consensus_v2_qc_graph_for_view,
-    rebuild_account_tx_index, rebuild_transactional_storage, receipts,
+    configure_storage_backend, rebuild_account_tx_index, rebuild_transactional_storage, receipts,
     reconcile_terminal_mempool_entries, replay_market_ops_bundle,
     replay_vault_bridge_reserve_bundle, run_once, shield_disclose, shield_mint, shield_scan,
     shield_spend, shield_turnstile, shielded_tree_root, sign_ethereum_checkpoint_vote,
@@ -232,7 +233,8 @@ use postfiat_node::{
     SignedVaultBridgeRouteProfileGovernanceOptions, SnapshotExportOptions, SnapshotImportOptions,
     StorageActivationRatificationOptions, StorageActivationBatchOptions,
     StorageActivationTemplateOptions, StorageCancellationRatificationOptions,
-    StorageCancellationBatchOptions, StorageCancellationTemplateOptions, StorageMigrationOptions,
+    StorageBackendConfigureOptions, StorageCancellationBatchOptions,
+    StorageCancellationTemplateOptions, StorageMigrationOptions,
     SnapshotPublisherKeyExportOptions, TopologyConsensusV2Options, TopologyOptions,
     TransferFeeQuoteOptions, TransferFeeQuoteReport, TransferOptions, TxFinalityQueryOptions,
     TxFinalityReport, ValidatorKeyFile, ValidatorKeyRecord, ValidatorKeyStageOptions,
@@ -384,7 +386,8 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "pftl-submit-certified-asset-ops"
         | "submit-certified-asset-ops"
         | "pftl-certified-asset-ops-from-bundle" => run_cli_group_01(command, flags),
-        "tx-latency-benchmark"
+        "tx-latency-corpus-create"
+        | "tx-latency-benchmark"
         | "real-transaction-latency-benchmark" => run_cli_group_02(command, flags),
         "transport-certified-batch-loop"
         | "transport-peer-certified-batch-loop"
@@ -692,6 +695,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "storage-cancellation-template"
         | "storage-cancellation-ratify"
         | "storage-cancellation-batch"
+        | "storage-backend-configure"
         | "ordered-history-index-rebuild"
         | "storage-rebuild-transactional"
         | "storage-integrity-migrate-legacy"

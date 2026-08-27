@@ -353,6 +353,62 @@ fn apply_activation_journal(store: &NodeStore, journal: &OrderedCommitDeltaJourn
     .expect("apply complete activation journal");
 }
 
+fn backend_equivalence_transfer_journal(
+    store: &NodeStore,
+    genesis: &Genesis,
+) -> OrderedCommitDeltaJournal {
+    let governance = store
+        .read_governance()
+        .expect("read backend-equivalence governance");
+    let mut ledger = store
+        .read_ledger()
+        .expect("read backend-equivalence ledger");
+    let faucet = read_transfer_key_file(store.data_dir(), None)
+        .expect("read backend-equivalence faucet key");
+    let transfer = build_signed_transfer(
+        genesis,
+        &ledger,
+        store.data_dir(),
+        None,
+        faucet.address,
+        1,
+    )
+    .expect("build backend-equivalence transfer");
+    let batch = postfiat_mempool_dag::build_transaction_batch(
+        &mempool_batch_domain(genesis),
+        vec![transfer],
+    )
+    .expect("build canonical backend-equivalence batch")
+    .batch;
+    let height = store
+        .read_chain_tip()
+        .expect("read backend-equivalence tip")
+        .height
+        .checked_add(1)
+        .expect("backend-equivalence height overflow");
+    let receipts = execute_transparent_batch(
+        genesis,
+        &governance,
+        &mut ledger,
+        &batch,
+        height,
+        AssetExecutionCompatibility::strict(),
+    );
+    assert_eq!(receipts.len(), 1);
+    assert!(receipts[0].accepted, "{receipts:?}");
+    activation_test_journal(
+        store,
+        genesis,
+        &governance,
+        &ledger,
+        BATCH_KIND_TRANSPARENT,
+        &batch.batch_id,
+        &batch,
+        &receipts,
+        false,
+    )
+}
+
 #[test]
 fn ordered_commit_journal_disagreement_rejects_without_durable_mutation() {
     let data_dir = unique_test_dir("postfiat-ordered-journal-disagreement");
@@ -792,6 +848,138 @@ fn ordered_history_v2_active_commit_uses_one_database_transaction_without_jsonl(
     std::fs::remove_dir_all(data_dir).expect("remove transactional test directory");
     std::fs::remove_dir_all(snapshot_dir).expect("remove transactional snapshot");
     std::fs::remove_dir_all(restored_dir).expect("remove transactional snapshot restore");
+}
+
+#[test]
+fn active_storage_backends_apply_identical_commits_from_one_snapshot() {
+    let seed_dir = unique_test_dir("postfiat-storage-backend-equivalence-seed");
+    let snapshot_dir = unique_test_dir("postfiat-storage-backend-equivalence-snapshot");
+    let mut genesis = Genesis::try_new_with_validator_count(
+        "postfiat-storage-backend-equivalence",
+        1,
+    )
+    .expect("create backend-equivalence genesis");
+    genesis.ordered_history_v2_activation_height = Some(1);
+    lifecycle_queries::init_with_genesis(
+        seed_dir.clone(),
+        "validator-0".to_owned(),
+        genesis.clone(),
+    )
+    .expect("initialize backend-equivalence seed");
+    let seed = NodeStore::new(&seed_dir);
+
+    let first = backend_equivalence_transfer_journal(&seed, &genesis);
+    apply_activation_journal(&seed, &first);
+
+    let second = backend_equivalence_transfer_journal(&seed, &genesis);
+    let source_manifest = export_snapshot(SnapshotExportOptions {
+        data_dir: seed_dir.clone(),
+        snapshot_dir: snapshot_dir.clone(),
+    })
+    .expect("export shared backend snapshot");
+    assert_eq!(source_manifest.block_height, 1);
+
+    apply_activation_journal(&seed, &second);
+    let third = backend_equivalence_transfer_journal(&seed, &genesis);
+
+    let modes = [
+        postfiat_storage::StorageBackendMode::LegacyJsonl,
+        postfiat_storage::StorageBackendMode::BoundedJsonl,
+        postfiat_storage::StorageBackendMode::Transactional,
+    ];
+    let mut proposed_commitments = Vec::new();
+    let mut final_identities = Vec::new();
+    let mut portable_file_hashes = Vec::new();
+    for mode in modes {
+        let data_dir = unique_test_dir(&format!(
+            "postfiat-storage-backend-equivalence-{}",
+            mode.as_str()
+        ));
+        import_snapshot(SnapshotImportOptions {
+            data_dir: data_dir.clone(),
+            snapshot_dir: snapshot_dir.clone(),
+            node_id: None,
+        })
+        .expect("import shared backend snapshot");
+        let configured = configure_storage_backend(StorageBackendConfigureOptions {
+            data_dir: data_dir.clone(),
+            mode,
+        })
+        .expect("configure comparison backend");
+        assert_eq!(configured.mode, mode.as_str());
+        assert_eq!(configured.finalized_height, 1);
+
+        let store = NodeStore::new(&data_dir);
+        let (_, proposed_second) = proposed_ordered_state(
+            &store,
+            &genesis,
+            &second.ordered_batch_id,
+            2,
+        )
+        .expect("propose second comparison commitment");
+        proposed_commitments.push(proposed_second.expect("active commitment"));
+        apply_activation_journal(&store, &second);
+        let (_, proposed_third) =
+            proposed_ordered_state(&store, &genesis, &third.ordered_batch_id, 3)
+                .expect("propose third comparison commitment");
+        assert_eq!(
+            proposed_third.as_ref().expect("active third commitment"),
+            &store
+                .backend_ordered_history_commitment()
+                .expect("read committed second commitment")
+                .append(&third.ordered_batch_id)
+                .expect("append expected third commitment")
+        );
+        apply_activation_journal(&store, &third);
+        verify_blocks(NodeOptions {
+            data_dir: data_dir.clone(),
+        })
+        .expect("verify backend-equivalent blocks");
+
+        let status = status(NodeOptions {
+            data_dir: data_dir.clone(),
+        })
+        .expect("read backend-equivalent status");
+        let storage = status.storage.expect("storage status");
+        assert_eq!(status.block_height, 3);
+        assert_eq!(storage.ordered_batch_count, 3);
+        final_identities.push((
+            status.block_height,
+            status.block_tip_hash,
+            status.state_root,
+            storage.ordered_history_accumulator,
+        ));
+
+        let portable = unique_test_dir(&format!(
+            "postfiat-storage-backend-equivalence-export-{}",
+            mode.as_str()
+        ));
+        let manifest = export_snapshot(SnapshotExportOptions {
+            data_dir: data_dir.clone(),
+            snapshot_dir: portable.clone(),
+        })
+        .expect("export backend-equivalent snapshot");
+        portable_file_hashes.push(
+            manifest
+                .files
+                .iter()
+                .map(|file| (file.name.clone(), file.hash_hex.clone()))
+                .collect::<Vec<_>>(),
+        );
+        std::fs::remove_dir_all(portable).expect("remove backend export");
+        std::fs::remove_dir_all(data_dir).expect("remove backend clone");
+    }
+
+    assert!(proposed_commitments
+        .windows(2)
+        .all(|pair| pair[0] == pair[1]));
+    assert!(final_identities.windows(2).all(|pair| pair[0] == pair[1]));
+    assert!(portable_file_hashes
+        .windows(2)
+        .all(|pair| pair[0] == pair[1]));
+
+    std::fs::remove_dir_all(seed_dir).expect("remove backend seed");
+    std::fs::remove_dir_all(snapshot_dir).expect("remove shared backend snapshot");
 }
 
 #[test]

@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""Run legacy, bounded-JSONL, and selected-store performance lanes locally.
+"""Run one-binary, one-snapshot storage backend comparisons locally.
 
-The retired lanes use frozen release binaries from their owning revisions and
-the selected lane uses the release binary under qualification. All three share
-the exact validator keys, deterministic account derivation, semantic transfer
-workload, loopback topology shape, full-vote policy, height/window cardinality,
-host allocation, storage medium, and resource sampler. Lane-native snapshots
-are required because the retired storage formats are not runtime modes of the
-selected binary. No external network or devnet endpoint is contacted.
+Every lane uses the exact same release binary, authenticated source snapshot,
+validator keys, topology, accounts, signed transaction corpus, host allocation,
+storage medium, full-vote policy, and timeout policy. The only changed input is
+the authenticated node-local storage backend selector. No external network or
+controlled-devnet endpoint is contacted.
 """
 
 from __future__ import annotations
@@ -18,7 +16,6 @@ import importlib.util
 import json
 import os
 import platform
-import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,18 +25,12 @@ REPO = Path(__file__).resolve().parents[2]
 BASE_RUNNER = REPO / "benchmarks" / "storage-scaling" / "run_campaign.py"
 SPEC = REPO / "docs" / "architecture" / "storage-scaling-fix-spec.md"
 LANE_ORDER = ("legacy-jsonl", "bounded-jsonl", "selected-indexed")
-LEGACY_SOURCE_REVISION = "8cc7d15edc58b5f5a0b745143fef2d45203465ff"
-BOUNDED_SOURCE_REVISION = "dfd0b9f11108b0b773d1e02bebae71685864228e"
-HISTORICAL_REVISIONS = {
-    "legacy-jsonl": LEGACY_SOURCE_REVISION,
-    "bounded-jsonl": BOUNDED_SOURCE_REVISION,
-}
 STORAGE_BEHAVIORS = {
-    "legacy-jsonl": "full-prefix JSON/JSONL and full ordered-history proposal path",
-    "bounded-jsonl": "authenticated JSONL v2 heads and fixed-slot ordered index candidate",
-    "selected-indexed": "transactional redb finality path and fixed-size accumulator",
+    "legacy-jsonl": "authenticated JSONL with full-prefix append verification and full ordered-history proposal work",
+    "bounded-jsonl": "authenticated JSONL v2 heads with the fixed-slot ordered index",
+    "selected-indexed": "transactional redb finality path with the fixed-size accumulator",
 }
-SCHEMA = "postfiat-storage-scaling-paired-six-validator-campaign-v2"
+SCHEMA = "postfiat-storage-scaling-paired-six-validator-campaign-v3"
 
 
 def load_base_runner() -> Any:
@@ -66,6 +57,15 @@ def write_json(path: Path, value: Any) -> None:
         json.dumps(value, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+
+
+def prepare_runner_root(root: Path, *, seed_root: bool = False) -> None:
+    root.mkdir(parents=True)
+    names = ["snapshots", "receipts", "normalized"]
+    if not seed_root:
+        names.append("logs")
+    for name in names:
+        (root / name).mkdir()
 
 
 def validator_public_identities(path: Path) -> list[dict[str, str]]:
@@ -109,17 +109,6 @@ def validator_public_identities(path: Path) -> list[dict[str, str]]:
 def require_revision(value: str, label: str) -> None:
     if len(value) != 40 or any(byte not in "0123456789abcdef" for byte in value):
         raise ValueError(f"{label} must be a full lowercase Git object ID")
-
-
-def revision_is_ancestor(ancestor: str, descendant: str) -> bool:
-    completed = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
-        cwd=REPO,
-        check=False,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    return completed.returncode == 0
 
 
 def release_binary(path: Path, label: str) -> Path:
@@ -177,159 +166,10 @@ def prefix_report_references(
             for field in ("normalized_report", "resource_samples"):
                 relative = Path(str(window[field]))
                 window[field] = (prefix / relative).as_posix()
-
-
-def run_lane(
-    *,
-    campaign_root: Path,
-    lane: str,
-    node_bin: Path,
-    source_revision: str,
-    development_smoke: bool,
-    shared_validator_key_file: Path | None,
-) -> dict[str, Any]:
-    lane_root = campaign_root / "lanes" / lane
-    lane_root.mkdir(parents=True)
-    (lane_root / "snapshots").mkdir()
-    (lane_root / "receipts").mkdir()
-    (lane_root / "normalized").mkdir()
-
-    storage_activation_height = None if lane == "legacy-jsonl" else 1
-    base_port, rpc_base_port = BASE.SHARED.find_ports()
-    seed, current_snapshot, wallet_key, wallet_address, recipient, topology = (
-        BASE.setup_seed(
-            node_bin,
-            lane_root,
-            base_port,
-            rpc_base_port,
-            storage_activation_height=storage_activation_height,
-            validator_key_file=shared_validator_key_file,
-        )
-    )
-    validator_identities = validator_public_identities(seed / "validator_keys.json")
-    binary_build = BASE.require_release_binary_identity(
-        node_bin,
-        seed,
-        source_revision,
-    )
-
-    heights = [2] if development_smoke else BASE.HEIGHTS
-    windows_per_height = 1 if development_smoke else BASE.WINDOWS_PER_HEIGHT
-    rounds_per_window = 1 if development_smoke else BASE.ROUNDS_PER_WINDOW
-    current_height = 1
-    rows: list[dict[str, Any]] = []
-    for target_height in heights:
-        if current_height < target_height:
-            advance_rounds = target_height - current_height
-            advance, current_snapshot = BASE.run_rounds(
-                node_bin=node_bin,
-                root=lane_root,
-                seed=seed,
-                topology=topology,
-                source_snapshot=current_snapshot,
-                wallet_key=wallet_key,
-                wallet_address=wallet_address,
-                recipient=recipient,
-                label=f"advance-{current_height}-to-{target_height}",
-                rounds=advance_rounds,
-                storage_lane=lane,
-            )
-            current_height = int(advance["final_height"])
-        if current_height != target_height:
-            raise RuntimeError(f"{lane} snapshot height drifted")
-
-        base_snapshot = current_snapshot
-        windows: list[dict[str, Any]] = []
-        first_result_snapshot: Path | None = None
-        for window_index in range(windows_per_height):
-            result, result_snapshot = BASE.run_rounds(
-                node_bin=node_bin,
-                root=lane_root,
-                seed=seed,
-                topology=topology,
-                source_snapshot=base_snapshot,
-                wallet_key=wallet_key,
-                wallet_address=wallet_address,
-                recipient=recipient,
-                label=f"height-{target_height}-window-{window_index + 1}",
-                rounds=rounds_per_window,
-                storage_lane=lane,
-            )
-            windows.append(result)
-            if window_index == 0:
-                first_result_snapshot = result_snapshot
-        if first_result_snapshot is None:
-            raise RuntimeError(f"{lane} height produced no measurement window")
-        current_snapshot = first_result_snapshot
-        current_height = target_height + rounds_per_window
-        rows.append({"height": target_height, "windows": windows})
-
-    aggregate_rows(rows, lane_root)
-    relationship_models = (
-        {} if development_smoke else BASE.height_relationship_models(rows, lane_root)
-    )
-    no_positive_linear_relationship = (
-        None
-        if development_smoke
-        else all(
-            model["material_positive_linear_relationship"] is False
-            for model in relationship_models.values()
-        )
-    )
-    comparison_windows_pass = all(
-        window["literal_receipts_exact"] is True
-        and int(window["validators_converged"]) == BASE.VALIDATORS
-        and int(window["resources"]["foreground_process_count"])
-        == rounds_per_window
-        and int(window["resources"]["foreground_min_sample_count"]) >= 2
-        for row in rows
-        for window in row["windows"]
-    )
-    selected_storage_gates_pass = (
-        None
-        if lane != BASE.SELECTED_STORAGE_LANE
-        else all(
-            window["zero_full_history_reads"] is True
-            and window["bounded_index_pages"] is True
-            and window["constant_accumulator_work"] is True
-            for row in rows
-            for window in row["windows"]
-        )
-    )
-    prefix_report_references(rows, lane_root, campaign_root)
-    return {
-        "lane": lane,
-        "storage_behavior": STORAGE_BEHAVIORS[lane],
-        "source_revision": source_revision,
-        "node_binary_sha256": sha256(node_bin),
-        "node_binary": node_bin.name,
-        "node_binary_build": binary_build,
-        "storage_activation_height": storage_activation_height,
-        "chain_id": BASE.CHAIN_ID,
-        "wallet_address": wallet_address,
-        "recipient_address": recipient,
-        "validator_public_identities": validator_identities,
-        "topology_sha256": sha256(topology),
-        "environment": {
-            "cpu_affinity": sorted(os.sched_getaffinity(0)),
-            "filesystem_device": lane_root.stat().st_dev,
-            "filesystem_block_size_bytes": os.statvfs(lane_root).f_bsize,
-        },
-        "height_1_snapshot_sha256": BASE.directory_digest(
-            lane_root / "snapshots" / "height-1.snapshot"
-        ),
-        "rows": rows,
-        "comparison_windows_pass": comparison_windows_pass,
-        "selected_storage_gates_pass": selected_storage_gates_pass,
-        "height_relationship_model": {
-            "schema": "postfiat-storage-height-cost-model-v2",
-            "sample_kind": "per_window_p95",
-            "relative_materiality": BASE.MODEL_RELATIVE_MATERIALITY,
-            "residual_sigmas": BASE.MODEL_RESIDUAL_SIGMAS,
-            "stages": relationship_models,
-        },
-        "no_positive_linear_height_relationship": no_positive_linear_relationship,
-    }
+            corpus = Path(str(window["signed_transfer_corpus"]))
+            window["signed_transfer_corpus"] = corpus.relative_to(
+                campaign_root
+            ).as_posix()
 
 
 def metric_p95(lane: dict[str, Any], row_index: int, metric: str) -> float:
@@ -361,12 +201,27 @@ def host_description(campaign_root: Path) -> dict[str, Any]:
     }
 
 
+def window_transaction_identities(
+    lane_root: Path, window: dict[str, Any]
+) -> tuple[tuple[str, str], ...]:
+    report = BASE.read_json(lane_root / str(window["normalized_report"]))
+    iterations = report.get("iterations")
+    if not isinstance(iterations, list):
+        raise RuntimeError("normalized benchmark report omitted iterations")
+    identities: list[tuple[str, str]] = []
+    for iteration in iterations:
+        if not isinstance(iteration, dict):
+            raise RuntimeError("normalized benchmark iteration is malformed")
+        tx_id = str(iteration.get("tx_id", ""))
+        signed_sha256 = str(iteration.get("signed_transfer_sha256", ""))
+        if not tx_id or len(signed_sha256) != 64:
+            raise RuntimeError("normalized benchmark iteration omitted exact input identity")
+        identities.append((tx_id, signed_sha256))
+    return tuple(identities)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--legacy-node-bin", type=Path, required=True)
-    parser.add_argument("--legacy-source-revision", required=True)
-    parser.add_argument("--bounded-node-bin", type=Path, required=True)
-    parser.add_argument("--bounded-source-revision", required=True)
     parser.add_argument("--node-bin", type=Path, required=True)
     parser.add_argument("--expected-source-revision", required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -377,26 +232,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    revisions = {
-        "legacy-jsonl": args.legacy_source_revision,
-        "bounded-jsonl": args.bounded_source_revision,
-        "selected-indexed": args.expected_source_revision,
-    }
-    for lane, revision in revisions.items():
-        require_revision(revision, f"{lane} source revision")
-    for lane, expected_revision in HISTORICAL_REVISIONS.items():
-        if revisions[lane] != expected_revision:
-            raise ValueError(
-                f"{lane} must use the frozen source revision {expected_revision}"
-            )
-    if len(set(revisions.values())) != len(revisions):
-        raise ValueError("paired lanes must bind three distinct source revisions")
+    require_revision(args.expected_source_revision, "source revision")
     current_revision = BASE.run_git_revision()
     if args.expected_source_revision != current_revision:
-        raise ValueError("selected source revision does not match HEAD")
-    for lane in ("legacy-jsonl", "bounded-jsonl"):
-        if not revision_is_ancestor(revisions[lane], current_revision):
-            raise ValueError(f"{lane} revision is not an ancestor of selected source")
+        raise ValueError("source revision does not match HEAD")
     if not args.development_smoke and not BASE.git_is_clean():
         raise ValueError("paired release qualification requires a clean checkout")
 
@@ -406,51 +245,245 @@ def main() -> int:
     root = raw_root.resolve()
     if root.exists():
         raise ValueError(f"refusing to overwrite output directory: {root}")
-    binaries = {
-        "legacy-jsonl": release_binary(args.legacy_node_bin, "legacy binary"),
-        "bounded-jsonl": release_binary(args.bounded_node_bin, "bounded binary"),
-        "selected-indexed": release_binary(args.node_bin, "selected binary"),
-    }
-    if len({sha256(path) for path in binaries.values()}) != len(binaries):
-        raise ValueError("paired lanes must bind three distinct release binaries")
+    node_bin = release_binary(args.node_bin, "qualification binary")
 
     root.mkdir(parents=True)
-    shared_private = root / "private"
-    shared_private.mkdir(mode=0o700)
-    shared_validator_key_file = shared_private / "validator_keys.json"
+    corpora_root = root / "corpora"
+    corpora_root.mkdir()
+    shared_root = root / "shared"
+    canonical_root = root / "canonical"
+    prepare_runner_root(shared_root, seed_root=True)
+    prepare_runner_root(canonical_root)
+    lane_roots = {lane: root / "lanes" / lane for lane in LANE_ORDER}
+    for lane_root in lane_roots.values():
+        prepare_runner_root(lane_root)
+
+    base_port, rpc_base_port = BASE.SHARED.find_ports()
+    seed, current_snapshot, wallet_key, wallet_address, recipient, topology = (
+        BASE.setup_seed(
+            node_bin,
+            shared_root,
+            base_port,
+            rpc_base_port,
+            storage_activation_height=BASE.STORAGE_ACTIVATION_HEIGHT,
+        )
+    )
+    binary_build = BASE.require_release_binary_identity(
+        node_bin,
+        seed,
+        args.expected_source_revision,
+    )
+    validator_identities = validator_public_identities(seed / "validator_keys.json")
+
+    heights = [2] if args.development_smoke else BASE.HEIGHTS
+    windows_per_height = 1 if args.development_smoke else BASE.WINDOWS_PER_HEIGHT
+    rounds_per_window = 1 if args.development_smoke else BASE.ROUNDS_PER_WINDOW
+    current_height = 1
+    lane_rows: dict[str, list[dict[str, Any]]] = {
+        lane: [] for lane in LANE_ORDER
+    }
+    snapshots_by_height: list[dict[str, Any]] = []
+    exact_pairing_verified = True
+
+    for target_height in heights:
+        if current_height < target_height:
+            advance_rounds = target_height - current_height
+            advance_label = f"advance-{current_height}-to-{target_height}"
+            advance_corpus = corpora_root / f"{advance_label}.json"
+            BASE.create_signed_transfer_corpus(
+                node_bin=node_bin,
+                source_snapshot=current_snapshot,
+                wallet_key=wallet_key,
+                wallet_address=wallet_address,
+                recipient=recipient,
+                count=advance_rounds,
+                output_file=advance_corpus,
+                logs=canonical_root / "logs",
+                label=advance_label,
+            )
+            advance, current_snapshot = BASE.run_rounds(
+                node_bin=node_bin,
+                root=canonical_root,
+                seed=seed,
+                topology=topology,
+                source_snapshot=current_snapshot,
+                wallet_key=wallet_key,
+                wallet_address=wallet_address,
+                recipient=recipient,
+                signed_transfer_corpus=advance_corpus,
+                label=advance_label,
+                rounds=advance_rounds,
+                storage_lane=BASE.SELECTED_STORAGE_LANE,
+            )
+            current_height = int(advance["final_height"])
+        if current_height != target_height:
+            raise RuntimeError(
+                f"canonical snapshot height drifted: {current_height} != {target_height}"
+            )
+
+        source_snapshot = current_snapshot
+        source_snapshot_sha256 = BASE.directory_digest(source_snapshot)
+        measurement_corpus = corpora_root / f"height-{target_height}.json"
+        corpus_report = BASE.create_signed_transfer_corpus(
+            node_bin=node_bin,
+            source_snapshot=source_snapshot,
+            wallet_key=wallet_key,
+            wallet_address=wallet_address,
+            recipient=recipient,
+            count=rounds_per_window,
+            output_file=measurement_corpus,
+            logs=canonical_root / "logs",
+            label=f"height-{target_height}",
+        )
+        corpus_sha256 = sha256(measurement_corpus)
+        snapshots_by_height.append(
+            {
+                "height": target_height,
+                "snapshot": source_snapshot.relative_to(root).as_posix(),
+                "snapshot_sha256": source_snapshot_sha256,
+                "signed_transfer_corpus": measurement_corpus.relative_to(
+                    root
+                ).as_posix(),
+                "signed_transfer_corpus_sha256": corpus_sha256,
+                "transfer_count": rounds_per_window,
+                "first_sequence": corpus_report["first_sequence"],
+                "last_sequence": corpus_report["last_sequence"],
+            }
+        )
+
+        first_result_snapshots: dict[str, Path] = {}
+        results_at_height: dict[str, list[dict[str, Any]]] = {}
+        for lane in LANE_ORDER:
+            lane_root = lane_roots[lane]
+            windows: list[dict[str, Any]] = []
+            for window_index in range(windows_per_height):
+                result, result_snapshot = BASE.run_rounds(
+                    node_bin=node_bin,
+                    root=lane_root,
+                    seed=seed,
+                    topology=topology,
+                    source_snapshot=source_snapshot,
+                    wallet_key=wallet_key,
+                    wallet_address=wallet_address,
+                    recipient=recipient,
+                    signed_transfer_corpus=measurement_corpus,
+                    label=(
+                        f"height-{target_height}-window-{window_index + 1}"
+                    ),
+                    rounds=rounds_per_window,
+                    storage_lane=lane,
+                )
+                if result["source_snapshot_sha256"] != source_snapshot_sha256:
+                    raise RuntimeError(f"{lane} did not use the shared source snapshot")
+                if result["signed_transfer_corpus_sha256"] != corpus_sha256:
+                    raise RuntimeError(f"{lane} did not use the shared signed corpus")
+                windows.append(result)
+                if window_index == 0:
+                    first_result_snapshots[lane] = result_snapshot
+            results_at_height[lane] = windows
+            lane_rows[lane].append({"height": target_height, "windows": windows})
+
+        for window_index in range(windows_per_height):
+            compared = [
+                results_at_height[lane][window_index] for lane in LANE_ORDER
+            ]
+            if len({int(window["starting_height"]) for window in compared}) != 1:
+                raise RuntimeError("paired lanes used different starting heights")
+            if len({int(window["final_height"]) for window in compared}) != 1:
+                raise RuntimeError("paired lanes finalized different heights")
+            if len({str(window["final_state_root"]) for window in compared}) != 1:
+                raise RuntimeError("paired lanes produced different final state roots")
+            identity_sets = {
+                window_transaction_identities(
+                    lane_roots[lane], results_at_height[lane][window_index]
+                )
+                for lane in LANE_ORDER
+            }
+            if len(identity_sets) != 1:
+                raise RuntimeError("paired lanes did not execute identical signed transactions")
+
+        selected_snapshot = first_result_snapshots.get(BASE.SELECTED_STORAGE_LANE)
+        if selected_snapshot is None:
+            raise RuntimeError("selected lane produced no continuation snapshot")
+        current_snapshot = selected_snapshot
+        current_height = target_height + rounds_per_window
+
     lanes: dict[str, dict[str, Any]] = {}
     for lane in LANE_ORDER:
-        lanes[lane] = run_lane(
-            campaign_root=root,
-            lane=lane,
-            node_bin=binaries[lane],
-            source_revision=revisions[lane],
-            development_smoke=args.development_smoke,
-            shared_validator_key_file=(
-                shared_validator_key_file
-                if shared_validator_key_file.exists()
-                else None
-            ),
+        lane_root = lane_roots[lane]
+        rows = lane_rows[lane]
+        aggregate_rows(rows, lane_root)
+        relationship_models = (
+            {}
+            if args.development_smoke
+            else BASE.height_relationship_models(rows, lane_root)
         )
-        if lane == "legacy-jsonl":
-            source_keys = (
-                root
-                / "lanes"
-                / lane
-                / "private"
-                / "seed"
-                / "validator_keys.json"
+        no_positive_linear_relationship = (
+            None
+            if args.development_smoke
+            else all(
+                model["material_positive_linear_relationship"] is False
+                for model in relationship_models.values()
             )
-            shutil.copyfile(source_keys, shared_validator_key_file)
-            shared_validator_key_file.chmod(0o600)
+        )
+        comparison_windows_pass = all(
+            window["literal_receipts_exact"] is True
+            and window["backend_work_gate_pass"] is True
+            and int(window["validators_converged"]) == BASE.VALIDATORS
+            and int(window["resources"]["foreground_process_count"])
+            == rounds_per_window
+            and int(window["resources"]["foreground_min_sample_count"]) >= 2
+            for row in rows
+            for window in row["windows"]
+        )
+        selected_storage_gates_pass = (
+            None
+            if lane != BASE.SELECTED_STORAGE_LANE
+            else all(
+                window["zero_full_history_reads"] is True
+                and window["bounded_index_pages"] is True
+                and window["constant_accumulator_work"] is True
+                for row in rows
+                for window in row["windows"]
+            )
+        )
+        prefix_report_references(rows, lane_root, root)
+        lanes[lane] = {
+            "lane": lane,
+            "storage_behavior": STORAGE_BEHAVIORS[lane],
+            "source_revision": args.expected_source_revision,
+            "node_binary_sha256": sha256(node_bin),
+            "node_binary": node_bin.name,
+            "node_binary_build": binary_build,
+            "storage_backend_mode": BASE.STORAGE_BACKEND_MODES[lane],
+            "storage_activation_height": BASE.STORAGE_ACTIVATION_HEIGHT,
+            "chain_id": BASE.CHAIN_ID,
+            "wallet_address": wallet_address,
+            "recipient_address": recipient,
+            "validator_public_identities": validator_identities,
+            "topology_sha256": sha256(topology),
+            "environment": {
+                "cpu_affinity": sorted(os.sched_getaffinity(0)),
+                "filesystem_device": lane_root.stat().st_dev,
+                "filesystem_block_size_bytes": os.statvfs(lane_root).f_bsize,
+            },
+            "height_1_snapshot_sha256": BASE.directory_digest(
+                shared_root / "snapshots" / "height-1.snapshot"
+            ),
+            "rows": rows,
+            "comparison_windows_pass": comparison_windows_pass,
+            "selected_storage_gates_pass": selected_storage_gates_pass,
+            "height_relationship_model": {
+                "schema": "postfiat-storage-height-cost-model-v2",
+                "sample_kind": "per_window_p95",
+                "relative_materiality": BASE.MODEL_RELATIVE_MATERIALITY,
+                "residual_sigmas": BASE.MODEL_RESIDUAL_SIGMAS,
+                "stages": relationship_models,
+            },
+            "no_positive_linear_height_relationship": no_positive_linear_relationship,
+        }
 
-    validator_key_sets = {
-        json.dumps(lane["validator_public_identities"], sort_keys=True)
-        for lane in lanes.values()
-    }
-    if len(validator_key_sets) != 1:
-        raise RuntimeError("paired lanes did not use the same validator keys")
-    selected = lanes["selected-indexed"]
+    selected = lanes[BASE.SELECTED_STORAGE_LANE]
     legacy = lanes["legacy-jsonl"]
     baseline = (
         {}
@@ -479,6 +512,7 @@ def main() -> int:
     source_worktree_clean = BASE.git_is_clean()
     release_gates_pass = (
         source_worktree_clean
+        and exact_pairing_verified
         and comparison_windows_pass
         and selected_window_gates_pass
         and selected["no_positive_linear_height_relationship"] is True
@@ -486,7 +520,10 @@ def main() -> int:
     )
     status = (
         "DEVELOPMENT SMOKE PASS"
-        if args.development_smoke and comparison_windows_pass and selected_window_gates_pass
+        if args.development_smoke
+        and exact_pairing_verified
+        and comparison_windows_pass
+        and selected_window_gates_pass
         else "DEVELOPMENT SMOKE BLOCKED"
         if args.development_smoke
         else "PASS"
@@ -507,19 +544,20 @@ def main() -> int:
         "evidence_eligible": (not args.development_smoke and release_gates_pass),
         "source_worktree_clean": source_worktree_clean,
         "source_revision": args.expected_source_revision,
-        "node_binary_sha256": sha256(binaries["selected-indexed"]),
-        "node_binary": binaries["selected-indexed"].name,
-        "node_binary_build": selected["node_binary_build"],
+        "node_binary_sha256": sha256(node_bin),
+        "node_binary": node_bin.name,
+        "node_binary_build": binary_build,
         "spec_sha3_384": hashlib.sha3_384(SPEC.read_bytes()).hexdigest(),
         "paired_runner_sha256": sha256(Path(__file__).resolve()),
         "selected_runner_sha256": sha256(BASE_RUNNER),
         "shared_runner_sha256": sha256(BASE.SHARED_RUNNER),
         "validator_count": BASE.VALIDATORS,
-        "windows_per_height": 1 if args.development_smoke else BASE.WINDOWS_PER_HEIGHT,
-        "rounds_per_window": 1 if args.development_smoke else BASE.ROUNDS_PER_WINDOW,
+        "windows_per_height": windows_per_height,
+        "rounds_per_window": rounds_per_window,
         "timeout_ms": BASE.QUALIFICATION_TIMEOUT_MS,
         "lane_order": list(LANE_ORDER),
         "lanes": lanes,
+        "snapshots_by_height": snapshots_by_height,
         "legacy_height_50_baseline": baseline,
         "rows": selected["rows"],
         "ratios": ratios,
@@ -531,9 +569,15 @@ def main() -> int:
         ],
         "pairing": {
             "same_host": True,
-            "same_chain_id": len({lane["chain_id"] for lane in lanes.values()}) == 1,
+            "same_source_revision": True,
+            "same_binary": True,
+            "same_chain_id": True,
             "same_validator_count": True,
-            "same_validator_keys": len(validator_key_sets) == 1,
+            "same_validator_keys": True,
+            "same_topology_file": True,
+            "same_authenticated_snapshot_at_each_height": True,
+            "same_signed_transactions": True,
+            "same_wallet_and_recipient_accounts": True,
             "same_height_window_cardinality": True,
             "same_full_vote_policy": True,
             "same_timeout_policy": True,
@@ -554,27 +598,8 @@ def main() -> int:
                 }
             )
             == 1,
-            "same_wallet_and_recipient_accounts": len(
-                {
-                    (lane["wallet_address"], lane["recipient_address"])
-                    for lane in lanes.values()
-                }
-            )
-            == 1,
-            "same_semantic_transfer_workload": True,
-            "same_binary": False,
-            "binary_policy": (
-                "exact owning release binary for each historical storage behavior; "
-                "all binaries and source revisions are hash-bound"
-            ),
-            "snapshot_policy": (
-                "lane-native authenticated snapshots at identical starting heights; "
-                "snapshot bytes differ where storage format or genesis activation differs"
-            ),
-            "signature_limit": (
-                "ML-DSA signatures are randomized, so independently executed lane "
-                "transactions and consensus hashes are not byte-identical"
-            ),
+            "same_final_state_for_identical_inputs": exact_pairing_verified,
+            "changed_input": "authenticated node-local storage backend mode only",
         },
         "host": host_description(root),
         "claims_not_made": [
@@ -583,8 +608,7 @@ def main() -> int:
                 if args.development_smoke
                 else []
             ),
-            "same binary across retired and selected storage implementations",
-            "byte-identical cross-lane signatures, blocks, or state roots",
+            "byte-identical independently generated validator signatures or certificate IDs",
             "public WAN or devnet performance",
             "deployment authorization",
         ],

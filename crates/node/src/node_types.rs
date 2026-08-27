@@ -2262,6 +2262,8 @@ pub struct BatchProposalTimingReport {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transactional_work:
         Option<postfiat_storage::transactional::TransactionalWorkCounters>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_work: Option<ApplyBatchStorageWorkReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shielded_breakdown: Option<ShieldedBatchProposalTimingReport>,
 }
@@ -2316,6 +2318,8 @@ pub struct BlockVoteCreationTimingReport {
     pub vote_file_write_ms: f64,
     pub process_spawn_ms: f64,
     pub target_breakdown: BlockVoteTargetTimingReport,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_work: Option<ApplyBatchStorageWorkReport>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

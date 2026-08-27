@@ -22,11 +22,15 @@ use postfiat_types::{
 };
 use serde::{Deserialize, Serialize};
 
+pub mod backend_mode;
 pub mod fastswap_store;
 pub mod integrity;
 pub mod ordered_history;
 pub mod transactional;
 
+pub use backend_mode::{
+    StorageBackendMode, STORAGE_BACKEND_MODE_FILE, STORAGE_BACKEND_MODE_SCHEMA,
+};
 pub use ordered_history::{OrderedHistoryCommitment, OrderedHistoryIndexReport};
 pub use transactional::{
     CanonicalExportReceiptV1, CanonicalHistoryIndexEntryV1, CommitFinalizedBlock, CommitOutcome,
@@ -76,7 +80,8 @@ pub struct NodeStore {
     transactional_store: Arc<Mutex<Option<Arc<TransactionalStore>>>>,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct StorageWorkCounters {
     pub jsonl_append_calls: u64,
     pub checkpoint_bytes_read: u64,
@@ -84,6 +89,8 @@ pub struct StorageWorkCounters {
     pub crash_suffix_records_verified: u64,
     pub legacy_prefix_bytes_read: u64,
     pub legacy_prefix_records_verified: u64,
+    pub ordered_history_bytes_read: u64,
+    pub ordered_history_records_read: u64,
     pub ordered_index_bitmap_bytes_read: u64,
     pub ordered_index_bitmap_bytes_written: u64,
     pub ordered_index_slots_read: u64,
@@ -98,6 +105,8 @@ struct StorageWorkCounterState {
     crash_suffix_records_verified: AtomicU64,
     legacy_prefix_bytes_read: AtomicU64,
     legacy_prefix_records_verified: AtomicU64,
+    ordered_history_bytes_read: AtomicU64,
+    ordered_history_records_read: AtomicU64,
     ordered_index_bitmap_bytes_read: AtomicU64,
     ordered_index_bitmap_bytes_written: AtomicU64,
     ordered_index_slots_read: AtomicU64,
@@ -264,6 +273,14 @@ impl NodeStore {
                 .work_counters
                 .legacy_prefix_records_verified
                 .load(Ordering::Relaxed),
+            ordered_history_bytes_read: self
+                .work_counters
+                .ordered_history_bytes_read
+                .load(Ordering::Relaxed),
+            ordered_history_records_read: self
+                .work_counters
+                .ordered_history_records_read
+                .load(Ordering::Relaxed),
             ordered_index_bitmap_bytes_read: self
                 .work_counters
                 .ordered_index_bitmap_bytes_read
@@ -303,6 +320,12 @@ impl NodeStore {
             .store(0, Ordering::Relaxed);
         self.work_counters
             .legacy_prefix_records_verified
+            .store(0, Ordering::Relaxed);
+        self.work_counters
+            .ordered_history_bytes_read
+            .store(0, Ordering::Relaxed);
+        self.work_counters
+            .ordered_history_records_read
             .store(0, Ordering::Relaxed);
         self.work_counters
             .ordered_index_bitmap_bytes_read
@@ -666,6 +689,13 @@ impl NodeStore {
         )? {
             merge_appended_ordered_batch(&mut batch_ids, batch_id)?;
         }
+        let logical_bytes = serde_json::to_vec(&batch_ids).map_err(invalid_data)?.len() as u64;
+        self.work_counters
+            .ordered_history_bytes_read
+            .fetch_add(logical_bytes, Ordering::Relaxed);
+        self.work_counters
+            .ordered_history_records_read
+            .fetch_add(batch_ids.len() as u64, Ordering::Relaxed);
         Ok(batch_ids)
     }
 
@@ -844,6 +874,9 @@ impl NodeStore {
         // truncate an unauthenticated partial record.
         enforce_serialized_size("JSONL append file", on_disk_len, MAX_JSONL_FILE_BYTES)?;
         let tail = self.read_jsonl_tail(&path)?;
+        if self.storage_backend_mode()? == StorageBackendMode::LegacyJsonl {
+            self.verify_jsonl_prefix_against_tail(&path, &tail)?;
+        }
         enforce_serialized_size("JSONL append file", tail.byte_offset, MAX_JSONL_FILE_BYTES)?;
         let envelope = self.jsonl_envelope(&tail.chain, payload);
         let envelope_json = serde_json::to_string(&envelope).map_err(invalid_data)?;
@@ -1405,6 +1438,92 @@ impl NodeStore {
             chain,
             previous_chain,
         })
+    }
+
+    /// Re-scan every accepted record and require the result to match the
+    /// authenticated v2 tail. This intentionally reproduces the retired
+    /// chain-length-dependent append work for the same-binary comparison lane;
+    /// the selected and bounded modes never call it.
+    fn verify_jsonl_prefix_against_tail(&self, path: &Path, tail: &JsonlTail) -> io::Result<()> {
+        if tail.byte_offset == 0 {
+            return Ok(());
+        }
+        let file = File::open(path)?;
+        let len = file.metadata()?.len();
+        let mut reader = BufReader::new(file);
+        let mut chain = JSONL_CHAIN_GENESIS.to_owned();
+        let mut previous_chain = JSONL_CHAIN_GENESIS.to_owned();
+        let mut record_count = 0_u64;
+        let mut byte_offset = 0_u64;
+        let mut line = Vec::new();
+        loop {
+            line.clear();
+            let read = reader
+                .by_ref()
+                .take(MAX_JSONL_RECORD_BYTES as u64 + 2)
+                .read_until(b'\n', &mut line)?;
+            if read == 0 {
+                break;
+            }
+            if line.len() > MAX_JSONL_RECORD_BYTES.saturating_add(1) || !line.ends_with(b"\n") {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "legacy comparison scan found an invalid JSONL record in `{}`",
+                        path.display()
+                    ),
+                ));
+            }
+            byte_offset = byte_offset.saturating_add(read as u64);
+            self.work_counters
+                .legacy_prefix_bytes_read
+                .fetch_add(read as u64, Ordering::Relaxed);
+            let mut trimmed: &[u8] = &line;
+            while matches!(trimmed.last(), Some(b'\n' | b'\r')) {
+                trimmed = &trimmed[..trimmed.len() - 1];
+            }
+            if trimmed.iter().all(u8::is_ascii_whitespace) {
+                continue;
+            }
+            let envelope: JsonlEnvelope = serde_json::from_slice(trimmed).map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "legacy comparison scan could not parse JSONL record {} in `{}`: {error}",
+                        record_count.saturating_add(1),
+                        path.display()
+                    ),
+                )
+            })?;
+            self.verify_jsonl_envelope(
+                path,
+                "legacy comparison scan",
+                record_count.saturating_add(1) as usize,
+                &envelope,
+                &chain,
+            )?;
+            self.work_counters
+                .legacy_prefix_records_verified
+                .fetch_add(1, Ordering::Relaxed);
+            previous_chain = chain;
+            chain = envelope.mac;
+            record_count = record_count.saturating_add(1);
+        }
+        if len != tail.byte_offset
+            || byte_offset != tail.byte_offset
+            || record_count != tail.record_count
+            || chain != tail.chain
+            || previous_chain != tail.previous_chain
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "legacy comparison scan disagrees with authenticated JSONL tail `{}`",
+                    path.display()
+                ),
+            ));
+        }
+        Ok(())
     }
 
     fn jsonl_head_path(path: &Path) -> PathBuf {
@@ -2562,6 +2681,41 @@ mod tests {
             fs::metadata(dir.join(RECEIPTS_APPEND_FILE))
                 .expect("append metadata")
                 .len()
+        );
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn legacy_comparison_mode_rescans_the_accepted_prefix_on_every_append() {
+        let dir = unique_test_dir("postfiat-storage-legacy-comparison-jsonl-test");
+        let store = NodeStore::new(&dir);
+        store.write_receipts(&[]).expect("write empty receipts");
+        store
+            .write_storage_backend_mode(StorageBackendMode::LegacyJsonl)
+            .expect("select legacy comparison mode");
+
+        take_jsonl_envelope_verifications();
+        store.reset_work_counters();
+        for index in 0..4_u64 {
+            store
+                .append_receipt_record(&sample_receipt(
+                    &format!("tx-legacy-comparison-{index}"),
+                    "tesSUCCESS",
+                ))
+                .expect("legacy comparison append");
+        }
+        let work = store.work_counters();
+        assert_eq!(work.jsonl_append_calls, 4);
+        assert_eq!(work.legacy_prefix_records_verified, 6);
+        assert!(work.legacy_prefix_bytes_read > 0);
+        assert_eq!(take_jsonl_envelope_verifications(), 6);
+        assert_eq!(
+            store
+                .read_receipts()
+                .expect("read comparison receipts")
+                .len(),
+            4
         );
 
         fs::remove_dir_all(dir).expect("cleanup");

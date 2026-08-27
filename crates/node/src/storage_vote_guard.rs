@@ -32,6 +32,35 @@ pub(crate) fn require_unambiguous_storage_for_vote(
     let expected_finalized_height = vote_height
         .checked_sub(1)
         .ok_or_else(|| vote_blocked("activated storage vote height cannot be zero"))?;
+    let backend_mode = store.storage_backend_mode().map_err(vote_blocked)?;
+    if !backend_mode.is_transactional() {
+        let tip = store.read_chain_tip().map_err(vote_blocked)?;
+        if tip.height != expected_finalized_height
+            || expected_parent_hash.is_some_and(|expected| tip.block_hash != expected)
+        {
+            return Err(vote_blocked(
+                "selected JSONL backend does not match the exact vote parent",
+            ));
+        }
+        let commitment = store
+            .backend_ordered_history_commitment()
+            .map_err(vote_blocked)?;
+        if commitment.count != tip.ordered_batch_count {
+            return Err(vote_blocked(
+                "selected JSONL ordered-history commitment conflicts with the vote parent",
+            ));
+        }
+        if current_replicated_state_root(&store, &genesis).map_err(vote_blocked)? != tip.state_root
+        {
+            return Err(vote_blocked(
+                "selected JSONL current state conflicts with the vote parent",
+            ));
+        }
+        read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))
+            .map_err(vote_blocked)?;
+        return Ok(());
+    }
+
     if !store
         .transactional_storage_configured()
         .map_err(vote_blocked)?

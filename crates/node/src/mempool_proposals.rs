@@ -2740,10 +2740,11 @@ fn propose_batch_with_optional_required_parent(
     }
     let stage_start = std::time::Instant::now();
     let store = NodeStore::new(&options.data_dir);
-    let transactional_work_store = store
-        .transactional_storage_configured()?
-        .then(|| store.transactional_store())
-        .transpose()?;
+    let legacy_work_before = store.work_counters();
+    let transactional_work_store = (store.storage_backend_mode()?.is_transactional()
+        && store.transactional_storage_configured()?)
+    .then(|| store.transactional_store())
+    .transpose()?;
     let transactional_work_before = transactional_work_store
         .as_ref()
         .map(|transactional| transactional.work_counters());
@@ -2849,10 +2850,13 @@ fn propose_batch_with_optional_required_parent(
     let stage_start = std::time::Instant::now();
     write_block_proposal_file(&options.proposal_file, &proposal)?;
     timings.serialization_ms = node_timing_elapsed_ms(stage_start);
-    timings.transactional_work = transactional_work_store
+    let transactional_work = transactional_work_store
         .as_ref()
         .zip(transactional_work_before)
         .map(|(transactional, before)| transactional.work_counters().saturating_delta(before));
+    let legacy_work = legacy_work_delta(store.work_counters(), legacy_work_before);
+    timings.transactional_work = transactional_work;
+    timings.storage_work = Some(storage_work_report(transactional_work, legacy_work));
     timings.total_ms = node_timing_elapsed_ms(total_start);
     Ok(BatchProposalWithTimingsReport { proposal, timings })
 }
@@ -2885,24 +2889,43 @@ pub(super) fn proposed_ordered_state(
     if effective_storage_commitment_activation_height(genesis, &governance)
         .is_some_and(|activation_height| block_height >= activation_height)
     {
-        if !store.transactional_storage_configured()? {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                "storage commitment activation requires a verified transactional store",
-            ));
-        }
-        let transactional = store.transactional_store()?;
-        let commitment = transactional
-            .next_ordered_history_commitment(batch_id)
-            .map_err(|error| {
-                if error.code()
-                    == postfiat_storage::transactional::StorageErrorCode::DuplicateRecord
-                {
-                    io::Error::new(io::ErrorKind::AlreadyExists, error)
-                } else {
-                    io::Error::from(error)
+        let commitment = match store.storage_backend_mode()? {
+            postfiat_storage::StorageBackendMode::Transactional => {
+                if !store.transactional_storage_configured()? {
+                    return Err(io::Error::new(
+                        io::ErrorKind::NotFound,
+                        "storage commitment activation requires a verified transactional store",
+                    ));
                 }
-            })?;
+                store
+                    .transactional_store()?
+                    .next_ordered_history_commitment(batch_id)
+                    .map_err(|error| {
+                        if error.code()
+                            == postfiat_storage::transactional::StorageErrorCode::DuplicateRecord
+                        {
+                            io::Error::new(io::ErrorKind::AlreadyExists, error)
+                        } else {
+                            io::Error::from(error)
+                        }
+                    })?
+            }
+            postfiat_storage::StorageBackendMode::BoundedJsonl => {
+                store.next_ordered_history_commitment(batch_id)?
+            }
+            postfiat_storage::StorageBackendMode::LegacyJsonl => {
+                let ordered_batches = store.read_ordered_batches()?;
+                if ordered_batches.iter().any(|existing| existing == batch_id) {
+                    return Err(io::Error::new(
+                        io::ErrorKind::AlreadyExists,
+                        format!("batch '{batch_id}' already applied"),
+                    ));
+                }
+                store
+                    .legacy_ordered_history_commitment()?
+                    .append(batch_id)?
+            }
+        };
         if commitment.count != block_height {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,

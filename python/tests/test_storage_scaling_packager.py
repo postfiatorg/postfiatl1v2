@@ -41,6 +41,17 @@ def _write_json(path: Path, value: object) -> None:
 
 
 def _campaign(root: Path, *, label: str = "height-50-window-1") -> Path:
+    corpora: dict[int, tuple[Path, str]] = {}
+    for height in (50, 100, 500, 1000, 5000):
+        corpus = root / "corpora" / f"height-{height}.json"
+        _write_json(
+            corpus,
+            {
+                "schema": "postfiat-tx-latency-signed-transfer-corpus-v1",
+                "transfers": [{"height": height}],
+            },
+        )
+        corpora[height] = (corpus, _sha256(corpus))
     lanes: dict[str, object] = {}
     for lane in LANES:
         normalized = root / "raw" / lane / "normalized.json"
@@ -54,6 +65,10 @@ def _campaign(root: Path, *, label: str = "height-50-window-1") -> Path:
                     "windows": [
                         {
                             "label": label,
+                            "signed_transfer_corpus": corpora[50][0]
+                            .relative_to(root)
+                            .as_posix(),
+                            "signed_transfer_corpus_sha256": corpora[50][1],
                             "normalized_report": normalized.relative_to(root).as_posix(),
                             "normalized_report_sha256": _sha256(normalized),
                             "resource_samples": resources.relative_to(root).as_posix(),
@@ -68,6 +83,19 @@ def _campaign(root: Path, *, label: str = "height-50-window-1") -> Path:
         "status": "PASS",
         "campaign_mode": "release-qualification",
         "evidence_eligible": True,
+        "snapshots_by_height": [
+            {
+                "height": height,
+                "snapshot": f"canonical/snapshots/height-{height}.snapshot",
+                "snapshot_sha256": f"{height:064x}",
+                "signed_transfer_corpus": corpus.relative_to(root).as_posix(),
+                "signed_transfer_corpus_sha256": digest,
+                "transfer_count": 50,
+                "first_sequence": 1,
+                "last_sequence": 50,
+            }
+            for height, (corpus, digest) in corpora.items()
+        ],
         "lanes": lanes,
     }
     path = root / "campaign-report.json"
@@ -91,6 +119,18 @@ class StorageScalingPackagerTests(unittest.TestCase):
                 copied["rows"],
                 copied["lanes"]["selected-indexed"]["rows"],
             )
+            corpora = {
+                entry["height"]: entry
+                for entry in copied["snapshots_by_height"]
+            }
+            self.assertEqual(set(corpora), {50, 100, 500, 1000, 5000})
+            for entry in corpora.values():
+                corpus = packet / entry["signed_transfer_corpus"]
+                self.assertTrue(corpus.is_file())
+                self.assertEqual(
+                    _sha256(corpus),
+                    entry["signed_transfer_corpus_sha256"],
+                )
             for lane in LANES:
                 window = copied["lanes"][lane]["rows"][0]["windows"][0]
                 normalized = packet / window["normalized_report"]
@@ -99,6 +139,14 @@ class StorageScalingPackagerTests(unittest.TestCase):
                 self.assertTrue(resources.is_file())
                 self.assertEqual(_sha256(normalized), window["normalized_report_sha256"])
                 self.assertEqual(_sha256(resources), window["resource_samples_sha256"])
+                self.assertEqual(
+                    window["signed_transfer_corpus"],
+                    corpora[50]["signed_transfer_corpus"],
+                )
+                self.assertEqual(
+                    window["signed_transfer_corpus_sha256"],
+                    corpora[50]["signed_transfer_corpus_sha256"],
+                )
 
     def test_copy_performance_rejects_noncanonical_destination_label(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

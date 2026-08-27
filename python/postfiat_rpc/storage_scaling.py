@@ -45,18 +45,59 @@ MATERIAL_STAGE_PATHS = {
 MODEL_RELATIVE_MATERIALITY = 0.10
 MODEL_RESIDUAL_SIGMAS = 2.0
 PERFORMANCE_LANES = ("legacy-jsonl", "bounded-jsonl", "selected-indexed")
-PERFORMANCE_SOURCE_REVISIONS = {
-    "legacy-jsonl": "8cc7d15edc58b5f5a0b745143fef2d45203465ff",
-    "bounded-jsonl": "dfd0b9f11108b0b773d1e02bebae71685864228e",
-}
 PERFORMANCE_STORAGE_BEHAVIORS = {
-    "legacy-jsonl": "full-prefix JSON/JSONL and full ordered-history proposal path",
-    "bounded-jsonl": "authenticated JSONL v2 heads and fixed-slot ordered index candidate",
-    "selected-indexed": "transactional redb finality path and fixed-size accumulator",
+    "legacy-jsonl": (
+        "authenticated JSONL with full-prefix append verification and full "
+        "ordered-history proposal work"
+    ),
+    "bounded-jsonl": (
+        "authenticated JSONL v2 heads with the fixed-slot ordered index"
+    ),
+    "selected-indexed": (
+        "transactional redb finality path with the fixed-size accumulator"
+    ),
 }
+PERFORMANCE_BACKEND_MODES = {
+    "legacy-jsonl": "legacy-jsonl",
+    "bounded-jsonl": "bounded-jsonl",
+    "selected-indexed": "transactional",
+}
+TRANSACTIONAL_COUNTER_FIELDS = (
+    "read_transactions",
+    "write_transactions",
+    "committed_write_transactions",
+    "records_read",
+    "records_written",
+    "bytes_read",
+    "bytes_written",
+    "page_reads",
+    "page_writes",
+    "full_history_scans",
+    "full_history_records_read",
+    "full_history_bytes_read",
+    "durable_commit_micros",
+)
+LEGACY_COUNTER_FIELDS = (
+    "jsonl_append_calls",
+    "checkpoint_bytes_read",
+    "crash_suffix_bytes_read",
+    "crash_suffix_records_verified",
+    "legacy_prefix_bytes_read",
+    "legacy_prefix_records_verified",
+    "ordered_history_bytes_read",
+    "ordered_history_records_read",
+    "ordered_index_bitmap_bytes_read",
+    "ordered_index_bitmap_bytes_written",
+    "ordered_index_slots_read",
+    "ordered_index_slots_written",
+)
+SIGNED_TRANSFER_CORPUS_SCHEMA = "postfiat-tx-latency-signed-transfer-corpus-v1"
 RESOURCE_SAMPLE_SCHEMA = "postfiat-storage-resource-samples-v1"
 RESOURCE_SAMPLE_TARGET_INTERVAL_MS = 100
 PERFORMANCE_QUALIFICATION_TIMEOUT_MS = 900_000
+MAX_PROPOSAL_PAGE_READS_PER_ROUND = 64
+MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND = 64
+MAX_APPLY_PAGE_WRITES_PER_VALIDATOR_ROUND = 32
 PERFORMANCE_RESOURCE_FIELDS = (
     "cpu_ticks",
     "peak_rss_kib",
@@ -112,7 +153,7 @@ ORIGINAL_E3_FORGED_CASES = (
 ARTIFACT_SCHEMAS = {
     "source": "postfiat-storage-source-identity-v1",
     "replay": "postfiat-storage-scaling-replay-v1",
-    "performance": "postfiat-storage-scaling-paired-six-validator-campaign-v2",
+    "performance": "postfiat-storage-scaling-paired-six-validator-campaign-v3",
     "tamper": "postfiat-storage-scaling-tamper-matrix-v1",
     "migration": "postfiat-storage-scaling-six-clone-migration-v1",
     "redaction": "postfiat-storage-scaling-redaction-v1",
@@ -372,8 +413,6 @@ def _verify_source(
         "bin/postfiat-node",
         "bin/postfiat-node-rollback",
         "bin/postfiat-node-incompatible",
-        "bin/postfiat-node-performance-legacy",
-        "bin/postfiat-node-performance-bounded",
     }
     observed_binaries: dict[str, str] = {}
     for index, value in enumerate(binaries):
@@ -387,7 +426,7 @@ def _verify_source(
             _fail(f"binary identity mismatch for {name}")
         observed_binaries[name] = expected
     if set(observed_binaries) != expected_binary_paths:
-        _fail("source binary roles do not match the required five-binary set")
+        _fail("source binary roles do not match the required three-binary set")
     if len(set(observed_binaries.values())) != len(expected_binary_paths):
         _fail("source binary roles are not distinct")
 
@@ -965,33 +1004,335 @@ def _verify_resource_samples(
     }
 
 
+def _canonical_signed_transfer_identity(
+    transfer_value: Any,
+    label: str,
+) -> tuple[str, str, int]:
+    transfer = _object(transfer_value, label)
+    unsigned = _object(transfer.get("unsigned"), f"{label} unsigned transfer")
+    unsigned_fields = (
+        "chain_id",
+        "genesis_hash",
+        "protocol_version",
+        "address_namespace",
+        "transaction_kind",
+        "signature_algorithm_id",
+        "from",
+        "to",
+        "amount",
+        "fee",
+        "sequence",
+    )
+    if set(unsigned) != set(unsigned_fields) or set(transfer) != {
+        "unsigned",
+        "algorithm_id",
+        "public_key_hex",
+        "signature_hex",
+    }:
+        _fail(f"{label} has a non-canonical field set")
+    canonical_unsigned = {field: unsigned[field] for field in unsigned_fields}
+    canonical_transfer = {
+        "unsigned": canonical_unsigned,
+        "algorithm_id": transfer["algorithm_id"],
+        "public_key_hex": transfer["public_key_hex"],
+        "signature_hex": transfer["signature_hex"],
+    }
+    for field in (
+        "chain_id",
+        "genesis_hash",
+        "address_namespace",
+        "transaction_kind",
+        "signature_algorithm_id",
+        "from",
+        "to",
+    ):
+        if not isinstance(unsigned[field], str) or not unsigned[field]:
+            _fail(f"{label} unsigned field {field} is invalid")
+    for field in ("protocol_version", "amount", "fee", "sequence"):
+        if (
+            not isinstance(unsigned[field], int)
+            or isinstance(unsigned[field], bool)
+            or unsigned[field] < 0
+        ):
+            _fail(f"{label} unsigned field {field} is invalid")
+    for field in ("algorithm_id", "public_key_hex", "signature_hex"):
+        if not isinstance(transfer[field], str) or not transfer[field]:
+            _fail(f"{label} field {field} is invalid")
+    canonical_json = json.dumps(
+        canonical_transfer,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    signed_sha256 = hashlib.sha256(canonical_json).hexdigest()
+    signing_bytes = (
+        "postfiat.transfer.v1\n"
+        f"chain_id={unsigned['chain_id']}\n"
+        f"genesis_hash={unsigned['genesis_hash']}\n"
+        f"protocol_version={unsigned['protocol_version']}\n"
+        f"address_namespace={unsigned['address_namespace']}\n"
+        f"transaction_kind={unsigned['transaction_kind']}\n"
+        f"signature_algorithm_id={unsigned['signature_algorithm_id']}\n"
+        f"from={unsigned['from']}\n"
+        f"to={unsigned['to']}\n"
+        f"amount={unsigned['amount']}\n"
+        f"fee={unsigned['fee']}\n"
+        f"sequence={unsigned['sequence']}\n"
+        f"algorithm={transfer['algorithm_id']}\n"
+        f"public_key={transfer['public_key_hex']}\n"
+        f"signature={transfer['signature_hex']}\n"
+    ).encode("utf-8")
+    tx_id = hashlib.sha3_384(b"postfiat.tx_id.v1\x00" + signing_bytes).hexdigest()
+    return tx_id, signed_sha256, int(unsigned["sequence"])
+
+
+def _verify_signed_transfer_corpus(
+    packet_dir: Path,
+    checksums: Mapping[str, str],
+    path: Any,
+    digest: Any,
+    *,
+    wallet_address: str,
+    recipient_address: str,
+    transfer_count: int,
+    label: str,
+) -> tuple[tuple[tuple[str, str], ...], int, int]:
+    corpus = _bound_json(
+        packet_dir,
+        checksums,
+        {"path": path, "sha256": digest},
+        label,
+    )
+    transfers = _list(corpus.get("transfers"), f"{label} transfers")
+    if corpus.get("schema") != SIGNED_TRANSFER_CORPUS_SCHEMA:
+        _fail(f"{label} schema is unsupported")
+    if len(transfers) != transfer_count:
+        _fail(f"{label} transfer count differs")
+    identities: list[tuple[str, str]] = []
+    sequences: list[int] = []
+    for index, transfer in enumerate(transfers):
+        tx_id, signed_sha256, sequence = _canonical_signed_transfer_identity(
+            transfer,
+            f"{label} entry {index}",
+        )
+        unsigned = _object(
+            _object(transfer, f"{label} entry {index}").get("unsigned"),
+            f"{label} entry {index} unsigned transfer",
+        )
+        if (
+            unsigned.get("from") != wallet_address
+            or unsigned.get("to") != recipient_address
+            or unsigned.get("amount") != 10
+        ):
+            _fail(f"{label} entry {index} workload binding differs")
+        identities.append((tx_id, signed_sha256))
+        sequences.append(sequence)
+    if len(set(identities)) != len(identities):
+        _fail(f"{label} contains duplicate signed transactions")
+    if sequences != list(range(sequences[0], sequences[0] + transfer_count)):
+        _fail(f"{label} sequences are not contiguous")
+    return tuple(identities), sequences[0], sequences[-1]
+
+
+def _recompute_raw_storage_work(
+    raw: Mapping[str, Any], lane_name: str
+) -> dict[str, Any]:
+    transactional_totals = {field: 0 for field in TRANSACTIONAL_COUNTER_FIELDS}
+    legacy_totals = {field: 0 for field in LEGACY_COUNTER_FIELDS}
+    full_history_records_read = 0
+    full_history_bytes_read = 0
+    selected = lane_name == "selected-indexed"
+
+    def add_work(value: Any, label: str, *, apply_stage: bool) -> None:
+        nonlocal full_history_records_read, full_history_bytes_read
+        work = _object(value, f"{label} storage work")
+        legacy = _object(work.get("legacy"), f"{label} legacy storage work")
+        if set(legacy) != set(LEGACY_COUNTER_FIELDS):
+            _fail(f"{label} legacy storage counter set differs")
+        for field in LEGACY_COUNTER_FIELDS:
+            counter = legacy.get(field)
+            if not isinstance(counter, int) or isinstance(counter, bool) or counter < 0:
+                _fail(f"{label} legacy storage counter {field} is invalid")
+            legacy_totals[field] += counter
+
+        transactional_value = work.get("transactional")
+        if selected:
+            transactional = _object(
+                transactional_value, f"{label} transactional storage work"
+            )
+            if set(transactional) != set(TRANSACTIONAL_COUNTER_FIELDS):
+                _fail(f"{label} transactional storage counter set differs")
+            for field in TRANSACTIONAL_COUNTER_FIELDS:
+                counter = transactional.get(field)
+                if (
+                    not isinstance(counter, int)
+                    or isinstance(counter, bool)
+                    or counter < 0
+                ):
+                    _fail(f"{label} transactional storage counter {field} is invalid")
+                transactional_totals[field] += counter
+            max_reads = (
+                MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND
+                if apply_stage
+                else MAX_PROPOSAL_PAGE_READS_PER_ROUND
+            )
+            max_writes = MAX_APPLY_PAGE_WRITES_PER_VALIDATOR_ROUND if apply_stage else 0
+            if (
+                transactional["page_reads"] > max_reads
+                or transactional["page_writes"] > max_writes
+            ):
+                _fail(f"{label} transactional page work exceeds the per-stage bound")
+            if apply_stage:
+                if transactional["committed_write_transactions"] != 1:
+                    _fail(f"{label} did not commit exactly one storage transaction")
+            elif any(
+                transactional[field] != 0
+                for field in (
+                    "write_transactions",
+                    "committed_write_transactions",
+                    "records_written",
+                    "bytes_written",
+                    "page_writes",
+                    "durable_commit_micros",
+                )
+            ):
+                _fail(f"{label} reported a write outside finalized apply")
+            if any(legacy[field] != 0 for field in LEGACY_COUNTER_FIELDS):
+                _fail(f"{label} selected storage unexpectedly used legacy work")
+        elif transactional_value is not None:
+            _fail(f"{label} comparison storage unexpectedly used transactional work")
+
+        expected_records = (
+            (transactional_value or {}).get("full_history_records_read", 0)
+            + legacy["crash_suffix_records_verified"]
+            + legacy["legacy_prefix_records_verified"]
+            + legacy["ordered_history_records_read"]
+        )
+        expected_bytes = (
+            (transactional_value or {}).get("full_history_bytes_read", 0)
+            + legacy["checkpoint_bytes_read"]
+            + legacy["crash_suffix_bytes_read"]
+            + legacy["legacy_prefix_bytes_read"]
+            + legacy["ordered_history_bytes_read"]
+            + legacy["ordered_index_bitmap_bytes_read"]
+        )
+        if (
+            work.get("full_history_records_read") != expected_records
+            or work.get("full_history_bytes_read") != expected_bytes
+        ):
+            _fail(f"{label} full-history storage summary differs")
+        full_history_records_read += expected_records
+        full_history_bytes_read += expected_bytes
+
+    iterations = _list(raw.get("iterations"), "performance raw storage iterations")
+    for iteration_index, iteration_value in enumerate(iterations, start=1):
+        iteration = _object(iteration_value, "performance raw storage iteration")
+        timings = _object(
+            iteration.get("round_timings"),
+            f"performance iteration {iteration_index} round timings",
+        )
+        proposal = _object(
+            timings.get("proposal_breakdown"),
+            f"performance iteration {iteration_index} proposal",
+        )
+        add_work(
+            proposal.get("storage_work"),
+            f"performance iteration {iteration_index} proposal",
+            apply_stage=False,
+        )
+
+        vote_targets = _list(
+            timings.get("vote_request_targets"),
+            f"performance iteration {iteration_index} validator reconstructions",
+        )
+        if len(vote_targets) != 5:
+            _fail(f"performance iteration {iteration_index} lacks five reconstructions")
+        for target_value in vote_targets:
+            target = _object(target_value, "performance validator reconstruction")
+            if target.get("result") != "ok":
+                _fail("performance validator reconstruction failed")
+            request = _object(
+                target.get("vote_request_breakdown"),
+                "performance validator reconstruction request",
+            )
+            remote = _object(
+                request.get("remote_handling"),
+                "performance remote validator handling",
+            )
+            block_vote = _object(
+                remote.get("block_vote_breakdown"),
+                "performance remote validator block vote",
+            )
+            add_work(
+                block_vote.get("storage_work"),
+                "performance validator reconstruction",
+                apply_stage=False,
+            )
+
+        local_apply = _object(
+            timings.get("local_apply_breakdown"),
+            f"performance iteration {iteration_index} local apply",
+        )
+        add_work(
+            local_apply.get("storage_work"),
+            f"performance iteration {iteration_index} local apply",
+            apply_stage=True,
+        )
+        send_targets = _list(
+            timings.get("certified_send_targets"),
+            f"performance iteration {iteration_index} certified applies",
+        )
+        if len(send_targets) != 5:
+            _fail(f"performance iteration {iteration_index} lacks five certified applies")
+        for target_value in send_targets:
+            target = _object(target_value, "performance certified apply")
+            if target.get("result") != "ok":
+                _fail("performance certified apply failed")
+            add_work(
+                target.get("storage_work"),
+                "performance certified apply",
+                apply_stage=True,
+            )
+
+    return {
+        "transactional": transactional_totals,
+        "legacy": legacy_totals,
+        "full_history_records_read": full_history_records_read,
+        "full_history_bytes_read": full_history_bytes_read,
+        "fsync_count": (
+            transactional_totals["committed_write_transactions"]
+            if selected
+            else legacy_totals["jsonl_append_calls"]
+        ),
+    }
+
+
 def _verify_performance_lane(
     packet_dir: Path,
     checksums: Mapping[str, str],
     lane: Mapping[str, Any],
     lane_name: str,
     expected_binary_digest: str,
-) -> list[Mapping[str, Any]]:
+    expected_source_revision: str,
+    snapshot_bindings: Mapping[int, Mapping[str, Any]],
+) -> tuple[list[Mapping[str, Any]], dict[int, list[Mapping[str, Any]]]]:
     if lane.get("lane") != lane_name:
         _fail(f"performance lane {lane_name} identifies the wrong mode")
     source_revision = str(lane.get("source_revision", ""))
-    if HEX40.fullmatch(source_revision) is None:
-        _fail(f"performance lane {lane_name} source revision is invalid")
-    expected_historical_revision = PERFORMANCE_SOURCE_REVISIONS.get(lane_name)
     if (
-        expected_historical_revision is not None
-        and source_revision != expected_historical_revision
+        HEX40.fullmatch(source_revision) is None
+        or source_revision != expected_source_revision
     ):
-        _fail(f"performance lane {lane_name} source revision is not frozen")
+        _fail(f"performance lane {lane_name} source revision differs")
     if lane.get("storage_behavior") != PERFORMANCE_STORAGE_BEHAVIORS[lane_name]:
         _fail(f"performance lane {lane_name} storage behavior is unbound")
     if lane.get("node_binary_sha256") != expected_binary_digest:
         _fail(f"performance lane {lane_name} binary identity is unbound")
     _verify_binary_build(lane, f"performance lane {lane_name}", source_revision)
+    if lane.get("storage_backend_mode") != PERFORMANCE_BACKEND_MODES[lane_name]:
+        _fail(f"performance lane {lane_name} backend selector is unbound")
     if lane.get("chain_id") != "postfiat-storage-scaling-local-v1":
         _fail(f"performance lane {lane_name} used the wrong local chain")
-    expected_activation = None if lane_name == "legacy-jsonl" else 1
-    if lane.get("storage_activation_height") != expected_activation:
+    if lane.get("storage_activation_height") != 1:
         _fail(f"performance lane {lane_name} used the wrong activation boundary")
     for key in ("height_1_snapshot_sha256", "topology_sha256"):
         if HEX64.fullmatch(str(lane.get(key, ""))) is None:
@@ -1050,9 +1391,13 @@ def _verify_performance_lane(
     height_50_stage_p95: dict[str, list[float]] = {
         stage: [] for stage in MATERIAL_STAGE_PATHS
     }
+    verified_windows: dict[int, list[Mapping[str, Any]]] = {}
     for row_value in rows:
         row = _object(row_value, f"performance lane {lane_name} row")
         height = int(row["height"])
+        snapshot_binding = snapshot_bindings.get(height)
+        if snapshot_binding is None:
+            _fail(f"performance lane {lane_name} height {height} lacks a shared input")
         windows = _list(
             row.get("windows"),
             f"performance lane {lane_name} height {height} windows",
@@ -1065,10 +1410,12 @@ def _verify_performance_lane(
         }
         row_source_snapshots: set[str] = set()
         row_initial_identities: set[tuple[str, str]] = set()
-        for window_value in windows:
+        row_verified_windows: list[Mapping[str, Any]] = []
+        for window_index, window_value in enumerate(windows, start=1):
             window = _object(window_value, f"performance lane {lane_name} window")
             if (
-                window.get("storage_lane") != lane_name
+                window.get("label") != f"height-{height}-window-{window_index}"
+                or window.get("storage_lane") != lane_name
                 or window.get("starting_height") != height
                 or window.get("rounds") != 50
                 or window.get("validators_converged") != 6
@@ -1078,9 +1425,29 @@ def _verify_performance_lane(
                 window.get("literal_receipts_exact"),
                 f"performance lane {lane_name} literal receipts",
             )
-            for key in ("source_snapshot_sha256", "result_snapshot_sha256"):
+            _bool(
+                window.get("backend_work_gate_pass"),
+                f"performance lane {lane_name} backend work gate",
+            )
+            for key in (
+                "source_snapshot_sha256",
+                "result_snapshot_sha256",
+                "signed_transfer_corpus_sha256",
+            ):
                 if HEX64.fullmatch(str(window.get(key, ""))) is None:
                     _fail(f"performance lane {lane_name} window {key} is invalid")
+            if (
+                window.get("source_snapshot_sha256")
+                != snapshot_binding["snapshot_sha256"]
+                or window.get("signed_transfer_corpus")
+                != snapshot_binding["corpus_path"]
+                or window.get("signed_transfer_corpus_sha256")
+                != snapshot_binding["corpus_sha256"]
+            ):
+                _fail(
+                    f"performance lane {lane_name} height {height} did not use "
+                    "the shared authenticated snapshot and signed corpus"
+                )
             row_source_snapshots.add(str(window["source_snapshot_sha256"]))
             initial_tip, initial_root = _verify_performance_fleet(
                 window.get("initial_fleet"),
@@ -1128,43 +1495,120 @@ def _verify_performance_lane(
                     expected_value,
                     f"performance lane {lane_name} sampled resource {key}",
                 )
+            transactional = _object(
+                storage.get("transactional"),
+                f"performance lane {lane_name} transactional counters",
+            )
+            legacy = _object(
+                storage.get("legacy"),
+                f"performance lane {lane_name} legacy counters",
+            )
+            for counter_set, fields, counter_label in (
+                (transactional, TRANSACTIONAL_COUNTER_FIELDS, "transactional"),
+                (legacy, LEGACY_COUNTER_FIELDS, "legacy"),
+            ):
+                if set(counter_set) != set(fields):
+                    _fail(
+                        f"performance lane {lane_name} {counter_label} counter set differs"
+                    )
+                for key in fields:
+                    value = counter_set.get(key)
+                    if (
+                        not isinstance(value, int)
+                        or isinstance(value, bool)
+                        or value < 0
+                    ):
+                        _fail(
+                            f"performance lane {lane_name} {counter_label} "
+                            f"counter {key} is invalid"
+                        )
+            for key in (
+                "full_history_records_read",
+                "full_history_bytes_read",
+                "fsync_count",
+            ):
+                value = storage.get(key)
+                if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                    _fail(f"performance lane {lane_name} storage counter {key} is invalid")
+            zero_full_history = (
+                storage["full_history_records_read"] == 0
+                and storage["full_history_bytes_read"] == 0
+            )
+            if window.get("zero_full_history_reads") is not zero_full_history:
+                _fail(f"performance lane {lane_name} full-history summary differs")
+            expected_bounded_index = (
+                transactional["page_reads"]
+                <= 50
+                * (
+                    MAX_PROPOSAL_PAGE_READS_PER_ROUND
+                    + 5 * MAX_PROPOSAL_PAGE_READS_PER_ROUND
+                    + 6 * MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND
+                )
+                if lane_name == "selected-indexed"
+                else (
+                    legacy["ordered_index_bitmap_bytes_read"] > 0
+                    and legacy["ordered_index_bitmap_bytes_written"] > 0
+                )
+                if lane_name == "bounded-jsonl"
+                else False
+            )
+            if window.get("bounded_index_pages") is not expected_bounded_index:
+                _fail(f"performance lane {lane_name} bounded-index summary differs")
+            expected_constant_accumulator = (
+                transactional["page_writes"]
+                <= 50 * 6 * MAX_APPLY_PAGE_WRITES_PER_VALIDATOR_ROUND
+                if lane_name == "selected-indexed"
+                else lane_name == "bounded-jsonl"
+            )
+            if (
+                window.get("constant_accumulator_work")
+                is not expected_constant_accumulator
+            ):
+                _fail(f"performance lane {lane_name} accumulator summary differs")
+            if any(transactional[key] != 0 for key in TRANSACTIONAL_COUNTER_FIELDS):
+                if lane_name != "selected-indexed":
+                    _fail(
+                        f"performance lane {lane_name} unexpectedly used transactional storage"
+                    )
             if lane_name == "selected-indexed":
-                for key in (
-                    "zero_full_history_reads",
-                    "bounded_index_pages",
-                    "constant_accumulator_work",
-                ):
-                    _bool(window.get(key), f"performance selected window {key}")
-                if storage.get("committed_write_transactions") != 300:
+                if transactional["committed_write_transactions"] != 300:
                     _fail("selected performance window did not commit once per validator")
-                if storage.get("fsync_count") != 300:
-                    _fail("selected performance fsync count differs from durable commits")
-                for key in (
-                    "full_history_scans",
-                    "full_history_records_read",
-                    "full_history_bytes_read",
-                ):
-                    if storage.get(key) != 0:
-                        _fail(f"selected performance storage counter {key} is not zero")
-                for key in ("page_reads", "page_writes", "fsync_count", "fsync_micros"):
-                    if not isinstance(resources.get(key), (int, float)) or resources[key] < 0:
-                        _fail(f"selected performance resource {key} is missing")
-            else:
-                for key in (
-                    "zero_full_history_reads",
-                    "bounded_index_pages",
-                    "constant_accumulator_work",
-                ):
-                    if window.get(key) is not None:
-                        _fail(f"historical performance lane {lane_name} overclaims {key}")
                 if (
-                    storage.get("telemetry_available") is not False
-                    or not isinstance(storage.get("reason"), str)
+                    storage["fsync_count"] != 300
+                    or storage["full_history_records_read"] != 0
+                    or storage["full_history_bytes_read"] != 0
+                    or transactional["full_history_scans"] != 0
                 ):
-                    _fail(f"historical performance lane {lane_name} hides telemetry limits")
-                for key in ("page_reads", "page_writes", "fsync_count", "fsync_micros"):
-                    if resources.get(key) is not None:
-                        _fail(f"historical performance lane {lane_name} invented {key}")
+                    _fail("selected performance work gate differs")
+            elif lane_name == "bounded-jsonl":
+                if (
+                    legacy["legacy_prefix_records_verified"] != 0
+                    or legacy["legacy_prefix_bytes_read"] != 0
+                    or legacy["ordered_history_records_read"] != 0
+                    or legacy["ordered_history_bytes_read"] != 0
+                    or legacy["ordered_index_bitmap_bytes_read"] <= 0
+                    or legacy["ordered_index_bitmap_bytes_written"] <= 0
+                    or legacy["ordered_index_slots_written"] <= 0
+                ):
+                    _fail("bounded-JSONL performance work gate differs")
+            elif (
+                legacy["legacy_prefix_records_verified"] <= 0
+                or legacy["legacy_prefix_bytes_read"] <= 0
+                or legacy["ordered_history_records_read"] <= 0
+                or legacy["ordered_history_bytes_read"] <= 0
+                or legacy["ordered_index_slots_read"] != 0
+                or legacy["ordered_index_slots_written"] != 0
+            ):
+                _fail("legacy performance work gate differs")
+            expected_resource_counters = {
+                "page_reads": transactional["page_reads"],
+                "page_writes": transactional["page_writes"],
+                "fsync_count": storage["fsync_count"],
+                "fsync_micros": transactional["durable_commit_micros"],
+            }
+            for key, expected_value in expected_resource_counters.items():
+                if resources.get(key) != expected_value:
+                    _fail(f"performance lane {lane_name} resource {key} differs")
 
             raw = _bound_json(
                 packet_dir,
@@ -1192,6 +1636,10 @@ def _verify_performance_lane(
                 "amount": 10,
                 "wallet_address": lane["wallet_address"],
                 "recipient": lane["recipient_address"],
+                "input_source": "signed-transfer-corpus",
+                "signed_transfer_corpus": "$SIGNED_TRANSFER_CORPUS",
+                "signed_transfer_corpus_sha256": snapshot_binding["corpus_sha256"],
+                "signed_transfer_corpus_offset": 0,
             }
             for key, expected_value in expected_config.items():
                 if config.get(key) != expected_value:
@@ -1204,8 +1652,11 @@ def _verify_performance_lane(
                     or config.get("expected_start_height") != height
                 ):
                     _fail("selected performance raw storage mode is invalid")
-            elif config.get("resident_transactional_store") is not None:
-                _fail(f"historical performance lane {lane_name} used selected mode")
+            elif (
+                config.get("resident_transactional_store") is not False
+                or config.get("expected_start_height") is not None
+            ):
+                _fail(f"comparison performance lane {lane_name} used selected mode")
             checks = _object(raw.get("checks"), "performance raw checks")
             for key in (
                 "all_receipts_accepted",
@@ -1217,6 +1668,7 @@ def _verify_performance_lane(
                 "iteration_count_matches_rounds",
                 "no_duplicate_receipts",
                 "state_verified_after_run",
+                "exact_input_binding",
             ):
                 _bool(checks.get(key), f"performance raw check {key}")
             raw_final = _object(raw.get("final_state"), "performance raw final state")
@@ -1230,6 +1682,10 @@ def _verify_performance_lane(
             iterations = _list(raw.get("iterations"), "performance iterations")
             if len(iterations) != 50:
                 _fail(f"performance lane {lane_name} window lacks 50 iterations")
+            expected_transaction_identities = snapshot_binding[
+                "transaction_identities"
+            ]
+            observed_transaction_identities: list[tuple[str, str]] = []
             stage_samples = {stage: [] for stage in MATERIAL_STAGE_PATHS}
             for iteration_index, iteration_value in enumerate(iterations, start=1):
                 iteration = _object(iteration_value, "performance iteration")
@@ -1247,8 +1703,29 @@ def _verify_performance_lane(
                     or iteration.get("quorum") != 5
                     or HEX96.fullmatch(str(iteration.get("block_hash", ""))) is None
                     or HEX96.fullmatch(str(iteration.get("certificate_id", ""))) is None
+                    or iteration.get("input_source") != "signed-transfer-corpus"
+                    or iteration.get("signed_transfer_corpus_index")
+                    != iteration_index - 1
+                    or HEX96.fullmatch(str(iteration.get("tx_id", ""))) is None
+                    or HEX64.fullmatch(
+                        str(iteration.get("signed_transfer_sha256", ""))
+                    )
+                    is None
                 ):
                     _fail(f"performance lane {lane_name} iteration identity is invalid")
+                transaction_identity = (
+                    str(iteration["tx_id"]),
+                    str(iteration["signed_transfer_sha256"]),
+                )
+                if (
+                    transaction_identity
+                    != expected_transaction_identities[iteration_index - 1]
+                ):
+                    _fail(
+                        f"performance lane {lane_name} iteration did not consume "
+                        "the bound signed corpus"
+                    )
+                observed_transaction_identities.append(transaction_identity)
                 for metric in samples:
                     metric_value = iteration.get(metric)
                     if not isinstance(metric_value, (int, float)) or metric_value <= 0:
@@ -1257,6 +1734,31 @@ def _verify_performance_lane(
                 for stage, path in MATERIAL_STAGE_PATHS.items():
                     stage_samples[stage].append(
                         _nested_stage_value(iteration, stage, path)
+                    )
+            raw_storage = _recompute_raw_storage_work(raw, lane_name)
+            for field in TRANSACTIONAL_COUNTER_FIELDS:
+                if field in ("full_history_records_read", "full_history_bytes_read"):
+                    continue
+                if storage.get(field) != transactional[field]:
+                    _fail(
+                        f"performance lane {lane_name} flattened transactional "
+                        f"counter {field} differs"
+                    )
+            for counter_group in ("transactional", "legacy"):
+                if raw_storage[counter_group] != storage[counter_group]:
+                    _fail(
+                        f"performance lane {lane_name} {counter_group} storage "
+                        "summary differs from raw stage telemetry"
+                    )
+            for field in (
+                "full_history_records_read",
+                "full_history_bytes_read",
+                "fsync_count",
+            ):
+                if raw_storage[field] != storage[field]:
+                    _fail(
+                        f"performance lane {lane_name} storage {field} differs "
+                        "from raw stage telemetry"
                     )
             for stage, values in stage_samples.items():
                 window_p95 = _percentile(values, 0.95)
@@ -1269,11 +1771,22 @@ def _verify_performance_lane(
                 )
                 if height == HEIGHTS[0]:
                     height_50_stage_p95[stage].append(window_p95)
+            row_verified_windows.append(
+                {
+                    "initial_tip": initial_tip,
+                    "initial_state_root": initial_root,
+                    "final_state_root": final_root,
+                    "transaction_identities": tuple(
+                        observed_transaction_identities
+                    ),
+                }
+            )
 
         if len(row_source_snapshots) != 1 or len(row_initial_identities) != 1:
             _fail(
                 f"performance lane {lane_name} height {height} windows did not share one snapshot"
             )
+        verified_windows[height] = row_verified_windows
         aggregate = _object(row.get("aggregate"), "performance aggregate")
         for metric, values in samples.items():
             observed = _object(aggregate.get(metric), f"performance {metric} aggregate")
@@ -1325,7 +1838,7 @@ def _verify_performance_lane(
     expected_selected_gate = True if lane_name == "selected-indexed" else None
     if lane.get("selected_storage_gates_pass") is not expected_selected_gate:
         _fail(f"performance lane {lane_name} selected gate summary is invalid")
-    return rows
+    return rows, verified_windows
 
 
 def _verify_performance(
@@ -1373,53 +1886,135 @@ def _verify_performance(
     lanes = _object(performance.get("lanes"), "performance lanes")
     if set(lanes) != set(PERFORMANCE_LANES):
         _fail("performance report does not contain exactly three lanes")
-    lane_binary_paths = {
-        "legacy-jsonl": "bin/postfiat-node-performance-legacy",
-        "bounded-jsonl": "bin/postfiat-node-performance-bounded",
-        "selected-indexed": "bin/postfiat-node",
-    }
+    selected_lane = _object(lanes["selected-indexed"], "selected performance lane")
+    wallet_address = str(selected_lane.get("wallet_address", ""))
+    recipient_address = str(selected_lane.get("recipient_address", ""))
+    if not wallet_address or not recipient_address:
+        _fail("performance workload accounts are missing")
+
+    snapshot_entries = _list(
+        performance.get("snapshots_by_height"),
+        "performance shared snapshots and corpora",
+    )
+    if [
+        entry.get("height") if isinstance(entry, dict) else None
+        for entry in snapshot_entries
+    ] != HEIGHTS:
+        _fail("performance shared snapshot/corpus heights differ")
+    snapshot_bindings: dict[int, Mapping[str, Any]] = {}
+    for entry_value in snapshot_entries:
+        entry = _object(entry_value, "performance shared snapshot/corpus entry")
+        height = int(entry["height"])
+        snapshot_path = str(entry.get("snapshot", ""))
+        if (
+            HEX64.fullmatch(str(entry.get("snapshot_sha256", ""))) is None
+            or _safe_relative(snapshot_path).as_posix() != snapshot_path
+            or entry.get("transfer_count") != 50
+        ):
+            _fail(f"performance height {height} snapshot/corpus binding is invalid")
+        transaction_identities, first_sequence, last_sequence = (
+            _verify_signed_transfer_corpus(
+                packet_dir,
+                checksums,
+                entry.get("signed_transfer_corpus"),
+                entry.get("signed_transfer_corpus_sha256"),
+                wallet_address=wallet_address,
+                recipient_address=recipient_address,
+                transfer_count=50,
+                label=f"performance height {height} signed transfer corpus",
+            )
+        )
+        if (
+            entry.get("first_sequence") != first_sequence
+            or entry.get("last_sequence") != last_sequence
+        ):
+            _fail(f"performance height {height} corpus sequence binding differs")
+        snapshot_bindings[height] = {
+            "snapshot_sha256": entry["snapshot_sha256"],
+            "corpus_path": entry["signed_transfer_corpus"],
+            "corpus_sha256": entry["signed_transfer_corpus_sha256"],
+            "transaction_identities": transaction_identities,
+        }
+
     verified_rows: dict[str, list[Mapping[str, Any]]] = {}
+    verified_windows: dict[str, dict[int, list[Mapping[str, Any]]]] = {}
     lane_sources: set[str] = set()
     lane_binaries: set[str] = set()
     for lane_name in PERFORMANCE_LANES:
         lane = _object(lanes.get(lane_name), f"performance lane {lane_name}")
-        expected_digest = binary_digests[lane_binary_paths[lane_name]]
-        verified_rows[lane_name] = _verify_performance_lane(
+        rows, windows = _verify_performance_lane(
             packet_dir,
             checksums,
             lane,
             lane_name,
-            expected_digest,
+            current_binary_digest,
+            source_revision,
+            snapshot_bindings,
         )
+        verified_rows[lane_name] = rows
+        verified_windows[lane_name] = windows
         lane_sources.add(str(lane.get("source_revision")))
         lane_binaries.add(str(lane.get("node_binary_sha256")))
-    if len(lane_sources) != 3 or len(lane_binaries) != 3:
-        _fail("performance lane source and binary identities are not distinct")
-    selected_lane = _object(lanes["selected-indexed"], "selected performance lane")
-    if selected_lane.get("source_revision") != source_revision:
-        _fail("selected performance lane source differs from the packet source")
+    if lane_sources != {source_revision} or lane_binaries != {current_binary_digest}:
+        _fail("performance lanes did not use one source revision and binary")
+    for height in HEIGHTS:
+        for window_index in range(5):
+            compared = [
+                verified_windows[lane_name][height][window_index]
+                for lane_name in PERFORMANCE_LANES
+            ]
+            if (
+                len(
+                    {
+                        (window["initial_tip"], window["initial_state_root"])
+                        for window in compared
+                    }
+                )
+                != 1
+                or len({window["final_state_root"] for window in compared}) != 1
+                or len(
+                    {
+                        window["transaction_identities"]
+                        for window in compared
+                    }
+                )
+                != 1
+            ):
+                _fail(
+                    f"performance height {height} window {window_index + 1} "
+                    "is not an exact cross-backend comparison"
+                )
     if performance.get("rows") != selected_lane.get("rows"):
         _fail("top-level performance rows differ from the selected lane")
 
     pairing = _object(performance.get("pairing"), "performance pairing")
-    for key in (
+    required_pairing_checks = (
         "same_host",
+        "same_source_revision",
+        "same_binary",
         "same_chain_id",
         "same_validator_count",
         "same_validator_keys",
+        "same_topology_file",
+        "same_authenticated_snapshot_at_each_height",
+        "same_signed_transactions",
+        "same_wallet_and_recipient_accounts",
         "same_height_window_cardinality",
         "same_full_vote_policy",
         "same_timeout_policy",
         "same_host_allocation",
         "same_storage_medium",
-        "same_wallet_and_recipient_accounts",
-        "same_semantic_transfer_workload",
-    ):
+        "same_final_state_for_identical_inputs",
+    )
+    if set(pairing) != {*required_pairing_checks, "changed_input"}:
+        _fail("performance pairing field set differs from the locked comparison")
+    for key in required_pairing_checks:
         _bool(pairing.get(key), f"performance pairing {key}")
-    if pairing.get("same_binary") is not False:
-        _fail("performance pairing must disclose distinct historical binaries")
-    if not isinstance(pairing.get("binary_policy"), str) or not pairing["binary_policy"]:
-        _fail("performance binary comparison policy is missing")
+    if (
+        pairing.get("changed_input")
+        != "authenticated node-local storage backend mode only"
+    ):
+        _fail("performance comparison changed more than the backend selector")
     accounts = {
         (lane.get("wallet_address"), lane.get("recipient_address"))
         for lane in lanes.values()
@@ -1434,6 +2029,13 @@ def _verify_performance(
     }
     if len(validator_key_sets) != 1:
         _fail("performance lanes did not use the same validator keys")
+    topology_and_seed_snapshots = {
+        (lane.get("topology_sha256"), lane.get("height_1_snapshot_sha256"))
+        for lane in lanes.values()
+        if isinstance(lane, dict)
+    }
+    if len(topology_and_seed_snapshots) != 1:
+        _fail("performance lanes did not use the same topology and seed snapshot")
     host = _object(performance.get("host"), "performance host identity")
     if (
         not isinstance(host.get("cpu_affinity"), list)

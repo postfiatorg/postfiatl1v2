@@ -12,7 +12,6 @@ from postfiat_rpc.storage_scaling import (
     MANIFEST_FILE,
     MATERIAL_STAGE_PATHS,
     PERFORMANCE_RESOURCE_FIELDS,
-    PERFORMANCE_SOURCE_REVISIONS,
     PERFORMANCE_STORAGE_BEHAVIORS,
     RESOURCE_SAMPLE_SCHEMA,
     RESOURCE_SAMPLE_TARGET_INTERVAL_MS,
@@ -68,12 +67,65 @@ def _constant_distribution(value: float, count: int) -> dict[str, float | int]:
     }
 
 
+def _signed_transfer_identity(
+    transfer: dict[str, object],
+) -> tuple[str, str]:
+    unsigned = transfer["unsigned"]
+    assert isinstance(unsigned, dict)
+    canonical_unsigned = {
+        field: unsigned[field]
+        for field in (
+            "chain_id",
+            "genesis_hash",
+            "protocol_version",
+            "address_namespace",
+            "transaction_kind",
+            "signature_algorithm_id",
+            "from",
+            "to",
+            "amount",
+            "fee",
+            "sequence",
+        )
+    }
+    canonical_transfer = {
+        "unsigned": canonical_unsigned,
+        "algorithm_id": transfer["algorithm_id"],
+        "public_key_hex": transfer["public_key_hex"],
+        "signature_hex": transfer["signature_hex"],
+    }
+    signed_sha256 = hashlib.sha256(
+        json.dumps(
+            canonical_transfer,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    signing_bytes = (
+        "postfiat.transfer.v1\n"
+        f"chain_id={unsigned['chain_id']}\n"
+        f"genesis_hash={unsigned['genesis_hash']}\n"
+        f"protocol_version={unsigned['protocol_version']}\n"
+        f"address_namespace={unsigned['address_namespace']}\n"
+        f"transaction_kind={unsigned['transaction_kind']}\n"
+        f"signature_algorithm_id={unsigned['signature_algorithm_id']}\n"
+        f"from={unsigned['from']}\n"
+        f"to={unsigned['to']}\n"
+        f"amount={unsigned['amount']}\n"
+        f"fee={unsigned['fee']}\n"
+        f"sequence={unsigned['sequence']}\n"
+        f"algorithm={transfer['algorithm_id']}\n"
+        f"public_key={transfer['public_key_hex']}\n"
+        f"signature={transfer['signature_hex']}\n"
+    ).encode("utf-8")
+    tx_id = hashlib.sha3_384(b"postfiat.tx_id.v1\x00" + signing_bytes).hexdigest()
+    return tx_id, signed_sha256
+
+
 def _passing_packet(packet: Path) -> None:
     packet.mkdir()
     digest96 = "a" * 96
     revision = "b" * 40
-    legacy_performance_revision = PERFORMANCE_SOURCE_REVISIONS["legacy-jsonl"]
-    bounded_performance_revision = PERFORMANCE_SOURCE_REVISIONS["bounded-jsonl"]
     binary = packet / "bin" / "postfiat-node"
     binary.parent.mkdir()
     binary.write_bytes(b"release-binary-identity")
@@ -81,10 +133,6 @@ def _passing_packet(packet: Path) -> None:
     rollback_binary.write_bytes(b"older-compatible-release-binary-identity")
     incompatible_binary = packet / "bin" / "postfiat-node-incompatible"
     incompatible_binary.write_bytes(b"older-incompatible-release-binary-identity")
-    legacy_performance_binary = packet / "bin" / "postfiat-node-performance-legacy"
-    legacy_performance_binary.write_bytes(b"legacy-performance-release-binary")
-    bounded_performance_binary = packet / "bin" / "postfiat-node-performance-bounded"
-    bounded_performance_binary.write_bytes(b"bounded-performance-release-binary")
     binaries = [
         {"path": "bin/postfiat-node", "sha256": _sha256(binary)},
         {
@@ -94,14 +142,6 @@ def _passing_packet(packet: Path) -> None:
         {
             "path": "bin/postfiat-node-incompatible",
             "sha256": _sha256(incompatible_binary),
-        },
-        {
-            "path": "bin/postfiat-node-performance-legacy",
-            "sha256": _sha256(legacy_performance_binary),
-        },
-        {
-            "path": "bin/postfiat-node-performance-bounded",
-            "sha256": _sha256(bounded_performance_binary),
         },
     ]
 
@@ -150,6 +190,48 @@ def _passing_packet(packet: Path) -> None:
         )
         replay_receipts.append(_reference(packet, path))
 
+    performance_corpora: dict[int, dict[str, object]] = {}
+    for height_index, height in enumerate([50, 100, 500, 1000, 5000]):
+        first_sequence = 10_000 + height_index * 100
+        transfers: list[dict[str, object]] = []
+        identities: list[tuple[str, str]] = []
+        for transfer_index in range(50):
+            transfer: dict[str, object] = {
+                "unsigned": {
+                    "chain_id": "postfiat-storage-scaling-local-v1",
+                    "genesis_hash": "c" * 96,
+                    "protocol_version": 1,
+                    "address_namespace": "postfiat",
+                    "transaction_kind": "transfer",
+                    "signature_algorithm_id": "ML-DSA-65",
+                    "from": "pf-test-wallet",
+                    "to": "pf-test-recipient",
+                    "amount": 10,
+                    "fee": 1,
+                    "sequence": first_sequence + transfer_index,
+                },
+                "algorithm_id": "ML-DSA-65",
+                "public_key_hex": f"{transfer_index + 1:04x}",
+                "signature_hex": f"{transfer_index + 101:04x}",
+            }
+            transfers.append(transfer)
+            identities.append(_signed_transfer_identity(transfer))
+        corpus_path = packet / "performance" / "corpora" / f"height-{height}.json"
+        _write_json(
+            corpus_path,
+            {
+                "schema": "postfiat-tx-latency-signed-transfer-corpus-v1",
+                "transfers": transfers,
+            },
+        )
+        performance_corpora[height] = {
+            "path": corpus_path.relative_to(packet).as_posix(),
+            "sha256": _sha256(corpus_path),
+            "identities": identities,
+            "first_sequence": first_sequence,
+            "last_sequence": first_sequence + 49,
+        }
+
     def performance_fleet(height: int, identity_seed: int) -> list[dict[str, object]]:
         return [
             {
@@ -161,6 +243,154 @@ def _passing_packet(packet: Path) -> None:
             for validator in range(6)
         ]
 
+    def performance_storage_work(
+        lane_name: str, *, apply_stage: bool
+    ) -> dict[str, object]:
+        transactional = {
+            "read_transactions": 0,
+            "write_transactions": 0,
+            "committed_write_transactions": 0,
+            "records_read": 0,
+            "records_written": 0,
+            "bytes_read": 0,
+            "bytes_written": 0,
+            "page_reads": 0,
+            "page_writes": 0,
+            "full_history_scans": 0,
+            "full_history_records_read": 0,
+            "full_history_bytes_read": 0,
+            "durable_commit_micros": 0,
+        }
+        legacy = {
+            "jsonl_append_calls": 0,
+            "checkpoint_bytes_read": 0,
+            "crash_suffix_bytes_read": 0,
+            "crash_suffix_records_verified": 0,
+            "legacy_prefix_bytes_read": 0,
+            "legacy_prefix_records_verified": 0,
+            "ordered_history_bytes_read": 0,
+            "ordered_history_records_read": 0,
+            "ordered_index_bitmap_bytes_read": 0,
+            "ordered_index_bitmap_bytes_written": 0,
+            "ordered_index_slots_read": 0,
+            "ordered_index_slots_written": 0,
+        }
+        if lane_name == "selected-indexed":
+            transactional.update(
+                {
+                    "read_transactions": 1,
+                    "records_read": 1,
+                    "bytes_read": 10,
+                    "page_reads": 1,
+                }
+            )
+            if apply_stage:
+                transactional.update(
+                    {
+                        "write_transactions": 1,
+                        "committed_write_transactions": 1,
+                        "records_written": 1,
+                        "bytes_written": 10,
+                        "page_writes": 1,
+                        "durable_commit_micros": 1,
+                    }
+                )
+            transactional_value: dict[str, int] | None = transactional
+        elif lane_name == "bounded-jsonl":
+            legacy["ordered_index_bitmap_bytes_read"] = 2
+            if apply_stage:
+                legacy.update(
+                    {
+                        "jsonl_append_calls": 1,
+                        "ordered_index_bitmap_bytes_written": 2,
+                        "ordered_index_slots_written": 1,
+                    }
+                )
+            transactional_value = None
+        else:
+            if apply_stage:
+                legacy.update(
+                    {
+                        "jsonl_append_calls": 1,
+                        "legacy_prefix_bytes_read": 10,
+                        "legacy_prefix_records_verified": 1,
+                    }
+                )
+            else:
+                legacy.update(
+                    {
+                        "ordered_history_bytes_read": 10,
+                        "ordered_history_records_read": 1,
+                    }
+                )
+            transactional_value = None
+        full_history_records = (
+            (transactional_value or {}).get("full_history_records_read", 0)
+            + legacy["crash_suffix_records_verified"]
+            + legacy["legacy_prefix_records_verified"]
+            + legacy["ordered_history_records_read"]
+        )
+        full_history_bytes = (
+            (transactional_value or {}).get("full_history_bytes_read", 0)
+            + legacy["checkpoint_bytes_read"]
+            + legacy["crash_suffix_bytes_read"]
+            + legacy["legacy_prefix_bytes_read"]
+            + legacy["ordered_history_bytes_read"]
+            + legacy["ordered_index_bitmap_bytes_read"]
+        )
+        return {
+            "transactional": transactional_value,
+            "legacy": legacy,
+            "full_history_records_read": full_history_records,
+            "full_history_bytes_read": full_history_bytes,
+        }
+
+    def performance_round_timings(lane_name: str) -> dict[str, object]:
+        proposal_work = performance_storage_work(lane_name, apply_stage=False)
+        apply_work = performance_storage_work(lane_name, apply_stage=True)
+        return {
+            "proposal_ms": 10.0,
+            "verification_ms": 10.0,
+            "vote_requests_ms": 10.0,
+            "local_vote_ms": 10.0,
+            "certificate_ms": 10.0,
+            "local_apply_ms": 10.0,
+            "certified_sends_ms": 10.0,
+            "post_apply_status_ms": 10.0,
+            "local_commit_publish_ms": 10.0,
+            "proposal_breakdown": {"storage_work": proposal_work},
+            "vote_request_targets": [
+                {
+                    "target": f"validator-{validator}",
+                    "result": "ok",
+                    "vote_request_breakdown": {
+                        "remote_handling": {
+                            "block_vote_breakdown": {
+                                "storage_work": performance_storage_work(
+                                    lane_name, apply_stage=False
+                                )
+                            }
+                        }
+                    },
+                }
+                for validator in range(1, 6)
+            ],
+            "local_apply_breakdown": {
+                "write_commit_ms": 10.0,
+                "storage_work": apply_work,
+            },
+            "certified_send_targets": [
+                {
+                    "target": f"validator-{validator}",
+                    "result": "ok",
+                    "storage_work": performance_storage_work(
+                        lane_name, apply_stage=True
+                    ),
+                }
+                for validator in range(1, 6)
+            ],
+        }
+
     def performance_rows(
         lane_name: str,
         consensus_base: float,
@@ -171,6 +401,9 @@ def _passing_packet(packet: Path) -> None:
         for index, height in enumerate([50, 100, 500, 1000, 5000]):
             consensus = consensus_base + index
             wallet = wallet_base + index
+            corpus = performance_corpora[height]
+            transaction_identities = corpus["identities"]
+            assert isinstance(transaction_identities, list)
             windows = []
             for window_index in range(5):
                 raw_path = (
@@ -199,14 +432,12 @@ def _passing_packet(packet: Path) -> None:
                             "amount": 10,
                             "wallet_address": "pf-test-wallet",
                             "recipient": "pf-test-recipient",
-                            **(
-                                {
-                                    "resident_transactional_store": True,
-                                    "expected_start_height": height,
-                                }
-                                if selected
-                                else {}
-                            ),
+                            "input_source": "signed-transfer-corpus",
+                            "signed_transfer_corpus": "$SIGNED_TRANSFER_CORPUS",
+                            "signed_transfer_corpus_sha256": corpus["sha256"],
+                            "signed_transfer_corpus_offset": 0,
+                            "resident_transactional_store": selected,
+                            "expected_start_height": height if selected else None,
                         },
                         "checks": {
                             "all_receipts_accepted": True,
@@ -218,6 +449,7 @@ def _passing_packet(packet: Path) -> None:
                             "iteration_count_matches_rounds": True,
                             "no_duplicate_receipts": True,
                             "state_verified_after_run": True,
+                            "exact_input_binding": True,
                         },
                         "final_state": {
                             "height": height + 50,
@@ -237,22 +469,17 @@ def _passing_packet(packet: Path) -> None:
                                 "block_hash": f"{height + iteration_index:096x}",
                                 "certificate_id": f"{height + iteration_index + 1:096x}",
                                 "quorum": 5,
+                                "input_source": "signed-transfer-corpus",
+                                "signed_transfer_corpus_index": iteration_index - 1,
+                                "tx_id": transaction_identities[iteration_index - 1][0],
+                                "signed_transfer_sha256": transaction_identities[
+                                    iteration_index - 1
+                                ][1],
                                 "consensus_round_ms": consensus,
                                 "wallet_to_finality_ms": wallet,
-                                "round_timings": {
-                                    "proposal_ms": 10.0,
-                                    "verification_ms": 10.0,
-                                    "vote_requests_ms": 10.0,
-                                    "local_vote_ms": 10.0,
-                                    "certificate_ms": 10.0,
-                                    "local_apply_ms": 10.0,
-                                    "certified_sends_ms": 10.0,
-                                    "post_apply_status_ms": 10.0,
-                                    "local_commit_publish_ms": 10.0,
-                                    "local_apply_breakdown": {
-                                        "write_commit_ms": 10.0,
-                                    },
-                                },
+                                "round_timings": performance_round_timings(
+                                    lane_name
+                                ),
                             }
                             for iteration_index in range(1, 51)
                         ],
@@ -334,16 +561,96 @@ def _passing_packet(packet: Path) -> None:
                         },
                     },
                 )
+                transactional = {
+                    "read_transactions": 0,
+                    "write_transactions": 0,
+                    "committed_write_transactions": 0,
+                    "records_read": 0,
+                    "records_written": 0,
+                    "bytes_read": 0,
+                    "bytes_written": 0,
+                    "page_reads": 0,
+                    "page_writes": 0,
+                    "full_history_scans": 0,
+                    "full_history_records_read": 0,
+                    "full_history_bytes_read": 0,
+                    "durable_commit_micros": 0,
+                }
+                legacy = {
+                    "jsonl_append_calls": 0,
+                    "checkpoint_bytes_read": 0,
+                    "crash_suffix_bytes_read": 0,
+                    "crash_suffix_records_verified": 0,
+                    "legacy_prefix_bytes_read": 0,
+                    "legacy_prefix_records_verified": 0,
+                    "ordered_history_bytes_read": 0,
+                    "ordered_history_records_read": 0,
+                    "ordered_index_bitmap_bytes_read": 0,
+                    "ordered_index_bitmap_bytes_written": 0,
+                    "ordered_index_slots_read": 0,
+                    "ordered_index_slots_written": 0,
+                }
+                if selected:
+                    transactional.update(
+                        {
+                            "read_transactions": 600,
+                            "write_transactions": 300,
+                            "committed_write_transactions": 300,
+                            "records_read": 600,
+                            "records_written": 300,
+                            "bytes_read": 6000,
+                            "bytes_written": 3000,
+                            "page_reads": 600,
+                            "page_writes": 300,
+                            "durable_commit_micros": 300,
+                        }
+                    )
+                    full_history_records = 0
+                    full_history_bytes = 0
+                    fsync_count = 300
+                elif lane_name == "bounded-jsonl":
+                    legacy.update(
+                        {
+                            "jsonl_append_calls": 300,
+                            "ordered_index_bitmap_bytes_read": 1200,
+                            "ordered_index_bitmap_bytes_written": 600,
+                            "ordered_index_slots_written": 300,
+                        }
+                    )
+                    full_history_records = 0
+                    full_history_bytes = 1200
+                    fsync_count = 300
+                else:
+                    legacy.update(
+                        {
+                            "jsonl_append_calls": 300,
+                            "legacy_prefix_bytes_read": 3000,
+                            "legacy_prefix_records_verified": 300,
+                            "ordered_history_bytes_read": 3000,
+                            "ordered_history_records_read": 300,
+                        }
+                    )
+                    full_history_records = 600
+                    full_history_bytes = 6000
+                    fsync_count = 300
+                storage = {
+                    **transactional,
+                    "transactional": transactional,
+                    "legacy": legacy,
+                    "full_history_records_read": full_history_records,
+                    "full_history_bytes_read": full_history_bytes,
+                    "fsync_count": fsync_count,
+                }
                 resources = {
                     "cpu_ticks": 10,
                     "peak_rss_kib": 20,
                     "disk_growth_bytes": 30,
                     "bytes_read": 40,
                     "bytes_written": 50,
-                    "page_reads": 6 if selected else None,
-                    "page_writes": 7 if selected else None,
-                    "fsync_count": 300 if selected else None,
-                    "fsync_micros": 8 if selected else None,
+                    "page_reads": transactional["page_reads"],
+                    "page_writes": transactional["page_writes"],
+                    "fsync_count": fsync_count,
+                    "fsync_micros": transactional["durable_commit_micros"],
                     "sample_count": 2,
                     "duration_ms": 1000.0,
                     "observed_pid_count": 50,
@@ -355,23 +662,6 @@ def _passing_packet(packet: Path) -> None:
                     "network_received_bytes": 80,
                     "network_transmitted_bytes": 90,
                 }
-                storage = (
-                    {
-                        "committed_write_transactions": 300,
-                        "fsync_count": 300,
-                        "full_history_scans": 0,
-                        "full_history_records_read": 0,
-                        "full_history_bytes_read": 0,
-                    }
-                    if selected
-                    else {
-                        "telemetry_available": False,
-                        "reason": (
-                            "historical release report predates transactional "
-                            "page counters"
-                        ),
-                    }
-                )
                 windows.append(
                     {
                         "label": f"height-{height}-window-{window_index + 1}",
@@ -380,10 +670,14 @@ def _passing_packet(packet: Path) -> None:
                         "rounds": 50,
                         "validators_converged": 6,
                         "literal_receipts_exact": True,
-                        "zero_full_history_reads": True if selected else None,
-                        "bounded_index_pages": True if selected else None,
-                        "constant_accumulator_work": True if selected else None,
+                        "backend_work_gate_pass": True,
+                        "zero_full_history_reads": full_history_records == 0
+                        and full_history_bytes == 0,
+                        "bounded_index_pages": lane_name != "legacy-jsonl",
+                        "constant_accumulator_work": lane_name != "legacy-jsonl",
                         "source_snapshot_sha256": f"{height + 10:064x}",
+                        "signed_transfer_corpus": corpus["path"],
+                        "signed_transfer_corpus_sha256": corpus["sha256"],
                         "result_snapshot_sha256": f"{result_identity_seed:064x}",
                         "initial_fleet": performance_fleet(
                             height, initial_identity_seed
@@ -976,22 +1270,25 @@ def _passing_packet(packet: Path) -> None:
 
     def performance_lane(
         lane_name: str,
-        source_revision: str,
-        lane_binary: Path,
         rows: list[dict[str, object]],
     ) -> dict[str, object]:
         selected = lane_name == "selected-indexed"
         return {
             "lane": lane_name,
             "storage_behavior": PERFORMANCE_STORAGE_BEHAVIORS[lane_name],
-            "source_revision": source_revision,
-            "node_binary_sha256": _sha256(lane_binary),
-            "node_binary": lane_binary.name,
+            "source_revision": revision,
+            "node_binary_sha256": _sha256(binary),
+            "node_binary": binary.name,
             "node_binary_build": {
-                "git_revision": source_revision[:8],
+                "git_revision": revision[:8],
                 "profile": "release",
             },
-            "storage_activation_height": None if lane_name == "legacy-jsonl" else 1,
+            "storage_backend_mode": {
+                "legacy-jsonl": "legacy-jsonl",
+                "bounded-jsonl": "bounded-jsonl",
+                "selected-indexed": "transactional",
+            }[lane_name],
+            "storage_activation_height": 1,
             "chain_id": "postfiat-storage-scaling-local-v1",
             "wallet_address": "pf-test-wallet",
             "recipient_address": "pf-test-recipient",
@@ -1024,24 +1321,9 @@ def _passing_packet(packet: Path) -> None:
         }
 
     performance_lanes = {
-        "legacy-jsonl": performance_lane(
-            "legacy-jsonl",
-            legacy_performance_revision,
-            legacy_performance_binary,
-            legacy_rows,
-        ),
-        "bounded-jsonl": performance_lane(
-            "bounded-jsonl",
-            bounded_performance_revision,
-            bounded_performance_binary,
-            bounded_rows,
-        ),
-        "selected-indexed": performance_lane(
-            "selected-indexed",
-            revision,
-            binary,
-            selected_rows,
-        ),
+        "legacy-jsonl": performance_lane("legacy-jsonl", legacy_rows),
+        "bounded-jsonl": performance_lane("bounded-jsonl", bounded_rows),
+        "selected-indexed": performance_lane("selected-indexed", selected_rows),
     }
     performance_ratios = {
         "consensus_round_ms_height50_vs_legacy": 100.0 / 110.0,
@@ -1097,6 +1379,21 @@ def _passing_packet(packet: Path) -> None:
             "timeout_ms": 900_000,
             "lane_order": ["legacy-jsonl", "bounded-jsonl", "selected-indexed"],
             "lanes": performance_lanes,
+            "snapshots_by_height": [
+                {
+                    "height": height,
+                    "snapshot": f"canonical/snapshots/height-{height}.snapshot",
+                    "snapshot_sha256": f"{height + 10:064x}",
+                    "signed_transfer_corpus": performance_corpora[height]["path"],
+                    "signed_transfer_corpus_sha256": performance_corpora[height][
+                        "sha256"
+                    ],
+                    "transfer_count": 50,
+                    "first_sequence": performance_corpora[height]["first_sequence"],
+                    "last_sequence": performance_corpora[height]["last_sequence"],
+                }
+                for height in [50, 100, 500, 1000, 5000]
+            ],
             "legacy_height_50_baseline": {
                 "consensus_round_ms": 110.0,
                 "wallet_to_finality_ms": 115.0,
@@ -1123,20 +1420,24 @@ def _passing_packet(packet: Path) -> None:
             },
             "pairing": {
                 "same_host": True,
+                "same_source_revision": True,
+                "same_binary": True,
                 "same_chain_id": True,
                 "same_validator_count": True,
                 "same_validator_keys": True,
+                "same_topology_file": True,
+                "same_authenticated_snapshot_at_each_height": True,
+                "same_signed_transactions": True,
+                "same_wallet_and_recipient_accounts": True,
                 "same_height_window_cardinality": True,
                 "same_full_vote_policy": True,
                 "same_timeout_policy": True,
                 "same_host_allocation": True,
                 "same_storage_medium": True,
-                "same_wallet_and_recipient_accounts": True,
-                "same_semantic_transfer_workload": True,
-                "same_binary": False,
-                "binary_policy": "three exact hash-bound release binaries",
-                "snapshot_policy": "lane-native snapshots at matching heights",
-                "signature_limit": "randomized signatures differ across lanes",
+                "same_final_state_for_identical_inputs": True,
+                "changed_input": (
+                    "authenticated node-local storage backend mode only"
+                ),
             },
         },
         "tamper": {
@@ -1239,6 +1540,28 @@ def _rewrite_first_selected_resource_samples(
     _write_checksums(packet)
 
 
+def _rewrite_first_selected_normalized_report(
+    packet: Path,
+    mutation: Callable[[dict[str, object]], None],
+) -> None:
+    performance_path = packet / "artifacts" / "performance.json"
+    performance = json.loads(performance_path.read_text(encoding="utf-8"))
+    selected = performance["lanes"]["selected-indexed"]
+    window = selected["rows"][0]["windows"][0]
+    normalized_path = packet / window["normalized_report"]
+    normalized = json.loads(normalized_path.read_text(encoding="utf-8"))
+    mutation(normalized)
+    _write_json(normalized_path, normalized)
+    window["normalized_report_sha256"] = _sha256(normalized_path)
+    performance["rows"] = selected["rows"]
+    _write_json(performance_path, performance)
+    manifest_path = packet / MANIFEST_FILE
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["artifacts"]["performance"]["sha256"] = _sha256(performance_path)
+    _write_json(manifest_path, manifest)
+    _write_checksums(packet)
+
+
 class StorageScalingVerifierTests(unittest.TestCase):
     def packet_dir(self, temporary: str) -> Path:
         return Path(temporary) / "packet"
@@ -1321,7 +1644,7 @@ class StorageScalingVerifierTests(unittest.TestCase):
             _rewrite_performance(packet, invent_gate)
             with self.assertRaisesRegex(
                 StorageScalingVerificationError,
-                "overclaims zero_full_history_reads",
+                "full-history summary differs",
             ):
                 verify_packet(packet)
 
@@ -1335,7 +1658,7 @@ class StorageScalingVerifierTests(unittest.TestCase):
                 assert isinstance(lanes, dict)
                 legacy = lanes["legacy-jsonl"]
                 assert isinstance(legacy, dict)
-                legacy["node_binary_sha256"] = performance["node_binary_sha256"]
+                legacy["node_binary_sha256"] = "f" * 64
 
             _rewrite_performance(packet, swap_binary)
             with self.assertRaisesRegex(
@@ -1359,7 +1682,7 @@ class StorageScalingVerifierTests(unittest.TestCase):
             _rewrite_performance(packet, change_source)
             with self.assertRaisesRegex(
                 StorageScalingVerificationError,
-                "source revision is not frozen",
+                "source revision differs",
             ):
                 verify_packet(packet)
 
@@ -1401,7 +1724,78 @@ class StorageScalingVerifierTests(unittest.TestCase):
             _rewrite_performance(packet, change_snapshot)
             with self.assertRaisesRegex(
                 StorageScalingVerificationError,
-                "did not share one snapshot",
+                "did not use the shared authenticated snapshot",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_unbound_signed_corpus(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def change_corpus(performance: dict[str, object]) -> None:
+                snapshots = performance["snapshots_by_height"]
+                assert isinstance(snapshots, list)
+                snapshots[0]["signed_transfer_corpus_sha256"] = "f" * 64
+
+            _rewrite_performance(packet, change_corpus)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "reference is not bound by the packet checksums",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_changed_signed_transaction(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def change_input(report: dict[str, object]) -> None:
+                iterations = report["iterations"]
+                assert isinstance(iterations, list)
+                iterations[0]["signed_transfer_sha256"] = "f" * 64
+
+            _rewrite_first_selected_normalized_report(packet, change_input)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "did not consume the bound signed corpus",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_raw_storage_work_summary_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def change_storage_work(report: dict[str, object]) -> None:
+                iterations = report["iterations"]
+                assert isinstance(iterations, list)
+                round_timings = iterations[0]["round_timings"]
+                storage_work = round_timings["proposal_breakdown"]["storage_work"]
+                transactional = storage_work["transactional"]
+                transactional["page_reads"] += 1
+
+            _rewrite_first_selected_normalized_report(packet, change_storage_work)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "transactional storage summary differs from raw stage telemetry",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_false_same_binary_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def change_pairing(performance: dict[str, object]) -> None:
+                pairing = performance["pairing"]
+                assert isinstance(pairing, dict)
+                pairing["same_binary"] = False
+
+            _rewrite_performance(packet, change_pairing)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "performance pairing same_binary must be true",
             ):
                 verify_packet(packet)
 

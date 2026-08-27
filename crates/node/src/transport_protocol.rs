@@ -1458,11 +1458,14 @@ pub(super) fn transport_batch_ack(
     envelope: &TransportBatchEnvelope,
     state_after: &StatusReport,
     receipts: &[postfiat_types::Receipt],
-    transactional_work: Option<postfiat_storage::transactional::TransactionalWorkCounters>,
+    storage_work: Option<postfiat_node::ApplyBatchStorageWorkReport>,
 ) -> TransportBatchAck {
     let accepted_count = receipts.iter().filter(|receipt| receipt.accepted).count() as u64;
     let receipt_count = receipts.len() as u64;
     let state = transport_hello(topology, state_after);
+    let transactional_work = storage_work
+        .as_ref()
+        .and_then(|work| work.transactional);
     TransportBatchAck {
         schema: TRANSPORT_BATCH_ACK_SCHEMA.to_string(),
         topology_id: topology.topology_id.clone(),
@@ -1479,6 +1482,7 @@ pub(super) fn transport_batch_ack(
         certified_state: Some(state.clone()),
         storage: state_after.storage.clone(),
         transactional_work,
+        storage_work,
         state,
     }
 }
@@ -1562,6 +1566,7 @@ pub(super) fn transport_already_applied_ack(
         certified_state: Some(certified_state),
         storage: state_after.storage.clone(),
         transactional_work: None,
+        storage_work: None,
         state: transport_hello(topology, state_after),
     })
 }
