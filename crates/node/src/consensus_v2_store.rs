@@ -27,11 +27,25 @@ pub fn live_consensus_v2_context(
     let store = NodeStore::new(data_dir);
     let genesis = store.read_genesis()?;
     let governance = store.read_governance()?;
-    let committed_height = store
-        .read_blocks()?
-        .blocks
-        .last()
-        .map_or(0, |block| block.header.height);
+    let committed_height = match store.read_chain_tip() {
+        Ok(tip) => {
+            if tip.chain_id != genesis.chain_id
+                || tip.genesis_hash != genesis_hash(&genesis)
+                || tip.protocol_version != genesis.protocol_version
+            {
+                return Err(invalid_data(
+                    "consensus v2 chain tip does not match local genesis",
+                ));
+            }
+            tip.height
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => store
+            .read_blocks()?
+            .blocks
+            .last()
+            .map_or(0, |block| block.header.height),
+        Err(error) => return Err(error),
+    };
     let committee_epoch = 1u64
         .checked_add(
             governance
@@ -428,12 +442,14 @@ mod tests {
             node_id: "validator-0".to_string(),
             validator_count: 4,
             activation_height: 7,
+            storage_activation_height: Some(1),
         })
         .expect("init consensus v2 activation chain");
         let genesis = NodeStore::new(&data_dir)
             .read_genesis()
             .expect("read v2 genesis");
         assert_eq!(genesis.consensus_v2_activation_height, Some(7));
+        assert_eq!(genesis.ordered_history_v2_activation_height, Some(1));
         let topology = write_consensus_v2_topology(TopologyConsensusV2Options {
             chain_id: genesis.chain_id.clone(),
             validators: 4,
@@ -442,6 +458,7 @@ mod tests {
             hosts: None,
             output_file: topology_file.clone(),
             activation_height: 7,
+            storage_activation_height: Some(1),
         })
         .expect("write consensus v2 topology");
         assert_eq!(topology.chain_id, status.chain_id);

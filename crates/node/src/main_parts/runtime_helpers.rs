@@ -130,12 +130,49 @@ fn require_unsafe_devnet_file_signer(flags: &[String], service: &str) -> Result<
     ))
 }
 
-fn require_unsafe_devnet_json_storage(flags: &[String], service: &str) -> Result<(), String> {
+fn require_transactional_or_unsafe_devnet_json_storage(
+    flags: &[String],
+    service: &str,
+) -> Result<(), String> {
     if flag_present(flags, "--unsafe-devnet-json-storage") {
         return Ok(());
     }
+
+    let data_dir = PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
+    let store = NodeStore::new(&data_dir);
+    if !store.transactional_storage_configured().map_err(|error| {
+        format!(
+            "{service} cannot establish the configured storage generation: {error}"
+        )
+    })? {
+        return Err(format!(
+            "{service} would use the bounded JSON/JSONL controlled-devnet store; long-running legacy operation requires the explicit --unsafe-devnet-json-storage acknowledgement"
+        ));
+    }
+
+    let transactional = store.transactional_store().map_err(|error| {
+        format!("{service} cannot open transactional storage: {error}")
+    })?;
+    let meta = transactional.meta().map_err(|error| {
+        format!("{service} cannot authenticate transactional storage: {error}")
+    })?;
+    let Some(activation_height) = meta.scheduled_activation_height else {
+        return Err(format!(
+            "{service} has a transactional generation but no storage activation; legacy operation requires the explicit --unsafe-devnet-json-storage acknowledgement"
+        ));
+    };
+    if meta.finalized_height >= activation_height {
+        return Ok(());
+    }
+    if meta.finalized_height.checked_add(1) == Some(activation_height)
+        && meta.last_full_verification_height == Some(meta.finalized_height)
+    {
+        return Ok(());
+    }
+
     Err(format!(
-        "{service} uses the bounded JSON/JSONL controlled-devnet store; production transactional indexed storage is not implemented, so long-running operation requires the explicit --unsafe-devnet-json-storage acknowledgement"
+        "{service} remains on legacy storage through height {}; long-running pre-activation operation requires the explicit --unsafe-devnet-json-storage acknowledgement",
+        activation_height.saturating_sub(1)
     ))
 }
 
@@ -557,7 +594,7 @@ fn print_usage() {
   postfiat-node init [--data-dir PATH] [--chain-id ID] [--node-id ID] [--validators N]
   postfiat-node init-consensus-v2 [--data-dir PATH] [--chain-id ID] [--node-id ID] [--validators N] --activation-height N
   postfiat-node topology [--validators N] [--base-port PORT] [--hosts CSV --rpc-base-port PORT] [--output PATH]
-  postfiat-node topology-consensus-v2 [--validators N] [--base-port PORT] [--hosts CSV --rpc-base-port PORT] --activation-height N [--output PATH]
+  postfiat-node topology-consensus-v2 [--validators N] [--base-port PORT] [--hosts CSV --rpc-base-port PORT] --activation-height N [--storage-activation-height N] [--output PATH]
   postfiat-node validator-keys [--data-dir PATH] [--validators N]
   postfiat-node validator-key-stage [--data-dir PATH] --source-key-file PATH --validator-id NODE_ID [--source-validator-id NODE_ID] [--replace]
   postfiat-node validate-local-keys [--data-dir PATH] [--validators N] [--local-only]
@@ -853,7 +890,14 @@ fn print_usage() {
   postfiat-node snapshot-import-signed [--data-dir PATH] --snapshot-dir PATH --trusted-publisher-key-file PATH [--node-id ID]
   postfiat-node snapshot-import-signed-finalized-checkpoint [--data-dir PATH] --snapshot-dir PATH --trusted-publisher-key-file PATH [--node-id ID]
   postfiat-node verify-finalized-checkpoint [--data-dir PATH]
+  postfiat-node storage-activation-template [--data-dir PATH] --activation-height N --record-file PATH
+  postfiat-node storage-activation-ratify [--data-dir PATH] --record-file PATH --validators CSV [--support CSV] --amendment-file PATH
+  postfiat-node storage-activation-batch [--data-dir PATH] --record-file PATH --authorization-amendment-file PATH --batch-file PATH
+  postfiat-node storage-cancellation-template [--data-dir PATH] --activation-id HASH --reason TEXT --record-file PATH
+  postfiat-node storage-cancellation-ratify [--data-dir PATH] --record-file PATH --validators CSV [--support CSV] --amendment-file PATH
+  postfiat-node storage-cancellation-batch [--data-dir PATH] --record-file PATH --authorization-amendment-file PATH --batch-file PATH
   postfiat-node ordered-history-index-rebuild [--data-dir PATH] --offline-confirmed
+  postfiat-node storage-rebuild-transactional [--data-dir PATH] --output-dir PATH --expected-tip HASH --expected-state-root HASH [--verify-only] --offline-confirmed
   postfiat-node storage-integrity-migrate-legacy [--data-dir PATH] --offline-confirmed
   postfiat-node deployment-publisher-key-create --publisher-key-file PATH
   postfiat-node deployment-publisher-key-export --publisher-key-file PATH --public-key-file PATH

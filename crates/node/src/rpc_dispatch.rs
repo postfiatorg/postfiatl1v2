@@ -2574,6 +2574,7 @@ fn rpc_server_info_response(
         "mempool": {
             "pending": status_report.mempool_pending
         },
+        "storage": &status_report.storage,
         "rpc": {
             "version": postfiat_rpc_sdk::RPC_VERSION,
             "read_aliases": [
@@ -3351,6 +3352,7 @@ mod rpc_cli_tests {
             block_height: 1,
             block_tip_hash: "c".repeat(96),
             mempool_pending: 0,
+            storage: None,
         };
         let result = rpc_server_info_response(
             &status_report,

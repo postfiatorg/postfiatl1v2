@@ -936,7 +936,9 @@ pub(super) fn execute_governance_batch(
             + batch.governance_agent_dry_runs.len()
             + batch.fastswap_bootstraps.len()
             + batch.fastpay_recovery_bootstraps.len()
-            + batch.vault_bridge_route_profile_activations.len(),
+            + batch.vault_bridge_route_profile_activations.len()
+            + batch.storage_commitment_activations.len()
+            + batch.storage_commitment_cancellations.len(),
     );
     for transition in &batch.cobalt_authority_transitions {
         match crate::cobalt_handoff::apply_cobalt_authority_transition(
@@ -956,6 +958,20 @@ pub(super) fn execute_governance_batch(
         }
     }
     for amendment in &batch.amendments {
+        if batch
+            .storage_commitment_activations
+            .iter()
+            .any(|record| record.authorization_amendment_id == amendment.amendment_id)
+            || batch
+                .storage_commitment_cancellations
+                .iter()
+                .any(|record| record.authorization_amendment_id == amendment.amendment_id)
+        {
+            // Storage activation/cancellation is atomic with its authorization
+            // amendment. The dedicated loop below either applies both state
+            // changes or neither one and emits one literal receipt.
+            continue;
+        }
         if let Some((code, message)) =
             governance_amendment_lifecycle_rejection(amendment, block_height)
         {
@@ -985,6 +1001,170 @@ pub(super) fn execute_governance_batch(
                 amendment.amendment_id.clone(),
                 "governance amendment applied",
             ));
+        }
+    }
+    for activation in &batch.storage_commitment_activations {
+        let applied = (|| -> Result<(), String> {
+            activation.validate()?;
+            if activation.scheduling_block_height != block_height {
+                return Err("storage commitment activation scheduling height mismatch".to_string());
+            }
+            if governance
+                .storage_commitment_activations
+                .iter()
+                .any(|existing| existing.activation_id == activation.activation_id)
+            {
+                return Err("storage commitment activation already recorded".to_string());
+            }
+            if governance
+                .scheduled_storage_commitment_activation()
+                .is_some()
+            {
+                return Err("a storage commitment activation is already scheduled".to_string());
+            }
+            let amendment = batch
+                .amendments
+                .iter()
+                .find(|amendment| amendment.amendment_id == activation.authorization_amendment_id)
+                .ok_or_else(|| {
+                    "storage commitment activation authorization amendment is missing".to_string()
+                })?;
+            let expected_value = u32::try_from(activation.activation_height)
+                .map_err(|_| "storage commitment activation height exceeds u32".to_string())?;
+            if amendment.kind != activation.authorization_kind()
+                || amendment.value != expected_value
+                || amendment.activation_height != 0
+            {
+                return Err(
+                    "storage commitment activation authorization binding mismatch".to_string(),
+                );
+            }
+            if let Some((code, message)) =
+                governance_amendment_lifecycle_rejection(amendment, block_height)
+            {
+                return Err(format!("{code}: {message}"));
+            }
+            if governance
+                .amendments
+                .iter()
+                .any(|existing| existing.amendment_id == amendment.amendment_id)
+            {
+                return Err(
+                    "storage commitment activation authorization already applied".to_string(),
+                );
+            }
+            apply_governance_amendment_with_lifecycle_records(
+                governance,
+                amendment.clone(),
+                &batch.batch_id,
+                block_height,
+            );
+            governance
+                .storage_commitment_activations
+                .push(activation.clone());
+            Ok(())
+        })();
+        match applied {
+            Ok(()) => receipts.push(
+                Receipt::accepted(
+                    activation.authorization_amendment_id.clone(),
+                    "storage commitment activation scheduled",
+                )
+                .with_code("storage_commitment_activation_scheduled"),
+            ),
+            Err(error) => receipts.push(Receipt::rejected(
+                activation.authorization_amendment_id.clone(),
+                "storage_commitment_activation_rejected",
+                error,
+            )),
+        }
+    }
+    for cancellation in &batch.storage_commitment_cancellations {
+        let applied = (|| -> Result<(), String> {
+            cancellation.validate()?;
+            if cancellation.cancellation_height != block_height {
+                return Err("storage commitment cancellation height mismatch".to_string());
+            }
+            if governance
+                .storage_commitment_cancellations
+                .iter()
+                .any(|existing| existing.cancellation_id == cancellation.cancellation_id)
+            {
+                return Err("storage commitment cancellation already recorded".to_string());
+            }
+            let activation = governance
+                .storage_commitment_activations
+                .iter()
+                .find(|activation| activation.activation_id == cancellation.activation_id)
+                .ok_or_else(|| "storage commitment cancellation target is missing".to_string())?;
+            if governance
+                .storage_commitment_cancellations
+                .iter()
+                .any(|existing| existing.activation_id == cancellation.activation_id)
+            {
+                return Err("storage commitment activation is already cancelled".to_string());
+            }
+            if block_height >= activation.activation_height {
+                return Err(
+                    "storage commitment activation cannot be cancelled at or after activation"
+                        .to_string(),
+                );
+            }
+            let amendment = batch
+                .amendments
+                .iter()
+                .find(|amendment| amendment.amendment_id == cancellation.authorization_amendment_id)
+                .ok_or_else(|| {
+                    "storage commitment cancellation authorization amendment is missing".to_string()
+                })?;
+            let expected_value = u32::try_from(cancellation.cancellation_height)
+                .map_err(|_| "storage commitment cancellation height exceeds u32".to_string())?;
+            if amendment.kind != cancellation.authorization_kind()
+                || amendment.value != expected_value
+                || amendment.activation_height != 0
+            {
+                return Err(
+                    "storage commitment cancellation authorization binding mismatch".to_string(),
+                );
+            }
+            if let Some((code, message)) =
+                governance_amendment_lifecycle_rejection(amendment, block_height)
+            {
+                return Err(format!("{code}: {message}"));
+            }
+            if governance
+                .amendments
+                .iter()
+                .any(|existing| existing.amendment_id == amendment.amendment_id)
+            {
+                return Err(
+                    "storage commitment cancellation authorization already applied".to_string(),
+                );
+            }
+            apply_governance_amendment_with_lifecycle_records(
+                governance,
+                amendment.clone(),
+                &batch.batch_id,
+                block_height,
+            );
+            governance
+                .storage_commitment_cancellations
+                .push(cancellation.clone());
+            Ok(())
+        })();
+        match applied {
+            Ok(()) => receipts.push(
+                Receipt::accepted(
+                    cancellation.authorization_amendment_id.clone(),
+                    "storage commitment activation cancelled",
+                )
+                .with_code("storage_commitment_activation_cancelled"),
+            ),
+            Err(error) => receipts.push(Receipt::rejected(
+                cancellation.authorization_amendment_id.clone(),
+                "storage_commitment_cancellation_rejected",
+                error,
+            )),
         }
     }
     for update in &batch.validator_registry_updates {

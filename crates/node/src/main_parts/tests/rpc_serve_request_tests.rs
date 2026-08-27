@@ -44,6 +44,7 @@ mod rpc_serve_request_tests {
             node_id: "validator-0".to_string(),
             validator_count: 4,
             activation_height: 1,
+            storage_activation_height: None,
         })
         .expect("initialize timeout vote RPC fixture");
         let rpc_port = TcpListener::bind(("127.0.0.1", 0))
@@ -60,6 +61,7 @@ mod rpc_serve_request_tests {
             hosts: Some(vec!["127.0.0.1".to_string(); 4]),
             output_file: topology_file.clone(),
             activation_height: 1,
+            storage_activation_height: None,
         })
         .expect("write timeout vote RPC topology");
         let local = status(NodeOptions {

@@ -460,6 +460,10 @@ struct TransportBatchAck {
     certificate_attached: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     certified_state: Option<TransportHello>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    storage: Option<postfiat_types::StorageStatusReportV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    transactional_work: Option<postfiat_storage::transactional::TransactionalWorkCounters>,
     state: TransportHello,
 }
 
@@ -841,6 +845,10 @@ struct TransportPeerTargetTimingReport {
     result: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     vote_request_breakdown: Option<TransportBlockVoteRequestTimingReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    storage: Option<postfiat_types::StorageStatusReportV1>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transactional_work: Option<postfiat_storage::transactional::TransactionalWorkCounters>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -2200,6 +2208,8 @@ fn completed_durable_certified_send_report(
                 block_height: ack.block_height,
                 block_tip_hash: ack.block_tip_hash.clone(),
             }),
+            storage: None,
+            transactional_work: None,
             state: TransportHello {
                 schema: TRANSPORT_HELLO_SCHEMA.to_string(),
                 topology_id: job.topology_id.clone(),
@@ -2779,6 +2789,8 @@ struct TxLatencyBenchmarkOptions {
     retry_backoff_ms: u64,
     local_apply_before_certified_send: bool,
     defer_certified_sends: bool,
+    resident_transactional_store: bool,
+    expected_start_height: Option<u64>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -2909,6 +2921,41 @@ fn tx_latency_statuses_at_height(
         .all(|status| status.block_height == expected_height)
 }
 
+fn tx_latency_certified_states(
+    round: &TransportPeerCertifiedBatchRoundReport,
+    validators: usize,
+) -> Result<Vec<TransportHello>, String> {
+    let mut states = vec![round.local_state.clone()];
+    for send in &round.sends {
+        let state = send.ack.certified_state.clone().ok_or_else(|| {
+            format!(
+                "certified send to `{}` omitted its finalized state",
+                send.to
+            )
+        })?;
+        states.push(state);
+    }
+    let node_ids = states
+        .iter()
+        .map(|state| state.node_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let identities = states
+        .iter()
+        .map(|state| {
+            (
+                state.block_height,
+                state.block_tip_hash.as_str(),
+                state.state_root.as_str(),
+            )
+        })
+        .collect::<BTreeSet<_>>();
+    if states.len() != validators || node_ids.len() != validators || identities.len() != 1 {
+        return Err("certified apply acknowledgements did not converge across every validator"
+            .to_string());
+    }
+    Ok(states)
+}
+
 fn tx_latency_write_json_line(
     path: &Path,
     value: &TxLatencyBenchmarkIterationReport,
@@ -2987,27 +3034,59 @@ fn tx_latency_benchmark(options: TxLatencyBenchmarkOptions) -> Result<TxLatencyB
         })?;
     }
 
-    let initial_statuses = tx_latency_collect_statuses(&options.base_dir, options.validators)?;
-    let mut current_height = initial_statuses
-        .first()
-        .map(|status| status.block_height)
-        .ok_or_else(|| "no validator statuses collected".to_string())?;
-    if !tx_latency_statuses_at_height(&initial_statuses, current_height) {
-        return Err("validators are not at one starting height".to_string());
+    if options.resident_transactional_store {
+        if options.expected_start_height.is_none() {
+            return Err(
+                "--resident-transactional-store requires --expected-start-height".to_string(),
+            );
+        }
+        if options.rounds != 1 {
+            return Err(
+                "--resident-transactional-store requires exactly one round per process"
+                    .to_string(),
+            );
+        }
+    } else if options.expected_start_height.is_some() {
+        return Err(
+            "--expected-start-height requires --resident-transactional-store".to_string(),
+        );
     }
+    let mut current_height = if let Some(expected) = options.expected_start_height {
+        expected
+    } else {
+        let initial_statuses =
+            tx_latency_collect_statuses(&options.base_dir, options.validators)?;
+        let height = initial_statuses
+            .first()
+            .map(|status| status.block_height)
+            .ok_or_else(|| "no validator statuses collected".to_string())?;
+        if !tx_latency_statuses_at_height(&initial_statuses, height) {
+            return Err("validators are not at one starting height".to_string());
+        }
+        height
+    };
+    let mut resident_final_states = Vec::new();
+    let canonical_validator_ids = (0..options.validators)
+        .map(|index| format!("validator-{index}"))
+        .collect::<Vec<_>>();
 
     let mut iterations = Vec::with_capacity(options.rounds);
     for iteration in 1..=options.rounds {
         let next_height = current_height
             .checked_add(1)
             .ok_or_else(|| "block height overflow".to_string())?;
-        let proposer = block_proposer(BlockProposerOptions {
-            data_dir: tx_latency_validator_data_dir(&options.base_dir, "validator-0"),
-            block_height: next_height,
-            view: 0,
-        })
-        .map_err(|error| format!("block proposer for height {next_height} failed: {error}"))?;
-        let source_node = proposer.proposer;
+        let source_node = if options.resident_transactional_store {
+            postfiat_ordering_fast::leader_for_view(&canonical_validator_ids, next_height, 0)
+                .map_err(|error| format!("block proposer for height {next_height} failed: {error}"))?
+        } else {
+            block_proposer(BlockProposerOptions {
+                data_dir: tx_latency_validator_data_dir(&options.base_dir, "validator-0"),
+                block_height: next_height,
+                view: 0,
+            })
+            .map_err(|error| format!("block proposer for height {next_height} failed: {error}"))?
+            .proposer
+        };
         let source_data_dir = tx_latency_validator_data_dir(&options.base_dir, &source_node);
         let key_file = source_data_dir.join(VALIDATOR_KEYS_FILE);
         let artifact_dir = options.artifact_root.join(format!("round-{iteration:06}"));
@@ -3140,23 +3219,25 @@ fn tx_latency_benchmark(options: TxLatencyBenchmarkOptions) -> Result<TxLatencyB
         iterations.push(iteration_report);
 
         current_height = next_height;
-        let statuses = tx_latency_collect_statuses(&options.base_dir, options.validators)?;
-        if !tx_latency_statuses_at_height(&statuses, current_height) {
-            return Err(format!(
-                "validators did not converge at height {current_height} after round {iteration}"
-            ));
+        if options.resident_transactional_store {
+            resident_final_states =
+                tx_latency_certified_states(&mempool_round.round, options.validators)?;
+            if resident_final_states
+                .iter()
+                .any(|state| state.block_height != current_height)
+            {
+                return Err(format!(
+                    "validators did not converge at height {current_height} after round {iteration}"
+                ));
+            }
+        } else {
+            let statuses = tx_latency_collect_statuses(&options.base_dir, options.validators)?;
+            if !tx_latency_statuses_at_height(&statuses, current_height) {
+                return Err(format!(
+                    "validators did not converge at height {current_height} after round {iteration}"
+                ));
+            }
         }
-    }
-
-    let final_statuses = tx_latency_collect_statuses(&options.base_dir, options.validators)?;
-    let mut final_state_reports = Vec::with_capacity(options.validators);
-    for index in 0..options.validators {
-        let node_id = format!("validator-{index}");
-        let report = verify_state(NodeOptions {
-            data_dir: tx_latency_validator_data_dir(&options.base_dir, &node_id),
-        })
-        .map_err(|error| format!("verify-state for `{node_id}` failed: {error}"))?;
-        final_state_reports.push(report);
     }
 
     let wallet_to_finality_values = iterations
@@ -3180,25 +3261,52 @@ fn tx_latency_benchmark(options: TxLatencyBenchmarkOptions) -> Result<TxLatencyB
     let no_duplicate_receipts = iterations
         .iter()
         .all(|iteration| tx_ids.insert(iteration.tx_id.clone()));
-    let final_heights = final_statuses
+    let (final_states, state_verified_after_run, state_verification_count) =
+        if options.resident_transactional_store {
+            let verified = resident_final_states.len() == options.validators
+                && iterations.iter().all(|iteration| {
+                    iteration.round_ok
+                        && iteration.all_sends_verified
+                        && iteration.all_vote_requests_verified
+                });
+            (resident_final_states, verified, options.validators)
+        } else {
+            let topology = read_topology_file(&options.topology_file)?;
+            let final_statuses =
+                tx_latency_collect_statuses(&options.base_dir, options.validators)?;
+            let final_states = final_statuses
+                .iter()
+                .map(|status| transport_hello(&topology, status))
+                .collect::<Vec<_>>();
+            let mut final_state_reports = Vec::with_capacity(options.validators);
+            for index in 0..options.validators {
+                let node_id = format!("validator-{index}");
+                let report = verify_state(NodeOptions {
+                    data_dir: tx_latency_validator_data_dir(&options.base_dir, &node_id),
+                })
+                .map_err(|error| format!("verify-state for `{node_id}` failed: {error}"))?;
+                final_state_reports.push(report);
+            }
+            let verified = final_state_reports.iter().all(|report| report.verified);
+            let count = final_state_reports.len();
+            (final_states, verified, count)
+        };
+    let final_heights = final_states
         .iter()
-        .map(|status| status.block_height)
+        .map(|state| state.block_height)
         .collect::<BTreeSet<_>>();
-    let final_tips = final_statuses
+    let final_tips = final_states
         .iter()
-        .map(|status| status.block_tip_hash.clone())
+        .map(|state| state.block_tip_hash.clone())
         .collect::<BTreeSet<_>>();
-    let final_roots = final_statuses
+    let final_roots = final_states
         .iter()
-        .map(|status| status.state_root.clone())
+        .map(|state| state.state_root.clone())
         .collect::<BTreeSet<_>>();
     let final_height_matches_rounds = final_heights.len() == 1
         && final_heights
             .first()
             .is_some_and(|height| *height == current_height);
-    let state_verified_after_run = final_state_reports
-        .iter()
-        .all(|report| report.verified);
     let all_transactions_final = iterations
         .iter()
         .all(|iteration| iteration.finality_confirmed);
@@ -3237,6 +3345,8 @@ fn tx_latency_benchmark(options: TxLatencyBenchmarkOptions) -> Result<TxLatencyB
             "build_mode": options.build_mode,
             "local_apply_before_certified_send": options.local_apply_before_certified_send,
             "defer_certified_sends": options.defer_certified_sends,
+            "resident_transactional_store": options.resident_transactional_store,
+            "expected_start_height": options.expected_start_height,
             "timeout_ms": options.timeout_ms,
             "send_retries": options.send_retries,
             "retry_backoff_ms": options.retry_backoff_ms,
@@ -3276,7 +3386,7 @@ fn tx_latency_benchmark(options: TxLatencyBenchmarkOptions) -> Result<TxLatencyB
             "height": final_heights.first().copied(),
             "state_root": final_roots.first().cloned(),
             "block_tip_hash": final_tips.first().cloned(),
-            "state_verification_count": final_state_reports.len()
+            "state_verification_count": state_verification_count
         }),
         iterations_file: options
             .iterations_file

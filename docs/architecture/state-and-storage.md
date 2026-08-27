@@ -69,7 +69,8 @@ This is an undeployed development candidate, not the selected production store.
 Synthetic counters are bounded through height 5,000, but the fixed bitmap has a
 high constant cost and the six-validator finality, exact replay, full tamper,
 and clone-migration gates remain open. See the
-[active milestone](../plans/active/storage-scaling-milestone.md) and
+[Storage Scaling Fix implementation specification](storage-scaling-fix-spec.md),
+the [active milestone](../plans/active/storage-scaling-milestone.md), and
 [development evidence](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling). Public
 testnet remains blocked.
 

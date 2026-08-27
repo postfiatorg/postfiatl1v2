@@ -1440,6 +1440,7 @@ pub(super) fn transport_batch_ack(
     envelope: &TransportBatchEnvelope,
     state_after: &StatusReport,
     receipts: &[postfiat_types::Receipt],
+    transactional_work: Option<postfiat_storage::transactional::TransactionalWorkCounters>,
 ) -> TransportBatchAck {
     let accepted_count = receipts.iter().filter(|receipt| receipt.accepted).count() as u64;
     let receipt_count = receipts.len() as u64;
@@ -1458,6 +1459,8 @@ pub(super) fn transport_batch_ack(
         rejected_count: receipt_count.saturating_sub(accepted_count),
         certificate_attached: envelope.certificate_json.is_some(),
         certified_state: Some(state.clone()),
+        storage: state_after.storage.clone(),
+        transactional_work,
         state,
     }
 }
@@ -1539,6 +1542,8 @@ pub(super) fn transport_already_applied_ack(
         rejected_count: 0,
         certificate_attached: true,
         certified_state: Some(certified_state),
+        storage: state_after.storage.clone(),
+        transactional_work: None,
         state: transport_hello(topology, state_after),
     })
 }
@@ -1798,6 +1803,7 @@ mod transport_cli_tests {
             block_height: 10,
             block_tip_hash: "33".repeat(48),
             mempool_pending: 0,
+            storage: None,
         }
     }
 

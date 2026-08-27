@@ -2691,6 +2691,162 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "storage-activation-template" => {
+            let data_dir =
+                PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
+            let activation_height = parse_u64_flag(flags, "--activation-height")?;
+            let record_file = PathBuf::from(
+                flag_value(flags, "--record-file").ok_or("missing --record-file")?,
+            );
+            let report = create_storage_activation_template(
+                StorageActivationTemplateOptions {
+                    data_dir,
+                    activation_height,
+                    record_file,
+                },
+            )
+            .map_err(|error| format!("storage activation template failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|error| format!("storage activation template serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "storage-activation-ratify" => {
+            let data_dir =
+                PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
+            let record_file = PathBuf::from(
+                flag_value(flags, "--record-file").ok_or("missing --record-file")?,
+            );
+            let validators =
+                split_csv(flag_value(flags, "--validators").ok_or("missing --validators")?);
+            let support = split_csv(flag_value(flags, "--support").unwrap_or(""));
+            let support = if support.is_empty() {
+                validators.clone()
+            } else {
+                support
+            };
+            let amendment_file = PathBuf::from(
+                flag_value(flags, "--amendment-file").ok_or("missing --amendment-file")?,
+            );
+            let amendment =
+                ratify_storage_activation(StorageActivationRatificationOptions {
+                    data_dir,
+                    record_file,
+                    validators,
+                    support,
+                    amendment_file,
+                })
+                .map_err(|error| format!("storage activation authorization failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&amendment)
+                .map_err(|error| format!("storage activation authorization serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "storage-activation-batch" => {
+            let data_dir =
+                PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
+            let record_file = PathBuf::from(
+                flag_value(flags, "--record-file").ok_or("missing --record-file")?,
+            );
+            let authorization_amendment_file = PathBuf::from(
+                flag_value(flags, "--authorization-amendment-file")
+                    .ok_or("missing --authorization-amendment-file")?,
+            );
+            let batch_file =
+                PathBuf::from(flag_value(flags, "--batch-file").ok_or("missing --batch-file")?);
+            let batch = create_storage_activation_batch(StorageActivationBatchOptions {
+                data_dir,
+                record_file,
+                authorization_amendment_file,
+                batch_file,
+            })
+            .map_err(|error| format!("storage activation batch failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&batch)
+                .map_err(|error| format!("storage activation batch serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "storage-cancellation-template" => {
+            let data_dir =
+                PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
+            let activation_id = flag_value(flags, "--activation-id")
+                .ok_or("missing --activation-id")?
+                .to_owned();
+            let reason = flag_value(flags, "--reason")
+                .ok_or("missing --reason")?
+                .to_owned();
+            let record_file = PathBuf::from(
+                flag_value(flags, "--record-file").ok_or("missing --record-file")?,
+            );
+            let report = create_storage_cancellation_template(
+                StorageCancellationTemplateOptions {
+                    data_dir,
+                    activation_id,
+                    reason,
+                    record_file,
+                },
+            )
+            .map_err(|error| format!("storage cancellation template failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|error| format!("storage cancellation template serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "storage-cancellation-ratify" => {
+            let data_dir =
+                PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
+            let record_file = PathBuf::from(
+                flag_value(flags, "--record-file").ok_or("missing --record-file")?,
+            );
+            let validators =
+                split_csv(flag_value(flags, "--validators").ok_or("missing --validators")?);
+            let support = split_csv(flag_value(flags, "--support").unwrap_or(""));
+            let support = if support.is_empty() {
+                validators.clone()
+            } else {
+                support
+            };
+            let amendment_file = PathBuf::from(
+                flag_value(flags, "--amendment-file").ok_or("missing --amendment-file")?,
+            );
+            let amendment =
+                ratify_storage_cancellation(StorageCancellationRatificationOptions {
+                    data_dir,
+                    record_file,
+                    validators,
+                    support,
+                    amendment_file,
+                })
+                .map_err(|error| format!("storage cancellation authorization failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&amendment)
+                .map_err(|error| format!("storage cancellation authorization serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "storage-cancellation-batch" => {
+            let data_dir =
+                PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
+            let record_file = PathBuf::from(
+                flag_value(flags, "--record-file").ok_or("missing --record-file")?,
+            );
+            let authorization_amendment_file = PathBuf::from(
+                flag_value(flags, "--authorization-amendment-file")
+                    .ok_or("missing --authorization-amendment-file")?,
+            );
+            let batch_file =
+                PathBuf::from(flag_value(flags, "--batch-file").ok_or("missing --batch-file")?);
+            let batch = create_storage_cancellation_batch(StorageCancellationBatchOptions {
+                data_dir,
+                record_file,
+                authorization_amendment_file,
+                batch_file,
+            })
+            .map_err(|error| format!("storage cancellation batch failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&batch)
+                .map_err(|error| format!("storage cancellation batch serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
         "ordered-history-index-rebuild" => {
             if !flag_present(flags, "--offline-confirmed") {
                 return Err(
@@ -2706,6 +2862,36 @@ fn run_cli_group_05(command: &str, flags: &[String]) -> Result<(), String> {
                 .map_err(|error| format!("ordered-history index rebuild failed: {error}"))?;
             let json = serde_json::to_string_pretty(&report)
                 .map_err(|error| format!("ordered-history index report serialization failed: {error}"))?;
+            println!("{json}");
+            Ok(())
+        }
+        "storage-rebuild-transactional" => {
+            if !flag_present(flags, "--offline-confirmed") {
+                return Err(
+                    "storage-rebuild-transactional requires --offline-confirmed after every process using the data directory has been stopped"
+                        .to_string(),
+                );
+            }
+            let data_dir = PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
+            let output_dir = PathBuf::from(
+                flag_value(flags, "--output-dir").ok_or("missing --output-dir")?,
+            );
+            let expected_tip = flag_value(flags, "--expected-tip")
+                .ok_or("missing --expected-tip")?
+                .to_string();
+            let expected_state_root = flag_value(flags, "--expected-state-root")
+                .ok_or("missing --expected-state-root")?
+                .to_string();
+            let report = rebuild_transactional_storage(StorageMigrationOptions {
+                data_dir,
+                output_dir,
+                expected_tip,
+                expected_state_root,
+                verify_only: flag_present(flags, "--verify-only"),
+            })
+            .map_err(|error| format!("storage transactional rebuild failed: {error}"))?;
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|error| format!("storage migration report serialization failed: {error}"))?;
             println!("{json}");
             Ok(())
         }

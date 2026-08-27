@@ -228,6 +228,7 @@ mod transport_batch_payload_tests {
                     node_id: format!("validator-{index}"),
                     validator_count: validator_count as u32,
                     activation_height: 2,
+                    storage_activation_height: None,
                 })
                 .expect("init validator");
                 data_dir
@@ -276,6 +277,7 @@ mod transport_batch_payload_tests {
             hosts: Some(vec!["127.0.0.1".to_string(); validator_count]),
             output_file: topology_file.clone(),
             activation_height: 2,
+            storage_activation_height: None,
         })
         .expect("write topology");
         let (_, validators) =
@@ -1048,6 +1050,7 @@ mod transport_batch_payload_tests {
                     node_id: format!("validator-{index}"),
                     validator_count: validator_count as u32,
                     activation_height: 1,
+                    storage_activation_height: None,
                 })
                 .expect("init validator");
                 data_dir
@@ -1101,6 +1104,7 @@ mod transport_batch_payload_tests {
             hosts: Some(vec!["127.0.0.1".to_string(); validator_count]),
             output_file: topology_file.clone(),
             activation_height: 1,
+            storage_activation_height: None,
         })
         .expect("write topology");
         let (_, validators) =
@@ -1370,7 +1374,7 @@ mod transport_batch_payload_tests {
                 "{command}: {error}"
             );
         }
-        require_unsafe_devnet_json_storage(
+        require_transactional_or_unsafe_devnet_json_storage(
             &["--unsafe-devnet-json-storage".to_string()],
             "validator service",
         )
@@ -1390,6 +1394,39 @@ mod transport_batch_payload_tests {
                 "{command}: {error}"
             );
         }
+    }
+
+    #[test]
+    fn verified_transactional_storage_does_not_require_legacy_acknowledgement() {
+        let root = std::env::temp_dir().join(format!(
+            "postfiat-transactional-service-guard-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        init_consensus_v2(InitConsensusV2Options {
+            data_dir: root.clone(),
+            chain_id: "postfiat-transactional-service-guard-test".to_owned(),
+            node_id: "validator-0".to_owned(),
+            validator_count: 1,
+            activation_height: 1,
+            storage_activation_height: Some(1),
+        })
+        .expect("initialize verified transactional generation");
+
+        require_transactional_or_unsafe_devnet_json_storage(
+            &[
+                "--data-dir".to_owned(),
+                root.to_string_lossy().into_owned(),
+            ],
+            "validator service",
+        )
+        .expect("transactional service must not require the legacy acknowledgement");
+
+        std::fs::remove_dir_all(root)
+            .expect("remove transactional service guard fixture");
     }
 
     #[test]
@@ -1456,6 +1493,7 @@ mod transport_batch_payload_tests {
             block_height: 6,
             block_tip_hash: "tip".to_string(),
             mempool_pending: 0,
+            storage: None,
         };
         let batch_json = r#"{"schema":"test-batch","batch_id":"batch-1"}"#;
         let proposal_json = serde_json::json!({

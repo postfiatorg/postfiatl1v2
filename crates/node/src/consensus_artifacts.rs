@@ -1810,6 +1810,8 @@ pub(super) fn build_governance_action_batch_with_fastswap_bootstraps(
         fastswap_bootstraps,
         fastpay_recovery_bootstraps: Vec::new(),
         vault_bridge_route_profile_activations: Vec::new(),
+        storage_commitment_activations: Vec::new(),
+        storage_commitment_cancellations: Vec::new(),
     })
 }
 
@@ -1927,6 +1929,137 @@ fn verify_fastpay_recovery_bootstrap_evidence(
     Ok(())
 }
 
+fn verify_storage_commitment_action_bindings(
+    genesis: &Genesis,
+    batch: &GovernanceActionBatch,
+) -> io::Result<()> {
+    let action_count =
+        batch.storage_commitment_activations.len() + batch.storage_commitment_cancellations.len();
+    if action_count == 0 {
+        return Ok(());
+    }
+    if action_count != 1
+        || batch.amendments.len() != 1
+        || !batch.validator_registry_updates.is_empty()
+        || !batch.cobalt_authority_transitions.is_empty()
+        || !batch.governance_agent_dry_runs.is_empty()
+        || !batch.fastswap_bootstraps.is_empty()
+        || !batch.fastpay_recovery_bootstraps.is_empty()
+        || !batch.vault_bridge_route_profile_activations.is_empty()
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "storage commitment governance action must contain exactly one authorization amendment and one activation or cancellation record",
+        ));
+    }
+    let amendment = &batch.amendments[0];
+    let expected_genesis_hash = genesis_hash(genesis);
+    let expected_value;
+    let expected_kind;
+    let authorization_amendment_id;
+    let record_chain_id;
+    let record_genesis_hash;
+    let record_protocol_version;
+    if let Some(record) = batch.storage_commitment_activations.first() {
+        record
+            .validate()
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        expected_value = u32::try_from(record.activation_height).map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "storage commitment activation height exceeds governance value range",
+            )
+        })?;
+        expected_kind = record.authorization_kind();
+        authorization_amendment_id = &record.authorization_amendment_id;
+        record_chain_id = &record.chain_id;
+        record_genesis_hash = &record.genesis_hash;
+        record_protocol_version = record.protocol_version;
+    } else {
+        let record = &batch.storage_commitment_cancellations[0];
+        record
+            .validate()
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        expected_value = u32::try_from(record.cancellation_height).map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "storage commitment cancellation height exceeds governance value range",
+            )
+        })?;
+        expected_kind = record.authorization_kind();
+        authorization_amendment_id = &record.authorization_amendment_id;
+        record_chain_id = &record.chain_id;
+        record_genesis_hash = &record.genesis_hash;
+        record_protocol_version = record.protocol_version;
+    }
+    if record_chain_id != &genesis.chain_id
+        || record_genesis_hash != &expected_genesis_hash
+        || record_protocol_version != genesis.protocol_version
+        || authorization_amendment_id != &amendment.amendment_id
+        || amendment.kind != expected_kind
+        || amendment.value != expected_value
+        || amendment.activation_height != 0
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "storage commitment governance action binding mismatch",
+        ));
+    }
+    Ok(())
+}
+
+fn storage_commitment_action_batch_id(
+    genesis: &Genesis,
+    batch: &GovernanceActionBatch,
+) -> io::Result<String> {
+    chain_bound_action_batch_id(
+        genesis,
+        "postfiat.governance_action_batch.v1",
+        "governance",
+        &(
+            &batch.amendments,
+            &batch.validator_registry_updates,
+            &batch.cobalt_authority_transitions,
+            &batch.governance_agent_dry_runs,
+            &batch.fastswap_bootstraps,
+            &batch.fastpay_recovery_bootstraps,
+            &batch.vault_bridge_route_profile_activations,
+            &batch.storage_commitment_activations,
+            &batch.storage_commitment_cancellations,
+        ),
+    )
+}
+
+pub fn build_storage_commitment_activation_batch(
+    genesis: &Genesis,
+    authorization: GovernanceAmendment,
+    activation: postfiat_types::StorageCommitmentActivationRecordV1,
+) -> io::Result<GovernanceActionBatch> {
+    let mut batch = GovernanceActionBatch::with_storage_commitment_activation(
+        String::new(),
+        authorization,
+        activation,
+    );
+    batch.batch_id = storage_commitment_action_batch_id(genesis, &batch)?;
+    verify_governance_action_batch_id(genesis, &batch)?;
+    Ok(batch)
+}
+
+pub fn build_storage_commitment_cancellation_batch(
+    genesis: &Genesis,
+    authorization: GovernanceAmendment,
+    cancellation: postfiat_types::StorageCommitmentCancellationRecordV1,
+) -> io::Result<GovernanceActionBatch> {
+    let mut batch = GovernanceActionBatch::with_storage_commitment_cancellation(
+        String::new(),
+        authorization,
+        cancellation,
+    );
+    batch.batch_id = storage_commitment_action_batch_id(genesis, &batch)?;
+    verify_governance_action_batch_id(genesis, &batch)?;
+    Ok(batch)
+}
+
 pub(super) fn verify_governance_action_batch_id(
     genesis: &Genesis,
     batch: &GovernanceActionBatch,
@@ -1938,7 +2071,9 @@ pub(super) fn verify_governance_action_batch_id(
             || !batch.governance_agent_dry_runs.is_empty()
             || !batch.fastswap_bootstraps.is_empty()
             || !batch.fastpay_recovery_bootstraps.is_empty()
-            || !batch.vault_bridge_route_profile_activations.is_empty())
+            || !batch.vault_bridge_route_profile_activations.is_empty()
+            || !batch.storage_commitment_activations.is_empty()
+            || !batch.storage_commitment_cancellations.is_empty())
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -1952,7 +2087,9 @@ pub(super) fn verify_governance_action_batch_id(
             || !batch.cobalt_authority_transitions.is_empty()
             || !batch.governance_agent_dry_runs.is_empty()
             || !batch.fastpay_recovery_bootstraps.is_empty()
-            || !batch.vault_bridge_route_profile_activations.is_empty())
+            || !batch.vault_bridge_route_profile_activations.is_empty()
+            || !batch.storage_commitment_activations.is_empty()
+            || !batch.storage_commitment_cancellations.is_empty())
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -1966,7 +2103,9 @@ pub(super) fn verify_governance_action_batch_id(
             || !batch.cobalt_authority_transitions.is_empty()
             || !batch.governance_agent_dry_runs.is_empty()
             || !batch.fastswap_bootstraps.is_empty()
-            || !batch.fastpay_recovery_bootstraps.is_empty())
+            || !batch.fastpay_recovery_bootstraps.is_empty()
+            || !batch.storage_commitment_activations.is_empty()
+            || !batch.storage_commitment_cancellations.is_empty())
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -1980,7 +2119,9 @@ pub(super) fn verify_governance_action_batch_id(
             || !batch.cobalt_authority_transitions.is_empty()
             || !batch.governance_agent_dry_runs.is_empty()
             || !batch.fastswap_bootstraps.is_empty()
-            || !batch.vault_bridge_route_profile_activations.is_empty())
+            || !batch.vault_bridge_route_profile_activations.is_empty()
+            || !batch.storage_commitment_activations.is_empty()
+            || !batch.storage_commitment_cancellations.is_empty())
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -2032,6 +2173,7 @@ pub(super) fn verify_governance_action_batch_id(
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
         verify_governance_amendment_evidence(genesis, &activation.amendment)?;
     }
+    verify_storage_commitment_action_bindings(genesis, batch)?;
     if batch.amendments.is_empty()
         && batch.validator_registry_updates.is_empty()
         && batch.cobalt_authority_transitions.is_empty()
@@ -2039,11 +2181,24 @@ pub(super) fn verify_governance_action_batch_id(
         && batch.fastswap_bootstraps.is_empty()
         && batch.fastpay_recovery_bootstraps.is_empty()
         && batch.vault_bridge_route_profile_activations.is_empty()
+        && batch.storage_commitment_activations.is_empty()
+        && batch.storage_commitment_cancellations.is_empty()
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "governance batch has no actions",
         ));
+    }
+    if !batch.storage_commitment_activations.is_empty()
+        || !batch.storage_commitment_cancellations.is_empty()
+    {
+        if batch.batch_id != storage_commitment_action_batch_id(genesis, batch)? {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "storage commitment governance batch id mismatch",
+            ));
+        }
+        return Ok(());
     }
     let expected = if batch.cobalt_authority_transitions.is_empty() {
         chain_bound_action_batch_id(
@@ -2186,7 +2341,9 @@ pub(super) fn verify_archived_governance_action_batch_id(
             || !batch.governance_agent_dry_runs.is_empty()
             || !batch.fastswap_bootstraps.is_empty()
             || !batch.fastpay_recovery_bootstraps.is_empty()
-            || !batch.vault_bridge_route_profile_activations.is_empty())
+            || !batch.vault_bridge_route_profile_activations.is_empty()
+            || !batch.storage_commitment_activations.is_empty()
+            || !batch.storage_commitment_cancellations.is_empty())
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -2200,7 +2357,9 @@ pub(super) fn verify_archived_governance_action_batch_id(
             || !batch.cobalt_authority_transitions.is_empty()
             || !batch.governance_agent_dry_runs.is_empty()
             || !batch.fastpay_recovery_bootstraps.is_empty()
-            || !batch.vault_bridge_route_profile_activations.is_empty())
+            || !batch.vault_bridge_route_profile_activations.is_empty()
+            || !batch.storage_commitment_activations.is_empty()
+            || !batch.storage_commitment_cancellations.is_empty())
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -2214,7 +2373,9 @@ pub(super) fn verify_archived_governance_action_batch_id(
             || !batch.cobalt_authority_transitions.is_empty()
             || !batch.governance_agent_dry_runs.is_empty()
             || !batch.fastswap_bootstraps.is_empty()
-            || !batch.fastpay_recovery_bootstraps.is_empty())
+            || !batch.fastpay_recovery_bootstraps.is_empty()
+            || !batch.storage_commitment_activations.is_empty()
+            || !batch.storage_commitment_cancellations.is_empty())
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -2228,7 +2389,9 @@ pub(super) fn verify_archived_governance_action_batch_id(
             || !batch.cobalt_authority_transitions.is_empty()
             || !batch.governance_agent_dry_runs.is_empty()
             || !batch.fastswap_bootstraps.is_empty()
-            || !batch.vault_bridge_route_profile_activations.is_empty())
+            || !batch.vault_bridge_route_profile_activations.is_empty()
+            || !batch.storage_commitment_activations.is_empty()
+            || !batch.storage_commitment_cancellations.is_empty())
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -2278,6 +2441,7 @@ pub(super) fn verify_archived_governance_action_batch_id(
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
         verify_governance_amendment_evidence(genesis, &activation.amendment)?;
     }
+    verify_storage_commitment_action_bindings(genesis, batch)?;
     if batch.amendments.is_empty()
         && batch.validator_registry_updates.is_empty()
         && batch.cobalt_authority_transitions.is_empty()
@@ -2285,6 +2449,8 @@ pub(super) fn verify_archived_governance_action_batch_id(
         && batch.fastswap_bootstraps.is_empty()
         && batch.fastpay_recovery_bootstraps.is_empty()
         && batch.vault_bridge_route_profile_activations.is_empty()
+        && batch.storage_commitment_activations.is_empty()
+        && batch.storage_commitment_cancellations.is_empty()
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -2303,6 +2469,8 @@ pub(super) fn verify_archived_governance_action_batch_id(
         && batch.fastswap_bootstraps.is_empty()
         && batch.fastpay_recovery_bootstraps.is_empty()
         && batch.vault_bridge_route_profile_activations.is_empty()
+        && batch.storage_commitment_activations.is_empty()
+        && batch.storage_commitment_cancellations.is_empty()
     {
         if let Some(embedded_genesis_hash) = common_embedded_registry_update_genesis_hash(batch) {
             if embedded_genesis_hash != genesis_hash(genesis)
@@ -2345,6 +2513,8 @@ pub(super) fn pre_age_release_governance_action_batch_id(
         || !batch.governance_agent_dry_runs.is_empty()
         || !batch.fastswap_bootstraps.is_empty()
         || !batch.fastpay_recovery_bootstraps.is_empty()
+        || !batch.storage_commitment_activations.is_empty()
+        || !batch.storage_commitment_cancellations.is_empty()
         || batch.vault_bridge_route_profile_activations.len() != 1
     {
         return Ok(None);
@@ -2408,6 +2578,28 @@ pub(super) fn governance_action_batch_id_matches_genesis_hash(
     batch: &GovernanceActionBatch,
     genesis_hash_hex: &str,
 ) -> io::Result<bool> {
+    if !batch.storage_commitment_activations.is_empty()
+        || !batch.storage_commitment_cancellations.is_empty()
+    {
+        let expected = chain_bound_action_batch_id_for_genesis_hash(
+            genesis,
+            genesis_hash_hex,
+            "postfiat.governance_action_batch.v1",
+            "governance",
+            &(
+                &batch.amendments,
+                &batch.validator_registry_updates,
+                &batch.cobalt_authority_transitions,
+                &batch.governance_agent_dry_runs,
+                &batch.fastswap_bootstraps,
+                &batch.fastpay_recovery_bootstraps,
+                &batch.vault_bridge_route_profile_activations,
+                &batch.storage_commitment_activations,
+                &batch.storage_commitment_cancellations,
+            ),
+        )?;
+        return Ok(batch.batch_id == expected);
+    }
     let expected = if batch.cobalt_authority_transitions.is_empty() {
         chain_bound_action_batch_id_for_genesis_hash(
             genesis,
@@ -2740,6 +2932,23 @@ pub(super) fn verify_live_signed_governance_batch(
     batch: &GovernanceActionBatch,
     proposal_slot: u64,
 ) -> io::Result<()> {
+    verify_storage_commitment_action_bindings(genesis, batch)?;
+    for activation in &batch.storage_commitment_activations {
+        if activation.scheduling_block_height != proposal_slot {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "storage commitment activation scheduling height does not match proposal slot",
+            ));
+        }
+    }
+    for cancellation in &batch.storage_commitment_cancellations {
+        if cancellation.cancellation_height != proposal_slot {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "storage commitment cancellation height does not match proposal slot",
+            ));
+        }
+    }
     match crate::cobalt_handoff::verify_governance_authority_batch(
         genesis,
         governance,
@@ -3834,6 +4043,7 @@ pub(super) fn read_bounded_json_text_file(path: &Path, label: &str) -> io::Resul
 pub(super) fn validate_snapshot_manifest_files(manifest: &SnapshotManifest) -> io::Result<()> {
     let expected_files = match manifest.snapshot_version {
         SNAPSHOT_VERSION => SNAPSHOT_FILES,
+        PRE_STORAGE_SNAPSHOT_VERSION => PRE_STORAGE_SNAPSHOT_FILES,
         LEGACY_SNAPSHOT_VERSION => LEGACY_SNAPSHOT_FILES,
         version => {
             return Err(io::Error::new(

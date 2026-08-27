@@ -462,6 +462,46 @@ pub struct ActiveNavProfileStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageStatusReportV1 {
+    pub schema: String,
+    pub storage_format: String,
+    pub storage_schema: String,
+    pub backend: String,
+    pub backend_version: String,
+    pub generation: String,
+    pub commitment_version: String,
+    pub scheduled_activation_height: Option<u64>,
+    pub transactional_active: bool,
+    pub finalized_height: u64,
+    pub finalized_block_hash: String,
+    pub finalized_state_root: String,
+    pub ordered_batch_count: u64,
+    pub ordered_history_accumulator: String,
+    pub last_full_verification_height: Option<u64>,
+    pub last_rebuild_height: Option<u64>,
+    pub migration_packet_root: Option<String>,
+    pub read_transactions: u64,
+    pub write_transactions: u64,
+    pub committed_write_transactions: u64,
+    pub records_read: u64,
+    pub records_written: u64,
+    pub bytes_read: u64,
+    pub bytes_written: u64,
+    pub pages_read: Option<u64>,
+    pub pages_written: Option<u64>,
+    #[serde(default)]
+    pub full_history_scans: u64,
+    #[serde(default)]
+    pub full_history_records_read: u64,
+    #[serde(default)]
+    pub full_history_bytes_read: u64,
+    pub fsync_count: u64,
+    pub durable_commit_micros: u64,
+    pub integrity_status: String,
+    pub reason_code: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StatusReport {
     pub chain_id: String,
     pub genesis_hash: String,
@@ -488,6 +528,8 @@ pub struct StatusReport {
     pub block_height: u64,
     pub block_tip_hash: String,
     pub mempool_pending: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage: Option<StorageStatusReportV1>,
 }
 
 impl StatusReport {
@@ -500,7 +542,7 @@ impl StatusReport {
     }
 }
 
-pub const SNAPSHOT_VERSION: u32 = 6;
+pub const SNAPSHOT_VERSION: u32 = 7;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SnapshotFile {

@@ -3,7 +3,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(unix)]
@@ -25,8 +25,13 @@ use serde::{Deserialize, Serialize};
 pub mod fastswap_store;
 pub mod integrity;
 pub mod ordered_history;
+pub mod transactional;
 
 pub use ordered_history::{OrderedHistoryCommitment, OrderedHistoryIndexReport};
+pub use transactional::{
+    CommitFinalizedBlock, CommitOutcome, CurrentStateUpdate, PruneOutcome, PruneRetainedHistory,
+    TransactionalStore, TransactionalStoreMetaV1,
+};
 
 use integrity::{
     from_hex, legacy_checksum, macs_equal, to_hex, IntegrityKey, FILE_MAC_MARKER,
@@ -66,6 +71,7 @@ pub struct NodeStore {
     integrity_key: IntegrityKey,
     allow_legacy_migration: bool,
     work_counters: Arc<StorageWorkCounterState>,
+    transactional_store: Arc<Mutex<Option<Arc<TransactionalStore>>>>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
@@ -112,6 +118,7 @@ impl NodeStore {
             integrity_key,
             allow_legacy_migration: false,
             work_counters: Arc::new(StorageWorkCounterState::default()),
+            transactional_store: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -126,6 +133,7 @@ impl NodeStore {
             integrity_key,
             allow_legacy_migration: false,
             work_counters: Arc::new(StorageWorkCounterState::default()),
+            transactional_store: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -139,6 +147,7 @@ impl NodeStore {
             integrity_key,
             allow_legacy_migration: true,
             work_counters: Arc::new(StorageWorkCounterState::default()),
+            transactional_store: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -186,6 +195,7 @@ impl NodeStore {
             integrity_key: IntegrityKey::load_or_create_at(key_path.as_ref())?,
             allow_legacy_migration: false,
             work_counters: Arc::new(StorageWorkCounterState::default()),
+            transactional_store: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -318,6 +328,12 @@ impl NodeStore {
     }
 
     pub fn read_governance(&self) -> io::Result<GovernanceState> {
+        if self.transactional_storage_active()? {
+            return self
+                .transactional_store()?
+                .governance()?
+                .ok_or_else(|| missing_transactional_state("governance"));
+        }
         self.read_json(self.data_dir.join(GOVERNANCE_FILE))
     }
 
@@ -342,6 +358,12 @@ impl NodeStore {
     }
 
     pub fn read_ledger(&self) -> io::Result<LedgerState> {
+        if self.transactional_storage_active()? {
+            return self
+                .transactional_store()?
+                .ledger()?
+                .ok_or_else(|| missing_transactional_state("ledger"));
+        }
         self.read_json(self.data_dir.join(LEDGER_FILE))
     }
 
@@ -350,6 +372,12 @@ impl NodeStore {
     }
 
     pub fn read_shielded(&self) -> io::Result<ShieldedState> {
+        if self.transactional_storage_active()? {
+            return self
+                .transactional_store()?
+                .shielded()?
+                .ok_or_else(|| missing_transactional_state("shielded"));
+        }
         match self.read_json(self.data_dir.join(SHIELDED_FILE)) {
             Ok(shielded) => Ok(shielded),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(ShieldedState::empty()),
@@ -362,6 +390,12 @@ impl NodeStore {
     }
 
     pub fn read_bridge(&self) -> io::Result<BridgeState> {
+        if self.transactional_storage_active()? {
+            return self
+                .transactional_store()?
+                .bridge()?
+                .ok_or_else(|| missing_transactional_state("bridge"));
+        }
         match self.read_json(self.data_dir.join(BRIDGE_FILE)) {
             Ok(bridge) => Ok(bridge),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(BridgeState::empty()),
@@ -375,6 +409,12 @@ impl NodeStore {
     }
 
     pub fn read_receipts(&self) -> io::Result<Vec<Receipt>> {
+        if self.transactional_storage_active()? {
+            return self
+                .transactional_store()?
+                .receipts_in_block_order()
+                .map_err(io::Error::from);
+        }
         let mut receipts: Vec<Receipt> = self.read_json(self.data_dir.join(RECEIPTS_FILE))?;
         for receipt in
             self.read_jsonl_records(&self.data_dir.join(RECEIPTS_APPEND_FILE), "receipt append")?
@@ -489,6 +529,11 @@ impl NodeStore {
     }
 
     pub fn read_blocks(&self) -> io::Result<BlockLog> {
+        if self.transactional_storage_active()? {
+            return Ok(BlockLog {
+                blocks: self.transactional_store()?.blocks_in_height_order()?,
+            });
+        }
         let mut blocks = match self.read_json(self.data_dir.join(BLOCKS_FILE)) {
             Ok(blocks) => Ok(blocks),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(BlockLog::empty()),
@@ -515,6 +560,17 @@ impl NodeStore {
     }
 
     pub fn read_chain_tip(&self) -> io::Result<ChainTipState> {
+        if self.transactional_storage_active()? {
+            let legacy_schema =
+                match self.read_json::<ChainTipState>(self.data_dir.join(CHAIN_TIP_FILE)) {
+                    Ok(tip) => tip.schema,
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                        "postfiat-chain-tip-v1".to_owned()
+                    }
+                    Err(error) => return Err(error),
+                };
+            return Ok(self.transactional_store()?.meta()?.chain_tip(legacy_schema));
+        }
         self.read_json(self.data_dir.join(CHAIN_TIP_FILE))
     }
 
@@ -524,6 +580,13 @@ impl NodeStore {
     }
 
     pub fn read_batch_archive(&self) -> io::Result<BatchArchive> {
+        if self.transactional_storage_active()? {
+            return Ok(BatchArchive {
+                batches: self
+                    .transactional_store()?
+                    .archived_batches_in_block_order()?,
+            });
+        }
         let mut archive = match self.read_json(self.data_dir.join(BATCH_ARCHIVE_FILE)) {
             Ok(archive) => Ok(archive),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(BatchArchive::empty()),
@@ -548,6 +611,12 @@ impl NodeStore {
     }
 
     pub fn read_ordered_batches(&self) -> io::Result<Vec<String>> {
+        if self.transactional_storage_active()? {
+            return self
+                .transactional_store()?
+                .ordered_batches()
+                .map_err(io::Error::from);
+        }
         let mut batch_ids: Vec<String> =
             self.read_json(self.data_dir.join(ORDERED_BATCHES_FILE))?;
         for batch_id in self.read_jsonl_records(
@@ -1016,7 +1085,7 @@ impl NodeStore {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
-                    "{label} `{}` line {} breaks the MAC chain (expected `{expected_chain}`, \
+                    "storage_legacy_jsonl_mac_chain_mismatch: {label} `{}` line {} breaks the MAC chain (expected `{expected_chain}`, \
                      found `{}`); history was truncated or reordered",
                     path.display(),
                     line_index,
@@ -1451,10 +1520,25 @@ impl NodeStore {
         if head.context() == *context {
             return Ok(());
         }
+        // A missing chain-tip file is recoverable from the authenticated log
+        // heads and canonical block history. The sentinel context returned by
+        // `jsonl_checkpoint_context` still binds chain/genesis/protocol; accept
+        // a same-domain v2 head here so the node can reconstruct and republish
+        // the exact tip. Record count, byte offset, hash chain, and log kind are
+        // verified independently before any reconstructed tip is trusted.
+        let chain_tip_missing = context.finalized_height == 0
+            && context.block_hash == context.genesis_hash
+            && context.state_root.is_empty();
+        let same_domain = head.chain_id == context.chain_id
+            && head.genesis_hash == context.genesis_hash
+            && head.protocol_version == context.protocol_version;
+        if chain_tip_missing && same_domain {
+            return Ok(());
+        }
         Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!(
-                "JSONL head `{}` does not match the current chain tip",
+                "storage_legacy_jsonl_head_tip_mismatch: JSONL head `{}` does not match the current chain tip",
                 Self::jsonl_head_path(path).display()
             ),
         ))
@@ -1799,6 +1883,13 @@ fn strip_trailing_newlines(body: &[u8]) -> &[u8] {
 
 fn invalid_data(error: impl std::error::Error + Send + Sync + 'static) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, error)
+}
+
+fn missing_transactional_state(domain: &str) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!("active transactional store is missing `{domain}` current state"),
+    )
 }
 
 #[cfg(unix)]
@@ -3087,7 +3178,12 @@ mod tests {
             .read_receipts()
             .expect_err("truncated receipt log must fail");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-        assert!(error.to_string().contains("MAC chain"), "{error}");
+        assert!(
+            error
+                .to_string()
+                .contains("storage_legacy_jsonl_mac_chain_mismatch"),
+            "{error}"
+        );
 
         fs::remove_dir_all(dir).expect("cleanup");
     }

@@ -291,9 +291,10 @@ use lifecycle_queries::{
     DEPLOYMENT_VALIDATOR_UNIT_STAGE_SCHEMA, DEV_KEY_SELF_CHECK_CONTEXT, DEV_KEY_SELF_CHECK_SEED,
     MAX_LOCAL_JSON_FILE_BYTES, MAX_OPERATOR_MANIFEST_TEXT_BYTES,
     OPERATOR_MANIFEST_SIGNATURE_CONTEXT, OPERATOR_MANIFEST_SIGNATURE_CONTEXT_V1,
-    SIGNED_SNAPSHOT_MANIFEST_FILE, SIGNED_SNAPSHOT_MANIFEST_SCHEMA, SNAPSHOT_FILES,
-    SNAPSHOT_MANIFEST_SIGNATURE_CONTEXT, SNAPSHOT_PUBLISHER_PUBLIC_KEY_SCHEMA,
-    VALIDATOR_KEY_SELF_CHECK_CONTEXT, VALIDATOR_KEY_SELF_CHECK_SEED,
+    PRE_STORAGE_SNAPSHOT_FILES, PRE_STORAGE_SNAPSHOT_VERSION, SIGNED_SNAPSHOT_MANIFEST_FILE,
+    SIGNED_SNAPSHOT_MANIFEST_SCHEMA, SNAPSHOT_FILES, SNAPSHOT_MANIFEST_SIGNATURE_CONTEXT,
+    SNAPSHOT_PUBLISHER_PUBLIC_KEY_SCHEMA, VALIDATOR_KEY_SELF_CHECK_CONTEXT,
+    VALIDATOR_KEY_SELF_CHECK_SEED,
 };
 #[cfg(test)]
 use lifecycle_queries::{
@@ -318,6 +319,10 @@ use mempool_proposals::{
 };
 #[cfg(test)]
 use mempool_proposals::{enforce_mempool_admission_limits, verify_mempool_state};
+mod storage_activation_cli;
+pub use storage_activation_cli::*;
+mod storage_migration;
+pub use storage_migration::*;
 mod batch_snapshot;
 mod lifecycle_checkpoint;
 pub use lifecycle_checkpoint::*;
@@ -419,7 +424,7 @@ use state_commitment::{
     archived_wan_devnet2_pre_age_release_state_root_allowed,
     archived_wan_devnet2_pre_orchard_supply_cap_enforcement_allowed,
     archived_wan_devnet_legacy_nav_asset_commitment_allowed,
-    bridge_verification_legacy_replay_allowed,
+    bridge_verification_legacy_replay_allowed, effective_storage_commitment_activation_height,
     legacy_domainless_vault_bridge_withdrawal_packet_evm_digest,
     legacy_domainless_vault_bridge_withdrawal_packet_hash, legacy_json_replicated_state_root,
     legacy_nav_asset_uncommitted_replicated_state_root,
@@ -487,8 +492,7 @@ pub use storage_commit::*;
 use storage_commit::{
     apply_historical_validator_registry_update_to_registry, apply_ordered_commit_delta_journal,
     apply_ordered_commit_delta_journal_timed, apply_ordered_commit_journal,
-    apply_ordered_commit_journal_timed, apply_stored_ordered_commit_journal,
-    apply_validator_registry_update_to_registry,
+    apply_ordered_commit_journal_timed, apply_validator_registry_update_to_registry,
     apply_verified_validator_registry_update_to_registry,
     apply_verified_validator_registry_update_to_registry_for_domain,
     apply_verified_validator_registry_update_to_registry_inner, bridge_witness_chain_domain_error,

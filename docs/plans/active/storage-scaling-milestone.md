@@ -4,6 +4,7 @@
 **Started:** 2026-08-26
 **Decision owner:** Post Fiat
 **Research specification:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
+**Implementation specification:** [Storage Scaling Fix](../../architecture/storage-scaling-fix-spec.md)
 **Implementation source:** dfd0b9f11108b0b773d1e02bebae71685864228e
 
 The operator directly authorized implementation on 2026-08-26 and explicitly
@@ -54,6 +55,9 @@ Evidence: [development packet](https://github.com/postfiatorg/postfiatl1v2/tree/
 - [ ] Implement and compare the specification's embedded ordered key-value or
   B-tree candidate with atomic write batches. The current fixed-slot candidate
   is bounded but is not the final selected store.
+- [ ] Move finalized blocks, receipts, archived batches, ordered membership,
+  current state, and chain-tip metadata into one atomic per-height transaction
+  as required by the implementation specification.
 - [ ] Run every original E3 tamper case and the full new checkpoint, index-page,
   stale-head, journal disagreement, and crash-cut matrix.
 - [ ] Add snapshot/import behavior and prove clean and rebuilt indexes are
@@ -92,6 +96,8 @@ Primary code:
 - [ ] Decide how the existing height-924 chain receives an explicit activation.
   A genesis-bound activation works for a new chain but cannot be retrofitted
   into the existing genesis hash.
+- [ ] Implement the consensus-ordered storage-commitment activation and
+  pre-activation cancellation records without expanding Cobalt's authority.
 - [ ] Write the versioned migration and rollback runbook.
 - [ ] Rehearse side-by-side rebuild, full replay, staggered restart, activation,
   post-activation finality, pre-activation rollback, forward recovery,

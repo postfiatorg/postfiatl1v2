@@ -37,6 +37,18 @@ pub const GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT: &str =
     "bridge_exit_root_activation_height";
 pub const GOVERNANCE_KIND_SHIELDED_ATOMIC_BATCH_ACTIVATION_HEIGHT: &str =
     "shielded_atomic_batch_activation_height";
+pub const GOVERNANCE_KIND_STORAGE_COMMITMENT_ACTIVATION: &str =
+    "storage_commitment_activation";
+pub const GOVERNANCE_KIND_STORAGE_COMMITMENT_CANCELLATION: &str =
+    "storage_commitment_cancellation";
+pub const STORAGE_COMMITMENT_ACTIVATION_SCHEMA_V1: &str =
+    "postfiat.storage_commitment_activation.v1";
+pub const STORAGE_COMMITMENT_CANCELLATION_SCHEMA_V1: &str =
+    "postfiat.storage_commitment_cancellation.v1";
+pub const STORAGE_COMMITMENT_FEATURE_ID_V1: &str = "ordered_history_redb_v1";
+pub const STORAGE_COMMITMENT_LEGACY_VERSION_V1: &str = "postfiat.replicated_state.v1";
+pub const STORAGE_COMMITMENT_NEW_VERSION_V1: &str = "postfiat.replicated_state.v2";
+pub const STORAGE_COMMITMENT_VERIFIER_VERSION_V1: &str = "postfiat.storage_verifier.v1";
 pub const GOVERNANCE_KIND_ATOMIC_SWAP_PAUSE: &str = "atomic_swap_pause";
 pub const GOVERNANCE_KIND_ORCHARD_POOL_PAUSE: &str = "orchard_pool_pause";
 pub const GOVERNANCE_AUTHORITY_MODE_FOUNDATION: u32 = 0;
@@ -900,6 +912,260 @@ impl VaultBridgeRouteProfileRecordV1 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageCommitmentActivationRecordV1 {
+    pub schema: String,
+    pub feature_id: String,
+    pub activation_id: String,
+    pub authorization_amendment_id: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub scheduling_block_height: u64,
+    pub activation_height: u64,
+    pub legacy_commitment_version: String,
+    pub new_commitment_version: String,
+    pub pre_activation_finalized_height: u64,
+    pub pre_activation_block_hash: String,
+    pub pre_activation_state_root: String,
+    pub pre_activation_ordered_count: u64,
+    pub pre_activation_ordered_accumulator: String,
+    pub migration_packet_root: String,
+    pub required_verifier_version: String,
+}
+
+impl StorageCommitmentActivationRecordV1 {
+    pub fn expected_activation_id(&self) -> Result<String, String> {
+        let encoded = serde_json::to_vec(&(
+            self.schema.as_str(),
+            self.feature_id.as_str(),
+            self.chain_id.as_str(),
+            self.genesis_hash.as_str(),
+            self.protocol_version,
+            self.scheduling_block_height,
+            self.activation_height,
+            self.legacy_commitment_version.as_str(),
+            self.new_commitment_version.as_str(),
+            self.pre_activation_finalized_height,
+            self.pre_activation_block_hash.as_str(),
+            self.pre_activation_state_root.as_str(),
+            self.pre_activation_ordered_count,
+            self.pre_activation_ordered_accumulator.as_str(),
+            self.migration_packet_root.as_str(),
+            self.required_verifier_version.as_str(),
+        ))
+        .map_err(|error| format!("storage commitment activation encoding failed: {error}"))?;
+        let mut hasher = Sha3_384::new();
+        hasher.update(b"postfiat.storage_commitment_activation.id.v1");
+        hasher.update((encoded.len() as u64).to_be_bytes());
+        hasher.update(encoded);
+        Ok(hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect())
+    }
+
+    pub fn authorization_kind(&self) -> String {
+        format!(
+            "{GOVERNANCE_KIND_STORAGE_COMMITMENT_ACTIVATION}:{}",
+            self.activation_id
+        )
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.schema != STORAGE_COMMITMENT_ACTIVATION_SCHEMA_V1
+            || self.feature_id != STORAGE_COMMITMENT_FEATURE_ID_V1
+        {
+            return Err("storage commitment activation schema mismatch".to_string());
+        }
+        for (label, value) in [
+            ("activation id", self.activation_id.as_str()),
+            (
+                "authorization amendment id",
+                self.authorization_amendment_id.as_str(),
+            ),
+            ("chain id", self.chain_id.as_str()),
+            ("genesis hash", self.genesis_hash.as_str()),
+            (
+                "legacy commitment version",
+                self.legacy_commitment_version.as_str(),
+            ),
+            (
+                "new commitment version",
+                self.new_commitment_version.as_str(),
+            ),
+            (
+                "pre-activation block hash",
+                self.pre_activation_block_hash.as_str(),
+            ),
+            (
+                "pre-activation state root",
+                self.pre_activation_state_root.as_str(),
+            ),
+            (
+                "pre-activation ordered accumulator",
+                self.pre_activation_ordered_accumulator.as_str(),
+            ),
+            ("migration packet root", self.migration_packet_root.as_str()),
+            (
+                "required verifier version",
+                self.required_verifier_version.as_str(),
+            ),
+        ] {
+            if value.is_empty() || value.len() > 1024 || value.chars().any(char::is_control) {
+                return Err(format!("storage commitment activation {label} is invalid"));
+            }
+        }
+        if self.protocol_version == 0
+            || self.scheduling_block_height == 0
+            || self.activation_height <= self.scheduling_block_height
+            || self.pre_activation_finalized_height
+                != self.scheduling_block_height.saturating_sub(1)
+        {
+            return Err("storage commitment activation height binding is invalid".to_string());
+        }
+        if self.legacy_commitment_version != STORAGE_COMMITMENT_LEGACY_VERSION_V1
+            || self.new_commitment_version != STORAGE_COMMITMENT_NEW_VERSION_V1
+            || self.required_verifier_version != STORAGE_COMMITMENT_VERIFIER_VERSION_V1
+        {
+            return Err("storage commitment activation version is unsupported".to_string());
+        }
+        for (label, value) in [
+            ("activation id", self.activation_id.as_str()),
+            (
+                "authorization amendment id",
+                self.authorization_amendment_id.as_str(),
+            ),
+            ("genesis hash", self.genesis_hash.as_str()),
+            (
+                "pre-activation block hash",
+                self.pre_activation_block_hash.as_str(),
+            ),
+            (
+                "pre-activation state root",
+                self.pre_activation_state_root.as_str(),
+            ),
+            (
+                "pre-activation ordered accumulator",
+                self.pre_activation_ordered_accumulator.as_str(),
+            ),
+            ("migration packet root", self.migration_packet_root.as_str()),
+        ] {
+            if value.len() != 96
+                || !value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            {
+                return Err(format!(
+                    "storage commitment activation {label} must be a lowercase SHA3-384 digest"
+                ));
+            }
+        }
+        if self.pre_activation_ordered_count != self.pre_activation_finalized_height {
+            return Err(
+                "storage commitment activation frozen ordered count does not match height"
+                    .to_string(),
+            );
+        }
+        if self.activation_id != self.expected_activation_id()? {
+            return Err("storage commitment activation id mismatch".to_string());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageCommitmentCancellationRecordV1 {
+    pub schema: String,
+    pub cancellation_id: String,
+    pub activation_id: String,
+    pub authorization_amendment_id: String,
+    pub chain_id: String,
+    pub genesis_hash: String,
+    pub protocol_version: u32,
+    pub cancellation_height: u64,
+    pub reason: String,
+}
+
+impl StorageCommitmentCancellationRecordV1 {
+    pub fn expected_cancellation_id(&self) -> Result<String, String> {
+        let encoded = serde_json::to_vec(&(
+            self.schema.as_str(),
+            self.activation_id.as_str(),
+            self.chain_id.as_str(),
+            self.genesis_hash.as_str(),
+            self.protocol_version,
+            self.cancellation_height,
+            self.reason.as_str(),
+        ))
+        .map_err(|error| format!("storage commitment cancellation encoding failed: {error}"))?;
+        let mut hasher = Sha3_384::new();
+        hasher.update(b"postfiat.storage_commitment_cancellation.id.v1");
+        hasher.update((encoded.len() as u64).to_be_bytes());
+        hasher.update(encoded);
+        Ok(hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect())
+    }
+
+    pub fn authorization_kind(&self) -> String {
+        format!(
+            "{GOVERNANCE_KIND_STORAGE_COMMITMENT_CANCELLATION}:{}",
+            self.cancellation_id
+        )
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.schema != STORAGE_COMMITMENT_CANCELLATION_SCHEMA_V1 {
+            return Err("storage commitment cancellation schema mismatch".to_string());
+        }
+        for (label, value) in [
+            ("cancellation id", self.cancellation_id.as_str()),
+            ("activation id", self.activation_id.as_str()),
+            (
+                "authorization amendment id",
+                self.authorization_amendment_id.as_str(),
+            ),
+            ("chain id", self.chain_id.as_str()),
+            ("genesis hash", self.genesis_hash.as_str()),
+            ("reason", self.reason.as_str()),
+        ] {
+            if value.is_empty() || value.len() > 1024 || value.chars().any(char::is_control) {
+                return Err(format!("storage commitment cancellation {label} is invalid"));
+            }
+        }
+        if self.protocol_version == 0 || self.cancellation_height == 0 {
+            return Err("storage commitment cancellation height is invalid".to_string());
+        }
+        for (label, value) in [
+            ("cancellation id", self.cancellation_id.as_str()),
+            ("activation id", self.activation_id.as_str()),
+            (
+                "authorization amendment id",
+                self.authorization_amendment_id.as_str(),
+            ),
+            ("genesis hash", self.genesis_hash.as_str()),
+        ] {
+            if value.len() != 96
+                || !value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            {
+                return Err(format!(
+                    "storage commitment cancellation {label} must be a lowercase SHA3-384 digest"
+                ));
+            }
+        }
+        if self.cancellation_id != self.expected_cancellation_id()? {
+            return Err("storage commitment cancellation id mismatch".to_string());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GovernanceState {
     pub active_validator_count: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -928,6 +1194,10 @@ pub struct GovernanceState {
     pub governance_agent_dry_run_records: Vec<GovernanceAgentDryRunRecord>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub vault_bridge_route_profiles: Vec<VaultBridgeRouteProfileRecordV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub storage_commitment_activations: Vec<StorageCommitmentActivationRecordV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub storage_commitment_cancellations: Vec<StorageCommitmentCancellationRecordV1>,
     pub amendments: Vec<GovernanceAmendment>,
 }
 
@@ -948,6 +1218,8 @@ impl GovernanceState {
             amendment_rollback_records: Vec::new(),
             governance_agent_dry_run_records: Vec::new(),
             vault_bridge_route_profiles: Vec::new(),
+            storage_commitment_activations: Vec::new(),
+            storage_commitment_cancellations: Vec::new(),
             amendments: Vec::new(),
         }
     }
@@ -966,6 +1238,24 @@ impl GovernanceState {
             _ => {}
         }
         self.amendments.push(amendment);
+    }
+
+    pub fn scheduled_storage_commitment_activation(
+        &self,
+    ) -> Option<&StorageCommitmentActivationRecordV1> {
+        self.storage_commitment_activations
+            .iter()
+            .rev()
+            .find(|activation| {
+                !self.storage_commitment_cancellations.iter().any(|cancellation| {
+                    cancellation.activation_id == activation.activation_id
+                })
+            })
+    }
+
+    pub fn storage_commitment_activation_height(&self) -> Option<u64> {
+        self.scheduled_storage_commitment_activation()
+            .map(|activation| activation.activation_height)
     }
 
     pub fn bridge_verification_activation_height(&self) -> Option<u64> {
@@ -1498,6 +1788,10 @@ pub struct GovernanceActionBatch {
     pub fastpay_recovery_bootstraps: Vec<FastPayRecoveryGovernanceBootstrapV1>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub vault_bridge_route_profile_activations: Vec<VaultBridgeRouteProfileActivationV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub storage_commitment_activations: Vec<StorageCommitmentActivationRecordV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub storage_commitment_cancellations: Vec<StorageCommitmentCancellationRecordV1>,
 }
 
 impl GovernanceActionBatch {
@@ -1511,6 +1805,8 @@ impl GovernanceActionBatch {
             fastswap_bootstraps: Vec::new(),
             fastpay_recovery_bootstraps: Vec::new(),
             vault_bridge_route_profile_activations: Vec::new(),
+            storage_commitment_activations: Vec::new(),
+            storage_commitment_cancellations: Vec::new(),
         }
     }
 
@@ -1528,6 +1824,8 @@ impl GovernanceActionBatch {
             fastswap_bootstraps: Vec::new(),
             fastpay_recovery_bootstraps: Vec::new(),
             vault_bridge_route_profile_activations: Vec::new(),
+            storage_commitment_activations: Vec::new(),
+            storage_commitment_cancellations: Vec::new(),
         }
     }
 
@@ -1546,6 +1844,8 @@ impl GovernanceActionBatch {
             fastswap_bootstraps: Vec::new(),
             fastpay_recovery_bootstraps: Vec::new(),
             vault_bridge_route_profile_activations: Vec::new(),
+            storage_commitment_activations: Vec::new(),
+            storage_commitment_cancellations: Vec::new(),
         }
     }
 
@@ -1562,6 +1862,8 @@ impl GovernanceActionBatch {
             fastswap_bootstraps: vec![bootstrap],
             fastpay_recovery_bootstraps: Vec::new(),
             vault_bridge_route_profile_activations: Vec::new(),
+            storage_commitment_activations: Vec::new(),
+            storage_commitment_cancellations: Vec::new(),
         }
     }
 
@@ -1578,6 +1880,8 @@ impl GovernanceActionBatch {
             fastswap_bootstraps: Vec::new(),
             fastpay_recovery_bootstraps: Vec::new(),
             vault_bridge_route_profile_activations: vec![activation],
+            storage_commitment_activations: Vec::new(),
+            storage_commitment_cancellations: Vec::new(),
         }
     }
 
@@ -1594,6 +1898,8 @@ impl GovernanceActionBatch {
             fastswap_bootstraps: Vec::new(),
             fastpay_recovery_bootstraps: vec![bootstrap],
             vault_bridge_route_profile_activations: Vec::new(),
+            storage_commitment_activations: Vec::new(),
+            storage_commitment_cancellations: Vec::new(),
         }
     }
 
@@ -1610,6 +1916,46 @@ impl GovernanceActionBatch {
             fastswap_bootstraps: Vec::new(),
             fastpay_recovery_bootstraps: Vec::new(),
             vault_bridge_route_profile_activations: Vec::new(),
+            storage_commitment_activations: Vec::new(),
+            storage_commitment_cancellations: Vec::new(),
+        }
+    }
+
+    pub fn with_storage_commitment_activation(
+        batch_id: impl Into<String>,
+        authorization: GovernanceAmendment,
+        activation: StorageCommitmentActivationRecordV1,
+    ) -> Self {
+        Self {
+            batch_id: batch_id.into(),
+            amendments: vec![authorization],
+            validator_registry_updates: Vec::new(),
+            cobalt_authority_transitions: Vec::new(),
+            governance_agent_dry_runs: Vec::new(),
+            fastswap_bootstraps: Vec::new(),
+            fastpay_recovery_bootstraps: Vec::new(),
+            vault_bridge_route_profile_activations: Vec::new(),
+            storage_commitment_activations: vec![activation],
+            storage_commitment_cancellations: Vec::new(),
+        }
+    }
+
+    pub fn with_storage_commitment_cancellation(
+        batch_id: impl Into<String>,
+        authorization: GovernanceAmendment,
+        cancellation: StorageCommitmentCancellationRecordV1,
+    ) -> Self {
+        Self {
+            batch_id: batch_id.into(),
+            amendments: vec![authorization],
+            validator_registry_updates: Vec::new(),
+            cobalt_authority_transitions: Vec::new(),
+            governance_agent_dry_runs: Vec::new(),
+            fastswap_bootstraps: Vec::new(),
+            fastpay_recovery_bootstraps: Vec::new(),
+            vault_bridge_route_profile_activations: Vec::new(),
+            storage_commitment_activations: Vec::new(),
+            storage_commitment_cancellations: vec![cancellation],
         }
     }
 }

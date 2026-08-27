@@ -1924,6 +1924,7 @@ version = "0.1.0"
 dependencies = [
  "libc",
  "postfiat-types",
+ "redb",
  "serde",
  "serde_json",
  "sha3 0.11.0",
@@ -2085,6 +2086,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f87cc11a0140b4b0da0ffc889885760c61b13672d80a908920b2c0df078fa14"
 dependencies = [
  "rayon",
+]
+
+[[package]]
+name = "redb"
+version = "4.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de6c3b63e007e90ce536ec2ae4690826136a20ec8dbbbb400daef1bb999d2e36"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

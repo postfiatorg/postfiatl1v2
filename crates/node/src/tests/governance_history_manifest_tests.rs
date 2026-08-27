@@ -3824,3 +3824,114 @@
             "{error}"
         );
     }
+
+    #[test]
+    fn transactional_migration_rebuilds_from_authenticated_retained_checkpoint() {
+        let data_dir = unique_test_dir("postfiat-retained-storage-migration");
+        let output_dir = unique_test_dir("postfiat-retained-storage-generation");
+        init(InitOptions {
+            data_dir: data_dir.clone(),
+            chain_id: "postfiat-retained-storage-migration".to_owned(),
+            node_id: "validator-0".to_owned(),
+            validator_count: 1,
+        })
+        .expect("initialize retained migration source");
+
+        let first_batch = data_dir.join("retained-first.batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: data_dir.clone(),
+            key_file: None,
+            to: "pfretainedmigration100000000000000000".to_owned(),
+            amount: ACCOUNT_RESERVE + 15,
+            batch_file: first_batch.clone(),
+        })
+        .expect("create retained migration first batch");
+        let first_receipts = apply_batch(ApplyBatchOptions {
+            data_dir: data_dir.clone(),
+            batch_file: first_batch,
+            certificate_file: None,
+        })
+        .expect("apply retained migration first batch");
+        assert!(first_receipts[0].accepted, "{first_receipts:?}");
+
+        let proof_file = data_dir.join("retained-archive-handoff.json");
+        create_history_archive_handoff(HistoryArchiveHandoffCreateOptions {
+            data_dir: data_dir.clone(),
+            from_height: 1,
+            to_height: 1,
+            archive_uri: Some("archive://postfiat/retained-migration-test".to_owned()),
+            output_file: proof_file.clone(),
+            overwrite: false,
+        })
+        .expect("create retained migration archive proof");
+        let mut prune_options = HistoryOptions::with_defaults(data_dir.clone());
+        prune_options.retain_recent_blocks = 0;
+        prune_options.minimum_replay_window_blocks = 0;
+        prune_options.archive_handoff_file = Some(proof_file);
+        let prune = history_prune(prune_options).expect("prune retained migration prefix");
+        assert_eq!(prune.checkpoint.pruned_up_to_height, 1);
+
+        let second_batch = data_dir.join("retained-second.batch.json");
+        create_transfer_batch(BatchTransferOptions {
+            data_dir: data_dir.clone(),
+            key_file: None,
+            to: "pfretainedmigration200000000000000000".to_owned(),
+            amount: ACCOUNT_RESERVE + 15,
+            batch_file: second_batch.clone(),
+        })
+        .expect("create retained migration second batch");
+        let second_receipts = apply_batch(ApplyBatchOptions {
+            data_dir: data_dir.clone(),
+            batch_file: second_batch,
+            certificate_file: None,
+        })
+        .expect("apply retained migration suffix batch");
+        assert!(second_receipts[0].accepted, "{second_receipts:?}");
+
+        let store = NodeStore::new(&data_dir);
+        let genesis = store.read_genesis().expect("read retained migration genesis");
+        let source_tip = reconstruct_chain_tip_for_genesis(&store, &genesis)
+            .expect("reconstruct retained migration tip");
+        let report = rebuild_transactional_storage(StorageMigrationOptions {
+            data_dir: data_dir.clone(),
+            output_dir: output_dir.clone(),
+            expected_tip: source_tip.block_hash.clone(),
+            expected_state_root: source_tip.state_root.clone(),
+            verify_only: false,
+        })
+        .expect("rebuild retained transactional generation");
+        assert_eq!(report.source_tip.history_base_height, 1);
+        assert_eq!(report.source_tip.height, 2);
+        assert_eq!(report.logical_store_report.block_count, 1);
+        assert_eq!(report.logical_store_report.ordered_batch_count, 2);
+        assert!(report.published);
+
+        let transactional = store
+            .transactional_store()
+            .expect("open retained transactional generation");
+        assert_eq!(
+            transactional
+                .blocks_in_height_order()
+                .expect("read retained transactional blocks")[0]
+                .header
+                .height,
+            2
+        );
+        assert!(transactional
+            .current_state_raw("retained_history_checkpoint")
+            .expect("read authenticated retained checkpoint")
+            .is_some());
+        let verified = rebuild_transactional_storage(StorageMigrationOptions {
+            data_dir: data_dir.clone(),
+            output_dir: output_dir.clone(),
+            expected_tip: source_tip.block_hash,
+            expected_state_root: source_tip.state_root,
+            verify_only: true,
+        })
+        .expect("verify retained transactional generation");
+        assert!(verified.verify_only);
+        assert_eq!(verified.migration_packet_root, report.migration_packet_root);
+
+        fs::remove_dir_all(data_dir).expect("cleanup retained migration source");
+        fs::remove_dir_all(output_dir).expect("cleanup retained migration generation");
+    }

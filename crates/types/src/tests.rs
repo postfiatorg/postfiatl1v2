@@ -211,6 +211,7 @@ fn status_report_to_json_uses_strict_json_escaping() {
             block_height: 1,
             block_tip_hash: "tip".to_string(),
             mempool_pending: 0,
+            storage: None,
         };
     let json = report.to_json().expect("serialize status report");
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid status JSON");

@@ -2524,6 +2524,7 @@ fn apply_governance_batch_internal(
             block_height,
         )?;
     }
+    verify_storage_commitment_action_readiness(&store, &genesis, &batch, &chain_tip)?;
     ensure_governance_batch_lifecycle_ready(&batch, block_height)?;
     let receipts = execute_governance_batch(
         &mut governance,

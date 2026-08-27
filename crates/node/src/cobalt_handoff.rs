@@ -169,6 +169,21 @@ pub(super) fn verify_governance_authority_batch(
             Ok(GovernanceAuthorityBatchKind::Foundation)
         }
         postfiat_types::GOVERNANCE_AUTHORITY_MODE_COBALT_RATIFIED => {
+            if batch.validator_registry_updates.is_empty() {
+                if batch
+                    .amendments
+                    .iter()
+                    .any(|amendment| amendment.kind == GOVERNANCE_KIND_AUTHORITY_MODE)
+                {
+                    return Err(permission(
+                        "authority_mode cannot be changed by a label-only governance amendment",
+                    ));
+                }
+                // Cobalt's ratified scope is validator-registry and trust-graph
+                // evolution only. All other governance domains continue to use
+                // the existing signed Foundation/validator authorization path.
+                return Ok(GovernanceAuthorityBatchKind::Foundation);
+            }
             if batch.validator_registry_updates.len() != 1
                 || governance_batch_action_count(batch) != 1
             {
@@ -965,6 +980,8 @@ fn governance_batch_action_count(batch: &GovernanceActionBatch) -> usize {
         + batch.fastswap_bootstraps.len()
         + batch.fastpay_recovery_bootstraps.len()
         + batch.vault_bridge_route_profile_activations.len()
+        + batch.storage_commitment_activations.len()
+        + batch.storage_commitment_cancellations.len()
 }
 
 fn validate_digest(label: &str, value: &str) -> io::Result<()> {
@@ -1468,16 +1485,17 @@ mod tests {
         )
         .expect("amendment fixture");
         let batch = GovernanceActionBatch::new("unused", vec![amendment]);
-        assert!(verify_governance_authority_batch(
-            &fixture.genesis,
-            &governance,
-            &fixture.registry,
-            &batch,
-            11,
-        )
-        .expect_err("non-validator Cobalt action rejected")
-        .to_string()
-        .contains("validator trust"));
+        assert_eq!(
+            verify_governance_authority_batch(
+                &fixture.genesis,
+                &governance,
+                &fixture.registry,
+                &batch,
+                11,
+            )
+            .expect("non-validator governance stays on the Foundation authorization path"),
+            GovernanceAuthorityBatchKind::Foundation
+        );
     }
 
     #[test]

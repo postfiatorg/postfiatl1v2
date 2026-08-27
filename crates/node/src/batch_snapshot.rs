@@ -229,6 +229,14 @@ pub struct ApplyBatchWriteTimingReport {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+pub struct ApplyBatchStorageWorkReport {
+    pub transactional: Option<postfiat_storage::transactional::TransactionalWorkCounters>,
+    pub legacy: postfiat_storage::StorageWorkCounters,
+    pub full_history_records_read: u64,
+    pub full_history_bytes_read: u64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ApplyBatchTimingReport {
     pub schema: String,
     pub total_ms: f64,
@@ -250,6 +258,7 @@ pub struct ApplyBatchTimingReport {
     pub live_registry_update_ms: f64,
     pub write_commit_ms: f64,
     pub write_commit_breakdown: ApplyBatchWriteTimingReport,
+    pub storage_work: ApplyBatchStorageWorkReport,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -331,6 +340,79 @@ pub(super) fn apply_batch_elapsed_ms(start: std::time::Instant) -> f64 {
     start.elapsed().as_secs_f64() * 1000.0
 }
 
+fn transactional_work_delta(
+    after: postfiat_storage::transactional::TransactionalWorkCounters,
+    before: postfiat_storage::transactional::TransactionalWorkCounters,
+) -> postfiat_storage::transactional::TransactionalWorkCounters {
+    postfiat_storage::transactional::TransactionalWorkCounters {
+        read_transactions: after
+            .read_transactions
+            .saturating_sub(before.read_transactions),
+        write_transactions: after
+            .write_transactions
+            .saturating_sub(before.write_transactions),
+        committed_write_transactions: after
+            .committed_write_transactions
+            .saturating_sub(before.committed_write_transactions),
+        records_read: after.records_read.saturating_sub(before.records_read),
+        records_written: after.records_written.saturating_sub(before.records_written),
+        bytes_read: after.bytes_read.saturating_sub(before.bytes_read),
+        bytes_written: after.bytes_written.saturating_sub(before.bytes_written),
+        page_reads: after.page_reads.saturating_sub(before.page_reads),
+        page_writes: after.page_writes.saturating_sub(before.page_writes),
+        full_history_scans: after
+            .full_history_scans
+            .saturating_sub(before.full_history_scans),
+        full_history_records_read: after
+            .full_history_records_read
+            .saturating_sub(before.full_history_records_read),
+        full_history_bytes_read: after
+            .full_history_bytes_read
+            .saturating_sub(before.full_history_bytes_read),
+        durable_commit_micros: after
+            .durable_commit_micros
+            .saturating_sub(before.durable_commit_micros),
+    }
+}
+
+fn legacy_work_delta(
+    after: postfiat_storage::StorageWorkCounters,
+    before: postfiat_storage::StorageWorkCounters,
+) -> postfiat_storage::StorageWorkCounters {
+    postfiat_storage::StorageWorkCounters {
+        jsonl_append_calls: after
+            .jsonl_append_calls
+            .saturating_sub(before.jsonl_append_calls),
+        checkpoint_bytes_read: after
+            .checkpoint_bytes_read
+            .saturating_sub(before.checkpoint_bytes_read),
+        crash_suffix_bytes_read: after
+            .crash_suffix_bytes_read
+            .saturating_sub(before.crash_suffix_bytes_read),
+        crash_suffix_records_verified: after
+            .crash_suffix_records_verified
+            .saturating_sub(before.crash_suffix_records_verified),
+        legacy_prefix_bytes_read: after
+            .legacy_prefix_bytes_read
+            .saturating_sub(before.legacy_prefix_bytes_read),
+        legacy_prefix_records_verified: after
+            .legacy_prefix_records_verified
+            .saturating_sub(before.legacy_prefix_records_verified),
+        ordered_index_bitmap_bytes_read: after
+            .ordered_index_bitmap_bytes_read
+            .saturating_sub(before.ordered_index_bitmap_bytes_read),
+        ordered_index_bitmap_bytes_written: after
+            .ordered_index_bitmap_bytes_written
+            .saturating_sub(before.ordered_index_bitmap_bytes_written),
+        ordered_index_slots_read: after
+            .ordered_index_slots_read
+            .saturating_sub(before.ordered_index_slots_read),
+        ordered_index_slots_written: after
+            .ordered_index_slots_written
+            .saturating_sub(before.ordered_index_slots_written),
+    }
+}
+
 pub fn apply_batch(options: ApplyBatchOptions) -> io::Result<Vec<Receipt>> {
     apply_batch_with_replay(options, None).map(|report| report.receipts)
 }
@@ -378,6 +460,14 @@ fn apply_batch_with_timings_inner(
     let stage_start = std::time::Instant::now();
     let store = NodeStore::new(&options.data_dir);
     let store_init_ms = apply_batch_elapsed_ms(stage_start);
+    let transactional_work_store = store
+        .transactional_storage_configured()?
+        .then(|| store.transactional_store())
+        .transpose()?;
+    let transactional_work_before = transactional_work_store
+        .as_ref()
+        .map(|transactional| transactional.work_counters());
+    let legacy_work_before = store.work_counters();
 
     let stage_start = std::time::Instant::now();
     let commit_lock = store.lock_ordered_commit()?;
@@ -587,6 +677,33 @@ fn apply_batch_with_timings_inner(
         },
     )?;
     let write_commit_ms = apply_batch_elapsed_ms(stage_start);
+    let legacy_work = legacy_work_delta(store.work_counters(), legacy_work_before);
+    let transactional_work = transactional_work_store
+        .as_ref()
+        .zip(transactional_work_before)
+        .map(|(transactional, before)| {
+            transactional_work_delta(transactional.work_counters(), before)
+        });
+    let transactional_full_history_records = transactional_work
+        .as_ref()
+        .map(|work| work.full_history_records_read)
+        .unwrap_or(0);
+    let transactional_full_history_bytes = transactional_work
+        .as_ref()
+        .map(|work| work.full_history_bytes_read)
+        .unwrap_or(0);
+    let storage_work = ApplyBatchStorageWorkReport {
+        transactional: transactional_work,
+        full_history_records_read: transactional_full_history_records
+            .saturating_add(legacy_work.crash_suffix_records_verified)
+            .saturating_add(legacy_work.legacy_prefix_records_verified),
+        full_history_bytes_read: transactional_full_history_bytes
+            .saturating_add(legacy_work.checkpoint_bytes_read)
+            .saturating_add(legacy_work.crash_suffix_bytes_read)
+            .saturating_add(legacy_work.legacy_prefix_bytes_read)
+            .saturating_add(legacy_work.ordered_index_bitmap_bytes_read),
+        legacy: legacy_work,
+    };
 
     Ok(ApplyBatchWithTimingsReport {
         receipts,
@@ -611,6 +728,7 @@ fn apply_batch_with_timings_inner(
             live_registry_update_ms,
             write_commit_ms,
             write_commit_breakdown,
+            storage_work,
         },
     })
 }
@@ -3008,6 +3126,9 @@ fn snapshot_file_bytes(
         GOVERNANCE_FILE => snapshot_json_bytes(&store.read_governance()?),
         LEDGER_FILE => snapshot_json_bytes(&store.read_ledger()?),
         BLOCKS_FILE => snapshot_json_bytes(&store.read_blocks()?),
+        HISTORY_CHECKPOINT_FILE => {
+            snapshot_json_bytes(&read_history_checkpoint_state_optional(store)?)
+        }
         BATCH_ARCHIVE_FILE => snapshot_json_bytes(&store.read_batch_archive()?),
         ORDERED_BATCHES_FILE => snapshot_json_bytes(&store.read_ordered_batches()?),
         RECEIPTS_FILE => snapshot_json_bytes(&store.read_receipts()?),
@@ -3076,12 +3197,13 @@ fn import_snapshot_with_basis(
     let manifest = read_snapshot_manifest(&options.snapshot_dir.join(SNAPSHOT_MANIFEST_FILE))?;
     let data_dir = options.data_dir;
     if manifest.snapshot_version != SNAPSHOT_VERSION
+        && manifest.snapshot_version != PRE_STORAGE_SNAPSHOT_VERSION
         && manifest.snapshot_version != LEGACY_SNAPSHOT_VERSION
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!(
-                "unsupported snapshot version {}, expected {LEGACY_SNAPSHOT_VERSION} or {SNAPSHOT_VERSION}",
+                "unsupported snapshot version {}, expected {LEGACY_SNAPSHOT_VERSION}, {PRE_STORAGE_SNAPSHOT_VERSION}, or {SNAPSHOT_VERSION}",
                 manifest.snapshot_version,
             ),
         ));
@@ -3132,11 +3254,20 @@ fn import_snapshot_with_basis(
                 format!("snapshot file `{}` byte length mismatch", file.name),
             ));
         }
+        if file.name == HISTORY_CHECKPOINT_FILE {
+            let checkpoint: Option<HistoryCheckpointState> =
+                serde_json::from_slice(&bytes).map_err(invalid_data)?;
+            if checkpoint.is_none() {
+                continue;
+            }
+        }
         atomic_write(data_dir.join(&file.name), bytes)?;
     }
     let imported_store = key_imported_snapshot_state(&data_dir)?;
 
-    if manifest.snapshot_version == SNAPSHOT_VERSION {
+    if manifest.snapshot_version == SNAPSHOT_VERSION
+        || manifest.snapshot_version == PRE_STORAGE_SNAPSHOT_VERSION
+    {
         restore_consensus_v2_artifact_snapshot(
             &data_dir,
             CONSENSUS_V2_SAFETY_SNAPSHOT_FILE,
@@ -3173,6 +3304,24 @@ fn import_snapshot_with_basis(
         let mut state = store.read_node_state()?;
         state.node_id = node_id;
         store.write_node_state(&state)?;
+    }
+
+    let imported_store = NodeStore::new(&data_dir);
+    let imported_genesis = imported_store.read_genesis()?;
+    let imported_governance = imported_store.read_governance()?;
+    let imported_tip =
+        read_chain_tip_or_reconstruct_for_genesis(&imported_store, &imported_genesis)?;
+    if effective_storage_commitment_activation_height(&imported_genesis, &imported_governance)
+        .is_some_and(|height| imported_tip.height >= height)
+    {
+        let transactional_generation = data_dir.join("transactional-snapshot-generation-v1");
+        rebuild_transactional_storage(StorageMigrationOptions {
+            data_dir: data_dir.clone(),
+            output_dir: transactional_generation,
+            expected_tip: imported_tip.block_hash,
+            expected_state_root: imported_tip.state_root,
+            verify_only: false,
+        })?;
     }
 
     let restored = status(NodeOptions {

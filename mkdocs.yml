@@ -127,6 +127,7 @@ nav:
       - Settlement Lanes: architecture/settlement-lanes.md
       - State And Storage: architecture/state-and-storage.md
       - Storage Scaling Research Specification: architecture/storage-scaling-research-spec.md
+      - Storage Scaling Fix Specification: architecture/storage-scaling-fix-spec.md
       - Finality: architecture/finality.md
       - Evidence Model: architecture/evidence-model.md
   - Governance:

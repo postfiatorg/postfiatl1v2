@@ -36,7 +36,38 @@ pub fn verify_blocks(options: NodeOptions) -> io::Result<BlockVerificationReport
             .or_default() += 1;
     }
     let mut block_receipt_counts = HashMap::<String, usize>::new();
-    let current_state_root = current_replicated_state_root(&store, &genesis)?;
+    let current_height = history_base_height
+        .checked_add(blocks.blocks.len() as u64)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "block height overflow"))?;
+    let current_state_root =
+        if effective_storage_commitment_activation_height(&genesis, &governance)
+            .is_some_and(|activation_height| current_height >= activation_height)
+            && !store.transactional_storage_configured()?
+        {
+            // A portable logical snapshot intentionally contains no source database
+            // pages or node-local generation pointer. Reconstruct the activated
+            // backend-independent commitment from its authenticated ordered prefix
+            // so the snapshot can be fully replayed before a fresh local generation
+            // is built. Finalized writes still fail closed without that generation.
+            let mut commitment = postfiat_storage::OrderedHistoryCommitment::genesis(
+                &genesis.chain_id,
+                &genesis_hash(&genesis),
+                genesis.protocol_version,
+            )?;
+            for batch_id in &ordered_batches {
+                commitment = commitment.append(batch_id)?;
+            }
+            replicated_state_root_v2(
+                &genesis,
+                &governance,
+                &store.read_ledger()?,
+                &commitment,
+                &store.read_shielded()?,
+                &store.read_bridge()?,
+            )?
+        } else {
+            current_replicated_state_root(&store, &genesis)?
+        };
     let mut parent_hash = history_checkpoint
         .as_ref()
         .map(|checkpoint| checkpoint.checkpoint_block_hash.clone())
@@ -1651,19 +1682,20 @@ pub(super) fn verify_replayed_blocks(
         shielded = ShieldedState::empty();
         bridge = BridgeState::empty();
     }
-    let mut ordered_history = if genesis.ordered_history_v2_activation_height.is_some() {
-        let mut commitment = postfiat_storage::OrderedHistoryCommitment::genesis(
-            &genesis.chain_id,
-            &genesis_hash(genesis),
-            genesis.protocol_version,
-        )?;
-        for batch_id in &ordered_batches {
-            commitment = commitment.append(batch_id)?;
-        }
-        Some(commitment)
-    } else {
-        None
-    };
+    let mut ordered_history =
+        if effective_storage_commitment_activation_height(genesis, &governance).is_some() {
+            let mut commitment = postfiat_storage::OrderedHistoryCommitment::genesis(
+                &genesis.chain_id,
+                &genesis_hash(genesis),
+                genesis.protocol_version,
+            )?;
+            for batch_id in &ordered_batches {
+                commitment = commitment.append(batch_id)?;
+            }
+            Some(commitment)
+        } else {
+            None
+        };
     let initial_native_supply = native_pft_live_total(&ledger, &shielded)?;
     if initial_native_supply > u128::from(genesis.expected_native_supply_atoms()) {
         return Err(io::Error::new(
@@ -1849,12 +1881,24 @@ pub(super) fn verify_replayed_blocks(
         }
 
         ordered_batches.push(block.header.batch_id.clone());
-        if let Some(commitment) = ordered_history.as_mut() {
+        if ordered_history.is_none()
+            && effective_storage_commitment_activation_height(genesis, &governance).is_some()
+        {
+            let mut commitment = postfiat_storage::OrderedHistoryCommitment::genesis(
+                &genesis.chain_id,
+                &genesis_hash(genesis),
+                genesis.protocol_version,
+            )?;
+            for batch_id in &ordered_batches {
+                commitment = commitment.append(batch_id)?;
+            }
+            ordered_history = Some(commitment);
+        } else if let Some(commitment) = ordered_history.as_mut() {
             *commitment = commitment.append(&block.header.batch_id)?;
         }
-        let ordered_history_v2_active = genesis
-            .ordered_history_v2_activation_height
-            .is_some_and(|activation_height| block.header.height >= activation_height);
+        let ordered_history_v2_active =
+            effective_storage_commitment_activation_height(genesis, &governance)
+                .is_some_and(|activation_height| block.header.height >= activation_height);
         replay_state_root = if ordered_history_v2_active {
             replicated_state_root_v2(
                 genesis,
@@ -2264,6 +2308,44 @@ pub(super) fn fastpay_pre_state_effects_for_next_block(
     store: &NodeStore,
     ledger: &LedgerState,
 ) -> io::Result<Vec<postfiat_types::FastPayVersionFenceV1>> {
+    if store.transactional_storage_active()? {
+        let transactional = store.transactional_store()?;
+        let mut effects = Vec::new();
+        for fence in ledger.fastpay_version_fences.iter().filter(|fence| {
+            fence.origin == postfiat_types::FastPayFenceOriginV1::Consensusless
+                && matches!(
+                    fence.decision,
+                    postfiat_types::FastPayRecoveryDecisionV1::Confirmed { .. }
+                )
+        }) {
+            match transactional.anchored_fastpay_effect(&fence.lock_id)? {
+                Some(anchored) if anchored == *fence => {}
+                Some(_) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "anchored FastPay effect `{}` conflicts with live ledger evidence",
+                            fence.lock_id
+                        ),
+                    ));
+                }
+                None => effects.push(fence.clone()),
+            }
+        }
+        effects.sort_by(|left, right| left.lock_id.cmp(&right.lock_id));
+        if effects.len() > postfiat_types::MAX_FASTPAY_PRE_STATE_EFFECTS_PER_BLOCK {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "{} unanchored FastPay effects exceed the per-block limit {}",
+                    effects.len(),
+                    postfiat_types::MAX_FASTPAY_PRE_STATE_EFFECTS_PER_BLOCK
+                ),
+            ));
+        }
+        return Ok(effects);
+    }
+
     let mut anchored = BTreeMap::<String, postfiat_types::FastPayVersionFenceV1>::new();
     if let Some(checkpoint) = read_history_checkpoint_state_optional(store)? {
         for effect in checkpoint

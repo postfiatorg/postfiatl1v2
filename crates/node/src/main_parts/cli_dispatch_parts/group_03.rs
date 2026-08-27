@@ -28,7 +28,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             Ok(())
         }
         "transport-certified-batch-loop" => {
-            require_unsafe_devnet_json_storage(flags, "certified batch loop")?;
+            require_transactional_or_unsafe_devnet_json_storage(flags, "certified batch loop")?;
             let data_dir =
                 PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
             let topology_file = flag_value(flags, "--topology").ok_or("missing --topology")?;
@@ -100,7 +100,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             Ok(())
         }
         "transport-peer-certified-batch-loop" => {
-            require_unsafe_devnet_json_storage(flags, "peer-certified batch loop")?;
+            require_transactional_or_unsafe_devnet_json_storage(flags, "peer-certified batch loop")?;
             let data_dir =
                 PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
             let topology_file = flag_value(flags, "--topology").ok_or("missing --topology")?;
@@ -178,7 +178,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             Ok(())
         }
         "transport-peer-certified-private-egress-loop" => {
-            require_unsafe_devnet_json_storage(flags, "peer-certified private egress loop")?;
+            require_transactional_or_unsafe_devnet_json_storage(flags, "peer-certified private egress loop")?;
             let data_dir =
                 PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
             let topology_file = flag_value(flags, "--topology").ok_or("missing --topology")?;
@@ -264,7 +264,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             Ok(())
         }
         "rpc-serve" => {
-            require_unsafe_devnet_json_storage(flags, "rpc service")?;
+            require_transactional_or_unsafe_devnet_json_storage(flags, "rpc service")?;
             let data_dir =
                 PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
             let spool_dir = flag_value(flags, "--spool-dir")
@@ -494,7 +494,7 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             Ok(())
         }
         "run" => {
-            require_unsafe_devnet_json_storage(flags, "node run service")?;
+            require_transactional_or_unsafe_devnet_json_storage(flags, "node run service")?;
             let mode = flag_value(flags, "--mode").unwrap_or("once");
             let data_dir =
                 PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));

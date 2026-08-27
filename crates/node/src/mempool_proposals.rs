@@ -2740,6 +2740,13 @@ fn propose_batch_with_optional_required_parent(
     }
     let stage_start = std::time::Instant::now();
     let store = NodeStore::new(&options.data_dir);
+    let transactional_work_store = store
+        .transactional_storage_configured()?
+        .then(|| store.transactional_store())
+        .transpose()?;
+    let transactional_work_before = transactional_work_store
+        .as_ref()
+        .map(|transactional| transactional.work_counters());
     timings.store_init_ms = node_timing_elapsed_ms(stage_start);
 
     if let Some(required_parent) = required_parent {
@@ -2842,6 +2849,10 @@ fn propose_batch_with_optional_required_parent(
     let stage_start = std::time::Instant::now();
     write_block_proposal_file(&options.proposal_file, &proposal)?;
     timings.serialization_ms = node_timing_elapsed_ms(stage_start);
+    timings.transactional_work = transactional_work_store
+        .as_ref()
+        .zip(transactional_work_before)
+        .map(|(transactional, before)| transactional.work_counters().saturating_delta(before));
     timings.total_ms = node_timing_elapsed_ms(total_start);
     Ok(BatchProposalWithTimingsReport { proposal, timings })
 }
@@ -2870,11 +2881,28 @@ pub(super) fn proposed_ordered_state(
     Vec<String>,
     Option<postfiat_storage::OrderedHistoryCommitment>,
 )> {
-    if genesis
-        .ordered_history_v2_activation_height
+    let governance = store.read_governance()?;
+    if effective_storage_commitment_activation_height(genesis, &governance)
         .is_some_and(|activation_height| block_height >= activation_height)
     {
-        let commitment = store.next_ordered_history_commitment(batch_id)?;
+        if !store.transactional_storage_configured()? {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "storage commitment activation requires a verified transactional store",
+            ));
+        }
+        let transactional = store.transactional_store()?;
+        let commitment = transactional
+            .next_ordered_history_commitment(batch_id)
+            .map_err(|error| {
+                if error.code()
+                    == postfiat_storage::transactional::StorageErrorCode::DuplicateRecord
+                {
+                    io::Error::new(io::ErrorKind::AlreadyExists, error)
+                } else {
+                    io::Error::from(error)
+                }
+            })?;
         if commitment.count != block_height {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -3056,6 +3084,7 @@ fn build_governance_batch_proposal(
         )?);
     verify_live_signed_governance_batch(&genesis, &governance, &registry, &batch, block_height)?;
 
+    verify_storage_commitment_action_readiness(store, &genesis, &batch, &chain_tip)?;
     ensure_governance_batch_lifecycle_ready(&batch, block_height)?;
     let receipts =
         execute_governance_batch(&mut governance, Some(&mut ledger), &batch, block_height);

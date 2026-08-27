@@ -71,7 +71,10 @@ use postfiat_node::{
     create_orchard_withdraw_action, create_orchard_withdraw_action_batch,
     create_shielded_atomic_batch, create_shielded_migrate_batch, create_shielded_mint_batch,
     create_shielded_spend_batch, create_shielded_swap_action_batch,
-    create_signed_asset_transaction_batch, create_transfer_batch, create_validator_registry_update,
+    ratify_storage_activation, ratify_storage_cancellation,
+    create_signed_asset_transaction_batch, create_storage_activation_batch,
+    create_storage_activation_template, create_storage_cancellation_batch,
+    create_storage_cancellation_template, create_transfer_batch, create_validator_registry_update,
     create_vault_bridge_route_profile_governance, create_verified_asset_orchard_swap_action_batch,
     detect_block_proposal_equivocation, detect_block_vote_equivocation, escrow_fee_quote,
     escrow_info, export_deployment_publisher_public_key, export_history_archive_window,
@@ -110,7 +113,7 @@ use postfiat_node::{
     pfusdc_checkpoint_witness, pfusdc_egress_witness, propose_batch,
     propose_batch_with_required_parent_with_timings, ratify_governance, ratify_validator_set,
     read_block_vote_for_verified_proposal, read_consensus_v2_qc_graph_for_view,
-    rebuild_account_tx_index, receipts,
+    rebuild_account_tx_index, rebuild_transactional_storage, receipts,
     reconcile_terminal_mempool_entries, replay_market_ops_bundle,
     replay_vault_bridge_reserve_bundle, run_once, shield_disclose, shield_mint, shield_scan,
     shield_spend, shield_turnstile, shielded_tree_root, sign_ethereum_checkpoint_vote,
@@ -227,6 +230,9 @@ use postfiat_node::{
     SignedPaymentV2JsonSubmitOptions, SignedSnapshotExportOptions, SignedSnapshotImportOptions,
     SignedTransferJsonSubmitOptions, SignedTransferSubmitOptions,
     SignedVaultBridgeRouteProfileGovernanceOptions, SnapshotExportOptions, SnapshotImportOptions,
+    StorageActivationRatificationOptions, StorageActivationBatchOptions,
+    StorageActivationTemplateOptions, StorageCancellationRatificationOptions,
+    StorageCancellationBatchOptions, StorageCancellationTemplateOptions, StorageMigrationOptions,
     SnapshotPublisherKeyExportOptions, TopologyConsensusV2Options, TopologyOptions,
     TransferFeeQuoteOptions, TransferFeeQuoteReport, TransferOptions, TxFinalityQueryOptions,
     TxFinalityReport, ValidatorKeyFile, ValidatorKeyRecord, ValidatorKeyStageOptions,
@@ -680,7 +686,14 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "snapshot-import-signed"
         | "snapshot-import-signed-finalized-checkpoint"
         | "verify-finalized-checkpoint"
+        | "storage-activation-template"
+        | "storage-activation-ratify"
+        | "storage-activation-batch"
+        | "storage-cancellation-template"
+        | "storage-cancellation-ratify"
+        | "storage-cancellation-batch"
         | "ordered-history-index-rebuild"
+        | "storage-rebuild-transactional"
         | "storage-integrity-migrate-legacy"
         | "deployment-publisher-key-export"
         | "deployment-manifest-create"

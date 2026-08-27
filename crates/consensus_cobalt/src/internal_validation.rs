@@ -1678,6 +1678,29 @@ fn build_cobalt_safety_witness_report(
 }
 
 fn validate_amendment_kind(kind: &str) -> Result<(), String> {
+    for (prefix, label) in [
+        (
+            GOVERNANCE_KIND_STORAGE_COMMITMENT_ACTIVATION,
+            "storage commitment activation",
+        ),
+        (
+            GOVERNANCE_KIND_STORAGE_COMMITMENT_CANCELLATION,
+            "storage commitment cancellation",
+        ),
+    ] {
+        if let Some(record_id) = kind.strip_prefix(&format!("{prefix}:")) {
+            if record_id.len() == 96
+                && record_id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            {
+                return Ok(());
+            }
+            return Err(format!(
+                "{label} governance kind must bind one lowercase SHA3-384 record id"
+            ));
+        }
+    }
     if let Some(payload_hash) = kind.strip_prefix(FASTPAY_RECOVERY_GOVERNANCE_KIND_PREFIX_V1) {
         if payload_hash.len() == 96
             && payload_hash

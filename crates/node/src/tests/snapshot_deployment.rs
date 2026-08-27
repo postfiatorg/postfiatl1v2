@@ -1540,20 +1540,23 @@ fn snapshot_v5_restores_only_never_activated_consensus_v2_genesis() {
     .expect("export v6-compatible legacy source");
     manifest.snapshot_version = LEGACY_SNAPSHOT_VERSION;
     manifest.files.retain(|file| {
-        file.name != CONSENSUS_V2_SAFETY_SNAPSHOT_FILE
+        file.name != HISTORY_CHECKPOINT_FILE
+            && file.name != CONSENSUS_V2_SAFETY_SNAPSHOT_FILE
             && file.name != CONSENSUS_V2_QC_SNAPSHOT_FILE
             && file.name != OWNED_LOCKS_FILE
             && file.name != OWNED_LOCKS_WAL_FILE
             && file.name != FASTPAY_SPECULATIVE_JOURNAL_FILE
     });
     for name in [
+        HISTORY_CHECKPOINT_FILE,
         CONSENSUS_V2_SAFETY_SNAPSHOT_FILE,
         CONSENSUS_V2_QC_SNAPSHOT_FILE,
         OWNED_LOCKS_FILE,
         OWNED_LOCKS_WAL_FILE,
         FASTPAY_SPECULATIVE_JOURNAL_FILE,
     ] {
-        std::fs::remove_file(legacy_snapshot.join(name)).expect("remove v6-only artifact");
+        std::fs::remove_file(legacy_snapshot.join(name))
+            .expect("remove post-v5 snapshot artifact");
     }
     write_snapshot_manifest(&legacy_snapshot.join(SNAPSHOT_MANIFEST_FILE), &manifest)
         .expect("write v5 manifest");
@@ -1572,6 +1575,7 @@ fn snapshot_v5_restores_only_never_activated_consensus_v2_genesis() {
         node_id: "validator-0".to_string(),
         validator_count: 1,
         activation_height: 1,
+        storage_activation_height: None,
     })
     .expect("init active source");
     let mut active_manifest = export_snapshot(SnapshotExportOptions {
@@ -1581,20 +1585,23 @@ fn snapshot_v5_restores_only_never_activated_consensus_v2_genesis() {
     .expect("export active source");
     active_manifest.snapshot_version = LEGACY_SNAPSHOT_VERSION;
     active_manifest.files.retain(|file| {
-        file.name != CONSENSUS_V2_SAFETY_SNAPSHOT_FILE
+        file.name != HISTORY_CHECKPOINT_FILE
+            && file.name != CONSENSUS_V2_SAFETY_SNAPSHOT_FILE
             && file.name != CONSENSUS_V2_QC_SNAPSHOT_FILE
             && file.name != OWNED_LOCKS_FILE
             && file.name != OWNED_LOCKS_WAL_FILE
             && file.name != FASTPAY_SPECULATIVE_JOURNAL_FILE
     });
     for name in [
+        HISTORY_CHECKPOINT_FILE,
         CONSENSUS_V2_SAFETY_SNAPSHOT_FILE,
         CONSENSUS_V2_QC_SNAPSHOT_FILE,
         OWNED_LOCKS_FILE,
         OWNED_LOCKS_WAL_FILE,
         FASTPAY_SPECULATIVE_JOURNAL_FILE,
     ] {
-        std::fs::remove_file(active_snapshot.join(name)).expect("remove v6-only artifact");
+        std::fs::remove_file(active_snapshot.join(name))
+            .expect("remove post-v5 snapshot artifact");
     }
     write_snapshot_manifest(
         &active_snapshot.join(SNAPSHOT_MANIFEST_FILE),
@@ -1685,6 +1692,7 @@ fn finalized_checkpoint_snapshot_accepts_certified_legacy_governance_anomaly_and
         node_id: "validator-0".to_string(),
         validator_count: 1,
         activation_height: 1,
+        storage_activation_height: None,
     })
     .expect("init activated source");
 
@@ -2990,13 +2998,21 @@ fn historical_external_certificate_rejects_wrong_local_parent_without_mutation()
     migrate_trusted_historical_seed_storage(&data_dir);
 
     let store = NodeStore::new(&data_dir);
+    let ledger_before = store.read_ledger().expect("read pre-replay ledger");
+    let block_artifact_paths = [
+        data_dir.join(BLOCKS_FILE),
+        data_dir.join(BLOCKS_APPEND_FILE),
+        data_dir.join(format!("{BLOCKS_APPEND_FILE}.head")),
+    ];
+    let block_artifacts_before = block_artifact_paths
+        .iter()
+        .map(|path| std::fs::read(path).expect("read pre-replay block artifact"))
+        .collect::<Vec<_>>();
     let mut divergent_tip = store.read_chain_tip().expect("read seed tip");
     divergent_tip.block_hash = "ab".repeat(48);
     store
         .write_chain_tip(&divergent_tip)
         .expect("persist divergent pre-replay tip");
-    let ledger_before = store.read_ledger().expect("read pre-replay ledger");
-    let blocks_before = store.read_blocks().expect("read pre-replay blocks");
 
     let error = apply_batch_with_replay(
         ApplyBatchOptions {
@@ -3010,7 +3026,7 @@ fn historical_external_certificate_rejects_wrong_local_parent_without_mutation()
     assert!(
         error
             .to_string()
-            .contains("historical replay parent mismatch"),
+            .contains("does not match the current chain tip"),
         "{error}"
     );
     assert_eq!(
@@ -3021,10 +3037,14 @@ fn historical_external_certificate_rejects_wrong_local_parent_without_mutation()
         store.read_chain_tip().expect("tip after rejection"),
         divergent_tip
     );
-    assert_eq!(
-        store.read_blocks().expect("blocks after rejection"),
-        blocks_before
-    );
+    for (path, before) in block_artifact_paths.iter().zip(block_artifacts_before) {
+        assert_eq!(
+            std::fs::read(path).expect("read block artifact after rejection"),
+            before,
+            "rejected replay mutated {}",
+            path.display()
+        );
+    }
 
     fs::remove_dir_all(&data_dir).expect("cleanup parent-divergent replay test");
 }

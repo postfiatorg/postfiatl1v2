@@ -898,6 +898,54 @@ pub fn history_prune(options: HistoryOptions) -> io::Result<HistoryPruneReport> 
     let checkpoint = build_history_checkpoint_state(&store, prune_up_to_height, &proof)?;
     let artifacts = build_history_prune_artifacts(&plan, checkpoint, blocks, archive, receipts)?;
 
+    if store.transactional_storage_active()? {
+        let genesis = store.read_genesis()?;
+        let expected_tip = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?;
+        let checkpoint_bytes =
+            serde_json::to_vec(&artifacts.pending.checkpoint).map_err(invalid_data)?;
+        let outcome = store.transactional_store()?.prune_retained_history(
+            postfiat_storage::PruneRetainedHistory {
+                expected_tip: &expected_tip,
+                new_history_base_height: prune_up_to_height,
+                retained_checkpoint: &checkpoint_bytes,
+            },
+        )?;
+        if outcome.pruned_block_count != artifacts.pending.journal_record.pruned_block_count as u64
+            || outcome.pruned_archive_count
+                != artifacts.pending.journal_record.pruned_batch_count as u64
+            || outcome.pruned_receipt_count
+                != artifacts.pending.journal_record.pruned_receipt_count as u64
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "transactional history prune counts do not match the verified prune plan",
+            ));
+        }
+        let verify_after_prune = verify_blocks(NodeOptions {
+            data_dir: options.data_dir.clone(),
+        })?;
+        append_history_prune_journal_record(&store, artifacts.pending.journal_record.clone())?;
+        let remaining_batch_count = artifacts.remaining_archive.batches.len();
+        let pruned_block_count = artifacts.pending.journal_record.pruned_block_count;
+        let pruned_batch_count = artifacts.pending.journal_record.pruned_batch_count;
+        let pruned_receipt_count = artifacts.pending.journal_record.pruned_receipt_count;
+        return Ok(HistoryPruneReport {
+            schema: "postfiat-history-prune-v1".to_string(),
+            pruned: true,
+            plan,
+            checkpoint: artifacts.pending.checkpoint,
+            journal_record: artifacts.pending.journal_record,
+            before_block_range: artifacts.before_block_range,
+            after_block_range: artifacts.after_block_range,
+            pruned_block_count,
+            pruned_batch_count,
+            pruned_receipt_count,
+            remaining_receipt_count: outcome.remaining_receipt_count as usize,
+            remaining_batch_count,
+            verify_after_prune,
+        });
+    }
+
     write_history_prune_pending_file(&store, &artifacts.pending)?;
     write_history_checkpoint_state_file(
         &store.data_dir().join(HISTORY_CHECKPOINT_FILE),
@@ -1208,15 +1256,24 @@ fn sorted_history_prune_receipt_ids(ids: HashSet<String>) -> Vec<String> {
 pub(super) fn read_history_checkpoint_state_optional(
     store: &NodeStore,
 ) -> io::Result<Option<HistoryCheckpointState>> {
-    let path = store.data_dir().join(HISTORY_CHECKPOINT_FILE);
-    match read_json_file(&path, "history checkpoint") {
-        Ok(checkpoint) => {
-            validate_history_checkpoint_state(store, &checkpoint)?;
-            Ok(Some(checkpoint))
+    let checkpoint = if store.transactional_storage_active()? {
+        store
+            .transactional_store()?
+            .current_state_raw("retained_history_checkpoint")?
+            .map(|bytes| serde_json::from_slice(&bytes).map_err(invalid_data))
+            .transpose()?
+    } else {
+        let path = store.data_dir().join(HISTORY_CHECKPOINT_FILE);
+        match read_json_file(&path, "history checkpoint") {
+            Ok(checkpoint) => Some(checkpoint),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+            Err(error) => return Err(error),
         }
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error),
+    };
+    if let Some(checkpoint) = checkpoint.as_ref() {
+        validate_history_checkpoint_state(store, checkpoint)?;
     }
+    Ok(checkpoint)
 }
 
 fn validate_history_checkpoint_state(
@@ -1572,7 +1629,9 @@ fn build_history_checkpoint_state_from_sources(
         bridge = BridgeState::empty();
         registry_update_ids = HashSet::new();
     }
-    let mut ordered_history = if genesis.ordered_history_v2_activation_height.is_some() {
+    let mut ordered_history = if effective_storage_commitment_activation_height(&genesis, &governance)
+        .is_some()
+    {
         let mut commitment = postfiat_storage::OrderedHistoryCommitment::genesis(
             &genesis.chain_id,
             &genesis_hash_hex,
@@ -1683,11 +1742,25 @@ fn build_history_checkpoint_state_from_sources(
             ));
         }
         ordered_batches.push(block.header.batch_id.clone());
-        if let Some(commitment) = ordered_history.as_mut() {
+        if ordered_history.is_none()
+            && effective_storage_commitment_activation_height(&genesis, &governance).is_some()
+        {
+            let mut commitment = postfiat_storage::OrderedHistoryCommitment::genesis(
+                &genesis.chain_id,
+                &genesis_hash_hex,
+                genesis.protocol_version,
+            )?;
+            for batch_id in &ordered_batches {
+                commitment = commitment.append(batch_id)?;
+            }
+            ordered_history = Some(commitment);
+        } else if let Some(commitment) = ordered_history.as_mut() {
             *commitment = commitment.append(&block.header.batch_id)?;
         }
-        let replay_state_root = if genesis
-            .ordered_history_v2_activation_height
+        let replay_state_root = if effective_storage_commitment_activation_height(
+            &genesis,
+            &governance,
+        )
             .is_some_and(|activation_height| block.header.height >= activation_height)
         {
             replicated_state_root_v2(

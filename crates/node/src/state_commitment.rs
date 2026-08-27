@@ -1,5 +1,14 @@
 use super::*;
 
+pub(super) fn effective_storage_commitment_activation_height(
+    genesis: &Genesis,
+    governance: &GovernanceState,
+) -> Option<u64> {
+    genesis
+        .ordered_history_v2_activation_height
+        .or_else(|| governance.storage_commitment_activation_height())
+}
+
 pub(super) fn replicated_state_root(
     genesis: &Genesis,
     governance: &GovernanceState,
@@ -38,8 +47,7 @@ pub(super) fn replicated_state_root_v2(
         &genesis_hash_hex,
         genesis.protocol_version,
     )?;
-    let activation_height = genesis
-        .ordered_history_v2_activation_height
+    let activation_height = effective_storage_commitment_activation_height(genesis, governance)
         .ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -1191,6 +1199,34 @@ pub(super) fn append_governance_state(bytes: &mut Vec<u8>, governance: &Governan
             );
         }
     }
+    if !governance.storage_commitment_activations.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "governance.storage_commitment_activation_count",
+            governance.storage_commitment_activations.len(),
+        );
+        for record in &governance.storage_commitment_activations {
+            append_storage_commitment_activation_record(
+                bytes,
+                "governance.storage_commitment_activation",
+                record,
+            );
+        }
+    }
+    if !governance.storage_commitment_cancellations.is_empty() {
+        append_canonical_usize(
+            bytes,
+            "governance.storage_commitment_cancellation_count",
+            governance.storage_commitment_cancellations.len(),
+        );
+        for record in &governance.storage_commitment_cancellations {
+            append_storage_commitment_cancellation_record(
+                bytes,
+                "governance.storage_commitment_cancellation",
+                record,
+            );
+        }
+    }
     append_canonical_usize(
         bytes,
         "governance.amendment_count",
@@ -1746,6 +1782,8 @@ fn assert_governance_state_commitment_inventory_complete(governance: &Governance
         amendment_rollback_records: _,
         governance_agent_dry_run_records: _,
         vault_bridge_route_profiles: _,
+        storage_commitment_activations: _,
+        storage_commitment_cancellations: _,
         amendments: _,
     } = governance;
 }
@@ -4765,6 +4803,131 @@ pub(super) fn append_vault_bridge_route_profile_record(
         &format!("{prefix}.authorized_height"),
         record.authorized_height,
     );
+}
+
+pub(super) fn append_storage_commitment_activation_record(
+    bytes: &mut Vec<u8>,
+    prefix: &str,
+    record: &postfiat_types::StorageCommitmentActivationRecordV1,
+) {
+    append_canonical_str(bytes, &format!("{prefix}.schema"), &record.schema);
+    append_canonical_str(bytes, &format!("{prefix}.feature_id"), &record.feature_id);
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.activation_id"),
+        &record.activation_id,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.authorization_amendment_id"),
+        &record.authorization_amendment_id,
+    );
+    append_canonical_str(bytes, &format!("{prefix}.chain_id"), &record.chain_id);
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.genesis_hash"),
+        &record.genesis_hash,
+    );
+    append_canonical_u32(
+        bytes,
+        &format!("{prefix}.protocol_version"),
+        record.protocol_version,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.scheduling_block_height"),
+        record.scheduling_block_height,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.activation_height"),
+        record.activation_height,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.legacy_commitment_version"),
+        &record.legacy_commitment_version,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.new_commitment_version"),
+        &record.new_commitment_version,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.pre_activation_finalized_height"),
+        record.pre_activation_finalized_height,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.pre_activation_block_hash"),
+        &record.pre_activation_block_hash,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.pre_activation_state_root"),
+        &record.pre_activation_state_root,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.pre_activation_ordered_count"),
+        record.pre_activation_ordered_count,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.pre_activation_ordered_accumulator"),
+        &record.pre_activation_ordered_accumulator,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.migration_packet_root"),
+        &record.migration_packet_root,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.required_verifier_version"),
+        &record.required_verifier_version,
+    );
+}
+
+pub(super) fn append_storage_commitment_cancellation_record(
+    bytes: &mut Vec<u8>,
+    prefix: &str,
+    record: &postfiat_types::StorageCommitmentCancellationRecordV1,
+) {
+    append_canonical_str(bytes, &format!("{prefix}.schema"), &record.schema);
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.cancellation_id"),
+        &record.cancellation_id,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.activation_id"),
+        &record.activation_id,
+    );
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.authorization_amendment_id"),
+        &record.authorization_amendment_id,
+    );
+    append_canonical_str(bytes, &format!("{prefix}.chain_id"), &record.chain_id);
+    append_canonical_str(
+        bytes,
+        &format!("{prefix}.genesis_hash"),
+        &record.genesis_hash,
+    );
+    append_canonical_u32(
+        bytes,
+        &format!("{prefix}.protocol_version"),
+        record.protocol_version,
+    );
+    append_canonical_u64(
+        bytes,
+        &format!("{prefix}.cancellation_height"),
+        record.cancellation_height,
+    );
+    append_canonical_str(bytes, &format!("{prefix}.reason"), &record.reason);
 }
 
 pub(super) fn append_validator_registry_update_record(

@@ -13,6 +13,7 @@ pub struct InitConsensusV2Options {
     pub node_id: String,
     pub validator_count: u32,
     pub activation_height: u64,
+    pub storage_activation_height: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,6 +35,7 @@ pub struct TopologyConsensusV2Options {
     pub hosts: Option<Vec<String>>,
     pub output_file: PathBuf,
     pub activation_height: u64,
+    pub storage_activation_height: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2257,6 +2259,9 @@ pub struct BatchProposalTimingReport {
     pub serialization_ms: f64,
     pub verifier_setup_ms: f64,
     pub state_exec_ms: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transactional_work:
+        Option<postfiat_storage::transactional::TransactionalWorkCounters>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shielded_breakdown: Option<ShieldedBatchProposalTimingReport>,
 }

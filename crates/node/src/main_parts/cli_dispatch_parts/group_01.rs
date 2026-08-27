@@ -33,12 +33,20 @@ fn run_cli_group_01(command: &str, flags: &[String]) -> Result<(), String> {
                 .ok_or("missing --activation-height")?
                 .parse::<u64>()
                 .map_err(|_| "--activation-height must be a u64".to_string())?;
+            let storage_activation_height = flag_value(flags, "--storage-activation-height")
+                .map(|value| {
+                    value
+                        .parse::<u64>()
+                        .map_err(|_| "--storage-activation-height must be a u64".to_string())
+                })
+                .transpose()?;
             let report = init_consensus_v2(InitConsensusV2Options {
                 data_dir: PathBuf::from(data_dir),
                 chain_id: chain_id.to_string(),
                 node_id: node_id.to_string(),
                 validator_count,
                 activation_height,
+                storage_activation_height,
             })
             .map_err(|error| format!("init-consensus-v2 failed: {error}"))?;
             let json = report
@@ -122,6 +130,13 @@ fn run_cli_group_01(command: &str, flags: &[String]) -> Result<(), String> {
                 .ok_or("missing --activation-height")?
                 .parse::<u64>()
                 .map_err(|_| "--activation-height must be a u64".to_string())?;
+            let storage_activation_height = flag_value(flags, "--storage-activation-height")
+                .map(|value| {
+                    value
+                        .parse::<u64>()
+                        .map_err(|_| "--storage-activation-height must be a u64".to_string())
+                })
+                .transpose()?;
             let output_file = flag_value(flags, "--output").unwrap_or(DEFAULT_TOPOLOGY_FILE);
             let topology = write_consensus_v2_topology(TopologyConsensusV2Options {
                 chain_id: chain_id.to_string(),
@@ -131,6 +146,7 @@ fn run_cli_group_01(command: &str, flags: &[String]) -> Result<(), String> {
                 hosts,
                 output_file: PathBuf::from(output_file),
                 activation_height,
+                storage_activation_height,
             })
             .map_err(|error| format!("topology-consensus-v2 failed: {error}"))?;
             let json = serde_json::to_string_pretty(&topology)
@@ -273,7 +289,7 @@ fn run_cli_group_01(command: &str, flags: &[String]) -> Result<(), String> {
         }
         "transport-block-vote-listen" => {
             require_unsafe_devnet_file_signer(flags, "transport block-vote listener")?;
-            require_unsafe_devnet_json_storage(flags, "transport block-vote listener")?;
+            require_transactional_or_unsafe_devnet_json_storage(flags, "transport block-vote listener")?;
             let data_dir =
                 PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
             let topology_file = flag_value(flags, "--topology").ok_or("missing --topology")?;
@@ -307,7 +323,7 @@ fn run_cli_group_01(command: &str, flags: &[String]) -> Result<(), String> {
         }
         "transport-validator-serve" => {
             require_unsafe_devnet_file_signer(flags, "transport validator service")?;
-            require_unsafe_devnet_json_storage(flags, "transport validator service")?;
+            require_transactional_or_unsafe_devnet_json_storage(flags, "transport validator service")?;
             let data_dir =
                 PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
             let topology_file = flag_value(flags, "--topology").ok_or("missing --topology")?;

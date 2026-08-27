@@ -2305,6 +2305,108 @@ pub(super) fn write_ordered_commit_with_journal_locked(
     write_ordered_commit_with_journal_timed_locked(store, commit_lock, write).map(|_| ())
 }
 
+pub(super) fn verify_storage_commitment_action_readiness(
+    store: &NodeStore,
+    genesis: &Genesis,
+    batch: &GovernanceActionBatch,
+    chain_tip: &ChainTipState,
+) -> io::Result<()> {
+    let Some(activation) = batch.storage_commitment_activations.first() else {
+        return Ok(());
+    };
+    if genesis.ordered_history_v2_activation_height.is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "storage_activation_genesis_conflict: genesis already fixes the storage activation height",
+        ));
+    }
+    if activation.pre_activation_finalized_height != chain_tip.height
+        || activation.pre_activation_block_hash != chain_tip.block_hash
+        || activation.pre_activation_state_root != chain_tip.state_root
+        || activation.pre_activation_ordered_count != chain_tip.ordered_batch_count
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "storage_activation_frozen_prefix_mismatch: activation record does not bind the current certified tip",
+        ));
+    }
+    let ordered_batches = store.read_ordered_batches()?;
+    if ordered_batches.len() as u64 != chain_tip.ordered_batch_count {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "storage_activation_legacy_ordered_count_mismatch: legacy ordered history does not match the certified tip",
+        ));
+    }
+    let mut legacy_commitment = postfiat_storage::OrderedHistoryCommitment::genesis(
+        &genesis.chain_id,
+        &genesis_hash(genesis),
+        genesis.protocol_version,
+    )?;
+    for batch_id in &ordered_batches {
+        legacy_commitment = legacy_commitment.append(batch_id)?;
+    }
+    if legacy_commitment.count != activation.pre_activation_ordered_count
+        || legacy_commitment.accumulator != activation.pre_activation_ordered_accumulator
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "storage_activation_legacy_accumulator_mismatch: frozen ordered accumulator does not match legacy history",
+        ));
+    }
+    if !store.transactional_storage_configured()? {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "storage_activation_store_missing: migrated transactional store is not configured",
+        ));
+    }
+    let expected_retained_receipt_count = store.read_blocks()?.blocks.iter().try_fold(
+        0_u64,
+        |count, block| {
+            count
+                .checked_add(block.receipt_ids.len() as u64)
+                .ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "storage_activation_receipt_count_overflow: retained receipt occurrences overflow u64",
+                    )
+                })
+        },
+    )?;
+    let meta = store.transactional_store()?.meta()?;
+    if meta.chain_id != chain_tip.chain_id
+        || meta.genesis_hash != chain_tip.genesis_hash
+        || meta.protocol_version != chain_tip.protocol_version
+        || meta.finalized_height != chain_tip.height
+        || meta.finalized_block_hash != chain_tip.block_hash
+        || meta.finalized_state_root != chain_tip.state_root
+        || meta.ordered_batch_count != chain_tip.ordered_batch_count
+        || meta.receipt_count != expected_retained_receipt_count
+        || meta.history_base_height != chain_tip.history_base_height
+        || meta.ordered_history_commitment() != legacy_commitment
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "storage_activation_migrated_tip_mismatch: transactional store does not exactly match the frozen legacy tip",
+        ));
+    }
+    if meta.scheduled_activation_height.is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "storage_activation_schedule_conflict: transactional store already has an activation schedule",
+        ));
+    }
+    if meta.last_full_verification_height != Some(chain_tip.height)
+        || meta.migration_packet_root.as_deref() != Some(activation.migration_packet_root.as_str())
+        || meta.verifier_version.as_deref() != Some(activation.required_verifier_version.as_str())
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "storage_activation_unverified_migration: transactional store lacks the exact full-verification and packet binding",
+        ));
+    }
+    Ok(())
+}
+
 pub(super) fn empty_apply_batch_write_timing_report() -> ApplyBatchWriteTimingReport {
     ApplyBatchWriteTimingReport {
         schema: "postfiat-ordered-commit-write-timings-v1".to_string(),
@@ -2332,17 +2434,120 @@ pub(super) fn write_ordered_commit_with_journal_timed_locked(
     let total_start = std::time::Instant::now();
     let mut timings = empty_apply_batch_write_timing_report();
     let journal = ordered_commit_delta_journal(write)?;
+
+    let genesis = store.read_genesis()?;
+    let scheduled_activation_height =
+        scheduled_storage_activation_after_journal(store, &genesis, &journal)?;
+    if let Some(activation_height) = scheduled_activation_height {
+        if journal.height >= activation_height {
+            if !store.transactional_storage_configured()? {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "storage commitment activation requires a verified transactional store",
+                ));
+            }
+            let stage_start = std::time::Instant::now();
+            apply_transactional_ordered_commit_delta(store, &journal, scheduled_activation_height)?;
+            timings.write_blocks_ms = apply_batch_elapsed_ms(stage_start);
+            if let Some(registry) = journal.validator_registry.as_ref() {
+                // This file is a compatibility mirror for legacy operator
+                // commands. The authenticated transactional value committed
+                // above is the durable authority after activation.
+                let stage_start = std::time::Instant::now();
+                write_validator_registry_file(
+                    &store.data_dir().join(VALIDATOR_REGISTRY_FILE),
+                    registry,
+                )?;
+                timings.write_validator_registry_ms = apply_batch_elapsed_ms(stage_start);
+            }
+            timings.total_ms = apply_batch_elapsed_ms(total_start);
+            return Ok(timings);
+        }
+    }
+
     let stage_start = std::time::Instant::now();
     store.write_ordered_commit_journal(&journal)?;
     timings.write_journal_ms = apply_batch_elapsed_ms(stage_start);
 
     apply_ordered_commit_delta_journal_timed(store, &journal, &mut timings)?;
 
+    if store.transactional_storage_configured()? {
+        let stage_start = std::time::Instant::now();
+        apply_transactional_ordered_commit_delta(store, &journal, scheduled_activation_height)?;
+        timings.write_blocks_ms += apply_batch_elapsed_ms(stage_start);
+    }
+
     let stage_start = std::time::Instant::now();
     store.remove_ordered_commit_journal()?;
     timings.remove_journal_ms = apply_batch_elapsed_ms(stage_start);
     timings.total_ms = apply_batch_elapsed_ms(total_start);
     Ok(timings)
+}
+
+fn scheduled_storage_activation_after_journal(
+    store: &NodeStore,
+    genesis: &Genesis,
+    journal: &OrderedCommitDeltaJournal,
+) -> io::Result<Option<u64>> {
+    if let Some(height) = genesis.ordered_history_v2_activation_height {
+        return Ok(Some(height));
+    }
+    match journal.governance.as_ref() {
+        Some(governance) => Ok(governance.storage_commitment_activation_height()),
+        None => Ok(store
+            .read_governance()?
+            .storage_commitment_activation_height()),
+    }
+}
+
+fn apply_transactional_ordered_commit_delta(
+    store: &NodeStore,
+    journal: &OrderedCommitDeltaJournal,
+    scheduled_activation_height: Option<u64>,
+) -> io::Result<postfiat_storage::CommitOutcome> {
+    let transactional = store.transactional_store()?;
+    let meta = transactional.meta()?;
+    let expected_tip = meta.chain_tip(CHAIN_TIP_SCHEMA);
+    let new_tip = chain_tip_after_delta(&expected_tip, journal)?;
+    let ordered_history = meta
+        .ordered_history_commitment()
+        .append(&journal.ordered_batch_id)?;
+    let registry_bytes = journal
+        .validator_registry
+        .as_ref()
+        .map(serde_json::to_vec)
+        .transpose()
+        .map_err(invalid_data)?;
+    let additional = registry_bytes
+        .map(
+            |canonical_bytes| postfiat_storage::transactional::NamedStateValue {
+                domain: "validator_registry".to_owned(),
+                canonical_bytes,
+            },
+        )
+        .into_iter()
+        .collect::<Vec<_>>();
+    transactional
+        .commit_finalized_block(postfiat_storage::CommitFinalizedBlock {
+            expected_tip: &expected_tip,
+            new_tip: &new_tip,
+            block: &journal.block,
+            receipts: &journal.receipt_delta,
+            archive_entry: &journal.archive_entry,
+            batch_id: &journal.ordered_batch_id,
+            ordered_history: &ordered_history,
+            current_state: postfiat_storage::CurrentStateUpdate {
+                ledger: journal.ledger.as_ref(),
+                governance: journal.governance.as_ref(),
+                shielded: journal.shielded.as_ref(),
+                bridge: journal.bridge.as_ref(),
+                node_state: None,
+                additional: &additional,
+            },
+            scheduled_activation_height,
+            allow_legacy_receipt_id_mismatch: false,
+        })
+        .map_err(io::Error::from)
 }
 
 pub(super) fn ordered_commit_delta_journal(
@@ -2445,20 +2650,45 @@ pub(super) fn recover_ordered_commit_journal_locked(
             ));
         }
     };
-    apply_stored_ordered_commit_journal(store, &journal)?;
-    store.remove_ordered_commit_journal()
-}
-
-pub(super) fn apply_stored_ordered_commit_journal(
-    store: &NodeStore,
-    journal: &StoredOrderedCommitJournal,
-) -> io::Result<()> {
-    match journal {
+    match &journal {
         StoredOrderedCommitJournal::Delta(journal) => {
-            apply_ordered_commit_delta_journal(store, journal)
+            let genesis = store.read_genesis()?;
+            let scheduled_activation_height =
+                scheduled_storage_activation_after_journal(store, &genesis, journal)?;
+            let transactional_configured = store.transactional_storage_configured()?;
+            let storage_commitment_active = scheduled_activation_height
+                .is_some_and(|activation_height| journal.height >= activation_height);
+
+            if storage_commitment_active {
+                if !transactional_configured {
+                    return Err(io::Error::new(
+                        io::ErrorKind::NotFound,
+                        "storage commitment activation requires a verified transactional store",
+                    ));
+                }
+            } else {
+                apply_ordered_commit_delta_journal(store, journal)?;
+            }
+
+            if transactional_configured {
+                apply_transactional_ordered_commit_delta(
+                    store,
+                    journal,
+                    scheduled_activation_height,
+                )?;
+            }
         }
-        StoredOrderedCommitJournal::Full(journal) => apply_ordered_commit_journal(store, journal),
+        StoredOrderedCommitJournal::Full(journal) => {
+            if store.transactional_storage_configured()? {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "legacy full ordered commit journal cannot be recovered while transactional storage is configured",
+                ));
+            }
+            apply_ordered_commit_journal(store, journal)?;
+        }
     }
+    store.remove_ordered_commit_journal()
 }
 
 pub(super) fn apply_ordered_commit_journal(
@@ -2668,22 +2898,6 @@ pub(super) fn apply_ordered_commit_delta_journal_timed(
     let stage_start = std::time::Instant::now();
     if !already_committed {
         store.append_ordered_batch_record(&journal.ordered_batch_id)?;
-        if genesis.ordered_history_v2_activation_height.is_some() {
-            let commitment =
-                store.append_ordered_history_index_record(&journal.ordered_batch_id)?;
-            let expected_count = chain_tip
-                .ordered_batch_count
-                .checked_add(1)
-                .ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::InvalidData, "ordered batch count overflow")
-                })?;
-            if commitment.count != expected_count {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "ordered-history index count does not match the commit journal",
-                ));
-            }
-        }
     }
     timings.write_ordered_batches_ms = apply_batch_elapsed_ms(stage_start);
 
@@ -2703,10 +2917,6 @@ pub(super) fn apply_ordered_commit_delta_journal_timed(
         chain_tip.clone()
     };
     store.bind_jsonl_checkpoints_to_chain_tip(&committed_tip, &journal.block.header.parent_hash)?;
-    store.bind_ordered_history_index_to_chain_tip(
-        &committed_tip,
-        &journal.block.header.parent_hash,
-    )?;
     timings.write_blocks_ms = apply_batch_elapsed_ms(stage_start);
 
     if let Some(registry) = journal.validator_registry.as_ref() {
@@ -2728,7 +2938,25 @@ pub(super) fn read_chain_tip_or_reconstruct_for_genesis(
     match store.read_chain_tip() {
         Ok(tip) => {
             validate_chain_tip_domain(&tip, genesis)?;
-            Ok(tip)
+            let history_base_height = read_history_checkpoint_state_optional(store)?
+                .map(|checkpoint| checkpoint.pruned_up_to_height)
+                .unwrap_or(0);
+            if tip.history_base_height == history_base_height {
+                return Ok(tip);
+            }
+            let reconstructed = reconstruct_chain_tip_for_genesis(store, genesis)?;
+            if tip.height != reconstructed.height
+                || tip.block_hash != reconstructed.block_hash
+                || tip.state_root != reconstructed.state_root
+                || tip.ordered_batch_count != reconstructed.ordered_batch_count
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "recorded chain tip conflicts with authenticated retained history",
+                ));
+            }
+            store.write_chain_tip(&reconstructed)?;
+            Ok(reconstructed)
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             let tip = reconstruct_chain_tip_for_genesis(store, genesis)?;
@@ -2785,7 +3013,11 @@ pub(super) fn reconstruct_chain_tip_for_genesis(
         .unwrap_or(0);
     let blocks = store.read_blocks()?;
     let ordered_batches = store.read_ordered_batches()?;
-    let receipts = store.read_receipts()?;
+    let receipt_count = blocks.blocks.iter().try_fold(0_u64, |count, block| {
+        count
+            .checked_add(block.receipt_ids.len() as u64)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "receipt count overflow"))
+    })?;
     let height = history_base_height
         .checked_add(blocks.blocks.len() as u64)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "chain tip height overflow"))?;
@@ -2815,7 +3047,7 @@ pub(super) fn reconstruct_chain_tip_for_genesis(
         block_hash,
         state_root,
         ordered_batch_count: ordered_batches.len() as u64,
-        receipt_count: receipts.len() as u64,
+        receipt_count,
         history_base_height,
     })
 }

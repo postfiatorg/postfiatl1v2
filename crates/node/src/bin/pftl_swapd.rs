@@ -2845,6 +2845,7 @@ mod tests {
                 node_id: format!("validator-{index}"),
                 validator_count: 6,
                 activation_height: 1,
+                storage_activation_height: None,
             })
             .expect("initialize finality test validator");
             data_dirs.push(data_dir);

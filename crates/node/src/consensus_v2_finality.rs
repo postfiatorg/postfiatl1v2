@@ -427,6 +427,7 @@ mod tests {
                 node_id: format!("validator-{index}"),
                 validator_count: 4,
                 activation_height: 1,
+                storage_activation_height: None,
             })
             .expect("init validator");
             data_dirs.push(data_dir);

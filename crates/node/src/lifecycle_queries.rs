@@ -126,6 +126,29 @@ pub(super) const SNAPSHOT_FILES: &[&str] = &[
     GOVERNANCE_FILE,
     LEDGER_FILE,
     BLOCKS_FILE,
+    HISTORY_CHECKPOINT_FILE,
+    BATCH_ARCHIVE_FILE,
+    ORDERED_BATCHES_FILE,
+    RECEIPTS_FILE,
+    MEMPOOL_FILE,
+    SHIELDED_FILE,
+    BRIDGE_FILE,
+    FAUCET_ACCOUNT_FILE,
+    VALIDATOR_REGISTRY_GENESIS_FILE,
+    VALIDATOR_REGISTRY_FILE,
+    CONSENSUS_V2_SAFETY_SNAPSHOT_FILE,
+    CONSENSUS_V2_QC_SNAPSHOT_FILE,
+    OWNED_LOCKS_FILE,
+    OWNED_LOCKS_WAL_FILE,
+    FASTPAY_SPECULATIVE_JOURNAL_FILE,
+];
+pub(super) const PRE_STORAGE_SNAPSHOT_VERSION: u32 = 6;
+pub(super) const PRE_STORAGE_SNAPSHOT_FILES: &[&str] = &[
+    GENESIS_FILE,
+    NODE_STATE_FILE,
+    GOVERNANCE_FILE,
+    LEDGER_FILE,
+    BLOCKS_FILE,
     BATCH_ARCHIVE_FILE,
     ORDERED_BATCHES_FILE,
     RECEIPTS_FILE,
@@ -310,6 +333,7 @@ pub fn init_consensus_v2(options: InitConsensusV2Options) -> io::Result<StatusRe
         Genesis::try_new_with_validator_count(options.chain_id, options.validator_count)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
     genesis.consensus_v2_activation_height = Some(options.activation_height);
+    genesis.ordered_history_v2_activation_height = options.storage_activation_height;
     genesis
         .validate()
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
@@ -335,11 +359,42 @@ pub(super) fn init_with_genesis(
     write_key_file(&data_dir.join(FAUCET_KEY_FILE), &faucet_key)?;
     ensure_validator_keys(&store, genesis.validator_count)?;
     ensure_validator_registry_genesis(&store)?;
-    let report = status(NodeOptions { data_dir })?;
     if genesis.ordered_history_v2_activation_height.is_some() {
-        store.rebuild_ordered_history_index()?;
+        let tip = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?;
+        let commitment = postfiat_storage::OrderedHistoryCommitment::genesis(
+            &genesis.chain_id,
+            &genesis_hash(&genesis),
+            genesis.protocol_version,
+        )?;
+        let ledger = store.read_ledger()?;
+        let governance = store.read_governance()?;
+        let shielded = store.read_shielded()?;
+        let bridge = store.read_bridge()?;
+        let node_state = store.read_node_state()?;
+        let registry =
+            read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?;
+        let registry_bytes = serde_json::to_vec(&registry).map_err(invalid_data)?;
+        let additional = [postfiat_storage::transactional::NamedStateValue {
+            domain: "validator_registry".to_owned(),
+            canonical_bytes: registry_bytes,
+        }];
+        let transactional = store.transactional_store()?;
+        transactional.initialize_with_activation(
+            &tip,
+            &commitment,
+            postfiat_storage::CurrentStateUpdate {
+                ledger: Some(&ledger),
+                governance: Some(&governance),
+                shielded: Some(&shielded),
+                bridge: Some(&bridge),
+                node_state: Some(&node_state),
+                additional: &additional,
+            },
+            genesis.ordered_history_v2_activation_height,
+        )?;
+        transactional.verify_and_mark_full_integrity()?;
     }
-    Ok(report)
+    status(NodeOptions { data_dir })
 }
 
 pub fn validator_keys(options: ValidatorKeysOptions) -> io::Result<ValidatorKeyFile> {
@@ -507,6 +562,7 @@ pub fn write_consensus_v2_topology(
     let mut genesis = Genesis::try_new_with_validator_count(options.chain_id, options.validators)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
     genesis.consensus_v2_activation_height = Some(options.activation_height);
+    genesis.ordered_history_v2_activation_height = options.storage_activation_height;
     genesis
         .validate()
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
@@ -578,7 +634,7 @@ pub fn status(options: NodeOptions) -> io::Result<StatusReport> {
     let ledger = store.read_ledger()?;
     let chain_tip = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?;
     let block_height = chain_tip.height;
-    let block_tip_hash = chain_tip.block_hash;
+    let block_tip_hash = chain_tip.block_hash.clone();
     let genesis_hash_hex = genesis_hash(&genesis);
     let deployment_identity = deployment_runtime_identity_from_env()?;
     if let Some(validator_id) = &deployment_identity.validator_id {
@@ -633,6 +689,127 @@ pub fn status(options: NodeOptions) -> io::Result<StatusReport> {
         })
         .collect::<io::Result<Vec<_>>>()?;
     active_nav_profiles.sort_by(|left, right| left.asset_id.cmp(&right.asset_id));
+    let scheduled_activation_height =
+        effective_storage_commitment_activation_height(&genesis, &governance);
+    let commitment_version = if scheduled_activation_height
+        .is_some_and(|activation_height| block_height >= activation_height)
+    {
+        postfiat_types::STORAGE_COMMITMENT_NEW_VERSION_V1
+    } else {
+        postfiat_types::STORAGE_COMMITMENT_LEGACY_VERSION_V1
+    };
+    let storage = if store.transactional_storage_configured()? {
+        let transactional = store.transactional_store()?;
+        let meta = transactional.meta()?;
+        let counters = transactional.work_counters();
+        let transactional_active = meta
+            .scheduled_activation_height
+            .is_some_and(|activation_height| meta.finalized_height >= activation_height);
+        let fully_verified = meta.last_full_verification_height == Some(meta.finalized_height);
+        postfiat_types::StorageStatusReportV1 {
+            schema: "postfiat-storage-status-v1".to_owned(),
+            storage_format: meta.storage_format,
+            storage_schema: meta.schema,
+            backend: meta.backend,
+            backend_version: meta.backend_version,
+            generation: meta.generation,
+            commitment_version: commitment_version.to_owned(),
+            scheduled_activation_height: meta.scheduled_activation_height,
+            transactional_active,
+            finalized_height: meta.finalized_height,
+            finalized_block_hash: meta.finalized_block_hash,
+            finalized_state_root: meta.finalized_state_root,
+            ordered_batch_count: meta.ordered_batch_count,
+            ordered_history_accumulator: meta.ordered_history_accumulator,
+            last_full_verification_height: meta.last_full_verification_height,
+            last_rebuild_height: meta.last_full_verification_height,
+            migration_packet_root: meta.migration_packet_root,
+            read_transactions: counters.read_transactions,
+            write_transactions: counters.write_transactions,
+            committed_write_transactions: counters.committed_write_transactions,
+            records_read: counters.records_read,
+            records_written: counters.records_written,
+            bytes_read: counters.bytes_read,
+            bytes_written: counters.bytes_written,
+            pages_read: Some(counters.page_reads),
+            pages_written: Some(counters.page_writes),
+            full_history_scans: counters.full_history_scans,
+            full_history_records_read: counters.full_history_records_read,
+            full_history_bytes_read: counters.full_history_bytes_read,
+            fsync_count: counters.committed_write_transactions,
+            durable_commit_micros: counters.durable_commit_micros,
+            integrity_status: if fully_verified {
+                "full_verification_current"
+            } else {
+                "verification_stale_or_missing"
+            }
+            .to_owned(),
+            reason_code: (!fully_verified).then(|| "storage_full_verification_stale".to_owned()),
+        }
+    } else {
+        let commitment = match store.ordered_history_commitment() {
+            Ok(commitment) => commitment,
+            Err(error)
+                if error.kind() == io::ErrorKind::NotFound
+                    && chain_tip.ordered_batch_count == 0 =>
+            {
+                postfiat_storage::OrderedHistoryCommitment::genesis(
+                    &genesis.chain_id,
+                    &genesis_hash_hex,
+                    genesis.protocol_version,
+                )?
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                let mut commitment = postfiat_storage::OrderedHistoryCommitment::genesis(
+                    &genesis.chain_id,
+                    &genesis_hash_hex,
+                    genesis.protocol_version,
+                )?;
+                for batch_id in store.read_ordered_batches()? {
+                    commitment = commitment.append(&batch_id)?;
+                }
+                commitment
+            }
+            Err(error) => return Err(error),
+        };
+        postfiat_types::StorageStatusReportV1 {
+            schema: "postfiat-storage-status-v1".to_owned(),
+            storage_format: "postfiat-json-jsonl-legacy".to_owned(),
+            storage_schema: "postfiat-authenticated-jsonl-head-v2".to_owned(),
+            backend: "filesystem".to_owned(),
+            backend_version: "legacy".to_owned(),
+            generation: "legacy".to_owned(),
+            commitment_version: commitment_version.to_owned(),
+            scheduled_activation_height,
+            transactional_active: false,
+            finalized_height: chain_tip.height,
+            finalized_block_hash: chain_tip.block_hash.clone(),
+            finalized_state_root: chain_tip.state_root.clone(),
+            ordered_batch_count: commitment.count,
+            ordered_history_accumulator: commitment.accumulator,
+            last_full_verification_height: None,
+            last_rebuild_height: None,
+            migration_packet_root: None,
+            read_transactions: 0,
+            write_transactions: 0,
+            committed_write_transactions: 0,
+            records_read: 0,
+            records_written: 0,
+            bytes_read: 0,
+            bytes_written: 0,
+            pages_read: None,
+            pages_written: None,
+            full_history_scans: 0,
+            full_history_records_read: 0,
+            full_history_bytes_read: 0,
+            fsync_count: 0,
+            durable_commit_micros: 0,
+            integrity_status: "legacy_authenticated".to_owned(),
+            reason_code: scheduled_activation_height
+                .is_some_and(|activation_height| block_height >= activation_height)
+                .then(|| "storage_active_generation_missing".to_owned()),
+        }
+    };
     Ok(StatusReport {
         chain_id: genesis.chain_id.clone(),
         genesis_hash: genesis_hash_hex,
@@ -657,6 +834,7 @@ pub fn status(options: NodeOptions) -> io::Result<StatusReport> {
         block_height,
         block_tip_hash,
         mempool_pending: mempool.len() as u64,
+        storage: Some(storage),
     })
 }
 
@@ -849,17 +1027,18 @@ pub(super) fn current_replicated_state_root(
     let ledger = store.read_ledger()?;
     let shielded = store.read_shielded()?;
     let bridge = store.read_bridge()?;
-    let ordered_history_active = match (
-        genesis.ordered_history_v2_activation_height,
-        store.read_chain_tip(),
-    ) {
+    let activation_height = effective_storage_commitment_activation_height(genesis, &governance);
+    let ordered_history_active = match (activation_height, store.read_chain_tip()) {
         (Some(activation_height), Ok(tip)) if tip.height >= activation_height => Some(tip),
         (_, Ok(_)) => None,
         (_, Err(error)) if error.kind() == io::ErrorKind::NotFound => None,
         (_, Err(error)) => return Err(error),
     };
     if let Some(tip) = ordered_history_active {
-        let ordered_history = store.ordered_history_commitment()?;
+        let ordered_history = store
+            .transactional_store()?
+            .meta()?
+            .ordered_history_commitment();
         if ordered_history.count != tip.ordered_batch_count {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,

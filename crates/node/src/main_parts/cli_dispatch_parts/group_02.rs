@@ -50,6 +50,15 @@ fn run_cli_group_02(command: &str, flags: &[String]) -> Result<(), String> {
             let local_apply_before_certified_send =
                 !flag_present(flags, "--local-apply-after-certified-send");
             let defer_certified_sends = flag_present(flags, "--defer-certified-sends");
+            let resident_transactional_store =
+                flag_present(flags, "--resident-transactional-store");
+            let expected_start_height = flag_value(flags, "--expected-start-height")
+                .map(|value| {
+                    value
+                        .parse::<u64>()
+                        .map_err(|_| "--expected-start-height must be a u64".to_string())
+                })
+                .transpose()?;
             let report = tx_latency_benchmark(TxLatencyBenchmarkOptions {
                 base_dir,
                 topology_file,
@@ -70,6 +79,8 @@ fn run_cli_group_02(command: &str, flags: &[String]) -> Result<(), String> {
                 retry_backoff_ms,
                 local_apply_before_certified_send,
                 defer_certified_sends,
+                resident_transactional_store,
+                expected_start_height,
             })?;
             let json = serde_json::to_string_pretty(&report)
                 .map_err(|error| format!("tx latency benchmark serialization failed: {error}"))?;
