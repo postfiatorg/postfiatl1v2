@@ -4,6 +4,7 @@ import hashlib
 import json
 import tempfile
 import unittest
+from collections.abc import Callable
 from pathlib import Path
 
 from postfiat_rpc.storage_scaling import (
@@ -58,11 +59,17 @@ def _passing_packet(packet: Path) -> None:
     binary.write_bytes(b"release-binary-identity")
     rollback_binary = packet / "bin" / "postfiat-node-rollback"
     rollback_binary.write_bytes(b"older-compatible-release-binary-identity")
+    incompatible_binary = packet / "bin" / "postfiat-node-incompatible"
+    incompatible_binary.write_bytes(b"older-incompatible-release-binary-identity")
     binaries = [
         {"path": "bin/postfiat-node", "sha256": _sha256(binary)},
         {
             "path": "bin/postfiat-node-rollback",
             "sha256": _sha256(rollback_binary),
+        },
+        {
+            "path": "bin/postfiat-node-incompatible",
+            "sha256": _sha256(incompatible_binary),
         },
     ]
 
@@ -442,6 +449,246 @@ def _passing_packet(packet: Path) -> None:
         for stage in MATERIAL_STAGE_PATHS
     }
 
+    migration_phase_contract = (
+        ("legacy-finality", "transparent", ["accepted"]),
+        (
+            "cancelled-activation-scheduled",
+            "governance",
+            ["storage_commitment_activation_scheduled"],
+        ),
+        (
+            "pre-activation-cancellation",
+            "governance",
+            ["storage_commitment_activation_cancelled"],
+        ),
+        ("post-cancellation-legacy-finality", "transparent", ["accepted"]),
+        (
+            "final-activation-scheduled",
+            "governance",
+            ["storage_commitment_activation_scheduled"],
+        ),
+        ("pre-activation-one", "transparent", ["accepted"]),
+        ("pre-activation-two", "transparent", ["accepted"]),
+        ("activation-finality", "transparent", ["accepted"]),
+        ("post-activation-finality", "transparent", ["accepted"]),
+        ("post-activation-forward-recovery", "transparent", ["accepted"]),
+    )
+    migration_phases = []
+    for offset, (label, batch_kind, receipt_codes) in enumerate(
+        migration_phase_contract,
+        start=1,
+    ):
+        degraded = label == "activation-finality"
+        phase = {
+            "label": label,
+            "height": 924 + offset,
+            "batch_kind": batch_kind,
+            "initial_applied_validator_count": 5 if degraded else 6,
+            "applied_validator_count": 6,
+            "certificate_validator_count": 6,
+            "certificate_vote_count": 5 if degraded else 6,
+            "certificate_quorum": 5,
+            "receipt_accepted": True,
+            "receipt_codes": receipt_codes,
+            "certificate_id": f"{offset:096x}",
+            "certificate_sha256": f"{offset + 20:064x}",
+            "consensus_v2_commit": True,
+            "transport_round_ok": True,
+            "all_vote_requests_verified": True,
+            "all_certified_sends_verified": not degraded,
+            "failed_peer_targets": ["validator-4"] if degraded else [],
+            "identity": {
+                "height": 924 + offset,
+                "tip": f"{offset + 100:096x}",
+                "state_root": f"{offset + 200:096x}",
+            },
+            "batch_sha256": f"{offset + 40:064x}",
+        }
+        if degraded:
+            phase.update(
+                {
+                    "catch_up_validator": "validator-4",
+                    "catch_up_receipt_accepted": True,
+                    "catch_up_receipt_count": 1,
+                    "catch_up_receipt_codes": ["accepted"],
+                }
+            )
+        migration_phases.append(phase)
+
+    def migration_rebuild(
+        height: int,
+        packet_root: str,
+        current_root: str,
+        node_root: str,
+        seed: int,
+    ) -> dict[str, object]:
+        return {
+            "packet_root": packet_root,
+            "manifest_sha256": f"{seed:064x}",
+            "manifest_file_sha3_384": f"{seed:096x}",
+            "current_state_root": current_root,
+            "node_state_root": node_root,
+            "required_disk_bytes": 1,
+            "available_disk_bytes": 2,
+            "logical_store_report": {
+                "schema": "postfiat-storage-logical-integrity-v1",
+                "backend": "redb",
+                "storage_format": "postfiat-redb-v1",
+                "finalized_height": height,
+                "block_count": height,
+                "archive_count": height,
+                "ordered_batch_count": height,
+                "receipt_count": height,
+                "history_index_count": 0,
+                "accumulator": f"{height:096x}",
+            },
+            "canonical_export_receipt": {
+                "schema": "postfiat-transactional-canonical-export-receipt-v1",
+                "finalized_height": height,
+                "record_count": height,
+                "records_sha3_384": f"{height + seed:096x}",
+            },
+            "rebuild_passed": True,
+            "verify_only_passed": True,
+            "generation_pointer_published": True,
+        }
+
+    packet_root = "c" * 96
+    migration_clones = []
+    for index in range(6):
+        source_digest = f"{index + 1:064x}"
+        migration_clones.append(
+            {
+                "validator_id": f"validator-{index}",
+                "source_tree_sha256": source_digest,
+                "backup_tree_sha256": source_digest,
+                "backup_reverified_sha256": source_digest,
+                "initial_migration": migration_rebuild(
+                    924,
+                    "d" * 96,
+                    "e" * 96,
+                    f"{1000 + index:096x}",
+                    10 + index,
+                ),
+                "post_restart_refreeze": migration_rebuild(
+                    925,
+                    "f" * 96,
+                    "1" * 96,
+                    f"{2000 + index:096x}",
+                    20 + index,
+                ),
+                "final_activation_refreeze": migration_rebuild(
+                    928,
+                    packet_root,
+                    "2" * 96,
+                    f"{3000 + index:096x}",
+                    30 + index,
+                ),
+                "final_identity": migration_phases[-1]["identity"],
+            }
+        )
+    restart_receipts = [
+        {
+            "validator_id": f"validator-{index}",
+            "stopped_cleanly": True,
+            "reopened_and_ready": True,
+        }
+        for index in range(6)
+    ]
+    incompatible_revision = "d" * 40
+    cobalt_boundary = {
+        "validator_registry_semantic_sha256": "3" * 64,
+        "cobalt_governance_semantic_sha256": "4" * 64,
+    }
+    migration_report = {
+        "schema": ARTIFACT_SCHEMAS["migration"],
+        "status": "PASS",
+        "evidence_eligible": True,
+        "source_worktree_clean": True,
+        "captured_at": "2026-08-26T00:00:00Z",
+        "source_revision": revision,
+        "node_binary_sha256": _sha256(binary),
+        "node_binary_build": {
+            "git_revision": revision[:8],
+            "profile": "release",
+        },
+        "incompatible_binary": {
+            "sha256": _sha256(incompatible_binary),
+            "source_revision": incompatible_revision,
+            "git_revision": incompatible_revision[:8],
+            "profile": "release",
+        },
+        "source_height": 924,
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": (
+            "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad255"
+            "21aff3ed334da07e150a7233a3e90a9"
+        ),
+        "exact_existing_chain_rehearsal": True,
+        "clone_count": 6,
+        "offline_rebuild": True,
+        "second_logical_scan": True,
+        "generation_pointer_published": True,
+        "pre_activation_restart": True,
+        "activation": True,
+        "pre_activation_cancellation": True,
+        "catch_up": True,
+        "pre_activation_rollback": True,
+        "post_activation_forward_recovery": True,
+        "all_six_converged": True,
+        "mixed_version_refused": True,
+        "backup_verified": True,
+        "disk_capacity_verified": True,
+        "stop_conditions_verified": True,
+        "stop_condition_receipt": {
+            "schema": "postfiat-storage-source-stop-receipt-v1",
+            "source_directory_count": 6,
+            "processes_examined": 10,
+            "unreadable_process_count": 0,
+            "matching_process_count": 0,
+        },
+        "consensus_v2_unchanged": True,
+        "cobalt_authority_unchanged": True,
+        "literal_receipts_exact": True,
+        "zero_post_activation_full_history_scans": True,
+        "external_network_contacted": False,
+        "loopback_transport_used": True,
+        "devnet_queried_or_mutated": False,
+        "identities": {
+            "source_tip": digest96,
+            "source_state_root": digest96,
+            "packet_root": packet_root,
+            "activation_id": "5" * 96,
+            "cancelled_activation_id": "6" * 96,
+            "cancellation_id": "7" * 96,
+            "activation_tip": migration_phases[7]["identity"]["tip"],
+            "activation_state_root": migration_phases[7]["identity"]["state_root"],
+            "final_tip": migration_phases[-1]["identity"]["tip"],
+            "final_state_root": migration_phases[-1]["identity"]["state_root"],
+        },
+        "cobalt_boundary": {
+            "before": cobalt_boundary,
+            "after": dict(cobalt_boundary),
+        },
+        "mixed_version_probe": {
+            "exit_code": 1,
+            "reason_code": "storage_unsupported_schema",
+            "reason_detail": "transactional migration verification binding is invalid",
+            "failure_output_sha256": "5" * 64,
+            "artifact_absent": True,
+            "binary_sha256": _sha256(incompatible_binary),
+            "source_revision": incompatible_revision,
+            "verifier_boundary": "v1 binary refused v2 migration generation",
+        },
+        "restart_receipts": {
+            "pre_activation": restart_receipts,
+            "scheduled_staggered": restart_receipts,
+            "post_activation_forward": restart_receipts,
+        },
+        "phases": migration_phases,
+        "clones": migration_clones,
+    }
+
     reports = {
         "source": {
             "schema": ARTIFACT_SCHEMAS["source"],
@@ -509,41 +756,7 @@ def _passing_packet(packet: Path) -> None:
             "offline": True,
             "network_contacted": False,
         },
-        "migration": {
-            "schema": ARTIFACT_SCHEMAS["migration"],
-            "source_revision": revision,
-            "node_binary_sha256": _sha256(binary),
-            "node_binary_build": {
-                "git_revision": revision[:8],
-                "profile": "release",
-            },
-            "source_height": 924,
-            "chain_id": "postfiat-wan-devnet-2",
-            "genesis_hash": (
-                "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad255"
-                "21aff3ed334da07e150a7233a3e90a9"
-            ),
-            "exact_existing_chain_rehearsal": True,
-            "clone_count": 6,
-            "offline_rebuild": True,
-            "second_logical_scan": True,
-            "generation_pointer_published": True,
-            "pre_activation_restart": True,
-            "activation": True,
-            "pre_activation_cancellation": True,
-            "catch_up": True,
-            "pre_activation_rollback": True,
-            "post_activation_forward_recovery": True,
-            "all_six_converged": True,
-            "mixed_version_refused": True,
-            "backup_verified": True,
-            "identities": {
-                "source_tip": digest96,
-                "source_state_root": digest96,
-                "packet_root": digest96,
-                "activation_id": digest96,
-            },
-        },
+        "migration": migration_report,
         "redaction": {
             "schema": ARTIFACT_SCHEMAS["redaction"],
             "passed": True,
@@ -580,6 +793,21 @@ def _passing_packet(packet: Path) -> None:
     _write_checksums(packet)
 
 
+def _rewrite_migration(
+    packet: Path,
+    mutation: Callable[[dict[str, object]], None],
+) -> None:
+    migration_path = packet / "artifacts" / "migration.json"
+    migration = json.loads(migration_path.read_text(encoding="utf-8"))
+    mutation(migration)
+    _write_json(migration_path, migration)
+    manifest_path = packet / MANIFEST_FILE
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["artifacts"]["migration"]["sha256"] = _sha256(migration_path)
+    _write_json(manifest_path, manifest)
+    _write_checksums(packet)
+
+
 class StorageScalingVerifierTests(unittest.TestCase):
     def packet_dir(self, temporary: str) -> Path:
         return Path(temporary) / "packet"
@@ -595,6 +823,129 @@ class StorageScalingVerifierTests(unittest.TestCase):
             self.assertEqual(
                 verified.report["tamper_case_count"], len(REQUIRED_TAMPER_CASES)
             )
+
+    def test_storage_scaling_packet_rejects_development_migration_smoke(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def mark_development(migration: dict[str, object]) -> None:
+                migration["status"] = "DEVELOPMENT SMOKE PASS"
+                migration["evidence_eligible"] = False
+
+            _rewrite_migration(packet, mark_development)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "not an evidence-eligible PASS",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_false_degraded_activation_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def claim_full_delivery(migration: dict[str, object]) -> None:
+                phases = migration["phases"]
+                assert isinstance(phases, list)
+                activation = phases[7]
+                assert isinstance(activation, dict)
+                activation["all_certified_sends_verified"] = True
+
+            _rewrite_migration(packet, claim_full_delivery)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "activation-finality participation policy",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_unbound_migration_binary(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def substitute_binary(migration: dict[str, object]) -> None:
+                incompatible = migration["incompatible_binary"]
+                assert isinstance(incompatible, dict)
+                incompatible["sha256"] = "f" * 64
+
+            _rewrite_migration(packet, substitute_binary)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "incompatible binary identity",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_conflated_binary_roles(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+            rollback_digest = _sha256(packet / "bin" / "postfiat-node-rollback")
+
+            def use_rollback_as_incompatible(migration: dict[str, object]) -> None:
+                incompatible = migration["incompatible_binary"]
+                assert isinstance(incompatible, dict)
+                incompatible["sha256"] = rollback_digest
+
+            _rewrite_migration(packet, use_rollback_as_incompatible)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "incompatible binary identity",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_mutable_migration_backup(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def change_backup(migration: dict[str, object]) -> None:
+                clones = migration["clones"]
+                assert isinstance(clones, list)
+                clone = clones[0]
+                assert isinstance(clone, dict)
+                clone["backup_reverified_sha256"] = "f" * 64
+
+            _rewrite_migration(packet, change_backup)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "immutable backup binding",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_active_migration_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def mark_source_active(migration: dict[str, object]) -> None:
+                receipt = migration["stop_condition_receipt"]
+                assert isinstance(receipt, dict)
+                receipt["matching_process_count"] = 1
+
+            _rewrite_migration(packet, mark_source_active)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "source stop receipt is invalid",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_migration_replay_identity_split(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def split_source_tip(migration: dict[str, object]) -> None:
+                identities = migration["identities"]
+                assert isinstance(identities, dict)
+                identities["source_tip"] = "f" * 96
+
+            _rewrite_migration(packet, split_source_tip)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "disagrees with exact height-924 replay",
+            ):
+                verify_packet(packet)
 
     def test_storage_scaling_packet_rejects_checksum_tamper(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -268,6 +268,7 @@ def main() -> int:
     parser.add_argument("--captured-at", required=True)
     parser.add_argument("--node-bin", type=Path, required=True)
     parser.add_argument("--rollback-node-bin", type=Path, required=True)
+    parser.add_argument("--incompatible-node-bin", type=Path, required=True)
     parser.add_argument("--state-distinction", type=Path, required=True)
     parser.add_argument("--replay-report", type=Path, required=True)
     parser.add_argument("--performance-report", type=Path, required=True)
@@ -280,7 +281,18 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    packet = args.output_dir.resolve()
+    raw_packet = args.output_dir.expanduser()
+    raw_node_bin = args.node_bin.expanduser()
+    raw_rollback_node_bin = args.rollback_node_bin.expanduser()
+    raw_incompatible_node_bin = args.incompatible_node_bin.expanduser()
+    if (
+        raw_packet.is_symlink()
+        or raw_node_bin.is_symlink()
+        or raw_rollback_node_bin.is_symlink()
+        or raw_incompatible_node_bin.is_symlink()
+    ):
+        raise ValueError("packet output and release binary paths must not be symlinks")
+    packet = raw_packet.resolve()
     if packet.exists():
         raise ValueError(f"refusing to overwrite packet: {packet}")
     validate_capture_time(args.captured_at)
@@ -288,13 +300,13 @@ def main() -> int:
         raise ValueError("source revision does not match HEAD")
     if not git_clean():
         raise ValueError("packet assembly requires a clean checkout")
-    node_bin = args.node_bin.resolve()
-    rollback_node_bin = args.rollback_node_bin.resolve()
+    node_bin = raw_node_bin.resolve()
+    rollback_node_bin = raw_rollback_node_bin.resolve()
+    incompatible_node_bin = raw_incompatible_node_bin.resolve()
     if not node_bin.is_file() or node_bin.parent.name != "release":
-        raise ValueError("--node-bin must identify a target/release binary")
+        raise ValueError("--node-bin must identify a regular target/release binary")
     if (
         not rollback_node_bin.is_file()
-        or rollback_node_bin.is_symlink()
         or rollback_node_bin.parent.name != "release"
         or rollback_node_bin == node_bin
         or sha256(rollback_node_bin) == sha256(node_bin)
@@ -302,20 +314,45 @@ def main() -> int:
         raise ValueError(
             "--rollback-node-bin must identify a distinct regular target/release binary"
         )
+    if (
+        not incompatible_node_bin.is_file()
+        or incompatible_node_bin.parent.name != "release"
+        or incompatible_node_bin in {node_bin, rollback_node_bin}
+        or sha256(incompatible_node_bin)
+        in {sha256(node_bin), sha256(rollback_node_bin)}
+    ):
+        raise ValueError(
+            "--incompatible-node-bin must identify a third regular target/release binary"
+        )
 
     performance = read_json(args.performance_report.resolve())
+    migration = read_json(args.migration_report.resolve())
     binary_digest = sha256(node_bin)
+    incompatible_binary_digest = sha256(incompatible_node_bin)
     if (
         performance.get("source_revision") != args.source_revision
         or performance.get("node_binary_sha256") != binary_digest
     ):
         raise ValueError("performance report source or binary identity mismatch")
+    incompatible = migration.get("incompatible_binary")
+    if (
+        migration.get("status") != "PASS"
+        or migration.get("evidence_eligible") is not True
+        or migration.get("source_worktree_clean") is not True
+        or migration.get("source_revision") != args.source_revision
+        or migration.get("node_binary_sha256") != binary_digest
+        or not isinstance(incompatible, dict)
+        or incompatible.get("sha256") != incompatible_binary_digest
+    ):
+        raise ValueError("migration report is not an evidence-eligible binary-bound PASS")
 
     packet.mkdir(parents=True)
     binary_destination = packet / "bin" / "postfiat-node"
     copy_file(node_bin, binary_destination)
     rollback_binary_destination = packet / "bin" / "postfiat-node-rollback"
     copy_file(rollback_node_bin, rollback_binary_destination)
+    incompatible_binary_destination = packet / "bin" / "postfiat-node-incompatible"
+    copy_file(incompatible_node_bin, incompatible_binary_destination)
     binaries = [
         {
             "path": binary_destination.relative_to(packet).as_posix(),
@@ -324,6 +361,10 @@ def main() -> int:
         {
             "path": rollback_binary_destination.relative_to(packet).as_posix(),
             "sha256": sha256(rollback_binary_destination),
+        },
+        {
+            "path": incompatible_binary_destination.relative_to(packet).as_posix(),
+            "sha256": sha256(incompatible_binary_destination),
         },
     ]
     source_report = {

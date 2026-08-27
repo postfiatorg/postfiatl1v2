@@ -151,6 +151,39 @@ After activation there is no chain rewind: an older software release is only a
 valid rollback candidate if it understands the activated commitment version
 and resumes from the same certified tip.
 
+Run the complete sequence with six explicit, stopped, immutable source data
+directories. The runner never discovers or contacts a fleet endpoint. It makes
+separate backups and working clones, performs three rebuild/verify passes,
+finalizes every transition through Consensus v2, refuses the incompatible v1
+binary, holds one non-proposer validator behind at activation, catches it up
+from the exact five-vote certificate, and rehashes every source and backup:
+
+```bash
+python3 benchmarks/storage-scaling/run_migration_rehearsal.py \
+  --node-bin /CURRENT_CHECKOUT/target/release/postfiat-node \
+  --incompatible-node-bin /V1_WORKTREE/target/release/postfiat-node \
+  --incompatible-source-revision FULL_V1_COMMIT_ID \
+  --source-data-dir /STOPPED/validator-0 \
+  --source-data-dir /STOPPED/validator-1 \
+  --source-data-dir /STOPPED/validator-2 \
+  --source-data-dir /STOPPED/validator-3 \
+  --source-data-dir /STOPPED/validator-4 \
+  --source-data-dir /STOPPED/validator-5 \
+  --validator-key-dir /ISOLATED/SPLIT-VALIDATOR-KEYS \
+  --workload-key-file /ISOLATED/FUNDED-WORKLOAD-KEY.json \
+  --workload-recipient FUNDED-TEST-RECIPIENT \
+  --output-dir /explicit/disposable/storage-six-clone-migration \
+  --expected-source-revision "$(git rev-parse HEAD)"
+```
+
+Evidence mode defaults to the exact controlled height-924 chain and requires a
+clean checkout. `--development-smoke` permits an explicitly supplied local
+fixture and dirty source, but its report is permanently ineligible for packet
+publication. Raw output contains disposable key material; only
+`six-clone-migration-report.json` may enter packet assembly after the offline
+verifier accepts its binary identities, ten phases, restart receipts, clone
+roots, backups, and unchanged Consensus/Cobalt boundaries.
+
 ## Offline rollback and tamper qualification
 
 Build the current source and a distinct compatible ancestor as release
@@ -189,8 +222,9 @@ a derived manifest that changes only the five audited source hashes to the
 current revision. Both manifests' provenance, the derived manifest, and the
 full independently verified E3 report are checksum-bound. The runner rejects a
 zero-test filter and emits one checksum-bound receipt for every closed case.
-Packet assembly must include both release binaries so the offline verifier can
-bind the current and rollback identities:
+Packet assembly must include three distinct release binaries so the offline
+verifier can separately bind the current release, compatible rollback release,
+and deliberately incompatible activation-fence probe:
 
 ```bash
 python3 benchmarks/storage-scaling/package_packet.py \
@@ -199,6 +233,7 @@ python3 benchmarks/storage-scaling/package_packet.py \
   --captured-at YYYY-MM-DDTHH:MM:SSZ \
   --node-bin /CURRENT_CHECKOUT/target/release/postfiat-node \
   --rollback-node-bin /OLDER_WORKTREE/target/release/postfiat-node \
+  --incompatible-node-bin /V1_WORKTREE/target/release/postfiat-node \
   --state-distinction /PATH/state-distinction.json \
   --replay-report /PATH/replay-report.json \
   --performance-report /PATH/performance-report.json \

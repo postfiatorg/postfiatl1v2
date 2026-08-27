@@ -899,6 +899,24 @@ pub(super) fn certified_send_targets_for_round(
     targets
 }
 
+pub(super) fn certified_send_outcomes_are_acceptable(
+    successful_send_count: usize,
+    failed_send_count: usize,
+    target_count: usize,
+    successful_sends_verified: bool,
+    allow_peer_failures: bool,
+    local_apply_before_certified_send: bool,
+    certified_sends_deferred: bool,
+) -> bool {
+    if certified_sends_deferred
+        || !successful_sends_verified
+        || successful_send_count.checked_add(failed_send_count) != Some(target_count)
+    {
+        return false;
+    }
+    failed_send_count == 0 || (allow_peer_failures && !local_apply_before_certified_send)
+}
+
 pub(super) fn transport_peer_host_is_loopback(host: &str) -> bool {
     if host.eq_ignore_ascii_case("localhost") {
         return true;
@@ -2414,6 +2432,44 @@ mod transport_cli_tests {
     }
 
     #[test]
+    fn certified_send_outcomes_allow_one_failed_peer_only_in_degraded_mode() {
+        assert!(certified_send_outcomes_are_acceptable(
+            4, 1, 5, true, true, false, false,
+        ));
+        assert!(!certified_send_outcomes_are_acceptable(
+            4, 1, 5, true, false, false, false,
+        ));
+        assert!(!certified_send_outcomes_are_acceptable(
+            4, 1, 5, true, true, true, false,
+        ));
+    }
+
+    #[test]
+    fn certified_send_outcomes_require_verified_accounted_synchronous_results() {
+        assert!(certified_send_outcomes_are_acceptable(
+            5, 0, 5, true, false, false, false,
+        ));
+        assert!(!certified_send_outcomes_are_acceptable(
+            4, 0, 5, true, true, false, false,
+        ));
+        assert!(!certified_send_outcomes_are_acceptable(
+            4, 1, 5, false, true, false, false,
+        ));
+        assert!(!certified_send_outcomes_are_acceptable(
+            5, 0, 5, true, false, false, true,
+        ));
+        assert!(!certified_send_outcomes_are_acceptable(
+            usize::MAX,
+            1,
+            usize::MAX,
+            true,
+            true,
+            false,
+            false,
+        ));
+    }
+
+    #[test]
     fn transport_batch_ack_reports_validator_rejection() {
         let topology = test_topology("127.0.0.1");
         let status = test_status("validator-0");
@@ -2709,6 +2765,62 @@ mod transport_cli_tests {
             .expect_err("tampered durable batch must fail");
         assert!(error.contains("hash mismatch"), "{error}");
         std::fs::remove_dir_all(root).expect("cleanup durable job root");
+    }
+
+    #[test]
+    fn certified_send_job_survives_data_directory_relocation() {
+        let root = unique_transport_test_ready_file("durable-job-relocation").with_extension("data");
+        std::fs::create_dir_all(&root).expect("create relocation root");
+        let batch = root.join("batch-source.json");
+        let certificate = root.join("certificate-source.json");
+        std::fs::write(&batch, b"{\"batch\":1}\n").expect("write relocation batch");
+        std::fs::write(&certificate, b"{\"certificate\":1}\n")
+            .expect("write relocation certificate");
+        let topology = test_topology("127.0.0.1");
+        let job_file = enqueue_durable_certified_send_job(
+            &root,
+            &topology,
+            "validator-0",
+            "validator-1",
+            "transparent",
+            10,
+            "certificate-relocation",
+            &"33".repeat(48),
+            &"22".repeat(48),
+            &batch,
+            &certificate,
+            50,
+            2,
+            5,
+        )
+        .expect("enqueue relocation job");
+        let relative_job_file = job_file
+            .strip_prefix(&root)
+            .expect("job below source root")
+            .to_path_buf();
+        let relocated = root.with_extension("relocated-data");
+        std::fs::rename(&root, &relocated).expect("relocate complete data directory");
+        let relocated_job_file = relocated.join(relative_job_file);
+        let relocated_job =
+            read_durable_certified_send_job(&relocated_job_file).expect("read relocated job");
+        assert!(
+            Path::new(&relocated_job.batch_file).starts_with(&root),
+            "v1 metadata must retain the source path for this compatibility test"
+        );
+        validate_durable_certified_send_payloads(&relocated_job_file, &relocated_job)
+            .expect("relocated job-local payloads remain authoritative");
+
+        let mut wrong_job = relocated_job;
+        wrong_job.batch_file = Path::new("unrelated")
+            .join(CERTIFIED_SEND_OUTBOX_DIR)
+            .join("00".repeat(48))
+            .join("batch.json")
+            .display()
+            .to_string();
+        let error = validate_durable_certified_send_payloads(&relocated_job_file, &wrong_job)
+            .expect_err("wrong job-id suffix must fail closed");
+        assert!(error.contains("path is not canonical"), "{error}");
+        std::fs::remove_dir_all(relocated).expect("cleanup relocation root");
     }
 
     #[test]

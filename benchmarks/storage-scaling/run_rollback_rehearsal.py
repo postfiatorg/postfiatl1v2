@@ -142,9 +142,18 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    node_bin = args.node_bin.resolve()
-    rollback_bin = args.rollback_node_bin.resolve()
-    root = args.output_dir.resolve()
+    raw_node_bin = args.node_bin.expanduser()
+    raw_rollback_bin = args.rollback_node_bin.expanduser()
+    raw_root = args.output_dir.expanduser()
+    if (
+        raw_node_bin.is_symlink()
+        or raw_rollback_bin.is_symlink()
+        or raw_root.is_symlink()
+    ):
+        raise ValueError("output and release binary paths must not be symlinks")
+    node_bin = raw_node_bin.resolve()
+    rollback_bin = raw_rollback_bin.resolve()
+    root = raw_root.resolve()
     current_revision = git_revision()
     rollback_revision = args.rollback_source_revision
 
@@ -154,7 +163,7 @@ def main() -> int:
         ("--node-bin", node_bin),
         ("--rollback-node-bin", rollback_bin),
     ):
-        if not path.is_file() or path.is_symlink() or path.parent.name != "release":
+        if not path.is_file() or path.parent.name != "release":
             raise ValueError(f"{label} must identify a regular target/release binary")
     if node_bin == rollback_bin or sha256(node_bin) == sha256(rollback_bin):
         raise ValueError("rollback rehearsal requires two distinct release binaries")

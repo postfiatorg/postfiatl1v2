@@ -14,6 +14,7 @@ import math
 import re
 import sys
 from dataclasses import dataclass
+from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePosixPath
@@ -337,17 +338,26 @@ def _verify_source(
     if HEX96.fullmatch(str(source.get("spec_sha3_384", ""))) is None:
         _fail("source specification digest is invalid")
     binaries = _list(source.get("binaries"), "source binaries")
-    if not binaries:
-        _fail("source binaries are missing")
+    expected_binary_paths = {
+        "bin/postfiat-node",
+        "bin/postfiat-node-rollback",
+        "bin/postfiat-node-incompatible",
+    }
+    observed_binaries: dict[str, str] = {}
     for index, value in enumerate(binaries):
         binary = _object(value, f"source binary {index}")
         name = str(binary.get("path", ""))
         expected = str(binary.get("sha256", ""))
-        if HEX64.fullmatch(expected) is None:
+        if name in observed_binaries or HEX64.fullmatch(expected) is None:
             _fail(f"binary {index} digest is invalid")
         path = packet_dir / _safe_relative(name)
         if _sha256(path) != expected:
             _fail(f"binary identity mismatch for {name}")
+        observed_binaries[name] = expected
+    if set(observed_binaries) != expected_binary_paths:
+        _fail("source binary roles do not match the required three-binary set")
+    if len(set(observed_binaries.values())) != len(expected_binary_paths):
+        _fail("source binary roles are not distinct")
 
 
 def _verify_binary_build(
@@ -382,11 +392,11 @@ def _verify_replay(
     checksums: Mapping[str, str],
     replay: Mapping[str, Any],
     source_revision: str,
-    binary_digests: set[str],
+    current_binary_digest: str,
 ) -> None:
     if replay.get("source_revision") != source_revision:
         _fail("replay source revision disagrees with the packet")
-    if replay.get("node_binary_sha256") not in binary_digests:
+    if replay.get("node_binary_sha256") != current_binary_digest:
         _fail("replay binary identity disagrees with the packet")
     _verify_binary_build(replay, "replay", source_revision)
     if replay.get("quarantine_archive_blocks") != 915:
@@ -407,13 +417,14 @@ def _verify_replay(
     expected = {915: "quarantine_archive", 924: "authenticated_history"}
     receipts = _list(replay.get("receipts"), "replay receipts")
     seen: set[int] = set()
+    receipt_identities: dict[int, tuple[str, str, str]] = {}
     for reference in receipts:
         receipt = _bound_json(packet_dir, checksums, reference, "replay receipt")
         if receipt.get("schema") != "postfiat-storage-replay-receipt-v1":
             _fail("replay receipt schema is unsupported")
         if receipt.get("source_revision") != source_revision:
             _fail("replay receipt source revision disagrees with the packet")
-        if receipt.get("node_binary_sha256") not in binary_digests:
+        if receipt.get("node_binary_sha256") != current_binary_digest:
             _fail("replay receipt binary identity disagrees with the packet")
         _verify_binary_build(receipt, "replay receipt", source_revision)
         height = receipt.get("source_height")
@@ -422,6 +433,11 @@ def _verify_replay(
         if height in seen or receipt.get("block_count") != height:
             _fail("replay receipt height is duplicated or incomplete")
         seen.add(height)
+        receipt_identities[height] = (
+            str(receipt.get("tip_hash", "")),
+            str(receipt.get("state_root", "")),
+            str(receipt.get("ordered_history_accumulator", "")),
+        )
         if receipt.get("chain_id") != CONTROLLED_CHAIN_ID:
             _fail(f"replay receipt at height {height} used the wrong chain")
         if receipt.get("genesis_hash") != CONTROLLED_GENESIS_HASH:
@@ -458,6 +474,12 @@ def _verify_replay(
             _fail(f"replay receipt {height} canonical export is invalid")
     if seen != set(expected):
         _fail("replay receipts do not cover exact heights 915 and 924")
+    if receipt_identities[924] != (
+        replay.get("tip_hash"),
+        replay.get("state_root"),
+        replay.get("ordered_history_accumulator"),
+    ):
+        _fail("replay summary disagrees with the exact height-924 receipt")
 
 
 def _metric_p95(row: Mapping[str, Any], metric: str) -> float:
@@ -590,7 +612,7 @@ def _verify_performance(
     checksums: Mapping[str, str],
     performance: Mapping[str, Any],
     source_revision: str,
-    binary_digests: set[str],
+    current_binary_digest: str,
 ) -> dict[str, float]:
     if performance.get("status") != "PASS":
         _fail("performance campaign did not pass")
@@ -600,7 +622,7 @@ def _verify_performance(
         _fail("performance campaign is not evidence eligible")
     if performance.get("source_revision") != source_revision:
         _fail("performance source revision differs from the packet source")
-    if performance.get("node_binary_sha256") not in binary_digests:
+    if performance.get("node_binary_sha256") != current_binary_digest:
         _fail("performance binary identity differs from the packet source")
     _verify_binary_build(performance, "performance", source_revision)
     if performance.get("validator_count") != 6:
@@ -833,7 +855,8 @@ def _verify_original_e3_campaign(
 def _verify_compatible_rollback(
     report: Mapping[str, Any],
     source_revision: str,
-    binary_digests: set[str],
+    current_binary_digest: str,
+    rollback_binary_digest: str,
 ) -> None:
     if (
         report.get("schema") != "postfiat-storage-compatible-rollback-v1"
@@ -869,7 +892,7 @@ def _verify_compatible_rollback(
         current.get("source_revision") != source_revision
         or current.get("git_revision") != source_revision[:8]
         or current.get("profile") != "release"
-        or current.get("sha256") not in binary_digests
+        or current.get("sha256") != current_binary_digest
     ):
         _fail("current rollback binary is not bound to packet source")
     rollback_revision = str(rollback.get("source_revision", ""))
@@ -878,7 +901,7 @@ def _verify_compatible_rollback(
         or rollback_revision == source_revision
         or rollback.get("git_revision") != rollback_revision[:8]
         or rollback.get("profile") != "release"
-        or rollback.get("sha256") not in binary_digests
+        or rollback.get("sha256") != rollback_binary_digest
         or rollback.get("sha256") == current.get("sha256")
     ):
         _fail("older rollback binary identity is invalid or unbound")
@@ -912,7 +935,8 @@ def _verify_tamper(
     checksums: Mapping[str, str],
     matrix: Mapping[str, Any],
     source_revision: str,
-    binary_digests: set[str],
+    current_binary_digest: str,
+    rollback_binary_digest: str,
 ) -> int:
     if matrix.get("status") != "PASS":
         _fail("tamper matrix did not pass")
@@ -1019,7 +1043,8 @@ def _verify_tamper(
                 _verify_compatible_rollback(
                     rollback_report,
                     source_revision,
-                    binary_digests,
+                    current_binary_digest,
+                    rollback_binary_digest,
                 )
             elif type(test.get("executed_test_count")) is not int or test.get(
                 "executed_test_count"
@@ -1063,17 +1088,98 @@ def _verify_tamper(
     return len(cases)
 
 
+def _verify_migration_rebuild(
+    rebuild: Mapping[str, Any],
+    label: str,
+    expected_height: int,
+) -> tuple[str, str, str]:
+    for key in (
+        "rebuild_passed",
+        "verify_only_passed",
+        "generation_pointer_published",
+    ):
+        _bool(rebuild.get(key), f"{label} {key}")
+    required = rebuild.get("required_disk_bytes")
+    available = rebuild.get("available_disk_bytes")
+    if (
+        type(required) is not int
+        or required < 0
+        or type(available) is not int
+        or available < required
+    ):
+        _fail(f"{label} disk-capacity evidence is invalid")
+    for key, pattern in (
+        ("packet_root", HEX96),
+        ("current_state_root", HEX96),
+        ("node_state_root", HEX96),
+        ("manifest_sha256", HEX64),
+        ("manifest_file_sha3_384", HEX96),
+    ):
+        if pattern.fullmatch(str(rebuild.get(key, ""))) is None:
+            _fail(f"{label} {key} is invalid")
+
+    logical = _object(rebuild.get("logical_store_report"), f"{label} logical store")
+    if (
+        logical.get("schema") != "postfiat-storage-logical-integrity-v1"
+        or logical.get("backend") != "redb"
+        or logical.get("storage_format") != "postfiat-redb-v1"
+        or logical.get("finalized_height") != expected_height
+        or logical.get("block_count") != expected_height
+        or logical.get("archive_count") != expected_height
+        or logical.get("ordered_batch_count") != expected_height
+        or type(logical.get("receipt_count")) is not int
+        or logical.get("receipt_count", -1) < 0
+        or type(logical.get("history_index_count")) is not int
+        or logical.get("history_index_count", -1) < 0
+        or HEX96.fullmatch(str(logical.get("accumulator", ""))) is None
+    ):
+        _fail(f"{label} logical store evidence is invalid")
+
+    canonical = _object(
+        rebuild.get("canonical_export_receipt"),
+        f"{label} canonical export",
+    )
+    if (
+        canonical.get("schema")
+        != "postfiat-transactional-canonical-export-receipt-v1"
+        or canonical.get("finalized_height") != expected_height
+        or type(canonical.get("record_count")) is not int
+        or canonical.get("record_count", 0) <= 0
+        or HEX96.fullmatch(str(canonical.get("records_sha3_384", ""))) is None
+    ):
+        _fail(f"{label} canonical export evidence is invalid")
+    return (
+        str(rebuild["packet_root"]),
+        str(rebuild["current_state_root"]),
+        str(rebuild["node_state_root"]),
+    )
+
+
 def _verify_migration(
     migration: Mapping[str, Any],
+    replay: Mapping[str, Any],
     source_revision: str,
-    binary_digests: set[str],
+    current_binary_digest: str,
+    incompatible_binary_digest: str,
 ) -> None:
+    if migration.get("status") != "PASS" or migration.get("evidence_eligible") is not True:
+        _fail("migration rehearsal is not an evidence-eligible PASS")
+    _bool(migration.get("source_worktree_clean"), "migration source worktree clean")
+    captured_at = migration.get("captured_at")
+    if not isinstance(captured_at, str) or not captured_at.endswith("Z"):
+        _fail("migration capture time is missing or not UTC")
+    try:
+        datetime.fromisoformat(captured_at[:-1] + "+00:00")
+    except ValueError:
+        _fail("migration capture time is invalid")
     if migration.get("source_revision") != source_revision:
         _fail("migration source revision disagrees with the packet")
-    if migration.get("node_binary_sha256") not in binary_digests:
+    current_binary = str(migration.get("node_binary_sha256", ""))
+    if current_binary != current_binary_digest:
         _fail("migration binary identity disagrees with the packet")
     _verify_binary_build(migration, "migration", source_revision)
-    if migration.get("source_height") != 924:
+    source_height = migration.get("source_height")
+    if source_height != 924:
         _fail("migration rehearsal did not start from exact height 924")
     if migration.get("chain_id") != CONTROLLED_CHAIN_ID:
         _fail("migration rehearsal did not use the controlled chain domain")
@@ -1098,12 +1204,295 @@ def _verify_migration(
         "all_six_converged",
         "mixed_version_refused",
         "backup_verified",
+        "disk_capacity_verified",
+        "stop_conditions_verified",
+        "consensus_v2_unchanged",
+        "cobalt_authority_unchanged",
+        "literal_receipts_exact",
+        "zero_post_activation_full_history_scans",
+        "loopback_transport_used",
     ):
         _bool(migration.get(key), f"migration {key}")
+    for key in ("external_network_contacted", "devnet_queried_or_mutated"):
+        if migration.get(key) is not False:
+            _fail(f"migration {key} must be false")
+    stop_receipt = _object(
+        migration.get("stop_condition_receipt"),
+        "migration source stop receipt",
+    )
+    if (
+        set(stop_receipt)
+        != {
+            "schema",
+            "source_directory_count",
+            "processes_examined",
+            "unreadable_process_count",
+            "matching_process_count",
+        }
+        or stop_receipt.get("schema")
+        != "postfiat-storage-source-stop-receipt-v1"
+        or stop_receipt.get("source_directory_count") != 6
+        or type(stop_receipt.get("processes_examined")) is not int
+        or stop_receipt.get("processes_examined", 0) <= 0
+        or stop_receipt.get("unreadable_process_count") != 0
+        or stop_receipt.get("matching_process_count") != 0
+    ):
+        _fail("migration source stop receipt is invalid")
+
     identities = _object(migration.get("identities"), "migration identities")
-    for key in ("source_tip", "source_state_root", "packet_root", "activation_id"):
+    identity_names = (
+        "source_tip",
+        "source_state_root",
+        "packet_root",
+        "activation_id",
+        "cancelled_activation_id",
+        "cancellation_id",
+        "activation_tip",
+        "activation_state_root",
+        "final_tip",
+        "final_state_root",
+    )
+    if set(identities) != set(identity_names):
+        _fail("migration identity set is incomplete or unexpected")
+    for key in identity_names:
         if HEX96.fullmatch(str(identities.get(key, ""))) is None:
             _fail(f"migration identity {key} is invalid")
+    if (
+        identities["source_tip"] != replay.get("tip_hash")
+        or identities["source_state_root"] != replay.get("state_root")
+    ):
+        _fail("migration source identity disagrees with exact height-924 replay")
+
+    incompatible = _object(
+        migration.get("incompatible_binary"),
+        "migration incompatible binary",
+    )
+    incompatible_revision = str(incompatible.get("source_revision", ""))
+    incompatible_digest = str(incompatible.get("sha256", ""))
+    if (
+        HEX40.fullmatch(incompatible_revision) is None
+        or incompatible_revision == source_revision
+        or incompatible.get("git_revision") != incompatible_revision[:8]
+        or incompatible.get("profile") != "release"
+        or incompatible_digest != incompatible_binary_digest
+        or incompatible_digest == current_binary
+    ):
+        _fail("migration incompatible binary identity is invalid or unbound")
+    mixed = _object(migration.get("mixed_version_probe"), "migration mixed-version probe")
+    if (
+        type(mixed.get("exit_code")) is not int
+        or mixed.get("exit_code", 0) == 0
+        or mixed.get("reason_code") != "storage_unsupported_schema"
+        or mixed.get("reason_detail")
+        != "transactional migration verification binding is invalid"
+        or HEX64.fullmatch(str(mixed.get("failure_output_sha256", ""))) is None
+        or mixed.get("artifact_absent") is not True
+        or mixed.get("binary_sha256") != incompatible_digest
+        or mixed.get("source_revision") != incompatible_revision
+        or mixed.get("verifier_boundary") != "v1 binary refused v2 migration generation"
+    ):
+        _fail("migration mixed-version refusal evidence is invalid")
+
+    cobalt = _object(migration.get("cobalt_boundary"), "migration Cobalt boundary")
+    before = _object(cobalt.get("before"), "migration Cobalt boundary before")
+    after = _object(cobalt.get("after"), "migration Cobalt boundary after")
+    cobalt_keys = {
+        "validator_registry_semantic_sha256",
+        "cobalt_governance_semantic_sha256",
+    }
+    if set(before) != cobalt_keys or after != before:
+        _fail("migration changed or incompletely recorded the Cobalt authority boundary")
+    if any(HEX64.fullmatch(str(before[key])) is None for key in cobalt_keys):
+        _fail("migration Cobalt boundary digest is invalid")
+
+    restart_groups = _object(migration.get("restart_receipts"), "migration restarts")
+    expected_restart_groups = {
+        "pre_activation",
+        "scheduled_staggered",
+        "post_activation_forward",
+    }
+    if set(restart_groups) != expected_restart_groups:
+        _fail("migration restart group set is incomplete or unexpected")
+    validator_ids = {f"validator-{index}" for index in range(6)}
+    for group in sorted(expected_restart_groups):
+        receipts = _list(restart_groups[group], f"migration restart group {group}")
+        observed_ids: set[str] = set()
+        for value in receipts:
+            receipt = _object(value, f"migration restart receipt {group}")
+            validator_id = str(receipt.get("validator_id", ""))
+            if (
+                validator_id not in validator_ids
+                or validator_id in observed_ids
+                or receipt.get("stopped_cleanly") is not True
+                or receipt.get("reopened_and_ready") is not True
+            ):
+                _fail(f"migration restart receipt {group} is invalid")
+            observed_ids.add(validator_id)
+        if observed_ids != validator_ids:
+            _fail(f"migration restart group {group} does not cover six validators")
+
+    phase_contract = (
+        ("legacy-finality", "transparent", ("accepted",)),
+        (
+            "cancelled-activation-scheduled",
+            "governance",
+            ("storage_commitment_activation_scheduled",),
+        ),
+        (
+            "pre-activation-cancellation",
+            "governance",
+            ("storage_commitment_activation_cancelled",),
+        ),
+        ("post-cancellation-legacy-finality", "transparent", ("accepted",)),
+        (
+            "final-activation-scheduled",
+            "governance",
+            ("storage_commitment_activation_scheduled",),
+        ),
+        ("pre-activation-one", "transparent", ("accepted",)),
+        ("pre-activation-two", "transparent", ("accepted",)),
+        ("activation-finality", "transparent", ("accepted",)),
+        ("post-activation-finality", "transparent", ("accepted",)),
+        ("post-activation-forward-recovery", "transparent", ("accepted",)),
+    )
+    phases = _list(migration.get("phases"), "migration phases")
+    if len(phases) != len(phase_contract):
+        _fail("migration phase count is not the required ten-phase sequence")
+    certificate_ids: set[str] = set()
+    batch_digests: set[str] = set()
+    catch_up_validator = ""
+    phase_identities: dict[str, Mapping[str, Any]] = {}
+    for offset, (expected_label, batch_kind, receipt_codes) in enumerate(
+        phase_contract,
+        start=1,
+    ):
+        phase = _object(phases[offset - 1], f"migration phase {expected_label}")
+        expected_height = source_height + offset
+        if (
+            phase.get("label") != expected_label
+            or phase.get("height") != expected_height
+            or phase.get("batch_kind") != batch_kind
+            or phase.get("receipt_codes") != list(receipt_codes)
+            or phase.get("applied_validator_count") != 6
+            or phase.get("certificate_validator_count") != 6
+            or phase.get("certificate_quorum") != 5
+        ):
+            _fail(f"migration phase {expected_label} has invalid fixed fields")
+        for key in (
+            "receipt_accepted",
+            "consensus_v2_commit",
+            "transport_round_ok",
+            "all_vote_requests_verified",
+        ):
+            _bool(phase.get(key), f"migration phase {expected_label} {key}")
+        certificate_id = str(phase.get("certificate_id", ""))
+        certificate_digest = str(phase.get("certificate_sha256", ""))
+        batch_digest = str(phase.get("batch_sha256", ""))
+        if (
+            HEX96.fullmatch(certificate_id) is None
+            or certificate_id in certificate_ids
+            or HEX64.fullmatch(certificate_digest) is None
+            or HEX64.fullmatch(batch_digest) is None
+            or batch_digest in batch_digests
+        ):
+            _fail(f"migration phase {expected_label} artifact identity is invalid or reused")
+        certificate_ids.add(certificate_id)
+        batch_digests.add(batch_digest)
+        identity = _object(phase.get("identity"), f"migration phase {expected_label} identity")
+        if (
+            identity.get("height") != expected_height
+            or HEX96.fullmatch(str(identity.get("tip", ""))) is None
+            or HEX96.fullmatch(str(identity.get("state_root", ""))) is None
+        ):
+            _fail(f"migration phase {expected_label} finalized identity is invalid")
+        phase_identities[expected_label] = identity
+
+        degraded = expected_label == "activation-finality"
+        if (
+            phase.get("initial_applied_validator_count") != (5 if degraded else 6)
+            or phase.get("certificate_vote_count") != (5 if degraded else 6)
+            or phase.get("all_certified_sends_verified") is not (False if degraded else True)
+        ):
+            _fail(f"migration phase {expected_label} participation policy is invalid")
+        failures = _list(
+            phase.get("failed_peer_targets"),
+            f"migration phase {expected_label} failed peers",
+        )
+        if degraded:
+            catch_up_validator = str(phase.get("catch_up_validator", ""))
+            if (
+                catch_up_validator not in validator_ids - {"validator-0"}
+                or failures != [catch_up_validator]
+                or phase.get("catch_up_receipt_accepted") is not True
+                or type(phase.get("catch_up_receipt_count")) is not int
+                or phase.get("catch_up_receipt_count", 0) <= 0
+                or phase.get("catch_up_receipt_codes") != ["accepted"]
+            ):
+                _fail("migration activation catch-up evidence is invalid")
+        elif failures:
+            _fail(f"migration phase {expected_label} unexpectedly recorded peer failures")
+
+    activation_identity = phase_identities["activation-finality"]
+    final_identity = phase_identities["post-activation-forward-recovery"]
+    if (
+        identities["activation_tip"] != activation_identity["tip"]
+        or identities["activation_state_root"] != activation_identity["state_root"]
+        or identities["final_tip"] != final_identity["tip"]
+        or identities["final_state_root"] != final_identity["state_root"]
+    ):
+        _fail("migration top-level identities disagree with phase finality")
+
+    clones = _list(migration.get("clones"), "migration clones")
+    if len(clones) != 6:
+        _fail("migration clone report count is not six")
+    stage_contract = {
+        "initial_migration": source_height,
+        "post_restart_refreeze": source_height + 1,
+        "final_activation_refreeze": source_height + 4,
+    }
+    source_tree_digests: set[str] = set()
+    stage_packet_roots = {stage: set() for stage in stage_contract}
+    stage_current_roots = {stage: set() for stage in stage_contract}
+    stage_node_roots = {stage: set() for stage in stage_contract}
+    observed_clone_ids: set[str] = set()
+    for value in clones:
+        clone = _object(value, "migration clone")
+        validator_id = str(clone.get("validator_id", ""))
+        source_digest = str(clone.get("source_tree_sha256", ""))
+        if (
+            validator_id not in validator_ids
+            or validator_id in observed_clone_ids
+            or HEX64.fullmatch(source_digest) is None
+            or clone.get("backup_tree_sha256") != source_digest
+            or clone.get("backup_reverified_sha256") != source_digest
+        ):
+            _fail("migration clone source or immutable backup binding is invalid")
+        observed_clone_ids.add(validator_id)
+        source_tree_digests.add(source_digest)
+        for stage, expected_height in stage_contract.items():
+            rebuild = _object(clone.get(stage), f"migration clone {validator_id} {stage}")
+            packet_root, current_root, node_root = _verify_migration_rebuild(
+                rebuild,
+                f"migration clone {validator_id} {stage}",
+                expected_height,
+            )
+            stage_packet_roots[stage].add(packet_root)
+            stage_current_roots[stage].add(current_root)
+            stage_node_roots[stage].add(node_root)
+        clone_final = _object(clone.get("final_identity"), "migration clone final identity")
+        if clone_final != final_identity:
+            _fail(f"migration clone {validator_id} did not converge on the final identity")
+    if observed_clone_ids != validator_ids or len(source_tree_digests) != 6:
+        _fail("migration clone identities or immutable source trees are not distinct")
+    for stage in stage_contract:
+        if (
+            len(stage_packet_roots[stage]) != 1
+            or len(stage_current_roots[stage]) != 1
+            or len(stage_node_roots[stage]) != 6
+        ):
+            _fail(f"migration clone roots do not satisfy shared/local policy at {stage}")
+    if stage_packet_roots["final_activation_refreeze"] != {identities["packet_root"]}:
+        _fail("migration activation packet root disagrees with the six final refreezes")
 
 
 def _verify_redaction(packet_dir: Path, redaction: Mapping[str, Any]) -> None:
@@ -1133,36 +1522,42 @@ def verify_packet(packet: str | Path) -> VerifiedPacket:
     _verify_state_distinction(manifest)
     source = _object(manifest.get("source"), "source")
     source_revision = str(source["git_revision"])
-    binary_digests = {
-        str(binary.get("sha256"))
+    binaries = {
+        str(binary.get("path")): str(binary.get("sha256"))
         for binary in _list(source.get("binaries"), "source binaries")
         if isinstance(binary, dict)
     }
+    current_binary_digest = binaries["bin/postfiat-node"]
+    rollback_binary_digest = binaries["bin/postfiat-node-rollback"]
+    incompatible_binary_digest = binaries["bin/postfiat-node-incompatible"]
     _verify_replay(
         packet_dir,
         checksums,
         artifacts["replay"],
         source_revision,
-        binary_digests,
+        current_binary_digest,
     )
     ratios = _verify_performance(
         packet_dir,
         checksums,
         artifacts["performance"],
         source_revision,
-        binary_digests,
+        current_binary_digest,
     )
     tamper_case_count = _verify_tamper(
         packet_dir,
         checksums,
         artifacts["tamper"],
         source_revision,
-        binary_digests,
+        current_binary_digest,
+        rollback_binary_digest,
     )
     _verify_migration(
         artifacts["migration"],
+        artifacts["replay"],
         source_revision,
-        binary_digests,
+        current_binary_digest,
+        incompatible_binary_digest,
     )
     _verify_redaction(packet_dir, artifacts["redaction"])
     report: dict[str, Any] = {

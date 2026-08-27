@@ -1,6 +1,6 @@
 # PostFiat L1 Current State
 
-Updated: `2026-08-27T01:40:49Z`
+Updated: `2026-08-27T08:09:48Z`
 
 Status: **canonical operational-state reference**
 
@@ -23,7 +23,7 @@ binary to the running services.
 | Running devnet | Six validators converged at height 924 with empty mempools; all validator, RPC, and advisory shadow services were active. | Chain `postfiat-wan-devnet-2`; genesis `ce22ca8c…e90a9`; tip `ebeb0e1e…a7649fbef`; state `0854bc47…1ee6f413e`. | `2026-08-26T06:34:55Z`–`06:35:50Z` | Authenticated post-drill fleet observation; point in time, not a current network query. |
 | Validator-trust authority | Cobalt is active for validator-registry and trust-graph ratification. The final signed drill rollback committed at 922, return to Cobalt at 923, and legitimate validator-5 rotation at 924. Consensus v2 remains block finality. | Registry root `08a451e0…2b9b1d`; trust root `89f18aef…08f0307`; ratification anchor sequence 2, ID `5eada38d…c21153c8`. | Accepted history through height 924; fleet-audited through `2026-08-26T06:35:50Z`. | E5 packet contains signed transitions, update, finality, rejection, and all-six fleet receipts. |
 | Deployed runtime | Every validator used the same node binary; every shadow used the same sidecar binary. The node reports embedded revision `8cc7d15e`. | Node SHA-256 `d5e5ef630155e61b001b84edb404a4def7d29a9205f23d33d2ad9c37c2696caf`; shadow SHA-256 `d61e6d0f6767998c4abfbf4f85e1f6bd5edfeef8a7a27cf965c17b676b1a0a4a`. | `2026-08-26T06:34:55Z`–`06:35:50Z` | Direct process, binary, status, governance-verifier, registry-root, and shadow-status receipts on all six hosts. |
-| Repository | `main` contains the deployed lineage, all E1–E6 packets, the authenticated final packet/interfaces, and an undeployed transactional storage-scaling implementation candidate. Repository descendants after `8cc7d15e` are not themselves proven installed on the fleet. | E5 evidence commit `ee6707c4`; E5 packet root `0695284a7b38ac0129c47e1242f4a2227ad25096147920e79569a924e5f3b3db`; transactional-storage qualification source `abf74668`. | 2026-08-27 | Clean offline source qualification only; nothing from the storage milestone is deployed. Exact height-924 replay, six-clone migration, release performance, and final storage packet remain open; use `git rev-parse HEAD` and the latest handoff for the pushed checkout. |
+| Repository | `main` contains the deployed lineage, all E1–E6 packets, the authenticated final packet/interfaces, and an undeployed transactional storage-scaling implementation candidate. Repository descendants after `8cc7d15e` are not themselves proven installed on the fleet. | E5 evidence commit `ee6707c4`; E5 packet root `0695284a7b38ac0129c47e1242f4a2227ad25096147920e79569a924e5f3b3db`; committed transactional-storage lineage through `20c95ec2`; development six-clone report `62571689…2e618476`. | 2026-08-27 | Offline source qualification plus a dirty-source height-501 development rehearsal only; nothing from the storage milestone is deployed. Exact height-924 replay, clean-source existing-chain migration, release performance, and the final storage packet remain open; use `git rev-parse HEAD` for the checkout. |
 | Adversarial campaign | E1–E6 passed their locked gates. The consolidated decision is `KEEP_ACTIVE` for Cobalt's bounded controlled-devnet validator-trust role. | E1 `495a59a2…4dfcd90`; E2 `8742d960…d7cba3`; E3 `9302b355…40b600`; E4 `93ba3db0…c14508`; E5 `0695284a…f3b3db`; E6 `ee6848f5…121be0b`. | Completed 2026-08-26 | [Completed milestone](../plans/completed/cobalt-adversarial-verification-milestone.md) and [results](../governance/cobalt-adversarial-verification-results.md). |
 | Operator boundary | The campaign proves protocol capability, not operator decentralization. Current proposals and authorizations originate from Foundation-administered validators. | E6 decision: independent-operator proposal path remains a mandatory follow-on milestone. | 2026-08-26 | No independent operators were recruited and no mainnet authority was granted. |
 
@@ -34,21 +34,24 @@ E4's first 50 baseline rounds reproduce the activation run's
 linearly with height to about 14.9 s at round 500, with correlation approximately
 0.9998. In the deployed lineage measured by E4, chain-height amplification came
 from full-prefix JSONL verification and full ordered-history proposal rebuilds.
-The repository now contains an undeployed bounded-tail and ordered-history
-candidate, but its six-validator finality, exact replay, tamper, and migration
-gates have not passed. The 5% gate remains valid as a paired, same-length A/B
-comparison; the absolute latency numbers are not a finality SLA and public
-testnet remains blocked.
+The repository now contains an undeployed transactional `redb` candidate. Its
+height-915 replay, tamper/crash matrix, and a development-only height-501
+six-clone workflow pass, but exact height-924 replay, clean-source migration,
+and paired release performance remain open. The 5% gate remains valid as a
+paired, same-length A/B comparison; the absolute latency numbers are not a
+finality SLA and public testnet remains blocked.
 
 ## Storage-scaling implementation boundary
 
-Source commit `dfd0b9f11108b0b773d1e02bebae71685864228e` adds authenticated
-bounded JSONL heads, bounded crash-suffix recovery, work counters, an explicit
-ordered-history v2 activation, a fixed-size accumulator and authenticated
-index, legacy/v2 replay selection, and an offline index-rebuild command.
-Synthetic development measurements through height 5,000 verify zero
-accepted-prefix JSONL work and fixed index work. They do not prove finality,
-archive replay, the full tamper corpus, clone migration, or deployment. See the
+The committed implementation lineage through `20c95ec2` selects transactional
+`redb` storage for the finality path while retaining authenticated bounded
+JSONL heads for legacy import and audit. It includes the fixed-size ordered
+history accumulator, atomic per-height commit, replay/rebuild tooling, the
+closed 69-case tamper/crash matrix, exact height-915 replay, and compatible
+two-binary rollback. A local height-501 development rehearsal also completed
+the ten-phase six-clone migration, cancellation, activation, catch-up, and
+forward-recovery workflow; it is not clean-source or exact-height-924 evidence.
+Nothing in this section proves deployment. See the
 [active milestone](../plans/active/storage-scaling-milestone.md) and
 [development evidence](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling).
 

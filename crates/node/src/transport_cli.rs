@@ -2041,23 +2041,37 @@ fn validate_durable_certified_send_payloads(
     let job_dir = job_file
         .parent()
         .ok_or_else(|| "certified send job file has no parent directory".to_string())?;
+    if job_dir.file_name().and_then(|value| value.to_str()) != Some(job.job_id.as_str()) {
+        return Err("certified send job directory does not match its canonical identity".to_string());
+    }
     let batch_file = job_dir.join("batch.json");
     let certificate_file = job_dir.join("certificate.json");
-    let legacy_job_dir = job_dir
-        .parent()
-        .filter(|parent| parent.file_name().and_then(|value| value.to_str()) == Some("completed"))
-        .and_then(Path::parent)
-        .map(|outbox_dir| outbox_dir.join(&job.job_id));
-    let stored_batch_file = Path::new(&job.batch_file);
-    let stored_certificate_file = Path::new(&job.certificate_file);
-    let batch_path_valid = stored_batch_file == batch_file
-        || legacy_job_dir
-            .as_ref()
-            .is_some_and(|legacy| stored_batch_file == legacy.join("batch.json"));
-    let certificate_path_valid = stored_certificate_file == certificate_file
-        || legacy_job_dir
-            .as_ref()
-            .is_some_and(|legacy| stored_certificate_file == legacy.join("certificate.json"));
+    let stored_path_is_job_local = |stored: &str, actual: &Path, file_name: &str| {
+        let stored = Path::new(stored);
+        stored == actual
+            || (stored.file_name().and_then(|value| value.to_str()) == Some(file_name)
+                && stored
+                    .parent()
+                    .and_then(Path::file_name)
+                    .and_then(|value| value.to_str())
+                    == Some(job.job_id.as_str())
+                && stored
+                    .parent()
+                    .and_then(Path::parent)
+                    .and_then(Path::file_name)
+                    .and_then(|value| value.to_str())
+                    == Some(CERTIFIED_SEND_OUTBOX_DIR))
+    };
+    // V1 jobs recorded absolute source paths before publication and kept those
+    // paths after compaction. The payload authority is the job-local file plus
+    // its bound hash, so accept the same canonical outbox/job-id/file suffix
+    // after a data-directory backup is restored at a different host path.
+    let batch_path_valid = stored_path_is_job_local(&job.batch_file, &batch_file, "batch.json");
+    let certificate_path_valid = stored_path_is_job_local(
+        &job.certificate_file,
+        &certificate_file,
+        "certificate.json",
+    );
     if !batch_path_valid || !certificate_path_valid {
         return Err("certified send durable payload path is not canonical".to_string());
     }

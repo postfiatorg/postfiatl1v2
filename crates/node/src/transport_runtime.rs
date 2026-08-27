@@ -3534,29 +3534,35 @@ pub(super) fn transport_peer_certified_batch_round(
     let vote_request_failures_allowed = vote_request_failures.is_empty()
         || options.allow_peer_failures
         || options.quorum_early_full_propagation;
-    let all_sends_verified = if options.defer_certified_sends {
-        false
-    } else {
-        sends.len() == certified_send_targets.len()
-            && sends.iter().all(|send| {
-                send.verified
-                    && send.sent.certificate_attached
-                    && send.ack.certificate_attached
-                    && send.sent.message_id == send.ack.message_id
-                    && send.sent.payload_hash == send.ack.payload_hash
-                    && send.ack.applied
-                    && send.ack.rejected_count == 0
-                    && send.ack.state.block_height == certification.block_height
-                    && send.ack.state.block_tip_hash != "genesis"
-            })
-    };
+    let successful_sends_verified = sends.iter().all(|send| {
+        send.verified
+            && send.sent.certificate_attached
+            && send.ack.certificate_attached
+            && send.sent.message_id == send.ack.message_id
+            && send.sent.payload_hash == send.ack.payload_hash
+            && send.ack.applied
+            && send.ack.rejected_count == 0
+            && send.ack.state.block_height == certification.block_height
+            && send.ack.state.block_tip_hash != "genesis"
+    });
+    let all_sends_verified = !options.defer_certified_sends
+        && send_failures.is_empty()
+        && sends.len() == certified_send_targets.len()
+        && successful_sends_verified;
+    let certified_send_outcomes_acceptable = certified_send_outcomes_are_acceptable(
+        sends.len(),
+        send_failures.len(),
+        certified_send_targets.len(),
+        successful_sends_verified,
+        options.allow_peer_failures,
+        options.local_apply_before_certified_send,
+        options.defer_certified_sends,
+    );
     let certified_apply_count = if options.defer_certified_sends {
         1
     } else {
         sends.len().saturating_add(1)
     };
-    let send_failures_allowed = send_failures.is_empty()
-        || (options.allow_peer_failures && !options.local_apply_before_certified_send);
     let retry_vote_request_count = vote_requests
         .iter()
         .filter(|request| request.attempts > 1)
@@ -3576,8 +3582,7 @@ pub(super) fn transport_peer_certified_batch_round(
     let round_ok = certification.round_ok
         && all_vote_requests_verified
         && vote_request_failures_allowed
-        && all_sends_verified
-        && send_failures_allowed
+        && certified_send_outcomes_acceptable
         && local_apply_verified
         && certification.vote_count >= certificate.certificate.quorum
         && (options.allow_peer_failures

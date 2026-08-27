@@ -942,8 +942,12 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    node_bin = args.node_bin.resolve()
-    root = args.output_dir.resolve()
+    raw_node_bin = args.node_bin.expanduser()
+    raw_root = args.output_dir.expanduser()
+    if raw_node_bin.is_symlink() or raw_root.is_symlink():
+        raise ValueError("binary and output paths must not be symlinks")
+    node_bin = raw_node_bin.resolve()
+    root = raw_root.resolve()
     if not node_bin.is_file() or node_bin.parent.name != "release":
         raise ValueError("--node-bin must be a regular target/release binary")
     if root.exists():

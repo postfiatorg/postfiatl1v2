@@ -135,13 +135,42 @@ Primary code:
   `51b93be075a92053f0e5721779a115e3c66ad36c4f91b82e0ce747396de58af7`;
   current/rollback binary SHA-256: `093d56dc…b643c940` and
   `f3a58e2e…b4b514a2`.
-- [ ] Rehearse side-by-side rebuild, full replay, staggered restart, activation,
+- [x] Rehearse side-by-side rebuild, full replay, staggered restart, activation,
   post-activation finality, pre-activation rollback, forward recovery,
   catch-up, and convergence on six disposable clones.
-- [ ] Bind disk-capacity, mixed-version rejection, backups, stop conditions,
+- [x] Bind disk-capacity, mixed-version rejection, backups, stop conditions,
   and unchanged Cobalt/Consensus v2 receipts.
 - [ ] Obtain separate authorization before any fleet probe, deployment,
   service restart, or live mutation.
+
+The fail-closed six-clone runner completed the full ten-phase sequence on the
+stopped local height-501 development fixture. The tightened current-format pass
+at `2026-08-27T08:09:48Z` used source `20c95ec2`, six distinct immutable source
+and backup roots, release binary SHA-256 `161f64d2…cab53187`, and incompatible
+binary SHA-256 `f3a58e2e…b4b514a2`. It finalized heights 502 through 511 with
+literal accepted receipts, retained Consensus v2 certificates, cancelled the
+first scheduled activation, restarted all six validators in three stages,
+formed the activation block from an exact five-vote quorum while validator-4
+was held back, caught validator-4 up from that certificate, and converged at
+tip `c68d3bfb…a0857d9e` and state root `20323b47…19863092`. Its source-stop
+receipt inspected 45 processes with zero unreadable or matching processes, and
+the incompatible binary failed with literal reason `storage_unsupported_schema`.
+The redaction-safe report SHA-256 is `62571689…2e618476`.
+
+This is development evidence only: the fixture is not the controlled height-924
+archive, the source worktree was dirty, and the report is explicitly ineligible
+for final packet publication. The exact clean-source height-924 rehearsal remains
+open with E3 replay and the final packet.
+
+Primary code:
+
+- benchmarks/storage-scaling/run_migration_rehearsal.py
+- crates/node/src/transport_cli.rs
+- crates/node/src/transport_protocol.rs
+- crates/node/src/transport_runtime.rs
+- benchmarks/storage-scaling/package_packet.py
+- python/postfiat_rpc/storage_scaling.py
+- python/tests/test_storage_scaling.py
 
 ## Interfaces and completion
 
