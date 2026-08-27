@@ -41,7 +41,7 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
         )
         self.assertEqual(configuration["windows_per_height"], 5)
         self.assertEqual(configuration["rounds_per_window"], 50)
-        self.assertEqual(configuration["advance_chunk_rounds"], 5000)
+        self.assertEqual(configuration["advance_chunk_rounds"], 1500)
         self.assertEqual(
             configuration["node_preparation_mode"],
             "byte-verified-prepared-fleet-clone",

@@ -51,7 +51,7 @@ DEVELOPMENT_MATRIX = (
     ("selected-indexed", 2),
     ("legacy-jsonl", 2),
 )
-ADVANCE_CHUNK_ROUNDS = 5_000
+ADVANCE_CHUNK_ROUNDS = 1_500
 RELEASE_MAX_WALL_SECONDS = 4 * 60 * 60
 DEVELOPMENT_MAX_WALL_SECONDS = 15 * 60
 SAFE_UNIT = re.compile(r"[^a-zA-Z0-9_.-]+")
@@ -594,6 +594,20 @@ def validate_checkpoint(
         "current_snapshot_sha256"
     ):
         raise ValueError("campaign current snapshot changed")
+    current_height = int(checkpoint.get("current_height", 0))
+    current_prepared_raw = checkpoint.get("current_prepared_fleet")
+    current_prepared_sha256 = checkpoint.get("current_prepared_fleet_sha256")
+    if current_height > 1:
+        current_prepared = safe_campaign_path(
+            state.root,
+            str(current_prepared_raw),
+            "campaign current prepared fleet",
+        )
+        BASE.validate_prepared_fleet(current_prepared)
+        if BASE.directory_digest(current_prepared) != current_prepared_sha256:
+            raise ValueError("campaign current prepared fleet changed")
+    elif current_prepared_raw is not None or current_prepared_sha256 is not None:
+        raise ValueError("height-one campaign unexpectedly has a prepared fleet")
     materials = checkpoint.get("height_materials")
     if not isinstance(materials, dict):
         raise ValueError("campaign checkpoint omitted height materials")
@@ -696,6 +710,8 @@ def initialize_campaign(
         "current_height": 1,
         "current_snapshot": current_snapshot.relative_to(root).as_posix(),
         "current_snapshot_sha256": BASE.directory_digest(current_snapshot),
+        "current_prepared_fleet": None,
+        "current_prepared_fleet_sha256": None,
         "height_materials": {},
         "completed_units": {},
         "current_unit": None,
@@ -771,11 +787,28 @@ def advance_to(
             "current canonical snapshot",
         )
         corpus = corpora_root / f"{label}.json"
+        prepared_fleet = (
+            state.root / "prepared-fleets" / f"canonical-height-{next_height}"
+        )
+        current_prepared_raw = state.value.get("current_prepared_fleet")
+        current_prepared = (
+            safe_campaign_path(
+                state.root,
+                str(current_prepared_raw),
+                "current advance prepared fleet",
+            )
+            if current_prepared_raw is not None
+            else None
+        )
+        current_prepared_sha256 = state.value.get(
+            "current_prepared_fleet_sha256"
+        )
         state.begin_unit(
             unit_id,
             runner_root=canonical_root,
             label=label,
             owned_corpus=corpus,
+            owned_prepared_fleet=prepared_fleet,
         )
         BASE.create_signed_transfer_corpus(
             node_bin=node_bin,
@@ -801,12 +834,29 @@ def advance_to(
             label=label,
             rounds=next_height - current_height,
             storage_lane=BASE.SELECTED_STORAGE_LANE,
+            prepared_fleet=current_prepared,
+            prepared_fleet_sha256=current_prepared_sha256,
+            nodes_root=(
+                canonical_root / "nodes" if current_prepared is not None else None
+            ),
         )
         if (
             int(result["starting_height"]) != current_height
             or int(result["final_height"]) != next_height
+            or result.get("node_preparation_mode")
+            != (
+                "byte-verified-prepared-fleet-clone"
+                if current_prepared is not None
+                else "authenticated-portable-snapshot-import"
+            )
         ):
             raise RuntimeError("canonical advance ended at the wrong height")
+        prepared_fleet_sha256 = BASE.directory_digest(canonical_root / "nodes")
+        BASE.clone_prepared_fleet(
+            canonical_root / "nodes",
+            prepared_fleet,
+            prepared_fleet_sha256,
+        )
         record_result(
             state,
             unit_id=unit_id,
@@ -822,6 +872,10 @@ def advance_to(
         state.value["current_snapshot_sha256"] = BASE.directory_digest(
             result_snapshot
         )
+        state.value["current_prepared_fleet"] = prepared_fleet.relative_to(
+            state.root
+        ).as_posix()
+        state.value["current_prepared_fleet_sha256"] = prepared_fleet_sha256
         state.finish_unit()
 
 
@@ -842,15 +896,22 @@ def freeze_height_material(
     source_snapshot = safe_campaign_path(
         state.root, str(state.value["current_snapshot"]), "height snapshot"
     )
-    prepared_fleet_source = state.root / "canonical" / "nodes"
-    BASE.validate_prepared_fleet(prepared_fleet_source)
-    prepared_fleet = state.root / "prepared-fleets" / f"height-{height}"
+    prepared_fleet = safe_campaign_path(
+        state.root,
+        str(state.value.get("current_prepared_fleet")),
+        "height prepared fleet",
+    )
+    BASE.validate_prepared_fleet(prepared_fleet)
+    prepared_fleet_sha256 = str(
+        state.value.get("current_prepared_fleet_sha256", "")
+    )
+    if BASE.directory_digest(prepared_fleet) != prepared_fleet_sha256:
+        raise RuntimeError("height prepared fleet changed before material freeze")
     corpus = state.root / "corpora" / f"height-{height}.json"
     unit_id = f"material/height-{height}"
     state.begin_unit(
         unit_id,
         owned_corpus=corpus,
-        owned_prepared_fleet=prepared_fleet,
     )
     report = BASE.create_signed_transfer_corpus(
         node_bin=node_bin,
@@ -862,12 +923,6 @@ def freeze_height_material(
         output_file=corpus,
         logs=state.root / "canonical" / "logs",
         label=f"height-{height}",
-    )
-    prepared_fleet_sha256 = BASE.directory_digest(prepared_fleet_source)
-    BASE.clone_prepared_fleet(
-        prepared_fleet_source,
-        prepared_fleet,
-        prepared_fleet_sha256,
     )
     state.value["height_materials"][key] = {
         "height": height,
