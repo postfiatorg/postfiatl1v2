@@ -64,12 +64,39 @@ work idling.
 | --- | --- | --- | --- |
 | Which storage implementation? | Transactional `redb`. | Decided | Freeze and qualify this candidate; do not restart candidate research. |
 | Which performance campaign? | Selected `redb` at heights 50 and 5,000; same-binary legacy control at height 50. | Decided | Do not run the superseded three-lane/five-height matrix. |
-| How does the selected lane move between high-height chunks? | By a content-hashed prepared transactional fleet, not by exporting and re-importing full history. | Decided; runner remediation required | Generate the next signed corpus read-only from the prepared fleet, bind before/after digests, and eliminate high-height portable snapshot export. Keep the portable snapshot only for the shared height-50 legacy control. |
+| How does the selected lane move between high-height chunks? | By a content-hashed prepared transactional fleet, not by exporting and re-importing full history. | Decided; runner remediation required | Generate the next signed corpus on a byte-verified disposable canonical clone, prove the frozen source is unchanged, bind the scratch before/after digests and expected sequence, discard the scratch clone, and eliminate high-height portable snapshot export. Keep the portable snapshot only for the shared height-50 legacy control. |
 | Is one height-924 validator directory needed? | Yes, for exact replay only. | Authorization and custodian still required | Finish G1, G2, the height-915 part of G3, and G4 without waiting for it. |
 | Are six validator directories needed now? | No. They are needed only for G6 immediately before a deployment decision. | Deferred | Spend no time collecting or rehearsing six clones during offline qualification. |
 | May this plan touch the controlled devnet? | No. | Not authorized | No fleet query, copy, service action, deployment, or mutation. |
 | What follows storage? | Dynamic UNL supplies proposal content inside the DGA/Cobalt envelope; Option C is the evidence sequence. | Direction recorded; implementation deferred | Keep its milestone deferred until the storage boundary in G7. |
 | Does a passing packet deploy anything? | No. | Separate later decision required | G5 can establish only `OFFLINE QUALIFIED`; G6 and written deployment authorization remain separate. |
+
+## Critical path and operator calls
+
+There is no decision or external input blocking the next local step. Work proceeds
+on four explicit tracks, and only the first is active now:
+
+| Order | Track | Start condition | Finish condition | Operator input |
+| ---: | --- | --- | --- | --- |
+| 1 | Local qualification | Now | G4A passes, one bounded G4 run passes, and all locally available G5 material verifies | None. Preserve the pinned candidate and do not touch the devnet. |
+| 2 | Exact height-924 replay | A custodian names one complete quiescent directory and separately authorizes a read-only copy | G3 replay and mutation sentinels pass and enter the packet | Name the custodian and authorize the copy. Do not wait idle for this input. |
+| 3 | Pre-deployment rehearsal | G5 is `OFFLINE QUALIFIED` and controlled-devnet deployment is actually the next decision | G6 passes on six distinct stopped copies | Separately authorize six copies and then make a separate deploy/no-deploy decision. |
+| 4 | Dynamic UNL milestone | G5 closes, or the decision owner explicitly changes priority | A separately activated governance plan exists | No choice is open now: the DGA/Cobalt envelope and Option C are the recorded direction. |
+
+The dependency chain is:
+
+```text
+local:     G4A -> G4 -> locally available G5 material --+
+                                                        +-> complete G5 -> OFFLINE QUALIFIED
+external:  authorized height-924 copy -> G3 -----------+
+
+OFFLINE QUALIFIED -> separate deployment decision -> G6
+```
+
+A missing height-924 copy blocks only the final `OFFLINE QUALIFIED` label. It
+must not trigger a 20-hour wait, an exhaustive legacy campaign, or collection of
+six fleet directories. G4A implementation work is not release evidence until it
+passes focused tests, a bounded six-validator smoke, and provenance review.
 
 ## Decisions recorded
 
@@ -78,9 +105,10 @@ work idling.
   same-binary legacy-versus-selected comparison at height 50.
 - **High-height campaign state:** a content-hashed six-node transactional fleet
   is the selected lane's checkpoint and restart boundary. Signed-corpus creation
-  may read a stopped prepared node only if a whole-tree before/after digest proves
-  it made no mutation. Full portable snapshots remain required only at height 50
-  for the legacy comparison.
+  uses a byte-verified disposable canonical clone, binds its before/after digests
+  and expected sequence, proves the frozen source is unchanged, and discards the
+  scratch clone. Full portable snapshots remain required only at height 50 for
+  the legacy comparison.
 - **Discarded release work:** bounded-JSONL performance qualification and
   legacy runs at heights 100, 500, 1,000, and 5,000. They remain optional
   diagnostics and cannot hold the release decision open.
@@ -305,8 +333,8 @@ without spending hours re-measuring a deliberately rejected legacy design.
 All rows use the G1 binary. At height 50, both lanes import the same authenticated
 snapshot and consume the same signed corpus, topology, keys, accounts, host,
 storage device, vote policy, timeout, and instrumentation. Build the height-5,000
-snapshot through the selected bounded path; do not advance legacy storage to
-height 5,000 merely to demonstrate the already-known defect.
+prepared fleet through the selected bounded path; do not advance legacy storage
+to height 5,000 merely to demonstrate the already-known defect.
 
 Run order is selected height 50, selected height 5,000, then legacy height 50.
 Stop immediately when a selected-path safety, convergence, literal-receipt, or
@@ -362,9 +390,10 @@ The completed prepared fleet is diagnostic input for remediation tests only.
       height-1,550-to-3,050 unit, not in transactional consensus or append.
 - [x] Confirm the failure is caused by portable full-history materialization,
       not by a positive full-history-read counter in the selected append path.
-- [ ] Make selected-lane corpus creation read directly from a stopped,
-      content-hashed prepared node and prove the entire prepared fleet has the
-      same digest before and after.
+- [ ] Make selected-lane corpus creation use a byte-verified disposable canonical
+      clone of a stopped, content-hashed prepared fleet. Prove the frozen source
+      digest is unchanged, bind the scratch before/after digests and expected
+      sequence, discard the scratch, and restore a pristine clone for measurement.
 - [ ] Stop exporting result snapshots for prepared-fleet selected runs. Bind the
       source and result prepared-fleet digests instead; retain full snapshot
       export/import only for the height-50 cross-backend control.
