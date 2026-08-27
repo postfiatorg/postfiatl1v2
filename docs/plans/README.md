@@ -4,10 +4,11 @@ Only current execution plans and completed plans belong here.
 
 ## Active
 
-- [Cobalt Adversarial Verification Milestone](completed/cobalt-adversarial-verification-milestone.md)
+- [Storage Scaling and Bounded Finality Milestone](active/storage-scaling-milestone.md)
 
 ## Completed
 
+- [Cobalt Adversarial Verification Milestone](completed/cobalt-adversarial-verification-milestone.md)
 - [Cobalt Activation Milestone](completed/cobalt-activate-or-retire-milestone.md)
 - [Cobalt Live Deployment and Liveness Milestone](completed/cobalt-live-deployment-and-liveness-milestone.md)
 - [P0 Complete Remediation](completed/P0-COMPLETE-REMEDIATION-PLAN-20260716.md)
