@@ -732,7 +732,8 @@ def export_snapshot(
 def create_signed_transfer_corpus(
     *,
     node_bin: Path,
-    source_snapshot: Path,
+    source_snapshot: Path | None = None,
+    source_data_dir: Path | None = None,
     wallet_key: Path,
     wallet_address: str,
     recipient: str,
@@ -743,32 +744,47 @@ def create_signed_transfer_corpus(
 ) -> dict[str, Any]:
     if count <= 0:
         raise ValueError("signed transfer corpus count must be positive")
+    if (source_snapshot is None) == (source_data_dir is None):
+        raise ValueError(
+            "signed transfer corpus requires exactly one source snapshot or data directory"
+        )
     if output_file.exists():
         raise ValueError(f"refusing to overwrite corpus: {output_file}")
-    corpus_node = output_file.parent / f".{label}.corpus-node"
-    if corpus_node.exists():
-        raise ValueError(f"refusing to overwrite corpus node: {corpus_node}")
+    corpus_node: Path | None = None
+    if source_snapshot is not None:
+        corpus_node = output_file.parent / f".{label}.corpus-node"
+        if corpus_node.exists():
+            raise ValueError(f"refusing to overwrite corpus node: {corpus_node}")
+        corpus_source = corpus_node
+    else:
+        assert source_data_dir is not None
+        if source_data_dir.is_symlink() or not source_data_dir.is_dir():
+            raise ValueError(
+                "signed transfer corpus source data directory is not a regular directory"
+            )
+        corpus_source = source_data_dir
     try:
-        SHARED.run(
-            [
-                str(node_bin),
-                "snapshot-import",
-                "--data-dir",
-                str(corpus_node),
-                "--snapshot-dir",
-                str(source_snapshot),
-                "--node-id",
-                "validator-0",
-            ],
-            stdout_path=logs / f"{label}.corpus-import.json",
-            stderr_path=logs / f"{label}.corpus-import.stderr",
-        )
+        if source_snapshot is not None:
+            SHARED.run(
+                [
+                    str(node_bin),
+                    "snapshot-import",
+                    "--data-dir",
+                    str(corpus_source),
+                    "--snapshot-dir",
+                    str(source_snapshot),
+                    "--node-id",
+                    "validator-0",
+                ],
+                stdout_path=logs / f"{label}.corpus-import.json",
+                stderr_path=logs / f"{label}.corpus-import.stderr",
+            )
         completed = SHARED.run(
             [
                 str(node_bin),
                 "tx-latency-corpus-create",
                 "--data-dir",
-                str(corpus_node),
+                str(corpus_source),
                 "--wallet-key-file",
                 str(wallet_key),
                 "--wallet-address",
@@ -786,7 +802,7 @@ def create_signed_transfer_corpus(
             stderr_path=logs / f"{label}.corpus-create.stderr",
         )
     finally:
-        if corpus_node.exists():
+        if corpus_node is not None and corpus_node.exists():
             shutil.rmtree(corpus_node)
     report = json.loads(completed.stdout)
     if not isinstance(report, dict):
@@ -805,7 +821,7 @@ def run_rounds(
     root: Path,
     seed: Path,
     topology: Path,
-    source_snapshot: Path,
+    source_snapshot: Path | None,
     wallet_key: Path,
     wallet_address: str,
     recipient: str,
@@ -816,7 +832,7 @@ def run_rounds(
     prepared_fleet: Path | None = None,
     prepared_fleet_sha256: str | None = None,
     nodes_root: Path | None = None,
-) -> tuple[dict[str, Any], Path]:
+) -> tuple[dict[str, Any], Path | None]:
     if storage_lane not in HISTORICAL_STORAGE_LANES | {SELECTED_STORAGE_LANE}:
         raise ValueError(f"unsupported storage lane: {storage_lane}")
     selected_transactional = storage_lane == SELECTED_STORAGE_LANE
@@ -830,7 +846,10 @@ def run_rounds(
         )
     if prepared_fleet is not None and not selected_transactional:
         raise ValueError("prepared fleets are valid only for selected transactional runs")
+    if prepared_fleet is None and source_snapshot is None:
+        raise ValueError("snapshot preparation requires a source snapshot")
     if prepared_fleet is None:
+        assert source_snapshot is not None
         SHARED.prepare_nodes(node_bin, nodes, source_snapshot, seed, logs, label)
         node_preparation_mode = "authenticated-portable-snapshot-import"
         observed_prepared_fleet_sha256 = None
@@ -1187,20 +1206,28 @@ def run_rounds(
     normalized_path = root / "normalized" / f"{label}.report.json"
     write_json(normalized_path, normalized)
 
-    result_snapshot = root / "snapshots" / f"{label}.snapshot"
-    export_snapshot(
-        node_bin,
-        nodes / "validator-0",
-        result_snapshot,
-        logs,
-        label,
+    result_snapshot: Path | None = None
+    if prepared_fleet is None:
+        result_snapshot = root / "snapshots" / f"{label}.snapshot"
+        export_snapshot(
+            node_bin,
+            nodes / "validator-0",
+            result_snapshot,
+            logs,
+            label,
+        )
+    result_prepared_fleet_sha256 = (
+        directory_digest(nodes) if selected_transactional else None
     )
     result = {
         "label": label,
         "storage_lane": storage_lane,
-        "source_snapshot_sha256": directory_digest(source_snapshot),
+        "source_snapshot_sha256": (
+            directory_digest(source_snapshot) if source_snapshot is not None else None
+        ),
         "node_preparation_mode": node_preparation_mode,
         "prepared_fleet_sha256": observed_prepared_fleet_sha256,
+        "result_prepared_fleet_sha256": result_prepared_fleet_sha256,
         "signed_transfer_corpus": signed_transfer_corpus.as_posix(),
         "signed_transfer_corpus_sha256": corpus_sha256,
         "starting_height": initial_height,
@@ -1284,7 +1311,9 @@ def run_rounds(
         "normalized_report_sha256": digest(normalized_path),
         "resource_samples": resource_samples_path.relative_to(root).as_posix(),
         "resource_samples_sha256": digest(resource_samples_path),
-        "result_snapshot_sha256": directory_digest(result_snapshot),
+        "result_snapshot_sha256": (
+            directory_digest(result_snapshot) if result_snapshot is not None else None
+        ),
     }
     write_json(root / "receipts" / f"{label}.json", result)
     print(

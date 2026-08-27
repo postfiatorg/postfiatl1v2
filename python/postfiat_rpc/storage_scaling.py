@@ -153,7 +153,7 @@ ORIGINAL_E3_FORGED_CASES = (
 ARTIFACT_SCHEMAS = {
     "source": "postfiat-storage-source-identity-v1",
     "replay": "postfiat-storage-scaling-replay-v1",
-    "performance": "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v1",
+    "performance": "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v2",
     "tamper": "postfiat-storage-scaling-tamper-matrix-v1",
     "migration": "postfiat-storage-scaling-six-clone-migration-v1",
     "redaction": "postfiat-storage-scaling-redaction-v1",
@@ -1434,13 +1434,12 @@ def _verify_performance_lane(
                 window.get("backend_work_gate_pass"),
                 f"performance lane {lane_name} backend work gate",
             )
-            for key in (
-                "source_snapshot_sha256",
-                "result_snapshot_sha256",
-                "signed_transfer_corpus_sha256",
-            ):
-                if HEX64.fullmatch(str(window.get(key, ""))) is None:
-                    _fail(f"performance lane {lane_name} window {key} is invalid")
+            if HEX64.fullmatch(
+                str(window.get("signed_transfer_corpus_sha256", ""))
+            ) is None:
+                _fail(
+                    f"performance lane {lane_name} window signed corpus is invalid"
+                )
             if (
                 window.get("source_snapshot_sha256")
                 != snapshot_binding["snapshot_sha256"]
@@ -1451,7 +1450,7 @@ def _verify_performance_lane(
             ):
                 _fail(
                     f"performance lane {lane_name} height {height} did not use "
-                    "the shared authenticated snapshot and signed corpus"
+                    "the shared frozen input and signed corpus"
                 )
             if lane_name == "selected-indexed":
                 if (
@@ -1459,6 +1458,11 @@ def _verify_performance_lane(
                     != "byte-verified-prepared-fleet-clone"
                     or window.get("prepared_fleet_sha256")
                     != snapshot_binding["prepared_fleet_sha256"]
+                    or window.get("result_snapshot_sha256") is not None
+                    or HEX64.fullmatch(
+                        str(window.get("result_prepared_fleet_sha256", ""))
+                    )
+                    is None
                 ):
                     _fail(
                         f"performance lane {lane_name} height {height} did not use "
@@ -1468,6 +1472,15 @@ def _verify_performance_lane(
                 window.get("node_preparation_mode")
                 != "authenticated-portable-snapshot-import"
                 or window.get("prepared_fleet_sha256") is not None
+                or window.get("result_prepared_fleet_sha256") is not None
+                or HEX64.fullmatch(
+                    str(window.get("source_snapshot_sha256", ""))
+                )
+                is None
+                or HEX64.fullmatch(
+                    str(window.get("result_snapshot_sha256", ""))
+                )
+                is None
             ):
                 _fail(
                     f"performance lane {lane_name} height {height} did not use "
@@ -1897,7 +1910,7 @@ def _verify_performance(
     _verify_binary_build(performance, "performance", source_revision)
     if performance.get("validator_count") != 6:
         _fail("performance topology is not six validators")
-    if performance.get("qualification_profile") != "time-budgeted-redb-v1":
+    if performance.get("qualification_profile") != "time-budgeted-redb-v2":
         _fail("performance qualification profile differs")
     if performance.get("windows_per_height") != 5 or performance.get("rounds_per_window") != 50:
         _fail("performance window cardinality differs from the specification")
@@ -1932,8 +1945,8 @@ def _verify_performance(
         _fail("performance workload accounts are missing")
 
     snapshot_entries = _list(
-        performance.get("snapshots_by_height"),
-        "performance shared snapshots and corpora",
+        performance.get("materials_by_height"),
+        "performance shared height materials and corpora",
     )
     if [
         entry.get("height") if isinstance(entry, dict) else None
@@ -1944,11 +1957,46 @@ def _verify_performance(
     for entry_value in snapshot_entries:
         entry = _object(entry_value, "performance shared snapshot/corpus entry")
         height = int(entry["height"])
-        snapshot_path = str(entry.get("snapshot", ""))
+        snapshot_value = entry.get("snapshot")
+        snapshot_sha256 = entry.get("snapshot_sha256")
+        if height == HEIGHTS[0]:
+            snapshot_path = str(snapshot_value or "")
+            valid_snapshot = (
+                HEX64.fullmatch(str(snapshot_sha256 or "")) is not None
+                and _safe_relative(snapshot_path).as_posix() == snapshot_path
+            )
+            expected_corpus_mode = "authenticated-portable-snapshot-import"
+            expected_corpus_fleet = None
+            valid_scratch = all(
+                entry.get(field) is None
+                for field in (
+                    "corpus_scratch_before_sha256",
+                    "corpus_scratch_after_sha256",
+                    "corpus_scratch_mutated",
+                    "corpus_scratch_discarded",
+                )
+            )
+        else:
+            valid_snapshot = snapshot_value is None and snapshot_sha256 is None
+            expected_corpus_mode = "disposable-canonical-prepared-fleet-clone"
+            expected_corpus_fleet = entry.get("prepared_fleet_sha256")
+            scratch_before = entry.get("corpus_scratch_before_sha256")
+            scratch_after = entry.get("corpus_scratch_after_sha256")
+            valid_scratch = (
+                HEX64.fullmatch(str(scratch_before or "")) is not None
+                and HEX64.fullmatch(str(scratch_after or "")) is not None
+                and scratch_before == entry.get("prepared_fleet_sha256")
+                and entry.get("corpus_scratch_mutated")
+                is (scratch_before != scratch_after)
+                and entry.get("corpus_scratch_discarded") is True
+            )
         if (
-            HEX64.fullmatch(str(entry.get("snapshot_sha256", ""))) is None
+            not valid_snapshot
+            or not valid_scratch
             or HEX64.fullmatch(str(entry.get("prepared_fleet_sha256", ""))) is None
-            or _safe_relative(snapshot_path).as_posix() != snapshot_path
+            or entry.get("corpus_source_mode") != expected_corpus_mode
+            or entry.get("corpus_source_prepared_fleet_sha256")
+            != expected_corpus_fleet
             or entry.get("transfer_count") != 50
         ):
             _fail(f"performance height {height} snapshot/corpus binding is invalid")
@@ -1970,7 +2018,7 @@ def _verify_performance(
         ):
             _fail(f"performance height {height} corpus sequence binding differs")
         snapshot_bindings[height] = {
-            "snapshot_sha256": entry["snapshot_sha256"],
+            "snapshot_sha256": snapshot_sha256,
             "prepared_fleet_sha256": entry["prepared_fleet_sha256"],
             "corpus_path": entry["signed_transfer_corpus"],
             "corpus_sha256": entry["signed_transfer_corpus_sha256"],

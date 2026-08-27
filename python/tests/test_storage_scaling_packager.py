@@ -94,13 +94,33 @@ def _campaign(root: Path, *, label: str = "height-50-window-1") -> Path:
         "status": "PASS",
         "campaign_mode": "release-qualification",
         "evidence_eligible": True,
-        "snapshots_by_height": [
+        "materials_by_height": [
             {
                 "height": height,
-                "snapshot": f"canonical/snapshots/height-{height}.snapshot",
-                "snapshot_sha256": f"{height:064x}",
+                "snapshot": (
+                    f"canonical/snapshots/height-{height}.snapshot"
+                    if height == 50
+                    else None
+                ),
+                "snapshot_sha256": f"{height:064x}" if height == 50 else None,
                 "prepared_fleet": f"prepared-fleets/height-{height}",
                 "prepared_fleet_sha256": f"{height + 1:064x}",
+                "corpus_source_mode": (
+                    "authenticated-portable-snapshot-import"
+                    if height == 50
+                    else "disposable-canonical-prepared-fleet-clone"
+                ),
+                "corpus_source_prepared_fleet_sha256": (
+                    None if height == 50 else f"{height + 1:064x}"
+                ),
+                "corpus_scratch_before_sha256": (
+                    None if height == 50 else f"{height + 1:064x}"
+                ),
+                "corpus_scratch_after_sha256": (
+                    None if height == 50 else f"{height + 3:064x}"
+                ),
+                "corpus_scratch_mutated": None if height == 50 else True,
+                "corpus_scratch_discarded": None if height == 50 else True,
                 "signed_transfer_corpus": corpus.relative_to(root).as_posix(),
                 "signed_transfer_corpus_sha256": digest,
                 "transfer_count": 50,
@@ -134,7 +154,7 @@ class StorageScalingPackagerTests(unittest.TestCase):
             )
             corpora = {
                 entry["height"]: entry
-                for entry in copied["snapshots_by_height"]
+                for entry in copied["materials_by_height"]
             }
             self.assertEqual(set(corpora), {50, 5000})
             for entry in corpora.values():
@@ -183,6 +203,36 @@ class StorageScalingPackagerTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "label is not canonical"):
                 PACKAGER.copy_performance(packet, source)
             self.assertFalse((root / "escape.json").exists())
+
+    def test_copy_performance_rejects_high_height_portable_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            campaign = root / "campaign"
+            campaign.mkdir()
+            source = _campaign(campaign)
+            report = json.loads(source.read_text(encoding="utf-8"))
+            high = report["materials_by_height"][1]
+            high["snapshot"] = "canonical/snapshots/height-5000.snapshot"
+            high["snapshot_sha256"] = "f" * 64
+            _write_json(source, report)
+
+            with self.assertRaisesRegex(ValueError, "prepared corpus binding"):
+                PACKAGER.copy_performance(root / "packet", source)
+
+    def test_copy_performance_rejects_scratch_not_cloned_from_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            campaign = root / "campaign"
+            campaign.mkdir()
+            source = _campaign(campaign)
+            report = json.loads(source.read_text(encoding="utf-8"))
+            report["materials_by_height"][1][
+                "corpus_scratch_before_sha256"
+            ] = "f" * 64
+            _write_json(source, report)
+
+            with self.assertRaisesRegex(ValueError, "prepared corpus binding"):
+                PACKAGER.copy_performance(root / "packet", source)
 
     def test_resolve_campaign_file_rejects_parent_escape(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

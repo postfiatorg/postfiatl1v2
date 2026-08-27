@@ -399,8 +399,9 @@ The completed prepared fleet is diagnostic input for remediation tests only.
       export/import only for the height-50 cross-backend control.
 - [ ] Make checkpoint/resume and the packet verifier reject a missing, changed,
       or ambiguously located prepared fleet, corpus, or runner binding.
-- [ ] Add focused tests for read-only corpus creation, no selected high-height
-      snapshot dependency, tamper rejection, and safe interruption.
+- [ ] Add focused tests for frozen-source corpus generation on a disposable
+      scratch clone, no selected high-height snapshot dependency, tamper
+      rejection, and safe interruption.
 - [ ] Pass one real six-validator smoke that crosses a deliberately lowered
       snapshot-size threshold in at most 30 minutes and leaves no process alive.
 - [ ] Start exactly one clean qualification run from height 1 after all G4A

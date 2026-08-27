@@ -6,7 +6,9 @@ import stat
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[2]
 PAIRED_PATH = REPO / "benchmarks" / "storage-scaling" / "run_paired_campaign.py"
@@ -47,6 +49,188 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
             "byte-verified-prepared-fleet-clone",
         )
         self.assertEqual(configuration["max_wall_seconds"], 4 * 60 * 60)
+
+    def test_development_matrix_exercises_snapshot_free_selected_advance(self) -> None:
+        configuration = PAIRED.campaign_configuration(True)
+
+        self.assertEqual(
+            configuration["lane_height_matrix"],
+            [
+                {"lane": "selected-indexed", "height": 2},
+                {"lane": "selected-indexed", "height": 3},
+                {"lane": "legacy-jsonl", "height": 2},
+            ],
+        )
+
+    def test_data_dir_corpus_creation_uses_supplied_node_without_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "validator-0"
+            source.mkdir()
+            (source / "state.bin").write_bytes(b"stopped prepared state")
+            output = root / "corpus.json"
+            logs = root / "logs"
+            logs.mkdir()
+            before = PAIRED.BASE.directory_digest(source)
+
+            def fake_run(command: list[str], **_kwargs: Any) -> Any:
+                self.assertIn("tx-latency-corpus-create", command)
+                self.assertNotIn("snapshot-import", command)
+                self.assertEqual(
+                    Path(command[command.index("--data-dir") + 1]), source
+                )
+                corpus = {
+                    "schema": "postfiat-tx-latency-signed-transfer-corpus-v1",
+                    "transfers": [{"sequence": 1}, {"sequence": 2}],
+                }
+                output.write_text(
+                    json.dumps(corpus, sort_keys=True) + "\n", encoding="utf-8"
+                )
+                return SimpleNamespace(
+                    stdout=json.dumps(
+                        {
+                            "transfer_count": 2,
+                            "sha256": PAIRED.BASE.digest(output),
+                        }
+                    )
+                )
+
+            with mock.patch.object(PAIRED.BASE.SHARED, "run", side_effect=fake_run):
+                report = PAIRED.BASE.create_signed_transfer_corpus(
+                    node_bin=Path("postfiat-node"),
+                    source_data_dir=source,
+                    wallet_key=Path("wallet.json"),
+                    wallet_address="wallet",
+                    recipient="recipient",
+                    count=2,
+                    output_file=output,
+                    logs=logs,
+                    label="prepared",
+                )
+
+            self.assertEqual(report["transfer_count"], 2)
+            self.assertEqual(PAIRED.BASE.directory_digest(source), before)
+            self.assertFalse((root / ".prepared.corpus-node").exists())
+
+    def test_corpus_creation_requires_one_source_kind(self) -> None:
+        arguments = {
+            "node_bin": Path("postfiat-node"),
+            "wallet_key": Path("wallet.json"),
+            "wallet_address": "wallet",
+            "recipient": "recipient",
+            "count": 1,
+            "output_file": Path("corpus.json"),
+            "logs": Path("logs"),
+            "label": "invalid",
+        }
+        with self.assertRaisesRegex(ValueError, "exactly one source"):
+            PAIRED.BASE.create_signed_transfer_corpus(**arguments)
+        with self.assertRaisesRegex(ValueError, "exactly one source"):
+            PAIRED.BASE.create_signed_transfer_corpus(
+                **arguments,
+                source_snapshot=Path("snapshot"),
+                source_data_dir=Path("node"),
+            )
+
+    def test_prepared_corpus_generation_binds_and_discards_mutated_scratch(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "prepared"
+            for index in range(PAIRED.BASE.VALIDATORS):
+                validator = source / f"validator-{index}"
+                validator.mkdir(parents=True)
+                (validator / "state.bin").write_bytes(bytes([index]))
+            source_sha256 = PAIRED.BASE.directory_digest(source)
+            working = root / "canonical" / "nodes"
+            output = root / "corpus.json"
+
+            def create_corpus(**arguments: Any) -> dict[str, Any]:
+                data_dir = arguments["source_data_dir"]
+                self.assertEqual(data_dir, working / "validator-0")
+                (data_dir / "state.bin").write_bytes(b"mutated scratch")
+                output.write_text("{}\n", encoding="utf-8")
+                return {
+                    "transfer_count": 2,
+                    "first_sequence": 7,
+                    "last_sequence": 8,
+                }
+
+            with mock.patch.object(
+                PAIRED.BASE,
+                "create_signed_transfer_corpus",
+                side_effect=create_corpus,
+            ):
+                report, provenance = PAIRED.create_corpus_from_prepared_fleet(
+                    node_bin=Path("postfiat-node"),
+                    prepared_fleet=source,
+                    prepared_fleet_sha256=source_sha256,
+                    working_fleet=working,
+                    wallet_key=Path("wallet.json"),
+                    wallet_address="wallet",
+                    recipient="recipient",
+                    count=2,
+                    expected_first_sequence=7,
+                    output_file=output,
+                    logs=root / "logs",
+                    label="height-7",
+                )
+
+            self.assertEqual(report["last_sequence"], 8)
+            self.assertEqual(PAIRED.BASE.directory_digest(source), source_sha256)
+            self.assertEqual(
+                provenance["source_prepared_fleet_sha256"], source_sha256
+            )
+            self.assertEqual(provenance["scratch_before_sha256"], source_sha256)
+            self.assertNotEqual(
+                provenance["scratch_after_sha256"],
+                provenance["scratch_before_sha256"],
+            )
+            self.assertTrue(provenance["scratch_mutated"])
+            self.assertTrue(provenance["scratch_discarded"])
+            self.assertFalse(working.exists())
+
+    def test_prepared_corpus_generation_rejects_wrong_sequence_before_discard(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "prepared"
+            for index in range(PAIRED.BASE.VALIDATORS):
+                validator = source / f"validator-{index}"
+                validator.mkdir(parents=True)
+                (validator / "state.bin").write_bytes(bytes([index]))
+            source_sha256 = PAIRED.BASE.directory_digest(source)
+            working = root / "canonical" / "nodes"
+
+            with mock.patch.object(
+                PAIRED.BASE,
+                "create_signed_transfer_corpus",
+                return_value={
+                    "transfer_count": 1,
+                    "first_sequence": 99,
+                    "last_sequence": 99,
+                },
+            ):
+                with self.assertRaisesRegex(RuntimeError, "sequence differs"):
+                    PAIRED.create_corpus_from_prepared_fleet(
+                        node_bin=Path("postfiat-node"),
+                        prepared_fleet=source,
+                        prepared_fleet_sha256=source_sha256,
+                        working_fleet=working,
+                        wallet_key=Path("wallet.json"),
+                        wallet_address="wallet",
+                        recipient="recipient",
+                        count=1,
+                        expected_first_sequence=7,
+                        output_file=root / "corpus.json",
+                        logs=root / "logs",
+                        label="height-7",
+                    )
+
+            self.assertEqual(PAIRED.BASE.directory_digest(source), source_sha256)
+            self.assertTrue(working.is_dir())
 
     def test_prepared_fleet_clone_is_byte_verified(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -39,9 +39,9 @@ STORAGE_BEHAVIORS = {
         "transactional redb finality path with the fixed-size accumulator"
     ),
 }
-SCHEMA = "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v1"
-CHECKPOINT_SCHEMA = "postfiat-storage-scaling-campaign-checkpoint-v1"
-QUALIFICATION_PROFILE = "time-budgeted-redb-v1"
+SCHEMA = "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v2"
+CHECKPOINT_SCHEMA = "postfiat-storage-scaling-campaign-checkpoint-v2"
+QUALIFICATION_PROFILE = "time-budgeted-redb-v2"
 RELEASE_MATRIX = (
     ("selected-indexed", 50),
     ("selected-indexed", 5_000),
@@ -49,6 +49,7 @@ RELEASE_MATRIX = (
 )
 DEVELOPMENT_MATRIX = (
     ("selected-indexed", 2),
+    ("selected-indexed", 3),
     ("legacy-jsonl", 2),
 )
 ADVANCE_CHUNK_ROUNDS = 1_500
@@ -336,6 +337,21 @@ def safe_campaign_path(root: Path, raw: str, label: str) -> Path:
     return resolved
 
 
+def optional_campaign_path(root: Path, raw: Any, label: str) -> Path | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        raise ValueError(f"{label} is not a string or null")
+    return safe_campaign_path(root, raw, label)
+
+
+def is_sha256(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+    )
+
+
 class CampaignState:
     def __init__(
         self,
@@ -420,20 +436,50 @@ def completed_unit_record(
     *,
     kind: str,
     result: dict[str, Any],
-    result_snapshot: Path,
+    result_snapshot: Path | None,
+    result_prepared_fleet: Path | None = None,
 ) -> dict[str, Any]:
     receipt = runner_root / "receipts" / f"{result['label']}.json"
     if BASE.read_json(receipt) != result:
         raise RuntimeError("completed-unit receipt differs from in-memory result")
-    return {
+    record = {
         "kind": kind,
         "runner_root": runner_root.relative_to(root).as_posix(),
         "result": result,
-        "result_snapshot": result_snapshot.relative_to(root).as_posix(),
-        "result_snapshot_sha256": BASE.directory_digest(result_snapshot),
+        "result_snapshot": (
+            result_snapshot.relative_to(root).as_posix()
+            if result_snapshot is not None
+            else None
+        ),
+        "result_snapshot_sha256": (
+            BASE.directory_digest(result_snapshot)
+            if result_snapshot is not None
+            else None
+        ),
+        "result_prepared_fleet": (
+            result_prepared_fleet.relative_to(root).as_posix()
+            if result_prepared_fleet is not None
+            else None
+        ),
+        "result_prepared_fleet_sha256": (
+            BASE.directory_digest(result_prepared_fleet)
+            if result_prepared_fleet is not None
+            else None
+        ),
         "receipt": receipt.relative_to(root).as_posix(),
         "receipt_sha256": sha256(receipt),
     }
+    if record["result_snapshot_sha256"] != result.get("result_snapshot_sha256"):
+        raise RuntimeError("completed-unit snapshot binding differs from its result")
+    if result_prepared_fleet is not None and record[
+        "result_prepared_fleet_sha256"
+    ] != result.get("result_prepared_fleet_sha256"):
+        raise RuntimeError("completed-unit prepared fleet differs from its result")
+    if result_snapshot is None and not is_sha256(
+        result.get("result_prepared_fleet_sha256")
+    ):
+        raise RuntimeError("snapshot-free completed unit omitted its result fleet digest")
+    return record
 
 
 def verify_completed_unit(root: Path, record: dict[str, Any]) -> None:
@@ -450,11 +496,36 @@ def verify_completed_unit(root: Path, record: dict[str, Any]) -> None:
         raise ValueError("completed unit receipt digest changed")
     if BASE.read_json(receipt) != result:
         raise ValueError("completed unit receipt content changed")
-    snapshot = safe_campaign_path(
-        root, str(record.get("result_snapshot", "")), "completed unit snapshot"
+    snapshot = optional_campaign_path(
+        root, record.get("result_snapshot"), "completed unit snapshot"
     )
-    if BASE.directory_digest(snapshot) != record.get("result_snapshot_sha256"):
+    snapshot_sha256 = record.get("result_snapshot_sha256")
+    if snapshot is None:
+        if snapshot_sha256 is not None or result.get("result_snapshot_sha256") is not None:
+            raise ValueError("completed unit snapshot nullability changed")
+        if not is_sha256(result.get("result_prepared_fleet_sha256")):
+            raise ValueError("snapshot-free completed unit omitted its result fleet digest")
+    elif (
+        BASE.directory_digest(snapshot) != snapshot_sha256
+        or snapshot_sha256 != result.get("result_snapshot_sha256")
+    ):
         raise ValueError("completed unit snapshot digest changed")
+    result_prepared_fleet = optional_campaign_path(
+        root,
+        record.get("result_prepared_fleet"),
+        "completed unit result prepared fleet",
+    )
+    result_prepared_sha256 = record.get("result_prepared_fleet_sha256")
+    if result_prepared_fleet is None:
+        if result_prepared_sha256 is not None:
+            raise ValueError("completed unit retained fleet nullability changed")
+    else:
+        BASE.validate_prepared_fleet(result_prepared_fleet)
+        if (
+            BASE.directory_digest(result_prepared_fleet) != result_prepared_sha256
+            or result_prepared_sha256 != result.get("result_prepared_fleet_sha256")
+        ):
+            raise ValueError("completed unit result prepared fleet changed")
     for field in ("normalized_report", "resource_samples"):
         artifact = runner_root / str(result.get(field, ""))
         expected = result.get(f"{field}_sha256")
@@ -465,6 +536,25 @@ def verify_completed_unit(root: Path, record: dict[str, Any]) -> None:
         raise ValueError("completed unit corpus path is outside the campaign")
     if sha256(corpus) != result.get("signed_transfer_corpus_sha256"):
         raise ValueError("completed unit corpus changed")
+    corpus_generation = result.get("corpus_generation")
+    if corpus_generation is not None:
+        if not isinstance(corpus_generation, dict):
+            raise ValueError("completed unit corpus generation is malformed")
+        scratch_before = corpus_generation.get("scratch_before_sha256")
+        scratch_after = corpus_generation.get("scratch_after_sha256")
+        if (
+            corpus_generation.get("mode")
+            != "disposable-canonical-prepared-fleet-clone"
+            or corpus_generation.get("source_prepared_fleet_sha256")
+            != result.get("prepared_fleet_sha256")
+            or not is_sha256(scratch_before)
+            or not is_sha256(scratch_after)
+            or scratch_before != result.get("prepared_fleet_sha256")
+            or corpus_generation.get("scratch_mutated")
+            is not (scratch_before != scratch_after)
+            or corpus_generation.get("scratch_discarded") is not True
+        ):
+            raise ValueError("completed unit corpus generation binding changed")
 
 
 def move_if_present(source: Path, destination_root: Path) -> str | None:
@@ -585,16 +675,20 @@ def validate_checkpoint(
         node_bin, seed, expected_source_revision
     ) != checkpoint.get("node_binary_build"):
         raise ValueError("campaign binary build identity changed")
-    current_snapshot = safe_campaign_path(
+    current_snapshot = optional_campaign_path(
         state.root,
-        str(checkpoint.get("current_snapshot", "")),
+        checkpoint.get("current_snapshot"),
         "campaign current snapshot",
     )
-    if BASE.directory_digest(current_snapshot) != checkpoint.get(
-        "current_snapshot_sha256"
-    ):
+    current_snapshot_sha256 = checkpoint.get("current_snapshot_sha256")
+    if current_snapshot is None:
+        if current_snapshot_sha256 is not None:
+            raise ValueError("campaign current snapshot nullability changed")
+    elif BASE.directory_digest(current_snapshot) != current_snapshot_sha256:
         raise ValueError("campaign current snapshot changed")
     current_height = int(checkpoint.get("current_height", 0))
+    if current_height == 1 and current_snapshot is None:
+        raise ValueError("height-one campaign omitted its current snapshot")
     current_prepared_raw = checkpoint.get("current_prepared_fleet")
     current_prepared_sha256 = checkpoint.get("current_prepared_fleet_sha256")
     if current_height > 1:
@@ -614,16 +708,27 @@ def validate_checkpoint(
     for raw_height, material in materials.items():
         if not isinstance(material, dict) or str(int(raw_height)) != raw_height:
             raise ValueError("campaign height material is malformed")
-        snapshot = safe_campaign_path(
-            state.root, str(material.get("snapshot", "")), "height snapshot"
+        height = int(raw_height)
+        snapshot = optional_campaign_path(
+            state.root, material.get("snapshot"), "height snapshot"
+        )
+        snapshot_sha256 = material.get("snapshot_sha256")
+        legacy_height = any(
+            entry.get("lane") == "legacy-jsonl" and entry.get("height") == height
+            for entry in configuration["lane_height_matrix"]
         )
         corpus = safe_campaign_path(
             state.root,
             str(material.get("signed_transfer_corpus", "")),
             "height signed corpus",
         )
-        if BASE.directory_digest(snapshot) != material.get("snapshot_sha256"):
-            raise ValueError(f"campaign height {raw_height} snapshot changed")
+        if legacy_height:
+            if snapshot is None or BASE.directory_digest(snapshot) != snapshot_sha256:
+                raise ValueError(f"campaign height {raw_height} snapshot changed")
+        elif snapshot is not None or snapshot_sha256 is not None:
+            raise ValueError(
+                f"campaign height {raw_height} retained an unnecessary snapshot"
+            )
         if sha256(corpus) != material.get("signed_transfer_corpus_sha256"):
             raise ValueError(f"campaign height {raw_height} corpus changed")
         prepared_fleet = safe_campaign_path(
@@ -636,6 +741,49 @@ def validate_checkpoint(
             "prepared_fleet_sha256"
         ):
             raise ValueError(f"campaign height {raw_height} prepared fleet changed")
+        expected_corpus_mode = (
+            "authenticated-portable-snapshot-import"
+            if legacy_height
+            else "disposable-canonical-prepared-fleet-clone"
+        )
+        if material.get("corpus_source_mode") != expected_corpus_mode:
+            raise ValueError(f"campaign height {raw_height} corpus source changed")
+        expected_corpus_fleet = (
+            None if legacy_height else material.get("prepared_fleet_sha256")
+        )
+        if (
+            material.get("corpus_source_prepared_fleet_sha256")
+            != expected_corpus_fleet
+        ):
+            raise ValueError(
+                f"campaign height {raw_height} corpus fleet binding changed"
+            )
+        scratch_before = material.get("corpus_scratch_before_sha256")
+        scratch_after = material.get("corpus_scratch_after_sha256")
+        if legacy_height:
+            if any(
+                material.get(field) is not None
+                for field in (
+                    "corpus_scratch_before_sha256",
+                    "corpus_scratch_after_sha256",
+                    "corpus_scratch_mutated",
+                    "corpus_scratch_discarded",
+                )
+            ):
+                raise ValueError(
+                    f"campaign height {raw_height} legacy corpus has scratch metadata"
+                )
+        elif (
+            not is_sha256(scratch_before)
+            or not is_sha256(scratch_after)
+            or scratch_before != material.get("prepared_fleet_sha256")
+            or material.get("corpus_scratch_mutated")
+            is not (scratch_before != scratch_after)
+            or material.get("corpus_scratch_discarded") is not True
+        ):
+            raise ValueError(
+                f"campaign height {raw_height} corpus scratch binding changed"
+            )
     completed = checkpoint.get("completed_units")
     if not isinstance(completed, dict):
         raise ValueError("campaign checkpoint omitted completed units")
@@ -750,7 +898,8 @@ def record_result(
     runner_root: Path,
     kind: str,
     result: dict[str, Any],
-    result_snapshot: Path,
+    result_snapshot: Path | None,
+    result_prepared_fleet: Path | None = None,
 ) -> None:
     state.value["completed_units"][unit_id] = completed_unit_record(
         state.root,
@@ -758,7 +907,69 @@ def record_result(
         kind=kind,
         result=result,
         result_snapshot=result_snapshot,
+        result_prepared_fleet=result_prepared_fleet,
     )
+
+
+def create_corpus_from_prepared_fleet(
+    *,
+    node_bin: Path,
+    prepared_fleet: Path,
+    prepared_fleet_sha256: str,
+    working_fleet: Path,
+    wallet_key: Path,
+    wallet_address: str,
+    recipient: str,
+    count: int,
+    expected_first_sequence: int,
+    output_file: Path,
+    logs: Path,
+    label: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    BASE.validate_prepared_fleet(prepared_fleet)
+    source_before = BASE.directory_digest(prepared_fleet)
+    if source_before != prepared_fleet_sha256:
+        raise RuntimeError("prepared fleet changed before corpus creation")
+    BASE.clone_prepared_fleet(
+        prepared_fleet,
+        working_fleet,
+        prepared_fleet_sha256,
+    )
+    working_before = BASE.directory_digest(working_fleet)
+    if working_before != source_before:
+        raise RuntimeError("corpus scratch clone differs from its frozen source")
+    report = BASE.create_signed_transfer_corpus(
+        node_bin=node_bin,
+        source_data_dir=working_fleet / "validator-0",
+        wallet_key=wallet_key,
+        wallet_address=wallet_address,
+        recipient=recipient,
+        count=count,
+        output_file=output_file,
+        logs=logs,
+        label=label,
+    )
+    working_after = BASE.directory_digest(working_fleet)
+    if BASE.directory_digest(prepared_fleet) != source_before:
+        raise RuntimeError("source prepared fleet changed during corpus creation")
+    expected_last_sequence = expected_first_sequence + count - 1
+    if (
+        int(report.get("first_sequence", -1)) != expected_first_sequence
+        or int(report.get("last_sequence", -1)) != expected_last_sequence
+    ):
+        raise RuntimeError("prepared-fleet corpus sequence differs from campaign state")
+    shutil.rmtree(working_fleet)
+    if working_fleet.exists():
+        raise RuntimeError("disposable corpus fleet was not removed")
+    provenance = {
+        "mode": "disposable-canonical-prepared-fleet-clone",
+        "source_prepared_fleet_sha256": source_before,
+        "scratch_before_sha256": working_before,
+        "scratch_after_sha256": working_after,
+        "scratch_mutated": working_after != working_before,
+        "scratch_discarded": True,
+    }
+    return report, provenance
 
 
 def advance_to(
@@ -781,9 +992,9 @@ def advance_to(
         next_height = min(target_height, current_height + chunk_size)
         label = f"advance-{current_height}-to-{next_height}"
         unit_id = f"canonical/{label}"
-        source_snapshot = safe_campaign_path(
+        source_snapshot = optional_campaign_path(
             state.root,
-            str(state.value["current_snapshot"]),
+            state.value.get("current_snapshot"),
             "current canonical snapshot",
         )
         corpus = corpora_root / f"{label}.json"
@@ -810,17 +1021,37 @@ def advance_to(
             owned_corpus=corpus,
             owned_prepared_fleet=prepared_fleet,
         )
-        BASE.create_signed_transfer_corpus(
-            node_bin=node_bin,
-            source_snapshot=source_snapshot,
-            wallet_key=wallet_key,
-            wallet_address=wallet_address,
-            recipient=recipient,
-            count=next_height - current_height,
-            output_file=corpus,
-            logs=canonical_root / "logs",
-            label=label,
-        )
+        if current_prepared is None:
+            if source_snapshot is None:
+                raise RuntimeError("initial advance omitted its portable snapshot")
+            BASE.create_signed_transfer_corpus(
+                node_bin=node_bin,
+                source_snapshot=source_snapshot,
+                wallet_key=wallet_key,
+                wallet_address=wallet_address,
+                recipient=recipient,
+                count=next_height - current_height,
+                output_file=corpus,
+                logs=canonical_root / "logs",
+                label=label,
+            )
+        else:
+            if not isinstance(current_prepared_sha256, str):
+                raise RuntimeError("advance prepared fleet omitted its digest")
+            _report, corpus_provenance = create_corpus_from_prepared_fleet(
+                node_bin=node_bin,
+                prepared_fleet=current_prepared,
+                prepared_fleet_sha256=current_prepared_sha256,
+                working_fleet=canonical_root / "nodes",
+                wallet_key=wallet_key,
+                wallet_address=wallet_address,
+                recipient=recipient,
+                count=next_height - current_height,
+                expected_first_sequence=current_height,
+                output_file=corpus,
+                logs=canonical_root / "logs",
+                label=label,
+            )
         result, result_snapshot = BASE.run_rounds(
             node_bin=node_bin,
             root=canonical_root,
@@ -852,6 +1083,14 @@ def advance_to(
         ):
             raise RuntimeError("canonical advance ended at the wrong height")
         prepared_fleet_sha256 = BASE.directory_digest(canonical_root / "nodes")
+        if result.get("result_prepared_fleet_sha256") != prepared_fleet_sha256:
+            raise RuntimeError("canonical advance result fleet digest differs")
+        if current_prepared is not None:
+            result["corpus_generation"] = corpus_provenance
+            BASE.write_json(
+                canonical_root / "receipts" / f"{label}.json",
+                result,
+            )
         BASE.clone_prepared_fleet(
             canonical_root / "nodes",
             prepared_fleet,
@@ -864,13 +1103,18 @@ def advance_to(
             kind="advance",
             result=result,
             result_snapshot=result_snapshot,
+            result_prepared_fleet=prepared_fleet,
         )
         state.value["current_height"] = next_height
-        state.value["current_snapshot"] = result_snapshot.relative_to(
-            state.root
-        ).as_posix()
-        state.value["current_snapshot_sha256"] = BASE.directory_digest(
-            result_snapshot
+        state.value["current_snapshot"] = (
+            result_snapshot.relative_to(state.root).as_posix()
+            if result_snapshot is not None
+            else None
+        )
+        state.value["current_snapshot_sha256"] = (
+            BASE.directory_digest(result_snapshot)
+            if result_snapshot is not None
+            else None
         )
         state.value["current_prepared_fleet"] = prepared_fleet.relative_to(
             state.root
@@ -893,8 +1137,8 @@ def freeze_height_material(
         return
     if int(state.value["current_height"]) != height:
         raise RuntimeError("cannot freeze material at a different current height")
-    source_snapshot = safe_campaign_path(
-        state.root, str(state.value["current_snapshot"]), "height snapshot"
+    source_snapshot = optional_campaign_path(
+        state.root, state.value.get("current_snapshot"), "height snapshot"
     )
     prepared_fleet = safe_campaign_path(
         state.root,
@@ -911,25 +1155,81 @@ def freeze_height_material(
     unit_id = f"material/height-{height}"
     state.begin_unit(
         unit_id,
+        runner_root=state.root / "canonical",
+        label=f"height-{height}",
         owned_corpus=corpus,
     )
-    report = BASE.create_signed_transfer_corpus(
-        node_bin=node_bin,
-        source_snapshot=source_snapshot,
-        wallet_key=wallet_key,
-        wallet_address=wallet_address,
-        recipient=recipient,
-        count=int(state.value["configuration"]["rounds_per_window"]),
-        output_file=corpus,
-        logs=state.root / "canonical" / "logs",
-        label=f"height-{height}",
+    legacy_height = any(
+        entry.get("lane") == "legacy-jsonl" and entry.get("height") == height
+        for entry in state.value["configuration"]["lane_height_matrix"]
     )
+    if legacy_height:
+        if source_snapshot is None:
+            raise RuntimeError("legacy comparison height omitted its portable snapshot")
+        report = BASE.create_signed_transfer_corpus(
+            node_bin=node_bin,
+            source_snapshot=source_snapshot,
+            wallet_key=wallet_key,
+            wallet_address=wallet_address,
+            recipient=recipient,
+            count=int(state.value["configuration"]["rounds_per_window"]),
+            output_file=corpus,
+            logs=state.root / "canonical" / "logs",
+            label=f"height-{height}",
+        )
+        corpus_source_mode = "authenticated-portable-snapshot-import"
+        corpus_source_prepared_fleet_sha256 = None
+    else:
+        report, corpus_provenance = create_corpus_from_prepared_fleet(
+            node_bin=node_bin,
+            prepared_fleet=prepared_fleet,
+            prepared_fleet_sha256=prepared_fleet_sha256,
+            working_fleet=state.root / "canonical" / "nodes",
+            wallet_key=wallet_key,
+            wallet_address=wallet_address,
+            recipient=recipient,
+            count=int(state.value["configuration"]["rounds_per_window"]),
+            expected_first_sequence=height,
+            output_file=corpus,
+            logs=state.root / "canonical" / "logs",
+            label=f"height-{height}",
+        )
+        corpus_source_mode = "disposable-canonical-prepared-fleet-clone"
+        corpus_source_prepared_fleet_sha256 = prepared_fleet_sha256
     state.value["height_materials"][key] = {
         "height": height,
-        "snapshot": source_snapshot.relative_to(state.root).as_posix(),
-        "snapshot_sha256": BASE.directory_digest(source_snapshot),
+        "snapshot": (
+            source_snapshot.relative_to(state.root).as_posix()
+            if source_snapshot is not None
+            else None
+        ),
+        "snapshot_sha256": (
+            BASE.directory_digest(source_snapshot)
+            if source_snapshot is not None
+            else None
+        ),
         "prepared_fleet": prepared_fleet.relative_to(state.root).as_posix(),
         "prepared_fleet_sha256": prepared_fleet_sha256,
+        "corpus_source_mode": corpus_source_mode,
+        "corpus_source_prepared_fleet_sha256": (
+            corpus_source_prepared_fleet_sha256
+        ),
+        "corpus_scratch_before_sha256": (
+            corpus_provenance["scratch_before_sha256"]
+            if not legacy_height
+            else None
+        ),
+        "corpus_scratch_after_sha256": (
+            corpus_provenance["scratch_after_sha256"]
+            if not legacy_height
+            else None
+        ),
+        "corpus_scratch_mutated": (
+            corpus_provenance["scratch_mutated"] if not legacy_height else None
+        ),
+        "corpus_scratch_discarded": (
+            corpus_provenance["scratch_discarded"] if not legacy_height else None
+        ),
         "signed_transfer_corpus": corpus.relative_to(state.root).as_posix(),
         "signed_transfer_corpus_sha256": sha256(corpus),
         "transfer_count": int(report["transfer_count"]),
@@ -952,8 +1252,8 @@ def run_windows(
     topology: Path,
 ) -> None:
     material = state.value["height_materials"][str(height)]
-    source_snapshot = safe_campaign_path(
-        state.root, material["snapshot"], "window source snapshot"
+    source_snapshot = optional_campaign_path(
+        state.root, material.get("snapshot"), "window source snapshot"
     )
     corpus = safe_campaign_path(
         state.root, material["signed_transfer_corpus"], "window signed corpus"
@@ -964,6 +1264,8 @@ def run_windows(
         "window prepared fleet",
     )
     use_prepared_fleet = lane == BASE.SELECTED_STORAGE_LANE
+    if not use_prepared_fleet and source_snapshot is None:
+        raise RuntimeError("legacy window omitted its portable snapshot")
     lane_root = state.root / "lanes" / lane
     windows = int(state.value["configuration"]["windows_per_height"])
     rounds = int(state.value["configuration"]["rounds_per_window"])
@@ -993,7 +1295,7 @@ def run_windows(
             nodes_root=(state.root / "canonical" / "nodes") if use_prepared_fleet else None,
         )
         if (
-            result["source_snapshot_sha256"] != material["snapshot_sha256"]
+            result["source_snapshot_sha256"] != material.get("snapshot_sha256")
             or result["signed_transfer_corpus_sha256"]
             != material["signed_transfer_corpus_sha256"]
             or int(result["starting_height"]) != height
@@ -1006,6 +1308,16 @@ def run_windows(
             )
             or result.get("prepared_fleet_sha256")
             != (material["prepared_fleet_sha256"] if use_prepared_fleet else None)
+            or (
+                result.get("result_snapshot_sha256") is not None
+                if use_prepared_fleet
+                else not is_sha256(result.get("result_snapshot_sha256"))
+            )
+            or (
+                not is_sha256(result.get("result_prepared_fleet_sha256"))
+                if use_prepared_fleet
+                else result.get("result_prepared_fleet_sha256") is not None
+            )
         ):
             raise RuntimeError(f"{unit_id} did not preserve the frozen input boundary")
         record_result(
@@ -1227,7 +1539,7 @@ def build_report(
         "lane_order": list(LANE_ORDER),
         "lane_height_matrix": configuration["lane_height_matrix"],
         "lanes": lanes,
-        "snapshots_by_height": materials,
+        "materials_by_height": materials,
         "legacy_height_50_baseline": baseline,
         "rows": selected["rows"],
         "ratios": ratios,

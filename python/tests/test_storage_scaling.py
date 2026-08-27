@@ -655,7 +655,9 @@ def _passing_packet(packet: Path) -> None:
                         and full_history_bytes == 0,
                         "bounded_index_pages": lane_name != "legacy-jsonl",
                         "constant_accumulator_work": lane_name != "legacy-jsonl",
-                        "source_snapshot_sha256": f"{height + 10:064x}",
+                        "source_snapshot_sha256": (
+                            f"{height + 10:064x}" if height == 50 else None
+                        ),
                         "node_preparation_mode": (
                             "byte-verified-prepared-fleet-clone"
                             if selected
@@ -666,7 +668,12 @@ def _passing_packet(packet: Path) -> None:
                         ),
                         "signed_transfer_corpus": corpus["path"],
                         "signed_transfer_corpus_sha256": corpus["sha256"],
-                        "result_snapshot_sha256": f"{result_identity_seed:064x}",
+                        "result_snapshot_sha256": (
+                            None if selected else f"{result_identity_seed:064x}"
+                        ),
+                        "result_prepared_fleet_sha256": (
+                            f"{result_identity_seed + 2:064x}" if selected else None
+                        ),
                         "initial_fleet": performance_fleet(
                             height, initial_identity_seed
                         ),
@@ -1351,7 +1358,7 @@ def _passing_packet(packet: Path) -> None:
             "status": "PASS",
             "captured_at": "2026-08-27T00:00:00Z",
             "campaign_mode": "release-qualification",
-            "qualification_profile": "time-budgeted-redb-v1",
+            "qualification_profile": "time-budgeted-redb-v2",
             "evidence_eligible": True,
             "source_worktree_clean": True,
             "source_revision": revision,
@@ -1374,12 +1381,34 @@ def _passing_packet(packet: Path) -> None:
                 {"lane": "legacy-jsonl", "height": 50},
             ],
             "lanes": performance_lanes,
-            "snapshots_by_height": [
+            "materials_by_height": [
                 {
                     "height": height,
-                    "snapshot": f"canonical/snapshots/height-{height}.snapshot",
-                    "snapshot_sha256": f"{height + 10:064x}",
+                    "snapshot": (
+                        f"canonical/snapshots/height-{height}.snapshot"
+                        if height == 50
+                        else None
+                    ),
+                    "snapshot_sha256": (
+                        f"{height + 10:064x}" if height == 50 else None
+                    ),
                     "prepared_fleet_sha256": f"{height + 20:064x}",
+                    "corpus_source_mode": (
+                        "authenticated-portable-snapshot-import"
+                        if height == 50
+                        else "disposable-canonical-prepared-fleet-clone"
+                    ),
+                    "corpus_source_prepared_fleet_sha256": (
+                        None if height == 50 else f"{height + 20:064x}"
+                    ),
+                    "corpus_scratch_before_sha256": (
+                        None if height == 50 else f"{height + 20:064x}"
+                    ),
+                    "corpus_scratch_after_sha256": (
+                        None if height == 50 else f"{height + 31:064x}"
+                    ),
+                    "corpus_scratch_mutated": None if height == 50 else True,
+                    "corpus_scratch_discarded": None if height == 50 else True,
                     "signed_transfer_corpus": performance_corpora[height]["path"],
                     "signed_transfer_corpus_sha256": performance_corpora[height][
                         "sha256"
@@ -1722,7 +1751,7 @@ class StorageScalingVerifierTests(unittest.TestCase):
             _rewrite_performance(packet, change_snapshot)
             with self.assertRaisesRegex(
                 StorageScalingVerificationError,
-                "did not use the shared authenticated snapshot",
+                "did not use the shared frozen input",
             ):
                 verify_packet(packet)
 
@@ -1747,13 +1776,113 @@ class StorageScalingVerifierTests(unittest.TestCase):
             ):
                 verify_packet(packet)
 
+    def test_storage_scaling_packet_rejects_high_height_snapshot_dependency(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def add_snapshot(performance: dict[str, object]) -> None:
+                materials = performance["materials_by_height"]
+                assert isinstance(materials, list)
+                high = materials[1]
+                assert isinstance(high, dict)
+                high["snapshot"] = "canonical/snapshots/height-5000.snapshot"
+                high["snapshot_sha256"] = "f" * 64
+
+            _rewrite_performance(packet, add_snapshot)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "snapshot/corpus binding is invalid",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_unbound_corpus_source_fleet(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def change_corpus_source(performance: dict[str, object]) -> None:
+                materials = performance["materials_by_height"]
+                assert isinstance(materials, list)
+                high = materials[1]
+                assert isinstance(high, dict)
+                high["corpus_source_prepared_fleet_sha256"] = "f" * 64
+
+            _rewrite_performance(packet, change_corpus_source)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "snapshot/corpus binding is invalid",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_forged_scratch_discard(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def retain_scratch(performance: dict[str, object]) -> None:
+                materials = performance["materials_by_height"]
+                assert isinstance(materials, list)
+                high = materials[1]
+                assert isinstance(high, dict)
+                high["corpus_scratch_discarded"] = False
+
+            _rewrite_performance(packet, retain_scratch)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "snapshot/corpus binding is invalid",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_scratch_not_cloned_from_source(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def change_scratch_source(performance: dict[str, object]) -> None:
+                materials = performance["materials_by_height"]
+                assert isinstance(materials, list)
+                high = materials[1]
+                assert isinstance(high, dict)
+                high["corpus_scratch_before_sha256"] = "f" * 64
+
+            _rewrite_performance(packet, change_scratch_source)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "snapshot/corpus binding is invalid",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_selected_result_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def add_result_snapshot(performance: dict[str, object]) -> None:
+                lanes = performance["lanes"]
+                assert isinstance(lanes, dict)
+                selected = lanes["selected-indexed"]
+                assert isinstance(selected, dict)
+                rows = selected["rows"]
+                assert isinstance(rows, list)
+                rows[1]["windows"][0]["result_snapshot_sha256"] = "f" * 64
+
+            _rewrite_performance(packet, add_result_snapshot)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "did not use the frozen prepared fleet",
+            ):
+                verify_packet(packet)
+
     def test_storage_scaling_packet_rejects_unbound_signed_corpus(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             packet = self.packet_dir(temporary)
             _passing_packet(packet)
 
             def change_corpus(performance: dict[str, object]) -> None:
-                snapshots = performance["snapshots_by_height"]
+                snapshots = performance["materials_by_height"]
                 assert isinstance(snapshots, list)
                 snapshots[0]["signed_transfer_corpus_sha256"] = "f" * 64
 

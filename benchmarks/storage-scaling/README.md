@@ -35,30 +35,37 @@ comparison mode requires both `--offline-confirmed` and
 clones.
 
 The runner creates one topology, validator-key set, deterministic wallet and
-recipient, and canonical transactional seed snapshot. It freezes each selected
-height as both a portable authenticated snapshot and a content-hashed prepared
-six-node fleet. Every selected window restores a byte-for-byte file-content
-copy of that fleet at the canonical database path recorded by the transactional
-generation pointer. The legacy control imports the shared portable height-50
-snapshot instead, because its intentionally different backend must not inherit
-the selected redb generation. Both height-50 lanes consume the same signed
-corpus. The source revision, binary SHA-256, snapshot digest, signed transaction
-bytes, host
-allocation, storage device, full-vote policy, and 900-second fail-closed timeout
-are identical; only the authenticated backend mode changes. The height-5,000
-snapshot is built through selected transactional advance chunks, never through
-a legacy height-5,000 control.
+recipient, and canonical transactional seed snapshot. Height 50 is frozen as
+both a portable authenticated snapshot and a content-hashed prepared six-node
+fleet because the legacy comparison needs the portable form. Higher selected
+heights are frozen only as content-hashed prepared fleets. Every selected
+window restores a byte-for-byte file-content copy of its fleet at the canonical
+database path recorded by the transactional generation pointer. The legacy
+control imports the shared portable height-50 snapshot instead, because its
+intentionally different backend must not inherit the selected redb generation.
+Both height-50 lanes consume the same signed corpus. The source revision,
+binary SHA-256, snapshot or prepared-fleet digest, signed transaction bytes,
+host allocation, storage device, full-vote policy, and 900-second fail-closed
+timeout are identical; only the authenticated backend mode changes. The
+height-5,000 prepared fleet is built through selected transactional advance chunks; no
+portable height-5,000 snapshot or legacy height-5,000 control is created.
 
 The runner atomically checkpoints every advance chunk, frozen height input, and
 completed window. `--resume` rehashes and refuses any changed source, binary,
-runner, topology, validator identities, snapshot, corpus, timeout, completed
-report, resource stream, receipt, or result snapshot. A partial unit is moved
-to an `interrupted/` quarantine before retry, not overwritten. An exclusive
-campaign lock prevents concurrent resume. The release profile has a four-hour
-aggregate wall-clock limit. Advances contain at most 1,500 rounds. Each
-completed chunk freezes both its portable snapshot and a content-hashed
-prepared fleet; the next chunk restores a verified copy at the canonical redb
-path instead of replay-importing six ever-larger histories. Operators must
+runner, topology, validator identities, snapshot or prepared fleet, corpus,
+timeout, completed report, resource stream, receipt, or result binding. A
+partial unit is moved to an `interrupted/` quarantine before retry, not
+overwritten. An exclusive campaign lock prevents concurrent resume. The release
+profile has a four-hour aggregate wall-clock limit. Advances contain at most
+1,500 rounds. Each
+completed chunk freezes a content-hashed prepared fleet; only the initial
+height-50 chunk also freezes a portable snapshot for the legacy comparison.
+The next selected chunk restores a verified copy at the canonical redb path
+instead of replay-importing or exporting ever-larger histories. Its signed
+corpus is created on a byte-verified disposable canonical clone of the stopped
+prepared fleet. The runner proves the frozen source is unchanged, binds the
+scratch clone's before/after digests and expected sequence, discards the scratch,
+and restores a pristine clone before measurement. Operators must
 additionally wrap each unattended segment in the plan's two-hour hard timeout;
 a completed unit is durable and a partial unit is quarantined.
 
@@ -113,7 +120,11 @@ python3 -u benchmarks/storage-scaling/run_paired_campaign.py \
 ```
 
 `run_paired_campaign.py --development-smoke` runs one round in the selected and
-legacy lanes from one shared height-2 snapshot and signed corpus. The
+legacy lanes from one shared height-2 snapshot and signed corpus, then advances
+the selected prepared fleet to height 3 and runs a second selected window with
+no portable snapshot. That final row exercises disposable corpus generation,
+source immutability, scratch discard, and the snapshot-free prepared-fleet
+checkpoint. The
 `--development-stop-after-units N` hook creates a controlled checkpoint stop so
 interrupt/resume behavior can be exercised; neither mode can produce release
 evidence. `run_campaign.py --development-smoke` remains the narrower

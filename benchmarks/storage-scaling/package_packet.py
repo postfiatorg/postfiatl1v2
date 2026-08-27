@@ -20,7 +20,7 @@ SPEC = REPO / "docs" / "architecture" / "storage-scaling-fix-spec.md"
 ARTIFACT_SCHEMAS = {
     "source": "postfiat-storage-source-identity-v1",
     "replay": "postfiat-storage-scaling-replay-v1",
-    "performance": "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v1",
+    "performance": "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v2",
     "tamper": "postfiat-storage-scaling-tamper-matrix-v1",
     "migration": "postfiat-storage-scaling-six-clone-migration-v1",
     "redaction": "postfiat-storage-scaling-redaction-v1",
@@ -148,18 +148,18 @@ def copy_performance(packet: Path, source: Path) -> Path:
     ):
         raise ValueError("performance report is not an evidence-eligible PASS")
     campaign_root = source.parent.resolve()
-    snapshots = report.get("snapshots_by_height")
+    materials = report.get("materials_by_height")
     required_heights = [50, 5000]
     if (
-        not isinstance(snapshots, list)
-        or [entry.get("height") if isinstance(entry, dict) else None for entry in snapshots]
+        not isinstance(materials, list)
+        or [entry.get("height") if isinstance(entry, dict) else None for entry in materials]
         != required_heights
     ):
-        raise ValueError("performance report omitted the closed snapshot/corpus set")
+        raise ValueError("performance report omitted the closed height-material set")
     corpora_by_height: dict[int, tuple[str, str]] = {}
-    for entry in snapshots:
+    for entry in materials:
         if not isinstance(entry, dict):
-            raise ValueError("performance snapshot/corpus entry is malformed")
+            raise ValueError("performance height-material entry is malformed")
         height = int(entry["height"])
         if re.fullmatch(
             r"[0-9a-f]{64}",
@@ -167,6 +167,56 @@ def copy_performance(packet: Path, source: Path) -> Path:
         ) is None:
             raise ValueError(
                 f"performance height-{height} prepared fleet digest is invalid"
+            )
+        if height == 50:
+            if (
+                not isinstance(entry.get("snapshot"), str)
+                or re.fullmatch(
+                    r"[0-9a-f]{64}", str(entry.get("snapshot_sha256", ""))
+                )
+                is None
+                or entry.get("corpus_source_mode")
+                != "authenticated-portable-snapshot-import"
+                or entry.get("corpus_source_prepared_fleet_sha256") is not None
+                or any(
+                    entry.get(field) is not None
+                    for field in (
+                        "corpus_scratch_before_sha256",
+                        "corpus_scratch_after_sha256",
+                        "corpus_scratch_mutated",
+                        "corpus_scratch_discarded",
+                    )
+                )
+            ):
+                raise ValueError("performance height-50 snapshot binding is invalid")
+        elif (
+            entry.get("snapshot") is not None
+            or entry.get("snapshot_sha256") is not None
+            or entry.get("corpus_source_mode")
+            != "disposable-canonical-prepared-fleet-clone"
+            or entry.get("corpus_source_prepared_fleet_sha256")
+            != entry.get("prepared_fleet_sha256")
+            or re.fullmatch(
+                r"[0-9a-f]{64}",
+                str(entry.get("corpus_scratch_before_sha256", "")),
+            )
+            is None
+            or re.fullmatch(
+                r"[0-9a-f]{64}",
+                str(entry.get("corpus_scratch_after_sha256", "")),
+            )
+            is None
+            or entry.get("corpus_scratch_before_sha256")
+            != entry.get("prepared_fleet_sha256")
+            or entry.get("corpus_scratch_mutated")
+            is not (
+                entry.get("corpus_scratch_before_sha256")
+                != entry.get("corpus_scratch_after_sha256")
+            )
+            or entry.get("corpus_scratch_discarded") is not True
+        ):
+            raise ValueError(
+                f"performance height-{height} prepared corpus binding is invalid"
             )
         entry.pop("prepared_fleet", None)
         corpus_source = resolve_campaign_file(
