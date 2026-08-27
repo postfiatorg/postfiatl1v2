@@ -66,6 +66,7 @@ mod transport_batch_payload_tests {
             let vote_dir = data_dir.join(format!("{round_label}-transport-votes"));
             let key_file = data_dir.join(VALIDATOR_KEYS_FILE);
             handles.push(std::thread::spawn(move || {
+                let shutdown_requested = std::sync::atomic::AtomicBool::new(false);
                 crate::transport_runtime::transport_validator_serve_inner(
                     data_dir,
                     topology_file,
@@ -86,6 +87,7 @@ mod transport_batch_payload_tests {
                         asset_orchard_private_egress_verifier_ms: Some(0.0),
                         asset_orchard_private_egress_verifier_breakdown: None,
                     }),
+                    &shutdown_requested,
                 )
             }));
         }

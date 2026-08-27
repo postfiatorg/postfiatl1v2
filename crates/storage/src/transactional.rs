@@ -2651,10 +2651,15 @@ fn shared_transactional_store(
     Ok(store)
 }
 
-/// Release process-cached writable handles that have no live consumer before
-/// an offline read-only verifier opens a database. Active handles remain in
-/// place, causing the read-only open to fail closed on redb's file lock.
-pub(crate) fn release_inactive_shared_transactional_stores() -> StorageResult<()> {
+/// Drop process-global transactional handles that have no live caller.
+///
+/// Command-line binaries must call this before returning to the operating
+/// system. Rust does not run destructors for process-global statics at exit,
+/// so retaining the registry's final `Arc` would prevent redb from recording
+/// a clean shutdown and force a height-dependent repair on the next open.
+/// Active handles remain in place, causing a competing read-only open to fail
+/// closed on redb's file lock.
+pub fn release_inactive_shared_transactional_stores() -> StorageResult<()> {
     let Some(registry) = SHARED_STORES.get() else {
         return Ok(());
     };
@@ -4485,6 +4490,27 @@ mod tests {
         assert!(owners
             .iter()
             .all(|owner| Arc::as_ptr(owner) as usize == first_ptr));
+    }
+
+    #[test]
+    fn inactive_shared_store_release_closes_redb_cleanly() {
+        let dir = TestDir::new("shared-clean-close");
+        let integrity_key = IntegrityKey::load_or_create(&dir.0).expect("load integrity key");
+        let owner =
+            shared_transactional_store(&dir.0, integrity_key.clone()).expect("open shared store");
+
+        release_inactive_shared_transactional_stores().expect("retain live shared owner");
+        assert!(
+            TransactionalStore::open_read_only_with_integrity_key(&dir.0, integrity_key.clone())
+                .is_err(),
+            "a live writable owner must keep the redb file locked"
+        );
+
+        drop(owner);
+        release_inactive_shared_transactional_stores().expect("release inactive shared owner");
+        let reopened = TransactionalStore::open_read_only_with_integrity_key(&dir.0, integrity_key)
+            .expect("cleanly reopen released redb store read-only");
+        drop(reopened);
     }
 
     #[test]

@@ -345,7 +345,11 @@ struct AssetOrchardSwapLiveRoundReport {
 fn main() {
     let args = env::args().skip(1).collect::<Vec<_>>();
     let is_rpc = args.first().is_some_and(|command| command == "rpc");
-    if let Err(error) = run_cli(args.clone()) {
+    let result = run_cli(args.clone());
+    let close_result =
+        postfiat_storage::transactional::release_inactive_shared_transactional_stores()
+            .map_err(|error| format!("transactional storage clean shutdown failed: {error}"));
+    if let Err(error) = result {
         if is_rpc {
             let id = rpc_error_id(&args[1..]);
             let (code, message) = rpc_dispatch::rpc_dispatch_error_response_parts(&error);
@@ -357,6 +361,13 @@ fn main() {
             eprintln!("error: {error}");
             print_usage();
         }
+        if let Err(close_error) = close_result {
+            eprintln!("error: {close_error}");
+        }
+        process::exit(1);
+    }
+    if let Err(error) = close_result {
+        eprintln!("error: {error}");
         process::exit(1);
     }
 }

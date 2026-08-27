@@ -1,5 +1,64 @@
 use super::*;
 
+static TRANSPORT_VALIDATOR_SHUTDOWN_REQUESTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(unix)]
+extern "C" fn transport_validator_signal_handler(_: libc::c_int) {
+    TRANSPORT_VALIDATOR_SHUTDOWN_REQUESTED.store(true, Ordering::Release);
+}
+
+#[cfg(unix)]
+fn install_transport_validator_signal_handlers() -> Result<(), String> {
+    // The command owns its process. A handler only flips an atomic flag; the
+    // nonblocking accept loop performs all cleanup in normal Rust code.
+    unsafe {
+        if libc::signal(
+            libc::SIGTERM,
+            transport_validator_signal_handler as *const () as libc::sighandler_t,
+        ) == libc::SIG_ERR
+            || libc::signal(
+                libc::SIGINT,
+                transport_validator_signal_handler as *const () as libc::sighandler_t,
+            ) == libc::SIG_ERR
+        {
+            return Err(format!(
+                "transport validator signal handler install failed: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn install_transport_validator_signal_handlers() -> Result<(), String> {
+    Ok(())
+}
+
+fn accept_transport_validator_connection(
+    listener: &TcpListener,
+    shutdown_signal: &std::sync::atomic::AtomicBool,
+) -> Result<Option<(TcpStream, SocketAddr)>, String> {
+    loop {
+        if shutdown_signal.load(Ordering::Acquire) {
+            return Ok(None);
+        }
+        match listener.accept() {
+            Ok(accepted) => return Ok(Some(accepted)),
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(10));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(error) => {
+                return Err(format!(
+                    "transport validator service accept failed: {error}"
+                ));
+            }
+        }
+    }
+}
+
 pub(super) struct TransportBatchInboxFiles {
     pub(super) batch_file: PathBuf,
     pub(super) certificate_file: Option<PathBuf>,
@@ -770,6 +829,8 @@ pub(super) fn transport_validator_serve(
     event_log: Option<PathBuf>,
     require_signed_proposal: bool,
 ) -> Result<TransportValidatorServeReport, String> {
+    TRANSPORT_VALIDATOR_SHUTDOWN_REQUESTED.store(false, Ordering::Release);
+    install_transport_validator_signal_handlers()?;
     transport_validator_serve_inner(
         data_dir,
         topology_file,
@@ -781,6 +842,7 @@ pub(super) fn transport_validator_serve(
         event_log,
         require_signed_proposal,
         None,
+        &TRANSPORT_VALIDATOR_SHUTDOWN_REQUESTED,
     )
 }
 
@@ -796,6 +858,7 @@ pub(super) fn transport_validator_serve_inner(
     event_log: Option<PathBuf>,
     require_signed_proposal: bool,
     prewarmed_for_test: Option<TransportShieldedVerifierPrewarmReport>,
+    shutdown_signal: &std::sync::atomic::AtomicBool,
 ) -> Result<TransportValidatorServeReport, String> {
     if max_connections == 0 {
         return Err("--max-connections must be positive".to_string());
@@ -828,6 +891,7 @@ pub(super) fn transport_validator_serve_inner(
     }
     let event_writer = Arc::new(Mutex::new(event_writer));
     let shared_state = Arc::new(Mutex::new(TransportValidatorServeSharedState::default()));
+    let active_streams = Arc::new(Mutex::new(BTreeMap::<u64, TcpStream>::new()));
     let mut handles = Vec::with_capacity(max_connections);
     let (listener, shielded_verifier_prewarm) = transport_startup_after_prewarm(
         || match prewarmed_for_test {
@@ -862,20 +926,35 @@ pub(super) fn transport_validator_serve_inner(
             Ok(())
         },
     )?;
-    for connection_index in 1..=max_connections {
+    listener
+        .set_nonblocking(true)
+        .map_err(|error| format!("transport validator nonblocking accept failed: {error}"))?;
+    let mut was_shutdown = false;
+    'accept_connections: for connection_index in 1..=max_connections {
         let connection_index = connection_index as u64;
-        let (stream, _) = listener
-            .accept()
-            .map_err(|error| format!("transport validator service accept failed: {error}"))?;
+        let Some((stream, _)) =
+            accept_transport_validator_connection(&listener, shutdown_signal)?
+        else {
+            was_shutdown = true;
+            break 'accept_connections;
+        };
         set_stream_timeout(&stream, timeout_ms)?;
+        let shutdown_stream = stream.try_clone().map_err(|error| {
+            format!("transport validator shutdown stream clone failed: {error}")
+        })?;
+        active_streams
+            .lock()
+            .map_err(|_| "transport validator active stream lock poisoned".to_string())?
+            .insert(connection_index, shutdown_stream);
         let data_dir_for_thread = data_dir.clone();
         let key_file_for_thread = key_file.clone();
         let vote_dir_for_thread = vote_dir.clone();
         let topology_for_thread = topology.clone();
         let event_writer_for_thread = Arc::clone(&event_writer);
         let shared_state_for_thread = Arc::clone(&shared_state);
+        let active_streams_for_thread = Arc::clone(&active_streams);
         handles.push(thread::spawn(move || {
-            handle_transport_validator_connection(
+            let result = handle_transport_validator_connection(
                 stream,
                 data_dir_for_thread,
                 key_file_for_thread,
@@ -885,14 +964,50 @@ pub(super) fn transport_validator_serve_inner(
                 shared_state_for_thread,
                 connection_index,
                 require_signed_proposal,
-            )
+            );
+            match active_streams_for_thread.lock() {
+                Ok(mut streams) => {
+                    streams.remove(&connection_index);
+                }
+                Err(_) if result.is_ok() => {
+                    return Err("transport validator active stream lock poisoned".to_string());
+                }
+                Err(_) => {}
+            }
+            result
         }));
     }
 
+    while handles.iter().any(|handle| !handle.is_finished()) {
+        if shutdown_signal.load(Ordering::Acquire) {
+            was_shutdown = true;
+            let streams = active_streams
+                .lock()
+                .map_err(|_| "transport validator active stream lock poisoned".to_string())?;
+            for stream in streams.values() {
+                let _ = stream.shutdown(std::net::Shutdown::Both);
+            }
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    let connection_count = handles.len() as u64;
+    let mut first_error = None;
     for handle in handles {
-        handle
-            .join()
-            .map_err(|_| "transport validator service worker thread panicked".to_string())??;
+        match handle.join() {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) if !was_shutdown => {
+                first_error.get_or_insert(error);
+            }
+            Err(_) if !was_shutdown => {
+                first_error.get_or_insert_with(|| {
+                    "transport validator service worker thread panicked".to_string()
+                });
+            }
+            Ok(Err(_)) | Err(_) => {}
+        }
+    }
+    if let Some(error) = first_error {
+        return Err(error);
     }
     let mut shared_state = shared_state
         .lock()
@@ -912,7 +1027,7 @@ pub(super) fn transport_validator_serve_inner(
         event_log: event_log_path.map(|path| path.display().to_string()),
         require_signed_proposal,
         shielded_verifier_prewarm,
-        connection_count: max_connections as u64,
+        connection_count,
         accepted_batch_count: batch_acks.len() as u64,
         accepted_block_vote_count: block_vote_responses.len() as u64,
         accepted_block_proposal_count: block_proposal_responses.len() as u64,
@@ -4903,6 +5018,27 @@ mod bounded_accept_tests {
     use super::*;
     use std::io::{BufRead, BufReader};
     use std::sync::mpsc;
+
+    #[test]
+    fn validator_accept_loop_stops_after_shutdown_signal() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test listener");
+        listener
+            .set_nonblocking(true)
+            .expect("make test listener nonblocking");
+        let shutdown_signal = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let signal_for_server = Arc::clone(&shutdown_signal);
+        let server = thread::spawn(move || {
+            accept_transport_validator_connection(&listener, &signal_for_server)
+        });
+
+        std::thread::sleep(Duration::from_millis(25));
+        shutdown_signal.store(true, Ordering::Release);
+        let accepted = server
+            .join()
+            .expect("validator accept thread panicked")
+            .expect("validator accept loop failed");
+        assert!(accepted.is_none(), "shutdown must end the accept loop");
+    }
 
     // N2 regression: a stalled connection must not prevent a second
     // connection from being accepted and fully served.
