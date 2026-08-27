@@ -1339,6 +1339,21 @@ def _verify_performance(
         _fail("performance campaign is not a release qualification")
     if performance.get("evidence_eligible") is not True:
         _fail("performance campaign is not evidence eligible")
+    if performance.get("source_worktree_clean") is not True:
+        _fail("performance campaign source worktree was not clean")
+    if (
+        performance.get("offline") is not True
+        or performance.get("network_contacted") is not False
+        or performance.get("devnet_queried_or_mutated") is not False
+    ):
+        _fail("performance campaign execution mode is not offline-only")
+    captured_at = performance.get("captured_at")
+    if not isinstance(captured_at, str) or not captured_at.endswith("Z"):
+        _fail("performance campaign capture time is missing or not UTC")
+    try:
+        datetime.fromisoformat(captured_at[:-1] + "+00:00")
+    except ValueError:
+        _fail("performance campaign capture time is invalid")
     if performance.get("source_revision") != source_revision:
         _fail("performance source revision differs from the packet source")
     current_binary_digest = binary_digests["bin/postfiat-node"]

@@ -1080,8 +1080,10 @@ def _passing_packet(packet: Path) -> None:
         "performance": {
             "schema": ARTIFACT_SCHEMAS["performance"],
             "status": "PASS",
+            "captured_at": "2026-08-27T00:00:00Z",
             "campaign_mode": "release-qualification",
             "evidence_eligible": True,
+            "source_worktree_clean": True,
             "source_revision": revision,
             "node_binary_sha256": _sha256(binary),
             "node_binary_build": {
@@ -1109,6 +1111,9 @@ def _passing_packet(packet: Path) -> None:
                 "stages": height_relationship_stages,
             },
             "no_positive_linear_height_relationship": True,
+            "offline": True,
+            "network_contacted": False,
+            "devnet_queried_or_mutated": False,
             "host": {
                 "cpu_affinity": [0, 1],
                 "campaign_root_device": 1,
@@ -1246,6 +1251,21 @@ class StorageScalingVerifierTests(unittest.TestCase):
             self.assertEqual(
                 verified.report["tamper_case_count"], len(REQUIRED_TAMPER_CASES)
             )
+
+    def test_storage_scaling_packet_rejects_nonoffline_performance(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def claim_network_contact(performance: dict[str, object]) -> None:
+                performance["network_contacted"] = True
+
+            _rewrite_performance(packet, claim_network_contact)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "execution mode is not offline-only",
+            ):
+                verify_packet(packet)
 
     def test_storage_scaling_packet_rejects_missing_performance_lane(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -20,6 +20,7 @@ import os
 import platform
 import shutil
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -475,8 +476,10 @@ def main() -> int:
         lane["comparison_windows_pass"] is True for lane in lanes.values()
     )
     selected_window_gates_pass = selected["selected_storage_gates_pass"] is True
+    source_worktree_clean = BASE.git_is_clean()
     release_gates_pass = (
-        comparison_windows_pass
+        source_worktree_clean
+        and comparison_windows_pass
         and selected_window_gates_pass
         and selected["no_positive_linear_height_relationship"] is True
         and all(value <= 1.10 for value in ratios.values())
@@ -493,12 +496,16 @@ def main() -> int:
     report = {
         "schema": SCHEMA,
         "status": status,
+        "captured_at": datetime.now(timezone.utc)
+        .isoformat(timespec="seconds")
+        .replace("+00:00", "Z"),
         "campaign_mode": (
             "development-smoke"
             if args.development_smoke
             else "release-qualification"
         ),
         "evidence_eligible": (not args.development_smoke and release_gates_pass),
+        "source_worktree_clean": source_worktree_clean,
         "source_revision": args.expected_source_revision,
         "node_binary_sha256": sha256(binaries["selected-indexed"]),
         "node_binary": binaries["selected-indexed"].name,
@@ -579,6 +586,8 @@ def main() -> int:
             "public WAN or devnet performance",
             "deployment authorization",
         ],
+        "offline": True,
+        "network_contacted": False,
         "devnet_queried_or_mutated": False,
     }
     write_json(root / "campaign-report.json", report)
