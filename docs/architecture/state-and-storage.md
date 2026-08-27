@@ -78,10 +78,10 @@ postfiat-node storage-rebuild-transactional --data-dir PATH --output-dir PATH \
 ```
 
 This source is an undeployed development candidate. Canonical snapshot/restore,
-rebuild, and retained-history equality pass, as does offline replay of the exact
-height-915 quarantine archive. Exact height 924, the complete tamper matrix,
-paired release-mode six-validator performance, and six-clone migration remain
-open. See the [Storage Scaling Fix implementation specification](storage-scaling-fix-spec.md),
+rebuild, retained-history equality, exact height-915 replay, the closed 69-case
+tamper/crash matrix, and compatible two-binary rollback pass offline. Exact
+height 924, paired release-mode six-validator performance, six-clone migration,
+and the final packet remain open. See the [Storage Scaling Fix implementation specification](storage-scaling-fix-spec.md),
 the [active milestone](../plans/active/storage-scaling-milestone.md), and
 [development evidence](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling).
 Public testnet remains blocked.

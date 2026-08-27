@@ -5,7 +5,7 @@
 **Decision owner:** Post Fiat
 **Research specification:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 **Implementation specification:** [Storage Scaling Fix](../../architecture/storage-scaling-fix-spec.md)
-**Implementation source:** 1985cd3f6addf4a3c271c8196e0b2fa205f5bd8c
+**Implementation source:** abf746684f2a85df7fe12c8116bbad923787629c
 
 The operator directly authorized implementation on 2026-08-26 and explicitly
 instructed this session not to use Task Node. This milestone records that
@@ -58,19 +58,34 @@ Evidence: [development packet](https://github.com/postfiatorg/postfiatl1v2/tree/
 - [x] Move finalized blocks, receipts, archived batches, ordered membership,
   current state, and chain-tip metadata into one atomic per-height transaction
   as required by the implementation specification.
-- [ ] Run every original E3 tamper case and the full new checkpoint, index-page,
+- [x] Run every original E3 tamper case and the full new checkpoint, index-page,
   stale-head, journal disagreement, and crash-cut matrix.
 - [x] Add snapshot/import behavior and prove clean, restored, and rebuilt
   canonical logical records and history-index entries are byte-identical.
 
+Clean offline qualification on source `abf74668` closed 69 classified cases
+through 37 nonzero test/campaign filters with no uncovered requirement. Tamper
+report SHA-256:
+`8bb4ee30f8b55d10ff41b66aa1163be9ca3afeead4b56b941b0ae1e47c61c9d6`.
+The runner preserved the frozen E3 manifest identity `c23320d4…7167fa7`,
+rebound only its five audited source hashes in manifest SHA-256
+`80fc5dfe…1a30350`, and independently verified 42 rejected attacks plus six
+byte-identical recoveries in report SHA-256 `10d081b6…e610cb7` with
+classification `ab53b5dd…b90d3`. This closes the source-level E2 tamper gate;
+final packet publication remains open.
+
 Primary code:
 
 - crates/storage/src/transactional.rs
+- crates/storage/src/transactional/canonical_export.rs
+- crates/storage/src/transactional/generation.rs
+- crates/storage/src/transactional/tamper_tests.rs
 - crates/storage/src/transactional/export.rs
 - crates/storage/src/integrity.rs
 - crates/storage/src/lib.rs
 - crates/storage/src/ordered_history.rs
 - crates/node/src/storage_migration.rs
+- crates/node/src/storage_vote_guard.rs
 - crates/node/src/mempool_proposals.rs
 - crates/node/src/batch_snapshot.rs
 - crates/node/src/storage_commit.rs
@@ -111,6 +126,15 @@ Primary code:
   pre-activation cancellation records without expanding Cobalt's authority.
 - [x] Write the versioned side-by-side migration, signing, cancellation, and
   rollback operator workflow in the storage-scaling evidence README.
+- [x] Rehearse compatible post-activation software rollback across two distinct
+  release binaries and six disposable local validators. Source `abf74668`
+  finalized height 2, ancestor `1985cd3f` resumed the exact certified tip and
+  finalized height 3, and `abf74668` resumed the exact height-3 tip and finalized
+  height 4. All six converged with literal accepted receipts, bounded page and
+  accumulator work, and zero full-history reads. Report SHA-256:
+  `51b93be075a92053f0e5721779a115e3c66ad36c4f91b82e0ce747396de58af7`;
+  current/rollback binary SHA-256: `093d56dc…b643c940` and
+  `f3a58e2e…b4b514a2`.
 - [ ] Rehearse side-by-side rebuild, full replay, staggered restart, activation,
   post-activation finality, pre-activation rollback, forward recovery,
   catch-up, and convergence on six disposable clones.
