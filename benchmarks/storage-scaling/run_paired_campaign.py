@@ -558,6 +558,8 @@ def validate_checkpoint(
         raise ValueError("campaign configuration changed")
     if checkpoint.get("source_revision") != expected_source_revision:
         raise ValueError("campaign source revision changed")
+    if checkpoint.get("runner_source_revision") != BASE.run_git_revision():
+        raise ValueError("campaign runner checkout revision changed")
     if checkpoint.get("node_binary_sha256") != sha256(node_bin):
         raise ValueError("campaign release binary changed")
     if checkpoint.get("runner_bindings") != runner_bindings():
@@ -638,6 +640,7 @@ def initialize_campaign(
     *,
     node_bin: Path,
     expected_source_revision: str,
+    runner_source_revision: str,
     configuration: dict[str, Any],
 ) -> dict[str, Any]:
     corpora_root = root / "corpora"
@@ -674,6 +677,7 @@ def initialize_campaign(
         "updated_at": utc_now(),
         "elapsed_wall_seconds": 0.0,
         "source_revision": expected_source_revision,
+        "runner_source_revision": runner_source_revision,
         "node_binary_sha256": sha256(node_bin),
         "node_binary": node_bin.name,
         "node_binary_build": binary_build,
@@ -1154,6 +1158,7 @@ def build_report(
         "evidence_eligible": release_pass,
         "source_worktree_clean": source_clean,
         "source_revision": state.value["source_revision"],
+        "runner_source_revision": state.value["runner_source_revision"],
         "node_binary_sha256": sha256(node_bin),
         "node_binary": node_bin.name,
         "node_binary_build": state.value["node_binary_build"],
@@ -1267,8 +1272,6 @@ def main() -> int:
 
     require_revision(args.expected_source_revision, "source revision")
     current_revision = BASE.run_git_revision()
-    if args.expected_source_revision != current_revision:
-        raise ValueError("source revision does not match HEAD")
     if not args.development_smoke and not BASE.git_is_clean():
         raise ValueError("release qualification requires a clean checkout")
 
@@ -1301,6 +1304,7 @@ def main() -> int:
                 root,
                 node_bin=node_bin,
                 expected_source_revision=args.expected_source_revision,
+                runner_source_revision=current_revision,
                 configuration=configuration,
             )
         state = CampaignState(

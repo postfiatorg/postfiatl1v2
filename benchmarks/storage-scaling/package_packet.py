@@ -397,8 +397,9 @@ def main() -> int:
     if packet.exists():
         raise ValueError(f"refusing to overwrite packet: {packet}")
     validate_capture_time(args.captured_at)
-    if args.source_revision != git_revision() or len(args.source_revision) != 40:
-        raise ValueError("source revision does not match HEAD")
+    if re.fullmatch(r"[0-9a-f]{40}", args.source_revision) is None:
+        raise ValueError("candidate source revision is invalid")
+    assembly_revision = git_revision()
     if not git_clean():
         raise ValueError("packet assembly requires a clean checkout")
     node_bin = raw_node_bin.resolve()
@@ -482,6 +483,7 @@ def main() -> int:
     source_report = {
         "schema": ARTIFACT_SCHEMAS["source"],
         "git_revision": args.source_revision,
+        "assembly_revision": assembly_revision,
         "spec_sha3_384": hashlib.sha3_384(SPEC.read_bytes()).hexdigest(),
         "binaries": binaries,
         "clean_checkout": True,
@@ -520,6 +522,7 @@ def main() -> int:
         "captured_at": args.captured_at,
         "source": {
             "git_revision": args.source_revision,
+            "assembly_revision": assembly_revision,
             "spec_sha3_384": source_report["spec_sha3_384"],
             "binaries": binaries,
         },

@@ -1321,6 +1321,7 @@ def _passing_packet(packet: Path) -> None:
         "source": {
             "schema": ARTIFACT_SCHEMAS["source"],
             "git_revision": revision,
+            "assembly_revision": revision,
             "spec_sha3_384": digest96,
             "binaries": binaries,
             "clean_checkout": True,
@@ -1354,6 +1355,7 @@ def _passing_packet(packet: Path) -> None:
             "evidence_eligible": True,
             "source_worktree_clean": True,
             "source_revision": revision,
+            "runner_source_revision": revision,
             "node_binary_sha256": _sha256(binary),
             "node_binary_build": {
                 "git_revision": revision[:8],
@@ -1465,6 +1467,7 @@ def _passing_packet(packet: Path) -> None:
         "captured_at": "2026-08-26T00:00:00Z",
         "source": {
             "git_revision": revision,
+            "assembly_revision": revision,
             "spec_sha3_384": digest96,
             "binaries": binaries,
         },

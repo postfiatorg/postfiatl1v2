@@ -397,7 +397,7 @@ def _verify_source(
     report: Mapping[str, Any],
 ) -> None:
     source = _object(manifest.get("source"), "source")
-    for key in ("git_revision", "spec_sha3_384", "binaries"):
+    for key in ("git_revision", "assembly_revision", "spec_sha3_384", "binaries"):
         if report.get(key) != source.get(key):
             _fail(f"source artifact disagrees with manifest field {key}")
     if report.get("clean_checkout") is not True:
@@ -406,6 +406,8 @@ def _verify_source(
         _fail("source artifact does not identify a release build")
     if HEX40.fullmatch(str(source.get("git_revision", ""))) is None:
         _fail("source git revision is not a full lowercase object ID")
+    if HEX40.fullmatch(str(source.get("assembly_revision", ""))) is None:
+        _fail("packet assembly revision is not a full lowercase object ID")
     if HEX96.fullmatch(str(source.get("spec_sha3_384", ""))) is None:
         _fail("source specification digest is invalid")
     binaries = _list(source.get("binaries"), "source binaries")
@@ -1887,6 +1889,8 @@ def _verify_performance(
         _fail("performance campaign capture time is invalid")
     if performance.get("source_revision") != source_revision:
         _fail("performance source revision differs from the packet source")
+    if HEX40.fullmatch(str(performance.get("runner_source_revision", ""))) is None:
+        _fail("performance runner checkout revision is invalid")
     current_binary_digest = binary_digests["bin/postfiat-node"]
     if performance.get("node_binary_sha256") != current_binary_digest:
         _fail("performance binary identity differs from the packet source")
