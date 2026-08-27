@@ -99,6 +99,8 @@ def _campaign(root: Path, *, label: str = "height-50-window-1") -> Path:
                 "height": height,
                 "snapshot": f"canonical/snapshots/height-{height}.snapshot",
                 "snapshot_sha256": f"{height:064x}",
+                "prepared_fleet": f"prepared-fleets/height-{height}",
+                "prepared_fleet_sha256": f"{height + 1:064x}",
                 "signed_transfer_corpus": corpus.relative_to(root).as_posix(),
                 "signed_transfer_corpus_sha256": digest,
                 "transfer_count": 50,
@@ -136,6 +138,8 @@ class StorageScalingPackagerTests(unittest.TestCase):
             }
             self.assertEqual(set(corpora), {50, 5000})
             for entry in corpora.values():
+                self.assertNotIn("prepared_fleet", entry)
+                self.assertRegex(entry["prepared_fleet_sha256"], r"^[0-9a-f]{64}$")
                 corpus = packet / entry["signed_transfer_corpus"]
                 self.assertTrue(corpus.is_file())
                 self.assertEqual(

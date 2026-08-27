@@ -51,7 +51,7 @@ DEVELOPMENT_MATRIX = (
     ("selected-indexed", 2),
     ("legacy-jsonl", 2),
 )
-ADVANCE_CHUNK_ROUNDS = 100
+ADVANCE_CHUNK_ROUNDS = 5_000
 RELEASE_MAX_WALL_SECONDS = 4 * 60 * 60
 DEVELOPMENT_MAX_WALL_SECONDS = 15 * 60
 SAFE_UNIT = re.compile(r"[^a-zA-Z0-9_.-]+")
@@ -305,6 +305,7 @@ def campaign_configuration(development_smoke: bool) -> dict[str, Any]:
         "windows_per_height": 1 if development_smoke else BASE.WINDOWS_PER_HEIGHT,
         "rounds_per_window": 1 if development_smoke else BASE.ROUNDS_PER_WINDOW,
         "advance_chunk_rounds": 1 if development_smoke else ADVANCE_CHUNK_ROUNDS,
+        "node_preparation_mode": "byte-verified-prepared-fleet-clone",
         "timeout_ms": BASE.QUALIFICATION_TIMEOUT_MS,
         "max_wall_seconds": (
             DEVELOPMENT_MAX_WALL_SECONDS
@@ -366,6 +367,7 @@ class CampaignState:
         runner_root: Path | None = None,
         label: str | None = None,
         owned_corpus: Path | None = None,
+        owned_prepared_fleet: Path | None = None,
     ) -> None:
         current: dict[str, Any] = {"unit_id": unit_id, "started_at": utc_now()}
         if runner_root is not None:
@@ -374,6 +376,10 @@ class CampaignState:
             current["label"] = label
         if owned_corpus is not None:
             current["owned_corpus"] = owned_corpus.relative_to(self.root).as_posix()
+        if owned_prepared_fleet is not None:
+            current["owned_prepared_fleet"] = owned_prepared_fleet.relative_to(
+                self.root
+            ).as_posix()
         self.value["current_unit"] = current
         self.write()
 
@@ -512,6 +518,16 @@ def quarantine_current_unit(state: CampaignState) -> None:
         name = move_if_present(corpus, destination / "corpora")
         if name is not None:
             moved.append(f"corpora/{name}")
+    prepared_fleet_raw = current.get("owned_prepared_fleet")
+    if isinstance(prepared_fleet_raw, str):
+        prepared_fleet = safe_campaign_path(
+            state.root,
+            prepared_fleet_raw,
+            "current unit prepared fleet",
+        )
+        name = move_if_present(prepared_fleet, destination / "prepared-fleets")
+        if name is not None:
+            moved.append(f"prepared-fleets/{name}")
     state.value.setdefault("interrupted_units", []).append(
         {
             "unit_id": unit_id,
@@ -594,6 +610,16 @@ def validate_checkpoint(
             raise ValueError(f"campaign height {raw_height} snapshot changed")
         if sha256(corpus) != material.get("signed_transfer_corpus_sha256"):
             raise ValueError(f"campaign height {raw_height} corpus changed")
+        prepared_fleet = safe_campaign_path(
+            state.root,
+            str(material.get("prepared_fleet", "")),
+            "height prepared fleet",
+        )
+        BASE.validate_prepared_fleet(prepared_fleet)
+        if BASE.directory_digest(prepared_fleet) != material.get(
+            "prepared_fleet_sha256"
+        ):
+            raise ValueError(f"campaign height {raw_height} prepared fleet changed")
     completed = checkpoint.get("completed_units")
     if not isinstance(completed, dict):
         raise ValueError("campaign checkpoint omitted completed units")
@@ -616,6 +642,7 @@ def initialize_campaign(
 ) -> dict[str, Any]:
     corpora_root = root / "corpora"
     corpora_root.mkdir()
+    (root / "prepared-fleets").mkdir()
     shared_root = root / "shared"
     canonical_root = root / "canonical"
     prepare_runner_root(shared_root, seed_root=True)
@@ -811,9 +838,16 @@ def freeze_height_material(
     source_snapshot = safe_campaign_path(
         state.root, str(state.value["current_snapshot"]), "height snapshot"
     )
+    prepared_fleet_source = state.root / "canonical" / "nodes"
+    BASE.validate_prepared_fleet(prepared_fleet_source)
+    prepared_fleet = state.root / "prepared-fleets" / f"height-{height}"
     corpus = state.root / "corpora" / f"height-{height}.json"
     unit_id = f"material/height-{height}"
-    state.begin_unit(unit_id, owned_corpus=corpus)
+    state.begin_unit(
+        unit_id,
+        owned_corpus=corpus,
+        owned_prepared_fleet=prepared_fleet,
+    )
     report = BASE.create_signed_transfer_corpus(
         node_bin=node_bin,
         source_snapshot=source_snapshot,
@@ -825,10 +859,18 @@ def freeze_height_material(
         logs=state.root / "canonical" / "logs",
         label=f"height-{height}",
     )
+    prepared_fleet_sha256 = BASE.directory_digest(prepared_fleet_source)
+    BASE.clone_prepared_fleet(
+        prepared_fleet_source,
+        prepared_fleet,
+        prepared_fleet_sha256,
+    )
     state.value["height_materials"][key] = {
         "height": height,
         "snapshot": source_snapshot.relative_to(state.root).as_posix(),
         "snapshot_sha256": BASE.directory_digest(source_snapshot),
+        "prepared_fleet": prepared_fleet.relative_to(state.root).as_posix(),
+        "prepared_fleet_sha256": prepared_fleet_sha256,
         "signed_transfer_corpus": corpus.relative_to(state.root).as_posix(),
         "signed_transfer_corpus_sha256": sha256(corpus),
         "transfer_count": int(report["transfer_count"]),
@@ -857,6 +899,12 @@ def run_windows(
     corpus = safe_campaign_path(
         state.root, material["signed_transfer_corpus"], "window signed corpus"
     )
+    prepared_fleet = safe_campaign_path(
+        state.root,
+        material["prepared_fleet"],
+        "window prepared fleet",
+    )
+    use_prepared_fleet = lane == BASE.SELECTED_STORAGE_LANE
     lane_root = state.root / "lanes" / lane
     windows = int(state.value["configuration"]["windows_per_height"])
     rounds = int(state.value["configuration"]["rounds_per_window"])
@@ -879,6 +927,11 @@ def run_windows(
             label=label,
             rounds=rounds,
             storage_lane=lane,
+            prepared_fleet=prepared_fleet if use_prepared_fleet else None,
+            prepared_fleet_sha256=(
+                material["prepared_fleet_sha256"] if use_prepared_fleet else None
+            ),
+            nodes_root=(state.root / "canonical" / "nodes") if use_prepared_fleet else None,
         )
         if (
             result["source_snapshot_sha256"] != material["snapshot_sha256"]
@@ -886,6 +939,14 @@ def run_windows(
             != material["signed_transfer_corpus_sha256"]
             or int(result["starting_height"]) != height
             or int(result["final_height"]) != height + rounds
+            or result.get("node_preparation_mode")
+            != (
+                "byte-verified-prepared-fleet-clone"
+                if use_prepared_fleet
+                else "authenticated-portable-snapshot-import"
+            )
+            or result.get("prepared_fleet_sha256")
+            != (material["prepared_fleet_sha256"] if use_prepared_fleet else None)
         ):
             raise RuntimeError(f"{unit_id} did not preserve the frozen input boundary")
         record_result(

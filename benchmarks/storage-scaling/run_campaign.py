@@ -107,6 +107,54 @@ def directory_digest(root: Path) -> str:
     return hasher.hexdigest()
 
 
+def validate_prepared_fleet(root: Path) -> None:
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError(f"prepared fleet is not a regular directory: {root}")
+    expected = {f"validator-{index}" for index in range(VALIDATORS)}
+    observed = {path.name for path in root.iterdir()}
+    if observed != expected:
+        raise ValueError(
+            "prepared fleet validator set differs: "
+            f"expected={sorted(expected)} observed={sorted(observed)}"
+        )
+    for validator in sorted(root.iterdir()):
+        if validator.is_symlink() or not validator.is_dir():
+            raise ValueError(f"prepared validator is not a directory: {validator}")
+        for path in validator.rglob("*"):
+            if path.is_symlink():
+                raise ValueError(f"prepared fleet contains a symlink: {path}")
+            if not path.is_dir() and not path.is_file():
+                raise ValueError(f"prepared fleet contains a special file: {path}")
+
+
+def clone_prepared_fleet(
+    source: Path,
+    destination: Path,
+    expected_sha256: str,
+) -> str:
+    validate_prepared_fleet(source)
+    resolved_source = source.resolve()
+    resolved_destination = destination.resolve(strict=False)
+    if (
+        resolved_source == resolved_destination
+        or resolved_source.is_relative_to(resolved_destination)
+        or resolved_destination.is_relative_to(resolved_source)
+    ):
+        raise ValueError("prepared fleet source and destination overlap")
+    if destination.is_symlink():
+        raise ValueError("prepared fleet destination must not be a symlink")
+    observed_sha256 = directory_digest(source)
+    if observed_sha256 != expected_sha256:
+        raise ValueError("prepared fleet digest changed before clone")
+    if destination.exists():
+        shutil.rmtree(destination)
+    shutil.copytree(source, destination, copy_function=shutil.copy2)
+    validate_prepared_fleet(destination)
+    if directory_digest(destination) != observed_sha256:
+        raise RuntimeError("prepared fleet clone is not byte-identical")
+    return observed_sha256
+
+
 def write_json(path: Path, value: Any, mode: int = 0o644) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -765,6 +813,9 @@ def run_rounds(
     label: str,
     rounds: int,
     storage_lane: str = SELECTED_STORAGE_LANE,
+    prepared_fleet: Path | None = None,
+    prepared_fleet_sha256: str | None = None,
+    nodes_root: Path | None = None,
 ) -> tuple[dict[str, Any], Path]:
     if storage_lane not in HISTORICAL_STORAGE_LANES | {SELECTED_STORAGE_LANE}:
         raise ValueError(f"unsupported storage lane: {storage_lane}")
@@ -772,26 +823,43 @@ def run_rounds(
     if signed_transfer_corpus.is_symlink() or not signed_transfer_corpus.is_file():
         raise ValueError("signed transfer corpus must be a regular non-symlink file")
     logs = root / "logs"
-    nodes = root / "nodes"
-    SHARED.prepare_nodes(node_bin, nodes, source_snapshot, seed, logs, label)
-    backend_mode = STORAGE_BACKEND_MODES[storage_lane]
-    for index in range(VALIDATORS):
-        command = [
-            str(node_bin),
-            "storage-backend-configure",
-            "--data-dir",
-            str(nodes / f"validator-{index}"),
-            "--mode",
-            backend_mode,
-            "--offline-confirmed",
-        ]
-        if not selected_transactional:
-            command.append("--unsafe-comparison-mode")
-        SHARED.run(
-            command,
-            stdout_path=logs / f"{label}.validator-{index}.backend.json",
-            stderr_path=logs / f"{label}.validator-{index}.backend.stderr",
+    nodes = root / "nodes" if nodes_root is None else nodes_root
+    if (prepared_fleet is None) != (prepared_fleet_sha256 is None):
+        raise ValueError(
+            "prepared fleet path and digest must either both be set or both be absent"
         )
+    if prepared_fleet is not None and not selected_transactional:
+        raise ValueError("prepared fleets are valid only for selected transactional runs")
+    if prepared_fleet is None:
+        SHARED.prepare_nodes(node_bin, nodes, source_snapshot, seed, logs, label)
+        node_preparation_mode = "authenticated-portable-snapshot-import"
+        observed_prepared_fleet_sha256 = None
+    else:
+        observed_prepared_fleet_sha256 = clone_prepared_fleet(
+            prepared_fleet,
+            nodes,
+            str(prepared_fleet_sha256),
+        )
+        node_preparation_mode = "byte-verified-prepared-fleet-clone"
+    if prepared_fleet is None:
+        backend_mode = STORAGE_BACKEND_MODES[storage_lane]
+        for index in range(VALIDATORS):
+            command = [
+                str(node_bin),
+                "storage-backend-configure",
+                "--data-dir",
+                str(nodes / f"validator-{index}"),
+                "--mode",
+                backend_mode,
+                "--offline-confirmed",
+            ]
+            if not selected_transactional:
+                command.append("--unsafe-comparison-mode")
+            SHARED.run(
+                command,
+                stdout_path=logs / f"{label}.validator-{index}.backend.json",
+                stderr_path=logs / f"{label}.validator-{index}.backend.stderr",
+            )
     before = full_fleet_status(node_bin, nodes)
     expected_backend, expected_transactional = STORAGE_BACKEND_IDENTITIES[storage_lane]
     for status in before:
@@ -1115,6 +1183,7 @@ def run_rounds(
     if not isinstance(normalized_config, dict):
         raise RuntimeError(f"{label} normalized report omitted configuration")
     normalized_config["signed_transfer_corpus"] = "$SIGNED_TRANSFER_CORPUS"
+    normalized_config["base_dir"] = "$WORKING_FLEET"
     normalized_path = root / "normalized" / f"{label}.report.json"
     write_json(normalized_path, normalized)
 
@@ -1130,6 +1199,8 @@ def run_rounds(
         "label": label,
         "storage_lane": storage_lane,
         "source_snapshot_sha256": directory_digest(source_snapshot),
+        "node_preparation_mode": node_preparation_mode,
+        "prepared_fleet_sha256": observed_prepared_fleet_sha256,
         "signed_transfer_corpus": signed_transfer_corpus.as_posix(),
         "signed_transfer_corpus_sha256": corpus_sha256,
         "starting_height": initial_height,

@@ -41,7 +41,39 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
         )
         self.assertEqual(configuration["windows_per_height"], 5)
         self.assertEqual(configuration["rounds_per_window"], 50)
+        self.assertEqual(configuration["advance_chunk_rounds"], 5000)
+        self.assertEqual(
+            configuration["node_preparation_mode"],
+            "byte-verified-prepared-fleet-clone",
+        )
         self.assertEqual(configuration["max_wall_seconds"], 4 * 60 * 60)
+
+    def test_prepared_fleet_clone_is_byte_verified(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "destination"
+            for index in range(PAIRED.BASE.VALIDATORS):
+                validator = source / f"validator-{index}"
+                validator.mkdir(parents=True)
+                (validator / "state.bin").write_bytes(bytes([index, 0, 255]))
+            expected = PAIRED.BASE.directory_digest(source)
+
+            observed = PAIRED.BASE.clone_prepared_fleet(
+                source,
+                destination,
+                expected,
+            )
+
+            self.assertEqual(observed, expected)
+            self.assertEqual(PAIRED.BASE.directory_digest(destination), expected)
+            (source / "validator-0" / "state.bin").write_bytes(b"changed")
+            with self.assertRaisesRegex(ValueError, "digest changed"):
+                PAIRED.BASE.clone_prepared_fleet(
+                    source,
+                    destination,
+                    expected,
+                )
 
     def test_atomic_checkpoint_replaces_with_private_file(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -70,6 +102,9 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
             corpus = root / "corpora" / "partial.json"
             corpus.parent.mkdir()
             corpus.write_text("{}\n", encoding="utf-8")
+            prepared_fleet = root / "prepared-fleets" / "height-2"
+            prepared_fleet.mkdir(parents=True)
+            (prepared_fleet / "partial").write_text("partial\n", encoding="utf-8")
             checkpoint = {
                 "configuration": {"max_wall_seconds": 900},
                 "elapsed_wall_seconds": 0.0,
@@ -78,6 +113,7 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
                     "runner_root": "lanes/selected-indexed",
                     "label": "height-2-window-1",
                     "owned_corpus": "corpora/partial.json",
+                    "owned_prepared_fleet": "prepared-fleets/height-2",
                 },
                 "interrupted_units": [],
                 "status": "INTERRUPTED",
@@ -93,6 +129,7 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
             self.assertFalse(partial.exists())
             self.assertFalse(nodes.exists())
             self.assertFalse(corpus.exists())
+            self.assertFalse(prepared_fleet.exists())
             self.assertIsNone(state.value["current_unit"])
             self.assertEqual(state.value["status"], "RUNNING")
             quarantined = list((root / "interrupted").iterdir())
@@ -103,6 +140,14 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
             self.assertTrue((quarantined[0] / "nodes" / "partial").is_file())
             self.assertTrue(
                 (quarantined[0] / "corpora" / "partial.json").is_file()
+            )
+            self.assertTrue(
+                (
+                    quarantined[0]
+                    / "prepared-fleets"
+                    / "height-2"
+                    / "partial"
+                ).is_file()
             )
 
     def test_complete_checkpoint_is_not_resumable(self) -> None:

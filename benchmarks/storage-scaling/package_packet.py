@@ -161,6 +161,14 @@ def copy_performance(packet: Path, source: Path) -> Path:
         if not isinstance(entry, dict):
             raise ValueError("performance snapshot/corpus entry is malformed")
         height = int(entry["height"])
+        if re.fullmatch(
+            r"[0-9a-f]{64}",
+            str(entry.get("prepared_fleet_sha256", "")),
+        ) is None:
+            raise ValueError(
+                f"performance height-{height} prepared fleet digest is invalid"
+            )
+        entry.pop("prepared_fleet", None)
         corpus_source = resolve_campaign_file(
             campaign_root,
             entry.get("signed_transfer_corpus"),

@@ -1451,6 +1451,26 @@ def _verify_performance_lane(
                     f"performance lane {lane_name} height {height} did not use "
                     "the shared authenticated snapshot and signed corpus"
                 )
+            if lane_name == "selected-indexed":
+                if (
+                    window.get("node_preparation_mode")
+                    != "byte-verified-prepared-fleet-clone"
+                    or window.get("prepared_fleet_sha256")
+                    != snapshot_binding["prepared_fleet_sha256"]
+                ):
+                    _fail(
+                        f"performance lane {lane_name} height {height} did not use "
+                        "the frozen prepared fleet"
+                    )
+            elif (
+                window.get("node_preparation_mode")
+                != "authenticated-portable-snapshot-import"
+                or window.get("prepared_fleet_sha256") is not None
+            ):
+                _fail(
+                    f"performance lane {lane_name} height {height} did not use "
+                    "the authenticated portable snapshot import"
+                )
             row_source_snapshots.add(str(window["source_snapshot_sha256"]))
             initial_tip, initial_root = _verify_performance_fleet(
                 window.get("initial_fleet"),
@@ -1923,6 +1943,7 @@ def _verify_performance(
         snapshot_path = str(entry.get("snapshot", ""))
         if (
             HEX64.fullmatch(str(entry.get("snapshot_sha256", ""))) is None
+            or HEX64.fullmatch(str(entry.get("prepared_fleet_sha256", ""))) is None
             or _safe_relative(snapshot_path).as_posix() != snapshot_path
             or entry.get("transfer_count") != 50
         ):
@@ -1946,6 +1967,7 @@ def _verify_performance(
             _fail(f"performance height {height} corpus sequence binding differs")
         snapshot_bindings[height] = {
             "snapshot_sha256": entry["snapshot_sha256"],
+            "prepared_fleet_sha256": entry["prepared_fleet_sha256"],
             "corpus_path": entry["signed_transfer_corpus"],
             "corpus_sha256": entry["signed_transfer_corpus_sha256"],
             "transaction_identities": transaction_identities,

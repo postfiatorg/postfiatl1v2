@@ -656,6 +656,14 @@ def _passing_packet(packet: Path) -> None:
                         "bounded_index_pages": lane_name != "legacy-jsonl",
                         "constant_accumulator_work": lane_name != "legacy-jsonl",
                         "source_snapshot_sha256": f"{height + 10:064x}",
+                        "node_preparation_mode": (
+                            "byte-verified-prepared-fleet-clone"
+                            if selected
+                            else "authenticated-portable-snapshot-import"
+                        ),
+                        "prepared_fleet_sha256": (
+                            f"{height + 20:064x}" if selected else None
+                        ),
                         "signed_transfer_corpus": corpus["path"],
                         "signed_transfer_corpus_sha256": corpus["sha256"],
                         "result_snapshot_sha256": f"{result_identity_seed:064x}",
@@ -1369,6 +1377,7 @@ def _passing_packet(packet: Path) -> None:
                     "height": height,
                     "snapshot": f"canonical/snapshots/height-{height}.snapshot",
                     "snapshot_sha256": f"{height + 10:064x}",
+                    "prepared_fleet_sha256": f"{height + 20:064x}",
                     "signed_transfer_corpus": performance_corpora[height]["path"],
                     "signed_transfer_corpus_sha256": performance_corpora[height][
                         "sha256"
@@ -1711,6 +1720,27 @@ class StorageScalingVerifierTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 StorageScalingVerificationError,
                 "did not use the shared authenticated snapshot",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_unpaired_prepared_fleet(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+
+            def change_prepared_fleet(performance: dict[str, object]) -> None:
+                lanes = performance["lanes"]
+                assert isinstance(lanes, dict)
+                selected = lanes["selected-indexed"]
+                assert isinstance(selected, dict)
+                rows = selected["rows"]
+                assert isinstance(rows, list)
+                rows[0]["windows"][1]["prepared_fleet_sha256"] = "f" * 64
+
+            _rewrite_performance(packet, change_prepared_fleet)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "did not use the frozen prepared fleet",
             ):
                 verify_packet(packet)
 
