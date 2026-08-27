@@ -6,7 +6,7 @@
 
 **Decision owner:** Post Fiat
 
-**Candidate lineage:** transactional `redb` source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`; release binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; evidence-runner lineage through `81c35d5d`
+**Candidate lineage:** transactional `redb` source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`; release binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; evidence-runner lineage through `4f976290`
 
 **Research basis:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 
@@ -21,6 +21,16 @@ source design is credible enough to stop comparing alternative storage designs:
 one finalized height commits atomically, post-activation proposal and commit
 paths use an indexed membership set plus a fixed-size accumulator, and the
 selected path does not intentionally rescan full history.
+
+The node still retains finalized history. That is not the defect being fixed.
+The defect was making the append path repeatedly read growing history. The
+transactional append path has now advanced a six-validator local fleet through
+height 1,550 with zero reported full-history reads. The current G4 failure is in
+the evidence harness: it serializes retained history into `blocks.json` between
+chunks, and that file reached 317,562,113 bytes at height 1,550, beyond the
+256 MiB bounded legacy-state reader. G4 must remove that full-history snapshot
+round trip from the high-height selected lane; it must not raise the safety cap
+or reinterpret this harness failure as a passing scaling result.
 
 Selection is not qualification, qualification is not deployment, and deployment
 is not public-testnet authorization. The remaining work must prove the selected
@@ -54,6 +64,7 @@ work idling.
 | --- | --- | --- | --- |
 | Which storage implementation? | Transactional `redb`. | Decided | Freeze and qualify this candidate; do not restart candidate research. |
 | Which performance campaign? | Selected `redb` at heights 50 and 5,000; same-binary legacy control at height 50. | Decided | Do not run the superseded three-lane/five-height matrix. |
+| How does the selected lane move between high-height chunks? | By a content-hashed prepared transactional fleet, not by exporting and re-importing full history. | Decided; runner remediation required | Generate the next signed corpus read-only from the prepared fleet, bind before/after digests, and eliminate high-height portable snapshot export. Keep the portable snapshot only for the shared height-50 legacy control. |
 | Is one height-924 validator directory needed? | Yes, for exact replay only. | Authorization and custodian still required | Finish G1, G2, the height-915 part of G3, and G4 without waiting for it. |
 | Are six validator directories needed now? | No. They are needed only for G6 immediately before a deployment decision. | Deferred | Spend no time collecting or rehearsing six clones during offline qualification. |
 | May this plan touch the controlled devnet? | No. | Not authorized | No fleet query, copy, service action, deployment, or mutation. |
@@ -65,6 +76,11 @@ work idling.
 - **Storage candidate:** transactional `redb`.
 - **Performance proof:** selected-path height 50 versus height 5,000, plus a
   same-binary legacy-versus-selected comparison at height 50.
+- **High-height campaign state:** a content-hashed six-node transactional fleet
+  is the selected lane's checkpoint and restart boundary. Signed-corpus creation
+  may read a stopped prepared node only if a whole-tree before/after digest proves
+  it made no mutation. Full portable snapshots remain required only at height 50
+  for the legacy comparison.
 - **Discarded release work:** bounded-JSONL performance qualification and
   legacy runs at heights 100, 500, 1,000, and 5,000. They remain optional
   diagnostics and cannot hold the release decision open.
@@ -107,8 +123,10 @@ before it starts.
   split into independently verifiable units.
 - No single unattended command may run longer than 2 hours without a new,
   evidence-backed operator decision.
-- G4 has a 4-hour aggregate wall-clock budget. Reaching the budget is a recorded
-  `TIME_BUDGET_EXCEEDED` result, not permission to continue silently.
+- G4 remediation gets one focused test/smoke cycle capped at 30 minutes. After
+  it passes, one clean release-evidence run gets a fresh 4-hour wall-clock budget.
+  Reaching either budget is a recorded `TIME_BUDGET_EXCEEDED` result, not
+  permission to continue silently.
 - A failed or timed-out gate is diagnosed once. It is not automatically restarted
   with a larger matrix.
 - Run selected-path evidence before expensive legacy controls.
@@ -128,7 +146,7 @@ independent local gates continue.
 | G1 — candidate freeze | **CANDIDATE PASS / G4 INPUT FREEZE ACTIVE** | Keep source `ae658441` and binary `891b…bf4` unchanged; G4 freezes its height-50 and height-5,000 materials. | A candidate source or binary change restarts G1–G4; evidence-runner-only changes are separately hash-bound. |
 | G2 — safety | **LOCAL PASS / PACKET BINDING OPEN** | Preserve the passing tamper and rollback receipts; commit only redaction-safe packet material after G4. | Do not rerun unless the candidate binary changes or independent verification rejects a receipt. |
 | G3 — exact replay | **HEIGHT 915 PASS / HEIGHT 924 WAITING FOR AUTHORIZED INPUT** | Preserve the passing 915 receipt. Run height 924 only from a separately authorized copy. | Never wait idle for the copy; finish G4 without it, but do not claim offline qualification. |
-| G4 — scaling | **IN PROGRESS — RUNNER REMEDIATED** | Restart the three-row selected-first matrix with runner `81c35d5d` and the unchanged G1 binary. | Four hours aggregate and two hours per unattended segment; stop on a selected-path failure or `TIME_BUDGET_EXCEEDED`. |
+| G4 — scaling | **FAILED AT HARNESS SNAPSHOT BOUNDARY / REMEDIATION REQUIRED** | Preserve the valid height-1,550 prepared fleet; remove high-height full-history snapshot round trips; pass focused tests and a bounded smoke before a clean rerun. | 30 minutes for remediation proof, then one clean four-hour final run; stop on any selected-path failure or `TIME_BUDGET_EXCEEDED`. |
 | G5 — offline packet | **BLOCKED BY G1–G4** | Package only after every preceding evidence gate passes. | No qualification claim until the offline verifier passes the complete packet. |
 | G6 — six-clone rehearsal | **DEFERRED** | Nothing until offline qualification is complete and deployment is the next real decision. | Requires separate data-copy authorization and six distinct stopped directories. |
 | G7 — Dynamic UNL handoff | **DIRECTION RECORDED / IMPLEMENTATION DEFERRED** | Preserve the recorded architecture decision only. | Spend no implementation time before the stated storage boundary or a new operator priority decision. |
@@ -186,8 +204,8 @@ checkpoints.
 - [x] Build one release binary and record its SHA-256, Rust toolchain, locked
       dependency identity, build command, host, and storage device.
 - [ ] Freeze topology, keys, accounts, transaction corpus, timeouts,
-      instrumentation schema, and authenticated height-50 and height-5,000
-      snapshot identities.
+      instrumentation schema, the authenticated height-50 snapshot identity,
+      and the height-5,000 prepared-fleet identity.
 - [x] Run the focused storage/node regression suites, formatting, and
       warnings-denied Clippy against that source.
 
@@ -325,6 +343,47 @@ database path. A controlled stop after an advance and resume passed before the
 release rerun, so no chunk is both longer than the operator limit and
 all-or-nothing.
 
+The release rerun on runner `4f976290` completed the height-1-to-50 advance,
+all five selected height-50 windows, and the height-50-to-1,550 advance. At
+height 1,550 all six validators agreed, the prepared fleet SHA-256 was
+`368aa0aacd9a7889e0de4a089e7cb91bb0230676c0c9433d67c03c52001d108e`,
+and the run had consumed 3,830.6 seconds. Before the first round of the
+height-1,550-to-3,050 unit, corpus setup tried to import the portable snapshot
+and failed because `blocks.json` was 317,562,113 bytes while
+`MAX_STATE_FILE_BYTES` is 268,435,456 bytes. The checkpoint is correctly marked
+`FAILED`; there is no final report, and no part of this run is release evidence.
+The completed prepared fleet is diagnostic input for remediation tests only.
+
+### G4A — close the high-height harness boundary before another long run
+
+- [x] Preserve the failed checkpoint, exact runner and candidate identities,
+      height-1,550 prepared-fleet digest, elapsed time, and failure boundary.
+- [x] Confirm the failure occurred during corpus setup before any round in the
+      height-1,550-to-3,050 unit, not in transactional consensus or append.
+- [x] Confirm the failure is caused by portable full-history materialization,
+      not by a positive full-history-read counter in the selected append path.
+- [ ] Make selected-lane corpus creation read directly from a stopped,
+      content-hashed prepared node and prove the entire prepared fleet has the
+      same digest before and after.
+- [ ] Stop exporting result snapshots for prepared-fleet selected runs. Bind the
+      source and result prepared-fleet digests instead; retain full snapshot
+      export/import only for the height-50 cross-backend control.
+- [ ] Make checkpoint/resume and the packet verifier reject a missing, changed,
+      or ambiguously located prepared fleet, corpus, or runner binding.
+- [ ] Add focused tests for read-only corpus creation, no selected high-height
+      snapshot dependency, tamper rejection, and safe interruption.
+- [ ] Pass one real six-validator smoke that crosses a deliberately lowered
+      snapshot-size threshold in at most 30 minutes and leaves no process alive.
+- [ ] Start exactly one clean qualification run from height 1 after all G4A
+      checks pass. Do not mutate or waive the old checkpoint into compatibility
+      with a changed runner.
+
+**G4A exit:** high-height selected execution depends only on the verified
+transactional prepared fleet and bounded corpus, while the shared height-50
+legacy comparison still uses the authenticated portable snapshot. The candidate
+binary remains unchanged; only the separately hash-bound evidence runner may
+change.
+
 - [ ] Complete the three required rows inside the 4-hour aggregate budget.
 - [ ] Verify literal accepted receipts and six-validator agreement on height,
       block hash, and state root for every measured round.
@@ -409,20 +468,21 @@ not deploy anything.
 
 ## Immediate execution order
 
-1. Do not rerun G0: the old campaign is stopped and resumability is proven.
-2. Finish G1 and pin the clean candidate before generating qualification
-   evidence.
-3. Run G2 in independently verifiable units.
-4. Regenerate the local height-915 evidence for G3. If no authorized height-924
-   input exists, record that boundary and move directly to G4 instead of
-   waiting.
-5. Run G4 selected-first within its four-hour aggregate limit.
-6. Close the height-924 part of G3 only after the copy is separately authorized
-   and available.
-7. Build and verify the G5 packet only when G1 through G4 are closed.
-8. Run G6 only if controlled-devnet deployment is actually the next decision
-   and its separate authorization has been recorded.
-9. Activate the deferred Dynamic UNL milestone only at the G7 boundary or after
+1. Preserve the unchanged G1 candidate and the passing local G2 and height-915
+   G3 receipts; do not rerun them while the binary is unchanged.
+2. Close G4A locally within its 30-minute remediation-proof budget. Do not query,
+   copy, stop, or modify the controlled devnet.
+3. After G4A passes, start one clean G4 selected-first run with a hard four-hour
+   campaign deadline and resumable advance chunks no longer than two hours.
+4. If G4 passes, bind the redaction-safe G2 and G4 artifacts and build everything
+   locally available for G5.
+5. Close the height-924 part of G3 only after a custodian and separate read-only
+   copy authorization exist. Do not wait idle for that decision.
+6. Complete G5 and record `OFFLINE QUALIFIED` only after the exact height-924
+   replay and independent packet verification pass.
+7. Run G6 only if controlled-devnet deployment is actually the next decision
+   and its separate data-copy authorization has been recorded.
+8. Activate the deferred Dynamic UNL milestone only at the G7 boundary or after
    an explicit operator reprioritization.
 
 The plan is complete only when G0 through G6 pass and a separate decision either
