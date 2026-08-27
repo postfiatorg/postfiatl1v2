@@ -5,7 +5,7 @@
 **Decision owner:** Post Fiat
 **Research specification:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 **Implementation specification:** [Storage Scaling Fix](../../architecture/storage-scaling-fix-spec.md)
-**Implementation source:** 0fdcc2b37022406415ef14a0aa504007e7fd7226
+**Implementation source:** 785806bdb13c417570b6676b39b1638bdc226517
 
 The operator directly authorized implementation on 2026-08-26 and explicitly
 instructed this session not to use Task Node. This milestone records that
@@ -59,6 +59,28 @@ four. The report explicitly records `evidence_eligible: false`, `offline: true`,
 the corrected paired mechanics and fail-closed evidence binding only; it does
 not close the five-height E1 window, either E3 latency ratio, or the
 height-relationship gate.
+
+A subsequent full attempt from `0fdcc2b3` completed all five legacy height-50
+windows and all five legacy height-100 windows before entering the advance to
+height 500. The height-50 aggregate p95 values were `2924.249613 ms`
+(`consensus_round_ms`) and `2936.715555 ms` (`wallet_to_finality_ms`); the
+height-100 values were `4113.92018 ms` and `4129.366321 ms`. The run was
+intentionally stopped with no final report after independent review proved that
+`storage-rebuild-transactional --verify-only` could recover a source journal,
+persist a reconstructed tip, upgrade a v1 JSONL head, and create a missing
+target. The scratch output is private, incomplete, and evidence-ineligible; its
+measurements are observations only and close no gate.
+
+Source `785806bd` corrects that verifier boundary. Source and target now open
+read-only, missing directories/keys/databases are never created, a pending
+source journal is refused instead of recovered, and chain-tip reconstruction,
+v1-head verification, and crash-suffix inspection cannot persist a repair.
+Whole-directory mutation sentinels cover missing source/target, successful
+verification, missing chain tip, pending journal, stale generation, v1 head,
+and partial crash suffix. The full storage suite passed 80 tests plus its
+process-crash integration test with two manual scaling tests ignored; the node
+library passed 315 tests with two unrelated Foundry-gated tests ignored;
+formatting and package-wide Clippy with warnings denied passed.
 
 ## E2 — bounded append and proposal history
 
@@ -156,10 +178,19 @@ Primary code:
   local archive, and no fleet access is authorized by this milestone.
 - [ ] Run paired legacy, bounded-JSONL, and selected indexed-store lanes at all
   five heights with six validators and literal receipt acceptance.
+- [ ] Prove selected-store height-50 p95 `consensus_round_ms` and
+  `wallet_to_finality_ms` are each at most 110% of the frozen legacy height-50
+  baseline.
 - [ ] Prove height-5,000 p95 consensus_round_ms and
   wallet_to_finality_ms are each at most 110% of height-50 p95.
 - [ ] Prove no material synchronous stage retains a positive linear
   relationship with height.
+
+The current paired runner's three-binary, lane-native-snapshot policy does not
+satisfy the locked research specification's same-binary and same-authenticated-
+snapshot requirement. The partial runs above therefore remain development
+diagnostics even aside from the verifier bug. No new full release campaign may
+start until the runner and verifier enforce the locked comparison boundary.
 
 Paired qualification code:
 
