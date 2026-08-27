@@ -5,7 +5,7 @@
 **Decision owner:** Post Fiat
 **Research specification:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 **Implementation specification:** [Storage Scaling Fix](../../architecture/storage-scaling-fix-spec.md)
-**Implementation source:** dfd0b9f11108b0b773d1e02bebae71685864228e
+**Implementation source:** cc9e32d71d697a6db97fac76744df26d320441b9
 
 The operator directly authorized implementation on 2026-08-26 and explicitly
 instructed this session not to use Task Node. This milestone records that
@@ -52,10 +52,10 @@ Evidence: [development packet](https://github.com/postfiatorg/postfiatl1v2/tree/
   operator command.
 - [x] Prove all ordered-commit persistence prefixes recover to one accepted
   activation block and that v2 proposal and commit roots agree.
-- [ ] Implement and compare the specification's embedded ordered key-value or
-  B-tree candidate with atomic write batches. The current fixed-slot candidate
-  is bounded but is not the final selected store.
-- [ ] Move finalized blocks, receipts, archived batches, ordered membership,
+- [x] Implement the specification's embedded ordered B-tree candidate with
+  atomic write transactions. The selected `redb` path replaces the fixed-slot
+  candidate for active finality; release performance qualification remains E3.
+- [x] Move finalized blocks, receipts, archived batches, ordered membership,
   current state, and chain-tip metadata into one atomic per-height transaction
   as required by the implementation specification.
 - [ ] Run every original E3 tamper case and the full new checkpoint, index-page,
@@ -79,9 +79,8 @@ Primary code:
 - [x] Synthetic work counters remain bounded through height 5,000: JSONL
   append verifies zero accepted-prefix records; proposal/index operations read
   a fixed bitmap and write one slot.
-- [ ] Optimize or replace the fixed bitmap candidate. In the unoptimized
-  development harness it costs about 0.33 seconds for proposal lookup and
-  about 0.64 seconds for index append despite being height-independent.
+- [x] Replace the fixed bitmap candidate with the transactional `redb` ordered
+  index and constant-size ordered-history accumulator on the active path.
 - [ ] Replay the exact 915-block quarantine archive and authenticated
   controlled-devnet history through height 924 byte for byte.
 - [ ] Run paired legacy, bounded-JSONL, and selected indexed-store lanes at all
@@ -93,12 +92,12 @@ Primary code:
 
 ## E4 — migration and rollback rehearsal
 
-- [ ] Decide how the existing height-924 chain receives an explicit activation.
-  A genesis-bound activation works for a new chain but cannot be retrofitted
-  into the existing genesis hash.
-- [ ] Implement the consensus-ordered storage-commitment activation and
+- [x] Select a versioned Foundation-governance activation record for the
+  existing chain; the controlled genesis remains unchanged.
+- [x] Implement consensus-ordered storage-commitment activation and
   pre-activation cancellation records without expanding Cobalt's authority.
-- [ ] Write the versioned migration and rollback runbook.
+- [x] Write the versioned side-by-side migration, signing, cancellation, and
+  rollback operator workflow in the storage-scaling evidence README.
 - [ ] Rehearse side-by-side rebuild, full replay, staggered restart, activation,
   post-activation finality, pre-activation rollback, forward recovery,
   catch-up, and convergence on six disposable clones.
@@ -109,8 +108,11 @@ Primary code:
 
 ## Interfaces and completion
 
-- [ ] Deliver python -m postfiat_rpc.storage_scaling verify PACKET.
-- [ ] Deliver the read-only browser view from the same verified packet.
+- [x] Deliver `python -m postfiat_rpc.storage_scaling verify PACKET` with
+  independent checksum, replay, performance, tamper, migration, and redaction
+  verification.
+- [x] Deliver the loopback-only read-only browser view from the same verified
+  packet.
 - [ ] Publish the final checksum manifest, redaction result, replay identities,
   paired curves, migration result, and remaining limits.
 - [ ] Run the proportional final release suite from a clean checkout.

@@ -1,5 +1,8 @@
 # Storage scaling implementation handoff
 
+> Historical snapshot: superseded by the
+> [transactional storage candidate handoff](2026-08-27___postfiatchad__transactional_storage_candidate.md).
+
 - **Operator:** Post Fiat Chad (postfiatchad)
 - **Date:** 2026-08-26 UTC
 
