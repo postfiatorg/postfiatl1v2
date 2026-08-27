@@ -48,7 +48,7 @@ pub const STORAGE_COMMITMENT_CANCELLATION_SCHEMA_V1: &str =
 pub const STORAGE_COMMITMENT_FEATURE_ID_V1: &str = "ordered_history_redb_v1";
 pub const STORAGE_COMMITMENT_LEGACY_VERSION_V1: &str = "postfiat.replicated_state.v1";
 pub const STORAGE_COMMITMENT_NEW_VERSION_V1: &str = "postfiat.replicated_state.v2";
-pub const STORAGE_COMMITMENT_VERIFIER_VERSION_V1: &str = "postfiat.storage_verifier.v1";
+pub const STORAGE_COMMITMENT_VERIFIER_VERSION_V2: &str = "postfiat.storage_verifier.v2";
 pub const GOVERNANCE_KIND_ATOMIC_SWAP_PAUSE: &str = "atomic_swap_pause";
 pub const GOVERNANCE_KIND_ORCHARD_POOL_PAUSE: &str = "orchard_pool_pause";
 pub const GOVERNANCE_AUTHORITY_MODE_FOUNDATION: u32 = 0;
@@ -1026,7 +1026,7 @@ impl StorageCommitmentActivationRecordV1 {
         }
         if self.legacy_commitment_version != STORAGE_COMMITMENT_LEGACY_VERSION_V1
             || self.new_commitment_version != STORAGE_COMMITMENT_NEW_VERSION_V1
-            || self.required_verifier_version != STORAGE_COMMITMENT_VERIFIER_VERSION_V1
+            || self.required_verifier_version != STORAGE_COMMITMENT_VERIFIER_VERSION_V2
         {
             return Err("storage commitment activation version is unsupported".to_string());
         }

@@ -4,7 +4,7 @@ use std::fs;
 use std::os::unix::ffi::OsStrExt;
 use std::sync::Arc;
 
-pub const STORAGE_MIGRATION_MANIFEST_SCHEMA_V1: &str = "postfiat-storage-migration-manifest-v1";
+pub const STORAGE_MIGRATION_MANIFEST_SCHEMA_V2: &str = "postfiat-storage-migration-manifest-v2";
 pub const STORAGE_MIGRATION_REPORT_SCHEMA_V1: &str = "postfiat-storage-migration-report-v1";
 pub const STORAGE_MIGRATION_MANIFEST_FILE: &str = "storage-migration-manifest.json";
 pub const STORAGE_MIGRATION_MANIFEST_CHECKSUM_FILE: &str = "storage-migration-manifest.sha3-384";
@@ -20,7 +20,7 @@ pub struct StorageMigrationOptions {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct StorageMigrationManifestV1 {
+pub struct StorageMigrationManifestV2 {
     pub schema: String,
     pub verifier_version: String,
     pub storage_format: String,
@@ -40,6 +40,7 @@ pub struct StorageMigrationManifestV1 {
     pub archive_root: String,
     pub ordered_batches_root: String,
     pub current_state_root: String,
+    pub node_state_root: String,
     pub history_checkpoint_root: Option<String>,
     pub validator_registry_root: String,
     pub logical_store_report: postfiat_storage::transactional::LogicalIntegrityReport,
@@ -640,9 +641,9 @@ fn build_migration_manifest(
     history_checkpoint: Option<&HistoryCheckpointState>,
     validator_registry: &ValidatorRegistry,
     logical_store_report: postfiat_storage::transactional::LogicalIntegrityReport,
-) -> io::Result<StorageMigrationManifestV1> {
-    Ok(StorageMigrationManifestV1 {
-        schema: STORAGE_MIGRATION_MANIFEST_SCHEMA_V1.to_owned(),
+) -> io::Result<StorageMigrationManifestV2> {
+    Ok(StorageMigrationManifestV2 {
+        schema: STORAGE_MIGRATION_MANIFEST_SCHEMA_V2.to_owned(),
         verifier_version: postfiat_storage::transactional::TRANSACTIONAL_VERIFIER_VERSION
             .to_owned(),
         storage_format: postfiat_storage::transactional::TRANSACTIONAL_STORAGE_FORMAT.to_owned(),
@@ -665,9 +666,10 @@ fn build_migration_manifest(
             ordered_batches,
         )?,
         current_state_root: logical_root(
-            "postfiat.storage_migration.current_state.v1",
-            &(ledger, governance, shielded, bridge, node_state),
+            "postfiat.storage_migration.current_state.v2",
+            &(ledger, governance, shielded, bridge),
         )?,
+        node_state_root: logical_root("postfiat.storage_migration.node_state.v2", node_state)?,
         history_checkpoint_root: history_checkpoint
             .map(|checkpoint| {
                 logical_root(
@@ -690,7 +692,7 @@ fn build_transactional_migration_manifest(
     genesis: &Genesis,
     source_tip: &ChainTipState,
     logical_store_report: postfiat_storage::transactional::LogicalIntegrityReport,
-) -> io::Result<StorageMigrationManifestV1> {
+) -> io::Result<StorageMigrationManifestV2> {
     fn required_state<T: serde::de::DeserializeOwned>(
         target: &postfiat_storage::TransactionalStore,
         domain: &str,
@@ -774,8 +776,8 @@ fn build_transactional_migration_manifest(
 }
 
 fn migration_manifest_mismatch_fields(
-    expected: &StorageMigrationManifestV1,
-    observed: &StorageMigrationManifestV1,
+    expected: &StorageMigrationManifestV2,
+    observed: &StorageMigrationManifestV2,
 ) -> io::Result<String> {
     let expected = serde_json::to_value(expected).map_err(invalid_data)?;
     let observed = serde_json::to_value(observed).map_err(invalid_data)?;
@@ -807,31 +809,40 @@ fn logical_root<T: Serialize + ?Sized>(domain: &str, value: &T) -> io::Result<St
     Ok(hash_hex(domain, &encoded))
 }
 
-fn migration_manifest_root(manifest: &StorageMigrationManifestV1) -> io::Result<String> {
+fn migration_manifest_root(manifest: &StorageMigrationManifestV2) -> io::Result<String> {
     let mut canonical = manifest.clone();
     canonical.migration_packet_root.clear();
-    logical_root("postfiat.storage_migration.packet.v1", &canonical)
+    canonical.node_state_root.clear();
+    logical_root("postfiat.storage_migration.packet.v2", &canonical)
+}
+
+fn migration_manifest_file_sha3_384(bytes: &[u8]) -> String {
+    let mut hasher = sha3::Sha3_384::new();
+    hasher.update(bytes);
+    bytes_to_hex(&hasher.finalize())
 }
 
 fn write_migration_manifest(
     output_dir: &Path,
-    manifest: &StorageMigrationManifestV1,
+    manifest: &StorageMigrationManifestV2,
 ) -> io::Result<()> {
     let json = serde_json::to_string_pretty(manifest).map_err(invalid_data)?;
+    let manifest_bytes = format!("{json}\n");
     atomic_write(
         output_dir.join(STORAGE_MIGRATION_MANIFEST_FILE),
-        format!("{json}\n"),
+        &manifest_bytes,
     )?;
     atomic_write(
         output_dir.join(STORAGE_MIGRATION_MANIFEST_CHECKSUM_FILE),
         format!(
             "{}  {}\n",
-            manifest.migration_packet_root, STORAGE_MIGRATION_MANIFEST_FILE
+            migration_manifest_file_sha3_384(manifest_bytes.as_bytes()),
+            STORAGE_MIGRATION_MANIFEST_FILE
         ),
     )
 }
 
-fn read_migration_manifest(output_dir: &Path) -> io::Result<StorageMigrationManifestV1> {
+fn read_migration_manifest(output_dir: &Path) -> io::Result<StorageMigrationManifestV2> {
     let path = output_dir.join(STORAGE_MIGRATION_MANIFEST_FILE);
     let raw = fs::read_to_string(&path).map_err(|error| {
         let reason = if error.kind() == io::ErrorKind::NotFound {
@@ -841,7 +852,7 @@ fn read_migration_manifest(output_dir: &Path) -> io::Result<StorageMigrationMani
         };
         io::Error::new(error.kind(), format!("{reason}: {error}"))
     })?;
-    let manifest: StorageMigrationManifestV1 = serde_json::from_str(&raw).map_err(|error| {
+    let manifest: StorageMigrationManifestV2 = serde_json::from_str(&raw).map_err(|error| {
         io::Error::new(
             io::ErrorKind::InvalidData,
             format!("storage_migration_manifest_invalid: {error}"),
@@ -853,7 +864,7 @@ fn read_migration_manifest(output_dir: &Path) -> io::Result<StorageMigrationMani
             format!("storage_migration_manifest_invalid: {error}"),
         )
     })?;
-    if manifest.schema != STORAGE_MIGRATION_MANIFEST_SCHEMA_V1
+    if manifest.schema != STORAGE_MIGRATION_MANIFEST_SCHEMA_V2
         || manifest.verifier_version
             != postfiat_storage::transactional::TRANSACTIONAL_VERIFIER_VERSION
         || computed_root != manifest.migration_packet_root
@@ -875,7 +886,8 @@ fn read_migration_manifest(output_dir: &Path) -> io::Result<StorageMigrationMani
     if checksum
         != format!(
             "{}  {}\n",
-            manifest.migration_packet_root, STORAGE_MIGRATION_MANIFEST_FILE
+            migration_manifest_file_sha3_384(raw.as_bytes()),
+            STORAGE_MIGRATION_MANIFEST_FILE
         )
     {
         return Err(io::Error::new(

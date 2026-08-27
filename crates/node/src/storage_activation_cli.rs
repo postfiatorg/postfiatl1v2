@@ -178,7 +178,7 @@ pub fn create_storage_activation_template(
         pre_activation_ordered_count: tip.ordered_batch_count,
         pre_activation_ordered_accumulator: meta.ordered_history_accumulator,
         migration_packet_root,
-        required_verifier_version: postfiat_types::STORAGE_COMMITMENT_VERIFIER_VERSION_V1
+        required_verifier_version: postfiat_types::STORAGE_COMMITMENT_VERIFIER_VERSION_V2
             .to_owned(),
     };
     record.activation_id = record

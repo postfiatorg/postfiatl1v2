@@ -1041,7 +1041,7 @@ fn transactional_rebuild_replays_publishes_and_verifies_a_legacy_generation() {
 
     let manifest_path = output_dir.join(STORAGE_MIGRATION_MANIFEST_FILE);
     let original_manifest = std::fs::read(&manifest_path).expect("read migration manifest");
-    let mut tampered_manifest: StorageMigrationManifestV1 =
+    let mut tampered_manifest: StorageMigrationManifestV2 =
         serde_json::from_slice(&original_manifest).expect("decode migration manifest");
     tampered_manifest.block_count = tampered_manifest.block_count.saturating_add(1);
     std::fs::write(
@@ -1290,6 +1290,157 @@ fn transactional_rebuild_replays_publishes_and_verifies_a_legacy_generation() {
 
     std::fs::remove_dir_all(data_dir).expect("remove rebuild source");
     std::fs::remove_dir_all(output_dir).expect("remove rebuild output");
+}
+
+#[test]
+fn transactional_migration_packet_root_is_shared_across_node_local_state() {
+    let source_dir = unique_test_dir("postfiat-shared-migration-root-source");
+    let snapshot_dir = unique_test_dir("postfiat-shared-migration-root-snapshot");
+    let peer_dir = unique_test_dir("postfiat-shared-migration-root-peer");
+    let source_generation = unique_test_dir("postfiat-shared-migration-root-source-generation");
+    let peer_generation = unique_test_dir("postfiat-shared-migration-root-peer-generation");
+    init(InitOptions {
+        data_dir: source_dir.clone(),
+        chain_id: "postfiat-shared-migration-root-test".to_owned(),
+        node_id: "validator-0".to_owned(),
+        validator_count: 1,
+    })
+    .expect("initialize shared migration root source");
+    let source_store = NodeStore::new(&source_dir);
+    let genesis = source_store
+        .read_genesis()
+        .expect("read shared migration root genesis");
+    let governance = source_store
+        .read_governance()
+        .expect("read shared migration root governance");
+    let ledger = source_store
+        .read_ledger()
+        .expect("read shared migration root ledger");
+    let batch = postfiat_mempool_dag::build_transaction_batch(
+        &mempool_batch_domain(&genesis),
+        Vec::new(),
+    )
+    .expect("build shared migration root batch")
+    .batch;
+    let journal = activation_test_journal(
+        &source_store,
+        &genesis,
+        &governance,
+        &ledger,
+        BATCH_KIND_TRANSPARENT,
+        &batch.batch_id,
+        &batch,
+        &[],
+        false,
+    );
+    apply_activation_journal(&source_store, &journal);
+    export_snapshot(SnapshotExportOptions {
+        data_dir: source_dir.clone(),
+        snapshot_dir: snapshot_dir.clone(),
+    })
+    .expect("export shared migration root snapshot");
+    import_snapshot(SnapshotImportOptions {
+        data_dir: peer_dir.clone(),
+        snapshot_dir: snapshot_dir.clone(),
+        node_id: Some("validator-peer".to_owned()),
+    })
+    .expect("import shared migration root peer");
+
+    let source_tip = source_store
+        .read_chain_tip()
+        .expect("read shared migration root source tip");
+    let peer_tip = NodeStore::new(&peer_dir)
+        .read_chain_tip()
+        .expect("read shared migration root peer tip");
+    assert_eq!(peer_tip, source_tip, "peer did not preserve the certified tip");
+    let source_report = rebuild_transactional_storage(StorageMigrationOptions {
+        data_dir: source_dir.clone(),
+        output_dir: source_generation.clone(),
+        expected_tip: source_tip.block_hash.clone(),
+        expected_state_root: source_tip.state_root.clone(),
+        verify_only: false,
+    })
+    .expect("rebuild shared migration root source");
+    let peer_report = rebuild_transactional_storage(StorageMigrationOptions {
+        data_dir: peer_dir.clone(),
+        output_dir: peer_generation.clone(),
+        expected_tip: peer_tip.block_hash.clone(),
+        expected_state_root: peer_tip.state_root.clone(),
+        verify_only: false,
+    })
+    .expect("rebuild shared migration root peer");
+    assert_eq!(
+        peer_report.migration_packet_root, source_report.migration_packet_root,
+        "activation-bound migration packet root must exclude node-local state"
+    );
+
+    let source_manifest: StorageMigrationManifestV2 = serde_json::from_slice(
+        &std::fs::read(source_generation.join(STORAGE_MIGRATION_MANIFEST_FILE))
+            .expect("read shared source manifest"),
+    )
+    .expect("decode shared source manifest");
+    let peer_manifest: StorageMigrationManifestV2 = serde_json::from_slice(
+        &std::fs::read(peer_generation.join(STORAGE_MIGRATION_MANIFEST_FILE))
+            .expect("read shared peer manifest"),
+    )
+    .expect("decode shared peer manifest");
+    assert_eq!(
+        peer_manifest.current_state_root, source_manifest.current_state_root,
+        "consensus current-state migration root must be node independent"
+    );
+    assert_ne!(
+        peer_manifest.node_state_root, source_manifest.node_state_root,
+        "local node state must remain independently integrity-bound"
+    );
+    let source_activation = create_storage_activation_template(
+        StorageActivationTemplateOptions {
+            data_dir: source_dir.clone(),
+            activation_height: 3,
+            record_file: source_dir.join("shared-root-activation.json"),
+        },
+    )
+    .expect("create source activation from shared migration root");
+    let peer_activation = create_storage_activation_template(StorageActivationTemplateOptions {
+        data_dir: peer_dir.clone(),
+        activation_height: 3,
+        record_file: peer_dir.join("shared-root-activation.json"),
+    })
+    .expect("create peer activation from shared migration root");
+    assert_eq!(
+        peer_activation.record, source_activation.record,
+        "all validators must derive one consensus-orderable activation record"
+    );
+    let mut tampered_local_manifest = peer_manifest;
+    tampered_local_manifest.node_state_root = "ab".repeat(48);
+    std::fs::write(
+        peer_generation.join(STORAGE_MIGRATION_MANIFEST_FILE),
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&tampered_local_manifest)
+                .expect("encode locally tampered migration manifest")
+        ),
+    )
+    .expect("write locally tampered migration manifest");
+    let local_tamper_error = rebuild_transactional_storage(StorageMigrationOptions {
+        data_dir: peer_dir.clone(),
+        output_dir: peer_generation.clone(),
+        expected_tip: peer_tip.block_hash,
+        expected_state_root: peer_tip.state_root,
+        verify_only: true,
+    })
+    .expect_err("node-local manifest tamper must fail the exact-file checksum");
+    assert!(
+        local_tamper_error
+            .to_string()
+            .contains("storage_migration_manifest_checksum_mismatch"),
+        "{local_tamper_error}"
+    );
+
+    std::fs::remove_dir_all(source_dir).expect("remove shared migration source");
+    std::fs::remove_dir_all(snapshot_dir).expect("remove shared migration snapshot");
+    std::fs::remove_dir_all(peer_dir).expect("remove shared migration peer");
+    std::fs::remove_dir_all(source_generation).expect("remove shared source generation");
+    std::fs::remove_dir_all(peer_generation).expect("remove shared peer generation");
 }
 
 #[test]

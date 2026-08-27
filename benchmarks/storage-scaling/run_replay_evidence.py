@@ -68,13 +68,14 @@ def tree_sha256(root: Path) -> str:
 def migration_packet_root(manifest: dict[str, Any]) -> str:
     canonical = dict(manifest)
     canonical["migration_packet_root"] = ""
+    canonical["node_state_root"] = ""
     encoded = json.dumps(
         canonical,
         ensure_ascii=False,
         separators=(",", ":"),
     ).encode("utf-8")
     digest = hashlib.sha3_384()
-    digest.update(b"postfiat.storage_migration.packet.v1")
+    digest.update(b"postfiat.storage_migration.packet.v2")
     digest.update(b"\x00")
     digest.update(encoded)
     return digest.hexdigest()
@@ -283,7 +284,7 @@ def replay_source(
     checksum_path = rebuild / "storage-migration-manifest.sha3-384"
     manifest = read_json(manifest_path)
     if (
-        manifest.get("schema") != "postfiat-storage-migration-manifest-v1"
+        manifest.get("schema") != "postfiat-storage-migration-manifest-v2"
         or manifest.get("chain_id") != CONTROLLED_CHAIN_ID
         or manifest.get("genesis_hash") != CONTROLLED_GENESIS_HASH
         or manifest.get("block_count") != height
@@ -294,8 +295,9 @@ def replay_source(
         raise RuntimeError(f"{source_kind} migration manifest is not exact")
     packet_root = migration_packet_root(manifest)
     checksum = checksum_path.read_text(encoding="utf-8")
+    manifest_file_sha3_384 = hashlib.sha3_384(manifest_path.read_bytes()).hexdigest()
     expected_checksum = (
-        f"{packet_root}  storage-migration-manifest.json\n"
+        f"{manifest_file_sha3_384}  storage-migration-manifest.json\n"
     )
     if (
         packet_root != manifest.get("migration_packet_root")
