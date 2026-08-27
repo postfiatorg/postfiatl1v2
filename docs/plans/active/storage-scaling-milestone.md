@@ -5,7 +5,7 @@
 **Decision owner:** Post Fiat
 **Research specification:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 **Implementation specification:** [Storage Scaling Fix](../../architecture/storage-scaling-fix-spec.md)
-**Implementation source:** 70245c708234cf80ed3b9081b0de15fb165b7e4b
+**Implementation source:** 0fdcc2b37022406415ef14a0aa504007e7fd7226
 
 The operator directly authorized implementation on 2026-08-26 and explicitly
 instructed this session not to use Task Node. This milestone records that
@@ -25,7 +25,7 @@ operator-directed exception to the repository's normal Task Node workflow.
 
 Evidence: [development packet](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling).
 
-The paired release workflow is implemented on clean source `70245c70`. It
+The paired release workflow is implemented on clean source `0fdcc2b3`. It
 runs the frozen legacy source `8cc7d15e`, bounded-JSONL source `dfd0b9f1`,
 and selected source under qualification with their exact owning release
 binaries. It binds one shared six-validator public-key identity, deterministic
@@ -36,16 +36,29 @@ verification independently reconstructs CPU, RSS, disk, process I/O, host load,
 memory, and network totals and refuses any foreground benchmark process with
 fewer than two samples.
 
-A clean offline development smoke captured at `2026-08-27T09:43:18Z` passed
-one measured round at height 2 in all three lanes. Its report SHA-256 is
-`5f7a30b6a3cc29e2956c308a8615e7b4ba6d42400b5b6abb090440783325cd99`;
+The first clean full campaign attempt used source `71e539bb`. It completed the
+legacy advance to height 50 and three complete 50-round height-50 windows;
+window four reached round 12. The run was intentionally stopped before a final
+report existed because the shared 90-second request/server timeout could censor
+the known slow legacy curve at height 5,000 instead of measuring it. All child
+node processes exited. The partial directory is not evidence eligible and does
+not pass or fail a performance gate.
+
+Source `0fdcc2b3` gives every lane the same 900-second fail-closed timeout,
+binds that policy into packet verification, and cleans up a benchmark child on
+interruption. A clean offline development smoke captured at
+`2026-08-27T10:20:13Z` passed one measured round at height 2 in all three lanes.
+Its report SHA-256 is
+`fab4d28a7797658307d8bf47608e074da6a8cf935a275934faee9deb8d929328`;
 legacy, bounded, and selected binary SHA-256 identities are
 `d2a91b11…f289b1ee`, `ab2e84b3…d1166679`, and
-`dfd71a02…532da25b`. The report explicitly records
-`evidence_eligible: false`, `offline: true`, `network_contacted: false`,
-and `devnet_queried_or_mutated: false`. This proves the paired mechanics and
-fail-closed evidence binding only; it does not close the five-height E1 window,
-either E3 latency ratio, or the height-relationship gate.
+`c75637bf…c8d2b4`. All normalized lanes record the 900-second policy, and their
+raw resource streams rehash with foreground sample minima of six, seven, and
+four. The report explicitly records `evidence_eligible: false`, `offline: true`,
+`network_contacted: false`, and `devnet_queried_or_mutated: false`. This proves
+the corrected paired mechanics and fail-closed evidence binding only; it does
+not close the five-height E1 window, either E3 latency ratio, or the
+height-relationship gate.
 
 ## E2 — bounded append and proposal history
 
