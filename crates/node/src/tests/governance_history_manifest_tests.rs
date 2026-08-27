@@ -3139,7 +3139,7 @@
         assert!(
             missing_error
                 .to_string()
-                .contains("missing snapshot file `ledger.json`"),
+                .contains("storage_snapshot_missing: missing snapshot file `ledger.json`"),
             "{missing_error}"
         );
 
@@ -3158,7 +3158,7 @@
         assert!(
             duplicate_error
                 .to_string()
-                .contains("duplicate snapshot file"),
+                .contains("storage_snapshot_duplicate_file: duplicate snapshot file"),
             "{duplicate_error}"
         );
 
@@ -3172,9 +3172,9 @@
         })
         .expect_err("unexpected snapshot file should fail import");
         assert!(
-            escape_error
-                .to_string()
-                .contains("unexpected snapshot file `../escaped.json`"),
+            escape_error.to_string().contains(
+                "storage_snapshot_unexpected_file: unexpected snapshot file `../escaped.json`"
+            ),
             "{escape_error}"
         );
 

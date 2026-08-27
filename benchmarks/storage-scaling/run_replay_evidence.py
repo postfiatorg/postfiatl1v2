@@ -258,6 +258,26 @@ def replay_source(
         != verified.get("migration_packet_root")
     ):
         raise RuntimeError(f"{source_kind} transactional rebuild did not verify")
+    canonical_export_path = Path(str(rebuilt.get("canonical_export_file", "")))
+    canonical_export_receipt = rebuilt.get("canonical_export_receipt")
+    if (
+        canonical_export_path.resolve()
+        != (rebuild / "canonical-history.jsonl").resolve()
+        or not canonical_export_path.is_file()
+        or not isinstance(canonical_export_receipt, dict)
+        or canonical_export_receipt != verified.get("canonical_export_receipt")
+        or canonical_export_receipt.get("schema")
+        != "postfiat-transactional-canonical-export-receipt-v1"
+        or canonical_export_receipt.get("finalized_height") != height
+        or type(canonical_export_receipt.get("record_count")) is not int
+        or canonical_export_receipt.get("record_count", 0) <= 0
+        or len(str(canonical_export_receipt.get("records_sha3_384", ""))) != 96
+        or any(
+            character not in "0123456789abcdef"
+            for character in str(canonical_export_receipt.get("records_sha3_384", ""))
+        )
+    ):
+        raise RuntimeError(f"{source_kind} canonical JSONL export did not verify")
 
     manifest_path = rebuild / "storage-migration-manifest.json"
     checksum_path = rebuild / "storage-migration-manifest.sha3-384"
@@ -302,6 +322,8 @@ def replay_source(
         "full_replay_passed": True,
         "logical_rebuild_identical": True,
         "canonical_export_identical": True,
+        "canonical_export_receipt": canonical_export_receipt,
+        "canonical_export_sha256": sha256(canonical_export_path),
         "tip_hash": tip_hash,
         "state_root": state_root,
         "ordered_history_accumulator": ordered_history,

@@ -59,10 +59,15 @@ ordered-history accumulator and indexed membership instead of materializing the
 full ordered-batch history.
 
 Authenticated JSONL v2 heads remain available for bounded legacy import, audit,
-and comparison. The fixed-slot bitmap remains a superseded bounded-work
-experiment; neither is the selected primary finality-path store. Legacy heights
-retain their exact list-based state roots, and the transactional generation can
-be rebuilt or verified offline with:
+and comparison. Each transactional rebuild also emits a deterministic
+`canonical-history.jsonl` audit export whose record count and SHA3-384 root are
+verified against the authenticated database; missing, corrupted, or substituted
+exports fail closed during independent verify-only. The export is never read or
+written by proposal, voting, or finalized commit. The fixed-slot bitmap remains
+a superseded bounded-work experiment; neither JSONL surface is the selected
+primary finality-path store. Legacy heights retain their exact list-based state
+roots, and the transactional generation can be rebuilt or verified offline
+with:
 
 ```bash
 postfiat-node storage-rebuild-transactional --data-dir PATH --output-dir PATH \

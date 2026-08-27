@@ -160,7 +160,24 @@ def copy_tamper(packet: Path, source: Path) -> Path:
         receipt_source = resolve_report_reference(source, case.get("receipt"))
         name = str(case.get("name", ""))
         destination = packet / "tamper" / f"{name}.json"
-        copy_file(receipt_source, destination)
+        receipt = read_json(receipt_source)
+        test_receipts = receipt.get("test_receipts")
+        if not isinstance(test_receipts, list) or not test_receipts:
+            raise ValueError("tamper receipt omitted executable test evidence")
+        for test_receipt in test_receipts:
+            if not isinstance(test_receipt, dict) or "report" not in test_receipt:
+                continue
+            evidence_source = resolve_report_reference(source, test_receipt["report"])
+            evidence_destination = (
+                packet / "tamper" / "evidence" / evidence_source.name
+            )
+            if evidence_destination.exists():
+                if sha256(evidence_destination) != sha256(evidence_source):
+                    raise ValueError("tamper evidence destination conflicts")
+            else:
+                copy_file(evidence_source, evidence_destination)
+            test_receipt["report"] = reference(packet, evidence_destination)
+        write_json(destination, receipt)
         case["receipt"] = reference(packet, destination)
     destination = packet / "artifacts" / "tamper.json"
     write_json(destination, report)
@@ -244,6 +261,7 @@ def main() -> int:
     parser.add_argument("--source-revision", required=True)
     parser.add_argument("--captured-at", required=True)
     parser.add_argument("--node-bin", type=Path, required=True)
+    parser.add_argument("--rollback-node-bin", type=Path, required=True)
     parser.add_argument("--state-distinction", type=Path, required=True)
     parser.add_argument("--replay-report", type=Path, required=True)
     parser.add_argument("--performance-report", type=Path, required=True)
@@ -265,8 +283,19 @@ def main() -> int:
     if not git_clean():
         raise ValueError("packet assembly requires a clean checkout")
     node_bin = args.node_bin.resolve()
+    rollback_node_bin = args.rollback_node_bin.resolve()
     if not node_bin.is_file() or node_bin.parent.name != "release":
         raise ValueError("--node-bin must identify a target/release binary")
+    if (
+        not rollback_node_bin.is_file()
+        or rollback_node_bin.is_symlink()
+        or rollback_node_bin.parent.name != "release"
+        or rollback_node_bin == node_bin
+        or sha256(rollback_node_bin) == sha256(node_bin)
+    ):
+        raise ValueError(
+            "--rollback-node-bin must identify a distinct regular target/release binary"
+        )
 
     performance = read_json(args.performance_report.resolve())
     binary_digest = sha256(node_bin)
@@ -279,11 +308,17 @@ def main() -> int:
     packet.mkdir(parents=True)
     binary_destination = packet / "bin" / "postfiat-node"
     copy_file(node_bin, binary_destination)
+    rollback_binary_destination = packet / "bin" / "postfiat-node-rollback"
+    copy_file(rollback_node_bin, rollback_binary_destination)
     binaries = [
         {
             "path": binary_destination.relative_to(packet).as_posix(),
             "sha256": sha256(binary_destination),
-        }
+        },
+        {
+            "path": rollback_binary_destination.relative_to(packet).as_posix(),
+            "sha256": sha256(rollback_binary_destination),
+        },
     ]
     source_report = {
         "schema": ARTIFACT_SCHEMAS["source"],

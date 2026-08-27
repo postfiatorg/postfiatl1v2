@@ -392,6 +392,7 @@ use block_replay_wallet::{
 };
 pub use pftl_swap_service::*;
 mod state_commitment;
+mod storage_vote_guard;
 pub use state_commitment::global_issued_asset_supply;
 #[allow(unused_imports)]
 use state_commitment::{

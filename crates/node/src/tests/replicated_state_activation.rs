@@ -249,6 +249,10 @@ fn assert_activation_journal_recovers_every_prefix(
             data_dir: data_dir.clone(),
         })
         .expect("recover activation journal");
+        status(NodeOptions {
+            data_dir: data_dir.clone(),
+        })
+        .expect("repeat activation recovery idempotently");
         assert_eq!(
             store.read_ledger().expect("read recovered ledger"),
             journal.ledger.clone().expect("activation journal ledger")
@@ -311,6 +315,69 @@ fn apply_activation_journal(store: &NodeStore, journal: &OrderedCommitDeltaJourn
         data_dir: store.data_dir().to_path_buf(),
     })
     .expect("apply complete activation journal");
+}
+
+#[test]
+fn ordered_commit_journal_disagreement_rejects_without_durable_mutation() {
+    let data_dir = unique_test_dir("postfiat-ordered-journal-disagreement");
+    init(InitOptions {
+        data_dir: data_dir.clone(),
+        chain_id: "postfiat-ordered-journal-disagreement".to_owned(),
+        node_id: "validator-0".to_owned(),
+        validator_count: 1,
+    })
+    .expect("initialize journal-disagreement store");
+    let store = NodeStore::new(&data_dir);
+    let genesis = store.read_genesis().expect("read journal genesis");
+    let governance = store.read_governance().expect("read journal governance");
+    let ledger = store.read_ledger().expect("read journal ledger");
+    let batch = postfiat_mempool_dag::build_transaction_batch(
+        &mempool_batch_domain(&genesis),
+        Vec::new(),
+    )
+    .expect("build journal-disagreement batch")
+    .batch;
+    let mut journal = activation_test_journal(
+        &store,
+        &genesis,
+        &governance,
+        &ledger,
+        BATCH_KIND_TRANSPARENT,
+        &batch.batch_id,
+        &batch,
+        &[],
+        false,
+    );
+    journal.ordered_batch_id = "authenticated-but-conflicting-batch".to_owned();
+    store
+        .write_ordered_commit_journal(&journal)
+        .expect("write authenticated conflicting journal");
+    let tip_before = store.read_chain_tip().expect("read tip before rejection");
+    let blocks_before = store.read_blocks().expect("read blocks before rejection");
+    let ledger_before = store.read_ledger().expect("read ledger before rejection");
+    let journal_before = store
+        .read_ordered_commit_journal_raw()
+        .expect("read journal before rejection");
+
+    let error = recover_ordered_commit_journal(&store)
+        .expect_err("journal/block disagreement must fail closed");
+    assert!(
+        error
+            .to_string()
+            .contains("ordered commit delta journal batch `authenticated-but-conflicting-batch` does not match block batch"),
+        "{error}"
+    );
+    assert_eq!(store.read_chain_tip().expect("read rejected tip"), tip_before);
+    assert_eq!(store.read_blocks().expect("read rejected blocks"), blocks_before);
+    assert_eq!(store.read_ledger().expect("read rejected ledger"), ledger_before);
+    assert_eq!(
+        store
+            .read_ordered_commit_journal_raw()
+            .expect("read rejected journal"),
+        journal_before
+    );
+
+    std::fs::remove_dir_all(data_dir).expect("remove journal-disagreement store");
 }
 
 #[test]
@@ -993,11 +1060,222 @@ fn transactional_rebuild_replays_publishes_and_verifies_a_legacy_generation() {
     assert!(manifest_error
         .to_string()
         .contains("storage_migration_manifest_invalid"));
-    std::fs::write(&manifest_path, original_manifest).expect("restore migration manifest");
+    std::fs::write(&manifest_path, &original_manifest).expect("restore migration manifest");
 
     let pointer_path = data_dir.join(
         postfiat_storage::transactional::TRANSACTIONAL_GENERATION_POINTER_FILE,
     );
+    let database_path = output_dir.join(
+        postfiat_storage::transactional::TRANSACTIONAL_DATABASE_FILE,
+    );
+    let pointer_before = std::fs::read(&pointer_path).expect("read pointer before export tests");
+    let database_before =
+        std::fs::read(&database_path).expect("read database before export tests");
+
+    std::fs::remove_file(&manifest_path).expect("remove migration manifest");
+    let missing_manifest_error = rebuild_transactional_storage(StorageMigrationOptions {
+        data_dir: data_dir.clone(),
+        output_dir: output_dir.clone(),
+        expected_tip: source_tip.block_hash.clone(),
+        expected_state_root: source_tip.state_root.clone(),
+        verify_only: true,
+    })
+    .expect_err("missing migration manifest must reject");
+    assert!(
+        missing_manifest_error
+            .to_string()
+            .contains("storage_migration_manifest_missing"),
+        "{missing_manifest_error}"
+    );
+    assert_eq!(
+        std::fs::read(&pointer_path).expect("read pointer after missing manifest"),
+        pointer_before
+    );
+    assert_eq!(
+        std::fs::read(&database_path).expect("read database after missing manifest"),
+        database_before
+    );
+    std::fs::write(&manifest_path, &original_manifest).expect("restore missing manifest");
+
+    let checksum_path = output_dir.join(STORAGE_MIGRATION_MANIFEST_CHECKSUM_FILE);
+    let original_checksum =
+        std::fs::read(&checksum_path).expect("read migration manifest checksum");
+    std::fs::remove_file(&checksum_path).expect("remove migration manifest checksum");
+    let missing_checksum_error = rebuild_transactional_storage(StorageMigrationOptions {
+        data_dir: data_dir.clone(),
+        output_dir: output_dir.clone(),
+        expected_tip: source_tip.block_hash.clone(),
+        expected_state_root: source_tip.state_root.clone(),
+        verify_only: true,
+    })
+    .expect_err("missing migration checksum must reject");
+    assert!(
+        missing_checksum_error
+            .to_string()
+            .contains("storage_migration_manifest_checksum_missing"),
+        "{missing_checksum_error}"
+    );
+    std::fs::write(&checksum_path, &original_checksum).expect("restore missing checksum");
+
+    let mut substituted_checksum = original_checksum.clone();
+    let checksum_byte = substituted_checksum
+        .first_mut()
+        .expect("migration checksum is nonempty");
+    *checksum_byte = if *checksum_byte == b'0' { b'1' } else { b'0' };
+    std::fs::write(&checksum_path, substituted_checksum).expect("substitute migration checksum");
+    let substituted_checksum_error = rebuild_transactional_storage(StorageMigrationOptions {
+        data_dir: data_dir.clone(),
+        output_dir: output_dir.clone(),
+        expected_tip: source_tip.block_hash.clone(),
+        expected_state_root: source_tip.state_root.clone(),
+        verify_only: true,
+    })
+    .expect_err("substituted migration checksum must reject");
+    assert!(
+        substituted_checksum_error
+            .to_string()
+            .contains("storage_migration_manifest_checksum_mismatch"),
+        "{substituted_checksum_error}"
+    );
+    assert_eq!(
+        std::fs::read(&pointer_path).expect("read pointer after export rejection"),
+        pointer_before
+    );
+    assert_eq!(
+        std::fs::read(&database_path).expect("read database after export rejection"),
+        database_before
+    );
+    std::fs::write(&checksum_path, original_checksum).expect("restore migration checksum");
+
+    let canonical_export_path = output_dir.join(STORAGE_CANONICAL_EXPORT_FILE);
+    let canonical_export =
+        std::fs::read(&canonical_export_path).expect("read migration canonical export");
+    assert_eq!(
+        report.canonical_export_file,
+        canonical_export_path,
+        "rebuild report did not identify the canonical export"
+    );
+    assert_eq!(
+        verified.canonical_export_receipt,
+        report.canonical_export_receipt,
+        "verify-only did not reproduce the canonical export receipt"
+    );
+
+    std::fs::remove_file(&canonical_export_path).expect("remove migration canonical export");
+    let missing_export_error = rebuild_transactional_storage(StorageMigrationOptions {
+        data_dir: data_dir.clone(),
+        output_dir: output_dir.clone(),
+        expected_tip: source_tip.block_hash.clone(),
+        expected_state_root: source_tip.state_root.clone(),
+        verify_only: true,
+    })
+    .expect_err("missing canonical export must reject verify-only");
+    assert!(
+        missing_export_error
+            .to_string()
+            .contains("storage_canonical_export_missing"),
+        "{missing_export_error}"
+    );
+    assert_eq!(
+        std::fs::read(&pointer_path).expect("read pointer after missing canonical export"),
+        pointer_before
+    );
+    assert_eq!(
+        std::fs::read(&database_path).expect("read database after missing canonical export"),
+        database_before
+    );
+    std::fs::write(&canonical_export_path, &canonical_export)
+        .expect("restore missing canonical export");
+
+    let mut corrupted_export = canonical_export.clone();
+    corrupted_export.pop();
+    std::fs::write(&canonical_export_path, corrupted_export)
+        .expect("truncate migration canonical export");
+    let corrupted_export_error = rebuild_transactional_storage(StorageMigrationOptions {
+        data_dir: data_dir.clone(),
+        output_dir: output_dir.clone(),
+        expected_tip: source_tip.block_hash.clone(),
+        expected_state_root: source_tip.state_root.clone(),
+        verify_only: true,
+    })
+    .expect_err("corrupted canonical export must reject verify-only");
+    assert!(
+        corrupted_export_error
+            .to_string()
+            .contains("storage_canonical_export_integrity_failure"),
+        "{corrupted_export_error}"
+    );
+    assert_eq!(
+        std::fs::read(&pointer_path).expect("read pointer after corrupted canonical export"),
+        pointer_before
+    );
+    assert_eq!(
+        std::fs::read(&database_path).expect("read database after corrupted canonical export"),
+        database_before
+    );
+    std::fs::write(&canonical_export_path, &canonical_export)
+        .expect("restore corrupted canonical export");
+
+    let donor_dir = unique_test_dir("postfiat-transactional-rebuild-export-donor");
+    let donor_store = store
+        .open_transactional_store_at(&donor_dir)
+        .expect("open canonical export donor store");
+    let donor_tip = ChainTipState {
+        schema: source_tip.schema.clone(),
+        chain_id: genesis.chain_id.clone(),
+        genesis_hash: genesis_hash(&genesis),
+        protocol_version: genesis.protocol_version,
+        height: 0,
+        block_hash: "donor-genesis".to_owned(),
+        state_root: "donor-state".to_owned(),
+        ordered_batch_count: 0,
+        receipt_count: 0,
+        history_base_height: 0,
+    };
+    let donor_commitment = postfiat_storage::OrderedHistoryCommitment::genesis(
+        &donor_tip.chain_id,
+        &donor_tip.genesis_hash,
+        donor_tip.protocol_version,
+    )
+    .expect("build canonical export donor commitment");
+    donor_store
+        .initialize(
+            &donor_tip,
+            &donor_commitment,
+            postfiat_storage::CurrentStateUpdate::default(),
+        )
+        .expect("initialize canonical export donor store");
+    let donor_export_path = donor_dir.join("donor-canonical-history.jsonl");
+    donor_store
+        .write_canonical_jsonl_export(&donor_export_path)
+        .expect("write valid canonical export donor");
+    std::fs::copy(&donor_export_path, &canonical_export_path)
+        .expect("substitute valid foreign canonical export");
+    let substituted_export_error = rebuild_transactional_storage(StorageMigrationOptions {
+        data_dir: data_dir.clone(),
+        output_dir: output_dir.clone(),
+        expected_tip: source_tip.block_hash.clone(),
+        expected_state_root: source_tip.state_root.clone(),
+        verify_only: true,
+    })
+    .expect_err("substituted canonical export must reject verify-only");
+    assert!(
+        substituted_export_error
+            .to_string()
+            .contains("storage_canonical_export_substituted"),
+        "{substituted_export_error}"
+    );
+    assert_eq!(
+        std::fs::read(&pointer_path).expect("read pointer after substituted canonical export"),
+        pointer_before
+    );
+    assert_eq!(
+        std::fs::read(&database_path).expect("read database after substituted canonical export"),
+        database_before
+    );
+    std::fs::write(&canonical_export_path, canonical_export)
+        .expect("restore substituted canonical export");
+
     let mut pointer_bytes = std::fs::read(&pointer_path).expect("read generation pointer");
     let pointer_byte = pointer_bytes
         .iter_mut()
@@ -1012,6 +1290,134 @@ fn transactional_rebuild_replays_publishes_and_verifies_a_legacy_generation() {
 
     std::fs::remove_dir_all(data_dir).expect("remove rebuild source");
     std::fs::remove_dir_all(output_dir).expect("remove rebuild output");
+}
+
+#[test]
+fn transactional_verify_only_rejects_a_valid_but_stale_generation_without_mutation() {
+    let data_dir = unique_test_dir("postfiat-stale-generation-source");
+    let output_dir = unique_test_dir("postfiat-stale-generation-output");
+    init(InitOptions {
+        data_dir: data_dir.clone(),
+        chain_id: "postfiat-stale-generation-test".to_owned(),
+        node_id: "validator-0".to_owned(),
+        validator_count: 1,
+    })
+    .expect("initialize stale-generation source");
+    let store = NodeStore::new(&data_dir);
+    let genesis = store.read_genesis().expect("read stale-generation genesis");
+    let mut governance = store
+        .read_governance()
+        .expect("read stale-generation governance");
+    let mut ledger = store.read_ledger().expect("read stale-generation ledger");
+    let first_amendment = ratify_governance(RatifyGovernanceOptions {
+        data_dir: data_dir.clone(),
+        validators: vec!["validator-0".to_owned()],
+        support: vec!["validator-0".to_owned()],
+        kind: GOVERNANCE_KIND_CRYPTO_POLICY.to_owned(),
+        value: 2,
+        activation_height: 0,
+        veto_until_height: 0,
+        paused: false,
+        amendment_file: data_dir.join("stale-generation-amendment.json"),
+    })
+    .expect("ratify first stale-generation amendment");
+    let first_batch = build_governance_action_batch(&genesis, vec![first_amendment], Vec::new())
+        .expect("build first stale-generation batch");
+    let first_receipts =
+        execute_governance_batch(&mut governance, Some(&mut ledger), &first_batch, 1);
+    assert!(first_receipts[0].accepted, "{first_receipts:?}");
+    let first = activation_test_journal(
+        &store,
+        &genesis,
+        &governance,
+        &ledger,
+        BATCH_KIND_GOVERNANCE,
+        &first_batch.batch_id,
+        &first_batch,
+        &first_receipts,
+        true,
+    );
+    apply_activation_journal(&store, &first);
+    let frozen_tip = store
+        .read_chain_tip()
+        .expect("read stale-generation frozen tip");
+    rebuild_transactional_storage(StorageMigrationOptions {
+        data_dir: data_dir.clone(),
+        output_dir: output_dir.clone(),
+        expected_tip: frozen_tip.block_hash.clone(),
+        expected_state_root: frozen_tip.state_root.clone(),
+        verify_only: false,
+    })
+    .expect("build generation at first tip");
+
+    let pointer_path = data_dir.join(
+        postfiat_storage::transactional::TRANSACTIONAL_GENERATION_POINTER_FILE,
+    );
+    let stale_pointer = std::fs::read(&pointer_path).expect("read valid stale pointer");
+    std::fs::remove_file(&pointer_path).expect("temporarily detach transactional generation");
+    let legacy_only = NodeStore::new(&data_dir);
+    let second_batch = postfiat_mempool_dag::build_transaction_batch(
+        &mempool_batch_domain(&genesis),
+        Vec::new(),
+    )
+    .expect("build second stale-generation batch")
+    .batch;
+    let second = activation_test_journal(
+        &legacy_only,
+        &genesis,
+        &governance,
+        &ledger,
+        BATCH_KIND_TRANSPARENT,
+        &second_batch.batch_id,
+        &second_batch,
+        &[],
+        false,
+    );
+    assert_eq!(second.height, 2);
+    apply_activation_journal(&legacy_only, &second);
+    std::fs::write(&pointer_path, &stale_pointer).expect("restore valid stale pointer");
+
+    let current = NodeStore::new(&data_dir);
+    let current_tip = current
+        .read_chain_tip()
+        .expect("read current legacy source tip");
+    assert_eq!(current_tip.height, 2);
+    let blocks_before = current.read_blocks().expect("read blocks before stale rejection");
+    let error = rebuild_transactional_storage(StorageMigrationOptions {
+        data_dir: data_dir.clone(),
+        output_dir: output_dir.clone(),
+        expected_tip: current_tip.block_hash.clone(),
+        expected_state_root: current_tip.state_root.clone(),
+        verify_only: true,
+    })
+    .expect_err("valid generation at an older certified tip must reject");
+    assert!(
+        error
+            .to_string()
+            .contains("storage_migration_manifest_domain_mismatch"),
+        "{error}"
+    );
+    assert_eq!(
+        current.read_blocks().expect("read blocks after stale rejection"),
+        blocks_before
+    );
+    assert_eq!(
+        std::fs::read(&pointer_path).expect("read pointer after stale rejection"),
+        stale_pointer
+    );
+    let stale_store = current
+        .transactional_store()
+        .expect("open still-bound stale generation");
+    assert_eq!(
+        stale_store
+            .meta()
+            .expect("read stale generation metadata")
+            .finalized_height,
+        1
+    );
+
+    std::fs::remove_dir_all(data_dir).expect("remove stale-generation source");
+    std::fs::remove_dir_all(output_dir).expect("remove stale-generation output");
 }
 
 #[test]
@@ -1497,4 +1903,321 @@ fn existing_chain_storage_activation_can_cancel_only_before_cutover() {
 
     std::fs::remove_dir_all(data_dir).expect("remove cancellation source");
     std::fs::remove_dir_all(output_dir).expect("remove cancellation generation");
+}
+
+#[test]
+fn ambiguous_active_transactional_state_blocks_vote_without_mutation() {
+    let data_dir = unique_test_dir("postfiat-active-storage-vote-block");
+    let mut genesis = Genesis::try_new_with_validator_count(
+        "postfiat-active-storage-vote-block",
+        1,
+    )
+    .expect("create active-storage vote-block genesis");
+    genesis.ordered_history_v2_activation_height = Some(1);
+    genesis.consensus_v2_activation_height = Some(2);
+    lifecycle_queries::init_with_genesis(
+        data_dir.clone(),
+        "validator-0".to_owned(),
+        genesis.clone(),
+    )
+    .expect("initialize active-storage vote-block fixture");
+    let store = NodeStore::new(&data_dir);
+    let governance = store.read_governance().expect("read vote-block governance");
+    let ledger = store.read_ledger().expect("read vote-block ledger");
+    let first_batch = postfiat_mempool_dag::build_transaction_batch(
+        &mempool_batch_domain(&genesis),
+        Vec::new(),
+    )
+    .expect("build vote-block activation batch")
+    .batch;
+    let first_journal = activation_test_journal(
+        &store,
+        &genesis,
+        &governance,
+        &ledger,
+        BATCH_KIND_TRANSPARENT,
+        &first_batch.batch_id,
+        &first_batch,
+        &[],
+        false,
+    );
+    apply_activation_journal(&store, &first_journal);
+    assert!(store
+        .transactional_storage_active()
+        .expect("read active-storage status"));
+
+    let second_batch_file = data_dir.join("vote-block-second-batch.json");
+    create_transfer_batch(BatchTransferOptions {
+        data_dir: data_dir.clone(),
+        key_file: None,
+        to: "pfstoragevoteblock00000000000000000000".to_owned(),
+        amount: 1,
+        batch_file: second_batch_file.clone(),
+    })
+    .expect("create vote-block second batch");
+    let proposal_file = data_dir.join("vote-block-second-proposal.json");
+    let proposal = propose_batch(BatchProposalOptions {
+        data_dir: data_dir.clone(),
+        verify_block_log: true,
+        batch_kind: Some(BATCH_KIND_TRANSPARENT.to_owned()),
+        batch_file: second_batch_file.clone(),
+        proposal_file: proposal_file.clone(),
+        view: None,
+        timeout_certificate_file: None,
+        key_file: Some(data_dir.join(VALIDATOR_KEYS_FILE)),
+        validator_id: None,
+    })
+    .expect("build healthy proposal before storage ambiguity");
+    let consensus_proposal = create_consensus_v2_proposal_for_block(
+        &data_dir,
+        &proposal,
+        None,
+        &data_dir.join(VALIDATOR_KEYS_FILE),
+    )
+    .expect("build healthy consensus-v2 proposal before storage ambiguity");
+    let prepare_votes = ["validator-0"]
+        .into_iter()
+        .map(|validator_id| {
+            create_consensus_v2_prepare_vote(
+                &data_dir,
+                &consensus_proposal,
+                None,
+                &data_dir.join(VALIDATOR_KEYS_FILE),
+                validator_id,
+            )
+            .expect("build healthy prepare vote before storage ambiguity")
+        })
+        .collect::<Vec<_>>();
+    let prepare_qc = certify_and_persist_consensus_v2_votes(
+        &data_dir,
+        consensus_proposal.round,
+        postfiat_types::ConsensusV2Phase::Prepare,
+        Some(consensus_proposal.block.clone()),
+        prepare_votes,
+    )
+    .expect("build healthy prepare QC before storage ambiguity");
+    let validator_keys =
+        read_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE)).expect("read validator keys");
+    let validator = validator_keys
+        .validators
+        .iter()
+        .find(|record| record.node_id == "validator-0")
+        .expect("find validator-0 key")
+        .clone();
+    let split_key_file = data_dir.join("validator-0.vote-block.private.json");
+    write_validator_key_file(
+        &split_key_file,
+        &ValidatorKeyFile {
+            validators: vec![validator],
+        },
+    )
+    .expect("write split vote-block key");
+    drop(store);
+    let sweep_dir = unique_test_dir("postfiat-active-storage-vote-block-sweep");
+    let sweep_store = NodeStore::new(&sweep_dir);
+    drop(
+        sweep_store
+            .transactional_store()
+            .expect("sweep active database handle before raw corruption"),
+    );
+    drop(sweep_store);
+
+    let database_path = data_dir.join(
+        postfiat_storage::transactional::TRANSACTIONAL_DATABASE_FILE,
+    );
+    let mut corrupted = std::fs::read(&database_path).expect("read active database");
+    let positions = corrupted
+        .windows(first_batch.batch_id.len())
+        .enumerate()
+        .filter_map(|(offset, candidate)| {
+            (candidate == first_batch.batch_id.as_bytes()).then_some(offset)
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        positions.len() >= 3,
+        "expected active batch ID in multiple authenticated tables"
+    );
+    for position in positions {
+        corrupted[position + first_batch.batch_id.len() / 2] ^= 1;
+    }
+    std::fs::write(&database_path, &corrupted).expect("corrupt active transactional state");
+
+    let vote_file = data_dir.join("ambiguous-storage.block-vote.json");
+    let error = create_block_vote(BlockVoteOptions {
+        data_dir: data_dir.clone(),
+        verify_block_log: true,
+        key_file: split_key_file.clone(),
+        validator_id: None,
+        batch_file: Some(second_batch_file.clone()),
+        proposal_file: Some(proposal_file.clone()),
+        timeout_certificate_file: None,
+        block_height: Some(proposal.block_height),
+        vote_file: vote_file.clone(),
+    })
+    .expect_err("ambiguous active storage must block voting");
+    assert!(
+        error.to_string().contains("storage_database_error")
+            || error.to_string().contains("storage_integrity_failure")
+            || error
+                .to_string()
+                .contains("storage_vote_blocked_ambiguous_local_state"),
+        "{error}"
+    );
+    assert!(!vote_file.exists(), "a vote was durably emitted from ambiguous storage");
+
+    let verified_vote_file = data_dir.join("ambiguous-storage-verified.block-vote.json");
+    let verified_error = create_block_vote_for_verified_proposal(
+        BlockVoteForVerifiedProposalOptions {
+            data_dir: data_dir.clone(),
+            verify_block_log: false,
+            key_file: split_key_file.clone(),
+            validator_id: Some("validator-0".to_owned()),
+            proposal: proposal.clone(),
+            block_height: Some(proposal.block_height),
+            vote_file: verified_vote_file.clone(),
+        },
+    )
+    .expect_err("preverified proposal must not bypass the storage vote guard");
+    assert!(
+        verified_error
+            .to_string()
+            .contains("storage_vote_blocked_ambiguous_local_state"),
+        "{verified_error}"
+    );
+    assert!(
+        !verified_vote_file.exists(),
+        "the preverified-proposal path emitted a vote from ambiguous storage"
+    );
+
+    let mut unsigned_proposal = proposal.clone();
+    unsigned_proposal.signature = None;
+    let proposal_sign_error = sign_verified_block_proposal(
+        &data_dir,
+        unsigned_proposal,
+        &split_key_file,
+        "validator-0",
+    )
+    .expect_err("block proposal signing must not bypass the storage vote guard");
+    assert!(
+        proposal_sign_error
+            .to_string()
+            .contains("storage_vote_blocked_ambiguous_local_state"),
+        "{proposal_sign_error}"
+    );
+
+    let timeout_vote_file = data_dir.join("ambiguous-storage.timeout-vote.json");
+    let timeout_error = create_block_timeout_vote(BlockTimeoutVoteOptions {
+        data_dir: data_dir.clone(),
+        verify_block_log: false,
+        key_file: split_key_file.clone(),
+        validator_id: Some("validator-0".to_owned()),
+        block_height: proposal.block_height,
+        view: proposal.view,
+        high_qc_id: "ambiguous-storage-high-qc".to_owned(),
+        vote_file: timeout_vote_file.clone(),
+    })
+    .expect_err("timeout vote signing must not bypass the storage vote guard");
+    assert!(
+        timeout_error
+            .to_string()
+            .contains("storage_vote_blocked_ambiguous_local_state"),
+        "{timeout_error}"
+    );
+    assert!(
+        !timeout_vote_file.exists(),
+        "the timeout path emitted a vote from ambiguous storage"
+    );
+
+    let consensus_error = create_consensus_v2_proposal_for_block(
+        &data_dir,
+        &proposal,
+        None,
+        &split_key_file,
+    )
+    .expect_err("consensus-v2 proposal signing must block on ambiguous storage");
+    assert!(
+        consensus_error
+            .to_string()
+            .contains("storage_vote_blocked_ambiguous_local_state"),
+        "{consensus_error}"
+    );
+
+    let prepare_error = create_consensus_v2_prepare_vote(
+        &data_dir,
+        &consensus_proposal,
+        None,
+        &split_key_file,
+        "validator-0",
+    )
+    .expect_err("consensus-v2 prepare voting must block on ambiguous storage");
+    assert!(
+        prepare_error
+            .to_string()
+            .contains("storage_vote_blocked_ambiguous_local_state"),
+        "{prepare_error}"
+    );
+
+    let precommit_error = create_consensus_v2_precommit_vote(
+        &data_dir,
+        &prepare_qc,
+        &split_key_file,
+        "validator-0",
+    )
+    .expect_err("consensus-v2 precommit voting must block on ambiguous storage");
+    assert!(
+        precommit_error
+            .to_string()
+            .contains("storage_vote_blocked_ambiguous_local_state"),
+        "{precommit_error}"
+    );
+
+    let consensus_timeout_error = create_consensus_v2_timeout_vote(
+        &data_dir,
+        consensus_proposal.round,
+        &split_key_file,
+        "validator-0",
+    )
+    .expect_err("consensus-v2 timeout voting must block on ambiguous storage");
+    assert!(
+        consensus_timeout_error
+            .to_string()
+            .contains("storage_vote_blocked_ambiguous_local_state"),
+        "{consensus_timeout_error}"
+    );
+
+    let database_after_first_rejection =
+        std::fs::read(&database_path).expect("read database after first blocked vote");
+    let second_vote_file = data_dir.join("ambiguous-storage-second.block-vote.json");
+    let second_error = create_block_vote(BlockVoteOptions {
+        data_dir: data_dir.clone(),
+        verify_block_log: true,
+        key_file: split_key_file,
+        validator_id: None,
+        batch_file: Some(second_batch_file),
+        proposal_file: Some(proposal_file),
+        timeout_certificate_file: None,
+        block_height: Some(proposal.block_height),
+        vote_file: second_vote_file.clone(),
+    })
+    .expect_err("repeated vote attempt from ambiguous storage must remain blocked");
+    assert!(
+        second_error.to_string().contains("storage_database_error")
+            || second_error.to_string().contains("storage_integrity_failure")
+            || second_error
+                .to_string()
+                .contains("storage_vote_blocked_ambiguous_local_state"),
+        "{second_error}"
+    );
+    assert!(
+        !second_vote_file.exists(),
+        "a repeated attempt emitted a vote from ambiguous storage"
+    );
+    assert!(
+        std::fs::read(&database_path).expect("read database after repeated blocked vote")
+            == database_after_first_rejection,
+        "repeated blocked voting changed the settled recovery state"
+    );
+
+    std::fs::remove_dir_all(data_dir).expect("remove active-storage vote-block fixture");
+    std::fs::remove_dir_all(sweep_dir).expect("remove active-storage sweep fixture");
 }

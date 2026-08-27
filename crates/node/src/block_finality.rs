@@ -2404,6 +2404,11 @@ fn create_block_vote_for_target_with_timings(
     mut timings: BlockVoteCreationTimingReport,
     total_start: std::time::Instant,
 ) -> io::Result<BlockVoteWithTimingsReport> {
+    storage_vote_guard::require_unambiguous_storage_for_vote(
+        store.data_dir(),
+        target.evidence.height,
+        Some(&target.evidence.parent_hash),
+    )?;
     let stage_start = std::time::Instant::now();
     let key_file = read_validator_key_file(key_file_path)?;
     timings.key_read_ms = node_timing_elapsed_ms(stage_start);
@@ -3106,6 +3111,11 @@ pub fn create_block_timeout_vote(
             "timeout vote high_qc_id must be nonempty",
         ));
     }
+    storage_vote_guard::require_unambiguous_storage_for_vote(
+        &options.data_dir,
+        options.block_height,
+        None,
+    )?;
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
     let governance = store.read_governance()?;
@@ -4326,6 +4336,11 @@ fn sign_block_proposal_file(
             "block proposal is already signed",
         ));
     }
+    storage_vote_guard::require_unambiguous_storage_for_vote(
+        store.data_dir(),
+        proposal.block_height,
+        Some(&proposal.parent_hash),
+    )?;
     let key_file = read_validator_key_file(key_file)?;
     validate_validator_key_file(&key_file)?;
     let key_record = select_validator_key_record(&key_file, validator_id)?;

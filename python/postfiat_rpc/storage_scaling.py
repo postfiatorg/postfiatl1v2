@@ -65,28 +65,84 @@ ARTIFACT_SCHEMAS = {
     "migration": "postfiat-storage-scaling-six-clone-migration-v1",
     "redaction": "postfiat-storage-scaling-redaction-v1",
 }
-REQUIRED_TAMPER_CASES = {
-    "history_truncated",
-    "history_padded",
-    "history_reordered",
-    "history_duplicated",
-    "history_omitted",
-    "history_modified",
-    "wrong_domain",
-    "stale_generation",
-    "missing_table_or_snapshot",
-    "index_without_history",
-    "history_without_index",
-    "conflicting_ordered_indexes",
-    "incorrect_count_or_accumulator",
-    "forged_receipt_archive_or_state",
-    "disk_or_write_failure",
-    "process_kill_before_commit",
-    "process_kill_during_commit",
-    "process_kill_after_commit",
-    "migration_activation_cancellation_restart",
-    "catch_up_and_rollback",
+REQUIRED_TAMPER_REASONS = {
+    "history_truncated": "storage_legacy_jsonl_mac_chain_mismatch",
+    "history_padded": "storage_count_mismatch",
+    "history_reordered": "storage_corrupt_record",
+    "history_modified": "storage_corrupt_record",
+    "history_duplicated": "storage_count_mismatch",
+    "history_omitted": "storage_count_mismatch",
+    "fabricated_transition": "transition_proof_mismatch",
+    "wrong_root_certificate": "certificate_root_mismatch",
+    "omitted_latest_update": "required_latest_update_omitted",
+    "interrupted_catch_up": "catch_up_resumed_from_second_honest_peer",
+    "wrong_chain_domain": "storage_ordered_commitment_mismatch",
+    "wrong_genesis_domain": "storage_ordered_commitment_mismatch",
+    "wrong_protocol_domain": "storage_ordered_commitment_mismatch",
+    "wrong_storage_domain": "storage_unsupported_schema",
+    "wrong_commitment_domain": "storage_unsupported_schema",
+    "wrong_table_domain": "storage_integrity_failure",
+    "wrong_key_domain": "storage_integrity_failure",
+    "missing_checkpoint": "storage_legacy_jsonl_head_missing",
+    "missing_checkpoint_log": "storage_legacy_jsonl_log_missing",
+    "checkpoint_log_substitution": "storage_legacy_jsonl_head_domain_mismatch",
+    "stale_valid_head": "storage_legacy_jsonl_head_rollback",
+    "bounded_crash_suffix": "storage_legacy_jsonl_crash_suffix_recovered",
+    "stale_generation": "storage_migration_manifest_domain_mismatch",
+    "stale_metadata": "storage_count_mismatch",
+    "stale_tip": "storage_corrupt_record",
+    "stale_accumulator": "storage_ordered_commitment_mismatch",
+    "missing_table": "storage_database_error",
+    "substituted_table": "storage_integrity_failure",
+    "corrupted_database_pages": "storage_database_error",
+    "missing_database_page": "storage_database_error",
+    "substituted_database_page": "storage_database_error",
+    "missing_generation_pointer": "storage_vote_blocked_ambiguous_local_state",
+    "substituted_generation_pointer": "storage_integrity_failure",
+    "missing_canonical_export": "storage_canonical_export_missing",
+    "corrupted_canonical_export": "storage_canonical_export_integrity_failure",
+    "substituted_canonical_export": "storage_canonical_export_substituted",
+    "index_without_history": "storage_count_mismatch",
+    "history_without_index": "storage_corrupt_record",
+    "conflicting_ordered_indexes": "storage_corrupt_record",
+    "incorrect_count": "storage_count_mismatch",
+    "forged_receipt": "storage_integrity_failure",
+    "forged_archive": "storage_integrity_failure",
+    "forged_state": "storage_integrity_failure",
+    "forged_certificate": "historical_replay_state_root_mismatch",
+    "forged_catch_up_response": "catch_up_response_rejected",
+    "journal_head_disagreement": "storage_ordered_commit_journal_disagreement",
+    "disk_full": "storage_database_error",
+    "permission_loss": "storage_database_error",
+    "write_failure": "storage_database_error",
+    "sync_failure": "storage_database_error",
+    "process_kill_before_commit": "storage_process_kill_recovered_old_tip",
+    "process_kill_during_commit": "storage_process_kill_recovered_old_tip",
+    "process_kill_after_commit": "storage_process_kill_recovered_new_tip",
+    "power_loss_before_commit": "storage_power_loss_recovered_old_tip",
+    "power_loss_during_commit": "storage_power_loss_recovered_old_tip",
+    "power_loss_after_commit": "storage_power_loss_recovered_new_tip",
+    "restart_after_transaction_cut": "storage_restart_recovered_old_tip",
+    "restart_after_activation_journal_cut": "storage_restart_recovered_new_tip",
+    "repeated_recovery": "storage_repeated_recovery_idempotent",
+    "idempotent_retry": "storage_idempotent_retry_same_tip",
+    "migration_activation_cancellation_restart": (
+        "storage_commitment_activation_cancelled"
+    ),
+    "pre_activation_rollback": "storage_commitment_activation_cancelled",
+    "post_activation_restart_replay": "storage_transactional_restart_replayed",
+    "compatible_post_activation_software_rollback": (
+        "storage_compatible_rollback_resumed_same_certified_tip"
+    ),
+    "missing_snapshot": "storage_snapshot_missing",
+    "substituted_snapshot": "storage_snapshot_integrity_failure",
+    "missing_migration_manifest": "storage_migration_manifest_missing",
+    "substituted_migration_manifest_checksum": (
+        "storage_migration_manifest_checksum_mismatch"
+    ),
+    "tampered_snapshot": "storage_snapshot_integrity_failure",
 }
+REQUIRED_TAMPER_CASES = set(REQUIRED_TAMPER_REASONS)
 
 
 class StorageScalingVerificationError(ValueError):
@@ -361,6 +417,24 @@ def _verify_replay(
         for key in ("tip_hash", "state_root", "ordered_history_accumulator"):
             if HEX96.fullmatch(str(receipt.get(key, ""))) is None:
                 _fail(f"replay receipt {height} {key} is invalid")
+        canonical_export = _object(
+            receipt.get("canonical_export_receipt"),
+            f"replay receipt {height} canonical export",
+        )
+        if (
+            canonical_export.get("schema")
+            != "postfiat-transactional-canonical-export-receipt-v1"
+            or canonical_export.get("finalized_height") != height
+            or type(canonical_export.get("record_count")) is not int
+            or canonical_export.get("record_count", 0) <= 0
+            or HEX96.fullmatch(
+                str(canonical_export.get("records_sha3_384", ""))
+            )
+            is None
+            or HEX64.fullmatch(str(receipt.get("canonical_export_sha256", "")))
+            is None
+        ):
+            _fail(f"replay receipt {height} canonical export is invalid")
     if seen != set(expected):
         _fail("replay receipts do not cover exact heights 915 and 924")
 
@@ -634,16 +708,161 @@ def _verify_performance(
     return ratios
 
 
+def _verify_original_e3_campaign(
+    packet_dir: Path,
+    checksums: Mapping[str, str],
+    reference: Any,
+    source_revision: str,
+    label: str,
+) -> None:
+    campaign = _bound_json(packet_dir, checksums, reference, label)
+    if campaign.get("schema") != "postfiat-cobalt-adversarial-e3-campaign-v1":
+        _fail(f"{label} schema is unsupported")
+    summary = _object(campaign.get("summary"), f"{label} summary")
+    expected_summary = {
+        "source_revision": source_revision,
+        "validator_count": 6,
+        "tamper_case_count": 24,
+        "forged_catch_up_case_count": 18,
+        "recovery_case_count": 6,
+        "rejected_case_count": 42,
+        "durable_mutation_count": 0,
+        "signed_evidence_count": 18,
+        "byte_identical_recovery_count": 6,
+        "manual_repair_action_count": 0,
+        "summary_only": False,
+        "pass": True,
+    }
+    for field, expected in expected_summary.items():
+        if summary.get(field) != expected:
+            _fail(f"{label} summary field {field} disagrees with the frozen campaign")
+    if summary.get("signed_evidence_verified") is not True:
+        _fail(f"{label} signed evidence was not verified")
+
+    cases = _list(campaign.get("cases"), f"{label} cases")
+    recoveries = _list(campaign.get("recoveries"), f"{label} recoveries")
+    if len(cases) != 42 or len(recoveries) != 6:
+        _fail(f"{label} did not include all 48 frozen cases")
+    for raw_case in cases:
+        case = _object(raw_case, f"{label} case")
+        if (
+            case.get("ok") is not True
+            or case.get("detected_before_rejoin") is not True
+            or case.get("durable_state_mutated") is not False
+            or case.get("state_hash_before") != case.get("state_hash_after")
+            or case.get("journal_sha256_before") != case.get("journal_sha256_after")
+        ):
+            _fail(f"{label} contains an unsafe rejected case")
+    for raw_recovery in recoveries:
+        recovery = _object(raw_recovery, f"{label} recovery")
+        if (
+            recovery.get("ok") is not True
+            or recovery.get("byte_identical") is not True
+            or recovery.get("restart_succeeded") is not True
+            or recovery.get("no_manual_repair") is not True
+            or recovery.get("honest_history_sha256")
+            != recovery.get("restored_history_sha256")
+        ):
+            _fail(f"{label} contains an unsafe recovery case")
+
+
+def _verify_compatible_rollback(
+    report: Mapping[str, Any],
+    source_revision: str,
+    binary_digests: set[str],
+) -> None:
+    if (
+        report.get("schema") != "postfiat-storage-compatible-rollback-v1"
+        or report.get("status") != "PASS"
+        or report.get("evidence_eligible") is not True
+        or report.get("source_revision") != source_revision
+        or report.get("chain_id") != "postfiat-storage-scaling-local-v1"
+        or report.get("validator_count") != 6
+        or report.get("storage_activation_height") != 1
+        or report.get("consensus_activation_height") != 2
+        or report.get("network_contacted") is not False
+        or report.get("devnet_queried_or_mutated") is not False
+    ):
+        _fail("compatible rollback report identity or execution mode is invalid")
+    for key in (
+        "rollback_source_is_ancestor",
+        "activated_commitment_understood",
+        "resumed_same_certified_tip",
+        "post_activation_finality_with_rollback_binary",
+        "forward_recovery_with_current_binary",
+        "literal_receipts_exact",
+        "zero_full_history_reads",
+        "bounded_index_pages",
+        "constant_accumulator_work",
+        "all_six_converged",
+        "offline",
+    ):
+        _bool(report.get(key), f"compatible rollback {key}")
+
+    current = _object(report.get("current_binary"), "current rollback binary")
+    rollback = _object(report.get("rollback_binary"), "older rollback binary")
+    if (
+        current.get("source_revision") != source_revision
+        or current.get("git_revision") != source_revision[:8]
+        or current.get("profile") != "release"
+        or current.get("sha256") not in binary_digests
+    ):
+        _fail("current rollback binary is not bound to packet source")
+    rollback_revision = str(rollback.get("source_revision", ""))
+    if (
+        HEX40.fullmatch(rollback_revision) is None
+        or rollback_revision == source_revision
+        or rollback.get("git_revision") != rollback_revision[:8]
+        or rollback.get("profile") != "release"
+        or rollback.get("sha256") not in binary_digests
+        or rollback.get("sha256") == current.get("sha256")
+    ):
+        _fail("older rollback binary identity is invalid or unbound")
+
+    identities = _object(report.get("identities"), "compatible rollback identities")
+    expected_heights = {
+        "current_post_activation": 2,
+        "rollback_resume_input": 2,
+        "rollback_finalized": 3,
+        "forward_resume_input": 3,
+        "forward_finalized": 4,
+    }
+    parsed: dict[str, Mapping[str, Any]] = {}
+    for label, height in expected_heights.items():
+        identity = _object(identities.get(label), f"compatible rollback {label}")
+        if identity.get("height") != height:
+            _fail(f"compatible rollback {label} height is invalid")
+        for key in ("tip", "state_root"):
+            if HEX96.fullmatch(str(identity.get(key, ""))) is None:
+                _fail(f"compatible rollback {label} {key} is invalid")
+        parsed[label] = identity
+    if (
+        parsed["rollback_resume_input"] != parsed["current_post_activation"]
+        or parsed["forward_resume_input"] != parsed["rollback_finalized"]
+    ):
+        _fail("compatible rollback did not resume the exact certified tips")
+
+
 def _verify_tamper(
     packet_dir: Path,
     checksums: Mapping[str, str],
     matrix: Mapping[str, Any],
     source_revision: str,
+    binary_digests: set[str],
 ) -> int:
+    if matrix.get("status") != "PASS":
+        _fail("tamper matrix did not pass")
+    if matrix.get("coverage_complete") is not True:
+        _fail("tamper matrix coverage is incomplete")
+    if matrix.get("uncovered_requirements") != []:
+        _fail("tamper matrix retains uncovered requirements")
     if matrix.get("source_revision") != source_revision:
         _fail("tamper matrix source revision disagrees with the packet")
+    if matrix.get("offline") is not True or matrix.get("network_contacted") is not False:
+        _fail("tamper matrix is not offline evidence")
     cases = _list(matrix.get("cases"), "tamper cases")
     observed: set[str] = set()
+    observed_tests: set[tuple[str, str]] = set()
     for value in cases:
         case = _object(value, "tamper case")
         name = str(case.get("name", ""))
@@ -652,9 +871,13 @@ def _verify_tamper(
         observed.add(name)
         _bool(case.get("passed"), f"tamper case {name}")
         _bool(case.get("no_partial_mutation"), f"tamper case {name} mutation gate")
-        if not isinstance(case.get("reason_code"), str) or not case["reason_code"]:
-            _fail(f"tamper case {name} has no stable reason code")
-        if case.get("terminal_state") not in {"rejected_voting_blocked", "recovered_old_tip", "recovered_new_tip"}:
+        if case.get("reason_code") != REQUIRED_TAMPER_REASONS.get(name):
+            _fail(f"tamper case {name} reason code is not the frozen classification")
+        if case.get("terminal_state") not in {
+            "rejected_voting_blocked",
+            "recovered_old_tip",
+            "recovered_new_tip",
+        }:
             _fail(f"tamper case {name} terminal state is invalid")
         receipt = _bound_json(
             packet_dir,
@@ -666,6 +889,8 @@ def _verify_tamper(
             _fail(f"tamper case {name} receipt schema is unsupported")
         if receipt.get("source_revision") != source_revision:
             _fail(f"tamper receipt {name} source revision disagrees with the packet")
+        if receipt.get("offline") is not True or receipt.get("network_contacted") is not False:
+            _fail(f"tamper receipt {name} is not offline evidence")
         for key in (
             "name",
             "passed",
@@ -675,9 +900,79 @@ def _verify_tamper(
         ):
             if receipt.get(key) != case.get(key):
                 _fail(f"tamper receipt {name} disagrees on {key}")
-    missing = REQUIRED_TAMPER_CASES - observed
-    if missing:
-        _fail(f"tamper matrix is missing cases: {sorted(missing)}")
+        tests = _list(receipt.get("test_receipts"), f"tamper receipt {name} tests")
+        if not tests:
+            _fail(f"tamper receipt {name} has no executable test evidence")
+        case_tests: set[tuple[str, str]] = set()
+        for raw_test in tests:
+            test = _object(raw_test, f"tamper receipt {name} test")
+            package = str(test.get("package", ""))
+            test_filter = str(test.get("test_filter", ""))
+            if not package or not test_filter or test.get("result") != "passed":
+                _fail(f"tamper receipt {name} contains an invalid test result")
+            if test_filter == "__full_campaign__":
+                if type(test.get("executed_case_count")) is not int or test.get(
+                    "executed_case_count"
+                ) != 48:
+                    _fail(f"tamper receipt {name} did not run the frozen E3 campaign")
+                if HEX64.fullmatch(
+                    str(test.get("verify_command_sha256", ""))
+                ) is None:
+                    _fail(f"tamper receipt {name} E3 campaign proof is incomplete")
+                _verify_original_e3_campaign(
+                    packet_dir,
+                    checksums,
+                    test.get("report"),
+                    source_revision,
+                    f"tamper receipt {name} E3 report",
+                )
+            elif (
+                package == "postfiat-storage-rollback-rehearsal"
+                and test_filter == "compatible_post_activation_software_rollback"
+            ):
+                if test.get("executed_test_count") != 1:
+                    _fail("compatible rollback receipt has an invalid execution count")
+                rollback_report = _bound_json(
+                    packet_dir,
+                    checksums,
+                    test.get("report"),
+                    "compatible rollback report",
+                )
+                _verify_compatible_rollback(
+                    rollback_report,
+                    source_revision,
+                    binary_digests,
+                )
+            elif type(test.get("executed_test_count")) is not int or test.get(
+                "executed_test_count"
+            ) < 1:
+                _fail(f"tamper receipt {name} test filter executed zero tests")
+            if HEX64.fullmatch(str(test.get("command_sha256", ""))) is None:
+                _fail(f"tamper receipt {name} test command is not checksum-bound")
+            for optional_hash in ("verify_command_sha256", "report_sha256"):
+                if optional_hash in test and HEX64.fullmatch(str(test[optional_hash])) is None:
+                    _fail(f"tamper receipt {name} {optional_hash} is invalid")
+            test_identity = (package, test_filter)
+            case_tests.add(test_identity)
+            observed_tests.add(test_identity)
+        if case.get("terminal_state") == "rejected_voting_blocked" and (
+            "postfiat-node",
+            "ambiguous_active_transactional_state_blocks_vote_without_mutation",
+        ) not in case_tests:
+            _fail(f"tamper case {name} lacks active-storage vote-block evidence")
+        if name == "compatible_post_activation_software_rollback" and (
+            "postfiat-storage-rollback-rehearsal",
+            "compatible_post_activation_software_rollback",
+        ) not in case_tests:
+            _fail("compatible rollback case lacks a two-binary rehearsal")
+    if observed != REQUIRED_TAMPER_CASES:
+        _fail(
+            "tamper matrix case set differs from the frozen set: "
+            f"missing={sorted(REQUIRED_TAMPER_CASES - observed)} "
+            f"unexpected={sorted(observed - REQUIRED_TAMPER_CASES)}"
+        )
+    if matrix.get("unique_test_count") != len(observed_tests):
+        _fail("tamper matrix unique test count is inconsistent")
     return len(cases)
 
 
@@ -775,6 +1070,7 @@ def verify_packet(packet: str | Path) -> VerifiedPacket:
         checksums,
         artifacts["tamper"],
         source_revision,
+        binary_digests,
     )
     _verify_migration(
         artifacts["migration"],

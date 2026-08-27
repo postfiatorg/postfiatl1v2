@@ -7,12 +7,27 @@ import argparse
 import hashlib
 import json
 import os
+import re
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
 
 REPO = Path(__file__).resolve().parents[2]
+ORIGINAL_E3_MANIFEST = (
+    REPO
+    / "benchmarks"
+    / "cobalt-adversarial-verification"
+    / "e3"
+    / "campaign-manifest.json"
+)
 
+ORIGINAL_E3 = ("postfiat-cobalt-e3-harness", "__full_campaign__")
+COMPATIBLE_ROLLBACK = (
+    "postfiat-storage-rollback-rehearsal",
+    "compatible_post_activation_software_rollback",
+)
+UNCOVERED_REQUIREMENTS: tuple[str, ...] = ()
 STORAGE_TRUNCATED = ("postfiat-storage", "truncated_jsonl_chain_is_rejected")
 STORAGE_HISTORY_MUTATIONS = (
     "postfiat-storage",
@@ -50,19 +65,96 @@ STORAGE_KILL = (
     "postfiat-storage",
     "sigkill_before_during_and_after_commit_recovers_one_complete_tip",
 )
+STORAGE_STALE_METADATA = (
+    "postfiat-storage",
+    "authenticated_stale_metadata_tip_count_and_accumulator_fail_without_marker",
+)
+STORAGE_TABLE_INDEX = (
+    "postfiat-storage",
+    "missing_substituted_and_one_sided_indexes_fail_without_mutation",
+)
+STORAGE_POINTER = (
+    "postfiat-storage",
+    "generation_pointer_is_bound_to_the_verified_database_manifest",
+)
+STORAGE_CANONICAL_EXPORT = (
+    "postfiat-storage",
+    "canonical_jsonl_export_rejects_missing_corrupted_and_substituted_files_without_database_mutation",
+)
+STORAGE_PAGES = (
+    "postfiat-storage",
+    "corrupted_transactional_data_pages_reject_without_logical_state",
+)
+STORAGE_MISSING_PAGE = (
+    "postfiat-storage",
+    "missing_transactional_data_page_rejects_without_logical_state",
+)
+STORAGE_SUBSTITUTED_PAGE = (
+    "postfiat-storage",
+    "substituted_transactional_data_page_rejects_without_logical_state",
+)
+STORAGE_CHECKPOINT_SUBSTITUTION = (
+    "postfiat-storage",
+    "jsonl_checkpoint_cannot_be_substituted_between_log_kinds",
+)
+STORAGE_STALE_HEAD = (
+    "postfiat-storage",
+    "deleted_jsonl_tail_is_rejected_by_authenticated_head",
+)
+STORAGE_MISSING_LOG = (
+    "postfiat-storage",
+    "deleted_jsonl_log_is_rejected_when_authenticated_head_remains",
+)
+STORAGE_MISSING_HEAD = (
+    "postfiat-storage",
+    "deleted_jsonl_head_is_rejected_when_log_remains",
+)
+STORAGE_CRASH_SUFFIX = (
+    "postfiat-storage",
+    "complete_jsonl_crash_suffix_is_verified_once_and_checkpointed",
+)
+
 NODE_REBUILD = (
     "postfiat-node",
     "transactional_rebuild_replays_publishes_and_verifies_a_legacy_generation",
+)
+NODE_STALE_GENERATION = (
+    "postfiat-node",
+    "transactional_verify_only_rejects_a_valid_but_stale_generation_without_mutation",
+)
+NODE_AMBIGUOUS_STORAGE_VOTE_BLOCK = (
+    "postfiat-node",
+    "ambiguous_active_transactional_state_blocks_vote_without_mutation",
 )
 NODE_CANCEL = (
     "postfiat-node",
     "existing_chain_storage_activation_can_cancel_only_before_cutover",
 )
+NODE_EXISTING_ACTIVATION = (
+    "postfiat-node",
+    "existing_chain_governance_schedule_switches_only_at_the_recorded_height",
+)
 NODE_ACTIVATION_RESTART = (
     "postfiat-node",
     "ordered_history_v2_activation_journal_recovers_every_persist_prefix",
 )
-NODE_CATCH_UP = (
+NODE_JOURNAL_DISAGREEMENT = (
+    "postfiat-node",
+    "ordered_commit_journal_disagreement_rejects_without_durable_mutation",
+)
+NODE_CATCH_UP_MALFORMED = (
+    "postfiat-node",
+    "catch_up_rejects_malformed_batches_without_durable_mutation",
+)
+NODE_CATCH_UP_RECOVERY = (
+    "postfiat-node",
+    "signed_history_catch_up_refuses_gap_then_converges",
+)
+NODE_EXTERNAL_STATE_ROOT = (
+    "postfiat-node",
+    "historical_external_certificate_rejects_state_divergent_catch_up_without_mutation",
+)
+NODE_EXTERNAL_PARENT = (
     "postfiat-node",
     "historical_external_certificate_rejects_wrong_local_parent_without_mutation",
 )
@@ -70,29 +162,89 @@ NODE_SNAPSHOT = (
     "postfiat-node",
     "signed_snapshot_roundtrip_rejects_tampering_and_preserves_signer_isolation",
 )
-NODE_PRUNE = (
+NODE_SNAPSHOT_FILE_SET = (
     "postfiat-node",
-    "history_prune_recover_completes_pending_prune_after_checkpoint_write",
+    "snapshot_import_rejects_bad_manifest_file_set",
 )
 
 CASES: dict[str, dict[str, Any]] = {
-    "history_truncated": {"tests": [STORAGE_TRUNCATED]},
-    "history_padded": {"tests": [STORAGE_HISTORY_MUTATIONS]},
-    "history_reordered": {"tests": [STORAGE_HISTORY_MUTATIONS]},
+    "history_truncated": {"tests": [ORIGINAL_E3, STORAGE_TRUNCATED]},
+    "history_padded": {"tests": [ORIGINAL_E3, STORAGE_HISTORY_MUTATIONS]},
+    "history_reordered": {"tests": [ORIGINAL_E3, STORAGE_HISTORY_MUTATIONS]},
+    "history_modified": {"tests": [ORIGINAL_E3, STORAGE_HISTORY_MUTATIONS]},
     "history_duplicated": {"tests": [STORAGE_HISTORY_MUTATIONS]},
     "history_omitted": {"tests": [STORAGE_HISTORY_MUTATIONS]},
-    "history_modified": {"tests": [STORAGE_HISTORY_MUTATIONS]},
-    "wrong_domain": {"tests": [STORAGE_DOMAIN]},
-    "stale_generation": {"tests": [NODE_REBUILD, STORAGE_PARENT]},
-    "missing_table_or_snapshot": {"tests": [STORAGE_OMITTED, NODE_SNAPSHOT]},
-    "index_without_history": {"tests": [STORAGE_CONFLICT]},
-    "history_without_index": {"tests": [STORAGE_OMITTED]},
-    "conflicting_ordered_indexes": {"tests": [STORAGE_CONFLICT]},
-    "incorrect_count_or_accumulator": {"tests": [STORAGE_PARENT]},
-    "forged_receipt_archive_or_state": {
-        "tests": [STORAGE_FORGED_VALUES, STORAGE_DOMAIN]
+    "fabricated_transition": {"tests": [ORIGINAL_E3, NODE_CATCH_UP_MALFORMED]},
+    "wrong_root_certificate": {"tests": [ORIGINAL_E3, NODE_CATCH_UP_MALFORMED]},
+    "omitted_latest_update": {"tests": [ORIGINAL_E3, NODE_CATCH_UP_MALFORMED]},
+    "interrupted_catch_up": {
+        "tests": [ORIGINAL_E3, NODE_CATCH_UP_RECOVERY],
+        "terminal_state": "recovered_new_tip",
     },
-    "disk_or_write_failure": {
+    "wrong_chain_domain": {"tests": [STORAGE_STALE_METADATA]},
+    "wrong_genesis_domain": {"tests": [STORAGE_STALE_METADATA]},
+    "wrong_protocol_domain": {"tests": [STORAGE_STALE_METADATA]},
+    "wrong_storage_domain": {"tests": [STORAGE_STALE_METADATA]},
+    "wrong_commitment_domain": {"tests": [STORAGE_STALE_METADATA]},
+    "wrong_table_domain": {"tests": [STORAGE_DOMAIN]},
+    "wrong_key_domain": {"tests": [STORAGE_DOMAIN]},
+    "missing_checkpoint": {"tests": [STORAGE_MISSING_HEAD]},
+    "missing_checkpoint_log": {"tests": [STORAGE_MISSING_LOG]},
+    "checkpoint_log_substitution": {
+        "tests": [STORAGE_CHECKPOINT_SUBSTITUTION]
+    },
+    "stale_valid_head": {"tests": [STORAGE_STALE_HEAD]},
+    "bounded_crash_suffix": {
+        "tests": [STORAGE_CRASH_SUFFIX],
+        "terminal_state": "recovered_new_tip",
+    },
+    "stale_generation": {"tests": [NODE_STALE_GENERATION]},
+    "stale_metadata": {"tests": [STORAGE_STALE_METADATA]},
+    "stale_tip": {"tests": [STORAGE_STALE_METADATA]},
+    "stale_accumulator": {"tests": [STORAGE_STALE_METADATA]},
+    "missing_table": {"tests": [STORAGE_TABLE_INDEX]},
+    "substituted_table": {"tests": [STORAGE_TABLE_INDEX, STORAGE_DOMAIN]},
+    "corrupted_database_pages": {"tests": [STORAGE_PAGES]},
+    "missing_database_page": {"tests": [STORAGE_MISSING_PAGE]},
+    "substituted_database_page": {"tests": [STORAGE_SUBSTITUTED_PAGE]},
+    "missing_generation_pointer": {"tests": [STORAGE_POINTER]},
+    "substituted_generation_pointer": {"tests": [STORAGE_POINTER, NODE_REBUILD]},
+    "missing_canonical_export": {
+        "tests": [STORAGE_CANONICAL_EXPORT, NODE_REBUILD]
+    },
+    "corrupted_canonical_export": {
+        "tests": [STORAGE_CANONICAL_EXPORT, NODE_REBUILD]
+    },
+    "substituted_canonical_export": {
+        "tests": [STORAGE_CANONICAL_EXPORT, NODE_REBUILD]
+    },
+    "index_without_history": {"tests": [STORAGE_TABLE_INDEX, STORAGE_CONFLICT]},
+    "history_without_index": {"tests": [STORAGE_TABLE_INDEX, STORAGE_OMITTED]},
+    "conflicting_ordered_indexes": {"tests": [STORAGE_CONFLICT]},
+    "incorrect_count": {"tests": [STORAGE_STALE_METADATA, STORAGE_PARENT]},
+    "forged_receipt": {"tests": [STORAGE_FORGED_VALUES]},
+    "forged_archive": {"tests": [STORAGE_FORGED_VALUES]},
+    "forged_state": {"tests": [STORAGE_FORGED_VALUES]},
+    "forged_certificate": {"tests": [NODE_EXTERNAL_STATE_ROOT]},
+    "forged_catch_up_response": {
+        "tests": [NODE_CATCH_UP_MALFORMED, NODE_EXTERNAL_PARENT]
+    },
+    "journal_head_disagreement": {
+        "tests": [NODE_JOURNAL_DISAGREEMENT, STORAGE_STALE_HEAD]
+    },
+    "disk_full": {
+        "tests": [STORAGE_DROP, STORAGE_DURABLE_FAULTS],
+        "terminal_state": "recovered_old_tip",
+    },
+    "permission_loss": {
+        "tests": [STORAGE_DROP, STORAGE_DURABLE_FAULTS],
+        "terminal_state": "recovered_old_tip",
+    },
+    "write_failure": {
+        "tests": [STORAGE_DROP, STORAGE_DURABLE_FAULTS],
+        "terminal_state": "recovered_old_tip",
+    },
+    "sync_failure": {
         "tests": [STORAGE_DROP, STORAGE_DURABLE_FAULTS],
         "terminal_state": "recovered_old_tip",
     },
@@ -108,39 +260,133 @@ CASES: dict[str, dict[str, Any]] = {
         "tests": [STORAGE_KILL],
         "terminal_state": "recovered_new_tip",
     },
+    "power_loss_before_commit": {
+        "tests": [STORAGE_DROP],
+        "terminal_state": "recovered_old_tip",
+    },
+    "power_loss_during_commit": {
+        "tests": [STORAGE_DROP, STORAGE_KILL],
+        "terminal_state": "recovered_old_tip",
+    },
+    "power_loss_after_commit": {
+        "tests": [STORAGE_KILL],
+        "terminal_state": "recovered_new_tip",
+    },
+    "restart_after_transaction_cut": {
+        "tests": [STORAGE_DROP],
+        "terminal_state": "recovered_old_tip",
+    },
+    "restart_after_activation_journal_cut": {
+        "tests": [NODE_ACTIVATION_RESTART],
+        "terminal_state": "recovered_new_tip",
+    },
+    "repeated_recovery": {
+        "tests": [NODE_ACTIVATION_RESTART],
+        "terminal_state": "recovered_new_tip",
+    },
+    "idempotent_retry": {
+        "tests": [STORAGE_KILL],
+        "terminal_state": "recovered_new_tip",
+    },
     "migration_activation_cancellation_restart": {
         "tests": [NODE_REBUILD, NODE_CANCEL, NODE_ACTIVATION_RESTART],
         "terminal_state": "recovered_new_tip",
     },
-    "catch_up_and_rollback": {
-        "tests": [NODE_CATCH_UP, NODE_PRUNE],
+    "pre_activation_rollback": {
+        "tests": [NODE_CANCEL],
         "terminal_state": "recovered_new_tip",
     },
+    "post_activation_restart_replay": {
+        "tests": [NODE_EXISTING_ACTIVATION, NODE_ACTIVATION_RESTART],
+        "terminal_state": "recovered_new_tip",
+    },
+    "compatible_post_activation_software_rollback": {
+        "tests": [COMPATIBLE_ROLLBACK],
+        "terminal_state": "recovered_new_tip",
+    },
+    "missing_snapshot": {"tests": [NODE_SNAPSHOT_FILE_SET]},
+    "substituted_snapshot": {"tests": [NODE_SNAPSHOT]},
+    "missing_migration_manifest": {"tests": [NODE_REBUILD]},
+    "substituted_migration_manifest_checksum": {"tests": [NODE_REBUILD]},
+    "tampered_snapshot": {"tests": [NODE_SNAPSHOT]},
 }
 
 REASON_CODES = {
     "history_truncated": "storage_legacy_jsonl_mac_chain_mismatch",
     "history_padded": "storage_count_mismatch",
     "history_reordered": "storage_corrupt_record",
+    "history_modified": "storage_corrupt_record",
     "history_duplicated": "storage_count_mismatch",
     "history_omitted": "storage_count_mismatch",
-    "history_modified": "storage_corrupt_record",
-    "wrong_domain": "storage_integrity_failure",
-    "stale_generation": "storage_migration_manifest_invalid",
-    "missing_table_or_snapshot": "storage_count_mismatch",
-    "index_without_history": "storage_corrupt_record",
-    "history_without_index": "storage_count_mismatch",
+    "fabricated_transition": "transition_proof_mismatch",
+    "wrong_root_certificate": "certificate_root_mismatch",
+    "omitted_latest_update": "required_latest_update_omitted",
+    "interrupted_catch_up": "catch_up_resumed_from_second_honest_peer",
+    "wrong_chain_domain": "storage_ordered_commitment_mismatch",
+    "wrong_genesis_domain": "storage_ordered_commitment_mismatch",
+    "wrong_protocol_domain": "storage_ordered_commitment_mismatch",
+    "wrong_storage_domain": "storage_unsupported_schema",
+    "wrong_commitment_domain": "storage_unsupported_schema",
+    "wrong_table_domain": "storage_integrity_failure",
+    "wrong_key_domain": "storage_integrity_failure",
+    "missing_checkpoint": "storage_legacy_jsonl_head_missing",
+    "missing_checkpoint_log": "storage_legacy_jsonl_log_missing",
+    "checkpoint_log_substitution": "storage_legacy_jsonl_head_domain_mismatch",
+    "stale_valid_head": "storage_legacy_jsonl_head_rollback",
+    "bounded_crash_suffix": "storage_legacy_jsonl_crash_suffix_recovered",
+    "stale_generation": "storage_migration_manifest_domain_mismatch",
+    "stale_metadata": "storage_count_mismatch",
+    "stale_tip": "storage_corrupt_record",
+    "stale_accumulator": "storage_ordered_commitment_mismatch",
+    "missing_table": "storage_database_error",
+    "substituted_table": "storage_integrity_failure",
+    "corrupted_database_pages": "storage_database_error",
+    "missing_database_page": "storage_database_error",
+    "substituted_database_page": "storage_database_error",
+    "missing_generation_pointer": "storage_vote_blocked_ambiguous_local_state",
+    "substituted_generation_pointer": "storage_integrity_failure",
+    "missing_canonical_export": "storage_canonical_export_missing",
+    "corrupted_canonical_export": "storage_canonical_export_integrity_failure",
+    "substituted_canonical_export": "storage_canonical_export_substituted",
+    "index_without_history": "storage_count_mismatch",
+    "history_without_index": "storage_corrupt_record",
     "conflicting_ordered_indexes": "storage_corrupt_record",
-    "incorrect_count_or_accumulator": "storage_ordered_commitment_mismatch",
-    "forged_receipt_archive_or_state": "storage_integrity_failure",
-    "disk_or_write_failure": "storage_database_error",
+    "incorrect_count": "storage_count_mismatch",
+    "forged_receipt": "storage_integrity_failure",
+    "forged_archive": "storage_integrity_failure",
+    "forged_state": "storage_integrity_failure",
+    "forged_certificate": "historical_replay_state_root_mismatch",
+    "forged_catch_up_response": "catch_up_response_rejected",
+    "journal_head_disagreement": "storage_ordered_commit_journal_disagreement",
+    "disk_full": "storage_database_error",
+    "permission_loss": "storage_database_error",
+    "write_failure": "storage_database_error",
+    "sync_failure": "storage_database_error",
     "process_kill_before_commit": "storage_process_kill_recovered_old_tip",
     "process_kill_during_commit": "storage_process_kill_recovered_old_tip",
     "process_kill_after_commit": "storage_process_kill_recovered_new_tip",
+    "power_loss_before_commit": "storage_power_loss_recovered_old_tip",
+    "power_loss_during_commit": "storage_power_loss_recovered_old_tip",
+    "power_loss_after_commit": "storage_power_loss_recovered_new_tip",
+    "restart_after_transaction_cut": "storage_restart_recovered_old_tip",
+    "restart_after_activation_journal_cut": "storage_restart_recovered_new_tip",
+    "repeated_recovery": "storage_repeated_recovery_idempotent",
+    "idempotent_retry": "storage_idempotent_retry_same_tip",
     "migration_activation_cancellation_restart": (
         "storage_commitment_activation_cancelled"
     ),
-    "catch_up_and_rollback": "storage_legacy_jsonl_head_tip_mismatch",
+    "pre_activation_rollback": "storage_commitment_activation_cancelled",
+    "post_activation_restart_replay": "storage_transactional_restart_replayed",
+    "compatible_post_activation_software_rollback": (
+        "storage_compatible_rollback_resumed_same_certified_tip"
+    ),
+    "missing_snapshot": "storage_snapshot_missing",
+    "substituted_snapshot": "storage_snapshot_integrity_failure",
+    "missing_migration_manifest": "storage_migration_manifest_missing",
+    "substituted_migration_manifest_checksum": (
+        "storage_migration_manifest_checksum_mismatch"
+    ),
+    "tampered_snapshot": "storage_snapshot_integrity_failure",
 }
 
 
@@ -183,7 +429,16 @@ def git_clean() -> bool:
     )
 
 
-def run_test(package: str, test_filter: str) -> dict[str, str]:
+def command_receipt(command: list[str]) -> dict[str, str]:
+    return {
+        "result": "passed",
+        "command_sha256": hashlib.sha256(
+            "\0".join(command).encode("utf-8")
+        ).hexdigest(),
+    }
+
+
+def run_cargo_test(package: str, test_filter: str) -> dict[str, str]:
     command = [
         "cargo",
         "test",
@@ -202,25 +457,229 @@ def run_test(package: str, test_filter: str) -> dict[str, str]:
         stderr=subprocess.STDOUT,
         text=True,
     )
-    output = completed.stdout
-    if completed.returncode != 0 or "test result: ok." not in output:
+    executed_counts = [
+        int(match)
+        for match in re.findall(r"^running ([0-9]+) tests?$", completed.stdout, re.MULTILINE)
+    ]
+    executed_test_count = sum(executed_counts)
+    if (
+        completed.returncode != 0
+        or "test result: ok." not in completed.stdout
+        or executed_test_count < 1
+    ):
         raise RuntimeError(
-            f"tamper evidence test failed: {package}::{test_filter}"
+            "tamper evidence test failed or matched zero tests: "
+            f"{package}::{test_filter}"
         )
     return {
         "package": package,
         "test_filter": test_filter,
-        "result": "passed",
-        "command_sha256": hashlib.sha256(
-            "\0".join(command).encode("utf-8")
-        ).hexdigest(),
+        "executed_test_count": executed_test_count,
+        **command_receipt(command),
     }
+
+
+def run_original_e3(output: Path, revision: str) -> dict[str, str]:
+    report = output / "original-e3-campaign.json"
+    work = output / "original-e3-work"
+    run_command = [
+        "cargo",
+        "run",
+        "-p",
+        "postfiat-cobalt-e3-harness",
+        "--locked",
+        "--",
+        "run",
+        str(ORIGINAL_E3_MANIFEST),
+        str(report),
+        str(work),
+    ]
+    environment = os.environ.copy()
+    environment["COBALT_E3_SOURCE_REVISION"] = revision
+    run = subprocess.run(
+        run_command,
+        cwd=REPO,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    if run.returncode != 0 or not report.is_file():
+        raise RuntimeError("original E3 six-validator campaign failed")
+    verify_command = [
+        "cargo",
+        "run",
+        "-p",
+        "postfiat-cobalt-e3-harness",
+        "--locked",
+        "--",
+        "verify",
+        str(ORIGINAL_E3_MANIFEST),
+        str(report),
+    ]
+    verify = subprocess.run(
+        verify_command,
+        cwd=REPO,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    if verify.returncode != 0 or "verified E3:" not in verify.stdout:
+        raise RuntimeError("original E3 six-validator campaign verification failed")
+    campaign = json.loads(report.read_text(encoding="utf-8"))
+    executed_case_count = len(campaign.get("cases", [])) + len(
+        campaign.get("recoveries", [])
+    )
+    if executed_case_count != 48:
+        raise RuntimeError("original E3 campaign did not execute its frozen 48 cases")
+    return {
+        "package": ORIGINAL_E3[0],
+        "test_filter": ORIGINAL_E3[1],
+        "executed_case_count": executed_case_count,
+        **command_receipt(run_command),
+        "verify_command_sha256": hashlib.sha256(
+            "\0".join(verify_command).encode("utf-8")
+        ).hexdigest(),
+        "report": {
+            "path": report.name,
+            "sha256": sha256(report),
+        },
+    }
+
+
+def run_compatible_rollback(
+    source: Path,
+    output: Path,
+    revision: str,
+) -> dict[str, Any]:
+    report = json.loads(source.read_text(encoding="utf-8"))
+    required_true = (
+        "evidence_eligible",
+        "rollback_source_is_ancestor",
+        "activated_commitment_understood",
+        "resumed_same_certified_tip",
+        "post_activation_finality_with_rollback_binary",
+        "forward_recovery_with_current_binary",
+        "literal_receipts_exact",
+        "zero_full_history_reads",
+        "bounded_index_pages",
+        "constant_accumulator_work",
+        "all_six_converged",
+        "offline",
+    )
+    current = report.get("current_binary")
+    rollback = report.get("rollback_binary")
+    identities = report.get("identities")
+    rollback_revision = (
+        str(rollback.get("source_revision", ""))
+        if isinstance(rollback, dict)
+        else ""
+    )
+    expected_heights = {
+        "current_post_activation": 2,
+        "rollback_resume_input": 2,
+        "rollback_finalized": 3,
+        "forward_resume_input": 3,
+        "forward_finalized": 4,
+    }
+    identity_fields_valid = isinstance(identities, dict) and all(
+        isinstance(identities.get(label), dict)
+        and identities[label].get("height") == height
+        and re.fullmatch(r"[0-9a-f]{96}", str(identities[label].get("tip", "")))
+        is not None
+        and re.fullmatch(
+            r"[0-9a-f]{96}",
+            str(identities[label].get("state_root", "")),
+        )
+        is not None
+        for label, height in expected_heights.items()
+    )
+    rollback_is_ancestor = (
+        re.fullmatch(r"[0-9a-f]{40}", rollback_revision) is not None
+        and rollback_revision != revision
+        and subprocess.run(
+            ["git", "merge-base", "--is-ancestor", rollback_revision, revision],
+            cwd=REPO,
+            check=False,
+        ).returncode
+        == 0
+    )
+    if (
+        report.get("schema") != "postfiat-storage-compatible-rollback-v1"
+        or report.get("status") != "PASS"
+        or report.get("source_revision") != revision
+        or report.get("network_contacted") is not False
+        or report.get("devnet_queried_or_mutated") is not False
+        or report.get("validator_count") != 6
+        or report.get("chain_id") != "postfiat-storage-scaling-local-v1"
+        or report.get("storage_activation_height") != 1
+        or report.get("consensus_activation_height") != 2
+        or any(report.get(key) is not True for key in required_true)
+        or not isinstance(current, dict)
+        or not isinstance(rollback, dict)
+        or current.get("source_revision") != revision
+        or current.get("git_revision") != revision[:8]
+        or current.get("profile") != "release"
+        or re.fullmatch(r"[0-9a-f]{64}", str(current.get("sha256", ""))) is None
+        or rollback.get("profile") != "release"
+        or rollback.get("git_revision") != rollback_revision[:8]
+        or re.fullmatch(r"[0-9a-f]{64}", str(rollback.get("sha256", "")))
+        is None
+        or current.get("sha256") == rollback.get("sha256")
+        or not rollback_is_ancestor
+        or not identity_fields_valid
+        or identities.get("rollback_resume_input")
+        != identities.get("current_post_activation")
+        or identities.get("forward_resume_input")
+        != identities.get("rollback_finalized")
+    ):
+        raise RuntimeError("compatible post-activation rollback report did not pass")
+    destination = output / "compatible-rollback-report.json"
+    shutil.copyfile(source, destination)
+    command = [
+        "verify-compatible-rollback-report",
+        sha256(destination),
+    ]
+    return {
+        "package": COMPATIBLE_ROLLBACK[0],
+        "test_filter": COMPATIBLE_ROLLBACK[1],
+        "executed_test_count": 1,
+        **command_receipt(command),
+        "report": {
+            "path": destination.name,
+            "sha256": sha256(destination),
+        },
+    }
+
+
+def run_test(
+    test: tuple[str, str],
+    output: Path,
+    revision: str,
+    rollback_report: Path,
+) -> dict[str, Any]:
+    if test == ORIGINAL_E3:
+        return run_original_e3(output, revision)
+    if test == COMPATIBLE_ROLLBACK:
+        return run_compatible_rollback(rollback_report, output, revision)
+    return run_cargo_test(*test)
+
+
+def tests_for_case(configuration: dict[str, Any]) -> list[tuple[str, str]]:
+    tests = list(configuration["tests"])
+    if configuration.get("terminal_state", "rejected_voting_blocked") == (
+        "rejected_voting_blocked"
+    ) and NODE_AMBIGUOUS_STORAGE_VOTE_BLOCK not in tests:
+        tests.append(NODE_AMBIGUOUS_STORAGE_VOTE_BLOCK)
+    return tests
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--expected-source-revision", required=True)
+    parser.add_argument("--rollback-report", type=Path, required=True)
     args = parser.parse_args()
 
     if set(REASON_CODES) != set(CASES):
@@ -233,6 +692,9 @@ def main() -> int:
         raise ValueError("HEAD does not match --expected-source-revision")
     if not git_clean():
         raise ValueError("tamper evidence requires a clean checkout")
+    rollback_report = args.rollback_report.resolve()
+    if rollback_report.is_symlink() or not rollback_report.is_file():
+        raise ValueError("--rollback-report must identify a regular file")
     output.mkdir(parents=True)
     receipts_dir = output / "receipts"
     receipts_dir.mkdir()
@@ -241,11 +703,11 @@ def main() -> int:
         {
             test
             for configuration in CASES.values()
-            for test in configuration["tests"]
+            for test in tests_for_case(configuration)
         }
     )
     test_results = {
-        test: run_test(*test)
+        test: run_test(test, output, revision, rollback_report)
         for test in unique_tests
     }
 
@@ -264,7 +726,7 @@ def main() -> int:
             ),
             "source_revision": revision,
             "test_receipts": [
-                test_results[test] for test in configuration["tests"]
+                test_results[test] for test in tests_for_case(configuration)
             ],
             "offline": True,
             "network_contacted": False,
@@ -289,7 +751,9 @@ def main() -> int:
         report_path,
         {
             "schema": "postfiat-storage-scaling-tamper-matrix-v1",
-            "status": "PASS",
+            "status": "PASS" if not UNCOVERED_REQUIREMENTS else "INCOMPLETE",
+            "coverage_complete": not UNCOVERED_REQUIREMENTS,
+            "uncovered_requirements": list(UNCOVERED_REQUIREMENTS),
             "source_revision": revision,
             "cases": cases,
             "unique_test_count": len(unique_tests),
@@ -297,9 +761,10 @@ def main() -> int:
             "network_contacted": False,
         },
     )
-    print("storage-scaling-tamper=PASS")
+    status = "PASS" if not UNCOVERED_REQUIREMENTS else "INCOMPLETE"
+    print(f"storage-scaling-tamper={status}")
     print(f"report={report_path}")
-    return 0
+    return 0 if not UNCOVERED_REQUIREMENTS else 1
 
 
 if __name__ == "__main__":

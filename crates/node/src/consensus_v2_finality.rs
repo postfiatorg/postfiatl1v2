@@ -42,6 +42,11 @@ pub fn create_consensus_v2_proposal_for_block(
     timeout_certificate: Option<&ConsensusV2TimeoutCertificate>,
     key_file: &Path,
 ) -> io::Result<ConsensusV2Proposal> {
+    crate::storage_vote_guard::require_unambiguous_storage_for_vote(
+        data_dir,
+        block_proposal.block_height,
+        Some(&block_proposal.parent_hash),
+    )?;
     let (domain, validators) = live_consensus_v2_context(data_dir)?;
     let graph =
         read_consensus_v2_qc_graph_for_view(data_dir, &domain, &validators, block_proposal.view)?;
@@ -114,6 +119,11 @@ pub fn create_consensus_v2_prepare_vote(
     key_file: &Path,
     validator_id: &str,
 ) -> io::Result<ConsensusV2Vote> {
+    crate::storage_vote_guard::require_unambiguous_storage_for_vote(
+        data_dir,
+        proposal.round.height,
+        None,
+    )?;
     let (domain, validators) = live_consensus_v2_context(data_dir)?;
     let graph =
         read_consensus_v2_qc_graph_for_view(data_dir, &domain, &validators, proposal.round.view)?;
@@ -135,6 +145,11 @@ pub fn create_consensus_v2_precommit_vote(
     key_file: &Path,
     validator_id: &str,
 ) -> io::Result<ConsensusV2Vote> {
+    crate::storage_vote_guard::require_unambiguous_storage_for_vote(
+        data_dir,
+        prepare_qc.round.height,
+        None,
+    )?;
     let (domain, validators) = live_consensus_v2_context(data_dir)?;
     persist_consensus_v2_qc(data_dir, prepare_qc)?;
     persist_consensus_v2_precommit_authorization(data_dir, prepare_qc)?;
@@ -156,6 +171,7 @@ pub fn create_consensus_v2_timeout_vote(
     key_file: &Path,
     validator_id: &str,
 ) -> io::Result<ConsensusV2TimeoutVote> {
+    crate::storage_vote_guard::require_unambiguous_storage_for_vote(data_dir, round.height, None)?;
     let (domain, validators) = live_consensus_v2_context(data_dir)?;
     let graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)?;
     let state = read_consensus_v2_safety_state(data_dir, &domain, round.height)?;

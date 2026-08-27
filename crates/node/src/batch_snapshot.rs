@@ -1761,7 +1761,7 @@ fn verify_signed_snapshot_manifest(
     ) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "signed snapshot manifest signature verification failed",
+            "storage_snapshot_integrity_failure: signed snapshot manifest signature verification failed",
         ));
     }
     Ok(())

@@ -4059,13 +4059,17 @@ pub(super) fn validate_snapshot_manifest_files(manifest: &SnapshotManifest) -> i
         if !expected.contains(file_name) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("unexpected snapshot file `{file_name}` in manifest"),
+                format!(
+                    "storage_snapshot_unexpected_file: unexpected snapshot file `{file_name}` in manifest"
+                ),
             ));
         }
         if !seen.insert(file_name) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("duplicate snapshot file `{file_name}` in manifest"),
+                format!(
+                    "storage_snapshot_duplicate_file: duplicate snapshot file `{file_name}` in manifest"
+                ),
             ));
         }
     }
@@ -4073,7 +4077,9 @@ pub(super) fn validate_snapshot_manifest_files(manifest: &SnapshotManifest) -> i
         if !seen.contains(file_name) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("missing snapshot file `{file_name}` in manifest"),
+                format!(
+                    "storage_snapshot_missing: missing snapshot file `{file_name}` in manifest"
+                ),
             ));
         }
     }

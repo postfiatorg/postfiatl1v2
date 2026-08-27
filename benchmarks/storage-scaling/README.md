@@ -78,10 +78,14 @@ postfiat-node storage-rebuild-transactional \
 
 The first command authenticates and replays legacy history, builds a separate
 transactional generation, verifies its logical contents, writes a
-checksum-bound migration manifest, and atomically publishes the generation
+checksum-bound migration manifest, writes the deterministic
+`canonical-history.jsonl` audit export, and atomically publishes the generation
 pointer. It refuses a non-empty output directory and reports required and
 available disk. The second command independently rechecks the published
-logical store and manifest. Neither command schedules activation.
+logical store, migration manifest, and canonical export against the
+authenticated database. A missing, truncated, or valid-but-foreign export fails
+closed without changing the database or published generation. Neither command
+schedules activation.
 
 Activation is a Foundation-governance workflow, not a Cobalt action. Run it
 only on six disposable clones until the complete packet passes. The signing
@@ -146,6 +150,56 @@ same two generic signing/assembly commands, and
 After activation there is no chain rewind: an older software release is only a
 valid rollback candidate if it understands the activated commitment version
 and resumes from the same certified tip.
+
+## Offline rollback and tamper qualification
+
+Build the current source and a distinct compatible ancestor as release
+binaries. From a clean current checkout, the rollback harness starts six local
+validators, finalizes height 2 with the current binary, resumes that exact tip
+and finalizes height 3 with the older binary, then resumes height 3 and
+finalizes height 4 with the current binary:
+
+```bash
+python3 benchmarks/storage-scaling/run_rollback_rehearsal.py \
+  --node-bin /CURRENT_CHECKOUT/target/release/postfiat-node \
+  --rollback-node-bin /OLDER_WORKTREE/target/release/postfiat-node \
+  --output-dir /explicit/disposable/storage-compatible-rollback \
+  --expected-source-revision "$(git rev-parse HEAD)" \
+  --rollback-source-revision FULL_OLDER_COMMIT_ID
+```
+
+A dirty-checkout run is allowed only with `--development-smoke`; its report is
+explicitly not evidence eligible. A clean `PASS` report is an input to the
+closed tamper/crash matrix:
+
+```bash
+python3 benchmarks/storage-scaling/run_tamper_evidence.py \
+  --output-dir /explicit/disposable/storage-tamper \
+  --expected-source-revision "$(git rev-parse HEAD)" \
+  --rollback-report \
+    /explicit/disposable/storage-compatible-rollback/compatible-rollback-report.json
+```
+
+The tamper runner executes the frozen original 48-case E3 campaign and every
+selected storage, node, crash, snapshot, migration, activation, catch-up, vote
+refusal, and compatible-rollback owner test. It rejects a zero-test filter and
+emits one checksum-bound receipt for every closed case. Packet assembly must
+include both release binaries so the offline verifier can bind the current and
+rollback identities:
+
+```bash
+python3 benchmarks/storage-scaling/package_packet.py \
+  --output-dir /explicit/disposable/storage-packet \
+  --source-revision "$(git rev-parse HEAD)" \
+  --captured-at YYYY-MM-DDTHH:MM:SSZ \
+  --node-bin /CURRENT_CHECKOUT/target/release/postfiat-node \
+  --rollback-node-bin /OLDER_WORKTREE/target/release/postfiat-node \
+  --state-distinction /PATH/state-distinction.json \
+  --replay-report /PATH/replay-report.json \
+  --performance-report /PATH/performance-report.json \
+  --tamper-report /explicit/disposable/storage-tamper/tamper-report.json \
+  --migration-report /PATH/migration-report.json
+```
 
 All paths above are operator procedures, not deployment authorization. Do not
 probe, restart, or mutate the live fleet from this harness. Do not publish

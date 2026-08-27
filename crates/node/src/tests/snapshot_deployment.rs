@@ -1504,7 +1504,9 @@ fn signed_snapshot_roundtrip_rejects_tampering_and_preserves_signer_isolation() 
     })
     .expect_err("tampered signed snapshot must fail");
     assert!(
-        error.to_string().contains("signature verification"),
+        error
+            .to_string()
+            .contains("storage_snapshot_integrity_failure"),
         "{error}"
     );
 

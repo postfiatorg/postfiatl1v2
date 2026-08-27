@@ -11,6 +11,7 @@ from postfiat_rpc.storage_scaling import (
     MANIFEST_FILE,
     MATERIAL_STAGE_PATHS,
     REQUIRED_TAMPER_CASES,
+    REQUIRED_TAMPER_REASONS,
     StorageScalingVerificationError,
     serve_verified_packet,
     verify_packet,
@@ -55,7 +56,15 @@ def _passing_packet(packet: Path) -> None:
     binary = packet / "bin" / "postfiat-node"
     binary.parent.mkdir()
     binary.write_bytes(b"release-binary-identity")
-    binaries = [{"path": "bin/postfiat-node", "sha256": _sha256(binary)}]
+    rollback_binary = packet / "bin" / "postfiat-node-rollback"
+    rollback_binary.write_bytes(b"older-compatible-release-binary-identity")
+    binaries = [
+        {"path": "bin/postfiat-node", "sha256": _sha256(binary)},
+        {
+            "path": "bin/postfiat-node-rollback",
+            "sha256": _sha256(rollback_binary),
+        },
+    ]
 
     replay_receipts = []
     for height, source_kind in (
@@ -75,6 +84,15 @@ def _passing_packet(packet: Path) -> None:
                 "full_replay_passed": True,
                 "logical_rebuild_identical": True,
                 "canonical_export_identical": True,
+                "canonical_export_receipt": {
+                    "schema": (
+                        "postfiat-transactional-canonical-export-receipt-v1"
+                    ),
+                    "finalized_height": height,
+                    "record_count": height,
+                    "records_sha3_384": digest96,
+                },
+                "canonical_export_sha256": "e" * 64,
                 "tip_hash": digest96,
                 "state_root": digest96,
                 "ordered_history_accumulator": digest96,
@@ -176,17 +194,122 @@ def _passing_packet(packet: Path) -> None:
             }
         )
 
+    rollback_revision = "c" * 40
+    rollback_report_path = packet / "tamper" / "evidence" / "compatible-rollback.json"
+    _write_json(
+        rollback_report_path,
+        {
+            "schema": "postfiat-storage-compatible-rollback-v1",
+            "status": "PASS",
+            "evidence_eligible": True,
+            "source_revision": revision,
+            "current_binary": {
+                "sha256": _sha256(binary),
+                "git_revision": revision[:8],
+                "source_revision": revision,
+                "profile": "release",
+            },
+            "rollback_binary": {
+                "sha256": _sha256(rollback_binary),
+                "git_revision": rollback_revision[:8],
+                "source_revision": rollback_revision,
+                "profile": "release",
+            },
+            "rollback_source_is_ancestor": True,
+            "chain_id": "postfiat-storage-scaling-local-v1",
+            "validator_count": 6,
+            "storage_activation_height": 1,
+            "consensus_activation_height": 2,
+            "activated_commitment_understood": True,
+            "resumed_same_certified_tip": True,
+            "post_activation_finality_with_rollback_binary": True,
+            "forward_recovery_with_current_binary": True,
+            "literal_receipts_exact": True,
+            "zero_full_history_reads": True,
+            "bounded_index_pages": True,
+            "constant_accumulator_work": True,
+            "all_six_converged": True,
+            "identities": {
+                "current_post_activation": {
+                    "height": 2,
+                    "tip": digest96,
+                    "state_root": digest96,
+                },
+                "rollback_resume_input": {
+                    "height": 2,
+                    "tip": digest96,
+                    "state_root": digest96,
+                },
+                "rollback_finalized": {
+                    "height": 3,
+                    "tip": "c" * 96,
+                    "state_root": "c" * 96,
+                },
+                "forward_resume_input": {
+                    "height": 3,
+                    "tip": "c" * 96,
+                    "state_root": "c" * 96,
+                },
+                "forward_finalized": {
+                    "height": 4,
+                    "tip": "d" * 96,
+                    "state_root": "d" * 96,
+                },
+            },
+            "offline": True,
+            "network_contacted": False,
+            "devnet_queried_or_mutated": False,
+        },
+    )
+
     tamper_cases = []
     for name in sorted(REQUIRED_TAMPER_CASES):
         receipt_path = packet / "tamper" / f"{name}.json"
+        test_receipts = [
+            {
+                "package": "postfiat-fixture",
+                "test_filter": name,
+                "executed_test_count": 1,
+                "result": "passed",
+                "command_sha256": "ab" * 32,
+            },
+            {
+                "package": "postfiat-node",
+                "test_filter": (
+                    "ambiguous_active_transactional_state_blocks_vote_without_mutation"
+                ),
+                "executed_test_count": 1,
+                "result": "passed",
+                "command_sha256": "cd" * 32,
+            },
+        ]
+        if name == "compatible_post_activation_software_rollback":
+            test_receipts = [
+                {
+                    "package": "postfiat-storage-rollback-rehearsal",
+                    "test_filter": name,
+                    "executed_test_count": 1,
+                    "result": "passed",
+                    "command_sha256": "ef" * 32,
+                    "report": _reference(packet, rollback_report_path),
+                }
+            ]
+        terminal_state = (
+            "recovered_new_tip"
+            if name == "compatible_post_activation_software_rollback"
+            else "rejected_voting_blocked"
+        )
         receipt = {
             "schema": "postfiat-storage-tamper-receipt-v1",
             "name": name,
             "passed": True,
-            "reason_code": f"rejected_{name}",
+            "reason_code": REQUIRED_TAMPER_REASONS[name],
             "no_partial_mutation": True,
-            "terminal_state": "rejected_voting_blocked",
+            "terminal_state": terminal_state,
             "source_revision": revision,
+            "test_receipts": test_receipts,
+            "offline": True,
+            "network_contacted": False,
         }
         _write_json(receipt_path, receipt)
         tamper_cases.append(
@@ -272,8 +395,14 @@ def _passing_packet(packet: Path) -> None:
         },
         "tamper": {
             "schema": ARTIFACT_SCHEMAS["tamper"],
+            "status": "PASS",
+            "coverage_complete": True,
+            "uncovered_requirements": [],
             "source_revision": revision,
             "cases": tamper_cases,
+            "unique_test_count": len(REQUIRED_TAMPER_CASES) + 1,
+            "offline": True,
+            "network_contacted": False,
         },
         "migration": {
             "schema": ARTIFACT_SCHEMAS["migration"],
@@ -448,6 +577,94 @@ class StorageScalingVerifierTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 StorageScalingVerificationError,
                 "embedded binary revision",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_invalid_canonical_export(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+            receipt_path = packet / "replay" / "height-915.json"
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            receipt["canonical_export_receipt"]["record_count"] = 0
+            _write_json(receipt_path, receipt)
+
+            replay_path = packet / "artifacts" / "replay.json"
+            replay = json.loads(replay_path.read_text(encoding="utf-8"))
+            replay["receipts"][0]["sha256"] = _sha256(receipt_path)
+            _write_json(replay_path, replay)
+
+            manifest_path = packet / MANIFEST_FILE
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["artifacts"]["replay"]["sha256"] = _sha256(replay_path)
+            _write_json(manifest_path, manifest)
+            _write_checksums(packet)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "canonical export is invalid",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_unbound_rollback_binary(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+            report_path = (
+                packet / "tamper" / "evidence" / "compatible-rollback.json"
+            )
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            report["rollback_binary"]["sha256"] = "f" * 64
+            _write_json(report_path, report)
+
+            name = "compatible_post_activation_software_rollback"
+            receipt_path = packet / "tamper" / f"{name}.json"
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            receipt["test_receipts"][0]["report"]["sha256"] = _sha256(
+                report_path
+            )
+            _write_json(receipt_path, receipt)
+
+            tamper_path = packet / "artifacts" / "tamper.json"
+            tamper = json.loads(tamper_path.read_text(encoding="utf-8"))
+            case = next(value for value in tamper["cases"] if value["name"] == name)
+            case["receipt"]["sha256"] = _sha256(receipt_path)
+            _write_json(tamper_path, tamper)
+
+            manifest_path = packet / MANIFEST_FILE
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["artifacts"]["tamper"]["sha256"] = _sha256(tamper_path)
+            _write_json(manifest_path, manifest)
+            _write_checksums(packet)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "older rollback binary identity",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_zero_test_filter(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+            name = sorted(REQUIRED_TAMPER_CASES)[0]
+            receipt_path = packet / "tamper" / f"{name}.json"
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            receipt["test_receipts"][0]["executed_test_count"] = 0
+            _write_json(receipt_path, receipt)
+
+            tamper_path = packet / "artifacts" / "tamper.json"
+            tamper = json.loads(tamper_path.read_text(encoding="utf-8"))
+            case = next(value for value in tamper["cases"] if value["name"] == name)
+            case["receipt"]["sha256"] = _sha256(receipt_path)
+            _write_json(tamper_path, tamper)
+
+            manifest_path = packet / MANIFEST_FILE
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["artifacts"]["tamper"]["sha256"] = _sha256(tamper_path)
+            _write_json(manifest_path, manifest)
+            _write_checksums(packet)
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "executed zero tests",
             ):
                 verify_packet(packet)
 

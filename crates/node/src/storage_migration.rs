@@ -8,6 +8,7 @@ pub const STORAGE_MIGRATION_MANIFEST_SCHEMA_V1: &str = "postfiat-storage-migrati
 pub const STORAGE_MIGRATION_REPORT_SCHEMA_V1: &str = "postfiat-storage-migration-report-v1";
 pub const STORAGE_MIGRATION_MANIFEST_FILE: &str = "storage-migration-manifest.json";
 pub const STORAGE_MIGRATION_MANIFEST_CHECKSUM_FILE: &str = "storage-migration-manifest.sha3-384";
+pub const STORAGE_CANONICAL_EXPORT_FILE: &str = "canonical-history.jsonl";
 
 #[derive(Debug, Clone)]
 pub struct StorageMigrationOptions {
@@ -57,6 +58,8 @@ pub struct StorageMigrationReportV1 {
     pub migration_packet_root: String,
     pub manifest_file: PathBuf,
     pub manifest_checksum_file: PathBuf,
+    pub canonical_export_file: PathBuf,
+    pub canonical_export_receipt: postfiat_storage::CanonicalExportReceiptV1,
     pub generation_pointer:
         Option<postfiat_storage::transactional::TransactionalGenerationPointerV1>,
     pub logical_store_report: postfiat_storage::transactional::LogicalIntegrityReport,
@@ -397,6 +400,14 @@ pub fn rebuild_transactional_storage(
     }
     manifest.migration_packet_root = migration_manifest_root(&manifest)?;
     let logical_store_report = target.verify_and_bind_migration(&manifest.migration_packet_root)?;
+    let canonical_export_file = options.output_dir.join(STORAGE_CANONICAL_EXPORT_FILE);
+    let canonical_export_receipt = target.write_canonical_jsonl_export(&canonical_export_file)?;
+    if target.verify_canonical_jsonl_export(&canonical_export_file)? != canonical_export_receipt {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "storage_canonical_export_integrity_failure: written migration export did not reverify",
+        ));
+    }
     write_migration_manifest(&options.output_dir, &manifest)?;
     drop(target);
 
@@ -415,6 +426,8 @@ pub fn rebuild_transactional_storage(
         manifest_checksum_file: options
             .output_dir
             .join(STORAGE_MIGRATION_MANIFEST_CHECKSUM_FILE),
+        canonical_export_file,
+        canonical_export_receipt,
         generation_pointer: Some(pointer),
         logical_store_report,
     })
@@ -528,6 +541,8 @@ fn verify_existing_transactional_generation(
             "storage_migration_verify_mismatch: database metadata or logical entries differ from the manifest",
         ));
     }
+    let canonical_export_file = output_dir.join(STORAGE_CANONICAL_EXPORT_FILE);
+    let canonical_export_receipt = target.verify_canonical_jsonl_export(&canonical_export_file)?;
     Ok(StorageMigrationReportV1 {
         schema: STORAGE_MIGRATION_REPORT_SCHEMA_V1.to_owned(),
         verify_only: true,
@@ -539,6 +554,8 @@ fn verify_existing_transactional_generation(
         migration_packet_root: manifest.migration_packet_root,
         manifest_file: output_dir.join(STORAGE_MIGRATION_MANIFEST_FILE),
         manifest_checksum_file: output_dir.join(STORAGE_MIGRATION_MANIFEST_CHECKSUM_FILE),
+        canonical_export_file,
+        canonical_export_receipt,
         generation_pointer: None,
         logical_store_report,
     })
@@ -816,19 +833,45 @@ fn write_migration_manifest(
 
 fn read_migration_manifest(output_dir: &Path) -> io::Result<StorageMigrationManifestV1> {
     let path = output_dir.join(STORAGE_MIGRATION_MANIFEST_FILE);
-    let raw = fs::read_to_string(&path)?;
-    let manifest: StorageMigrationManifestV1 = serde_json::from_str(&raw).map_err(invalid_data)?;
+    let raw = fs::read_to_string(&path).map_err(|error| {
+        let reason = if error.kind() == io::ErrorKind::NotFound {
+            "storage_migration_manifest_missing"
+        } else {
+            "storage_migration_manifest_read_failed"
+        };
+        io::Error::new(error.kind(), format!("{reason}: {error}"))
+    })?;
+    let manifest: StorageMigrationManifestV1 = serde_json::from_str(&raw).map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("storage_migration_manifest_invalid: {error}"),
+        )
+    })?;
+    let computed_root = migration_manifest_root(&manifest).map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("storage_migration_manifest_invalid: {error}"),
+        )
+    })?;
     if manifest.schema != STORAGE_MIGRATION_MANIFEST_SCHEMA_V1
         || manifest.verifier_version
             != postfiat_storage::transactional::TRANSACTIONAL_VERIFIER_VERSION
-        || migration_manifest_root(&manifest)? != manifest.migration_packet_root
+        || computed_root != manifest.migration_packet_root
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "storage_migration_manifest_invalid: schema, verifier, or packet root mismatch",
         ));
     }
-    let checksum = fs::read_to_string(output_dir.join(STORAGE_MIGRATION_MANIFEST_CHECKSUM_FILE))?;
+    let checksum = fs::read_to_string(output_dir.join(STORAGE_MIGRATION_MANIFEST_CHECKSUM_FILE))
+        .map_err(|error| {
+            let reason = if error.kind() == io::ErrorKind::NotFound {
+                "storage_migration_manifest_checksum_missing"
+            } else {
+                "storage_migration_manifest_checksum_read_failed"
+            };
+            io::Error::new(error.kind(), format!("{reason}: {error}"))
+        })?;
     if checksum
         != format!(
             "{}  {}\n",

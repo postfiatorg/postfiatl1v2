@@ -29,8 +29,9 @@ pub mod transactional;
 
 pub use ordered_history::{OrderedHistoryCommitment, OrderedHistoryIndexReport};
 pub use transactional::{
-    CanonicalHistoryIndexEntryV1, CommitFinalizedBlock, CommitOutcome, CurrentStateUpdate,
-    PruneOutcome, PruneRetainedHistory, TransactionalStore, TransactionalStoreMetaV1,
+    CanonicalExportReceiptV1, CanonicalHistoryIndexEntryV1, CommitFinalizedBlock, CommitOutcome,
+    CurrentStateUpdate, PruneOutcome, PruneRetainedHistory, TransactionalStore,
+    TransactionalStoreMetaV1,
 };
 
 use integrity::{
@@ -864,7 +865,7 @@ impl NodeStore {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
                         format!(
-                            "JSONL head `{}` exists without its log; possible rollback",
+                            "storage_legacy_jsonl_log_missing: JSONL head `{}` exists without its log; possible rollback",
                             head_path.display()
                         ),
                     ));
@@ -1137,7 +1138,7 @@ impl NodeStore {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     format!(
-                        "JSONL head `{}` exists without its log; possible rollback",
+                        "storage_legacy_jsonl_log_missing: JSONL head `{}` exists without its log; possible rollback",
                         head_path.display()
                     ),
                 ));
@@ -1149,7 +1150,7 @@ impl NodeStore {
                 io::Error::new(
                     io::ErrorKind::InvalidData,
                     format!(
-                        "JSONL head `{}` is missing; possible tail rollback",
+                        "storage_legacy_jsonl_head_missing: JSONL head `{}` is missing; possible tail rollback",
                         head_path.display()
                     ),
                 )
@@ -1192,7 +1193,7 @@ impl NodeStore {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
-                    "JSONL log `{}` is shorter than authenticated offset {}; possible rollback",
+                    "storage_legacy_jsonl_head_rollback: JSONL log `{}` is shorter than authenticated offset {}; possible rollback",
                     path.display(),
                     head.byte_offset
                 ),
@@ -1503,7 +1504,7 @@ impl NodeStore {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
-                    "JSONL head `{}` failed integrity or domain verification",
+                    "storage_legacy_jsonl_head_domain_mismatch: JSONL head `{}` failed integrity or domain verification",
                     Self::jsonl_head_path(path).display()
                 ),
             ));
@@ -1561,7 +1562,7 @@ impl NodeStore {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
-                    "JSONL head `{}` failed integrity verification",
+                    "storage_legacy_jsonl_head_integrity_failure: JSONL head `{}` failed integrity verification",
                     head_path.display()
                 ),
             ));
@@ -1574,7 +1575,7 @@ impl NodeStore {
         Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!(
-                "JSONL head `{}` does not match the authenticated log tail; possible rollback",
+                "storage_legacy_jsonl_head_rollback: JSONL head `{}` does not match the authenticated log tail; possible rollback",
                 head_path.display()
             ),
         ))
@@ -1619,7 +1620,7 @@ impl NodeStore {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     format!(
-                        "JSONL head `{}` is missing; possible tail rollback",
+                        "storage_legacy_jsonl_head_missing: JSONL head `{}` is missing; possible tail rollback",
                         head_path.display()
                     ),
                 ));
@@ -1654,7 +1655,7 @@ impl NodeStore {
         Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!(
-                "JSONL head `{}` does not match the authenticated log tail; possible rollback",
+                "storage_legacy_jsonl_head_rollback: JSONL head `{}` does not match the authenticated log tail; possible rollback",
                 head_path.display()
             ),
         ))
@@ -3209,7 +3210,37 @@ mod tests {
             .read_receipts()
             .expect_err("deleted final record must fail closed");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-        assert!(error.to_string().contains("possible rollback"), "{error}");
+        assert!(
+            error
+                .to_string()
+                .contains("storage_legacy_jsonl_head_rollback"),
+            "{error}"
+        );
+
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn deleted_jsonl_head_is_rejected_when_log_remains() {
+        let dir = unique_test_dir("postfiat-storage-deleted-jsonl-head-test");
+        let store = NodeStore::new(&dir);
+        store.write_receipts(&[]).expect("write empty receipts");
+        store
+            .append_receipt_record(&sample_receipt("tx-deleted-head", "tesSUCCESS"))
+            .expect("append receipt");
+        fs::remove_file(NodeStore::jsonl_head_path(&dir.join(RECEIPTS_APPEND_FILE)))
+            .expect("delete append head");
+
+        let error = store
+            .read_receipts()
+            .expect_err("an authenticated log without its head must fail closed");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(
+            error
+                .to_string()
+                .contains("storage_legacy_jsonl_head_missing"),
+            "{error}"
+        );
 
         fs::remove_dir_all(dir).expect("cleanup");
     }
@@ -3228,7 +3259,12 @@ mod tests {
             .read_receipts()
             .expect_err("an authenticated head without its log must fail closed");
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-        assert!(error.to_string().contains("possible rollback"), "{error}");
+        assert!(
+            error
+                .to_string()
+                .contains("storage_legacy_jsonl_log_missing"),
+            "{error}"
+        );
 
         fs::remove_dir_all(dir).expect("cleanup");
     }
