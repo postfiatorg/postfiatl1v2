@@ -110,6 +110,7 @@ nav:
   - Handoffs:
       - Storage Verifier And Campaign Reset: handoffs/2026-08-27___postfiatchad__storage_verifier_and_campaign_reset.md
       - Storage Candidate Review: handoffs/2026-08-27___dravlic__storage_candidate_review.md
+      - Storage G4 Time-Budget Decision: handoffs/2026-08-28___dravlic__storage_g4_time_budget_decision.md
       - Standard: handoffs/README.md
       - Transactional Storage Candidate: handoffs/2026-08-27___postfiatchad__transactional_storage_candidate.md
       - Storage Scaling Prototype (Historical): handoffs/2026-08-26___postfiatchad__storage_scaling_implementation.md
