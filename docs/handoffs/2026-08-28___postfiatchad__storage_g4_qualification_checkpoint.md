@@ -1,5 +1,10 @@
 # Storage G4 qualification checkpoint
 
+> **Historical checkpoint:** this handoff was superseded after the original
+> four-hour budget expired. Resume from the
+> [G4 timeout and persistent-remediation handoff](2026-08-28___postfiatchad__storage_g4_timeout_and_persistent_remediation.md),
+> not from the commands below.
+
 - **Operator:** Post Fiat Chad (`postfiatchad`)
 - **Date:** 2026-08-28 UTC
 

@@ -6,7 +6,7 @@
 
 **Decision owner:** Post Fiat
 
-**Candidate lineage:** transactional `redb` source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`; release binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; evidence-runner lineage through `f7b3d21d`
+**Candidate lineage:** transactional `redb` source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`; release binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; persistent evidence-runner remediation implemented at `438fb29c`
 
 **Research basis:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 
@@ -24,13 +24,15 @@ selected path does not intentionally rescan full history.
 
 The node still retains finalized history. That is not the defect being fixed.
 The defect was making the append path repeatedly read growing history. The
-transactional append path has now advanced a six-validator local fleet through
-height 1,550 with zero reported full-history reads. The current G4 failure is in
-the evidence harness: it serializes retained history into `blocks.json` between
-chunks, and that file reached 317,562,113 bytes at height 1,550, beyond the
-256 MiB bounded legacy-state reader. G4 must remove that full-history snapshot
-round trip from the high-height selected lane; it must not raise the safety cap
-or reinterpret this harness failure as a passing scaling result.
+transactional append path has now advanced a six-validator local fleet durably
+through height 3,050, with a diagnostic partial advance through height 4,542.
+Those rounds reported zero full-history reads and nearly flat p95 round time, so
+they did not reproduce the original storage defect. The four-hour G4 run instead
+exposed a second harness problem: setup launched a new node process and restarted
+validator services for every block. That process lifecycle exhausted the budget.
+Runner commit `438fb29c` keeps setup-only advancement resident while leaving the
+three required measurement rows unchanged. Its remediation smokes pass, but G4
+still requires one clean, independently bound v3 qualification run.
 
 Selection is not qualification, qualification is not deployment, and deployment
 is not public-testnet authorization. The remaining work must prove the selected
@@ -64,7 +66,7 @@ work idling.
 | --- | --- | --- | --- |
 | Which storage implementation? | Transactional `redb`. | Decided | Freeze and qualify this candidate; do not restart candidate research. |
 | Which performance campaign? | Selected `redb` at heights 50 and 5,000; same-binary legacy control at height 50. | Decided | Do not run the superseded three-lane/five-height matrix. |
-| How does the selected lane move between high-height chunks? | By a content-hashed prepared transactional fleet, not by exporting and re-importing full history. | Decided; runner remediation required | Generate the next signed corpus on a byte-verified disposable canonical clone, prove the frozen source is unchanged, bind the scratch before/after digests and expected sequence, discard the scratch clone, and eliminate high-height portable snapshot export. Keep the portable snapshot only for the shared height-50 legacy control. |
+| How does the selected lane move between high-height chunks? | By a content-hashed prepared transactional fleet and one persistent setup-only batch loop, not by exporting full history or restarting a process per block. | Decided; remediation smoke passes, fresh evidence required | Bind the separate canonical batch-builder binary, raw batches, certificates, every round, and the before/after fleet digests. Keep the portable snapshot only for the shared height-50 legacy control, and keep measured windows on the unchanged measurement path. |
 | Is one height-924 validator directory needed? | Yes, for exact replay only. | Authorization and custodian still required | Finish G1, G2, the height-915 part of G3, and G4 without waiting for it. |
 | Are six validator directories needed now? | No. They are needed only for G6 immediately before a deployment decision. | Deferred | Spend no time collecting or rehearsing six clones during offline qualification. |
 | May this plan touch the controlled devnet? | No. | Not authorized | No fleet query, copy, service action, deployment, or mutation. |
@@ -174,7 +176,7 @@ independent local gates continue.
 | G1 — candidate freeze | **CANDIDATE PASS / G4 INPUT FREEZE ACTIVE** | Keep source `ae658441` and binary `891b…bf4` unchanged; G4 freezes its height-50 and height-5,000 materials. | A candidate source or binary change restarts G1–G4; evidence-runner-only changes are separately hash-bound. |
 | G2 — safety | **LOCAL PASS / PACKET BINDING OPEN** | Preserve the passing tamper and rollback receipts; commit only redaction-safe packet material after G4. | Do not rerun unless the candidate binary changes or independent verification rejects a receipt. |
 | G3 — exact replay | **HEIGHT 915 PASS / HEIGHT 924 WAITING FOR AUTHORIZED INPUT** | Preserve the passing 915 receipt. Run height 924 only from a separately authorized copy. | Never wait idle for the copy; finish G4 without it, but do not claim offline qualification. |
-| G4 — scaling | **RUN INTERRUPTED / DURABLE AT HEIGHT 1,550** | Resume the same checksum-bound campaign from the pinned runner worktree; do not start a new campaign. | 9,542.971 seconds remain in the original four-hour aggregate budget; a timeout is a failed gate. |
+| G4 — scaling | **TIME BUDGET EXCEEDED / REMEDIATION SMOKE PASS** | Preserve the exhausted v2 output; freeze a clean v3 runner and batch builder, then start exactly one new qualification output. | The v2 run consumed 14,398.975 of 14,400 seconds and cannot resume under the changed runner. One clean v3 run receives the already-approved fresh four-hour budget, split at the two-hour operator boundary. |
 | G5 — offline packet | **BLOCKED BY G1–G4** | Package only after every preceding evidence gate passes. | No qualification claim until the offline verifier passes the complete packet. |
 | G6 — six-clone rehearsal | **DEFERRED** | Nothing until offline qualification is complete and deployment is the next real decision. | Requires separate data-copy authorization and six distinct stopped directories. |
 | G7 — Dynamic UNL handoff | **DIRECTION RECORDED / IMPLEMENTATION DEFERRED** | Preserve the recorded architecture decision only. | Spend no implementation time before the stated storage boundary or a new operator priority decision. |
@@ -427,25 +429,63 @@ Moving one file in a copied current prepared fleet made resume fail closed with
 `campaign current prepared fleet changed`. These are local development proofs,
 not release qualification evidence.
 
-The one clean G4 campaign started from runner checkout `8768866a` at
-`2026-08-27T23:54:36Z` and was normally interrupted for operator handoff at
-`2026-08-28T01:15:33Z`. Checkpoint SHA-256 is
-`79094159a091f306e2cf95b52cdf4dcba85bf6f9cecc0694abc9d0431a331889`;
-status is `INTERRUPTED`; aggregate elapsed time is 4,857.029 seconds; and no
-final report exists. All five selected height-50 windows and the snapshot-free
-height-50-to-1,550 advance are complete. The durable height-1,550 fleet SHA-256
-is `1edb40d3808f8b06f0f96ad8537e8eb0d6b12566ce46d12cf622cee138816648`;
-its advance has six-validator convergence, literal accepted receipts, zero
-full-history reads, and a passing backend-work gate. The partial
-height-1,550-to-3,050 unit is not evidence and will be quarantined automatically
-on resume. Resume the same output only; 9,542.971 seconds remain in the original
-four-hour budget.
+The one clean v2 G4 campaign started from runner checkout `8768866a` at
+`2026-08-27T23:54:36Z` and reached its four-hour budget at
+`2026-08-28T04:10:24Z`. Checkpoint SHA-256 is
+`5c48b9b8ad7d97ac9797a5b7c2f9388328cc82beebe2f7e1f31b334caa36ef85`;
+status is `INTERRUPTED`; aggregate elapsed time is 14,398.975 seconds; and no
+final report exists. The durable fleet reached height 3,050 with SHA-256
+`68d9e538d2f3727ab6a60db00238c9abaebfaad024c5eaf0f6aecde4a81dd8df`.
+The completed height-50-to-1,550 and height-1,550-to-3,050 chunks reported p95
+`consensus_round_ms` of 1,877.727 and 1,928.697 respectively, plus literal
+accepted receipts, six-validator convergence, and zero full-history reads.
+A partial height-3,050-to-4,550 unit completed 1,492 rounds through height 4,542
+with diagnostic p95 1,928.775 ms and zero full-history reads, but it is not
+release evidence. The v2 output is exhausted and must not be resumed or upgraded
+in place.
 
 **G4A exit:** high-height selected execution depends only on the verified
 transactional prepared fleet and bounded corpus, while the shared height-50
 legacy comparison still uses the authenticated portable snapshot. The candidate
 binary remains unchanged; only the separately hash-bound evidence runner may
 change.
+
+### G4B — remove the per-block setup lifecycle after the real timeout
+
+- [x] Preserve the exhausted v2 checkpoint, exact 14,398.975-second budget,
+      durable height-3,050 fleet, incomplete height-4,542 diagnostic boundary,
+      candidate identity, and absence of a final report.
+- [x] Confirm that completed and partial high-height advances report zero
+      full-history reads and nearly flat p95 round time; do not present partial
+      output as release evidence.
+- [x] Diagnose the remaining wall-time growth as one foreground node launch and
+      validator-service restart cycle per setup block.
+- [x] Add a separately hash-bound release helper that transforms the canonical
+      signed transfer corpus into canonical transaction batches without changing
+      the candidate node binary.
+- [x] Use one persistent peer-certified batch loop only for setup advances. Keep
+      selected and legacy measurement windows on the unchanged measured path.
+- [x] Upgrade campaign, checkpoint, and packet bindings to v3 so resume and
+      offline verification cover the helper binary, build revision, raw batches,
+      certificates, processed rounds, fleet digests, and normalized report.
+- [x] Pass two Rust helper tests, 60 focused Python tests, warnings-denied release
+      clippy, and formatting checks.
+- [x] Pass a real 12-round, six-validator persistent advance in one foreground
+      process: height 1 to 13 in 5,655.333 ms, 72 committed writes, 4,896 page
+      reads, 576 page writes, and zero full-history records or bytes read.
+- [x] Pass a controlled stop/resume campaign and make resume reject a changed
+      batch-builder binary before executing another unit.
+- [ ] Freeze a clean v3 runner and helper, then start exactly one new
+      qualification output from height 1 under the approved four-hour aggregate
+      budget. Do not resume or mutate the exhausted v2 output.
+
+G4B is implemented at `438fb29c`. The v3 development campaign passed with
+report SHA-256 `e1e87b854dc4fbae88f00e3ebfe9c4c848706090cd52d6c394c5cd2b8ea8518f`;
+the controlled resume campaign passed with report SHA-256
+`f8501bf2fa15d1fc5a5714f3f5a476b28c6419f250fed9176ebb3f4e0f1abc87`.
+Both are development proofs, not release qualification evidence. The release
+helper must be rebuilt from the clean documentation checkpoint so its embedded
+revision matches the pinned runner before the new G4 run starts.
 
 - [ ] Complete the three required rows inside the 4-hour aggregate budget.
 - [ ] Verify literal accepted receipts and six-validator agreement on height,
@@ -533,20 +573,23 @@ not deploy anything.
 
 1. Preserve the unchanged G1 candidate and the passing local G2 and height-915
    G3 receipts; do not rerun them while the binary is unchanged.
-2. Preserve the passing G4A proof from runner `f7b3d21d`. Do not query, copy,
-   stop, or modify the controlled devnet.
-3. Resume the same G4 campaign from the pinned `8768866a` worktree and existing
-   checkpoint. Do not start a fresh output or reset its original four-hour
-   budget.
-4. If G4 passes, bind the redaction-safe G2 and G4 artifacts and build everything
+2. Preserve the exhausted v2 G4 output as a failed time-budget result. Do not
+   resume it, reset its budget, or treat its height-4,542 partial unit as evidence.
+3. Commit this milestone and its handoff, rebuild the v3 helper from that clean
+   revision, verify the candidate hash is unchanged, and create a detached clean
+   runner worktree at the same revision.
+4. Start exactly one new v3 G4 output from height 1. Enforce the four-hour
+   aggregate budget with at most two hours per unattended segment; resume only
+   that same checksum-bound v3 output if the first segment stops cleanly.
+5. If G4 passes, bind the redaction-safe G2 and G4 artifacts and build everything
    locally available for G5.
-5. Close the height-924 part of G3 only after a custodian and separate read-only
+6. Close the height-924 part of G3 only after a custodian and separate read-only
    copy authorization exist. Do not wait idle for that decision.
-6. Complete G5 and record `OFFLINE QUALIFIED` only after the exact height-924
+7. Complete G5 and record `OFFLINE QUALIFIED` only after the exact height-924
    replay and independent packet verification pass.
-7. Run G6 only if controlled-devnet deployment is actually the next decision
+8. Run G6 only if controlled-devnet deployment is actually the next decision
    and its separate data-copy authorization has been recorded.
-8. Activate the deferred Dynamic UNL milestone only at the G7 boundary or after
+9. Activate the deferred Dynamic UNL milestone only at the G7 boundary or after
    an explicit operator reprioritization.
 
 The plan is complete only when G0 through G6 pass and a separate decision either
