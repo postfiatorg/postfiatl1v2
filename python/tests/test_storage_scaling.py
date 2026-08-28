@@ -129,12 +129,18 @@ def _passing_packet(packet: Path) -> None:
     binary = packet / "bin" / "postfiat-node"
     binary.parent.mkdir()
     binary.write_bytes(b"release-binary-identity")
+    batch_builder_binary = packet / "bin" / "postfiat-storage-corpus-batches"
+    batch_builder_binary.write_bytes(b"corpus-batch-builder-identity")
     rollback_binary = packet / "bin" / "postfiat-node-rollback"
     rollback_binary.write_bytes(b"older-compatible-release-binary-identity")
     incompatible_binary = packet / "bin" / "postfiat-node-incompatible"
     incompatible_binary.write_bytes(b"older-incompatible-release-binary-identity")
     binaries = [
         {"path": "bin/postfiat-node", "sha256": _sha256(binary)},
+        {
+            "path": "bin/postfiat-storage-corpus-batches",
+            "sha256": _sha256(batch_builder_binary),
+        },
         {
             "path": "bin/postfiat-node-rollback",
             "sha256": _sha256(rollback_binary),
@@ -1358,12 +1364,18 @@ def _passing_packet(packet: Path) -> None:
             "status": "PASS",
             "captured_at": "2026-08-27T00:00:00Z",
             "campaign_mode": "release-qualification",
-            "qualification_profile": "time-budgeted-redb-v2",
+            "qualification_profile": "time-budgeted-redb-v3",
             "evidence_eligible": True,
             "source_worktree_clean": True,
             "source_revision": revision,
             "runner_source_revision": revision,
             "node_binary_sha256": _sha256(binary),
+            "batch_builder_binary_sha256": _sha256(batch_builder_binary),
+            "batch_builder_binary": "postfiat-storage-corpus-batches",
+            "batch_builder_build": {
+                "git_revision": revision[:8],
+                "profile": "release",
+            },
             "node_binary_build": {
                 "git_revision": revision[:8],
                 "profile": "release",

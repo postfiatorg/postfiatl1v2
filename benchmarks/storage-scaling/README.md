@@ -50,10 +50,22 @@ timeout are identical; only the authenticated backend mode changes. The
 height-5,000 prepared fleet is built through selected transactional advance chunks; no
 portable height-5,000 snapshot or legacy height-5,000 control is created.
 
+Setup-only selected advances use one long-lived
+`transport-peer-certified-batch-loop` process that owns validator-0 while the
+other five validators remain resident. A separately built and hash-bound
+`postfiat-storage-corpus-batches` helper converts each exact signed corpus entry
+into one canonical one-transaction batch using the same `mempool_dag` builder
+as the candidate source. The loop routes proposals to the deterministic leader,
+records literal receipts and per-stage storage work, and advances all six nodes
+without restarting a proposer process for every block. This optimization is
+not performance evidence. All fifteen measured windows retain the original
+one-round latency process and resource semantics.
+
 The runner atomically checkpoints every advance chunk, frozen height input, and
-completed window. `--resume` rehashes and refuses any changed source, binary,
-runner, topology, validator identities, snapshot or prepared fleet, corpus,
-timeout, completed report, resource stream, receipt, or result binding. A
+completed window. `--resume` rehashes and refuses any changed source, candidate
+binary, batch-builder binary, runner, topology, validator identities, snapshot
+or prepared fleet, corpus, canonical batch, certificate, timeout, completed
+report, resource stream, receipt, or result binding. A
 partial unit is moved to an `interrupted/` quarantine before retry, not
 overwritten. An exclusive campaign lock prevents concurrent resume. The release
 profile has a four-hour aggregate wall-clock limit. Advances contain at most
@@ -83,7 +95,9 @@ latency gates pass, and the independent packet verifier recomputes the result.
 Candidate and harness provenance are separate. `--expected-source-revision`
 must name the source embedded in the qualification binary. The campaign also
 records the clean evidence-runner checkout revision and hashes the paired,
-selected, shared, and specification inputs. Packet assembly records its own
+selected, shared, and specification inputs. The setup-only batch builder embeds
+the runner checkout revision, is built in release mode, and is independently
+SHA-256 bound; it is not the candidate node binary. Packet assembly records its own
 clean checkout revision instead of falsely claiming that a later harness commit
 is the candidate binary source.
 
@@ -98,12 +112,21 @@ export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="$PWD/scripts/zig-cc"
 cargo build --release --locked -p postfiat-node
 ```
 
+Build the setup-only helper from the clean evidence-runner checkout with the
+same pinned toolchain and linker environment:
+
+```bash
+cargo build --release --locked -p postfiat-bench \
+  --bin postfiat-storage-corpus-batches
+```
+
 Then run from the clean selected checkout:
 
 ```bash
 timeout --signal=INT --kill-after=120s 7200s \
 python3 -u benchmarks/storage-scaling/run_paired_campaign.py \
   --node-bin target/release/postfiat-node \
+  --batch-builder-bin target/release/postfiat-storage-corpus-batches \
   --expected-source-revision FULL_CANDIDATE_SOURCE_ID \
   --output-dir /explicit/disposable/storage-scaling-paired
 ```
@@ -114,6 +137,7 @@ Resume only the same bound output after a clean interruption:
 timeout --signal=INT --kill-after=120s 7200s \
 python3 -u benchmarks/storage-scaling/run_paired_campaign.py \
   --node-bin target/release/postfiat-node \
+  --batch-builder-bin target/release/postfiat-storage-corpus-batches \
   --expected-source-revision FULL_CANDIDATE_SOURCE_ID \
   --output-dir /explicit/disposable/storage-scaling-paired \
   --resume
@@ -322,6 +346,7 @@ python3 benchmarks/storage-scaling/package_packet.py \
   --source-revision "$(git rev-parse HEAD)" \
   --captured-at YYYY-MM-DDTHH:MM:SSZ \
   --node-bin /CURRENT_CHECKOUT/target/release/postfiat-node \
+  --batch-builder-bin /RUNNER_CHECKOUT/target/release/postfiat-storage-corpus-batches \
   --rollback-node-bin /OLDER_WORKTREE/target/release/postfiat-node \
   --incompatible-node-bin /V1_WORKTREE/target/release/postfiat-node \
   --state-distinction /PATH/state-distinction.json \

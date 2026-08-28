@@ -48,6 +48,10 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
             configuration["node_preparation_mode"],
             "byte-verified-prepared-fleet-clone",
         )
+        self.assertEqual(
+            configuration["advance_execution_mode"],
+            "persistent-peer-certified-batch-loop",
+        )
         self.assertEqual(configuration["max_wall_seconds"], 4 * 60 * 60)
 
     def test_development_matrix_exercises_snapshot_free_selected_advance(self) -> None:
@@ -352,8 +356,116 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
                     state,
                     expected_source_revision="0" * 40,
                     node_bin=Path("/does/not/matter"),
+                    batch_builder_bin=Path("/does/not/matter-either"),
                     configuration={},
                 )
+
+    def test_persistent_advance_iteration_binds_receipt_and_six_states(self) -> None:
+        digest96 = "a" * 96
+        states = [
+            {
+                "node_id": f"validator-{index}",
+                "block_height": 2,
+                "block_tip_hash": digest96,
+                "state_root": "b" * 96,
+            }
+            for index in range(6)
+        ]
+        batch = {
+            "corpus_index": 0,
+            "batch_file": "round-000001.batch.json",
+            "batch_id": "c" * 96,
+            "tx_id": "d" * 96,
+            "signed_transfer_sha256": "e" * 64,
+        }
+        round_report = {
+            "schema": "postfiat-transport-peer-certified-batch-round-v1",
+            "round_ok": True,
+            "from": "validator-0",
+            "batch_file": "/tmp/round-000001.batch.json",
+            "proposal_proposer": "validator-2",
+            "proposal_signed": True,
+            "proposal_signature_signer": "validator-2",
+            "require_local_proposer": False,
+            "require_signed_proposal": True,
+            "allow_peer_failures": False,
+            "local_apply_before_certified_send": True,
+            "certified_sends_deferred": False,
+            "all_vote_requests_verified": True,
+            "all_sends_verified": True,
+            "local_receipt_count": 1,
+            "local_accepted_count": 1,
+            "local_rejected_count": 0,
+            "vote_request_failures": [],
+            "send_failures": [],
+            "unresolved_vote_targets": [],
+            "skipped_certified_send_targets": [],
+            "certification": {
+                "certificate_id": "f" * 96,
+                "block_height": 2,
+                "vote_count": 6,
+            },
+            "timings": {
+                "client_visible_finality_ms": 10.0,
+                "total_ms": 11.0,
+                "certified_sends_ms": 2.0,
+                "local_apply_ms": 1.0,
+                "local_apply_breakdown": {
+                    "write_commit_ms": 0.5,
+                    "write_commit_breakdown": {
+                        "refresh_account_tx_index_ms": 0.0,
+                    },
+                },
+            },
+            "local_hot_finality": [
+                {
+                    "tx_id": batch["tx_id"],
+                    "confirmed": True,
+                    "receipt": {"tx_id": batch["tx_id"], "accepted": True},
+                    "block": {
+                        "header": {
+                            "height": 2,
+                            "batch_id": batch["batch_id"],
+                            "certificate_id": "f" * 96,
+                            "block_hash": digest96,
+                        }
+                    },
+                }
+            ],
+            "local_state": states[0],
+            "sends": [
+                {
+                    "verified": True,
+                    "ack": {
+                        "applied": True,
+                        "receipt_count": 1,
+                        "accepted_count": 1,
+                        "rejected_count": 0,
+                        "certified_state": state,
+                    },
+                }
+                for state in states[1:]
+            ],
+        }
+
+        iteration = PAIRED.BASE.persistent_advance_iteration(
+            round_report,
+            batch,
+            iteration=1,
+            block_height=2,
+        )
+
+        self.assertEqual(iteration["tx_id"], batch["tx_id"])
+        self.assertEqual(iteration["source_node"], "validator-2")
+        self.assertTrue(iteration["receipt_accepted"])
+        round_report["sends"][0]["ack"]["accepted_count"] = 0
+        with self.assertRaisesRegex(RuntimeError, "certified send differs"):
+            PAIRED.BASE.persistent_advance_iteration(
+                round_report,
+                batch,
+                iteration=1,
+                block_height=2,
+            )
 
     def test_targeted_height_model_accepts_two_height_profile(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

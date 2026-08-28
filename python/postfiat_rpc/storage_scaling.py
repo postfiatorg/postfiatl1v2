@@ -153,7 +153,7 @@ ORIGINAL_E3_FORGED_CASES = (
 ARTIFACT_SCHEMAS = {
     "source": "postfiat-storage-source-identity-v1",
     "replay": "postfiat-storage-scaling-replay-v1",
-    "performance": "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v2",
+    "performance": "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v3",
     "tamper": "postfiat-storage-scaling-tamper-matrix-v1",
     "migration": "postfiat-storage-scaling-six-clone-migration-v1",
     "redaction": "postfiat-storage-scaling-redaction-v1",
@@ -413,6 +413,7 @@ def _verify_source(
     binaries = _list(source.get("binaries"), "source binaries")
     expected_binary_paths = {
         "bin/postfiat-node",
+        "bin/postfiat-storage-corpus-batches",
         "bin/postfiat-node-rollback",
         "bin/postfiat-node-incompatible",
     }
@@ -1910,8 +1911,24 @@ def _verify_performance(
     _verify_binary_build(performance, "performance", source_revision)
     if performance.get("validator_count") != 6:
         _fail("performance topology is not six validators")
-    if performance.get("qualification_profile") != "time-budgeted-redb-v2":
+    if performance.get("qualification_profile") != "time-budgeted-redb-v3":
         _fail("performance qualification profile differs")
+    if (
+        performance.get("batch_builder_binary_sha256")
+        != binary_digests["bin/postfiat-storage-corpus-batches"]
+        or performance.get("batch_builder_binary")
+        != "postfiat-storage-corpus-batches"
+    ):
+        _fail("performance batch builder identity differs from the packet source")
+    builder_build = _object(
+        performance.get("batch_builder_build"), "performance batch builder build"
+    )
+    if (
+        builder_build.get("git_revision")
+        != str(performance["runner_source_revision"])[:8]
+        or builder_build.get("profile") != "release"
+    ):
+        _fail("performance batch builder build differs from the runner source")
     if performance.get("windows_per_height") != 5 or performance.get("rounds_per_window") != 50:
         _fail("performance window cardinality differs from the specification")
     if performance.get("lane_order") != list(PERFORMANCE_LANES):

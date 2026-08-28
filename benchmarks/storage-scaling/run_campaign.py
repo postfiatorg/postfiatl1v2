@@ -45,6 +45,10 @@ STORAGE_BACKEND_IDENTITIES = {
 }
 RESOURCE_SAMPLE_SCHEMA = "postfiat-storage-resource-samples-v1"
 RESOURCE_SAMPLE_TARGET_INTERVAL_MS = 100
+PERSISTENT_ADVANCE_REPORT_SCHEMA = (
+    "postfiat-storage-scaling-persistent-advance-report-v1"
+)
+BATCH_BUILD_REPORT_SCHEMA = "postfiat-storage-corpus-batch-build-report-v1"
 QUALIFICATION_TIMEOUT_MS = 900_000
 MAX_PROPOSAL_PAGE_READS_PER_ROUND = 64
 MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND = 64
@@ -815,6 +819,221 @@ def create_signed_transfer_corpus(
     return report
 
 
+def validate_batch_build_report(
+    report: dict[str, Any],
+    *,
+    batch_root: Path,
+    signed_transfer_corpus: Path,
+    rounds: int,
+    expected_builder_revision: str,
+) -> list[dict[str, Any]]:
+    if (
+        report.get("schema") != BATCH_BUILD_REPORT_SCHEMA
+        or report.get("source_git_revision") != expected_builder_revision[:8]
+        or report.get("build_profile") != "release"
+        or report.get("corpus_sha256") != digest(signed_transfer_corpus)
+        or int(report.get("transfer_count", 0)) != rounds
+    ):
+        raise RuntimeError("advance batch builder report identity differs")
+    batches = report.get("batches")
+    if not isinstance(batches, list) or len(batches) != rounds:
+        raise RuntimeError("advance batch builder emitted the wrong batch count")
+    if batch_root.is_symlink() or not batch_root.is_dir():
+        raise RuntimeError("advance batch root is not a regular directory")
+    observed_files = {
+        path.name
+        for path in batch_root.iterdir()
+        if path.is_file() and path.name.endswith(".batch.json")
+    }
+    expected_files: set[str] = set()
+    tx_ids: set[str] = set()
+    batch_ids: set[str] = set()
+    first_sequence: int | None = None
+    normalized: list[dict[str, Any]] = []
+    for index, raw in enumerate(batches):
+        if not isinstance(raw, dict):
+            raise RuntimeError("advance batch builder entry is malformed")
+        filename = f"round-{index + 1:06}.batch.json"
+        sequence = int(raw.get("sequence", -1))
+        if first_sequence is None:
+            first_sequence = sequence
+        if (
+            int(raw.get("corpus_index", -1)) != index
+            or raw.get("batch_file") != filename
+            or sequence < 0
+            or sequence != first_sequence + index
+        ):
+            raise RuntimeError("advance batch builder ordering differs from the corpus")
+        tx_id = str(raw.get("tx_id", ""))
+        batch_id = str(raw.get("batch_id", ""))
+        if (
+            len(tx_id) != 96
+            or len(batch_id) != 96
+            or len(str(raw.get("payload_hash", ""))) != 96
+            or len(str(raw.get("signed_transfer_sha256", ""))) != 64
+            or len(str(raw.get("batch_sha256", ""))) != 64
+            or tx_id in tx_ids
+            or batch_id in batch_ids
+        ):
+            raise RuntimeError("advance batch builder emitted an invalid identity")
+        tx_ids.add(tx_id)
+        batch_ids.add(batch_id)
+        path = batch_root / filename
+        if path.is_symlink() or not path.is_file():
+            raise RuntimeError(f"advance batch builder omitted {filename}")
+        if digest(path) != raw.get("batch_sha256"):
+            raise RuntimeError(f"advance batch builder digest changed for {filename}")
+        expected_files.add(filename)
+        normalized.append(dict(raw))
+    if observed_files != expected_files:
+        raise RuntimeError("advance batch directory contains an unexpected batch set")
+    return normalized
+
+
+def persistent_advance_iteration(
+    round_report: dict[str, Any],
+    batch: dict[str, Any],
+    *,
+    iteration: int,
+    block_height: int,
+) -> dict[str, Any]:
+    certification = round_report.get("certification")
+    timings = round_report.get("timings")
+    finality_rows = round_report.get("local_hot_finality")
+    sends = round_report.get("sends")
+    expected_proposer = f"validator-{block_height % VALIDATORS}"
+    if (
+        round_report.get("schema")
+        != "postfiat-transport-peer-certified-batch-round-v1"
+        or round_report.get("round_ok") is not True
+        or round_report.get("from") != "validator-0"
+        or round_report.get("proposal_proposer") != expected_proposer
+        or round_report.get("proposal_signed") is not True
+        or round_report.get("proposal_signature_signer") != expected_proposer
+        or round_report.get("require_local_proposer") is not False
+        or round_report.get("require_signed_proposal") is not True
+        or round_report.get("allow_peer_failures") is not False
+        or round_report.get("local_apply_before_certified_send") is not True
+        or round_report.get("certified_sends_deferred") is not False
+        or round_report.get("all_vote_requests_verified") is not True
+        or round_report.get("all_sends_verified") is not True
+        or Path(str(round_report.get("batch_file", ""))).name
+        != str(batch.get("batch_file", ""))
+        or int(round_report.get("local_receipt_count", -1)) != 1
+        or int(round_report.get("local_accepted_count", -1)) != 1
+        or int(round_report.get("local_rejected_count", -1)) != 0
+        or round_report.get("vote_request_failures") != []
+        or round_report.get("send_failures") != []
+        or round_report.get("unresolved_vote_targets") != []
+        or round_report.get("skipped_certified_send_targets") != []
+        or not isinstance(certification, dict)
+        or not isinstance(timings, dict)
+        or not isinstance(finality_rows, list)
+        or len(finality_rows) != 1
+        or not isinstance(sends, list)
+        or len(sends) != VALIDATORS - 1
+    ):
+        raise RuntimeError(f"persistent advance round {iteration} failed its exact gate")
+    finality = finality_rows[0]
+    receipt = finality.get("receipt") if isinstance(finality, dict) else None
+    block = finality.get("block") if isinstance(finality, dict) else None
+    header = block.get("header") if isinstance(block, dict) else None
+    if (
+        not isinstance(receipt, dict)
+        or receipt.get("accepted") is not True
+        or receipt.get("tx_id") != batch["tx_id"]
+        or finality.get("tx_id") != batch["tx_id"]
+        or finality.get("confirmed") is not True
+        or not isinstance(header, dict)
+        or int(header.get("height", 0)) != block_height
+        or header.get("batch_id") != batch["batch_id"]
+        or certification.get("certificate_id") != header.get("certificate_id")
+        or int(certification.get("block_height", 0)) != block_height
+        or int(certification.get("vote_count", 0)) != VALIDATORS
+    ):
+        raise RuntimeError(f"persistent advance round {iteration} receipt binding differs")
+
+    states = [round_report.get("local_state")]
+    for send in sends:
+        ack = send.get("ack") if isinstance(send, dict) else None
+        state = ack.get("certified_state") if isinstance(ack, dict) else None
+        if (
+            not isinstance(send, dict)
+            or send.get("verified") is not True
+            or not isinstance(ack, dict)
+            or ack.get("applied") is not True
+            or int(ack.get("receipt_count", -1)) != 1
+            or int(ack.get("accepted_count", -1)) != 1
+            or int(ack.get("rejected_count", -1)) != 0
+            or not isinstance(state, dict)
+        ):
+            raise RuntimeError(
+                f"persistent advance round {iteration} certified send differs"
+            )
+        states.append(state)
+    node_ids = {str(state.get("node_id", "")) for state in states if isinstance(state, dict)}
+    identities = {
+        (
+            int(state.get("block_height", 0)),
+            str(state.get("block_tip_hash", "")),
+            str(state.get("state_root", "")),
+        )
+        for state in states
+        if isinstance(state, dict)
+    }
+    if (
+        node_ids != {f"validator-{index}" for index in range(VALIDATORS)}
+        or len(identities) != 1
+        or next(iter(identities))[0] != block_height
+    ):
+        raise RuntimeError(f"persistent advance round {iteration} did not converge")
+
+    local_apply = timings.get("local_apply_breakdown")
+    if not isinstance(local_apply, dict):
+        raise RuntimeError(f"persistent advance round {iteration} omitted local apply")
+    write_commit_ms = float(local_apply.get("write_commit_ms", 0.0))
+    write_breakdown = local_apply.get("write_commit_breakdown")
+    refresh_ms = (
+        float(write_breakdown.get("refresh_account_tx_index_ms", 0.0))
+        if isinstance(write_breakdown, dict)
+        else 0.0
+    )
+    finality_ms = float(timings.get("client_visible_finality_ms", 0.0))
+    return {
+        "iteration": iteration,
+        "source_node": expected_proposer,
+        "tx_id": batch["tx_id"],
+        "input_source": "signed-transfer-corpus-prebuilt-batch",
+        "signed_transfer_corpus_index": int(batch["corpus_index"]),
+        "signed_transfer_sha256": batch["signed_transfer_sha256"],
+        "block_height": block_height,
+        "block_hash": header["block_hash"],
+        "certificate_id": header["certificate_id"],
+        "vote_policy": "full",
+        "validators": VALIDATORS,
+        "quorum": 5,
+        "vote_count": int(certification["vote_count"]),
+        "quote_ms": 0.0,
+        "wallet_sign_ms": 0.0,
+        "mempool_submit_ms": 0.0,
+        "mempool_batch_ms": 0.0,
+        "wallet_to_finality_ms": finality_ms,
+        "admitted_to_finality_ms": finality_ms,
+        "consensus_round_ms": finality_ms,
+        "round_function_return_ms": float(timings.get("total_ms", finality_ms)),
+        "certified_sends_ms": float(timings.get("certified_sends_ms", 0.0)),
+        "local_apply_ms": float(timings.get("local_apply_ms", 0.0)),
+        "write_commit_ms": write_commit_ms,
+        "refresh_account_tx_index_ms": refresh_ms,
+        "receipt_accepted": True,
+        "finality_confirmed": True,
+        "round_ok": True,
+        "all_vote_requests_verified": True,
+        "all_sends_verified": True,
+        "round_timings": timings,
+    }
+
+
 def run_rounds(
     *,
     node_bin: Path,
@@ -1318,6 +1537,538 @@ def run_rounds(
     write_json(root / "receipts" / f"{label}.json", result)
     print(
         f"storage-scaling-window={label} start={initial_height} "
+        f"end={final_height} rounds={rounds}",
+        flush=True,
+    )
+    return result, result_snapshot
+
+
+def run_persistent_advance(
+    *,
+    node_bin: Path,
+    batch_builder_bin: Path,
+    expected_builder_revision: str,
+    root: Path,
+    seed: Path,
+    topology: Path,
+    source_snapshot: Path | None,
+    signed_transfer_corpus: Path,
+    label: str,
+    rounds: int,
+    prepared_fleet: Path | None = None,
+    prepared_fleet_sha256: str | None = None,
+    nodes_root: Path | None = None,
+) -> tuple[dict[str, Any], Path | None]:
+    if rounds <= 0:
+        raise ValueError("persistent advance rounds must be positive")
+    if signed_transfer_corpus.is_symlink() or not signed_transfer_corpus.is_file():
+        raise ValueError("signed transfer corpus must be a regular non-symlink file")
+    if batch_builder_bin.is_symlink() or not batch_builder_bin.is_file():
+        raise ValueError("batch builder must be a regular non-symlink file")
+    if (prepared_fleet is None) != (prepared_fleet_sha256 is None):
+        raise ValueError(
+            "prepared fleet path and digest must either both be set or both be absent"
+        )
+    if prepared_fleet is None and source_snapshot is None:
+        raise ValueError("initial persistent advance requires a source snapshot")
+
+    logs = root / "logs"
+    nodes = root / "nodes" if nodes_root is None else nodes_root
+    if prepared_fleet is None:
+        assert source_snapshot is not None
+        SHARED.prepare_nodes(node_bin, nodes, source_snapshot, seed, logs, label)
+        node_preparation_mode = "authenticated-portable-snapshot-import"
+        observed_prepared_fleet_sha256 = None
+        for index in range(VALIDATORS):
+            SHARED.run(
+                [
+                    str(node_bin),
+                    "storage-backend-configure",
+                    "--data-dir",
+                    str(nodes / f"validator-{index}"),
+                    "--mode",
+                    "transactional",
+                    "--offline-confirmed",
+                ],
+                stdout_path=logs / f"{label}.validator-{index}.backend.json",
+                stderr_path=logs / f"{label}.validator-{index}.backend.stderr",
+            )
+    else:
+        observed_prepared_fleet_sha256 = clone_prepared_fleet(
+            prepared_fleet,
+            nodes,
+            str(prepared_fleet_sha256),
+        )
+        node_preparation_mode = "byte-verified-prepared-fleet-clone"
+
+    before = full_fleet_status(node_bin, nodes)
+    initial_height, _, _ = fleet_identity(before)
+    for status in before:
+        storage = status.get("storage")
+        if (
+            not isinstance(storage, dict)
+            or storage.get("backend") != "redb"
+            or storage.get("transactional_active") is not True
+        ):
+            raise RuntimeError("persistent advance prepared the wrong storage backend")
+
+    label_root = root / label
+    if label_root.exists():
+        raise ValueError(f"refusing to overwrite persistent advance: {label_root}")
+    label_root.mkdir(parents=True)
+    pending_batches = label_root / "pending-batches"
+    processed_batches = label_root / "processed-batches"
+    batch_report_path = label_root / "batch-build-report.json"
+    batch_stderr_path = logs / f"{label}.batch-build.stderr"
+    completed = SHARED.run(
+        [
+            str(batch_builder_bin),
+            "--data-dir",
+            str(nodes / "validator-0"),
+            "--signed-transfer-corpus",
+            str(signed_transfer_corpus),
+            "--output-dir",
+            str(pending_batches),
+        ],
+        stdout_path=batch_report_path,
+        stderr_path=batch_stderr_path,
+    )
+    batch_report = json.loads(completed.stdout)
+    if not isinstance(batch_report, dict):
+        raise RuntimeError("advance batch builder report is not an object")
+    batches = validate_batch_build_report(
+        batch_report,
+        batch_root=pending_batches,
+        signed_transfer_corpus=signed_transfer_corpus,
+        rounds=rounds,
+        expected_builder_revision=expected_builder_revision,
+    )
+    reference_status = before[0]
+    if (
+        Path(str(batch_report.get("data_dir", ""))).resolve()
+        != (nodes / "validator-0").resolve()
+        or Path(str(batch_report.get("output_dir", ""))).resolve()
+        != pending_batches.resolve()
+        or batch_report.get("chain_id") != reference_status.get("chain_id")
+        or batch_report.get("genesis_hash") != reference_status.get("genesis_hash")
+        or int(batch_report.get("protocol_version", 0))
+        != int(reference_status.get("protocol_version", 0))
+    ):
+        raise RuntimeError("advance batch builder domain differs from the fleet")
+
+    services: list[Any] = []
+    service_handles: list[tuple[Any, Any]] = []
+    foreground_pids: set[int] = set()
+    samples: list[dict[str, Any]] = []
+    stop_event = threading.Event()
+    sample_thread: threading.Thread | None = None
+    foreground: dict[str, int] | None = None
+    loop_report_path = label_root / "loop-report.json"
+    loop_stderr_path = logs / f"{label}.loop.stderr"
+
+    def current_pids() -> list[int]:
+        service_pids = [process.pid for process in services if process.poll() is None]
+        return sorted(set(service_pids) | foreground_pids)
+
+    command = [
+        str(node_bin),
+        "transport-peer-certified-batch-loop",
+        "--data-dir",
+        str(nodes / "validator-0"),
+        "--topology",
+        str(topology),
+        "--batch-kind",
+        "transparent",
+        "--batch-dir",
+        str(pending_batches),
+        "--key-file",
+        str(nodes / "validator-0" / "validator_keys.json"),
+        "--proposal-key-file",
+        str(nodes / "validator-0" / "validator_keys.json"),
+        "--local-apply-before-certified-send",
+        "--artifact-root",
+        str(label_root / "artifacts"),
+        "--processed-dir",
+        str(processed_batches),
+        "--max-rounds",
+        str(rounds),
+        "--start-height",
+        str(initial_height + 1),
+        "--poll-ms",
+        "1",
+        "--timeout-ms",
+        str(QUALIFICATION_TIMEOUT_MS),
+        "--send-retries",
+        "16",
+        "--retry-backoff-ms",
+        "100",
+    ]
+    return_code: int | None = None
+    try:
+        for index in range(1, VALIDATORS):
+            process, handles = SHARED.start_validator(
+                node_bin,
+                nodes,
+                topology,
+                root,
+                logs,
+                label,
+                index,
+                timeout_ms=QUALIFICATION_TIMEOUT_MS,
+            )
+            services.append(process)
+            service_handles.append(handles)
+        sample_thread = SHARED.start_resource_sampler(
+            stop_event, current_pids, nodes, samples
+        )
+        with loop_report_path.open("wb") as stdout_handle, loop_stderr_path.open(
+            "wb"
+        ) as stderr_handle:
+            started_monotonic_ns = time.monotonic_ns()
+            process = subprocess.Popen(
+                command,
+                stdout=stdout_handle,
+                stderr=stderr_handle,
+            )
+            foreground_pids.add(process.pid)
+            try:
+                return_code = process.wait()
+            except BaseException:
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+                raise
+            finally:
+                ended_monotonic_ns = time.monotonic_ns()
+                foreground_pids.discard(process.pid)
+                foreground = {
+                    "pid": process.pid,
+                    "started_monotonic_ns": started_monotonic_ns,
+                    "ended_monotonic_ns": ended_monotonic_ns,
+                }
+    finally:
+        if sample_thread is not None:
+            stop_event.set()
+            sample_thread.join()
+        SHARED.stop_validators(services, service_handles)
+    if return_code != 0:
+        raise RuntimeError(
+            f"persistent advance loop failed with {return_code}; "
+            f"stdout={loop_report_path} stderr={loop_stderr_path}"
+        )
+    if foreground is None:
+        raise RuntimeError("persistent advance did not start its foreground process")
+
+    loop_report = read_json(loop_report_path)
+    loop_rounds = loop_report.get("rounds")
+    if (
+        loop_report.get("schema")
+        != "postfiat-transport-peer-certified-batch-loop-v1"
+        or loop_report.get("node_id") != "validator-0"
+        or loop_report.get("loop_ok") is not True
+        or int(loop_report.get("processed_round_count", 0)) != rounds
+        or int(loop_report.get("max_rounds", 0)) != rounds
+        or int(loop_report.get("start_height", 0)) != initial_height + 1
+        or loop_report.get("shutdown_reason") != "max_rounds"
+        or loop_report.get("require_local_proposer") is not False
+        or loop_report.get("require_signed_proposal") is not True
+        or loop_report.get("allow_peer_failures") is not False
+        or loop_report.get("local_apply_before_certified_send") is not True
+        or loop_report.get("defer_certified_sends") is not False
+        or not isinstance(loop_rounds, list)
+        or len(loop_rounds) != rounds
+        or len(loop_report.get("processed_batch_files", [])) != rounds
+        or len(loop_report.get("archived_batch_files", [])) != rounds
+    ):
+        raise RuntimeError("persistent advance loop summary failed its exact gate")
+    if any(
+        path.is_file() and path.name.endswith(".batch.json")
+        for path in pending_batches.iterdir()
+    ):
+        raise RuntimeError("persistent advance left a processed batch pending")
+    batches = validate_batch_build_report(
+        batch_report,
+        batch_root=processed_batches,
+        signed_transfer_corpus=signed_transfer_corpus,
+        rounds=rounds,
+        expected_builder_revision=expected_builder_revision,
+    )
+    certificate_files = {
+        path.name
+        for path in processed_batches.iterdir()
+        if path.is_file() and path.name.endswith(".certificate.json")
+    }
+    expected_certificates = {
+        f"round-{index:06}.certificate.json" for index in range(1, rounds + 1)
+    }
+    if certificate_files != expected_certificates:
+        raise RuntimeError("persistent advance archived the wrong certificate set")
+
+    iterations = [
+        persistent_advance_iteration(
+            round_report,
+            batches[index],
+            iteration=index + 1,
+            block_height=initial_height + index + 1,
+        )
+        for index, round_report in enumerate(loop_rounds)
+        if isinstance(round_report, dict)
+    ]
+    if len(iterations) != rounds:
+        raise RuntimeError("persistent advance loop contains a malformed round")
+
+    after = full_fleet_status(node_bin, nodes)
+    final_height, final_tip, final_root = fleet_identity(after)
+    if final_height != initial_height + rounds:
+        raise RuntimeError(
+            f"{label} finalized height {final_height}, expected {initial_height + rounds}"
+        )
+    corpus_sha256 = digest(signed_transfer_corpus)
+    report = {
+        "schema": PERSISTENT_ADVANCE_REPORT_SCHEMA,
+        "generated_utc": f"unix_seconds:{int(time.time())}",
+        "status": "passed",
+        "config": {
+            "mode": "setup-only-persistent-advance",
+            "build_mode": "release",
+            "transport": "single-process-peer-certified-batch-loop",
+            "base_dir": nodes.as_posix(),
+            "topology_file": topology.as_posix(),
+            "validators": VALIDATORS,
+            "rounds": rounds,
+            "vote_policy": "full",
+            "timeout_ms": QUALIFICATION_TIMEOUT_MS,
+            "input_source": "signed-transfer-corpus-prebuilt-batch",
+            "signed_transfer_corpus": signed_transfer_corpus.as_posix(),
+            "signed_transfer_corpus_sha256": corpus_sha256,
+            "signed_transfer_corpus_offset": 0,
+            "resident_transactional_store": True,
+            "expected_start_height": initial_height,
+            "local_apply_before_certified_send": True,
+            "defer_certified_sends": False,
+            "performance_evidence": False,
+        },
+        "checks": {
+            "all_receipts_accepted": True,
+            "all_rounds_ok": True,
+            "all_transactions_final": True,
+            "all_vote_policies_match": True,
+            "converged": True,
+            "exact_input_binding": True,
+            "final_height_matches_rounds": True,
+            "iteration_count_matches_rounds": True,
+            "no_duplicate_receipts": True,
+            "state_verified_after_run": True,
+        },
+        "not_measured": [
+            "release performance comparison",
+            "wallet signing latency",
+            "mempool admission latency",
+        ],
+        "final_state": {
+            "height": final_height,
+            "block_tip_hash": final_tip,
+            "state_root": final_root,
+            "state_verification_count": VALIDATORS,
+        },
+        "iterations": iterations,
+        "latency": {
+            metric: latency_stats([float(row[metric]) for row in iterations])
+            for metric in (
+                "wallet_to_finality_ms",
+                "admitted_to_finality_ms",
+                "consensus_round_ms",
+                "refresh_account_tx_index_ms",
+            )
+        },
+    }
+    report_path = label_root / "report.json"
+    iterations_path = label_root / "iterations.jsonl"
+    write_json(report_path, report)
+    iterations_path.write_text(
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in iterations),
+        encoding="utf-8",
+    )
+
+    counters, remote_storage = storage_work_from_report(
+        report, SELECTED_STORAGE_LANE
+    )
+    backend_work_gate_pass = (
+        counters["full_history_scans"] == 0
+        and counters["full_history_records_read"] == 0
+        and counters["full_history_bytes_read"] == 0
+        and counters["committed_write_transactions"] == rounds * VALIDATORS
+    )
+    if not backend_work_gate_pass:
+        raise RuntimeError(f"{label} selected-store work gate failed: {counters}")
+
+    if not samples:
+        raise RuntimeError(f"{label} resource sampler emitted no samples")
+    resource = SHARED.resource_summary(samples)
+    sample_origin_ns = int(samples[0]["monotonic_ns"])
+    normalized_samples: list[dict[str, Any]] = []
+    for sample in samples:
+        normalized_sample = dict(sample)
+        normalized_sample["monotonic_offset_ns"] = (
+            int(normalized_sample.pop("monotonic_ns")) - sample_origin_ns
+        )
+        normalized_samples.append(normalized_sample)
+    normalized_foreground = {
+        "pid": foreground["pid"],
+        "started_offset_ns": foreground["started_monotonic_ns"] - sample_origin_ns,
+        "ended_offset_ns": foreground["ended_monotonic_ns"] - sample_origin_ns,
+    }
+    foreground_sample_count = sum(
+        1
+        for sample in normalized_samples
+        if normalized_foreground["started_offset_ns"]
+        <= sample["monotonic_offset_ns"]
+        <= normalized_foreground["ended_offset_ns"]
+        and str(foreground["pid"]) in sample["processes"]
+    )
+    if foreground_sample_count < 2:
+        raise RuntimeError(
+            f"{label} resource sampler observed the persistent process fewer than two times"
+        )
+    resource_samples_path = root / "resource-samples" / f"{label}.json"
+    write_json(
+        resource_samples_path,
+        {
+            "schema": RESOURCE_SAMPLE_SCHEMA,
+            "sample_target_interval_ms": RESOURCE_SAMPLE_TARGET_INTERVAL_MS,
+            "samples": normalized_samples,
+            "foreground_processes": [normalized_foreground],
+            "foreground_sample_counts": {
+                str(foreground["pid"]): foreground_sample_count
+            },
+        },
+    )
+    normalized = normalize_report_paths(report, root)
+    normalized_config = normalized["config"]
+    normalized_config["signed_transfer_corpus"] = "$SIGNED_TRANSFER_CORPUS"
+    normalized_config["base_dir"] = "$WORKING_FLEET"
+    normalized_path = root / "normalized" / f"{label}.report.json"
+    write_json(normalized_path, normalized)
+
+    result_snapshot: Path | None = None
+    if prepared_fleet is None:
+        result_snapshot = root / "snapshots" / f"{label}.snapshot"
+        export_snapshot(
+            node_bin,
+            nodes / "validator-0",
+            result_snapshot,
+            logs,
+            label,
+        )
+    result_prepared_fleet_sha256 = directory_digest(nodes)
+    result = {
+        "label": label,
+        "storage_lane": SELECTED_STORAGE_LANE,
+        "advance_execution_mode": "persistent-peer-certified-batch-loop",
+        "performance_evidence": False,
+        "source_snapshot_sha256": (
+            directory_digest(source_snapshot) if source_snapshot is not None else None
+        ),
+        "node_preparation_mode": node_preparation_mode,
+        "prepared_fleet_sha256": observed_prepared_fleet_sha256,
+        "result_prepared_fleet_sha256": result_prepared_fleet_sha256,
+        "signed_transfer_corpus": signed_transfer_corpus.as_posix(),
+        "signed_transfer_corpus_sha256": corpus_sha256,
+        "starting_height": initial_height,
+        "rounds": rounds,
+        "validators_converged": VALIDATORS,
+        "literal_receipts_exact": True,
+        "backend_work_gate_pass": True,
+        "zero_full_history_reads": True,
+        "bounded_index_pages": (
+            counters["page_reads"]
+            <= rounds
+            * (
+                MAX_PROPOSAL_PAGE_READS_PER_ROUND
+                + (VALIDATORS - 1) * MAX_PROPOSAL_PAGE_READS_PER_ROUND
+                + VALIDATORS * MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND
+            )
+        ),
+        "constant_accumulator_work": True,
+        "final_height": final_height,
+        "final_tip": final_tip,
+        "final_state_root": final_root,
+        "latency": report["latency"],
+        "storage": counters,
+        "resources": {
+            "cpu_ticks": resource["validator_cpu_ticks"],
+            "peak_rss_kib": resource["validator_peak_rss_kib"],
+            "disk_growth_bytes": max(0, resource["node_disk_delta_bytes"]),
+            "bytes_read": resource["validator_read_bytes"],
+            "bytes_written": resource["validator_write_bytes"],
+            "page_reads": counters.get("page_reads"),
+            "page_writes": counters.get("page_writes"),
+            "fsync_count": counters.get("fsync_count"),
+            "fsync_micros": counters.get("durable_commit_micros"),
+            "sample_count": resource["sample_count"],
+            "duration_ms": resource["duration_ms"],
+            "observed_pid_count": len(resource["observed_pids"]),
+            "foreground_process_count": 1,
+            "foreground_min_sample_count": foreground_sample_count,
+            "host_cpu_ticks": resource["host_cpu_ticks"],
+            "host_total_memory_kib": resource["host_total_memory_kib"],
+            "host_min_available_memory_kib": resource[
+                "host_min_available_memory_kib"
+            ],
+            "network_received_bytes": resource["network_received_bytes"],
+            "network_transmitted_bytes": resource["network_transmitted_bytes"],
+        },
+        "storage_telemetry_source": (
+            "persistent driver proposal, five remote validator reconstructions, "
+            "local apply, and five in-process certified-apply deltas"
+        ),
+        "remote_validator_storage_final": remote_storage,
+        "initial_fleet": [
+            {
+                "node_id": status["node_id"],
+                "height": status["block_height"],
+                "tip": status["block_tip_hash"],
+                "state_root": status["state_root"],
+            }
+            for status in before
+        ],
+        "final_fleet": [
+            {
+                "node_id": status["node_id"],
+                "height": status["block_height"],
+                "tip": status["block_tip_hash"],
+                "state_root": status["state_root"],
+            }
+            for status in after
+        ],
+        "batch_builder_binary_sha256": digest(batch_builder_bin),
+        "batch_builder_build": {
+            "git_revision": batch_report["source_git_revision"],
+            "profile": batch_report["build_profile"],
+        },
+        "batch_builder_report": batch_report_path.relative_to(root).as_posix(),
+        "batch_builder_report_sha256": digest(batch_report_path),
+        "batch_loop_report": loop_report_path.relative_to(root).as_posix(),
+        "batch_loop_report_sha256": digest(loop_report_path),
+        "processed_batches": processed_batches.relative_to(root).as_posix(),
+        "processed_batches_sha256": directory_digest(processed_batches),
+        "normalized_report": normalized_path.relative_to(root).as_posix(),
+        "normalized_report_sha256": digest(normalized_path),
+        "resource_samples": resource_samples_path.relative_to(root).as_posix(),
+        "resource_samples_sha256": digest(resource_samples_path),
+        "result_snapshot_sha256": (
+            directory_digest(result_snapshot) if result_snapshot is not None else None
+        ),
+    }
+    if not result["bounded_index_pages"]:
+        raise RuntimeError(f"{label} exceeded the cumulative page bound")
+    write_json(root / "receipts" / f"{label}.json", result)
+    print(
+        f"storage-scaling-persistent-advance={label} start={initial_height} "
         f"end={final_height} rounds={rounds}",
         flush=True,
     )

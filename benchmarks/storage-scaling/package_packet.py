@@ -20,7 +20,7 @@ SPEC = REPO / "docs" / "architecture" / "storage-scaling-fix-spec.md"
 ARTIFACT_SCHEMAS = {
     "source": "postfiat-storage-source-identity-v1",
     "replay": "postfiat-storage-scaling-replay-v1",
-    "performance": "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v2",
+    "performance": "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v3",
     "tamper": "postfiat-storage-scaling-tamper-matrix-v1",
     "migration": "postfiat-storage-scaling-six-clone-migration-v1",
     "redaction": "postfiat-storage-scaling-redaction-v1",
@@ -418,6 +418,7 @@ def main() -> int:
     parser.add_argument("--source-revision", required=True)
     parser.add_argument("--captured-at", required=True)
     parser.add_argument("--node-bin", type=Path, required=True)
+    parser.add_argument("--batch-builder-bin", type=Path, required=True)
     parser.add_argument("--rollback-node-bin", type=Path, required=True)
     parser.add_argument("--incompatible-node-bin", type=Path, required=True)
     parser.add_argument("--state-distinction", type=Path, required=True)
@@ -434,11 +435,13 @@ def main() -> int:
 
     raw_packet = args.output_dir.expanduser()
     raw_node_bin = args.node_bin.expanduser()
+    raw_batch_builder_bin = args.batch_builder_bin.expanduser()
     raw_rollback_node_bin = args.rollback_node_bin.expanduser()
     raw_incompatible_node_bin = args.incompatible_node_bin.expanduser()
     if (
         raw_packet.is_symlink()
         or raw_node_bin.is_symlink()
+        or raw_batch_builder_bin.is_symlink()
         or raw_rollback_node_bin.is_symlink()
         or raw_incompatible_node_bin.is_symlink()
     ):
@@ -453,10 +456,19 @@ def main() -> int:
     if not git_clean():
         raise ValueError("packet assembly requires a clean checkout")
     node_bin = raw_node_bin.resolve()
+    batch_builder_bin = raw_batch_builder_bin.resolve()
     rollback_node_bin = raw_rollback_node_bin.resolve()
     incompatible_node_bin = raw_incompatible_node_bin.resolve()
     if not node_bin.is_file() or node_bin.parent.name != "release":
         raise ValueError("--node-bin must identify a regular target/release binary")
+    if (
+        not batch_builder_bin.is_file()
+        or batch_builder_bin.parent.name != "release"
+        or batch_builder_bin.name != "postfiat-storage-corpus-batches"
+    ):
+        raise ValueError(
+            "--batch-builder-bin must identify the regular release corpus batch builder"
+        )
     if (
         not rollback_node_bin.is_file()
         or rollback_node_bin.parent.name != "release"
@@ -479,11 +491,14 @@ def main() -> int:
     performance = read_json(args.performance_report.resolve())
     migration = read_json(args.migration_report.resolve())
     binary_digest = sha256(node_bin)
+    batch_builder_digest = sha256(batch_builder_bin)
     incompatible_binary_digest = sha256(incompatible_node_bin)
     performance_lanes = performance.get("lanes")
     if (
         performance.get("source_revision") != args.source_revision
         or performance.get("node_binary_sha256") != binary_digest
+        or performance.get("batch_builder_binary_sha256")
+        != batch_builder_digest
         or not isinstance(performance_lanes, dict)
         or set(performance_lanes) != {
             "selected-indexed",
@@ -512,6 +527,8 @@ def main() -> int:
     packet.mkdir(parents=True)
     binary_destination = packet / "bin" / "postfiat-node"
     copy_file(node_bin, binary_destination)
+    batch_builder_destination = packet / "bin" / "postfiat-storage-corpus-batches"
+    copy_file(batch_builder_bin, batch_builder_destination)
     rollback_binary_destination = packet / "bin" / "postfiat-node-rollback"
     copy_file(rollback_node_bin, rollback_binary_destination)
     incompatible_binary_destination = packet / "bin" / "postfiat-node-incompatible"
@@ -520,6 +537,10 @@ def main() -> int:
         {
             "path": binary_destination.relative_to(packet).as_posix(),
             "sha256": sha256(binary_destination),
+        },
+        {
+            "path": batch_builder_destination.relative_to(packet).as_posix(),
+            "sha256": sha256(batch_builder_destination),
         },
         {
             "path": rollback_binary_destination.relative_to(packet).as_posix(),

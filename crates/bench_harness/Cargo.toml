@@ -6,10 +6,15 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
+build = "build.rs"
 
 [[bin]]
 name = "postfiat-bench"
 path = "src/main.rs"
+
+[[bin]]
+name = "postfiat-storage-corpus-batches"
+path = "src/bin/postfiat_storage_corpus_batches.rs"
 
 [dependencies]
 postfiat-bridge = { path = "../bridge" }
@@ -23,3 +28,4 @@ postfiat-storage = { path = "../storage" }
 postfiat-types = { path = "../types" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }

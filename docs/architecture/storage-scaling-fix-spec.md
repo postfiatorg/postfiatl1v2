@@ -15,6 +15,18 @@
 > migration, and separate deployment-authorization requirements remain
 > mandatory.
 
+> **Setup-harness amendment (2026-08-28):** Setup-only selected-store advances
+> may use a separately hash-bound canonical corpus-to-batch helper and one
+> long-lived peer-certified batch-loop process. This removes per-block process
+> startup and validator prewarm from the four-hour campaign budget. The helper
+> must use the unchanged canonical `mempool_dag` batch builder, preserve every
+> signed transfer byte and transaction identity, route each proposal to the
+> deterministic Consensus v2 leader, retain literal receipts and bounded-work
+> telemetry for all six validators, and fail closed on any changed corpus,
+> batch, certificate, binary, or checkpoint. The height-50 and height-5,000
+> measurement windows remain unchanged; setup-loop timings are explicitly not
+> release performance samples.
+
 ## Purpose
 
 Block finality on the controlled devnet gets slower as the chain gets longer.

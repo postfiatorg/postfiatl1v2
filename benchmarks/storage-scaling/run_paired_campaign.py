@@ -39,9 +39,9 @@ STORAGE_BEHAVIORS = {
         "transactional redb finality path with the fixed-size accumulator"
     ),
 }
-SCHEMA = "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v2"
-CHECKPOINT_SCHEMA = "postfiat-storage-scaling-campaign-checkpoint-v2"
-QUALIFICATION_PROFILE = "time-budgeted-redb-v2"
+SCHEMA = "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v3"
+CHECKPOINT_SCHEMA = "postfiat-storage-scaling-campaign-checkpoint-v3"
+QUALIFICATION_PROFILE = "time-budgeted-redb-v3"
 RELEASE_MATRIX = (
     ("selected-indexed", 50),
     ("selected-indexed", 5_000),
@@ -307,6 +307,7 @@ def campaign_configuration(development_smoke: bool) -> dict[str, Any]:
         "rounds_per_window": 1 if development_smoke else BASE.ROUNDS_PER_WINDOW,
         "advance_chunk_rounds": 1 if development_smoke else ADVANCE_CHUNK_ROUNDS,
         "node_preparation_mode": "byte-verified-prepared-fleet-clone",
+        "advance_execution_mode": "persistent-peer-certified-batch-loop",
         "timeout_ms": BASE.QUALIFICATION_TIMEOUT_MS,
         "max_wall_seconds": (
             DEVELOPMENT_MAX_WALL_SECONDS
@@ -482,7 +483,13 @@ def completed_unit_record(
     return record
 
 
-def verify_completed_unit(root: Path, record: dict[str, Any]) -> None:
+def verify_completed_unit(
+    root: Path,
+    record: dict[str, Any],
+    *,
+    expected_builder_revision: str | None = None,
+    expected_builder_sha256: str | None = None,
+) -> None:
     runner_root = safe_campaign_path(
         root, str(record.get("runner_root", "")), "completed unit runner root"
     )
@@ -527,9 +534,14 @@ def verify_completed_unit(root: Path, record: dict[str, Any]) -> None:
         ):
             raise ValueError("completed unit result prepared fleet changed")
     for field in ("normalized_report", "resource_samples"):
-        artifact = runner_root / str(result.get(field, ""))
+        artifact = (runner_root / str(result.get(field, ""))).resolve()
         expected = result.get(f"{field}_sha256")
-        if artifact.is_symlink() or not artifact.is_file() or sha256(artifact) != expected:
+        if (
+            not artifact.is_relative_to(runner_root)
+            or artifact.is_symlink()
+            or not artifact.is_file()
+            or sha256(artifact) != expected
+        ):
             raise ValueError(f"completed unit {field} changed")
     corpus = Path(str(result.get("signed_transfer_corpus", "")))
     if not corpus.is_absolute() or not corpus.resolve().is_relative_to(root):
@@ -555,6 +567,89 @@ def verify_completed_unit(root: Path, record: dict[str, Any]) -> None:
             or corpus_generation.get("scratch_discarded") is not True
         ):
             raise ValueError("completed unit corpus generation binding changed")
+    if result.get("advance_execution_mode") == "persistent-peer-certified-batch-loop":
+        if (
+            result.get("performance_evidence") is not False
+            or not is_sha256(result.get("batch_builder_binary_sha256"))
+            or (
+                expected_builder_sha256 is not None
+                and result.get("batch_builder_binary_sha256")
+                != expected_builder_sha256
+            )
+        ):
+            raise ValueError("persistent advance builder identity changed")
+
+        def bound_runner_path(field: str, *, directory: bool = False) -> Path:
+            path = (runner_root / str(result.get(field, ""))).resolve()
+            if not path.is_relative_to(runner_root) or path.is_symlink():
+                raise ValueError(f"persistent advance {field} escaped its runner")
+            if directory and not path.is_dir():
+                raise ValueError(f"persistent advance {field} is not a directory")
+            if not directory and not path.is_file():
+                raise ValueError(f"persistent advance {field} is not a file")
+            return path
+
+        batch_report_path = bound_runner_path("batch_builder_report")
+        loop_report_path = bound_runner_path("batch_loop_report")
+        processed_batches = bound_runner_path("processed_batches", directory=True)
+        if (
+            sha256(batch_report_path)
+            != result.get("batch_builder_report_sha256")
+            or sha256(loop_report_path) != result.get("batch_loop_report_sha256")
+            or BASE.directory_digest(processed_batches)
+            != result.get("processed_batches_sha256")
+        ):
+            raise ValueError("persistent advance raw artifact changed")
+        batch_report = BASE.read_json(batch_report_path)
+        builder_revision = str(batch_report.get("source_git_revision", ""))
+        builder_build = result.get("batch_builder_build")
+        if (
+            not isinstance(builder_build, dict)
+            or builder_build.get("git_revision") != builder_revision
+            or builder_build.get("profile") != batch_report.get("build_profile")
+        ):
+            raise ValueError("persistent advance builder build changed")
+        if expected_builder_revision is not None and builder_revision != expected_builder_revision[:8]:
+            raise ValueError("persistent advance builder revision changed")
+        batches = BASE.validate_batch_build_report(
+            batch_report,
+            batch_root=processed_batches,
+            signed_transfer_corpus=corpus,
+            rounds=int(result.get("rounds", 0)),
+            expected_builder_revision=(
+                expected_builder_revision
+                if expected_builder_revision is not None
+                else builder_revision.ljust(40, "0")
+            ),
+        )
+        loop_report = BASE.read_json(loop_report_path)
+        loop_rounds = loop_report.get("rounds")
+        rounds = int(result.get("rounds", 0))
+        start = int(result.get("starting_height", -1))
+        if (
+            loop_report.get("schema")
+            != "postfiat-transport-peer-certified-batch-loop-v1"
+            or loop_report.get("loop_ok") is not True
+            or int(loop_report.get("processed_round_count", 0)) != rounds
+            or not isinstance(loop_rounds, list)
+            or len(loop_rounds) != rounds
+        ):
+            raise ValueError("persistent advance loop report changed")
+        verified = [
+            BASE.persistent_advance_iteration(
+                raw,
+                batches[index],
+                iteration=index + 1,
+                block_height=start + index + 1,
+            )
+            for index, raw in enumerate(loop_rounds)
+            if isinstance(raw, dict)
+        ]
+        if (
+            len(verified) != rounds
+            or verified[-1]["block_height"] != result.get("final_height")
+        ):
+            raise ValueError("persistent advance independently verified rounds changed")
 
 
 def move_if_present(source: Path, destination_root: Path) -> str | None:
@@ -635,6 +730,7 @@ def validate_checkpoint(
     *,
     expected_source_revision: str,
     node_bin: Path,
+    batch_builder_bin: Path,
     configuration: dict[str, Any],
 ) -> None:
     checkpoint = state.value
@@ -652,6 +748,8 @@ def validate_checkpoint(
         raise ValueError("campaign runner checkout revision changed")
     if checkpoint.get("node_binary_sha256") != sha256(node_bin):
         raise ValueError("campaign release binary changed")
+    if checkpoint.get("batch_builder_binary_sha256") != sha256(batch_builder_bin):
+        raise ValueError("campaign batch builder binary changed")
     if checkpoint.get("runner_bindings") != runner_bindings():
         raise ValueError("campaign runner, shared runner, or specification changed")
     if checkpoint.get("host") != host_description(state.root):
@@ -790,7 +888,14 @@ def validate_checkpoint(
     for record in completed.values():
         if not isinstance(record, dict):
             raise ValueError("campaign completed unit is malformed")
-        verify_completed_unit(state.root, record)
+        verify_completed_unit(
+            state.root,
+            record,
+            expected_builder_revision=str(checkpoint["runner_source_revision"]),
+            expected_builder_sha256=str(
+                checkpoint["batch_builder_binary_sha256"]
+            ),
+        )
     if float(checkpoint.get("elapsed_wall_seconds", 0.0)) >= int(
         configuration["max_wall_seconds"]
     ):
@@ -801,6 +906,7 @@ def initialize_campaign(
     root: Path,
     *,
     node_bin: Path,
+    batch_builder_bin: Path,
     expected_source_revision: str,
     runner_source_revision: str,
     configuration: dict[str, Any],
@@ -843,6 +949,8 @@ def initialize_campaign(
         "node_binary_sha256": sha256(node_bin),
         "node_binary": node_bin.name,
         "node_binary_build": binary_build,
+        "batch_builder_binary_sha256": sha256(batch_builder_bin),
+        "batch_builder_binary": batch_builder_bin.name,
         "runner_bindings": runner_bindings(),
         "configuration": configuration,
         "host": host_description(root),
@@ -977,6 +1085,7 @@ def advance_to(
     *,
     target_height: int,
     node_bin: Path,
+    batch_builder_bin: Path,
     seed: Path,
     wallet_key: Path,
     wallet_address: str,
@@ -1052,19 +1161,17 @@ def advance_to(
                 logs=canonical_root / "logs",
                 label=label,
             )
-        result, result_snapshot = BASE.run_rounds(
+        result, result_snapshot = BASE.run_persistent_advance(
             node_bin=node_bin,
+            batch_builder_bin=batch_builder_bin,
+            expected_builder_revision=str(state.value["runner_source_revision"]),
             root=canonical_root,
             seed=seed,
             topology=topology,
             source_snapshot=source_snapshot,
-            wallet_key=wallet_key,
-            wallet_address=wallet_address,
-            recipient=recipient,
             signed_transfer_corpus=corpus,
             label=label,
             rounds=next_height - current_height,
-            storage_lane=BASE.SELECTED_STORAGE_LANE,
             prepared_fleet=current_prepared,
             prepared_fleet_sha256=current_prepared_sha256,
             nodes_root=(
@@ -1339,6 +1446,23 @@ def build_report(
 ) -> dict[str, Any]:
     configuration = state.value["configuration"]
     matrix = DEVELOPMENT_MATRIX if development_smoke else RELEASE_MATRIX
+    builder_builds = {
+        (
+            str(result.get("batch_builder_build", {}).get("git_revision", "")),
+            str(result.get("batch_builder_build", {}).get("profile", "")),
+        )
+        for record in state.value["completed_units"].values()
+        if isinstance(record, dict)
+        for result in [record.get("result")]
+        if isinstance(result, dict)
+        and result.get("advance_execution_mode")
+        == "persistent-peer-certified-batch-loop"
+    }
+    if builder_builds != {
+        (str(state.value["runner_source_revision"])[:8], "release")
+    }:
+        raise RuntimeError("persistent advances do not share one bound builder build")
+    builder_revision, builder_profile = next(iter(builder_builds))
     lanes: dict[str, dict[str, Any]] = {}
     for lane in LANE_ORDER:
         lane_root = state.root / "lanes" / lane
@@ -1529,6 +1653,14 @@ def build_report(
         "node_binary_sha256": sha256(node_bin),
         "node_binary": node_bin.name,
         "node_binary_build": state.value["node_binary_build"],
+        "batch_builder_binary_sha256": state.value[
+            "batch_builder_binary_sha256"
+        ],
+        "batch_builder_binary": state.value["batch_builder_binary"],
+        "batch_builder_build": {
+            "git_revision": builder_revision,
+            "profile": builder_profile,
+        },
         **state.value["runner_bindings"],
         "validator_count": BASE.VALIDATORS,
         "windows_per_height": int(configuration["windows_per_height"]),
@@ -1609,6 +1741,7 @@ def build_report(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--node-bin", type=Path, required=True)
+    parser.add_argument("--batch-builder-bin", type=Path, required=True)
     parser.add_argument("--expected-source-revision", required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument(
@@ -1662,6 +1795,13 @@ def main() -> int:
             raise RuntimeError("another campaign process owns this output") from error
 
         node_bin = release_binary(args.node_bin, "qualification binary")
+        batch_builder_bin = release_binary(
+            args.batch_builder_bin, "corpus batch builder binary"
+        )
+        if batch_builder_bin.name != "postfiat-storage-corpus-batches":
+            raise ValueError(
+                "--batch-builder-bin must name postfiat-storage-corpus-batches"
+            )
         configuration = campaign_configuration(args.development_smoke)
         checkpoint_path = root / "campaign-checkpoint.json"
         if args.resume:
@@ -1670,6 +1810,7 @@ def main() -> int:
             checkpoint = initialize_campaign(
                 root,
                 node_bin=node_bin,
+                batch_builder_bin=batch_builder_bin,
                 expected_source_revision=args.expected_source_revision,
                 runner_source_revision=current_revision,
                 configuration=configuration,
@@ -1684,6 +1825,7 @@ def main() -> int:
                 state,
                 expected_source_revision=args.expected_source_revision,
                 node_bin=node_bin,
+                batch_builder_bin=batch_builder_bin,
                 configuration=configuration,
             )
             quarantine_current_unit(state)
@@ -1701,6 +1843,7 @@ def main() -> int:
                         state,
                         target_height=height,
                         node_bin=node_bin,
+                        batch_builder_bin=batch_builder_bin,
                         seed=seed,
                         wallet_key=wallet_key,
                         wallet_address=wallet_address,
