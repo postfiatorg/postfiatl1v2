@@ -1,6 +1,6 @@
 # Vote-Lock Index Fix: Executable Implementation Plan
 
-**Status:** Implemented and verified locally — handoff and commit in progress
+**Status:** Implemented and verified locally — handoff complete
 **Date:** 2026-08-28
 **Baseline:** `main` at `1f478e0c473de42ecf43b4dd0925893de8f181ed`
 **Motivating failure:** [Storage G4 structural vote-path failure](../../handoffs/2026-08-28___postfiatchad__storage_g4_structural_vote_path_failure.md)
@@ -342,7 +342,7 @@ migration, and 0.118138 ms in `vote_lock_reservation_ms`.
 - [x] `vote_lock_files_examined` / `vote_lock_bytes_decoded` /
       `vote_lock_migration_performed` reported per vote and bounded.
 - [x] fmt, check, clippy `-D warnings`, and full workspace tests pass.
-- [ ] Handoff written per repo convention stating: the changed invariant
+- [x] Handoff written per repo convention stating: the changed invariant
       (scan → indexed lookup + one-time migration), surfaces touched,
       commands run, tests omitted (G4 re-run, devnet), and that
       qualification, G3, G5, and deployment remain blocked pending their own
