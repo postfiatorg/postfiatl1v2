@@ -174,7 +174,7 @@ independent local gates continue.
 | G1 — candidate freeze | **CANDIDATE PASS / G4 INPUT FREEZE ACTIVE** | Keep source `ae658441` and binary `891b…bf4` unchanged; G4 freezes its height-50 and height-5,000 materials. | A candidate source or binary change restarts G1–G4; evidence-runner-only changes are separately hash-bound. |
 | G2 — safety | **LOCAL PASS / PACKET BINDING OPEN** | Preserve the passing tamper and rollback receipts; commit only redaction-safe packet material after G4. | Do not rerun unless the candidate binary changes or independent verification rejects a receipt. |
 | G3 — exact replay | **HEIGHT 915 PASS / HEIGHT 924 WAITING FOR AUTHORIZED INPUT** | Preserve the passing 915 receipt. Run height 924 only from a separately authorized copy. | Never wait idle for the copy; finish G4 without it, but do not claim offline qualification. |
-| G4 — scaling | **G4A PASS / CLEAN RERUN READY** | Preserve the failed diagnostic run and passing G4A receipts; start exactly one clean qualification campaign from height 1. | One clean four-hour final run; stop on any selected-path failure or `TIME_BUDGET_EXCEEDED`. |
+| G4 — scaling | **RUN INTERRUPTED / DURABLE AT HEIGHT 1,550** | Resume the same checksum-bound campaign from the pinned runner worktree; do not start a new campaign. | 9,542.971 seconds remain in the original four-hour aggregate budget; a timeout is a failed gate. |
 | G5 — offline packet | **BLOCKED BY G1–G4** | Package only after every preceding evidence gate passes. | No qualification claim until the offline verifier passes the complete packet. |
 | G6 — six-clone rehearsal | **DEFERRED** | Nothing until offline qualification is complete and deployment is the next real decision. | Requires separate data-copy authorization and six distinct stopped directories. |
 | G7 — Dynamic UNL handoff | **DIRECTION RECORDED / IMPLEMENTATION DEFERRED** | Preserve the recorded architecture decision only. | Spend no implementation time before the stated storage boundary or a new operator priority decision. |
@@ -405,7 +405,7 @@ The completed prepared fleet is diagnostic input for remediation tests only.
 - [x] Pass one real six-validator smoke that crosses a snapshot-free selected
       advance with portable snapshots forbidden, in at most 30 minutes, and
       leaves no process alive.
-- [ ] Start exactly one clean qualification run from height 1 after all G4A
+- [x] Start exactly one clean qualification run from height 1 after all G4A
       checks pass. Do not mutate or waive the old checkpoint into compatibility
       with a changed runner.
 
@@ -426,6 +426,20 @@ and checkpoint SHA-256
 Moving one file in a copied current prepared fleet made resume fail closed with
 `campaign current prepared fleet changed`. These are local development proofs,
 not release qualification evidence.
+
+The one clean G4 campaign started from runner checkout `8768866a` at
+`2026-08-27T23:54:36Z` and was normally interrupted for operator handoff at
+`2026-08-28T01:15:33Z`. Checkpoint SHA-256 is
+`79094159a091f306e2cf95b52cdf4dcba85bf6f9cecc0694abc9d0431a331889`;
+status is `INTERRUPTED`; aggregate elapsed time is 4,857.029 seconds; and no
+final report exists. All five selected height-50 windows and the snapshot-free
+height-50-to-1,550 advance are complete. The durable height-1,550 fleet SHA-256
+is `1edb40d3808f8b06f0f96ad8537e8eb0d6b12566ce46d12cf622cee138816648`;
+its advance has six-validator convergence, literal accepted receipts, zero
+full-history reads, and a passing backend-work gate. The partial
+height-1,550-to-3,050 unit is not evidence and will be quarantined automatically
+on resume. Resume the same output only; 9,542.971 seconds remain in the original
+four-hour budget.
 
 **G4A exit:** high-height selected execution depends only on the verified
 transactional prepared fleet and bounded corpus, while the shared height-50
@@ -521,8 +535,9 @@ not deploy anything.
    G3 receipts; do not rerun them while the binary is unchanged.
 2. Preserve the passing G4A proof from runner `f7b3d21d`. Do not query, copy,
    stop, or modify the controlled devnet.
-3. Start one clean G4 selected-first run with a hard four-hour
-   campaign deadline and resumable advance chunks no longer than two hours.
+3. Resume the same G4 campaign from the pinned `8768866a` worktree and existing
+   checkpoint. Do not start a fresh output or reset its original four-hour
+   budget.
 4. If G4 passes, bind the redaction-safe G2 and G4 artifacts and build everything
    locally available for G5.
 5. Close the height-924 part of G3 only after a custodian and separate read-only
