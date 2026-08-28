@@ -149,6 +149,41 @@ python3 -u benchmarks/storage-scaling/run_paired_campaign.py \
   --resume
 ```
 
+### Build once, measure separately
+
+After a build output has contiguous advances through height 5,000 and complete
+height-50 and height-5,000 materials, export its read-only prepared input. The
+source campaign may be `FAILED`, `INTERRUPTED`, or complete:
+
+```bash
+python3 -u benchmarks/storage-scaling/run_paired_campaign.py \
+  --output-dir /explicit/disposable/storage-scaling-build \
+  --export-prepared-input-manifest \
+    /explicit/disposable/storage-scaling-prepared-input.json
+```
+
+Run the unchanged measurement matrix in a fresh output with the exact candidate
+and batch-builder binaries bound by that manifest:
+
+```bash
+timeout --signal=INT --kill-after=120s 7200s \
+python3 -u benchmarks/storage-scaling/run_paired_campaign.py \
+  --node-bin target/release/postfiat-node \
+  --batch-builder-bin target/release/postfiat-storage-corpus-batches \
+  --expected-source-revision FULL_CANDIDATE_SOURCE_ID \
+  --prepared-input-manifest \
+    /explicit/disposable/storage-scaling-prepared-input.json \
+  --output-dir /explicit/disposable/storage-scaling-measurement
+```
+
+The fresh checkpoint starts its elapsed time at zero, so the four-hour budget
+covers only the 5+5+5 measurement matrix. Packet assembly retains the manifest
+and its hash, contiguous build receipt/report bindings and zero-full-history
+counters, the six-validator build-final identity, byte-equal fleet import
+receipts, and the binding from the build-final fleet to every height-5,000
+window. The private bundle is never placed in the packet; only its digest is
+recorded.
+
 Before spending another release budget after a restore-path change, run the
 offline high-height preflight against a stopped, content-hashed prepared fleet.
 The workspace must not exist and is removed by the preflight; the report remains

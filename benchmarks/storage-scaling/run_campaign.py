@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import hmac
 import importlib.util
 import json
 import math
@@ -252,6 +253,83 @@ def clone_prepared_fleet(
     )
     validate_prepared_fleet(destination)
     return observed_sha256
+
+
+def rebase_prepared_generation_pointers(nodes: Path) -> None:
+    validate_prepared_fleet(nodes)
+    mac_domain = b"postfiat.storage.state-file.v1:state file"
+    for index in range(VALIDATORS):
+        validator = nodes / f"validator-{index}"
+        pointer_path = validator / "transactional_generation.json"
+        key_path = validator / ".integrity.key"
+        if (
+            pointer_path.is_symlink()
+            or not pointer_path.is_file()
+            or key_path.is_symlink()
+            or not key_path.is_file()
+            or key_path.stat().st_nlink != 1
+            or key_path.stat().st_mode & 0o077 != 0
+        ):
+            raise ValueError("prepared generation pointer binding is incomplete")
+        key = key_path.read_bytes()
+        if len(key) != 48:
+            raise ValueError("prepared generation integrity key is invalid")
+        raw = pointer_path.read_bytes().rstrip(b"\r\n")
+        try:
+            body, trailer = raw.rsplit(b"\n", 1)
+        except ValueError as error:
+            raise ValueError("prepared generation pointer is not authenticated") from error
+        if not trailer.startswith(b"pftmac1:") or not hmac.compare_digest(
+            trailer.removeprefix(b"pftmac1:").decode("ascii"),
+            hmac.new(key, mac_domain + b"\x00" + body, hashlib.sha3_384).hexdigest(),
+        ):
+            raise ValueError("prepared generation pointer authentication failed")
+        decoded = json.loads(body)
+        if not isinstance(decoded, dict):
+            raise ValueError("prepared generation pointer is not an object")
+        database_directory = Path(str(decoded.get("database_directory", "")))
+        database_file = str(decoded.get("database_file", ""))
+        destination_directory = validator / database_directory.name
+        if (
+            set(decoded)
+            != {
+                "schema",
+                "generation",
+                "database_directory",
+                "database_file",
+                "migration_packet_root",
+            }
+            or decoded.get("schema")
+            != "postfiat-transactional-generation-pointer-v1"
+            or not database_directory.is_absolute()
+            or not database_directory.name
+            or not database_file
+            or not (destination_directory / database_file).is_file()
+            or len(str(decoded.get("migration_packet_root", ""))) != 96
+        ):
+            raise ValueError("prepared generation pointer is malformed")
+        rebased = {
+            "schema": decoded["schema"],
+            "generation": decoded["generation"],
+            "database_directory": str(destination_directory.resolve()),
+            "database_file": database_file,
+            "migration_packet_root": decoded["migration_packet_root"],
+        }
+        rebased_body = json.dumps(rebased, indent=2).encode("utf-8")
+        rebased_mac = hmac.new(
+            key,
+            mac_domain + b"\x00" + rebased_body,
+            hashlib.sha3_384,
+        ).hexdigest()
+        mode = pointer_path.stat().st_mode & 0o777
+        temporary = pointer_path.with_name(f".{pointer_path.name}.rebase")
+        if temporary.exists() or temporary.is_symlink():
+            raise ValueError("prepared generation pointer rebase file already exists")
+        temporary.write_bytes(
+            rebased_body + b"\npftmac1:" + rebased_mac.encode("ascii") + b"\n"
+        )
+        temporary.chmod(mode)
+        temporary.replace(pointer_path)
 
 
 def write_json(path: Path, value: Any, mode: int = 0o644) -> None:
@@ -1146,6 +1224,7 @@ def run_rounds(
     prepared_fleet: Path | None = None,
     prepared_fleet_sha256: str | None = None,
     nodes_root: Path | None = None,
+    rebase_prepared_pointers: bool = False,
 ) -> tuple[dict[str, Any], Path | None]:
     if storage_lane not in HISTORICAL_STORAGE_LANES | {SELECTED_STORAGE_LANE}:
         raise ValueError(f"unsupported storage lane: {storage_lane}")
@@ -1160,6 +1239,8 @@ def run_rounds(
         )
     if prepared_fleet is not None and not selected_transactional:
         raise ValueError("prepared fleets are valid only for selected transactional runs")
+    if rebase_prepared_pointers and prepared_fleet is None:
+        raise ValueError("prepared pointer rebasing requires a prepared fleet")
     if prepared_fleet is None and source_snapshot is None:
         raise ValueError("snapshot preparation requires a source snapshot")
     if prepared_fleet is None:
@@ -1173,6 +1254,8 @@ def run_rounds(
             nodes,
             str(prepared_fleet_sha256),
         )
+        if rebase_prepared_pointers:
+            rebase_prepared_generation_pointers(nodes)
         node_preparation_mode = "byte-verified-prepared-fleet-clone"
     if prepared_fleet is None:
         backend_mode = STORAGE_BACKEND_MODES[storage_lane]

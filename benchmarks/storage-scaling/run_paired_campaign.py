@@ -41,6 +41,7 @@ STORAGE_BEHAVIORS = {
 }
 SCHEMA = "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v4"
 CHECKPOINT_SCHEMA = "postfiat-storage-scaling-campaign-checkpoint-v4"
+PREPARED_INPUT_MANIFEST_SCHEMA = "postfiat-storage-prepared-input-manifest-v1"
 QUALIFICATION_PROFILE = "time-budgeted-redb-v4"
 RELEASE_MATRIX = (
     ("selected-indexed", 50),
@@ -56,6 +57,19 @@ ADVANCE_CHUNK_ROUNDS = 1_500
 RELEASE_MAX_WALL_SECONDS = 4 * 60 * 60
 DEVELOPMENT_MAX_WALL_SECONDS = 15 * 60
 SAFE_UNIT = re.compile(r"[^a-zA-Z0-9_.-]+")
+BUILD_COUNTER_FIELDS = (
+    "committed_write_transactions",
+    "page_reads",
+    "page_writes",
+    "full_history_scans",
+    "full_history_records_read",
+    "full_history_bytes_read",
+)
+BUILD_ZERO_COUNTER_FIELDS = (
+    "full_history_scans",
+    "full_history_records_read",
+    "full_history_bytes_read",
+)
 
 
 def load_base_runner() -> Any:
@@ -353,6 +367,882 @@ def is_sha256(value: Any) -> bool:
     )
 
 
+def prepared_input_reference(
+    manifest_path: Path,
+    source: Path,
+    expected_sha256: str,
+) -> dict[str, str]:
+    relative = Path(os.path.relpath(source, manifest_path.parent)).as_posix()
+    return {"path": relative, "sha256": expected_sha256}
+
+
+def converged_build_fleet(
+    value: Any,
+    *,
+    expected_height: int,
+    label: str,
+) -> tuple[list[dict[str, Any]], str, str]:
+    if not isinstance(value, list) or len(value) != BASE.VALIDATORS:
+        raise ValueError(f"{label} does not contain six validators")
+    expected_nodes = {f"validator-{index}" for index in range(BASE.VALIDATORS)}
+    nodes: set[str] = set()
+    identities: set[tuple[int, str, str]] = set()
+    normalized: list[dict[str, Any]] = []
+    for raw in value:
+        if not isinstance(raw, dict):
+            raise ValueError(f"{label} contains a malformed validator")
+        node_id = str(raw.get("node_id", ""))
+        height = raw.get("height")
+        tip = str(raw.get("tip", ""))
+        state_root = str(raw.get("state_root", ""))
+        if (
+            node_id not in expected_nodes
+            or node_id in nodes
+            or height != expected_height
+            or re.fullmatch(r"[0-9a-f]{96}", tip) is None
+            or re.fullmatch(r"[0-9a-f]{96}", state_root) is None
+        ):
+            raise ValueError(f"{label} contains an invalid validator identity")
+        nodes.add(node_id)
+        identities.add((height, tip, state_root))
+        normalized.append(
+            {
+                "node_id": node_id,
+                "height": height,
+                "tip": tip,
+                "state_root": state_root,
+            }
+        )
+    if nodes != expected_nodes or len(identities) != 1:
+        raise ValueError(f"{label} did not converge")
+    normalized.sort(key=lambda row: row["node_id"])
+    _, tip, state_root = next(iter(identities))
+    return normalized, tip, state_root
+
+
+def build_counters(result: dict[str, Any], label: str) -> dict[str, int]:
+    storage = result.get("storage")
+    if not isinstance(storage, dict):
+        raise ValueError(f"{label} omitted storage counters")
+    transactional = storage.get("transactional")
+    if not isinstance(transactional, dict):
+        raise ValueError(f"{label} omitted transactional counters")
+    counters: dict[str, int] = {}
+    for field in BUILD_COUNTER_FIELDS:
+        value = storage.get(field)
+        if (
+            not isinstance(value, int)
+            or isinstance(value, bool)
+            or value < 0
+            or transactional.get(field) != value
+        ):
+            raise ValueError(f"{label} counter {field} is invalid")
+        counters[field] = value
+    if any(counters[field] != 0 for field in BUILD_ZERO_COUNTER_FIELDS):
+        raise ValueError(f"{label} performed full-history work")
+    return counters
+
+
+def export_prepared_input_manifest(
+    campaign_root: Path,
+    manifest_path: Path,
+) -> dict[str, Any]:
+    if campaign_root.is_symlink() or not campaign_root.is_dir():
+        raise ValueError("prepared-input export campaign is not a regular directory")
+    checkpoint_path = campaign_root / "campaign-checkpoint.json"
+    checkpoint = BASE.read_json(checkpoint_path)
+    if (
+        checkpoint.get("schema") != CHECKPOINT_SCHEMA
+        or checkpoint.get("campaign_schema") != SCHEMA
+    ):
+        raise ValueError("prepared-input export checkpoint schema mismatch")
+    source_revision = str(checkpoint.get("source_revision", ""))
+    runner_revision = str(checkpoint.get("runner_source_revision", ""))
+    require_revision(source_revision, "prepared-input candidate source revision")
+    require_revision(runner_revision, "prepared-input runner source revision")
+    node_binary_sha256 = checkpoint.get("node_binary_sha256")
+    helper_sha256 = checkpoint.get("batch_builder_binary_sha256")
+    if not is_sha256(node_binary_sha256) or not is_sha256(helper_sha256):
+        raise ValueError("prepared-input export binary digest is invalid")
+    node_build = checkpoint.get("node_binary_build")
+    if (
+        not isinstance(node_build, dict)
+        or node_build.get("git_revision") != source_revision[:8]
+        or node_build.get("profile") != "release"
+    ):
+        raise ValueError("prepared-input export node build identity is invalid")
+    bindings = checkpoint.get("runner_bindings")
+    if (
+        not isinstance(bindings, dict)
+        or set(bindings) != {
+            "spec_sha3_384",
+            "paired_runner_sha256",
+            "selected_runner_sha256",
+            "shared_runner_sha256",
+        }
+        or re.fullmatch(r"[0-9a-f]{96}", str(bindings.get("spec_sha3_384", "")))
+        is None
+        or any(
+            not is_sha256(bindings.get(field))
+            for field in (
+                "paired_runner_sha256",
+                "selected_runner_sha256",
+                "shared_runner_sha256",
+            )
+        )
+    ):
+        raise ValueError("prepared-input export runner bindings are invalid")
+
+    completed = checkpoint.get("completed_units")
+    if not isinstance(completed, dict):
+        raise ValueError("prepared-input export omitted completed units")
+    advance_records: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
+    for unit_id, raw_record in completed.items():
+        if not isinstance(raw_record, dict) or raw_record.get("kind") != "advance":
+            continue
+        result = raw_record.get("result")
+        if not isinstance(result, dict):
+            raise ValueError("prepared-input advance omitted its result")
+        advance_records.append((str(unit_id), raw_record, result))
+    advance_records.sort(key=lambda item: int(item[2].get("starting_height", -1)))
+    if not advance_records:
+        raise ValueError("prepared-input export has no completed advances")
+
+    expected_start = 1
+    advances: list[dict[str, Any]] = []
+    aggregate_counters = {field: 0 for field in BUILD_COUNTER_FIELDS}
+    helper_builds: set[tuple[str, str]] = set()
+    timing_values: list[float] = []
+    timing_complete = True
+    final_validators: list[dict[str, Any]] = []
+    final_tip = ""
+    final_state_root = ""
+    for unit_id, record, result in advance_records:
+        start = result.get("starting_height")
+        final = result.get("final_height")
+        rounds = result.get("rounds")
+        if (
+            not isinstance(start, int)
+            or isinstance(start, bool)
+            or not isinstance(final, int)
+            or isinstance(final, bool)
+            or not isinstance(rounds, int)
+            or isinstance(rounds, bool)
+            or start != expected_start
+            or final <= start
+            or rounds != final - start
+            or result.get("validators_converged") != BASE.VALIDATORS
+            or result.get("literal_receipts_exact") is not True
+            or result.get("backend_work_gate_pass") is not True
+            or result.get("zero_full_history_reads") is not True
+            or result.get("batch_builder_binary_sha256") != helper_sha256
+        ):
+            raise ValueError("prepared-input advances are not contiguous from height 1")
+        runner_root = safe_campaign_path(
+            campaign_root,
+            str(record.get("runner_root", "")),
+            "prepared-input advance runner",
+        )
+        receipt = safe_campaign_path(
+            campaign_root,
+            str(record.get("receipt", "")),
+            "prepared-input advance receipt",
+        )
+        report = (runner_root / str(result.get("normalized_report", ""))).resolve()
+        if (
+            not report.is_relative_to(runner_root)
+            or report.is_symlink()
+            or not report.is_file()
+            or BASE.read_json(receipt) != result
+            or sha256(receipt) != record.get("receipt_sha256")
+            or sha256(report) != result.get("normalized_report_sha256")
+        ):
+            raise ValueError("prepared-input advance receipt or report changed")
+        counters = build_counters(result, f"prepared-input advance {unit_id}")
+        for field, value in counters.items():
+            aggregate_counters[field] += value
+        final_validators, final_tip, final_state_root = converged_build_fleet(
+            result.get("final_fleet"),
+            expected_height=final,
+            label=f"prepared-input advance {unit_id} final fleet",
+        )
+        if (
+            result.get("final_tip") != final_tip
+            or result.get("final_state_root") != final_state_root
+        ):
+            raise ValueError("prepared-input advance final identity differs")
+        helper_build = result.get("batch_builder_build")
+        if not isinstance(helper_build, dict):
+            raise ValueError("prepared-input advance helper build is missing")
+        helper_builds.add(
+            (
+                str(helper_build.get("git_revision", "")),
+                str(helper_build.get("profile", "")),
+            )
+        )
+        elapsed = record.get("elapsed_seconds")
+        if (
+            not isinstance(elapsed, (int, float))
+            or isinstance(elapsed, bool)
+            or elapsed < 0
+        ):
+            timing_complete = False
+        else:
+            timing_values.append(float(elapsed))
+        advances.append(
+            {
+                "unit_id": unit_id,
+                "starting_height": start,
+                "final_height": final,
+                "rounds": rounds,
+                "receipt": prepared_input_reference(
+                    manifest_path, receipt, sha256(receipt)
+                ),
+                "report": prepared_input_reference(
+                    manifest_path, report, sha256(report)
+                ),
+                "counters": counters,
+                "final_tip": final_tip,
+                "final_state_root": final_state_root,
+                "result_prepared_fleet_sha256": result.get(
+                    "result_prepared_fleet_sha256"
+                ),
+            }
+        )
+        expected_start = final
+
+    helper_revision = runner_revision[:8]
+    if helper_builds != {(helper_revision, "release")}:
+        raise ValueError("prepared-input advances do not share one helper build")
+    top_height = expected_start
+    if top_height < 50:
+        raise ValueError("prepared-input export did not reach height 50")
+
+    public = checkpoint.get("public_inputs")
+    if not isinstance(public, dict):
+        raise ValueError("prepared-input export omitted public inputs")
+    validator_identities = public.get("validator_public_identities")
+    expected_nodes = [f"validator-{index}" for index in range(BASE.VALIDATORS)]
+    if (
+        not isinstance(validator_identities, list)
+        or len(validator_identities) != BASE.VALIDATORS
+        or [
+            identity.get("node_id") if isinstance(identity, dict) else None
+            for identity in validator_identities
+        ]
+        != expected_nodes
+        or any(
+            not isinstance(identity, dict)
+            or identity.get("algorithm_id") != "ML-DSA-65"
+            or not is_sha256(identity.get("public_key_sha256"))
+            for identity in validator_identities
+        )
+    ):
+        raise ValueError("prepared-input validator identities are invalid")
+    topology_sha256 = public.get("topology_sha256")
+    height_one_sha256 = public.get("height_1_snapshot_sha256")
+    if not is_sha256(topology_sha256) or not is_sha256(height_one_sha256):
+        raise ValueError("prepared-input public input digest is invalid")
+
+    private_bundle = campaign_root / "shared" / "private"
+    topology = safe_campaign_path(
+        campaign_root,
+        str(checkpoint.get("private_paths", {}).get("topology", "")),
+        "prepared-input topology",
+    )
+    height_one = campaign_root / "shared" / "snapshots" / "height-1.snapshot"
+    private_bundle_sha256 = BASE.directory_digest(private_bundle)
+    if sha256(topology) != topology_sha256:
+        raise ValueError("prepared-input topology changed")
+    if BASE.directory_digest(height_one) != height_one_sha256:
+        raise ValueError("prepared-input height-1 snapshot changed")
+
+    materials = checkpoint.get("height_materials")
+    if not isinstance(materials, dict):
+        raise ValueError("prepared-input export omitted height materials")
+    material_entries: list[dict[str, Any]] = []
+    for height in sorted({50, top_height}):
+        material = materials.get(str(height))
+        if not isinstance(material, dict) or material.get("height") != height:
+            raise ValueError(f"prepared-input height {height} material is incomplete")
+        prepared_fleet = safe_campaign_path(
+            campaign_root,
+            str(material.get("prepared_fleet", "")),
+            f"prepared-input height {height} fleet",
+        )
+        prepared_fleet_sha256 = material.get("prepared_fleet_sha256")
+        corpus = safe_campaign_path(
+            campaign_root,
+            str(material.get("signed_transfer_corpus", "")),
+            f"prepared-input height {height} corpus",
+        )
+        corpus_sha256 = material.get("signed_transfer_corpus_sha256")
+        transfer_count = material.get("transfer_count")
+        first_sequence = material.get("first_sequence")
+        last_sequence = material.get("last_sequence")
+        if (
+            not is_sha256(prepared_fleet_sha256)
+            or not is_sha256(corpus_sha256)
+            or not isinstance(transfer_count, int)
+            or isinstance(transfer_count, bool)
+            or transfer_count <= 0
+            or not isinstance(first_sequence, int)
+            or isinstance(first_sequence, bool)
+            or not isinstance(last_sequence, int)
+            or isinstance(last_sequence, bool)
+            or last_sequence != first_sequence + transfer_count - 1
+        ):
+            raise ValueError(f"prepared-input height {height} material is incomplete")
+        BASE.validate_prepared_fleet(prepared_fleet)
+        if BASE.directory_digest(prepared_fleet) != prepared_fleet_sha256:
+            raise ValueError(f"prepared-input height {height} fleet changed")
+        if sha256(corpus) != corpus_sha256:
+            raise ValueError(f"prepared-input height {height} corpus changed")
+        snapshot_reference = None
+        if height == 50:
+            snapshot = safe_campaign_path(
+                campaign_root,
+                str(material.get("snapshot", "")),
+                "prepared-input height-50 snapshot",
+            )
+            snapshot_sha256 = material.get("snapshot_sha256")
+            if (
+                not is_sha256(snapshot_sha256)
+                or BASE.directory_digest(snapshot) != snapshot_sha256
+            ):
+                raise ValueError("prepared-input height 50 material is incomplete")
+            snapshot_reference = prepared_input_reference(
+                manifest_path, snapshot, snapshot_sha256
+            )
+            if (
+                material.get("corpus_source_mode")
+                != "authenticated-portable-snapshot-import"
+                or material.get("corpus_source_prepared_fleet_sha256") is not None
+                or any(
+                    material.get(field) is not None
+                    for field in (
+                        "corpus_scratch_before_sha256",
+                        "corpus_scratch_after_sha256",
+                        "corpus_scratch_mutated",
+                        "corpus_scratch_discarded",
+                        "corpus_scratch_restored_sha256",
+                    )
+                )
+            ):
+                raise ValueError("prepared-input height 50 material is incomplete")
+        elif material.get("snapshot") is not None or material.get(
+            "snapshot_sha256"
+        ) is not None:
+            raise ValueError("prepared-input top material retained a portable snapshot")
+        elif (
+            material.get("corpus_source_mode")
+            != "disposable-canonical-prepared-fleet-clone"
+            or material.get("corpus_source_prepared_fleet_sha256")
+            != prepared_fleet_sha256
+            or material.get("corpus_scratch_before_sha256")
+            != prepared_fleet_sha256
+            or not is_sha256(material.get("corpus_scratch_after_sha256"))
+            or material.get("corpus_scratch_mutated")
+            is not (
+                material.get("corpus_scratch_before_sha256")
+                != material.get("corpus_scratch_after_sha256")
+            )
+            or material.get("corpus_scratch_discarded") is not True
+            or material.get("corpus_scratch_restored_sha256")
+            != prepared_fleet_sha256
+        ):
+            raise ValueError(f"prepared-input height {height} material is incomplete")
+        material_entries.append(
+            {
+                "height": height,
+                "prepared_fleet": prepared_input_reference(
+                    manifest_path, prepared_fleet, prepared_fleet_sha256
+                ),
+                "snapshot": snapshot_reference,
+                "signed_transfer_corpus": prepared_input_reference(
+                    manifest_path, corpus, corpus_sha256
+                ),
+                "transfer_count": transfer_count,
+                "first_sequence": first_sequence,
+                "last_sequence": last_sequence,
+                "corpus_source_mode": material.get("corpus_source_mode"),
+                "corpus_source_prepared_fleet_sha256": material.get(
+                    "corpus_source_prepared_fleet_sha256"
+                ),
+                "corpus_scratch_before_sha256": material.get(
+                    "corpus_scratch_before_sha256"
+                ),
+                "corpus_scratch_after_sha256": material.get(
+                    "corpus_scratch_after_sha256"
+                ),
+                "corpus_scratch_mutated": material.get("corpus_scratch_mutated"),
+                "corpus_scratch_discarded": material.get(
+                    "corpus_scratch_discarded"
+                ),
+                "corpus_scratch_restored_sha256": material.get(
+                    "corpus_scratch_restored_sha256"
+                ),
+            }
+        )
+    top_material = material_entries[-1]
+    top_fleet_sha256 = top_material["prepared_fleet"]["sha256"]
+    final_advance_digest = advance_records[-1][2].get(
+        "result_prepared_fleet_sha256"
+    )
+    if top_fleet_sha256 != final_advance_digest:
+        raise ValueError("prepared-input top material differs from the final advance")
+
+    checkpoint_elapsed = checkpoint.get("elapsed_wall_seconds")
+    if (
+        not isinstance(checkpoint_elapsed, (int, float))
+        or isinstance(checkpoint_elapsed, bool)
+        or checkpoint_elapsed < 0
+    ):
+        raise ValueError("prepared-input checkpoint elapsed time is invalid")
+    manifest = {
+        "schema": PREPARED_INPUT_MANIFEST_SCHEMA,
+        "exported_at": utc_now(),
+        "candidate": {
+            "source_revision": source_revision,
+            "node_binary_sha256": node_binary_sha256,
+            "node_binary_build": copy.deepcopy(node_build),
+        },
+        "batch_builder": {
+            "binary_sha256": helper_sha256,
+            "build": {
+                "git_revision": helper_revision,
+                "profile": "release",
+            },
+        },
+        "runner": {
+            "source_revision": runner_revision,
+            **copy.deepcopy(bindings),
+        },
+        "public_inputs": {
+            "topology_sha256": topology_sha256,
+            "validator_public_identities": copy.deepcopy(validator_identities),
+            "height_1_snapshot_sha256": height_one_sha256,
+        },
+        "private_bundle": prepared_input_reference(
+            manifest_path, private_bundle, private_bundle_sha256
+        ),
+        "topology": prepared_input_reference(
+            manifest_path, topology, topology_sha256
+        ),
+        "height_1_snapshot": prepared_input_reference(
+            manifest_path, height_one, height_one_sha256
+        ),
+        "build": {
+            "started_at": checkpoint.get("started_at"),
+            "elapsed_seconds": float(checkpoint_elapsed),
+            "elapsed_source": "campaign-checkpoint",
+            "completed_advance_elapsed_seconds": (
+                sum(timing_values) if timing_complete else None
+            ),
+            "counters": aggregate_counters,
+            "final_height": top_height,
+            "final_tip": final_tip,
+            "final_state_root": final_state_root,
+            "final_validators": final_validators,
+            "final_prepared_fleet_sha256": top_fleet_sha256,
+        },
+        "advances": advances,
+        "materials": material_entries,
+    }
+    if manifest_path.is_symlink() or manifest_path.exists():
+        raise ValueError(f"refusing to overwrite prepared-input manifest: {manifest_path}")
+    write_json(manifest_path, manifest)
+    return manifest
+
+
+def validate_prepared_input_manifest(manifest: dict[str, Any]) -> None:
+    if manifest.get("schema") != PREPARED_INPUT_MANIFEST_SCHEMA:
+        raise ValueError("prepared-input manifest schema mismatch")
+    candidate = manifest.get("candidate")
+    batch_builder = manifest.get("batch_builder")
+    runner = manifest.get("runner")
+    public = manifest.get("public_inputs")
+    build = manifest.get("build")
+    if not all(
+        isinstance(value, dict)
+        for value in (candidate, batch_builder, runner, public, build)
+    ):
+        raise ValueError("prepared-input manifest identity is incomplete")
+    assert isinstance(candidate, dict)
+    assert isinstance(batch_builder, dict)
+    assert isinstance(runner, dict)
+    assert isinstance(public, dict)
+    assert isinstance(build, dict)
+    source_revision = str(candidate.get("source_revision", ""))
+    runner_revision = str(runner.get("source_revision", ""))
+    require_revision(source_revision, "prepared-input candidate source revision")
+    require_revision(runner_revision, "prepared-input runner source revision")
+    node_build = candidate.get("node_binary_build")
+    helper_build = batch_builder.get("build")
+    if (
+        not is_sha256(candidate.get("node_binary_sha256"))
+        or not isinstance(node_build, dict)
+        or node_build.get("git_revision") != source_revision[:8]
+        or node_build.get("profile") != "release"
+        or not is_sha256(batch_builder.get("binary_sha256"))
+        or not isinstance(helper_build, dict)
+        or helper_build.get("git_revision") != runner_revision[:8]
+        or helper_build.get("profile") != "release"
+        or re.fullmatch(r"[0-9a-f]{96}", str(runner.get("spec_sha3_384", "")))
+        is None
+        or any(
+            not is_sha256(runner.get(field))
+            for field in (
+                "paired_runner_sha256",
+                "selected_runner_sha256",
+                "shared_runner_sha256",
+            )
+        )
+    ):
+        raise ValueError("prepared-input manifest build identity is invalid")
+    identities = public.get("validator_public_identities")
+    if (
+        not is_sha256(public.get("topology_sha256"))
+        or not is_sha256(public.get("height_1_snapshot_sha256"))
+        or not isinstance(identities, list)
+        or len(identities) != BASE.VALIDATORS
+        or [
+            identity.get("node_id") if isinstance(identity, dict) else None
+            for identity in identities
+        ]
+        != [f"validator-{index}" for index in range(BASE.VALIDATORS)]
+        or any(
+            not isinstance(identity, dict)
+            or identity.get("algorithm_id") != "ML-DSA-65"
+            or not is_sha256(identity.get("public_key_sha256"))
+            for identity in identities
+        )
+    ):
+        raise ValueError("prepared-input manifest public inputs are invalid")
+
+    def validate_reference(value: Any, label: str) -> dict[str, str]:
+        if (
+            not isinstance(value, dict)
+            or set(value) != {"path", "sha256"}
+            or not isinstance(value.get("path"), str)
+            or not value["path"]
+            or Path(value["path"]).is_absolute()
+            or not is_sha256(value.get("sha256"))
+        ):
+            raise ValueError(f"prepared-input manifest {label} reference is invalid")
+        return value
+
+    for field in ("private_bundle", "topology", "height_1_snapshot"):
+        validate_reference(manifest.get(field), field)
+
+    advances = manifest.get("advances")
+    if not isinstance(advances, list) or not advances:
+        raise ValueError("prepared-input manifest omitted build advances")
+    expected_start = 1
+    aggregate = {field: 0 for field in BUILD_COUNTER_FIELDS}
+    for index, raw in enumerate(advances, start=1):
+        if not isinstance(raw, dict):
+            raise ValueError("prepared-input manifest advance is malformed")
+        start = raw.get("starting_height")
+        final = raw.get("final_height")
+        rounds = raw.get("rounds")
+        if (
+            not isinstance(start, int)
+            or isinstance(start, bool)
+            or not isinstance(final, int)
+            or isinstance(final, bool)
+            or not isinstance(rounds, int)
+            or isinstance(rounds, bool)
+            or start != expected_start
+            or final <= start
+            or rounds != final - start
+            or not isinstance(raw.get("unit_id"), str)
+            or not raw["unit_id"]
+            or re.fullmatch(r"[0-9a-f]{96}", str(raw.get("final_tip", "")))
+            is None
+            or re.fullmatch(
+                r"[0-9a-f]{96}", str(raw.get("final_state_root", ""))
+            )
+            is None
+            or not is_sha256(raw.get("result_prepared_fleet_sha256"))
+        ):
+            raise ValueError(
+                "prepared-input manifest advances are not contiguous from height 1"
+            )
+        validate_reference(raw.get("receipt"), f"advance {index} receipt")
+        validate_reference(raw.get("report"), f"advance {index} report")
+        counters = raw.get("counters")
+        if not isinstance(counters, dict) or set(counters) != set(
+            BUILD_COUNTER_FIELDS
+        ):
+            raise ValueError("prepared-input manifest advance counters are invalid")
+        for field in BUILD_COUNTER_FIELDS:
+            value = counters.get(field)
+            if (
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or value < 0
+            ):
+                raise ValueError(
+                    f"prepared-input manifest advance counter {field} is invalid"
+                )
+            aggregate[field] += value
+        if any(counters[field] != 0 for field in BUILD_ZERO_COUNTER_FIELDS):
+            raise ValueError("prepared-input manifest build performed full-history work")
+        expected_start = final
+
+    build_counters_value = build.get("counters")
+    elapsed = build.get("elapsed_seconds")
+    if (
+        build_counters_value != aggregate
+        or not isinstance(elapsed, (int, float))
+        or isinstance(elapsed, bool)
+        or elapsed < 0
+        or build.get("final_height") != expected_start
+        or build.get("final_tip") != advances[-1]["final_tip"]
+        or build.get("final_state_root") != advances[-1]["final_state_root"]
+        or build.get("final_prepared_fleet_sha256")
+        != advances[-1]["result_prepared_fleet_sha256"]
+    ):
+        raise ValueError("prepared-input manifest final build identity is invalid")
+    final_validators, final_tip, final_root = converged_build_fleet(
+        build.get("final_validators"),
+        expected_height=expected_start,
+        label="prepared-input manifest final fleet",
+    )
+    if (
+        final_validators != build.get("final_validators")
+        or final_tip != build.get("final_tip")
+        or final_root != build.get("final_state_root")
+    ):
+        raise ValueError("prepared-input manifest final fleet identity differs")
+
+    materials = manifest.get("materials")
+    required_heights = sorted({50, expected_start})
+    if (
+        not isinstance(materials, list)
+        or [
+            material.get("height") if isinstance(material, dict) else None
+            for material in materials
+        ]
+        != required_heights
+    ):
+        raise ValueError("prepared-input manifest height materials are incomplete")
+    for raw in materials:
+        assert isinstance(raw, dict)
+        height = int(raw["height"])
+        fleet = validate_reference(
+            raw.get("prepared_fleet"), f"height {height} prepared fleet"
+        )
+        validate_reference(
+            raw.get("signed_transfer_corpus"), f"height {height} corpus"
+        )
+        count = raw.get("transfer_count")
+        first = raw.get("first_sequence")
+        last = raw.get("last_sequence")
+        if (
+            not isinstance(count, int)
+            or isinstance(count, bool)
+            or count <= 0
+            or not isinstance(first, int)
+            or isinstance(first, bool)
+            or not isinstance(last, int)
+            or isinstance(last, bool)
+            or last != first + count - 1
+        ):
+            raise ValueError(
+                f"prepared-input manifest height {height} corpus is incomplete"
+            )
+        if height == 50:
+            validate_reference(raw.get("snapshot"), "height 50 snapshot")
+            if (
+                raw.get("corpus_source_mode")
+                != "authenticated-portable-snapshot-import"
+                or raw.get("corpus_source_prepared_fleet_sha256") is not None
+                or any(
+                    raw.get(field) is not None
+                    for field in (
+                        "corpus_scratch_before_sha256",
+                        "corpus_scratch_after_sha256",
+                        "corpus_scratch_mutated",
+                        "corpus_scratch_discarded",
+                        "corpus_scratch_restored_sha256",
+                    )
+                )
+            ):
+                raise ValueError("prepared-input manifest height 50 material differs")
+        elif (
+            raw.get("snapshot") is not None
+            or raw.get("corpus_source_mode")
+            != "disposable-canonical-prepared-fleet-clone"
+            or raw.get("corpus_source_prepared_fleet_sha256") != fleet["sha256"]
+            or raw.get("corpus_scratch_before_sha256") != fleet["sha256"]
+            or not is_sha256(raw.get("corpus_scratch_after_sha256"))
+            or raw.get("corpus_scratch_mutated")
+            is not (
+                raw.get("corpus_scratch_before_sha256")
+                != raw.get("corpus_scratch_after_sha256")
+            )
+            or raw.get("corpus_scratch_discarded") is not True
+            or raw.get("corpus_scratch_restored_sha256") != fleet["sha256"]
+        ):
+            raise ValueError(
+                f"prepared-input manifest height {height} material differs"
+            )
+    if materials[-1]["prepared_fleet"]["sha256"] != build.get(
+        "final_prepared_fleet_sha256"
+    ):
+        raise ValueError("prepared-input manifest top material differs from build end")
+
+
+def prepared_input_source(
+    manifest_path: Path,
+    reference: dict[str, str],
+    *,
+    label: str,
+    directory: bool,
+) -> Path:
+    source = (manifest_path.parent / reference["path"]).resolve()
+    if source.is_symlink():
+        raise ValueError(f"prepared-input {label} must not be a symlink")
+    if directory:
+        BASE.validate_regular_tree(source, f"prepared-input {label}")
+        observed = BASE.directory_digest(source)
+    else:
+        if not source.is_file():
+            raise ValueError(f"prepared-input {label} is not a regular file")
+        observed = sha256(source)
+    if observed != reference["sha256"]:
+        raise ValueError(f"prepared-input {label} digest mismatch")
+    return source
+
+
+def verify_prepared_input_sources(
+    manifest_path: Path,
+    manifest: dict[str, Any],
+) -> tuple[str, str]:
+    validate_prepared_input_manifest(manifest)
+    prepared_input_source(
+        manifest_path,
+        manifest["private_bundle"],
+        label="private bundle",
+        directory=True,
+    )
+    prepared_input_source(
+        manifest_path,
+        manifest["topology"],
+        label="topology",
+        directory=False,
+    )
+    prepared_input_source(
+        manifest_path,
+        manifest["height_1_snapshot"],
+        label="height-1 snapshot",
+        directory=True,
+    )
+    for index, advance in enumerate(manifest["advances"], start=1):
+        receipt_path = prepared_input_source(
+            manifest_path,
+            advance["receipt"],
+            label=f"advance {index} receipt",
+            directory=False,
+        )
+        prepared_input_source(
+            manifest_path,
+            advance["report"],
+            label=f"advance {index} report",
+            directory=False,
+        )
+        receipt = BASE.read_json(receipt_path)
+        final_validators, final_tip, final_root = converged_build_fleet(
+            receipt.get("final_fleet"),
+            expected_height=advance["final_height"],
+            label=f"prepared-input advance {index} receipt final fleet",
+        )
+        if (
+            receipt.get("starting_height") != advance["starting_height"]
+            or receipt.get("final_height") != advance["final_height"]
+            or receipt.get("rounds") != advance["rounds"]
+            or build_counters(receipt, f"prepared-input advance {index} receipt")
+            != advance["counters"]
+            or receipt.get("final_tip") != advance["final_tip"]
+            or receipt.get("final_state_root") != advance["final_state_root"]
+            or final_tip != advance["final_tip"]
+            or final_root != advance["final_state_root"]
+            or final_validators != receipt.get("final_fleet")
+            or receipt.get("result_prepared_fleet_sha256")
+            != advance["result_prepared_fleet_sha256"]
+        ):
+            raise ValueError(f"prepared-input advance {index} receipt differs")
+    wallet_address = ""
+    recipient_address = ""
+    for material in manifest["materials"]:
+        height = int(material["height"])
+        prepared_input_source(
+            manifest_path,
+            material["prepared_fleet"],
+            label=f"height {height} prepared fleet",
+            directory=True,
+        )
+        corpus_path = prepared_input_source(
+            manifest_path,
+            material["signed_transfer_corpus"],
+            label=f"height {height} corpus",
+            directory=False,
+        )
+        if material["snapshot"] is not None:
+            prepared_input_source(
+                manifest_path,
+                material["snapshot"],
+                label=f"height {height} snapshot",
+                directory=True,
+            )
+        corpus = BASE.read_json(corpus_path)
+        transfers = corpus.get("transfers")
+        if (
+            corpus.get("schema")
+            != "postfiat-tx-latency-signed-transfer-corpus-v1"
+            or not isinstance(transfers, list)
+            or len(transfers) != material["transfer_count"]
+        ):
+            raise ValueError(f"prepared-input height {height} corpus is malformed")
+        sequences: list[int] = []
+        accounts: set[tuple[str, str]] = set()
+        for transfer in transfers:
+            unsigned = transfer.get("unsigned") if isinstance(transfer, dict) else None
+            if (
+                not isinstance(unsigned, dict)
+                or not isinstance(unsigned.get("from"), str)
+                or not unsigned["from"]
+                or not isinstance(unsigned.get("to"), str)
+                or not unsigned["to"]
+                or unsigned.get("amount") != 10
+                or not isinstance(unsigned.get("sequence"), int)
+                or isinstance(unsigned.get("sequence"), bool)
+            ):
+                raise ValueError(
+                    f"prepared-input height {height} corpus entry is malformed"
+                )
+            accounts.add((unsigned["from"], unsigned["to"]))
+            sequences.append(unsigned["sequence"])
+        if (
+            len(accounts) != 1
+            or sequences
+            != list(range(material["first_sequence"], material["last_sequence"] + 1))
+        ):
+            raise ValueError(f"prepared-input height {height} corpus binding differs")
+        observed_wallet, observed_recipient = next(iter(accounts))
+        if not wallet_address:
+            wallet_address = observed_wallet
+            recipient_address = observed_recipient
+        elif (wallet_address, recipient_address) != (
+            observed_wallet,
+            observed_recipient,
+        ):
+            raise ValueError("prepared-input corpora use different accounts")
+    return wallet_address, recipient_address
+
+
 class CampaignState:
     def __init__(
         self,
@@ -368,6 +1258,7 @@ class CampaignState:
         self.segment_started = time.monotonic()
         self.stop_after_units = stop_after_units
         self.segment_completed_units = 0
+        self.current_unit_started_monotonic: float | None = None
 
     def elapsed(self) -> float:
         return self.elapsed_before + (time.monotonic() - self.segment_started)
@@ -386,6 +1277,7 @@ class CampaignState:
         owned_corpus: Path | None = None,
         owned_prepared_fleet: Path | None = None,
     ) -> None:
+        self.current_unit_started_monotonic = time.monotonic()
         current: dict[str, Any] = {"unit_id": unit_id, "started_at": utc_now()}
         if runner_root is not None:
             current["runner_root"] = runner_root.relative_to(self.root).as_posix()
@@ -400,7 +1292,36 @@ class CampaignState:
         self.value["current_unit"] = current
         self.write()
 
+    def finish_current_unit_timing(self) -> dict[str, Any]:
+        current = self.value.get("current_unit")
+        if not isinstance(current, dict):
+            raise RuntimeError("campaign has no current unit to finish")
+        if self.current_unit_started_monotonic is None:
+            raise RuntimeError("current campaign unit omitted its monotonic start")
+        timing = {
+            "started_at": current["started_at"],
+            "finished_at": utc_now(),
+            "elapsed_seconds": (
+                time.monotonic() - self.current_unit_started_monotonic
+            ),
+        }
+        current.update(timing)
+        self.current_unit_started_monotonic = None
+        return timing
+
     def finish_unit(self) -> None:
+        current = self.value.get("current_unit")
+        if not isinstance(current, dict):
+            raise RuntimeError("campaign has no current unit to finish")
+        unit_id = str(current.get("unit_id", ""))
+        completed = self.value.get("completed_units")
+        if not isinstance(completed, dict):
+            raise RuntimeError("campaign omitted its completed-unit ledger")
+        if not isinstance(completed.get(unit_id), dict):
+            completed[unit_id] = {"kind": "material"}
+        completed[unit_id].update(
+            {"outcome": "completed", **self.finish_current_unit_timing()}
+        )
         self.value["current_unit"] = None
         self.value["status"] = "RUNNING"
         self.write()
@@ -417,16 +1338,37 @@ class CampaignState:
             raise DevelopmentStop("development stop requested after checkpoint")
 
     def mark_interrupted(self, error: BaseException) -> None:
-        self.value["status"] = (
+        status = (
             "TIME_BUDGET_EXCEEDED"
             if isinstance(error, TimeBudgetExceeded)
             else "INTERRUPTED"
             if isinstance(error, (KeyboardInterrupt, DevelopmentStop))
             else "FAILED"
         )
+        self.value["status"] = status
+        current = self.value.get("current_unit")
+        if (
+            isinstance(current, dict)
+            and self.current_unit_started_monotonic is not None
+        ):
+            timing = self.finish_current_unit_timing()
+            current["error_type"] = type(error).__name__
+            current["error_message"] = str(error)
+            if status == "FAILED":
+                current["outcome"] = "failed"
+                self.value.setdefault("failed_units", []).append(
+                    {
+                        "unit_id": str(current.get("unit_id", "unknown")),
+                        "outcome": "failed",
+                        **timing,
+                        "error_type": type(error).__name__,
+                        "error_message": str(error),
+                    }
+                )
         self.value["last_stop"] = {
             "at": utc_now(),
             "type": type(error).__name__,
+            "message": str(error),
         }
         self.write()
 
@@ -669,6 +1611,27 @@ def quarantine_current_unit(state: CampaignState) -> None:
     current = state.value.get("current_unit")
     if not isinstance(current, dict):
         return
+    if not isinstance(current.get("finished_at"), str):
+        finished_at = utc_now()
+        started_at = str(current.get("started_at", finished_at))
+        try:
+            elapsed_seconds = max(
+                0.0,
+                (
+                    datetime.fromisoformat(finished_at.replace("Z", "+00:00"))
+                    - datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+                ).total_seconds(),
+            )
+        except ValueError:
+            started_at = finished_at
+            elapsed_seconds = 0.0
+        current.update(
+            {
+                "started_at": started_at,
+                "finished_at": finished_at,
+                "elapsed_seconds": elapsed_seconds,
+            }
+        )
     unit_id = str(current.get("unit_id", "unknown"))
     safe_name = SAFE_UNIT.sub("-", unit_id).strip("-") or "unknown"
     destination = (
@@ -718,13 +1681,142 @@ def quarantine_current_unit(state: CampaignState) -> None:
     state.value.setdefault("interrupted_units", []).append(
         {
             "unit_id": unit_id,
+            "outcome": "discarded",
             "quarantined_at": utc_now(),
             "moved_entries": moved,
+            "started_at": current.get("started_at"),
+            "finished_at": current.get("finished_at"),
+            "elapsed_seconds": current.get("elapsed_seconds"),
+            "error_type": current.get("error_type"),
+            "error_message": current.get("error_message"),
         }
     )
     state.value["current_unit"] = None
     state.value["status"] = "RUNNING"
     state.write()
+
+
+def validate_prepared_campaign_binding(state: CampaignState) -> None:
+    checkpoint = state.value
+    if checkpoint.get("input_mode") != "prepared-input-manifest":
+        return
+    manifest_path = safe_campaign_path(
+        state.root,
+        str(checkpoint.get("prepared_input_manifest", "")),
+        "campaign prepared-input manifest",
+    )
+    if (
+        manifest_path.is_symlink()
+        or not manifest_path.is_file()
+        or sha256(manifest_path)
+        != checkpoint.get("prepared_input_manifest_sha256")
+    ):
+        raise ValueError("campaign prepared-input manifest changed")
+    manifest = BASE.read_json(manifest_path)
+    validate_prepared_input_manifest(manifest)
+    expected_build = {
+        "candidate": manifest["candidate"],
+        "batch_builder": manifest["batch_builder"],
+        "runner": manifest["runner"],
+        "build": manifest["build"],
+    }
+    if checkpoint.get("prepared_input_build") != expected_build:
+        raise ValueError("campaign prepared-input build identity changed")
+    if (
+        manifest["candidate"]["source_revision"]
+        != checkpoint.get("source_revision")
+        or manifest["candidate"]["node_binary_sha256"]
+        != checkpoint.get("node_binary_sha256")
+        or manifest["batch_builder"]["binary_sha256"]
+        != checkpoint.get("batch_builder_binary_sha256")
+        or manifest["public_inputs"]["topology_sha256"]
+        != checkpoint.get("public_inputs", {}).get("topology_sha256")
+        or manifest["public_inputs"]["height_1_snapshot_sha256"]
+        != checkpoint.get("public_inputs", {}).get("height_1_snapshot_sha256")
+        or manifest["public_inputs"]["validator_public_identities"]
+        != checkpoint.get("public_inputs", {}).get(
+            "validator_public_identities"
+        )
+    ):
+        raise ValueError("campaign prepared-input public binding changed")
+    imported = checkpoint.get("prepared_input_import")
+    if not isinstance(imported, dict):
+        raise ValueError("campaign prepared-input import receipt is missing")
+    private_bundle = state.root / "shared" / "private"
+    private_digest = BASE.directory_digest(private_bundle)
+    if (
+        private_digest != manifest["private_bundle"]["sha256"]
+        or imported.get("private_bundle_source_sha256") != private_digest
+        or imported.get("private_bundle_destination_sha256") != private_digest
+        or imported.get("height_1_snapshot_destination_sha256")
+        != manifest["height_1_snapshot"]["sha256"]
+    ):
+        raise ValueError("campaign prepared-input private or seed binding changed")
+    fleet_imports = imported.get("prepared_fleets")
+    if not isinstance(fleet_imports, list) or len(fleet_imports) != len(
+        manifest["materials"]
+    ):
+        raise ValueError("campaign prepared-input fleet receipts are incomplete")
+    for material, receipt in zip(manifest["materials"], fleet_imports):
+        height = int(material["height"])
+        if not isinstance(receipt, dict):
+            raise ValueError("campaign prepared-input fleet receipt is malformed")
+        destination = safe_campaign_path(
+            state.root,
+            str(receipt.get("destination", "")),
+            f"campaign prepared-input height {height} fleet",
+        )
+        expected_sha256 = material["prepared_fleet"]["sha256"]
+        if (
+            receipt.get("height") != height
+            or receipt.get("source_sha256") != expected_sha256
+            or receipt.get("destination_sha256") != expected_sha256
+            or BASE.directory_digest(destination) != expected_sha256
+            or checkpoint["height_materials"][str(height)][
+                "prepared_fleet_sha256"
+            ]
+            != expected_sha256
+        ):
+            raise ValueError(
+                f"campaign prepared-input height {height} fleet binding changed"
+            )
+    advance_imports = imported.get("advances")
+    if not isinstance(advance_imports, list) or len(advance_imports) != len(
+        manifest["advances"]
+    ):
+        raise ValueError("campaign prepared-input advance artifacts are incomplete")
+    for index, (advance, receipt) in enumerate(
+        zip(manifest["advances"], advance_imports),
+        start=1,
+    ):
+        if not isinstance(receipt, dict) or receipt.get("unit_id") != advance.get(
+            "unit_id"
+        ):
+            raise ValueError(
+                f"campaign prepared-input advance {index} receipt is malformed"
+            )
+        for field in ("receipt", "report"):
+            artifact = safe_campaign_path(
+                state.root,
+                str(receipt.get(field, "")),
+                f"campaign prepared-input advance {index} {field}",
+            )
+            expected_sha256 = advance[field]["sha256"]
+            if (
+                artifact.is_symlink()
+                or not artifact.is_file()
+                or receipt.get(f"{field}_sha256") != expected_sha256
+                or sha256(artifact) != expected_sha256
+            ):
+                raise ValueError(
+                    f"campaign prepared-input advance {index} {field} changed"
+                )
+    if (
+        checkpoint.get("current_height") != manifest["build"]["final_height"]
+        or checkpoint.get("current_prepared_fleet_sha256")
+        != manifest["build"]["final_prepared_fleet_sha256"]
+    ):
+        raise ValueError("campaign prepared-input final identity changed")
 
 
 def validate_checkpoint(
@@ -756,6 +1848,7 @@ def validate_checkpoint(
         raise ValueError("campaign runner, shared runner, or specification changed")
     if checkpoint.get("host") != host_description(state.root):
         raise ValueError("campaign host allocation or storage medium changed")
+    validate_prepared_campaign_binding(state)
     public = checkpoint.get("public_inputs")
     if not isinstance(public, dict):
         raise ValueError("campaign checkpoint omitted public inputs")
@@ -890,9 +1983,31 @@ def validate_checkpoint(
     completed = checkpoint.get("completed_units")
     if not isinstance(completed, dict):
         raise ValueError("campaign checkpoint omitted completed units")
-    for record in completed.values():
+    for unit_id, record in completed.items():
         if not isinstance(record, dict):
             raise ValueError("campaign completed unit is malformed")
+        timing_fields = (
+            record.get("started_at"),
+            record.get("finished_at"),
+            record.get("elapsed_seconds"),
+        )
+        if any(value is not None for value in timing_fields) and (
+            not isinstance(timing_fields[0], str)
+            or not isinstance(timing_fields[1], str)
+            or not isinstance(timing_fields[2], (int, float))
+            or isinstance(timing_fields[2], bool)
+            or timing_fields[2] < 0
+        ):
+            raise ValueError("campaign completed unit timing is malformed")
+        if record.get("kind") == "material":
+            if (
+                not unit_id.startswith("material/height-")
+                or unit_id.removeprefix("material/height-")
+                not in checkpoint["height_materials"]
+                or any(value is None for value in timing_fields)
+            ):
+                raise ValueError("campaign completed material unit is malformed")
+            continue
         verify_completed_unit(
             state.root,
             record,
@@ -977,6 +2092,295 @@ def initialize_campaign(
         "completed_units": {},
         "current_unit": None,
         "interrupted_units": [],
+        "failed_units": [],
+        "last_stop": None,
+        "final_report_sha256": None,
+        "private_paths": {
+            "seed": seed.relative_to(root).as_posix(),
+            "wallet_key": wallet_key.relative_to(root).as_posix(),
+            "topology": topology.relative_to(root).as_posix(),
+        },
+    }
+
+
+def initialize_prepared_campaign(
+    root: Path,
+    *,
+    manifest_path: Path,
+    node_bin: Path,
+    batch_builder_bin: Path,
+    expected_source_revision: str,
+    runner_source_revision: str,
+    configuration: dict[str, Any],
+) -> dict[str, Any]:
+    if manifest_path.is_symlink() or not manifest_path.is_file():
+        raise ValueError("--prepared-input-manifest must be a regular file")
+    manifest = BASE.read_json(manifest_path)
+    wallet_address, recipient = verify_prepared_input_sources(
+        manifest_path, manifest
+    )
+    candidate = manifest["candidate"]
+    batch_builder = manifest["batch_builder"]
+    if candidate["source_revision"] != expected_source_revision:
+        raise ValueError("prepared-input candidate source revision differs")
+    if candidate["node_binary_sha256"] != sha256(node_bin):
+        raise ValueError("prepared-input node binary digest differs")
+    if batch_builder["binary_sha256"] != sha256(batch_builder_bin):
+        raise ValueError("prepared-input batch builder digest differs")
+    required_heights = sorted(
+        {
+            int(entry["height"])
+            for entry in configuration["lane_height_matrix"]
+        }
+    )
+    if [material["height"] for material in manifest["materials"]] != required_heights:
+        raise ValueError("prepared-input heights differ from the measurement matrix")
+
+    (root / "corpora").mkdir()
+    (root / "prepared-fleets").mkdir()
+    imported_root = root / "prepared-input"
+    imported_root.mkdir()
+    shared_root = root / "shared"
+    canonical_root = root / "canonical"
+    prepare_runner_root(shared_root, seed_root=True)
+    prepare_runner_root(canonical_root)
+    for lane in LANE_ORDER:
+        prepare_runner_root(root / "lanes" / lane)
+
+    imported_manifest = imported_root / "prepared-input-manifest.json"
+    shutil.copyfile(manifest_path, imported_manifest)
+    if sha256(imported_manifest) != sha256(manifest_path):
+        raise RuntimeError("prepared-input manifest copy digest differs")
+    imported_advances: list[dict[str, Any]] = []
+    for index, advance in enumerate(manifest["advances"], start=1):
+        receipt_source = prepared_input_source(
+            manifest_path,
+            advance["receipt"],
+            label=f"advance {index} receipt",
+            directory=False,
+        )
+        report_source = prepared_input_source(
+            manifest_path,
+            advance["report"],
+            label=f"advance {index} report",
+            directory=False,
+        )
+        receipt_destination = (
+            imported_root / "advances" / f"advance-{index:04}-receipt.json"
+        )
+        report_destination = (
+            imported_root / "advances" / f"advance-{index:04}-report.json"
+        )
+        receipt_destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(receipt_source, receipt_destination)
+        shutil.copyfile(report_source, report_destination)
+        if (
+            sha256(receipt_destination) != advance["receipt"]["sha256"]
+            or sha256(report_destination) != advance["report"]["sha256"]
+        ):
+            raise RuntimeError("prepared-input advance artifact copy digest differs")
+        imported_advances.append(
+            {
+                "unit_id": advance["unit_id"],
+                "receipt": receipt_destination.relative_to(root).as_posix(),
+                "receipt_sha256": advance["receipt"]["sha256"],
+                "report": report_destination.relative_to(root).as_posix(),
+                "report_sha256": advance["report"]["sha256"],
+            }
+        )
+
+    private_source = prepared_input_source(
+        manifest_path,
+        manifest["private_bundle"],
+        label="private bundle",
+        directory=True,
+    )
+    private_destination = shared_root / "private"
+    private_source_sha256 = manifest["private_bundle"]["sha256"]
+    private_destination_sha256 = BASE.clone_regular_tree(
+        private_source,
+        private_destination,
+        private_source_sha256,
+        label="prepared-input private bundle",
+    )
+    topology_source = prepared_input_source(
+        manifest_path,
+        manifest["topology"],
+        label="topology",
+        directory=False,
+    )
+    topology = shared_root / "topology.json"
+    shutil.copyfile(topology_source, topology)
+    if sha256(topology) != manifest["topology"]["sha256"]:
+        raise RuntimeError("prepared-input topology copy digest differs")
+    height_one_source = prepared_input_source(
+        manifest_path,
+        manifest["height_1_snapshot"],
+        label="height-1 snapshot",
+        directory=True,
+    )
+    height_one = shared_root / "snapshots" / "height-1.snapshot"
+    height_one_destination_sha256 = BASE.clone_regular_tree(
+        height_one_source,
+        height_one,
+        manifest["height_1_snapshot"]["sha256"],
+        label="prepared-input height-1 snapshot",
+    )
+
+    height_materials: dict[str, dict[str, Any]] = {}
+    fleet_imports: list[dict[str, Any]] = []
+    for material in manifest["materials"]:
+        height = int(material["height"])
+        fleet_source = prepared_input_source(
+            manifest_path,
+            material["prepared_fleet"],
+            label=f"height {height} prepared fleet",
+            directory=True,
+        )
+        fleet_destination = (
+            root / "prepared-fleets" / f"canonical-height-{height}"
+        )
+        source_fleet_sha256 = material["prepared_fleet"]["sha256"]
+        destination_fleet_sha256 = BASE.clone_prepared_fleet(
+            fleet_source,
+            fleet_destination,
+            source_fleet_sha256,
+        )
+        if source_fleet_sha256 != destination_fleet_sha256:
+            raise RuntimeError("prepared-input fleet copy digest differs")
+        fleet_imports.append(
+            {
+                "height": height,
+                "source_sha256": source_fleet_sha256,
+                "destination": fleet_destination.relative_to(root).as_posix(),
+                "destination_sha256": destination_fleet_sha256,
+            }
+        )
+        corpus_source = prepared_input_source(
+            manifest_path,
+            material["signed_transfer_corpus"],
+            label=f"height {height} corpus",
+            directory=False,
+        )
+        corpus_destination = root / "corpora" / f"height-{height}.json"
+        shutil.copyfile(corpus_source, corpus_destination)
+        corpus_sha256 = material["signed_transfer_corpus"]["sha256"]
+        if sha256(corpus_destination) != corpus_sha256:
+            raise RuntimeError("prepared-input corpus copy digest differs")
+        snapshot_destination = None
+        snapshot_sha256 = None
+        if material["snapshot"] is not None:
+            snapshot_source = prepared_input_source(
+                manifest_path,
+                material["snapshot"],
+                label=f"height {height} snapshot",
+                directory=True,
+            )
+            snapshot_destination = (
+                canonical_root / "snapshots" / f"height-{height}.snapshot"
+            )
+            snapshot_sha256 = BASE.clone_regular_tree(
+                snapshot_source,
+                snapshot_destination,
+                material["snapshot"]["sha256"],
+                label=f"prepared-input height {height} snapshot",
+            )
+        height_materials[str(height)] = {
+            "height": height,
+            "snapshot": (
+                snapshot_destination.relative_to(root).as_posix()
+                if snapshot_destination is not None
+                else None
+            ),
+            "snapshot_sha256": snapshot_sha256,
+            "prepared_fleet": fleet_destination.relative_to(root).as_posix(),
+            "prepared_fleet_sha256": destination_fleet_sha256,
+            "signed_transfer_corpus": corpus_destination.relative_to(root).as_posix(),
+            "signed_transfer_corpus_sha256": corpus_sha256,
+            "transfer_count": material["transfer_count"],
+            "first_sequence": material["first_sequence"],
+            "last_sequence": material["last_sequence"],
+            "corpus_source_mode": material["corpus_source_mode"],
+            "corpus_source_prepared_fleet_sha256": material[
+                "corpus_source_prepared_fleet_sha256"
+            ],
+            "corpus_scratch_before_sha256": material[
+                "corpus_scratch_before_sha256"
+            ],
+            "corpus_scratch_after_sha256": material[
+                "corpus_scratch_after_sha256"
+            ],
+            "corpus_scratch_mutated": material["corpus_scratch_mutated"],
+            "corpus_scratch_discarded": material["corpus_scratch_discarded"],
+            "corpus_scratch_restored_sha256": material[
+                "corpus_scratch_restored_sha256"
+            ],
+        }
+
+    seed = private_destination / "seed"
+    wallet_key = private_destination / "wallet.key.json"
+    if not seed.is_dir() or wallet_key.is_symlink() or not wallet_key.is_file():
+        raise ValueError("prepared-input private bundle omitted runner inputs")
+    top_height = int(manifest["build"]["final_height"])
+    top_material = height_materials[str(top_height)]
+    return {
+        "schema": CHECKPOINT_SCHEMA,
+        "campaign_schema": SCHEMA,
+        "status": "RUNNING",
+        "started_at": utc_now(),
+        "updated_at": utc_now(),
+        "elapsed_wall_seconds": 0.0,
+        "input_mode": "prepared-input-manifest",
+        "prepared_input_manifest": imported_manifest.relative_to(root).as_posix(),
+        "prepared_input_manifest_sha256": sha256(imported_manifest),
+        "prepared_input_build": {
+            "candidate": copy.deepcopy(candidate),
+            "batch_builder": copy.deepcopy(batch_builder),
+            "runner": copy.deepcopy(manifest["runner"]),
+            "build": copy.deepcopy(manifest["build"]),
+        },
+        "prepared_input_import": {
+            "private_bundle_source_sha256": private_source_sha256,
+            "private_bundle_destination_sha256": private_destination_sha256,
+            "height_1_snapshot_destination_sha256": (
+                height_one_destination_sha256
+            ),
+            "prepared_fleets": fleet_imports,
+            "advances": imported_advances,
+        },
+        "source_revision": expected_source_revision,
+        "runner_source_revision": runner_source_revision,
+        "node_binary_sha256": sha256(node_bin),
+        "node_binary": node_bin.name,
+        "node_binary_build": copy.deepcopy(candidate["node_binary_build"]),
+        "batch_builder_binary_sha256": sha256(batch_builder_bin),
+        "batch_builder_binary": batch_builder_bin.name,
+        "runner_bindings": runner_bindings(),
+        "configuration": configuration,
+        "host": host_description(root),
+        "public_inputs": {
+            "wallet_address": wallet_address,
+            "recipient_address": recipient,
+            "validator_public_identities": copy.deepcopy(
+                manifest["public_inputs"]["validator_public_identities"]
+            ),
+            "topology_sha256": manifest["public_inputs"]["topology_sha256"],
+            "height_1_snapshot_sha256": manifest["public_inputs"][
+                "height_1_snapshot_sha256"
+            ],
+        },
+        "current_height": top_height,
+        "current_snapshot": None,
+        "current_snapshot_sha256": None,
+        "current_prepared_fleet": top_material["prepared_fleet"],
+        "current_prepared_fleet_sha256": top_material[
+            "prepared_fleet_sha256"
+        ],
+        "height_materials": height_materials,
+        "completed_units": {},
+        "current_unit": None,
+        "interrupted_units": [],
+        "failed_units": [],
         "last_stop": None,
         "final_report_sha256": None,
         "private_paths": {
@@ -1461,6 +2865,10 @@ def run_windows(
                 material["prepared_fleet_sha256"] if use_prepared_fleet else None
             ),
             nodes_root=(state.root / "canonical" / "nodes") if use_prepared_fleet else None,
+            rebase_prepared_pointers=(
+                use_prepared_fleet
+                and state.value.get("input_mode") == "prepared-input-manifest"
+            ),
         )
         if (
             result["source_snapshot_sha256"] != material.get("snapshot_sha256")
@@ -1528,11 +2936,23 @@ def build_report(
         and result.get("advance_execution_mode")
         == "persistent-peer-certified-batch-loop"
     }
-    if builder_builds != {
-        (str(state.value["runner_source_revision"])[:8], "release")
-    }:
-        raise RuntimeError("persistent advances do not share one bound builder build")
-    builder_revision, builder_profile = next(iter(builder_builds))
+    if state.value.get("input_mode") == "prepared-input-manifest":
+        imported_builder = state.value.get("prepared_input_build", {}).get(
+            "batch_builder", {}
+        )
+        imported_build = imported_builder.get("build")
+        if builder_builds or not isinstance(imported_build, dict):
+            raise RuntimeError("prepared-input helper build identity is invalid")
+        builder_revision = str(imported_build.get("git_revision", ""))
+        builder_profile = str(imported_build.get("profile", ""))
+    else:
+        if builder_builds != {
+            (str(state.value["runner_source_revision"])[:8], "release")
+        }:
+            raise RuntimeError(
+                "persistent advances do not share one bound builder build"
+            )
+        builder_revision, builder_profile = next(iter(builder_builds))
     lanes: dict[str, dict[str, Any]] = {}
     for lane in LANE_ORDER:
         lane_root = state.root / "lanes" / lane
@@ -1805,15 +3225,45 @@ def build_report(
         "network_contacted": False,
         "devnet_queried_or_mutated": False,
     }
+    if state.value.get("input_mode") == "prepared-input-manifest":
+        report.update(
+            {
+                "input_mode": "prepared-input-manifest",
+                "prepared_input_manifest": state.value[
+                    "prepared_input_manifest"
+                ],
+                "prepared_input_manifest_sha256": state.value[
+                    "prepared_input_manifest_sha256"
+                ],
+                "prepared_input_build": copy.deepcopy(
+                    state.value["prepared_input_build"]
+                ),
+                "prepared_input_import": copy.deepcopy(
+                    state.value["prepared_input_import"]
+                ),
+            }
+        )
     return report
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--node-bin", type=Path, required=True)
-    parser.add_argument("--batch-builder-bin", type=Path, required=True)
-    parser.add_argument("--expected-source-revision", required=True)
+    parser.add_argument("--node-bin", type=Path)
+    parser.add_argument("--batch-builder-bin", type=Path)
+    parser.add_argument("--expected-source-revision")
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--export-prepared-input-manifest",
+        type=Path,
+        metavar="OUT.json",
+        help="export a verified build manifest from an existing campaign output",
+    )
+    parser.add_argument(
+        "--prepared-input-manifest",
+        type=Path,
+        metavar="PATH",
+        help="measure from a verified prepared-input build manifest",
+    )
     parser.add_argument(
         "--resume",
         action="store_true",
@@ -1831,6 +3281,41 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    if args.export_prepared_input_manifest is not None:
+        if (
+            args.resume
+            or args.development_smoke
+            or args.development_stop_after_units is not None
+            or args.node_bin is not None
+            or args.batch_builder_bin is not None
+            or args.expected_source_revision is not None
+            or args.prepared_input_manifest is not None
+        ):
+            raise ValueError(
+                "--export-prepared-input-manifest is an export-only operation"
+            )
+        raw_root = args.output_dir.expanduser()
+        if raw_root.is_symlink():
+            raise ValueError("output path must not be a symlink")
+        root = raw_root.resolve()
+        raw_manifest = args.export_prepared_input_manifest.expanduser()
+        if raw_manifest.is_symlink():
+            raise ValueError("prepared-input manifest path must not be a symlink")
+        manifest_path = raw_manifest.resolve()
+        export_prepared_input_manifest(root, manifest_path)
+        print(f"prepared-input-manifest={manifest_path}", flush=True)
+        return 0
+
+    if (
+        args.node_bin is None
+        or args.batch_builder_bin is None
+        or args.expected_source_revision is None
+    ):
+        parser.error(
+            "--node-bin, --batch-builder-bin, and --expected-source-revision "
+            "are required unless exporting a prepared-input manifest"
+        )
+
     if args.development_stop_after_units is not None and (
         not args.development_smoke
         or args.development_stop_after_units <= 0
@@ -1838,6 +3323,11 @@ def main() -> int:
     ):
         raise ValueError(
             "--development-stop-after-units requires a new development smoke"
+        )
+
+    if args.prepared_input_manifest is not None and args.development_smoke:
+        raise ValueError(
+            "--prepared-input-manifest is valid only for release measurement"
         )
 
     require_revision(args.expected_source_revision, "source revision")
@@ -1876,15 +3366,46 @@ def main() -> int:
         checkpoint_path = root / "campaign-checkpoint.json"
         if args.resume:
             checkpoint = BASE.read_json(checkpoint_path)
+            if args.prepared_input_manifest is not None:
+                supplied_manifest = args.prepared_input_manifest.expanduser()
+                if supplied_manifest.is_symlink() or not supplied_manifest.is_file():
+                    raise ValueError(
+                        "--prepared-input-manifest must be a regular file"
+                    )
+                supplied_manifest = supplied_manifest.resolve()
+                if (
+                    checkpoint.get("input_mode") != "prepared-input-manifest"
+                    or sha256(supplied_manifest)
+                    != checkpoint.get("prepared_input_manifest_sha256")
+                ):
+                    raise ValueError("resume prepared-input manifest differs")
+                supplied = BASE.read_json(supplied_manifest)
+                verify_prepared_input_sources(supplied_manifest, supplied)
         else:
-            checkpoint = initialize_campaign(
-                root,
-                node_bin=node_bin,
-                batch_builder_bin=batch_builder_bin,
-                expected_source_revision=args.expected_source_revision,
-                runner_source_revision=current_revision,
-                configuration=configuration,
-            )
+            if args.prepared_input_manifest is not None:
+                prepared_manifest = args.prepared_input_manifest.expanduser()
+                if prepared_manifest.is_symlink():
+                    raise ValueError(
+                        "--prepared-input-manifest must not be a symlink"
+                    )
+                checkpoint = initialize_prepared_campaign(
+                    root,
+                    manifest_path=prepared_manifest.resolve(),
+                    node_bin=node_bin,
+                    batch_builder_bin=batch_builder_bin,
+                    expected_source_revision=args.expected_source_revision,
+                    runner_source_revision=current_revision,
+                    configuration=configuration,
+                )
+            else:
+                checkpoint = initialize_campaign(
+                    root,
+                    node_bin=node_bin,
+                    batch_builder_bin=batch_builder_bin,
+                    expected_source_revision=args.expected_source_revision,
+                    runner_source_revision=current_revision,
+                    configuration=configuration,
+                )
         state = CampaignState(
             root,
             checkpoint,

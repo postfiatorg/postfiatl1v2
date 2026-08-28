@@ -25,6 +25,7 @@ ARTIFACT_SCHEMAS = {
     "migration": "postfiat-storage-scaling-six-clone-migration-v1",
     "redaction": "postfiat-storage-scaling-redaction-v1",
 }
+PREPARED_INPUT_MANIFEST_SCHEMA = "postfiat-storage-prepared-input-manifest-v1"
 SENSITIVE = re.compile(
     r"private[-_ ]?key(?![A-Za-z0-9_])|secret|password|mnemonic|spending[-_ ]?key|"
     r"full[-_ ]?viewing[-_ ]?key|master[-_ ]?seed|rseed|ssh[-_ ]?cred",
@@ -138,6 +139,95 @@ def copy_replay(packet: Path, source: Path) -> Path:
     return destination
 
 
+def copy_prepared_input(
+    packet: Path,
+    campaign_root: Path,
+    report: dict[str, Any],
+) -> None:
+    manifest_source = resolve_campaign_file(
+        campaign_root,
+        report.get("prepared_input_manifest"),
+        report.get("prepared_input_manifest_sha256"),
+        "performance prepared-input manifest",
+    )
+    manifest = read_json(manifest_source)
+    expected_build = {
+        "candidate": manifest.get("candidate"),
+        "batch_builder": manifest.get("batch_builder"),
+        "runner": manifest.get("runner"),
+        "build": manifest.get("build"),
+    }
+    if (
+        manifest.get("schema") != PREPARED_INPUT_MANIFEST_SCHEMA
+        or report.get("prepared_input_build") != expected_build
+    ):
+        raise ValueError("performance prepared-input build binding is invalid")
+    manifest_destination = packet / "performance" / "prepared-input" / "manifest.json"
+    copy_file(manifest_source, manifest_destination)
+    report["prepared_input_manifest"] = manifest_destination.relative_to(
+        packet
+    ).as_posix()
+    report["prepared_input_manifest_sha256"] = sha256(manifest_destination)
+
+    imported = report.get("prepared_input_import")
+    manifest_advances = manifest.get("advances")
+    imported_advances = imported.get("advances") if isinstance(imported, dict) else None
+    if (
+        not isinstance(manifest_advances, list)
+        or not manifest_advances
+        or not isinstance(imported_advances, list)
+        or len(imported_advances) != len(manifest_advances)
+    ):
+        raise ValueError("performance prepared-input advance artifacts are incomplete")
+    for index, (advance, imported_advance) in enumerate(
+        zip(manifest_advances, imported_advances),
+        start=1,
+    ):
+        if not isinstance(advance, dict) or not isinstance(imported_advance, dict):
+            raise ValueError("performance prepared-input advance is malformed")
+        if imported_advance.get("unit_id") != advance.get("unit_id"):
+            raise ValueError("performance prepared-input advance identity differs")
+        for field in ("receipt", "report"):
+            manifest_reference = advance.get(field)
+            if not isinstance(manifest_reference, dict):
+                raise ValueError(
+                    f"performance prepared-input advance {field} is unbound"
+                )
+            source = resolve_campaign_file(
+                campaign_root,
+                imported_advance.get(field),
+                imported_advance.get(f"{field}_sha256"),
+                f"performance prepared-input advance {index} {field}",
+            )
+            if sha256(source) != manifest_reference.get("sha256"):
+                raise ValueError(
+                    f"performance prepared-input advance {index} {field} differs"
+                )
+            destination = (
+                packet
+                / "performance"
+                / "prepared-input"
+                / "advances"
+                / f"advance-{index:04}-{field}.json"
+            )
+            if field == "receipt":
+                receipt = read_json(source)
+                if not isinstance(receipt.get("signed_transfer_corpus"), str):
+                    raise ValueError(
+                        f"performance prepared-input advance {index} receipt "
+                        "omitted its corpus path"
+                    )
+                receipt["signed_transfer_corpus"] = "$SIGNED_TRANSFER_CORPUS"
+                write_json(destination, receipt)
+            else:
+                copy_file(source, destination)
+            imported_advance[f"source_{field}_sha256"] = manifest_reference[
+                "sha256"
+            ]
+            imported_advance[field] = destination.relative_to(packet).as_posix()
+            imported_advance[f"{field}_sha256"] = sha256(destination)
+
+
 def copy_performance(packet: Path, source: Path) -> Path:
     report = read_json(source)
     if (
@@ -148,6 +238,11 @@ def copy_performance(packet: Path, source: Path) -> Path:
     ):
         raise ValueError("performance report is not an evidence-eligible PASS")
     campaign_root = source.parent.resolve()
+    input_mode = report.get("input_mode")
+    if input_mode == "prepared-input-manifest":
+        copy_prepared_input(packet, campaign_root, report)
+    elif input_mode is not None:
+        raise ValueError("performance report input mode is unsupported")
     materials = report.get("materials_by_height")
     required_heights = [50, 5000]
     if (
