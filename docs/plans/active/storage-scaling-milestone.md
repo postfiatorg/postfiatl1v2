@@ -1,12 +1,12 @@
 # Storage Scaling: Time-Budgeted Qualification and Release Gates
 
-**Status:** Active — `redb` selected; qualification incomplete; deployment and public testnet blocked
+**Status:** Active — `redb` selected; corrected G4 failed; deployment and public testnet blocked
 
 **Decision date:** 2026-08-27
 
 **Decision owner:** Post Fiat
 
-**Candidate lineage:** transactional `redb` source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`; release binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; persistent setup remediation implemented at `438fb29c`; v4 sampling and prepared-fleet restore remediation at `428fe7c9`; build/measurement manifest workflow merged at `90d68784`
+**Candidate lineage:** failed pre-fix source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`, binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; corrected vote-lock source `442c5a4ddafed3aa0709f64e213fe0cedac5222d`, binary SHA-256 `29423cba098ce793ccab4a234ab26a2d30c6b11ad9eacd339b11b89cd6187c48`; corrected runner `693855e3492bc3d37801653e90bc308969fbad85`; persistent setup remediation `438fb29c`; v4 restore remediation `428fe7c9`; build/measurement workflow `90d68784`
 
 **Research basis:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 
@@ -23,27 +23,37 @@ paths use an indexed membership set plus a fixed-size accumulator, and the
 selected path does not intentionally rescan full history.
 
 The node still retains finalized history. That is not the defect being fixed.
-The transactional `redb` append path passed its per-window bounded-work gates,
-but the end-to-end candidate still failed G4 because every validator rescanned
-its complete JSON vote-lock history before every signature.
+The transactional `redb` append path continues to pass its per-window
+bounded-work gates. The first prepared-input campaign instead found a complete
+JSON vote-lock scan before every signature. That defect was fixed and verified
+in source `442c5a4d`; selected-path votes after the one-time migration now examine
+at most two files and decode at most 314 bytes.
 
-The prepared-input measurement campaign completed on 2026-08-28 with report
-SHA-256 `88502bca7aaa4e576e5e9684b3d9b72d8c1b66e24b6c6c8e746f11807ac7eabb`.
-The selected height-5,000 versus height-50 consensus-round p95 ratio was 2.808
-and the wallet-to-finality p95 ratio was 2.762, both above the required 1.10.
-`no_positive_linear_height_relationship` is false, `evidence_eligible` is
-false, and the result is `PUBLIC TESTNET BLOCKED`. Experiment completion does
-not mean candidate qualification.
+The exactly one authorized corrected campaign then ran on 2026-08-28. All ten
+selected `redb` windows completed with literal accepted receipts,
+six-validator convergence, bounded redb work, zero full-history storage reads,
+and passing vote-lock work gates. The corrected candidate nevertheless failed:
+height-5,000/height-50 consensus-round p95 was 2.693 and wallet-to-finality p95
+was 2.649, both above the required 1.10.
 
-The redb store's own selected-window checks passed: literal accepted receipts,
-six-validator convergence, bounded point and accumulator work, and zero
-reported full-history storage reads. Source and stage timings instead isolate
-the remaining unbounded path to `reserve_block_proposal_vote_lock` in the
-consensus signing path. The next bounded work is the
-[vote-lock index fix](vote-lock-index-fix-plan.md): replace the per-vote scan
-with a derived-path lookup, migrate legacy misplaced locks once without changing
-conflict semantics, and report the exact files and bytes examined. A corrected
-candidate must then run the unchanged 5+5+5 G4 measurement matrix again.
+The next height-dependent cost is in a different surface. Before named setup and
+proposal timing, each proposer resumes its durable certified-send outbox. That
+path validates the entire retained completed-tombstone set twice, rereading and
+hashing `job.json`, `batch.json`, and `certificate.json` for every tombstone.
+Validator 0 has 240 completed tombstones at height 50 and the retention cap of
+1,024 at height 5,000; only validator-0 proposer rounds exhibit the recurring
+slow pattern. The work is history-proportional until the cap and still costs
+about 1.5 seconds per affected proposal at the cap.
+
+The first legacy control then failed the locked vote-lock gate because five
+validators performed their single migration in finalized round 2 rather than
+round 1. The runner stopped after 2,092.637 seconds, so no legacy window, final
+campaign report, or packet exists. The checkpoint SHA-256 is
+`847b60f924414825ac050fd901bc80b3dbb200d7db6d91c74f1357fc018cd6c1`.
+This is a valid failed campaign, the no-retry allowance is consumed, and the
+candidate is not qualified. See the
+[corrected G4 campaign plan](corrected-g4-campaign-plan.md) for the complete gate
+table and single diagnosis.
 
 Selection is not qualification, qualification is not deployment, and deployment
 is not public-testnet authorization. The remaining work must prove the selected
@@ -86,12 +96,14 @@ work idling.
 
 ## Critical path and operator calls
 
-There is no decision or external input blocking the next local step. Work proceeds
-on four explicit tracks, and only the first is active now:
+The corrected G4 campaign is closed failed and cannot be retried under its
+one-run rule. Local qualification now requires a separately reviewed remediation
+plan for the certified-send tombstone resume path; G3 still independently
+requires authorized height-924 input. The four tracks are:
 
 | Order | Track | Start condition | Finish condition | Operator input |
 | ---: | --- | --- | --- | --- |
-| 1 | Local qualification | Now | The vote-lock index fix passes its safety and bounded-work gates, a corrected single binary is frozen, binary-sensitive G1/G2 evidence is refreshed, corrected G4 passes, and all locally available G5 material verifies | None. Keep the transactional storage design fixed and do not touch the devnet. |
+| 1 | Local qualification | A new reviewed plan bounds certified-send tombstone resume without changing delivery durability | A newly frozen candidate passes refreshed binary-sensitive gates and exactly one separately authorized G4 campaign | Decide whether to authorize that remediation plan; the closed corrected campaign may not be retried. Keep the transactional storage design fixed and do not touch the devnet. |
 | 2 | Exact height-924 replay | A custodian names one complete quiescent directory and separately authorizes a read-only copy | G3 replay and mutation sentinels pass and enter the packet | Name the custodian and authorize the copy. Do not wait idle for this input. |
 | 3 | Pre-deployment rehearsal | G5 is `OFFLINE QUALIFIED` and controlled-devnet deployment is actually the next decision | G6 passes on six distinct stopped copies | Separately authorize six copies and then make a separate deploy/no-deploy decision. |
 | 4 | Dynamic UNL milestone | G5 closes, or the decision owner explicitly changes priority | A separately activated governance plan exists | No choice is open now: the DGA/Cobalt envelope and Option C are the recorded direction. |
@@ -99,19 +111,19 @@ on four explicit tracks, and only the first is active now:
 The dependency chain is:
 
 ```text
-local:     vote-lock fix -> corrected freeze/G1/G2 -> corrected G4 --+
-                                                                       +-> complete G5 -> OFFLINE QUALIFIED
-external:  authorized height-924 copy -> G3 --------------------------+
+local:     certified-send resume plan -> new fix/freeze/gates -> new G4 --+
+                                                                         +-> complete G5 -> OFFLINE QUALIFIED
+external:  authorized height-924 copy -> corrected G3 ------------------+
 
 OFFLINE QUALIFIED -> separate deployment decision -> G6
 ```
 
 A missing height-924 copy blocks only the final `OFFLINE QUALIFIED` label. It
 must not trigger a 20-hour wait, an exhaustive legacy campaign, or collection of
-six fleet directories. The vote-lock source fix is not qualification evidence:
-it must first pass its focused safety and bounded-work gates, then enter a
-single corrected candidate binary whose binary-sensitive gates and unchanged
-G4 matrix are rerun.
+six fleet directories. The vote-lock source fix is verified but did not qualify
+the candidate. The corrected G4 output is final failed evidence; any later
+certified-send fix changes candidate source and must begin a new freeze and
+separately authorized campaign rather than resume or relabel this one.
 
 ## Decisions recorded
 
@@ -169,11 +181,13 @@ before it starts.
 - Each G4 remediation gets one focused test/smoke cycle capped at 30 minutes.
   The prepared v4 build was reused once and the measurement-only matrix completed
   in 3,311.552 seconds, but its scaling ratios failed. That result is closed and
-  must not be resumed or relabeled. After the vote-lock fix passes locally,
-  freeze one corrected candidate binary and run exactly one new unchanged 5+5+5
-  measurement matrix with a fresh four-hour measurement budget. Reaching that
-  budget is a recorded `TIME_BUDGET_EXCEEDED` result, not permission to
-  continue silently.
+  must not be resumed or relabeled. The vote-lock-corrected campaign then used
+  its one-run allowance and failed after 2,092.637 seconds: all ten selected
+  windows completed, both scaling ratios failed, and the first legacy control
+  hit a binding vote-lock migration-position failure. It also is closed and
+  must not be resumed, retried, or relabeled. Any later campaign requires a new
+  reviewed plan and fresh candidate freeze. Reaching a budget remains a
+  recorded `TIME_BUDGET_EXCEEDED` result, not permission to continue silently.
 - A failed or timed-out gate is diagnosed once. It is not automatically restarted
   with a larger matrix.
 - Run selected-path evidence before expensive legacy controls.
@@ -190,11 +204,11 @@ independent local gates continue.
 | Gate | Current state | Work allowed now | Budget and advance rule |
 | --- | --- | --- | --- |
 | G0 — campaign control | **PASS** | None; do not rerun the old campaign. | Reopen only if checkpoint/resume itself changes. |
-| G1 — candidate freeze | **PRIOR CANDIDATE FROZEN / CORRECTED FREEZE PENDING** | Preserve source `ae658441` and binary `891b…bf4` as the failed campaign lineage. After local vote-lock verification, freeze and hash one corrected source tree and binary. | The node source and binary change restarts G1–G4 even though the selected redb storage design is unchanged; evidence-runner-only changes remain separately hash-bound. |
-| G2 — safety | **PRIOR LOCAL PASS / CORRECTED-BINARY REFRESH REQUIRED** | Preserve the old tamper and rollback receipts as history. Repeat every binary-bound G2 check with the corrected frozen binary before corrected G4. | A source or binary change prevents reuse of the prior receipts as qualification evidence. |
+| G1 — candidate freeze | **CORRECTED FREEZE PASS** | Preserve source `442c5a4d`, binary `29423c…7c48`, and manifest `b4a580…bf01`; the older `ae658441` lineage remains failed history. | Any new node source or binary change restarts the binary-sensitive gates. |
+| G2 — safety | **CORRECTED LOCAL PASS / PACKET BINDING PENDING** | Preserve corrected manifest `132220…78c7`, rollback `1a05fe…9970`, and tamper `95c723…1f07`; raw output remains private. | Redaction-safe repository packet binding remains open; a new candidate requires another refresh. |
 | G3 — exact replay | **PRIOR HEIGHT 915 PASS / CORRECTED REPLAY REQUIRED / HEIGHT 924 AUTHORIZATION BLOCKED** | Preserve the old height-915 receipt as history; rerun height 915 with the corrected binary. Run height 924 only from a separately authorized copy. | Never wait idle for the height-924 copy, but do not claim offline qualification without both corrected replay receipts. |
-| G4 — scaling | **FAILED / VOTE-LOCK REMEDIATION ACTIVE** | Preserve the completed failed campaign and implement the bounded vote-lock lookup and one-time migration. Do not rerun G4 until the candidate binary contains that fix. | The completed matrix exceeded both 1.10 ratios because vote signing rescanned lock history. The corrected candidate must rerun the unchanged 5+5+5 matrix under the same measurement budget. |
-| G5 — offline packet | **BLOCKED BY G3 HEIGHT 924 AND CORRECTED G4** | Package locally available material only after a corrected G4 passes; close the final packet only after G3 height 924 exists. | No qualification claim until the offline verifier passes the complete packet. |
+| G4 — scaling | **FAILED / CORRECTED CAMPAIGN CLOSED** | Preserve checkpoint `847b60…d6c1`, failure receipt `ce8703…8c38`, and diagnosis `4c7bb6…32f8`. Do not resume or retry. | Vote-lock work passed on selected windows, but ratios were 2.693 and 2.649; certified-send tombstone resume is the next owner. A new campaign requires a new reviewed plan and freeze. |
+| G5 — offline packet | **BLOCKED BY G3 HEIGHT 924 AND FAILED G4** | Do not package the failed partial campaign. Preserve its private checkpoint and diagnosis only. | No qualification claim until a future G4 passes and the complete offline verifier accepts G1–G4. |
 | G6 — six-clone rehearsal | **DEFERRED** | Nothing until offline qualification is complete and deployment is the next real decision. | Requires separate data-copy authorization and six distinct stopped directories. |
 | G7 — Dynamic UNL handoff | **DIRECTION RECORDED / IMPLEMENTATION DEFERRED** | Preserve the recorded architecture decision only. | Spend no implementation time before the stated storage boundary or a new operator priority decision. |
 
@@ -250,7 +264,7 @@ checkpoints.
       `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`.
 - [x] Build one release binary and record its SHA-256, Rust toolchain, locked
       dependency identity, build command, host, and storage device.
-- [ ] Freeze topology, keys, accounts, transaction corpus, timeouts,
+- [x] Freeze topology, keys, accounts, transaction corpus, timeouts,
       instrumentation schema, the authenticated height-50 snapshot identity,
       and the height-5,000 prepared-fleet identity.
 - [x] Run the focused storage/node regression suites, formatting, and
@@ -264,8 +278,22 @@ toolchain is Rust 1.95.0, with `Cargo.lock` SHA-256
 The storage suite passed 83 tests with two manual tests ignored; the process
 crash integration test, four bounded transport shutdown tests, 14 replicated
 state activation tests, formatting, and warnings-denied storage/node Clippy all
-passed. G4 owns the remaining synthetic input freeze, so this binary must not
-change while that gate runs.
+passed. That pre-fix binary is retained only as failed-campaign history.
+
+The corrected freeze passed at source
+`442c5a4ddafed3aa0709f64e213fe0cedac5222d`, which was clean and present on
+`origin/main`. Release binary SHA-256 is
+`29423cba098ce793ccab4a234ab26a2d30c6b11ad9eacd339b11b89cd6187c48`;
+G1 manifest SHA-256 is
+`b4a580f7f4c61db4992f83f823d6715cd712589eaaada9debde3f45622f1bf01`.
+The clean release build, 83 storage tests, 15 vote-lock tests, 5,000-lock release
+spot check, bounded accept tests, replicated-state activation tests, formatting,
+and workspace warnings-denied Clippy passed. The corrected prepared-input
+manifest SHA-256
+`9d48530539eaf05a18879dbafb3d7c62862617c28b843ae300dc1d87ed05cb88`
+freezes the public inputs and binds the unchanged prepared fleets to the
+corrected measurement binary. The candidate stayed unchanged through the one
+corrected campaign and is now frozen failed evidence.
 
 **Exit:** one clean source, one binary, and one frozen input set control G2
 through G5. Any source or binary change returns the plan to G1.
@@ -301,6 +329,16 @@ and compatible rollback report SHA-256
 `76a121c6a5529480f4f22101fba0f16d1ee4423489b11e5a50498414d7cbb59a`.
 They are not yet a G5 packet; the final unchecked G2 item is their redaction-safe
 packet binding and independent packet verification.
+
+The corrected binary-sensitive refresh also passed. G2 manifest SHA-256 is
+`132220922f0d5b6e3728861f227e6aff4f28ad87f36fce6d78119f9e75ef78c7`;
+compatible rollback report SHA-256 is
+`1a05fe1132c4993b52171288848f03b524230c085934cfe0b4b68fa1cc359970`;
+and the rerun 69-case tamper/crash report SHA-256 is
+`95c723e2f054f3feafd020cfa4e8116388b4105d89ca5b7bc1b6488912541f07`.
+`storage-rebuild-transactional --verify-only` passed its two focused
+read-only/fail-closed tests. These receipts bind corrected source and binary but
+remain private local evidence until a later redaction-safe G5 packet exists.
 
 ## G3 — exact replay
 
@@ -620,11 +658,76 @@ under the accepted build/measurement split below.
       ratios, storage and vote-lock counters, resource summaries, build
       bindings, and all pass/fail decisions for the corrected campaign.
 
-**Exit:** the completed campaign is a valid failed gate, not qualification. G4
-reopens only after the vote-lock remediation is implemented and focused safety
-checks pass. The corrected candidate must pass the unchanged matrix; a missing
-receipt, convergence failure, positive historical-work counter, or failed ratio
-remains a real failed gate.
+**G4D exit:** the pre-fix completed campaign is valid failed evidence, not
+qualification. It motivated one vote-lock-corrected campaign under the separate
+[corrected G4 plan](corrected-g4-campaign-plan.md).
+
+### G4E — corrected vote-lock campaign: closed fail
+
+- [x] Repair the local Zig C/C++/archive wrappers and prove a clean-checkout
+      release build from pushed `main`.
+- [x] Freeze corrected source `442c5a4d`, node binary SHA-256 `29423c…7c48`,
+      and G1 manifest SHA-256 `b4a580…bf01`.
+- [x] Refresh binary-sensitive G2 safety evidence and bind manifest SHA-256
+      `132220…78c7`.
+- [x] Extend the runner with vote-lock work parsing and stable gates; pass 84
+      focused tests and freeze runner `693855e3`.
+- [x] Derive one read-only prepared-input manifest that distinguishes the old
+      binary which built the frozen fleets from the corrected binary used for
+      measurement. Manifest SHA-256 is `9d4853…cb88`.
+- [x] Execute exactly one unchanged 5+5+5 campaign under one fresh four-hour
+      measurement clock, selected windows first.
+- [x] Preserve the failed checkpoint, legacy failure receipt, single diagnosis,
+      exact gate values, and zero surviving campaign processes.
+- [x] Stop without retrying, changing the candidate, enlarging the matrix, or
+      contacting the devnet.
+
+The runner work is committed locally on branch
+`postfiatchad/corrected-g4-vote-lock-gate` at
+`693855e3492bc3d37801653e90bc308969fbad85`. The three commits add the work
+gate, preserve `prepared_by` build provenance, and make manifest derivation
+read-only. They are not merged into this repository's `main`; the source hash is
+the binding.
+
+The first derivation attempt called candidate `status` on the private frozen
+seed and changed exactly `postfiat-state-v1.redb`. The changed file was preserved
+in a separate private recovery directory with SHA-256
+`b19d36f15fce49eceb57f571a7e2e23f79c18c13967e410103e1fe887924fac6`.
+The source file was restored byte-for-byte from its independently verified copy,
+and the complete private bundle returned to its expected SHA-256
+`fbb74d2352ac7a60058ac845dd1d4968ef07aa32ec9bf27278295996d3013a54`.
+Runner `693855e3` then derives the manifest from the already frozen G1 identity
+without opening candidate state. This incident did not alter the frozen input
+used by the campaign.
+
+The corrected campaign checkpoint is private at
+`~/repos/postfiat-storage-g4-measurement-693855e3-442c5a4d-v1` and has SHA-256
+`847b60f924414825ac050fd901bc80b3dbb200d7db6d91c74f1357fc018cd6c1`.
+It records ten completed selected windows and failure in
+`legacy-jsonl/height-50-window-1` at `2026-08-28T22:33:12Z`. The selected
+latency ratios are 2.693 and 2.649; all selected correctness, redb work, and
+vote-lock gates pass. The legacy failure receipt SHA-256 is
+`ce8703dfc16c22c3930508b314231c6992c82fa20c54bc9d9fa2254da9c98c38`.
+The redaction-safe private diagnosis SHA-256 is
+`4c7bb67b8622de967b240a6583a34bd554e9a1c7f19672ef43a06f88ef7832f8`.
+No final report or packet was created because the campaign failed before the
+legacy controls completed.
+
+The single diagnosis implicates the uninstrumented proposer outbox-resume phase:
+`transport_peer_certified_batch_round` calls
+`resume_durable_certified_send_outbox` before named setup timing; compaction and
+pruning each validate the complete retained certified-send tombstone set. That
+set grows from 240 tombstones at height 50 to the 1,024 cap at height 5,000.
+Every retained job causes `job.json`, `batch.json`, and `certificate.json` to be
+read and both payloads rehashed twice per affected proposal. The slow rounds are
+exactly validator-0 proposer rounds in all ten selected windows.
+
+**G4E exit:** **FAIL; no retry authorized.** The vote-lock fix worked, but the
+candidate remains unqualified. The next source owner is certified-send
+tombstone resume/retention in `crates/node/src/transport_cli.rs`, with the
+missing phase timer in `crates/node/src/transport_runtime.rs`. Any fix or later
+campaign requires a new reviewed plan, new source/binary freeze, and refreshed
+binary-sensitive gates.
 
 ## G5 — offline qualification packet
 
@@ -687,35 +790,34 @@ not deploy anything.
 
 ## Immediate execution order
 
-1. Preserve the transactional redb design and the existing G2 and height-915 G3
-   receipts as historical evidence. A corrected node binary changes the
-   candidate identity, so do not reuse binary-sensitive receipts as proof for it.
-2. Preserve v2, v3, v4, and the completed prepared-input measurement campaign as
-   failed evidence. The last campaign completed the 5+5+5 matrix but failed the
-   1.10 scaling gates; it must not be resumed or relabeled.
-3. Complete and verify the
-   [vote-lock index fix](vote-lock-index-fix-plan.md): O(1) post-marker lookup,
-   fail-closed one-time migration, direct work counters, full workspace gates,
-   and the release-mode 5,000-lock spot check.
-4. Freeze one corrected candidate binary. Refresh G1 provenance, every G2
-   safety receipt whose validity binds the changed binary, and the locally
-   available height-915 G3 replay. Update the campaign verifier to require the
-   vote-lock work counters.
-5. Build and hash-bind a corrected prepared input with that one binary, then run
-   exactly one unchanged 5+5+5 G4 matrix. Enforce the four-hour measurement
-   budget with at most two hours per unattended segment; resume only the same
-   checksum-bound output if the first segment stops cleanly.
-6. If corrected G4 passes, bind the refreshed redaction-safe G2, prepared-build,
-   and G4 measurement artifacts and build everything locally available for G5.
+1. Preserve every prior campaign and the corrected checkpoint as immutable
+   failed evidence. Do not resume, retry, merge outputs, or relabel partial work.
+2. Keep candidate source `442c5a4d`, binary `29423c…7c48`, corrected G1/G2
+   manifests, prepared-input manifest, runner `693855e3`, and diagnosis hashes
+   together as the closed corrected-campaign lineage.
+3. Do not modify candidate code under the corrected G4 plan. If local storage
+   work continues, first write and independently review a new plan for bounding
+   certified-send completed-tombstone resume while preserving durable delivery,
+   crash recovery, quarantine, replay, and fail-closed semantics.
+4. Require that new plan to add a direct timer/work counter for the pre-setup
+   outbox-resume phase, tests at 0/240/1,024 retained tombstones, tamper and crash
+   coverage, and a migration/retention proof. Do not infer success from the old
+   listed-stage model.
+5. If that source changes, freeze a new candidate and refresh every
+   binary-sensitive G1/G2/G3 receipt before any new performance campaign.
+6. Treat the legacy round-2 migration result as a separate harness/fixture
+   contract question. Resolve it in the new plan before authorizing another
+   campaign; do not waive it retroactively.
 7. Close the height-924 part of G3 only after a custodian and separate read-only
    copy authorization exist. Do not wait idle for that decision.
-8. Complete G5 and record `OFFLINE QUALIFIED` only after the exact height-924
-   replay and independent packet verification pass.
+8. Build G5 and record `OFFLINE QUALIFIED` only after a future G4 passes, the
+   exact height-924 replay exists, and the complete offline verifier passes.
 9. Run G6 only if controlled-devnet deployment is actually the next decision
    and its separate data-copy authorization has been recorded.
 10. Activate the deferred Dynamic UNL milestone only at the G7 boundary or after
     an explicit operator reprioritization.
 
-The plan is complete only when G0 through G6 pass and a separate decision either
-authorizes deployment or explicitly records why the qualified candidate remains
-undeployed. Until then, public testnet remains blocked.
+The milestone remains active and public testnet remains blocked. The immediate
+question is no longer whether the vote-lock index works—it does. The question is
+whether to authorize a new, bounded certified-send retention/resume remediation
+plan; this document does not authorize that implementation or another run.
