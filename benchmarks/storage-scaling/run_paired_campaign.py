@@ -888,6 +888,7 @@ def derive_prepared_input_manifest(
     source_manifest_path: Path,
     manifest_path: Path,
     *,
+    candidate_build_manifest_path: Path,
     node_bin: Path,
     batch_builder_bin: Path,
     expected_source_revision: str,
@@ -911,17 +912,29 @@ def derive_prepared_input_manifest(
         runner_source_revision,
         "derived prepared-input runner source revision",
     )
-    private_bundle = prepared_input_source(
-        source_manifest_path,
-        source["private_bundle"],
-        label="private bundle",
-        directory=True,
-    )
-    node_build = BASE.require_release_binary_identity(
-        node_bin,
-        private_bundle / "seed",
-        expected_source_revision,
-    )
+    if (
+        candidate_build_manifest_path.is_symlink()
+        or not candidate_build_manifest_path.is_file()
+    ):
+        raise ValueError("candidate build manifest must be a regular file")
+    candidate_build_manifest = BASE.read_json(candidate_build_manifest_path)
+    candidate_record = candidate_build_manifest.get("candidate")
+    if (
+        candidate_build_manifest.get("schema")
+        != "postfiat.storage.corrected_g1_candidate.v1"
+        or candidate_build_manifest.get("status") != "PASS"
+        or not isinstance(candidate_record, dict)
+        or candidate_record.get("source_revision") != expected_source_revision
+        or candidate_record.get("binary_sha256") != sha256(node_bin)
+        or candidate_record.get("embedded_build_git_revision")
+        != expected_source_revision[:8]
+        or candidate_record.get("embedded_build_profile") != "release"
+    ):
+        raise ValueError("candidate build manifest does not bind the qualification binary")
+    node_build = {
+        "git_revision": candidate_record["embedded_build_git_revision"],
+        "profile": candidate_record["embedded_build_profile"],
+    }
 
     derived = copy.deepcopy(source)
     original_prepared_by = source.get("prepared_by")
@@ -939,6 +952,7 @@ def derive_prepared_input_manifest(
         "source_revision": expected_source_revision,
         "node_binary_sha256": sha256(node_bin),
         "node_binary_build": node_build,
+        "candidate_build_manifest_sha256": sha256(candidate_build_manifest_path),
     }
     derived["batch_builder"] = {
         "binary_sha256": sha256(batch_builder_bin),
@@ -1056,6 +1070,12 @@ def validate_prepared_input_manifest(
         helper_build = identity_builder.get("build")
         if (
             not is_sha256(identity_candidate.get("node_binary_sha256"))
+            or (
+                identity_candidate.get("candidate_build_manifest_sha256") is not None
+                and not is_sha256(
+                    identity_candidate.get("candidate_build_manifest_sha256")
+                )
+            )
             or not isinstance(node_build, dict)
             or node_build.get("git_revision") != source_revision[:8]
             or node_build.get("profile") != "release"
@@ -3490,6 +3510,12 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--candidate-build-manifest",
+        type=Path,
+        metavar="PATH",
+        help="G1 build manifest that binds the derived candidate binary",
+    )
+    parser.add_argument(
         "--prepared-input-manifest",
         type=Path,
         metavar="PATH",
@@ -3515,6 +3541,7 @@ def main() -> int:
     if args.derive_from_prepared_input_manifest is not None:
         if (
             args.export_prepared_input_manifest is None
+            or args.candidate_build_manifest is None
             or args.node_bin is None
             or args.batch_builder_bin is None
             or args.expected_source_revision is None
@@ -3526,8 +3553,8 @@ def main() -> int:
         ):
             raise ValueError(
                 "manifest derivation requires only --derive-from-prepared-input-manifest, "
-                "--export-prepared-input-manifest, --node-bin, "
-                "--batch-builder-bin, and --expected-source-revision"
+                "--export-prepared-input-manifest, --candidate-build-manifest, "
+                "--node-bin, --batch-builder-bin, and --expected-source-revision"
             )
         require_revision(args.expected_source_revision, "source revision")
         current_revision = BASE.run_git_revision()
@@ -3544,13 +3571,20 @@ def main() -> int:
             )
         raw_source = args.derive_from_prepared_input_manifest.expanduser()
         raw_manifest = args.export_prepared_input_manifest.expanduser()
-        if raw_source.is_symlink() or raw_manifest.is_symlink():
-            raise ValueError("prepared-input manifest paths must not be symlinks")
+        raw_build_manifest = args.candidate_build_manifest.expanduser()
+        if (
+            raw_source.is_symlink()
+            or raw_manifest.is_symlink()
+            or raw_build_manifest.is_symlink()
+        ):
+            raise ValueError("manifest paths must not be symlinks")
         source_manifest_path = raw_source.resolve()
         manifest_path = raw_manifest.resolve()
+        candidate_build_manifest_path = raw_build_manifest.resolve()
         derive_prepared_input_manifest(
             source_manifest_path,
             manifest_path,
+            candidate_build_manifest_path=candidate_build_manifest_path,
             node_bin=node_bin,
             batch_builder_bin=batch_builder_bin,
             expected_source_revision=args.expected_source_revision,
@@ -3569,6 +3603,7 @@ def main() -> int:
             or args.batch_builder_bin is not None
             or args.expected_source_revision is not None
             or args.prepared_input_manifest is not None
+            or args.candidate_build_manifest is not None
         ):
             raise ValueError(
                 "--export-prepared-input-manifest requires only --output-dir"
@@ -3584,6 +3619,11 @@ def main() -> int:
         export_prepared_input_manifest(root, manifest_path)
         print(f"prepared-input-manifest={manifest_path}", flush=True)
         return 0
+
+    if args.candidate_build_manifest is not None:
+        raise ValueError(
+            "--candidate-build-manifest is valid only with manifest derivation"
+        )
 
     if (
         args.output_dir is None

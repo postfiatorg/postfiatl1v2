@@ -180,6 +180,8 @@ python3 -u benchmarks/storage-scaling/run_paired_campaign.py \
     /explicit/disposable/original-prepared-input.json \
   --export-prepared-input-manifest \
     /explicit/disposable/corrected-measurement-input.json \
+  --candidate-build-manifest \
+    /explicit/disposable/corrected-g1-candidate-manifest.json \
   --node-bin target/release/postfiat-node \
   --batch-builder-bin target/release/postfiat-storage-corpus-batches \
   --expected-source-revision FULL_CORRECTED_CANDIDATE_SOURCE_ID

@@ -2103,6 +2103,13 @@ def _verify_prepared_input_build(
         candidate.get("source_revision") != source_revision
         or candidate.get("node_binary_sha256")
         != binary_digests["bin/postfiat-node"]
+        or (
+            candidate.get("candidate_build_manifest_sha256") is not None
+            and HEX64.fullmatch(
+                str(candidate.get("candidate_build_manifest_sha256", ""))
+            )
+            is None
+        )
         or node_build.get("git_revision") != source_revision[:8]
         or node_build.get("profile") != "release"
     ):
@@ -2172,6 +2179,19 @@ def _verify_prepared_input_build(
                 str(prepared_candidate.get("node_binary_sha256", ""))
             )
             is None
+            or (
+                prepared_candidate.get("candidate_build_manifest_sha256")
+                is not None
+                and HEX64.fullmatch(
+                    str(
+                        prepared_candidate.get(
+                            "candidate_build_manifest_sha256",
+                            "",
+                        )
+                    )
+                )
+                is None
+            )
             or prepared_node_build.get("git_revision")
             != prepared_source_revision[:8]
             or prepared_node_build.get("profile") != "release"

@@ -529,27 +529,38 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
             corrected_revision = "8" * 40
             runner_revision = "9" * 40
             derived_path = temporary_root / "corrected-prepared-input.json"
-
-            with mock.patch.object(
-                PAIRED.BASE,
-                "require_release_binary_identity",
-                return_value={
-                    "git_revision": corrected_revision[:8],
-                    "profile": "release",
+            candidate_build_manifest_path = temporary_root / "g1-candidate.json"
+            _write_json(
+                candidate_build_manifest_path,
+                {
+                    "schema": "postfiat.storage.corrected_g1_candidate.v1",
+                    "status": "PASS",
+                    "candidate": {
+                        "source_revision": corrected_revision,
+                        "binary_sha256": PAIRED.sha256(node_bin),
+                        "embedded_build_git_revision": corrected_revision[:8],
+                        "embedded_build_profile": "release",
+                    },
                 },
-            ):
-                derived = PAIRED.derive_prepared_input_manifest(
-                    source_manifest_path,
-                    derived_path,
-                    node_bin=node_bin,
-                    batch_builder_bin=batch_builder_bin,
-                    expected_source_revision=corrected_revision,
-                    runner_source_revision=runner_revision,
-                )
+            )
+
+            derived = PAIRED.derive_prepared_input_manifest(
+                source_manifest_path,
+                derived_path,
+                candidate_build_manifest_path=candidate_build_manifest_path,
+                node_bin=node_bin,
+                batch_builder_bin=batch_builder_bin,
+                expected_source_revision=corrected_revision,
+                runner_source_revision=runner_revision,
+            )
 
             self.assertEqual(
                 derived["candidate"]["node_binary_sha256"],
                 PAIRED.sha256(node_bin),
+            )
+            self.assertEqual(
+                derived["candidate"]["candidate_build_manifest_sha256"],
+                PAIRED.sha256(candidate_build_manifest_path),
             )
             self.assertEqual(
                 derived["batch_builder"]["binary_sha256"],
