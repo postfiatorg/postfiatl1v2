@@ -1780,6 +1780,37 @@ def validate_prepared_campaign_binding(state: CampaignState) -> None:
             raise ValueError(
                 f"campaign prepared-input height {height} fleet binding changed"
             )
+    advance_imports = imported.get("advances")
+    if not isinstance(advance_imports, list) or len(advance_imports) != len(
+        manifest["advances"]
+    ):
+        raise ValueError("campaign prepared-input advance artifacts are incomplete")
+    for index, (advance, receipt) in enumerate(
+        zip(manifest["advances"], advance_imports),
+        start=1,
+    ):
+        if not isinstance(receipt, dict) or receipt.get("unit_id") != advance.get(
+            "unit_id"
+        ):
+            raise ValueError(
+                f"campaign prepared-input advance {index} receipt is malformed"
+            )
+        for field in ("receipt", "report"):
+            artifact = safe_campaign_path(
+                state.root,
+                str(receipt.get(field, "")),
+                f"campaign prepared-input advance {index} {field}",
+            )
+            expected_sha256 = advance[field]["sha256"]
+            if (
+                artifact.is_symlink()
+                or not artifact.is_file()
+                or receipt.get(f"{field}_sha256") != expected_sha256
+                or sha256(artifact) != expected_sha256
+            ):
+                raise ValueError(
+                    f"campaign prepared-input advance {index} {field} changed"
+                )
     if (
         checkpoint.get("current_height") != manifest["build"]["final_height"]
         or checkpoint.get("current_prepared_fleet_sha256")
@@ -2120,6 +2151,43 @@ def initialize_prepared_campaign(
     shutil.copyfile(manifest_path, imported_manifest)
     if sha256(imported_manifest) != sha256(manifest_path):
         raise RuntimeError("prepared-input manifest copy digest differs")
+    imported_advances: list[dict[str, Any]] = []
+    for index, advance in enumerate(manifest["advances"], start=1):
+        receipt_source = prepared_input_source(
+            manifest_path,
+            advance["receipt"],
+            label=f"advance {index} receipt",
+            directory=False,
+        )
+        report_source = prepared_input_source(
+            manifest_path,
+            advance["report"],
+            label=f"advance {index} report",
+            directory=False,
+        )
+        receipt_destination = (
+            imported_root / "advances" / f"advance-{index:04}-receipt.json"
+        )
+        report_destination = (
+            imported_root / "advances" / f"advance-{index:04}-report.json"
+        )
+        receipt_destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(receipt_source, receipt_destination)
+        shutil.copyfile(report_source, report_destination)
+        if (
+            sha256(receipt_destination) != advance["receipt"]["sha256"]
+            or sha256(report_destination) != advance["report"]["sha256"]
+        ):
+            raise RuntimeError("prepared-input advance artifact copy digest differs")
+        imported_advances.append(
+            {
+                "unit_id": advance["unit_id"],
+                "receipt": receipt_destination.relative_to(root).as_posix(),
+                "receipt_sha256": advance["receipt"]["sha256"],
+                "report": report_destination.relative_to(root).as_posix(),
+                "report_sha256": advance["report"]["sha256"],
+            }
+        )
 
     private_source = prepared_input_source(
         manifest_path,
@@ -2278,6 +2346,7 @@ def initialize_prepared_campaign(
                 height_one_destination_sha256
             ),
             "prepared_fleets": fleet_imports,
+            "advances": imported_advances,
         },
         "source_revision": expected_source_revision,
         "runner_source_revision": runner_source_revision,

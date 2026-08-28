@@ -94,6 +94,20 @@ LEGACY_COUNTER_FIELDS = (
 SIGNED_TRANSFER_CORPUS_SCHEMA = "postfiat-tx-latency-signed-transfer-corpus-v1"
 RESOURCE_SAMPLE_SCHEMA = "postfiat-storage-resource-samples-v1"
 RESOURCE_SAMPLE_TARGET_INTERVAL_MS = 100
+PREPARED_INPUT_MANIFEST_SCHEMA = "postfiat-storage-prepared-input-manifest-v1"
+PREPARED_BUILD_COUNTER_FIELDS = (
+    "committed_write_transactions",
+    "page_reads",
+    "page_writes",
+    "full_history_scans",
+    "full_history_records_read",
+    "full_history_bytes_read",
+)
+PREPARED_BUILD_ZERO_COUNTER_FIELDS = (
+    "full_history_scans",
+    "full_history_records_read",
+    "full_history_bytes_read",
+)
 PERFORMANCE_QUALIFICATION_TIMEOUT_MS = 900_000
 MAX_PROPOSAL_PAGE_READS_PER_ROUND = 64
 MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND = 64
@@ -1873,6 +1887,379 @@ def _verify_performance_lane(
     return rows, verified_windows
 
 
+def _verify_prepared_input_build(
+    packet_dir: Path,
+    checksums: Mapping[str, str],
+    performance: Mapping[str, Any],
+    source_revision: str,
+    binary_digests: Mapping[str, str],
+    snapshot_bindings: Mapping[int, Mapping[str, Any]],
+    verified_windows: Mapping[str, Mapping[int, Sequence[Mapping[str, Any]]]],
+) -> None:
+    manifest = _bound_json(
+        packet_dir,
+        checksums,
+        {
+            "path": performance.get("prepared_input_manifest"),
+            "sha256": performance.get("prepared_input_manifest_sha256"),
+        },
+        "performance prepared-input manifest",
+    )
+    if manifest.get("schema") != PREPARED_INPUT_MANIFEST_SCHEMA:
+        _fail("performance prepared-input manifest schema is unsupported")
+    expected_build = {
+        "candidate": manifest.get("candidate"),
+        "batch_builder": manifest.get("batch_builder"),
+        "runner": manifest.get("runner"),
+        "build": manifest.get("build"),
+    }
+    if performance.get("prepared_input_build") != expected_build:
+        _fail("performance prepared-input build identity differs from the manifest")
+    candidate = _object(manifest.get("candidate"), "prepared-input candidate")
+    node_build = _object(
+        candidate.get("node_binary_build"), "prepared-input node build"
+    )
+    if (
+        candidate.get("source_revision") != source_revision
+        or candidate.get("node_binary_sha256")
+        != binary_digests["bin/postfiat-node"]
+        or node_build.get("git_revision") != source_revision[:8]
+        or node_build.get("profile") != "release"
+    ):
+        _fail("performance prepared-input candidate binding differs")
+    batch_builder = _object(
+        manifest.get("batch_builder"), "prepared-input batch builder"
+    )
+    builder_build = _object(
+        batch_builder.get("build"), "prepared-input batch builder build"
+    )
+    runner = _object(manifest.get("runner"), "prepared-input runner")
+    runner_revision = str(runner.get("source_revision", ""))
+    if (
+        batch_builder.get("binary_sha256")
+        != binary_digests["bin/postfiat-storage-corpus-batches"]
+        or HEX40.fullmatch(runner_revision) is None
+        or builder_build.get("git_revision") != runner_revision[:8]
+        or builder_build.get("profile") != "release"
+        or HEX96.fullmatch(str(runner.get("spec_sha3_384", ""))) is None
+        or any(
+            HEX64.fullmatch(str(runner.get(field, ""))) is None
+            for field in (
+                "paired_runner_sha256",
+                "selected_runner_sha256",
+                "shared_runner_sha256",
+            )
+        )
+    ):
+        _fail("performance prepared-input helper or runner binding differs")
+    public = _object(manifest.get("public_inputs"), "prepared-input public inputs")
+    private_bundle = _object(
+        manifest.get("private_bundle"), "prepared-input private bundle reference"
+    )
+    topology_reference = _object(
+        manifest.get("topology"), "prepared-input topology reference"
+    )
+    height_one_reference = _object(
+        manifest.get("height_1_snapshot"),
+        "prepared-input height-1 snapshot reference",
+    )
+    for label, reference in (
+        ("private bundle", private_bundle),
+        ("topology", topology_reference),
+        ("height-1 snapshot", height_one_reference),
+    ):
+        path = reference.get("path")
+        if (
+            not isinstance(path, str)
+            or not path
+            or Path(path).is_absolute()
+            or HEX64.fullmatch(str(reference.get("sha256", ""))) is None
+        ):
+            _fail(f"prepared-input {label} reference is invalid")
+    selected_lane = _object(
+        _object(performance.get("lanes"), "performance lanes").get(
+            "selected-indexed"
+        ),
+        "selected performance lane",
+    )
+    if (
+        public.get("topology_sha256") != selected_lane.get("topology_sha256")
+        or public.get("height_1_snapshot_sha256")
+        != selected_lane.get("height_1_snapshot_sha256")
+        or public.get("validator_public_identities")
+        != selected_lane.get("validator_public_identities")
+        or topology_reference.get("sha256") != public.get("topology_sha256")
+        or height_one_reference.get("sha256")
+        != public.get("height_1_snapshot_sha256")
+    ):
+        _fail("performance prepared-input public inputs differ from measurement")
+
+    imported = _object(
+        performance.get("prepared_input_import"), "prepared-input import receipt"
+    )
+    imported_fleets = _list(
+        imported.get("prepared_fleets"), "prepared-input imported fleets"
+    )
+    manifest_materials = _list(
+        manifest.get("materials"), "prepared-input materials"
+    )
+    if (
+        imported.get("private_bundle_source_sha256")
+        != private_bundle.get("sha256")
+        or imported.get("private_bundle_destination_sha256")
+        != private_bundle.get("sha256")
+        or imported.get("height_1_snapshot_destination_sha256")
+        != height_one_reference.get("sha256")
+        or len(imported_fleets) != len(manifest_materials)
+    ):
+        _fail("performance prepared-input copy receipt differs")
+    for material_value, fleet_value in zip(manifest_materials, imported_fleets):
+        material = _object(material_value, "prepared-input imported material")
+        fleet = _object(fleet_value, "prepared-input fleet copy receipt")
+        fleet_reference = _object(
+            material.get("prepared_fleet"), "prepared-input fleet reference"
+        )
+        if (
+            fleet.get("height") != material.get("height")
+            or fleet.get("source_sha256") != fleet_reference.get("sha256")
+            or fleet.get("destination_sha256") != fleet_reference.get("sha256")
+        ):
+            _fail("performance prepared-input source/destination fleet differs")
+    imported_advances = _list(
+        imported.get("advances"), "prepared-input imported advances"
+    )
+    advances = _list(manifest.get("advances"), "prepared-input advances")
+    if not advances or len(imported_advances) != len(advances):
+        _fail("performance prepared-input build receipts are incomplete")
+    expected_start = 1
+    aggregate = {field: 0 for field in PREPARED_BUILD_COUNTER_FIELDS}
+    last_validators: list[Mapping[str, Any]] = []
+    last_tip = ""
+    last_root = ""
+    for index, (advance_value, imported_value) in enumerate(
+        zip(advances, imported_advances),
+        start=1,
+    ):
+        advance = _object(advance_value, f"prepared-input advance {index}")
+        imported_advance = _object(
+            imported_value, f"prepared-input imported advance {index}"
+        )
+        start = advance.get("starting_height")
+        final = advance.get("final_height")
+        rounds = advance.get("rounds")
+        if (
+            type(start) is not int
+            or type(final) is not int
+            or type(rounds) is not int
+            or start != expected_start
+            or final <= start
+            or rounds != final - start
+            or imported_advance.get("unit_id") != advance.get("unit_id")
+            or HEX64.fullmatch(
+                str(advance.get("result_prepared_fleet_sha256", ""))
+            )
+            is None
+        ):
+            _fail("performance prepared-input advances are not contiguous from height 1")
+        counters = _object(
+            advance.get("counters"), f"prepared-input advance {index} counters"
+        )
+        if set(counters) != set(PREPARED_BUILD_COUNTER_FIELDS):
+            _fail("performance prepared-input build counter set differs")
+        for field in PREPARED_BUILD_COUNTER_FIELDS:
+            value = counters.get(field)
+            if type(value) is not int or value < 0:
+                _fail(f"performance prepared-input counter {field} is invalid")
+            aggregate[field] += value
+        if (
+            counters["committed_write_transactions"] != rounds * 6
+            or any(
+                counters[field] != 0
+                for field in PREPARED_BUILD_ZERO_COUNTER_FIELDS
+            )
+        ):
+            _fail("performance prepared-input build performed invalid storage work")
+        manifest_receipt = _object(
+            advance.get("receipt"), f"prepared-input advance {index} receipt binding"
+        )
+        manifest_report = _object(
+            advance.get("report"), f"prepared-input advance {index} report binding"
+        )
+        if (
+            imported_advance.get("source_receipt_sha256")
+            != manifest_receipt.get("sha256")
+            or imported_advance.get("source_report_sha256")
+            != manifest_report.get("sha256")
+        ):
+            _fail("performance prepared-input build artifact digest differs")
+        receipt = _bound_json(
+            packet_dir,
+            checksums,
+            {
+                "path": imported_advance.get("receipt"),
+                "sha256": imported_advance.get("receipt_sha256"),
+            },
+            f"prepared-input advance {index} receipt",
+        )
+        raw_report = _bound_json(
+            packet_dir,
+            checksums,
+            {
+                "path": imported_advance.get("report"),
+                "sha256": imported_advance.get("report_sha256"),
+            },
+            f"prepared-input advance {index} report",
+        )
+        if (
+            raw_report.get("schema")
+            != "postfiat-storage-scaling-persistent-advance-report-v1"
+            or raw_report.get("status") != "passed"
+        ):
+            _fail(f"performance prepared-input advance {index} report did not pass")
+        storage = _object(
+            receipt.get("storage"), f"prepared-input advance {index} storage"
+        )
+        transactional = _object(
+            storage.get("transactional"),
+            f"prepared-input advance {index} transactional storage",
+        )
+        observed_counters: dict[str, int] = {}
+        for field in PREPARED_BUILD_COUNTER_FIELDS:
+            value = storage.get(field)
+            if type(value) is not int or value < 0 or transactional.get(field) != value:
+                _fail(
+                    f"performance prepared-input receipt counter {field} differs"
+                )
+            observed_counters[field] = value
+        last_validators_value = _list(
+            receipt.get("final_fleet"),
+            f"prepared-input advance {index} final fleet",
+        )
+        last_tip, last_root = _verify_performance_fleet(
+            last_validators_value,
+            f"prepared-input advance {index} final fleet",
+            final,
+        )
+        last_validators = [
+            _object(value, f"prepared-input advance {index} validator")
+            for value in last_validators_value
+        ]
+        if (
+            receipt.get("starting_height") != start
+            or receipt.get("final_height") != final
+            or receipt.get("rounds") != rounds
+            or receipt.get("validators_converged") != 6
+            or receipt.get("literal_receipts_exact") is not True
+            or receipt.get("backend_work_gate_pass") is not True
+            or receipt.get("zero_full_history_reads") is not True
+            or observed_counters != counters
+            or receipt.get("final_tip") != advance.get("final_tip")
+            or receipt.get("final_state_root") != advance.get("final_state_root")
+            or last_tip != advance.get("final_tip")
+            or last_root != advance.get("final_state_root")
+            or receipt.get("result_prepared_fleet_sha256")
+            != advance.get("result_prepared_fleet_sha256")
+            or receipt.get("batch_builder_binary_sha256")
+            != batch_builder.get("binary_sha256")
+            or receipt.get("batch_builder_build") != builder_build
+        ):
+            _fail(f"performance prepared-input advance {index} receipt differs")
+        expected_start = final
+
+    build = _object(manifest.get("build"), "prepared-input final build")
+    final_validators = _list(
+        build.get("final_validators"), "prepared-input build-final validators"
+    )
+    final_tip, final_root = _verify_performance_fleet(
+        final_validators,
+        "prepared-input build-final validators",
+        expected_start,
+    )
+    build_elapsed = build.get("elapsed_seconds")
+    if (
+        expected_start != 5000
+        or not isinstance(build_elapsed, (int, float))
+        or isinstance(build_elapsed, bool)
+        or not math.isfinite(float(build_elapsed))
+        or float(build_elapsed) < 0
+        or build.get("counters") != aggregate
+        or build.get("final_height") != expected_start
+        or build.get("final_tip") != last_tip
+        or build.get("final_state_root") != last_root
+        or build.get("final_tip") != final_tip
+        or build.get("final_state_root") != final_root
+        or final_validators != last_validators
+        or build.get("final_prepared_fleet_sha256")
+        != advances[-1].get("result_prepared_fleet_sha256")
+    ):
+        _fail("performance prepared-input final build identity differs")
+
+    materials = manifest_materials
+    performance_materials = _list(
+        performance.get("materials_by_height"), "performance materials"
+    )
+    if [
+        value.get("height") if isinstance(value, dict) else None for value in materials
+    ] != HEIGHTS:
+        _fail("performance prepared-input materials are incomplete")
+    for manifest_value, performance_value in zip(materials, performance_materials):
+        material = _object(manifest_value, "prepared-input material")
+        measured = _object(performance_value, "performance material")
+        height = int(material["height"])
+        fleet_reference = _object(
+            material.get("prepared_fleet"),
+            f"prepared-input height {height} fleet",
+        )
+        corpus_reference = _object(
+            material.get("signed_transfer_corpus"),
+            f"prepared-input height {height} corpus",
+        )
+        expected_snapshot_sha256 = None
+        if height == 50:
+            expected_snapshot_sha256 = _object(
+                material.get("snapshot"), "prepared-input height-50 snapshot"
+            ).get("sha256")
+        elif material.get("snapshot") is not None:
+            _fail("performance prepared-input top material retained a snapshot")
+        if (
+            measured.get("height") != height
+            or measured.get("prepared_fleet_sha256")
+            != fleet_reference.get("sha256")
+            or measured.get("snapshot_sha256") != expected_snapshot_sha256
+            or measured.get("signed_transfer_corpus_sha256")
+            != corpus_reference.get("sha256")
+            or measured.get("transfer_count") != material.get("transfer_count")
+            or measured.get("first_sequence") != material.get("first_sequence")
+            or measured.get("last_sequence") != material.get("last_sequence")
+            or snapshot_bindings[height]["prepared_fleet_sha256"]
+            != fleet_reference.get("sha256")
+            or any(
+                measured.get(field) != material.get(field)
+                for field in (
+                    "corpus_source_mode",
+                    "corpus_source_prepared_fleet_sha256",
+                    "corpus_scratch_before_sha256",
+                    "corpus_scratch_after_sha256",
+                    "corpus_scratch_mutated",
+                    "corpus_scratch_discarded",
+                    "corpus_scratch_restored_sha256",
+                )
+            )
+        ):
+            _fail(f"performance prepared-input height {height} material differs")
+    top_digest = build.get("final_prepared_fleet_sha256")
+    selected_rows = _list(selected_lane.get("rows"), "selected performance rows")
+    top_windows = _list(selected_rows[-1].get("windows"), "selected top windows")
+    if any(window.get("prepared_fleet_sha256") != top_digest for window in top_windows):
+        _fail("performance top-height window used a different build-final fleet")
+    if any(
+        window.get("initial_tip") != final_tip
+        or window.get("initial_state_root") != final_root
+        for window in verified_windows["selected-indexed"][5000]
+    ):
+        _fail("performance top-height window initial identity differs from build end")
+
+
 def _verify_performance(
     packet_dir: Path,
     checksums: Mapping[str, str],
@@ -1880,6 +2267,9 @@ def _verify_performance(
     source_revision: str,
     binary_digests: Mapping[str, str],
 ) -> dict[str, float]:
+    input_mode = performance.get("input_mode")
+    if input_mode not in {None, "prepared-input-manifest"}:
+        _fail("performance input mode is unsupported")
     if performance.get("status") != "PASS":
         _fail("performance campaign did not pass")
     if performance.get("campaign_mode") != "release-qualification":
@@ -1923,10 +2313,10 @@ def _verify_performance(
     builder_build = _object(
         performance.get("batch_builder_build"), "performance batch builder build"
     )
-    if (
-        builder_build.get("git_revision")
+    if builder_build.get("profile") != "release" or (
+        input_mode is None
+        and builder_build.get("git_revision")
         != str(performance["runner_source_revision"])[:8]
-        or builder_build.get("profile") != "release"
     ):
         _fail("performance batch builder build differs from the runner source")
     if performance.get("windows_per_height") != 5 or performance.get("rounds_per_window") != 50:
@@ -2066,6 +2456,16 @@ def _verify_performance(
         lane_binaries.add(str(lane.get("node_binary_sha256")))
     if lane_sources != {source_revision} or lane_binaries != {current_binary_digest}:
         _fail("performance lanes did not use one source revision and binary")
+    if input_mode == "prepared-input-manifest":
+        _verify_prepared_input_build(
+            packet_dir,
+            checksums,
+            performance,
+            source_revision,
+            binary_digests,
+            snapshot_bindings,
+            verified_windows,
+        )
     for height in [50]:
         for window_index in range(5):
             compared = [

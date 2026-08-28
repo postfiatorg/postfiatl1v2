@@ -1530,6 +1530,233 @@ def _passing_packet(packet: Path) -> None:
     _write_checksums(packet)
 
 
+def _add_prepared_input_build(packet: Path) -> None:
+    performance_path = packet / "artifacts" / "performance.json"
+    performance = json.loads(performance_path.read_text(encoding="utf-8"))
+    selected = performance["lanes"]["selected-indexed"]
+    top_window = selected["rows"][-1]["windows"][0]
+    final_validators = top_window["initial_fleet"]
+    final_tip = final_validators[0]["tip"]
+    final_state_root = final_validators[0]["state_root"]
+    counters = {
+        "committed_write_transactions": 4999 * 6,
+        "page_reads": 4999 * 12,
+        "page_writes": 4999 * 6,
+        "full_history_scans": 0,
+        "full_history_records_read": 0,
+        "full_history_bytes_read": 0,
+    }
+    top_digest = performance["materials_by_height"][-1][
+        "prepared_fleet_sha256"
+    ]
+    advance_report = (
+        packet / "performance" / "prepared-input" / "advances" / "advance-0001-report.json"
+    )
+    _write_json(
+        advance_report,
+        {
+            "schema": "postfiat-storage-scaling-persistent-advance-report-v1",
+            "status": "passed",
+        },
+    )
+    advance_receipt = (
+        packet
+        / "performance"
+        / "prepared-input"
+        / "advances"
+        / "advance-0001-receipt.json"
+    )
+    _write_json(
+        advance_receipt,
+        {
+            "starting_height": 1,
+            "final_height": 5000,
+            "rounds": 4999,
+            "validators_converged": 6,
+            "literal_receipts_exact": True,
+            "backend_work_gate_pass": True,
+            "zero_full_history_reads": True,
+            "storage": {**counters, "transactional": dict(counters)},
+            "final_tip": final_tip,
+            "final_state_root": final_state_root,
+            "final_fleet": final_validators,
+            "result_prepared_fleet_sha256": top_digest,
+            "batch_builder_binary_sha256": performance[
+                "batch_builder_binary_sha256"
+            ],
+            "batch_builder_build": performance["batch_builder_build"],
+        },
+    )
+    manifest_materials = []
+    for material in performance["materials_by_height"]:
+        height = material["height"]
+        manifest_materials.append(
+            {
+                "height": height,
+                "prepared_fleet": {
+                    "path": f"source/prepared-fleets/height-{height}",
+                    "sha256": material["prepared_fleet_sha256"],
+                },
+                "snapshot": (
+                    {
+                        "path": "source/snapshots/height-50.snapshot",
+                        "sha256": material["snapshot_sha256"],
+                    }
+                    if height == 50
+                    else None
+                ),
+                "signed_transfer_corpus": {
+                    "path": material["signed_transfer_corpus"],
+                    "sha256": material["signed_transfer_corpus_sha256"],
+                },
+                "transfer_count": material["transfer_count"],
+                "first_sequence": material["first_sequence"],
+                "last_sequence": material["last_sequence"],
+                "corpus_source_mode": material["corpus_source_mode"],
+                "corpus_source_prepared_fleet_sha256": material[
+                    "corpus_source_prepared_fleet_sha256"
+                ],
+                "corpus_scratch_before_sha256": material[
+                    "corpus_scratch_before_sha256"
+                ],
+                "corpus_scratch_after_sha256": material[
+                    "corpus_scratch_after_sha256"
+                ],
+                "corpus_scratch_mutated": material["corpus_scratch_mutated"],
+                "corpus_scratch_discarded": material[
+                    "corpus_scratch_discarded"
+                ],
+                "corpus_scratch_restored_sha256": material[
+                    "corpus_scratch_restored_sha256"
+                ],
+            }
+        )
+    runner_revision = performance["runner_source_revision"]
+    manifest = {
+        "schema": "postfiat-storage-prepared-input-manifest-v1",
+        "candidate": {
+            "source_revision": performance["source_revision"],
+            "node_binary_sha256": performance["node_binary_sha256"],
+            "node_binary_build": performance["node_binary_build"],
+        },
+        "batch_builder": {
+            "binary_sha256": performance["batch_builder_binary_sha256"],
+            "build": performance["batch_builder_build"],
+        },
+        "runner": {
+            "source_revision": runner_revision,
+            "spec_sha3_384": "a" * 96,
+            "paired_runner_sha256": "b" * 64,
+            "selected_runner_sha256": "c" * 64,
+            "shared_runner_sha256": "d" * 64,
+        },
+        "public_inputs": {
+            "topology_sha256": selected["topology_sha256"],
+            "height_1_snapshot_sha256": selected["height_1_snapshot_sha256"],
+            "validator_public_identities": selected[
+                "validator_public_identities"
+            ],
+        },
+        "private_bundle": {"path": "source/private", "sha256": "e" * 64},
+        "topology": {
+            "path": "source/topology.json",
+            "sha256": selected["topology_sha256"],
+        },
+        "height_1_snapshot": {
+            "path": "source/height-1.snapshot",
+            "sha256": selected["height_1_snapshot_sha256"],
+        },
+        "build": {
+            "started_at": "2026-08-27T00:00:00Z",
+            "elapsed_seconds": 1000.0,
+            "elapsed_source": "campaign-checkpoint",
+            "completed_advance_elapsed_seconds": 900.0,
+            "counters": counters,
+            "final_height": 5000,
+            "final_tip": final_tip,
+            "final_state_root": final_state_root,
+            "final_validators": final_validators,
+            "final_prepared_fleet_sha256": top_digest,
+        },
+        "advances": [
+            {
+                "unit_id": "canonical/advance-1-to-5000",
+                "starting_height": 1,
+                "final_height": 5000,
+                "rounds": 4999,
+                "receipt": {
+                    "path": "source/advance-receipt.json",
+                    "sha256": _sha256(advance_receipt),
+                },
+                "report": {
+                    "path": "source/advance-report.json",
+                    "sha256": _sha256(advance_report),
+                },
+                "counters": counters,
+                "final_tip": final_tip,
+                "final_state_root": final_state_root,
+                "result_prepared_fleet_sha256": top_digest,
+            }
+        ],
+        "materials": manifest_materials,
+    }
+    manifest_path = packet / "performance" / "prepared-input" / "manifest.json"
+    _write_json(manifest_path, manifest)
+    fleet_receipts = [
+        {
+            "height": material["height"],
+            "source_sha256": material["prepared_fleet"]["sha256"],
+            "destination": f"prepared-fleets/height-{material['height']}",
+            "destination_sha256": material["prepared_fleet"]["sha256"],
+        }
+        for material in manifest_materials
+    ]
+    performance.update(
+        {
+            "input_mode": "prepared-input-manifest",
+            "prepared_input_manifest": manifest_path.relative_to(packet).as_posix(),
+            "prepared_input_manifest_sha256": _sha256(manifest_path),
+            "prepared_input_build": {
+                key: manifest[key]
+                for key in ("candidate", "batch_builder", "runner", "build")
+            },
+            "prepared_input_import": {
+                "private_bundle_source_sha256": manifest["private_bundle"][
+                    "sha256"
+                ],
+                "private_bundle_destination_sha256": manifest[
+                    "private_bundle"
+                ]["sha256"],
+                "height_1_snapshot_destination_sha256": manifest[
+                    "height_1_snapshot"
+                ]["sha256"],
+                "prepared_fleets": fleet_receipts,
+                "advances": [
+                    {
+                        "unit_id": manifest["advances"][0]["unit_id"],
+                        "receipt": advance_receipt.relative_to(packet).as_posix(),
+                        "source_receipt_sha256": _sha256(advance_receipt),
+                        "receipt_sha256": _sha256(advance_receipt),
+                        "report": advance_report.relative_to(packet).as_posix(),
+                        "source_report_sha256": _sha256(advance_report),
+                        "report_sha256": _sha256(advance_report),
+                    }
+                ],
+            },
+        }
+    )
+    _write_json(performance_path, performance)
+    packet_manifest_path = packet / MANIFEST_FILE
+    packet_manifest = json.loads(
+        packet_manifest_path.read_text(encoding="utf-8")
+    )
+    packet_manifest["artifacts"]["performance"]["sha256"] = _sha256(
+        performance_path
+    )
+    _write_json(packet_manifest_path, packet_manifest)
+    _write_checksums(packet)
+
+
 def _rewrite_migration(
     packet: Path,
     mutation: Callable[[dict[str, object]], None],
@@ -1619,6 +1846,80 @@ class StorageScalingVerifierTests(unittest.TestCase):
             self.assertEqual(
                 verified.report["tamper_case_count"], len(REQUIRED_TAMPER_CASES)
             )
+
+    def test_storage_scaling_packet_verifies_prepared_input_build(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+            _add_prepared_input_build(packet)
+
+            verified = verify_packet(packet)
+
+            self.assertIs(verified.report["verified"], True)
+
+    def test_storage_scaling_packet_rejects_noncontiguous_prepared_build(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+            _add_prepared_input_build(packet)
+            manifest_path = (
+                packet / "performance" / "prepared-input" / "manifest.json"
+            )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["advances"][0]["starting_height"] = 2
+            _write_json(manifest_path, manifest)
+            performance_path = packet / "artifacts" / "performance.json"
+            performance = json.loads(performance_path.read_text(encoding="utf-8"))
+            performance["prepared_input_manifest_sha256"] = _sha256(manifest_path)
+            _write_json(performance_path, performance)
+            packet_manifest_path = packet / MANIFEST_FILE
+            packet_manifest = json.loads(
+                packet_manifest_path.read_text(encoding="utf-8")
+            )
+            packet_manifest["artifacts"]["performance"]["sha256"] = _sha256(
+                performance_path
+            )
+            _write_json(packet_manifest_path, packet_manifest)
+            _write_checksums(packet)
+
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "not contiguous from height 1",
+            ):
+                verify_packet(packet)
+
+    def test_storage_scaling_packet_rejects_prepared_full_history_work(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+            _add_prepared_input_build(packet)
+            manifest_path = (
+                packet / "performance" / "prepared-input" / "manifest.json"
+            )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["advances"][0]["counters"]["full_history_scans"] = 1
+            manifest["build"]["counters"]["full_history_scans"] = 1
+            _write_json(manifest_path, manifest)
+            performance_path = packet / "artifacts" / "performance.json"
+            performance = json.loads(performance_path.read_text(encoding="utf-8"))
+            performance["prepared_input_manifest_sha256"] = _sha256(manifest_path)
+            performance["prepared_input_build"]["build"] = manifest["build"]
+            _write_json(performance_path, performance)
+            packet_manifest_path = packet / MANIFEST_FILE
+            packet_manifest = json.loads(
+                packet_manifest_path.read_text(encoding="utf-8")
+            )
+            packet_manifest["artifacts"]["performance"]["sha256"] = _sha256(
+                performance_path
+            )
+            _write_json(packet_manifest_path, packet_manifest)
+            _write_checksums(packet)
+
+            with self.assertRaisesRegex(
+                StorageScalingVerificationError,
+                "invalid storage work",
+            ):
+                verify_packet(packet)
 
     def test_storage_scaling_packet_rejects_nonoffline_performance(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

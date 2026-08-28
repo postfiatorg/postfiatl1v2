@@ -207,6 +207,90 @@ class StorageScalingPackagerTests(unittest.TestCase):
                 PACKAGER.copy_performance(packet, source)
             self.assertFalse((root / "escape.json").exists())
 
+    def test_copy_performance_includes_prepared_input_build_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            campaign = root / "campaign"
+            campaign.mkdir()
+            source = _campaign(campaign)
+            report = json.loads(source.read_text(encoding="utf-8"))
+            advance_receipt = campaign / "prepared-input" / "advance-receipt.json"
+            advance_report = campaign / "prepared-input" / "advance-report.json"
+            _write_json(
+                advance_receipt,
+                {
+                    "kind": "receipt",
+                    "signed_transfer_corpus": "/host-local/corpus.json",
+                },
+            )
+            _write_json(advance_report, {"kind": "report"})
+            manifest = {
+                "schema": PACKAGER.PREPARED_INPUT_MANIFEST_SCHEMA,
+                "candidate": {"source_revision": "a" * 40},
+                "batch_builder": {"binary_sha256": "b" * 64},
+                "runner": {"source_revision": "c" * 40},
+                "build": {"final_height": 5000},
+                "advances": [
+                    {
+                        "unit_id": "canonical/advance-1-to-5000",
+                        "receipt": {"path": "unused", "sha256": _sha256(advance_receipt)},
+                        "report": {"path": "unused", "sha256": _sha256(advance_report)},
+                    }
+                ],
+            }
+            manifest_path = campaign / "prepared-input" / "manifest.json"
+            _write_json(manifest_path, manifest)
+            report.update(
+                {
+                    "input_mode": "prepared-input-manifest",
+                    "prepared_input_manifest": manifest_path.relative_to(
+                        campaign
+                    ).as_posix(),
+                    "prepared_input_manifest_sha256": _sha256(manifest_path),
+                    "prepared_input_build": {
+                        key: manifest[key]
+                        for key in ("candidate", "batch_builder", "runner", "build")
+                    },
+                    "prepared_input_import": {
+                        "advances": [
+                            {
+                                "unit_id": "canonical/advance-1-to-5000",
+                                "receipt": advance_receipt.relative_to(
+                                    campaign
+                                ).as_posix(),
+                                "receipt_sha256": _sha256(advance_receipt),
+                                "report": advance_report.relative_to(
+                                    campaign
+                                ).as_posix(),
+                                "report_sha256": _sha256(advance_report),
+                            }
+                        ]
+                    },
+                }
+            )
+            _write_json(source, report)
+            packet = root / "packet"
+
+            destination = PACKAGER.copy_performance(packet, source)
+
+            copied = json.loads(destination.read_text(encoding="utf-8"))
+            copied_manifest = packet / copied["prepared_input_manifest"]
+            self.assertEqual(_sha256(copied_manifest), _sha256(manifest_path))
+            imported = copied["prepared_input_import"]["advances"][0]
+            self.assertTrue((packet / imported["receipt"]).is_file())
+            self.assertTrue((packet / imported["report"]).is_file())
+            self.assertEqual(
+                imported["source_receipt_sha256"],
+                manifest["advances"][0]["receipt"]["sha256"],
+            )
+            copied_receipt = json.loads(
+                (packet / imported["receipt"]).read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                copied_receipt["signed_transfer_corpus"],
+                "$SIGNED_TRANSFER_CORPUS",
+            )
+
     def test_copy_performance_rejects_high_height_portable_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
