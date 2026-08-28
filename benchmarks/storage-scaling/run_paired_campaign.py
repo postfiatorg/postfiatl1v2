@@ -368,6 +368,7 @@ class CampaignState:
         self.segment_started = time.monotonic()
         self.stop_after_units = stop_after_units
         self.segment_completed_units = 0
+        self.current_unit_started_monotonic: float | None = None
 
     def elapsed(self) -> float:
         return self.elapsed_before + (time.monotonic() - self.segment_started)
@@ -386,6 +387,7 @@ class CampaignState:
         owned_corpus: Path | None = None,
         owned_prepared_fleet: Path | None = None,
     ) -> None:
+        self.current_unit_started_monotonic = time.monotonic()
         current: dict[str, Any] = {"unit_id": unit_id, "started_at": utc_now()}
         if runner_root is not None:
             current["runner_root"] = runner_root.relative_to(self.root).as_posix()
@@ -400,7 +402,36 @@ class CampaignState:
         self.value["current_unit"] = current
         self.write()
 
+    def finish_current_unit_timing(self) -> dict[str, Any]:
+        current = self.value.get("current_unit")
+        if not isinstance(current, dict):
+            raise RuntimeError("campaign has no current unit to finish")
+        if self.current_unit_started_monotonic is None:
+            raise RuntimeError("current campaign unit omitted its monotonic start")
+        timing = {
+            "started_at": current["started_at"],
+            "finished_at": utc_now(),
+            "elapsed_seconds": (
+                time.monotonic() - self.current_unit_started_monotonic
+            ),
+        }
+        current.update(timing)
+        self.current_unit_started_monotonic = None
+        return timing
+
     def finish_unit(self) -> None:
+        current = self.value.get("current_unit")
+        if not isinstance(current, dict):
+            raise RuntimeError("campaign has no current unit to finish")
+        unit_id = str(current.get("unit_id", ""))
+        completed = self.value.get("completed_units")
+        if not isinstance(completed, dict):
+            raise RuntimeError("campaign omitted its completed-unit ledger")
+        if not isinstance(completed.get(unit_id), dict):
+            completed[unit_id] = {"kind": "material"}
+        completed[unit_id].update(
+            {"outcome": "completed", **self.finish_current_unit_timing()}
+        )
         self.value["current_unit"] = None
         self.value["status"] = "RUNNING"
         self.write()
@@ -417,16 +448,37 @@ class CampaignState:
             raise DevelopmentStop("development stop requested after checkpoint")
 
     def mark_interrupted(self, error: BaseException) -> None:
-        self.value["status"] = (
+        status = (
             "TIME_BUDGET_EXCEEDED"
             if isinstance(error, TimeBudgetExceeded)
             else "INTERRUPTED"
             if isinstance(error, (KeyboardInterrupt, DevelopmentStop))
             else "FAILED"
         )
+        self.value["status"] = status
+        current = self.value.get("current_unit")
+        if (
+            isinstance(current, dict)
+            and self.current_unit_started_monotonic is not None
+        ):
+            timing = self.finish_current_unit_timing()
+            current["error_type"] = type(error).__name__
+            current["error_message"] = str(error)
+            if status == "FAILED":
+                current["outcome"] = "failed"
+                self.value.setdefault("failed_units", []).append(
+                    {
+                        "unit_id": str(current.get("unit_id", "unknown")),
+                        "outcome": "failed",
+                        **timing,
+                        "error_type": type(error).__name__,
+                        "error_message": str(error),
+                    }
+                )
         self.value["last_stop"] = {
             "at": utc_now(),
             "type": type(error).__name__,
+            "message": str(error),
         }
         self.write()
 
@@ -669,6 +721,27 @@ def quarantine_current_unit(state: CampaignState) -> None:
     current = state.value.get("current_unit")
     if not isinstance(current, dict):
         return
+    if not isinstance(current.get("finished_at"), str):
+        finished_at = utc_now()
+        started_at = str(current.get("started_at", finished_at))
+        try:
+            elapsed_seconds = max(
+                0.0,
+                (
+                    datetime.fromisoformat(finished_at.replace("Z", "+00:00"))
+                    - datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+                ).total_seconds(),
+            )
+        except ValueError:
+            started_at = finished_at
+            elapsed_seconds = 0.0
+        current.update(
+            {
+                "started_at": started_at,
+                "finished_at": finished_at,
+                "elapsed_seconds": elapsed_seconds,
+            }
+        )
     unit_id = str(current.get("unit_id", "unknown"))
     safe_name = SAFE_UNIT.sub("-", unit_id).strip("-") or "unknown"
     destination = (
@@ -718,8 +791,14 @@ def quarantine_current_unit(state: CampaignState) -> None:
     state.value.setdefault("interrupted_units", []).append(
         {
             "unit_id": unit_id,
+            "outcome": "discarded",
             "quarantined_at": utc_now(),
             "moved_entries": moved,
+            "started_at": current.get("started_at"),
+            "finished_at": current.get("finished_at"),
+            "elapsed_seconds": current.get("elapsed_seconds"),
+            "error_type": current.get("error_type"),
+            "error_message": current.get("error_message"),
         }
     )
     state.value["current_unit"] = None
@@ -890,9 +969,31 @@ def validate_checkpoint(
     completed = checkpoint.get("completed_units")
     if not isinstance(completed, dict):
         raise ValueError("campaign checkpoint omitted completed units")
-    for record in completed.values():
+    for unit_id, record in completed.items():
         if not isinstance(record, dict):
             raise ValueError("campaign completed unit is malformed")
+        timing_fields = (
+            record.get("started_at"),
+            record.get("finished_at"),
+            record.get("elapsed_seconds"),
+        )
+        if any(value is not None for value in timing_fields) and (
+            not isinstance(timing_fields[0], str)
+            or not isinstance(timing_fields[1], str)
+            or not isinstance(timing_fields[2], (int, float))
+            or isinstance(timing_fields[2], bool)
+            or timing_fields[2] < 0
+        ):
+            raise ValueError("campaign completed unit timing is malformed")
+        if record.get("kind") == "material":
+            if (
+                not unit_id.startswith("material/height-")
+                or unit_id.removeprefix("material/height-")
+                not in checkpoint["height_materials"]
+                or any(value is None for value in timing_fields)
+            ):
+                raise ValueError("campaign completed material unit is malformed")
+            continue
         verify_completed_unit(
             state.root,
             record,
@@ -977,6 +1078,7 @@ def initialize_campaign(
         "completed_units": {},
         "current_unit": None,
         "interrupted_units": [],
+        "failed_units": [],
         "last_stop": None,
         "final_report_sha256": None,
         "private_paths": {

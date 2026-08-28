@@ -473,6 +473,59 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
             self.assertFalse(path.with_name(f".{path.name}.tmp").exists())
 
+    def test_completed_unit_persists_exact_timing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            checkpoint = {
+                "configuration": {"max_wall_seconds": 900},
+                "elapsed_wall_seconds": 0.0,
+                "completed_units": {"material/height-50": {"kind": "material"}},
+                "current_unit": None,
+                "status": "RUNNING",
+            }
+            state = PAIRED.CampaignState(root, checkpoint, stop_after_units=None)
+
+            state.begin_unit("material/height-50")
+            state.finish_unit()
+
+            completed = state.value["completed_units"]["material/height-50"]
+            self.assertRegex(completed["started_at"], r"Z$")
+            self.assertRegex(completed["finished_at"], r"Z$")
+            self.assertGreaterEqual(completed["elapsed_seconds"], 0.0)
+            self.assertIsNone(state.value["current_unit"])
+
+    def test_failed_unit_and_last_stop_persist_message_and_timing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            checkpoint = {
+                "configuration": {"max_wall_seconds": 900},
+                "elapsed_wall_seconds": 0.0,
+                "completed_units": {},
+                "failed_units": [],
+                "current_unit": None,
+                "status": "RUNNING",
+            }
+            state = PAIRED.CampaignState(root, checkpoint, stop_after_units=None)
+            state.begin_unit("selected-indexed/height-50-window-1")
+
+            state.mark_interrupted(RuntimeError("resource sampler missed process"))
+
+            failed = state.value["failed_units"][0]
+            self.assertEqual(
+                failed["error_message"], "resource sampler missed process"
+            )
+            self.assertRegex(failed["started_at"], r"Z$")
+            self.assertRegex(failed["finished_at"], r"Z$")
+            self.assertGreaterEqual(failed["elapsed_seconds"], 0.0)
+            self.assertEqual(
+                state.value["last_stop"],
+                {
+                    "at": state.value["last_stop"]["at"],
+                    "type": "RuntimeError",
+                    "message": "resource sampler missed process",
+                },
+            )
+
     def test_quarantine_preserves_partial_unit_instead_of_overwriting(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -516,6 +569,10 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
             self.assertFalse(prepared_fleet.exists())
             self.assertIsNone(state.value["current_unit"])
             self.assertEqual(state.value["status"], "RUNNING")
+            discarded = state.value["interrupted_units"][0]
+            self.assertRegex(discarded["started_at"], r"Z$")
+            self.assertRegex(discarded["finished_at"], r"Z$")
+            self.assertGreaterEqual(discarded["elapsed_seconds"], 0.0)
             quarantined = list((root / "interrupted").iterdir())
             self.assertEqual(len(quarantined), 1)
             self.assertTrue(
