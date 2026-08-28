@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
+import hmac
 import json
 import os
 import stat
@@ -83,10 +85,19 @@ def _synthetic_prepared_campaign(root: Path) -> dict[str, Any]:
     runner_revision = "b" * 40
     private = root / "shared" / "private"
     (private / "seed").mkdir(parents=True)
-    (private / "seed" / "validator_keys.json").write_text(
-        "synthetic private validator material\n", encoding="utf-8"
+    validator_records = [
+        {
+            "node_id": f"validator-{index}",
+            "algorithm_id": "ML-DSA-65",
+            "public_key_hex": bytes([index + 1]).hex(),
+        }
+        for index in range(PAIRED.BASE.VALIDATORS)
+    ]
+    _write_json(
+        private / "seed" / "validator_keys.json",
+        {"validators": validator_records},
     )
-    (private / "wallet.json").write_text(
+    (private / "wallet.key.json").write_text(
         "synthetic private wallet material\n", encoding="utf-8"
     )
     topology = root / "shared" / "topology.json"
@@ -98,18 +109,38 @@ def _synthetic_prepared_campaign(root: Path) -> dict[str, Any]:
     height_50_snapshot.mkdir(parents=True)
     (height_50_snapshot / "state.bin").write_bytes(b"height fifty")
     fleet_50, fleet_50_digest = _synthetic_fleet(root, 50)
-    fleet_100, fleet_100_digest = _synthetic_fleet(root, 100)
+    fleet_5000, fleet_5000_digest = _synthetic_fleet(root, 5000)
 
     corpora: dict[int, tuple[Path, str]] = {}
-    for height in (50, 100):
+    for height in (50, 5000):
         corpus = root / "corpora" / f"height-{height}.json"
-        _write_json(corpus, {"height": height, "transfers": [height, height + 1]})
+        transfers = [
+            {
+                "unsigned": {
+                    "from": "pf-test-wallet",
+                    "to": "pf-test-recipient",
+                    "amount": 10,
+                    "sequence": height + offset,
+                },
+                "algorithm_id": "ML-DSA-65",
+                "public_key_hex": "01",
+                "signature_hex": "02",
+            }
+            for offset in range(2)
+        ]
+        _write_json(
+            corpus,
+            {
+                "schema": "postfiat-tx-latency-signed-transfer-corpus-v1",
+                "transfers": transfers,
+            },
+        )
         corpora[height] = (corpus, PAIRED.sha256(corpus))
 
     completed: dict[str, dict[str, Any]] = {}
     for start, final, fleet_digest in (
         (1, 50, fleet_50_digest),
-        (50, 100, fleet_100_digest),
+        (50, 5000, fleet_5000_digest),
     ):
         label = f"advance-{start}-to-{final}"
         rounds = final - start
@@ -169,7 +200,7 @@ def _synthetic_prepared_campaign(root: Path) -> dict[str, Any]:
         {
             "node_id": f"validator-{index}",
             "algorithm_id": "ML-DSA-65",
-            "public_key_sha256": f"{index + 1:064x}",
+            "public_key_sha256": hashlib.sha256(bytes([index + 1])).hexdigest(),
         }
         for index in range(PAIRED.BASE.VALIDATORS)
     ]
@@ -220,29 +251,46 @@ def _synthetic_prepared_campaign(root: Path) -> dict[str, Any]:
                 "corpus_scratch_discarded": None,
                 "corpus_scratch_restored_sha256": None,
             },
-            "100": {
-                "height": 100,
+            "5000": {
+                "height": 5000,
                 "snapshot": None,
                 "snapshot_sha256": None,
-                "prepared_fleet": fleet_100.relative_to(root).as_posix(),
-                "prepared_fleet_sha256": fleet_100_digest,
-                "signed_transfer_corpus": corpora[100][0].relative_to(root).as_posix(),
-                "signed_transfer_corpus_sha256": corpora[100][1],
+                "prepared_fleet": fleet_5000.relative_to(root).as_posix(),
+                "prepared_fleet_sha256": fleet_5000_digest,
+                "signed_transfer_corpus": corpora[5000][0].relative_to(root).as_posix(),
+                "signed_transfer_corpus_sha256": corpora[5000][1],
                 "transfer_count": 2,
-                "first_sequence": 100,
-                "last_sequence": 101,
+                "first_sequence": 5000,
+                "last_sequence": 5001,
                 "corpus_source_mode": "disposable-canonical-prepared-fleet-clone",
-                "corpus_source_prepared_fleet_sha256": fleet_100_digest,
-                "corpus_scratch_before_sha256": fleet_100_digest,
+                "corpus_source_prepared_fleet_sha256": fleet_5000_digest,
+                "corpus_scratch_before_sha256": fleet_5000_digest,
                 "corpus_scratch_after_sha256": "3" * 64,
                 "corpus_scratch_mutated": True,
                 "corpus_scratch_discarded": True,
-                "corpus_scratch_restored_sha256": fleet_100_digest,
+                "corpus_scratch_restored_sha256": fleet_5000_digest,
             },
         },
     }
     _write_json(root / "campaign-checkpoint.json", checkpoint)
     return checkpoint
+
+
+def _bind_synthetic_campaign_binaries(
+    root: Path,
+    checkpoint: dict[str, Any],
+    node_bin: Path,
+    batch_builder_bin: Path,
+) -> None:
+    checkpoint["node_binary_sha256"] = PAIRED.sha256(node_bin)
+    checkpoint["batch_builder_binary_sha256"] = PAIRED.sha256(batch_builder_bin)
+    for record in checkpoint["completed_units"].values():
+        result = record["result"]
+        result["batch_builder_binary_sha256"] = PAIRED.sha256(batch_builder_bin)
+        receipt = root / record["receipt"]
+        _write_json(receipt, result)
+        record["receipt_sha256"] = PAIRED.sha256(receipt)
+    _write_json(root / "campaign-checkpoint.json", checkpoint)
 
 
 class StorageScalingPairedRunnerTests(unittest.TestCase):
@@ -292,18 +340,18 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
             manifest = PAIRED.export_prepared_input_manifest(root, manifest_path)
 
             self.assertEqual(manifest["schema"], PAIRED.PREPARED_INPUT_MANIFEST_SCHEMA)
-            self.assertEqual(manifest["build"]["final_height"], 100)
+            self.assertEqual(manifest["build"]["final_height"], 5000)
             self.assertEqual(
                 [advance["starting_height"] for advance in manifest["advances"]],
                 [1, 50],
             )
             self.assertEqual(
                 manifest["build"]["counters"]["committed_write_transactions"],
-                (49 + 50) * PAIRED.BASE.VALIDATORS,
+                (49 + 4950) * PAIRED.BASE.VALIDATORS,
             )
             self.assertEqual(
                 [material["height"] for material in manifest["materials"]],
-                [50, 100],
+                [50, 5000],
             )
             encoded = manifest_path.read_text(encoding="utf-8")
             self.assertNotIn("synthetic private validator material", encoded)
@@ -315,7 +363,7 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
             root = Path(temporary) / "campaign"
             root.mkdir()
             checkpoint = _synthetic_prepared_campaign(root)
-            checkpoint["completed_units"]["canonical/advance-50-to-100"]["result"][
+            checkpoint["completed_units"]["canonical/advance-50-to-5000"]["result"][
                 "starting_height"
             ] = 51
             _write_json(root / "campaign-checkpoint.json", checkpoint)
@@ -330,7 +378,7 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
             root = Path(temporary) / "campaign"
             root.mkdir()
             checkpoint = _synthetic_prepared_campaign(root)
-            record = checkpoint["completed_units"]["canonical/advance-50-to-100"]
+            record = checkpoint["completed_units"]["canonical/advance-50-to-5000"]
             result = record["result"]
             result["storage"]["full_history_scans"] = 1
             result["storage"]["transactional"]["full_history_scans"] = 1
@@ -349,12 +397,159 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
             root = Path(temporary) / "campaign"
             root.mkdir()
             checkpoint = _synthetic_prepared_campaign(root)
-            checkpoint["height_materials"].pop("100")
+            checkpoint["height_materials"].pop("5000")
             _write_json(root / "campaign-checkpoint.json", checkpoint)
 
             with self.assertRaisesRegex(ValueError, "material is incomplete"):
                 PAIRED.export_prepared_input_manifest(
                     root, Path(temporary) / "prepared-input.json"
+                )
+
+    def test_prepared_input_import_starts_fresh_measurement_checkpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary_root = Path(temporary)
+            campaign = temporary_root / "campaign"
+            campaign.mkdir()
+            checkpoint = _synthetic_prepared_campaign(campaign)
+            release = temporary_root / "target" / "release"
+            release.mkdir(parents=True)
+            node_bin = release / "postfiat-node"
+            node_bin.write_bytes(b"candidate node")
+            batch_builder_bin = release / "postfiat-storage-corpus-batches"
+            batch_builder_bin.write_bytes(b"batch builder")
+            _bind_synthetic_campaign_binaries(
+                campaign, checkpoint, node_bin, batch_builder_bin
+            )
+            manifest_path = temporary_root / "prepared-input.json"
+            manifest = PAIRED.export_prepared_input_manifest(
+                campaign, manifest_path
+            )
+            output = temporary_root / "measurement"
+            output.mkdir()
+
+            with mock.patch.object(
+                PAIRED,
+                "host_description",
+                return_value={"synthetic": True},
+            ):
+                imported = PAIRED.initialize_prepared_campaign(
+                    output,
+                    manifest_path=manifest_path,
+                    node_bin=node_bin,
+                    batch_builder_bin=batch_builder_bin,
+                    expected_source_revision=manifest["candidate"][
+                        "source_revision"
+                    ],
+                    runner_source_revision="9" * 40,
+                    configuration=PAIRED.campaign_configuration(False),
+                )
+
+            self.assertEqual(imported["status"], "RUNNING")
+            self.assertEqual(imported["elapsed_wall_seconds"], 0.0)
+            self.assertEqual(imported["input_mode"], "prepared-input-manifest")
+            self.assertEqual(imported["current_height"], 5000)
+            self.assertEqual(set(imported["height_materials"]), {"50", "5000"})
+            self.assertEqual(
+                imported["prepared_input_build"]["build"]["elapsed_seconds"],
+                manifest["build"]["elapsed_seconds"],
+            )
+            self.assertEqual(
+                imported["prepared_input_import"]["prepared_fleets"][1][
+                    "source_sha256"
+                ],
+                imported["prepared_input_import"]["prepared_fleets"][1][
+                    "destination_sha256"
+                ],
+            )
+            state = PAIRED.CampaignState(output, imported, stop_after_units=None)
+            PAIRED.validate_prepared_campaign_binding(state)
+            imported_manifest = output / imported["prepared_input_manifest"]
+            imported_manifest.write_text(
+                imported_manifest.read_text(encoding="utf-8") + " ",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "manifest changed"):
+                PAIRED.validate_prepared_campaign_binding(state)
+
+    def test_prepared_input_import_rejects_binary_digest_change(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary_root = Path(temporary)
+            campaign = temporary_root / "campaign"
+            campaign.mkdir()
+            _synthetic_prepared_campaign(campaign)
+            manifest_path = temporary_root / "prepared-input.json"
+            PAIRED.export_prepared_input_manifest(campaign, manifest_path)
+            release = temporary_root / "target" / "release"
+            release.mkdir(parents=True)
+            node_bin = release / "postfiat-node"
+            node_bin.write_bytes(b"different candidate")
+            batch_builder_bin = release / "postfiat-storage-corpus-batches"
+            batch_builder_bin.write_bytes(b"different helper")
+            output = temporary_root / "measurement"
+            output.mkdir()
+
+            with self.assertRaisesRegex(ValueError, "node binary digest differs"):
+                PAIRED.initialize_prepared_campaign(
+                    output,
+                    manifest_path=manifest_path,
+                    node_bin=node_bin,
+                    batch_builder_bin=batch_builder_bin,
+                    expected_source_revision="a" * 40,
+                    runner_source_revision="9" * 40,
+                    configuration=PAIRED.campaign_configuration(False),
+                )
+
+    def test_prepared_generation_pointer_rebase_preserves_authentication(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            nodes = Path(temporary) / "nodes"
+            domain = b"postfiat.storage.state-file.v1:state file"
+            for index in range(PAIRED.BASE.VALIDATORS):
+                validator = nodes / f"validator-{index}"
+                database = validator / "transactional-snapshot-generation-v1"
+                database.mkdir(parents=True)
+                (database / "postfiat-state-v1.redb").write_bytes(bytes([index]))
+                key = bytes([index + 1]) * 48
+                key_path = validator / ".integrity.key"
+                key_path.write_bytes(key)
+                key_path.chmod(0o600)
+                pointer = {
+                    "schema": "postfiat-transactional-generation-pointer-v1",
+                    "generation": "generation-00000001",
+                    "database_directory": (
+                        f"/old/campaign/validator-{index}/"
+                        "transactional-snapshot-generation-v1"
+                    ),
+                    "database_file": "postfiat-state-v1.redb",
+                    "migration_packet_root": "a" * 96,
+                }
+                body = json.dumps(pointer, indent=2).encode("utf-8")
+                tag = hmac.new(
+                    key, domain + b"\x00" + body, hashlib.sha3_384
+                ).hexdigest()
+                (validator / "transactional_generation.json").write_bytes(
+                    body + b"\npftmac1:" + tag.encode("ascii") + b"\n"
+                )
+
+            PAIRED.BASE.rebase_prepared_generation_pointers(nodes)
+
+            for index in range(PAIRED.BASE.VALIDATORS):
+                validator = nodes / f"validator-{index}"
+                raw = (validator / "transactional_generation.json").read_bytes()
+                body, trailer = raw.rstrip().rsplit(b"\n", 1)
+                pointer = json.loads(body)
+                self.assertEqual(
+                    Path(pointer["database_directory"]),
+                    (
+                        validator / "transactional-snapshot-generation-v1"
+                    ).resolve(),
+                )
+                key = (validator / ".integrity.key").read_bytes()
+                self.assertEqual(
+                    trailer.decode(),
+                    "pftmac1:"
+                    + hmac.new(
+                        key, domain + b"\x00" + body, hashlib.sha3_384
+                    ).hexdigest(),
                 )
 
     def test_data_dir_corpus_creation_uses_supplied_node_without_snapshot(self) -> None:
