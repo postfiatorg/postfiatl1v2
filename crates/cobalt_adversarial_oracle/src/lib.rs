@@ -396,7 +396,7 @@ fn generate_case(index: usize, rng: &mut DeterministicRng) -> GraphCase {
             tags.push("t_plus_one_equals_2q_minus_n".to_string());
         }
         1 => {
-            let quorum = if validator_count % 2 == 0 {
+            let quorum = if validator_count.is_multiple_of(2) {
                 validator_count - 1
             } else {
                 validator_count
@@ -470,7 +470,7 @@ fn generate_case(index: usize, rng: &mut DeterministicRng) -> GraphCase {
             tags.push("invalid_t_equals_2q_minus_n".to_string());
         }
         10 => {
-            let quorum = if validator_count % 2 == 0 {
+            let quorum = if validator_count.is_multiple_of(2) {
                 validator_count
             } else {
                 validator_count - 1

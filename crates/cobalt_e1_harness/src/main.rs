@@ -510,22 +510,6 @@ fn run(manifest_path: &Path, output_dir: &Path, summary_only: bool) -> io::Resul
     Ok(summary)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use postfiat_cobalt_adversarial_oracle::{generate_corpus, DEFAULT_SEED};
-
-    #[test]
-    fn production_domain_fixture_builds_and_analyzes_a_graph() {
-        let domain = domain();
-        assert_eq!(domain.genesis_hash.len(), 96);
-        let case = generate_corpus(DEFAULT_SEED, 1).remove(0);
-        let graph = build_production_graph(&case, &domain).expect("production graph");
-        analyze_trust_graph(&domain, &graph, &CobaltFaultModel::default())
-            .expect("production linkage report");
-    }
-}
-
 fn main() -> io::Result<()> {
     let args = env::args().collect::<Vec<_>>();
     if args.get(1).map(String::as_str) != Some("compare") {
@@ -556,4 +540,20 @@ fn main() -> io::Result<()> {
     let summary_bytes = serde_json::to_vec(&summary).map_err(io::Error::other)?;
     println!("summary_sha256={}", sha256_hex(&summary_bytes));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use postfiat_cobalt_adversarial_oracle::{generate_corpus, DEFAULT_SEED};
+
+    #[test]
+    fn production_domain_fixture_builds_and_analyzes_a_graph() {
+        let domain = domain();
+        assert_eq!(domain.genesis_hash.len(), 96);
+        let case = generate_corpus(DEFAULT_SEED, 1).remove(0);
+        let graph = build_production_graph(&case, &domain).expect("production graph");
+        analyze_trust_graph(&domain, &graph, &CobaltFaultModel::default())
+            .expect("production linkage report");
+    }
 }

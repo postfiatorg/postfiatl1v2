@@ -2295,32 +2295,7 @@ pub struct BlockVoteTargetTimingReport {
     pub asset_orchard_swap_verifier_breakdown: AssetOrchardSwapTimingReport,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct BlockVoteCreationTimingReport {
-    pub schema: String,
-    pub total_ms: f64,
-    pub verify_block_log_ms: f64,
-    pub store_init_ms: f64,
-    pub read_genesis_ms: f64,
-    pub target_ms: f64,
-    pub key_read_ms: f64,
-    pub key_validation_ms: f64,
-    pub validator_membership_ms: f64,
-    pub registry_read_ms: f64,
-    pub registry_key_check_ms: f64,
-    pub vote_lock_reservation_ms: f64,
-    pub message_build_ms: f64,
-    pub private_key_decode_ms: f64,
-    pub mldsa_signing_ms: f64,
-    pub vote_construct_ms: f64,
-    pub vote_validation_ms: f64,
-    pub json_serde_ms: f64,
-    pub vote_file_write_ms: f64,
-    pub process_spawn_ms: f64,
-    pub target_breakdown: BlockVoteTargetTimingReport,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub storage_work: Option<ApplyBatchStorageWorkReport>,
-}
+include!("node_types_block_vote_timing.rs");
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockVoteWithTimingsReport {

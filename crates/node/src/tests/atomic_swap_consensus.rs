@@ -491,6 +491,9 @@ fn active_atomic_node_store(fixture: &AtomicNodeFixture, label: &str) -> (PathBu
     store
         .write_blocks(&BlockLog::empty())
         .expect("write empty blocks");
+    store
+        .write_ordered_batches(&[])
+        .expect("write empty ordered batches");
     let mut governance = GovernanceState::new(1);
     governance.apply(atomic_node_activation_amendment(1));
     store

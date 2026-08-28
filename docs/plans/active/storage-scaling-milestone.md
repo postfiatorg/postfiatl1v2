@@ -23,27 +23,27 @@ paths use an indexed membership set plus a fixed-size accumulator, and the
 selected path does not intentionally rescan full history.
 
 The node still retains finalized history. That is not the defect being fixed.
-The defect was making the append path repeatedly read growing history. The
-transactional candidate has now advanced a six-validator local fleet through
-height 5,000 with zero reported full-history reads and nearly flat setup-round
-p95 time. It has not yet passed G4 because the evidence harness failed closed.
+The transactional `redb` append path passed its per-window bounded-work gates,
+but the end-to-end candidate still failed G4 because every validator rescanned
+its complete JSON vote-lock history before every signature.
 
-The v3 run reached height 5,000 inside its four-hour budget and completed all 50
-rounds of the first height-5,000 window. It then rejected the window because its
-resource sampler missed a required foreground observation. V4 fixed that
-sampler boundary and completed the full selected-path work: the build reached
-height 5,000, all five selected height-50 windows passed, and all five selected
-height-5,000 windows passed with six-validator convergence and zero full-history
-work. The campaign still stopped at 14,390.603 seconds before running the five
-legacy height-50 controls, so it did not pass the old aggregate rule.
+The prepared-input measurement campaign completed on 2026-08-28 with report
+SHA-256 `88502bca7aaa4e576e5e9684b3d9b72d8c1b66e24b6c6c8e746f11807ac7eabb`.
+The selected height-5,000 versus height-50 consensus-round p95 ratio was 2.808
+and the wallet-to-finality p95 ratio was 2.762, both above the required 1.10.
+`no_positive_linear_height_relationship` is false, `evidence_eligible` is
+false, and the result is `PUBLIC TESTNET BLOCKED`. Experiment completion does
+not mean candidate qualification.
 
-The operator accepted the build/measurement split on 2026-08-28. The verified
-v4 build is frozen once and a fresh measurement-only campaign runs the unchanged
-5+5+5 matrix with a new four-hour clock. The manifest binds the exact candidate,
-helper, runner, contiguous height-1-to-5,000 receipts, zero-full-history counters,
-six-validator final roots, and byte-identical imported fleets. This changes only
-which phase the time budget covers; it does not weaken any storage or performance
-gate.
+The redb store's own selected-window checks passed: literal accepted receipts,
+six-validator convergence, bounded point and accumulator work, and zero
+reported full-history storage reads. Source and stage timings instead isolate
+the remaining unbounded path to `reserve_block_proposal_vote_lock` in the
+consensus signing path. The next bounded work is the
+[vote-lock index fix](vote-lock-index-fix-plan.md): replace the per-vote scan
+with a derived-path lookup, migrate legacy misplaced locks once without changing
+conflict semantics, and report the exact files and bytes examined. A corrected
+candidate must then run the unchanged 5+5+5 G4 measurement matrix again.
 
 Selection is not qualification, qualification is not deployment, and deployment
 is not public-testnet authorization. The remaining work must prove the selected
@@ -91,7 +91,7 @@ on four explicit tracks, and only the first is active now:
 
 | Order | Track | Start condition | Finish condition | Operator input |
 | ---: | --- | --- | --- | --- |
-| 1 | Local qualification | Now | The accepted prepared-input manifest is verified, one fresh measurement-only G4 run passes, and all locally available G5 material verifies | None. Preserve the pinned candidate and do not touch the devnet. |
+| 1 | Local qualification | Now | The vote-lock index fix passes its safety and bounded-work gates, a corrected single binary is frozen, binary-sensitive G1/G2 evidence is refreshed, corrected G4 passes, and all locally available G5 material verifies | None. Keep the transactional storage design fixed and do not touch the devnet. |
 | 2 | Exact height-924 replay | A custodian names one complete quiescent directory and separately authorizes a read-only copy | G3 replay and mutation sentinels pass and enter the packet | Name the custodian and authorize the copy. Do not wait idle for this input. |
 | 3 | Pre-deployment rehearsal | G5 is `OFFLINE QUALIFIED` and controlled-devnet deployment is actually the next decision | G6 passes on six distinct stopped copies | Separately authorize six copies and then make a separate deploy/no-deploy decision. |
 | 4 | Dynamic UNL milestone | G5 closes, or the decision owner explicitly changes priority | A separately activated governance plan exists | No choice is open now: the DGA/Cobalt envelope and Option C are the recorded direction. |
@@ -99,17 +99,19 @@ on four explicit tracks, and only the first is active now:
 The dependency chain is:
 
 ```text
-local:     G4A -> G4 -> locally available G5 material --+
-                                                        +-> complete G5 -> OFFLINE QUALIFIED
-external:  authorized height-924 copy -> G3 -----------+
+local:     vote-lock fix -> corrected freeze/G1/G2 -> corrected G4 --+
+                                                                       +-> complete G5 -> OFFLINE QUALIFIED
+external:  authorized height-924 copy -> G3 --------------------------+
 
 OFFLINE QUALIFIED -> separate deployment decision -> G6
 ```
 
 A missing height-924 copy blocks only the final `OFFLINE QUALIFIED` label. It
 must not trigger a 20-hour wait, an exhaustive legacy campaign, or collection of
-six fleet directories. G4A implementation work is not release evidence until it
-passes focused tests, a bounded six-validator smoke, and provenance review.
+six fleet directories. The vote-lock source fix is not qualification evidence:
+it must first pass its focused safety and bounded-work gates, then enter a
+single corrected candidate binary whose binary-sensitive gates and unchanged
+G4 matrix are rerun.
 
 ## Decisions recorded
 
@@ -165,12 +167,13 @@ before it starts.
 - No single unattended command may run longer than 2 hours without a new,
   evidence-backed operator decision.
 - Each G4 remediation gets one focused test/smoke cycle capped at 30 minutes.
-  The v4 build phase is complete: it reached height 5,000 and froze all required
-  input under a 14,390.603-second checkpoint, but the aggregate campaign stopped
-  before the legacy controls. The accepted amendment permits that verified build
-  to be reused once. Exactly one fresh measurement-only run gets a four-hour
-  wall-clock budget for the unchanged 5+5+5 windows. Reaching that budget is a
-  recorded `TIME_BUDGET_EXCEEDED` result, not permission to continue silently.
+  The prepared v4 build was reused once and the measurement-only matrix completed
+  in 3,311.552 seconds, but its scaling ratios failed. That result is closed and
+  must not be resumed or relabeled. After the vote-lock fix passes locally,
+  freeze one corrected candidate binary and run exactly one new unchanged 5+5+5
+  measurement matrix with a fresh four-hour measurement budget. Reaching that
+  budget is a recorded `TIME_BUDGET_EXCEEDED` result, not permission to
+  continue silently.
 - A failed or timed-out gate is diagnosed once. It is not automatically restarted
   with a larger matrix.
 - Run selected-path evidence before expensive legacy controls.
@@ -187,11 +190,11 @@ independent local gates continue.
 | Gate | Current state | Work allowed now | Budget and advance rule |
 | --- | --- | --- | --- |
 | G0 — campaign control | **PASS** | None; do not rerun the old campaign. | Reopen only if checkpoint/resume itself changes. |
-| G1 — candidate freeze | **CANDIDATE PASS / G4 INPUT FREEZE ACTIVE** | Keep source `ae658441` and binary `891b…bf4` unchanged; G4 freezes its height-50 and height-5,000 materials. | A candidate source or binary change restarts G1–G4; evidence-runner-only changes are separately hash-bound. |
-| G2 — safety | **LOCAL PASS / PACKET BINDING OPEN** | Preserve the passing tamper and rollback receipts; commit only redaction-safe packet material after G4. | Do not rerun unless the candidate binary changes or independent verification rejects a receipt. |
-| G3 — exact replay | **HEIGHT 915 PASS / HEIGHT 924 WAITING FOR AUTHORIZED INPUT** | Preserve the passing 915 receipt. Run height 924 only from a separately authorized copy. | Never wait idle for the copy; finish G4 without it, but do not claim offline qualification. |
-| G4 — scaling | **V4 BUILD VERIFIED / MEASUREMENT-ONLY RUN NEXT** | Preserve earlier failures and the completed v4 build; consume its verified prepared-input manifest in exactly one fresh measurement output. | The build clock is recorded separately. The unchanged 5+5+5 measurement matrix receives a fresh four-hour budget, split at the two-hour operator boundary. |
-| G5 — offline packet | **BLOCKED BY G3 HEIGHT 924 AND G4 MEASUREMENT** | Package locally available material after G4 passes; close the final packet only after G3 height 924 exists. | No qualification claim until the offline verifier passes the complete packet. |
+| G1 — candidate freeze | **PRIOR CANDIDATE FROZEN / CORRECTED FREEZE PENDING** | Preserve source `ae658441` and binary `891b…bf4` as the failed campaign lineage. After local vote-lock verification, freeze and hash one corrected source tree and binary. | The node source and binary change restarts G1–G4 even though the selected redb storage design is unchanged; evidence-runner-only changes remain separately hash-bound. |
+| G2 — safety | **PRIOR LOCAL PASS / CORRECTED-BINARY REFRESH REQUIRED** | Preserve the old tamper and rollback receipts as history. Repeat every binary-bound G2 check with the corrected frozen binary before corrected G4. | A source or binary change prevents reuse of the prior receipts as qualification evidence. |
+| G3 — exact replay | **PRIOR HEIGHT 915 PASS / CORRECTED REPLAY REQUIRED / HEIGHT 924 AUTHORIZATION BLOCKED** | Preserve the old height-915 receipt as history; rerun height 915 with the corrected binary. Run height 924 only from a separately authorized copy. | Never wait idle for the height-924 copy, but do not claim offline qualification without both corrected replay receipts. |
+| G4 — scaling | **FAILED / VOTE-LOCK REMEDIATION ACTIVE** | Preserve the completed failed campaign and implement the bounded vote-lock lookup and one-time migration. Do not rerun G4 until the candidate binary contains that fix. | The completed matrix exceeded both 1.10 ratios because vote signing rescanned lock history. The corrected candidate must rerun the unchanged 5+5+5 matrix under the same measurement budget. |
+| G5 — offline packet | **BLOCKED BY G3 HEIGHT 924 AND CORRECTED G4** | Package locally available material only after a corrected G4 passes; close the final packet only after G3 height 924 exists. | No qualification claim until the offline verifier passes the complete packet. |
 | G6 — six-clone rehearsal | **DEFERRED** | Nothing until offline qualification is complete and deployment is the next real decision. | Requires separate data-copy authorization and six distinct stopped directories. |
 | G7 — Dynamic UNL handoff | **DIRECTION RECORDED / IMPLEMENTATION DEFERRED** | Preserve the recorded architecture decision only. | Spend no implementation time before the stated storage boundary or a new operator priority decision. |
 
@@ -587,33 +590,41 @@ under the accepted build/measurement split below.
       It binds candidate `ae658441`, node SHA-256 `891b…bf4`, helper SHA-256
       `dbbc…6685`, five contiguous advances through height 5,000, and final
       prepared-fleet SHA-256 `4e2f24b7…54086`.
-- [ ] Start exactly one fresh measurement-only output from the verified manifest.
-      Its checkpoint must start at zero elapsed seconds, perform no setup advance,
-      and use the exact bound candidate and helper binaries.
-- [ ] Complete the unchanged three required rows inside the fresh four-hour
-      measurement budget.
-- [ ] Verify literal accepted receipts and six-validator agreement on height,
+- [x] Start exactly one fresh measurement-only output from the verified manifest.
+      Its checkpoint started at zero elapsed seconds, performed no setup advance,
+      and used the exact bound candidate and helper binaries.
+- [x] Complete the unchanged three required rows inside the fresh four-hour
+      measurement budget. The campaign completed in 3,311.552 seconds.
+- [x] Verify literal accepted receipts and six-validator agreement on height,
       block hash, and state root for every measured round.
-- [ ] Prove proposer construction, every remote validator reconstruction, and
-      every finalized apply report zero full-history records and bytes after
-      activation.
-- [ ] Prove indexed point work is `O(log n)` pages or better and the
-      ordered-history accumulator update is constant work.
-- [ ] Prove selected height-50 p95 `consensus_round_ms` and
-      `wallet_to_finality_ms` are each no more than 110% of the corresponding
-      legacy height-50 p95.
-- [ ] Prove selected height-5,000 p95 for both metrics is each no more than 110%
-      of selected height-50 p95.
-- [ ] Publish raw iterations, p50/p95, variance, counters, CPU, RSS, disk,
-      process I/O, host load, fsync, and network observations.
+- [x] Prove the selected redb proposer/apply paths report zero full-history
+      storage records and bytes, bounded indexed point work, and constant
+      accumulator work.
+- [x] Preserve the final report SHA-256
+      `88502bca7aaa4e576e5e9684b3d9b72d8c1b66e24b6c6c8e746f11807ac7eabb`
+      and its failed-closed result: `evidence_eligible: false` and
+      `PUBLIC TESTNET BLOCKED`.
+- [x] Remove the newly isolated O(chain-history) vote-lock directory scan from
+      normal post-marker validator signing while preserving durable
+      anti-equivocation semantics and legacy lock compatibility. The one allowed
+      directory enumeration is the marker-absent, serialized migration.
+- [x] Report bounded vote-lock files and bytes examined for every vote. The
+      release-mode 5,000-history spot check examined two paths, decoded 312
+      bytes, performed no migration, and reserved the lock in 0.118138 ms.
+- [ ] Re-run the unchanged matrix with one corrected candidate binary and prove
+      selected height-50 p95 is no more than 110% of legacy height-50 p95 for
+      both required metrics.
+- [ ] Prove corrected selected height-5,000 p95 is no more than 110% of selected
+      height-50 p95 for both required metrics.
 - [ ] Make the verifier independently recompute identities, distributions,
-      ratios, counters, resource summaries, build bindings, and all pass/fail
-      decisions.
+      ratios, storage and vote-lock counters, resource summaries, build
+      bindings, and all pass/fail decisions for the corrected campaign.
 
-**Exit:** every measurement item and the prepared-build verifier pass inside
-budget. A timeout, censored sample, missing receipt, convergence failure,
-positive full-history counter, or failed ratio is a real failed gate requiring
-focused remediation—not a reason to rebuild or start the exhaustive matrix.
+**Exit:** the completed campaign is a valid failed gate, not qualification. G4
+reopens only after the vote-lock remediation is implemented and focused safety
+checks pass. The corrected candidate must pass the unchanged matrix; a missing
+receipt, convergence failure, positive historical-work counter, or failed ratio
+remains a real failed gate.
 
 ## G5 — offline qualification packet
 
@@ -676,27 +687,34 @@ not deploy anything.
 
 ## Immediate execution order
 
-1. Preserve the unchanged G1 candidate and the passing local G2 and height-915
-   G3 receipts; do not rerun them while the binary is unchanged.
-2. Preserve v2 and v3 as failed evidence. Preserve v4 as the accepted build
-   input: it reached height 5,000 and passed all ten selected windows but did not
-   complete the legacy controls before the old aggregate clock expired.
-3. Use the merged prepared-input workflow and the verified manifest
-   `9ac31841…34c61`; do not rebuild height 1→5,000 or alter the source output.
-4. From a clean detached checkout, run exactly one fresh measurement-only G4
-   output with the bound candidate and helper binaries. Enforce the four-hour
-   measurement budget with at most two hours per unattended segment; resume only
-   that same checksum-bound output if the first segment stops cleanly.
-5. If G4 passes, bind the redaction-safe G2, prepared-build, and G4 measurement
-   artifacts and build everything locally available for G5.
-6. Close the height-924 part of G3 only after a custodian and separate read-only
+1. Preserve the transactional redb design and the existing G2 and height-915 G3
+   receipts as historical evidence. A corrected node binary changes the
+   candidate identity, so do not reuse binary-sensitive receipts as proof for it.
+2. Preserve v2, v3, v4, and the completed prepared-input measurement campaign as
+   failed evidence. The last campaign completed the 5+5+5 matrix but failed the
+   1.10 scaling gates; it must not be resumed or relabeled.
+3. Complete and verify the
+   [vote-lock index fix](vote-lock-index-fix-plan.md): O(1) post-marker lookup,
+   fail-closed one-time migration, direct work counters, full workspace gates,
+   and the release-mode 5,000-lock spot check.
+4. Freeze one corrected candidate binary. Refresh G1 provenance, every G2
+   safety receipt whose validity binds the changed binary, and the locally
+   available height-915 G3 replay. Update the campaign verifier to require the
+   vote-lock work counters.
+5. Build and hash-bind a corrected prepared input with that one binary, then run
+   exactly one unchanged 5+5+5 G4 matrix. Enforce the four-hour measurement
+   budget with at most two hours per unattended segment; resume only the same
+   checksum-bound output if the first segment stops cleanly.
+6. If corrected G4 passes, bind the refreshed redaction-safe G2, prepared-build,
+   and G4 measurement artifacts and build everything locally available for G5.
+7. Close the height-924 part of G3 only after a custodian and separate read-only
    copy authorization exist. Do not wait idle for that decision.
-7. Complete G5 and record `OFFLINE QUALIFIED` only after the exact height-924
+8. Complete G5 and record `OFFLINE QUALIFIED` only after the exact height-924
    replay and independent packet verification pass.
-8. Run G6 only if controlled-devnet deployment is actually the next decision
+9. Run G6 only if controlled-devnet deployment is actually the next decision
    and its separate data-copy authorization has been recorded.
-9. Activate the deferred Dynamic UNL milestone only at the G7 boundary or after
-   an explicit operator reprioritization.
+10. Activate the deferred Dynamic UNL milestone only at the G7 boundary or after
+    an explicit operator reprioritization.
 
 The plan is complete only when G0 through G6 pass and a separate decision either
 authorizes deployment or explicitly records why the qualified candidate remains

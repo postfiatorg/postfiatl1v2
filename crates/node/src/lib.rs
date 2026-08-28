@@ -357,6 +357,8 @@ use vault_bridge_workflows::{
 include!("governance.rs");
 include!("governance_agent.rs");
 include!("privacy.rs");
+mod vote_locks;
+use vote_locks::reserve_block_proposal_vote_lock;
 include!("block_finality.rs");
 mod block_replay_wallet;
 pub use block_replay_wallet::*;
