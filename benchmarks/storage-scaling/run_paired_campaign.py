@@ -337,6 +337,7 @@ def runner_bindings() -> dict[str, str]:
         "paired_runner_sha256": sha256(Path(__file__).resolve()),
         "selected_runner_sha256": sha256(BASE_RUNNER),
         "shared_runner_sha256": sha256(BASE.SHARED_RUNNER),
+        "vote_lock_work_gate_schema": BASE.VOTE_LOCK_WORK_GATE_SCHEMA,
     }
 
 
@@ -479,7 +480,10 @@ def export_prepared_input_manifest(
             "paired_runner_sha256",
             "selected_runner_sha256",
             "shared_runner_sha256",
+            "vote_lock_work_gate_schema",
         }
+        or bindings.get("vote_lock_work_gate_schema")
+        != BASE.VOTE_LOCK_WORK_GATE_SCHEMA
         or re.fullmatch(r"[0-9a-f]{96}", str(bindings.get("spec_sha3_384", "")))
         is None
         or any(
@@ -888,6 +892,8 @@ def validate_prepared_input_manifest(manifest: dict[str, Any]) -> None:
         or not isinstance(helper_build, dict)
         or helper_build.get("git_revision") != runner_revision[:8]
         or helper_build.get("profile") != "release"
+        or runner.get("vote_lock_work_gate_schema")
+        != BASE.VOTE_LOCK_WORK_GATE_SCHEMA
         or re.fullmatch(r"[0-9a-f]{96}", str(runner.get("spec_sha3_384", "")))
         is None
         or any(
@@ -2992,6 +2998,7 @@ def build_report(
         comparison_windows_pass = all(
             window["literal_receipts_exact"] is True
             and window["backend_work_gate_pass"] is True
+            and window["vote_lock_work_gate_pass"] is True
             and int(window["validators_converged"]) == BASE.VALIDATORS
             and int(window["resources"]["foreground_process_count"])
             == int(configuration["rounds_per_window"])
@@ -3004,6 +3011,7 @@ def build_report(
                 window["zero_full_history_reads"] is True
                 and window["bounded_index_pages"] is True
                 and window["constant_accumulator_work"] is True
+                and window["vote_lock_work_gate_pass"] is True
                 for row in rows
                 for window in row["windows"]
             )
@@ -3091,6 +3099,12 @@ def build_report(
         lane["comparison_windows_pass"] is True for lane in lanes.values()
     )
     selected_window_gates = selected["selected_storage_gates_pass"] is True
+    vote_lock_work_gates_pass = all(
+        window["vote_lock_work_gate_pass"] is True
+        for lane in lanes.values()
+        for row in lane["rows"]
+        for window in row["windows"]
+    )
     source_clean = BASE.git_is_clean()
     release_pass = (
         not development_smoke
@@ -3098,6 +3112,7 @@ def build_report(
         and exact_pairing
         and comparison_windows_pass
         and selected_window_gates
+        and vote_lock_work_gates_pass
         and selected["no_positive_linear_height_relationship"] is True
         and all(value <= 1.10 for value in ratios.values())
         and state.elapsed() <= int(configuration["max_wall_seconds"])
@@ -3107,6 +3122,7 @@ def build_report(
         and exact_pairing
         and comparison_windows_pass
         and selected_window_gates
+        and vote_lock_work_gates_pass
     )
     status = (
         "PASS"
@@ -3167,6 +3183,7 @@ def build_report(
         "ratios": ratios,
         "comparison_windows_pass": comparison_windows_pass,
         "window_gates_pass": selected_window_gates,
+        "vote_lock_work_gates_pass": vote_lock_work_gates_pass,
         "height_relationship_model": selected["height_relationship_model"],
         "no_positive_linear_height_relationship": selected[
             "no_positive_linear_height_relationship"

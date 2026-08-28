@@ -108,6 +108,15 @@ PREPARED_BUILD_ZERO_COUNTER_FIELDS = (
     "full_history_records_read",
     "full_history_bytes_read",
 )
+VOTE_LOCK_WORK_GATE_SCHEMA = "postfiat-storage-vote-lock-work-gate-v1"
+VOTE_LOCK_MAX_FILES_EXAMINED = 3
+VOTE_LOCK_MAX_BYTES_DECODED = 4_096
+VOTE_LOCK_REASON_MIGRATION_REPEATED = "VOTE_LOCK_MIGRATION_REPEATED"
+VOTE_LOCK_REASON_MIGRATION_LATE = (
+    "VOTE_LOCK_MIGRATION_AFTER_FIRST_FINALIZED_ROUND"
+)
+VOTE_LOCK_REASON_FILES_EXCEEDED = "VOTE_LOCK_FILES_EXAMINED_EXCEEDED"
+VOTE_LOCK_REASON_BYTES_EXCEEDED = "VOTE_LOCK_BYTES_DECODED_EXCEEDED"
 PERFORMANCE_QUALIFICATION_TIMEOUT_MS = 900_000
 MAX_PROPOSAL_PAGE_READS_PER_ROUND = 64
 MAX_APPLY_PAGE_READS_PER_VALIDATOR_ROUND = 64
@@ -832,6 +841,167 @@ def _verify_performance_fleet(
         _fail(f"{label} did not converge")
     _, tip, state_root = next(iter(identities))
     return tip, state_root
+
+
+def _recompute_vote_lock_work(
+    raw: Mapping[str, Any],
+    lane_name: str,
+) -> dict[str, Any]:
+    iterations = _list(raw.get("iterations"), "performance vote-lock iterations")
+    validators: dict[str, dict[str, Any]] = {}
+    for round_number, iteration_value in enumerate(iterations, start=1):
+        iteration = _object(iteration_value, "performance vote-lock iteration")
+        round_timings = _object(
+            iteration.get("round_timings"),
+            "performance vote-lock round timings",
+        )
+        targets = _list(
+            round_timings.get("vote_request_targets"),
+            "performance vote-lock targets",
+        )
+        if len(targets) != 5:
+            _fail(f"performance lane {lane_name} vote-lock target count differs")
+        observed_this_round: set[str] = set()
+        for target_value in targets:
+            target = _object(target_value, "performance vote-lock target")
+            node_id = str(target.get("target", ""))
+            if (
+                node_id not in {f"validator-{index}" for index in range(6)}
+                or node_id in observed_this_round
+                or target.get("result") != "ok"
+            ):
+                _fail(
+                    f"performance lane {lane_name} vote-lock target identity differs"
+                )
+            observed_this_round.add(node_id)
+            request = _object(
+                target.get("vote_request_breakdown"),
+                "performance vote-lock request",
+            )
+            remote = _object(
+                request.get("remote_handling"),
+                "performance remote vote-lock handling",
+            )
+            timing = _object(
+                remote.get("block_vote_breakdown"),
+                "performance block-vote timing",
+            )
+            files_examined = timing.get("vote_lock_files_examined", 0)
+            bytes_decoded = timing.get("vote_lock_bytes_decoded", 0)
+            migration_performed = timing.get(
+                "vote_lock_migration_performed",
+                False,
+            )
+            if (
+                not isinstance(files_examined, int)
+                or isinstance(files_examined, bool)
+                or files_examined < 0
+                or not isinstance(bytes_decoded, int)
+                or isinstance(bytes_decoded, bool)
+                or bytes_decoded < 0
+                or not isinstance(migration_performed, bool)
+            ):
+                _fail(f"performance lane {lane_name} vote-lock telemetry is invalid")
+            summary = validators.setdefault(
+                node_id,
+                {
+                    "votes_observed": 0,
+                    "migration_rounds": [],
+                    "max_files_examined": 0,
+                    "max_bytes_decoded": 0,
+                },
+            )
+            summary["votes_observed"] += 1
+            summary["max_files_examined"] = max(
+                int(summary["max_files_examined"]),
+                files_examined,
+            )
+            summary["max_bytes_decoded"] = max(
+                int(summary["max_bytes_decoded"]),
+                bytes_decoded,
+            )
+            if migration_performed:
+                summary["migration_rounds"].append(round_number)
+                if len(summary["migration_rounds"]) > 1:
+                    _fail(
+                        f"{VOTE_LOCK_REASON_MIGRATION_REPEATED}: "
+                        f"performance lane {lane_name}"
+                    )
+                if round_number != 1:
+                    _fail(
+                        f"{VOTE_LOCK_REASON_MIGRATION_LATE}: "
+                        f"performance lane {lane_name}"
+                    )
+            else:
+                if files_examined > VOTE_LOCK_MAX_FILES_EXAMINED:
+                    _fail(
+                        f"{VOTE_LOCK_REASON_FILES_EXCEEDED}: "
+                        f"performance lane {lane_name}"
+                    )
+                if bytes_decoded > VOTE_LOCK_MAX_BYTES_DECODED:
+                    _fail(
+                        f"{VOTE_LOCK_REASON_BYTES_EXCEEDED}: "
+                        f"performance lane {lane_name}"
+                    )
+
+    if (
+        len(iterations) != 50
+        or sorted(validators) != [f"validator-{index}" for index in range(6)]
+    ):
+        _fail(f"performance lane {lane_name} vote-lock coverage is incomplete")
+    public_validators = {
+        node_id: {
+            "passed": True,
+            "votes_observed": int(summary["votes_observed"]),
+            "migration_rounds": list(summary["migration_rounds"]),
+            "max_files_examined": int(summary["max_files_examined"]),
+            "max_bytes_decoded": int(summary["max_bytes_decoded"]),
+            "reason_codes": [],
+            "violations": [],
+        }
+        for node_id, summary in sorted(validators.items())
+    }
+    return {
+        "schema": VOTE_LOCK_WORK_GATE_SCHEMA,
+        "passed": True,
+        "reason_codes": [],
+        "limits": {
+            "migration_max_per_validator_per_window_restore": 1,
+            "migration_allowed_finalized_round": 1,
+            "non_migration_max_files_examined": VOTE_LOCK_MAX_FILES_EXAMINED,
+            "non_migration_max_bytes_decoded": VOTE_LOCK_MAX_BYTES_DECODED,
+            "legacy_absent_fields_default_to_zero_false": True,
+        },
+        "rounds_observed": len(iterations),
+        "validators_observed": len(public_validators),
+        "validators": public_validators,
+    }
+
+
+def _verify_vote_lock_work(
+    packet_dir: Path,
+    checksums: Mapping[str, str],
+    window: Mapping[str, Any],
+    raw: Mapping[str, Any],
+    lane_name: str,
+) -> None:
+    expected = _recompute_vote_lock_work(raw, lane_name)
+    receipt = _bound_json(
+        packet_dir,
+        checksums,
+        {
+            "path": window.get("vote_lock_work_receipt"),
+            "sha256": window.get("vote_lock_work_receipt_sha256"),
+        },
+        f"performance lane {lane_name} vote-lock work receipt",
+    )
+    if (
+        window.get("vote_lock_work_gate_pass") is not True
+        or window.get("vote_lock_work_gate_reason_codes") != []
+        or window.get("vote_lock_work") != expected
+        or receipt != expected
+    ):
+        _fail(f"performance lane {lane_name} vote-lock gate summary differs")
 
 
 def _verify_resource_samples(
@@ -1772,6 +1942,13 @@ def _verify_performance_lane(
                     stage_samples[stage].append(
                         _nested_stage_value(iteration, stage, path)
                     )
+            _verify_vote_lock_work(
+                packet_dir,
+                checksums,
+                window,
+                raw,
+                lane_name,
+            )
             raw_storage = _recompute_raw_storage_work(raw, lane_name)
             for field in TRANSACTIONAL_COUNTER_FIELDS:
                 if field in ("full_history_records_read", "full_history_bytes_read"):
@@ -1941,6 +2118,8 @@ def _verify_prepared_input_build(
         or HEX40.fullmatch(runner_revision) is None
         or builder_build.get("git_revision") != runner_revision[:8]
         or builder_build.get("profile") != "release"
+        or runner.get("vote_lock_work_gate_schema")
+        != VOTE_LOCK_WORK_GATE_SCHEMA
         or HEX96.fullmatch(str(runner.get("spec_sha3_384", ""))) is None
         or any(
             HEX64.fullmatch(str(runner.get(field, ""))) is None
@@ -2618,6 +2797,10 @@ def _verify_performance(
             _fail(f"performance ratio exceeds 110% for {key}")
     _bool(performance.get("comparison_windows_pass"), "comparison window gate")
     _bool(performance.get("window_gates_pass"), "selected window gate")
+    _bool(
+        performance.get("vote_lock_work_gates_pass"),
+        "vote-lock work gate",
+    )
     _bool(
         performance.get("no_positive_linear_height_relationship"),
         "height relationship gate",

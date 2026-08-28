@@ -64,6 +64,16 @@ def _campaign(root: Path, *, label: str = "height-50-window-1") -> Path:
             resources = root / "raw" / lane / f"height-{height}.resources.json"
             _write_json(normalized, {"lane": lane, "height": height, "kind": "normalized"})
             _write_json(resources, {"lane": lane, "height": height, "kind": "resources"})
+            vote_lock = (
+                root / "raw" / lane / f"height-{height}.vote-lock-work.json"
+            )
+            _write_json(
+                vote_lock,
+                {
+                    "schema": "postfiat-storage-vote-lock-work-gate-v1",
+                    "passed": True,
+                },
+            )
             window_label = (
                 label
                 if lane == "selected-indexed" and height == 50
@@ -83,6 +93,10 @@ def _campaign(root: Path, *, label: str = "height-50-window-1") -> Path:
                             "normalized_report_sha256": _sha256(normalized),
                             "resource_samples": resources.relative_to(root).as_posix(),
                             "resource_samples_sha256": _sha256(resources),
+                            "vote_lock_work_receipt": (
+                                vote_lock.relative_to(root).as_posix()
+                            ),
+                            "vote_lock_work_receipt_sha256": _sha256(vote_lock),
                         }
                     ],
                 }
@@ -176,8 +190,10 @@ class StorageScalingPackagerTests(unittest.TestCase):
                     window = row["windows"][0]
                     normalized = packet / window["normalized_report"]
                     resources = packet / window["resource_samples"]
+                    vote_lock = packet / window["vote_lock_work_receipt"]
                     self.assertTrue(normalized.is_file())
                     self.assertTrue(resources.is_file())
+                    self.assertTrue(vote_lock.is_file())
                     self.assertEqual(
                         _sha256(normalized),
                         window["normalized_report_sha256"],
@@ -185,6 +201,10 @@ class StorageScalingPackagerTests(unittest.TestCase):
                     self.assertEqual(
                         _sha256(resources),
                         window["resource_samples_sha256"],
+                    )
+                    self.assertEqual(
+                        _sha256(vote_lock),
+                        window["vote_lock_work_receipt_sha256"],
                     )
                     self.assertEqual(
                         window["signed_transfer_corpus"],

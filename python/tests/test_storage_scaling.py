@@ -16,6 +16,7 @@ from postfiat_rpc.storage_scaling import (
     RESOURCE_SAMPLE_SCHEMA,
     RESOURCE_SAMPLE_TARGET_INTERVAL_MS,
     REQUIRED_TAMPER_CASES,
+    VOTE_LOCK_WORK_GATE_SCHEMA,
     REQUIRED_TAMPER_REASONS,
     StorageScalingVerificationError,
     serve_verified_packet,
@@ -340,9 +341,13 @@ def _passing_packet(packet: Path) -> None:
             "full_history_bytes_read": full_history_bytes,
         }
 
-    def performance_round_timings(lane_name: str) -> dict[str, object]:
+    def performance_round_timings(
+        lane_name: str,
+        iteration_index: int,
+    ) -> dict[str, object]:
         proposal_work = performance_storage_work(lane_name, apply_stage=False)
         apply_work = performance_storage_work(lane_name, apply_stage=True)
+        omitted_validator = (iteration_index - 1) % 6
         return {
             "proposal_ms": 10.0,
             "verification_ms": 10.0,
@@ -361,14 +366,18 @@ def _passing_packet(packet: Path) -> None:
                     "vote_request_breakdown": {
                         "remote_handling": {
                             "block_vote_breakdown": {
+                                "vote_lock_files_examined": 3,
+                                "vote_lock_bytes_decoded": 4_096,
+                                "vote_lock_migration_performed": False,
                                 "storage_work": performance_storage_work(
                                     lane_name, apply_stage=False
-                                )
+                                ),
                             }
                         }
                     },
                 }
-                for validator in range(1, 6)
+                for validator in range(6)
+                if validator != omitted_validator
             ],
             "local_apply_breakdown": {
                 "write_commit_ms": 10.0,
@@ -382,7 +391,8 @@ def _passing_packet(packet: Path) -> None:
                         lane_name, apply_stage=True
                     ),
                 }
-                for validator in range(1, 6)
+                for validator in range(6)
+                if validator != omitted_validator
             ],
         }
 
@@ -476,7 +486,8 @@ def _passing_packet(packet: Path) -> None:
                                 "consensus_round_ms": consensus,
                                 "wallet_to_finality_ms": wallet,
                                 "round_timings": performance_round_timings(
-                                    lane_name
+                                    lane_name,
+                                    iteration_index,
                                 ),
                             }
                             for iteration_index in range(1, 51)
@@ -648,6 +659,44 @@ def _passing_packet(packet: Path) -> None:
                     "network_received_bytes": 80,
                     "network_transmitted_bytes": 90,
                 }
+                vote_lock_work = {
+                    "schema": VOTE_LOCK_WORK_GATE_SCHEMA,
+                    "passed": True,
+                    "reason_codes": [],
+                    "limits": {
+                        "migration_max_per_validator_per_window_restore": 1,
+                        "migration_allowed_finalized_round": 1,
+                        "non_migration_max_files_examined": 3,
+                        "non_migration_max_bytes_decoded": 4_096,
+                        "legacy_absent_fields_default_to_zero_false": True,
+                    },
+                    "rounds_observed": 50,
+                    "validators_observed": 6,
+                    "validators": {
+                        f"validator-{validator}": {
+                            "passed": True,
+                            "votes_observed": sum(
+                                1
+                                for iteration_index in range(1, 51)
+                                if (iteration_index - 1) % 6 != validator
+                            ),
+                            "migration_rounds": [],
+                            "max_files_examined": 3,
+                            "max_bytes_decoded": 4_096,
+                            "reason_codes": [],
+                            "violations": [],
+                        }
+                        for validator in range(6)
+                    },
+                }
+                vote_lock_path = (
+                    packet
+                    / "performance"
+                    / "vote-lock-work"
+                    / lane_name
+                    / f"height-{height}-window-{window_index + 1}.json"
+                )
+                _write_json(vote_lock_path, vote_lock_work)
                 windows.append(
                     {
                         "label": f"height-{height}-window-{window_index + 1}",
@@ -657,6 +706,13 @@ def _passing_packet(packet: Path) -> None:
                         "validators_converged": 6,
                         "literal_receipts_exact": True,
                         "backend_work_gate_pass": True,
+                        "vote_lock_work_gate_pass": True,
+                        "vote_lock_work_gate_reason_codes": [],
+                        "vote_lock_work": vote_lock_work,
+                        "vote_lock_work_receipt": (
+                            vote_lock_path.relative_to(packet).as_posix()
+                        ),
+                        "vote_lock_work_receipt_sha256": _sha256(vote_lock_path),
                         "zero_full_history_reads": full_history_records == 0
                         and full_history_bytes == 0,
                         "bounded_index_pages": lane_name != "legacy-jsonl",
@@ -1442,6 +1498,7 @@ def _passing_packet(packet: Path) -> None:
             "ratios": performance_ratios,
             "comparison_windows_pass": True,
             "window_gates_pass": True,
+            "vote_lock_work_gates_pass": True,
             "height_relationship_model": {
                 "schema": "postfiat-storage-height-cost-model-v2",
                 "sample_kind": "per_window_p95",
@@ -1649,6 +1706,7 @@ def _add_prepared_input_build(packet: Path) -> None:
             "paired_runner_sha256": "b" * 64,
             "selected_runner_sha256": "c" * 64,
             "shared_runner_sha256": "d" * 64,
+            "vote_lock_work_gate_schema": VOTE_LOCK_WORK_GATE_SCHEMA,
         },
         "public_inputs": {
             "topology_sha256": selected["topology_sha256"],

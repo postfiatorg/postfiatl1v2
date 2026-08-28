@@ -71,6 +71,41 @@ def _write_json(path: Path, value: object) -> None:
     )
 
 
+def _vote_lock_report(
+    round_overrides: list[dict[str, dict[str, object]]],
+) -> dict[str, object]:
+    iterations = []
+    for overrides in round_overrides:
+        targets = []
+        for index in range(PAIRED.BASE.VALIDATORS - 1):
+            node_id = f"validator-{index}"
+            timing: dict[str, object] = {
+                "vote_lock_files_examined": 3,
+                "vote_lock_bytes_decoded": 4_096,
+                "vote_lock_migration_performed": False,
+            }
+            timing.update(overrides.get(node_id, {}))
+            targets.append(
+                {
+                    "target": node_id,
+                    "result": "ok",
+                    "vote_request_breakdown": {
+                        "remote_handling": {
+                            "block_vote_breakdown": timing,
+                        }
+                    },
+                }
+            )
+        iterations.append(
+            {
+                "round_timings": {
+                    "vote_request_targets": targets,
+                }
+            }
+        )
+    return {"iterations": iterations}
+
+
 def _synthetic_fleet(root: Path, height: int) -> tuple[Path, str]:
     fleet = root / "prepared-fleets" / f"canonical-height-{height}"
     for index in range(PAIRED.BASE.VALIDATORS):
@@ -223,6 +258,7 @@ def _synthetic_prepared_campaign(root: Path) -> dict[str, Any]:
             "paired_runner_sha256": "f" * 64,
             "selected_runner_sha256": "1" * 64,
             "shared_runner_sha256": "2" * 64,
+            "vote_lock_work_gate_schema": PAIRED.BASE.VOTE_LOCK_WORK_GATE_SCHEMA,
         },
         "public_inputs": {
             "validator_public_identities": identities,
@@ -294,6 +330,113 @@ def _bind_synthetic_campaign_binaries(
 
 
 class StorageScalingPairedRunnerTests(unittest.TestCase):
+    def test_vote_lock_gate_accepts_bounded_work_and_first_round_migration(
+        self,
+    ) -> None:
+        report = _vote_lock_report(
+            [
+                {
+                    "validator-0": {
+                        "vote_lock_files_examined": 4_999,
+                        "vote_lock_bytes_decoded": 21_000_000,
+                        "vote_lock_migration_performed": True,
+                    }
+                },
+                {},
+            ]
+        )
+
+        gate = PAIRED.BASE.vote_lock_work_from_report(report)
+
+        self.assertTrue(gate["passed"])
+        self.assertEqual(gate["reason_codes"], [])
+        validator = gate["validators"]["validator-0"]
+        self.assertEqual(validator["migration_rounds"], [1])
+        self.assertEqual(validator["votes_observed"], 2)
+
+    def test_vote_lock_gate_rejects_migration_twice(self) -> None:
+        migration = {
+            "validator-0": {
+                "vote_lock_files_examined": 4_999,
+                "vote_lock_bytes_decoded": 21_000_000,
+                "vote_lock_migration_performed": True,
+            }
+        }
+        report = _vote_lock_report([migration, migration])
+
+        gate = PAIRED.BASE.vote_lock_work_from_report(report)
+
+        self.assertFalse(gate["passed"])
+        self.assertIn(
+            PAIRED.BASE.VOTE_LOCK_REASON_MIGRATION_REPEATED,
+            gate["reason_codes"],
+        )
+
+    def test_vote_lock_gate_rejects_late_migration(self) -> None:
+        report = _vote_lock_report(
+            [
+                {},
+                {
+                    "validator-0": {
+                        "vote_lock_files_examined": 4_999,
+                        "vote_lock_bytes_decoded": 21_000_000,
+                        "vote_lock_migration_performed": True,
+                    }
+                },
+            ]
+        )
+
+        gate = PAIRED.BASE.vote_lock_work_from_report(report)
+
+        self.assertFalse(gate["passed"])
+        self.assertEqual(
+            gate["reason_codes"],
+            [PAIRED.BASE.VOTE_LOCK_REASON_MIGRATION_LATE],
+        )
+
+    def test_vote_lock_gate_rejects_oversized_bytes(self) -> None:
+        report = _vote_lock_report(
+            [
+                {
+                    "validator-0": {
+                        "vote_lock_bytes_decoded": 4_097,
+                    }
+                }
+            ]
+        )
+
+        gate = PAIRED.BASE.vote_lock_work_from_report(report)
+
+        self.assertFalse(gate["passed"])
+        self.assertEqual(
+            gate["reason_codes"],
+            [PAIRED.BASE.VOTE_LOCK_REASON_BYTES_EXCEEDED],
+        )
+
+    def test_vote_lock_gate_defaults_legacy_absent_fields_to_zero_false(
+        self,
+    ) -> None:
+        report = _vote_lock_report([{}])
+        for target in report["iterations"][0]["round_timings"][
+            "vote_request_targets"
+        ]:
+            target["vote_request_breakdown"]["remote_handling"][
+                "block_vote_breakdown"
+            ] = {}
+
+        gate = PAIRED.BASE.vote_lock_work_from_report(report)
+
+        self.assertTrue(gate["passed"])
+        self.assertEqual(gate["reason_codes"], [])
+        self.assertTrue(
+            all(
+                validator["max_files_examined"] == 0
+                and validator["max_bytes_decoded"] == 0
+                and validator["migration_rounds"] == []
+                for validator in gate["validators"].values()
+            )
+        )
+
     def test_release_configuration_is_the_time_budgeted_matrix(self) -> None:
         configuration = PAIRED.campaign_configuration(False)
 

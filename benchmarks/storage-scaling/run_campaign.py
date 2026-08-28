@@ -712,6 +712,16 @@ LEGACY_COUNTER_FIELDS = [
     "ordered_index_slots_read",
     "ordered_index_slots_written",
 ]
+VOTE_LOCK_WORK_GATE_SCHEMA = "postfiat-storage-vote-lock-work-gate-v1"
+VOTE_LOCK_MAX_FILES_EXAMINED = 3
+VOTE_LOCK_MAX_BYTES_DECODED = 4_096
+VOTE_LOCK_REASON_INVALID_TELEMETRY = "VOTE_LOCK_TELEMETRY_INVALID"
+VOTE_LOCK_REASON_MIGRATION_REPEATED = "VOTE_LOCK_MIGRATION_REPEATED"
+VOTE_LOCK_REASON_MIGRATION_LATE = (
+    "VOTE_LOCK_MIGRATION_AFTER_FIRST_FINALIZED_ROUND"
+)
+VOTE_LOCK_REASON_FILES_EXCEEDED = "VOTE_LOCK_FILES_EXAMINED_EXCEEDED"
+VOTE_LOCK_REASON_BYTES_EXCEEDED = "VOTE_LOCK_BYTES_DECODED_EXCEEDED"
 
 
 def add_counter_fields(
@@ -872,6 +882,192 @@ def storage_work_from_report(
         else legacy_totals["jsonl_append_calls"]
     )
     return totals, remote_latest
+
+
+def vote_lock_work_from_report(report: dict[str, Any]) -> dict[str, Any]:
+    iterations = report.get("iterations")
+    if not isinstance(iterations, list):
+        raise RuntimeError("benchmark report omitted iterations")
+
+    validators: dict[str, dict[str, Any]] = {}
+
+    def validator_summary(node_id: str) -> dict[str, Any]:
+        return validators.setdefault(
+            node_id,
+            {
+                "votes_observed": 0,
+                "migration_rounds": [],
+                "max_files_examined": 0,
+                "max_bytes_decoded": 0,
+                "reason_codes": set(),
+                "violations": [],
+            },
+        )
+
+    def add_violation(
+        summary: dict[str, Any],
+        reason_code: str,
+        *,
+        round_number: int,
+        files_examined: int | None,
+        bytes_decoded: int | None,
+        migration_performed: bool | None,
+    ) -> None:
+        summary["reason_codes"].add(reason_code)
+        summary["violations"].append(
+            {
+                "reason_code": reason_code,
+                "finalized_round": round_number,
+                "files_examined": files_examined,
+                "bytes_decoded": bytes_decoded,
+                "migration_performed": migration_performed,
+            }
+        )
+
+    for round_number, iteration in enumerate(iterations, start=1):
+        if not isinstance(iteration, dict):
+            raise RuntimeError("benchmark iteration is not an object")
+        round_timings = iteration.get("round_timings")
+        if not isinstance(round_timings, dict):
+            raise RuntimeError("benchmark iteration omitted round timings")
+        vote_targets = round_timings.get("vote_request_targets")
+        if not isinstance(vote_targets, list) or len(vote_targets) != VALIDATORS - 1:
+            raise RuntimeError("round did not report five validator vote timings")
+        observed_this_round: set[str] = set()
+        for target in vote_targets:
+            if not isinstance(target, dict) or target.get("result") != "ok":
+                raise RuntimeError("validator vote target failed")
+            node_id = str(target.get("target", ""))
+            if not node_id:
+                raise RuntimeError("validator vote target omitted its identity")
+            summary = validator_summary(node_id)
+            if node_id in observed_this_round:
+                add_violation(
+                    summary,
+                    VOTE_LOCK_REASON_INVALID_TELEMETRY,
+                    round_number=round_number,
+                    files_examined=None,
+                    bytes_decoded=None,
+                    migration_performed=None,
+                )
+                continue
+            observed_this_round.add(node_id)
+            request = target.get("vote_request_breakdown")
+            remote = request.get("remote_handling") if isinstance(request, dict) else None
+            block_vote = (
+                remote.get("block_vote_breakdown")
+                if isinstance(remote, dict)
+                else None
+            )
+            if not isinstance(block_vote, dict):
+                raise RuntimeError(
+                    f"validator vote target {node_id} omitted block-vote telemetry"
+                )
+
+            raw_files = block_vote.get("vote_lock_files_examined", 0)
+            raw_bytes = block_vote.get("vote_lock_bytes_decoded", 0)
+            raw_migration = block_vote.get("vote_lock_migration_performed", False)
+            valid_counts = (
+                isinstance(raw_files, int)
+                and not isinstance(raw_files, bool)
+                and raw_files >= 0
+                and isinstance(raw_bytes, int)
+                and not isinstance(raw_bytes, bool)
+                and raw_bytes >= 0
+            )
+            valid_migration = isinstance(raw_migration, bool)
+            files_examined = raw_files if valid_counts else None
+            bytes_decoded = raw_bytes if valid_counts else None
+            migration_performed = raw_migration if valid_migration else None
+            summary["votes_observed"] += 1
+            if not valid_counts or not valid_migration:
+                add_violation(
+                    summary,
+                    VOTE_LOCK_REASON_INVALID_TELEMETRY,
+                    round_number=round_number,
+                    files_examined=files_examined,
+                    bytes_decoded=bytes_decoded,
+                    migration_performed=migration_performed,
+                )
+                continue
+
+            summary["max_files_examined"] = max(
+                int(summary["max_files_examined"]), files_examined
+            )
+            summary["max_bytes_decoded"] = max(
+                int(summary["max_bytes_decoded"]), bytes_decoded
+            )
+            if migration_performed:
+                summary["migration_rounds"].append(round_number)
+                if len(summary["migration_rounds"]) > 1:
+                    add_violation(
+                        summary,
+                        VOTE_LOCK_REASON_MIGRATION_REPEATED,
+                        round_number=round_number,
+                        files_examined=files_examined,
+                        bytes_decoded=bytes_decoded,
+                        migration_performed=True,
+                    )
+                if round_number != 1:
+                    add_violation(
+                        summary,
+                        VOTE_LOCK_REASON_MIGRATION_LATE,
+                        round_number=round_number,
+                        files_examined=files_examined,
+                        bytes_decoded=bytes_decoded,
+                        migration_performed=True,
+                    )
+                continue
+
+            if files_examined > VOTE_LOCK_MAX_FILES_EXAMINED:
+                add_violation(
+                    summary,
+                    VOTE_LOCK_REASON_FILES_EXCEEDED,
+                    round_number=round_number,
+                    files_examined=files_examined,
+                    bytes_decoded=bytes_decoded,
+                    migration_performed=False,
+                )
+            if bytes_decoded > VOTE_LOCK_MAX_BYTES_DECODED:
+                add_violation(
+                    summary,
+                    VOTE_LOCK_REASON_BYTES_EXCEEDED,
+                    round_number=round_number,
+                    files_examined=files_examined,
+                    bytes_decoded=bytes_decoded,
+                    migration_performed=False,
+                )
+
+    reason_codes: set[str] = set()
+    public_validators: dict[str, dict[str, Any]] = {}
+    for node_id, summary in sorted(validators.items()):
+        validator_reason_codes = sorted(summary["reason_codes"])
+        reason_codes.update(validator_reason_codes)
+        public_validators[node_id] = {
+            "passed": not validator_reason_codes,
+            "votes_observed": int(summary["votes_observed"]),
+            "migration_rounds": list(summary["migration_rounds"]),
+            "max_files_examined": int(summary["max_files_examined"]),
+            "max_bytes_decoded": int(summary["max_bytes_decoded"]),
+            "reason_codes": validator_reason_codes,
+            "violations": list(summary["violations"]),
+        }
+
+    return {
+        "schema": VOTE_LOCK_WORK_GATE_SCHEMA,
+        "passed": not reason_codes,
+        "reason_codes": sorted(reason_codes),
+        "limits": {
+            "migration_max_per_validator_per_window_restore": 1,
+            "migration_allowed_finalized_round": 1,
+            "non_migration_max_files_examined": VOTE_LOCK_MAX_FILES_EXAMINED,
+            "non_migration_max_bytes_decoded": VOTE_LOCK_MAX_BYTES_DECODED,
+            "legacy_absent_fields_default_to_zero_false": True,
+        },
+        "rounds_observed": len(iterations),
+        "validators_observed": len(public_validators),
+        "validators": public_validators,
+    }
 
 
 def normalize_report_paths(value: Any, root: Path) -> Any:
@@ -1497,6 +1693,17 @@ def run_rounds(
             )
 
     counters, remote_storage = storage_work_from_report(report, storage_lane)
+    vote_lock_work = vote_lock_work_from_report(report)
+    vote_lock_work_path = root / "vote-lock-work" / f"{label}.json"
+    write_json(vote_lock_work_path, vote_lock_work)
+    if vote_lock_work["passed"] is not True:
+        reason_codes = vote_lock_work["reason_codes"]
+        reason_code = (
+            str(reason_codes[0])
+            if isinstance(reason_codes, list) and reason_codes
+            else VOTE_LOCK_REASON_INVALID_TELEMETRY
+        )
+        raise RuntimeError(f"{reason_code}: {label} vote-lock work gate failed")
     legacy_work = counters["legacy"]
     if selected_transactional:
         backend_work_gate_pass = (
@@ -1632,6 +1839,11 @@ def run_rounds(
         "validators_converged": VALIDATORS,
         "literal_receipts_exact": True,
         "backend_work_gate_pass": backend_work_gate_pass,
+        "vote_lock_work_gate_pass": vote_lock_work["passed"],
+        "vote_lock_work_gate_reason_codes": vote_lock_work["reason_codes"],
+        "vote_lock_work": vote_lock_work,
+        "vote_lock_work_receipt": vote_lock_work_path.relative_to(root).as_posix(),
+        "vote_lock_work_receipt_sha256": digest(vote_lock_work_path),
         "zero_full_history_reads": (
             counters["full_history_records_read"] == 0
             and counters["full_history_bytes_read"] == 0

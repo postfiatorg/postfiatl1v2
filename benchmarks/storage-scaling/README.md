@@ -95,13 +95,19 @@ reconstructions, the local finalized apply, and all five certified remote
 applies. Each window preserves a redaction-safe sampler stream. Qualification
 fails unless all six validators converge, every literal receipt is accepted
 and final, every selected finalized height uses one durable database transaction
-per validator, full-history work is zero, page work stays bounded, both 110%
-latency gates pass, and the independent packet verifier recomputes the result.
+per validator, full-history work is zero, page work stays bounded, every
+non-migration vote examines at most three vote-lock files and decodes at most
+4,096 bytes, any one-time vote-lock migration occurs only in the first finalized
+round after a window restore, both 110% latency gates pass, and the independent
+packet verifier recomputes the result from raw per-vote timings.
 
 Candidate and harness provenance are separate. `--expected-source-revision`
 must name the source embedded in the qualification binary. The campaign also
 records the clean evidence-runner checkout revision and hashes the paired,
-selected, shared, and specification inputs. The setup-only batch builder embeds
+selected, shared, and specification inputs. The prepared-input manifest binds
+the vote-lock work-gate schema alongside those runner hashes so a measurement
+resume cannot silently drop or reinterpret the counter gate. The setup-only
+batch builder embeds
 the runner checkout revision, is built in release mode, and is independently
 SHA-256 bound; it is not the candidate node binary. Packet assembly records its own
 clean checkout revision instead of falsely claiming that a later harness commit
