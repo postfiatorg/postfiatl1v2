@@ -61,6 +61,190 @@ def _bind_synthetic_generation_pointers(
         )
 
 
+def _write_json(path: Path, value: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(value, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _synthetic_fleet(root: Path, height: int) -> tuple[Path, str]:
+    fleet = root / "prepared-fleets" / f"canonical-height-{height}"
+    for index in range(PAIRED.BASE.VALIDATORS):
+        validator = fleet / f"validator-{index}"
+        validator.mkdir(parents=True)
+        (validator / "state.bin").write_bytes(f"{height}:{index}".encode())
+    return fleet, PAIRED.BASE.directory_digest(fleet)
+
+
+def _synthetic_prepared_campaign(root: Path) -> dict[str, Any]:
+    source_revision = "a" * 40
+    runner_revision = "b" * 40
+    private = root / "shared" / "private"
+    (private / "seed").mkdir(parents=True)
+    (private / "seed" / "validator_keys.json").write_text(
+        "synthetic private validator material\n", encoding="utf-8"
+    )
+    (private / "wallet.json").write_text(
+        "synthetic private wallet material\n", encoding="utf-8"
+    )
+    topology = root / "shared" / "topology.json"
+    _write_json(topology, {"validators": 6})
+    height_one = root / "shared" / "snapshots" / "height-1.snapshot"
+    height_one.mkdir(parents=True)
+    (height_one / "state.bin").write_bytes(b"height one")
+    height_50_snapshot = root / "canonical" / "snapshots" / "height-50.snapshot"
+    height_50_snapshot.mkdir(parents=True)
+    (height_50_snapshot / "state.bin").write_bytes(b"height fifty")
+    fleet_50, fleet_50_digest = _synthetic_fleet(root, 50)
+    fleet_100, fleet_100_digest = _synthetic_fleet(root, 100)
+
+    corpora: dict[int, tuple[Path, str]] = {}
+    for height in (50, 100):
+        corpus = root / "corpora" / f"height-{height}.json"
+        _write_json(corpus, {"height": height, "transfers": [height, height + 1]})
+        corpora[height] = (corpus, PAIRED.sha256(corpus))
+
+    completed: dict[str, dict[str, Any]] = {}
+    for start, final, fleet_digest in (
+        (1, 50, fleet_50_digest),
+        (50, 100, fleet_100_digest),
+    ):
+        label = f"advance-{start}-to-{final}"
+        rounds = final - start
+        counters = {
+            "committed_write_transactions": rounds * PAIRED.BASE.VALIDATORS,
+            "page_reads": rounds * 12,
+            "page_writes": rounds * 6,
+            "full_history_scans": 0,
+            "full_history_records_read": 0,
+            "full_history_bytes_read": 0,
+        }
+        final_fleet = [
+            {
+                "node_id": f"validator-{index}",
+                "height": final,
+                "tip": f"{final:096x}",
+                "state_root": f"{final + 1:096x}",
+            }
+            for index in range(PAIRED.BASE.VALIDATORS)
+        ]
+        result = {
+            "label": label,
+            "starting_height": start,
+            "final_height": final,
+            "rounds": rounds,
+            "validators_converged": PAIRED.BASE.VALIDATORS,
+            "literal_receipts_exact": True,
+            "backend_work_gate_pass": True,
+            "zero_full_history_reads": True,
+            "batch_builder_binary_sha256": "c" * 64,
+            "batch_builder_build": {
+                "git_revision": runner_revision[:8],
+                "profile": "release",
+            },
+            "storage": {**counters, "transactional": dict(counters)},
+            "final_tip": f"{final:096x}",
+            "final_state_root": f"{final + 1:096x}",
+            "final_fleet": final_fleet,
+            "result_prepared_fleet_sha256": fleet_digest,
+            "normalized_report": f"normalized/{label}.report.json",
+        }
+        report = root / "canonical" / result["normalized_report"]
+        _write_json(report, {"label": label, "status": "passed"})
+        result["normalized_report_sha256"] = PAIRED.sha256(report)
+        receipt = root / "canonical" / "receipts" / f"{label}.json"
+        _write_json(receipt, result)
+        completed[f"canonical/{label}"] = {
+            "kind": "advance",
+            "runner_root": "canonical",
+            "result": result,
+            "receipt": receipt.relative_to(root).as_posix(),
+            "receipt_sha256": PAIRED.sha256(receipt),
+            "elapsed_seconds": float(rounds),
+        }
+
+    identities = [
+        {
+            "node_id": f"validator-{index}",
+            "algorithm_id": "ML-DSA-65",
+            "public_key_sha256": f"{index + 1:064x}",
+        }
+        for index in range(PAIRED.BASE.VALIDATORS)
+    ]
+    checkpoint = {
+        "schema": PAIRED.CHECKPOINT_SCHEMA,
+        "campaign_schema": PAIRED.SCHEMA,
+        "status": "FAILED",
+        "started_at": "2026-08-28T00:00:00Z",
+        "elapsed_wall_seconds": 1234.5,
+        "source_revision": source_revision,
+        "runner_source_revision": runner_revision,
+        "node_binary_sha256": "d" * 64,
+        "node_binary_build": {
+            "git_revision": source_revision[:8],
+            "profile": "release",
+        },
+        "batch_builder_binary_sha256": "c" * 64,
+        "runner_bindings": {
+            "spec_sha3_384": "e" * 96,
+            "paired_runner_sha256": "f" * 64,
+            "selected_runner_sha256": "1" * 64,
+            "shared_runner_sha256": "2" * 64,
+        },
+        "public_inputs": {
+            "validator_public_identities": identities,
+            "topology_sha256": PAIRED.sha256(topology),
+            "height_1_snapshot_sha256": PAIRED.BASE.directory_digest(height_one),
+        },
+        "private_paths": {"topology": topology.relative_to(root).as_posix()},
+        "completed_units": completed,
+        "height_materials": {
+            "50": {
+                "height": 50,
+                "snapshot": height_50_snapshot.relative_to(root).as_posix(),
+                "snapshot_sha256": PAIRED.BASE.directory_digest(height_50_snapshot),
+                "prepared_fleet": fleet_50.relative_to(root).as_posix(),
+                "prepared_fleet_sha256": fleet_50_digest,
+                "signed_transfer_corpus": corpora[50][0].relative_to(root).as_posix(),
+                "signed_transfer_corpus_sha256": corpora[50][1],
+                "transfer_count": 2,
+                "first_sequence": 50,
+                "last_sequence": 51,
+                "corpus_source_mode": "authenticated-portable-snapshot-import",
+                "corpus_source_prepared_fleet_sha256": None,
+                "corpus_scratch_before_sha256": None,
+                "corpus_scratch_after_sha256": None,
+                "corpus_scratch_mutated": None,
+                "corpus_scratch_discarded": None,
+                "corpus_scratch_restored_sha256": None,
+            },
+            "100": {
+                "height": 100,
+                "snapshot": None,
+                "snapshot_sha256": None,
+                "prepared_fleet": fleet_100.relative_to(root).as_posix(),
+                "prepared_fleet_sha256": fleet_100_digest,
+                "signed_transfer_corpus": corpora[100][0].relative_to(root).as_posix(),
+                "signed_transfer_corpus_sha256": corpora[100][1],
+                "transfer_count": 2,
+                "first_sequence": 100,
+                "last_sequence": 101,
+                "corpus_source_mode": "disposable-canonical-prepared-fleet-clone",
+                "corpus_source_prepared_fleet_sha256": fleet_100_digest,
+                "corpus_scratch_before_sha256": fleet_100_digest,
+                "corpus_scratch_after_sha256": "3" * 64,
+                "corpus_scratch_mutated": True,
+                "corpus_scratch_discarded": True,
+                "corpus_scratch_restored_sha256": fleet_100_digest,
+            },
+        },
+    }
+    _write_json(root / "campaign-checkpoint.json", checkpoint)
+    return checkpoint
+
+
 class StorageScalingPairedRunnerTests(unittest.TestCase):
     def test_release_configuration_is_the_time_budgeted_matrix(self) -> None:
         configuration = PAIRED.campaign_configuration(False)
@@ -97,6 +281,81 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
                 {"lane": "legacy-jsonl", "height": 2},
             ],
         )
+
+    def test_export_prepared_input_manifest_binds_failed_campaign_build(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "campaign"
+            root.mkdir()
+            _synthetic_prepared_campaign(root)
+            manifest_path = Path(temporary) / "prepared-input.json"
+
+            manifest = PAIRED.export_prepared_input_manifest(root, manifest_path)
+
+            self.assertEqual(manifest["schema"], PAIRED.PREPARED_INPUT_MANIFEST_SCHEMA)
+            self.assertEqual(manifest["build"]["final_height"], 100)
+            self.assertEqual(
+                [advance["starting_height"] for advance in manifest["advances"]],
+                [1, 50],
+            )
+            self.assertEqual(
+                manifest["build"]["counters"]["committed_write_transactions"],
+                (49 + 50) * PAIRED.BASE.VALIDATORS,
+            )
+            self.assertEqual(
+                [material["height"] for material in manifest["materials"]],
+                [50, 100],
+            )
+            encoded = manifest_path.read_text(encoding="utf-8")
+            self.assertNotIn("synthetic private validator material", encoded)
+            self.assertNotIn("synthetic private wallet material", encoded)
+            self.assertEqual(json.loads(encoded), manifest)
+
+    def test_export_prepared_input_manifest_rejects_noncontiguous_advances(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "campaign"
+            root.mkdir()
+            checkpoint = _synthetic_prepared_campaign(root)
+            checkpoint["completed_units"]["canonical/advance-50-to-100"]["result"][
+                "starting_height"
+            ] = 51
+            _write_json(root / "campaign-checkpoint.json", checkpoint)
+
+            with self.assertRaisesRegex(ValueError, "not contiguous"):
+                PAIRED.export_prepared_input_manifest(
+                    root, Path(temporary) / "prepared-input.json"
+                )
+
+    def test_export_prepared_input_manifest_rejects_full_history_work(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "campaign"
+            root.mkdir()
+            checkpoint = _synthetic_prepared_campaign(root)
+            record = checkpoint["completed_units"]["canonical/advance-50-to-100"]
+            result = record["result"]
+            result["storage"]["full_history_scans"] = 1
+            result["storage"]["transactional"]["full_history_scans"] = 1
+            receipt = root / record["receipt"]
+            _write_json(receipt, result)
+            record["receipt_sha256"] = PAIRED.sha256(receipt)
+            _write_json(root / "campaign-checkpoint.json", checkpoint)
+
+            with self.assertRaisesRegex(ValueError, "full-history work"):
+                PAIRED.export_prepared_input_manifest(
+                    root, Path(temporary) / "prepared-input.json"
+                )
+
+    def test_export_prepared_input_manifest_rejects_incomplete_top_material(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "campaign"
+            root.mkdir()
+            checkpoint = _synthetic_prepared_campaign(root)
+            checkpoint["height_materials"].pop("100")
+            _write_json(root / "campaign-checkpoint.json", checkpoint)
+
+            with self.assertRaisesRegex(ValueError, "material is incomplete"):
+                PAIRED.export_prepared_input_manifest(
+                    root, Path(temporary) / "prepared-input.json"
+                )
 
     def test_data_dir_corpus_creation_uses_supplied_node_without_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
