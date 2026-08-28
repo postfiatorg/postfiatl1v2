@@ -1,0 +1,22 @@
+{
+  "captured_at": "2026-08-28T09:38:47Z",
+  "cleanup_seconds": 3.9948362520663068,
+  "consensus_executed": false,
+  "forced_incremental_reset_seconds": 115.35474052501377,
+  "forced_reset_database_bytes": 10882670592,
+  "forced_reset_database_count": 6,
+  "initial_clone_seconds": 177.40975890506525,
+  "network_contacted": false,
+  "node_process_started": false,
+  "offline": true,
+  "preflight_sha256": "3f3c80c31a3030b9ba6b34a293ff0eba72f9fd747233b2398443ae24231a9844",
+  "prepared_fleet_sha256": "8a4618e7ea81df7d26c4547868d9941f712552fc5e8982c74bc8763909bccfeb",
+  "runner_revision": "03123ca060eaa25618b89b35fc0add02999915d5",
+  "runner_sha256": "8718a7a427495fe6e729f1e0e1bec95e50f691e1965c3cf4ed69b6eb8b577f7d",
+  "schema": "postfiat-storage-prepared-fleet-restore-preflight-v1",
+  "source_after_sha256": "8a4618e7ea81df7d26c4547868d9941f712552fc5e8982c74bc8763909bccfeb",
+  "source_bytes": 19040307767,
+  "source_file_count": 178214,
+  "status": "PASS",
+  "workspace_removed": true
+}

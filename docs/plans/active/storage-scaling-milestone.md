@@ -36,8 +36,9 @@ started immediately. The same run showed that copying and hashing a 19 GB fleet
 for every window left too little aggregate budget. V4 waits for the first sample,
 restores an existing canonical workspace incrementally with a full-digest
 fallback, and preserves the absolute transactional-generation pointer boundary.
-A development smoke and a real 19 GB restore preflight pass, but one clean,
-independently bound v4 qualification run still must pass before G4 closes.
+A development smoke passed first. The same smoke and real 19 GB restore
+preflight now also pass from clean v4 runner `03123ca0`; one independently bound
+v4 qualification run still must pass before G4 closes.
 
 Selection is not qualification, qualification is not deployment, and deployment
 is not public-testnet authorization. The remaining work must prove the selected
@@ -182,7 +183,7 @@ independent local gates continue.
 | G1 — candidate freeze | **CANDIDATE PASS / G4 INPUT FREEZE ACTIVE** | Keep source `ae658441` and binary `891b…bf4` unchanged; G4 freezes its height-50 and height-5,000 materials. | A candidate source or binary change restarts G1–G4; evidence-runner-only changes are separately hash-bound. |
 | G2 — safety | **LOCAL PASS / PACKET BINDING OPEN** | Preserve the passing tamper and rollback receipts; commit only redaction-safe packet material after G4. | Do not rerun unless the candidate binary changes or independent verification rejects a receipt. |
 | G3 — exact replay | **HEIGHT 915 PASS / HEIGHT 924 WAITING FOR AUTHORIZED INPUT** | Preserve the passing 915 receipt. Run height 924 only from a separately authorized copy. | Never wait idle for the copy; finish G4 without it, but do not claim offline qualification. |
-| G4 — scaling | **V3 FAILED / V4 DEVELOPMENT PREFLIGHT PASS** | Preserve v2 and v3; freeze clean v4, repeat its bounded smoke and height-5,000 restore preflight, then run exactly one v4 qualification output. | V3 failed closed after 13,987.118 seconds at the first height-5,000 resource gate. It cannot resume under v4. One clean v4 run receives a fresh four-hour budget, split at the two-hour operator boundary. |
+| G4 — scaling | **V3 FAILED / V4 CLEAN PREFLIGHT PASS** | Preserve v2 and v3; run exactly one clean v4 qualification output. | V3 failed closed after 13,987.118 seconds at the first height-5,000 resource gate. It cannot resume under v4. The one clean v4 run receives a fresh four-hour budget, split at the two-hour operator boundary. |
 | G5 — offline packet | **BLOCKED BY G1–G4** | Package only after every preceding evidence gate passes. | No qualification claim until the offline verifier passes the complete packet. |
 | G6 — six-clone rehearsal | **DEFERRED** | Nothing until offline qualification is complete and deployment is the next real decision. | Requires separate data-copy authorization and six distinct stopped directories. |
 | G7 — Dynamic UNL handoff | **DIRECTION RECORDED / IMPLEMENTATION DEFERRED** | Preserve the recorded architecture decision only. | Spend no implementation time before the stated storage boundary or a new operator priority decision. |
@@ -532,9 +533,18 @@ The v3 output is frozen failed evidence and cannot resume under v4.
       fleet. A clean copy took 170.387 seconds; a forced reset of all six
       1,813,778,432-byte database files took 114.859 seconds; the source digest
       remained exact and the disposable workspace was removed.
-- [ ] Freeze the v4 runner at a clean commit, rebuild its helper, repeat the real
-      smoke and height-5,000 preflight from that clean revision, and commit the
-      redaction-safe preflight report.
+- [x] Freeze the v4 runner at clean commit `03123ca0`, rebuild helper SHA-256
+      `f8bb25f2df22a8337d571a404ae3d4799735978d162c086945d5ad95c6c1ca73`,
+      repeat the real smoke and height-5,000 preflight, and commit the
+      redaction-safe preflight report. The 29.332-second smoke report and
+      checkpoint SHA-256 values are `c7be9957…30710` and `a8b85cba…0e9f`;
+      every measured foreground process had at least four samples, scratch
+      restored exactly, and no child survived. The clean preflight report is
+      `benchmarks/storage-scaling/g4c-height5000-preflight-03123ca0.json`
+      (file SHA-256 `84d5fa93…6e1fb`): the 19,040,307,767-byte clone took
+      177.410 seconds, the forced 10,882,670,592-byte six-database reset took
+      115.355 seconds, the source remained `8a4618e7…ccfeb`, and cleanup took
+      3.995 seconds.
 - [ ] Start exactly one clean v4 qualification output from height 1 with the
       unchanged candidate binary and a fresh four-hour aggregate budget. Split it
       at the two-hour operator boundary; resume only the same bound output.
@@ -628,11 +638,11 @@ not deploy anything.
 2. Preserve both failed G4 outputs. V2 exhausted its budget at height 3,050; v3
    reached height 5,000 and failed the first high-height resource gate. Do not
    resume, mutate, or present either output as release evidence.
-3. Commit the v4 runner, verifier, milestone, and handoff. From that clean
-   revision, rebuild the helper, verify the candidate hash is unchanged, and
-   repeat the six-validator smoke and real height-5,000 restore preflight.
-4. Commit the redaction-safe clean preflight report, rebuild the helper from that
-   final clean revision, and create a detached runner worktree at the same commit.
+3. Preserve clean v4 implementation commit `03123ca0`, its passing
+   six-validator smoke, and its committed redaction-safe height-5,000 preflight.
+4. Rebuild the helper from the final evidence/documentation revision, verify the
+   candidate hash is unchanged, and create a detached runner worktree at that
+   same revision.
 5. Start exactly one v4 G4 output from height 1. Enforce the four-hour aggregate
    budget with at most two hours per unattended segment; resume only that same
    checksum-bound output if the first segment stops cleanly.
