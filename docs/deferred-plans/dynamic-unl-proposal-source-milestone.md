@@ -1,10 +1,47 @@
 # Dynamic UNL Proposal Source Milestone
 
-**Status:** Deferred draft — not authorized, not current execution work; PUBLIC TESTNET BLOCK unchanged
+**Status:** Deferred, activation-ready draft — updated 2026-08-28; not authorized, not current execution work; PUBLIC TESTNET BLOCK unchanged
 **Drafted:** 2026-08-27 by Domagoj Ravlić (`dravlic`)
+**Updated:** 2026-08-28 by Domagoj Ravlić (`dravlic`)
 **Decision owner:** Post Fiat
-**Research specification:** [Dynamic UNL Proposal Source](../governance/dynamic-unl-proposal-source-research-spec.md) — Text Improvement Harness full gate passed on 2026-08-26, average 89.13/100 (GPT 92.00, Fable 86.00, GLM 89.40; five runs per lane; run group `dynamic-unl-proposal-source-research-spec`); scored content SHA-256 `62938fea81f10cc0dbda531593666e9b469eebb80d02c948db644c90e58647c8`; Task Node lock pending the operator's decision
-**Prerequisites before activation:** the operator picks this as the next milestone; Task Node locks the specification, or an explicit operator exception is recorded as it was for the storage milestone; the storage-scaling milestone is closed or explicitly de-prioritised
+**Research specification:** [Dynamic UNL Proposal Source](../governance/dynamic-unl-proposal-source-research-spec.md) — Text Improvement Harness full gate passed on 2026-08-26, average 89.13/100 (GPT 92.00, Fable 86.00, GLM 89.40; five runs per lane; run group `dynamic-unl-proposal-source-research-spec`); scored content SHA-256 `62938fea81f10cc0dbda531593666e9b469eebb80d02c948db644c90e58647c8`
+
+**Prerequisites before activation:**
+
+- The decision owner names this as the next milestone and records an explicit
+  exception for the Task Node lock, as was done for the storage milestone; Task
+  Node stays off until the operator says otherwise.
+- The storage-scaling milestone has closed G5, or the decision owner explicitly
+  de-prioritises storage after all locally executable gates finish.
+
+**Owners (must be filled by the decision owner before activation):**
+
+- **L1 observer service owner:** `unassigned` — retains signed Consensus v2,
+  Cobalt, uptime, and topology records across the scoring window for Option C's
+  L1-native path.
+- **Independent-operator submitter owner:** `unassigned` — owns the admitted
+  operator path that submits unchanged proposal bytes.
+- **Inference cost:** unanswered — which operators bear pinned model inference
+  cost.
+
+**Direction recorded:**
+
+- Dynamic UNL supplies the ranked target and proposal content inside the L1 DGA
+  policy envelope. The deterministic formula stays the published shadow
+  baseline and a separately activated fail-closed fallback.
+- The evidence sequence is Option C, with all PFT-derived integration
+  `SHADOW_ONLY`.
+- These directions were recorded in the storage milestone by the operator's
+  goal run on 2026-08-27 from our decision notes and still await the operator's
+  own confirmation: the [validator-evaluator alternatives note](../governance/validator-evaluator-alternatives-note.md)
+  scored 89.27/100 (GPT 90.60, Fable 88.40, GLM 88.80; five runs per lane), and
+  the [L1 evidence-source note](../governance/dynamic-unl-l1-evidence-source-note.md)
+  scored 89.80/100 (GPT 92.60, Fable 89.20, GLM 87.60; five runs per lane).
+
+**Authority boundary:** This milestone remains deferred and unauthorized. All
+work remains `SHADOW_ONLY`; this document grants no proposal, ratification,
+registry-mutation, deployment, or public-testnet authority. Public testnet
+remains blocked.
 
 On this L1 the validator set is governed registry state, Cobalt has ratified
 registry and trust-graph changes since height 916, and every proposal so far

@@ -204,8 +204,8 @@ objection or replacement decision in his handoff.
    Dynamic UNL inside the DGA/Cobalt envelope, and Option C. Another operator's
    goal run copied those proposals into `Decisions recorded` and G7
    ([milestone:126-137](https://github.com/postfiatorg/postfiatl1v2/blob/03123ca060eaa25618b89b35fc0add02999915d5/docs/plans/active/storage-scaling-milestone.md#L126),
-   [G7:608-620](https://github.com/postfiatorg/postfiatl1v2/blob/03123ca060eaa25618b89b35fc0add02999915d5/docs/plans/active/storage-scaling-milestone.md#L608)); that did not
-   constitute Domagoj's answer. They remain open until he confirms or changes
+   [G7:608-620](https://github.com/postfiatorg/postfiatl1v2/blob/03123ca060eaa25618b89b35fc0add02999915d5/docs/plans/active/storage-scaling-milestone.md#L608)); that goal run did not
+   constitute the operator's own answer. They remain open until he confirms or changes
    them.
 
 ## References
