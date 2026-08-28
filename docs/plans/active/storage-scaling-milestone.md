@@ -6,7 +6,7 @@
 
 **Decision owner:** Post Fiat
 
-**Candidate lineage:** transactional `redb` source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`; release binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; persistent setup remediation implemented at `438fb29c`; v4 sampling and prepared-fleet restore remediation in the current evidence-runner revision
+**Candidate lineage:** transactional `redb` source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`; release binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; persistent setup remediation implemented at `438fb29c`; v4 sampling and prepared-fleet restore remediation at `428fe7c9`; build/measurement manifest workflow merged at `90d68784`
 
 **Research basis:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 
@@ -30,15 +30,20 @@ p95 time. It has not yet passed G4 because the evidence harness failed closed.
 
 The v3 run reached height 5,000 inside its four-hour budget and completed all 50
 rounds of the first height-5,000 window. It then rejected the window because its
-resource sampler missed a required foreground observation: the sampler performed
-a full directory-size walk before starting its 100 ms loop, while measurement
-started immediately. The same run showed that copying and hashing a 19 GB fleet
-for every window left too little aggregate budget. V4 waits for the first sample,
-restores an existing canonical workspace incrementally with a full-digest
-fallback, and preserves the absolute transactional-generation pointer boundary.
-A development smoke passed first. The same smoke and real 19 GB restore
-preflight now also pass from clean v4 runner `03123ca0`; one independently bound
-v4 qualification run still must pass before G4 closes.
+resource sampler missed a required foreground observation. V4 fixed that
+sampler boundary and completed the full selected-path work: the build reached
+height 5,000, all five selected height-50 windows passed, and all five selected
+height-5,000 windows passed with six-validator convergence and zero full-history
+work. The campaign still stopped at 14,390.603 seconds before running the five
+legacy height-50 controls, so it did not pass the old aggregate rule.
+
+The operator accepted the build/measurement split on 2026-08-28. The verified
+v4 build is frozen once and a fresh measurement-only campaign runs the unchanged
+5+5+5 matrix with a new four-hour clock. The manifest binds the exact candidate,
+helper, runner, contiguous height-1-to-5,000 receipts, zero-full-history counters,
+six-validator final roots, and byte-identical imported fleets. This changes only
+which phase the time budget covers; it does not weaken any storage or performance
+gate.
 
 Selection is not qualification, qualification is not deployment, and deployment
 is not public-testnet authorization. The remaining work must prove the selected
@@ -71,7 +76,7 @@ work idling.
 | Question | Recorded answer | State | Effect on current work |
 | --- | --- | --- | --- |
 | Which storage implementation? | Transactional `redb`. | Decided | Freeze and qualify this candidate; do not restart candidate research. |
-| Which performance campaign? | Selected `redb` at heights 50 and 5,000; same-binary legacy control at height 50. | Decided | Do not run the superseded three-lane/five-height matrix. |
+| Which performance campaign? | Selected `redb` at heights 50 and 5,000; same-binary legacy control at height 50. Build height 1→5,000 once, freeze it, then apply the four-hour budget to the unchanged 5+5+5 measurement matrix. | Decided by operator on 2026-08-28 | Do not rebuild inside the measurement clock or run the superseded three-lane/five-height matrix. |
 | How does the selected lane move between high-height chunks? | By a content-hashed prepared transactional fleet and one persistent setup-only batch loop, not by exporting full history or restarting a process per block. | Decided; remediation smoke passes, fresh evidence required | Bind the separate canonical batch-builder binary, raw batches, certificates, every round, and the before/after fleet digests. Keep the portable snapshot only for the shared height-50 legacy control, and keep measured windows on the unchanged measurement path. |
 | Is one height-924 validator directory needed? | Yes, for exact replay only. | Authorization and custodian still required | Finish G1, G2, the height-915 part of G3, and G4 without waiting for it. |
 | Are six validator directories needed now? | No. They are needed only for G6 immediately before a deployment decision. | Deferred | Spend no time collecting or rehearsing six clones during offline qualification. |
@@ -86,7 +91,7 @@ on four explicit tracks, and only the first is active now:
 
 | Order | Track | Start condition | Finish condition | Operator input |
 | ---: | --- | --- | --- | --- |
-| 1 | Local qualification | Now | G4C clean preflight passes, one bounded v4 G4 run passes, and all locally available G5 material verifies | None. Preserve the pinned candidate and do not touch the devnet. |
+| 1 | Local qualification | Now | The accepted prepared-input manifest is verified, one fresh measurement-only G4 run passes, and all locally available G5 material verifies | None. Preserve the pinned candidate and do not touch the devnet. |
 | 2 | Exact height-924 replay | A custodian names one complete quiescent directory and separately authorizes a read-only copy | G3 replay and mutation sentinels pass and enter the packet | Name the custodian and authorize the copy. Do not wait idle for this input. |
 | 3 | Pre-deployment rehearsal | G5 is `OFFLINE QUALIFIED` and controlled-devnet deployment is actually the next decision | G6 passes on six distinct stopped copies | Separately authorize six copies and then make a separate deploy/no-deploy decision. |
 | 4 | Dynamic UNL milestone | G5 closes, or the decision owner explicitly changes priority | A separately activated governance plan exists | No choice is open now: the DGA/Cobalt envelope and Option C are the recorded direction. |
@@ -160,10 +165,12 @@ before it starts.
 - No single unattended command may run longer than 2 hours without a new,
   evidence-backed operator decision.
 - Each G4 remediation gets one focused test/smoke cycle capped at 30 minutes.
-  V3 used its one release run and failed. After the v4 clean smoke and real
-  height-5,000 restore preflight pass, exactly one clean v4 release-evidence run
-  gets a fresh 4-hour wall-clock budget. Reaching either budget is a recorded
-  `TIME_BUDGET_EXCEEDED` result, not permission to continue silently.
+  The v4 build phase is complete: it reached height 5,000 and froze all required
+  input under a 14,390.603-second checkpoint, but the aggregate campaign stopped
+  before the legacy controls. The accepted amendment permits that verified build
+  to be reused once. Exactly one fresh measurement-only run gets a four-hour
+  wall-clock budget for the unchanged 5+5+5 windows. Reaching that budget is a
+  recorded `TIME_BUDGET_EXCEEDED` result, not permission to continue silently.
 - A failed or timed-out gate is diagnosed once. It is not automatically restarted
   with a larger matrix.
 - Run selected-path evidence before expensive legacy controls.
@@ -183,8 +190,8 @@ independent local gates continue.
 | G1 — candidate freeze | **CANDIDATE PASS / G4 INPUT FREEZE ACTIVE** | Keep source `ae658441` and binary `891b…bf4` unchanged; G4 freezes its height-50 and height-5,000 materials. | A candidate source or binary change restarts G1–G4; evidence-runner-only changes are separately hash-bound. |
 | G2 — safety | **LOCAL PASS / PACKET BINDING OPEN** | Preserve the passing tamper and rollback receipts; commit only redaction-safe packet material after G4. | Do not rerun unless the candidate binary changes or independent verification rejects a receipt. |
 | G3 — exact replay | **HEIGHT 915 PASS / HEIGHT 924 WAITING FOR AUTHORIZED INPUT** | Preserve the passing 915 receipt. Run height 924 only from a separately authorized copy. | Never wait idle for the copy; finish G4 without it, but do not claim offline qualification. |
-| G4 — scaling | **V3 FAILED / V4 CLEAN PREFLIGHT PASS** | Preserve v2 and v3; run exactly one clean v4 qualification output. | V3 failed closed after 13,987.118 seconds at the first height-5,000 resource gate. It cannot resume under v4. The one clean v4 run receives a fresh four-hour budget, split at the two-hour operator boundary. |
-| G5 — offline packet | **BLOCKED BY G1–G4** | Package only after every preceding evidence gate passes. | No qualification claim until the offline verifier passes the complete packet. |
+| G4 — scaling | **V4 BUILD VERIFIED / MEASUREMENT-ONLY RUN NEXT** | Preserve earlier failures and the completed v4 build; consume its verified prepared-input manifest in exactly one fresh measurement output. | The build clock is recorded separately. The unchanged 5+5+5 measurement matrix receives a fresh four-hour budget, split at the two-hour operator boundary. |
+| G5 — offline packet | **BLOCKED BY G3 HEIGHT 924 AND G4 MEASUREMENT** | Package locally available material after G4 passes; close the final packet only after G3 height 924 exists. | No qualification claim until the offline verifier passes the complete packet. |
 | G6 — six-clone rehearsal | **DEFERRED** | Nothing until offline qualification is complete and deployment is the next real decision. | Requires separate data-copy authorization and six distinct stopped directories. |
 | G7 — Dynamic UNL handoff | **DIRECTION RECORDED / IMPLEMENTATION DEFERRED** | Preserve the recorded architecture decision only. | Spend no implementation time before the stated storage boundary or a new operator priority decision. |
 
@@ -545,11 +552,46 @@ The v3 output is frozen failed evidence and cannot resume under v4.
       177.410 seconds, the forced 10,882,670,592-byte six-database reset took
       115.355 seconds, the source remained `8a4618e7…ccfeb`, and cleanup took
       3.995 seconds.
-- [ ] Start exactly one clean v4 qualification output from height 1 with the
-      unchanged candidate binary and a fresh four-hour aggregate budget. Split it
-      at the two-hour operator boundary; resume only the same bound output.
+- [x] Start exactly one clean v4 qualification output from height 1 with the
+      unchanged candidate binary and a fresh four-hour aggregate budget.
+- [x] Preserve its final failed-closed boundary. Checkpoint SHA-256
+      `8e3ed2c910b518157fe4a530f1e34f896c48dcacef291a088615d25d3a65b28d`
+      records `INTERRUPTED`, height 5,000, 14,390.603 seconds, 15 completed
+      units, no current unit, no final report, and no surviving process.
+- [x] Verify the v4 build and selected measurements on their own merits. The five
+      contiguous advances cover height 1→5,000; all five selected height-50 and
+      five selected height-5,000 windows passed six-validator convergence,
+      literal receipts, bounded point work, constant accumulator work, and zero
+      full-history work. The old aggregate campaign failed only because the five
+      legacy height-50 controls had not run before the clock expired.
 
-- [ ] Complete the three required rows inside the 4-hour aggregate budget.
+**G4C exit:** the v4 harness defects are closed and the selected path has passing
+raw evidence, but the old aggregate campaign rule is exhausted. G4 remains open
+under the accepted build/measurement split below.
+
+### G4D — build once, measure separately
+
+- [x] Record the operator's 2026-08-28 approval to split setup from measurement.
+      This is a time-accounting change only; the candidate, input corpus,
+      5+5+5 matrix, ratios, receipts, convergence, counters, raw samples, and
+      independent-verification rules remain unchanged.
+- [x] Merge the prepared-input workflow at `90d68784`. The exporter accepts an
+      interrupted source only after independently validating candidate/helper
+      identities, contiguous advances from height 1, every receipt/report digest,
+      zero full-history counters, six-validator convergence, frozen material
+      digests, and the exact build-final fleet.
+- [x] Pass all 77 focused runner, packet, and verifier tests plus Python compile
+      and diff checks.
+- [x] Export the v4 build manifest with SHA-256
+      `9ac31841a41ba514855a82f52650e1951ed97c9f99d54a4048a07407d6734c61`.
+      It binds candidate `ae658441`, node SHA-256 `891b…bf4`, helper SHA-256
+      `dbbc…6685`, five contiguous advances through height 5,000, and final
+      prepared-fleet SHA-256 `4e2f24b7…54086`.
+- [ ] Start exactly one fresh measurement-only output from the verified manifest.
+      Its checkpoint must start at zero elapsed seconds, perform no setup advance,
+      and use the exact bound candidate and helper binaries.
+- [ ] Complete the unchanged three required rows inside the fresh four-hour
+      measurement budget.
 - [ ] Verify literal accepted receipts and six-validator agreement on height,
       block hash, and state root for every measured round.
 - [ ] Prove proposer construction, every remote validator reconstruction, and
@@ -565,12 +607,13 @@ The v3 output is frozen failed evidence and cannot resume under v4.
 - [ ] Publish raw iterations, p50/p95, variance, counters, CPU, RSS, disk,
       process I/O, host load, fsync, and network observations.
 - [ ] Make the verifier independently recompute identities, distributions,
-      ratios, counters, resource summaries, and all pass/fail decisions.
+      ratios, counters, resource summaries, build bindings, and all pass/fail
+      decisions.
 
-**Exit:** every item passes inside budget. A timeout, censored sample, missing
-receipt, convergence failure, positive full-history counter, or failed ratio is
-a real failed gate requiring focused remediation—not a reason to start the
-exhaustive matrix.
+**Exit:** every measurement item and the prepared-build verifier pass inside
+budget. A timeout, censored sample, missing receipt, convergence failure,
+positive full-history counter, or failed ratio is a real failed gate requiring
+focused remediation—not a reason to rebuild or start the exhaustive matrix.
 
 ## G5 — offline qualification packet
 
@@ -635,27 +678,25 @@ not deploy anything.
 
 1. Preserve the unchanged G1 candidate and the passing local G2 and height-915
    G3 receipts; do not rerun them while the binary is unchanged.
-2. Preserve both failed G4 outputs. V2 exhausted its budget at height 3,050; v3
-   reached height 5,000 and failed the first high-height resource gate. Do not
-   resume, mutate, or present either output as release evidence.
-3. Preserve clean v4 implementation commit `03123ca0`, its passing
-   six-validator smoke, and its committed redaction-safe height-5,000 preflight.
-4. Rebuild the helper from the final evidence/documentation revision, verify the
-   candidate hash is unchanged, and create a detached runner worktree at that
-   same revision.
-5. Start exactly one v4 G4 output from height 1. Enforce the four-hour aggregate
-   budget with at most two hours per unattended segment; resume only that same
-   checksum-bound output if the first segment stops cleanly.
-6. If G4 passes, bind the redaction-safe G2 and G4 artifacts and build everything
-   locally available for G5.
-7. Close the height-924 part of G3 only after a custodian and separate read-only
+2. Preserve v2 and v3 as failed evidence. Preserve v4 as the accepted build
+   input: it reached height 5,000 and passed all ten selected windows but did not
+   complete the legacy controls before the old aggregate clock expired.
+3. Use the merged prepared-input workflow and the verified manifest
+   `9ac31841…34c61`; do not rebuild height 1→5,000 or alter the source output.
+4. From a clean detached checkout, run exactly one fresh measurement-only G4
+   output with the bound candidate and helper binaries. Enforce the four-hour
+   measurement budget with at most two hours per unattended segment; resume only
+   that same checksum-bound output if the first segment stops cleanly.
+5. If G4 passes, bind the redaction-safe G2, prepared-build, and G4 measurement
+   artifacts and build everything locally available for G5.
+6. Close the height-924 part of G3 only after a custodian and separate read-only
    copy authorization exist. Do not wait idle for that decision.
-8. Complete G5 and record `OFFLINE QUALIFIED` only after the exact height-924
+7. Complete G5 and record `OFFLINE QUALIFIED` only after the exact height-924
    replay and independent packet verification pass.
-9. Run G6 only if controlled-devnet deployment is actually the next decision
+8. Run G6 only if controlled-devnet deployment is actually the next decision
    and its separate data-copy authorization has been recorded.
-10. Activate the deferred Dynamic UNL milestone only at the G7 boundary or after
-    an explicit operator reprioritization.
+9. Activate the deferred Dynamic UNL milestone only at the G7 boundary or after
+   an explicit operator reprioritization.
 
 The plan is complete only when G0 through G6 pass and a separate decision either
 authorizes deployment or explicitly records why the qualified candidate remains

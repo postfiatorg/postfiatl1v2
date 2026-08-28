@@ -300,3 +300,35 @@ client's tmux sessions were not used. All our commits were pushed from the
 5. Review and merge, or reject, branch `dravlic/prepared-input-manifest`.
 6. Say whether the L1 observer and anchor-profile specifications should be locked
    (Task Node exception or lock) once Task Node is allowed again.
+
+## Operator continuation (postfiatchad, 2026-08-28)
+
+This section supersedes the run snapshot and storage decisions above; it does
+not rewrite Domagoj's historical end-of-session record.
+
+- The operator accepted the build/measurement split and directed execution.
+- Branch `dravlic/prepared-input-manifest` was reviewed and merged at
+  `90d68784`. All 77 focused tests passed. Python compilation and diff checks
+  also passed.
+- The v4 run later finished at a different boundary than the 11:32 UTC snapshot:
+  status `INTERRUPTED`, height 5,000, 14,390.603 seconds, 15 completed units,
+  no current unit, no final report, and no surviving process. Checkpoint SHA-256
+  is `8e3ed2c910b518157fe4a530f1e34f896c48dcacef291a088615d25d3a65b28d`.
+  The run completed five selected height-50 and five selected height-5,000
+  windows; every one passed convergence, literal receipts, bounded work, and
+  zero-full-history gates. Only the five legacy height-50 controls were missing.
+- The verified prepared-input manifest was exported with SHA-256
+  `9ac31841a41ba514855a82f52650e1951ed97c9f99d54a4048a07407d6734c61`.
+  It binds the unchanged candidate, exact helper, five contiguous advances from
+  height 1 through 5,000, final six-validator roots, all input materials, and
+  final prepared fleet `4e2f24b7…54086`. It contains references and digests,
+  not private key material.
+- The next action is one fresh measurement-only run from that manifest. Its
+  elapsed clock starts at zero; it runs the unchanged 5+5+5 windows and receives
+  the four-hour budget. No devnet access is involved.
+- G3 height-924 replay still requires a separately authorized read-only copy.
+  G5 cannot be called `OFFLINE QUALIFIED` without it. G6 and deployment remain
+  separately authorized later gates.
+
+No Task Node action, subagent work, controlled-devnet query, copy, service
+action, deployment, or mutation occurred in this continuation.
