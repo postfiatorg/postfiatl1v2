@@ -157,6 +157,8 @@ def copy_prepared_input(
         "runner": manifest.get("runner"),
         "build": manifest.get("build"),
     }
+    if manifest.get("prepared_by") is not None:
+        expected_build["prepared_by"] = manifest.get("prepared_by")
     if (
         manifest.get("schema") != PREPARED_INPUT_MANIFEST_SCHEMA
         or report.get("prepared_input_build") != expected_build

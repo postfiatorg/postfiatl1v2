@@ -501,6 +501,92 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
             self.assertNotIn("synthetic private wallet material", encoded)
             self.assertEqual(json.loads(encoded), manifest)
 
+    def test_derive_prepared_input_manifest_separates_build_and_measurement(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary_root = Path(temporary)
+            campaign = temporary_root / "campaign"
+            campaign.mkdir()
+            checkpoint = _synthetic_prepared_campaign(campaign)
+            original_node = temporary_root / "original-node"
+            original_node.write_bytes(b"original candidate")
+            original_builder = temporary_root / "original-builder"
+            original_builder.write_bytes(b"original builder")
+            _bind_synthetic_campaign_binaries(
+                campaign,
+                checkpoint,
+                original_node,
+                original_builder,
+            )
+            source_manifest_path = temporary_root / "prepared-input.json"
+            source_manifest = PAIRED.export_prepared_input_manifest(
+                campaign,
+                source_manifest_path,
+            )
+            node_bin = temporary_root / "corrected-postfiat-node"
+            node_bin.write_bytes(b"corrected candidate")
+            batch_builder_bin = temporary_root / "corrected-batch-builder"
+            batch_builder_bin.write_bytes(b"corrected builder")
+            corrected_revision = "8" * 40
+            runner_revision = "9" * 40
+            derived_path = temporary_root / "corrected-prepared-input.json"
+
+            with mock.patch.object(
+                PAIRED.BASE,
+                "require_release_binary_identity",
+                return_value={
+                    "git_revision": corrected_revision[:8],
+                    "profile": "release",
+                },
+            ):
+                derived = PAIRED.derive_prepared_input_manifest(
+                    source_manifest_path,
+                    derived_path,
+                    node_bin=node_bin,
+                    batch_builder_bin=batch_builder_bin,
+                    expected_source_revision=corrected_revision,
+                    runner_source_revision=runner_revision,
+                )
+
+            self.assertEqual(
+                derived["candidate"]["node_binary_sha256"],
+                PAIRED.sha256(node_bin),
+            )
+            self.assertEqual(
+                derived["batch_builder"]["binary_sha256"],
+                PAIRED.sha256(batch_builder_bin),
+            )
+            self.assertEqual(derived["runner"]["source_revision"], runner_revision)
+            self.assertEqual(
+                derived["prepared_by"]["candidate"],
+                source_manifest["candidate"],
+            )
+            self.assertEqual(
+                derived["prepared_by"]["batch_builder"],
+                source_manifest["batch_builder"],
+            )
+            self.assertEqual(
+                derived["prepared_by"]["source_manifest_sha256"],
+                PAIRED.sha256(source_manifest_path),
+            )
+            self.assertEqual(
+                [
+                    material["prepared_fleet"]["sha256"]
+                    for material in derived["materials"]
+                ],
+                [
+                    material["prepared_fleet"]["sha256"]
+                    for material in source_manifest["materials"]
+                ],
+            )
+            PAIRED.verify_prepared_input_sources(derived_path, derived)
+
+            tampered = json.loads(json.dumps(derived))
+            tampered["prepared_by"]["batch_builder"]["binary_sha256"] = derived[
+                "batch_builder"
+            ]["binary_sha256"]
+            with self.assertRaisesRegex(ValueError, "receipt differs"):
+                PAIRED.verify_prepared_input_sources(derived_path, tampered)
+
     def test_export_prepared_input_manifest_rejects_noncontiguous_advances(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "campaign"

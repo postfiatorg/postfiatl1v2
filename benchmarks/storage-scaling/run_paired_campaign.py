@@ -341,6 +341,31 @@ def runner_bindings() -> dict[str, str]:
     }
 
 
+def prepared_build_bindings(manifest: dict[str, Any]) -> dict[str, Any]:
+    prepared_by = manifest.get("prepared_by")
+    if prepared_by is None:
+        return {
+            "candidate": manifest.get("candidate"),
+            "batch_builder": manifest.get("batch_builder"),
+            "runner": manifest.get("runner"),
+        }
+    if not isinstance(prepared_by, dict):
+        raise ValueError("prepared-input prepared-by identity is malformed")
+    return prepared_by
+
+
+def prepared_input_report_build(manifest: dict[str, Any]) -> dict[str, Any]:
+    result = {
+        "candidate": copy.deepcopy(manifest.get("candidate")),
+        "batch_builder": copy.deepcopy(manifest.get("batch_builder")),
+        "runner": copy.deepcopy(manifest.get("runner")),
+        "build": copy.deepcopy(manifest.get("build")),
+    }
+    if manifest.get("prepared_by") is not None:
+        result["prepared_by"] = copy.deepcopy(manifest["prepared_by"])
+    return result
+
+
 def safe_campaign_path(root: Path, raw: str, label: str) -> Path:
     relative = Path(raw)
     if relative.is_absolute() or not relative.parts or any(
@@ -859,7 +884,144 @@ def export_prepared_input_manifest(
     return manifest
 
 
-def validate_prepared_input_manifest(manifest: dict[str, Any]) -> None:
+def derive_prepared_input_manifest(
+    source_manifest_path: Path,
+    manifest_path: Path,
+    *,
+    node_bin: Path,
+    batch_builder_bin: Path,
+    expected_source_revision: str,
+    runner_source_revision: str,
+) -> dict[str, Any]:
+    if source_manifest_path == manifest_path:
+        raise ValueError("derived prepared-input manifest must use a new path")
+    if manifest_path.is_symlink() or manifest_path.exists():
+        raise ValueError(f"refusing to overwrite prepared-input manifest: {manifest_path}")
+    source = BASE.read_json(source_manifest_path)
+    verify_prepared_input_sources(
+        source_manifest_path,
+        source,
+        require_measurement_gate=False,
+    )
+    require_revision(
+        expected_source_revision,
+        "derived prepared-input candidate source revision",
+    )
+    require_revision(
+        runner_source_revision,
+        "derived prepared-input runner source revision",
+    )
+    private_bundle = prepared_input_source(
+        source_manifest_path,
+        source["private_bundle"],
+        label="private bundle",
+        directory=True,
+    )
+    node_build = BASE.require_release_binary_identity(
+        node_bin,
+        private_bundle / "seed",
+        expected_source_revision,
+    )
+
+    derived = copy.deepcopy(source)
+    original_prepared_by = source.get("prepared_by")
+    if original_prepared_by is None:
+        derived["prepared_by"] = {
+            "source_manifest_sha256": sha256(source_manifest_path),
+            "candidate": copy.deepcopy(source["candidate"]),
+            "batch_builder": copy.deepcopy(source["batch_builder"]),
+            "runner": copy.deepcopy(source["runner"]),
+        }
+    else:
+        derived["prepared_by"] = copy.deepcopy(original_prepared_by)
+    derived["exported_at"] = utc_now()
+    derived["candidate"] = {
+        "source_revision": expected_source_revision,
+        "node_binary_sha256": sha256(node_bin),
+        "node_binary_build": node_build,
+    }
+    derived["batch_builder"] = {
+        "binary_sha256": sha256(batch_builder_bin),
+        "build": {
+            "git_revision": runner_source_revision[:8],
+            "profile": "release",
+        },
+    }
+    derived["runner"] = {
+        "source_revision": runner_source_revision,
+        **runner_bindings(),
+    }
+
+    def rebind_reference(
+        reference: dict[str, str],
+        *,
+        label: str,
+        directory: bool,
+    ) -> dict[str, str]:
+        source_path = prepared_input_source(
+            source_manifest_path,
+            reference,
+            label=label,
+            directory=directory,
+        )
+        return prepared_input_reference(
+            manifest_path,
+            source_path,
+            reference["sha256"],
+        )
+
+    for field, directory in (
+        ("private_bundle", True),
+        ("topology", False),
+        ("height_1_snapshot", True),
+    ):
+        derived[field] = rebind_reference(
+            source[field],
+            label=field.replace("_", " "),
+            directory=directory,
+        )
+    for index, (source_advance, derived_advance) in enumerate(
+        zip(source["advances"], derived["advances"]),
+        start=1,
+    ):
+        for field in ("receipt", "report"):
+            derived_advance[field] = rebind_reference(
+                source_advance[field],
+                label=f"advance {index} {field}",
+                directory=False,
+            )
+    for source_material, derived_material in zip(
+        source["materials"],
+        derived["materials"],
+    ):
+        height = int(source_material["height"])
+        derived_material["prepared_fleet"] = rebind_reference(
+            source_material["prepared_fleet"],
+            label=f"height {height} prepared fleet",
+            directory=True,
+        )
+        derived_material["signed_transfer_corpus"] = rebind_reference(
+            source_material["signed_transfer_corpus"],
+            label=f"height {height} corpus",
+            directory=False,
+        )
+        if source_material["snapshot"] is not None:
+            derived_material["snapshot"] = rebind_reference(
+                source_material["snapshot"],
+                label=f"height {height} snapshot",
+                directory=True,
+            )
+
+    validate_prepared_input_manifest(derived)
+    write_json(manifest_path, derived)
+    return derived
+
+
+def validate_prepared_input_manifest(
+    manifest: dict[str, Any],
+    *,
+    require_measurement_gate: bool = True,
+) -> None:
     if manifest.get("schema") != PREPARED_INPUT_MANIFEST_SCHEMA:
         raise ValueError("prepared-input manifest schema mismatch")
     candidate = manifest.get("candidate")
@@ -877,35 +1039,78 @@ def validate_prepared_input_manifest(manifest: dict[str, Any]) -> None:
     assert isinstance(runner, dict)
     assert isinstance(public, dict)
     assert isinstance(build, dict)
-    source_revision = str(candidate.get("source_revision", ""))
-    runner_revision = str(runner.get("source_revision", ""))
-    require_revision(source_revision, "prepared-input candidate source revision")
-    require_revision(runner_revision, "prepared-input runner source revision")
-    node_build = candidate.get("node_binary_build")
-    helper_build = batch_builder.get("build")
-    if (
-        not is_sha256(candidate.get("node_binary_sha256"))
-        or not isinstance(node_build, dict)
-        or node_build.get("git_revision") != source_revision[:8]
-        or node_build.get("profile") != "release"
-        or not is_sha256(batch_builder.get("binary_sha256"))
-        or not isinstance(helper_build, dict)
-        or helper_build.get("git_revision") != runner_revision[:8]
-        or helper_build.get("profile") != "release"
-        or runner.get("vote_lock_work_gate_schema")
-        != BASE.VOTE_LOCK_WORK_GATE_SCHEMA
-        or re.fullmatch(r"[0-9a-f]{96}", str(runner.get("spec_sha3_384", "")))
-        is None
-        or any(
-            not is_sha256(runner.get(field))
-            for field in (
-                "paired_runner_sha256",
-                "selected_runner_sha256",
-                "shared_runner_sha256",
+
+    def validate_identity_set(
+        identity_candidate: dict[str, Any],
+        identity_builder: dict[str, Any],
+        identity_runner: dict[str, Any],
+        *,
+        require_gate: bool,
+        label: str,
+    ) -> None:
+        source_revision = str(identity_candidate.get("source_revision", ""))
+        runner_revision = str(identity_runner.get("source_revision", ""))
+        require_revision(source_revision, f"{label} candidate source revision")
+        require_revision(runner_revision, f"{label} runner source revision")
+        node_build = identity_candidate.get("node_binary_build")
+        helper_build = identity_builder.get("build")
+        if (
+            not is_sha256(identity_candidate.get("node_binary_sha256"))
+            or not isinstance(node_build, dict)
+            or node_build.get("git_revision") != source_revision[:8]
+            or node_build.get("profile") != "release"
+            or not is_sha256(identity_builder.get("binary_sha256"))
+            or not isinstance(helper_build, dict)
+            or helper_build.get("git_revision") != runner_revision[:8]
+            or helper_build.get("profile") != "release"
+            or (
+                require_gate
+                and identity_runner.get("vote_lock_work_gate_schema")
+                != BASE.VOTE_LOCK_WORK_GATE_SCHEMA
             )
+            or re.fullmatch(
+                r"[0-9a-f]{96}",
+                str(identity_runner.get("spec_sha3_384", "")),
+            )
+            is None
+            or any(
+                not is_sha256(identity_runner.get(field))
+                for field in (
+                    "paired_runner_sha256",
+                    "selected_runner_sha256",
+                    "shared_runner_sha256",
+                )
+            )
+        ):
+            raise ValueError(f"{label} build identity is invalid")
+
+    validate_identity_set(
+        candidate,
+        batch_builder,
+        runner,
+        require_gate=require_measurement_gate,
+        label="prepared-input manifest",
+    )
+    prepared_by = manifest.get("prepared_by")
+    if prepared_by is not None:
+        if (
+            not isinstance(prepared_by, dict)
+            or set(prepared_by)
+            != {"source_manifest_sha256", "candidate", "batch_builder", "runner"}
+            or not is_sha256(prepared_by.get("source_manifest_sha256"))
+            or not all(
+                isinstance(prepared_by.get(field), dict)
+                for field in ("candidate", "batch_builder", "runner")
+            )
+        ):
+            raise ValueError("prepared-input prepared-by identity is invalid")
+        validate_identity_set(
+            prepared_by["candidate"],
+            prepared_by["batch_builder"],
+            prepared_by["runner"],
+            require_gate=False,
+            label="prepared-input prepared-by",
         )
-    ):
-        raise ValueError("prepared-input manifest build identity is invalid")
     identities = public.get("validator_public_identities")
     if (
         not is_sha256(public.get("topology_sha256"))
@@ -1126,8 +1331,15 @@ def prepared_input_source(
 def verify_prepared_input_sources(
     manifest_path: Path,
     manifest: dict[str, Any],
+    *,
+    require_measurement_gate: bool = True,
 ) -> tuple[str, str]:
-    validate_prepared_input_manifest(manifest)
+    validate_prepared_input_manifest(
+        manifest,
+        require_measurement_gate=require_measurement_gate,
+    )
+    build_bindings = prepared_build_bindings(manifest)
+    build_builder = build_bindings["batch_builder"]
     prepared_input_source(
         manifest_path,
         manifest["private_bundle"],
@@ -1178,6 +1390,9 @@ def verify_prepared_input_sources(
             or final_validators != receipt.get("final_fleet")
             or receipt.get("result_prepared_fleet_sha256")
             != advance["result_prepared_fleet_sha256"]
+            or receipt.get("batch_builder_binary_sha256")
+            != build_builder.get("binary_sha256")
+            or receipt.get("batch_builder_build") != build_builder.get("build")
         ):
             raise ValueError(f"prepared-input advance {index} receipt differs")
     wallet_address = ""
@@ -1720,12 +1935,7 @@ def validate_prepared_campaign_binding(state: CampaignState) -> None:
         raise ValueError("campaign prepared-input manifest changed")
     manifest = BASE.read_json(manifest_path)
     validate_prepared_input_manifest(manifest)
-    expected_build = {
-        "candidate": manifest["candidate"],
-        "batch_builder": manifest["batch_builder"],
-        "runner": manifest["runner"],
-        "build": manifest["build"],
-    }
+    expected_build = prepared_input_report_build(manifest)
     if checkpoint.get("prepared_input_build") != expected_build:
         raise ValueError("campaign prepared-input build identity changed")
     if (
@@ -2339,12 +2549,7 @@ def initialize_prepared_campaign(
         "input_mode": "prepared-input-manifest",
         "prepared_input_manifest": imported_manifest.relative_to(root).as_posix(),
         "prepared_input_manifest_sha256": sha256(imported_manifest),
-        "prepared_input_build": {
-            "candidate": copy.deepcopy(candidate),
-            "batch_builder": copy.deepcopy(batch_builder),
-            "runner": copy.deepcopy(manifest["runner"]),
-            "build": copy.deepcopy(manifest["build"]),
-        },
+        "prepared_input_build": prepared_input_report_build(manifest),
         "prepared_input_import": {
             "private_bundle_source_sha256": private_source_sha256,
             "private_bundle_destination_sha256": private_destination_sha256,
@@ -3268,12 +3473,21 @@ def main() -> int:
     parser.add_argument("--node-bin", type=Path)
     parser.add_argument("--batch-builder-bin", type=Path)
     parser.add_argument("--expected-source-revision")
-    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--output-dir", type=Path)
     parser.add_argument(
         "--export-prepared-input-manifest",
         type=Path,
         metavar="OUT.json",
         help="export a verified build manifest from an existing campaign output",
+    )
+    parser.add_argument(
+        "--derive-from-prepared-input-manifest",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "derive a measurement manifest that preserves a verified prepared "
+            "build while binding a new candidate and runner"
+        ),
     )
     parser.add_argument(
         "--prepared-input-manifest",
@@ -3298,9 +3512,57 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    if args.derive_from_prepared_input_manifest is not None:
+        if (
+            args.export_prepared_input_manifest is None
+            or args.node_bin is None
+            or args.batch_builder_bin is None
+            or args.expected_source_revision is None
+            or args.output_dir is not None
+            or args.resume
+            or args.development_smoke
+            or args.development_stop_after_units is not None
+            or args.prepared_input_manifest is not None
+        ):
+            raise ValueError(
+                "manifest derivation requires only --derive-from-prepared-input-manifest, "
+                "--export-prepared-input-manifest, --node-bin, "
+                "--batch-builder-bin, and --expected-source-revision"
+            )
+        require_revision(args.expected_source_revision, "source revision")
+        current_revision = BASE.run_git_revision()
+        if not BASE.git_is_clean():
+            raise ValueError("manifest derivation requires a clean runner checkout")
+        node_bin = release_binary(args.node_bin, "qualification binary")
+        batch_builder_bin = release_binary(
+            args.batch_builder_bin,
+            "corpus batch builder binary",
+        )
+        if batch_builder_bin.name != "postfiat-storage-corpus-batches":
+            raise ValueError(
+                "--batch-builder-bin must name postfiat-storage-corpus-batches"
+            )
+        raw_source = args.derive_from_prepared_input_manifest.expanduser()
+        raw_manifest = args.export_prepared_input_manifest.expanduser()
+        if raw_source.is_symlink() or raw_manifest.is_symlink():
+            raise ValueError("prepared-input manifest paths must not be symlinks")
+        source_manifest_path = raw_source.resolve()
+        manifest_path = raw_manifest.resolve()
+        derive_prepared_input_manifest(
+            source_manifest_path,
+            manifest_path,
+            node_bin=node_bin,
+            batch_builder_bin=batch_builder_bin,
+            expected_source_revision=args.expected_source_revision,
+            runner_source_revision=current_revision,
+        )
+        print(f"prepared-input-manifest={manifest_path}", flush=True)
+        return 0
+
     if args.export_prepared_input_manifest is not None:
         if (
-            args.resume
+            args.output_dir is None
+            or args.resume
             or args.development_smoke
             or args.development_stop_after_units is not None
             or args.node_bin is not None
@@ -3309,7 +3571,7 @@ def main() -> int:
             or args.prepared_input_manifest is not None
         ):
             raise ValueError(
-                "--export-prepared-input-manifest is an export-only operation"
+                "--export-prepared-input-manifest requires only --output-dir"
             )
         raw_root = args.output_dir.expanduser()
         if raw_root.is_symlink():
@@ -3324,13 +3586,15 @@ def main() -> int:
         return 0
 
     if (
-        args.node_bin is None
+        args.output_dir is None
+        or args.node_bin is None
         or args.batch_builder_bin is None
         or args.expected_source_revision is None
     ):
         parser.error(
-            "--node-bin, --batch-builder-bin, and --expected-source-revision "
-            "are required unless exporting a prepared-input manifest"
+            "--output-dir, --node-bin, --batch-builder-bin, and "
+            "--expected-source-revision are required unless exporting or "
+            "deriving a prepared-input manifest"
         )
 
     if args.development_stop_after_units is not None and (

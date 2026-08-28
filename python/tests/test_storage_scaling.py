@@ -1915,6 +1915,43 @@ class StorageScalingVerifierTests(unittest.TestCase):
 
             self.assertIs(verified.report["verified"], True)
 
+    def test_storage_scaling_packet_verifies_derived_prepared_build_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = self.packet_dir(temporary)
+            _passing_packet(packet)
+            _add_prepared_input_build(packet)
+            manifest_path = (
+                packet / "performance" / "prepared-input" / "manifest.json"
+            )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["prepared_by"] = {
+                "source_manifest_sha256": "f" * 64,
+                "candidate": json.loads(json.dumps(manifest["candidate"])),
+                "batch_builder": json.loads(json.dumps(manifest["batch_builder"])),
+                "runner": json.loads(json.dumps(manifest["runner"])),
+            }
+            _write_json(manifest_path, manifest)
+            performance_path = packet / "artifacts" / "performance.json"
+            performance = json.loads(performance_path.read_text(encoding="utf-8"))
+            performance["prepared_input_manifest_sha256"] = _sha256(manifest_path)
+            performance["prepared_input_build"]["prepared_by"] = manifest[
+                "prepared_by"
+            ]
+            _write_json(performance_path, performance)
+            packet_manifest_path = packet / MANIFEST_FILE
+            packet_manifest = json.loads(
+                packet_manifest_path.read_text(encoding="utf-8")
+            )
+            packet_manifest["artifacts"]["performance"]["sha256"] = _sha256(
+                performance_path
+            )
+            _write_json(packet_manifest_path, packet_manifest)
+            _write_checksums(packet)
+
+            verified = verify_packet(packet)
+
+            self.assertIs(verified.report["verified"], True)
+
     def test_storage_scaling_packet_rejects_noncontiguous_prepared_build(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             packet = self.packet_dir(temporary)

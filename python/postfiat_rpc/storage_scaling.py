@@ -2090,6 +2090,9 @@ def _verify_prepared_input_build(
         "runner": manifest.get("runner"),
         "build": manifest.get("build"),
     }
+    prepared_by = manifest.get("prepared_by")
+    if prepared_by is not None:
+        expected_build["prepared_by"] = prepared_by
     if performance.get("prepared_input_build") != expected_build:
         _fail("performance prepared-input build identity differs from the manifest")
     candidate = _object(manifest.get("candidate"), "prepared-input candidate")
@@ -2131,6 +2134,69 @@ def _verify_prepared_input_build(
         )
     ):
         _fail("performance prepared-input helper or runner binding differs")
+    build_batch_builder = batch_builder
+    build_builder_build = builder_build
+    if prepared_by is not None:
+        prepared_by_object = _object(prepared_by, "prepared-input prepared-by")
+        prepared_candidate = _object(
+            prepared_by_object.get("candidate"),
+            "prepared-input prepared-by candidate",
+        )
+        prepared_node_build = _object(
+            prepared_candidate.get("node_binary_build"),
+            "prepared-input prepared-by node build",
+        )
+        prepared_runner = _object(
+            prepared_by_object.get("runner"),
+            "prepared-input prepared-by runner",
+        )
+        prepared_runner_revision = str(prepared_runner.get("source_revision", ""))
+        build_batch_builder = _object(
+            prepared_by_object.get("batch_builder"),
+            "prepared-input prepared-by batch builder",
+        )
+        build_builder_build = _object(
+            build_batch_builder.get("build"),
+            "prepared-input prepared-by batch builder build",
+        )
+        prepared_source_revision = str(prepared_candidate.get("source_revision", ""))
+        if (
+            set(prepared_by_object)
+            != {"source_manifest_sha256", "candidate", "batch_builder", "runner"}
+            or HEX64.fullmatch(
+                str(prepared_by_object.get("source_manifest_sha256", ""))
+            )
+            is None
+            or HEX40.fullmatch(prepared_source_revision) is None
+            or HEX64.fullmatch(
+                str(prepared_candidate.get("node_binary_sha256", ""))
+            )
+            is None
+            or prepared_node_build.get("git_revision")
+            != prepared_source_revision[:8]
+            or prepared_node_build.get("profile") != "release"
+            or HEX40.fullmatch(prepared_runner_revision) is None
+            or HEX96.fullmatch(
+                str(prepared_runner.get("spec_sha3_384", ""))
+            )
+            is None
+            or any(
+                HEX64.fullmatch(str(prepared_runner.get(field, ""))) is None
+                for field in (
+                    "paired_runner_sha256",
+                    "selected_runner_sha256",
+                    "shared_runner_sha256",
+                )
+            )
+            or HEX64.fullmatch(
+                str(build_batch_builder.get("binary_sha256", ""))
+            )
+            is None
+            or build_builder_build.get("git_revision")
+            != prepared_runner_revision[:8]
+            or build_builder_build.get("profile") != "release"
+        ):
+            _fail("performance prepared-input prepared-by binding differs")
     public = _object(manifest.get("public_inputs"), "prepared-input public inputs")
     private_bundle = _object(
         manifest.get("private_bundle"), "prepared-input private bundle reference"
@@ -2339,8 +2405,8 @@ def _verify_prepared_input_build(
             or receipt.get("result_prepared_fleet_sha256")
             != advance.get("result_prepared_fleet_sha256")
             or receipt.get("batch_builder_binary_sha256")
-            != batch_builder.get("binary_sha256")
-            or receipt.get("batch_builder_build") != builder_build
+            != build_batch_builder.get("binary_sha256")
+            or receipt.get("batch_builder_build") != build_builder_build
         ):
             _fail(f"performance prepared-input advance {index} receipt differs")
         expected_start = final

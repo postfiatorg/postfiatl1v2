@@ -168,6 +168,23 @@ python3 -u benchmarks/storage-scaling/run_paired_campaign.py \
     /explicit/disposable/storage-scaling-prepared-input.json
 ```
 
+When a corrected candidate must measure the exact fleets prepared by an older
+candidate, derive a new manifest instead of rewriting the old build identity.
+The derived manifest preserves the source-manifest digest and its candidate,
+helper, and runner under `prepared_by`, while binding the new measurement
+candidate, helper, runner, and vote-lock gate at the top level:
+
+```bash
+python3 -u benchmarks/storage-scaling/run_paired_campaign.py \
+  --derive-from-prepared-input-manifest \
+    /explicit/disposable/original-prepared-input.json \
+  --export-prepared-input-manifest \
+    /explicit/disposable/corrected-measurement-input.json \
+  --node-bin target/release/postfiat-node \
+  --batch-builder-bin target/release/postfiat-storage-corpus-batches \
+  --expected-source-revision FULL_CORRECTED_CANDIDATE_SOURCE_ID
+```
+
 Run the unchanged measurement matrix in a fresh output with the exact candidate
 and batch-builder binaries bound by that manifest:
 
