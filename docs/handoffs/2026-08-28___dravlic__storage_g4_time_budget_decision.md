@@ -218,3 +218,85 @@ objection or replacement decision in his handoff.
 - [Storage scaling fix specification](../architecture/storage-scaling-fix-spec.md)
 - [Storage scaling research specification](../architecture/storage-scaling-research-spec.md)
 - Local timing review: `/home/postfiatchad/wow-reports/2026-08-28-g4-time-review.md`
+
+## End of session (dravlic, 2026-08-28)
+
+### Delivered today
+
+- [`9efa011c`](https://github.com/postfiatorg/postfiatl1v2/commit/9efa011c) —
+  [this handoff](2026-08-28___dravlic__storage_g4_time_budget_decision.md):
+  three-run G4 time accounting and the product owner's proposed build/measure
+  amendment in the sections above.
+- [`983ca6d7`](https://github.com/postfiatorg/postfiatl1v2/commit/983ca6d7) — made the
+  [deferred Dynamic UNL proposal-source milestone](../deferred-plans/dynamic-unl-proposal-source-milestone.md)
+  activation-ready: prerequisites without the Task Node lock, owner slots for
+  the L1 observer service and independent-operator submitter, the inference-cost
+  question, `Direction recorded` with the caveat that the operator's goal run
+  copied it, and the authority boundary; also updated the
+  [deferred-plan index](../deferred-plans/README.md).
+- [`6ac53a26`](https://github.com/postfiatorg/postfiatl1v2/commit/6ac53a26) — added the
+  [L1 observer research specification](../governance/l1-observer-research-spec.md),
+  the first building block of Option C's L1-native path. Its one-loop Text
+  Improvement Harness score was 89.40/100 (GPT 91.60, Fable 86.60, GLM 90.00;
+  five runs per lane; run group `l1-observer-research-spec`). Task Node lock is
+  pending the operator's decision.
+- Branch `dravlic/prepared-input-manifest` is not merged. Its five commits are
+  [`64a5eca0`](https://github.com/postfiatorg/postfiatl1v2/commit/64a5eca0),
+  [`dcb5a26f`](https://github.com/postfiatorg/postfiatl1v2/commit/dcb5a26f),
+  [`39ba1b37`](https://github.com/postfiatorg/postfiatl1v2/commit/39ba1b37),
+  [`2e2135ab`](https://github.com/postfiatorg/postfiatl1v2/commit/2e2135ab), and
+  [`e1925e09`](https://github.com/postfiatorg/postfiatl1v2/commit/e1925e09)
+  (8 files, +3,051/−21). The three storage-scaling Python test modules pass,
+  77 tests. The [paired runner](https://github.com/postfiatorg/postfiatl1v2/blob/e1925e09/benchmarks/storage-scaling/run_paired_campaign.py)
+  persists per-unit `started_at`, `finished_at`, `elapsed_seconds`, and the stop
+  message in the checkpoint. It can export
+  `--export-prepared-input-manifest OUT.json` from any existing campaign output,
+  including `FAILED` or `INTERRUPTED`, with contiguous 1→N advances, zero
+  full-history counters, and no private material. A fresh run can import it with
+  `--prepared-input-manifest PATH`: candidate, binary, and helper identities must
+  match; the local copy must preserve source/destination digest equality; height-50
+  and top-height materials are imported; `input_mode` is
+  `prepared-input-manifest`; elapsed time starts at zero; the budget covers
+  measurement only; and resume re-verifies the input. The
+  [packet verifier](https://github.com/postfiatorg/postfiatl1v2/blob/e1925e09/python/postfiat_rpc/storage_scaling.py)
+  requires the manifest, contiguous build receipts, zero full-history build
+  counters, convergence, and a build-final fleet digest equal to every top-height
+  window's initial fleet. The
+  [runner README](https://github.com/postfiatorg/postfiatl1v2/blob/e1925e09/benchmarks/storage-scaling/README.md#build-once-measure-separately)
+  documents “Build once, measure separately.” The default path without either
+  flag is unchanged. Merge is the operator's call; no campaign was run with it.
+- [`ca1d532b`](https://github.com/postfiatorg/postfiatl1v2/commit/ca1d532b) — added the
+  [L1 anchor-profile research specification](../governance/l1-anchor-profile-research-spec.md),
+  answering open question 3: whether the bounded `payment_v2` memo lane is enough
+  for Dynamic UNL announcements and commit/reveal/convergence anchors, or a
+  dedicated data-carrying transaction is needed. Its one-loop harness score was
+  88.67/100 (GPT 90.40, Fable 86.60, GLM 89.00; five runs per lane; run group
+  `l1-anchor-profile-research-spec`). It recommends Option B: retain the memo lane
+  and add canonical validation, ML-DSA-65 role attribution, receipt metadata, and
+  a bounded round index, all `SHADOW_ONLY`. Task Node lock is pending.
+
+### Client's G4 v4 run at wrap-up
+
+At 11:32 UTC its checkpoint reported status `RUNNING`, height 1,550, 3,412
+seconds elapsed of the 14,400-second budget, seven completed units, and current
+unit `advance-1550-to-3050`. This was a read-only observation of the client's
+checkpoint; it was not our run and was not touched.
+
+### Boundaries
+
+No Task Node action. The controlled devnet was not queried, copied, or touched.
+No Cargo builds, benchmarks, or node processes ran from this session. The
+client's tmux sessions were not used. All our commits were pushed from the
+`postfiatl1v2-dravlic` worktree with `git push origin HEAD:main`.
+
+### Decisions for the operator
+
+1. Accept or replace the build/measure amendment above before the next G4 run.
+2. Name the height-924 directory custodian and authorize its read-only copy.
+3. Confirm or change the two governance directions—Dynamic UNL inside the DGA
+   envelope with formula fallback, and Option C. The milestone currently records
+   them from his goal run, not from him.
+4. Fill the two owner slots in the deferred milestone, or say they stay empty.
+5. Review and merge, or reject, branch `dravlic/prepared-input-manifest`.
+6. Say whether the L1 observer and anchor-profile specifications should be locked
+   (Task Node exception or lock) once Task Node is allowed again.
