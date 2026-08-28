@@ -39,8 +39,10 @@ recipient, and canonical transactional seed snapshot. Height 50 is frozen as
 both a portable authenticated snapshot and a content-hashed prepared six-node
 fleet because the legacy comparison needs the portable form. Higher selected
 heights are frozen only as content-hashed prepared fleets. Every selected
-window restores a byte-for-byte file-content copy of its fleet at the canonical
-database path recorded by the transactional generation pointer. The legacy
+window restores the exact expected fleet at the canonical database path recorded
+by the authenticated absolute transactional generation pointer. V4 first resets
+changed files in the existing workspace, verifies the complete destination
+digest, and falls back to a full copy if the digest differs. The legacy
 control imports the shared portable height-50 snapshot instead, because its
 intentionally different backend must not inherit the selected redb generation.
 Both height-50 lanes consume the same signed corpus. The source revision,
@@ -59,7 +61,9 @@ as the candidate source. The loop routes proposals to the deterministic leader,
 records literal receipts and per-stage storage work, and advances all six nodes
 without restarting a proposer process for every block. This optimization is
 not performance evidence. All fifteen measured windows retain the original
-one-round latency process and resource semantics.
+one-round latency process and resource semantics. Measurement cannot start until
+the resource sampler has completed its first sample, so the initial disk-size
+walk cannot hide a short-lived foreground process.
 
 The runner atomically checkpoints every advance chunk, frozen height input, and
 completed window. `--resume` rehashes and refuses any changed source, candidate
@@ -74,10 +78,12 @@ completed chunk freezes a content-hashed prepared fleet; only the initial
 height-50 chunk also freezes a portable snapshot for the legacy comparison.
 The next selected chunk restores a verified copy at the canonical redb path
 instead of replay-importing or exporting ever-larger histories. Its signed
-corpus is created on a byte-verified disposable canonical clone of the stopped
-prepared fleet. The runner proves the frozen source is unchanged, binds the
-scratch clone's before/after digests and expected sequence, discards the scratch,
-and restores a pristine clone before measurement. Operators must
+corpus uses that canonical workspace as disposable scratch because each
+authenticated generation pointer binds an absolute canonical database path.
+The runner rejects any other pointer location, binds the scratch before/after
+digests and expected sequence, discards the changed scratch state by restoring
+the frozen fleet digest, and records the post-restore digest before setup or
+measurement. Operators must
 additionally wrap each unattended segment in the plan's two-hour hard timeout;
 a completed unit is durable and a partial unit is quarantined.
 
@@ -142,6 +148,23 @@ python3 -u benchmarks/storage-scaling/run_paired_campaign.py \
   --output-dir /explicit/disposable/storage-scaling-paired \
   --resume
 ```
+
+Before spending another release budget after a restore-path change, run the
+offline high-height preflight against a stopped, content-hashed prepared fleet.
+The workspace must not exist and is removed by the preflight; the report remains
+outside it:
+
+```bash
+python3 -u benchmarks/storage-scaling/run_prepared_fleet_preflight.py \
+  --source /explicit/stopped/prepared-fleet \
+  --expected-sha256 PREPARED_FLEET_SHA256 \
+  --workspace /explicit/disposable/preflight-workspace \
+  --report /explicit/preflight-report.json
+```
+
+The preflight performs one clean clone, forces all six transactional database
+files through the incremental-reset path, re-verifies the complete source and
+destination digests, and starts no node or consensus process.
 
 `run_paired_campaign.py --development-smoke` runs one round in the selected and
 legacy lanes from one shared height-2 snapshot and signed corpus, then advances

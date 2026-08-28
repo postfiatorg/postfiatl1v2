@@ -153,7 +153,7 @@ ORIGINAL_E3_FORGED_CASES = (
 ARTIFACT_SCHEMAS = {
     "source": "postfiat-storage-source-identity-v1",
     "replay": "postfiat-storage-scaling-replay-v1",
-    "performance": "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v3",
+    "performance": "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v4",
     "tamper": "postfiat-storage-scaling-tamper-matrix-v1",
     "migration": "postfiat-storage-scaling-six-clone-migration-v1",
     "redaction": "postfiat-storage-scaling-redaction-v1",
@@ -1911,7 +1911,7 @@ def _verify_performance(
     _verify_binary_build(performance, "performance", source_revision)
     if performance.get("validator_count") != 6:
         _fail("performance topology is not six validators")
-    if performance.get("qualification_profile") != "time-budgeted-redb-v3":
+    if performance.get("qualification_profile") != "time-budgeted-redb-v4":
         _fail("performance qualification profile differs")
     if (
         performance.get("batch_builder_binary_sha256")
@@ -1991,6 +1991,7 @@ def _verify_performance(
                     "corpus_scratch_after_sha256",
                     "corpus_scratch_mutated",
                     "corpus_scratch_discarded",
+                    "corpus_scratch_restored_sha256",
                 )
             )
         else:
@@ -2003,6 +2004,8 @@ def _verify_performance(
                 HEX64.fullmatch(str(scratch_before or "")) is not None
                 and HEX64.fullmatch(str(scratch_after or "")) is not None
                 and scratch_before == entry.get("prepared_fleet_sha256")
+                and entry.get("corpus_scratch_restored_sha256")
+                == entry.get("prepared_fleet_sha256")
                 and entry.get("corpus_scratch_mutated")
                 is (scratch_before != scratch_after)
                 and entry.get("corpus_scratch_discarded") is True

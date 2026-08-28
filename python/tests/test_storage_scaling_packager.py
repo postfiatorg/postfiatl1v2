@@ -121,6 +121,9 @@ def _campaign(root: Path, *, label: str = "height-50-window-1") -> Path:
                 ),
                 "corpus_scratch_mutated": None if height == 50 else True,
                 "corpus_scratch_discarded": None if height == 50 else True,
+                "corpus_scratch_restored_sha256": (
+                    None if height == 50 else f"{height + 1:064x}"
+                ),
                 "signed_transfer_corpus": corpus.relative_to(root).as_posix(),
                 "signed_transfer_corpus_sha256": digest,
                 "transfer_count": 50,

@@ -568,14 +568,27 @@ def start_resource_sampler(
     nodes: Path,
     samples: list[dict[str, Any]],
 ) -> threading.Thread:
+    ready = threading.Event()
+    startup_errors: list[BaseException] = []
+
     def sample_loop() -> None:
-        samples.append(resource_sample(pid_provider(), nodes, include_disk=True))
+        try:
+            samples.append(resource_sample(pid_provider(), nodes, include_disk=True))
+        except BaseException as error:
+            startup_errors.append(error)
+            ready.set()
+            return
+        ready.set()
         while not stop_event.wait(0.1):
             samples.append(resource_sample(pid_provider(), nodes, include_disk=False))
         samples.append(resource_sample(pid_provider(), nodes, include_disk=True))
 
     thread = threading.Thread(target=sample_loop, name="resource-sampler", daemon=False)
     thread.start()
+    ready.wait()
+    if startup_errors:
+        thread.join()
+        raise RuntimeError("resource sampler failed before measurement") from startup_errors[0]
     return thread
 
 

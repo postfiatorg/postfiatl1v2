@@ -1,5 +1,11 @@
 # Storage G4 timeout and persistent remediation
 
+> **Historical snapshot:** this handoff predates the v3 release run. V3 later
+> reached height 5,000 but failed its first high-height resource-sampling gate.
+> Resume from the
+> [active storage-scaling milestone](../plans/active/storage-scaling-milestone.md),
+> not from the commands below.
+
 - **Operator:** Post Fiat Chad (`postfiatchad`)
 - **Date:** 2026-08-28 UTC
 

@@ -20,7 +20,7 @@ SPEC = REPO / "docs" / "architecture" / "storage-scaling-fix-spec.md"
 ARTIFACT_SCHEMAS = {
     "source": "postfiat-storage-source-identity-v1",
     "replay": "postfiat-storage-scaling-replay-v1",
-    "performance": "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v3",
+    "performance": "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v4",
     "tamper": "postfiat-storage-scaling-tamper-matrix-v1",
     "migration": "postfiat-storage-scaling-six-clone-migration-v1",
     "redaction": "postfiat-storage-scaling-redaction-v1",
@@ -185,6 +185,7 @@ def copy_performance(packet: Path, source: Path) -> Path:
                         "corpus_scratch_after_sha256",
                         "corpus_scratch_mutated",
                         "corpus_scratch_discarded",
+                        "corpus_scratch_restored_sha256",
                     )
                 )
             ):
@@ -207,6 +208,8 @@ def copy_performance(packet: Path, source: Path) -> Path:
             )
             is None
             or entry.get("corpus_scratch_before_sha256")
+            != entry.get("prepared_fleet_sha256")
+            or entry.get("corpus_scratch_restored_sha256")
             != entry.get("prepared_fleet_sha256")
             or entry.get("corpus_scratch_mutated")
             is not (

@@ -39,9 +39,9 @@ STORAGE_BEHAVIORS = {
         "transactional redb finality path with the fixed-size accumulator"
     ),
 }
-SCHEMA = "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v3"
-CHECKPOINT_SCHEMA = "postfiat-storage-scaling-campaign-checkpoint-v3"
-QUALIFICATION_PROFILE = "time-budgeted-redb-v3"
+SCHEMA = "postfiat-storage-scaling-time-budgeted-six-validator-campaign-v4"
+CHECKPOINT_SCHEMA = "postfiat-storage-scaling-campaign-checkpoint-v4"
+QUALIFICATION_PROFILE = "time-budgeted-redb-v4"
 RELEASE_MATRIX = (
     ("selected-indexed", 50),
     ("selected-indexed", 5_000),
@@ -562,6 +562,8 @@ def verify_completed_unit(
             or not is_sha256(scratch_before)
             or not is_sha256(scratch_after)
             or scratch_before != result.get("prepared_fleet_sha256")
+            or corpus_generation.get("scratch_restored_sha256")
+            != result.get("prepared_fleet_sha256")
             or corpus_generation.get("scratch_mutated")
             is not (scratch_before != scratch_after)
             or corpus_generation.get("scratch_discarded") is not True
@@ -866,6 +868,7 @@ def validate_checkpoint(
                     "corpus_scratch_after_sha256",
                     "corpus_scratch_mutated",
                     "corpus_scratch_discarded",
+                    "corpus_scratch_restored_sha256",
                 )
             ):
                 raise ValueError(
@@ -875,6 +878,8 @@ def validate_checkpoint(
             not is_sha256(scratch_before)
             or not is_sha256(scratch_after)
             or scratch_before != material.get("prepared_fleet_sha256")
+            or material.get("corpus_scratch_restored_sha256")
+            != material.get("prepared_fleet_sha256")
             or material.get("corpus_scratch_mutated")
             is not (scratch_before != scratch_after)
             or material.get("corpus_scratch_discarded") is not True
@@ -1019,6 +1024,52 @@ def record_result(
     )
 
 
+def validate_canonical_generation_pointers(
+    prepared_fleet: Path,
+    working_fleet: Path,
+) -> None:
+    for index in range(BASE.VALIDATORS):
+        pointer_path = (
+            prepared_fleet / f"validator-{index}" / "transactional_generation.json"
+        )
+        if pointer_path.is_symlink() or not pointer_path.is_file():
+            raise RuntimeError(
+                f"prepared validator-{index} omitted its generation pointer"
+            )
+        payload = pointer_path.read_text(encoding="utf-8")
+        try:
+            pointer, end = json.JSONDecoder().raw_decode(payload)
+        except json.JSONDecodeError as error:
+            raise RuntimeError(
+                f"prepared validator-{index} generation pointer is malformed"
+            ) from error
+        if (
+            not isinstance(pointer, dict)
+            or pointer.get("schema")
+            != "postfiat-transactional-generation-pointer-v1"
+            or pointer.get("generation") != "generation-00000001"
+            or pointer.get("database_file") != "postfiat-state-v1.redb"
+            or re.fullmatch(
+                r"\s*pftmac1:[0-9a-f]{96}\s*",
+                payload[end:],
+            )
+            is None
+        ):
+            raise RuntimeError(
+                f"prepared validator-{index} generation pointer is malformed"
+            )
+        expected_directory = (
+            working_fleet
+            / f"validator-{index}"
+            / "transactional-snapshot-generation-v1"
+        ).resolve()
+        if Path(str(pointer.get("database_directory", ""))) != expected_directory:
+            raise RuntimeError(
+                f"prepared validator-{index} generation pointer does not bind "
+                "the canonical working fleet"
+            )
+
+
 def create_corpus_from_prepared_fleet(
     *,
     node_bin: Path,
@@ -1035,47 +1086,52 @@ def create_corpus_from_prepared_fleet(
     label: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     BASE.validate_prepared_fleet(prepared_fleet)
-    source_before = BASE.directory_digest(prepared_fleet)
-    if source_before != prepared_fleet_sha256:
-        raise RuntimeError("prepared fleet changed before corpus creation")
-    BASE.clone_prepared_fleet(
+    validate_canonical_generation_pointers(prepared_fleet, working_fleet)
+    working_before = BASE.clone_prepared_fleet(
         prepared_fleet,
         working_fleet,
         prepared_fleet_sha256,
     )
-    working_before = BASE.directory_digest(working_fleet)
-    if working_before != source_before:
-        raise RuntimeError("corpus scratch clone differs from its frozen source")
-    report = BASE.create_signed_transfer_corpus(
-        node_bin=node_bin,
-        source_data_dir=working_fleet / "validator-0",
-        wallet_key=wallet_key,
-        wallet_address=wallet_address,
-        recipient=recipient,
-        count=count,
-        output_file=output_file,
-        logs=logs,
-        label=label,
-    )
-    working_after = BASE.directory_digest(working_fleet)
-    if BASE.directory_digest(prepared_fleet) != source_before:
+    working_after: str | None = None
+    try:
+        report = BASE.create_signed_transfer_corpus(
+            node_bin=node_bin,
+            source_data_dir=working_fleet / "validator-0",
+            wallet_key=wallet_key,
+            wallet_address=wallet_address,
+            recipient=recipient,
+            count=count,
+            output_file=output_file,
+            logs=logs,
+            label=label,
+        )
+        working_after = BASE.directory_digest(working_fleet)
+        expected_last_sequence = expected_first_sequence + count - 1
+        if (
+            int(report.get("first_sequence", -1)) != expected_first_sequence
+            or int(report.get("last_sequence", -1)) != expected_last_sequence
+        ):
+            raise RuntimeError(
+                "prepared-fleet corpus sequence differs from campaign state"
+            )
+    finally:
+        restored_sha256 = BASE.clone_prepared_fleet(
+            prepared_fleet,
+            working_fleet,
+            prepared_fleet_sha256,
+        )
+    if working_after is None:
+        raise RuntimeError("prepared-fleet corpus omitted its scratch digest")
+    if BASE.directory_digest(prepared_fleet) != prepared_fleet_sha256:
         raise RuntimeError("source prepared fleet changed during corpus creation")
-    expected_last_sequence = expected_first_sequence + count - 1
-    if (
-        int(report.get("first_sequence", -1)) != expected_first_sequence
-        or int(report.get("last_sequence", -1)) != expected_last_sequence
-    ):
-        raise RuntimeError("prepared-fleet corpus sequence differs from campaign state")
-    shutil.rmtree(working_fleet)
-    if working_fleet.exists():
-        raise RuntimeError("disposable corpus fleet was not removed")
     provenance = {
         "mode": "disposable-canonical-prepared-fleet-clone",
-        "source_prepared_fleet_sha256": source_before,
+        "source_prepared_fleet_sha256": prepared_fleet_sha256,
         "scratch_before_sha256": working_before,
         "scratch_after_sha256": working_after,
         "scratch_mutated": working_after != working_before,
         "scratch_discarded": True,
+        "scratch_restored_sha256": restored_sha256,
     }
     return report, provenance
 
@@ -1301,7 +1357,7 @@ def freeze_height_material(
             logs=state.root / "canonical" / "logs",
             label=f"height-{height}",
         )
-        corpus_source_mode = "disposable-canonical-prepared-fleet-clone"
+        corpus_source_mode = corpus_provenance["mode"]
         corpus_source_prepared_fleet_sha256 = prepared_fleet_sha256
     state.value["height_materials"][key] = {
         "height": height,
@@ -1336,6 +1392,11 @@ def freeze_height_material(
         ),
         "corpus_scratch_discarded": (
             corpus_provenance["scratch_discarded"] if not legacy_height else None
+        ),
+        "corpus_scratch_restored_sha256": (
+            corpus_provenance["scratch_restored_sha256"]
+            if not legacy_height
+            else None
         ),
         "signed_transfer_corpus": corpus.relative_to(state.root).as_posix(),
         "signed_transfer_corpus_sha256": sha256(corpus),
@@ -1436,6 +1497,15 @@ def run_windows(
             result_snapshot=result_snapshot,
         )
         state.finish_unit()
+
+    if (
+        use_prepared_fleet
+        and BASE.directory_digest(prepared_fleet)
+        != material["prepared_fleet_sha256"]
+    ):
+        raise RuntimeError(
+            f"{lane}/height-{height} frozen prepared fleet changed during windows"
+        )
 
 
 def build_report(

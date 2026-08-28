@@ -131,12 +131,82 @@ def validate_prepared_fleet(root: Path) -> None:
                 raise ValueError(f"prepared fleet contains a special file: {path}")
 
 
-def clone_prepared_fleet(
+def validate_regular_tree(root: Path, label: str) -> None:
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError(f"{label} is not a regular directory: {root}")
+    for path in root.rglob("*"):
+        if path.is_symlink():
+            raise ValueError(f"{label} contains a symlink: {path}")
+        if not path.is_dir() and not path.is_file():
+            raise ValueError(f"{label} contains a special file: {path}")
+
+
+def tree_inventory(root: Path, label: str) -> dict[Path, tuple[str, int, int]]:
+    validate_regular_tree(root, label)
+    inventory: dict[Path, tuple[str, int, int]] = {}
+    for path in root.rglob("*"):
+        relative = path.relative_to(root)
+        if path.is_dir():
+            inventory[relative] = ("directory", 0, 0)
+        else:
+            metadata = path.stat()
+            inventory[relative] = (
+                "file",
+                metadata.st_size,
+                metadata.st_mtime_ns,
+            )
+    return inventory
+
+
+def remove_tree_entry(path: Path) -> None:
+    if path.is_symlink():
+        raise ValueError(f"refusing to remove a symlink from clone workspace: {path}")
+    if path.is_dir():
+        shutil.rmtree(path)
+    elif path.exists():
+        path.unlink()
+
+
+def incrementally_reset_tree(source: Path, destination: Path) -> None:
+    source_inventory = tree_inventory(source, "clone source")
+    destination_inventory = tree_inventory(destination, "clone destination")
+
+    for relative, (kind, _, _) in sorted(
+        destination_inventory.items(),
+        key=lambda item: len(item[0].parts),
+        reverse=True,
+    ):
+        source_entry = source_inventory.get(relative)
+        if source_entry is None or source_entry[0] != kind:
+            remove_tree_entry(destination / relative)
+
+    for relative, (kind, size, modified_ns) in sorted(
+        source_inventory.items(),
+        key=lambda item: (len(item[0].parts), item[0].as_posix()),
+    ):
+        source_path = source / relative
+        destination_path = destination / relative
+        if kind == "directory":
+            destination_path.mkdir(parents=True, exist_ok=True)
+            continue
+        if destination_path.is_file() and not destination_path.is_symlink():
+            metadata = destination_path.stat()
+            if metadata.st_size == size and metadata.st_mtime_ns == modified_ns:
+                continue
+        elif destination_path.exists() or destination_path.is_symlink():
+            remove_tree_entry(destination_path)
+        destination_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, destination_path)
+
+
+def clone_regular_tree(
     source: Path,
     destination: Path,
     expected_sha256: str,
+    *,
+    label: str,
 ) -> str:
-    validate_prepared_fleet(source)
+    validate_regular_tree(source, f"{label} source")
     resolved_source = source.resolve()
     resolved_destination = destination.resolve(strict=False)
     if (
@@ -144,18 +214,43 @@ def clone_prepared_fleet(
         or resolved_source.is_relative_to(resolved_destination)
         or resolved_destination.is_relative_to(resolved_source)
     ):
-        raise ValueError("prepared fleet source and destination overlap")
+        raise ValueError(f"{label} source and destination overlap")
     if destination.is_symlink():
-        raise ValueError("prepared fleet destination must not be a symlink")
-    observed_sha256 = directory_digest(source)
-    if observed_sha256 != expected_sha256:
-        raise ValueError("prepared fleet digest changed before clone")
-    if destination.exists():
+        raise ValueError(f"{label} destination must not be a symlink")
+
+    used_incremental_reset = destination.exists()
+    if used_incremental_reset:
+        if not destination.is_dir():
+            raise ValueError(f"{label} destination is not a directory")
+        incrementally_reset_tree(source, destination)
+    else:
+        shutil.copytree(source, destination, copy_function=shutil.copy2)
+
+    validate_regular_tree(destination, f"{label} destination")
+    observed_sha256 = directory_digest(destination)
+    if observed_sha256 != expected_sha256 and used_incremental_reset:
         shutil.rmtree(destination)
-    shutil.copytree(source, destination, copy_function=shutil.copy2)
+        shutil.copytree(source, destination, copy_function=shutil.copy2)
+        validate_regular_tree(destination, f"{label} destination")
+        observed_sha256 = directory_digest(destination)
+    if observed_sha256 != expected_sha256:
+        raise RuntimeError(f"{label} clone does not match its expected digest")
+    return observed_sha256
+
+
+def clone_prepared_fleet(
+    source: Path,
+    destination: Path,
+    expected_sha256: str,
+) -> str:
+    validate_prepared_fleet(source)
+    observed_sha256 = clone_regular_tree(
+        source,
+        destination,
+        expected_sha256,
+        label="prepared fleet",
+    )
     validate_prepared_fleet(destination)
-    if directory_digest(destination) != observed_sha256:
-        raise RuntimeError("prepared fleet clone is not byte-identical")
     return observed_sha256
 
 

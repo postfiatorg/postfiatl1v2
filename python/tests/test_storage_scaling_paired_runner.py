@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import stat
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -27,6 +30,35 @@ def _load_paired() -> Any:
 
 
 PAIRED = _load_paired()
+
+
+def _bind_synthetic_generation_pointers(
+    prepared_fleet: Path,
+    working_fleet: Path,
+) -> None:
+    for index in range(PAIRED.BASE.VALIDATORS):
+        pointer = {
+            "schema": "postfiat-transactional-generation-pointer-v1",
+            "generation": "generation-00000001",
+            "database_directory": str(
+                (
+                    working_fleet
+                    / f"validator-{index}"
+                    / "transactional-snapshot-generation-v1"
+                ).resolve()
+            ),
+            "database_file": "postfiat-state-v1.redb",
+            "migration_packet_root": "1" * 96,
+        }
+        path = (
+            prepared_fleet / f"validator-{index}" / "transactional_generation.json"
+        )
+        path.write_text(
+            json.dumps(pointer, indent=2, sort_keys=True)
+            + "\n"
+            + f"pftmac1:{'2' * 96}\n",
+            encoding="utf-8",
+        )
 
 
 class StorageScalingPairedRunnerTests(unittest.TestCase):
@@ -146,8 +178,9 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
                 validator = source / f"validator-{index}"
                 validator.mkdir(parents=True)
                 (validator / "state.bin").write_bytes(bytes([index]))
-            source_sha256 = PAIRED.BASE.directory_digest(source)
             working = root / "canonical" / "nodes"
+            _bind_synthetic_generation_pointers(source, working)
+            source_sha256 = PAIRED.BASE.directory_digest(source)
             output = root / "corpus.json"
 
             def create_corpus(**arguments: Any) -> dict[str, Any]:
@@ -186,14 +219,26 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
             self.assertEqual(
                 provenance["source_prepared_fleet_sha256"], source_sha256
             )
+            self.assertEqual(
+                provenance["mode"],
+                "disposable-canonical-prepared-fleet-clone",
+            )
             self.assertEqual(provenance["scratch_before_sha256"], source_sha256)
+            self.assertEqual(
+                provenance["scratch_restored_sha256"],
+                source_sha256,
+            )
             self.assertNotEqual(
                 provenance["scratch_after_sha256"],
                 provenance["scratch_before_sha256"],
             )
             self.assertTrue(provenance["scratch_mutated"])
             self.assertTrue(provenance["scratch_discarded"])
-            self.assertFalse(working.exists())
+            self.assertTrue(working.is_dir())
+            self.assertEqual(
+                PAIRED.BASE.directory_digest(working),
+                source_sha256,
+            )
 
     def test_prepared_corpus_generation_rejects_wrong_sequence_before_discard(
         self,
@@ -205,8 +250,9 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
                 validator = source / f"validator-{index}"
                 validator.mkdir(parents=True)
                 (validator / "state.bin").write_bytes(bytes([index]))
-            source_sha256 = PAIRED.BASE.directory_digest(source)
             working = root / "canonical" / "nodes"
+            _bind_synthetic_generation_pointers(source, working)
+            source_sha256 = PAIRED.BASE.directory_digest(source)
 
             with mock.patch.object(
                 PAIRED.BASE,
@@ -235,6 +281,46 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
 
             self.assertEqual(PAIRED.BASE.directory_digest(source), source_sha256)
             self.assertTrue(working.is_dir())
+            self.assertEqual(
+                PAIRED.BASE.directory_digest(working),
+                source_sha256,
+            )
+
+    def test_prepared_corpus_generation_rejects_noncanonical_pointer(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "prepared"
+            for index in range(PAIRED.BASE.VALIDATORS):
+                validator = source / f"validator-{index}"
+                validator.mkdir(parents=True)
+                (validator / "state.bin").write_bytes(bytes([index]))
+            _bind_synthetic_generation_pointers(source, root / "wrong-nodes")
+            source_sha256 = PAIRED.BASE.directory_digest(source)
+            with mock.patch.object(
+                PAIRED.BASE,
+                "create_signed_transfer_corpus",
+            ) as create_corpus:
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "does not bind the canonical working fleet",
+                ):
+                    PAIRED.create_corpus_from_prepared_fleet(
+                        node_bin=Path("postfiat-node"),
+                        prepared_fleet=source,
+                        prepared_fleet_sha256=source_sha256,
+                        working_fleet=root / "canonical" / "nodes",
+                        wallet_key=Path("wallet.json"),
+                        wallet_address="wallet",
+                        recipient="recipient",
+                        count=1,
+                        expected_first_sequence=7,
+                        output_file=root / "corpus.json",
+                        logs=root / "logs",
+                        label="height-7",
+                    )
+            create_corpus.assert_not_called()
 
     def test_prepared_fleet_clone_is_byte_verified(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -256,12 +342,122 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
             self.assertEqual(observed, expected)
             self.assertEqual(PAIRED.BASE.directory_digest(destination), expected)
             (source / "validator-0" / "state.bin").write_bytes(b"changed")
-            with self.assertRaisesRegex(ValueError, "digest changed"):
+            with self.assertRaisesRegex(RuntimeError, "expected digest"):
                 PAIRED.BASE.clone_prepared_fleet(
                     source,
                     destination,
                     expected,
                 )
+
+    def test_prepared_fleet_clone_incrementally_restores_exact_content(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "destination"
+            for index in range(PAIRED.BASE.VALIDATORS):
+                validator = source / f"validator-{index}"
+                validator.mkdir(parents=True)
+                (validator / "state.bin").write_bytes(bytes([index, 0, 255]))
+            expected = PAIRED.BASE.directory_digest(source)
+            PAIRED.BASE.clone_prepared_fleet(source, destination, expected)
+
+            unchanged = destination / "validator-2" / "state.bin"
+            unchanged_inode = unchanged.stat().st_ino
+            (destination / "validator-0" / "state.bin").write_bytes(b"mutated")
+            (destination / "validator-1" / "state.bin").unlink()
+            (destination / "validator-3" / "extra.bin").write_bytes(b"extra")
+
+            observed = PAIRED.BASE.clone_prepared_fleet(
+                source,
+                destination,
+                expected,
+            )
+
+            self.assertEqual(observed, expected)
+            self.assertEqual(PAIRED.BASE.directory_digest(destination), expected)
+            self.assertEqual(unchanged.stat().st_ino, unchanged_inode)
+            self.assertFalse((destination / "validator-3" / "extra.bin").exists())
+
+    def test_prepared_fleet_clone_falls_back_on_same_metadata_tamper(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            destination = root / "destination"
+            for index in range(PAIRED.BASE.VALIDATORS):
+                validator = source / f"validator-{index}"
+                validator.mkdir(parents=True)
+                (validator / "state.bin").write_bytes(bytes([index, 0, 255]))
+            expected = PAIRED.BASE.directory_digest(source)
+            PAIRED.BASE.clone_prepared_fleet(source, destination, expected)
+
+            source_file = source / "validator-0" / "state.bin"
+            destination_file = destination / "validator-0" / "state.bin"
+            destination_file.write_bytes(b"bad")
+            source_metadata = source_file.stat()
+            os.utime(
+                destination_file,
+                ns=(source_metadata.st_atime_ns, source_metadata.st_mtime_ns),
+            )
+            copytree = PAIRED.BASE.shutil.copytree
+            with mock.patch.object(
+                PAIRED.BASE.shutil,
+                "copytree",
+                wraps=copytree,
+            ) as copytree_mock:
+                observed = PAIRED.BASE.clone_prepared_fleet(
+                    source,
+                    destination,
+                    expected,
+                )
+
+            self.assertEqual(observed, expected)
+            self.assertEqual(destination_file.read_bytes(), source_file.read_bytes())
+            self.assertGreaterEqual(copytree_mock.call_count, 1)
+
+    def test_resource_sampler_is_ready_before_measurement(self) -> None:
+        stop_event = threading.Event()
+        samples: list[dict[str, Any]] = []
+        include_disk_calls: list[bool] = []
+
+        def fake_resource_sample(
+            _pids: list[int],
+            _nodes: Path,
+            *,
+            include_disk: bool,
+        ) -> dict[str, Any]:
+            include_disk_calls.append(include_disk)
+            time.sleep(0.05)
+            return {
+                "monotonic_ns": time.monotonic_ns(),
+                "host_cpu_ticks": 0,
+                "host_memory": {"total_kib": 1, "available_kib": 1},
+                "network": {"received": 0, "transmitted": 0},
+                "node_disk_bytes": 0 if include_disk else None,
+                "processes": {},
+            }
+
+        started = time.monotonic()
+        with mock.patch.object(
+            PAIRED.BASE.SHARED,
+            "resource_sample",
+            side_effect=fake_resource_sample,
+        ):
+            sample_thread = PAIRED.BASE.SHARED.start_resource_sampler(
+                stop_event,
+                lambda: [],
+                Path("."),
+                samples,
+            )
+            elapsed = time.monotonic() - started
+            self.assertGreaterEqual(elapsed, 0.04)
+            self.assertEqual(len(samples), 1)
+            stop_event.set()
+            sample_thread.join()
+
+        self.assertEqual(include_disk_calls, [True, True])
+        self.assertEqual(len(samples), 2)
 
     def test_atomic_checkpoint_replaces_with_private_file(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

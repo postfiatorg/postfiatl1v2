@@ -1364,7 +1364,7 @@ def _passing_packet(packet: Path) -> None:
             "status": "PASS",
             "captured_at": "2026-08-27T00:00:00Z",
             "campaign_mode": "release-qualification",
-            "qualification_profile": "time-budgeted-redb-v3",
+            "qualification_profile": "time-budgeted-redb-v4",
             "evidence_eligible": True,
             "source_worktree_clean": True,
             "source_revision": revision,
@@ -1421,6 +1421,9 @@ def _passing_packet(packet: Path) -> None:
                     ),
                     "corpus_scratch_mutated": None if height == 50 else True,
                     "corpus_scratch_discarded": None if height == 50 else True,
+                    "corpus_scratch_restored_sha256": (
+                        None if height == 50 else f"{height + 20:064x}"
+                    ),
                     "signed_transfer_corpus": performance_corpora[height]["path"],
                     "signed_transfer_corpus_sha256": performance_corpora[height][
                         "sha256"
