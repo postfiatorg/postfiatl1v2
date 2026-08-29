@@ -1179,13 +1179,12 @@ fn compact_completed_with_index_locked(
     cleanup_orphan_certified_send_staging_dirs(data_dir)?;
     let outbox_dir = certified_send_outbox_dir(data_dir);
     if !outbox_dir.exists() {
-        if let Some(index) = read_index(data_dir, &mut report.work)? {
-            if !index.entries.is_empty() {
-                return Err(
-                    "certified send completed index exists without its outbox; explicit verify repair is required"
-                        .to_string(),
-                );
-            }
+        let index = ensure_index(data_dir, &mut report.work)?;
+        if !index.entries.is_empty() {
+            return Err(
+                "certified send completed index exists without its outbox; explicit verify repair is required"
+                    .to_string(),
+            );
         }
         report.work.compaction_ms = monotonic_elapsed_ms(compaction_start);
         return Ok(report);
@@ -1466,6 +1465,140 @@ mod completed_index_tests {
             10,
         )
         .expect("enqueue active test job")
+    }
+
+    #[test]
+    fn no_outbox_first_resume_migrates_empty_index() {
+        let root = test_root("no-outbox-first-resume");
+        std::fs::create_dir_all(&root).expect("create fresh data directory");
+
+        let report = resume_durable_certified_send_outbox(
+            &root,
+            &root.join("unused-topology.json"),
+            CERTIFIED_SEND_OUTBOX_MAX_JOBS,
+        )
+        .expect("eagerly create empty completed index");
+
+        assert!(completed_index_path_for_test(&root).is_file());
+        assert!(report.work.index_migration_performed);
+        assert_eq!(report.work.tombstones_validated, 0);
+        assert_eq!(report.work.files_read, 0);
+        assert_eq!(report.work.bytes_hashed, 0);
+        assert_eq!(report.work.index_files_read, 1);
+        assert!(report.work.index_bytes_read > 0);
+        assert_eq!(report.work.completed_entries_enumerated, 0);
+        assert_eq!(report.work.jobs_compacted, 0);
+        assert_eq!(report.work.jobs_pruned, 0);
+        assert!(report.all_completed);
+        std::fs::remove_dir_all(root).expect("cleanup first-resume test");
+    }
+
+    #[test]
+    fn no_outbox_second_resume_reads_index_without_migration() {
+        let root = test_root("no-outbox-second-resume");
+        std::fs::create_dir_all(&root).expect("create fresh data directory");
+        let first = resume_durable_certified_send_outbox(
+            &root,
+            &root.join("unused-topology.json"),
+            CERTIFIED_SEND_OUTBOX_MAX_JOBS,
+        )
+        .expect("eagerly create empty completed index");
+        assert!(first.work.index_migration_performed);
+
+        let second = resume_durable_certified_send_outbox(
+            &root,
+            &root.join("unused-topology.json"),
+            CERTIFIED_SEND_OUTBOX_MAX_JOBS,
+        )
+        .expect("reuse eager empty completed index");
+
+        assert!(!second.work.index_migration_performed);
+        assert_eq!(second.work.index_files_read, 1);
+        assert_eq!(second.work.tombstones_validated, 0);
+        assert_eq!(second.work.files_read, 0);
+        assert_eq!(second.work.bytes_hashed, 0);
+        assert!(second.all_completed);
+        std::fs::remove_dir_all(root).expect("cleanup second-resume test");
+    }
+
+    #[test]
+    fn campaign_replay_no_outbox_then_deliveries_then_resume() {
+        let root = test_root("campaign-no-outbox-deliveries-resume");
+        let topology = test_topology();
+        std::fs::create_dir_all(&root).expect("create fresh data directory");
+        let first = resume_durable_certified_send_outbox(
+            &root,
+            &root.join("unused-topology.json"),
+            CERTIFIED_SEND_OUTBOX_MAX_JOBS,
+        )
+        .expect("eagerly create empty completed index");
+        assert!(first.work.index_migration_performed);
+
+        for height in 1..=5 {
+            tombstone_job(&root, &topology, height, false);
+        }
+        let second = resume_durable_certified_send_outbox(
+            &root,
+            &root.join("unused-topology.json"),
+            CERTIFIED_SEND_OUTBOX_MAX_JOBS,
+        )
+        .expect("compact deliveries after eager migration");
+
+        assert!(!second.work.index_migration_performed);
+        assert_eq!(second.work.jobs_compacted, 5);
+        assert_eq!(second.work.jobs_pruned, 0);
+        assert_eq!(second.work.tombstones_validated, 5);
+        assert_eq!(second.work.files_read, 15);
+        assert_eq!(second.work.completed_entries_enumerated, 0);
+        assert_eq!(
+            second.work.tombstones_validated,
+            second.work.jobs_compacted + second.work.jobs_pruned
+        );
+        assert!(second.all_completed);
+        std::fs::remove_dir_all(root).expect("cleanup campaign replay test");
+    }
+
+    #[test]
+    fn no_outbox_intent_without_index_fails_closed() {
+        let root = test_root("no-outbox-intent-without-index");
+        let topology = test_topology();
+        let (_, source) = tombstone_job(&root, &topology, 1, false);
+        write_append_intent_for_test(&root, &source).expect("write append intent");
+        std::fs::remove_dir_all(certified_send_outbox_dir(&root))
+            .expect("remove outbox after intent");
+
+        let error = resume_durable_certified_send_outbox(
+            &root,
+            &root.join("unused-topology.json"),
+            CERTIFIED_SEND_OUTBOX_MAX_JOBS,
+        )
+        .expect_err("intent without index must fail closed");
+
+        assert!(error.contains("mutation intent exists"), "{error}");
+        assert!(error.contains("explicit verify repair"), "{error}");
+        assert!(!completed_index_path_for_test(&root).exists());
+        std::fs::remove_dir_all(root).expect("cleanup intent-without-index test");
+    }
+
+    #[test]
+    fn non_empty_index_with_deleted_outbox_still_fails_closed() {
+        let root = test_root("non-empty-index-deleted-outbox");
+        let topology = test_topology();
+        seed_completed(&root, &topology, 1);
+        verify_and_rebuild_completed_index(&root).expect("build non-empty index");
+        std::fs::remove_dir_all(certified_send_outbox_dir(&root))
+            .expect("delete outbox behind non-empty index");
+
+        let error = resume_durable_certified_send_outbox(
+            &root,
+            &root.join("unused-topology.json"),
+            CERTIFIED_SEND_OUTBOX_MAX_JOBS,
+        )
+        .expect_err("non-empty index without outbox must fail closed");
+
+        assert!(error.contains("index exists without its outbox"), "{error}");
+        assert!(error.contains("explicit verify repair"), "{error}");
+        std::fs::remove_dir_all(root).expect("cleanup deleted-outbox test");
     }
 
     #[test]
