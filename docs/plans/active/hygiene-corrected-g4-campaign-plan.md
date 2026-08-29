@@ -1,6 +1,6 @@
 # Hygiene-Corrected G4 Campaign: Executable Plan
 
-**Status:** Authorized — one run under the operator's standing 2026-08-29 directive to unblock the testnet path
+**Status:** Executed once — **FAIL on ratios alone** (consensus `1.1149`, wallet `1.10091` vs ≤1.10; every window, coverage, work, comparison, and height-model gate passed; all 15 windows completed). Diagnosis: the residual height cost is validator-0's at-cap resume paying ~14 fsyncs per batch under concurrent load. Successor: [fsync-lean G4 plan](fsync-lean-g4-campaign-plan.md)
 **Date:** 2026-08-29
 **Predecessor:** [Batched-index G4 plan](batched-index-g4-campaign-plan.md) (closed, failed on a single 8.4 ms round-coverage residual overshoot; see the [residual failure handoff](../../handoffs/2026-08-29___postfiatchad__batched_index_g4_residual_failure.md))
 
