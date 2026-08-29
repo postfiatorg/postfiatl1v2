@@ -1,0 +1,40 @@
+{
+  "schema": "postfiat.arc_mvp.local_six_fleet.v1",
+  "captured_at_utc": "2026-08-29T00:59:19Z",
+  "candidate_parent_commit": "3e2c9caa9159cd899664434f0377f05b27f31deb",
+  "qualification_diff_sha256": "22e654e586c8924837a87b040f9319b136cb25c6e7aa5162779792e7e4c641bd",
+  "command": "cargo test -p postfiat-node activated_consensus_v2_transport_survives_failed_view_zero_proposer_n6 -- --nocapture",
+  "result": {
+    "status": "passed",
+    "passed": 1,
+    "failed": 0,
+    "duration_seconds": 167.29
+  },
+  "fleet": {
+    "validator_count": 6,
+    "transport": "loopback TCP services",
+    "state_origin": "fresh local genesis followed by snapshot import",
+    "signer_isolation": "each validator data directory contains only its own ML-DSA-65 private key",
+    "live_system_mutation": false
+  },
+  "behaviors_verified": [
+    "six validator services form certified rounds",
+    "consensus recovers from a failed view-zero proposer",
+    "all validators import the same snapshot and converge",
+    "governed validator-key rotation activates",
+    "each node retains only its own rotated signing key",
+    "post-rotation blocks certify",
+    "a fresh wallet is funded and submits an owned deposit",
+    "verify-blocks replays committed history",
+    "all validators converge on height, tip, and state root"
+  ],
+  "qualification_changes": [
+    "crates/node/src/main_parts/tests/transport_batch_payload_tests.rs",
+    "crates/node/src/tests/vault_bridge_governed_route.rs"
+  ],
+  "limitations": [
+    "This qualifies shared PFTL consensus, snapshot, signer-isolation, governance, wallet, and replay infrastructure.",
+    "It is not an Arc ingress proof transaction and does not qualify an Arc validator-set rotation witness.",
+    "The final Arc ELF, vkey, proof, and route bindings still require release-candidate regeneration."
+  ]
+}
