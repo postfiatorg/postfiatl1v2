@@ -1,6 +1,6 @@
 # Storage Scaling: Time-Budgeted Qualification and Release Gates
 
-**Status:** Active — `redb` selected; eager-index contract remediated and locally frozen; remediated G3/G4 qualification, deployment, and public testnet blocked
+**Status:** Active — `redb` selected; remediated G4 authorized and preflight passed; measurement pending; G3, deployment, and public testnet blocked
 
 **Decision date:** 2026-08-27
 
@@ -82,8 +82,10 @@ an index and a non-empty index without its outbox remain unchanged. Five owner
 fixtures cover the exact failed sequence; runner `a3c7bea9` adds a test-only
 telemetry replay without changing the gate logic. The clean release freeze,
 focused owner tests, release 1,024-tombstone check, and private local G1/G2
-refresh passed. This remediation does not resurrect the failed campaign and
-does not authorize another measurement run.
+refresh passed. This remediation does not resurrect the failed campaign.
+The operator separately authorized exactly one new run on 2026-08-29 under the
+[remediated G4 qualification plan](remediated-g4-qualification-campaign-plan.md);
+its identity and migration preflights passed before the measurement clock.
 
 Selection is not qualification, qualification is not deployment, and deployment
 is not public-testnet authorization. The remaining work must prove the selected
@@ -130,14 +132,14 @@ The corrected vote-lock campaign and the final certified-send campaign are both
 closed failed and cannot be retried under their one-run rules. The
 certified-send migration-position mismatch exposed by the final run is fixed at
 source `a92bb085`, and its node/runner freeze, G1/G2 refresh, and prepared-input
-rebind pass locally. Local qualification now requires a separately reviewed and
-explicitly authorized new campaign; the remediation grants no run allowance.
-G3 still independently requires corrected replay and authorized height-924
-input. The four tracks are:
+rebind pass locally. The operator has now separately reviewed and authorized
+exactly one new campaign; its identity and migration preflights passed outside
+the clock. G3 still independently requires corrected replay and authorized
+height-924 input. The four tracks are:
 
 | Order | Track | Start condition | Finish condition | Operator input |
 | ---: | --- | --- | --- | --- |
-| 1 | Local qualification | A new reviewed campaign plan binds source `a92bb085`, runner `a3c7bea9`, helper `ad70ca…014a`, and prepared input `c9fb32…da42` | One separately authorized campaign passes the unchanged latency/correctness, certified-send, and timing-coverage gates | Decide whether to authorize exactly one new run under that future plan. No run is authorized now; the devnet remains out of scope. |
+| 1 | Local qualification | **Started:** the [remediated G4 plan](remediated-g4-qualification-campaign-plan.md) binds source `a92bb085`, runner `a3c7bea9`, helper `ad70ca…014a`, and prepared input `c9fb32…da42`; authorization and preflight passed | The one authorized campaign passes the unchanged latency/correctness, certified-send, and timing-coverage gates | No further input is needed for this run. Its single result is final; the devnet remains out of scope. |
 | 2 | Exact height-924 replay | A custodian names one complete quiescent directory and separately authorizes a read-only copy | G3 replay and mutation sentinels pass and enter the packet | Name the custodian and authorize the copy. Do not wait idle for this input. |
 | 3 | Pre-deployment rehearsal | G5 is `OFFLINE QUALIFIED` and controlled-devnet deployment is actually the next decision | G6 passes on six distinct stopped copies | Separately authorize six copies and then make a separate deploy/no-deploy decision. |
 | 4 | Dynamic UNL milestone | G5 closes, or the decision owner explicitly changes priority | A separately activated governance plan exists | No choice is open now: the DGA/Cobalt envelope and Option C are the recorded direction. |
@@ -155,9 +157,9 @@ OFFLINE QUALIFIED -> separate deployment decision -> G6
 A missing height-924 copy blocks only the final `OFFLINE QUALIFIED` label. It
 must not trigger a 20-hour wait, an exhaustive legacy campaign, or collection of
 six fleet directories. The post-certified-send G4 result is final failed
-evidence. A future run requires a new reviewed campaign plan, verification that
-the frozen identities are unchanged, and separate authorization; it may not
-resume, retry, or relabel either failed output.
+evidence. The current remediated plan separately satisfies the review, binding,
+and authorization conditions for one fresh run; it may not resume, retry, or
+relabel either failed output. No later run is authorized.
 
 ## Decisions recorded
 
@@ -246,7 +248,7 @@ independent local gates continue.
 | G1 — candidate freeze | **PASS — EAGER-INDEX FREEZE / CAMPAIGN NOT RUN** | Preserve source `a92bb085`, binary `902773…e182`, G1 `ed66a6…0190`, runner `a3c7bea9`, helper `ad70ca…014a`, prepared input `c9fb32…da42`, and rehash receipt `6848d4…bb58`. | Another source, runner, helper, or input change must refresh the affected bindings; this pass does not authorize a campaign. |
 | G2 — safety | **EAGER-INDEX LOCAL PASS / PACKET BINDING PENDING** | Preserve manifest `dd300b…d170`, rollback `9c3231…e8a5`, tamper `6b63fe…46e0`, and stale-generation receipt `db78c8…563f`; raw output remains private. | Redaction-safe repository packet binding remains open; another candidate change requires another refresh. |
 | G3 — exact replay | **PRIOR HEIGHT 915 PASS / EAGER-INDEX REPLAY REQUIRED / HEIGHT 924 AUTHORIZATION BLOCKED** | Preserve the old height-915 receipt as history; any remediated replay must use binary `902773…e182`. Run height 924 only from a separately authorized copy. | Never wait idle for the height-924 copy, but do not claim offline qualification without both remediated replay receipts. |
-| G4 — scaling | **FINAL CAMPAIGN CLOSED FAIL / CONTRACT REMEDIATED / NO NEW RUN AUTHORIZED** | Preserve the failed checkpoint and receipts. Preserve the separately frozen eager-index source `a92bb085`, binary `902773…e182`, and runner `a3c7bea9`. | Do not rerun. The node-owned contract fix passed local evidence, but a new measurement campaign still requires its own reviewed plan and explicit authorization. |
+| G4 — scaling | **REMEDIATED CAMPAIGN AUTHORIZED / PREFLIGHT PASS / MEASUREMENT PENDING** | Execute exactly one fresh run under the [remediated G4 plan](remediated-g4-qualification-campaign-plan.md) with source `a92bb085`, binary `902773…e182`, runner `a3c7bea9`, helper `ad70ca…014a`, and input `c9fb32…da42`. | One result only. Pass advances G4; fail gets one diagnosis. No retry, candidate change, devnet action, or relabeling. |
 | G5 — offline packet | **BLOCKED BY REMEDIATED G3 AND FAILED G4** | Do not package either failed campaign or private validator material. | No qualification claim until remediated G3, a future separately planned and authorized G4 pass, redaction-safe packet binding, and the complete offline verifier all pass. |
 | G6 — six-clone rehearsal | **DEFERRED** | Nothing until offline qualification is complete and deployment is the next real decision. | Requires separate data-copy authorization and six distinct stopped directories. |
 | G7 — Dynamic UNL handoff | **DIRECTION RECORDED / IMPLEMENTATION DEFERRED** | Preserve the recorded architecture decision only. | Spend no implementation time before the stated storage boundary or a new operator priority decision. |
@@ -937,6 +939,30 @@ are frozen. The failed G4G result remains failed. Any new measurement run must
 be proposed in a separate reviewed campaign plan and explicitly authorized;
 this milestone and the remediation spec grant no run allowance.
 
+### G4I — remediated qualification campaign: authorized and preflight complete
+
+- [x] Record the operator's direct 2026-08-29 authorization for exactly one run
+      under the
+      [remediated G4 plan](remediated-g4-qualification-campaign-plan.md),
+      without Task Node or agents.
+- [x] Rehash candidate `902773…e182`, G1 `ed66a6…0190`, G2
+      `dd300b…d170`, helper `ad70ca…014a`, prepared input `c9fb32…da42`,
+      and input-verification receipt `6848d4…bb58`.
+- [x] Independently rehash all 18 prepared-input references and confirm the
+      source and runner worktrees remain clean at `a92bb085` and `a3c7bea9`.
+- [x] Pass 96 runner/packager/verifier tests, 15 completed-index tests, and 35
+      certified-send tests, including eager empty migration, later compaction,
+      per-validator first use after restore, and repeated/late rejection.
+- [ ] Execute exactly one fresh 5+5+5 measurement under one four-hour runner
+      clock and the two-hour unattended command cap.
+- [ ] On pass, package and independently verify the result. On fail, diagnose
+      once from its own artifacts and do not invoke the packager.
+- [ ] Record the complete gate table and hashes in this milestone and a new
+      handoff, then stop without retry or candidate change.
+
+**G4I exit:** pending the one authorized measurement result. Preflight work is
+complete and consumed none of the measurement clock.
+
 ## G5 — offline qualification packet
 
 **Purpose:** make the result independently checkable and state exactly what it
@@ -1009,24 +1035,25 @@ not deploy anything.
    binary `902773…e182`, G1 `ed66a6…0190`, G2 `dd300b…d170`, runner
    `a3c7bea9`, helper `ad70ca…014a`, prepared input `c9fb32…da42`, and
    verification receipt `6848d4…bb58`.
-4. Treat the eager-index candidate as ready for the remaining gates, not as
-   qualified. No performance campaign is authorized by this milestone or the
-   completed remediation spec.
+4. Execute the one authorized
+   [remediated G4 campaign](remediated-g4-qualification-campaign-plan.md) from
+   the fresh output path now that every identity and migration preflight has
+   passed. Its result is final under that plan.
 5. Run a remediated height-915 replay only under a separately bounded action
    using binary `902773…e182`. Close height 924 only after a custodian and
    separate read-only copy authorization exist; do not wait idle for it.
-6. Before any new G4 run, write and review a new campaign plan that binds the
-   frozen identities, states the time budget, and records explicit operator
-   authorization for exactly one run.
-7. Build G5 and record `OFFLINE QUALIFIED` only after remediated G3, a future
-   separately planned and authorized G4 pass, redaction-safe packet binding,
-   and the complete offline verifier pass.
+6. On G4 pass, assemble only the locally available packet material while
+   keeping G3 open. On G4 fail, record one named-stage diagnosis and stop
+   without retry or candidate change.
+7. Record `OFFLINE QUALIFIED` only after remediated G3, a passing G4,
+   redaction-safe packet binding, and the complete offline verifier pass.
 8. Run G6 only if controlled-devnet deployment is actually the next decision
    and its separate data-copy authorization has been recorded.
 9. Activate the deferred Dynamic UNL milestone only at the G7 boundary or after
    an explicit operator reprioritization.
 
 The milestone remains active and public testnet remains blocked. The
-first-migration contract mismatch is fixed and locally evidence-bound, but G3,
-a new explicitly authorized G4 pass, G5, and deployment gates remain open. No
-new campaign, devnet action, deployment, or qualification claim is authorized.
+first-migration contract mismatch is fixed and locally evidence-bound. Exactly
+one remediated G4 campaign is now authorized and preflight-complete; its
+measurement has not started. G3, G5, deployment, and public-testnet gates remain
+open, and no devnet action, deployment, or qualification claim is authorized.
