@@ -1,12 +1,12 @@
 # Storage Scaling: Time-Budgeted Qualification and Release Gates
 
-**Status:** Active — `redb` selected but not qualified; remediated G4 failed once with no retry; G3, G5, deployment, and public testnet blocked
+**Status:** Active — `redb` selected but not qualified; remediated G4 failed once with no retry; both diagnosed defects are fixed at unfrozen source `48a94425`; freeze, evidence refresh, and a new authorized campaign remain; G3, G5, deployment, and public testnet blocked
 
 **Decision date:** 2026-08-27
 
 **Decision owner:** Post Fiat
 
-**Candidate lineage:** failed pre-fix source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`, binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; corrected vote-lock source `442c5a4ddafed3aa0709f64e213fe0cedac5222d`, binary SHA-256 `29423cba098ce793ccab4a234ab26a2d30c6b11ad9eacd339b11b89cd6187c48`; certified-send tombstone source `e52e050269a2f9fdd28c5083c3888debf3a85063`, binary SHA-256 `6b130a1f9c81bd64bc9dc42043595f5a27e84185cf3f40b13b5f37a40d72a82e`; eager-index source `a92bb085ceb6a9f405e916608e6b7bb6010fcc9b`, binary SHA-256 `902773e00e5226dab9e027ebce2b932b2cf26509dba08424f6ebe46db985e182`; gate-logic runner `15d059d1`; test-only runner successor `a3c7bea9`; persistent setup remediation `438fb29c`; v4 restore remediation `428fe7c9`; build/measurement workflow `90d68784`
+**Candidate lineage:** failed pre-fix source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`, binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; corrected vote-lock source `442c5a4ddafed3aa0709f64e213fe0cedac5222d`, binary SHA-256 `29423cba098ce793ccab4a234ab26a2d30c6b11ad9eacd339b11b89cd6187c48`; certified-send tombstone source `e52e050269a2f9fdd28c5083c3888debf3a85063`, binary SHA-256 `6b130a1f9c81bd64bc9dc42043595f5a27e84185cf3f40b13b5f37a40d72a82e`; eager-index source `a92bb085ceb6a9f405e916608e6b7bb6010fcc9b`, binary SHA-256 `902773e00e5226dab9e027ebce2b932b2cf26509dba08424f6ebe46db985e182`; unfrozen vote-lock-marker and batched-index remediation sources `ff2b3532` and `48a94425` (no release freeze yet); gate-logic runner `15d059d1`; test-only runner successor `a3c7bea9`; persistent setup remediation `438fb29c`; v4 restore remediation `428fe7c9`; build/measurement workflow `90d68784`
 
 **Research basis:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 
@@ -140,13 +140,30 @@ The remediated campaign is now the third closed failed G4 lineage and cannot be
 retried. Source `a92bb085` fixed the certified-send mismatch, but the new run
 exposed an uncovered empty-directory vote-lock marker defect and independently
 missed both selected-path height-ratio limits. Its ten selected windows are
-useful bound diagnostics, not a final report or qualification packet. G3 still
-independently requires corrected replay and authorized height-924 input. The
-four tracks are:
+useful bound diagnostics, not a final report or qualification packet.
+
+Both defects were diagnosed from the campaign's own raw rounds and fixed on
+2026-08-29 at unfrozen sources `ff2b3532` and `48a94425`:
+
+- **Vote-lock marker (`ff2b3532`):** the empty-directory migration branch now
+  binds the marker eagerly on a validator's first successful reservation,
+  mirroring the locked certified-send contract; the exact campaign sequence
+  and the stray-legacy-lock contract are pinned by fixtures.
+- **Selected height-ratio tail (`48a94425`):** the entire ~1.40 ratio was
+  validator-0's proposal rounds at the 1,024-tombstone retention cap, where
+  each resume rewrote the full ~780 KB completed index once per touched entry
+  (~10 rewrites and ~50 fsyncs per round, ~205 ms). Appends and prunes are now
+  covered by one durable batch intent with one index write per resume; the
+  release spot check dropped the at-cap steady-state round from ~205 ms to
+  ≤6.4 ms with unchanged validation authority and gate arithmetic.
+
+These fixes are implemented and locally verified but **not frozen, not
+evidence-bound, and not campaign-proven**. G3 still independently requires
+corrected replay and authorized height-924 input. The four tracks are:
 
 | Order | Track | Start condition | Finish condition | Operator input |
 | ---: | --- | --- | --- | --- |
-| 1 | Local qualification | **Blocked by closed G4 failure:** the [remediated G4 plan](remediated-g4-qualification-campaign-plan.md) failed once on the legacy vote-lock marker contract and both selected height ratios | A new reviewed remediation proves the exact vote-lock sequence and selected tail, then a separately frozen and authorized campaign passes | No retry is authorized. First decide whether to fund another bounded remediation; the devnet remains out of scope. |
+| 1 | Local qualification | **Remediation implemented, unfrozen:** the [remediated G4 plan](remediated-g4-qualification-campaign-plan.md) failure is fixed at `ff2b3532`/`48a94425`; freeze, G1/G2 refresh, prepared-input rebind, and a new reviewed campaign plan are the remaining start conditions | A separately frozen and authorized campaign passes the unchanged latency/correctness, work, and timing gates | No run is authorized. Authorize the freeze/evidence cycle and then a new campaign plan; the devnet remains out of scope. |
 | 2 | Exact height-924 replay | A custodian names one complete quiescent directory and separately authorizes a read-only copy | G3 replay and mutation sentinels pass and enter the packet | Name the custodian and authorize the copy. Do not wait idle for this input. |
 | 3 | Pre-deployment rehearsal | G5 is `OFFLINE QUALIFIED` and controlled-devnet deployment is actually the next decision | G6 passes on six distinct stopped copies | Separately authorize six copies and then make a separate deploy/no-deploy decision. |
 | 4 | Dynamic UNL milestone | G5 closes, or the decision owner explicitly changes priority | A separately activated governance plan exists | No choice is open now: the DGA/Cobalt envelope and Option C are the recorded direction. |
@@ -154,7 +171,7 @@ four tracks are:
 The dependency chain is:
 
 ```text
-local:     diagnose/fix vote-lock marker + selected tail -> new freeze -> new authorized G4 --+
+local:     fixes ff2b3532/48a94425 (done) -> new freeze/evidence -> new authorized G4 --------+
                                                                                               +-> complete G5 -> OFFLINE QUALIFIED
 external:  corrected height-915 + authorized height-924 G3 -------------------------------+
 
@@ -254,7 +271,7 @@ independent local gates continue.
 | G1 — candidate freeze | **PASS FOR CLOSED FAILED LINEAGE** | Preserve source `a92bb085`, binary `902773…e182`, G1 `ed66a6…0190`, runner `a3c7bea9`, helper `ad70ca…014a`, prepared input `c9fb32…da42`, and rehash receipt `6848d4…bb58`. | Any remediation changes the candidate and requires a new freeze; this historical pass authorizes nothing. |
 | G2 — safety | **EAGER-INDEX LOCAL PASS / PACKET BINDING PENDING** | Preserve manifest `dd300b…d170`, rollback `9c3231…e8a5`, tamper `6b63fe…46e0`, and stale-generation receipt `db78c8…563f`; raw output remains private. | Redaction-safe repository packet binding remains open; another candidate change requires another refresh. |
 | G3 — exact replay | **PRIOR HEIGHT 915 PASS / EAGER-INDEX REPLAY REQUIRED / HEIGHT 924 AUTHORIZATION BLOCKED** | Preserve the old height-915 receipt as history; any remediated replay must use binary `902773…e182`. Run height 924 only from a separately authorized copy. | Never wait idle for the height-924 copy, but do not claim offline qualification without both remediated replay receipts. |
-| G4 — scaling | **FAIL — NO RETRY AUTHORIZED** | Preserve checkpoint `e33dfd…28a3`, failure receipt `4f3ad6…327`, and diagnosis `e2134a…c164`; do not package private output. | A future attempt requires a reviewed vote-lock/selected-tail remediation, new affected bindings, and separate authorization. |
+| G4 — scaling | **FAIL — NO RETRY AUTHORIZED / REMEDIATION IMPLEMENTED UNFROZEN** | Preserve checkpoint `e33dfd…28a3`, failure receipt `4f3ad6…327`, and diagnosis `e2134a…c164`; do not package private output. Both diagnosed defects are fixed at `ff2b3532`/`48a94425` with fixtures and release spot checks. | A future attempt requires a new source/binary freeze, refreshed G1/G2 and prepared-input bindings, a new reviewed campaign plan, and separate authorization. |
 | G5 — offline packet | **BLOCKED BY REMEDIATED G3 AND FAILED G4** | Do not package either failed campaign or private validator material. | No qualification claim until remediated G3, a future separately planned and authorized G4 pass, redaction-safe packet binding, and the complete offline verifier all pass. |
 | G6 — six-clone rehearsal | **DEFERRED** | Nothing until offline qualification is complete and deployment is the next real decision. | Requires separate data-copy authorization and six distinct stopped directories. |
 | G7 — Dynamic UNL handoff | **DIRECTION RECORDED / IMPLEMENTATION DEFERRED** | Preserve the recorded architecture decision only. | Spend no implementation time before the stated storage boundary or a new operator priority decision. |
@@ -1006,6 +1023,14 @@ No final campaign report or packet exists. The packager was not invoked.
 the vote-lock empty-directory marker contract and the selected-window latency
 tail, add the exact missed fixtures, refresh every affected identity, and obtain
 separate run authorization. This closed lineage is not offline qualification.
+
+Follow-up: both defects were subsequently fixed and locally verified at
+unfrozen sources `ff2b3532` (eager vote-lock marker) and `48a94425` (batched
+completed-index mutations; at-cap steady-state resume ~205 ms → ≤6.4 ms). See
+the
+[remediation handoff](../../handoffs/2026-08-29___postfiatchad__vote_lock_marker_and_batched_index_fixes.md).
+Identity refresh and a new reviewed, separately authorized campaign plan
+remain open.
 
 ## G5 — offline qualification packet
 
