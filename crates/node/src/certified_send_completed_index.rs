@@ -20,6 +20,9 @@ const COMPLETED_INDEX_MUTATION_LOCK_FILE: &str =
     ".certified-send-completed-index-mutation.lock";
 const COMPLETED_INDEX_MAX_BYTES: u64 = 4 * 1024 * 1024;
 const COMPLETED_INDEX_INTENT_MAX_BYTES: u64 = 64 * 1024;
+const COMPLETED_INDEX_INTENT_BATCH_SCHEMA: &str =
+    "postfiat.certified_send_completed_index_intent.v2";
+const COMPLETED_INDEX_INTENT_MAX_OPERATIONS: usize = 32;
 const COMPLETED_INDEX_MAX_TRANSIENT_ENTRIES: usize =
     CERTIFIED_SEND_COMPLETED_TOMBSTONE_MAX_JOBS + CERTIFIED_SEND_OUTBOX_MAX_JOBS;
 const COMPLETED_INDEX_VERIFY_REPORT_SCHEMA: &str =
@@ -69,6 +72,26 @@ struct CompletedIndexIntentV1 {
     operation: String,
     entry: CompletedIndexEntryV1,
     intent_checksum: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CompletedIndexIntentOp {
+    operation: String,
+    entry: CompletedIndexEntryV1,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CompletedIndexBatchIntentV2 {
+    schema: String,
+    operations: Vec<CompletedIndexIntentOp>,
+    intent_checksum: String,
+}
+
+enum CompletedIndexIntent {
+    Single(CompletedIndexIntentV1),
+    Batch(CompletedIndexBatchIntentV2),
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -485,7 +508,50 @@ fn write_intent(
         .map_err(|error| format!("certified send completed intent atomic write failed: {error}"))
 }
 
-fn read_intent(data_dir: &Path) -> Result<Option<CompletedIndexIntentV1>, String> {
+fn batch_intent_checksum(
+    schema: &str,
+    operations: &[CompletedIndexIntentOp],
+) -> Result<String, String> {
+    let encoded = serde_json::to_vec(&(schema, operations)).map_err(|error| {
+        format!("certified send completed batch intent checksum encoding failed: {error}")
+    })?;
+    Ok(sha256_hex(&encoded))
+}
+
+fn write_batch_intent(
+    data_dir: &Path,
+    operations: &[CompletedIndexIntentOp],
+) -> Result<(), String> {
+    if operations.is_empty() || operations.len() > COMPLETED_INDEX_INTENT_MAX_OPERATIONS {
+        return Err(format!(
+            "certified send completed batch intent must contain between 1 and {COMPLETED_INDEX_INTENT_MAX_OPERATIONS} operations"
+        ));
+    }
+    for op in operations {
+        if !matches!(op.operation.as_str(), "append" | "prune") {
+            return Err("certified send completed intent operation is invalid".to_string());
+        }
+        validate_entry(&op.entry)?;
+    }
+    let intent = CompletedIndexBatchIntentV2 {
+        schema: COMPLETED_INDEX_INTENT_BATCH_SCHEMA.to_string(),
+        operations: operations.to_vec(),
+        intent_checksum: batch_intent_checksum(COMPLETED_INDEX_INTENT_BATCH_SCHEMA, operations)?,
+    };
+    let bytes = serde_json::to_vec_pretty(&intent).map_err(|error| {
+        format!("certified send completed batch intent serialization failed: {error}")
+    })?;
+    if bytes.len() as u64 > COMPLETED_INDEX_INTENT_MAX_BYTES {
+        return Err(format!(
+            "certified send completed batch intent exceeds {COMPLETED_INDEX_INTENT_MAX_BYTES} bytes"
+        ));
+    }
+    postfiat_storage::atomic_write(completed_index_intent_path(data_dir), bytes).map_err(
+        |error| format!("certified send completed batch intent atomic write failed: {error}"),
+    )
+}
+
+fn read_intent(data_dir: &Path) -> Result<Option<CompletedIndexIntent>, String> {
     let path = completed_index_intent_path(data_dir);
     let Some(bytes) = read_bounded_regular_file(
         &path,
@@ -495,7 +561,46 @@ fn read_intent(data_dir: &Path) -> Result<Option<CompletedIndexIntentV1>, String
     else {
         return Ok(None);
     };
-    let intent: CompletedIndexIntentV1 = serde_json::from_slice(&bytes).map_err(|error| {
+    let probe: serde_json::Value = serde_json::from_slice(&bytes).map_err(|error| {
+        format!(
+            "certified send completed intent parse `{}` failed: {error}",
+            path.display()
+        )
+    })?;
+    let schema = probe
+        .get("schema")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    if schema == COMPLETED_INDEX_INTENT_BATCH_SCHEMA {
+        let intent: CompletedIndexBatchIntentV2 =
+            serde_json::from_value(probe).map_err(|error| {
+                format!(
+                    "certified send completed batch intent parse `{}` failed: {error}",
+                    path.display()
+                )
+            })?;
+        if intent.operations.is_empty()
+            || intent.operations.len() > COMPLETED_INDEX_INTENT_MAX_OPERATIONS
+        {
+            return Err(
+                "certified send completed batch intent operation count is invalid".to_string(),
+            );
+        }
+        for op in &intent.operations {
+            if !matches!(op.operation.as_str(), "append" | "prune") {
+                return Err(
+                    "certified send completed intent operation is invalid".to_string()
+                );
+            }
+            validate_entry(&op.entry)?;
+        }
+        let expected = batch_intent_checksum(&intent.schema, &intent.operations)?;
+        if intent.intent_checksum != expected {
+            return Err("certified send completed intent self-checksum mismatch".to_string());
+        }
+        return Ok(Some(CompletedIndexIntent::Batch(intent)));
+    }
+    let intent: CompletedIndexIntentV1 = serde_json::from_value(probe).map_err(|error| {
         format!(
             "certified send completed intent parse `{}` failed: {error}",
             path.display()
@@ -511,7 +616,7 @@ fn read_intent(data_dir: &Path) -> Result<Option<CompletedIndexIntentV1>, String
     if intent.intent_checksum != expected {
         return Err("certified send completed intent self-checksum mismatch".to_string());
     }
-    Ok(Some(intent))
+    Ok(Some(CompletedIndexIntent::Single(intent)))
 }
 
 fn clear_intent(data_dir: &Path) -> Result<(), String> {
@@ -757,14 +862,14 @@ fn index_entry_position(index: &CompletedIndexV1, job_id: &str) -> Option<usize>
     index.entries.iter().position(|entry| entry.job_id == job_id)
 }
 
-fn require_validated_matches_intent(
+fn require_validated_matches_entry(
     validated: &ValidatedCompletedJob,
-    intent: &CompletedIndexIntentV1,
+    entry: &CompletedIndexEntryV1,
 ) -> Result<(), String> {
-    if validated.entry != intent.entry {
+    if &validated.entry != entry {
         return Err(format!(
             "certified send completed intent for `{}` conflicts with validated job bytes",
-            intent.entry.job_id
+            entry.job_id
         ));
     }
     Ok(())
@@ -810,42 +915,41 @@ fn finish_prune_retention(data_dir: &Path, entry: &CompletedIndexEntryV1) -> Res
     Ok(())
 }
 
-fn reconcile_append_intent(
+fn reconcile_append_op(
     data_dir: &Path,
     index: &mut CompletedIndexV1,
-    intent: &CompletedIndexIntentV1,
+    entry: &CompletedIndexEntryV1,
     work: &mut DurableCertifiedSendWorkReport,
 ) -> Result<(), String> {
-    let source = certified_send_outbox_dir(data_dir).join(&intent.entry.job_id);
-    let destination = certified_send_completed_dir(data_dir).join(&intent.entry.job_id);
+    let source = certified_send_outbox_dir(data_dir).join(&entry.job_id);
+    let destination = certified_send_completed_dir(data_dir).join(&entry.job_id);
     let source_exists = source.exists();
     let destination_exists = destination.exists();
-    let index_position = index_entry_position(index, &intent.entry.job_id);
+    let index_position = index_entry_position(index, &entry.job_id);
     if let Some(position) = index_position {
-        if index.entries[position] != intent.entry || source_exists || !destination_exists {
+        if &index.entries[position] != entry || source_exists || !destination_exists {
             return Err(format!(
                 "certified send append intent for `{}` conflicts with indexed filesystem state",
-                intent.entry.job_id
+                entry.job_id
             ));
         }
-        clear_intent(data_dir)?;
         return Ok(());
     }
     if source_exists == destination_exists {
         return Err(format!(
             "certified send append intent for `{}` has ambiguous source/destination state",
-            intent.entry.job_id
+            entry.job_id
         ));
     }
     let current = if source_exists { &source } else { &destination };
     let validated = validate_job_directory_and_quarantine(
         data_dir,
         current,
-        &intent.entry.job_id,
+        &entry.job_id,
         work,
         "append-intent recovery",
     )?;
-    require_validated_matches_intent(&validated, intent)?;
+    require_validated_matches_entry(&validated, entry)?;
     if source_exists {
         std::fs::create_dir_all(certified_send_completed_dir(data_dir)).map_err(|error| {
             format!("certified send completed directory create failed: {error}")
@@ -853,40 +957,37 @@ fn reconcile_append_intent(
         std::fs::rename(&source, &destination).map_err(|error| {
             format!(
                 "certified send completed append recovery move `{}` failed: {error}",
-                intent.entry.job_id
+                entry.job_id
             )
         })?;
         sync_append_move(data_dir)?;
     }
-    index.entries.push(intent.entry.clone());
-    write_index(data_dir, &mut index.entries)?;
-    index.entry_count = index.entries.len() as u64;
-    index.entries_checksum = entries_checksum(&index.entries)?;
-    clear_intent(data_dir)
+    index.entries.push(entry.clone());
+    Ok(())
 }
 
-fn reconcile_prune_intent(
+fn reconcile_prune_op(
     data_dir: &Path,
     index: &mut CompletedIndexV1,
-    intent: &CompletedIndexIntentV1,
+    entry: &CompletedIndexEntryV1,
     work: &mut DurableCertifiedSendWorkReport,
 ) -> Result<(), String> {
-    let source = certified_send_completed_dir(data_dir).join(&intent.entry.job_id);
-    let destination = retention_destination(data_dir, &intent.entry.job_id);
+    let source = certified_send_completed_dir(data_dir).join(&entry.job_id);
+    let destination = retention_destination(data_dir, &entry.job_id);
     let source_exists = source.exists();
     let destination_exists = destination.exists();
     if source_exists && destination_exists {
         return Err(format!(
             "certified send prune intent for `{}` has both source and retention destination",
-            intent.entry.job_id
+            entry.job_id
         ));
     }
-    let index_position = index_entry_position(index, &intent.entry.job_id);
+    let index_position = index_entry_position(index, &entry.job_id);
     if let Some(position) = index_position {
-        if index.entries[position] != intent.entry {
+        if &index.entries[position] != entry {
             return Err(format!(
                 "certified send prune intent for `{}` conflicts with index entry",
-                intent.entry.job_id
+                entry.job_id
             ));
         }
         if source_exists || destination_exists {
@@ -894,18 +995,18 @@ fn reconcile_prune_intent(
             let validated = validate_job_directory_and_quarantine(
                 data_dir,
                 current,
-                &intent.entry.job_id,
+                &entry.job_id,
                 work,
                 "prune-intent recovery",
             )?;
-            require_validated_matches_intent(&validated, intent)?;
+            require_validated_matches_entry(&validated, entry)?;
         }
         if source_exists {
             ensure_retention_directory(data_dir)?;
             std::fs::rename(&source, &destination).map_err(|error| {
                 format!(
                     "certified send completed prune recovery move `{}` failed: {error}",
-                    intent.entry.job_id
+                    entry.job_id
                 )
             })?;
             sync_certified_send_directory(
@@ -918,21 +1019,15 @@ fn reconcile_prune_intent(
             )?;
         }
         index.entries.remove(position);
-        write_index(data_dir, &mut index.entries)?;
-        index.entry_count = index.entries.len() as u64;
-        index.entries_checksum = entries_checksum(&index.entries)?;
-        finish_prune_retention(data_dir, &intent.entry)?;
-        clear_intent(data_dir)?;
         return Ok(());
     }
     if source_exists {
         return Err(format!(
             "certified send prune intent for `{}` is absent from the index but remains completed",
-            intent.entry.job_id
+            entry.job_id
         ));
     }
-    finish_prune_retention(data_dir, &intent.entry)?;
-    clear_intent(data_dir)
+    Ok(())
 }
 
 fn reconcile_intent(
@@ -943,13 +1038,31 @@ fn reconcile_intent(
     let Some(intent) = read_intent(data_dir)? else {
         return Ok(false);
     };
-    match intent.operation.as_str() {
-        "append" => reconcile_append_intent(data_dir, index, &intent, work)?,
-        "prune" => reconcile_prune_intent(data_dir, index, &intent, work)?,
-        _ => {
-            return Err("certified send completed intent operation is invalid".to_string());
+    let operations: Vec<CompletedIndexIntentOp> = match intent {
+        CompletedIndexIntent::Single(single) => vec![CompletedIndexIntentOp {
+            operation: single.operation,
+            entry: single.entry,
+        }],
+        CompletedIndexIntent::Batch(batch) => batch.operations,
+    };
+    for op in &operations {
+        match op.operation.as_str() {
+            "append" => reconcile_append_op(data_dir, index, &op.entry, work)?,
+            "prune" => reconcile_prune_op(data_dir, index, &op.entry, work)?,
+            _ => {
+                return Err("certified send completed intent operation is invalid".to_string());
+            }
         }
     }
+    write_index(data_dir, &mut index.entries)?;
+    index.entry_count = index.entries.len() as u64;
+    index.entries_checksum = entries_checksum(&index.entries)?;
+    for op in &operations {
+        if op.operation == "prune" {
+            finish_prune_retention(data_dir, &op.entry)?;
+        }
+    }
+    clear_intent(data_dir)?;
     Ok(true)
 }
 
@@ -1045,75 +1158,29 @@ fn validate_active_completed_job(
     }
 }
 
-fn append_completed_job(
-    data_dir: &Path,
-    source: &Path,
-    job: &DurableCertifiedSendJob,
-    job_bytes: &[u8],
-    index: &mut CompletedIndexV1,
-    work: &mut DurableCertifiedSendWorkReport,
-) -> Result<(), String> {
-    let entry = validate_active_completed_job(data_dir, source, job, job_bytes, work)?;
-    if index_entry_position(index, &entry.job_id).is_some() {
-        let error = format!("certified send completed record `{}` already exists", entry.job_id);
-        quarantine_durable_certified_send_job(
-            data_dir,
-            &entry.job_id,
-            &source.join("job.json"),
-            &error,
-        )?;
-        return Err(error);
-    }
-    let completed_dir = certified_send_completed_dir(data_dir);
-    std::fs::create_dir_all(&completed_dir)
-        .map_err(|error| format!("certified send completed directory create failed: {error}"))?;
-    let destination = completed_dir.join(&entry.job_id);
-    if destination.exists() {
-        let error = format!(
-            "certified send completed record `{}` already exists",
-            destination.display()
-        );
-        quarantine_durable_certified_send_job(
-            data_dir,
-            &entry.job_id,
-            &source.join("job.json"),
-            &error,
-        )?;
-        return Err(error);
-    }
-    write_intent(data_dir, "append", &entry)?;
-    std::fs::rename(source, &destination).map_err(|error| {
-        format!(
-            "certified send completed job move `{}` failed: {error}",
-            entry.job_id
-        )
-    })?;
-    sync_append_move(data_dir)?;
-    index.entries.push(entry);
-    write_index(data_dir, &mut index.entries)?;
-    index.entry_count = index.entries.len() as u64;
-    index.entries_checksum = entries_checksum(&index.entries)?;
-    clear_intent(data_dir)
+struct PlannedAppend {
+    source: PathBuf,
+    entry: CompletedIndexEntryV1,
 }
 
-fn prune_indexed_jobs(
+/// Applies one resume's appends and prunes with one durable batch intent and
+/// one index rewrite per chunk, instead of one intent write, one full index
+/// rewrite, and multiple directory syncs per touched entry. Bounded work per
+/// resume becomes O(index size + touched jobs), not O(index size × touched).
+fn apply_completed_index_batch(
     data_dir: &Path,
     index: &mut CompletedIndexV1,
+    appends: Vec<PlannedAppend>,
     max_tombstones: usize,
     work: &mut DurableCertifiedSendWorkReport,
-) -> Result<usize, String> {
+) -> Result<(usize, usize), String> {
+    let total = index.entries.len().saturating_add(appends.len());
+    let prune_count = total
+        .saturating_sub(max_tombstones)
+        .min(index.entries.len());
     let prune_start = Instant::now();
-    let prune_count = index.entries.len().saturating_sub(max_tombstones);
-    if prune_count == 0 {
-        work.prune_ms += monotonic_elapsed_ms(prune_start);
-        return Ok(0);
-    }
-    for _ in 0..prune_count {
-        let entry = index
-            .entries
-            .first()
-            .cloned()
-            .ok_or_else(|| "certified send prune index unexpectedly empty".to_string())?;
+    let mut prunes = Vec::with_capacity(prune_count);
+    for entry in index.entries.iter().take(prune_count) {
         let source = certified_send_completed_dir(data_dir).join(&entry.job_id);
         let validated = validate_job_directory_and_quarantine(
             data_dir,
@@ -1122,7 +1189,7 @@ fn prune_indexed_jobs(
             work,
             "index prune",
         )?;
-        if validated.entry != entry {
+        if &validated.entry != entry {
             let error = format!(
                 "certified send completed job `{}` conflicts with its index during prune",
                 entry.job_id
@@ -1135,7 +1202,6 @@ fn prune_indexed_jobs(
             )?;
             return Err(error);
         }
-        ensure_retention_directory(data_dir)?;
         let destination = retention_destination(data_dir, &entry.job_id);
         if destination.exists() {
             return Err(format!(
@@ -1143,31 +1209,121 @@ fn prune_indexed_jobs(
                 destination.display()
             ));
         }
-        write_intent(data_dir, "prune", &entry)?;
-        std::fs::rename(&source, &destination).map_err(|error| {
-            format!(
-                "certified send completed retention move `{}` -> `{}` failed: {error}",
-                source.display(),
-                destination.display()
-            )
-        })?;
-        sync_certified_send_directory(
-            &certified_send_completed_dir(data_dir),
-            "completed directory after retention move",
-        )?;
-        sync_certified_send_directory(
-            &certified_send_completed_retention_dir(data_dir),
-            "completed retention directory after move",
-        )?;
-        index.entries.remove(0);
+        prunes.push(entry.clone());
+    }
+    work.prune_ms += monotonic_elapsed_ms(prune_start);
+
+    let mut append_sources = std::collections::BTreeMap::new();
+    let mut operations = Vec::with_capacity(appends.len() + prunes.len());
+    for append in appends {
+        append_sources.insert(append.entry.job_id.clone(), append.source);
+        operations.push(CompletedIndexIntentOp {
+            operation: "append".to_string(),
+            entry: append.entry,
+        });
+    }
+    for entry in prunes {
+        operations.push(CompletedIndexIntentOp {
+            operation: "prune".to_string(),
+            entry,
+        });
+    }
+    if operations.is_empty() {
+        return Ok((0, 0));
+    }
+
+    let mut compacted = 0usize;
+    let mut pruned = 0usize;
+    for chunk in operations.chunks(COMPLETED_INDEX_INTENT_MAX_OPERATIONS) {
+        write_batch_intent(data_dir, chunk)?;
+        let mut chunk_has_append = false;
+        let mut chunk_has_prune = false;
+        for op in chunk {
+            match op.operation.as_str() {
+                "append" => {
+                    chunk_has_append = true;
+                    let source = append_sources.get(&op.entry.job_id).ok_or_else(|| {
+                        format!(
+                            "certified send batch append `{}` has no planned source",
+                            op.entry.job_id
+                        )
+                    })?;
+                    let completed_dir = certified_send_completed_dir(data_dir);
+                    std::fs::create_dir_all(&completed_dir).map_err(|error| {
+                        format!("certified send completed directory create failed: {error}")
+                    })?;
+                    let destination = completed_dir.join(&op.entry.job_id);
+                    std::fs::rename(source, &destination).map_err(|error| {
+                        format!(
+                            "certified send completed job move `{}` failed: {error}",
+                            op.entry.job_id
+                        )
+                    })?;
+                }
+                "prune" => {
+                    chunk_has_prune = true;
+                    ensure_retention_directory(data_dir)?;
+                    let source = certified_send_completed_dir(data_dir).join(&op.entry.job_id);
+                    let destination = retention_destination(data_dir, &op.entry.job_id);
+                    std::fs::rename(&source, &destination).map_err(|error| {
+                        format!(
+                            "certified send completed retention move `{}` -> `{}` failed: {error}",
+                            source.display(),
+                            destination.display()
+                        )
+                    })?;
+                }
+                _ => {
+                    return Err(
+                        "certified send completed intent operation is invalid".to_string()
+                    );
+                }
+            }
+        }
+        if chunk_has_append {
+            sync_append_move(data_dir)?;
+        }
+        if chunk_has_prune {
+            sync_certified_send_directory(
+                &certified_send_completed_dir(data_dir),
+                "completed directory after retention move",
+            )?;
+            sync_certified_send_directory(
+                &certified_send_completed_retention_dir(data_dir),
+                "completed retention directory after move",
+            )?;
+        }
+        for op in chunk {
+            match op.operation.as_str() {
+                "append" => {
+                    index.entries.push(op.entry.clone());
+                    compacted = compacted.saturating_add(1);
+                }
+                "prune" => {
+                    let position =
+                        index_entry_position(index, &op.entry.job_id).ok_or_else(|| {
+                            format!(
+                                "certified send batch prune `{}` is absent from the index",
+                                op.entry.job_id
+                            )
+                        })?;
+                    index.entries.remove(position);
+                    pruned = pruned.saturating_add(1);
+                }
+                _ => {}
+            }
+        }
         write_index(data_dir, &mut index.entries)?;
         index.entry_count = index.entries.len() as u64;
         index.entries_checksum = entries_checksum(&index.entries)?;
-        remove_certified_send_disposable_job_dir(&destination, &entry.job_id)?;
+        for op in chunk {
+            if op.operation == "prune" {
+                finish_prune_retention(data_dir, &op.entry)?;
+            }
+        }
         clear_intent(data_dir)?;
     }
-    work.prune_ms += monotonic_elapsed_ms(prune_start);
-    Ok(prune_count)
+    Ok((compacted, pruned))
 }
 
 fn compact_completed_with_index_locked(
@@ -1201,23 +1357,46 @@ fn compact_completed_with_index_locked(
     if !intent_reconciled {
         require_completed_directory_stamp(data_dir, &index)?;
     }
+    let mut appends = Vec::with_capacity(active_completed.len());
     for (directory, job, job_bytes) in active_completed {
-        append_completed_job(
+        let entry = validate_active_completed_job(
             data_dir,
             &directory,
             &job,
             &job_bytes,
-            &mut index,
             &mut report.work,
         )?;
-        report.compacted = report.compacted.saturating_add(1);
+        if index_entry_position(&index, &entry.job_id).is_some()
+            || certified_send_completed_dir(data_dir)
+                .join(&entry.job_id)
+                .exists()
+        {
+            let error = format!(
+                "certified send completed record `{}` already exists",
+                entry.job_id
+            );
+            quarantine_durable_certified_send_job(
+                data_dir,
+                &entry.job_id,
+                &directory.join("job.json"),
+                &error,
+            )?;
+            return Err(error);
+        }
+        appends.push(PlannedAppend {
+            source: directory,
+            entry,
+        });
     }
-    report.pruned = prune_indexed_jobs(
+    let (compacted, pruned) = apply_completed_index_batch(
         data_dir,
         &mut index,
+        appends,
         max_tombstones,
         &mut report.work,
     )?;
+    report.compacted = compacted;
+    report.pruned = pruned;
     report.work.jobs_compacted = report.compacted as u64;
     report.work.jobs_pruned = report.pruned as u64;
     report.work.compaction_ms = monotonic_elapsed_ms(compaction_start);
@@ -1249,12 +1428,14 @@ pub(super) fn prune_completed_with_index(
     if index.entries.len() > max_tombstones && !intent_reconciled {
         require_completed_directory_stamp(data_dir, &index)?;
     }
-    report.pruned = prune_indexed_jobs(
+    let (_, pruned) = apply_completed_index_batch(
         data_dir,
         &mut index,
+        Vec::new(),
         max_tombstones,
         &mut report.work,
     )?;
+    report.pruned = pruned;
     report.work.jobs_pruned = report.pruned as u64;
     report.work.compaction_ms = monotonic_elapsed_ms(compaction_start);
     Ok(report)
@@ -1307,6 +1488,21 @@ pub(super) fn write_append_intent_for_test(
     let validated = validate_job_directory(source_directory, job_id, &mut work)?;
     write_intent(data_dir, "append", &validated.entry)?;
     Ok(validated.entry)
+}
+
+#[cfg(test)]
+pub(super) fn write_batch_intent_for_test(
+    data_dir: &Path,
+    operations: &[(&str, CompletedIndexEntryV1)],
+) -> Result<(), String> {
+    let ops: Vec<CompletedIndexIntentOp> = operations
+        .iter()
+        .map(|(operation, entry)| CompletedIndexIntentOp {
+            operation: (*operation).to_string(),
+            entry: entry.clone(),
+        })
+        .collect();
+    write_batch_intent(data_dir, &ops)
 }
 
 #[cfg(test)]
@@ -1756,6 +1952,98 @@ mod completed_index_tests {
     }
 
     #[test]
+    fn at_cap_resume_batches_appends_and_prunes_with_one_index_write() {
+        let root = test_root("at-cap-batch");
+        let topology = test_topology();
+        let seeded = seed_completed(
+            &root,
+            &topology,
+            CERTIFIED_SEND_COMPLETED_TOMBSTONE_MAX_JOBS,
+        );
+        verify_and_rebuild_completed_index(&root).expect("build at-cap index");
+        for height in 20_000..20_005 {
+            tombstone_job(&root, &topology, height, false);
+        }
+
+        let report = resume_durable_certified_send_outbox(
+            &root,
+            &root.join("unused-topology.json"),
+            CERTIFIED_SEND_OUTBOX_MAX_JOBS,
+        )
+        .expect("at-cap steady-state resume");
+
+        assert!(!report.work.index_migration_performed);
+        assert_eq!(report.work.jobs_compacted, 5);
+        assert_eq!(report.work.jobs_pruned, 5);
+        assert_eq!(
+            report.work.tombstones_validated,
+            report.work.jobs_compacted + report.work.jobs_pruned
+        );
+        assert_eq!(report.work.files_read, 30);
+        assert_eq!(report.work.index_files_read, 1);
+        assert!(!completed_index_intent_path_for_test(&root).exists());
+        for (_, path) in seeded.iter().take(5) {
+            assert!(!path.exists(), "oldest tombstones must be pruned");
+        }
+        let retention = certified_send_completed_retention_dir(&root);
+        assert_eq!(
+            std::fs::read_dir(&retention)
+                .expect("read retention directory")
+                .count(),
+            0,
+            "retention payloads must be disposed after the batch"
+        );
+        let verified =
+            verify_and_rebuild_completed_index(&root).expect("verify at-cap index");
+        assert_eq!(
+            verified.entry_count,
+            CERTIFIED_SEND_COMPLETED_TOMBSTONE_MAX_JOBS
+        );
+        std::fs::remove_dir_all(root).expect("cleanup at-cap batch test");
+    }
+
+    #[test]
+    fn crash_mid_batch_intent_recovers_all_operations() {
+        let root = test_root("batch-crash");
+        let topology = test_topology();
+        let seeded = seed_completed(&root, &topology, 8);
+        verify_and_rebuild_completed_index(&root).expect("build base index");
+
+        let (_, append_source) = tombstone_job(&root, &topology, 99, false);
+        let append_job_id = append_source
+            .file_name()
+            .and_then(|value| value.to_str())
+            .expect("append job id")
+            .to_string();
+        let mut work = DurableCertifiedSendWorkReport::default();
+        let append_entry = validate_job_directory(&append_source, &append_job_id, &mut work)
+            .expect("validate planned append")
+            .entry;
+        let prune_job_id = &seeded[0].0;
+        let prune_entry = validate_job_directory(&seeded[0].1, prune_job_id, &mut work)
+            .expect("validate planned prune")
+            .entry;
+        write_batch_intent_for_test(
+            &root,
+            &[("append", append_entry.clone()), ("prune", prune_entry)],
+        )
+        .expect("write batch intent");
+        let destination = certified_send_completed_dir(&root).join(&append_entry.job_id);
+        std::fs::rename(&append_source, &destination)
+            .expect("simulate crash after first batch move");
+
+        let report = compact_completed_with_index(&root).expect("recover batch intent");
+        assert_eq!(report.compacted, 0);
+        assert!(!completed_index_intent_path_for_test(&root).exists());
+        assert!(destination.exists(), "append must be reconciled into completed");
+        assert!(!seeded[0].1.exists(), "prune must be reconciled out of completed");
+        let verified =
+            verify_and_rebuild_completed_index(&root).expect("verify recovered index");
+        assert_eq!(verified.entry_count, 8);
+        std::fs::remove_dir_all(root).expect("cleanup batch crash test");
+    }
+
+    #[test]
     fn crash_between_move_and_index_rewrite_recovers() {
         let root = test_root("append-crash");
         let topology = test_topology();
@@ -1892,5 +2180,55 @@ mod completed_index_tests {
             "indexed proposer resume delta was {:.3} ms: {timings:?}",
             slowest - fastest
         );
+    }
+
+    #[test]
+    #[ignore = "release-mode manual spot check of the at-cap steady-state campaign round"]
+    fn release_at_cap_steady_state_rounds_are_bounded() {
+        // Mirrors the remediated-G4 failure shape: validator-0 at the
+        // 1,024-tombstone retention cap completing five certified sends per
+        // proposal round. Before batching, every such round cost ~205 ms in
+        // per-entry index rewrites and syncs; the gate here is per-round.
+        let topology = test_topology();
+        let root = test_root("release-at-cap-steady");
+        seed_completed(
+            &root,
+            &topology,
+            CERTIFIED_SEND_COMPLETED_TOMBSTONE_MAX_JOBS,
+        );
+        verify_and_rebuild_completed_index(&root).expect("build at-cap index");
+        let mut round_ms = Vec::new();
+        for round in 0..8u64 {
+            for height in (30_000 + round * 5)..(30_000 + round * 5 + 5) {
+                tombstone_job(&root, &topology, height, false);
+            }
+            let report = resume_durable_certified_send_outbox(
+                &root,
+                &root.join("unused-topology.json"),
+                CERTIFIED_SEND_OUTBOX_MAX_JOBS,
+            )
+            .expect("at-cap steady-state release resume");
+            assert_eq!(report.work.jobs_compacted, 5);
+            assert_eq!(report.work.jobs_pruned, 5);
+            assert_eq!(
+                report.work.tombstones_validated,
+                report.work.jobs_compacted + report.work.jobs_pruned
+            );
+            eprintln!(
+                "round={round} outbox_resume_ms={:.3} compaction_ms={:.3} prune_ms={:.3} validation_ms={:.3} index_bytes_read={}",
+                report.outbox_resume_ms,
+                report.work.compaction_ms,
+                report.work.prune_ms,
+                report.work.validation_ms,
+                report.work.index_bytes_read,
+            );
+            round_ms.push(report.outbox_resume_ms);
+        }
+        let slowest = round_ms.iter().copied().fold(0.0_f64, f64::max);
+        assert!(
+            slowest <= 60.0,
+            "at-cap steady-state resume must stay bounded; observed {round_ms:?}"
+        );
+        std::fs::remove_dir_all(root).expect("cleanup release at-cap steady test");
     }
 }
