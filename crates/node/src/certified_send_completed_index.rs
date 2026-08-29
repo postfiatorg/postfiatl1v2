@@ -482,6 +482,7 @@ fn intent_checksum(
     Ok(sha256_hex(&encoded))
 }
 
+#[cfg(test)]
 fn write_intent(
     data_dir: &Path,
     operation: &str,
