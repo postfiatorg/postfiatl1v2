@@ -1,6 +1,6 @@
 # Remediated G4 Qualification Campaign: Executable Plan
 
-**Status:** Reviewed and authorized for exactly one execution — Steps 1–2 passed; measurement not started
+**Status:** Closed — exactly one execution failed; no retry, final report, packet, or qualification
 **Date:** 2026-08-29
 **Planning baseline:** `main` at `24edd8fa`; frozen candidate source `a92bb085`
 **Predecessors:** [Final G4 qualification plan](final-g4-qualification-campaign-plan.md) (closed, failed — mechanics of this plan follow it),
@@ -9,28 +9,30 @@
 **Key handoffs:** [Eager-index remediation complete](../../handoffs/2026-08-29___postfiatchad__certified_send_eager_index_remediation_complete.md),
 [Final G4 qualification failure](../../handoffs/2026-08-29___postfiatchad__final_g4_qualification_failure.md)
 
-## BLUF for the executing agent
+## BLUF
 
-Every defect any G4 campaign has ever surfaced is now fixed and locally
-verified at the frozen identities below:
+The plan's single authorized campaign executed once and **failed**. All ten
+selected-redb windows completed 500 valid rounds with literal receipts,
+six-validator convergence, bounded transactional work, zero full-history
+reads, and passing vote-lock, certified-send, and timing-coverage gates.
+However, their checkpoint-bound reports independently recompute to
+height-5,000/height-50 p95 ratios of **1.403** for consensus and **1.402** for
+wallet-to-finality, both above the 1.10 limit.
 
-1. **`redb` bounded work** — proven across two campaigns: bounded transactional
-   commits, zero full-history reads.
-2. **Vote-lock index scan** — fixed at `442c5a4d`, proven in-campaign: 2,450
-   votes at ≤2 files / ≤314 bytes.
-3. **Certified-send tombstone resume** — fixed at `e52e0502`, re-verified at
-   `a92bb085`: 2.064 ms resume at the 1,024-tombstone cap, zero retained
-   payload reads.
-4. **Certified-send migration position** — fixed node-side at `a92bb085`: a
-   validator with no outbox now writes and binds an empty completed-set index
-   on its first successful resume, so migration always lands on observation 1.
-   The runner gate logic is byte-identical to `15d059d1`; runner `a3c7bea9`
-   adds only the previously missing no-outbox→deliveries→resume fixture.
+The first legacy height-50 control then completed all 50 raw rounds but failed
+`VOTE_LOCK_MIGRATION_AFTER_FIRST_VALIDATOR_RESERVATION`. Four validators
+migrated their vote-lock index on their second observed reservation. The node's
+empty-directory path returns without writing the index marker, so the first
+reservation creates a lock and the next reservation performs migration. The
+preflight telemetry fixture did not exercise that actual node sequence.
 
-The round-coverage residual gate makes unattributed time itself a failure, so
-no fifth defect can hide untimed. This plan requests **exactly one** unchanged
-5+5+5 measurement campaign. It may pass or fail on real scaling ratios; either
-result is final under this plan. No retry, no matrix change, no relabeling.
+There is no final campaign report or packet. The packager was not invoked.
+Checkpoint SHA-256 is
+`e33dfdb628563f38d486ace5a3ebc13be280ecea5cb862a8da51627b1c6028a3`;
+the one-diagnosis SHA-256 is
+`e2134a4ea8988ced89e95f601b0cdc0aeaeffe9acd46676976f54adadb60c164`.
+This run cannot be resumed, retried, or relabeled. Storage remains selected but
+not offline qualified.
 
 ## Frozen identities
 
@@ -125,29 +127,37 @@ references successfully. The intended output path remained absent.
 - [x] Run the focused node suites (`completed_index_tests`,
       `certified_send`) once against the frozen source to confirm the working
       tree still matches the freeze.
-- [x] Confirm the portable-snapshot legacy sequence passes the re-keyed
-      vote-lock contract in the preflight suite; the legacy lane must not
-      discover a contract failure inside the clock again.
+- [ ] **Retrospective FAIL:** exercise the exact portable-snapshot legacy
+      node sequence. The preflight fixture modeled accepted per-validator
+      telemetry, but did not execute empty vote-lock directory → first durable
+      lock → second reservation against the candidate.
 
-**Completed:** the runner, packager, and verifier suite passed 96 tests in
-22.556 seconds. It includes per-validator first use after restore, eager empty
-migration followed by compaction, and repeated/late-migration rejection. The
-frozen candidate passed 15 completed-index tests and 35 certified-send tests;
-each suite ignored only the intentional manual release spot check. Both source
-and runner worktrees remained clean.
+**Recorded preflight result:** the runner, packager, and verifier suite passed
+96 tests in 22.556 seconds; the frozen candidate passed 15 completed-index tests
+and 35 certified-send tests, with only the intentional manual release spot
+check ignored in each node suite. Both source and runner worktrees remained
+clean. The campaign proved this coverage was insufficient: the claimed
+portable-restore contract was not exercised end to end.
 
-## Step 3 — Run the campaign
+## Step 3 — Campaign result
 
-1. Fresh private run directory
-   `~/repos/postfiat-storage-g4-measurement-a3c7bea9-a92bb085-v1`.
-2. Fresh four-hour measurement clock starting at first measurement; expected
-   duration ~55–60 minutes based on the corrected campaign's 3,311-second
-   full matrix.
-3. Execute the unchanged matrix with checkpoint/resume enabled; restore every
-   window's fleet content-verified against the frozen digests.
-4. On completion, package the report and checkpoint with `package_packet.py`;
-   record all SHA-256 identities. On failure, do not invoke the packager;
-   partial raw output is not a packet and is not release evidence.
+Exactly one campaign ran in the fresh private directory
+`~/repos/postfiat-storage-g4-measurement-a3c7bea9-a92bb085-v1`. The four-hour
+measurement clock started at `2026-08-29T14:44:45Z`; the campaign failed at
+`2026-08-29T15:18:44Z` after 2,038.594669 seconds, well inside the budget.
+
+Ten selected units completed: five height-50 windows and five height-5,000
+windows, 50 finalized rounds each. The first legacy height-50 unit completed
+its 50 raw rounds, then failed its vote-lock work gate. The checkpoint status
+is `FAILED`, `final_report_sha256` is null, and no campaign process survives.
+The packager was not invoked.
+
+| Failure artifact | SHA-256 |
+| --- | --- |
+| Campaign checkpoint | `e33dfdb628563f38d486ace5a3ebc13be280ecea5cb862a8da51627b1c6028a3` |
+| Failed legacy raw report | `379a7b2630925b529ef55f727f92f38d32cfa49f3466f286e9fef12ab4815790` |
+| Failed legacy vote-lock receipt | `4f3ad65296946d28bebd9a1ae88eb472ba92141deda5bb1b1bcacddb18cb4327` |
+| One diagnosis | `e2134a4ea8988ced89e95f601b0cdc0aeaeffe9acd46676976f54adadb60c164` |
 
 ## Step 4 — Pass/fail gates
 
@@ -156,35 +166,40 @@ never passes.
 
 | Gate | Threshold | Result |
 | --- | --- | --- |
-| Height-5,000/height-50 `consensus_round_ms` p95 ratio | ≤ 1.10 | — |
-| Height-5,000/height-50 `wallet_to_finality_ms` p95 ratio | ≤ 1.10 | — |
-| No material positive height relationship in synchronous stages | Required | — |
-| Round-coverage residual gate | Every measured round; residual < 100 ms | — |
-| Selected/legacy height-50 comparison | All five legacy windows complete and compare | — |
-| Literal receipts, six-validator convergence, bounded `redb` work, zero full-history reads | Every round | — |
-| Vote-lock bounded-work and migration-position gate | First-reservation only; ≤2 files / ≤314 bytes ordinary votes | — |
-| Certified-send bounded-work and migration-position gate | First-resume only, including zero-work empty-index migrations; `validated == compacted + pruned` on ordinary resumes | — |
-| Four-hour measurement budget | Not exceeded | — |
+| Height-5,000/height-50 `consensus_round_ms` p95 ratio | ≤ 1.10 | **FAIL** — 405.759 ms → 569.129 ms; ratio `1.402629`, recomputed from the ten completed selected windows |
+| Height-5,000/height-50 `wallet_to_finality_ms` p95 ratio | ≤ 1.10 | **FAIL** — 418.215 ms → 586.163 ms; ratio `1.401582`, recomputed from the ten completed selected windows |
+| No material positive height relationship in synchronous stages | Required | **PASS for the ten completed selected windows** — every named-stage model reports false; no final campaign report exists |
+| Round-coverage residual gate | Every measured round; residual < 100 ms | **Unavailable overall** — all 500 selected rounds pass, max 79.619 ms; the failed legacy report independently recomputes to 50/50 pass, max 66.968 ms, but its receipt was not emitted before the vote-lock stop |
+| Selected/legacy height-50 comparison | All five legacy windows complete and compare | **FAIL / unavailable** — only the first legacy window ran, and it failed before becoming a completed unit |
+| Literal receipts, six-validator convergence, bounded `redb` work, zero full-history reads | Every round | **Unavailable overall** — all ten selected windows pass; the raw legacy benchmark passes 50 rounds, but the campaign stopped before all 15 units |
+| Vote-lock bounded-work and migration-position gate | First-reservation only; ≤2 files / ≤314 bytes ordinary votes | **FAIL** — validators 0, 1, 2, and 5 migrated in round 2 on reservation observation 2; four files / 866 bytes each |
+| Certified-send bounded-work and migration-position gate | First-resume only, including zero-work empty-index migrations; `validated == compacted + pruned` on ordinary resumes | **Unavailable overall** — all ten selected windows pass; the failed legacy report independently recomputes to pass, but no receipt was emitted before the vote-lock stop |
+| Four-hour measurement budget | Not exceeded | **PASS** — 2,038.595 / 14,400 seconds |
 
-## Step 5 — Outcomes
+The ratio and named-stage entries are exact artifact-based recomputations using
+the frozen runner's own aggregation functions. They are not a substitute for
+the absent final campaign report and are not packet evidence.
 
-**On pass:**
+## Step 5 — Recorded outcome
 
-- Update the milestone: G4 **PASSED** with the complete identity and gate
-  table. The local-qualification lane advances to assembling locally
-  available G5 packet material. State plainly: this is offline local
-  qualification evidence — not devnet evidence, not deployment authorization;
-  G3's remediated height-915 replay (binary `902773e0…e182`) and the
-  separately authorized height-924 replay remain open and still block
-  `OFFLINE QUALIFIED`.
-- Write the handoff; include the full gate table and every hash.
+**FAIL; no retry authorized.** The process stopped at the first legacy
+vote-lock work gate. `crates/node/src/vote_locks.rs:193-260` owns the failed
+node behavior: when the vote-lock directory is empty, migration returns without
+writing the marker. The first reservation then writes a lock; the next
+reservation migrates it. The locked runner correctly rejects migration after
+the validator's first observed reservation.
 
-**On fail:**
+The preflight gap is equally specific: its telemetry fixture represented
+first-use and late-use results, but did not execute the candidate's exact
+empty-directory → first lock → second reservation sequence on the portable
+legacy restore. A future remediation needs an owner-level node fixture and an
+end-to-end portable-restore fixture for that sequence.
 
-- Diagnose once from the campaign's own artifacts. The coverage gate
-  guarantees the failure is attributable to a named stage; name the stage and
-  its owning source, write the handoff, update the milestone, stop. No
-  candidate changes, no second run under this plan.
+Separately, the completed selected data misses both scaling-ratio limits. A
+future proposal must address both the vote-lock marker contract and the
+selected-window latency tail. No source change, new freeze, or new campaign is
+authorized by this failure closure. G3 remains open; G5, deployment, and public
+testnet remain blocked.
 
 ## Explicit non-goals
 
@@ -201,9 +216,10 @@ never passes.
 
 - [x] This plan reviewed; one run explicitly authorized and recorded by the operator's direct 2026-08-29 instruction.
 - [x] Step-1 identity re-verification passed outside the clock.
-- [x] Step-2 preflight suites passed outside the clock, including both
-      no-outbox fixtures and the legacy-lane vote-lock contract.
-- [ ] Exactly one campaign executed under one fresh four-hour clock.
-- [ ] Full gate table reported truthfully with all identities.
-- [ ] Milestone and handoff updated; on fail, exactly one named-stage
-      diagnosis recorded, then stopped without candidate change or retry.
+- [ ] Step-2's focused suites passed outside the clock, but the claimed exact
+      legacy-lane vote-lock sequence was not actually covered; the campaign
+      exposed this retrospective preflight failure.
+- [x] Exactly one campaign executed under one fresh four-hour clock.
+- [x] Full gate table reported truthfully with all identities.
+- [x] Milestone and handoff updated; exactly one named-stage diagnosis recorded,
+      then stopped without candidate change, packaging, or retry.

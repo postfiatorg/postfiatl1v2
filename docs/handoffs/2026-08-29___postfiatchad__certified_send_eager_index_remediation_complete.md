@@ -3,6 +3,10 @@
 - **Operator:** Post Fiat (`postfiatchad`)
 - **Date:** 2026-08-29 UTC
 
+> **Historical snapshot:** the separately authorized remediated campaign later
+> failed once. Resume from the
+> [remediated G4 qualification failure](2026-08-29___postfiatchad__remediated_g4_qualification_failure.md).
+
 ## BLUF
 
 The candidate-owned fix for the final G4 certified-send migration mismatch is

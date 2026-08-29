@@ -1,6 +1,6 @@
 # Certified-Send Eager Index Migration: Option 1 Remediation Spec
 
-**Status:** Complete — node fix, runner fixture, source/binary freeze, G1/G2 refresh, and prepared-input rebind passed; no campaign authorized
+**Status:** Complete — remediation passed; the later remediated G4 campaign failed separately on vote-lock migration and both height ratios
 **Date:** 2026-08-29
 **Planning baseline:** `main` at `9f554001` (final G4 closeout docs); failed frozen candidate `e52e0502`
 **Runner lineage:** gate logic remains `15d059d1`; test-only successor `a3c7bea9285ab02871fd2111038764c6174b905b` on `postfiatchad/corrected-g4-vote-lock-gate`
@@ -8,6 +8,11 @@
 **Predecessors:** [Final G4 qualification plan](final-g4-qualification-campaign-plan.md) (closed, failed),
 [Certified-send tombstone bounding plan](certified-send-tombstone-bounding-plan.md) (implemented; source of the defect this spec removes),
 [Storage scaling milestone](storage-scaling-milestone.md) (governing gates)
+
+**Later outcome:** this spec's certified-send fix passed its affected gates in
+all ten selected windows. The separately authorized campaign nevertheless
+failed on the vote-lock marker contract and both selected height ratios; see
+the [remediated G4 failure](../../handoffs/2026-08-29___postfiatchad__remediated_g4_qualification_failure.md).
 
 ## BLUF for the reviewer
 

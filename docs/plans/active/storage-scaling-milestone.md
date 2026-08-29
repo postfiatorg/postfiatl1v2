@@ -1,6 +1,6 @@
 # Storage Scaling: Time-Budgeted Qualification and Release Gates
 
-**Status:** Active — `redb` selected; remediated G4 authorized and preflight passed; measurement pending; G3, deployment, and public testnet blocked
+**Status:** Active — `redb` selected but not qualified; remediated G4 failed once with no retry; G3, G5, deployment, and public testnet blocked
 
 **Decision date:** 2026-08-27
 
@@ -75,17 +75,25 @@ the campaign lineage is not qualified. See the
 [final G4 qualification plan](final-g4-qualification-campaign-plan.md) for the
 complete gate table and diagnosis.
 
-The mismatch is now fixed in the node at source `a92bb085`: every validator's
-first successful certified-send resume creates and binds the completed-set
-index even when no outbox exists. The fail-closed guards for an intent without
-an index and a non-empty index without its outbox remain unchanged. Five owner
-fixtures cover the exact failed sequence; runner `a3c7bea9` adds a test-only
-telemetry replay without changing the gate logic. The clean release freeze,
-focused owner tests, release 1,024-tombstone check, and private local G1/G2
-refresh passed. This remediation does not resurrect the failed campaign.
-The operator separately authorized exactly one new run on 2026-08-29 under the
-[remediated G4 qualification plan](remediated-g4-qualification-campaign-plan.md);
-its identity and migration preflights passed before the measurement clock.
+The certified-send mismatch was then fixed in the node at source `a92bb085`:
+every validator's first successful certified-send resume creates and binds the
+completed-set index even when no outbox exists. Five owner fixtures cover the
+exact failed sequence; runner `a3c7bea9` adds a test-only telemetry replay
+without changing the gate logic. The clean release freeze, focused owner tests,
+release 1,024-tombstone check, and private local G1/G2 refresh passed.
+
+The operator separately authorized exactly one remediated campaign. It ran from
+`2026-08-29T14:44:45Z` to `2026-08-29T15:18:44Z` and **failed** after
+2,038.594669 seconds. All ten selected windows completed and passed their
+per-window correctness, bounded-work, certified-send, vote-lock, and timing
+coverage gates. Their bound reports nevertheless recompute to consensus and
+wallet height ratios of `1.402629` and `1.401582`, both above 1.10. The first
+legacy window then failed
+`VOTE_LOCK_MIGRATION_AFTER_FIRST_VALIDATOR_RESERVATION`: the node defers the
+empty-directory vote-lock marker until a later reservation, and four validators
+migrated on observation 2. The preflight fixture did not execute that node
+sequence. Checkpoint SHA-256 is `e33dfd…28a3`; one-diagnosis SHA-256 is
+`e2134a…c164`. No final report or packet exists, and no retry is authorized.
 
 Selection is not qualification, qualification is not deployment, and deployment
 is not public-testnet authorization. The remaining work must prove the selected
@@ -128,18 +136,17 @@ work idling.
 
 ## Critical path and operator calls
 
-The corrected vote-lock campaign and the final certified-send campaign are both
-closed failed and cannot be retried under their one-run rules. The
-certified-send migration-position mismatch exposed by the final run is fixed at
-source `a92bb085`, and its node/runner freeze, G1/G2 refresh, and prepared-input
-rebind pass locally. The operator has now separately reviewed and authorized
-exactly one new campaign; its identity and migration preflights passed outside
-the clock. G3 still independently requires corrected replay and authorized
-height-924 input. The four tracks are:
+The remediated campaign is now the third closed failed G4 lineage and cannot be
+retried. Source `a92bb085` fixed the certified-send mismatch, but the new run
+exposed an uncovered empty-directory vote-lock marker defect and independently
+missed both selected-path height-ratio limits. Its ten selected windows are
+useful bound diagnostics, not a final report or qualification packet. G3 still
+independently requires corrected replay and authorized height-924 input. The
+four tracks are:
 
 | Order | Track | Start condition | Finish condition | Operator input |
 | ---: | --- | --- | --- | --- |
-| 1 | Local qualification | **Started:** the [remediated G4 plan](remediated-g4-qualification-campaign-plan.md) binds source `a92bb085`, runner `a3c7bea9`, helper `ad70ca…014a`, and prepared input `c9fb32…da42`; authorization and preflight passed | The one authorized campaign passes the unchanged latency/correctness, certified-send, and timing-coverage gates | No further input is needed for this run. Its single result is final; the devnet remains out of scope. |
+| 1 | Local qualification | **Blocked by closed G4 failure:** the [remediated G4 plan](remediated-g4-qualification-campaign-plan.md) failed once on the legacy vote-lock marker contract and both selected height ratios | A new reviewed remediation proves the exact vote-lock sequence and selected tail, then a separately frozen and authorized campaign passes | No retry is authorized. First decide whether to fund another bounded remediation; the devnet remains out of scope. |
 | 2 | Exact height-924 replay | A custodian names one complete quiescent directory and separately authorizes a read-only copy | G3 replay and mutation sentinels pass and enter the packet | Name the custodian and authorize the copy. Do not wait idle for this input. |
 | 3 | Pre-deployment rehearsal | G5 is `OFFLINE QUALIFIED` and controlled-devnet deployment is actually the next decision | G6 passes on six distinct stopped copies | Separately authorize six copies and then make a separate deploy/no-deploy decision. |
 | 4 | Dynamic UNL milestone | G5 closes, or the decision owner explicitly changes priority | A separately activated governance plan exists | No choice is open now: the DGA/Cobalt envelope and Option C are the recorded direction. |
@@ -147,19 +154,18 @@ height-924 input. The four tracks are:
 The dependency chain is:
 
 ```text
-local:     eager contract fix/freeze complete -> reviewed + authorized G4 --+
-                                                                           +-> complete G5 -> OFFLINE QUALIFIED
-external:  corrected height-915 + authorized height-924 G3 ----------------+
+local:     diagnose/fix vote-lock marker + selected tail -> new freeze -> new authorized G4 --+
+                                                                                              +-> complete G5 -> OFFLINE QUALIFIED
+external:  corrected height-915 + authorized height-924 G3 -------------------------------+
 
 OFFLINE QUALIFIED -> separate deployment decision -> G6
 ```
 
 A missing height-924 copy blocks only the final `OFFLINE QUALIFIED` label. It
 must not trigger a 20-hour wait, an exhaustive legacy campaign, or collection of
-six fleet directories. The post-certified-send G4 result is final failed
-evidence. The current remediated plan separately satisfies the review, binding,
-and authorization conditions for one fresh run; it may not resume, retry, or
-relabel either failed output. No later run is authorized.
+six fleet directories. The remediated G4 result is final failed evidence. It
+may not be resumed, retried, packaged, or relabeled. No later remediation,
+freeze, or campaign is authorized.
 
 ## Decisions recorded
 
@@ -245,10 +251,10 @@ independent local gates continue.
 | Gate | Current state | Work allowed now | Budget and advance rule |
 | --- | --- | --- | --- |
 | G0 — campaign control | **PASS** | None; do not rerun the old campaign. | Reopen only if checkpoint/resume itself changes. |
-| G1 — candidate freeze | **PASS — EAGER-INDEX FREEZE / CAMPAIGN NOT RUN** | Preserve source `a92bb085`, binary `902773…e182`, G1 `ed66a6…0190`, runner `a3c7bea9`, helper `ad70ca…014a`, prepared input `c9fb32…da42`, and rehash receipt `6848d4…bb58`. | Another source, runner, helper, or input change must refresh the affected bindings; this pass does not authorize a campaign. |
+| G1 — candidate freeze | **PASS FOR CLOSED FAILED LINEAGE** | Preserve source `a92bb085`, binary `902773…e182`, G1 `ed66a6…0190`, runner `a3c7bea9`, helper `ad70ca…014a`, prepared input `c9fb32…da42`, and rehash receipt `6848d4…bb58`. | Any remediation changes the candidate and requires a new freeze; this historical pass authorizes nothing. |
 | G2 — safety | **EAGER-INDEX LOCAL PASS / PACKET BINDING PENDING** | Preserve manifest `dd300b…d170`, rollback `9c3231…e8a5`, tamper `6b63fe…46e0`, and stale-generation receipt `db78c8…563f`; raw output remains private. | Redaction-safe repository packet binding remains open; another candidate change requires another refresh. |
 | G3 — exact replay | **PRIOR HEIGHT 915 PASS / EAGER-INDEX REPLAY REQUIRED / HEIGHT 924 AUTHORIZATION BLOCKED** | Preserve the old height-915 receipt as history; any remediated replay must use binary `902773…e182`. Run height 924 only from a separately authorized copy. | Never wait idle for the height-924 copy, but do not claim offline qualification without both remediated replay receipts. |
-| G4 — scaling | **REMEDIATED CAMPAIGN AUTHORIZED / PREFLIGHT PASS / MEASUREMENT PENDING** | Execute exactly one fresh run under the [remediated G4 plan](remediated-g4-qualification-campaign-plan.md) with source `a92bb085`, binary `902773…e182`, runner `a3c7bea9`, helper `ad70ca…014a`, and input `c9fb32…da42`. | One result only. Pass advances G4; fail gets one diagnosis. No retry, candidate change, devnet action, or relabeling. |
+| G4 — scaling | **FAIL — NO RETRY AUTHORIZED** | Preserve checkpoint `e33dfd…28a3`, failure receipt `4f3ad6…327`, and diagnosis `e2134a…c164`; do not package private output. | A future attempt requires a reviewed vote-lock/selected-tail remediation, new affected bindings, and separate authorization. |
 | G5 — offline packet | **BLOCKED BY REMEDIATED G3 AND FAILED G4** | Do not package either failed campaign or private validator material. | No qualification claim until remediated G3, a future separately planned and authorized G4 pass, redaction-safe packet binding, and the complete offline verifier all pass. |
 | G6 — six-clone rehearsal | **DEFERRED** | Nothing until offline qualification is complete and deployment is the next real decision. | Requires separate data-copy authorization and six distinct stopped directories. |
 | G7 — Dynamic UNL handoff | **DIRECTION RECORDED / IMPLEMENTATION DEFERRED** | Preserve the recorded architecture decision only. | Spend no implementation time before the stated storage boundary or a new operator priority decision. |
@@ -939,7 +945,7 @@ are frozen. The failed G4G result remains failed. Any new measurement run must
 be proposed in a separate reviewed campaign plan and explicitly authorized;
 this milestone and the remediation spec grant no run allowance.
 
-### G4I — remediated qualification campaign: authorized and preflight complete
+### G4I — remediated qualification campaign: closed fail
 
 - [x] Record the operator's direct 2026-08-29 authorization for exactly one run
       under the
@@ -951,17 +957,55 @@ this milestone and the remediation spec grant no run allowance.
 - [x] Independently rehash all 18 prepared-input references and confirm the
       source and runner worktrees remain clean at `a92bb085` and `a3c7bea9`.
 - [x] Pass 96 runner/packager/verifier tests, 15 completed-index tests, and 35
-      certified-send tests, including eager empty migration, later compaction,
-      per-validator first use after restore, and repeated/late rejection.
-- [ ] Execute exactly one fresh 5+5+5 measurement under one four-hour runner
+      certified-send tests. Retrospective correction: these suites did not
+      execute the exact portable legacy empty-directory vote-lock sequence.
+- [x] Execute exactly one fresh 5+5+5 measurement under one four-hour runner
       clock and the two-hour unattended command cap.
-- [ ] On pass, package and independently verify the result. On fail, diagnose
-      once from its own artifacts and do not invoke the packager.
-- [ ] Record the complete gate table and hashes in this milestone and a new
+- [x] On failure, diagnose once from its own artifacts and do not invoke the
+      packager.
+- [x] Record the complete gate table and hashes in this milestone and a new
       handoff, then stop without retry or candidate change.
 
-**G4I exit:** pending the one authorized measurement result. Preflight work is
-complete and consumed none of the measurement clock.
+The single run started at `2026-08-29T14:44:45Z` and failed at
+`2026-08-29T15:18:44Z` after 2,038.594669 seconds. All ten selected windows
+completed. Their 500 rounds passed literal receipts, six-validator convergence,
+bounded `redb` work, zero full-history reads, certified-send, vote-lock, and
+round-coverage gates. Exact recomputation from those checkpoint-bound reports
+produces:
+
+| Selected metric | Height 50 p95 | Height 5,000 p95 | Ratio | Limit | Result |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `consensus_round_ms` | 405.759 ms | 569.129 ms | `1.402629` | `1.10` | **FAIL** |
+| `wallet_to_finality_ms` | 418.215 ms | 586.163 ms | `1.401582` | `1.10` | **FAIL** |
+
+Every named synchronous-stage height model reports no material positive linear
+relationship. The maximum selected timing residual is 79.619 ms against the
+100 ms limit. These are exact partial-result recomputations, not a final report
+or packet.
+
+The first legacy window then ran 50 raw rounds and failed
+`VOTE_LOCK_MIGRATION_AFTER_FIRST_VALIDATOR_RESERVATION`. Validators 0, 1, 2,
+and 5 migrated in finalized round 2 on reservation observation 2, examining
+four files and 866 bytes each. The node owner is
+`crates/node/src/vote_locks.rs:193-260`: its empty-directory migration branch
+returns without writing the marker, so the first reservation creates a lock
+and the next reservation migrates it. The runner at
+`benchmarks/storage-scaling/run_campaign.py:962-1107` correctly rejects that
+late migration.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Checkpoint | `e33dfdb628563f38d486ace5a3ebc13be280ecea5cb862a8da51627b1c6028a3` |
+| Failed legacy raw report | `379a7b2630925b529ef55f727f92f38d32cfa49f3466f286e9fef12ab4815790` |
+| Failed legacy vote-lock receipt | `4f3ad65296946d28bebd9a1ae88eb472ba92141deda5bb1b1bcacddb18cb4327` |
+| One diagnosis | `e2134a4ea8988ced89e95f601b0cdc0aeaeffe9acd46676976f54adadb60c164` |
+
+No final campaign report or packet exists. The packager was not invoked.
+
+**G4I exit:** **FAIL; no retry authorized.** A later proposal must address both
+the vote-lock empty-directory marker contract and the selected-window latency
+tail, add the exact missed fixtures, refresh every affected identity, and obtain
+separate run authorization. This closed lineage is not offline qualification.
 
 ## G5 — offline qualification packet
 
@@ -1031,29 +1075,31 @@ not deploy anything.
    `6b130a…a82e`, G1 `895ec7…ffe`, G2 `dc01f9…78e7`, runner `15d059d1`,
    helper `e8c487…ec71`, prepared input `b5be15…4ce8`, checkpoint
    `f62e1b…0ac1`, and diagnosis `10606b…1739`.
-3. Preserve the completed remediation lineage separately: source `a92bb085`,
+3. Preserve the closed remediated lineage separately: source `a92bb085`,
    binary `902773…e182`, G1 `ed66a6…0190`, G2 `dd300b…d170`, runner
-   `a3c7bea9`, helper `ad70ca…014a`, prepared input `c9fb32…da42`, and
-   verification receipt `6848d4…bb58`.
-4. Execute the one authorized
-   [remediated G4 campaign](remediated-g4-qualification-campaign-plan.md) from
-   the fresh output path now that every identity and migration preflight has
-   passed. Its result is final under that plan.
-5. Run a remediated height-915 replay only under a separately bounded action
-   using binary `902773…e182`. Close height 924 only after a custodian and
-   separate read-only copy authorization exist; do not wait idle for it.
-6. On G4 pass, assemble only the locally available packet material while
-   keeping G3 open. On G4 fail, record one named-stage diagnosis and stop
-   without retry or candidate change.
-7. Record `OFFLINE QUALIFIED` only after remediated G3, a passing G4,
-   redaction-safe packet binding, and the complete offline verifier pass.
+   `a3c7bea9`, helper `ad70ca…014a`, prepared input `c9fb32…da42`, checkpoint
+   `e33dfd…28a3`, failure receipt `4f3ad6…327`, and diagnosis
+   `e2134a…c164`.
+4. Do not resume, retry, package, or relabel the remediated output. Its one-run
+   allowance is consumed.
+5. Before proposing another campaign, write and review a bounded remediation
+   that covers both failures: the empty-directory vote-lock marker sequence
+   and the selected height-ratio tail. Require exact node-owner and portable
+   restore fixtures, then refresh every affected source/binary/input binding.
+6. Run a remediated height-915 replay only under a separately bounded action
+   using the exact then-current frozen binary. Close height 924 only after a
+   custodian and separate read-only copy authorization exist; do not wait idle
+   for it.
+7. Record `OFFLINE QUALIFIED` only after remediated G3, a separately authorized
+   passing G4, redaction-safe packet binding, and the complete offline verifier
+   pass.
 8. Run G6 only if controlled-devnet deployment is actually the next decision
    and its separate data-copy authorization has been recorded.
 9. Activate the deferred Dynamic UNL milestone only at the G7 boundary or after
    an explicit operator reprioritization.
 
-The milestone remains active and public testnet remains blocked. The
-first-migration contract mismatch is fixed and locally evidence-bound. Exactly
-one remediated G4 campaign is now authorized and preflight-complete; its
-measurement has not started. G3, G5, deployment, and public-testnet gates remain
-open, and no devnet action, deployment, or qualification claim is authorized.
+The milestone remains active and public testnet remains blocked. The certified-
+send migration mismatch is fixed, but the remediated G4 campaign failed once on
+a vote-lock marker defect and both scaling ratios. G3, G4, G5, deployment, and
+public-testnet gates remain open. No retry, devnet action, deployment, or
+qualification claim is authorized.
