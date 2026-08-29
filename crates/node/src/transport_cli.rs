@@ -1218,20 +1218,28 @@ fn remove_certified_send_disposable_job_dir(
     directory: &Path,
     expected_job_id: &str,
 ) -> Result<(), String> {
-    validate_certified_send_disposable_job_dir(directory, expected_job_id)?;
     let parent = directory.parent().ok_or_else(|| {
         format!(
             "certified send disposable job directory `{}` has no parent",
             directory.display()
         )
     })?;
+    let parent = parent.to_path_buf();
+    remove_certified_send_disposable_job_dir_unsynced(directory, expected_job_id)?;
+    sync_certified_send_directory(&parent, "disposable job parent")
+}
+
+fn remove_certified_send_disposable_job_dir_unsynced(
+    directory: &Path,
+    expected_job_id: &str,
+) -> Result<(), String> {
+    validate_certified_send_disposable_job_dir(directory, expected_job_id)?;
     std::fs::remove_dir_all(directory).map_err(|error| {
         format!(
             "certified send disposable job directory remove `{}` failed: {error}",
             directory.display()
         )
-    })?;
-    sync_certified_send_directory(parent, "disposable job parent")
+    })
 }
 
 pub(crate) fn cleanup_orphan_certified_send_staging_dirs(data_dir: &Path) -> Result<usize, String> {

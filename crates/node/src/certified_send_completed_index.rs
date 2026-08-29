@@ -461,7 +461,10 @@ fn write_index(data_dir: &Path, entries: &mut Vec<CompletedIndexEntryV1>) -> Res
         completed_directory_stamp,
     };
     validate_index(&index)?;
-    let bytes = serde_json::to_vec_pretty(&index)
+    // Compact encoding: the index is machine-owned durable state read and
+    // rewritten on every resume; at the 1,024-entry retention cap the pretty
+    // form costs ~25% extra bytes on every parse, serialize, and fsync.
+    let bytes = serde_json::to_vec(&index)
         .map_err(|error| format!("certified send completed index serialization failed: {error}"))?;
     if bytes.len() as u64 > COMPLETED_INDEX_MAX_BYTES {
         return Err(format!(
@@ -1282,13 +1285,16 @@ fn apply_completed_index_batch(
             }
         }
         if chunk_has_append {
-            sync_append_move(data_dir)?;
-        }
-        if chunk_has_prune {
             sync_certified_send_directory(
-                &certified_send_completed_dir(data_dir),
-                "completed directory after retention move",
+                &certified_send_outbox_dir(data_dir),
+                "outbox directory after completed move",
             )?;
+        }
+        sync_certified_send_directory(
+            &certified_send_completed_dir(data_dir),
+            "completed directory after batch moves",
+        )?;
+        if chunk_has_prune {
             sync_certified_send_directory(
                 &certified_send_completed_retention_dir(data_dir),
                 "completed retention directory after move",
@@ -1317,10 +1323,28 @@ fn apply_completed_index_batch(
         write_index(data_dir, &mut index.entries)?;
         index.entry_count = index.entries.len() as u64;
         index.entries_checksum = entries_checksum(&index.entries)?;
+        // Dispose all pruned retention payloads, then make the disposals
+        // durable with one retention-directory sync. A crash mid-disposal
+        // leaves retention directories that the next resume's retention
+        // cleanup removes, exactly as with per-entry disposal.
+        let mut disposed = false;
         for op in chunk {
             if op.operation == "prune" {
-                finish_prune_retention(data_dir, &op.entry)?;
+                let destination = retention_destination(data_dir, &op.entry.job_id);
+                if destination.exists() {
+                    remove_certified_send_disposable_job_dir_unsynced(
+                        &destination,
+                        &op.entry.job_id,
+                    )?;
+                    disposed = true;
+                }
             }
+        }
+        if disposed {
+            sync_certified_send_directory(
+                &certified_send_completed_retention_dir(data_dir),
+                "completed retention directory after disposal",
+            )?;
         }
         clear_intent(data_dir)?;
     }
