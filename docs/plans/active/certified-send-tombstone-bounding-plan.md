@@ -1,8 +1,10 @@
 # Certified-Send Tombstone Bounding: Executable Implementation Plan
 
-**Status:** Ready for execution — not started
+**Status:** Complete — implementation, verification, G1 source/binary freeze, and G2 refresh passed; campaign authorization pending
 **Date:** 2026-08-29
-**Baseline:** `main` at `d769f6c6` (candidate source `442c5a4d` + campaign-close docs)
+**Planning baseline:** `main` at `d769f6c6` (candidate source `442c5a4d` + campaign-close docs)
+**Implemented source:** `e52e050269a2f9fdd28c5083c3888debf3a85063` (`origin/main` at freeze)
+**Runner source:** `15d059d1` on `postfiatchad/corrected-g4-vote-lock-gate`
 **Motivating failure:** [Corrected G4 campaign failure](../../handoffs/2026-08-28___postfiatchad__corrected_g4_campaign_failure.md)
 **Predecessors:** [Vote-lock index fix plan](vote-lock-index-fix-plan.md) (implemented, proven in-campaign),
 [Corrected G4 campaign plan](corrected-g4-campaign-plan.md) (closed, failed),
@@ -259,12 +261,87 @@ claiming G1-grade builds.
 
 ## Step 8 — Freeze and evidence refresh
 
-After the fix passes Step 7: new G1 candidate freeze (clean checkout, full
-identity record), refreshed binary-bound G2 receipts, milestone update
+After the fix passes Step 7: new G1 source/binary candidate freeze (clean
+checkout, full identity record), refreshed binary-bound G2 receipts, milestone
+update
 recording this plan's completion and the new lineage. **Stop there.** The next
 5+5+5 campaign requires separate operator authorization and will follow the
 corrected-G4 plan pattern with new identities, the Step-3 gates, and the
 Step-4 contract.
+
+## Completion evidence
+
+### Changed invariant and implementation
+
+Per-proposal certified-send resume now reads one bounded index and processes
+only active/pending work plus entries actually compacted or pruned. The full-set
+validation authority moves from every proposal to: **(a) one-time index
+migration, (b) explicit startup/repair, (c) the specific entries touched by
+compaction or pruning.** Delivery blocking, acknowledgement, quarantine,
+canonical names, replay rejection, size limits, retention moves, and fsync
+ordering remain fail closed.
+
+The index, mutation intent, and `flock` mutation lock are stored at the data-dir
+root as `.certified-send-completed-index-state.v1`,
+`.certified-send-completed-index-intent.v1`, and
+`.certified-send-completed-index-mutation.lock`. They are outside both
+`certified-send-outbox/` and `completed/` because the previous binary rejects
+unknown/noncanonical entries in those directories. Root placement therefore
+preserves compatible rollback and mixed-binary operation. The index uses schema
+`postfiat.certified_send_completed_index.v1`, deterministic height/job ordering,
+entry and directory-stamp checksums, topology/chain/genesis/protocol bindings,
+and raw job/batch/certificate SHA-256 bindings. An atomic intent record and
+serialized mutation lock provide crash reconciliation; divergence fails closed
+until the explicit verify/rebuild command repairs it.
+
+The node report now includes the resume-node identity, `outbox_resume_ms`,
+compaction/validation/prune timings, retained-work counters, index-read counters,
+compaction/prune counts, enumeration count, and one-time migration flag. Runner
+`15d059d1` binds and independently verifies the certified-send work receipt and
+round-coverage receipt, permits vote-lock/index migration only on each
+validator's first observed reservation/resume after restore, rejects repeated
+migration, and applies a 100 ms maximum / -1 ms minimum round residual.
+
+### Frozen identities and local evidence
+
+| Artifact | Result and identity |
+| --- | --- |
+| Candidate source | PASS; clean detached checkout `e52e050269a2f9fdd28c5083c3888debf3a85063`, equal to `origin/main` at freeze |
+| Release binary | SHA-256 `6b130a1f9c81bd64bc9dc42043595f5a27e84185cf3f40b13b5f37a40d72a82e`; 51,978,232 bytes; embedded revision `e52e0502`, profile `release` |
+| G1 manifest | SHA-256 `895ec768927a2d630c7d90fd73c5275efe1e54e857248a7cf12441fe97df9ffe` |
+| Runner | Branch `postfiatchad/corrected-g4-vote-lock-gate`, pushed commit `15d059d1`; 95 focused runner/packager/verifier tests passed |
+| G2 manifest | PASS; SHA-256 `dc01f9770fc2344cce0dcfcfd58dbe37b968f9ffc0276c329bb4f4fea47378e7` |
+| Compatible rollback | PASS; six validators converged through current → older compatible binary → current recovery; report SHA-256 `af37f0e4de9d23689b131532d0fded2593905b5d88a5de1600431c511d6904be` |
+| Tamper/crash refresh | PASS; 69 cases / 37 owner tests / zero uncovered requirements; report SHA-256 `df45e0bb478299e7778bc50537fd6bb059f04a19c52f01d0c5adb444331c2ceb` |
+| `--verify-only` | PASS; two tests prove missing inputs are not created and stale generations are rejected without mutation |
+
+G1/G2 reports remain private local evidence because their directories include
+disposable keys and campaign material. They are not a redaction-safe G5 packet
+and must not be committed or published.
+
+### Measured result and verification
+
+The pre-fix release binary at source `442c5a4d` resumed 1,024 retained
+tombstones in 66.893 ms while reading 6,144 files / 3,952,142 bytes and hashing
+4,096 payloads / 73,728 bytes. The frozen candidate resumed the same retained
+count in 2.098 ms with zero retained payload reads or hashes, one 687,566-byte
+index read, and a 2.054 ms maximum proposer/peer delta in the six-validator
+release spot check.
+
+All Step-7 commands passed against the implemented source: 30 certified-send
+tests (one manual release check ignored), 15 vote-lock tests (one manual release
+check ignored), 83 storage tests (two manual scaling tests ignored, process-crash
+integration passed), formatting, workspace all-target check, warnings-denied
+workspace Clippy, and the complete locked workspace test suite. The workspace
+suite completed with node library 329 passed / 3 ignored and node binary 138
+passed / 3 ignored. The ignored release proposer-rotation test was then run
+explicitly and passed.
+
+No performance campaign, devnet contact, deployment, height-924 copy, Task Node
+action, agent delegation, frozen-fleet mutation, or auditor-inventory edit was
+performed. The source/G1/G2 refresh closes this plan only; storage remains
+unqualified until a separately authorized future G4 campaign passes and the
+remaining milestone gates close.
 
 ## Explicit non-goals
 
@@ -278,17 +355,17 @@ Step-4 contract.
 
 ## Exit criteria
 
-- [ ] Per-proposal certified-send work bounded by pending jobs + O(1) index
+- [x] Per-proposal certified-send work bounded by pending jobs + O(1) index
       access; proven flat across 0/240/1,024 tombstones by executable tests.
-- [ ] One-time migration + explicit repair own full-set validation; authority
+- [x] One-time migration + explicit repair own full-set validation; authority
       relocation documented in exactly those terms.
-- [ ] `outbox_resume_ms` and work counters in the round report; runner
+- [x] `outbox_resume_ms` and work counters in the round report; runner
       bounded-work and round-coverage residual gates implemented and tested.
-- [ ] Runner migration-allowance contract re-keyed and proven against the
+- [x] Runner migration-allowance contract re-keyed and proven against the
       portable-snapshot sequence.
-- [ ] Round-path `read_dir` classification table complete; zero unbounded
+- [x] Round-path `read_dir` classification table complete; zero unbounded
       round-path sites.
-- [ ] All Step-7 gates pass; vote-lock suite untouched and green.
-- [ ] New G1 freeze + G2 refresh recorded; milestone updated; handoff written
-      naming the changed invariant, surfaces, commands, omissions, and the
-      pending campaign authorization boundary.
+- [x] All Step-7 gates pass; vote-lock suite untouched and green.
+- [x] New G1 source/binary freeze + G2 refresh recorded; milestone updated;
+      handoff written naming the changed invariant, surfaces, commands,
+      omissions, and the pending campaign authorization boundary.

@@ -1,12 +1,12 @@
 # Storage Scaling: Time-Budgeted Qualification and Release Gates
 
-**Status:** Active — `redb` selected; corrected G4 failed; deployment and public testnet blocked
+**Status:** Active — `redb` selected; certified-send remediation frozen; new G4 authorization, deployment, and public testnet blocked
 
 **Decision date:** 2026-08-27
 
 **Decision owner:** Post Fiat
 
-**Candidate lineage:** failed pre-fix source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`, binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; corrected vote-lock source `442c5a4ddafed3aa0709f64e213fe0cedac5222d`, binary SHA-256 `29423cba098ce793ccab4a234ab26a2d30c6b11ad9eacd339b11b89cd6187c48`; corrected runner `693855e3492bc3d37801653e90bc308969fbad85`; persistent setup remediation `438fb29c`; v4 restore remediation `428fe7c9`; build/measurement workflow `90d68784`
+**Candidate lineage:** failed pre-fix source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`, binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; corrected vote-lock source `442c5a4ddafed3aa0709f64e213fe0cedac5222d`, binary SHA-256 `29423cba098ce793ccab4a234ab26a2d30c6b11ad9eacd339b11b89cd6187c48`; certified-send-remediated source `e52e050269a2f9fdd28c5083c3888debf3a85063`, binary SHA-256 `6b130a1f9c81bd64bc9dc42043595f5a27e84185cf3f40b13b5f37a40d72a82e`; corrected runner `15d059d1`; persistent setup remediation `438fb29c`; v4 restore remediation `428fe7c9`; build/measurement workflow `90d68784`
 
 **Research basis:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 
@@ -44,6 +44,17 @@ Validator 0 has 240 completed tombstones at height 50 and the retention cap of
 1,024 at height 5,000; only validator-0 proposer rounds exhibit the recurring
 slow pattern. The work is history-proportional until the cap and still costs
 about 1.5 seconds per affected proposal at the cap.
+
+That path is now remediated and frozen at source `e52e0502`. Normal resume reads
+one bounded completed-set index and validates only jobs actually compacted or
+pruned; full-set validation belongs to one-time migration, explicit repair, and
+the touched entries. The release 1,024-tombstone spot check dropped from 66.893
+ms / 6,144 retained-file reads to 2.098 ms / zero retained payload reads. The
+new runner binds a certified-send work gate and a round-timing coverage residual
+gate. The source/binary candidate portion of G1 and the binary-sensitive local
+G2 refresh pass; campaign-input binding is pending authorization. No new G4
+performance campaign has been run or authorized, so this is remediation
+readiness, not qualification.
 
 The first legacy control then failed the locked vote-lock gate because five
 validators performed their single migration in finalized round 2 rather than
@@ -97,13 +108,15 @@ work idling.
 ## Critical path and operator calls
 
 The corrected G4 campaign is closed failed and cannot be retried under its
-one-run rule. Local qualification now requires a separately reviewed remediation
-plan for the certified-send tombstone resume path; G3 still independently
-requires authorized height-924 input. The four tracks are:
+one-run rule. The certified-send remediation plan is now complete with a new
+source/binary freeze and refreshed local G2 evidence. Local qualification's next
+boundary is an explicit yes/no decision on exactly one new 5+5+5 campaign; G3
+still independently requires corrected replay and authorized height-924 input.
+The four tracks are:
 
 | Order | Track | Start condition | Finish condition | Operator input |
 | ---: | --- | --- | --- | --- |
-| 1 | Local qualification | A new reviewed plan bounds certified-send tombstone resume without changing delivery durability | A newly frozen candidate passes refreshed binary-sensitive gates and exactly one separately authorized G4 campaign | Decide whether to authorize that remediation plan; the closed corrected campaign may not be retried. Keep the transactional storage design fixed and do not touch the devnet. |
+| 1 | Local qualification | Explicit authorization names candidate `e52e0502`, runner `15d059d1`, the frozen inputs, and exactly one new 5+5+5 campaign | That single campaign passes the unchanged latency/correctness gates plus the new certified-send and timing-coverage gates | Decide yes or no on the new campaign. The closed corrected campaign may not be retried, and the devnet remains out of scope. |
 | 2 | Exact height-924 replay | A custodian names one complete quiescent directory and separately authorizes a read-only copy | G3 replay and mutation sentinels pass and enter the packet | Name the custodian and authorize the copy. Do not wait idle for this input. |
 | 3 | Pre-deployment rehearsal | G5 is `OFFLINE QUALIFIED` and controlled-devnet deployment is actually the next decision | G6 passes on six distinct stopped copies | Separately authorize six copies and then make a separate deploy/no-deploy decision. |
 | 4 | Dynamic UNL milestone | G5 closes, or the decision owner explicitly changes priority | A separately activated governance plan exists | No choice is open now: the DGA/Cobalt envelope and Option C are the recorded direction. |
@@ -111,19 +124,19 @@ requires authorized height-924 input. The four tracks are:
 The dependency chain is:
 
 ```text
-local:     certified-send resume plan -> new fix/freeze/gates -> new G4 --+
-                                                                         +-> complete G5 -> OFFLINE QUALIFIED
-external:  authorized height-924 copy -> corrected G3 ------------------+
+local:     fix/freeze/gates PASS -> separately authorized new G4 --+
+                                                                   +-> complete G5 -> OFFLINE QUALIFIED
+external:  corrected height-915 + authorized height-924 G3 --------+
 
 OFFLINE QUALIFIED -> separate deployment decision -> G6
 ```
 
 A missing height-924 copy blocks only the final `OFFLINE QUALIFIED` label. It
 must not trigger a 20-hour wait, an exhaustive legacy campaign, or collection of
-six fleet directories. The vote-lock source fix is verified but did not qualify
-the candidate. The corrected G4 output is final failed evidence; any later
-certified-send fix changes candidate source and must begin a new freeze and
-separately authorized campaign rather than resume or relabel this one.
+six fleet directories. The vote-lock and certified-send source fixes are both
+verified, but no post-certified-send G4 result exists. The corrected G4 output
+remains final failed evidence; a future run must start from the new frozen
+candidate under separate authorization rather than resume or relabel it.
 
 ## Decisions recorded
 
@@ -204,11 +217,11 @@ independent local gates continue.
 | Gate | Current state | Work allowed now | Budget and advance rule |
 | --- | --- | --- | --- |
 | G0 — campaign control | **PASS** | None; do not rerun the old campaign. | Reopen only if checkpoint/resume itself changes. |
-| G1 — candidate freeze | **CORRECTED FREEZE PASS** | Preserve source `442c5a4d`, binary `29423c…7c48`, and manifest `b4a580…bf01`; the older `ae658441` lineage remains failed history. | Any new node source or binary change restarts the binary-sensitive gates. |
-| G2 — safety | **CORRECTED LOCAL PASS / PACKET BINDING PENDING** | Preserve corrected manifest `132220…78c7`, rollback `1a05fe…9970`, and tamper `95c723…1f07`; raw output remains private. | Redaction-safe repository packet binding remains open; a new candidate requires another refresh. |
-| G3 — exact replay | **PRIOR HEIGHT 915 PASS / CORRECTED REPLAY REQUIRED / HEIGHT 924 AUTHORIZATION BLOCKED** | Preserve the old height-915 receipt as history; rerun height 915 with the corrected binary. Run height 924 only from a separately authorized copy. | Never wait idle for the height-924 copy, but do not claim offline qualification without both corrected replay receipts. |
-| G4 — scaling | **FAILED / CORRECTED CAMPAIGN CLOSED** | Preserve checkpoint `847b60…d6c1`, failure receipt `ce8703…8c38`, and diagnosis `4c7bb6…32f8`. Do not resume or retry. | Vote-lock work passed on selected windows, but ratios were 2.693 and 2.649; certified-send tombstone resume is the next owner. A new campaign requires a new reviewed plan and freeze. |
-| G5 — offline packet | **BLOCKED BY G3 HEIGHT 924 AND FAILED G4** | Do not package the failed partial campaign. Preserve its private checkpoint and diagnosis only. | No qualification claim until a future G4 passes and the complete offline verifier accepts G1–G4. |
+| G1 — candidate freeze | **REMEDIATED SOURCE/BINARY FREEZE PASS / CAMPAIGN INPUT BINDING PENDING** | Preserve source `e52e0502`, binary `6b130a…a82e`, and manifest `895ec7…ffe`; if a campaign is authorized, bind its topology/corpus/prepared fleets before execution. | Any new node source or binary change restarts the binary-sensitive gates; no G4 may start without the input binding. |
+| G2 — safety | **REMEDIATED LOCAL PASS / PACKET BINDING PENDING** | Preserve manifest `dc01f9…78e7`, rollback `af37f0…04be`, and tamper `df45e0…2ceb`; raw output remains private. | Redaction-safe repository packet binding remains open; another candidate change requires another refresh. |
+| G3 — exact replay | **PRIOR HEIGHT 915 PASS / REMEDIATED REPLAY REQUIRED / HEIGHT 924 AUTHORIZATION BLOCKED** | Preserve the old height-915 receipt as history; rerun height 915 with binary `6b130a…a82e`. Run height 924 only from a separately authorized copy. | Never wait idle for the height-924 copy, but do not claim offline qualification without both remediated replay receipts. |
+| G4 — scaling | **PRIOR CAMPAIGN CLOSED FAILED / NEW CAMPAIGN NOT AUTHORIZED** | Preserve checkpoint `847b60…d6c1`, failure receipt `ce8703…8c38`, and diagnosis `4c7bb6…32f8`. Candidate `e52e0502` is ready only for a separately authorized new run. | Decide yes/no on exactly one 5+5+5 campaign. Do not resume, retry, or relabel the prior output. |
+| G5 — offline packet | **BLOCKED BY REMEDIATED G3 AND MISSING NEW G4 PASS** | Do not package the failed prior campaign or private G1/G2 material. | No qualification claim until remediated G3, a separately authorized G4 pass, redaction-safe packet binding, and the complete offline verifier all pass. |
 | G6 — six-clone rehearsal | **DEFERRED** | Nothing until offline qualification is complete and deployment is the next real decision. | Requires separate data-copy authorization and six distinct stopped directories. |
 | G7 — Dynamic UNL handoff | **DIRECTION RECORDED / IMPLEMENTATION DEFERRED** | Preserve the recorded architecture decision only. | Spend no implementation time before the stated storage boundary or a new operator priority decision. |
 
@@ -295,6 +308,21 @@ freezes the public inputs and binds the unchanged prepared fleets to the
 corrected measurement binary. The candidate stayed unchanged through the one
 corrected campaign and is now frozen failed evidence.
 
+The certified-send remediation freeze passed at source
+`e52e050269a2f9fdd28c5083c3888debf3a85063`, from a clean detached checkout
+matching `origin/main` at freeze. Release binary SHA-256 is
+`6b130a1f9c81bd64bc9dc42043595f5a27e84185cf3f40b13b5f37a40d72a82e`;
+G1 manifest SHA-256 is
+`895ec768927a2d630c7d90fd73c5275efe1e54e857248a7cf12441fe97df9ffe`.
+The complete Step-7 suite passed, including the locked workspace tests, and the
+release 1,024-tombstone proposer-rotation check passed with 2.098 ms resume,
+zero retained payload reads/hashes, one bounded index read, and a 2.054 ms
+proposer/peer delta. Runner `15d059d1` passed 95 focused runner, packager, and
+independent-verifier tests. No prepared campaign input or performance run is
+implied by this candidate freeze. For `e52e0502`, the source/binary portion is
+complete and the frozen campaign-input portion remains pending explicit campaign
+authorization.
+
 **Exit:** one clean source, one binary, and one frozen input set control G2
 through G5. Any source or binary change returns the plan to G1.
 
@@ -339,6 +367,17 @@ and the rerun 69-case tamper/crash report SHA-256 is
 `storage-rebuild-transactional --verify-only` passed its two focused
 read-only/fail-closed tests. These receipts bind corrected source and binary but
 remain private local evidence until a later redaction-safe G5 packet exists.
+
+The certified-send-remediated binary-sensitive refresh also passed. G2 manifest
+SHA-256 is
+`dc01f9770fc2344cce0dcfcfd58dbe37b968f9ffc0276c329bb4f4fea47378e7`;
+compatible rollback report SHA-256 is
+`af37f0e4de9d23689b131532d0fded2593905b5d88a5de1600431c511d6904be`;
+and the complete 69-case / 37-owner-test tamper/crash report SHA-256 is
+`df45e0bb478299e7778bc50537fd6bb059f04a19c52f01d0c5adb444331c2ceb`.
+The two `transactional_verify_only` tests passed again. All evidence was produced
+offline with no devnet contact. It remains private local evidence, not the
+unchecked redaction-safe G5 packet.
 
 ## G3 — exact replay
 
@@ -729,6 +768,39 @@ missing phase timer in `crates/node/src/transport_runtime.rs`. Any fix or later
 campaign requires a new reviewed plan, new source/binary freeze, and refreshed
 binary-sensitive gates.
 
+### G4F — certified-send remediation freeze: ready, no campaign authorized
+
+- [x] Implement the reviewed
+      [certified-send tombstone bounding plan](certified-send-tombstone-bounding-plan.md)
+      at source `e52e0502` without changing consensus bytes or durable delivery
+      semantics.
+- [x] Move full completed-set validation from every proposal to one-time index
+      migration, explicit repair, and entries touched by compaction/pruning;
+      preserve fail-closed migration, repair, quarantine, crash recovery,
+      retention, and compatible rollback.
+- [x] Add `outbox_resume_ms`, bounded-work counters, per-validator first-resume
+      migration rules, independently recomputed certified-send work receipts,
+      and a round-coverage residual gate in runner `15d059d1`.
+- [x] Prove flat retained-payload work at 0/240/1,024 tombstones and pass the
+      release proposer-rotation check: 2.098 ms at 1,024, zero retained payload
+      reads/hashes, one bounded index read, and 2.054 ms peer delta.
+- [x] Complete the round-path `read_dir` audit with zero unbounded synchronous
+      round-history sites.
+- [x] Pass focused node/storage tests, formatting, workspace check,
+      warnings-denied workspace Clippy, the complete locked workspace tests, and
+      95 focused runner/packager/verifier tests.
+- [x] Freeze binary SHA-256 `6b130a…a82e` and G1 manifest SHA-256
+      `895ec7…ffe`; refresh G2 manifest `dc01f9…78e7`, rollback
+      `af37f0…04be`, and tamper/crash `df45e0…2ceb`.
+- [x] Stop before any performance campaign, devnet contact, height-924 access,
+      deployment, or G5 packaging.
+
+**G4F exit:** remediation source, telemetry, runner gates, the G1 source/binary
+candidate freeze, and private local G2 evidence are ready. Campaign-input
+binding remains pending. **G4 is not passed.** Exactly one new 5+5+5 campaign may
+start only after separate operator authorization pins the candidate, runner,
+frozen inputs, timeout, stop rules, and evidence identities.
+
 ## G5 — offline qualification packet
 
 **Purpose:** make the result independently checkable and state exactly what it
@@ -792,32 +864,29 @@ not deploy anything.
 
 1. Preserve every prior campaign and the corrected checkpoint as immutable
    failed evidence. Do not resume, retry, merge outputs, or relabel partial work.
-2. Keep candidate source `442c5a4d`, binary `29423c…7c48`, corrected G1/G2
-   manifests, prepared-input manifest, runner `693855e3`, and diagnosis hashes
-   together as the closed corrected-campaign lineage.
-3. Do not modify candidate code under the corrected G4 plan. If local storage
-   work continues, first write and independently review a new plan for bounding
-   certified-send completed-tombstone resume while preserving durable delivery,
-   crash recovery, quarantine, replay, and fail-closed semantics.
-4. Require that new plan to add a direct timer/work counter for the pre-setup
-   outbox-resume phase, tests at 0/240/1,024 retained tombstones, tamper and crash
-   coverage, and a migration/retention proof. Do not infer success from the old
-   listed-stage model.
-5. If that source changes, freeze a new candidate and refresh every
-   binary-sensitive G1/G2/G3 receipt before any new performance campaign.
-6. Treat the legacy round-2 migration result as a separate harness/fixture
-   contract question. Resolve it in the new plan before authorizing another
-   campaign; do not waive it retroactively.
-7. Close the height-924 part of G3 only after a custodian and separate read-only
-   copy authorization exist. Do not wait idle for that decision.
-8. Build G5 and record `OFFLINE QUALIFIED` only after a future G4 passes, the
-   exact height-924 replay exists, and the complete offline verifier passes.
-9. Run G6 only if controlled-devnet deployment is actually the next decision
+2. Preserve the closed `442c5a4d` campaign lineage separately from remediated
+   source `e52e0502`, binary `6b130a…a82e`, G1 `895ec7…ffe`, G2
+   `dc01f9…78e7`, and runner `15d059d1`.
+3. Make an explicit yes/no decision on exactly one new 5+5+5 campaign. A yes
+   must pin the remediated candidate, runner, prepared inputs, timeout, stop
+   rules, and evidence identities before execution; silence is not permission.
+4. If authorized, run selected windows first under one fresh four-hour
+   measurement clock and enforce the certified-send bounded-work and
+   round-coverage residual gates. Stop after that single result; do not contact
+   the devnet or expand the matrix.
+5. Treat any new node-source or binary change as a new G1/G2 freeze. Treat any
+   runner or prepared-input change as a newly bound campaign identity.
+6. Rerun height 915 for the remediated candidate. Close height 924 only after a
+   custodian and separate read-only copy authorization exist; do not wait idle
+   for that decision.
+7. Build G5 and record `OFFLINE QUALIFIED` only after remediated G3, a future G4
+   pass, redaction-safe packet binding, and the complete offline verifier pass.
+8. Run G6 only if controlled-devnet deployment is actually the next decision
    and its separate data-copy authorization has been recorded.
-10. Activate the deferred Dynamic UNL milestone only at the G7 boundary or after
-    an explicit operator reprioritization.
+9. Activate the deferred Dynamic UNL milestone only at the G7 boundary or after
+   an explicit operator reprioritization.
 
-The milestone remains active and public testnet remains blocked. The immediate
-question is no longer whether the vote-lock index works—it does. The question is
-whether to authorize a new, bounded certified-send retention/resume remediation
-plan; this document does not authorize that implementation or another run.
+The milestone remains active and public testnet remains blocked. The vote-lock
+and certified-send source fixes are implemented and locally verified. The
+immediate decision is whether to authorize exactly one new campaign against the
+remediated freeze; this document records readiness but does not authorize it.
