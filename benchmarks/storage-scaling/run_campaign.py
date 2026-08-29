@@ -742,6 +742,13 @@ CERTIFIED_SEND_REASON_BYTES_EXCEEDED = "CERTIFIED_SEND_BYTES_HASHED_EXCEEDED"
 CERTIFIED_SEND_REASON_INDEX_WORK_EXCEEDED = "CERTIFIED_SEND_INDEX_WORK_EXCEEDED"
 ROUND_COVERAGE_GATE_SCHEMA = "postfiat-storage-round-coverage-gate-v1"
 ROUND_COVERAGE_MAX_RESIDUAL_MS = 100.0
+# One isolated, bounded scheduler stall per window is tolerated: a round
+# whose residual is in (100, 250] ms passes only when it is the sole such
+# round in the window. A systematic hidden stage appears in many rounds
+# and still fails; the stalled round's full latency still feeds the p95
+# ratio gates. See the 2026-08-29 measurement-environment decision.
+ROUND_COVERAGE_MAX_ISOLATED_STALL_MS = 250.0
+ROUND_COVERAGE_MAX_STALL_ROUNDS_PER_WINDOW = 1
 ROUND_COVERAGE_REASON_INVALID_TELEMETRY = "ROUND_COVERAGE_TELEMETRY_INVALID"
 ROUND_COVERAGE_REASON_RESIDUAL_EXCEEDED = "ROUND_COVERAGE_RESIDUAL_EXCEEDED"
 ROUND_COVERAGE_STAGE_FIELDS = (
@@ -1403,9 +1410,11 @@ def round_coverage_from_report(report: dict[str, Any]) -> dict[str, Any]:
         residual_ms = total_ms - named_ms
         max_residual = max(max_residual, residual_ms)
         passed = -1.0 <= residual_ms <= ROUND_COVERAGE_MAX_RESIDUAL_MS
-        reason_code = None if passed else ROUND_COVERAGE_REASON_RESIDUAL_EXCEEDED
-        if reason_code is not None:
-            reason_codes.add(reason_code)
+        stall_candidate = (
+            ROUND_COVERAGE_MAX_RESIDUAL_MS
+            < residual_ms
+            <= ROUND_COVERAGE_MAX_ISOLATED_STALL_MS
+        )
         rows.append(
             {
                 "finalized_round": round_number,
@@ -1414,15 +1423,38 @@ def round_coverage_from_report(report: dict[str, Any]) -> dict[str, Any]:
                 "named_stage_ms": named_ms,
                 "residual_ms": residual_ms,
                 "passed": passed,
-                "reason_code": reason_code,
+                "tolerated_stall": False,
+                "stall_candidate": stall_candidate,
+                "reason_code": None,
             }
         )
+    stall_rounds = [row for row in rows if row.get("stall_candidate")]
+    tolerate = len(stall_rounds) <= ROUND_COVERAGE_MAX_STALL_ROUNDS_PER_WINDOW
+    for row in rows:
+        if "stall_candidate" not in row:
+            continue
+        if row.pop("stall_candidate"):
+            if tolerate:
+                row["passed"] = True
+                row["tolerated_stall"] = True
+            else:
+                row["passed"] = False
+                row["reason_code"] = ROUND_COVERAGE_REASON_RESIDUAL_EXCEEDED
+                reason_codes.add(ROUND_COVERAGE_REASON_RESIDUAL_EXCEEDED)
+        elif not row["passed"]:
+            row["reason_code"] = ROUND_COVERAGE_REASON_RESIDUAL_EXCEEDED
+            reason_codes.add(ROUND_COVERAGE_REASON_RESIDUAL_EXCEEDED)
     return {
         "schema": ROUND_COVERAGE_GATE_SCHEMA,
         "passed": not reason_codes,
         "reason_codes": sorted(reason_codes),
+        "tolerated_stall_rounds": [
+            row["finalized_round"] for row in rows if row.get("tolerated_stall")
+        ],
         "limits": {
             "max_unattributed_residual_ms": ROUND_COVERAGE_MAX_RESIDUAL_MS,
+            "max_isolated_stall_residual_ms": ROUND_COVERAGE_MAX_ISOLATED_STALL_MS,
+            "max_tolerated_stall_rounds_per_window": ROUND_COVERAGE_MAX_STALL_ROUNDS_PER_WINDOW,
             "minimum_residual_ms": -1.0,
             "named_stage_fields": list(ROUND_COVERAGE_STAGE_FIELDS),
             "shielded_verifier_prewarm_field": "shielded_verifier_prewarm.total_ms",

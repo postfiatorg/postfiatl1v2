@@ -708,6 +708,39 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
         self.assertTrue(gate["passed"])
         self.assertEqual(gate["max_residual_ms"], 20.0)
 
+    def test_round_coverage_gate_tolerates_one_isolated_bounded_stall(self) -> None:
+        gate = PAIRED.BASE.round_coverage_from_report(
+            _round_coverage_report([20.0, 180.0, 30.0])
+        )
+
+        self.assertTrue(gate["passed"])
+        self.assertEqual(gate["tolerated_stall_rounds"], [2])
+        self.assertEqual(gate["max_residual_ms"], 180.0)
+
+    def test_round_coverage_gate_rejects_two_stall_rounds(self) -> None:
+        gate = PAIRED.BASE.round_coverage_from_report(
+            _round_coverage_report([180.0, 20.0, 140.0])
+        )
+
+        self.assertFalse(gate["passed"])
+        self.assertEqual(gate["tolerated_stall_rounds"], [])
+        self.assertEqual(
+            gate["reason_codes"],
+            [PAIRED.BASE.ROUND_COVERAGE_REASON_RESIDUAL_EXCEEDED],
+        )
+
+    def test_round_coverage_gate_rejects_unbounded_stall(self) -> None:
+        gate = PAIRED.BASE.round_coverage_from_report(
+            _round_coverage_report([260.0])
+        )
+
+        self.assertFalse(gate["passed"])
+        self.assertEqual(gate["tolerated_stall_rounds"], [])
+        self.assertEqual(
+            gate["reason_codes"],
+            [PAIRED.BASE.ROUND_COVERAGE_REASON_RESIDUAL_EXCEEDED],
+        )
+
     def test_round_coverage_gate_rejects_hidden_outbox_scale_work(self) -> None:
         gate = PAIRED.BASE.round_coverage_from_report(
             _round_coverage_report([1_200.0])
