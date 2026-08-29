@@ -277,7 +277,8 @@ fn activate_route(
             route.route_epoch,
             route.activation_height,
         ),
-        tier4_finality_bootstrap: None,
+            tier4_finality_bootstrap: None,
+            arc_finality_bootstrap: None,
     };
     let batch = GovernanceActionBatch::with_vault_bridge_route_profile_activation(
         format!("route-activation-{}", route.route_epoch),
@@ -938,6 +939,7 @@ fn route_profile_record_commits_every_field_and_is_order_independent() {
             first.activation_height,
         ),
         tier4_finality_bootstrap: None,
+        arc_finality_bootstrap: None,
     };
     let record =
         postfiat_types::VaultBridgeRouteProfileRecordV1::new(&activation, 2).expect("route record");
@@ -1030,6 +1032,7 @@ fn route_profile_record_commits_every_field_and_is_order_independent() {
             second.activation_height,
         ),
         tier4_finality_bootstrap: None,
+        arc_finality_bootstrap: None,
     };
     let second_record = postfiat_types::VaultBridgeRouteProfileRecordV1::new(&second_activation, 3)
         .expect("second route record");

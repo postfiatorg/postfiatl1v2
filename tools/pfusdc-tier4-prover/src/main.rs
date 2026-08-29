@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, fs, path::PathBuf, time::Instant};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use pfusdc_arc_ingress_program::{verify_arc_ingress_witness_v1, ArcIngressWitnessV1};
 use pfusdc_ingress_program::bonded::{
     bonded_ingress_policy_hash_v1, verify_bonded_age_release_witness_v1,
     verify_bonded_confirmation_witness_v1, verify_bonded_ingress_witness_v1,
@@ -11,8 +12,9 @@ use pfusdc_ingress_program::bonded::{
 use pfusdc_ingress_program::{verify_ingress_witness_v2, PfUsdcIngressProofWitnessV2};
 use postfiat_pfusdc_proofs::{verify_checkpoint_witness_v1, verify_egress_witness_v1};
 use postfiat_types::{
-    vault_bridge_route_binding, PfUsdcCheckpointProofWitnessV1, PfUsdcEgressProgramInputV1,
-    PfUsdcEgressProofWitnessV1, PfUsdcIngressPublicValuesV3, VaultBridgeRouteProfileV1,
+    vault_bridge_deposit_evidence_root, vault_bridge_deposit_id, vault_bridge_route_binding, PfUsdcCheckpointProofWitnessV1, PfUsdcEgressProgramInputV1,
+    PfUsdcEgressProofWitnessV1, PfUsdcIngressPublicValuesV3, VaultBridgeDepositEvidence,
+    VaultBridgeRouteProfileV1,
     NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1,
 };
 use sha2::Sha256;
@@ -25,7 +27,11 @@ const EGRESS_ELF: Elf = Elf::Static(include_bytes!(
 const INGRESS_ELF: Elf = Elf::Static(include_bytes!(
     "../../../programs/pfusdc-ingress/elf/pfusdc-ingress-program"
 ));
+const ARC_INGRESS_ELF: Elf = Elf::Static(include_bytes!(
+    "../../../programs/pfusdc-arc-ingress/elf/pfusdc-arc-ingress-program"
+));
 
+mod arc_ingress_capture;
 mod egress_audit;
 mod ingress_capture;
 mod manifest;
@@ -71,8 +77,31 @@ enum Command {
         #[arg(long)]
         output: PathBuf,
     },
+    /// Validate a route profile and derive its canonical hash and route binding.
+    RouteProfileInfo {
+        #[arg(long)]
+        profile: PathBuf,
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    /// Validate one canonical vault-deposit evidence row and derive its IDs.
+    DepositEvidenceInfo {
+        #[arg(long)]
+        evidence: PathBuf,
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
     /// Capture and natively verify one finalized Ethereum/Arbitrum ingress witness.
     IngressCapture(ingress_capture::IngressCaptureArgs),
+    /// Capture and natively verify one finalized Arc direct-deposit witness.
+    ArcIngressCapture(arc_ingress_capture::ArcIngressCaptureArgs),
+    /// Run deterministic security-field mutations against an Arc witness.
+    ArcIngressAudit {
+        #[arg(long)]
+        witness: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+    },
     /// Capture one Ethereum-finalized, bonded-assertion ingress witness.
     BondedIngressCapture(ingress_capture::bonded::BondedIngressCaptureArgs),
     /// Capture a newer Ethereum-finalized confirmation for an escrowed mint.
@@ -140,6 +169,15 @@ enum Command {
         #[arg(long)]
         prove: bool,
     },
+    /// Execute or Groth16-prove a canonical Arc ingress witness.
+    ArcIngress {
+        #[arg(long)]
+        witness: PathBuf,
+        #[arg(long)]
+        output_dir: PathBuf,
+        #[arg(long)]
+        prove: bool,
+    },
     /// Execute or Groth16-prove a canonical PFTL egress witness.
     Egress {
         /// Optional frozen egress ELF. Defaults to the repository-embedded release.
@@ -176,7 +214,11 @@ async fn main() -> Result<()> {
             output,
         } => bonded_route_info(policy, route_profile, output),
         Command::DeploymentManifest { input, output } => manifest::run(input, output),
+        Command::RouteProfileInfo { profile, output } => route_profile_info(profile, output),
+        Command::DepositEvidenceInfo { evidence, output } => deposit_evidence_info(evidence, output),
         Command::IngressCapture(capture) => ingress_capture::capture(capture).await,
+        Command::ArcIngressCapture(capture) => arc_ingress_capture::capture(capture).await,
+        Command::ArcIngressAudit { witness, output } => arc_ingress_audit(witness, output),
         Command::BondedIngressCapture(capture) => ingress_capture::bonded::capture(capture).await,
         Command::BondedConfirmationCapture(capture) => {
             ingress_capture::bonded::capture_confirmation(capture).await
@@ -221,6 +263,11 @@ async fn main() -> Result<()> {
             output_dir,
             prove,
         } => prove_bonded_age_release(elf, witness, output_dir, prove).await,
+        Command::ArcIngress {
+            witness,
+            output_dir,
+            prove,
+        } => prove_arc_ingress(witness, output_dir, prove).await,
         Command::Egress {
             elf,
             witness,
@@ -233,6 +280,212 @@ async fn main() -> Result<()> {
             prove,
         } => prove_checkpoint(witness, output_dir, prove).await,
     }
+}
+
+fn deposit_evidence_info(evidence_path: PathBuf, output: Option<PathBuf>) -> Result<()> {
+    let bytes = fs::read(&evidence_path)
+        .with_context(|| format!("read deposit evidence {}", evidence_path.display()))?;
+    let evidence: VaultBridgeDepositEvidence = serde_json::from_slice(&bytes)
+        .with_context(|| format!("decode deposit evidence {}", evidence_path.display()))?;
+    evidence.validate().map_err(anyhow::Error::msg)?;
+    let derived_deposit_id = vault_bridge_deposit_id(&evidence).map_err(anyhow::Error::msg)?;
+    let evidence_root =
+        vault_bridge_deposit_evidence_root(&evidence).map_err(anyhow::Error::msg)?;
+    let document = serde_json::json!({
+        "schema": "postfiat.pfusdc.deposit_evidence_info.v1",
+        "evidence": evidence_path,
+        "derived_deposit_id": derived_deposit_id,
+        "evidence_root": evidence_root,
+        "source_domain": evidence.source_domain(),
+        "finality_ref": evidence.finality_ref(),
+    });
+    let encoded = serde_json::to_vec_pretty(&document)?;
+    if let Some(path) = output {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, &encoded)?;
+    }
+    println!("{}", String::from_utf8(encoded)?);
+    Ok(())
+}
+
+fn arc_ingress_audit(witness_path: PathBuf, output: PathBuf) -> Result<()> {
+    let bytes = fs::read(&witness_path)
+        .with_context(|| format!("read Arc ingress witness {}", witness_path.display()))?;
+    let witness: ArcIngressWitnessV1 = serde_json::from_slice(&bytes)
+        .with_context(|| format!("decode Arc ingress witness {}", witness_path.display()))?;
+    verify_arc_ingress_witness_v1(&witness)
+        .map_err(|error| anyhow::anyhow!("baseline Arc witness rejected: {}", error.code()))?;
+    let mut results = Vec::new();
+    let mut check = |name: &str, mutated: ArcIngressWitnessV1, expected: &str| -> Result<()> {
+        let error = verify_arc_ingress_witness_v1(&mutated)
+            .expect_err("security mutation unexpectedly verified");
+        anyhow::ensure!(
+            error.code() == expected,
+            "mutation {name} returned {}, expected {expected}",
+            error.code()
+        );
+        results.push(serde_json::json!({
+            "mutation": name,
+            "accepted": false,
+            "error_code": error.code(),
+        }));
+        Ok(())
+    };
+
+    let mut forged = witness.clone();
+    forged.signatures[0].signature[0] ^= 1;
+    check("forged_signature", forged, "ARC_INGRESS_INVALID_SIGNATURE")?;
+
+    let mut subquorum = witness.clone();
+    subquorum.signatures.truncate(1);
+    check("subquorum", subquorum, "ARC_INGRESS_SUB_QUORUM")?;
+
+    let mut receipt = witness.clone();
+    let last = receipt
+        .encoded_receipt
+        .last_mut()
+        .context("baseline receipt is empty")?;
+    *last ^= 1;
+    check("mutated_receipt", receipt, "ARC_INGRESS_RECEIPT_PROOF")?;
+
+    let mut wrong_log = witness.clone();
+    wrong_log.amount_atoms = wrong_log
+        .amount_atoms
+        .checked_add(1)
+        .context("amount mutation overflow")?;
+    check("wrong_log_fields", wrong_log, "ARC_INGRESS_DEPOSIT_MISMATCH")?;
+
+    let mut stale_set = witness.clone();
+    stale_set.validator_set_commitment_in[0] ^= 1;
+    check(
+        "stale_validator_set_commitment",
+        stale_set,
+        "ARC_INGRESS_VALIDATOR_SET_COMMITMENT_MISMATCH",
+    )?;
+
+    let mut asserted_rotation = witness;
+    asserted_rotation.next_validators = asserted_rotation.validators.clone();
+    check(
+        "unauthenticated_rotation",
+        asserted_rotation,
+        "ARC_INGRESS_ROTATION_PROOF_UNAVAILABLE",
+    )?;
+
+    let report = serde_json::json!({
+        "schema": "postfiat.pfusdc.arc_ingress_negative_suite.v1",
+        "witness": witness_path,
+        "baseline_accepted": true,
+        "results": results,
+        "replay_scope": "PFTL state transition; deposit_id replay is not a stateless guest property",
+    });
+    if let Some(parent) = output.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&output, serde_json::to_vec_pretty(&report)?)?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    Ok(())
+}
+
+fn route_profile_info(profile_path: PathBuf, output: Option<PathBuf>) -> Result<()> {
+    let bytes = fs::read(&profile_path)
+        .with_context(|| format!("read route profile {}", profile_path.display()))?;
+    let profile: VaultBridgeRouteProfileV1 = serde_json::from_slice(&bytes)
+        .with_context(|| format!("decode route profile {}", profile_path.display()))?;
+    profile.validate().map_err(anyhow::Error::msg)?;
+    let profile_hash = profile.profile_hash().map_err(anyhow::Error::msg)?;
+    let route_binding = vault_bridge_route_binding(&profile_hash, profile.route_epoch)
+        .map_err(anyhow::Error::msg)?;
+    let document = serde_json::json!({
+        "schema": "postfiat.pfusdc.route_profile_info.v1",
+        "profile": profile_path,
+        "profile_hash": profile_hash,
+        "route_binding": route_binding,
+    });
+    let encoded = serde_json::to_vec_pretty(&document)?;
+    if let Some(path) = output {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, &encoded)?;
+    }
+    println!("{}", String::from_utf8(encoded)?);
+    Ok(())
+}
+
+async fn prove_arc_ingress(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -> Result<()> {
+    #[cfg(debug_assertions)]
+    if prove {
+        anyhow::bail!("Groth16 proving requires a --release build");
+    }
+    let witness_bytes = fs::read(&witness_path)
+        .with_context(|| format!("read Arc ingress witness {}", witness_path.display()))?;
+    let witness: ArcIngressWitnessV1 = serde_json::from_slice(&witness_bytes)
+        .with_context(|| format!("decode Arc ingress witness {}", witness_path.display()))?;
+    let expected = verify_arc_ingress_witness_v1(&witness).map_err(|error| {
+        anyhow::anyhow!("native Arc ingress verification failed: {}", error.code())
+    })?;
+    let expected_public_values = expected.canonical_bytes();
+    let mut stdin = SP1Stdin::new();
+    stdin.write_vec(serde_cbor::to_vec(&witness).context("encode Arc ingress witness as CBOR")?);
+    let client = ProverClient::from_env().await;
+    let started = Instant::now();
+    let (executed_public_values, report) = client.execute(ARC_INGRESS_ELF, stdin.clone()).await?;
+    let executed = executed_public_values.to_vec();
+    anyhow::ensure!(
+        executed == expected_public_values,
+        "SP1 Arc ingress output differs from native canonical public values"
+    );
+    fs::create_dir_all(&output_dir)?;
+    fs::write(output_dir.join("public-values.bin"), &executed)?;
+    fs::write(
+        output_dir.join("public-values.sha3-384"),
+        hex::encode(Sha3_384::digest(&executed)),
+    )?;
+    fs::write(
+        output_dir.join("execute-report.json"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "schema": "postfiat.pfusdc.arc_ingress_execute_report.v1",
+            "witness": witness_path,
+            "elapsed_ms": started.elapsed().as_millis(),
+            "instruction_count": report.total_instruction_count(),
+            "public_values_bytes": executed.len(),
+        }))?,
+    )?;
+    println!(
+        "Arc ingress witness executed: {} cycles in {} ms",
+        report.total_instruction_count(),
+        started.elapsed().as_millis()
+    );
+    if prove {
+        let setup_started = Instant::now();
+        let pk = client.setup(ARC_INGRESS_ELF).await?;
+        let proof = client.prove(&pk, stdin).groth16().await?;
+        client.verify(&proof, pk.verifying_key(), None)?;
+        anyhow::ensure!(
+            proof.public_values.to_vec() == expected_public_values,
+            "verified Arc ingress proof contains unexpected public values"
+        );
+        fs::write(output_dir.join("proof.bin"), bincode::serialize(&proof)?)?;
+        fs::write(output_dir.join("proof-calldata.bin"), proof.bytes())?;
+        fs::write(
+            output_dir.join("proof-report.json"),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "schema": "postfiat.pfusdc.arc_ingress_proof_report.v1",
+                "program_vkey": pk.verifying_key().bytes32(),
+                "proof_mode": "groth16",
+                "setup_and_prove_ms": setup_started.elapsed().as_millis(),
+                "proof_bytes": proof.bytes().len(),
+                "public_values_bytes": proof.public_values.to_vec().len(),
+            }))?,
+        )?;
+        println!(
+            "verified Arc ingress Groth16 proof; vkey {}",
+            pk.verifying_key().bytes32()
+        );
+    }
+    Ok(())
 }
 
 fn bonded_route_info(
@@ -306,6 +559,7 @@ async fn bonded_program_info(elf_path: PathBuf, output: Option<PathBuf>) -> Resu
 async fn program_info(output: Option<PathBuf>) -> Result<()> {
     let client = ProverClient::from_env().await;
     let ingress = client.setup(INGRESS_ELF).await?;
+    let arc_ingress = client.setup(ARC_INGRESS_ELF).await?;
     let egress = client.setup(EGRESS_ELF).await?;
     let document = serde_json::json!({
         "schema": "postfiat.pfusdc.tier4_program_info.v1",
@@ -313,6 +567,10 @@ async fn program_info(output: Option<PathBuf>) -> Result<()> {
         "ingress": {
             "elf_sha256": hex::encode(Sha256::digest(&*INGRESS_ELF)),
             "program_vkey": ingress.verifying_key().bytes32(),
+        },
+        "arc_ingress": {
+            "elf_sha256": hex::encode(Sha256::digest(&*ARC_INGRESS_ELF)),
+            "program_vkey": arc_ingress.verifying_key().bytes32(),
         },
         "egress": {
             "elf_sha256": hex::encode(Sha256::digest(&*EGRESS_ELF)),

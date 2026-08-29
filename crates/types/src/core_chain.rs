@@ -204,6 +204,9 @@ pub const VAULT_BRIDGE_ROUTE_ARBITRUM_ONE_USDC_V1: &str =
     "arbitrum-one-usdc-v1";
 pub const PROOF_BOUNDED_NAV_CAP_CHECKPOINT_DOMAIN_V1: &str =
     "postfiat.nav.proof_bounded_cap_checkpoint.v1";
+/// Dedicated verifier kind for an Arc consensus certificate plus an exact
+/// successful receipt/log inclusion proof.
+pub const NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1: &str = "sp1-arc-finality-v1";
 pub const NAV_SP1_PROOF_ENCODING_GROTH16: &str = "groth16";
 pub const DEFAULT_MAX_NAV_SP1_PROOF_BYTES: u64 = 4096;
 pub const DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES: u64 = 16384;

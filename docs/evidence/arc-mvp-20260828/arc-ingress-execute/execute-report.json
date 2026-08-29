@@ -1,0 +1,7 @@
+{
+  "elapsed_ms": 12730,
+  "instruction_count": 2376633,
+  "public_values_bytes": 314,
+  "schema": "postfiat.pfusdc.arc_ingress_execute_report.v1",
+  "witness": "docs/evidence/arc-mvp-20260828/arc-ingress-witness.json"
+}
