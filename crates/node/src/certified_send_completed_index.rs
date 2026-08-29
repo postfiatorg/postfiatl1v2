@@ -635,6 +635,23 @@ fn clear_intent(data_dir: &Path) -> Result<(), String> {
     }
 }
 
+/// Removes a fully-applied batch intent without forcing the removal durable.
+/// Safe only after every operation in the batch is reflected in the durable
+/// index: replaying a fully-applied batch intent is idempotent (appends see
+/// indexed destinations, prunes see absent sources), so a crash that
+/// resurrects the cleared intent recovers to the same state.
+fn clear_intent_unsynced(data_dir: &Path) -> Result<(), String> {
+    let path = completed_index_intent_path(data_dir);
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!(
+            "certified send completed intent remove `{}` failed: {error}",
+            path.display()
+        )),
+    }
+}
+
 fn acquire_mutation_guard(data_dir: &Path) -> Result<CompletedIndexMutationGuard, String> {
     std::fs::create_dir_all(data_dir).map_err(|error| {
         format!(
@@ -1346,7 +1363,7 @@ fn apply_completed_index_batch(
                 "completed retention directory after disposal",
             )?;
         }
-        clear_intent(data_dir)?;
+        clear_intent_unsynced(data_dir)?;
     }
     Ok((compacted, pruned))
 }
