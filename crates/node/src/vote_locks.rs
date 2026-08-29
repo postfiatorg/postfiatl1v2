@@ -250,11 +250,15 @@ fn migrate_block_proposal_vote_locks(
     }
     json_paths.sort();
 
-    // A brand-new directory has no legacy state to migrate. Defer the marker
-    // until the first durable lock exists so an immediately imported legacy
-    // lock still receives the one-time preflight on the next reservation.
+    // A brand-new directory has no legacy state to migrate. Bind the marker
+    // eagerly so migration is genuinely complete on this validator's first
+    // successful reservation, mirroring the certified-send completed-index
+    // contract. A legacy JSON lock appearing after the marker exists is
+    // unsupported out-of-band state and requires explicit operator repair;
+    // it must not silently receive a second migration.
     if json_paths.is_empty() {
-        return Ok(());
+        work.migration_performed = true;
+        return write_vote_lock_index_marker(store, genesis);
     }
 
     work.migration_performed = true;
@@ -403,6 +407,10 @@ fn migrate_block_proposal_vote_locks(
     }
     sync_directory(&lock_dir)?;
 
+    write_vote_lock_index_marker(store, genesis)
+}
+
+fn write_vote_lock_index_marker(store: &NodeStore, genesis: &Genesis) -> io::Result<()> {
     let marker = expected_vote_lock_index_marker(genesis);
     let json = serde_json::to_string_pretty(&marker).map_err(|error| {
         io::Error::new(
@@ -1153,6 +1161,93 @@ mod tests {
             "5,000 historical locks plus the new vote lock must remain"
         );
         fs::remove_dir_all(data_dir).expect("cleanup release spot-check data");
+    }
+
+    #[test]
+    fn empty_directory_first_reservation_binds_marker_eagerly() {
+        let (data_dir, store) = test_store("eager-empty");
+        let genesis = activated_genesis();
+
+        // Campaign sequence, step 1: a validator with no vote-lock state
+        // performs its one-time migration on its first successful reservation.
+        let first = reserve_block_proposal_vote_lock(
+            &store,
+            &genesis,
+            &target(14, 0, "first-proposal"),
+            "validator-0",
+        )
+        .expect("first reservation on empty directory");
+        assert!(
+            first.migration_performed,
+            "empty-directory first reservation must migrate"
+        );
+        assert!(vote_lock_index_marker_path(&store).exists());
+
+        // Campaign sequence, step 2: the next reservation is ordinary bounded
+        // work with no second migration.
+        let second = reserve_block_proposal_vote_lock(
+            &store,
+            &genesis,
+            &target(15, 0, "second-proposal"),
+            "validator-0",
+        )
+        .expect("second reservation");
+        assert!(
+            !second.migration_performed,
+            "migration must not repeat after the marker exists"
+        );
+        assert!(
+            second.files_examined <= 3,
+            "ordinary reservation examined {} files",
+            second.files_examined
+        );
+        fs::remove_dir_all(data_dir).expect("cleanup");
+    }
+
+    #[test]
+    fn stray_legacy_lock_after_eager_marker_is_not_migrated() {
+        let (data_dir, store) = test_store("eager-stray");
+        let genesis = activated_genesis();
+        reserve_block_proposal_vote_lock(
+            &store,
+            &genesis,
+            &target(14, 0, "first-proposal"),
+            "validator-0",
+        )
+        .expect("first reservation binds marker");
+
+        // Out-of-band state after the marker exists is unsupported: it must
+        // not trigger a second migration on later reservations.
+        let stray = data_dir
+            .join(BLOCK_PROPOSAL_VOTE_LOCK_DIR)
+            .join("imported-legacy.json");
+        write_lock(
+            &stray,
+            &lock_for(
+                &genesis,
+                20,
+                0,
+                "imported-proposal",
+                BLOCK_PROPOSAL_VOTE_LOCK_SCHEMA_V1,
+            ),
+        );
+
+        let work = reserve_block_proposal_vote_lock(
+            &store,
+            &genesis,
+            &target(21, 0, "later-proposal"),
+            "validator-0",
+        )
+        .expect("reservation after stray import");
+        assert!(
+            !work.migration_performed,
+            "stray legacy lock must not re-trigger migration"
+        );
+        assert!(
+            stray.exists(),
+            "stray evidence must remain for explicit operator repair"
+        );
+        fs::remove_dir_all(data_dir).expect("cleanup");
     }
 
     #[test]
