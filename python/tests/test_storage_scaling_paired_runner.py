@@ -562,6 +562,37 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
         self.assertEqual(gate["validators"]["validator-5"]["migration_rounds"], [2])
         self.assertEqual(gate["validators"]["validator-5"]["resumes_observed"], 1)
 
+    def test_certified_send_gate_accepts_eager_empty_migration_then_compaction(
+        self,
+    ) -> None:
+        report = _certified_send_report(
+            [
+                (
+                    "validator-3",
+                    {
+                        "outbox_index_migration_performed": True,
+                    },
+                ),
+                (
+                    "validator-3",
+                    {
+                        "outbox_tombstones_validated": 5,
+                        "outbox_files_read": 15,
+                        "outbox_bytes_hashed": 5,
+                        "outbox_jobs_compacted": 5,
+                    },
+                ),
+            ]
+        )
+
+        gate = PAIRED.BASE.certified_send_work_from_report(report)
+
+        self.assertTrue(gate["passed"])
+        self.assertEqual(gate["reason_codes"], [])
+        self.assertEqual(gate["validators"]["validator-3"]["resumes_observed"], 2)
+        self.assertEqual(gate["validators"]["validator-3"]["migration_rounds"], [1])
+        self.assertEqual(gate["validators"]["validator-3"]["max_files_read"], 15)
+
     def test_certified_send_gate_rejects_repeated_and_late_migration(self) -> None:
         migration = {
             "outbox_tombstones_validated": 1,
