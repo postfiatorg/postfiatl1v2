@@ -108,6 +108,7 @@ nav:
       - Completed P0 Remediation: plans/completed/P0-COMPLETE-REMEDIATION-PLAN-20260716.md
       - Completed Capability Restoration: plans/completed/OPEN-SOURCE-CAPABILITY-RESTORATION-PLAN-20260716.md
   - Handoffs:
+      - Certified-Send Eager-Index Remediation: handoffs/2026-08-29___postfiatchad__certified_send_eager_index_remediation_complete.md
       - Storage Verifier And Campaign Reset: handoffs/2026-08-27___postfiatchad__storage_verifier_and_campaign_reset.md
       - Storage Candidate Review: handoffs/2026-08-27___dravlic__storage_candidate_review.md
       - Storage G4 Time-Budget Decision: handoffs/2026-08-28___dravlic__storage_g4_time_budget_decision.md

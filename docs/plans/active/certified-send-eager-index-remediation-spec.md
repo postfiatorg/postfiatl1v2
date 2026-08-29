@@ -1,6 +1,6 @@
 # Certified-Send Eager Index Migration: Option 1 Remediation Spec
 
-**Status:** Accepted and implemented locally — candidate freeze and evidence refresh in progress; no campaign authorized
+**Status:** Complete — node fix, runner fixture, source/binary freeze, G1/G2 refresh, and prepared-input rebind passed; no campaign authorized
 **Date:** 2026-08-29
 **Planning baseline:** `main` at `9f554001` (final G4 closeout docs); failed frozen candidate `e52e0502`
 **Runner lineage:** gate logic remains `15d059d1`; test-only successor `a3c7bea9285ab02871fd2111038764c6174b905b` on `postfiatchad/corrected-g4-vote-lock-gate`
@@ -196,21 +196,42 @@ new runner identity rather than `15d059d1`.
 
 ## Evidence and identity refresh (the accepted cost of Option 1)
 
-| Identity | Effect |
+| Identity | Final result |
 | --- | --- |
-| Candidate source `e52e0502` | Superseded by a new commit; the failed lineage stays preserved and labeled |
-| Candidate binary `6b130a…a82e` | New release build, new SHA-256 |
-| G1 candidate manifest `895ec7…9ffe` | Re-freeze against the new source and binary |
-| G2 safety manifest `dc01f9…78e7` (rollback, tamper) | Binary-sensitive refresh required |
-| G3 remediated height-915 replay (still open) | Must target the **new** binary; do not run it against `6b130a…a82e` first |
-| Prepared fleets (built by `ae658441`) | Data unchanged and reusable; the prepared-input manifest `b5be15…4ce8` and verification receipt must be re-bound to the new candidate identity |
-| Runner `15d059d1` | Gate logic unchanged; superseded for future campaign binding by test-only commit `a3c7bea9` because the recommended fixture was adopted |
+| Candidate source `e52e0502` | Superseded by pushed source `a92bb085ceb6a9f405e916608e6b7bb6010fcc9b`; the failed lineage stays preserved and labeled |
+| Candidate binary `6b130a…a82e` | Superseded by release binary SHA-256 `902773e00e5226dab9e027ebce2b932b2cf26509dba08424f6ebe46db985e182`, 51,977,656 bytes, embedded revision `a92bb085`, profile `release` |
+| G1 candidate manifest `895ec7…9ffe` | Refreshed PASS; SHA-256 `ed66a6375234f64d5aab863bccb6415b07c77fc5a3a028c5a6c2f01f41af0190` |
+| G2 safety manifest `dc01f9…78e7` | Refreshed PASS; manifest `dd300bcb8130f91ab54e26f969fe7dca37335d99cc5bf4ca78a939a79584d170`, rollback `9c32319693df1f55a6c1ecd75449fe8341d180317e11547c604f135741c3e8a5`, tamper/crash `6b63fe1070a2981e5d2720bf25b3cf3b8ad95beece364d9fd76579f027b146e0` |
+| G3 remediated height-915 replay | Still open; it must target binary `902773…e182` |
+| Prepared fleets (built by `ae658441`) | Reused without mutation; new prepared-input manifest `c9fb32e7c3cebcf2ef16a90843c63dd96b7ed0ebc3c20ce94d2fd21707e7da42` and independent 18-reference rehash receipt `6848d49d2488cd0730efd14863c5fe446a1f31827cec98346583beee8b9cbb58` |
+| Runner `15d059d1` | Gate logic unchanged; test-only successor `a3c7bea9285ab02871fd2111038764c6174b905b` passed 96 focused tests; rebuilt helper SHA-256 `ad70ca685cfaf1d0a67eb80f4805438c0e4363c8957598d1d884abd03690014a` embeds `a3c7bea9` / `release` |
 | Both failed campaigns' artifacts | Preserved, closed, never resumed or relabeled |
 
-Per the milestone time controls, implementation gets one focused test/smoke
-cycle capped at 30 minutes: the new fixtures plus the existing certified-send
-index tests. Do not run Orchard suites or the full workspace for this change;
-it does not cross an Orchard boundary.
+## Completion evidence
+
+- [x] Source `a92bb085` is pushed to `origin/main`; its implementation changes
+      only the no-outbox branch and adds the five required owner fixtures.
+- [x] `cargo fmt --all -- --check` passed.
+- [x] `cargo test -p postfiat-node completed_index_tests --locked` passed 15
+      tests with one intentional manual release check ignored.
+- [x] `cargo test -p postfiat-node certified_send --locked` passed 35 tests
+      with one intentional manual release check ignored.
+- [x] The release 1,024-tombstone proposer-rotation check passed: 2.064 ms
+      resume, zero retained payload reads/hashes, one bounded index read, and
+      2.020 ms proposer/peer delta.
+- [x] Runner, packager, and independent-verifier tests passed 96 tests on
+      pushed runner `a3c7bea9`; its only change from the gate-logic commit is
+      the accepted eager-migration fixture.
+- [x] The compatible six-validator rollback, 69-case tamper/crash matrix, and
+      two read-only `--verify-only` owner tests passed against the frozen
+      candidate.
+- [x] The prepared-input derivation and a separate read-only rehash of all 18
+      referenced files/directories passed. No measurement process was started.
+
+Per the milestone time controls, only the focused certified-send and runner
+suites were required. The full workspace and Orchard suites were deliberately
+not run: this change does not cross an Orchard boundary, and the accepted spec
+explicitly excludes those broad gates.
 
 ## Boundaries
 
