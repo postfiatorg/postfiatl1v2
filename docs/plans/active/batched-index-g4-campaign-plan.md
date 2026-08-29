@@ -1,6 +1,6 @@
 # Batched-Index G4 Qualification Campaign: Executable Plan
 
-**Status:** Authorized — one run; operator directed "get the testnet unblocked" on 2026-08-29 and this plan records that as the single run authorization
+**Status:** Executed once — **FAIL** (`ROUND_COVERAGE_RESIDUAL_EXCEEDED`, one round at 108.4 ms vs 100 ms in height-5000-window-5); no retry under this plan; see the [residual failure handoff](../../handoffs/2026-08-29___postfiatchad__batched_index_g4_residual_failure.md) and the [hygiene-corrected successor plan](hygiene-corrected-g4-campaign-plan.md)
 **Date:** 2026-08-29
 **Baseline:** `main` at `86929450` (frozen candidate); predecessor failure closed at `db595bf2`
 **Predecessors:** [Remediated G4 plan](remediated-g4-qualification-campaign-plan.md) (closed, failed),
