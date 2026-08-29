@@ -106,6 +106,77 @@ def _vote_lock_report(
     return {"iterations": iterations}
 
 
+def _vote_lock_report_with_targets(
+    rounds: list[tuple[list[str], dict[str, dict[str, object]]]],
+) -> dict[str, object]:
+    iterations = []
+    for target_ids, overrides in rounds:
+        targets = []
+        for node_id in target_ids:
+            timing: dict[str, object] = {
+                "vote_lock_files_examined": 3,
+                "vote_lock_bytes_decoded": 4_096,
+                "vote_lock_migration_performed": False,
+            }
+            timing.update(overrides.get(node_id, {}))
+            targets.append(
+                {
+                    "target": node_id,
+                    "result": "ok",
+                    "vote_request_breakdown": {
+                        "remote_handling": {"block_vote_breakdown": timing}
+                    },
+                }
+            )
+        iterations.append({"round_timings": {"vote_request_targets": targets}})
+    return {"iterations": iterations}
+
+
+def _certified_send_report(
+    rounds: list[tuple[str, dict[str, object]]],
+) -> dict[str, object]:
+    iterations = []
+    for node_id, overrides in rounds:
+        timings: dict[str, object] = {
+            "outbox_resume_node_id": node_id,
+            "outbox_tombstones_validated": 0,
+            "outbox_files_read": 0,
+            "outbox_bytes_hashed": 0,
+            "outbox_index_files_read": 1,
+            "outbox_index_bytes_read": 128,
+            "outbox_completed_entries_enumerated": 0,
+            "outbox_jobs_compacted": 0,
+            "outbox_jobs_pruned": 0,
+            "outbox_index_migration_performed": False,
+        }
+        timings.update(overrides)
+        iterations.append(
+            {
+                "source_node": "validator-0",
+                "round_timings": timings,
+            }
+        )
+    return {"iterations": iterations}
+
+
+def _round_coverage_report(residuals_ms: list[float]) -> dict[str, object]:
+    iterations = []
+    for residual_ms in residuals_ms:
+        timings: dict[str, object] = {
+            field: 10.0 for field in PAIRED.BASE.ROUND_COVERAGE_STAGE_FIELDS
+        }
+        timings["shielded_verifier_prewarm"] = {"total_ms": 5.0}
+        timings["total_ms"] = (
+            5.0
+            + 10.0 * len(PAIRED.BASE.ROUND_COVERAGE_STAGE_FIELDS)
+            + residual_ms
+        )
+        iterations.append(
+            {"source_node": "validator-0", "round_timings": timings}
+        )
+    return {"iterations": iterations}
+
+
 def _synthetic_fleet(root: Path, height: int) -> tuple[Path, str]:
     fleet = root / "prepared-fleets" / f"canonical-height-{height}"
     for index in range(PAIRED.BASE.VALIDATORS):
@@ -259,6 +330,8 @@ def _synthetic_prepared_campaign(root: Path) -> dict[str, Any]:
             "selected_runner_sha256": "1" * 64,
             "shared_runner_sha256": "2" * 64,
             "vote_lock_work_gate_schema": PAIRED.BASE.VOTE_LOCK_WORK_GATE_SCHEMA,
+            "certified_send_work_gate_schema": PAIRED.BASE.CERTIFIED_SEND_WORK_GATE_SCHEMA,
+            "round_coverage_gate_schema": PAIRED.BASE.ROUND_COVERAGE_GATE_SCHEMA,
         },
         "public_inputs": {
             "validator_public_identities": identities,
@@ -435,6 +508,184 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
                 and validator["migration_rounds"] == []
                 for validator in gate["validators"].values()
             )
+        )
+
+    def test_vote_lock_gate_allows_each_validators_first_use_after_restore(
+        self,
+    ) -> None:
+        report = _vote_lock_report_with_targets(
+            [
+                ([f"validator-{index}" for index in range(5)], {}),
+                (
+                    [f"validator-{index}" for index in range(1, 6)],
+                    {
+                        "validator-5": {
+                            "vote_lock_files_examined": 4_999,
+                            "vote_lock_bytes_decoded": 21_000_000,
+                            "vote_lock_migration_performed": True,
+                        }
+                    },
+                ),
+            ]
+        )
+
+        gate = PAIRED.BASE.vote_lock_work_from_report(report)
+
+        self.assertTrue(gate["passed"])
+        self.assertEqual(gate["validators"]["validator-5"]["migration_rounds"], [2])
+        self.assertEqual(gate["validators"]["validator-5"]["votes_observed"], 1)
+
+    def test_certified_send_gate_allows_first_use_in_a_later_global_round(
+        self,
+    ) -> None:
+        report = _certified_send_report(
+            [
+                ("validator-0", {}),
+                (
+                    "validator-5",
+                    {
+                        "outbox_tombstones_validated": 1_024,
+                        "outbox_files_read": 3_072,
+                        "outbox_bytes_hashed": 1_024,
+                        "outbox_index_files_read": 0,
+                        "outbox_index_bytes_read": 0,
+                        "outbox_completed_entries_enumerated": 1_024,
+                        "outbox_index_migration_performed": True,
+                    },
+                ),
+            ]
+        )
+
+        gate = PAIRED.BASE.certified_send_work_from_report(report)
+
+        self.assertTrue(gate["passed"])
+        self.assertEqual(gate["validators"]["validator-5"]["migration_rounds"], [2])
+        self.assertEqual(gate["validators"]["validator-5"]["resumes_observed"], 1)
+
+    def test_certified_send_gate_rejects_repeated_and_late_migration(self) -> None:
+        migration = {
+            "outbox_tombstones_validated": 1,
+            "outbox_files_read": 3,
+            "outbox_bytes_hashed": 1,
+            "outbox_index_files_read": 0,
+            "outbox_index_bytes_read": 0,
+            "outbox_completed_entries_enumerated": 1,
+            "outbox_index_migration_performed": True,
+        }
+        report = _certified_send_report(
+            [("validator-0", migration), ("validator-0", migration)]
+        )
+
+        gate = PAIRED.BASE.certified_send_work_from_report(report)
+
+        self.assertFalse(gate["passed"])
+        self.assertIn(
+            PAIRED.BASE.CERTIFIED_SEND_REASON_MIGRATION_REPEATED,
+            gate["reason_codes"],
+        )
+        self.assertIn(
+            PAIRED.BASE.CERTIFIED_SEND_REASON_MIGRATION_LATE,
+            gate["reason_codes"],
+        )
+
+    def test_certified_send_gate_rejects_untouched_tombstone_validation(
+        self,
+    ) -> None:
+        report = _certified_send_report(
+            [
+                (
+                    "validator-0",
+                    {
+                        "outbox_tombstones_validated": 1,
+                        "outbox_files_read": 3,
+                        "outbox_bytes_hashed": 1,
+                    },
+                )
+            ]
+        )
+
+        gate = PAIRED.BASE.certified_send_work_from_report(report)
+
+        self.assertFalse(gate["passed"])
+        self.assertEqual(
+            gate["reason_codes"],
+            [PAIRED.BASE.CERTIFIED_SEND_REASON_UNTOUCHED_VALIDATION],
+        )
+
+    def test_certified_send_gate_rejects_unbounded_index_work(self) -> None:
+        report = _certified_send_report(
+            [
+                (
+                    "validator-0",
+                    {
+                        "outbox_index_files_read": 2,
+                        "outbox_index_bytes_read": 128,
+                    },
+                )
+            ]
+        )
+
+        gate = PAIRED.BASE.certified_send_work_from_report(report)
+
+        self.assertFalse(gate["passed"])
+        self.assertEqual(
+            gate["reason_codes"],
+            [PAIRED.BASE.CERTIFIED_SEND_REASON_INDEX_WORK_EXCEEDED],
+        )
+
+    def test_certified_send_gate_rejects_nonmigration_directory_enumeration(
+        self,
+    ) -> None:
+        report = _certified_send_report(
+            [
+                (
+                    "validator-0",
+                    {"outbox_completed_entries_enumerated": 1},
+                )
+            ]
+        )
+
+        gate = PAIRED.BASE.certified_send_work_from_report(report)
+
+        self.assertFalse(gate["passed"])
+        self.assertEqual(
+            gate["reason_codes"],
+            [PAIRED.BASE.CERTIFIED_SEND_REASON_INDEX_WORK_EXCEEDED],
+        )
+
+    def test_certified_send_gate_defaults_absent_legacy_counters(self) -> None:
+        report = {
+            "iterations": [
+                {
+                    "round_timings": {
+                        "outbox_resume_node_id": "validator-0",
+                    }
+                }
+            ]
+        }
+
+        gate = PAIRED.BASE.certified_send_work_from_report(report)
+
+        self.assertTrue(gate["passed"])
+        self.assertEqual(gate["validators"]["validator-0"]["resumes_observed"], 1)
+
+    def test_round_coverage_gate_accepts_small_residual(self) -> None:
+        gate = PAIRED.BASE.round_coverage_from_report(
+            _round_coverage_report([20.0])
+        )
+
+        self.assertTrue(gate["passed"])
+        self.assertEqual(gate["max_residual_ms"], 20.0)
+
+    def test_round_coverage_gate_rejects_hidden_outbox_scale_work(self) -> None:
+        gate = PAIRED.BASE.round_coverage_from_report(
+            _round_coverage_report([1_200.0])
+        )
+
+        self.assertFalse(gate["passed"])
+        self.assertEqual(
+            gate["reason_codes"],
+            [PAIRED.BASE.ROUND_COVERAGE_REASON_RESIDUAL_EXCEEDED],
         )
 
     def test_release_configuration_is_the_time_budgeted_matrix(self) -> None:

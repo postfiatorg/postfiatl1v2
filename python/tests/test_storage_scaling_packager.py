@@ -74,6 +74,26 @@ def _campaign(root: Path, *, label: str = "height-50-window-1") -> Path:
                     "passed": True,
                 },
             )
+            certified_send = (
+                root / "raw" / lane / f"height-{height}.certified-send-work.json"
+            )
+            _write_json(
+                certified_send,
+                {
+                    "schema": "postfiat-storage-certified-send-work-gate-v1",
+                    "passed": True,
+                },
+            )
+            round_coverage = (
+                root / "raw" / lane / f"height-{height}.round-coverage.json"
+            )
+            _write_json(
+                round_coverage,
+                {
+                    "schema": "postfiat-storage-round-coverage-gate-v1",
+                    "passed": True,
+                },
+            )
             window_label = (
                 label
                 if lane == "selected-indexed" and height == 50
@@ -97,6 +117,18 @@ def _campaign(root: Path, *, label: str = "height-50-window-1") -> Path:
                                 vote_lock.relative_to(root).as_posix()
                             ),
                             "vote_lock_work_receipt_sha256": _sha256(vote_lock),
+                            "certified_send_work_receipt": (
+                                certified_send.relative_to(root).as_posix()
+                            ),
+                            "certified_send_work_receipt_sha256": _sha256(
+                                certified_send
+                            ),
+                            "round_coverage_receipt": (
+                                round_coverage.relative_to(root).as_posix()
+                            ),
+                            "round_coverage_receipt_sha256": _sha256(
+                                round_coverage
+                            ),
                         }
                     ],
                 }
@@ -191,9 +223,13 @@ class StorageScalingPackagerTests(unittest.TestCase):
                     normalized = packet / window["normalized_report"]
                     resources = packet / window["resource_samples"]
                     vote_lock = packet / window["vote_lock_work_receipt"]
+                    certified_send = packet / window["certified_send_work_receipt"]
+                    round_coverage = packet / window["round_coverage_receipt"]
                     self.assertTrue(normalized.is_file())
                     self.assertTrue(resources.is_file())
                     self.assertTrue(vote_lock.is_file())
+                    self.assertTrue(certified_send.is_file())
+                    self.assertTrue(round_coverage.is_file())
                     self.assertEqual(
                         _sha256(normalized),
                         window["normalized_report_sha256"],
@@ -205,6 +241,14 @@ class StorageScalingPackagerTests(unittest.TestCase):
                     self.assertEqual(
                         _sha256(vote_lock),
                         window["vote_lock_work_receipt_sha256"],
+                    )
+                    self.assertEqual(
+                        _sha256(certified_send),
+                        window["certified_send_work_receipt_sha256"],
+                    )
+                    self.assertEqual(
+                        _sha256(round_coverage),
+                        window["round_coverage_receipt_sha256"],
                     )
                     self.assertEqual(
                         window["signed_transfer_corpus"],

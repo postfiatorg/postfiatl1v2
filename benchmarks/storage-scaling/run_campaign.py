@@ -718,10 +718,45 @@ VOTE_LOCK_MAX_BYTES_DECODED = 4_096
 VOTE_LOCK_REASON_INVALID_TELEMETRY = "VOTE_LOCK_TELEMETRY_INVALID"
 VOTE_LOCK_REASON_MIGRATION_REPEATED = "VOTE_LOCK_MIGRATION_REPEATED"
 VOTE_LOCK_REASON_MIGRATION_LATE = (
-    "VOTE_LOCK_MIGRATION_AFTER_FIRST_FINALIZED_ROUND"
+    "VOTE_LOCK_MIGRATION_AFTER_FIRST_VALIDATOR_RESERVATION"
 )
 VOTE_LOCK_REASON_FILES_EXCEEDED = "VOTE_LOCK_FILES_EXAMINED_EXCEEDED"
 VOTE_LOCK_REASON_BYTES_EXCEEDED = "VOTE_LOCK_BYTES_DECODED_EXCEEDED"
+CERTIFIED_SEND_WORK_GATE_SCHEMA = "postfiat-storage-certified-send-work-gate-v1"
+CERTIFIED_SEND_MAX_JOBS_COMPACTED = VALIDATORS - 1
+CERTIFIED_SEND_MAX_JOBS_PRUNED = VALIDATORS - 1
+CERTIFIED_SEND_MAX_INDEX_FILES_READ = 1
+CERTIFIED_SEND_MAX_INDEX_BYTES_READ = 4 * 1024 * 1024
+CERTIFIED_SEND_MAX_COMPLETED_ENTRIES_ENUMERATED = 2_048
+CERTIFIED_SEND_MAX_HASHED_BYTES_PER_TOMBSTONE = 64 * 1024 + 2 * 4 * 1024 * 1024
+CERTIFIED_SEND_REASON_INVALID_TELEMETRY = "CERTIFIED_SEND_TELEMETRY_INVALID"
+CERTIFIED_SEND_REASON_MIGRATION_REPEATED = "CERTIFIED_SEND_INDEX_MIGRATION_REPEATED"
+CERTIFIED_SEND_REASON_MIGRATION_LATE = (
+    "CERTIFIED_SEND_INDEX_MIGRATION_AFTER_FIRST_VALIDATOR_RESUME"
+)
+CERTIFIED_SEND_REASON_UNTOUCHED_VALIDATION = (
+    "CERTIFIED_SEND_UNTOUCHED_TOMBSTONE_VALIDATION"
+)
+CERTIFIED_SEND_REASON_FILES_EXCEEDED = "CERTIFIED_SEND_FILES_READ_EXCEEDED"
+CERTIFIED_SEND_REASON_BYTES_EXCEEDED = "CERTIFIED_SEND_BYTES_HASHED_EXCEEDED"
+CERTIFIED_SEND_REASON_INDEX_WORK_EXCEEDED = "CERTIFIED_SEND_INDEX_WORK_EXCEEDED"
+ROUND_COVERAGE_GATE_SCHEMA = "postfiat-storage-round-coverage-gate-v1"
+ROUND_COVERAGE_MAX_RESIDUAL_MS = 100.0
+ROUND_COVERAGE_REASON_INVALID_TELEMETRY = "ROUND_COVERAGE_TELEMETRY_INVALID"
+ROUND_COVERAGE_REASON_RESIDUAL_EXCEEDED = "ROUND_COVERAGE_RESIDUAL_EXCEEDED"
+ROUND_COVERAGE_STAGE_FIELDS = (
+    "outbox_resume_ms",
+    "setup_ms",
+    "proposal_ms",
+    "target_selection_ms",
+    "vote_requests_ms",
+    "certificate_ms",
+    "local_apply_ms",
+    "post_apply_status_ms",
+    "local_commit_publish_ms",
+    "certified_sends_ms",
+    "verification_ms",
+)
 
 
 def add_counter_fields(
@@ -1008,7 +1043,10 @@ def vote_lock_work_from_report(report: dict[str, Any]) -> dict[str, Any]:
                         bytes_decoded=bytes_decoded,
                         migration_performed=True,
                     )
-                if round_number != 1:
+                # Portable restores do not make every validator reserve a vote
+                # lock in finalized round 1. Migration authority belongs to each
+                # validator's first observed reservation, not to a global round.
+                if int(summary["votes_observed"]) != 1:
                     add_violation(
                         summary,
                         VOTE_LOCK_REASON_MIGRATION_LATE,
@@ -1059,7 +1097,7 @@ def vote_lock_work_from_report(report: dict[str, Any]) -> dict[str, Any]:
         "reason_codes": sorted(reason_codes),
         "limits": {
             "migration_max_per_validator_per_window_restore": 1,
-            "migration_allowed_finalized_round": 1,
+            "migration_allowed_validator_reservation_observation": 1,
             "non_migration_max_files_examined": VOTE_LOCK_MAX_FILES_EXAMINED,
             "non_migration_max_bytes_decoded": VOTE_LOCK_MAX_BYTES_DECODED,
             "legacy_absent_fields_default_to_zero_false": True,
@@ -1067,6 +1105,341 @@ def vote_lock_work_from_report(report: dict[str, Any]) -> dict[str, Any]:
         "rounds_observed": len(iterations),
         "validators_observed": len(public_validators),
         "validators": public_validators,
+    }
+
+
+def certified_send_work_from_report(report: dict[str, Any]) -> dict[str, Any]:
+    iterations = report.get("iterations")
+    if not isinstance(iterations, list):
+        raise RuntimeError("benchmark report omitted iterations")
+
+    validators: dict[str, dict[str, Any]] = {}
+    reason_codes: set[str] = set()
+
+    def validator_summary(node_id: str) -> dict[str, Any]:
+        return validators.setdefault(
+            node_id,
+            {
+                "resumes_observed": 0,
+                "migration_rounds": [],
+                "max_tombstones_validated": 0,
+                "max_files_read": 0,
+                "max_bytes_hashed": 0,
+                "max_index_files_read": 0,
+                "max_index_bytes_read": 0,
+                "max_completed_entries_enumerated": 0,
+                "reason_codes": set(),
+                "violations": [],
+            },
+        )
+
+    def violate(
+        summary: dict[str, Any],
+        reason_code: str,
+        round_number: int,
+        observed: dict[str, Any],
+    ) -> None:
+        reason_codes.add(reason_code)
+        summary["reason_codes"].add(reason_code)
+        summary["violations"].append(
+            {
+                "reason_code": reason_code,
+                "finalized_round": round_number,
+                **observed,
+            }
+        )
+
+    counter_fields = (
+        "outbox_tombstones_validated",
+        "outbox_files_read",
+        "outbox_bytes_hashed",
+        "outbox_index_files_read",
+        "outbox_index_bytes_read",
+        "outbox_completed_entries_enumerated",
+        "outbox_jobs_compacted",
+        "outbox_jobs_pruned",
+    )
+    for round_number, iteration in enumerate(iterations, start=1):
+        if not isinstance(iteration, dict):
+            raise RuntimeError("benchmark iteration is not an object")
+        timings = iteration.get("round_timings")
+        if not isinstance(timings, dict):
+            raise RuntimeError("benchmark iteration omitted round timings")
+        node_id = str(timings.get("outbox_resume_node_id", ""))
+        if node_id not in {f"validator-{index}" for index in range(VALIDATORS)}:
+            raise RuntimeError("benchmark iteration resume validator identity is invalid")
+        summary = validator_summary(node_id)
+        summary["resumes_observed"] += 1
+        values: dict[str, int] = {}
+        valid = True
+        for field in counter_fields:
+            raw = timings.get(field, 0)
+            if not isinstance(raw, int) or isinstance(raw, bool) or raw < 0:
+                valid = False
+            else:
+                values[field] = raw
+        migration = timings.get("outbox_index_migration_performed", False)
+        if not isinstance(migration, bool):
+            valid = False
+        observed = {
+            "validator_resume_observation": int(summary["resumes_observed"]),
+            "tombstones_validated": values.get("outbox_tombstones_validated"),
+            "files_read": values.get("outbox_files_read"),
+            "bytes_hashed": values.get("outbox_bytes_hashed"),
+            "index_files_read": values.get("outbox_index_files_read"),
+            "index_bytes_read": values.get("outbox_index_bytes_read"),
+            "completed_entries_enumerated": values.get(
+                "outbox_completed_entries_enumerated"
+            ),
+            "jobs_compacted": values.get("outbox_jobs_compacted"),
+            "jobs_pruned": values.get("outbox_jobs_pruned"),
+            "index_migration_performed": migration if isinstance(migration, bool) else None,
+        }
+        if not valid:
+            violate(
+                summary,
+                CERTIFIED_SEND_REASON_INVALID_TELEMETRY,
+                round_number,
+                observed,
+            )
+            continue
+
+        validated = values["outbox_tombstones_validated"]
+        files_read = values["outbox_files_read"]
+        bytes_hashed = values["outbox_bytes_hashed"]
+        index_files = values["outbox_index_files_read"]
+        index_bytes = values["outbox_index_bytes_read"]
+        enumerated = values["outbox_completed_entries_enumerated"]
+        compacted = values["outbox_jobs_compacted"]
+        pruned = values["outbox_jobs_pruned"]
+        summary["max_tombstones_validated"] = max(
+            int(summary["max_tombstones_validated"]), validated
+        )
+        summary["max_files_read"] = max(int(summary["max_files_read"]), files_read)
+        summary["max_bytes_hashed"] = max(
+            int(summary["max_bytes_hashed"]), bytes_hashed
+        )
+        summary["max_index_files_read"] = max(
+            int(summary["max_index_files_read"]), index_files
+        )
+        summary["max_index_bytes_read"] = max(
+            int(summary["max_index_bytes_read"]), index_bytes
+        )
+        summary["max_completed_entries_enumerated"] = max(
+            int(summary["max_completed_entries_enumerated"]), enumerated
+        )
+
+        if migration:
+            summary["migration_rounds"].append(round_number)
+            if len(summary["migration_rounds"]) > 1:
+                violate(
+                    summary,
+                    CERTIFIED_SEND_REASON_MIGRATION_REPEATED,
+                    round_number,
+                    observed,
+                )
+            # A restored fleet can first invoke a validator's resume path in a
+            # later finalized round. The allowance is therefore per-validator
+            # first use, never a global round-number waiver.
+            if int(summary["resumes_observed"]) != 1:
+                violate(
+                    summary,
+                    CERTIFIED_SEND_REASON_MIGRATION_LATE,
+                    round_number,
+                    observed,
+                )
+        elif validated != compacted + pruned:
+            violate(
+                summary,
+                CERTIFIED_SEND_REASON_UNTOUCHED_VALIDATION,
+                round_number,
+                observed,
+            )
+        if migration and validated != enumerated + compacted + pruned:
+            violate(
+                summary,
+                CERTIFIED_SEND_REASON_UNTOUCHED_VALIDATION,
+                round_number,
+                observed,
+            )
+
+        if (
+            compacted > CERTIFIED_SEND_MAX_JOBS_COMPACTED
+            or pruned > CERTIFIED_SEND_MAX_JOBS_PRUNED
+        ):
+            violate(
+                summary,
+                CERTIFIED_SEND_REASON_UNTOUCHED_VALIDATION,
+                round_number,
+                observed,
+            )
+        if files_read != validated * 3:
+            violate(
+                summary,
+                CERTIFIED_SEND_REASON_FILES_EXCEEDED,
+                round_number,
+                observed,
+            )
+        if bytes_hashed > validated * CERTIFIED_SEND_MAX_HASHED_BYTES_PER_TOMBSTONE:
+            violate(
+                summary,
+                CERTIFIED_SEND_REASON_BYTES_EXCEEDED,
+                round_number,
+                observed,
+            )
+        if (
+            index_files > CERTIFIED_SEND_MAX_INDEX_FILES_READ
+            or index_bytes > CERTIFIED_SEND_MAX_INDEX_BYTES_READ
+            or enumerated > CERTIFIED_SEND_MAX_COMPLETED_ENTRIES_ENUMERATED
+            or (not migration and enumerated != 0)
+            or (index_files == 0) != (index_bytes == 0)
+        ):
+            violate(
+                summary,
+                CERTIFIED_SEND_REASON_INDEX_WORK_EXCEEDED,
+                round_number,
+                observed,
+            )
+
+    public_validators: dict[str, dict[str, Any]] = {}
+    for node_id, summary in sorted(validators.items()):
+        validator_reasons = sorted(summary["reason_codes"])
+        public_validators[node_id] = {
+            "passed": not validator_reasons,
+            "resumes_observed": int(summary["resumes_observed"]),
+            "migration_rounds": list(summary["migration_rounds"]),
+            "max_tombstones_validated": int(summary["max_tombstones_validated"]),
+            "max_files_read": int(summary["max_files_read"]),
+            "max_bytes_hashed": int(summary["max_bytes_hashed"]),
+            "max_index_files_read": int(summary["max_index_files_read"]),
+            "max_index_bytes_read": int(summary["max_index_bytes_read"]),
+            "max_completed_entries_enumerated": int(
+                summary["max_completed_entries_enumerated"]
+            ),
+            "reason_codes": validator_reasons,
+            "violations": list(summary["violations"]),
+        }
+    return {
+        "schema": CERTIFIED_SEND_WORK_GATE_SCHEMA,
+        "passed": not reason_codes,
+        "reason_codes": sorted(reason_codes),
+        "limits": {
+            "migration_max_per_validator_per_window_restore": 1,
+            "migration_allowed_validator_resume_observation": 1,
+            "max_jobs_compacted_per_resume": CERTIFIED_SEND_MAX_JOBS_COMPACTED,
+            "max_jobs_pruned_per_resume": CERTIFIED_SEND_MAX_JOBS_PRUNED,
+            "files_per_validated_tombstone": 3,
+            "max_hashed_bytes_per_tombstone": CERTIFIED_SEND_MAX_HASHED_BYTES_PER_TOMBSTONE,
+            "max_index_files_read": CERTIFIED_SEND_MAX_INDEX_FILES_READ,
+            "max_index_bytes_read": CERTIFIED_SEND_MAX_INDEX_BYTES_READ,
+            "max_completed_entries_enumerated": CERTIFIED_SEND_MAX_COMPLETED_ENTRIES_ENUMERATED,
+            "legacy_absent_fields_default_to_zero_false": True,
+        },
+        "rounds_observed": len(iterations),
+        "validators_observed": len(public_validators),
+        "validators": public_validators,
+    }
+
+
+def round_coverage_from_report(report: dict[str, Any]) -> dict[str, Any]:
+    iterations = report.get("iterations")
+    if not isinstance(iterations, list):
+        raise RuntimeError("benchmark report omitted iterations")
+    reason_codes: set[str] = set()
+    rows: list[dict[str, Any]] = []
+    max_residual = 0.0
+    for round_number, iteration in enumerate(iterations, start=1):
+        valid = isinstance(iteration, dict)
+        timings = iteration.get("round_timings") if valid else None
+        valid = valid and isinstance(timings, dict)
+        total_raw = timings.get("total_ms") if isinstance(timings, dict) else None
+        prewarm = (
+            timings.get("shielded_verifier_prewarm")
+            if isinstance(timings, dict)
+            else None
+        )
+        prewarm_raw = prewarm.get("total_ms") if isinstance(prewarm, dict) else None
+        stage_values: dict[str, float] = {}
+        if (
+            not isinstance(total_raw, (int, float))
+            or isinstance(total_raw, bool)
+            or not math.isfinite(float(total_raw))
+            or float(total_raw) < 0
+            or not isinstance(prewarm_raw, (int, float))
+            or isinstance(prewarm_raw, bool)
+            or not math.isfinite(float(prewarm_raw))
+            or float(prewarm_raw) < 0
+        ):
+            valid = False
+        if isinstance(timings, dict):
+            for field in ROUND_COVERAGE_STAGE_FIELDS:
+                raw = timings.get(field, 0 if field == "outbox_resume_ms" else None)
+                if (
+                    not isinstance(raw, (int, float))
+                    or isinstance(raw, bool)
+                    or not math.isfinite(float(raw))
+                    or float(raw) < 0
+                ):
+                    valid = False
+                else:
+                    stage_values[field] = float(raw)
+        if not valid:
+            reason_codes.add(ROUND_COVERAGE_REASON_INVALID_TELEMETRY)
+            rows.append(
+                {
+                    "finalized_round": round_number,
+                    "source_node": (
+                        str(iteration.get("source_node", ""))
+                        if isinstance(iteration, dict)
+                        else ""
+                    ),
+                    "passed": False,
+                    "reason_code": ROUND_COVERAGE_REASON_INVALID_TELEMETRY,
+                }
+            )
+            continue
+        total_ms = float(total_raw)
+        named_ms = float(prewarm_raw) + sum(stage_values.values())
+        residual_ms = total_ms - named_ms
+        max_residual = max(max_residual, residual_ms)
+        passed = -1.0 <= residual_ms <= ROUND_COVERAGE_MAX_RESIDUAL_MS
+        reason_code = None if passed else ROUND_COVERAGE_REASON_RESIDUAL_EXCEEDED
+        if reason_code is not None:
+            reason_codes.add(reason_code)
+        rows.append(
+            {
+                "finalized_round": round_number,
+                "source_node": str(iteration.get("source_node", "")),
+                "total_ms": total_ms,
+                "named_stage_ms": named_ms,
+                "residual_ms": residual_ms,
+                "passed": passed,
+                "reason_code": reason_code,
+            }
+        )
+    return {
+        "schema": ROUND_COVERAGE_GATE_SCHEMA,
+        "passed": not reason_codes,
+        "reason_codes": sorted(reason_codes),
+        "limits": {
+            "max_unattributed_residual_ms": ROUND_COVERAGE_MAX_RESIDUAL_MS,
+            "minimum_residual_ms": -1.0,
+            "named_stage_fields": list(ROUND_COVERAGE_STAGE_FIELDS),
+            "shielded_verifier_prewarm_field": "shielded_verifier_prewarm.total_ms",
+            "overlapping_diagnostic_fields_excluded": [
+                "local_vote_ms",
+                "client_visible_finality_ms",
+                "legacy_certificate_ms",
+                "consensus_v2_prepare_qc_ms",
+                "consensus_v2_precommit_votes_ms",
+                "consensus_v2_precommit_qc_ms",
+                "consensus_v2_commit_assembly_ms",
+                "consensus_v2_commit_attach_write_ms",
+            ],
+        },
+        "rounds_observed": len(iterations),
+        "max_residual_ms": max_residual,
+        "rounds": rows,
     }
 
 
@@ -1704,6 +2077,28 @@ def run_rounds(
             else VOTE_LOCK_REASON_INVALID_TELEMETRY
         )
         raise RuntimeError(f"{reason_code}: {label} vote-lock work gate failed")
+    certified_send_work = certified_send_work_from_report(report)
+    certified_send_work_path = root / "certified-send-work" / f"{label}.json"
+    write_json(certified_send_work_path, certified_send_work)
+    if certified_send_work["passed"] is not True:
+        reason_codes = certified_send_work["reason_codes"]
+        reason_code = (
+            str(reason_codes[0])
+            if isinstance(reason_codes, list) and reason_codes
+            else CERTIFIED_SEND_REASON_INVALID_TELEMETRY
+        )
+        raise RuntimeError(f"{reason_code}: {label} certified-send work gate failed")
+    round_coverage = round_coverage_from_report(report)
+    round_coverage_path = root / "round-coverage" / f"{label}.json"
+    write_json(round_coverage_path, round_coverage)
+    if round_coverage["passed"] is not True:
+        reason_codes = round_coverage["reason_codes"]
+        reason_code = (
+            str(reason_codes[0])
+            if isinstance(reason_codes, list) and reason_codes
+            else ROUND_COVERAGE_REASON_INVALID_TELEMETRY
+        )
+        raise RuntimeError(f"{reason_code}: {label} round-coverage gate failed")
     legacy_work = counters["legacy"]
     if selected_transactional:
         backend_work_gate_pass = (
@@ -1844,6 +2239,16 @@ def run_rounds(
         "vote_lock_work": vote_lock_work,
         "vote_lock_work_receipt": vote_lock_work_path.relative_to(root).as_posix(),
         "vote_lock_work_receipt_sha256": digest(vote_lock_work_path),
+        "certified_send_work_gate_pass": certified_send_work["passed"],
+        "certified_send_work_gate_reason_codes": certified_send_work["reason_codes"],
+        "certified_send_work": certified_send_work,
+        "certified_send_work_receipt": certified_send_work_path.relative_to(root).as_posix(),
+        "certified_send_work_receipt_sha256": digest(certified_send_work_path),
+        "round_coverage_gate_pass": round_coverage["passed"],
+        "round_coverage_gate_reason_codes": round_coverage["reason_codes"],
+        "round_coverage": round_coverage,
+        "round_coverage_receipt": round_coverage_path.relative_to(root).as_posix(),
+        "round_coverage_receipt_sha256": digest(round_coverage_path),
         "zero_full_history_reads": (
             counters["full_history_records_read"] == 0
             and counters["full_history_bytes_read"] == 0

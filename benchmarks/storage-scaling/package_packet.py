@@ -412,6 +412,34 @@ def copy_performance(packet: Path, source: Path) -> Path:
                 window["vote_lock_work_receipt_sha256"] = sha256(
                     vote_lock_destination
                 )
+                for field, directory, label_text in (
+                    (
+                        "certified_send_work_receipt",
+                        "certified-send-work",
+                        "performance certified-send work receipt",
+                    ),
+                    (
+                        "round_coverage_receipt",
+                        "round-coverage",
+                        "performance round-coverage receipt",
+                    ),
+                ):
+                    source = resolve_campaign_file(
+                        campaign_root,
+                        window.get(field),
+                        window.get(f"{field}_sha256"),
+                        label_text,
+                    )
+                    target = (
+                        packet
+                        / "performance"
+                        / directory
+                        / lane_name
+                        / f"{label}.json"
+                    )
+                    copy_file(source, target)
+                    window[field] = target.relative_to(packet).as_posix()
+                    window[f"{field}_sha256"] = sha256(target)
     report["rows"] = lanes["selected-indexed"]["rows"]
     destination = packet / "artifacts" / "performance.json"
     write_json(destination, report)

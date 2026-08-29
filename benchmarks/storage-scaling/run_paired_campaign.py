@@ -248,7 +248,13 @@ def prefix_report_references(
     prefix = lane_root.relative_to(campaign_root)
     for row in rows:
         for window in row["windows"]:
-            for field in ("normalized_report", "resource_samples"):
+            for field in (
+                "normalized_report",
+                "resource_samples",
+                "vote_lock_work_receipt",
+                "certified_send_work_receipt",
+                "round_coverage_receipt",
+            ):
                 relative = Path(str(window[field]))
                 window[field] = (prefix / relative).as_posix()
             corpus = Path(str(window["signed_transfer_corpus"]))
@@ -338,6 +344,8 @@ def runner_bindings() -> dict[str, str]:
         "selected_runner_sha256": sha256(BASE_RUNNER),
         "shared_runner_sha256": sha256(BASE.SHARED_RUNNER),
         "vote_lock_work_gate_schema": BASE.VOTE_LOCK_WORK_GATE_SCHEMA,
+        "certified_send_work_gate_schema": BASE.CERTIFIED_SEND_WORK_GATE_SCHEMA,
+        "round_coverage_gate_schema": BASE.ROUND_COVERAGE_GATE_SCHEMA,
     }
 
 
@@ -506,9 +514,15 @@ def export_prepared_input_manifest(
             "selected_runner_sha256",
             "shared_runner_sha256",
             "vote_lock_work_gate_schema",
+            "certified_send_work_gate_schema",
+            "round_coverage_gate_schema",
         }
         or bindings.get("vote_lock_work_gate_schema")
         != BASE.VOTE_LOCK_WORK_GATE_SCHEMA
+        or bindings.get("certified_send_work_gate_schema")
+        != BASE.CERTIFIED_SEND_WORK_GATE_SCHEMA
+        or bindings.get("round_coverage_gate_schema")
+        != BASE.ROUND_COVERAGE_GATE_SCHEMA
         or re.fullmatch(r"[0-9a-f]{96}", str(bindings.get("spec_sha3_384", "")))
         is None
         or any(
@@ -1085,8 +1099,14 @@ def validate_prepared_input_manifest(
             or helper_build.get("profile") != "release"
             or (
                 require_gate
-                and identity_runner.get("vote_lock_work_gate_schema")
-                != BASE.VOTE_LOCK_WORK_GATE_SCHEMA
+                and (
+                    identity_runner.get("vote_lock_work_gate_schema")
+                    != BASE.VOTE_LOCK_WORK_GATE_SCHEMA
+                    or identity_runner.get("certified_send_work_gate_schema")
+                    != BASE.CERTIFIED_SEND_WORK_GATE_SCHEMA
+                    or identity_runner.get("round_coverage_gate_schema")
+                    != BASE.ROUND_COVERAGE_GATE_SCHEMA
+                )
             )
             or re.fullmatch(
                 r"[0-9a-f]{96}",
@@ -1716,7 +1736,13 @@ def verify_completed_unit(
             or result_prepared_sha256 != result.get("result_prepared_fleet_sha256")
         ):
             raise ValueError("completed unit result prepared fleet changed")
-    for field in ("normalized_report", "resource_samples"):
+    for field in (
+        "normalized_report",
+        "resource_samples",
+        "vote_lock_work_receipt",
+        "certified_send_work_receipt",
+        "round_coverage_receipt",
+    ):
         artifact = (runner_root / str(result.get(field, ""))).resolve()
         expected = result.get(f"{field}_sha256")
         if (
@@ -3224,6 +3250,8 @@ def build_report(
             window["literal_receipts_exact"] is True
             and window["backend_work_gate_pass"] is True
             and window["vote_lock_work_gate_pass"] is True
+            and window["certified_send_work_gate_pass"] is True
+            and window["round_coverage_gate_pass"] is True
             and int(window["validators_converged"]) == BASE.VALIDATORS
             and int(window["resources"]["foreground_process_count"])
             == int(configuration["rounds_per_window"])
@@ -3237,6 +3265,8 @@ def build_report(
                 and window["bounded_index_pages"] is True
                 and window["constant_accumulator_work"] is True
                 and window["vote_lock_work_gate_pass"] is True
+                and window["certified_send_work_gate_pass"] is True
+                and window["round_coverage_gate_pass"] is True
                 for row in rows
                 for window in row["windows"]
             )
@@ -3330,6 +3360,18 @@ def build_report(
         for row in lane["rows"]
         for window in row["windows"]
     )
+    certified_send_work_gates_pass = all(
+        window["certified_send_work_gate_pass"] is True
+        for lane in lanes.values()
+        for row in lane["rows"]
+        for window in row["windows"]
+    )
+    round_coverage_gates_pass = all(
+        window["round_coverage_gate_pass"] is True
+        for lane in lanes.values()
+        for row in lane["rows"]
+        for window in row["windows"]
+    )
     source_clean = BASE.git_is_clean()
     release_pass = (
         not development_smoke
@@ -3338,6 +3380,8 @@ def build_report(
         and comparison_windows_pass
         and selected_window_gates
         and vote_lock_work_gates_pass
+        and certified_send_work_gates_pass
+        and round_coverage_gates_pass
         and selected["no_positive_linear_height_relationship"] is True
         and all(value <= 1.10 for value in ratios.values())
         and state.elapsed() <= int(configuration["max_wall_seconds"])
@@ -3348,6 +3392,8 @@ def build_report(
         and comparison_windows_pass
         and selected_window_gates
         and vote_lock_work_gates_pass
+        and certified_send_work_gates_pass
+        and round_coverage_gates_pass
     )
     status = (
         "PASS"
@@ -3409,6 +3455,8 @@ def build_report(
         "comparison_windows_pass": comparison_windows_pass,
         "window_gates_pass": selected_window_gates,
         "vote_lock_work_gates_pass": vote_lock_work_gates_pass,
+        "certified_send_work_gates_pass": certified_send_work_gates_pass,
+        "round_coverage_gates_pass": round_coverage_gates_pass,
         "height_relationship_model": selected["height_relationship_model"],
         "no_positive_linear_height_relationship": selected[
             "no_positive_linear_height_relationship"
