@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, fs, path::PathBuf, time::Instant};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use pfusdc_arc_ingress_program::{verify_arc_ingress_witness_v1, ArcIngressWitnessV1};
+use pfusdc_arc_ingress_program::{verify_arc_ingress_witness_v2, ArcIngressWitnessV2};
 use pfusdc_ingress_program::bonded::{
     bonded_ingress_policy_hash_v1, verify_bonded_age_release_witness_v1,
     verify_bonded_confirmation_witness_v1, verify_bonded_ingress_witness_v1,
@@ -12,9 +12,9 @@ use pfusdc_ingress_program::bonded::{
 use pfusdc_ingress_program::{verify_ingress_witness_v2, PfUsdcIngressProofWitnessV2};
 use postfiat_pfusdc_proofs::{verify_checkpoint_witness_v1, verify_egress_witness_v1};
 use postfiat_types::{
-    vault_bridge_deposit_evidence_root, vault_bridge_deposit_id, vault_bridge_route_binding, PfUsdcCheckpointProofWitnessV1, PfUsdcEgressProgramInputV1,
-    PfUsdcEgressProofWitnessV1, PfUsdcIngressPublicValuesV3, VaultBridgeDepositEvidence,
-    VaultBridgeRouteProfileV1,
+    vault_bridge_deposit_evidence_root, vault_bridge_deposit_id, vault_bridge_route_binding,
+    PfUsdcCheckpointProofWitnessV1, PfUsdcEgressProgramInputV1, PfUsdcEgressProofWitnessV1,
+    PfUsdcIngressPublicValuesV3, VaultBridgeDepositEvidence, VaultBridgeRouteProfileV1,
     NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1,
 };
 use sha2::Sha256;
@@ -95,6 +95,10 @@ enum Command {
     IngressCapture(ingress_capture::IngressCaptureArgs),
     /// Capture and natively verify one finalized Arc direct-deposit witness.
     ArcIngressCapture(arc_ingress_capture::ArcIngressCaptureArgs),
+    /// Capture and verify one live Arc validator-set change from historical state.
+    ArcValidatorTransitionCapture(arc_ingress_capture::ArcValidatorTransitionCaptureArgs),
+    /// Re-verify an authenticated Arc validator transition fixture, optionally against public RPC.
+    ArcValidatorTransitionVerify(arc_ingress_capture::ArcValidatorTransitionVerifyArgs),
     /// Run deterministic security-field mutations against an Arc witness.
     ArcIngressAudit {
         #[arg(long)]
@@ -215,9 +219,17 @@ async fn main() -> Result<()> {
         } => bonded_route_info(policy, route_profile, output),
         Command::DeploymentManifest { input, output } => manifest::run(input, output),
         Command::RouteProfileInfo { profile, output } => route_profile_info(profile, output),
-        Command::DepositEvidenceInfo { evidence, output } => deposit_evidence_info(evidence, output),
+        Command::DepositEvidenceInfo { evidence, output } => {
+            deposit_evidence_info(evidence, output)
+        }
         Command::IngressCapture(capture) => ingress_capture::capture(capture).await,
         Command::ArcIngressCapture(capture) => arc_ingress_capture::capture(capture).await,
+        Command::ArcValidatorTransitionCapture(capture) => {
+            arc_ingress_capture::capture_validator_transition(capture).await
+        }
+        Command::ArcValidatorTransitionVerify(verify) => {
+            arc_ingress_capture::verify_validator_transition(verify).await
+        }
         Command::ArcIngressAudit { witness, output } => arc_ingress_audit(witness, output),
         Command::BondedIngressCapture(capture) => ingress_capture::bonded::capture(capture).await,
         Command::BondedConfirmationCapture(capture) => {
@@ -313,13 +325,13 @@ fn deposit_evidence_info(evidence_path: PathBuf, output: Option<PathBuf>) -> Res
 fn arc_ingress_audit(witness_path: PathBuf, output: PathBuf) -> Result<()> {
     let bytes = fs::read(&witness_path)
         .with_context(|| format!("read Arc ingress witness {}", witness_path.display()))?;
-    let witness: ArcIngressWitnessV1 = serde_json::from_slice(&bytes)
+    let witness: ArcIngressWitnessV2 = serde_json::from_slice(&bytes)
         .with_context(|| format!("decode Arc ingress witness {}", witness_path.display()))?;
-    verify_arc_ingress_witness_v1(&witness)
+    verify_arc_ingress_witness_v2(&witness)
         .map_err(|error| anyhow::anyhow!("baseline Arc witness rejected: {}", error.code()))?;
     let mut results = Vec::new();
-    let mut check = |name: &str, mutated: ArcIngressWitnessV1, expected: &str| -> Result<()> {
-        let error = verify_arc_ingress_witness_v1(&mutated)
+    let mut check = |name: &str, mutated: ArcIngressWitnessV2, expected: &str| -> Result<()> {
+        let error = verify_arc_ingress_witness_v2(&mutated)
             .expect_err("security mutation unexpectedly verified");
         anyhow::ensure!(
             error.code() == expected,
@@ -355,7 +367,11 @@ fn arc_ingress_audit(witness_path: PathBuf, output: PathBuf) -> Result<()> {
         .amount_atoms
         .checked_add(1)
         .context("amount mutation overflow")?;
-    check("wrong_log_fields", wrong_log, "ARC_INGRESS_DEPOSIT_MISMATCH")?;
+    check(
+        "wrong_log_fields",
+        wrong_log,
+        "ARC_INGRESS_DEPOSIT_MISMATCH",
+    )?;
 
     let mut stale_set = witness.clone();
     stale_set.validator_set_commitment_in[0] ^= 1;
@@ -365,8 +381,89 @@ fn arc_ingress_audit(witness_path: PathBuf, output: PathBuf) -> Result<()> {
         "ARC_INGRESS_VALIDATOR_SET_COMMITMENT_MISMATCH",
     )?;
 
+    let mut wrong_rotation_account = witness.clone();
+    let account_proof_byte = wrong_rotation_account
+        .validator_registry_proof
+        .as_mut()
+        .context("baseline omitted validator registry proof")?
+        .registry_account
+        .proof_nodes
+        .first_mut()
+        .context("registry account proof is empty")?
+        .first_mut()
+        .context("registry account proof node is empty")?;
+    *account_proof_byte ^= 1;
+    check(
+        "wrong_rotation_account_proof",
+        wrong_rotation_account,
+        "ARC_INGRESS_ROTATION_ACCOUNT_PROOF",
+    )?;
+
+    let mut wrong_rotation_storage = witness.clone();
+    let storage_proof_byte = wrong_rotation_storage
+        .validator_registry_proof
+        .as_mut()
+        .context("baseline omitted validator registry proof")?
+        .storage_proofs
+        .first_mut()
+        .context("registry storage proofs are empty")?
+        .proof_nodes
+        .first_mut()
+        .context("storage proof is empty")?
+        .first_mut()
+        .context("storage proof node is empty")?;
+    *storage_proof_byte ^= 1;
+    check(
+        "wrong_rotation_storage_proof",
+        wrong_rotation_storage,
+        "ARC_INGRESS_ROTATION_STORAGE_PROOF",
+    )?;
+
+    let mut wrong_rotation_slot = witness.clone();
+    wrong_rotation_slot
+        .validator_registry_proof
+        .as_mut()
+        .context("baseline omitted validator registry proof")?
+        .storage_proofs
+        .first_mut()
+        .context("registry storage proofs are empty")?
+        .key[0] ^= 1;
+    check(
+        "wrong_rotation_storage_slot",
+        wrong_rotation_slot,
+        "ARC_INGRESS_ROTATION_STORAGE_LAYOUT",
+    )?;
+
+    let mut reordered_rotation = witness.clone();
+    anyhow::ensure!(
+        reordered_rotation.next_validators.len() > 1,
+        "rotation fixture needs at least two validators"
+    );
+    reordered_rotation.next_validators.swap(0, 1);
+    check(
+        "reordered_rotation_set",
+        reordered_rotation,
+        "ARC_INGRESS_ROTATION_STORAGE_LAYOUT",
+    )?;
+
+    let mut zero_power_rotation = witness.clone();
+    zero_power_rotation.next_validators[0].voting_power = 0;
+    check(
+        "zero_power_rotation_set",
+        zero_power_rotation,
+        "ARC_INGRESS_ROTATION_STORAGE_LAYOUT",
+    )?;
+
+    let mut duplicate_rotation = witness.clone();
+    duplicate_rotation.next_validators[1] = duplicate_rotation.next_validators[0].clone();
+    check(
+        "duplicate_rotation_validator",
+        duplicate_rotation,
+        "ARC_INGRESS_ROTATION_STORAGE_LAYOUT",
+    )?;
+
     let mut asserted_rotation = witness;
-    asserted_rotation.next_validators = asserted_rotation.validators.clone();
+    asserted_rotation.validator_registry_proof = None;
     check(
         "unauthenticated_rotation",
         asserted_rotation,
@@ -421,9 +518,9 @@ async fn prove_arc_ingress(witness_path: PathBuf, output_dir: PathBuf, prove: bo
     }
     let witness_bytes = fs::read(&witness_path)
         .with_context(|| format!("read Arc ingress witness {}", witness_path.display()))?;
-    let witness: ArcIngressWitnessV1 = serde_json::from_slice(&witness_bytes)
+    let witness: ArcIngressWitnessV2 = serde_json::from_slice(&witness_bytes)
         .with_context(|| format!("decode Arc ingress witness {}", witness_path.display()))?;
-    let expected = verify_arc_ingress_witness_v1(&witness).map_err(|error| {
+    let expected = verify_arc_ingress_witness_v2(&witness).map_err(|error| {
         anyhow::anyhow!("native Arc ingress verification failed: {}", error.code())
     })?;
     let expected_public_values = expected.canonical_bytes();
