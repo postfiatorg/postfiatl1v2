@@ -40,6 +40,9 @@ const CERTIFIED_SEND_ERROR_MAX_CHARS: usize = 2_048;
 const CERTIFIED_SEND_STAGING_DIR_PREFIX: &str = ".certified-send-stage-v1-";
 const CERTIFIED_SEND_COMPLETED_RETENTION_DIR: &str = "completed-retention-v1";
 const CERTIFIED_SEND_DISPOSABLE_DIR_MAX_ENTRIES: usize = 16;
+const CERTIFIED_SEND_OUTBOX_MAX_DIRECTORY_ENTRIES: usize =
+    CERTIFIED_SEND_OUTBOX_MAX_JOBS * 2 + 3;
+const CERTIFIED_SEND_COMPLETED_RETENTION_MAX_ENTRIES: usize = 1;
 static CERTIFIED_SEND_STAGING_COUNTER: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
 
@@ -858,6 +861,34 @@ struct TransportPeerTargetTimingReport {
 #[derive(Debug, Clone, serde::Serialize)]
 struct TransportPeerCertifiedBatchRoundTimingsReport {
     total_ms: f64,
+    #[serde(default)]
+    outbox_resume_node_id: String,
+    #[serde(default)]
+    outbox_resume_ms: f64,
+    #[serde(default)]
+    outbox_tombstones_validated: u64,
+    #[serde(default)]
+    outbox_files_read: u64,
+    #[serde(default)]
+    outbox_bytes_hashed: u64,
+    #[serde(default)]
+    outbox_index_files_read: u64,
+    #[serde(default)]
+    outbox_index_bytes_read: u64,
+    #[serde(default)]
+    outbox_completed_entries_enumerated: u64,
+    #[serde(default)]
+    outbox_jobs_compacted: u64,
+    #[serde(default)]
+    outbox_jobs_pruned: u64,
+    #[serde(default)]
+    outbox_index_migration_performed: bool,
+    #[serde(default)]
+    outbox_compaction_ms: f64,
+    #[serde(default)]
+    outbox_validation_ms: f64,
+    #[serde(default)]
+    outbox_prune_ms: f64,
     shielded_verifier_prewarm: TransportShieldedVerifierPrewarmReport,
     setup_ms: f64,
     proposal_ms: f64,
@@ -987,6 +1018,9 @@ struct DurableCertifiedSendResumeReport {
     quarantined: usize,
     targets: Vec<DurableCertifiedSendResumeTargetReport>,
     all_completed: bool,
+    outbox_resume_ms: f64,
+    #[serde(flatten)]
+    work: DurableCertifiedSendWorkReport,
 }
 
 fn transport_artifact_component(value: &str) -> String {
@@ -1206,11 +1240,18 @@ pub(crate) fn cleanup_orphan_certified_send_staging_dirs(data_dir: &Path) -> Res
         return Ok(0);
     }
     let mut staging_dirs = Vec::new();
+    let mut entry_count = 0usize;
     for entry in std::fs::read_dir(&outbox_dir)
         .map_err(|error| format!("certified send staging cleanup read failed: {error}"))?
     {
         let entry =
             entry.map_err(|error| format!("certified send staging entry failed: {error}"))?;
+        entry_count = entry_count.saturating_add(1);
+        if entry_count > CERTIFIED_SEND_OUTBOX_MAX_DIRECTORY_ENTRIES {
+            return Err(format!(
+                "certified send outbox exceeds bounded directory entry count {CERTIFIED_SEND_OUTBOX_MAX_DIRECTORY_ENTRIES}"
+            ));
+        }
         let name = entry.file_name();
         let name = name.to_str().ok_or_else(|| {
             format!(
@@ -1695,6 +1736,7 @@ fn enqueue_durable_certified_send_job(
         .map_err(|error| format!("certified send outbox read failed: {error}"))?
         .filter_map(Result::ok)
         .filter(|entry| entry.path().join("job.json").is_file())
+        .take(CERTIFIED_SEND_OUTBOX_MAX_JOBS + 1)
         .count();
     if queued_jobs >= CERTIFIED_SEND_OUTBOX_MAX_JOBS {
         return Err(format!(
@@ -1760,13 +1802,21 @@ fn enqueue_durable_certified_send_job(
     Ok(job_file)
 }
 
-fn read_durable_certified_send_job(path: &Path) -> Result<DurableCertifiedSendJob, String> {
-    let metadata = std::fs::metadata(path).map_err(|error| {
+fn read_durable_certified_send_job_with_bytes(
+    path: &Path,
+) -> Result<(DurableCertifiedSendJob, Vec<u8>), String> {
+    let metadata = std::fs::symlink_metadata(path).map_err(|error| {
         format!(
             "certified send job metadata `{}` failed: {error}",
             path.display()
         )
     })?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err(format!(
+            "certified send job `{}` must be a non-symlink regular file",
+            path.display()
+        ));
+    }
     if metadata.len() > CERTIFIED_SEND_JOB_MAX_BYTES {
         return Err(format!(
             "certified send job `{}` exceeded {CERTIFIED_SEND_JOB_MAX_BYTES} bytes",
@@ -1794,7 +1844,11 @@ fn read_durable_certified_send_job(path: &Path) -> Result<DurableCertifiedSendJo
     if job.job_id != expected_job_id {
         return Err("certified send job id does not match canonical identity".to_string());
     }
-    Ok(job)
+    Ok((job, bytes))
+}
+
+fn read_durable_certified_send_job(path: &Path) -> Result<DurableCertifiedSendJob, String> {
+    read_durable_certified_send_job_with_bytes(path).map(|(job, _)| job)
 }
 
 fn write_durable_certified_send_job(
@@ -1820,9 +1874,15 @@ fn cleanup_certified_send_completed_retention_dir(data_dir: &Path) -> Result<usi
     let mut retired = Vec::new();
     for entry in std::fs::read_dir(&retention_dir)
         .map_err(|error| format!("certified send completed retention read failed: {error}"))?
+        .take(CERTIFIED_SEND_COMPLETED_RETENTION_MAX_ENTRIES + 1)
     {
         let entry = entry
             .map_err(|error| format!("certified send completed retention entry failed: {error}"))?;
+        if retired.len() >= CERTIFIED_SEND_COMPLETED_RETENTION_MAX_ENTRIES {
+            return Err(format!(
+                "certified send completed retention directory exceeds bounded entry count {CERTIFIED_SEND_COMPLETED_RETENTION_MAX_ENTRIES}"
+            ));
+        }
         let name = entry.file_name();
         let job_id = name.to_str().ok_or_else(|| {
             format!(
@@ -1845,203 +1905,30 @@ fn cleanup_certified_send_completed_retention_dir(data_dir: &Path) -> Result<usi
     Ok(retired.len())
 }
 
+#[cfg(test)]
 fn validated_completed_durable_certified_send_jobs(
     data_dir: &Path,
 ) -> Result<Vec<(PathBuf, DurableCertifiedSendJob)>, String> {
-    let completed_dir = certified_send_completed_dir(data_dir);
-    if !require_certified_send_directory(&completed_dir, "completed directory")? {
-        return Ok(Vec::new());
-    }
-    let mut completed = Vec::new();
-    for entry in std::fs::read_dir(&completed_dir)
-        .map_err(|error| format!("certified send completed retention scan failed: {error}"))?
-    {
-        let entry = entry
-            .map_err(|error| format!("certified send completed retention entry failed: {error}"))?;
-        let name = entry.file_name();
-        let job_id = name.to_str().ok_or_else(|| {
-            format!(
-                "certified send completed entry `{}` is not valid UTF-8",
-                entry.path().display()
-            )
-        })?;
-        if !certified_send_job_id_is_canonical(job_id) {
-            return Err(format!(
-                "certified send completed entry `{}` has a non-canonical name",
-                entry.path().display()
-            ));
-        }
-        if !require_certified_send_directory(&entry.path(), "completed job directory")? {
-            return Err(format!(
-                "certified send completed job directory `{}` disappeared during retention scan",
-                entry.path().display()
-            ));
-        }
-        let job_file = entry.path().join("job.json");
-        let job_metadata = std::fs::symlink_metadata(&job_file).map_err(|error| {
-            format!(
-                "certified send completed job metadata `{}` failed: {error}",
-                job_file.display()
-            )
-        })?;
-        if job_metadata.file_type().is_symlink() || !job_metadata.is_file() {
-            return Err(format!(
-                "certified send completed job `{}` must be a non-symlink regular file",
-                job_file.display()
-            ));
-        }
-        let job = read_durable_certified_send_job(&job_file)?;
-        if job.job_id != job_id {
-            return Err(format!(
-                "certified send completed directory `{job_id}` conflicts with job id `{}`",
-                job.job_id
-            ));
-        }
-        validate_completed_durable_certified_send_job(&job_file, &job)?;
-        completed.push((entry.path(), job));
-    }
-    completed.sort_by(|(_, left), (_, right)| {
-        left.block_height
-            .cmp(&right.block_height)
-            .then_with(|| left.job_id.cmp(&right.job_id))
-    });
-    Ok(completed)
+    validated_completed_jobs_for_legacy_callers(data_dir)
 }
 
+#[cfg(test)]
 fn prune_completed_durable_certified_send_jobs(
     data_dir: &Path,
     max_tombstones: usize,
 ) -> Result<usize, String> {
-    cleanup_certified_send_completed_retention_dir(data_dir)?;
-    let completed = validated_completed_durable_certified_send_jobs(data_dir)?;
-    let prune_count = completed.len().saturating_sub(max_tombstones);
-    if prune_count == 0 {
-        return Ok(0);
-    }
-
-    let outbox_dir = certified_send_outbox_dir(data_dir);
-    let resolved_dir = certified_send_resolved_quarantine_dir(data_dir);
-    let retention_dir = certified_send_completed_retention_dir(data_dir);
-    std::fs::create_dir_all(&retention_dir).map_err(|error| {
-        format!(
-            "certified send completed retention directory create `{}` failed: {error}",
-            retention_dir.display()
-        )
-    })?;
-    sync_certified_send_directory(&outbox_dir, "outbox directory after retention create")?;
-    sync_certified_send_directory(
-        &resolved_dir,
-        "resolved quarantine directory after retention create",
-    )?;
-    let completed_dir = certified_send_completed_dir(data_dir);
-    for (source, job) in completed.into_iter().take(prune_count) {
-        let destination = retention_dir.join(&job.job_id);
-        if destination.exists() {
-            return Err(format!(
-                "certified send completed retention destination `{}` already exists",
-                destination.display()
-            ));
-        }
-        // Move out of the scanner-visible completed set atomically before
-        // recursive deletion. A crash during deletion leaves only a canonical
-        // disposable directory in the scanner-ignored retention root.
-        std::fs::rename(&source, &destination).map_err(|error| {
-            format!(
-                "certified send completed retention move `{}` -> `{}` failed: {error}",
-                source.display(),
-                destination.display()
-            )
-        })?;
-        sync_certified_send_directory(&completed_dir, "completed directory after retention move")?;
-        sync_certified_send_directory(&retention_dir, "completed retention directory after move")?;
-        remove_certified_send_disposable_job_dir(&destination, &job.job_id)?;
-    }
-    Ok(prune_count)
+    prune_completed_with_index(data_dir, max_tombstones).map(|report| report.pruned)
 }
 
+#[cfg(test)]
 fn compact_completed_durable_certified_send_jobs(data_dir: &Path) -> Result<usize, String> {
-    cleanup_orphan_certified_send_staging_dirs(data_dir)?;
-    let outbox_dir = certified_send_outbox_dir(data_dir);
-    if !outbox_dir.exists() {
-        return Ok(0);
-    }
-    cleanup_certified_send_completed_retention_dir(data_dir)?;
-    validated_completed_durable_certified_send_jobs(data_dir)?;
-    let completed_dir = outbox_dir.join("completed");
-    std::fs::create_dir_all(&completed_dir)
-        .map_err(|error| format!("certified send completed directory create failed: {error}"))?;
-    let mut job_dirs = std::fs::read_dir(&outbox_dir)
-        .map_err(|error| format!("certified send outbox compaction read failed: {error}"))?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path != &completed_dir && path.join("job.json").is_file())
-        .collect::<Vec<_>>();
-    job_dirs.sort();
-    let mut compacted = 0usize;
-    for job_dir in job_dirs {
-        let job_file = job_dir.join("job.json");
-        let job = read_durable_certified_send_job(&job_file)?;
-        if certified_send_quarantine_job_dir(data_dir, &job.job_id).exists() {
-            continue;
-        }
-        if !job.completed {
-            continue;
-        }
-        if let Err(detail) = validate_completed_durable_certified_send_job(&job_file, &job) {
-            let error = format!(
-                "certified send completed job `{}` is invalid before compaction: {detail}",
-                job.job_id
-            );
-            quarantine_durable_certified_send_job(
-                data_dir,
-                &job.job_id,
-                &job_file,
-                &error,
-            )?;
-            return Err(error);
-        }
-        let destination = completed_dir.join(&job.job_id);
-        if destination.exists() {
-            let error = format!(
-                "certified send completed record `{}` already exists",
-                destination.display()
-            );
-            quarantine_durable_certified_send_job(
-                data_dir,
-                &job.job_id,
-                &job_file,
-                &error,
-            )?;
-            return Err(error);
-        }
-        std::fs::rename(&job_dir, &destination).map_err(|error| {
-            format!(
-                "certified send completed job move `{}` failed: {error}",
-                job.job_id
-            )
-        })?;
-        compacted = compacted.saturating_add(1);
-    }
-    #[cfg(unix)]
-    {
-        std::fs::File::open(&outbox_dir)
-            .and_then(|directory| directory.sync_all())
-            .map_err(|error| format!("certified send outbox directory sync failed: {error}"))?;
-        std::fs::File::open(&completed_dir)
-            .and_then(|directory| directory.sync_all())
-            .map_err(|error| format!("certified send completed directory sync failed: {error}"))?;
-    }
-    prune_completed_durable_certified_send_jobs(
-        data_dir,
-        CERTIFIED_SEND_COMPLETED_TOMBSTONE_MAX_JOBS,
-    )?;
-    Ok(compacted)
+    compact_completed_with_index(data_dir).map(|report| report.compacted)
 }
 
-fn validate_durable_certified_send_payloads(
+fn read_validated_durable_certified_send_payloads(
     job_file: &Path,
     job: &DurableCertifiedSendJob,
-) -> Result<(), String> {
+) -> Result<(Vec<u8>, Vec<u8>), String> {
     let job_dir = job_file
         .parent()
         .ok_or_else(|| "certified send job file has no parent directory".to_string())?;
@@ -2099,11 +1986,17 @@ fn validate_durable_certified_send_payloads(
     if batch_hash != job.batch_hash || certificate_hash != job.certificate_hash {
         return Err("certified send durable payload hash mismatch".to_string());
     }
-    Ok(())
+    Ok((batch_bytes, certificate_bytes))
 }
 
-fn validate_completed_durable_certified_send_job(
+fn validate_durable_certified_send_payloads(
     job_file: &Path,
+    job: &DurableCertifiedSendJob,
+) -> Result<(), String> {
+    read_validated_durable_certified_send_payloads(job_file, job).map(|_| ())
+}
+
+fn validate_completed_durable_certified_send_job_metadata(
     job: &DurableCertifiedSendJob,
 ) -> Result<(), String> {
     if !job.completed {
@@ -2122,6 +2015,14 @@ fn validate_completed_durable_certified_send_job(
                 .to_string(),
         );
     }
+    Ok(())
+}
+
+fn validate_completed_durable_certified_send_job(
+    job_file: &Path,
+    job: &DurableCertifiedSendJob,
+) -> Result<(), String> {
+    validate_completed_durable_certified_send_job_metadata(job)?;
     validate_durable_certified_send_payloads(job_file, job)
 }
 
@@ -2473,7 +2374,9 @@ fn resume_durable_certified_send_outbox(
             "certified send resume max jobs must be between 1 and {CERTIFIED_SEND_OUTBOX_MAX_JOBS}"
         ));
     }
-    compact_completed_durable_certified_send_jobs(data_dir)?;
+    let resume_start = Instant::now();
+    let compaction = compact_completed_with_index(data_dir)?;
+    let work = compaction.work;
     let outbox_dir = certified_send_outbox_dir(data_dir);
     if !outbox_dir.exists() {
         return Ok(DurableCertifiedSendResumeReport {
@@ -2486,6 +2389,8 @@ fn resume_durable_certified_send_outbox(
             quarantined: 0,
             targets: Vec::new(),
             all_completed: true,
+            outbox_resume_ms: monotonic_elapsed_ms(resume_start),
+            work,
         });
     }
     let mut job_files = std::fs::read_dir(&outbox_dir)
@@ -2493,6 +2398,7 @@ fn resume_durable_certified_send_outbox(
         .filter_map(Result::ok)
         .map(|entry| entry.path().join("job.json"))
         .filter(|path| path.is_file())
+        .take(CERTIFIED_SEND_OUTBOX_MAX_JOBS + 1)
         .collect::<Vec<_>>();
     job_files.sort();
     let mut jobs = Vec::with_capacity(job_files.len());
@@ -2511,9 +2417,18 @@ fn resume_durable_certified_send_outbox(
 
     let quarantine_dir = certified_send_quarantine_dir(data_dir);
     let mut quarantine_entries = if quarantine_dir.exists() {
-        std::fs::read_dir(&quarantine_dir)
+        let entries = std::fs::read_dir(&quarantine_dir)
             .map_err(|error| format!("certified send quarantine read failed: {error}"))?
-            .filter_map(Result::ok)
+            .take(CERTIFIED_SEND_OUTBOX_MAX_JOBS + 1)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("certified send quarantine entry failed: {error}"))?;
+        if entries.len() > CERTIFIED_SEND_OUTBOX_MAX_JOBS {
+            return Err(format!(
+                "certified send outbox contains more than {CERTIFIED_SEND_OUTBOX_MAX_JOBS} quarantine entries"
+            ));
+        }
+        entries
+            .into_iter()
             .filter(|entry| entry.path().is_dir())
             .map(|entry| entry.path())
             .collect::<Vec<_>>()
@@ -2521,12 +2436,6 @@ fn resume_durable_certified_send_outbox(
         Vec::new()
     };
     quarantine_entries.sort();
-    if quarantine_entries.len() > CERTIFIED_SEND_OUTBOX_MAX_JOBS {
-        return Err(format!(
-            "certified send outbox contains {} quarantine records, exceeding bound {CERTIFIED_SEND_OUTBOX_MAX_JOBS}",
-            quarantine_entries.len()
-        ));
-    }
 
     let mut discovered_job_ids = jobs
         .iter()
@@ -2648,6 +2557,8 @@ fn resume_durable_certified_send_outbox(
         quarantined,
         all_completed: pending == 0,
         targets,
+        outbox_resume_ms: monotonic_elapsed_ms(resume_start),
+        work,
     })
 }
 
@@ -3914,8 +3825,10 @@ struct TransportCertifiedBatchLoopReport {
 }
 
 
+mod certified_send_completed_index;
 mod transport_protocol;
 mod transport_runtime;
+use certified_send_completed_index::*;
 use transport_protocol::*;
 use transport_runtime::*;
 
@@ -4105,7 +4018,7 @@ mod certified_send_durability_tests {
         std::fs::create_dir(&unknown).expect("create unknown completed entry");
         let error = prune_completed_durable_certified_send_jobs(&data_dir, 2)
             .expect_err("unknown completed entry must fail closed");
-        assert!(error.contains("non-canonical name"));
+        assert!(error.contains("index/directory divergence"));
         assert_eq!(
             std::fs::read_dir(&completed_dir)
                 .expect("read completed after fail closed")
@@ -4116,6 +4029,8 @@ mod certified_send_durability_tests {
             "validation failure must not prune any tombstone"
         );
         std::fs::remove_dir(&unknown).expect("remove unknown test entry");
+        verify_and_rebuild_completed_index(&data_dir)
+            .expect("explicitly repair directory stamp after operator divergence");
 
         assert_eq!(
             prune_completed_durable_certified_send_jobs(&data_dir, 2)

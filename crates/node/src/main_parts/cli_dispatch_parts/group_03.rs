@@ -27,6 +27,16 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             }
             Ok(())
         }
+        "transport-certified-send-outbox-verify" => {
+            let data_dir =
+                PathBuf::from(flag_value(flags, "--data-dir").unwrap_or(DEFAULT_DATA_DIR));
+            let report = verify_and_rebuild_completed_index(&data_dir)?;
+            let json = serde_json::to_string_pretty(&report).map_err(|error| {
+                format!("certified send outbox verify report serialization failed: {error}")
+            })?;
+            println!("{json}");
+            Ok(())
+        }
         "transport-certified-batch-loop" => {
             require_transactional_or_unsafe_devnet_json_storage(flags, "certified batch loop")?;
             let data_dir =

@@ -404,6 +404,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "transport-peer-certified-batch-loop"
         | "transport-peer-certified-private-egress-loop"
         | "transport-certified-send-outbox-resume"
+        | "transport-certified-send-outbox-verify"
         | "rpc-serve"
         | "validator-keys"
         | "validator-key-stage"

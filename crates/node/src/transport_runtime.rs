@@ -3718,6 +3718,22 @@ pub(super) fn transport_peer_certified_batch_round(
     let verification_ms = monotonic_elapsed_ms(verification_start);
     let timings = TransportPeerCertifiedBatchRoundTimingsReport {
         total_ms: monotonic_elapsed_ms(round_start),
+        outbox_resume_node_id: local_status.node_id.clone(),
+        outbox_resume_ms: resumed_delivery.outbox_resume_ms,
+        outbox_tombstones_validated: resumed_delivery.work.tombstones_validated,
+        outbox_files_read: resumed_delivery.work.files_read,
+        outbox_bytes_hashed: resumed_delivery.work.bytes_hashed,
+        outbox_index_files_read: resumed_delivery.work.index_files_read,
+        outbox_index_bytes_read: resumed_delivery.work.index_bytes_read,
+        outbox_completed_entries_enumerated: resumed_delivery
+            .work
+            .completed_entries_enumerated,
+        outbox_jobs_compacted: resumed_delivery.work.jobs_compacted,
+        outbox_jobs_pruned: resumed_delivery.work.jobs_pruned,
+        outbox_index_migration_performed: resumed_delivery.work.index_migration_performed,
+        outbox_compaction_ms: resumed_delivery.work.compaction_ms,
+        outbox_validation_ms: resumed_delivery.work.validation_ms,
+        outbox_prune_ms: resumed_delivery.work.prune_ms,
         shielded_verifier_prewarm,
         setup_ms,
         proposal_ms,
