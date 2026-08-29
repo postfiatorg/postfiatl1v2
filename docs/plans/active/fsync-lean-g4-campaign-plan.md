@@ -1,6 +1,6 @@
 # Fsync-Lean G4 Campaign: Executable Plan
 
-**Status:** Authorized — one run under the operator's standing 2026-08-29 directive to unblock the testnet path
+**Status:** Executed once — **FAIL** (`ROUND_COVERAGE_RESIDUAL_EXCEEDED`, height-5000-window-2, one isolated 103.6 ms residual on a validator-4 round with a 20 ms resume; six windows had completed with every gate passing). See the [measurement-environment decision handoff](../../handoffs/2026-08-29___postfiatchad__g4_measurement_environment_decision.md); no further run is authorized without new explicit operator input
 **Date:** 2026-08-29
 **Predecessors:** [Hygiene-corrected G4 plan](hygiene-corrected-g4-campaign-plan.md) (closed, failed on ratios 1.1149/1.1009 with every gate passing), [Batched-index G4 plan](batched-index-g4-campaign-plan.md) (closed, failed on one 8.4 ms residual)
 

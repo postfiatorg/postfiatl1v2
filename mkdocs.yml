@@ -108,6 +108,8 @@ nav:
       - Completed P0 Remediation: plans/completed/P0-COMPLETE-REMEDIATION-PLAN-20260716.md
       - Completed Capability Restoration: plans/completed/OPEN-SOURCE-CAPABILITY-RESTORATION-PLAN-20260716.md
   - Handoffs:
+      - G4 Measurement Environment Decision: handoffs/2026-08-29___postfiatchad__g4_measurement_environment_decision.md
+      - Batched-Index G4 Residual Failure: handoffs/2026-08-29___postfiatchad__batched_index_g4_residual_failure.md
       - Vote-Lock Marker And Batched Index Fixes: handoffs/2026-08-29___postfiatchad__vote_lock_marker_and_batched_index_fixes.md
       - Remediated G4 Qualification Failure: handoffs/2026-08-29___postfiatchad__remediated_g4_qualification_failure.md
       - Certified-Send Eager-Index Remediation: handoffs/2026-08-29___postfiatchad__certified_send_eager_index_remediation_complete.md

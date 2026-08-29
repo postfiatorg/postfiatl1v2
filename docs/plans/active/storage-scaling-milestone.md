@@ -1,6 +1,6 @@
 # Storage Scaling: Time-Budgeted Qualification and Release Gates
 
-**Status:** Active — `redb` selected but not qualified; remediated G4 failed once with no retry; both diagnosed defects are fixed at unfrozen source `48a94425`; freeze, evidence refresh, and a new authorized campaign remain; G3, G5, deployment, and public testnet blocked
+**Status:** Active — `redb` selected but not qualified; three further one-run campaigns (2026-08-29, frozen candidates `86929450` and `66f30f13`) closed failed on marginal environmental grounds: two isolated host-jitter residual rounds and one 1.10-ratio miss by 0.09–1.5% with every other gate passing; an operator decision on the measurement environment is required before any fourth run (see the [environment decision handoff](../../handoffs/2026-08-29___postfiatchad__g4_measurement_environment_decision.md)); G3 height-915 replay additionally needs its quarantine-archive input re-supplied (not present on the current host); G5, deployment, and public testnet blocked
 
 **Decision date:** 2026-08-27
 
