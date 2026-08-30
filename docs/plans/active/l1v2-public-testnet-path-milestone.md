@@ -43,9 +43,9 @@ operationalizations; the operator may tighten or restate them.
 
 ## B — Pre-deployment rehearsal and deployment decision (G6)
 
-- [ ] B1 *(operator)* Authorize six distinct stopped validator-directory copies from the controlled devnet fleet
-- [ ] B2 Run the six-clone migration rehearsal (`benchmarks/storage-scaling/run_migration_rehearsal.py`): cancelled lane, completed activation lane, restart/catch-up/rollback, mixed-version refusal, all-six convergence
-- [ ] B3 *(operator decision)* Deploy the qualified `d0ae79f3` lineage to the controlled devnet with pinned source/binary/data/activation/rollback identities; verify with a fleet receipt (`docs/status/chain-state-current.md` update)
+- [x] B1 *(operator)* Authorized and captured six distinct stopped validator-directory copies from the controlled devnet fleet (2026-08-30)
+- [ ] B2 Run the six-clone migration rehearsal (`benchmarks/storage-scaling/run_migration_rehearsal.py`): **FAIL 2026-08-30** after all six exact height-924 rebuild/verify passes; the first height-925 round rejected superseded validator-registry history reapplication
+- [ ] B3 *(operator decision)* Deploy a qualified lineage to the controlled devnet with pinned source/binary/data/activation/rollback identities; **blocked — do not deploy `d0ae79f3`**; verify any successor with a fleet receipt (`docs/status/chain-state-current.md` update)
 
 ## C — Validator story: fork community feeds the l1v2 registry
 

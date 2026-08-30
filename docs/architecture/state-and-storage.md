@@ -89,9 +89,11 @@ each repair/refusal boundary.
 This source is an undeployed development candidate. Canonical snapshot/restore,
 rebuild, retained-history equality, exact height-915 replay, the closed 69-case
 tamper/crash matrix, compatible two-binary rollback, and a development-only
-height-501 six-clone migration rehearsal pass offline. Exact height 924,
-clean-source existing-chain migration qualification, paired release-mode
-six-validator performance, and the final packet remain open. See the [Storage Scaling Fix implementation specification](storage-scaling-fix-spec.md),
+height-501 six-clone migration rehearsal pass offline. Candidate `d0ae79f3`
+later passed six exact height-924 transactional rebuild/verify pairs but failed
+its first certified continuation round when superseded validator-registry
+history was treated as due again. It is not clone-qualified and was not
+deployed. See the [Storage Scaling Fix implementation specification](storage-scaling-fix-spec.md),
 the [active milestone](../plans/active/storage-scaling-milestone.md), and
 [development evidence](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling).
 Public testnet remains blocked.

@@ -1,0 +1,60 @@
+{
+  "candidate": {
+    "binary_sha256": "9e82d9286d79307b6246a773882e744ade1abad6b10498c3ed2d9c9e6b78c80c",
+    "source_revision": "d0ae79f3342fc78cbf907dbf231a60de8bc40606"
+  },
+  "failed_at": "2026-08-30T14:46:05.443512Z",
+  "failure": {
+    "attempt_count": 3,
+    "operation": "first post-migration certified transparent round at height 925",
+    "phase": "legacy-finality",
+    "private_failure_log_sha256": "d0b4c18ff50070210cd89f56eab2d929cd7aefb77075795bbfe349dacc1833a8",
+    "reason_code": "VALIDATOR_REGISTRY_HISTORY_REAPPLICATION_ROOT_MISMATCH",
+    "reason_detail": "live validator registry activation previous validator registry root mismatch",
+    "rejected_by": "validator-1"
+  },
+  "incompatible_probe_binary": {
+    "binary_sha256": "d2a91b112e3e4bfb875b5359170b2ed566161c9fdfb0d0d142f70f17f289b1ee",
+    "source_revision": "8cc7d15edc58b5f5a0b745143fef2d45203465ff"
+  },
+  "live_fleet_probe_receipt": "benchmarks/storage-scaling/devnet-rollout/fleet-probe-20260830.json",
+  "passed_before_failure": {
+    "independent_verify_only_count": 6,
+    "rebuilds_published": true,
+    "shared_migration_packet_root": "6a6b53eab81011ad469c23cb8088a4bc6d2b628d06a11c873f3adcb829c087e9389d6e32020361c965a0dd361e4807d5",
+    "six_distinct_stopped_sources_authenticated": true,
+    "source_fleet_converged": true,
+    "split_validator_keys_staged": true,
+    "transactional_rebuild_count": 6,
+    "verify_only_non_mutating": true
+  },
+  "post_failure": {
+    "all_six_working_clones_remained_at_height": 924,
+    "candidate_disposition": "DO_NOT_DEPLOY",
+    "clone_qualified": false,
+    "live_deployment_attempted": false,
+    "live_validator_state_mutated": false,
+    "rollback_required": false
+  },
+  "schema": "postfiat-devnet-storage-g6-failure-v1",
+  "source_fleet": {
+    "authority_mode": 1,
+    "chain_id": "postfiat-wan-devnet-2",
+    "height": 924,
+    "registry_root": "08a451e07aeaf9ada41a69e7c26dfd3fd86fce11c02f5567127c598b3cf775ac054b2add85295cc8c0d429bb6d2b9b1d",
+    "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+    "tip": "ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef",
+    "trust_graph_root": "89f18aef2c5726ae43043407eb4d638ee8f3b6027e58ec3553296478602232cf3c2fc5d1dfebc4058d720b16508f0307",
+    "validator_count": 6,
+    "validators": [
+      "validator-0",
+      "validator-1",
+      "validator-2",
+      "validator-3",
+      "validator-4",
+      "validator-5"
+    ]
+  },
+  "started_at": "2026-08-30T14:09:09.339022Z",
+  "status": "FAIL"
+}

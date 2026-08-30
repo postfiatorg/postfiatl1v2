@@ -45,7 +45,7 @@ themselves deployed without a new fleet receipt.
 - Orchard proof generation is CPU-intensive; not yet optimized for production latency.
 - Governance agent gates are implemented but not all are exercised in live testnet.
 - WAN devnet fleet operations require manual operator setup.
-- E4 exposed near-linear finality growth with chain height in the deployed JSON/JSONL lineage. Current source has an undeployed transactional `redb` candidate; snapshot/rebuild equality, exact height-915 replay, the 69-case tamper/crash matrix, compatible two-binary rollback, and a development-only height-501 six-clone migration pass. Exact height 924, clean-source existing-chain migration qualification, paired six-validator performance, and the final packet remain open. Public testnet remains blocked.
+- E4 exposed near-linear finality growth with chain height in the deployed JSON/JSONL lineage. Candidate `d0ae79f3` passed G4, but its exact height-924 G6 rehearsal failed on the first certified continuation round after six transactional rebuild/verify passes because superseded validator-registry history was treated as due again. It is not clone-qualified and was not deployed. A successor requires owning-boundary repair and repeated affected gates; public testnet remains blocked.
 
 ## Not Yet Implemented
 

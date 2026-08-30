@@ -1,0 +1,93 @@
+{
+  "authority_mode": 1,
+  "checks": {
+    "all_services_active": true,
+    "all_six_converged": true,
+    "all_six_reachable": true,
+    "binary_unchanged": true,
+    "deployment_not_attempted": true,
+    "no_transactional_backend_present": true,
+    "rollback_not_required": true
+  },
+  "deployed_binary_sha256": "d5e5ef630155e61b001b84edb404a4def7d29a9205f23d33d2ad9c37c2696caf",
+  "height": 924,
+  "mempool_pending": 0,
+  "observed_from": "2026-08-30T14:48:27.687969Z",
+  "observed_through": "2026-08-30T14:48:45.952880Z",
+  "reason": "G6 clone rehearsal failed before live deployment",
+  "registry_root": "08a451e07aeaf9ada41a69e7c26dfd3fd86fce11c02f5567127c598b3cf775ac054b2add85295cc8c0d429bb6d2b9b1d",
+  "schema": "postfiat-devnet-storage-rollout-stop-receipt-v1",
+  "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+  "status": "PASS_UNCHANGED",
+  "tip": "ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef",
+  "trust_graph_root": "89f18aef2c5726ae43043407eb4d638ee8f3b6027e58ec3553296478602232cf3c2fc5d1dfebc4058d720b16508f0307",
+  "validator_count": 6,
+  "validators": [
+    {
+      "binary_sha256": "d5e5ef630155e61b001b84edb404a4def7d29a9205f23d33d2ad9c37c2696caf",
+      "captured_at": "2026-08-30T14:48:27.687969Z",
+      "height": 924,
+      "rpc_service": "active",
+      "shadow_service": "active",
+      "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+      "tip": "ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef",
+      "validator_id": "validator-0",
+      "validator_service": "active"
+    },
+    {
+      "binary_sha256": "d5e5ef630155e61b001b84edb404a4def7d29a9205f23d33d2ad9c37c2696caf",
+      "captured_at": "2026-08-30T14:48:30.169787Z",
+      "height": 924,
+      "rpc_service": "active",
+      "shadow_service": "active",
+      "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+      "tip": "ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef",
+      "validator_id": "validator-1",
+      "validator_service": "active"
+    },
+    {
+      "binary_sha256": "d5e5ef630155e61b001b84edb404a4def7d29a9205f23d33d2ad9c37c2696caf",
+      "captured_at": "2026-08-30T14:48:35.782247Z",
+      "height": 924,
+      "rpc_service": "active",
+      "shadow_service": "active",
+      "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+      "tip": "ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef",
+      "validator_id": "validator-2",
+      "validator_service": "active"
+    },
+    {
+      "binary_sha256": "d5e5ef630155e61b001b84edb404a4def7d29a9205f23d33d2ad9c37c2696caf",
+      "captured_at": "2026-08-30T14:48:39.765009Z",
+      "height": 924,
+      "rpc_service": "active",
+      "shadow_service": "active",
+      "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+      "tip": "ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef",
+      "validator_id": "validator-3",
+      "validator_service": "active"
+    },
+    {
+      "binary_sha256": "d5e5ef630155e61b001b84edb404a4def7d29a9205f23d33d2ad9c37c2696caf",
+      "captured_at": "2026-08-30T14:48:41.938664Z",
+      "height": 924,
+      "rpc_service": "active",
+      "shadow_service": "active",
+      "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+      "tip": "ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef",
+      "validator_id": "validator-4",
+      "validator_service": "active"
+    },
+    {
+      "binary_sha256": "d5e5ef630155e61b001b84edb404a4def7d29a9205f23d33d2ad9c37c2696caf",
+      "captured_at": "2026-08-30T14:48:45.952880Z",
+      "height": 924,
+      "rpc_service": "active",
+      "shadow_service": "active",
+      "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+      "tip": "ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef",
+      "validator_id": "validator-5",
+      "validator_service": "active"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # PostFiat L1 Current State
 
-Updated: `2026-08-27T13:02:55Z`
+Updated: `2026-08-30T14:48:45Z`
 
 Status: **canonical operational-state reference**
 
@@ -12,18 +12,19 @@ binary to the running services.
 !!! warning "Point-in-time evidence"
 
     The latest authenticated all-six observation ran from
-    `2026-08-26T06:34:55Z` through `2026-08-26T06:35:50Z`. It is the last
-    committed observation, not a real-time query now. Re-probe before making a
-    later “right now” claim.
+    `2026-08-30T14:48:27Z` through `2026-08-30T14:48:45Z`, after the G6 clone
+    rehearsal stopped. It is a point-in-time observation, not a real-time query
+    now. Re-probe before making a later “right now” claim.
 
 ## Operational summary
 
 | Plane | Recorded state | Exact identifier | Observed or updated at | Evidence and freshness |
 | --- | --- | --- | --- | --- |
-| Running devnet | Six validators converged at height 924 with empty mempools; all validator, RPC, and advisory shadow services were active. | Chain `postfiat-wan-devnet-2`; genesis `ce22ca8c…e90a9`; tip `ebeb0e1e…a7649fbef`; state `0854bc47…1ee6f413e`. | `2026-08-26T06:34:55Z`–`06:35:50Z` | Authenticated post-drill fleet observation; point in time, not a current network query. |
-| Validator-trust authority | Cobalt is active for validator-registry and trust-graph ratification. The final signed drill rollback committed at 922, return to Cobalt at 923, and legitimate validator-5 rotation at 924. Consensus v2 remains block finality. | Registry root `08a451e0…2b9b1d`; trust root `89f18aef…08f0307`; ratification anchor sequence 2, ID `5eada38d…c21153c8`. | Accepted history through height 924; fleet-audited through `2026-08-26T06:35:50Z`. | E5 packet contains signed transitions, update, finality, rejection, and all-six fleet receipts. |
-| Deployed runtime | Every validator used the same node binary; every shadow used the same sidecar binary. The node reports embedded revision `8cc7d15e`. | Node SHA-256 `d5e5ef630155e61b001b84edb404a4def7d29a9205f23d33d2ad9c37c2696caf`; shadow SHA-256 `d61e6d0f6767998c4abfbf4f85e1f6bd5edfeef8a7a27cf965c17b676b1a0a4a`. | `2026-08-26T06:34:55Z`–`06:35:50Z` | Direct process, binary, status, governance-verifier, registry-root, and shadow-status receipts on all six hosts. |
-| Repository | `main` contains the deployed lineage, all E1–E6 packets, the authenticated final packet/interfaces, and an undeployed transactional storage-scaling implementation candidate. Repository descendants after `8cc7d15e` are not themselves proven installed on the fleet. | E5 evidence commit `ee6707c4`; E5 packet root `0695284a7b38ac0129c47e1242f4a2227ad25096147920e79569a924e5f3b3db`; read-only-verifier storage lineage `785806bd`; development six-clone report `62571689…2e618476`. | `2026-08-27T13:02:55Z` | Offline source qualification only; nothing from the storage milestone is deployed. Exact height-924 replay, clean-source existing-chain migration, a locked-spec-compliant same-binary/same-snapshot performance campaign, and the final storage packet remain open; use `git rev-parse HEAD` for the checkout. |
+| Running devnet | Six validators converged at height 924 with empty mempools; all validator, RPC, and advisory shadow services were active before and after the stopped G6 rehearsal. | Chain `postfiat-wan-devnet-2`; genesis `ce22ca8c…e90a9`; tip `ebeb0e1e…a7649fbef`; state `0854bc47…1ee6f413e`. | `2026-08-30T14:48:27Z`–`14:48:45Z` | Authenticated post-stop fleet observation; point in time, not a current network query. |
+| Validator-trust authority | Cobalt remains active for validator-registry and trust-graph ratification. The final signed drill rollback committed at 922, return to Cobalt at 923, and legitimate validator-5 rotation at 924. Consensus v2 remains block finality. | Registry root `08a451e0…2b9b1d`; trust root `89f18aef…08f0307`; ratification anchor sequence 2, ID `5eada38d…c21153c8`. | Accepted history through height 924; fleet-audited through `2026-08-30T14:48:45Z`. | The fresh probe found authority mode 1 and identical registry/trust roots on all six. |
+| Deployed runtime | Every validator still uses the pre-storage node binary; every validator, RPC, and shadow service is active. The node reports embedded revision `8cc7d15e`. | Node SHA-256 `d5e5ef630155e61b001b84edb404a4def7d29a9205f23d33d2ad9c37c2696caf`; candidate `9e82d928…8c80c` was not deployed. | `2026-08-30T14:48:27Z`–`14:48:45Z` | Direct process, binary, status, governance, registry-root, and service receipts on all six hosts. |
+| Storage rollout | `d0ae79f3` is **not clone-qualified and must not deploy**. Six exact height-924 clones rebuilt and independently verified one shared transactional packet, but the first height-925 certified round failed closed while reapplying superseded validator-registry history. | Candidate `d0ae79f3`; binary `9e82d928…8c80c`; migration packet `6a6b53ea…e4807d5`; reason `VALIDATOR_REGISTRY_HISTORY_REAPPLICATION_ROOT_MISMATCH`. | Failed `2026-08-30T14:46:05Z`; fleet unchanged through `14:48:45Z`. | [Rollout plan](../plans/active/devnet-storage-rollout-plan.md) and `benchmarks/storage-scaling/devnet-rollout/g6-failure-20260830.json`. No deployment, rollback, storage activation, Cobalt transition, or Z1 clock occurred. |
+| Repository | `main` contains the deployed lineage, Cobalt evidence, and the undeployed transactional storage candidate. Repository descendants after `8cc7d15e` are not installed on the fleet. | G4-qualified source `d0ae79f3`; binary `9e82d928…8c80c`; exact height-924 G6 result **FAIL**. | `2026-08-30T14:48:45Z` | A successor must repair the exact registry-history continuation defect and repeat the invalidated qualification gates before another deployment decision; use `git rev-parse HEAD` for the checkout. |
 | Adversarial campaign | E1–E6 passed their locked gates. The consolidated decision is `KEEP_ACTIVE` for Cobalt's bounded controlled-devnet validator-trust role. | E1 `495a59a2…4dfcd90`; E2 `8742d960…d7cba3`; E3 `9302b355…40b600`; E4 `93ba3db0…c14508`; E5 `0695284a…f3b3db`; E6 `ee6848f5…121be0b`. | Completed 2026-08-26 | [Completed milestone](../plans/completed/cobalt-adversarial-verification-milestone.md) and [results](../governance/cobalt-adversarial-verification-results.md). |
 | Operator boundary | The campaign proves protocol capability, not operator decentralization. Current proposals and authorizations originate from Foundation-administered validators. | E6 decision: independent-operator proposal path remains a mandatory follow-on milestone. | 2026-08-26 | No independent operators were recruited and no mainnet authority was granted. |
 
@@ -36,8 +37,10 @@ linearly with height to about 14.9 s at round 500, with correlation approximatel
 from full-prefix JSONL verification and full ordered-history proposal rebuilds.
 The repository now contains an undeployed transactional `redb` candidate. Its
 height-915 replay, tamper/crash matrix, and a development-only height-501
-six-clone workflow pass, but exact height-924 replay, clean-source migration,
-and paired release performance remain open. A partial three-binary performance
+six-clone workflow pass. On 2026-08-30, all six exact height-924 transactional
+rebuilds and independent verifies passed, but the first certified continuation
+round failed on superseded validator-registry history reapplication. The
+candidate is not clone-qualified. A partial three-binary performance
 run through legacy height 100 was stopped after its selected verifier was found
 to mutate inspected state; source `785806bd` corrects that verifier and passes
 whole-directory mutation sentinels. The existing three-binary,
@@ -55,10 +58,11 @@ history accumulator, atomic per-height commit, replay/rebuild tooling, the
 closed 69-case tamper/crash matrix, exact height-915 replay, and compatible
 two-binary rollback. Its offline verifier opens source and target read-only and
 refuses every repair-required state without durable mutation. A local
-height-501 development rehearsal also completed
-the ten-phase six-clone migration, cancellation, activation, catch-up, and
-forward-recovery workflow; it is not clean-source or exact-height-924 evidence.
-Nothing in this section proves deployment. See the
+height-501 development rehearsal also completed the ten-phase six-clone
+workflow. The later exact height-924 rehearsal stopped before its first new
+height: the candidate treated a superseded registry update as due again and
+failed its previous-root check. That is a fail-closed result, not deployment
+eligibility. Nothing in this section proves deployment. See the
 [active milestone](../plans/active/storage-scaling-milestone.md) and
 [development evidence](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling).
 
@@ -68,7 +72,7 @@ Nothing in this section proves deployment. See the
 | --- | --- |
 | Chain | `postfiat-wan-devnet-2` |
 | Genesis hash | `ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9` |
-| Observation window | `2026-08-26T06:34:55Z`–`2026-08-26T06:35:50Z` |
+| Observation window | `2026-08-30T14:48:27Z`–`2026-08-30T14:48:45Z` |
 | Validators | 6, all converged |
 | Height | 924 |
 | Mempool | 0 pending on every validator |

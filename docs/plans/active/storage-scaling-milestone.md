@@ -1,6 +1,6 @@
 # Storage Scaling: Time-Budgeted Qualification and Release Gates
 
-**Status:** Active — **G4 PASSED** on 2026-08-30 (ratios 1.0581/1.0623 vs ≤1.10, all gates green, `evidence_eligible = true`; candidate `d0ae79f3`, runner `ae6ec9cb`; see the [first-pass handoff](../../handoffs/2026-08-30___postfiatchad__g4_first_pass.md)). G5 packet assembly is blocked only on the external G3 inputs: re-supply the height-915 quarantine archive and name the height-924 custodian. Deployment and public testnet remain separately gated.
+**Status:** Active — **G4 PASSED** on 2026-08-30 (ratios 1.0581/1.0623 vs ≤1.10, all gates green, `evidence_eligible = true`; candidate `d0ae79f3`, runner `ae6ec9cb`; see the [first-pass handoff](../../handoffs/2026-08-30___postfiatchad__g4_first_pass.md)). The separately authorized exact height-924 G6 rehearsal later **FAILED** on the first certified continuation round after all six rebuild/verify passes; `d0ae79f3` is not clone-qualified and must not deploy. G5 still requires the height-915 quarantine input and a successor candidate must repeat invalidated qualification gates.
 
 **Decision date:** 2026-08-27
 
@@ -270,10 +270,10 @@ independent local gates continue.
 | G0 — campaign control | **PASS** | None; do not rerun the old campaign. | Reopen only if checkpoint/resume itself changes. |
 | G1 — candidate freeze | **PASS FOR CLOSED FAILED LINEAGE** | Preserve source `a92bb085`, binary `902773…e182`, G1 `ed66a6…0190`, runner `a3c7bea9`, helper `ad70ca…014a`, prepared input `c9fb32…da42`, and rehash receipt `6848d4…bb58`. | Any remediation changes the candidate and requires a new freeze; this historical pass authorizes nothing. |
 | G2 — safety | **EAGER-INDEX LOCAL PASS / PACKET BINDING PENDING** | Preserve manifest `dd300b…d170`, rollback `9c3231…e8a5`, tamper `6b63fe…46e0`, and stale-generation receipt `db78c8…563f`; raw output remains private. | Redaction-safe repository packet binding remains open; another candidate change requires another refresh. |
-| G3 — exact replay | **PRIOR HEIGHT 915 PASS / EAGER-INDEX REPLAY REQUIRED / HEIGHT 924 AUTHORIZATION BLOCKED** | Preserve the old height-915 receipt as history; any remediated replay must use binary `902773…e182`. Run height 924 only from a separately authorized copy. | Never wait idle for the height-924 copy, but do not claim offline qualification without both remediated replay receipts. |
-| G4 — scaling | **PASS (2026-08-30)** | Preserve report `e2cff9cd…999f`, checkpoint `f05dca53…cc3c`, and the private output directory. | Closed; reopen only if the candidate or runner changes. |
-| G5 — offline packet | **BLOCKED BY REMEDIATED G3 AND FAILED G4** | Do not package either failed campaign or private validator material. | No qualification claim until remediated G3, a future separately planned and authorized G4 pass, redaction-safe packet binding, and the complete offline verifier all pass. |
-| G6 — six-clone rehearsal | **DEFERRED** | Nothing until offline qualification is complete and deployment is the next real decision. | Requires separate data-copy authorization and six distinct stopped directories. |
+| G3 — exact replay | **HEIGHT 924 REBUILD/VERIFY PASS / HEIGHT 915 INPUT OPEN** | Preserve the six exact height-924 rebuild/verify receipts and re-supply the height-915 quarantine archive. | Do not claim offline qualification without the remaining height-915 receipt and successor requalification after the G6 defect. |
+| G4 — scaling | **PASS FOR `d0ae79f3` (2026-08-30), NOW INVALIDATED FOR A SUCCESSOR** | Preserve report `e2cff9cd…999f`, checkpoint `f05dca53…cc3c`, and the private output directory. | Any fix for the G6 defect changes the candidate and reopens the affected gates. |
+| G5 — offline packet | **BLOCKED BY HEIGHT 915 AND G6 CANDIDATE DEFECT** | Do not package private validator material or describe `d0ae79f3` as qualified. | A successor needs the missing replay input, repeated affected gates, redaction-safe packet binding, and the offline verifier. |
+| G6 — six-clone rehearsal | **FAIL (2026-08-30)** | Diagnose only from the preserved private run and redaction-safe failure receipt; do not deploy `d0ae79f3`. | Six rebuild/verify passes derived packet `6a6b53ea…e4807d5`; the first height-925 round failed on superseded registry-history reapplication. |
 | G7 — Dynamic UNL handoff | **DIRECTION RECORDED / IMPLEMENTATION DEFERRED** | Preserve the recorded architecture decision only. | Spend no implementation time before the stated storage boundary or a new operator priority decision. |
 
 ## G0 — stop the open-ended campaign and make runs resumable
@@ -1058,19 +1058,24 @@ deployment and public testnet remain blocked.
 **Purpose:** spend the six-node migration cost only when deployment is the next
 real decision.
 
-- [ ] Obtain separate authorization and six distinct, complete, stopped
+- [x] Obtain separate authorization and six distinct, complete, stopped
       validator-0 through validator-5 data-directory copies.
-- [ ] Bind each source and backup root, required disk, source/binary identity,
-      activation record, cancellation boundary, and rollback binary.
+- [x] Bind the exact height-924 source fleet, required disk, source/binary
+      identity, rollback binary, and shared initial migration packet.
 - [ ] Rehearse side-by-side migration, independent verification, staged restart,
       pre-activation cancellation, activation, post-activation finality,
-      compatible rollback, catch-up, and all-six convergence.
+      compatible rollback, catch-up, and all-six convergence. **FAIL:** the
+      first height-925 certified round stopped before activation planning.
 - [ ] Prove Cobalt authority and every Consensus v2 rule remain unchanged.
 - [ ] Package and independently verify the clone receipts.
 - [ ] Record `CLONE QUALIFIED` only after every G6 item passes.
 - [ ] Require a separate written deployment decision. It must pin source,
       binary, packet, six source snapshots, activation height, rollback window,
       stop conditions, owners, and fleet evidence requirements.
+
+**2026-08-30 result:** G6 failed; see
+`benchmarks/storage-scaling/devnet-rollout/g6-failure-20260830.json`. The live
+fleet was unchanged and `CLONE QUALIFIED` was not recorded.
 
 **Exit:** passing G6 makes deployment eligible for a separate decision; it does
 not deploy anything.
