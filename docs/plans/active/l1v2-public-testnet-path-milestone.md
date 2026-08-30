@@ -1,0 +1,54 @@
+# L1v2 Public Testnet Path
+
+**Status:** Active — sequencing document; authorizes no deployment, devnet mutation, or launch
+**Date:** 2026-08-30
+**Task:** Task Node `task_510e7605cb2dff0dfd672b397d26f2a6`
+**Basis:** [Storage scaling milestone](storage-scaling-milestone.md), [G4 first-pass handoff](../../handoffs/2026-08-30___postfiatchad__g4_first_pass.md), [Cobalt further evaluation](https://postfiat.org/posts/cobalt-further-evaluation/), Dynamic UNL roadmap (`dynamic-unl-scoring/docs/CurrentRoadmap.md`)
+
+Each lettered gate that changes chain, fleet, or authority state requires its
+own operator decision; this plan orders the work and names the decision
+points, nothing more.
+
+## A — Finish offline storage qualification (G3 → G5)
+
+- [x] G4 scaling PASS at candidate `d0ae79f3`, binary `9e82d928…8c80c`, report `e2cff9cd…999f` ([handoff](../../handoffs/2026-08-30___postfiatchad__g4_first_pass.md))
+- [ ] A1 *(operator, external)* Re-supply the height-915 quarantine archive to the qualification host; record its source-tree SHA-256 against the prior receipt (`postfiat-storage-g3-ae658441/replay-915/receipts/height-915.json`)
+- [ ] A2 *(operator, external)* Name the height-924 custodian and authorize one read-only copy of a quiescent validator directory (`docs/status/chain-state-current.md` identities)
+- [ ] A3 Run both exact replays against the frozen binary with `benchmarks/storage-scaling/run_replay_evidence.py`; bind receipts
+- [ ] A4 Assemble the redaction-safe packet with `benchmarks/storage-scaling/package_packet.py`; run the offline verifier; milestone state becomes **OFFLINE QUALIFIED**
+- [ ] A5 Retire [storage-scaling-milestone.md](storage-scaling-milestone.md) into `docs/plans/completed/` and refresh `docs/architecture/state-and-storage.md` concisely
+
+## B — Pre-deployment rehearsal and deployment decision (G6)
+
+- [ ] B1 *(operator)* Authorize six distinct stopped validator-directory copies from the controlled devnet fleet
+- [ ] B2 Run the six-clone migration rehearsal (`benchmarks/storage-scaling/run_migration_rehearsal.py`): cancelled lane, completed activation lane, restart/catch-up/rollback, mixed-version refusal, all-six convergence
+- [ ] B3 *(operator decision)* Deploy the qualified `d0ae79f3` lineage to the controlled devnet with pinned source/binary/data/activation/rollback identities; verify with a fleet receipt (`docs/status/chain-state-current.md` update)
+
+## C — Validator story: fork community feeds the l1v2 registry
+
+The PFT Ledger fork (51+ community validators, Dynamic UNL live) supplies the
+operator population; l1v2 supplies the registry-as-protocol-state destination.
+
+- [ ] C1 Complete Dynamic UNL governance verification G.6/G.7 and Evidence Transparency E.1 on the fork (`dynamic-unl-scoring/docs/CurrentRoadmap.md`)
+- [ ] C2 Run the deterministic sub-scorer shadow evaluation against frozen rounds 12–19 (per `dynamic-unl-scoring/docs/DeterministicFinalScore.md` method); *(operator decision)* keep or demote model authority based on measured selection deltas
+- [ ] C3 Design the l1v2 genesis-registry proposal path: scored fork operators → proposed registry + template trust graph → Cobalt-checked ratification (Dynamic UNL Phase 3A/3B; `crates/consensus_cobalt/`, `docs/architecture/overview.md`)
+- [ ] C4 Extend the validator sidecar into the l1v2 ratification client (commit-reveal signature after deterministic round replay; `validator-scoring-sidecar`)
+
+## D — Public-testnet eligibility gates
+
+- [ ] D1 Inventory the non-storage release gates: `SECURITY.md`, `docs/release-process.md`, open security items (`docs/security/`)
+- [ ] D2 Public operator runbook: join, key custody (ML-DSA), sidecar, monitoring (`docs/runbooks/`, fork operator docs as template)
+- [ ] D3 Topology/independence thresholds for launch, reusing the fork's strict-gate machinery (placement preflight, concentration caps)
+- [ ] D4 *(operator decision)* Public-testnet launch — explicitly outside this plan's authority
+
+## E — Mandate deliverables
+
+- [ ] E1 Python CLI: `testnet-path` status tool reading gate states from this document and the milestone registry; human-runnable
+- [ ] E2 User-facing interface consuming the CLI output (docs/status page)
+- [ ] E3 On completion, retire this document into `docs/plans/completed/` and refresh documentation
+
+## Order and dependencies
+
+A1/A2 are independent external inputs; A3–A5 follow either. B needs A
+complete. C runs in parallel with A and B (it lives mostly in the fork
+repositories). D needs B and C. E1/E2 can start immediately.
