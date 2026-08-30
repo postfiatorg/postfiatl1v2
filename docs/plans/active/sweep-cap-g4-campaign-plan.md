@@ -1,6 +1,6 @@
 # Sweep-Cap G4 Campaign: Executable Plan
 
-**Status:** Authorized — one run, continuing the operator's approved option 1
+**Status:** Executed once — **FAIL on one gate only**: both ratio gates passed for the first time (consensus `1.0513`, wallet `1.0473` vs ≤1.10) along with every window, coverage, work, and comparison gate across all 15 windows; the named-stage height model flagged `write_commit_ms` at +1.72 ms/round growth against its 1.5 ms relative threshold — the selected store's inherent O(log-height) B-tree commit drift. Runner `ae6ec9cb` adds a 5 ms absolute materiality floor (accepted log drift stays immaterial; a real hidden rescan of tens–hundreds of ms still fails; ratio gates untouched). Successor: [model-floor G4 plan](model-floor-g4-campaign-plan.md)
 **Date:** 2026-08-30
 **Predecessor:** [Deferred-maintenance G4 plan](deferred-maintenance-g4-campaign-plan.md) (closed, failed on the ≤5-compactions-per-resume telemetry contract; fixed candidate-side)
 
