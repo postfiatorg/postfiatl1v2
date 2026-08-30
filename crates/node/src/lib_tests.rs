@@ -14,6 +14,7 @@ mod tests {
     mod lifecycle_checkpoint_tests;
     mod private_primary_replay_gate_tests;
     mod snapshot_deployment;
+    mod validator_registry_continuation_tests;
     mod vault_bridge_governed_route;
     use consensus_history::{dummy_block_record, write_split_validator_key_files};
     include!("tests/governance_history_manifest_tests.rs");

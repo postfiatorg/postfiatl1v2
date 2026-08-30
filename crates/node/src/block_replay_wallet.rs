@@ -1327,6 +1327,38 @@ pub(super) fn backfill_legacy_validator_registry_records(
     validate_validator_registry(registry)
 }
 
+/// Length of the leading run of recorded validator-registry updates that are
+/// already reflected in the persisted live registry.
+///
+/// The persisted registry always equals the state produced by the most
+/// recently applied update, so the applied history ends at the *last*
+/// recorded update whose affected validator set reproduces its
+/// `new_registry_root` from the current registry. Earlier updates are
+/// accepted history even when a later update to the same validator record
+/// has superseded them and their own roots are no longer reproducible.
+/// Testing each update in isolation treats such superseded history as due
+/// again, reapplies it to a registry that is not its predecessor, and fails
+/// the previous-root check, so activation must derive the applied prefix
+/// from the latest matching update instead. Updates after the prefix remain
+/// subject to the fail-closed previous-root and new-root checks when they
+/// are applied.
+pub(super) fn applied_validator_registry_update_prefix_len(
+    registry: &ValidatorRegistry,
+    updates: &[ValidatorRegistryUpdateRecord],
+) -> usize {
+    let mut applied_prefix_len = 0;
+    for (index, update) in updates.iter().enumerate() {
+        let new_validators = validator_registry_update_new_validators(update);
+        let reflects_registry = validator_registry_root(registry, &new_validators)
+            .map(|current_new_root| current_new_root == update.new_registry_root)
+            .unwrap_or(false);
+        if reflects_registry {
+            applied_prefix_len = index + 1;
+        }
+    }
+    applied_prefix_len
+}
+
 pub(super) fn live_validator_registry_after_due_updates(
     store: &NodeStore,
     genesis: &Genesis,
@@ -1335,19 +1367,20 @@ pub(super) fn live_validator_registry_after_due_updates(
 ) -> io::Result<Option<ValidatorRegistry>> {
     let mut registry =
         read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?;
+    let applied_prefix_len = applied_validator_registry_update_prefix_len(
+        &registry,
+        &governance.validator_registry_updates,
+    );
     let mut changed = false;
-    for update in &governance.validator_registry_updates {
+    for update in governance
+        .validator_registry_updates
+        .iter()
+        .skip(applied_prefix_len)
+    {
         if update.activation_height > block_height {
             continue;
         }
-        let new_validators = validator_registry_update_new_validators(update);
         if !validator_registry_update_can_live_apply(update, governance)? {
-            continue;
-        }
-        if validator_registry_root(&registry, &new_validators)
-            .map(|current_new_root| current_new_root == update.new_registry_root)
-            .unwrap_or(false)
-        {
             continue;
         }
         apply_verified_validator_registry_update_to_registry(
@@ -1390,19 +1423,25 @@ pub(super) fn activate_due_validator_registry_updates_for_commit(
 ) -> io::Result<DueValidatorRegistryActivations> {
     let mut registry =
         read_validator_registry_file(&store.data_dir().join(VALIDATOR_REGISTRY_FILE))?;
+    let applied_prefix_len = applied_validator_registry_update_prefix_len(
+        &registry,
+        &governance.validator_registry_updates,
+    );
     let mut registry_changed = false;
     let mut governance_changed = false;
-    for update in &governance.validator_registry_updates.clone() {
+    for (index, update) in governance
+        .validator_registry_updates
+        .clone()
+        .iter()
+        .enumerate()
+    {
         if update.activation_height >= block_height
             || update.operation == VALIDATOR_REGISTRY_OP_ROTATE_KEY
         {
             continue;
         }
         let new_validators = validator_registry_update_new_validators(update);
-        let already_live = validator_registry_root(&registry, &new_validators)
-            .map(|current_new_root| current_new_root == update.new_registry_root)
-            .unwrap_or(false);
-        if !already_live {
+        if index >= applied_prefix_len {
             apply_verified_validator_registry_update_to_registry(
                 genesis,
                 &mut registry,

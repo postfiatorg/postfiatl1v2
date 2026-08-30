@@ -1077,6 +1077,30 @@ real decision.
 `benchmarks/storage-scaling/devnet-rollout/g6-failure-20260830.json`. The live
 fleet was unchanged and `CLONE QUALIFIED` was not recorded.
 
+**Continuation-defect repair (2026-08-30, post-stop):**
+
+- [x] Repair the owning boundary: live and ordered validator-registry
+      activation now derive the applied history prefix from the latest update
+      whose affected set reproduces its `new_registry_root`
+      (`applied_validator_registry_update_prefix_len` in
+      `crates/node/src/block_replay_wallet.rs`), so accepted, superseded
+      updates are never treated as due again. The fail-closed previous-root
+      and new-root checks in `crates/node/src/storage_commit.rs` are
+      unchanged and still guard every pending update.
+- [x] Exact regression: drill rotation, signed rollback, and later rotation
+      of the same validator record, then a successful next certified height
+      (`superseded_registry_rotation_history_continues_to_next_certified_height`
+      in `crates/node/src/tests/validator_registry_continuation_tests.rs`).
+      Reproduces the exact `live validator registry activation previous
+      validator registry root mismatch` failure on the pre-fix code.
+- [x] Adversarial history coverage: stale, reordered, duplicated, missing,
+      and wrong-root update histories reject or stay inert without durable
+      mutation, and settled admit-then-remove history no longer resurrects
+      the removed validator on the ordered activation path.
+- [ ] Freeze the successor source revision and binary hash, then repeat every
+      invalidated qualification gate (G3 height-915 input, G4, G5, full G6)
+      before any new written deployment decision.
+
 **Exit:** passing G6 makes deployment eligible for a separate decision; it does
 not deploy anything.
 
