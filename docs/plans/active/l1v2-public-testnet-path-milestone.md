@@ -9,6 +9,29 @@ Each lettered gate that changes chain, fleet, or authority state requires its
 own operator decision; this plan orders the work and names the decision
 points, nothing more.
 
+## Gate Zero — operator preconditions (recorded 2026-08-30)
+
+**No community-facing step — genesis outreach (C3 execution), ratification
+clients on operator machines (C4 deployment), any Phase D gate, or launch —
+may start until all three are true.** Internal work (A, B, C1, C2, E, and
+design-only portions of C3/C4) proceeds normally. Bars below are proposed
+operationalizations; the operator may tighten or restate them.
+
+- [ ] Z1 **Cobalt is live**: Cobalt-ratified transitions are the sole
+      registry-change path on the running devnet with the qualified storage
+      lineage (post-B3), and have processed real transitions — including at
+      least one validator change — over a sustained window with zero
+      overrides
+- [ ] Z2 **AI-governance decision made and live**: the C2 shadow evaluation
+      is complete, the model-authority decision (keep or demote) is recorded,
+      and the decided configuration is what actually runs the fork's weekly
+      production rounds
+- [ ] Z3 **NAVCoin swaps work end to end**: full round trips
+      (deposit → mint → swap → redemption) succeed repeatedly on the
+      qualified lineage over a sustained window **without requiring any
+      consensus upgrade during that window** — consensus-surface churn on
+      NAVCoin paths must have stopped before strangers run the binary
+
 ## A — Finish offline storage qualification (G3 → G5)
 
 - [x] G4 scaling PASS at candidate `d0ae79f3`, binary `9e82d928…8c80c`, report `e2cff9cd…999f` ([handoff](../../handoffs/2026-08-30___postfiatchad__g4_first_pass.md))
@@ -50,5 +73,6 @@ operator population; l1v2 supplies the registry-as-protocol-state destination.
 ## Order and dependencies
 
 A1/A2 are independent external inputs; A3–A5 follow either. B needs A
-complete. C runs in parallel with A and B (it lives mostly in the fork
-repositories). D needs B and C. E1/E2 can start immediately.
+complete. C1/C2 and design work run in parallel with A and B. **Everything
+that touches community operators is blocked by Gate Zero (Z1–Z3).** D needs
+B, C, and Gate Zero. E1/E2 can start immediately.
