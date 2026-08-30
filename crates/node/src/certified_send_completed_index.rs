@@ -23,6 +23,7 @@ const COMPLETED_INDEX_INTENT_MAX_BYTES: u64 = 64 * 1024;
 const COMPLETED_INDEX_INTENT_BATCH_SCHEMA: &str =
     "postfiat.certified_send_completed_index_intent.v2";
 const COMPLETED_INDEX_INTENT_MAX_OPERATIONS: usize = 32;
+const CERTIFIED_SEND_MAX_COMPACTIONS_PER_RESUME: usize = 5;
 const COMPLETED_INDEX_MAX_TRANSIENT_ENTRIES: usize =
     CERTIFIED_SEND_COMPLETED_TOMBSTONE_MAX_JOBS + CERTIFIED_SEND_OUTBOX_MAX_JOBS;
 const COMPLETED_INDEX_VERIFY_REPORT_SCHEMA: &str =
@@ -1399,8 +1400,16 @@ fn compact_completed_with_index_locked(
     if !intent_reconciled {
         require_completed_directory_stamp(data_dir, &index)?;
     }
+    // Bound compaction to one round's worth of deliveries per maintenance
+    // pass. A first pass after restore may find leftover completed jobs plus
+    // the current round's deliveries; sweeping the oldest five keeps the
+    // per-resume work gate exact (validated == compacted + pruned, ≤5 each)
+    // and defers the remainder exactly one round.
     let mut appends = Vec::with_capacity(active_completed.len());
-    for (directory, job, job_bytes) in active_completed {
+    for (directory, job, job_bytes) in active_completed
+        .into_iter()
+        .take(CERTIFIED_SEND_MAX_COMPACTIONS_PER_RESUME)
+    {
         let entry = validate_active_completed_job(
             data_dir,
             &directory,
@@ -2042,6 +2051,27 @@ mod completed_index_tests {
             CERTIFIED_SEND_COMPLETED_TOMBSTONE_MAX_JOBS
         );
         std::fs::remove_dir_all(root).expect("cleanup at-cap batch test");
+    }
+
+    #[test]
+    fn maintenance_sweeps_at_most_five_jobs_per_pass() {
+        let root = test_root("sweep-cap");
+        let topology = test_topology();
+        std::fs::create_dir_all(&root).expect("create fresh data directory");
+        for height in 1..=8 {
+            tombstone_job(&root, &topology, height, false);
+        }
+
+        let first = compact_completed_with_index(&root).expect("first bounded sweep");
+        assert_eq!(first.compacted, 5, "first pass sweeps the oldest five");
+        assert_eq!(first.work.tombstones_validated, 5);
+        let second = compact_completed_with_index(&root).expect("second bounded sweep");
+        assert_eq!(second.compacted, 3, "remainder compacts on the next pass");
+        assert!(!second.work.index_migration_performed);
+        let verified =
+            verify_and_rebuild_completed_index(&root).expect("verify swept index");
+        assert_eq!(verified.entry_count, 8);
+        std::fs::remove_dir_all(root).expect("cleanup sweep-cap test");
     }
 
     #[test]
