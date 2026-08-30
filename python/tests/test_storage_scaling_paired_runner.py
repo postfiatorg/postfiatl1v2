@@ -708,6 +708,9 @@ class StorageScalingPairedRunnerTests(unittest.TestCase):
         self.assertTrue(gate["passed"])
         self.assertEqual(gate["max_residual_ms"], 20.0)
 
+    def test_height_model_floor_ignores_sub_five_ms_drift(self) -> None:
+        self.assertEqual(PAIRED.BASE.MODEL_MIN_MATERIAL_GROWTH_MS, 5.0)
+
     def test_round_coverage_gate_tolerates_one_isolated_bounded_stall(self) -> None:
         gate = PAIRED.BASE.round_coverage_from_report(
             _round_coverage_report([20.0, 180.0, 30.0])

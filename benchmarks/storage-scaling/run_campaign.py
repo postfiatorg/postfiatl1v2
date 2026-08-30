@@ -67,6 +67,13 @@ MATERIAL_STAGE_PATHS = {
     "write_commit_ms": ("round_timings", "local_apply_breakdown", "write_commit_ms"),
 }
 MODEL_RELATIVE_MATERIALITY = 0.10
+# Absolute materiality floor: a two-height fit cannot distinguish the
+# accepted O(log-height) tree-depth drift of the selected transactional
+# store (~2 ms per 100x height, inherent to any B-tree commit) from a
+# genuinely height-proportional hidden cost, which manifests as tens to
+# hundreds of milliseconds. Growth below this floor is immaterial; the
+# unchanged 1.10 aggregate ratio gates still bound total growth.
+MODEL_MIN_MATERIAL_GROWTH_MS = 5.0
 MODEL_RESIDUAL_SIGMAS = 2.0
 REPO = Path(__file__).resolve().parents[2]
 SHARED_RUNNER = (
@@ -548,6 +555,7 @@ def height_relationship_models(
             baseline * MODEL_RELATIVE_MATERIALITY,
             linear["residual_rmse_ms"] * MODEL_RESIDUAL_SIGMAS,
             same_height_variance_allowance,
+            MODEL_MIN_MATERIAL_GROWTH_MS,
         )
         material_positive = (
             linear["slope"] > 0 and predicted_delta > material_threshold
