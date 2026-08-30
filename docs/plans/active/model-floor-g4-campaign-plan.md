@@ -1,6 +1,6 @@
 # Model-Floor G4 Campaign: Executable Plan
 
-**Status:** Authorized — one run, continuing the operator's approved option 1
+**Status:** Executed once — **PASS**. First passing G4 in the project: consensus ratio `1.0581`, wallet `1.0623` (≤1.10); every window, coverage, work, comparison, and height-model gate passed across all 15 windows; `evidence_eligible = true`; selected path ~2.9× faster than legacy at height 50. Campaign report SHA-256 `e2cff9cde8c3c9e300393af924a63dc42b2451dacc90079df61dbdf66a6d999f` in the private output directory. G5 packet assembly remains blocked only on the external G3 inputs (height-915 archive re-supply; height-924 custodian)
 **Date:** 2026-08-30
 **Predecessor:** [Sweep-cap G4 plan](sweep-cap-g4-campaign-plan.md) (closed; first-ever ratio pass at 1.0513/1.0473; failed only the stage height model on the store's +1.72 ms O(log-height) commit drift)
 
