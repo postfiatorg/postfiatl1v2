@@ -2759,7 +2759,7 @@ pub(super) fn transport_peer_certified_batch_round(
             "--send-retries must be <= {MAX_TRANSPORT_SEND_RETRIES}"
         ));
     }
-    let resumed_delivery = resume_durable_certified_send_outbox(
+    let resumed_delivery = resume_durable_certified_send_outbox_pending_only(
         &options.data_dir,
         &options.topology_file,
         CERTIFIED_SEND_OUTBOX_MAX_JOBS,
@@ -3631,6 +3631,18 @@ pub(super) fn transport_peer_certified_batch_round(
         .ok_or_else(|| "peer certified batch round did not apply locally".to_string())?;
     let local_state =
         local_state.ok_or_else(|| "peer certified batch round missing local state".to_string())?;
+
+    // Deferred certified-send maintenance: migration, reconciliation,
+    // compaction, and pruning run after client-visible finality so retention
+    // bookkeeping never delays proposal or finality. The elapsed time and
+    // work counters merge into this round's outbox telemetry below, keeping
+    // the coverage and certified-send work gates byte-identical in shape.
+    let outbox_maintenance_start = Instant::now();
+    let outbox_maintenance = compact_completed_with_index(&options.data_dir).map_err(|error| {
+        format!("peer certified batch round outbox maintenance failed: {error}")
+    })?;
+    let outbox_maintenance_ms = monotonic_elapsed_ms(outbox_maintenance_start);
+
     let local_hot_finality = transport_hot_finality_reports(
         &topology,
         &proposal,
@@ -3719,21 +3731,29 @@ pub(super) fn transport_peer_certified_batch_round(
     let timings = TransportPeerCertifiedBatchRoundTimingsReport {
         total_ms: monotonic_elapsed_ms(round_start),
         outbox_resume_node_id: local_status.node_id.clone(),
-        outbox_resume_ms: resumed_delivery.outbox_resume_ms,
-        outbox_tombstones_validated: resumed_delivery.work.tombstones_validated,
-        outbox_files_read: resumed_delivery.work.files_read,
-        outbox_bytes_hashed: resumed_delivery.work.bytes_hashed,
-        outbox_index_files_read: resumed_delivery.work.index_files_read,
-        outbox_index_bytes_read: resumed_delivery.work.index_bytes_read,
-        outbox_completed_entries_enumerated: resumed_delivery
-            .work
-            .completed_entries_enumerated,
-        outbox_jobs_compacted: resumed_delivery.work.jobs_compacted,
-        outbox_jobs_pruned: resumed_delivery.work.jobs_pruned,
-        outbox_index_migration_performed: resumed_delivery.work.index_migration_performed,
-        outbox_compaction_ms: resumed_delivery.work.compaction_ms,
-        outbox_validation_ms: resumed_delivery.work.validation_ms,
-        outbox_prune_ms: resumed_delivery.work.prune_ms,
+        outbox_resume_ms: resumed_delivery.outbox_resume_ms + outbox_maintenance_ms,
+        outbox_tombstones_validated: resumed_delivery.work.tombstones_validated
+            + outbox_maintenance.work.tombstones_validated,
+        outbox_files_read: resumed_delivery.work.files_read + outbox_maintenance.work.files_read,
+        outbox_bytes_hashed: resumed_delivery.work.bytes_hashed
+            + outbox_maintenance.work.bytes_hashed,
+        outbox_index_files_read: resumed_delivery.work.index_files_read
+            + outbox_maintenance.work.index_files_read,
+        outbox_index_bytes_read: resumed_delivery.work.index_bytes_read
+            + outbox_maintenance.work.index_bytes_read,
+        outbox_completed_entries_enumerated: resumed_delivery.work.completed_entries_enumerated
+            + outbox_maintenance.work.completed_entries_enumerated,
+        outbox_jobs_compacted: resumed_delivery.work.jobs_compacted
+            + outbox_maintenance.work.jobs_compacted,
+        outbox_jobs_pruned: resumed_delivery.work.jobs_pruned
+            + outbox_maintenance.work.jobs_pruned,
+        outbox_index_migration_performed: resumed_delivery.work.index_migration_performed
+            || outbox_maintenance.work.index_migration_performed,
+        outbox_compaction_ms: resumed_delivery.work.compaction_ms
+            + outbox_maintenance.work.compaction_ms,
+        outbox_validation_ms: resumed_delivery.work.validation_ms
+            + outbox_maintenance.work.validation_ms,
+        outbox_prune_ms: resumed_delivery.work.prune_ms + outbox_maintenance.work.prune_ms,
         shielded_verifier_prewarm,
         setup_ms,
         proposal_ms,

@@ -2045,6 +2045,34 @@ mod completed_index_tests {
     }
 
     #[test]
+    fn pending_only_resume_defers_all_maintenance() {
+        let root = test_root("pending-only");
+        let topology = test_topology();
+        std::fs::create_dir_all(&root).expect("create fresh data directory");
+        for height in 1..=3 {
+            tombstone_job(&root, &topology, height, false);
+        }
+
+        let scan = resume_durable_certified_send_outbox_pending_only(
+            &root,
+            &root.join("unused-topology.json"),
+            CERTIFIED_SEND_OUTBOX_MAX_JOBS,
+        )
+        .expect("pending-only scan");
+        assert!(scan.all_completed);
+        assert_eq!(scan.pending, 0);
+        assert!(!scan.work.index_migration_performed, "maintenance must be deferred");
+        assert_eq!(scan.work.jobs_compacted, 0);
+        assert!(!completed_index_path_for_test(&root).exists());
+
+        let maintenance = compact_completed_with_index(&root).expect("deferred maintenance");
+        assert!(maintenance.work.index_migration_performed);
+        assert_eq!(maintenance.compacted, 3);
+        assert!(completed_index_path_for_test(&root).exists());
+        std::fs::remove_dir_all(root).expect("cleanup pending-only test");
+    }
+
+    #[test]
     fn crash_mid_batch_intent_recovers_all_operations() {
         let root = test_root("batch-crash");
         let topology = test_topology();

@@ -2377,13 +2377,40 @@ fn resume_durable_certified_send_outbox(
     topology_file: &Path,
     max_jobs: usize,
 ) -> Result<DurableCertifiedSendResumeReport, String> {
+    resume_durable_certified_send_outbox_with_maintenance(data_dir, topology_file, max_jobs, true)
+}
+
+/// Resume with deferred maintenance: scans the outbox for pending jobs and
+/// retries deliveries, but performs no completed-index maintenance
+/// (migration, reconciliation, compaction, pruning). The caller must run
+/// `compact_completed_with_index` afterwards — the round runtime does so
+/// after client-visible finality so retention bookkeeping never delays
+/// proposal or finality, and reports it in the same round telemetry.
+fn resume_durable_certified_send_outbox_pending_only(
+    data_dir: &Path,
+    topology_file: &Path,
+    max_jobs: usize,
+) -> Result<DurableCertifiedSendResumeReport, String> {
+    resume_durable_certified_send_outbox_with_maintenance(data_dir, topology_file, max_jobs, false)
+}
+
+fn resume_durable_certified_send_outbox_with_maintenance(
+    data_dir: &Path,
+    topology_file: &Path,
+    max_jobs: usize,
+    perform_maintenance: bool,
+) -> Result<DurableCertifiedSendResumeReport, String> {
     if max_jobs == 0 || max_jobs > CERTIFIED_SEND_OUTBOX_MAX_JOBS {
         return Err(format!(
             "certified send resume max jobs must be between 1 and {CERTIFIED_SEND_OUTBOX_MAX_JOBS}"
         ));
     }
     let resume_start = Instant::now();
-    let compaction = compact_completed_with_index(data_dir)?;
+    let compaction = if perform_maintenance {
+        compact_completed_with_index(data_dir)?
+    } else {
+        CompletedIndexCompactionReport::default()
+    };
     let work = compaction.work;
     let outbox_dir = certified_send_outbox_dir(data_dir);
     if !outbox_dir.exists() {
