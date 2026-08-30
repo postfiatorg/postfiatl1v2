@@ -93,10 +93,43 @@ height-501 six-clone migration rehearsal pass offline. Candidate `d0ae79f3`
 later passed six exact height-924 transactional rebuild/verify pairs but failed
 its first certified continuation round when superseded validator-registry
 history was treated as due again. It is not clone-qualified and was not
-deployed. See the [Storage Scaling Fix implementation specification](storage-scaling-fix-spec.md),
+deployed; the continuation defect itself is repaired in the repository lineage
+(see the next section). See the [Storage Scaling Fix implementation specification](storage-scaling-fix-spec.md),
 the [active milestone](../plans/active/storage-scaling-milestone.md), and
 [development evidence](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling).
 Public testnet remains blocked.
+
+## Validator-registry activation on continuation
+
+When a node commits a new height, it activates due validator-registry updates
+from the recorded governance history against the persisted registry file. Two
+paths share this behavior in `crates/node/src/block_replay_wallet.rs`: the
+ordered commit-side activation and the live activation that finalizes the
+registry written with the block.
+
+Both paths derive an **applied-history prefix**
+(`applied_validator_registry_update_prefix_len`). The persisted registry always
+equals the state produced by the most recently applied update, so applied
+history runs through the *latest* recorded update whose affected validator set
+reproduces its `new_registry_root` from the current registry. Everything at or
+before that point is settled history and is never reapplied — including
+accepted updates that a later update to the same validator record has
+superseded, whose own roots are no longer reproducible. Updates after the
+prefix are pending and chain through the unchanged fail-closed previous-root
+and new-root checks in `crates/node/src/storage_commit.rs`: wrong-root,
+reordered, or missing history rejects the commit without durable mutation.
+
+Testing each update in isolation instead of deriving the prefix is what
+stopped the 2026-08-30 exact height-924 G6 clone rehearsal: a superseded drill
+rotation was treated as due again and correctly failed the previous-root check
+(see the [postmortem](../postmortems/devnet-storage-g6-rehearsal-stop-2026-08-30.md)).
+The repair landed at commit `2c7aa36f` with an exact regression — drill
+rotation, signed rollback, later rotation of the same validator record, then a
+successful next certified height — plus stale, reordered, duplicated, missing,
+and wrong-root history coverage in
+`crates/node/src/tests/validator_registry_continuation_tests.rs`. The repair is
+part of the repository lineage only: it does not make `d0ae79f3` deployable,
+and no qualification gate has been rerun for a successor candidate.
 
 ## Partial History
 
