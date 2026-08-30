@@ -1,6 +1,6 @@
 # Deferred-Maintenance G4 Campaign: Executable Plan
 
-**Status:** Authorized — one run under the operator's approved option 1 (2026-08-30 "yes"): remove the at-cap retention cost from the client-visible span at its source
+**Status:** Executed once — **FAIL** in the first window: `CERTIFIED_SEND_UNTOUCHED_TOMBSTONE_VALIDATION` because a validator's first post-finality maintenance pass swept restore leftovers plus its own round's deliveries (10 compactions vs the ≤5 per-resume gate limit). Candidate-owned fix at `d0ae79f3`: maintenance sweeps at most five jobs per pass (oldest first, remainder deferred one round), keeping the frozen gate arithmetic exact. Successor: [sweep-cap G4 plan](sweep-cap-g4-campaign-plan.md)
 **Date:** 2026-08-30
 **Predecessor:** [Stall-tolerant G4 plan](stall-tolerant-g4-campaign-plan.md) (closed, failed on ratios alone by 0.3%/0.6% with every gate passing)
 
