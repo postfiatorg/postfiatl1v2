@@ -1,6 +1,6 @@
 # Stall-Tolerant G4 Campaign: Executable Plan
 
-**Status:** Authorized — one run; the operator explicitly approved the coverage-gate amendment and this run on 2026-08-29 ("yes" to the two-part proposal) after declining a dedicated measurement host
+**Status:** Executed once — **FAIL on ratios alone, by 0.3%/0.6%** (consensus `1.1028`, wallet `1.1061` vs ≤1.10). All 15 windows completed; every window, coverage (amended), work, comparison, and height-model gate passed. Diagnosis: the round p50 ratio is height-flat (1.029); p95 deterministically lands on validator-0's at-cap resume (~56 ms vs ~24 ms at height 50), whose cost is the certified-send index file's own fsyncs on this virtio disk. No further run without new explicit operator input; see the closure section of the [environment decision handoff](../../handoffs/2026-08-29___postfiatchad__g4_measurement_environment_decision.md)
 **Date:** 2026-08-30
 **Predecessors:** [Fsync-lean G4 plan](fsync-lean-g4-campaign-plan.md) (closed, failed on one isolated 103.6 ms host stall), [environment decision handoff](../../handoffs/2026-08-29___postfiatchad__g4_measurement_environment_decision.md)
 

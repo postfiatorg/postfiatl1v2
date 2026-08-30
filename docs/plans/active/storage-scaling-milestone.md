@@ -1,6 +1,6 @@
 # Storage Scaling: Time-Budgeted Qualification and Release Gates
 
-**Status:** Active — `redb` selected but not qualified; three further one-run campaigns (2026-08-29, frozen candidates `86929450` and `66f30f13`) closed failed on marginal environmental grounds: two isolated host-jitter residual rounds and one 1.10-ratio miss by 0.09–1.5% with every other gate passing; an operator decision on the measurement environment is required before any fourth run (see the [environment decision handoff](../../handoffs/2026-08-29___postfiatchad__g4_measurement_environment_decision.md)); G3 height-915 replay additionally needs its quarantine-archive input re-supplied (not present on the current host); G5, deployment, and public testnet blocked
+**Status:** Active — `redb` selected but not qualified; four one-run campaigns closed failed (2026-08-29/30): two on isolated host-jitter rounds, two on ratio-only misses of 0.09–1.5% and finally 0.3%/0.6% with every other gate passing under the reviewed stall-tolerance amendment; the p95 gap is fully attributed to the certified-send index file's fsyncs on validator-0 at-cap rounds; the recommended next step is migrating that index into the transactional `redb` store (operator decision pending — see the [environment decision handoff](../../handoffs/2026-08-29___postfiatchad__g4_measurement_environment_decision.md)); G3 needs its height-915 input re-supplied and the height-924 custodian; G5, deployment, and public testnet blocked
 
 **Decision date:** 2026-08-27
 

@@ -68,6 +68,31 @@ intact. Rebuildable `target/` caches and five unreferenced
 
 No fourth campaign is authorized until one is chosen.
 
+## 2026-08-30 closure update: fourth campaign, ratio-only miss by 0.3%/0.6%
+
+With the operator-approved stall-tolerance amendment (runner `2e49abb2`, one
+isolated 100–250 ms residual round tolerated per window, ratio thresholds
+untouched) and a further fsync cut (candidate `1423770e`), a fourth one-run
+campaign completed the full matrix with **every gate passing except the
+ratios**: consensus `1.1028`, wallet `1.1061` versus ≤1.10. The median round
+ratio is height-flat (`1.029`); the p95 statistic deterministically samples
+validator-0's at-cap proposal rounds (8 of 50 per window exceed the 5% tail),
+whose resume costs ~56 ms at the 1,024-tombstone cap versus ~24 ms at height
+50 — now almost entirely the ~8 sequential fsyncs and ~600 KB rewrite of the
+certified-send completed-index file on a virtio disk. Private output:
+`~/repos/postfiat-storage-g4-measurement-2e49abb2-1423770e-v1`.
+
+Four campaigns now bound the truth: 1.09–1.12 on this host. The remaining
+honest engineering option is architectural: move the certified-send completed
+index out of its standalone fsync-per-resume JSON file and into the
+transactional `redb` store, so its durability rides the existing bounded
+per-round commit (~1.2 ms durable-commit already measured and gated). That
+removes nearly the entire at-cap delta at its source. Alternatives remain a
+bare-metal measurement host or an operator-reviewed threshold change; the
+threshold change is not recommended because the gate is correctly reporting a
+real at-cap cost. No fifth campaign is authorized until the operator picks
+one.
+
 ## Also in this session
 
 The freeze/evidence cycle was performed twice (sources `86929450` and
