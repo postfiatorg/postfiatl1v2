@@ -1,12 +1,12 @@
 # Storage Scaling: Time-Budgeted Qualification and Release Gates
 
-**Status:** Active — **G4 PASSED** on 2026-08-30 (ratios 1.0581/1.0623 vs ≤1.10, all gates green, `evidence_eligible = true`; candidate `d0ae79f3`, runner `ae6ec9cb`; see the [first-pass handoff](../../handoffs/2026-08-30___postfiatchad__g4_first_pass.md)). The separately authorized exact height-924 G6 rehearsal later **FAILED** on the first certified continuation round after all six rebuild/verify passes; `d0ae79f3` is not clone-qualified and must not deploy. G5 still requires the height-915 quarantine input and a successor candidate must repeat invalidated qualification gates.
+**Status:** Active — no deployment-eligible candidate. Candidate `d0ae79f3` passed G4 but failed the exact height-924 G6 continuation. Successor `10dd9f20` repaired that defect and passed the existing clone runner, but the first live canary proved the runner was not deployment-exact: it omitted concurrent transport and RPC access to one transactional database and did not prove exact old-binary/data rollback. The canary was rolled back, both candidates are **DO NOT DEPLOY**, G5 still lacks the height-915 quarantine input, and public testnet remains blocked.
 
 **Decision date:** 2026-08-27
 
 **Decision owner:** Post Fiat
 
-**Candidate lineage:** failed pre-fix source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`, binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; corrected vote-lock source `442c5a4ddafed3aa0709f64e213fe0cedac5222d`, binary SHA-256 `29423cba098ce793ccab4a234ab26a2d30c6b11ad9eacd339b11b89cd6187c48`; certified-send tombstone source `e52e050269a2f9fdd28c5083c3888debf3a85063`, binary SHA-256 `6b130a1f9c81bd64bc9dc42043595f5a27e84185cf3f40b13b5f37a40d72a82e`; eager-index source `a92bb085ceb6a9f405e916608e6b7bb6010fcc9b`, binary SHA-256 `902773e00e5226dab9e027ebce2b932b2cf26509dba08424f6ebe46db985e182`; unfrozen vote-lock-marker and batched-index remediation sources `ff2b3532` and `48a94425` (no release freeze yet); gate-logic runner `15d059d1`; test-only runner successor `a3c7bea9`; persistent setup remediation `438fb29c`; v4 restore remediation `428fe7c9`; build/measurement workflow `90d68784`
+**Candidate lineage:** failed pre-fix source `ae65844190f153cbdd49d1e5ac28ab96a19f7af4`, binary SHA-256 `891bfb42ea16af844fd72351ee38a90eaeb8f4302492a8fd64ce0f3db5dcbbf4`; corrected vote-lock source `442c5a4ddafed3aa0709f64e213fe0cedac5222d`, binary SHA-256 `29423cba098ce793ccab4a234ab26a2d30c6b11ad9eacd339b11b89cd6187c48`; certified-send tombstone source `e52e050269a2f9fdd28c5083c3888debf3a85063`, binary SHA-256 `6b130a1f9c81bd64bc9dc42043595f5a27e84185cf3f40b13b5f37a40d72a82e`; eager-index source `a92bb085ceb6a9f405e916608e6b7bb6010fcc9b`, binary SHA-256 `902773e00e5226dab9e027ebce2b932b2cf26509dba08424f6ebe46db985e182`; unfrozen vote-lock-marker and batched-index remediation sources `ff2b3532` and `48a94425` (no release freeze yet); gate-logic runner `15d059d1`; test-only runner successor `a3c7bea9`; persistent setup remediation `438fb29c`; v4 restore remediation `428fe7c9`; build/measurement workflow `90d68784`; registry-continuation successor `10dd9f20c2530fd90fbf69ff5512fae5448eaac6`, binary SHA-256 `0cc664a3b2057a48547b0898487b979b89a0ba96ccad922402b5746b65ad4183`
 
 **Research basis:** [Storage Scaling and Bounded Finality](../../architecture/storage-scaling-research-spec.md)
 
@@ -270,10 +270,10 @@ independent local gates continue.
 | G0 — campaign control | **PASS** | None; do not rerun the old campaign. | Reopen only if checkpoint/resume itself changes. |
 | G1 — candidate freeze | **PASS FOR CLOSED FAILED LINEAGE** | Preserve source `a92bb085`, binary `902773…e182`, G1 `ed66a6…0190`, runner `a3c7bea9`, helper `ad70ca…014a`, prepared input `c9fb32…da42`, and rehash receipt `6848d4…bb58`. | Any remediation changes the candidate and requires a new freeze; this historical pass authorizes nothing. |
 | G2 — safety | **EAGER-INDEX LOCAL PASS / PACKET BINDING PENDING** | Preserve manifest `dd300b…d170`, rollback `9c3231…e8a5`, tamper `6b63fe…46e0`, and stale-generation receipt `db78c8…563f`; raw output remains private. | Redaction-safe repository packet binding remains open; another candidate change requires another refresh. |
-| G3 — exact replay | **HEIGHT 924 REBUILD/VERIFY PASS / HEIGHT 915 INPUT OPEN** | Preserve the six exact height-924 rebuild/verify receipts and re-supply the height-915 quarantine archive. | Do not claim offline qualification without the remaining height-915 receipt and successor requalification after the G6 defect. |
-| G4 — scaling | **PASS FOR `d0ae79f3` (2026-08-30), NOW INVALIDATED FOR A SUCCESSOR** | Preserve report `e2cff9cd…999f`, checkpoint `f05dca53…cc3c`, and the private output directory. | Any fix for the G6 defect changes the candidate and reopens the affected gates. |
-| G5 — offline packet | **BLOCKED BY HEIGHT 915 AND G6 CANDIDATE DEFECT** | Do not package private validator material or describe `d0ae79f3` as qualified. | A successor needs the missing replay input, repeated affected gates, redaction-safe packet binding, and the offline verifier. |
-| G6 — six-clone rehearsal | **FAIL (2026-08-30)** | Diagnose only from the preserved private run and redaction-safe failure receipt; do not deploy `d0ae79f3`. | Six rebuild/verify passes derived packet `6a6b53ea…e4807d5`; the first height-925 round failed on superseded registry-history reapplication. |
+| G3 — exact replay | **HEIGHT 924 REBUILD/VERIFY PASS / ROLLBACK CLAIM INVALIDATED / HEIGHT 915 INPUT OPEN** | Preserve the receipts and re-supply the height-915 archive. Treat writable source-head upgrades as part of the rollback surface. | Do not claim offline qualification until the source is non-mutating or every mutation is rollback-compatible and the missing replay receipt passes. |
+| G4 — scaling | **HISTORICAL PASS FOR `d0ae79f3` ONLY** | Preserve report `e2cff9cd…999f`, checkpoint `f05dca53…cc3c`, and private output. | It does not qualify a future database-owner architecture or successor binary. |
+| G5 — offline packet | **BLOCKED BY HEIGHT 915 AND DEPLOYMENT-TOPOLOGY DEFECT** | Do not package private validator material or describe either candidate as qualified. | A successor needs the missing replay input, repeated affected gates, redaction-safe packet binding, and the offline verifier. |
+| G6 — six-clone rehearsal | **OLD RUNNER PASS INVALIDATED / LIVE CANARY ROLLED BACK (2026-08-30)** | Preserve both private runs and redaction-safe receipts; repair the authoritative-writer boundary and the gate before another attempt. | The replacement gate must run exact signed systemd units, concurrent transport/RPC, RPC-to-finality, and exact `8cc7d15e` binary-plus-data rollback. |
 | G7 — Dynamic UNL handoff | **DIRECTION RECORDED / IMPLEMENTATION DEFERRED** | Preserve the recorded architecture decision only. | Spend no implementation time before the stated storage boundary or a new operator priority decision. |
 
 ## G0 — stop the open-ended campaign and make runs resumable
@@ -1064,8 +1064,10 @@ real decision.
       identity, rollback binary, and shared initial migration packet.
 - [ ] Rehearse side-by-side migration, independent verification, staged restart,
       pre-activation cancellation, activation, post-activation finality,
-      compatible rollback, catch-up, and all-six convergence. **FAIL:** the
-      first height-925 certified round stopped before activation planning.
+      compatible rollback, catch-up, and all-six convergence. `d0ae79f3`
+      failed at height 925. `10dd9f20` passed the old transport-only runner,
+      but the live canary invalidated that result because production co-starts
+      transport and RPC and requires exact old-binary/data rollback.
 - [ ] Prove Cobalt authority and every Consensus v2 rule remain unchanged.
 - [ ] Package and independently verify the clone receipts.
 - [ ] Record `CLONE QUALIFIED` only after every G6 item passes.
@@ -1073,9 +1075,13 @@ real decision.
       binary, packet, six source snapshots, activation height, rollback window,
       stop conditions, owners, and fleet evidence requirements.
 
-**2026-08-30 result:** G6 failed; see
-`benchmarks/storage-scaling/devnet-rollout/g6-failure-20260830.json`. The live
-fleet was unchanged and `CLONE QUALIFIED` was not recorded.
+**2026-08-30 results:** `d0ae79f3` failed the first height-925 round; see
+`benchmarks/storage-scaling/devnet-rollout/g6-failure-20260830.json`. Successor
+`10dd9f20` repaired that continuation defect and passed the old clone runner,
+but its first live canary exposed a missing production topology in the gate.
+Validator-1 was rolled back and the final all-six probe was healthy; see
+`benchmarks/storage-scaling/devnet-rollout/canary-rollback-20260830.json`.
+`CLONE QUALIFIED` is invalidated and no candidate may deploy.
 
 **Continuation-defect repair (2026-08-30, post-stop):**
 
@@ -1097,9 +1103,14 @@ fleet was unchanged and `CLONE QUALIFIED` was not recorded.
       and wrong-root update histories reject or stay inert without durable
       mutation, and settled admit-then-remove history no longer resurrects
       the removed validator on the ordered activation path.
-- [ ] Freeze the successor source revision and binary hash, then repeat every
-      invalidated qualification gate (G3 height-915 input, G4, G5, full G6)
-      before any new written deployment decision.
+- [x] Freeze successor `10dd9f20` / `0cc664a3…ad4183` and rerun the existing
+      full G6 workflow; the runner passed but its qualification claim was later
+      invalidated by the live topology gap.
+- [ ] Establish one authoritative transactional-database writer, then add a
+      deployment-exact gate with the signed systemd units, both service start
+      orders, RPC-to-finality, and exact deployed-binary/data rollback.
+- [ ] Freeze a new successor and repeat every affected gate, including the G3
+      height-915 input, G4, G5, replacement G6, and a new written canary decision.
 
 **Exit:** passing G6 makes deployment eligible for a separate decision; it does
 not deploy anything.

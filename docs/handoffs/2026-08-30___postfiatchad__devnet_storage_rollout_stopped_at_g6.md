@@ -2,6 +2,11 @@
 
 Date: 2026-08-30
 
+> **Superseded operationally:** successor `10dd9f20` later repaired this
+> continuation defect, but its live canary failed on a separate deployment
+> topology gap and was rolled back. Continue with the
+> [canary rollback handoff](2026-08-30___postfiatchad__devnet_storage_canary_rollback.md).
+
 ## Result
 
 **STOP — `d0ae79f3` is not clone-qualified and was not deployed.**
@@ -26,6 +31,7 @@ Z1 did not start.
 
 ## Evidence
 
+- [G6 rehearsal stop report](../postmortems/devnet-storage-g6-rehearsal-stop-2026-08-30.md)
 - `benchmarks/storage-scaling/devnet-rollout/fleet-probe-20260830.json`
 - `benchmarks/storage-scaling/devnet-rollout/g6-failure-20260830.json`
 - `benchmarks/storage-scaling/devnet-rollout/stop-receipt-20260830.json`
