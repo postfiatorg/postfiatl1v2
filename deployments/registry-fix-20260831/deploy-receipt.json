@@ -1,0 +1,53 @@
+{
+  "backported_fix": "2c7aa36ff384b2dc4efb19f2b549e7113796a8e5",
+  "base_revision": "8cc7d15edc58b5f5a0b745143fef2d45203465ff",
+  "binary_sha256": "6b07a8c31ee5f306995e12df23d644348c3ab074beb68800f7251f3f38ef7de6",
+  "chain_id": "postfiat-wan-devnet-2",
+  "deploy_order": [
+    "validator-1",
+    "validator-0",
+    "validator-2",
+    "validator-3",
+    "validator-4",
+    "validator-5"
+  ],
+  "deployed_at_utc": "2026-08-31T00:07:54Z",
+  "git_revision": "291d1eb156894dd502b6f56b783e93fba7433b6e",
+  "liveness": {
+    "all_six_converged": true,
+    "block_925": {
+      "batch_id_prefix": "3fee4666db433ce3",
+      "certificate_registry_root_prefix": "08a451e07aeaf9ad",
+      "fee": 32,
+      "transfer_atoms": 1000000
+    },
+    "block_926": {
+      "accepted": true,
+      "confirmed": true,
+      "fee": 22,
+      "transfer_atoms": 500000,
+      "tx_id_prefix": "c028cdd0c1cf2b16"
+    },
+    "final_height": 926,
+    "final_tip_prefix": "9e738e879d4a"
+  },
+  "open_defects": [
+    "snapshot finalized-checkpoint export fails fleet-wide at block 924 certificate replay",
+    "finality submit can return error after successful commit",
+    "rpc-serve connection read has no timeout"
+  ],
+  "previous_binary_sha256": "d5e5ef630155e61b001b84edb404a4def7d29a9205f23d33d2ad9c37c2696caf",
+  "regression_tests": {
+    "failed": 0,
+    "passed": 4,
+    "suite": "validator_registry_continuation_tests"
+  },
+  "release_id": "registry-fix-291d1eb1",
+  "repairs": [
+    "validator-0 RPC accept-queue wedge: service restart",
+    "validator-1 ordered_batches JSONL head: storage-integrity-migrate-legacy regeneration",
+    "certified-send outboxes: chown root-owned stale jobs to postfiat on validators 2-5"
+  ],
+  "rollback": "restore /root/postfiat-deploy-backups/registry-fix-291d1eb1/validator-N unit files; old release dirs untouched",
+  "schema": "postfiat-devnet-registry-fix-deploy-receipt-v1"
+}

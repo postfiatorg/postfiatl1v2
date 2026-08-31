@@ -12,7 +12,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Instant;
 
 use postfiat_types::{
@@ -94,7 +94,14 @@ const ALLOWED_ADDITIONAL_STATE_DOMAINS: &[&str] = &[
 ];
 const FASTPAY_ANCHOR_KEY_PREFIX: &[u8] = b"fastpay_anchor_v1\0";
 
-static SHARED_STORES: OnceLock<Mutex<HashMap<PathBuf, Arc<TransactionalStore>>>> = OnceLock::new();
+static SHARED_STORES: OnceLock<Mutex<HashMap<PathBuf, Weak<TransactionalStore>>>> =
+    OnceLock::new();
+
+/// Total time a writer-lease acquisition retries against a database held by
+/// another process before failing closed with `storage_writer_busy`.
+const WRITER_LEASE_DEADLINE: std::time::Duration = std::time::Duration::from_secs(20);
+const WRITER_LEASE_INITIAL_BACKOFF: std::time::Duration = std::time::Duration::from_millis(50);
+const WRITER_LEASE_MAX_BACKOFF: std::time::Duration = std::time::Duration::from_millis(500);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StorageErrorCode {
@@ -118,6 +125,7 @@ pub enum StorageErrorCode {
     NonCanonicalKey,
     SizeLimit,
     CorruptRecord,
+    WriterBusy,
 }
 
 impl StorageErrorCode {
@@ -143,6 +151,7 @@ impl StorageErrorCode {
             Self::NonCanonicalKey => "storage_non_canonical_key",
             Self::SizeLimit => "storage_size_limit",
             Self::CorruptRecord => "storage_corrupt_record",
+            Self::WriterBusy => "storage_writer_busy",
         }
     }
 }
@@ -168,6 +177,13 @@ impl StorageError {
     pub const fn reason_code(&self) -> &'static str {
         self.code.as_str()
     }
+
+    /// True when the error is redb's cross-open contention: the database file
+    /// is currently open elsewhere (other process, or a same-process handle
+    /// whose destructor has not yet released the lock). Safe to retry.
+    pub fn is_database_contention(&self) -> bool {
+        self.code == StorageErrorCode::Database && self.message.contains("Database already open")
+    }
 }
 
 impl fmt::Display for StorageError {
@@ -182,6 +198,7 @@ impl From<StorageError> for io::Error {
     fn from(error: StorageError) -> Self {
         let kind = match error.code {
             StorageErrorCode::Database => io::ErrorKind::Other,
+            StorageErrorCode::WriterBusy => io::ErrorKind::WouldBlock,
             StorageErrorCode::DuplicateRecord => io::ErrorKind::AlreadyExists,
             StorageErrorCode::Uninitialized => io::ErrorKind::NotFound,
             StorageErrorCode::SizeLimit | StorageErrorCode::NonCanonicalKey => {
@@ -2620,6 +2637,31 @@ impl TransactionalReadSnapshot {
     }
 }
 
+/// Acquire the process-shared transactional store under the bounded writer
+/// lease.
+///
+/// `redb` grants exactly one process access to the database file: a writable
+/// [`Database`] excludes every other open, and [`ReadOnlyDatabase`] cannot
+/// coexist with a writer either. The deployed topology runs two services
+/// (`transport-validator-serve` and `rpc-serve`) against one data directory,
+/// so no process may hold the database while idle. This function therefore
+/// hands out a shared handle whose lifetime is exactly the set of in-flight
+/// operations:
+///
+/// - Callers inside one process share a single live handle through a weak
+///   registry entry, so concurrent redb read transactions never reopen the
+///   file.
+/// - When the last caller drops its `Arc`, the database closes and the file
+///   lock is released for the other process.
+/// - When the file is held by the other process, acquisition retries with
+///   backoff until [`WRITER_LEASE_DEADLINE`], then fails closed with
+///   `storage_writer_busy` without mutating anything. The retry also absorbs
+///   the drop race in which redb's destructor is still releasing the lock of
+///   a handle whose strong count already reached zero.
+///
+/// The devnet is operator-driven: blocks exist only during explicit certified
+/// rounds and rounds are serialized by proposer election, so contention
+/// windows are short and bounded.
 fn shared_transactional_store(
     data_dir: &Path,
     integrity_key: IntegrityKey,
@@ -2628,37 +2670,62 @@ fn shared_transactional_store(
     let canonical_dir = fs::canonicalize(data_dir).map_err(database_error)?;
     let database_path = canonical_dir.join(TRANSACTIONAL_DATABASE_FILE);
     let registry = SHARED_STORES.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut stores = registry.lock().map_err(|_| {
-        StorageError::new(
-            StorageErrorCode::Database,
-            "shared transactional store registry is poisoned",
-        )
-    })?;
-    // Keep the active path strongly owned for the process lifetime. A weak-only
-    // registry can observe a zero strong count while redb's destructor is still
-    // releasing its file lock, then race a reopen and fail with `Database already
-    // open`. Sweep inactive *other* paths whenever a new path is requested so
-    // tests and one-shot tools do not accumulate handles without bound.
-    stores.retain(|path, store| path == &database_path || Arc::strong_count(store) > 1);
-    if let Some(store) = stores.get(&database_path) {
-        return Ok(Arc::clone(store));
+    let deadline = std::time::Instant::now() + writer_lease_deadline();
+    let mut backoff = WRITER_LEASE_INITIAL_BACKOFF;
+    loop {
+        {
+            let mut stores = registry.lock().map_err(|_| {
+                StorageError::new(
+                    StorageErrorCode::Database,
+                    "shared transactional store registry is poisoned",
+                )
+            })?;
+            stores.retain(|_, store| store.strong_count() > 0);
+            if let Some(store) = stores.get(&database_path).and_then(Weak::upgrade) {
+                return Ok(store);
+            }
+            match TransactionalStore::open_with_integrity_key(
+                &canonical_dir,
+                integrity_key.clone(),
+            ) {
+                Ok(store) => {
+                    let store = Arc::new(store);
+                    stores.insert(database_path, Arc::downgrade(&store));
+                    return Ok(store);
+                }
+                Err(error) if !error.is_database_contention() => return Err(error),
+                Err(_) => {}
+            }
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(StorageError::new(
+                StorageErrorCode::WriterBusy,
+                format!(
+                    "transactional database `{}` is held by another process; \
+                     writer lease deadline exhausted",
+                    database_path.display()
+                ),
+            ));
+        }
+        std::thread::sleep(backoff);
+        backoff = (backoff * 2).min(WRITER_LEASE_MAX_BACKOFF);
     }
-    let store = Arc::new(TransactionalStore::open_with_integrity_key(
-        &canonical_dir,
-        integrity_key,
-    )?);
-    stores.insert(database_path, Arc::clone(&store));
-    Ok(store)
+}
+
+fn writer_lease_deadline() -> std::time::Duration {
+    std::env::var("POSTFIAT_STORAGE_WRITER_LEASE_DEADLINE_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(std::time::Duration::from_millis)
+        .unwrap_or(WRITER_LEASE_DEADLINE)
 }
 
 /// Drop process-global transactional handles that have no live caller.
 ///
-/// Command-line binaries must call this before returning to the operating
-/// system. Rust does not run destructors for process-global statics at exit,
-/// so retaining the registry's final `Arc` would prevent redb from recording
-/// a clean shutdown and force a height-dependent repair on the next open.
-/// Active handles remain in place, causing a competing read-only open to fail
-/// closed on redb's file lock.
+/// The registry holds only weak references, so this is now a sweep of dead
+/// entries. It is retained because command-line binaries call it before
+/// returning to the operating system and because it documents the invariant:
+/// no process may keep the database open while idle.
 pub fn release_inactive_shared_transactional_stores() -> StorageResult<()> {
     let Some(registry) = SHARED_STORES.get() else {
         return Ok(());
@@ -2669,7 +2736,7 @@ pub fn release_inactive_shared_transactional_stores() -> StorageResult<()> {
             "shared transactional store registry is poisoned",
         )
     })?;
-    stores.retain(|_, store| Arc::strong_count(store) > 1);
+    stores.retain(|_, store| store.strong_count() > 0);
     Ok(())
 }
 
@@ -4468,9 +4535,11 @@ mod tests {
     fn shared_store_registry_keeps_one_redb_owner_across_concurrent_reopens() {
         let dir = TestDir::new("shared-owner");
         let integrity_key = IntegrityKey::load_or_create(&dir.0).expect("load integrity key");
+        // Under the writer lease, dropping the only caller closes the
+        // database; a later acquisition opens a fresh handle rather than
+        // reusing a process-lifetime owner.
         let first =
             shared_transactional_store(&dir.0, integrity_key.clone()).expect("open shared store");
-        let first_ptr = Arc::as_ptr(&first) as usize;
         drop(first);
 
         let owners = std::thread::scope(|scope| {
@@ -4487,9 +4556,17 @@ mod tests {
                 .map(|handle| handle.join().expect("shared store thread"))
                 .collect::<Vec<_>>()
         });
+        // All concurrent callers must share exactly one live redb owner.
+        let owner_ptr = Arc::as_ptr(&owners[0]) as usize;
         assert!(owners
             .iter()
-            .all(|owner| Arc::as_ptr(owner) as usize == first_ptr));
+            .all(|owner| Arc::as_ptr(owner) as usize == owner_ptr));
+        drop(owners);
+        // And once every caller is gone, the lease is released: a direct
+        // open that bypasses the registry succeeds.
+        let direct = TransactionalStore::open_with_integrity_key(&dir.0, integrity_key)
+            .expect("lease released after concurrent callers dropped");
+        drop(direct);
     }
 
     #[test]
@@ -5606,4 +5683,109 @@ mod tests {
     }
 
     include!("transactional/tamper_tests.rs");
+
+    /// Serializes the lease tests that manipulate the process-global writer
+    /// lease deadline environment variable.
+    static LEASE_ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn lease_test_key(dir: &TestDir) -> IntegrityKey {
+        IntegrityKey::load_or_create(&dir.0).expect("create lease test integrity key")
+    }
+
+    fn lease_initialize(store: &TransactionalStore) {
+        let tip = genesis_tip();
+        let commitment = OrderedHistoryCommitment::genesis(
+            &tip.chain_id,
+            &tip.genesis_hash,
+            tip.protocol_version,
+        )
+        .expect("lease test genesis commitment");
+        store
+            .initialize(&tip, &commitment, CurrentStateUpdate::default())
+            .expect("initialize lease test store");
+    }
+
+    #[test]
+    fn writer_lease_releases_database_when_idle() {
+        let dir = TestDir::new("writer-lease-release");
+        let key = lease_test_key(&dir);
+        {
+            let store =
+                shared_transactional_store(&dir.0, key.clone()).expect("acquire writer lease");
+            lease_initialize(&store);
+        }
+        // With every caller gone, the file lock must be free: a direct open
+        // that bypasses the shared registry must succeed immediately, and it
+        // must see the state committed under the lease.
+        let direct = TransactionalStore::open_with_integrity_key(&dir.0, key)
+            .expect("idle lease must release the redb file lock");
+        direct.meta().expect("committed state visible after lease release");
+        drop(direct);
+    }
+
+    #[test]
+    fn writer_lease_is_shared_by_concurrent_callers_in_one_process() {
+        let dir = TestDir::new("writer-lease-shared");
+        let key = lease_test_key(&dir);
+        let first = shared_transactional_store(&dir.0, key.clone()).expect("first acquisition");
+        let second = shared_transactional_store(&dir.0, key).expect("second acquisition");
+        assert!(
+            Arc::ptr_eq(&first, &second),
+            "concurrent in-process callers must share one live handle"
+        );
+    }
+
+    #[test]
+    fn writer_lease_fails_closed_when_database_is_held() {
+        let _env = LEASE_ENV_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let dir = TestDir::new("writer-lease-busy");
+        let key = lease_test_key(&dir);
+        // Simulate the sibling process: a direct handle that bypasses the
+        // shared registry holds redb's exclusive file lock.
+        let held = TransactionalStore::open_with_integrity_key(&dir.0, key.clone())
+            .expect("hold direct handle");
+        std::env::set_var("POSTFIAT_STORAGE_WRITER_LEASE_DEADLINE_MS", "250");
+        let result = shared_transactional_store(&dir.0, key);
+        std::env::remove_var("POSTFIAT_STORAGE_WRITER_LEASE_DEADLINE_MS");
+        let error = result.expect_err("acquisition against a held database must fail closed");
+        assert_eq!(
+            error.code(),
+            StorageErrorCode::WriterBusy,
+            "unexpected error: {error}"
+        );
+        assert!(error.to_string().contains("storage_writer_busy"));
+        drop(held);
+    }
+
+    #[test]
+    fn writer_lease_acquires_after_holder_releases() {
+        let _env = LEASE_ENV_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let dir = TestDir::new("writer-lease-retry");
+        let key = lease_test_key(&dir);
+        let held = TransactionalStore::open_with_integrity_key(&dir.0, key.clone())
+            .expect("hold direct handle");
+        let holder = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            drop(held);
+        });
+        let store = shared_transactional_store(&dir.0, key)
+            .expect("acquisition must retry until the holder releases");
+        lease_initialize(&store);
+        holder.join().expect("join holder thread");
+    }
+
+    #[test]
+    fn writer_lease_contention_error_is_detected() {
+        let dir = TestDir::new("writer-lease-contention-detect");
+        let key = lease_test_key(&dir);
+        let held =
+            TransactionalStore::open_with_integrity_key(&dir.0, key.clone()).expect("hold handle");
+        let error = TransactionalStore::open_with_integrity_key(&dir.0, key)
+            .expect_err("second direct open must fail while held");
+        assert!(
+            error.is_database_contention(),
+            "contention detection must recognize redb's already-open error: {error}"
+        );
+        drop(held);
+    }
 }

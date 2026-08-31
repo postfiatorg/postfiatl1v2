@@ -3,7 +3,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(unix)]
@@ -77,7 +77,6 @@ pub struct NodeStore {
     allow_legacy_migration: bool,
     read_only: bool,
     work_counters: Arc<StorageWorkCounterState>,
-    transactional_store: Arc<Mutex<Option<Arc<TransactionalStore>>>>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -130,7 +129,6 @@ impl NodeStore {
             allow_legacy_migration: false,
             read_only: false,
             work_counters: Arc::new(StorageWorkCounterState::default()),
-            transactional_store: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -146,7 +144,6 @@ impl NodeStore {
             allow_legacy_migration: false,
             read_only: false,
             work_counters: Arc::new(StorageWorkCounterState::default()),
-            transactional_store: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -162,7 +159,6 @@ impl NodeStore {
             allow_legacy_migration: false,
             read_only: true,
             work_counters: Arc::new(StorageWorkCounterState::default()),
-            transactional_store: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -177,7 +173,6 @@ impl NodeStore {
             allow_legacy_migration: true,
             read_only: false,
             work_counters: Arc::new(StorageWorkCounterState::default()),
-            transactional_store: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -227,7 +222,6 @@ impl NodeStore {
             allow_legacy_migration: false,
             read_only: false,
             work_counters: Arc::new(StorageWorkCounterState::default()),
-            transactional_store: Arc::new(Mutex::new(None)),
         })
     }
 

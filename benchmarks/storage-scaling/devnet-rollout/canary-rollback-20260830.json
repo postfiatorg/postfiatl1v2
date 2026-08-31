@@ -1,0 +1,95 @@
+{
+  "schema": "postfiat-devnet-storage-canary-rollback-v1",
+  "status": "ROLLBACK_COMPLETE",
+  "candidate": {
+    "source_revision": "10dd9f20c2530fd90fbf69ff5512fae5448eaac6",
+    "binary_sha256": "0cc664a3b2057a48547b0898487b979b89a0ba96ccad922402b5746b65ad4183",
+    "g6_report_status": "PASS",
+    "g6_evidence_eligible": true,
+    "g6_disposition": "INVALIDATED_BY_DEPLOYMENT_TOPOLOGY_GAP"
+  },
+  "canary": {
+    "validator_id": "validator-1",
+    "started_at": "2026-08-30T22:40:11Z",
+    "validators_attempted": 1,
+    "validators_completed": 0,
+    "live_height_before": 924,
+    "live_height_after": 924,
+    "live_chain_mutated": false,
+    "governance_mutated": false,
+    "cobalt_transition_attempted": false,
+    "storage_activation_attempted": false
+  },
+  "failures": [
+    {
+      "phase": "initial_generation_location",
+      "reason_code": "SYSTEMD_SANDBOX_PATH_NOT_WRITABLE",
+      "reason_detail": "transactional generation was initially published outside the validator service ReadWritePaths"
+    },
+    {
+      "phase": "concurrent_service_start",
+      "reason_code": "TRANSACTIONAL_DATABASE_MULTI_PROCESS_LOCK_CONFLICT",
+      "reason_detail": "transport-validator-serve held the redb database and rpc-serve failed with storage_database_error: Database already open. Cannot acquire lock."
+    },
+    {
+      "phase": "rollback",
+      "reason_code": "LEGACY_JSONL_HEAD_UPGRADE_NOT_ROLLBACK_COMPATIBLE",
+      "reason_detail": "the writable rebuild upgraded v1 JSONL checkpoint heads in place; the deployed rollback binary rejected the v2 heads until the exact pre-rollout heads were restored"
+    }
+  ],
+  "qualification_gap": {
+    "g6_started_transport_service_only": true,
+    "g6_started_rpc_and_transport_concurrently": false,
+    "g6_exercised_systemd_sandbox": false,
+    "g6_pre_activation_rollback_meant_activation_cancellation": true,
+    "g6_tested_exact_deployed_rollback_binary": false,
+    "exact_deployed_rollback_revision": "8cc7d15edc58b5f5a0b745143fef2d45203465ff",
+    "g6_incompatible_probe_revision": "13c969f82c43e5ab77c220b87000568857bec9da",
+    "report_claim_invalidated": "clone-qualified/deployment-eligible"
+  },
+  "control_gap": {
+    "g5_height_915_input_open": true,
+    "predecessor_g4_evidence_carried_forward_by_session": true,
+    "deployment_exact_gate_present": false,
+    "future_authorization_conveyed": false
+  },
+  "rollback": {
+    "old_binary_sha256": "d5e5ef630155e61b001b84edb404a4def7d29a9205f23d33d2ad9c37c2696caf",
+    "signed_old_deployment_manifest_verified": true,
+    "old_transport_unit_sha256": "062cf50c8c42b6f8ee2fcc65a70c9cbf3d8c85fe3f76b3737df1fb94984181df",
+    "old_rpc_unit_sha256": "8cfa7cf7bda42ade83a40e356f932c0f07549f9598afa782f91c03a2894ae0d4",
+    "transactional_generation_pointer_removed": true,
+    "exact_pre_rollout_jsonl_heads_restored": [
+      "receipts.append.jsonl.head",
+      "blocks.append.jsonl.head",
+      "batch_archive.append.jsonl.head"
+    ],
+    "underlying_jsonl_logs_matched_pre_rollout_backups": true,
+    "candidate_database_preserved_inert_for_private_diagnosis": true,
+    "post_restore_storage_difference_from_pre_rollout_clone": [
+      "node_state.json:last_run_unix"
+    ]
+  },
+  "post_recovery": {
+    "observed_from": "2026-08-30T23:00:24Z",
+    "observed_through": "2026-08-30T23:00:39Z",
+    "validator_count": 6,
+    "all_six_reachable": true,
+    "all_six_converged": true,
+    "all_validator_rpc_shadow_services_active": true,
+    "deployed_binary_identical": true,
+    "transactional_generation_pointer_absent_everywhere": true,
+    "height": 924,
+    "tip": "ebeb0e1ee27f30ba480255728832719d94eac1a89d762a7aa7019eae269008fac53098cf6495f477a241d63a7649fbef",
+    "state_root": "0854bc47f78996b2dcd279206cbdcc0b4858395c5937e0e0d56b3d645ca6b6a9d9c9578f5ac77bb14bea9dd1ee6f413e",
+    "mempool_pending": 0,
+    "deployed_binary_sha256": "d5e5ef630155e61b001b84edb404a4def7d29a9205f23d33d2ad9c37c2696caf"
+  },
+  "disposition": {
+    "candidate": "DO_NOT_DEPLOY",
+    "rolling_deploy_stopped": true,
+    "rollback_complete": true,
+    "z1_started": false,
+    "required_next_gate": "exact signed systemd topology with transport and RPC concurrent on one transactional generation plus exact deployed-binary rollback"
+  }
+}

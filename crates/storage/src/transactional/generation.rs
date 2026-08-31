@@ -93,26 +93,21 @@ impl NodeStore {
             self.data_dir.join(TRANSACTIONAL_GENERATION_POINTER_FILE),
             &pointer,
         )?;
-        *self
-            .transactional_store
-            .lock()
-            .map_err(|_| io::Error::other("transactional store handle lock is poisoned"))? = None;
         Ok(pointer)
     }
 
-    /// Return the process-local shared database handle for this node store.
-    /// Cloned `NodeStore` values share the same handle, allowing concurrent
-    /// redb read transactions without attempting to open the file twice.
+    /// Acquire the shared database handle for this node store under the
+    /// bounded writer lease.
+    ///
+    /// The returned `Arc` is the lease: concurrent callers inside one process
+    /// share a single live handle, and when the last caller drops its `Arc`
+    /// the database closes and the file lock is released for the other
+    /// service. Callers must not store the handle beyond the operation that
+    /// acquired it. `redb` permits no cross-process sharing at all (a writer
+    /// excludes read-only opens too), so holding an idle handle starves the
+    /// sibling `transport-validator-serve`/`rpc-serve` process; that is the
+    /// exact defect that stopped the 2026-08-30 storage canary.
     pub fn transactional_store(&self) -> StorageResult<Arc<TransactionalStore>> {
-        let mut cached = self.transactional_store.lock().map_err(|_| {
-            StorageError::new(
-                StorageErrorCode::Database,
-                "transactional store handle lock is poisoned",
-            )
-        })?;
-        if let Some(store) = cached.as_ref() {
-            return Ok(Arc::clone(store));
-        }
         let pointer = self.transactional_generation_pointer().map_err(|error| {
             StorageError::new(StorageErrorCode::IntegrityFailure, error.to_string())
         })?;
@@ -131,7 +126,6 @@ impl NodeStore {
         if let Some(pointer) = pointer.as_ref() {
             validate_generation_pointer_binding(pointer, &store.meta()?)?;
         }
-        *cached = Some(Arc::clone(&store));
         Ok(store)
     }
 
