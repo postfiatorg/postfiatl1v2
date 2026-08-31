@@ -5,8 +5,8 @@
 
 ## BLUF
 
-Congratulations on the storage deployment — transactional storage live on all
-six validators at height 931 is the milestone this month was building toward.
+Transactional storage is live on all six validators at height 931, verified
+from the committed receipts.
 This session pushed the operator's 8 stranded commits (the deployment record
 was not on origin), fixed all three open defects from his
 [registry-fix handoff](2026-08-31___postfiatchad__devnet_registry_fix_deploy.md)
