@@ -153,6 +153,7 @@ nav:
       - L1 Observer Service Research Specification: governance/l1-observer-research-spec.md
       - L1 Dynamic UNL Anchor Profile Research Specification: governance/l1-anchor-profile-research-spec.md
       - Validator Evaluator Alternatives Decision Note: governance/validator-evaluator-alternatives-note.md
+      - Pending Operator Decisions: governance/pending-operator-decisions.md
       - Verifiable Constitution: governance/verifiable-constitution.md
       - Validator Registry: governance/validator-registry.md
       - Validator Admission Bin Policy: governance/validator-admission-bin-policy.md
