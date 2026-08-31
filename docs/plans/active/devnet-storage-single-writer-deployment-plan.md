@@ -83,17 +83,17 @@ Base revision: current fleet lineage (`registry-fix-291d1eb1` =
 `8cc7d15e` + `2c7aa36f` backport) plus the storage commits
 (`dfd0b9f1..10dd9f20`) rebased onto it.
 
-- [ ] 1. **Writer lease (1 day).** Implement acquire-commit-release in
+- [x] 1. **Writer lease (done 2026-08-31, `f0013c29`).** Implement acquire-commit-release in
       `TransactionalStore` and route `rpc-serve` reads through read-only
       opens. Focused tests: concurrent two-process open in both orders,
       writer-busy fail-closed round, reader sees committed height during an
       active writer, lease released after crash mid-round (lock dies with
       the process).
-- [ ] 2. **Rebase and unit parity (0.5 day).** Rebase storage commits onto
+- [x] 2. **Rebase and unit parity (done 2026-08-31; `main` is the deployed lineage plus storage commits; units byte-identical mod release paths).** Rebase storage commits onto
       the deployed lineage; regenerate units with
       `deployment-validator-units-stage`; diff against live units — only
       release paths and storage flags may differ.
-- [ ] 3. **Deployment-exact gate, replacing G6 (1 day).** Six clones from
+- [x] 3. **Deployment-exact gate — PASSED 2026-08-31 on the real hosts** (receipt: `benchmarks/storage-scaling/deployment-exact-gate/gate-926-receipt.json`). Six clones from
       exact height-926 copies of the live data directories, running the
       signed systemd units under the real sandbox (`ProtectSystem=strict`,
       `ReadWritePaths`), with transport and RPC co-started in both orders.

@@ -1,0 +1,50 @@
+{
+  "schema": "postfiat-storage-deployment-exact-gate-receipt-v1",
+  "status": "PASS",
+  "date_utc": "2026-08-31",
+  "chain_id": "postfiat-wan-devnet-2",
+  "candidate": {
+    "release_id": "storage-lease-af9b83c3",
+    "git_revision": "af9b83c355267f18cd2b1b173b25fed57553a8ed",
+    "binary_sha256": "383f4325a157f554786b6c8868defedcef8faeb320f9998eeef69c07c7141a7a",
+    "writer_lease_commit": "f0013c29",
+    "focused_tests": {
+      "storage_crate": "88 passed",
+      "writer_lease": "5 passed",
+      "node_transactional": "6+2 passed",
+      "registry_continuation": "4 passed"
+    }
+  },
+  "topology": {
+    "clones": "six exact height-926 copies of the live data directories, one per real validator host",
+    "mesh": "real WireGuard overlay 10.77.0.0/24, gate p2p ports 26750-26760, gate rpc 27750-27755",
+    "units": "directive-parity transforms of the production staged units (sandbox, ExecStartPre manifest verify, User=postfiat)",
+    "manifest": "signed by the fleet trusted publisher key; verified on every host with the exact ExecStartPre command"
+  },
+  "phases": {
+    "migration": "rebuild + independent verify on all six; one shared packet root 7246a0602f0ad052\u2026; refreeze at 927 root 8657a372767967c5\u2026",
+    "two_process_start": "transport+rpc ready on all six; hosts 0/2/4 transport-first, hosts 1/3/5 rpc-first",
+    "legacy_round_927": "RPC finality submit, converged all six",
+    "activation_scheduled_928": "governance batch via transport-peer-certified-batch-round with services running (lease coexistence proven)",
+    "preactivation_round_929": "RPC finality submit, converged",
+    "activation_cutover_930": "all six transactional_active=true, commitment postfiat.replicated_state.v2, full_history_scans=0",
+    "transactional_round_931": "RPC finality submit on active storage, converged all six",
+    "restart": "post-activation restart preserved identity at 930/931",
+    "rollback": "validator-5 clone restored from pre-migration backup; deployed registry-fix binary served status at exact height-926 identity"
+  },
+  "defects_caught_and_corrected_in_gate": [
+    "generation directory outside systemd ReadWritePaths fails service start (canary failure class 1); corrected layout: generation inside the data directory",
+    "gate p2p ports blocked by ufw until allowed on wg0 (gate-only rule 26750:26760, removed at teardown pending)",
+    "failed round attempts leave stale height-N vote locks and durable consensus-v2 round state; recovery = restore clone + re-migrate (documented for production incident response)"
+  ],
+  "operational_findings": [
+    "deferred certified sends require transport-certified-send-outbox-resume (or equivalent follow-up) for full six-way propagation after RPC finality rounds",
+    "rpc-serve status serves a stale in-process health cache across the storage cutover until restart; post-activation restart is mandatory in the rollout sequence"
+  ],
+  "production_rollout": {
+    "state": "NOT STARTED - live fleet untouched at height 926 on registry-fix-291d1eb1",
+    "staged_release": "~/.postfiat/deployments/storage-lease-af9b83c3 (signed units + manifest ready)",
+    "driver": "~/.postfiat/deployments/storage-lease-af9b83c3/rollout/deploy.py (probe/canary/fleet phases)"
+  },
+  "artifacts": "~/.postfiat/deployments/storage-gate-926/ (rounds, finality reports, activation round, rebuild logs); gate data dirs retained on hosts under /var/lib/postfiat/gate926/"
+}
