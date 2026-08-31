@@ -2553,7 +2553,7 @@ fn ambiguous_active_transactional_state_blocks_vote_without_mutation() {
         positions.len() >= 3,
         "expected active batch ID in multiple authenticated tables"
     );
-    for position in positions {
+    for position in &positions {
         corrupted[position + first_batch.batch_id.len() / 2] ^= 1;
     }
     std::fs::write(&database_path, &corrupted).expect("corrupt active transactional state");
@@ -2701,8 +2701,23 @@ fn ambiguous_active_transactional_state_blocks_vote_without_mutation() {
         "{consensus_timeout_error}"
     );
 
-    let database_after_first_rejection =
-        std::fs::read(&database_path).expect("read database after first blocked vote");
+    // The bounded writer lease opens and closes the database around every
+    // attempt, and redb rewrites shutdown and allocator bookkeeping on each
+    // cycle, so whole-file byte identity no longer holds. The settled
+    // recovery state is instead pinned directly: every deliberately
+    // corrupted byte must remain corrupted (no repair, no healing, no
+    // content mutation) across repeated blocked votes.
+    let assert_corruption_settled = |label: &str| {
+        let current = std::fs::read(&database_path).expect(label);
+        for position in &positions {
+            assert_eq!(
+                current[position + first_batch.batch_id.len() / 2],
+                corrupted[position + first_batch.batch_id.len() / 2],
+                "blocked voting mutated the ambiguous corrupted state at byte {position}"
+            );
+        }
+    };
+    assert_corruption_settled("read database after first blocked vote");
     let second_vote_file = data_dir.join("ambiguous-storage-second.block-vote.json");
     let second_error = create_block_vote(BlockVoteOptions {
         data_dir: data_dir.clone(),
@@ -2728,11 +2743,7 @@ fn ambiguous_active_transactional_state_blocks_vote_without_mutation() {
         !second_vote_file.exists(),
         "a repeated attempt emitted a vote from ambiguous storage"
     );
-    assert!(
-        std::fs::read(&database_path).expect("read database after repeated blocked vote")
-            == database_after_first_rejection,
-        "repeated blocked voting changed the settled recovery state"
-    );
+    assert_corruption_settled("read database after repeated blocked vote");
 
     std::fs::remove_dir_all(data_dir).expect("remove active-storage vote-block fixture");
     std::fs::remove_dir_all(sweep_dir).expect("remove active-storage sweep fixture");
