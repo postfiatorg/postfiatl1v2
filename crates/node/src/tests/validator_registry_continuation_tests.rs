@@ -673,3 +673,255 @@ fn ordered_activation_does_not_resurrect_superseded_membership_history() {
 
     fs::remove_dir_all(data_dir).expect("cleanup superseded membership history data");
 }
+
+/// Replay/export shape of the fleet-wide block-924 snapshot failure: the
+/// recorded drill rotation is scoped to the subject record only, so live
+/// activation never applies it, and the later legitimate rotation of the
+/// same record supersedes it. The certificate replay behind checkpoint
+/// export must treat the recorded certificate lineage as the applied
+/// history instead of reapplying the superseded rotation and failing with
+/// `block 2 certificate registry root mismatch`.
+#[test]
+fn superseded_unapplied_rotation_history_replays_for_checkpoint_export() {
+    let data_dir = unique_test_dir("postfiat-superseded-unapplied-rotation-export-test");
+    init(InitOptions {
+        data_dir: data_dir.clone(),
+        chain_id: "postfiat-superseded-unapplied-rotation-export".to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: 4,
+    })
+    .expect("init superseded unapplied rotation export test");
+    let validators = local_validator_ids(4).expect("validators");
+    let subject_validators = vec![CONTINUATION_SUBJECT.to_string()];
+    let registry_path = data_dir.join(VALIDATOR_REGISTRY_FILE);
+    let keys_path = data_dir.join(VALIDATOR_KEYS_FILE);
+    let original_registry = read_validator_registry_file(&registry_path).expect("registry");
+    let original_keys = read_validator_key_file(&keys_path).expect("validator keys");
+    let original_record = validator_registry_record(&original_registry, CONTINUATION_SUBJECT)
+        .expect("subject record")
+        .clone();
+    let drill_key =
+        create_validator_key_record(CONTINUATION_SUBJECT.to_string()).expect("drill key");
+    let final_key =
+        create_validator_key_record(CONTINUATION_SUBJECT.to_string()).expect("final key");
+    let drill_registry = registry_with_subject_key(
+        &original_registry,
+        CONTINUATION_SUBJECT,
+        &drill_key.algorithm_id,
+        &drill_key.public_key_hex,
+    );
+    let final_registry = registry_with_subject_key(
+        &original_registry,
+        CONTINUATION_SUBJECT,
+        &final_key.algorithm_id,
+        &final_key.public_key_hex,
+    );
+    let original_root =
+        validator_registry_root(&original_registry, &validators).expect("original root");
+    let final_root = validator_registry_root(&final_registry, &validators).expect("final root");
+    let subject_original_root =
+        validator_registry_root(&original_registry, &subject_validators).expect("subject root");
+    let subject_drill_root = validator_registry_root(&drill_registry, &subject_validators)
+        .expect("subject drill root");
+    let original_entry = continuation_registry_entry(
+        &original_record.node_id,
+        &original_record.algorithm_id,
+        &original_record.public_key_hex,
+    );
+    let drill_entry = continuation_registry_entry(
+        &drill_key.node_id,
+        &drill_key.algorithm_id,
+        &drill_key.public_key_hex,
+    );
+    let final_entry = continuation_registry_entry(
+        &final_key.node_id,
+        &final_key.algorithm_id,
+        &final_key.public_key_hex,
+    );
+
+    // Height 1: the drill rotation is recorded subject-scoped, so live
+    // activation skips it forever and the persisted registry keeps the
+    // original key.
+    let (_, drill_update_file) = certified_subject_rotation_update(
+        &data_dir,
+        &subject_validators,
+        "drill-subject-rotation",
+        1,
+        &subject_original_root,
+        &subject_drill_root,
+        &original_entry,
+        &drill_entry,
+    );
+    commit_governance_registry_update(&data_dir, "drill-subject-rotation", drill_update_file);
+    assert_eq!(
+        validator_registry_root(
+            &read_validator_registry_file(&registry_path).expect("registry after drill record"),
+            &validators,
+        )
+        .expect("root after drill record"),
+        original_root,
+        "live activation must not apply the subject-scoped drill rotation"
+    );
+
+    // Height 2: the legitimate rotation of the same record supersedes the
+    // recorded drill rotation.
+    let (_, final_update_file) = certified_subject_rotation_update(
+        &data_dir,
+        &validators,
+        "final-rotation",
+        2,
+        &original_root,
+        &final_root,
+        &original_entry,
+        &final_entry,
+    );
+    commit_governance_registry_update(&data_dir, "final-rotation", final_update_file);
+    assert_eq!(
+        validator_registry_root(
+            &read_validator_registry_file(&registry_path).expect("registry after final rotation"),
+            &validators,
+        )
+        .expect("root after final rotation"),
+        final_root
+    );
+    write_validator_key_file(&keys_path, &keys_with_subject_record(&original_keys, &final_key))
+        .expect("stage final signing key");
+
+    // Height 3: continuation past the superseded history.
+    let transfer_batch_file = data_dir.join("export-continuation-transfer.batch.json");
+    create_transfer_batch(BatchTransferOptions {
+        data_dir: data_dir.clone(),
+        key_file: None,
+        to: format!("pf{:0<38}", "supersededexportcontinuation"),
+        amount: 5,
+        batch_file: transfer_batch_file.clone(),
+    })
+    .expect("create export continuation transfer batch");
+    apply_batch(ApplyBatchOptions {
+        data_dir: data_dir.clone(),
+        batch_file: transfer_batch_file,
+        certificate_file: None,
+    })
+    .expect("continuation past superseded registry history must commit");
+    assert_eq!(chain_tip_height(&data_dir), 3);
+
+    // The certificate replay used by snapshot checkpoint export must accept
+    // the recorded certificate lineage over the superseded history.
+    let report = verify_blocks(NodeOptions {
+        data_dir: data_dir.clone(),
+    })
+    .expect("certificate replay over superseded unapplied rotation history");
+    assert!(report.verified);
+    assert_eq!(report.block_count, 3);
+
+    let snapshot_dir = data_dir.join("superseded-history-snapshot");
+    export_snapshot(SnapshotExportOptions {
+        data_dir: data_dir.clone(),
+        snapshot_dir,
+    })
+    .expect("snapshot export over superseded unapplied rotation history");
+
+    fs::remove_dir_all(data_dir).expect("cleanup superseded unapplied rotation export data");
+}
+
+/// Replay/export shape for a recorded signed restore of off-chain drill
+/// history: the recorded rollback's predecessor state never entered the
+/// certified lineage, so its effect is already reflected by the replayed
+/// registry. Certificate replay must treat it as applied history instead of
+/// failing its previous-root check.
+#[test]
+fn recorded_offchain_rollback_history_replays_for_checkpoint_export() {
+    let data_dir = unique_test_dir("postfiat-recorded-offchain-rollback-export-test");
+    init(InitOptions {
+        data_dir: data_dir.clone(),
+        chain_id: "postfiat-recorded-offchain-rollback-export".to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: 4,
+    })
+    .expect("init recorded offchain rollback export test");
+    let validators = local_validator_ids(4).expect("validators");
+    let registry_path = data_dir.join(VALIDATOR_REGISTRY_FILE);
+    let original_registry = read_validator_registry_file(&registry_path).expect("registry");
+    let original_record = validator_registry_record(&original_registry, CONTINUATION_SUBJECT)
+        .expect("subject record")
+        .clone();
+    let drill_key =
+        create_validator_key_record(CONTINUATION_SUBJECT.to_string()).expect("drill key");
+    let drill_registry = registry_with_subject_key(
+        &original_registry,
+        CONTINUATION_SUBJECT,
+        &drill_key.algorithm_id,
+        &drill_key.public_key_hex,
+    );
+    let original_root =
+        validator_registry_root(&original_registry, &validators).expect("original root");
+    let drill_root = validator_registry_root(&drill_registry, &validators).expect("drill root");
+    let original_entry = continuation_registry_entry(
+        &original_record.node_id,
+        &original_record.algorithm_id,
+        &original_record.public_key_hex,
+    );
+    let drill_entry = continuation_registry_entry(
+        &drill_key.node_id,
+        &drill_key.algorithm_id,
+        &drill_key.public_key_hex,
+    );
+
+    // Height 1: record the signed rollback of an off-chain drill rotation
+    // whose effect never reached any certified round; the persisted registry
+    // already holds the restored original key.
+    let (_, rollback_update_file) = certified_subject_rotation_update(
+        &data_dir,
+        &validators,
+        "offchain-rollback",
+        1,
+        &drill_root,
+        &original_root,
+        &drill_entry,
+        &original_entry,
+    );
+    commit_governance_registry_update(&data_dir, "offchain-rollback", rollback_update_file);
+    assert_eq!(
+        validator_registry_root(
+            &read_validator_registry_file(&registry_path).expect("registry after rollback record"),
+            &validators,
+        )
+        .expect("root after rollback record"),
+        original_root,
+        "the recorded restore is already reflected by the persisted registry"
+    );
+
+    // Height 2: continuation past the recorded restore.
+    let transfer_batch_file = data_dir.join("rollback-continuation-transfer.batch.json");
+    create_transfer_batch(BatchTransferOptions {
+        data_dir: data_dir.clone(),
+        key_file: None,
+        to: format!("pf{:0<38}", "rollbackexportcontinuation"),
+        amount: 3,
+        batch_file: transfer_batch_file.clone(),
+    })
+    .expect("create rollback continuation transfer batch");
+    apply_batch(ApplyBatchOptions {
+        data_dir: data_dir.clone(),
+        batch_file: transfer_batch_file,
+        certificate_file: None,
+    })
+    .expect("continuation past recorded off-chain rollback must commit");
+    assert_eq!(chain_tip_height(&data_dir), 2);
+
+    let report = verify_blocks(NodeOptions {
+        data_dir: data_dir.clone(),
+    })
+    .expect("certificate replay over recorded off-chain rollback history");
+    assert!(report.verified);
+    assert_eq!(report.block_count, 2);
+
+    let snapshot_dir = data_dir.join("recorded-rollback-snapshot");
+    export_snapshot(SnapshotExportOptions {
+        data_dir: data_dir.clone(),
+        snapshot_dir,
+    })
+    .expect("snapshot export over recorded off-chain rollback history");
+
+    fs::remove_dir_all(data_dir).expect("cleanup recorded offchain rollback export data");
+}

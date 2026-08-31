@@ -195,6 +195,7 @@ fn verify_blocks_from_store(store: &NodeStore) -> io::Result<BlockVerificationRe
             &mut certificate_governance,
             &mut certificate_registry_update_ids,
             block.header.height,
+            &block.header.certificate.registry_root,
         )?;
         let certificate_validators = active_validator_ids(&certificate_governance)?;
         backfill_legacy_validator_registry_records(
@@ -1265,12 +1266,71 @@ pub(super) fn update_governance_for_certificate_replay(
     Ok(())
 }
 
+/// Whether a recorded update's end state is already present in the replayed
+/// registry: its affected validator set reproduces `new_registry_root` and
+/// the subject record already matches the update's outcome (rotated,
+/// admitted, or reactivated record present; removed or suspended record
+/// absent). Reproducing the subset root alone is not enough because a
+/// removal's remaining records are unchanged by the removal itself.
+fn validator_registry_update_effect_already_reflected(
+    registry: &ValidatorRegistry,
+    update: &ValidatorRegistryUpdateRecord,
+) -> bool {
+    let new_validators = validator_registry_update_new_validators(update);
+    let root_reflected = validator_registry_root(registry, &new_validators)
+        .map(|current_new_root| current_new_root == update.new_registry_root)
+        .unwrap_or(false);
+    if !root_reflected {
+        return false;
+    }
+    let subject_record = registry
+        .validators
+        .iter()
+        .find(|record| record.node_id == update.subject_node_id);
+    match update.operation.as_str() {
+        VALIDATOR_REGISTRY_OP_ROTATE_KEY
+        | VALIDATOR_REGISTRY_OP_ADMIT
+        | VALIDATOR_REGISTRY_OP_REACTIVATE => match (subject_record, update.new_record.as_ref()) {
+            (Some(record), Some(new_record)) => {
+                new_record.active
+                    && record.node_id == new_record.node_id
+                    && record.algorithm_id == new_record.algorithm_id
+                    && record.public_key_hex == new_record.public_key_hex
+            }
+            _ => false,
+        },
+        VALIDATOR_REGISTRY_OP_REMOVE | VALIDATOR_REGISTRY_OP_SUSPEND => subject_record.is_none(),
+        _ => false,
+    }
+}
+
+/// Activate the recorded validator-registry updates that are due strictly
+/// before `block_height` on the replay path.
+///
+/// Recorded history may contain accepted updates that never entered the
+/// certified registry lineage: a drill rotation that live activation never
+/// applied, or a recorded signed restore of off-chain history. Reapplying
+/// such superseded history in isolation either diverges from the recorded
+/// certificate roots or fails the previous-root check, which is the
+/// fleet-wide block-924 checkpoint-export stop. Two guards keep replay on
+/// the certified lineage while every pending update stays fail-closed:
+///
+/// - an update whose affected validator set already reproduces its
+///   `new_registry_root` from the replayed registry is applied history and
+///   is skipped without mutation (the recorded-restore case); and
+/// - after applying the due run, the block's quorum-signed certificate
+///   registry root anchors the lineage: when it matches an earlier state of
+///   the run, the trailing updates are superseded history and their effect
+///   is rewound while they stay marked as applied (the never-applied
+///   drill-rotation case). Certificate vote verification then still
+///   fail-closes on the reconstructed registry.
 pub(super) fn activate_validator_registry_updates_for_height(
     genesis: &Genesis,
     registry: &mut ValidatorRegistry,
     governance: &mut GovernanceState,
     applied_update_ids: &mut HashSet<String>,
     block_height: u64,
+    certificate_registry_root: &str,
 ) -> io::Result<()> {
     let due_updates = governance
         .validator_registry_updates
@@ -1281,22 +1341,49 @@ pub(super) fn activate_validator_registry_updates_for_height(
         })
         .cloned()
         .collect::<Vec<_>>();
+    if due_updates.is_empty() {
+        return Ok(());
+    }
+    let mut lineage_states = vec![(registry.clone(), active_validator_ids(governance)?)];
     for update in due_updates {
-        let context = format!(
-            "block {} replay update `{}`",
-            block_height, update.update_id
-        );
-        let new_validators = apply_historical_validator_registry_update_to_registry(
-            genesis,
-            registry,
-            &update,
-            block_height,
-            &context,
-        )?;
+        let new_validators =
+            if validator_registry_update_effect_already_reflected(registry, &update) {
+                validator_registry_update_new_validators(&update)
+            } else {
+                let context = format!(
+                    "block {} replay update `{}`",
+                    block_height, update.update_id
+                );
+                apply_historical_validator_registry_update_to_registry(
+                    genesis,
+                    registry,
+                    &update,
+                    block_height,
+                    &context,
+                )?
+            };
         if update.operation != VALIDATOR_REGISTRY_OP_ROTATE_KEY {
             set_active_validator_ids(governance, new_validators)?;
         }
         applied_update_ids.insert(update.update_id);
+        lineage_states.push((registry.clone(), active_validator_ids(governance)?));
+    }
+    if certificate_registry_root.is_empty() {
+        return Ok(());
+    }
+    let anchored_state_index = lineage_states.iter().rposition(|(candidate, validators)| {
+        validator_registry_root(candidate, validators)
+            .map(|candidate_root| candidate_root == certificate_registry_root)
+            .unwrap_or(false)
+    });
+    // Without a matching lineage state the fully applied history stands and
+    // certificate verification fails closed against it.
+    if let Some(index) = anchored_state_index {
+        let (anchored_registry, anchored_validators) = lineage_states.swap_remove(index);
+        *registry = anchored_registry;
+        if active_validator_ids(governance)? != anchored_validators {
+            set_active_validator_ids(governance, anchored_validators)?;
+        }
     }
     Ok(())
 }
@@ -1816,6 +1903,7 @@ pub(super) fn verify_replayed_blocks(
             &mut governance,
             &mut registry_update_ids,
             block.header.height,
+            &block.header.certificate.registry_root,
         )?;
         let replay_validators = active_validator_ids(&governance)?;
         backfill_legacy_validator_registry_records(

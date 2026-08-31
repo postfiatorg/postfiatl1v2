@@ -1693,6 +1693,7 @@ fn build_history_checkpoint_state_from_sources(
             &mut governance,
             &mut registry_update_ids,
             block.header.height,
+            &block.header.certificate.registry_root,
         )?;
         let replay_validators = active_validator_ids(&governance)?;
         backfill_legacy_validator_registry_records(

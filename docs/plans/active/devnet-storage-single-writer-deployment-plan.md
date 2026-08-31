@@ -121,10 +121,17 @@ Base revision: current fleet lineage (`registry-fix-291d1eb1` =
 
 Parallel, non-blocking:
 
-- [ ] P1. Fix finalized-checkpoint certificate replay at drill heights
-      922-924 (`activate_validator_registry_updates_for_height`,
-      `crates/node/src/block_replay_wallet.rs:1268`) with a regression test
-      against the archived chain; restores signed snapshot backups.
+- [x] P1. Fix finalized-checkpoint certificate replay at drill heights
+      922-924 — done 2026-08-31: `activate_validator_registry_updates_for_height`
+      in `crates/node/src/block_replay_wallet.rs` now skips recorded updates
+      whose effect is already reflected and anchors the applied history on
+      each block's quorum-signed certificate registry root, so superseded
+      drill history is no longer reapplied on the replay/export path.
+      Regression tests reconstruct both failing shapes from local fixtures in
+      `crates/node/src/tests/validator_registry_continuation_tests.rs`
+      (`superseded_unapplied_rotation_history_replays_for_checkpoint_export`,
+      `recorded_offchain_rollback_history_replays_for_checkpoint_export`);
+      restores signed snapshot backups.
 - [ ] P2. RPC serve-loop read timeout and an RPC-round-trip health probe
       (the validator-0 wedge class).
 - [x] P3. Finality-submit idempotent response (no error after successful
