@@ -158,6 +158,176 @@ mod rpc_serve_request_tests {
     }
 
     #[test]
+    fn rpc_serve_drops_stalled_client_reads_without_blocking_other_connections() {
+        let root = env::temp_dir().join(format!(
+            "postfiat-rpc-stalled-client-{}-{}",
+            process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        init_consensus_v2(InitConsensusV2Options {
+            data_dir: root.clone(),
+            chain_id: "stalled-client-rpc-test".to_string(),
+            node_id: "validator-0".to_string(),
+            validator_count: 4,
+            activation_height: 1,
+            storage_activation_height: None,
+        })
+        .expect("initialize stalled client RPC fixture");
+        let rpc_port = TcpListener::bind(("127.0.0.1", 0))
+            .expect("reserve stalled client RPC port")
+            .local_addr()
+            .expect("stalled client RPC address")
+            .port();
+        let ready_file = root.join("readiness/stalled-client-rpc.json");
+        let server_root = root.clone();
+        let server = std::thread::spawn(move || {
+            rpc_serve(RpcServeOptions {
+                data_dir: server_root.clone(),
+                spool_dir: server_root.join("runtime/rpc-spool"),
+                ready_file: server_root.join("readiness/stalled-client-rpc.json"),
+                bind_host: "127.0.0.1".to_string(),
+                port: rpc_port,
+                max_requests: 3,
+                timeout_ms: 1_500,
+                child_timeout_ms: 1_500,
+                event_log: None,
+                allow_mempool_submit: false,
+                allow_mempool_submit_finality: false,
+                allow_orchard_batch_create: false,
+                owned_lane_enabled: true,
+                finality_topology_file: server_root.join("topology.json"),
+                finality_key_file: server_root.join(VALIDATOR_KEYS_FILE),
+                finality_proposal_key_file: Some(server_root.join(VALIDATOR_KEYS_FILE)),
+                finality_artifact_root: server_root.join("finality-artifacts"),
+                finality_timeout_ms: 1_500,
+                finality_send_retries: 0,
+                finality_retry_backoff_ms: 0,
+                finality_quorum_early_full_propagation: false,
+                max_mempool_submit_per_peer: 8,
+                max_mempool_submit_total: 32,
+                max_orchard_batch_create_per_peer: 2,
+                max_orchard_batch_create_total: 8,
+                max_orchard_batch_create_concurrent: 1,
+                max_child_dispatch_concurrent: 8,
+                max_child_dispatch_per_peer: 4,
+                keep_alive: true,
+            })
+            .expect("serve stalled client RPC")
+        });
+        for _ in 0..500 {
+            if ready_file.is_file() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(ready_file.is_file(), "stalled client RPC did not become ready");
+
+        // One client stalls half-open mid-request: a partial frame, then
+        // silence, with the socket left open (the validator-0 wedge shape).
+        let stall_started = Instant::now();
+        let mut stalled =
+            TcpStream::connect(("127.0.0.1", rpc_port)).expect("connect stalled client");
+        stalled
+            .set_read_timeout(Some(Duration::from_secs(20)))
+            .expect("set stalled client read timeout");
+        stalled
+            .write_all(b"{\"rpc_version\":")
+            .expect("write stalled request prefix");
+
+        // Another client trickles bytes faster than the per-recv socket
+        // timeout, which the old per-syscall-only timeout never caught.
+        let trickle_started = Instant::now();
+        let trickler =
+            TcpStream::connect(("127.0.0.1", rpc_port)).expect("connect trickling client");
+        trickler
+            .set_read_timeout(Some(Duration::from_secs(20)))
+            .expect("set trickling client read timeout");
+        let mut trickler_writer = trickler.try_clone().expect("clone trickling client");
+        let drip = std::thread::spawn(move || {
+            for _ in 0..60 {
+                if trickler_writer.write_all(b"x").is_err() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(200));
+            }
+        });
+
+        // A healthy client must be served while both bad connections stall.
+        let healthy_started = Instant::now();
+        let response = send_loopback_rpc(rpc_port, &RpcRequest::empty("healthy-status", "status"));
+        assert!(response.ok, "{:?}", response.error);
+        assert!(
+            healthy_started.elapsed() < Duration::from_millis(1_400),
+            "healthy request must not queue behind stalled connections"
+        );
+
+        let assert_connection_dropped =
+            |stream: TcpStream, started: Instant, label: &str| -> Duration {
+                let mut reader = BufReader::new(stream);
+                let mut line = String::new();
+                reader
+                    .read_line(&mut line)
+                    .unwrap_or_else(|error| panic!("read {label} error response: {error}"));
+                let response: RpcResponse =
+                    serde_json::from_str(&line).expect("parse dropped-connection error");
+                assert!(!response.ok, "{label} must receive a read error");
+                assert_eq!(
+                    response.error.as_ref().expect("dropped-connection error").code,
+                    "rpc_read_error",
+                    "{label} must be dropped as a read error"
+                );
+                let elapsed = started.elapsed();
+                line.clear();
+                assert_eq!(
+                    reader
+                        .read_line(&mut line)
+                        .unwrap_or_else(|error| panic!("read {label} EOF: {error}")),
+                    0,
+                    "{label} connection must be closed after the read timeout"
+                );
+                elapsed
+            };
+
+        let stalled_elapsed = assert_connection_dropped(stalled, stall_started, "stalled client");
+        assert!(
+            stalled_elapsed >= Duration::from_millis(1_000),
+            "stalled client dropped before the read timeout: {stalled_elapsed:?}"
+        );
+        assert!(
+            stalled_elapsed < Duration::from_secs(10),
+            "stalled client held its connection too long: {stalled_elapsed:?}"
+        );
+        let trickle_elapsed =
+            assert_connection_dropped(trickler, trickle_started, "trickling client");
+        assert!(
+            trickle_elapsed >= Duration::from_millis(1_000),
+            "trickling client dropped before the read timeout: {trickle_elapsed:?}"
+        );
+        assert!(
+            trickle_elapsed < Duration::from_secs(8),
+            "per-connection read deadline must bound trickled reads: {trickle_elapsed:?}"
+        );
+        drip.join().expect("join trickling writer");
+
+        let report = server.join().expect("join stalled client RPC");
+        assert_eq!(report.request_count, 3);
+        assert_eq!(report.ok_count, 1);
+        let read_error_count = report
+            .requests
+            .iter()
+            .filter(|request| request.error_code.as_deref() == Some("rpc_read_error"))
+            .count();
+        assert_eq!(
+            read_error_count, 2,
+            "both stalled connections must be recorded as read errors"
+        );
+        fs::remove_dir_all(root).expect("cleanup stalled client RPC fixture");
+    }
+
+    #[test]
     fn fastpay_v3_loopback_rpc_exposes_live_capabilities_and_bounded_reads() {
         let root = env::temp_dir().join(format!(
             "postfiat-fastpay-v3-loopback-rpc-{}",

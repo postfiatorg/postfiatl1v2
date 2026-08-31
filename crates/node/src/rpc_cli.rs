@@ -194,6 +194,62 @@ impl Drop for RpcServeActiveConnectionGuard {
     }
 }
 
+// Hard ceiling on how long one connection may keep a single request read
+// outstanding. The socket-level `SO_RCVTIMEO` from `set_stream_timeout` only
+// bounds one recv syscall, so a client trickling bytes (or stalling half-open
+// mid-request) could otherwise hold its connection slot forever — the
+// validator-0 RPC accept-queue wedge class
+// (docs/postmortems/devnet-registry-continuation-wedge-2026-08-31.md).
+const RPC_SERVE_CONNECTION_READ_TIMEOUT_MS: u64 = 30_000;
+
+/// Bounds every read on one RPC connection by a per-request deadline in
+/// addition to the per-syscall socket timeout, so a stalled or trickling
+/// client is dropped without affecting other connections.
+struct RpcServeDeadlineStream {
+    stream: TcpStream,
+    per_read_timeout: Duration,
+    read_budget: Duration,
+    read_deadline: Instant,
+}
+
+impl RpcServeDeadlineStream {
+    fn new(stream: TcpStream, per_read_timeout_ms: u64) -> Self {
+        let per_read_timeout = Duration::from_millis(per_read_timeout_ms.max(1));
+        let read_budget =
+            per_read_timeout.min(Duration::from_millis(RPC_SERVE_CONNECTION_READ_TIMEOUT_MS));
+        Self {
+            stream,
+            per_read_timeout,
+            read_budget,
+            read_deadline: Instant::now() + read_budget,
+        }
+    }
+
+    /// Start a fresh bounded read budget for the next request frame.
+    fn reset_read_deadline(&mut self) {
+        self.read_deadline = Instant::now() + self.read_budget;
+    }
+
+    fn tcp_stream_mut(&mut self) -> &mut TcpStream {
+        &mut self.stream
+    }
+}
+
+impl Read for RpcServeDeadlineStream {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let remaining = self.read_deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "rpc serve connection read deadline exceeded",
+            ));
+        }
+        self.stream
+            .set_read_timeout(Some(remaining.min(self.per_read_timeout)))?;
+        self.stream.read(buf)
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 struct RpcMempoolSubmitSignedTransferFinalityReport {
     schema: String,
@@ -650,7 +706,7 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
             &readiness,
         )?;
 
-        let (mut stream, peer_addr) = listener
+        let (stream, peer_addr) = listener
             .accept()
             .map_err(|error| format!("rpc serve accept failed: {error}"))?;
         set_stream_timeout(&stream, options.timeout_ms)?;
@@ -696,6 +752,7 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
         };
         let event_sender = event_sender.clone();
         let keep_alive = options.keep_alive;
+        let timeout_ms = options.timeout_ms;
         thread::spawn(move || {
             let _active_connection_guard =
                 RpcServeActiveConnectionGuard(Arc::clone(&context.runtime_metrics));
@@ -705,8 +762,11 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
             let mut idx = request_index;
             // Keep one reader for the connection lifetime so pipelined bytes
             // read ahead after a newline are not discarded between requests.
-            let mut reader = BufReader::new(&mut stream);
+            let mut reader = BufReader::new(RpcServeDeadlineStream::new(stream, timeout_ms));
             let last_event = loop {
+                // Each request frame gets a fresh bounded read budget; a
+                // stalled or trickling client only drops this connection.
+                reader.get_mut().reset_read_deadline();
                 let event = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     handle_rpc_serve_connection(&mut reader, idx, &mut context)
                 }))
@@ -729,8 +789,14 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
                 if !keep_alive {
                     break event;
                 }
+                // A failed request read means the client stalled or vanished;
+                // close instead of granting it another idle budget.
+                if event.error_code.as_deref() == Some("rpc_read_error") {
+                    break event;
+                }
                 // Observe both read-ahead and new socket bytes without
                 // consuming the next frame before the handler sees it.
+                reader.get_mut().reset_read_deadline();
                 match reader.fill_buf() {
                     Ok([]) => break event,
                     Ok(_) => continue,
@@ -976,7 +1042,7 @@ fn fastswap_success_response(
 }
 
 fn handle_rpc_serve_connection(
-    reader: &mut BufReader<&mut TcpStream>,
+    reader: &mut BufReader<RpcServeDeadlineStream>,
     request_index: u64,
     context: &mut RpcServeConnectionContext,
 ) -> RpcServeEventRecord {
@@ -991,7 +1057,7 @@ fn handle_rpc_serve_connection(
                 "rpc_read_error"
             };
             let response = rpc_serve_error_response(&id, error_code, &error);
-            let _ = write_json_line(reader.get_mut(), &response);
+            let _ = write_json_line(reader.get_mut().tcp_stream_mut(), &response);
             return rpc_serve_event(
                 &context.node_id,
                 request_index,
@@ -1007,7 +1073,7 @@ fn handle_rpc_serve_connection(
     if let Err(error) = validate_rpc_serve_request_line(&line) {
         let id = format!("remote-{request_index}");
         let response = rpc_serve_error_response(&id, "rpc_request_too_large", &error);
-        let _ = write_json_line(reader.get_mut(), &response);
+        let _ = write_json_line(reader.get_mut().tcp_stream_mut(), &response);
         return rpc_serve_event(
             &context.node_id,
             request_index,
@@ -1029,7 +1095,7 @@ fn handle_rpc_serve_connection(
                 "rpc_parse_error",
                 &format!("rpc request parse failed: {error}"),
             );
-            let _ = write_json_line(reader.get_mut(), &response);
+            let _ = write_json_line(reader.get_mut().tcp_stream_mut(), &response);
             return rpc_serve_event(
                 &context.node_id,
                 request_index,
@@ -1892,7 +1958,7 @@ fn handle_rpc_serve_connection(
             merge_rpc_serve_runtime_metrics(result, context.runtime_metrics.snapshot());
         }
     }
-    let _ = write_json_line(reader.get_mut(), &response);
+    let _ = write_json_line(reader.get_mut().tcp_stream_mut(), &response);
     let mut event = rpc_serve_event(
         &context.node_id,
         request_index,
