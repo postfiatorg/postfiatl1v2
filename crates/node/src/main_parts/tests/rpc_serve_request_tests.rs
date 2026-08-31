@@ -1382,4 +1382,156 @@ mod rpc_serve_request_tests {
             order_json
         );
     }
+
+    /// Single-node fixture with one committed transfer and one conflicting
+    /// (same sender sequence, different amount) signed transfer that was
+    /// never committed.
+    fn committed_transfer_replay_fixture(
+        label: &str,
+    ) -> (PathBuf, String, String, String) {
+        let root = env::temp_dir().join(format!(
+            "postfiat-finality-replay-{label}-{}-{}",
+            process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        init(InitOptions {
+            data_dir: root.clone(),
+            chain_id: "postfiat-local".to_string(),
+            node_id: "validator-0".to_string(),
+            validator_count: 1,
+        })
+        .expect("init replay fixture");
+        let recipient_backup = postfiat_rpc_sdk::wallet_backup_from_master_seed(
+            "postfiat-local",
+            "5b".repeat(32),
+            0,
+        )
+        .expect("recipient wallet backup");
+        let recipient_key = postfiat_rpc_sdk::derive_wallet_key_pair(&recipient_backup)
+            .expect("recipient wallet key");
+        let recipient =
+            postfiat_crypto_provider::address_from_public_key(&recipient_key.public_key);
+
+        let committed_batch_file = root.join("committed.batch.json");
+        let committed_batch = create_transfer_batch(BatchTransferOptions {
+            data_dir: root.clone(),
+            key_file: None,
+            to: recipient.clone(),
+            amount: 250_000,
+            batch_file: committed_batch_file.clone(),
+        })
+        .expect("committed transfer batch");
+        // Built from the same pre-commit ledger, so it reuses the committed
+        // transfer's sender sequence with different bytes: a genuine conflict.
+        let conflicting_batch = create_transfer_batch(BatchTransferOptions {
+            data_dir: root.clone(),
+            key_file: None,
+            to: recipient,
+            amount: 125_000,
+            batch_file: root.join("conflicting.batch.json"),
+        })
+        .expect("conflicting transfer batch");
+        let committed = committed_batch.transactions[0].clone();
+        let conflicting = conflicting_batch.transactions[0].clone();
+        assert_eq!(committed.unsigned.sequence, conflicting.unsigned.sequence);
+        let committed_tx_id = postfiat_execution::transfer_tx_id(&committed);
+        assert_ne!(
+            committed_tx_id,
+            postfiat_execution::transfer_tx_id(&conflicting)
+        );
+
+        let receipts = apply_batch(ApplyBatchOptions {
+            data_dir: root.clone(),
+            batch_file: committed_batch_file,
+            certificate_file: None,
+        })
+        .expect("apply committed batch");
+        assert_eq!(receipts.len(), 1);
+        assert!(receipts[0].accepted, "{receipts:?}");
+
+        (
+            root,
+            serde_json::to_string(&committed).expect("committed json"),
+            serde_json::to_string(&conflicting).expect("conflicting json"),
+            committed_tx_id,
+        )
+    }
+
+    #[test]
+    fn finality_submit_retry_after_own_commit_replays_committed_finality() {
+        let (root, committed_json, _, committed_tx_id) =
+            committed_transfer_replay_fixture("own-commit");
+
+        // The retry's own duplicate check still rejects the resubmission;
+        // before the fix this error surfaced to the client.
+        let duplicate_error =
+            submit_signed_transfer_json_to_mempool(SignedTransferJsonSubmitOptions {
+                data_dir: root.clone(),
+                signed_transfer_json: committed_json.clone(),
+            })
+            .expect_err("resubmitting the committed transfer must hit the duplicate check");
+
+        let artifact_dir = root.join("replay-artifacts");
+        let response = committed_signed_transfer_finality_replay(
+            "replay-after-own-commit",
+            &root,
+            &committed_json,
+            &artifact_dir,
+            Instant::now(),
+            &duplicate_error.to_string(),
+        )
+        .expect("committed transfer must produce an idempotent replay")
+        .expect("idempotent replay response");
+        assert!(response.ok);
+        let result = response.result.expect("replay result");
+        assert_eq!(result["tx_id"], committed_tx_id);
+        assert_eq!(result["idempotent_replay"], true);
+        assert_eq!(result["round_ok"], true);
+        assert_eq!(result["finality"]["confirmed"], true);
+        assert_eq!(result["finality"]["receipt"]["accepted"], true);
+        let replay_report: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(artifact_dir.join("rpc-finality-idempotent-replay.json"))
+                .expect("replay report artifact"),
+        )
+        .expect("replay report json");
+        assert_eq!(replay_report["tx_id"], committed_tx_id);
+        assert_eq!(
+            replay_report["suppressed_error"],
+            duplicate_error.to_string()
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn finality_submit_conflicting_duplicate_still_fails() {
+        let (root, _, conflicting_json, _) =
+            committed_transfer_replay_fixture("conflict");
+
+        // A conflicting transfer at the committed sequence is still rejected...
+        let conflict_error =
+            submit_signed_transfer_json_to_mempool(SignedTransferJsonSubmitOptions {
+                data_dir: root.clone(),
+                signed_transfer_json: conflicting_json.clone(),
+            })
+            .expect_err("conflicting duplicate must stay rejected");
+
+        // ...and it must not be replayed as committed finality, so the
+        // handler keeps surfacing the original error.
+        assert!(
+            committed_signed_transfer_finality_replay(
+                "replay-conflict",
+                &root,
+                &conflicting_json,
+                &root.join("replay-artifacts"),
+                Instant::now(),
+                &conflict_error.to_string(),
+            )
+            .is_none(),
+            "a genuinely conflicting duplicate must not be replayed as success"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
 }

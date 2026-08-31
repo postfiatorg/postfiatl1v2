@@ -127,8 +127,12 @@ Parallel, non-blocking:
       against the archived chain; restores signed snapshot backups.
 - [ ] P2. RPC serve-loop read timeout and an RPC-round-trip health probe
       (the validator-0 wedge class).
-- [ ] P3. Finality-submit idempotent response (no error after successful
-      commit).
+- [x] P3. Finality-submit idempotent response (no error after successful
+      commit) — done 2026-08-31: `committed_signed_transfer_finality_replay`
+      in `crates/node/src/rpc_cli.rs` replays the committed finality result
+      when the exact signed transfer (same tx_id) is already final;
+      conflicting duplicates still fail. Regression tests in
+      `crates/node/src/main_parts/tests/rpc_serve_request_tests.rs`.
 
 ## Schedule
 

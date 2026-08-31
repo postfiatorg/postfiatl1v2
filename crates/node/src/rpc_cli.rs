@@ -264,6 +264,7 @@ struct RpcMempoolSubmitSignedTransferFinalityReport {
     total_ms: f64,
     certified_sends_deferred: bool,
     round_ok: bool,
+    idempotent_replay: bool,
 }
 
 #[derive(Debug, Default)]
@@ -2746,6 +2747,7 @@ fn run_rpc_serve_mempool_submit_fastlane_primary_finality_inner(
         total_ms,
         certified_sends_deferred: round.round.certified_sends_deferred,
         round_ok: round.round_ok,
+        idempotent_replay: false,
     };
     success_response(
         &request.id,
@@ -2907,8 +2909,142 @@ fn run_rpc_serve_mempool_submit_signed_transfer_finality_inner(
         .finality_artifact_root
         .join(format!("rpc-finality-{request_index}-{request_component}"));
     let total_start = Instant::now();
+    match run_rpc_serve_mempool_submit_signed_transfer_finality_round(
+        request,
+        context,
+        params,
+        signed_transfer_json,
+        &artifact_dir,
+        total_start,
+    ) {
+        Ok(response) => Ok(response),
+        Err((code, message)) => committed_signed_transfer_finality_replay(
+            &request.id,
+            &context.data_dir,
+            signed_transfer_json,
+            &artifact_dir,
+            total_start,
+            &message,
+        )
+        .unwrap_or(Err((code, message))),
+    }
+}
+
+/// P3 idempotency: a finality submit retry can race its own successful
+/// commit and hit its own duplicate check even though the transfer is final
+/// (plan item P3 in docs/plans/active/devnet-storage-single-writer-deployment-plan.md).
+/// When the exact signed transfer (same tx_id) is already committed with an
+/// accepted receipt, answer with that committed finality result instead of
+/// the error. A genuinely conflicting duplicate hashes to a different
+/// tx_id, is never found committed, and keeps the original error.
+fn committed_signed_transfer_finality_replay(
+    request_id: &str,
+    data_dir: &Path,
+    signed_transfer_json: &str,
+    artifact_dir: &Path,
+    total_start: Instant,
+    suppressed_error: &str,
+) -> Option<Result<RpcResponse, (String, String)>> {
+    let signed: postfiat_types::SignedTransfer =
+        serde_json::from_str(signed_transfer_json).ok()?;
+    signed.validate().ok()?;
+    let tx_id = postfiat_execution::transfer_tx_id(&signed);
+    let finality = tx_finality(TxFinalityQueryOptions {
+        data_dir: data_dir.to_path_buf(),
+        tx_id: tx_id.clone(),
+        audit_block_log: false,
+    })
+    .ok()?;
+    if !finality.confirmed || !finality.receipt.accepted {
+        return None;
+    }
+    Some(committed_signed_transfer_finality_replay_response(
+        request_id,
+        tx_id,
+        finality,
+        artifact_dir,
+        total_start,
+        suppressed_error,
+    ))
+}
+
+fn committed_signed_transfer_finality_replay_response(
+    request_id: &str,
+    tx_id: String,
+    finality: TxFinalityReport,
+    artifact_dir: &Path,
+    total_start: Instant,
+    suppressed_error: &str,
+) -> Result<RpcResponse, (String, String)> {
+    std::fs::create_dir_all(artifact_dir).map_err(|error| {
+        (
+            "rpc_finality_submit_failed".to_string(),
+            format!("finality replay artifact directory create failed: {error}"),
+        )
+    })?;
+    let replay_report_file = artifact_dir.join("rpc-finality-idempotent-replay.json");
+    let replay_report = serde_json::json!({
+        "schema": "postfiat-rpc-finality-idempotent-replay-v1",
+        "tx_id": tx_id,
+        "suppressed_error": suppressed_error,
+    });
+    let replay_json = serde_json::to_string_pretty(&replay_report).map_err(|error| {
+        (
+            "rpc_finality_submit_failed".to_string(),
+            format!("finality replay report serialization failed: {error}"),
+        )
+    })?;
+    std::fs::write(&replay_report_file, replay_json).map_err(|error| {
+        (
+            "rpc_finality_submit_failed".to_string(),
+            format!(
+                "finality replay report write `{}` failed: {error}",
+                replay_report_file.display()
+            ),
+        )
+    })?;
+    let result = RpcMempoolSubmitSignedTransferFinalityReport {
+        schema: "postfiat-rpc-mempool-submit-signed-transfer-finality-v1".to_string(),
+        tx_id: tx_id.clone(),
+        finality,
+        round_report_file: replay_report_file.display().to_string(),
+        artifact_dir: artifact_dir.display().to_string(),
+        readiness_wait_ms: 0.0,
+        mempool_submit_ms: 0.0,
+        mempool_batch_ms: 0.0,
+        certified_round_ms: 0.0,
+        total_ms: monotonic_elapsed_ms(total_start),
+        certified_sends_deferred: false,
+        round_ok: true,
+        idempotent_replay: true,
+    };
+    success_response(
+        request_id,
+        &result,
+        vec![RpcEvent::new(
+            "mempool_submit_signed_transfer_finality",
+            tx_id,
+            "externally signed transparent transfer already finalized; idempotent replay",
+        )],
+    )
+    .map_err(|error| {
+        (
+            "rpc_finality_submit_failed".to_string(),
+            format!("finality RPC response serialization failed: {error}"),
+        )
+    })
+}
+
+fn run_rpc_serve_mempool_submit_signed_transfer_finality_round(
+    request: &RpcRequest,
+    context: &RpcServeConnectionContext,
+    params: &serde_json::Map<String, serde_json::Value>,
+    signed_transfer_json: &str,
+    artifact_dir: &Path,
+    total_start: Instant,
+) -> Result<RpcResponse, (String, String)> {
     let readiness_wait_ms = wait_for_rpc_finality_required_parent(context, params)?;
-    let finality_view = prepare_rpc_finality_view(&context.data_dir, params, &artifact_dir)?;
+    let finality_view = prepare_rpc_finality_view(&context.data_dir, params, artifact_dir)?;
     require_rpc_finality_local_proposer(context, finality_view.view)?;
     let round = transport_peer_certified_mempool_round(TransportPeerCertifiedMempoolRoundOptions {
         data_dir: context.data_dir.clone(),
@@ -2919,7 +3055,7 @@ fn run_rpc_serve_mempool_submit_signed_transfer_finality_inner(
         require_signed_proposal: true,
         allow_peer_failures: false,
         quorum_early_full_propagation: context.finality_quorum_early_full_propagation,
-        artifact_dir: artifact_dir.clone(),
+        artifact_dir: artifact_dir.to_path_buf(),
         block_height: None,
         view: Some(finality_view.view),
         timeout_certificate_file: finality_view.timeout_certificate_file,
@@ -2993,6 +3129,7 @@ fn run_rpc_serve_mempool_submit_signed_transfer_finality_inner(
         total_ms,
         certified_sends_deferred: round.round.certified_sends_deferred,
         round_ok: round.round_ok,
+        idempotent_replay: false,
     };
     success_response(
         &request.id,
@@ -3157,6 +3294,7 @@ fn run_rpc_serve_mempool_submit_signed_payment_v2_finality_inner(
         total_ms,
         certified_sends_deferred: round.round.certified_sends_deferred,
         round_ok: round.round_ok,
+        idempotent_replay: false,
     };
     success_response(
         &request.id,
@@ -3321,6 +3459,7 @@ fn run_rpc_serve_mempool_submit_signed_asset_transaction_finality_inner(
         total_ms,
         certified_sends_deferred: round.round.certified_sends_deferred,
         round_ok: round.round_ok,
+        idempotent_replay: false,
     };
     success_response(
         &request.id,
@@ -3487,6 +3626,7 @@ fn run_rpc_serve_mempool_submit_signed_escrow_transaction_finality_inner(
         total_ms,
         certified_sends_deferred: round.round.certified_sends_deferred,
         round_ok: round.round_ok,
+        idempotent_replay: false,
     };
     success_response(
         &request.id,

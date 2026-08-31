@@ -300,6 +300,7 @@ fn run_rpc_serve_mempool_submit_signed_atomic_swap_finality_inner(
         total_ms,
         certified_sends_deferred: round.round.certified_sends_deferred,
         round_ok: round.round_ok,
+        idempotent_replay: false,
     };
     success_response(
         &request.id,
