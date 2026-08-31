@@ -104,16 +104,16 @@ Base revision: current fleet lineage (`registry-fix-291d1eb1` =
       files, and the rolled-back clone serves status at the pre-round
       height. Any `PASS` emitted by a runner that skipped a production
       service is a gate bug, not evidence.
-- [ ] 4. **Canary (0.5 day).** Raw-copy backup of validator-1, deploy signed
+- [x] 4. **Canary — DONE 2026-08-31.** Raw-copy backup of validator-1, deploy signed
       release to validator-1 only, verify both services ready and status
       convergence at the live height. Stop rule: any service failure or
       divergence → restore the backup, one diagnosis, stop.
-- [ ] 5. **Fleet rollout + liveness proof (0.5 day).** Remaining five
+- [x] 5. **Fleet rollout + liveness proof — DONE 2026-08-31** (blocks 927-931; receipt `deployments/storage-lease-20260831/deploy-receipt.json`). Remaining five
       validators one at a time with per-host status checks; then two
       value-carrying certified rounds through RPC finality submit; all six
       converged on the new storage with `transactional_generation` present
       and zero full-history reads in telemetry.
-- [ ] 6. **Receipts and Z1 (same day).** Deploy receipt under
+- [x] 6. **Receipts recorded; Z1 clock started 2026-08-31T04:29:41Z.** Deploy receipt under
       `deployments/`, update
       [Current State](../../status/chain-state-current.md), start the Z1
       observation clock. Milestone completion gate (full suite) runs at the

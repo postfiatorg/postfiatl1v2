@@ -1,10 +1,23 @@
 # PostFiat L1 Current State
 
-Updated: `2026-08-31T00:30:00Z`
+Updated: `2026-08-31T04:30:00Z`
 
 Status: **canonical operational-state reference**
 
-!!! success "2026-08-31: chain unwedged and live at height 926"
+!!! success "2026-08-31: transactional storage DEPLOYED AND ACTIVE at height 931"
+
+    Release `storage-lease-af9b83c3` (writer lease `f0013c29` + storage
+    rework, binary `383f4325…141a7a`) is live on all six validators after
+    passing the deployment-exact gate on real-host clones. The chain migrated
+    and activated transactional `redb` storage at height 930 and finalized
+    block 931 on it: all six converged at tip `8e3639ee…665c4b`, commitment
+    `postfiat.replicated_state.v2`, zero full-history scans. Z1 observation
+    started `2026-08-31T04:29:41Z`. Receipts:
+    `deployments/storage-lease-20260831/deploy-receipt.json` and
+    `benchmarks/storage-scaling/deployment-exact-gate/gate-926-receipt.json`.
+    Height-926 details below are historical.
+
+!!! success "2026-08-31 (earlier): chain unwedged and live at height 926"
 
     The height-924 wedge was the superseded validator-registry reapplication
     defect in the **deployed** `8cc7d15e` lineage, not only in the storage

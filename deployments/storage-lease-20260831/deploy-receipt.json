@@ -1,0 +1,60 @@
+{
+  "schema": "postfiat-devnet-storage-deployment-receipt-v1",
+  "status": "DEPLOYED_AND_ACTIVE",
+  "chain_id": "postfiat-wan-devnet-2",
+  "date_utc": "2026-08-31",
+  "release": {
+    "release_id": "storage-lease-af9b83c3",
+    "git_revision": "af9b83c355267f18cd2b1b173b25fed57553a8ed",
+    "binary_sha256": "383f4325a157f554786b6c8868defedcef8faeb320f9998eeef69c07c7141a7a",
+    "previous_binary_sha256": "6b07a8c31ee5f306995e12df23d644348c3ab074beb68800f7251f3f38ef7de6",
+    "qualification_gate": "benchmarks/storage-scaling/deployment-exact-gate/gate-926-receipt.json"
+  },
+  "rollout": {
+    "canary": "validator-1 (unit backup, raw data-dir copy, on-host manifest verify, offline rebuild+verify, restart, identity check)",
+    "deploy_order": [
+      "validator-1",
+      "validator-0",
+      "validator-5",
+      "validator-2",
+      "validator-3",
+      "validator-4"
+    ],
+    "initial_migration_packet_root_prefix": "7246a0602f0ad052",
+    "refreeze_at_927_packet_root_prefix": "8aa42f0d6014be2b",
+    "generation_layout": "inside data dir (transactional-generation-927), within systemd ReadWritePaths"
+  },
+  "chain_sequence": {
+    "legacy_round_927": "RPC finality transfer, converged",
+    "activation_scheduled_928": "six-signature governance batch, certified round with services running",
+    "preactivation_round_929": "RPC finality transfer, converged",
+    "activation_cutover_930": "all six transactional_active, v2 commitment",
+    "post_activation_restart": "all six, both services",
+    "final_round_931": "RPC finality transfer on transactional storage, converged"
+  },
+  "final_state": {
+    "height": 931,
+    "tip": "8e3639ee748255636d09adb8b3fe70f20f8ae0aa9388b024eaffb98b7a94f3c7c4b0e5710f0d8c2479b08d9bc8665c4b",
+    "state_root": "ef18f8ca8eee67e4f25e0752b54012f1e66b8b4de16444d2583a81e890aec1f3492c1544280279e5acf090559fd55e0f",
+    "transactional_active": true,
+    "commitment_version": "postfiat.replicated_state.v2",
+    "full_history_scans": 0,
+    "faucet_balance": 10529321,
+    "faucet_sequence": 98,
+    "recipient_balance": 3375000
+  },
+  "incidents_during_rollout": [
+    "driver verified manifest before installing units (ordering bug, failed closed, fixed)",
+    "silent long-lived SSH sessions died mid-rebuild; switched to detached remote rebuilds with polling",
+    "root-owned cobalt-e5-live dirs inside validator 2/3/4 data dirs broke rebuild source scan; chowned fleet-wide",
+    "activation certified-round CLI exits nonzero after its own successful commit (internal retry); commit verified exactly-once"
+  ],
+  "rollback_surface": "per-host /root/postfiat-deploy-backups/storage-lease-af9b83c3/ (units) + /var/lib/postfiat/pre-storage-lease-af9b83c3-raw (full pre-rollout data dir) + old release dirs untouched",
+  "z1_observation_clock_started_utc": "2026-08-31T04:29:41Z",
+  "cleanups_pending": [
+    "remove gate ufw rule 26750:26760 on wg0 (all six)",
+    "remove /var/lib/postfiat/gate926 (~8GB/host) after Z1",
+    "superseded generation dir transactional-generation (pre-refreeze) removable after Z1",
+    "rpc status cache lags one block after rounds until refresh; track with P2/P3 follow-ups"
+  ]
+}
