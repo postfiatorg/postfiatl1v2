@@ -5,6 +5,9 @@ Only current execution plans and completed plans belong here.
 ## Active
 
 - [Storage Scaling: Time-Budgeted Qualification and Release Gates](active/storage-scaling-milestone.md)
+- [L1v2 Public Testnet Path](active/l1v2-public-testnet-path-milestone.md)
+- [Devnet Transactional Storage: Single-Writer Deployment Plan](active/devnet-storage-single-writer-deployment-plan.md)
+- [Devnet Storage Rollout](active/devnet-storage-rollout-plan.md)
 
 ## Completed
 
