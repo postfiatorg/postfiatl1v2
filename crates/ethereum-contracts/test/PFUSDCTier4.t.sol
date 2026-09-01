@@ -10,6 +10,7 @@ import {
 } from "../src/ERC20BridgeVaultV2.sol";
 import {PFTLFinalityVerifierV1, ISP1Verifier} from "../src/PFTLFinalityVerifierV1.sol";
 import {PfUsdcIngressAnchorV1, IArbitrumBridgeV1, IArbitrumOutboxV1} from "../src/PfUsdcIngressAnchorV1.sol";
+import {ArcPfUsdcDeploymentFactory} from "../src/ArcPfUsdcDeploymentFactory.sol";
 
 contract Tier4MockToken is IERC20BridgeTokenV2 {
     mapping(address => uint256) public balanceOf;
@@ -326,6 +327,74 @@ contract PFUSDCTier4Test {
         _assertTrue(
             first.governedRouteBinding() != second.governedRouteBinding(), "route binding remains instance-pinned"
         );
+    }
+
+    function testArcDirectIngressPinsVaultAndRevertsAtomicallyOnWrongRoute() public {
+        ArcPfUsdcDeploymentFactory factory = new ArcPfUsdcDeploymentFactory();
+        Tier4TemporaryFinality temporary = new Tier4TemporaryFinality();
+        bytes32 routeBinding = keccak256("arc-direct-route");
+        Tier4MockOutbox unauthorizedCaller = new Tier4MockOutbox();
+        (bool unauthorizedFactoryOk,) = unauthorizedCaller.relay(
+            address(factory),
+            abi.encodeCall(
+                ArcPfUsdcDeploymentFactory.deploy,
+                (token, IPFTLFinalityVerifierV1(address(temporary)), routeBinding, address(this))
+            )
+        );
+        _assertTrue(!unauthorizedFactoryOk, "non-deployer factory call accepted");
+        (PfUsdcIngressAnchorV1 directAnchor, ERC20BridgeVaultV2 directVault) =
+            factory.deploy(token, temporary, routeBinding, address(this));
+
+        (bool factoryReplayOk,) = address(factory)
+            .call(
+                abi.encodeCall(
+                    ArcPfUsdcDeploymentFactory.deploy,
+                    (token, IPFTLFinalityVerifierV1(address(temporary)), routeBinding, address(this))
+                )
+            );
+        _assertTrue(!factoryReplayOk, "direct factory replay accepted");
+
+        _assertTrue(directAnchor.directIngress(), "anchor direct mode disabled");
+        _assertTrue(directVault.directIngress(), "vault direct mode disabled");
+        _assertTrue(directAnchor.l2Vault() == address(directVault), "anchor vault binding");
+
+        token.mint(address(this), 2_000_000);
+        token.approve(address(directVault), 2_000_000);
+        bytes32 depositId =
+            directVault.depositV2(1_000_000, "pf-arc-recipient", keccak256("arc-direct-nonce"), routeBinding);
+        _assertTrue(directAnchor.depositSeen(depositId), "direct anchor omitted deposit");
+        _assertEq(token.balanceOf(address(directVault)), 1_000_000, "direct vault pull");
+
+        uint256 walletBefore = token.balanceOf(address(this));
+        uint256 vaultBefore = token.balanceOf(address(directVault));
+        (bool ok,) = address(directVault)
+            .call(
+                abi.encodeCall(
+                    ERC20BridgeVaultV2.depositV2,
+                    (500_000, "pf-arc-recipient", keccak256("wrong-route-nonce"), keccak256("wrong-route"))
+                )
+            );
+        _assertTrue(!ok, "wrong direct route accepted");
+        _assertEq(token.balanceOf(address(this)), walletBefore, "failed direct deposit changed wallet");
+        _assertEq(token.balanceOf(address(directVault)), vaultBefore, "failed direct deposit changed vault");
+
+        bytes memory unauthorized = abi.encodeCall(
+            IPfUsdcIngressAnchorV1.recordDepositV1,
+            (
+                keccak256("forged-direct-id"),
+                address(this),
+                keccak256(bytes("pf-arc-recipient")),
+                "pf-arc-recipient",
+                1,
+                keccak256("forged-direct-nonce"),
+                routeBinding,
+                block.chainid,
+                address(directVault),
+                address(token)
+            )
+        );
+        (ok,) = address(directAnchor).call(unauthorized);
+        _assertTrue(!ok, "non-vault direct anchor caller accepted");
     }
 
     function testProofNativeWithdrawalPaysExactlyAndConsumesReplayKeys() public {

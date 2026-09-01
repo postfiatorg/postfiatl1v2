@@ -1543,6 +1543,17 @@ pub(super) fn execute_governance_batch(
                     );
                 }
             }
+            if let Some(state) = activation.arc_finality_bootstrap.as_ref() {
+                if ledger
+                    .arc_finality_state(&state.route_profile_hash, state.route_epoch)
+                    .is_some()
+                {
+                    return Err(
+                        "Arc Tier-4 route finality bootstrap already exists for route epoch"
+                            .to_string(),
+                    );
+                }
+            }
             postfiat_types::VaultBridgeRouteProfileRecordV1::new(activation, block_height)
         })();
         match validated {
@@ -1552,6 +1563,11 @@ pub(super) fn execute_governance_batch(
                     // therefore an accepted Tier-4 activation must have it.
                     if let Some(ledger) = ledger.as_deref_mut() {
                         ledger.ethereum_arbitrum_finality_states.push(state);
+                    }
+                }
+                if let Some(state) = activation.arc_finality_bootstrap.clone() {
+                    if let Some(ledger) = ledger.as_deref_mut() {
+                        ledger.arc_finality_states.push(state);
                     }
                 }
                 apply_governance_amendment_with_lifecycle_records(
@@ -1602,6 +1618,7 @@ pub(super) fn validate_vault_bridge_route_profile_against_ledger(
         postfiat_types::NAV_PROFILE_VERIFIER_SP1_GROTH16
             | postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
             | postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+            | postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
     ) {
         profile.valuation_policy_hash == route.verifier_policy_hash
             && profile.sp1_program_vkey == route.verifier_program_vkey
