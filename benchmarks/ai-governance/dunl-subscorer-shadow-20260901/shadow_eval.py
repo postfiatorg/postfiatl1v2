@@ -6,9 +6,10 @@ For every fetched frozen testnet round this script:
 1. computes deterministic sub-scores for every validator from the round's
    frozen inputs (``subscorer.py`` v1);
 2. runs the fork's own ``compute_final_score`` and ``select_unl``
-   (read-only imports from the ``dynamic-unl-scoring`` clone) over those
-   sub-scores, using the round's frozen selector parameters and frozen
-   previous UNL from its own manifest/inputs; and
+   (the pinned module files of the read-only ``dynamic-unl-scoring``
+   clone, loaded directly so no third-party dependency is needed) over
+   those sub-scores, using the round's frozen selector parameters and
+   frozen previous UNL from its own manifest/inputs; and
 3. compares against the round's published outputs: per-dimension mean/max
    absolute delta vs the model's sub-scores, final-score deltas, the number
    of validators crossing the score-40 cutoff in either direction (the
@@ -24,10 +25,19 @@ through the selector to confirm the published UNL reproduces exactly under
 the frozen parameters before the deterministic candidate is compared.
 
 Writes ``results.json`` (machine-readable) and ``results-tables.md``
-(per-round tables). No network, no model, read-only fork imports.
+(per-round tables). No network, no model, no third-party dependencies:
+the two fork modules whose logic runs (``score_formula``,
+``unl_selector``) are loaded from their pinned files with local plain
+data carriers standing in for the parser's ``ScoringResult`` and
+``ValidatorScore`` (field-identical, no validation logic to replicate)
+and a fail-loud stand-in for the fork settings, which the evaluation
+must never read because every selector parameter comes from the round's
+manifest. This keeps the evaluation and its guard tests runnable under
+a bare interpreter.
 
 Fail-loud guards (regression-tested in ``test_shadow_eval.py``): the
-imported fork modules must match the round's manifest content-hash pins,
+pinned fork module files must match the round's manifest content-hash
+pins,
 the round's pinned ``score_cutoff`` must equal the flip line, and the
 frozen-entry and published-model validator sets must match exactly —
 any mismatch raises instead of narrowing the comparison silently.
@@ -44,25 +54,112 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import statistics
 import sys
+import types
+from dataclasses import dataclass, field
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 FORK_ROOT = Path.home() / "repos" / "dynamic-unl-scoring"
-sys.path.insert(0, str(FORK_ROOT))
+FORK_SERVICES = FORK_ROOT / "scoring_service" / "services"
 sys.path.insert(0, str(HERE))
-
-from scoring_service.services.response_parser import (  # noqa: E402
-    ScoringResult,
-    ValidatorScore,
-)
-from scoring_service.services.score_formula import compute_final_score  # noqa: E402
-from scoring_service.services.unl_selector import select_unl  # noqa: E402
 
 import subscorer  # noqa: E402
 import subscorer_v2  # noqa: E402
+
+
+@dataclass
+class ValidatorScore:
+    """Field-identical stand-in for the pinned parser's ``ValidatorScore``.
+
+    The pinned class declares these fields with no validators or coercion,
+    so a plain carrier is behaviorally identical for the values this
+    evaluation constructs.
+    """
+
+    master_key: str
+    score: int
+    consensus: int
+    reliability: int
+    software: int
+    diversity: int
+    identity: int
+    reasoning: str
+
+
+@dataclass
+class ScoringResult:
+    """Field-identical stand-in for the pinned parser's ``ScoringResult``."""
+
+    validator_scores: list[ValidatorScore]
+    raw_response: str
+    complete: bool
+    errors: list[str] = field(default_factory=list)
+
+
+class _UnusedForkSettings:
+    """The fork settings must never be read by this evaluation.
+
+    ``select_unl`` falls back to settings only for parameters not passed
+    explicitly; the evaluation always passes the round's frozen manifest
+    parameters, so any settings read is a bug and fails loudly.
+    """
+
+    def __getattr__(self, name: str):
+        raise AttributeError(
+            f"fork settings.{name} was read during the shadow evaluation; "
+            "every selector parameter must come from the round's manifest"
+        )
+
+
+def _register_stub_module(name: str) -> types.ModuleType:
+    module = types.ModuleType(name)
+    sys.modules[name] = module
+    parent_name, _, child = name.rpartition(".")
+    if parent_name:
+        setattr(sys.modules[parent_name], child, module)
+    return module
+
+
+def _load_pinned_module(name: str, path: Path) -> types.ModuleType:
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    parent_name, _, child = name.rpartition(".")
+    if parent_name:
+        setattr(sys.modules[parent_name], child, module)
+    spec.loader.exec_module(module)
+    return module
+
+
+# The real files behind every module name a round manifest may pin. Pin
+# verification hashes these exact files; the loader below executes the
+# score-formula and selector files directly, so the logic that runs is
+# the pinned fork code without the fork package's optional dependencies.
+_PINNED_MODULE_FILES = {
+    "scoring_service.services.response_parser": FORK_SERVICES / "response_parser.py",
+    "scoring_service.services.score_formula": FORK_SERVICES / "score_formula.py",
+    "scoring_service.services.unl_selector": FORK_SERVICES / "unl_selector.py",
+}
+
+_register_stub_module("scoring_service")
+_register_stub_module("scoring_service.services")
+_register_stub_module("scoring_service.config").settings = _UnusedForkSettings()
+_parser_stub = _register_stub_module("scoring_service.services.response_parser")
+_parser_stub.ValidatorScore = ValidatorScore
+_parser_stub.ScoringResult = ScoringResult
+
+compute_final_score = _load_pinned_module(
+    "scoring_service.services.score_formula",
+    _PINNED_MODULE_FILES["scoring_service.services.score_formula"],
+).compute_final_score
+select_unl = _load_pinned_module(
+    "scoring_service.services.unl_selector",
+    _PINNED_MODULE_FILES["scoring_service.services.unl_selector"],
+).select_unl
 
 ROUNDS = tuple(range(12, 20))
 CUTOFF_LINE = 40
@@ -75,10 +172,10 @@ def _load(round_dir: Path, rel_path: str) -> dict:
 
 
 def _verify_code_pins(code: dict) -> None:
-    """Fail loudly if an imported fork module drifted from the round's pins.
+    """Fail loudly if a pinned fork module drifted from the round's pins.
 
     Every round's execution manifest content-hash-pins the parser, selector,
-    and (formula-era) score-formula modules. The evaluation imports today's
+    and (formula-era) score-formula modules. The evaluation loads today's
     fork clone; if that clone has moved past the pinned content, the numbers
     it computes would no longer describe the frozen round.
     """
@@ -86,7 +183,11 @@ def _verify_code_pins(code: dict) -> None:
         pin = code.get(key)
         if pin is None:
             continue
-        module_file = Path(sys.modules[pin["module"]].__file__)
+        module_file = _PINNED_MODULE_FILES.get(pin["module"])
+        if module_file is None:
+            raise ValueError(
+                f"round pins unrecognized fork module {pin['module']!r}"
+            )
         digest = hashlib.sha256(module_file.read_bytes()).hexdigest()
         if digest != pin["content_sha256"]:
             raise ValueError(

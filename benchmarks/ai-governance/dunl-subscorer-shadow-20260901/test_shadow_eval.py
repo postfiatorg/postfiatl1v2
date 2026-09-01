@@ -1,22 +1,28 @@
 """Regression tests for the shadow evaluation's fail-loud guards.
 
-These tests need the read-only ``dynamic-unl-scoring`` fork clone (for the
-imports at the top of ``shadow_eval``) and the fetched ``rounds/`` data
-(gitignored); they skip cleanly when either is unavailable. Run from this
-directory: ``python3 -m unittest test_shadow_eval`` (venv with the fork's
-parser deps).
+These tests need the read-only ``dynamic-unl-scoring`` fork clone (whose
+pinned module files ``shadow_eval`` loads) and the fetched ``rounds/``
+data (gitignored); they skip only when one of those is genuinely absent
+from the host. They need no third-party dependencies — ``shadow_eval``
+loads the pinned fork files directly, exactly as the evaluation itself
+runs — so they execute under a bare ``python3``. Run from this
+directory: ``python3 -m unittest test_shadow_eval``.
 
 Guards under test, each of which previously produced a plausible but wrong
 number instead of failing:
 
 - cutoff flips were computed against the hardcoded 40 even when the round
   pinned a different ``score_cutoff``;
-- the imported fork modules were never verified against the round's
+- the pinned fork modules were never verified against the round's
   content-hash pins, so a drifted fork clone silently changed the numbers
   (the UNL-reproduction control does not catch formula drift);
 - a validator present in the frozen entries but missing from the published
   model scores (or vice versa) was silently dropped from every metric, as
   was any duplicate-key collapse.
+
+``test_loader_is_dependency_free`` additionally pins the property that
+the guard suite must never skip for a missing optional dependency: the
+fork loading path must not touch pydantic at all.
 
 The final test pins the round-16 report to the committed ``results.json``
 and ``results-v2.json`` entries, proving the guards changed no numbers.
@@ -33,21 +39,35 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROUND_16 = HERE / "rounds" / "testnet-r16"
+FORK_ROOT = Path.home() / "repos" / "dynamic-unl-scoring"
 
 sys.path.insert(0, str(HERE))
 
-try:
+if FORK_ROOT.exists():
     import shadow_eval
     import subscorer
-    _IMPORT_ERROR: Exception | None = None
-except ImportError as exc:  # fork clone or its deps unavailable
+else:  # only a genuinely absent fork clone may skip this suite
     shadow_eval = None
-    _IMPORT_ERROR = exc
 
 
-@unittest.skipIf(shadow_eval is None, f"fork imports unavailable: {_IMPORT_ERROR}")
+@unittest.skipIf(shadow_eval is None, f"fork clone not found at {FORK_ROOT}")
 @unittest.skipUnless(ROUND_16.exists(), "frozen rounds not fetched (rounds/ is gitignored)")
 class ShadowEvalGuardTest(unittest.TestCase):
+    def test_loader_is_dependency_free(self) -> None:
+        # The evaluation and this guard suite must run under a bare
+        # interpreter: loading shadow_eval must not import pydantic (the
+        # fork package's optional dependency), and the pinned files whose
+        # logic actually runs must be the real fork files.
+        self.assertNotIn("pydantic", sys.modules)
+        for name, path in shadow_eval._PINNED_MODULE_FILES.items():
+            self.assertTrue(path.is_file(), f"{name}: {path} missing")
+        self.assertEqual(
+            Path(sys.modules["scoring_service.services.unl_selector"].__file__),
+            shadow_eval._PINNED_MODULE_FILES[
+                "scoring_service.services.unl_selector"
+            ],
+        )
+
     def _round_copy(self) -> Path:
         tmp = Path(tempfile.mkdtemp(prefix="shadow-eval-test-"))
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
