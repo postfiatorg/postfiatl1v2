@@ -17,7 +17,7 @@
     "scripts/check-a666-evm-spot-valuation-policy": "eba34c092f589923b57cce350a4d9ee5c016f2c6bc9db059141748bba8a9c54e",
     "scripts/check-a666-monero-policies": "5e34db5f4082d08f3c16673ccfc20f6937894640ccca1f7bba8b4443742fb020",
     "scripts/check-a666-near-solana-valuation-policies": "b59384bb6648b400d231e4d37e9c31ba5098a94d21fa060173fd741a4eed716c",
-    "scripts/check-nav-reserve-proof-fuzz-smoke": "d9bae0c68f8448eba9c99092546a7780026b277901980bec56730b5d66418d79",
+    "scripts/check-nav-reserve-proof-fuzz-smoke": "e0c814a53c3b81f7b72c6ca3c7a71d739ed0efae62505fd9effba15326acb4b7",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/lib.rs": "88d6f3b58d6df771486e084d846e050ee1bb49125d9051afb4601f8aaba059fe",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/checkpoint_signing.rs": "59a8174b9299cdb1d74344a87dcc00d27902c3ee7a058c5b45f733ab00607770",
     "tools/nav-reserve-proof/crates/reserve-proof-cli/src/main.rs": "b4a425d3bb43ce109f3b3aaef4b6422aeed01ebf9a37bef5c5e4588a542781ec",
