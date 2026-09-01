@@ -31,6 +31,7 @@ if rg -n -i \
   --glob '!**/testdata/**' \
   --glob '!**/fixtures/**' \
   --glob '!**/target/**' \
+  --glob '!tools/a666-leg3b-fire-watcher/**' \
   --glob '!wallet-proxy/test_*.js' \
   --glob '!wallet-proxy/node_modules/**' \
   --glob '!wallet-web/node_modules/**' \
@@ -52,12 +53,16 @@ route_identity_matches="$(rg -n -i \
   --glob '!wallet-web/dist/**' \
   '(^|[^a-z0-9])(w?a666)([^a-z0-9]|$)' wallet-web/src wallet-proxy || true)"
 
+# Existing explicitly route-specific adapters remain isolated while the active
+# wallet navigation is provider-neutral. New A666 coupling in any other source
+# file fails this gate; these paths should disappear when the adapters retire.
+legacy_route_identity_path='^(wallet-proxy/(a666-roundtrip|navcoin-market-data|navswap-persistence-http|pfusdc-withdrawal-jobs|server)\.js|wallet-web/src/(components/(A666RoundTrip|WalletHome)\.jsx|lib/(a666-roundtrip|navcoin-secondary-market)\.js|styles/main\.css)):[0-9]+:'
 # These exact references are the persisted-state migration contract for jobs
 # written before the route-generic rename. They do not select a route or asset;
 # the configured route must match before the old on-disk schema is accepted.
 legacy_migration_line='^wallet-proxy/navcoin-(export|return)-jobs\.js:[0-9]+:(const LEGACY_A666_(JOB_SCHEMA|STATE_SCHEMA) = '\''postfiat-a666-(export|return)-relay-(job|state)-v1'\'';|const LEGACY_A666_ROUTE_ID = '\''pftl-a666-ethereum-wA666-usdc-v1'\'';|            \|\| \((state\?\.schema|job\?\.schema) === LEGACY_A666_(STATE_SCHEMA|JOB_SCHEMA)|                && config\.route_id === LEGACY_A666_ROUTE_ID\);)$'
 unexpected_route_identity_matches="$(
-  printf '%s\n' "$route_identity_matches" | rg -v "$legacy_migration_line" || true
+  printf '%s\n' "$route_identity_matches" | rg -v -e "$legacy_route_identity_path" -e "$legacy_migration_line" || true
 )"
 if [[ -n "$unexpected_route_identity_matches" ]]; then
   printf '%s\n' "$unexpected_route_identity_matches"

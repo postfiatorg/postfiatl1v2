@@ -1381,8 +1381,9 @@ mod tests {
       "requestsHash":null
     }"#;
 
-    const HISTORICAL_WITNESS: &str =
-        include_str!("../../../../../benchmarks/nav-reserve-proof-historical/hl-receipt-witness.json");
+    const HISTORICAL_WITNESS: &str = include_str!(
+        "../../../../../benchmarks/nav-reserve-proof-historical/hl-receipt-witness.json"
+    );
 
     fn policy() -> HyperliquidReceiptPolicyV1 {
         HyperliquidReceiptPolicyV1 {

@@ -141,6 +141,7 @@ READ_ONLY_PUBLIC_METHODS = {
     "owned_certificate",
     "owned_recovery_status",
     "pfusdc_egress_witness",
+    "pfusdc_ingress_preflight",
     "nav_reserve_proof_status",
     "fx_fix_list",
     "fx_fix_info",

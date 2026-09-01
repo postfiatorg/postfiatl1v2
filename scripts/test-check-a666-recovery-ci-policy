@@ -81,7 +81,7 @@ def require_clean_with(relative: str, content: str) -> None:
 def require_exact_direct_proving_allowlist() -> None:
     repo_root = CHECKER.parent.parent
     vectors = {
-        "scripts/test_native_campaign_driver.py": (435, 626),
+        "scripts/test_native_campaign_driver.py": (445, 636),
         "scripts/test_native_prover_leaf.py": (180,),
     }
     for relative, allowed_lines in vectors.items():
