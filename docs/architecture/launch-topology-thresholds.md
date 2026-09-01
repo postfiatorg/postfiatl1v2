@@ -47,10 +47,13 @@ those two numbers.
   normalization so corporate variants of one operator count together.
 - **Rationale:** a single provider-wide outage must leave at least `q_S`
   validators standing, so no family may reach the blocking threshold of 3.
-- **Checked by:** `new:` placement preflight — the tool named in launch gate
-  L3's evidence row does not exist yet; it would consume the fork's ASN
-  resolution (`dynamic-unl-scoring/scoring_service/clients/asn.py`, public
-  pyasn data) and family rules, and fail closed on unresolved endpoints.
+- **Checked by:** built — `python/postfiat_rpc/placement_preflight.py`
+  (tests `python/tests/test_placement_preflight.py`) enforces the family and
+  ASN caps over declared fields using the fork's family normalization ported
+  from `provider_families.py`, and fails closed on unresolved endpoints.
+  Feeding it fork-side ASN resolution
+  (`dynamic-unl-scoring/scoring_service/clients/asn.py`, public pyasn data)
+  for real operators is community-facing work under gate L3.
 
 ### 2.2 Geographic concentration
 
@@ -69,11 +72,14 @@ those two numbers.
   the operator wants geography held to the same bar as providers, the cap is
   **2 of 12** and at least **6 countries**. This is the one dimension where
   the proposal deliberately diverges from the group arithmetic.
-- **Checked by:** `new:` the same placement preflight, country axis —
-  operator-declared country fields in the genesis evidence record
-  (`genesis-registry-proposal-path.md` §2.3) cross-checked against the
-  fork's DB-IP resolution; a declared/observed mismatch is an unresolved
-  record and fails closed.
+- **Checked by:** built — the same placement preflight, country axis
+  (`--strict` selects this section's 2-of-12 / 6-country variant). It reads
+  operator-declared country fields from the genesis evidence record
+  (`genesis-registry-proposal-path.md` §2.3), re-digests each record against
+  the registry's committed evidence digest, and treats a missing or
+  mismatched record as unresolved, failing closed. Cross-checking declared
+  countries against the fork's DB-IP resolution for real operators is
+  community-facing work under gate L3.
 
 ### 2.3 Operator independence
 
@@ -146,8 +152,8 @@ those two numbers.
 
 | Dimension | Fork rule and value | Proposed launch threshold | Checked by |
 | --- | --- | --- | --- |
-| Provider / ASN concentration | No cap; scored only, diversity weight 10/100 (`provider_families.py`, `scoring_v10.txt`) | ≤ 2 of 12 per provider family and per ASN | `new:` placement preflight |
-| Geographic concentration | No cap; scored only (`geolocation.py`, `scoring_v10.txt`) | ≤ 4 of 12 per country; ≥ 4 countries (strict variant: ≤ 2 and ≥ 6) | `new:` placement preflight, country axis |
+| Provider / ASN concentration | No cap; scored only, diversity weight 10/100 (`provider_families.py`, `scoring_v10.txt`) | ≤ 2 of 12 per provider family and per ASN | Built: `python/postfiat_rpc/placement_preflight.py` |
+| Geographic concentration | No cap; scored only (`geolocation.py`, `scoring_v10.txt`) | ≤ 4 of 12 per country; ≥ 4 countries (strict variant: ≤ 2 and ≥ 6) | Built: the same placement preflight, country axis (`--strict`) |
 | Operator independence | No correlation rule; verified-domain identity check only (weight 10/100) | Every correlation group ≤ 2 of 12; unresolved fails | `new:` L3 independence verifier |
 | Client / software diversity | Single implementation; software weight 10/100; sidecar READY preflight (`preflight.py`) | 12 of 12 on the exact pinned binary; monoculture recorded as accepted risk | Existing: fleet receipts, release-gate rows 6–8, C4 preflight |
 | Minimum count and quorum margin | UNL cap 35, cutoff 40, gap 3 (`config.py`); ≥90% overlap convention | `n_S ≥ 12`, `q_S = 10`, margin 2, `t_S = 3` | Existing: `genesis_registry.py` verifier, pinned Cobalt checker |
@@ -164,9 +170,10 @@ this document:
 4. the zero-skew binary rule and the accepted monoculture risk (§2.4); and
 5. the `n_S ≥ 12` / `q_S = 10` launch profile (§2.5).
 
-To be built (`new:`): the placement preflight covering §2.1–2.2 and the L3
-independence verifier covering §2.3. Everything in §2.4–2.5 is checkable
-with machinery that already exists in this repository.
+To be built (`new:`): the L3 independence verifier covering §2.3. The
+placement preflight covering §2.1–2.2 is built
+(`python/postfiat_rpc/placement_preflight.py`); everything in §2.4–2.5 is
+checkable with machinery that already exists in this repository.
 
 ## 5. How this gates launch
 
@@ -174,8 +181,9 @@ These thresholds operationalize launch gate L3 and feed release-gate
 inventory row 20. Nothing here authorizes any deployment: producing the
 correlation dataset and running the preflights against real community
 operators is community-facing work, blocked by Gate Zero (Z1–Z3) like all of
-Phase D. Once the operator confirms the numbers and the two `new:` tools
-exist and pass over the published dataset, row 20 and gate L3 can close;
+Phase D. Once the operator confirms the numbers, the built placement
+preflight passes over the published dataset, and the still-`new:` L3
+independence verifier exists and passes too, row 20 and gate L3 can close;
 D4 — the public-testnet launch decision itself — remains an explicit
 operator decision outside this plan's authority, and no threshold in this
 document can substitute for it.
