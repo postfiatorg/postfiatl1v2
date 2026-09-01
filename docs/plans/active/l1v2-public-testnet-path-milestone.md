@@ -53,7 +53,7 @@ The PFT Ledger fork (51+ community validators, Dynamic UNL live) supplies the
 operator population; l1v2 supplies the registry-as-protocol-state destination.
 
 - [ ] C1 Complete Dynamic UNL governance verification G.6/G.7 and Evidence Transparency E.1 on the fork (`dynamic-unl-scoring/docs/CurrentRoadmap.md`)
-- [ ] C2 Run the deterministic sub-scorer shadow evaluation against frozen rounds 12–19 (per `dynamic-unl-scoring/docs/DeterministicFinalScore.md` method); *(operator decision)* keep or demote model authority based on measured selection deltas
+- [x] C2 Run the deterministic sub-scorer shadow evaluation against frozen rounds 12–19 (per `dynamic-unl-scoring/docs/DeterministicFinalScore.md` method): complete 2026-09-01, all eight rounds — 2 cutoff flips (both stricter), UNL overlap 19–20/20 ([results note](../../governance/dunl-subscorer-shadow-eval-20260901.md), `benchmarks/ai-governance/dunl-subscorer-shadow-20260901/`); the *(operator decision)* keep or demote model authority remains open and is tracked by Z2
 - [ ] C3 Design the l1v2 genesis-registry proposal path: scored fork operators → proposed registry + template trust graph → Cobalt-checked ratification (Dynamic UNL Phase 3A/3B; `crates/consensus_cobalt/`, `docs/architecture/overview.md`)
 - [ ] C4 Extend the validator sidecar into the l1v2 ratification client (commit-reveal signature after deterministic round replay; `validator-scoring-sidecar`)
 
