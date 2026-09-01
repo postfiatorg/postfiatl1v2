@@ -26,11 +26,17 @@ the frozen parameters before the deterministic candidate is compared.
 Writes ``results.json`` (machine-readable) and ``results-tables.md``
 (per-round tables). No network, no model, read-only fork imports.
 
-Usage: ``.venv/bin/python shadow_eval.py``
+``--scorer-version 2`` evaluates ``subscorer_v2.py`` instead (era-aware
+consensus: the round's frozen prompt version is passed to the scorer),
+writes ``results-v2.json`` / ``results-tables-v2.md``, and embeds a
+per-round v1-vs-v2 comparison read from the immutable ``results.json``.
+
+Usage: ``.venv/bin/python shadow_eval.py [--scorer-version {1,2}]``
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import statistics
 import sys
@@ -49,6 +55,7 @@ from scoring_service.services.score_formula import compute_final_score  # noqa: 
 from scoring_service.services.unl_selector import select_unl  # noqa: E402
 
 import subscorer  # noqa: E402
+import subscorer_v2  # noqa: E402
 
 ROUNDS = tuple(range(12, 20))
 CUTOFF_LINE = 40
@@ -80,7 +87,7 @@ def _select(finals: dict[str, int], previous_unl: list[str], params: dict) -> li
     ).unl
 
 
-def evaluate_round(round_dir: Path) -> dict:
+def evaluate_round(round_dir: Path, scorer_version: int = 1) -> dict:
     manifest = _load(round_dir, "runtime/execution_manifest.json")
     code = manifest["code"]
     params = code["selector"]["parameters"]
@@ -94,7 +101,10 @@ def evaluate_round(round_dir: Path) -> dict:
     }
 
     entries = subscorer.load_round_entries(round_dir)
-    det_by_vid = subscorer.score_round(entries)
+    if scorer_version == 2:
+        det_by_vid = subscorer_v2.score_round(entries, code["prompt"]["version"])
+    else:
+        det_by_vid = subscorer.score_round(entries)
     det = {
         validator_map[vid]["master_key"]: dims for vid, dims in det_by_vid.items()
     }
@@ -245,7 +255,46 @@ def _round_table(report: dict) -> str:
     return "\n".join(lines)
 
 
+def _v1_comparison(reports: list[dict]) -> dict | None:
+    """Per-round v2-vs-v1 comparison, read from the immutable results.json."""
+    v1_path = HERE / "results.json"
+    if not v1_path.exists():
+        return None
+    v1_rounds = {r["round"]: r for r in json.loads(v1_path.read_text())["rounds"]}
+    rounds = []
+    for r in reports:
+        v1 = v1_rounds.get(r["round"])
+        if v1 is None:
+            continue
+        rounds.append({
+            "round": r["round"],
+            "cutoff_flips_v1": v1["cutoff_flips"]["total"],
+            "cutoff_flips_v2": r["cutoff_flips"]["total"],
+            "unl_overlap_v1": v1["unl_overlap"],
+            "unl_overlap_v2": r["unl_overlap"],
+            "published_unl_size": r["published_unl_size"],
+            "dimension_mean_abs_delta": {
+                dim: {
+                    "v1": v1["dimension_deltas"][dim]["mean_abs"],
+                    "v2": r["dimension_deltas"][dim]["mean_abs"],
+                }
+                for dim in DIMENSIONS
+            },
+        })
+    return {
+        "baseline_results": "results.json (sub-scorers v1, immutable)",
+        "rounds": rounds,
+        "total_cutoff_flips_v1": sum(r["cutoff_flips_v1"] for r in rounds),
+        "total_cutoff_flips_v2": sum(r["cutoff_flips_v2"] for r in rounds),
+    }
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--scorer-version", type=int, choices=(1, 2), default=1)
+    scorer_version = parser.parse_args().scorer_version
+    suffix = "" if scorer_version == 1 else f"-v{scorer_version}"
+
     rounds_dir = HERE / "rounds"
     reports, failures = [], []
     for round_number in ROUNDS:
@@ -254,12 +303,14 @@ def main() -> int:
             failures.append(f"testnet-r{round_number}: not fetched")
             continue
         try:
-            reports.append(evaluate_round(round_dir))
+            reports.append(evaluate_round(round_dir, scorer_version))
         except FileNotFoundError as exc:
             failures.append(f"testnet-r{round_number}: missing artifact {exc.filename}")
 
     results = {
-        "evaluation": "deterministic sub-scorers v1 shadow evaluation",
+        "evaluation": (
+            f"deterministic sub-scorers v{scorer_version} shadow evaluation"
+        ),
         "cutoff_line": CUTOFF_LINE,
         "boundary_margin": BOUNDARY_MARGIN,
         "rounds": reports,
@@ -269,17 +320,24 @@ def main() -> int:
             "rounds_evaluated": len(reports),
         },
     }
-    (HERE / "results.json").write_text(json.dumps(results, indent=1) + "\n")
+    if scorer_version != 1:
+        comparison = _v1_comparison(reports)
+        if comparison is not None:
+            results["v1_comparison"] = comparison
+    (HERE / f"results{suffix}.json").write_text(json.dumps(results, indent=1) + "\n")
 
     tables = [
-        "# Deterministic sub-scorer shadow evaluation — per-round tables",
+        f"# Deterministic sub-scorer v{scorer_version} shadow evaluation "
+        "— per-round tables"
+        if scorer_version != 1
+        else "# Deterministic sub-scorer shadow evaluation — per-round tables",
         "",
         f"Rounds evaluated: {len(reports)}; fetch/evaluation failures: "
         f"{failures if failures else 'none'}.",
         "",
         *(_round_table(r) for r in reports),
     ]
-    (HERE / "results-tables.md").write_text("\n".join(tables))
+    (HERE / f"results-tables{suffix}.md").write_text("\n".join(tables))
 
     for r in reports:
         print(
