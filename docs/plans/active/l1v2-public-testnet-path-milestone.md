@@ -66,8 +66,8 @@ operator population; l1v2 supplies the registry-as-protocol-state destination.
 
 ## E — Mandate deliverables
 
-- [ ] E1 Python CLI: `testnet-path` status tool reading gate states from this document and the milestone registry; human-runnable
-- [ ] E2 User-facing interface consuming the CLI output (docs/status page)
+- [x] E1 Python CLI: `testnet-path` status tool reading gate states from this document and the milestone registry; human-runnable (`python/postfiat_rpc/testnet_path.py`, tests `python/tests/test_testnet_path_status.py`; run `PYTHONPATH=python python3 -m postfiat_rpc.testnet_path`, with `--json` and `--markdown`)
+- [x] E2 User-facing interface consuming the CLI output (docs/status page): generated [`docs/status/testnet-path.md`](../../status/testnet-path.md) via `--markdown`, listed in the mkdocs nav next to the current-state page
 - [ ] E3 On completion, retire this document into `docs/plans/completed/` and refresh documentation
 
 ## Order and dependencies

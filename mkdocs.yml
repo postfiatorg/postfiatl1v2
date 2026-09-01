@@ -14,6 +14,7 @@ exclude_docs: |
   specs/**
   status/**
   !status/chain-state-current.md
+  !status/testnet-path.md
   !status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md
   ai-handoff.md
   cut.md
@@ -87,6 +88,7 @@ extra_css:
 nav:
   - Home: index.md
   - Current State: status/chain-state-current.md
+  - Testnet Path: status/testnet-path.md
   - Whitepaper: whitepaper.md
   - NAVCoins:
       - Overview: navcoins/index.md
