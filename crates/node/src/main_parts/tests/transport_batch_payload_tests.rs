@@ -238,8 +238,6 @@ mod transport_batch_payload_tests {
             .collect::<Vec<_>>();
         let shared_keys = std::fs::read(data_dirs[0].join(VALIDATOR_KEYS_FILE))
             .expect("shared validator keys");
-        let key_file: ValidatorKeyFile =
-            serde_json::from_slice(&shared_keys).expect("parse shared validator keys");
         let shared_registry = std::fs::read(data_dirs[0].join(VALIDATOR_REGISTRY_FILE))
             .expect("shared validator registry");
         for data_dir in data_dirs.iter().skip(1) {
@@ -270,24 +268,6 @@ mod transport_batch_payload_tests {
                 std::fs::Permissions::from_mode(0o600),
             )
             .expect("protect restored validator keys");
-        }
-        for (index, data_dir) in data_dirs.iter().enumerate() {
-            let node_id = format!("validator-{index}");
-            let local_record = key_file
-                .validators
-                .iter()
-                .find(|record| record.node_id == node_id)
-                .expect("local validator key")
-                .clone();
-            let isolated = serde_json::to_vec_pretty(&ValidatorKeyFile {
-                validators: vec![local_record],
-            })
-            .expect("serialize isolated validator key");
-            let key_path = data_dir.join(VALIDATOR_KEYS_FILE);
-            std::fs::write(&key_path, isolated).expect("write isolated validator key");
-            #[cfg(unix)]
-            std::fs::set_permissions(&key_path, std::fs::Permissions::from_mode(0o600))
-                .expect("protect isolated validator key");
         }
         let topology_file = root.join("topology.json");
         let base_port = consensus_v2_test_base_port(validator_count);
@@ -529,6 +509,8 @@ mod transport_batch_payload_tests {
             amendment_file: unsigned_amendment_file.clone(),
         })
         .expect("create six-node governance proposal");
+        let key_file: ValidatorKeyFile =
+            serde_json::from_slice(&shared_keys).expect("parse shared validator keys");
         let authorization_files = key_file
             .validators
             .iter()
@@ -817,18 +799,9 @@ mod transport_batch_payload_tests {
         rotated_key_record.algorithm_id = ML_DSA_65_ALGORITHM.to_string();
         rotated_key_record.public_key_hex = bytes_to_hex(&replacement_key.public_key);
         rotated_key_record.private_key_hex = bytes_to_hex(&replacement_key.private_key);
-        for (index, data_dir) in data_dirs.iter().enumerate() {
-            let node_id = format!("validator-{index}");
-            let local_record = rotated_key_file
-                .validators
-                .iter()
-                .find(|record| record.node_id == node_id)
-                .expect("rotated local validator key")
-                .clone();
-            let rotated_key_json = serde_json::to_string_pretty(&ValidatorKeyFile {
-                validators: vec![local_record],
-            })
-            .expect("rotated isolated key file json");
+        let rotated_key_json =
+            serde_json::to_string_pretty(&rotated_key_file).expect("rotated key file json");
+        for data_dir in &data_dirs {
             std::fs::write(
                 data_dir.join(VALIDATOR_KEYS_FILE),
                 format!("{rotated_key_json}\n"),

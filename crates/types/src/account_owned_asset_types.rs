@@ -212,8 +212,7 @@ impl VaultBridgeRouteProfileV1 {
             }
             NAV_PROFILE_VERIFIER_SP1_GROTH16
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
-            | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
-            | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1 => {
+            | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 => {
                 if self.min_attestations != 0 || self.minimum_confirmations != 0 {
                     return Err(
                         "receipt-proven route profile must not require observer attestations or confirmations"

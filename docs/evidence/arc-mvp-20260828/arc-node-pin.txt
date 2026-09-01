@@ -1,4 +1,0 @@
-repository=https://github.com/circlefin/arc-node.git
-commit=66ad2d5aa6d9b41e8f689812004be4c7233a9e16
-captured_utc=2026-08-28
-local_path=external/arc-node

@@ -3,7 +3,6 @@ use super::*;
 include!("atomic_swap_type_tests.rs");
 include!("atomic_swap_batch_tests.rs");
 include!("pfusdc_tier4_type_tests.rs");
-include!("pfusdc_arc_type_tests.rs");
 include!("genesis_registry_tests.rs");
 
 #[test]

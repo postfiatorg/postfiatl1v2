@@ -1,6 +1,0 @@
-{
-  "profile": "docs/evidence/arc-mvp-20260828/route-profile.json",
-  "profile_hash": "2f86a3ddfcd93a053346e9098fead505cf17731ac574f00662a8ec6e21503d6b6df0e165d16f0f2b633f830ddd38d80b",
-  "route_binding": "6edfa31c57cfeec8955572fd9cdb81b22222beb1dbac432ff7c7f0fc7ad9c520",
-  "schema": "postfiat.pfusdc.route_profile_info.v1"
-}

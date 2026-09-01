@@ -1,6 +1,0 @@
-[submodule "external/arc-node"]
-	path = external/arc-node
-	url = https://github.com/circlefin/arc-node.git
-[submodule "external/sp1-contracts"]
-	path = external/sp1-contracts
-	url = https://github.com/succinctlabs/sp1-contracts.git

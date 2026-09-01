@@ -30,7 +30,6 @@ contract PfUsdcIngressAnchorV1 is IPfUsdcIngressAnchorV1 {
     }
 
     error NotActiveOutbox(address caller, address activeOutbox);
-    error NotDirectVault(address caller, address expectedVault);
     error WrongL2Sender(address sender, address expected);
     error WrongRouteField(bytes32 field);
     error InvalidDeposit();
@@ -49,7 +48,6 @@ contract PfUsdcIngressAnchorV1 is IPfUsdcIngressAnchorV1 {
     uint256 public constant MAX_PFTL_RECIPIENT_BYTES = 256;
 
     IArbitrumBridgeV1 public immutable bridge;
-    bool public immutable directIngress;
     address public immutable l2Vault;
     address public immutable l2Token;
     uint256 public immutable l2ChainId;
@@ -66,9 +64,11 @@ contract PfUsdcIngressAnchorV1 is IPfUsdcIngressAnchorV1 {
         uint256 l2ChainId_,
         bytes32 governedRouteBinding_
     ) {
-        if (l2Vault_ == address(0) || l2Token_ == address(0) || l2ChainId_ == 0 || governedRouteBinding_ == bytes32(0)) revert InvalidDeposit();
+        if (
+            address(bridge_) == address(0) || l2Vault_ == address(0) || l2Token_ == address(0) || l2ChainId_ == 0
+                || governedRouteBinding_ == bytes32(0)
+        ) revert InvalidDeposit();
         bridge = bridge_;
-        directIngress = address(bridge_) == address(0);
         l2Vault = l2Vault_;
         l2Token = l2Token_;
         l2ChainId = l2ChainId_;
@@ -94,14 +94,10 @@ contract PfUsdcIngressAnchorV1 is IPfUsdcIngressAnchorV1 {
     }
 
     function _recordDeposit(DepositRecordV1 memory deposit) private {
-        if (directIngress) {
-            if (msg.sender != l2Vault) revert NotDirectVault(msg.sender, l2Vault);
-        } else {
-            address activeOutbox = bridge.activeOutbox();
-            if (msg.sender != activeOutbox) revert NotActiveOutbox(msg.sender, activeOutbox);
-            address l2Sender = IArbitrumOutboxV1(msg.sender).l2ToL1Sender();
-            if (l2Sender != l2Vault) revert WrongL2Sender(l2Sender, l2Vault);
-        }
+        address activeOutbox = bridge.activeOutbox();
+        if (msg.sender != activeOutbox) revert NotActiveOutbox(msg.sender, activeOutbox);
+        address l2Sender = IArbitrumOutboxV1(msg.sender).l2ToL1Sender();
+        if (l2Sender != l2Vault) revert WrongL2Sender(l2Sender, l2Vault);
         if (deposit.routeBinding != governedRouteBinding) revert WrongRouteField("route_binding");
         if (deposit.sourceChainId != l2ChainId) revert WrongRouteField("source_chain_id");
         if (deposit.vault != l2Vault) revert WrongRouteField("vault");
@@ -113,22 +109,6 @@ contract PfUsdcIngressAnchorV1 is IPfUsdcIngressAnchorV1 {
                 || recipient.length > MAX_PFTL_RECIPIENT_BYTES || deposit.amount == 0 || deposit.nonce == bytes32(0)
                 || keccak256(recipient) != deposit.pftlRecipientHash
         ) revert InvalidDeposit();
-        if (directIngress) {
-            bytes32 expectedDepositId = keccak256(
-                abi.encode(
-                    "postfiat.erc20_bridge.deposit.v2",
-                    deposit.sourceChainId,
-                    deposit.vault,
-                    deposit.token,
-                    deposit.depositor,
-                    deposit.amount,
-                    deposit.pftlRecipientHash,
-                    deposit.nonce,
-                    deposit.routeBinding
-                )
-            );
-            if (deposit.depositId != expectedDepositId) revert InvalidDeposit();
-        }
         if (depositSeen[deposit.depositId]) revert DuplicateDeposit(deposit.depositId);
         depositSeen[deposit.depositId] = true;
         emit Tier4DepositRecorded(

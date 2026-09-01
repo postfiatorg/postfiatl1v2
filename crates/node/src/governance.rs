@@ -552,35 +552,6 @@ pub fn assemble_signed_fastpay_recovery_governance_bootstrap(
     Ok(batch)
 }
 
-fn decode_tier4_finality_bootstrap(
-    raw: Option<&str>,
-) -> io::Result<(
-    Option<postfiat_types::EthereumArbitrumFinalityStateV2>,
-    Option<postfiat_types::PfUsdcArcFinalityStateV1>,
-)> {
-    let Some(raw) = raw else {
-        return Ok((None, None));
-    };
-    let value: serde_json::Value = serde_json::from_str(raw)
-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-    match value.get("schema").and_then(serde_json::Value::as_str) {
-        Some(postfiat_types::ETHEREUM_ARBITRUM_FINALITY_STATE_SCHEMA_V2) => {
-            let state = serde_json::from_value(value)
-                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-            Ok((Some(state), None))
-        }
-        Some(postfiat_types::PFUSDC_ARC_FINALITY_STATE_SCHEMA_V1) => {
-            let state = serde_json::from_value(value)
-                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-            Ok((None, Some(state)))
-        }
-        _ => Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "unsupported Tier-4 finality bootstrap schema",
-        )),
-    }
-}
-
 pub fn create_vault_bridge_route_profile_governance(
     options: VaultBridgeRouteProfileGovernanceOptions,
 ) -> io::Result<GovernanceActionBatch> {
@@ -610,21 +581,20 @@ pub fn create_vault_bridge_route_profile_governance(
     )
     .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
     write_amendment_file(&options.amendment_file, &amendment)?;
-    let finality_bootstrap_raw = options
+    let tier4_finality_bootstrap = options
         .tier4_finality_bootstrap_file
         .as_ref()
         .map(|path| {
-            read_bounded_json_text_file(path, "Tier-4 finality bootstrap")
+            let raw = read_bounded_json_text_file(path, "Tier-4 finality bootstrap")?;
+            serde_json::from_str::<postfiat_types::EthereumArbitrumFinalityStateV2>(&raw)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
         })
         .transpose()?;
-    let (tier4_finality_bootstrap, arc_finality_bootstrap) =
-        decode_tier4_finality_bootstrap(finality_bootstrap_raw.as_deref())?;
     let activation = postfiat_types::VaultBridgeRouteProfileActivationV1 {
         schema: postfiat_types::VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
         profile,
         amendment,
         tier4_finality_bootstrap,
-        arc_finality_bootstrap,
     };
     let batch = build_governance_action_batch_with_vault_bridge_route_profile_activation(
         &genesis,
@@ -646,21 +616,20 @@ pub fn assemble_signed_vault_bridge_route_profile_governance(
     let profile = serde_json::from_str::<postfiat_types::VaultBridgeRouteProfileV1>(&raw)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     let amendment = read_amendment_file(&options.signed_amendment_file)?;
-    let finality_bootstrap_raw = options
+    let tier4_finality_bootstrap = options
         .tier4_finality_bootstrap_file
         .as_ref()
         .map(|path| {
-            read_bounded_json_text_file(path, "Tier-4 finality bootstrap")
+            let raw = read_bounded_json_text_file(path, "Tier-4 finality bootstrap")?;
+            serde_json::from_str::<postfiat_types::EthereumArbitrumFinalityStateV2>(&raw)
+                .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
         })
         .transpose()?;
-    let (tier4_finality_bootstrap, arc_finality_bootstrap) =
-        decode_tier4_finality_bootstrap(finality_bootstrap_raw.as_deref())?;
     let activation = postfiat_types::VaultBridgeRouteProfileActivationV1 {
         schema: postfiat_types::VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
         profile,
         amendment,
         tier4_finality_bootstrap,
-        arc_finality_bootstrap,
     };
     let batch = build_governance_action_batch_with_vault_bridge_route_profile_activation(
         &genesis,

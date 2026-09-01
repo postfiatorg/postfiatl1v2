@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "crates/arc-conformance",
     "crates/bench_harness",
     "crates/bridge",
     "crates/cobalt_adversarial_oracle",

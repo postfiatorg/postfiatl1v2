@@ -806,8 +806,6 @@ pub struct VaultBridgeRouteProfileActivationV1 {
     pub amendment: GovernanceAmendment,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tier4_finality_bootstrap: Option<EthereumArbitrumFinalityStateV2>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub arc_finality_bootstrap: Option<PfUsdcArcFinalityStateV1>,
 }
 
 impl VaultBridgeRouteProfileActivationV1 {
@@ -820,13 +818,11 @@ impl VaultBridgeRouteProfileActivationV1 {
         match (
             self.profile.verifier_kind.as_str(),
             self.tier4_finality_bootstrap.as_ref(),
-            self.arc_finality_bootstrap.as_ref(),
         ) {
             (
                 NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
                 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1,
                 Some(state),
-                None,
             ) => {
                 state.validate()?;
                 if state.route_profile_hash != profile_hash
@@ -845,37 +841,14 @@ impl VaultBridgeRouteProfileActivationV1 {
                 NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
                 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1,
                 None,
-                None,
             ) => {
                 return Err("Tier-4 route activation requires a finality bootstrap".to_string());
             }
-            (NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1, None, Some(state)) => {
-                state.validate()?;
-                let expected_route_binding =
-                    vault_bridge_route_binding(&profile_hash, self.profile.route_epoch)?;
-                if state.route_profile_hash != profile_hash
-                    || state.route_epoch != u64::from(self.profile.route_epoch)
-                    || state.arc_chain_id != self.profile.source_chain_id
-                    || state.vault_address != self.profile.vault_address
-                    || state.vault_runtime_code_hash != self.profile.vault_runtime_code_hash
-                    || state.token_address != self.profile.token_address
-                    || state.token_runtime_code_hash != self.profile.token_runtime_code_hash
-                    || state.route_binding != expected_route_binding
-                {
-                    return Err(
-                        "Arc Tier-4 route finality bootstrap does not match route profile"
-                            .to_string(),
-                    );
-                }
-            }
-            (NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1, None, None) => {
-                return Err("Arc Tier-4 route activation requires a finality bootstrap".to_string());
-            }
-            (_, Some(_), _) | (_, _, Some(_)) => {
+            (_, Some(_)) => {
                 return Err("non-Tier-4 route activation cannot carry a finality bootstrap"
                     .to_string());
             }
-            (_, None, None) => {}
+            (_, None) => {}
         }
         let expected_kind = vault_bridge_route_amendment_kind(&self.profile)?;
         if self.amendment.kind != expected_kind
@@ -2055,7 +2028,6 @@ mod shielded_bridge_governance_tests {
             profile: profile.clone(),
             amendment: amendment.clone(),
             tier4_finality_bootstrap: None,
-            arc_finality_bootstrap: None,
         };
         let record = VaultBridgeRouteProfileRecordV1::new(&activation, profile.activation_height)
             .expect("route profile record");

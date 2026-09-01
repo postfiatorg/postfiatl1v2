@@ -1474,7 +1474,6 @@ mod tests {
             profile: route.clone(),
             amendment: route_amendment.clone(),
             tier4_finality_bootstrap: None,
-            arc_finality_bootstrap: None,
         };
         let current_route_amendment = test_amendment(
             &postfiat_types::vault_bridge_route_amendment_kind(&current_route)
@@ -1487,7 +1486,6 @@ mod tests {
             profile: current_route.clone(),
             amendment: current_route_amendment.clone(),
             tier4_finality_bootstrap: None,
-            arc_finality_bootstrap: None,
         };
         let mut governance = store.read_governance().expect("fixture governance");
         governance.amendments.push(test_amendment(

@@ -824,7 +824,6 @@ fn validate_issued_supply_custody_inventory(
         fastswap_activation_height: _,
         ethereum_arbitrum_finality_states: _,
         fast_ingress_campaigns: _,
-        arc_finality_states: _,
     } = ledger;
     let ShieldedState {
         next_note_position: _,
@@ -1563,16 +1562,6 @@ pub(super) fn append_ledger_state(
             }),
         )?;
     }
-    if commit_complete_nav_state && !ledger.arc_finality_states.is_empty() {
-        append_sorted_canonical_commitments(
-            bytes,
-            "ledger.arc_finality_state",
-            ledger
-                .arc_finality_states
-                .iter()
-                .map(|value| value.state_commitment_bytes()),
-        )?;
-    }
 
     let fastlane_state_present = commit_fastlane_state
         && (!ledger.fast_lane_reserves.is_empty()
@@ -1755,7 +1744,6 @@ fn assert_ledger_state_commitment_inventory_complete(ledger: &LedgerState) {
         fastswap_activation_height: _,
         ethereum_arbitrum_finality_states: _,
         fast_ingress_campaigns: _,
-        arc_finality_states: _,
     } = ledger;
 }
 
