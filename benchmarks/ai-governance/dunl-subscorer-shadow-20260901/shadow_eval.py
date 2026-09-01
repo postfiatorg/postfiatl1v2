@@ -26,6 +26,12 @@ the frozen parameters before the deterministic candidate is compared.
 Writes ``results.json`` (machine-readable) and ``results-tables.md``
 (per-round tables). No network, no model, read-only fork imports.
 
+Fail-loud guards (regression-tested in ``test_shadow_eval.py``): the
+imported fork modules must match the round's manifest content-hash pins,
+the round's pinned ``score_cutoff`` must equal the flip line, and the
+frozen-entry and published-model validator sets must match exactly —
+any mismatch raises instead of narrowing the comparison silently.
+
 ``--scorer-version 2`` evaluates ``subscorer_v2.py`` instead (era-aware
 consensus: the round's frozen prompt version is passed to the scorer),
 writes ``results-v2.json`` / ``results-tables-v2.md``, and embeds a
@@ -37,6 +43,7 @@ Usage: ``.venv/bin/python shadow_eval.py [--scorer-version {1,2}]``
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import statistics
 import sys
@@ -67,6 +74,28 @@ def _load(round_dir: Path, rel_path: str) -> dict:
     return json.loads((round_dir / rel_path).read_text())
 
 
+def _verify_code_pins(code: dict) -> None:
+    """Fail loudly if an imported fork module drifted from the round's pins.
+
+    Every round's execution manifest content-hash-pins the parser, selector,
+    and (formula-era) score-formula modules. The evaluation imports today's
+    fork clone; if that clone has moved past the pinned content, the numbers
+    it computes would no longer describe the frozen round.
+    """
+    for key in ("parser", "selector", "score_formula"):
+        pin = code.get(key)
+        if pin is None:
+            continue
+        module_file = Path(sys.modules[pin["module"]].__file__)
+        digest = hashlib.sha256(module_file.read_bytes()).hexdigest()
+        if digest != pin["content_sha256"]:
+            raise ValueError(
+                f"fork module {pin['module']} (sha256 {digest}) does not match "
+                f"the round's pinned {key} hash {pin['content_sha256']}; the "
+                "fork clone has drifted from the frozen round"
+            )
+
+
 def _select(finals: dict[str, int], previous_unl: list[str], params: dict) -> list[str]:
     result = ScoringResult(
         validator_scores=[
@@ -90,7 +119,13 @@ def _select(finals: dict[str, int], previous_unl: list[str], params: dict) -> li
 def evaluate_round(round_dir: Path, scorer_version: int = 1) -> dict:
     manifest = _load(round_dir, "runtime/execution_manifest.json")
     code = manifest["code"]
+    _verify_code_pins(code)
     params = code["selector"]["parameters"]
+    if params["score_cutoff"] != CUTOFF_LINE:
+        raise ValueError(
+            f"{round_dir.name} pins score_cutoff {params['score_cutoff']} but "
+            f"this evaluation computes cutoff flips against {CUTOFF_LINE}"
+        )
     formula_era = "score_formula" in code
     previous_unl = _load(round_dir, "inputs/previous_unl.json")["previous_unl"]
     published_unl = _load(round_dir, "outputs/selected_unl.json")["unl"]
@@ -105,9 +140,27 @@ def evaluate_round(round_dir: Path, scorer_version: int = 1) -> dict:
         det_by_vid = subscorer_v2.score_round(entries, code["prompt"]["version"])
     else:
         det_by_vid = subscorer.score_round(entries)
+    if len(det_by_vid) != len(entries):
+        raise ValueError(
+            f"{round_dir.name}: duplicate validator_id in the frozen entries "
+            f"collapsed {len(entries)} entries to {len(det_by_vid)} scores"
+        )
     det = {
         validator_map[vid]["master_key"]: dims for vid, dims in det_by_vid.items()
     }
+    if len(det) != len(det_by_vid):
+        raise ValueError(
+            f"{round_dir.name}: duplicate master_key in validator_map "
+            f"collapsed {len(det_by_vid)} scores to {len(det)}"
+        )
+    frozen_only = sorted(set(det) - set(model_scores))
+    model_only = sorted(set(model_scores) - set(det))
+    if frozen_only or model_only:
+        raise ValueError(
+            f"{round_dir.name}: validator sets differ between the frozen "
+            f"entries and the published model scores (frozen-only "
+            f"{frozen_only}, model-only {model_only})"
+        )
 
     common = sorted(set(det) & set(model_scores))
     report: dict = {
