@@ -58,6 +58,22 @@ def fetch(rounds: list[int]) -> int:
         "rounds": {},
         "failures": [],
     }
+    if MANIFEST_PATH.exists():
+        # A partial re-run must not destroy the pins of unfetched rounds:
+        # carry the previous manifest's entries for every round not being
+        # fetched now, and drop its stale entries for the rounds that are.
+        previous = json.loads(MANIFEST_PATH.read_text())
+        fetched = {str(number) for number in rounds}
+        manifest["rounds"] = {
+            key: value
+            for key, value in previous.get("rounds", {}).items()
+            if key not in fetched
+        }
+        manifest["failures"] = [
+            failure
+            for failure in previous.get("failures", [])
+            if str(failure.get("round")) not in fetched
+        ]
     exit_code = 0
 
     for round_number in rounds:
@@ -76,6 +92,8 @@ def fetch(rounds: list[int]) -> int:
                 manifest["failures"].append(
                     {"round": round_number, "file": rel_path, "reason": "fetch failed"}
                 )
+                # The evaluation cannot run without this artifact.
+                exit_code = 1
                 continue
             target = round_dir / rel_path
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -97,9 +115,14 @@ def fetch(rounds: list[int]) -> int:
                 }
         manifest["rounds"][str(round_number)] = files
 
+    manifest["rounds"] = {
+        key: manifest["rounds"][key]
+        for key in sorted(manifest["rounds"], key=int)
+    }
+    manifest["failures"].sort(key=lambda f: (f["round"], f["file"] or ""))
     MANIFEST_PATH.write_text(json.dumps(manifest, indent=1) + "\n")
-    print(f"wrote {MANIFEST_PATH.name} ({len(rounds)} rounds, "
-          f"{len(manifest['failures'])} failures)")
+    print(f"wrote {MANIFEST_PATH.name} ({len(rounds)} rounds fetched, "
+          f"{len(manifest['rounds'])} pinned, {len(manifest['failures'])} failures)")
     return exit_code
 
 
