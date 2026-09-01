@@ -59,6 +59,13 @@ def require_equal(actual: object, expected: object, label: str) -> None:
 
 
 def main() -> None:
+    if not EVIDENCE.exists():
+        print(
+            "a666_public_source_qualification=skipped "
+            "reason=archived-evidence-not-in-public-tree"
+        )
+        return
+
     source_record = load(SOURCE_RECORD)
     aggregate = load(AGGREGATE_RECORD)
     expected_results = load(EXPECTED_RESULTS)
