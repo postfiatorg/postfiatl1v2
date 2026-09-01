@@ -8,6 +8,15 @@ Plan: [reputation-scoring-h200-run-plan.md](reputation-scoring-h200-run-plan.md)
 single-provider deviation recorded pre-output in `6b3ce76f`).
 Artifact: `benchmarks/ai-governance/reputation-h200-20260901/determinism-artifact.json`.
 
+!!! important "Current operator direction"
+
+    This multi-lane benchmark is a historical experiment, not the current
+    institution-scoring policy. The active requirement is documented in
+    [Institution Legitimacy Scoring](institution-legitimacy-scoring.md): ask
+    `qwen/qwen3.8-27b` whether it recognizes the named institution, score its
+    legitimacy from 0–100, and assign **0** when it is not recognized.
+    Deterministic validator sub-scorers are not a substitute for that judgment.
+
 ## Determinism gate — PASS
 
 - 2 Vast.ai H200 hosts from distinct machine owners (machine `148661`/host

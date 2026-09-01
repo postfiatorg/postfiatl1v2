@@ -181,3 +181,17 @@ write action was the single agreed stop call.
 - [Launch topology thresholds proposal](../architecture/launch-topology-thresholds.md)
 - [Genesis-registry proposal path design](../architecture/genesis-registry-proposal-path.md)
 - [Testnet-path status page](../status/testnet-path.md)
+
+## Operator correction — institution legitimacy is the product requirement
+
+The operator clarified that the intended reputation score is simple: ask
+`qwen/qwen3.8-27b` whether it recognizes the institution claimed by a provider,
+request a 0–100 legitimacy score and explanation, and assign 0 when the model
+does not recognize it. The deterministic validator sub-scorer work is not an
+alternative to this institution-legitimacy judgment, and the prior
+real-but-obscure positive floor does not apply.
+
+Implemented in `python/postfiat_rpc/institution_reputation.py`, documented in
+[Institution Legitimacy Scoring](../governance/institution-legitimacy-scoring.md),
+and recorded as the answered model-authority row in the
+[pending-decisions sheet](../governance/pending-operator-decisions.md).
