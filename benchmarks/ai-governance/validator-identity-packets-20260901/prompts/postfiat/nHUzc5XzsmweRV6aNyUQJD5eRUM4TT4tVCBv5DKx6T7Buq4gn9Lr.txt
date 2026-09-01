@@ -1,0 +1,88 @@
+You are generating one foundation-publishable public identity packet for a blockchain validator. Research current public sources using web search. Return the packet as your final answer only; do not edit files, run repository code, or add commentary outside the packet.
+
+INPUT COORDINATES
+- Network: PostFiat testnet current published UNL (completed round 20)
+- Validator master public key: nHUzc5XzsmweRV6aNyUQJD5eRUM4TT4tVCBv5DKx6T7Buq4gn9Lr
+- Claimed domain observed by the frozen upstream collector: pft.wizbubba.xyz (claimed)
+- Domain verification status in the frozen input: true in the frozen upstream input; not independently re-verified here
+- Required machine-readable claimed_domain value: "pft.wizbubba.xyz"
+- Required machine-readable domain_verification_status value: true
+- Validator-list publishers containing the key: postfiat-round-20
+- Upstream metadata source: https://scoring-testnet.postfiat.org/api/scoring/rounds/20/inputs/model_request.json
+
+INPUT BOUNDARY
+The exact validator key and claimed domain above are the only supplied identity coordinates. Do not assume an institution name from a pre-filled mapping. When no domain was supplied, search the exact validator key in public validator registries and primary sources; if that does not establish an identity, return an unknown identity packet rather than attaching an unrelated organization.
+
+RESEARCH OBJECTIVE
+1. Determine the most likely official URL/domain, public entity identity, and well-supported current or historical aliases. Do not treat a similar name as an alias.
+2. Determine the official X handle, if supported by an official website, the X profile itself, or another strong primary source. Otherwise write "Not established."
+3. State likely jurisdiction of incorporation and principal region(s) of operation separately. Use company filings, official legal pages, public registries, or strong primary sources when available. Do not infer incorporation from a server location, IP address, domain registrar, language, or country-code domain alone.
+4. Describe the entity's principal activities and its relationship to the validator/domain.
+5. Produce a one-paragraph Dun & Bradstreet-style business summary in neutral business-reference language. In 90-160 words, synthesize the supported legal/canonical name, entity type, incorporation and principal operating base, principal products or services, customer or stakeholder types, geographic reach, and size tier. Do not include a credit rating, risk judgment, recommendation, marketing superlatives, or unsupported revenue, ownership, or headcount. If the identity is not established, the paragraph must say so and summarize only the observable public footprint.
+6. Estimate the size of its public institutional profile using this rubric:
+   - Unknown: evidence is insufficient.
+   - Individual: one publicly identified person, not an organization.
+   - Micro: approximately 1-10 people or a very small public footprint.
+   - Small: approximately 11-50 people or a limited established footprint.
+   - Medium: approximately 51-250 people or a substantial sector footprint.
+   - Large: approximately 251-1,000 people or major international footprint.
+   - Very large: more than 1,000 people or globally prominent institutional footprint.
+   When headcount is not supported, use qualitative public-footprint evidence and explicitly say headcount is not established.
+7. Record uncertainty and conflicting evidence. Never invent ownership, control, incorporation, personnel, aliases, or social accounts.
+8. Use only public institutional information. Do not publish private residential addresses, personal phone numbers, private emails, or other doxxing material.
+
+EVIDENCE RULES
+- Prefer primary sources: the entity's official site and legal pages, regulator/company registries, official GitHub, official X profile, network documentation, signed/domain-verification material, and RDAP.
+- Every material identity, alias, location, activity, and size claim must have a nearby Markdown link to its supporting source outside the Business Summary paragraph.
+- Clearly label the validator domain as claimed, verified, or not independently verified.
+- A domain-to-entity match is a research conclusion, not consensus truth.
+- Domain verification proves a validator/domain link only when the required network-specific attestation was actually checked; an input true/null value must still be described as frozen upstream evidence.
+- If identity cannot be supported, say "Not established" rather than guessing.
+- Do not assign legitimacy, reputation, sanctions, association, credit, or risk scores. This packet is evidence for later scoring, not the score itself.
+- Do not claim that you browsed a page you could not actually access.
+- The Evidence section must still list the strongest public URLs searched or checked when the identity remains unknown.
+
+OUTPUT FORMAT
+Return Markdown with exactly these top-level headings in this order:
+
+# Validator Identity Packet
+
+## Packet Status
+State SHADOW_ONLY, research timestamp in UTC, and that this is external identity evidence rather than consensus data.
+
+## Validator Coordinates
+Include network, exact master public key, claimed domain, frozen domain-verification status, list publishers, and metadata source.
+
+## Claimed Domain and Official URLs
+State the domain conclusion and official URLs with evidence, or "Not established."
+
+## Public Identity
+State canonical public entity name, entity type, supported aliases, and the evidence connecting the domain or key to the entity. Use "Not established" when appropriate.
+
+## Business Summary
+Write exactly one 90-160 word paragraph in the neutral business-reference style specified above. It must be prose, not bullets, must contain no Markdown links, and must keep validator-key control caveats separate from entity-level business facts.
+
+## Public X Handle
+State the handle and verification basis, or "Not established."
+
+## Region of Incorporation and Operations
+Separate incorporation jurisdiction from operational regions and label confidence, or state that each is not established.
+
+## Activities
+Give a concise evidence-backed description, including the entity's relationship to the validator or network when supported. Do not infer technical operation from list membership alone.
+
+## Estimated Public-Profile Size
+Give exactly one rubric tier, the evidence, confidence, and whether headcount is established.
+
+## Evidence
+Provide a numbered list of the most important source URLs, source titles, source types, access dates, and the specific facts each supports.
+
+## Uncertainty and Conflicts
+List unresolved facts, weak inferences excluded, and any conflicting names or records.
+
+## Machine-Readable Summary
+Include one fenced JSON object with exactly these keys:
+validator_id, network, claimed_domain, domain_verification_status, canonical_entity, entity_type, aliases, official_urls, business_summary, x_handle, incorporation_region, operating_regions, profile_size_tier, profile_size_confidence, identity_confidence, unresolved_fields, evidence_urls.
+The business_summary value must reproduce the Business Summary paragraph exactly. Use null or empty arrays for unknown values. Use the exact input validator_id, network label, claimed_domain, and domain_verification_status values. The JSON must agree with the prose.
+
+The packet will be published exactly as returned and later passed byte-for-byte into a pinned H200 scoring run.

@@ -35,8 +35,10 @@ per-validator scores. The complete artifact lives under
 
 ## Scoring rule
 
-The institution name or declared domain is submitted to the pinned model. The
-prompt requires:
+For the next scoring revision, the [validator identity-packet stage](validator-identity-packets.md)
+first converts each frozen validator key/domain coordinate into cited public
+identity evidence. The pinned model receives the exact frozen Markdown packet,
+not an improvised entity-name mapping. The scoring prompt requires:
 
 - genuine model recognition before any positive score;
 - exactly 0 for missing or unrecognized institutions;
