@@ -12,8 +12,8 @@ JSONL session log that produced it.
 - frozen domain-verification status: `null`
 
 The packet concludes that Ripple Labs Inc. is the most likely public identity,
-but carefully does **not** claim that the research proves current validator-key
-control.
+adds a single 90–160 word neutral business-reference summary, and carefully
+does **not** claim that the research proves current validator-key control.
 
 ## Generation boundary
 

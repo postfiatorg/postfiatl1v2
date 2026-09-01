@@ -23,6 +23,7 @@ HEADINGS = [
     "## Validator Coordinates",
     "## Claimed Domain and Official URLs",
     "## Public Identity",
+    "## Business Summary",
     "## Public X Handle",
     "## Region of Incorporation and Operations",
     "## Activities",
@@ -40,6 +41,7 @@ SUMMARY_KEYS = {
     "entity_type",
     "aliases",
     "official_urls",
+    "business_summary",
     "x_handle",
     "incorporation_region",
     "operating_regions",
@@ -79,10 +81,21 @@ def main() -> None:
     packet = PACKET.read_text()
     found_headings = re.findall(r"^#{1,2} .+$", packet, flags=re.MULTILINE)
     assert found_headings == HEADINGS, "packet heading contract mismatch"
-    assert "**SHADOW_ONLY**" in packet
+    assert "SHADOW_ONLY" in packet
     assert VALIDATOR_ID in packet
-    assert "not independently established" in packet
+    assert "not independently established" in packet.lower()
     assert "legitimacy score" not in packet.lower()
+
+    business_match = re.search(
+        r"^## Business Summary\n\n(.+?)\n\n## Public X Handle$",
+        packet,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    assert business_match, "missing one-paragraph business summary"
+    business_summary = business_match.group(1).strip()
+    assert "\n" not in business_summary, "business summary must be one paragraph"
+    word_count = len(re.findall(r"\b[\w’&.-]+\b", business_summary))
+    assert 90 <= word_count <= 160, f"business summary has {word_count} words"
 
     match = re.search(
         r"^## Machine-Readable Summary\n\n\x60\x60\x60json\n(.*?)\n\x60\x60\x60\s*$",
@@ -97,6 +110,7 @@ def main() -> None:
     assert summary["claimed_domain"] == source["domain"]
     assert summary["domain_verification_status"] is source["domain_verified"] is None
     assert summary["profile_size_tier"] in PROFILE_TIERS
+    assert summary["business_summary"] == business_summary
     assert summary["evidence_urls"]
 
     rows = [json.loads(line) for line in LOG.read_text().splitlines()]

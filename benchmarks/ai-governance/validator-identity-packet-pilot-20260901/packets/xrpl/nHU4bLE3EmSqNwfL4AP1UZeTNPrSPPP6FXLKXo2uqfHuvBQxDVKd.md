@@ -2,120 +2,96 @@
 
 ## Packet Status
 
-**SHADOW_ONLY**
-
-Research timestamp: **2026-09-01T19:08:18Z**
-
-This packet contains external public-identity evidence. It is not XRP Ledger consensus data and does not establish validator ownership through consensus.
+- **Status:** SHADOW_ONLY
+- **Research timestamp:** 2026-09-01T19:20:48Z
+- **Scope:** External public-identity evidence only; this packet is not XRP Ledger consensus data and does not establish validator-key control.
 
 ## Validator Coordinates
 
 - **Network:** XRP Ledger mainnet
 - **Validator master public key:** `nHU4bLE3EmSqNwfL4AP1UZeTNPrSPPP6FXLKXo2uqfHuvBQxDVKd`
 - **Claimed domain:** `ripple.com`
-- **Frozen domain-verification status:** `null` — not independently established; this is not equivalent to a failed verification.
-- **Validator-list publishers containing the key:** Ripple and XRP Ledger Foundation, as stated in the frozen input. Ripple maintains a [signed validator-list archive](https://github.com/ripple/vl), while an XRPL Foundation repository example maps this exact key to `ripple.com` and documents signed UNL generation ([XRPLF/xrpl-cli](https://github.com/XRPLF/xrpl-cli)).
-- **Upstream metadata source:** [XRPSCAN validator API](https://api.xrpscan.com/api/v1/validator). XRPSCAN documents validator-specific lookup as `/validator/{VALIDATOR_PUBLIC_KEY}` ([API documentation](https://docs.xrpscan.com/api-documentation/validator/validator-info)); the supplied record itself was not successfully retrieved during this research.
+- **Frozen domain-verification status:** Not independently established (`null`)
+- **Validator-list publishers containing the key:** Ripple and XRP Ledger Foundation, according to the frozen input
+- **Upstream metadata source:** [XRPSCAN validator API](https://api.xrpscan.com/api/v1/validator), supplied as a frozen input source; its key-specific response was not independently retrieved during this research
 
 ## Claimed Domain and Official URLs
 
-**Domain conclusion:** `ripple.com` is the official corporate domain of Ripple Labs Inc., with **high confidence**. Ripple’s legal terms expressly identify `www.ripple.com` as a website of Ripple Labs Inc. and its subsidiaries ([Ripple Terms of Use](https://ripple.com/legal/terms-of-use/)). Ripple’s verified GitHub organization also states that the organization controls `ripple.com` ([GitHub: Ripple](https://github.com/ripple)).
-
-That conclusion concerns the domain-to-entity relationship. The separate mapping of this validator key to the domain remains **claimed / not independently verified**, because no validator-domain attestation was independently established in this packet.
+**Conclusion:** `ripple.com` is the official corporate domain of Ripple Labs Inc. Ripple’s terms expressly identify `www.ripple.com` as a website of Ripple Labs Inc. and its affiliated group, while its current privacy policy states that Ripple owns or maintains `ripple.com`. This establishes the domain-to-entity relationship at high confidence. It does not independently establish the domain-to-validator relationship. ([Ripple Terms of Use](https://ripple.com/legal/terms-of-use/), [Ripple Privacy Policy](https://ripple.com/legal/privacy-policy/))
 
 Official URLs:
 
-- [https://ripple.com/](https://ripple.com/) — official corporate website.
-- [https://docs.ripple.com/](https://docs.ripple.com/) — official product documentation.
-- [https://github.com/ripple](https://github.com/ripple) — verified corporate GitHub organization controlling `ripple.com`.
+- **Corporate website:** [https://ripple.com/](https://ripple.com/)
+- **Company profile:** [https://ripple.com/company/](https://ripple.com/company/)
+- **Legal and compliance materials:** [https://ripple.com/legal/compliance/](https://ripple.com/legal/compliance/)
+- **Product documentation:** [https://docs.ripple.com/](https://docs.ripple.com/)
+
+The validator domain remains **claimed and not independently verified**. The XRP Ledger Foundation’s public CLI documentation maps the exact master key to `ripple.com`, but the displayed mapping is a truncated example rather than an independently checked domain attestation. ([XRPLF xrpl-cli](https://github.com/XRPLF/xrpl-cli))
 
 ## Public Identity
 
 - **Canonical public entity:** **Ripple Labs Inc.**
-- **Entity type:** Delaware corporation and financial-technology company. A current SEC filing identifies Ripple Labs Inc. as a corporation organized in Delaware ([SEC Form D](https://www.sec.gov/Archives/edgar/data/1685012/000168501225000002/xslFormDX01/primary_doc.xml)); Ripple describes itself as a financial-technology company providing crypto solutions to institutions and other organizations ([About Ripple](https://ripple.com/company/)).
-- **Identity confidence:** **Medium-high** for the validator-to-entity conclusion; **high** for the `ripple.com`-to-Ripple Labs Inc. conclusion.
+- **Entity type:** Delaware corporation and financial-technology company providing enterprise blockchain and digital-asset solutions. The Delaware incorporation and legal name appear in a recent SEC filing; Ripple describes itself as a financial-technology company offering crypto solutions to businesses. ([SEC EDGAR filing](https://www.sec.gov/Archives/edgar/data/1685012/000168501225000002/0001685012-25-000002-index.htm), [About Ripple](https://ripple.com/company/))
+- **Supported current alias:** **Ripple**. Ripple’s legal terms define Ripple Labs Inc., its subsidiaries, and affiliates collectively as “Ripple.” ([Ripple Terms of Use](https://ripple.com/legal/terms-of-use/))
+- **Supported historical alias:** **Open Coin, Inc.** An SEC pleading identifies Ripple as formerly known as Open Coin, Inc. A USPTO assignment record uses the spelling **OpenCoin, Inc.**; these are treated as spelling variants of the supported former name, not separate entities. ([SEC complaint](https://www.sec.gov/files/litigation/complaints/2020/comp-pr2020-338.pdf), [USPTO assignment record](https://assignmentcenter.uspto.gov/ipas/search/api/v2/public/download/trademark/5619/0742))
+- **Domain connection:** Ripple’s own legal materials directly connect Ripple Labs Inc. to `ripple.com`. The XRPLF repository separately associates the specified validator key with that domain. Together these support Ripple Labs Inc. as the most likely public identity, while leaving current key control unproven. ([Ripple Terms of Use](https://ripple.com/legal/terms-of-use/), [XRPLF xrpl-cli](https://github.com/XRPLF/xrpl-cli))
 
-Supported aliases and historical names:
+## Business Summary
 
-- **Ripple** — current official brand and collective name for Ripple Labs Inc. and its subsidiaries ([Ripple Compliance & Disclosures](https://ripple.com/legal/compliance/)). Because Ripple uses the name collectively for a corporate group, it is not necessarily an exact legal synonym for the parent in every context.
-- **Ripple Labs** — supported short-form mark used in Ripple’s official legal terms ([Ripple Terms of Use](https://ripple.com/legal/terms-of-use/)).
-- **Open Coin, Inc.** — supported historical corporate name. An SEC complaint describes Ripple as “f/k/a Open Coin, Inc.” ([SEC complaint](https://www.sec.gov/files/litigation/complaints/2020/comp-pr2020-338.pdf)).
-
-The evidence chain connecting the claimed domain to the entity is:
-
-1. The frozen upstream metadata identifies `ripple.com` for the supplied key.
-2. An XRP Ledger Foundation repository example independently pairs the exact key with the name `ripple.com` ([XRPLF/xrpl-cli](https://github.com/XRPLF/xrpl-cli)).
-3. Ripple’s legal terms identify `ripple.com` as a Ripple Labs Inc. website ([Ripple Terms of Use](https://ripple.com/legal/terms-of-use/)).
-4. Ripple’s verified GitHub organization reports control of `ripple.com` ([GitHub: Ripple](https://github.com/ripple)).
-
-This supports Ripple Labs Inc. as the most likely public identity, but it does not independently prove that Ripple presently possesses or controls the validator’s private keys.
+Ripple Labs Inc. is a Delaware corporation and financial-technology company publicly operating as Ripple, with its principal U.S. base in San Francisco and offices across major North American, European, Asia-Pacific, Middle Eastern, African, and Latin American markets. The company provides enterprise blockchain and digital-asset infrastructure, including cross-border payments, collections, digital-asset custody, stablecoin, and wallet services, and supports development on the open-source XRP Ledger. Its customers and stakeholders include financial institutions, businesses, governments, developers, regulators, and ecosystem partners. Ripple reports operations in more than 90 countries, more than 15 offices, and at least 1,000 employees, supporting classification as a very large institutional profile with global reach.
 
 ## Public X Handle
 
-**@Ripple** — **established**.
-
-Verification basis: the [X profile](https://x.com/Ripple) identifies itself as Ripple and links to `ripple.com`; Ripple’s official website also directs readers to its X presence in company publications ([Ripple: XRP Community Day 2025](https://ripple.com/insights/xrp-community-day-2025-a-record-breaking-event-uniting-the-global-community/)).
+**@Ripple** — established. Ripple’s official website identifies `@Ripple` as an authentic corporate X account, and the [X profile](https://x.com/Ripple) identifies itself as Ripple and links to `ripple.com`. ([Ripple authentic-account guidance](https://ripple.com/insights/how-to-spot-and-report-crypto-scams/))
 
 ## Region of Incorporation and Operations
 
-- **Incorporation jurisdiction:** **Delaware, United States — high confidence.** Ripple Labs Inc.’s SEC Form D records Delaware as its jurisdiction of incorporation ([SEC Form D](https://www.sec.gov/Archives/edgar/data/1685012/000168501225000002/xslFormDX01/primary_doc.xml)).
-- **Principal operational base:** **San Francisco, California, United States — high confidence.** The same SEC filing identifies San Francisco as the principal place of business, and Ripple’s privacy policy describes the United States as the location of its corporate headquarters ([Ripple Privacy Policy](https://ripple.com/legal/privacy-policy/)).
-- **Operational regions:** **North America, Europe, Asia-Pacific, the Middle East, and Latin America — high confidence.** Ripple’s official locations page identifies offices including San Francisco, New York, Washington, D.C., London, Dublin, Reykjavik, Singapore, Mumbai, Sydney, Dubai, and São Paulo ([Ripple Locations](https://ripple.com/careers/locations/)). Ripple separately reports delivering solutions in more than 90 countries ([About Ripple](https://ripple.com/company/)).
-
-These operational regions are based on disclosed offices and service footprint, not validator-server geolocation.
+- **Incorporation jurisdiction — High confidence:** **Delaware, United States.** Ripple Labs Inc.’s 2025 SEC filing reports Delaware as its state of incorporation. ([SEC EDGAR filing](https://www.sec.gov/Archives/edgar/data/1685012/000168501225000002/0001685012-25-000002-index.htm))
+- **Principal operating base — High confidence:** **San Francisco, California, United States.** The SEC filing gives a San Francisco business address, and Ripple’s 2026 privacy policy lists a San Francisco corporate contact address and identifies the United States as the location of its corporate headquarters. ([SEC EDGAR filing](https://www.sec.gov/Archives/edgar/data/1685012/000168501225000002/0001685012-25-000002-index.htm), [Ripple Privacy Policy](https://ripple.com/legal/privacy-policy/))
+- **Principal operational regions — High confidence:** Global, including **North America, Latin America, Europe, Asia-Pacific, and the Middle East and Africa**. Ripple identifies offices in San Francisco, São Paulo, London, Singapore, and Dubai; it separately identifies Singapore as its Asia-Pacific headquarters and Dubai as its Middle East and Africa regional headquarters. ([Ripple contact page](https://ripple.com/contact/sales/), [Singapore operations](https://ripple.com/ripple-press/ripple-secures-major-payments-institution-license-from-the-monetary-authority-of-singapore/), [Middle East and Africa operations](https://ripple.com/ripple-press/ripple-reinforces-commitment-to-the-middle-east-with-expanded-presence-in-the-uae/))
 
 ## Activities
 
-Ripple provides institutional financial infrastructure involving payments, digital-asset custody, stablecoins, prime brokerage, treasury management, and tokenization ([Ripple corporate website](https://ripple.com/)). It describes its customers and users as global financial institutions, businesses, governments, and developers ([About Ripple](https://ripple.com/company/)).
+Ripple provides enterprise infrastructure for cross-border payments, stablecoin collections, digital-asset custody, stablecoins, wallet-as-a-service, and connections to fiat and stablecoin payment rails. Its stated stakeholder base includes financial institutions, businesses, governments, developers, regulators, customers, and ecosystem partners. ([Ripple documentation](https://docs.ripple.com/), [About Ripple](https://ripple.com/company/))
 
-Ripple states that its solutions use XRP, RLUSD, and other digital assets, and that Ripple is an XRP holder and one of multiple developers building on and contributing to the XRP Ledger ([Ripple XRP page](https://ripple.com/xrp/)). Its verified GitHub organization publishes XRPL-related open-source software, including validator tooling and validation-history infrastructure ([GitHub: Ripple](https://github.com/ripple)).
+Ripple also supports developers building on the open-source XRP Ledger, while its privacy policy distinguishes Ripple’s commercial services from the open-source XRP Ledger software and distributed network. ([About Ripple](https://ripple.com/company/), [Ripple Privacy Policy](https://ripple.com/legal/privacy-policy/))
 
-For this particular validator, the exact public key is associated with the name `ripple.com` in an XRPL Foundation repository example ([XRPLF/xrpl-cli](https://github.com/XRPLF/xrpl-cli)). Therefore, a Ripple-operated or Ripple-associated validator is the most likely interpretation, but current operation and cryptographic control are not independently established.
+For the specified validator, the XRP Ledger Foundation’s public CLI documentation maps the exact master key to `ripple.com`. This supports likely attribution to Ripple’s XRP Ledger operations when combined with the frozen publisher and upstream-metadata coordinates, but it is not proof that Ripple Labs Inc. or a particular subsidiary currently controls the validator’s private key. ([XRPLF xrpl-cli](https://github.com/XRPLF/xrpl-cli), [XRPL domain-verification specification](https://xrpl.org/docs/references/xrp-ledger-toml))
 
 ## Estimated Public-Profile Size
 
 **Very large**
 
+- **Evidence:** Ripple publicly reports **1,000+ employees, 15+ offices, and activity in 90+ countries**, together with a global institutional customer and stakeholder footprint. ([About Ripple](https://ripple.com/company/))
 - **Confidence:** High
-- **Headcount status:** Established only at the published approximate threshold; exact current headcount is not established.
-
-Ripple’s official company page reports **1,000+ employees**, **15+ offices**, and activity in **90+ countries** ([About Ripple](https://ripple.com/company/)). The disclosed headcount threshold and major international institutional footprint support the **Very large** rubric tier. The public figure is rounded and does not provide an exact current employee count.
+- **Headcount status:** A public lower-bound headcount of 1,000+ is established by Ripple’s official site; the exact current headcount is not established. The tier also rests on Ripple’s globally prominent institutional footprint.
 
 ## Evidence
 
-1. [XRPLF/xrpl-cli](https://github.com/XRPLF/xrpl-cli) — **“XRPLF/xrpl-cli”**; XRP Ledger Foundation GitHub repository; accessed **2026-09-01**. Its signed-UNL example pairs the exact validator master key with the name `ripple.com`.
-
-2. [Ripple Historical Validator Lists](https://github.com/ripple/vl) — **“Historical Validator Lists”**; official Ripple GitHub repository; accessed **2026-09-01**. Supports Ripple’s role as a signed XRP Ledger validator-list publisher.
-
-3. [Ripple Terms of Use](https://ripple.com/legal/terms-of-use/) — **“Terms of Use”**; primary corporate legal page; accessed **2026-09-01**. Identifies `www.ripple.com` as a Ripple Labs Inc. website and supports the names Ripple and Ripple Labs.
-
-4. [GitHub: Ripple](https://github.com/ripple) — **“Ripple”**; verified corporate GitHub organization; accessed **2026-09-01**. Reports verified control of `ripple.com` and supports Ripple’s open-source and XRPL-development activities.
-
-5. [SEC Form D for Ripple Labs Inc.](https://www.sec.gov/Archives/edgar/data/1685012/000168501225000002/xslFormDX01/primary_doc.xml) — **“Form D — Ripple Labs Inc.”**; U.S. regulator filing; accessed **2026-09-01**. Supports the canonical legal name, corporation type, Delaware incorporation, and San Francisco principal place of business.
-
-6. [About Ripple](https://ripple.com/company/) — **“About Ripple”**; primary corporate profile; accessed **2026-09-01**. Supports the financial-technology identity, institutional activities, 1,000+ employees, 15+ offices, and 90+ countries served.
-
-7. [Ripple Locations](https://ripple.com/careers/locations/) — **“Locations Around the World”**; primary corporate careers page; accessed **2026-09-01**. Supports offices across North America, Europe, Asia-Pacific, the Middle East, and Latin America.
-
-8. [Ripple on X](https://x.com/Ripple) — **“Ripple (@Ripple)”**; official social profile; accessed **2026-09-01**. Supports the official X handle through the profile’s Ripple identity and `ripple.com` link.
-
-9. [Ripple XRP page](https://ripple.com/xrp/) — **“XRP Digital Asset for Global Crypto Utility”**; primary corporate product/ecosystem page; accessed **2026-09-01**. Supports Ripple’s use of XRP and RLUSD and its stated role as one of multiple XRP Ledger contributors.
-
-10. [SEC complaint concerning Ripple](https://www.sec.gov/files/litigation/complaints/2020/comp-pr2020-338.pdf) — **“SEC v. Ripple Labs, Inc. — Complaint”**; regulator-filed court document; accessed **2026-09-01**. Supports the historical name Open Coin, Inc. and historical Delaware/San Francisco corporate description.
-
-11. [XRPSCAN Validator Info documentation](https://docs.xrpscan.com/api-documentation/validator/validator-info) — **“Validator info”**; upstream API documentation; accessed **2026-09-01** through the public search index. Documents the validator-specific API response fields, including master key and domain. The [input-provided API endpoint](https://api.xrpscan.com/api/v1/validator) was not independently retrieved successfully on **2026-09-01**.
+1. [Ripple Terms of Use](https://ripple.com/legal/terms-of-use/) — Official legal page; accessed 2026-09-01. Supports Ripple Labs Inc. as the entity behind `ripple.com`, the collective public name “Ripple,” and Ripple-related trademarks.
+2. [Ripple Privacy Policy](https://ripple.com/legal/privacy-policy/) — Official legal page; accessed 2026-09-01. Supports Ripple Labs Inc.’s canonical name, ownership or maintenance of `ripple.com`, San Francisco contact location, U.S. corporate headquarters, and separation between Ripple services and the open-source XRP Ledger network.
+3. [Ripple Labs Inc. SEC Form D filing index](https://www.sec.gov/Archives/edgar/data/1685012/000168501225000002/0001685012-25-000002-index.htm) — U.S. regulator filing record; accessed 2026-09-01. Supports the legal name, Delaware incorporation, and San Francisco business address.
+4. [SEC complaint concerning Ripple Labs Inc.](https://www.sec.gov/files/litigation/complaints/2020/comp-pr2020-338.pdf) — U.S. regulator pleading; accessed 2026-09-01. Supports the historical name “Open Coin, Inc.,” Delaware corporate form, and historical San Francisco principal place of business.
+5. [USPTO trademark assignment record](https://assignmentcenter.uspto.gov/ipas/search/api/v2/public/download/trademark/5619/0742) — U.S. government intellectual-property record; accessed 2026-09-01. Supports the historical spelling “OpenCoin, Inc.” and the corporate conversion record.
+6. [About Ripple](https://ripple.com/company/) — Official company page; accessed 2026-09-01. Supports activities, customer and stakeholder types, developer support, 1,000+ employees, 15+ offices, and operations in 90+ countries.
+7. [Ripple product documentation](https://docs.ripple.com/) — Official technical and product documentation; accessed 2026-09-01. Supports payment, collections, custody, stablecoin, wallet, and payment-rail services.
+8. [Ripple contact page](https://ripple.com/contact/sales/) — Official company page; accessed 2026-09-01. Supports offices in San Francisco, São Paulo, London, Singapore, and Dubai and the company’s global operational footprint.
+9. [Ripple authentic-account guidance](https://ripple.com/insights/how-to-spot-and-report-crypto-scams/) — Official company publication; accessed 2026-09-01. Identifies `@Ripple` as an authentic Ripple corporate X handle.
+10. [Ripple on X](https://x.com/Ripple) — Official social profile; accessed 2026-09-01. Supports the `@Ripple` handle and its link to `ripple.com`.
+11. [XRPLF xrpl-cli](https://github.com/XRPLF/xrpl-cli) — XRP Ledger Foundation public GitHub repository; accessed 2026-09-01. Maps validator key `nHU4bLE3EmSqNwfL4AP1UZeTNPrSPPP6FXLKXo2uqfHuvBQxDVKd` to the name `ripple.com` in a truncated validator-list example.
+12. [XRP Ledger xrp-ledger.toml specification](https://xrpl.org/docs/references/xrp-ledger-toml) — Official XRPL technical documentation; accessed 2026-09-01. Defines validator-domain verification as a two-way relationship involving a domain-hosted validator entry and validator-generated domain attestation.
 
 ## Uncertainty and Conflicts
 
-- No signed `xrp-ledger.toml` validator-domain attestation for this exact key was independently established. The frozen verification value remains `null`.
-- The supplied XRPSCAN record could not be independently retrieved during this research. Its claimed domain and publisher memberships are therefore preserved as frozen input rather than represented as freshly verified API results.
-- The XRPL Foundation repository’s exact key-to-`ripple.com` mapping is corroborative metadata, but a repository example is not proof of present private-key possession, validator operation, or domain attestation.
-- Ripple Labs Inc. is the supported legal parent name, while **Ripple** can refer collectively to the parent and its subsidiaries. Corporate-group actions should not automatically be attributed to the parent legal entity.
-- Ripple’s verified GitHub description uses “Ripple, Inc.” while current Ripple legal pages and SEC filings identify **Ripple Labs Inc.** “Ripple, Inc.” is therefore not treated as a separately established legal alias.
-- Only the exact historical name **Open Coin, Inc.** is included. Similar spellings such as “OpenCoin” are excluded absent equally strong evidence for that precise form.
-- The validator’s current operator, hosting provider, physical server location, and operational personnel are not established.
-- Ripple publishes a rounded “1,000+” employee figure; the exact current headcount is not established.
-- Similar-name organizations and social accounts, including “Rippling,” are not aliases and were excluded.
+- The frozen domain-verification value is `null`. No current validator-generated attestation or equivalent two-way proof was independently validated, so `ripple.com` remains a **claimed, not independently verified validator domain**.
+- The exact key-to-domain mapping appears in an XRP Ledger Foundation repository, but the relevant passage is expressly a truncated example. It supports public attribution but does not prove current private-key control.
+- Current control by Ripple Labs Inc., a Ripple subsidiary, or a named internal operations team is not established. No particular subsidiary or personnel identity is assigned.
+- Inclusion by Ripple and XRP Ledger Foundation validator-list publishers is taken from the frozen input and was not independently revalidated against live signed publisher payloads.
+- The supplied key-specific XRPSCAN API response could not be retrieved during this research; no claim is made that it was browsed.
+- Official records vary between **“Open Coin, Inc.”** and **“OpenCoin, Inc.”** for the former name. Both spellings are retained as historical record variants rather than treated as different organizations.
+- Recent public materials show different San Francisco street addresses. The principal city and U.S. operating base are well supported, but no single street address is published in this packet.
+- Exact current employee count and the identity of the legal entity operating the validator are unresolved.
+- Server geography, registrar data, similar “Ripple” names, and unrelated social accounts were not used to infer incorporation, ownership, aliases, or validator control.
 
 ## Machine-Readable Summary
 
@@ -126,50 +102,50 @@ Ripple’s official company page reports **1,000+ employees**, **15+ offices**, 
   "claimed_domain": "ripple.com",
   "domain_verification_status": null,
   "canonical_entity": "Ripple Labs Inc.",
-  "entity_type": "Delaware corporation and financial-technology company",
+  "entity_type": "Delaware corporation and financial-technology company providing enterprise blockchain and digital-asset solutions",
   "aliases": [
     "Ripple",
-    "Ripple Labs",
-    "Open Coin, Inc. (former legal name)"
+    "Open Coin, Inc.",
+    "OpenCoin, Inc."
   ],
   "official_urls": [
     "https://ripple.com/",
-    "https://docs.ripple.com/",
-    "https://github.com/ripple"
+    "https://ripple.com/company/",
+    "https://ripple.com/legal/compliance/",
+    "https://docs.ripple.com/"
   ],
+  "business_summary": "Ripple Labs Inc. is a Delaware corporation and financial-technology company publicly operating as Ripple, with its principal U.S. base in San Francisco and offices across major North American, European, Asia-Pacific, Middle Eastern, African, and Latin American markets. The company provides enterprise blockchain and digital-asset infrastructure, including cross-border payments, collections, digital-asset custody, stablecoin, and wallet services, and supports development on the open-source XRP Ledger. Its customers and stakeholders include financial institutions, businesses, governments, developers, regulators, and ecosystem partners. Ripple reports operations in more than 90 countries, more than 15 offices, and at least 1,000 employees, supporting classification as a very large institutional profile with global reach.",
   "x_handle": "@Ripple",
   "incorporation_region": "Delaware, United States",
   "operating_regions": [
     "North America",
+    "Latin America",
     "Europe",
     "Asia-Pacific",
-    "Middle East",
-    "Latin America"
+    "Middle East and Africa"
   ],
   "profile_size_tier": "Very large",
-  "profile_size_confidence": "high",
-  "identity_confidence": "medium-high",
+  "profile_size_confidence": "High",
+  "identity_confidence": "High for the ripple.com-to-entity match; moderate for current validator-key attribution and control",
   "unresolved_fields": [
-    "Independent validator-domain attestation for the supplied master key",
-    "Current validator operator and cryptographic control",
-    "Current validator hosting provider and physical server location",
-    "Exact current employee headcount",
-    "Independent retrieval of the frozen XRPSCAN metadata record"
+    "Independent validator-domain attestation verification",
+    "Current validator private-key controller",
+    "Specific Ripple legal entity or internal team operating the validator",
+    "Exact current employee headcount"
   ],
   "evidence_urls": [
-    "https://github.com/XRPLF/xrpl-cli",
-    "https://github.com/ripple/vl",
     "https://ripple.com/legal/terms-of-use/",
-    "https://github.com/ripple",
-    "https://www.sec.gov/Archives/edgar/data/1685012/000168501225000002/xslFormDX01/primary_doc.xml",
-    "https://ripple.com/company/",
-    "https://ripple.com/careers/locations/",
     "https://ripple.com/legal/privacy-policy/",
-    "https://x.com/Ripple",
-    "https://ripple.com/xrp/",
+    "https://www.sec.gov/Archives/edgar/data/1685012/000168501225000002/0001685012-25-000002-index.htm",
     "https://www.sec.gov/files/litigation/complaints/2020/comp-pr2020-338.pdf",
-    "https://docs.xrpscan.com/api-documentation/validator/validator-info",
-    "https://api.xrpscan.com/api/v1/validator"
+    "https://assignmentcenter.uspto.gov/ipas/search/api/v2/public/download/trademark/5619/0742",
+    "https://ripple.com/company/",
+    "https://docs.ripple.com/",
+    "https://ripple.com/contact/sales/",
+    "https://ripple.com/insights/how-to-spot-and-report-crypto-scams/",
+    "https://x.com/Ripple",
+    "https://github.com/XRPLF/xrpl-cli",
+    "https://xrpl.org/docs/references/xrp-ledger-toml"
   ]
 }
 ```
