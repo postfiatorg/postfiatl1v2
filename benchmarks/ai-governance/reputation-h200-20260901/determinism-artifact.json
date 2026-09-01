@@ -1,0 +1,125 @@
+{
+ "aggregate_sha256": {
+  "primary-run1": "79a34c1c7cec941e8be132e6236b17fddbf96805d02bfd313efd41760dad6143",
+  "primary-run2": "79a34c1c7cec941e8be132e6236b17fddbf96805d02bfd313efd41760dad6143",
+  "replay-run1": "79a34c1c7cec941e8be132e6236b17fddbf96805d02bfd313efd41760dad6143",
+  "replay-run2": "79a34c1c7cec941e8be132e6236b17fddbf96805d02bfd313efd41760dad6143"
+ },
+ "artifact": "reputation-h200-20260901 determinism proof",
+ "augmentation_labels": {
+  "commitment": "b89dc8f4acfd450b7412bdfd48e312ddae43d45aea69b01ca96638a499b53a03",
+  "revealed": "package/outputs/augmentation_labels.REVEALED.json"
+ },
+ "byte_identical_count": 864,
+ "byte_identical_fraction": 1.0,
+ "comparison_count": 864,
+ "cost_usd": {
+  "budget_cap": 150.0,
+  "method": "Vast.ai account credit delta 253.78 -> 248.44",
+  "total": 5.34
+ },
+ "determinism_acceptance": {
+  "detail": "864/864 slot comparisons byte-identical across 2 owners x 2 runs, including both truncated responses and all 18 padding slots per host-run",
+  "verdict": "PASS"
+ },
+ "execution_profile_id": "qwen3.8-27b-fp8-h200-sglang-strict-fixed32-schema-v2",
+ "hosts": {
+  "primary": {
+   "host_id": 667715,
+   "instance": 49461172,
+   "machine_id": 148661
+  },
+  "replay": {
+   "host_id": 445596,
+   "instance": 49461176,
+   "machine_id": 131918
+  }
+ },
+ "lane_validity": {
+  "censorship_resistance": 89,
+  "prestige": 90,
+  "sanctions_safety": 89
+ },
+ "manifest_commit": "6b3ce76f",
+ "manifest_sha256": "cb647783b990be0d554ded0d12c1ccd54a9295ccada9a69fae0c14526c2250b5",
+ "mismatches": [],
+ "plan_commit": "06a23b6b",
+ "runs": {
+  "primary-run1": {
+   "aggregate_sha256": "79a34c1c7cec941e8be132e6236b17fddbf96805d02bfd313efd41760dad6143",
+   "gpu": "NVIDIA H200, 580.173.02, GPU-7cf87e70-9f9d-4ca2-fa45-49609b3e3427",
+   "started_at": "2026-09-01T01:00:32Z",
+   "wall_seconds": 290.4
+  },
+  "primary-run2": {
+   "aggregate_sha256": "79a34c1c7cec941e8be132e6236b17fddbf96805d02bfd313efd41760dad6143",
+   "gpu": "NVIDIA H200, 580.173.02, GPU-7cf87e70-9f9d-4ca2-fa45-49609b3e3427",
+   "started_at": "2026-09-01T01:05:22Z",
+   "wall_seconds": 285.7
+  },
+  "replay-run1": {
+   "aggregate_sha256": "79a34c1c7cec941e8be132e6236b17fddbf96805d02bfd313efd41760dad6143",
+   "gpu": "NVIDIA H200, 580.159.03, GPU-17b90af6-d09e-6017-1dd9-225586ff4b79",
+   "started_at": "2026-09-01T01:00:35Z",
+   "wall_seconds": 256.5
+  },
+  "replay-run2": {
+   "aggregate_sha256": "79a34c1c7cec941e8be132e6236b17fddbf96805d02bfd313efd41760dad6143",
+   "gpu": "NVIDIA H200, 580.159.03, GPU-17b90af6-d09e-6017-1dd9-225586ff4b79",
+   "started_at": "2026-09-01T01:04:51Z",
+   "wall_seconds": 248.1
+  }
+ },
+ "schema_invalid_scoring_responses": [
+  [
+   "censorship_resistance",
+   "anc-002",
+   157
+  ],
+  [
+   "sanctions_safety",
+   "anc-028",
+   279
+  ]
+ ],
+ "semantic_acceptance": {
+  "anchor_window_miss_count": 42,
+  "auc": {
+   "baseline_composite": 0.75,
+   "baseline_prestige": 0.9642857142857143,
+   "model_composite": null,
+   "model_prestige_lane": 0.9464285714285714
+  },
+  "monotonicity": {
+   "chains_strictly_satisfied": [
+    "MIT>fabrications(all dims)",
+    "Tor>Yandex(C)",
+    "ICRC>Sberbank(S)",
+    "Coinbase>Binance(S)",
+    "Reuters>VK(C)"
+   ],
+   "criterion8": "PASS",
+   "gross_inversions": 0,
+   "strict_chain_ties": [
+    {
+     "pair": "Yandex vs VK (censorship_resistance)",
+     "scores": [
+      15,
+      15
+     ]
+    },
+    {
+     "pair": "Sberbank vs Garantex (sanctions_safety)",
+     "scores": [
+      10,
+      10
+     ]
+    }
+   ]
+  },
+  "notes": "Lane validity fails for censorship_resistance and sanctions_safety (one truncated finish_reason=length response each at the 1024-token cap; schema-invalid responses fail their lane with no repair, per plan section 2). Criterion 5 fails: model prestige-lane AUC 0.9464 does not strictly beat the deterministic baseline's 0.9643; model composite AUC is not computable with failed lanes. Criterion 8 passes: zero gross inversions; two strict-chain ties disclosed. Per plan section 8, no-lift is a publishable negative result limited to this run. Results are immutable; any token-cap or rubric change requires a new profile id and run.",
+  "verdict": "FAIL on lane validity and criterion 5 (no measured lift); PASS on criterion 8; negative result published per plan section 8"
+ },
+ "shadow_only": true,
+ "strict_solo_replay_recovery_invocations": 0
+}

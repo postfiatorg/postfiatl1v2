@@ -1,0 +1,334 @@
+{
+ "anchor_window_misses": [
+  [
+   "anc-001",
+   "Massachusetts Institute of Technology",
+   "censorship_resistance",
+   85,
+   "55-75"
+  ],
+  [
+   "anc-003",
+   "University of Tokyo",
+   "censorship_resistance",
+   25,
+   "50-70"
+  ],
+  [
+   "anc-005",
+   "Internet Archive",
+   "sanctions_safety",
+   45,
+   "70-90"
+  ],
+  [
+   "anc-006",
+   "International Committee of the Red Cross",
+   "censorship_resistance",
+   25,
+   "70-90"
+  ],
+  [
+   "anc-007",
+   "Tor Project",
+   "prestige",
+   82,
+   "55-80"
+  ],
+  [
+   "anc-007",
+   "Tor Project",
+   "sanctions_safety",
+   45,
+   "55-80"
+  ],
+  [
+   "anc-008",
+   "Signal Foundation",
+   "censorship_resistance",
+   45,
+   "85-100"
+  ],
+  [
+   "anc-008",
+   "Signal Foundation",
+   "sanctions_safety",
+   45,
+   "65-85"
+  ],
+  [
+   "anc-009",
+   "Electronic Frontier Foundation",
+   "censorship_resistance",
+   78,
+   "80-95"
+  ],
+  [
+   "anc-010",
+   "Mozilla Foundation",
+   "censorship_resistance",
+   45,
+   "70-90"
+  ],
+  [
+   "anc-011",
+   "Cloudflare",
+   "censorship_resistance",
+   45,
+   "60-85"
+  ],
+  [
+   "anc-012",
+   "Reuters",
+   "prestige",
+   78,
+   "80-95"
+  ],
+  [
+   "anc-012",
+   "Reuters",
+   "censorship_resistance",
+   50,
+   "65-85"
+  ],
+  [
+   "anc-012",
+   "Reuters",
+   "sanctions_safety",
+   45,
+   "75-90"
+  ],
+  [
+   "anc-013",
+   "Associated Press",
+   "prestige",
+   78,
+   "80-95"
+  ],
+  [
+   "anc-013",
+   "Associated Press",
+   "censorship_resistance",
+   50,
+   "65-85"
+  ],
+  [
+   "anc-015",
+   "Kraken",
+   "censorship_resistance",
+   45,
+   "50-70"
+  ],
+  [
+   "anc-016",
+   "Gemini",
+   "prestige",
+   78,
+   "55-75"
+  ],
+  [
+   "anc-017",
+   "Bitstamp",
+   "prestige",
+   78,
+   "55-75"
+  ],
+  [
+   "anc-017",
+   "Bitstamp",
+   "sanctions_safety",
+   45,
+   "65-85"
+  ],
+  [
+   "anc-019",
+   "Ripple",
+   "sanctions_safety",
+   45,
+   "55-75"
+  ],
+  [
+   "anc-020",
+   "XRPL Foundation",
+   "prestige",
+   75,
+   "45-65"
+  ],
+  [
+   "anc-020",
+   "XRPL Foundation",
+   "censorship_resistance",
+   25,
+   "50-70"
+  ],
+  [
+   "anc-020",
+   "XRPL Foundation",
+   "sanctions_safety",
+   45,
+   "55-80"
+  ],
+  [
+   "anc-021",
+   "Hetzner",
+   "prestige",
+   72,
+   "50-70"
+  ],
+  [
+   "anc-021",
+   "Hetzner",
+   "censorship_resistance",
+   25,
+   "45-65"
+  ],
+  [
+   "anc-021",
+   "Hetzner",
+   "sanctions_safety",
+   45,
+   "65-85"
+  ],
+  [
+   "anc-022",
+   "OVHcloud",
+   "prestige",
+   78,
+   "55-75"
+  ],
+  [
+   "anc-022",
+   "OVHcloud",
+   "censorship_resistance",
+   25,
+   "45-65"
+  ],
+  [
+   "anc-022",
+   "OVHcloud",
+   "sanctions_safety",
+   45,
+   "65-85"
+  ],
+  [
+   "anc-023",
+   "DigitalOcean",
+   "prestige",
+   75,
+   "50-70"
+  ],
+  [
+   "anc-023",
+   "DigitalOcean",
+   "sanctions_safety",
+   45,
+   "65-85"
+  ],
+  [
+   "anc-024",
+   "University of Ljubljana",
+   "prestige",
+   85,
+   "55-75"
+  ],
+  [
+   "anc-024",
+   "University of Ljubljana",
+   "censorship_resistance",
+   25,
+   "50-70"
+  ],
+  [
+   "anc-025",
+   "Telegram",
+   "prestige",
+   78,
+   "55-75"
+  ],
+  [
+   "anc-025",
+   "Telegram",
+   "censorship_resistance",
+   25,
+   "55-80"
+  ],
+  [
+   "anc-027",
+   "Yandex",
+   "prestige",
+   75,
+   "50-70"
+  ],
+  [
+   "anc-027",
+   "Yandex",
+   "sanctions_safety",
+   10,
+   "25-50"
+  ],
+  [
+   "anc-028",
+   "VK",
+   "prestige",
+   78,
+   "35-55"
+  ],
+  [
+   "anc-029",
+   "Sberbank",
+   "prestige",
+   80,
+   "45-70"
+  ],
+  [
+   "anc-029",
+   "Sberbank",
+   "censorship_resistance",
+   5,
+   "10-30"
+  ],
+  [
+   "anc-030",
+   "Garantex",
+   "sanctions_safety",
+   10,
+   "0-5"
+  ]
+ ],
+ "auc": {
+  "baseline_composite": 0.75,
+  "baseline_prestige": 0.9642857142857143,
+  "model_composite": null,
+  "model_prestige_lane": 0.9464285714285714
+ },
+ "invalid_responses": [
+  [
+   "censorship_resistance",
+   "anc-002",
+   157
+  ],
+  [
+   "sanctions_safety",
+   "anc-028",
+   279
+  ]
+ ],
+ "lane_validity": {
+  "censorship_resistance": 89,
+  "prestige": 90,
+  "sanctions_safety": 89
+ },
+ "monotonicity": {
+  "Coinbase>Binance(S)": true,
+  "ICRC>Sberbank>Garantex(S)": false,
+  "MIT>fabs(all)": true,
+  "Reuters>VK(C)": true,
+  "Tor>Yandex>VK(C)": false
+ },
+ "weights_prior": {
+  "abstained": 193,
+  "classifications": 268,
+  "total_claims": 366,
+  "with_claims": 157
+ }
+}
