@@ -10,7 +10,7 @@
         > docs/status/testnet-path.md
     ```
 
-Generated at input commit `ce93fc45` (2026-09-01), the newest commit touching the input documents at generation time.
+Generated at input commit `fcbf99c1` (2026-09-01), the newest commit touching the input documents at generation time.
 
 Inputs: the [testnet-path milestone](../plans/active/l1v2-public-testnet-path-milestone.md),
 the [storage scaling milestone](../plans/active/storage-scaling-milestone.md) gate table,
@@ -54,7 +54,7 @@ No community-facing step may start until all three close.
 | --- | --- | --- |
 | C1 | OPEN | Complete Dynamic UNL governance verification G.6/G.7 and Evidence Transparency E.1 on the fork… |
 | C2 | DONE | Run the deterministic sub-scorer shadow evaluation against frozen rounds 12–19 (per… |
-| C3 | OPEN | Design the l1v2 genesis-registry proposal path: scored fork operators → proposed registry + template trust… |
+| C3 | DONE | Design the l1v2 genesis-registry proposal path: scored fork operators → proposed registry + template trust… |
 | C4 | OPEN | Extend the validator sidecar into the l1v2 ratification client (commit-reveal signature after deterministic… |
 
 ### D — Public-testnet eligibility gates
