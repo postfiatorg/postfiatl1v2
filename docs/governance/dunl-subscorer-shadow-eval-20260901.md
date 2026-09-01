@@ -191,3 +191,129 @@ data; the choice between them is a policy weighting, not a measurement.
 - If sub-scores ever become authoritative, a content-hash pin and manifest
   section for the sub-scorer module, mirroring the parser/selector/formula
   conventions.
+
+## Sub-scorers v2 (2026-09-01, second pass)
+
+v2 addresses the three divergence classes above. It is a separate versioned
+module — `subscorer_v2.py`, `SUBSCORER_VERSION = 2`, FORMULA-style — and v1
+(`subscorer.py`) is untouched and stays reproducible; everything above this
+section is the immutable v1 record. Artifacts: `results-v2.json` (with an
+embedded per-round v1 comparison) and `results-tables-v2.md`, produced by
+`shadow_eval.py --scorer-version 2`. Full rule statements live in the v2
+module docstring; the changes:
+
+1. **Era-aware consensus.** The rule now follows the round's own frozen
+   prompt version: v8+ keeps the worst-window ceiling (v1's rule); v5/v6
+   rounds get the era's whole-record reading — `floor(100·30d)` for
+   participating validators — *with the era's own written non-participation
+   penalty*: a dead 1h window pins consensus at 10, the value the era's
+   model itself used for seven of its eight offline cases. A pure 30-day
+   reading without that penalty was evaluated and rejected: it manufactured
+   seven ineligible→eligible flips for validators even the era's model had
+   scored ineligible.
+2. **Rubric-text reliability banding.** Classification now keys on *which
+   window carries the losses*, as the published rubric states: "broken"
+   requires a dead 1h window; a clean 1h over a degraded 24h window is the
+   recent/chronic band (40–70) and lands at its floor of 40, not at 10.
+   The in-band ladders are v1's, which were already rubric-shaped.
+3. **Rubric-banded diversity.** The linear count penalties are replaced by
+   a band matrix over the same concentration counts (provider: unique /
+   small / medium / dominant; country: rare / moderate / common), shaped to
+   the model's observed banding in rounds 17–19, monotone in both axes,
+   multiples of 5. Disclosed: this is in-sample fitting to the model's
+   bands, and the model's own banding violates its monotonicity constraint
+   in spots (e.g. round 18 scores a dominant-provider validator 40 in a
+   2-count country but 60–75 in a 5-count country); v2 stays monotone, so
+   those cells cannot be matched.
+
+Software and identity rules are unchanged. The `incomplete` window flags,
+fee votes, and formal identity are explicitly read-but-neutral with stated
+revisit triggers in the module docstring (in the only round carrying the
+`incomplete` flag, the model itself scored those windows at face value).
+
+### v2 results
+
+| Round | Prompt | n | Final Δ mean/max | Cutoff flips out/in | UNL overlap | Seats changed | Control |
+|---|---|---|---|---|---|---|---|
+| 12 | v5 | 45 | 8.84 / 23 | **1** / 0 | 20/20 | 0 | pass |
+| 13 | v5 | 45 | 8.31 / 25 | 0 / 0 | 20/20 | 0 | pass |
+| 14 | v6 | 42 | 6.02 / 25 | 0 / 0 | 20/20 | 0 | pass |
+| 15 | v6 | 50 | 7.92 / 22 | 0 / 0 | 19/20 | 1 | pass |
+| 16 | v8 | 51 | 2.80 / 8 | 0 / 0 | 19/20 | 1 | pass |
+| 17 | v9 | 53 | 1.17 / 8 | 0 / 0 | 20/20 | 0 | pass |
+| 18 | v9 | 55 | 1.36 / 8 | 0 / 0 | 20/20 | 0 | pass |
+| 19 | v10 | 54 | 1.24 / 8 | 0 / 0 | 19/20 | 1 | pass |
+
+**Headline: 1 cutoff flip across eight rounds under v2 (v1: 2), still
+strictly in the eligible→ineligible direction — v2, like v1, never made an
+ineligible validator eligible.** The internal control reproduced the
+published UNL in all eight rounds.
+
+### v1 → v2 comparison
+
+Flips and overlap per round (v1 → v2):
+
+| Round | Cutoff flips | UNL overlap | Seats changed |
+|---|---|---|---|
+| 12 | 1 → 1 | 19/20 → **20/20** | 1 → 0 |
+| 13 | 0 → 0 | 20/20 → 20/20 | 0 → 0 |
+| 14 | 0 → 0 | 20/20 → 20/20 | 0 → 0 |
+| 15 | 0 → 0 | 19/20 → 19/20 | 1 → 1 |
+| 16 | **1 → 0** | 19/20 → 19/20 | 1 → 1 |
+| 17 | 0 → 0 | 20/20 → 20/20 | 0 → 0 |
+| 18 | 0 → 0 | 20/20 → 20/20 | 0 → 0 |
+| 19 | 0 → 0 | 19/20 → 19/20 | 1 → 1 |
+
+Per-dimension mean absolute delta vs the model's sub-scores (v1 → v2;
+unchanged dimensions elided — software and identity are identical in every
+round, reliability changes only in round 16):
+
+| Round | consensus | reliability | diversity |
+|---|---|---|---|
+| 12 | 4.02 → 3.60 | 16.22 | 21.22 → 14.67 |
+| 13 | 4.93 → 5.07 | 19.00 | 17.44 → 10.56 |
+| 14 | 5.29 → 5.31 | 14.88 | 15.48 → 6.55 |
+| 15 | 4.68 → 4.38 | 20.40 | 14.90 → 10.80 |
+| 16 | 0.69 | 16.67 → 16.08 | 23.33 → 15.88 |
+| 17 | 0.43 | 2.45 | 16.66 → 6.79 |
+| 18 | 0.33 | 5.09 | 15.27 → 3.36 |
+| 19 | 0.37 | 3.98 | 17.96 → 4.72 |
+
+Cutoff-boundary cases under v2 (the same two validators as v1):
+
+| Round | Validator | Baseline final | v1 final | v2 final | Flipped under v2 |
+|---|---|---|---|---|---|
+| 12 | `nHU5tRRb…hqr5` | 45 | 23 | 28 | YES (out) |
+| 16 | `nHBWFVzx…CLYCN` | 41 | 37 | 41 | no — reliability 40 (band floor) lands the final exactly at the baseline's 41 |
+
+**What improved.** Diversity, the largest persistent v1 divergence, converges
+sharply where family evidence exists (rounds 17–19: mean delta 3.4–6.8, was
+15.3–18.0) and materially everywhere else. The round-16 flip resolves
+in-band: the rubric-aligned chronic floor of 40 keeps the validator eligible
+at exactly the baseline's 41, so the flip that moved with v1's 10-vs-40 band
+constant is gone, with the classification now stated from rubric text rather
+than an ad-hoc threshold. Era-aware consensus removes the artificial
+0-versus-model gap on old-era offline validators (round 12 consensus max
+delta drops 80→70, its UNL overlap reaches 20/20), and the headline falls to
+one flip without ever loosening eligibility.
+
+**What did not improve.** The round-12 flip itself persists, deliberately:
+the era model's consensus 80 for that offline validator violated the era's
+own written near-zero penalty policy (the same round scored a nearly
+identical offline validator at 10), and v2 does not reproduce a
+self-inconsistency — the flip now measures the era model's inconsistency
+rather than an era-semantics mismatch in the rules. Old-era reliability
+deltas (mean 14.9–20.4, rounds 12–16) are untouched: the v5/v6 reliability
+rubric read different evidence (domain verification, UNL-membership
+context), and v2 keeps one operational-stability rule for all eras rather
+than reconstructing superseded semantics. Old-era consensus means barely
+move (the 30-day and worst-window readings are near-identical for
+participating validators; the max-38 outlier survives under both). Round
+16's set-wide 10-point software offset remains by design, and rounds 12–16
+diversity still lacks family-grouping evidence, so corporate ASN variants
+keep counting as distinct providers there. One deep-in-the-pack seat still
+changes in each of rounds 15, 16, and 19. The v1-requirements items that
+remain open: a published provider-family map for historical rounds, the
+governance choice of a diversity curve (v2 supplies a deliberate,
+model-shaped candidate — not a decision), and the content-hash pin, which
+only becomes relevant if sub-scores become authoritative.
