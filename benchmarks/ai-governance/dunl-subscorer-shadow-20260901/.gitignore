@@ -1,0 +1,4 @@
+# Fetched round artifacts (public but not redistributed here; pinned by
+# SHA-256 in rounds-manifest.json) and the local evaluation venv.
+rounds/
+.venv/
