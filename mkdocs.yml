@@ -148,6 +148,7 @@ nav:
       - Storage Scaling Fix Specification: architecture/storage-scaling-fix-spec.md
       - Testnet Genesis And Launch Specification (locked): architecture/l1v2-testnet-genesis-and-launch-spec.md
       - Genesis Registry Proposal Path: architecture/genesis-registry-proposal-path.md
+      - Launch Topology Thresholds (proposal): architecture/launch-topology-thresholds.md
       - Finality: architecture/finality.md
       - Evidence Model: architecture/evidence-model.md
   - Governance:
