@@ -43,7 +43,20 @@ lookups, and sealed-label commitment as v2. Builder
 records `reasoning_sha256` per slot. **Not re-scored through TIH** — the plan
 header's TIH record covers the pre-rewrite plan text only.
 
-## In flight — needs an operator or agent to finish
+## RESOLVED — v3 and v4 completed after this handoff was first written
+
+The in-flight work below was finished the same session: v3 completed
+(determinism PASS, validity FAIL to reasoning truncation) and a v4 profile
+(8192-token cap) was frozen and run — **determinism PASS 864/864 and the
+first measured lift** (prestige AUC 0.9732 > baseline 0.9643, all four
+fabrications in the 0–5 bands). Residuals: 16/270 truncations, obscure-real
+operators misbanded. See the
+[results note](../governance/reputation-scoring-h200-results-20260901.md)
+v3/v4 section and `determinism-artifact-v4.json` (commit `a1699ac2`). All
+instances destroyed; cumulative spend $77.32 of $150. The original in-flight
+section is retained below for the record.
+
+## In flight — needs an operator or agent to finish (historical)
 
 Two Vast instances are **live and billing** (account credit 240.34 at
 writing; v2+v3 spend so far ≈ $13):
