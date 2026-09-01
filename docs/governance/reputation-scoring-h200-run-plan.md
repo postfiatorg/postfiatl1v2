@@ -39,7 +39,13 @@ A host that deviates from any locked value is rejected before scoring.
 | Sampling | `temperature: 0`, `top_p: 1`, thinking off |
 | Execution profile id | `qwen3.8-27b-fp8-h200-sglang-strict-fixed32-schema-v2` |
 
-Launch flags are exactly those in the runbook’s `sglang.launch_server` block. The server is bound to localhost behind a narrow tunnel. Scoring has no browsing or retrieval tools.
+The locked profile is launched with the runbook block plus explicit flags for
+the three table values that its displayed command omitted:
+`--attention-backend triton`, `--linear-attn-backend triton`,
+`--disable-cuda-graph`, and `--disable-overlap-schedule`. This pre-output
+erratum makes the table authoritative and is recorded in the execution
+manifest. The server is bound to localhost behind a narrow tunnel. Scoring has
+no browsing or retrieval tools.
 
 Every inference request is content-addressed and records `request_sha256`. A schema-invalid scoring response fails its lane; there is no silent repair or prose-to-JSON recovery.
 
@@ -86,7 +92,7 @@ A failed padding request is an execution failure even though its output has no s
 
 ### 2.4 Two-host replay gate
 
-A primary H200 and replay H200 are rented from different providers/accounts. Each host completes two full runs.
+A primary H200 and replay H200 are rented through Vast.ai from distinct machine owners, with different `machine_id` and `host_id` values. This is the single-provider deviation declared in §6; it proves cross-machine replay, not cross-provider independence. Each host completes two full runs.
 
 For every occupied batch slot:
 

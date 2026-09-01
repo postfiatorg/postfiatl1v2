@@ -1,0 +1,9 @@
+{
+  "source": "OFAC sanctions programs and FATF public statements, operator-compiled benchmark snapshot",
+  "snapshot_date": "2026-09-01",
+  "note": "Benchmark input for the deterministic baseline's jurisdiction-table lookup (plan section 7). Not a legal finding.",
+  "comprehensive": ["IR", "KP", "SY", "CU"],
+  "elevated": ["RU", "BY", "VE", "MM", "AF"],
+  "censorship_high_pressure": ["RU", "BY", "CN", "IR", "KP", "CU", "MM", "AF", "SY"],
+  "censorship_moderate_pressure": ["AE", "SA", "VN", "TR", "EG"]
+}
