@@ -1,0 +1,106 @@
+{
+ "artifact": "reputation-h200-20260901 v3/v4 reasoning-profile determinism proof",
+ "cost_usd": {
+  "budget_cap": 150.0,
+  "method": "Vast credit delta 253.78 -> 176.46 across v2+v3+v4 including failed rentals",
+  "total": 77.32
+ },
+ "profiles": {
+  "v3": {
+   "determinism": "PASS 864/864 content and reasoning byte-identical, aggregate 39dcb093b7f70267c4ffd49db0c3996cd85d24516a7a6574f77978bc51b029ce",
+   "id": "qwen3.8-27b-fp8-h200-sglang-strict-fixed32-schema-v3-thinking",
+   "validity": "FAIL: 151/270 truncated at 4096-token cap (reasoning ~4k tokens/packet)"
+  },
+  "v4": {
+   "aggregate_sha256": "43f3ae5bfe21edd08124db4f02781e4af6cf927cbddf7e04b67eb87921f56636",
+   "anchor_window_misses": 46,
+   "auc": {
+    "baseline_composite": 0.75,
+    "baseline_prestige": 0.9642857142857143,
+    "model_prestige_lane": 0.9732142857142857
+   },
+   "determinism": "PASS 864/864 content and reasoning byte-identical across distinct-owner hosts x 2 runs",
+   "fabrication_prestige_scores": {
+    "aug-015": 5,
+    "aug-016": 5,
+    "aug-017": 0,
+    "aug-018": 5
+   },
+   "hosts": {
+    "primary": {
+     "host_id": 445596,
+     "instance": 49483696,
+     "machine_id": 131920
+    },
+    "replay": {
+     "host_id": 667715,
+     "instance": 49481961,
+     "machine_id": 148661
+    }
+   },
+   "id": "qwen3.8-27b-fp8-h200-sglang-strict-fixed32-schema-v4-thinking",
+   "invalid_count": 16,
+   "lane_validity": {
+    "censorship_resistance": 79,
+    "prestige": 90,
+    "sanctions_safety": 85
+   },
+   "monotonicity_raw": {
+    "Coinbase>Binance(S)": [
+     null,
+     35
+    ],
+    "ICRC>Sber>Garantex(S)": [
+     85,
+     0,
+     0
+    ],
+    "MIT>fabs": false,
+    "Reuters>VK(C)": [
+     45,
+     15
+    ],
+    "Tor>Yandex>VK(C)": [
+     95,
+     15,
+     15
+    ]
+   },
+   "obscure_operator_violation": {
+    "aug-009": 5,
+    "aug-010": 42,
+    "aug-011": 7,
+    "note": "rubric floors real-but-obscure at 25-30; model placed two of three in fabrication bands"
+   },
+   "runs": {
+    "primary-run1": {
+     "aggregate_sha256": "43f3ae5bfe21edd08124db4f02781e4af6cf927cbddf7e04b67eb87921f56636",
+     "gpu": "NVIDIA H200, 580.159.03, GPU-3a3490bd-35f7-fe9a-f6ea-71f2584295fe",
+     "wall_seconds": 4558.7
+    },
+    "primary-run2": {
+     "aggregate_sha256": "43f3ae5bfe21edd08124db4f02781e4af6cf927cbddf7e04b67eb87921f56636",
+     "gpu": "NVIDIA H200, 580.159.03, GPU-3a3490bd-35f7-fe9a-f6ea-71f2584295fe",
+     "wall_seconds": 4443.8
+    },
+    "replay-run1": {
+     "aggregate_sha256": "43f3ae5bfe21edd08124db4f02781e4af6cf927cbddf7e04b67eb87921f56636",
+     "gpu": "NVIDIA H200, 580.173.02, GPU-7cf87e70-9f9d-4ca2-fa45-49609b3e3427",
+     "wall_seconds": 5108.3
+    },
+    "replay-run2": {
+     "aggregate_sha256": "43f3ae5bfe21edd08124db4f02781e4af6cf927cbddf7e04b67eb87921f56636",
+     "gpu": "NVIDIA H200, 580.173.02, GPU-7cf87e70-9f9d-4ca2-fa45-49609b3e3427",
+     "wall_seconds": 5144.0
+    }
+   },
+   "weights_prior": {
+    "abstained": 98,
+    "classifications": 254,
+    "total_claims": 996
+   }
+  }
+ },
+ "shadow_only": true,
+ "verdict": "v4 achieves the first measured lift: prestige lane fully valid (90/90) with model AUC 0.9732 strictly above baseline 0.9643; all four fabrications scored into the 0-5 fabrication bands including the name-squat. Remaining failures: 16/270 truncations still break full lane validity for censorship_resistance (79/90) and sanctions_safety (85/90), and the obscurity-is-not-fabrication calibration rule is violated for two real obscure operators, which is the exact coverage-bias hazard pre-registered in plan section 3.2. Full pre-registered composite acceptance is therefore still not met."
+}

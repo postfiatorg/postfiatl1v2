@@ -32,7 +32,7 @@ def sha_s(s: str) -> str:
 def one(req: dict) -> dict:
     body = json.dumps(req["body"], sort_keys=True, separators=(",", ":")).encode()
     r = urllib.request.urlopen(urllib.request.Request(
-        URL, data=body, headers={"Content-Type": "application/json"}), timeout=600)
+        URL, data=body, headers={"Content-Type": "application/json"}), timeout=1800)
     resp = json.loads(r.read())
     ch = resp["choices"][0]
     content = ch["message"]["content"] or ""

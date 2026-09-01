@@ -45,6 +45,31 @@ Artifact: `benchmarks/ai-governance/reputation-h200-20260901/determinism-artifac
   were constructed by the session operator, who also holds the rubric and
   baseline; no independence claim is made.
 
+## v3/v4 reasoning-profile follow-ups (same day, new profiles)
+
+Two successor profiles were frozen and run after the v2 result, each
+pre-registered before its own output (`bf050466`, `c4073979`); artifact
+`benchmarks/ai-governance/reputation-h200-20260901/determinism-artifact-v4.json`.
+
+- **v3** (`…-schema-v3-thinking`): reasoning enabled, identity-verification
+  prompt rules, 4096-token cap. Determinism PASS (864/864, reasoning bytes
+  included; aggregate `39dcb093…`). Validity FAIL: reasoning traces cluster
+  at ~4k tokens, truncating 151/270 responses.
+- **v4** (`…-schema-v4-thinking`): 8192-token cap plus a concise-reasoning
+  line. Determinism PASS again (864/864 content and reasoning byte-identical
+  across distinct-owner hosts × two runs; aggregate `43f3ae5b…`).
+  **First measured lift:** prestige lane fully valid (90/90) with model AUC
+  **0.9732 > baseline 0.9643**, and all four fabrications scored 0–5 —
+  including the Coinbase name-squat at 0. Remaining failures, reported
+  honestly: 16/270 truncations still break lane validity for
+  censorship_resistance (79/90) and sanctions_safety (85/90), and the model
+  violated the obscurity≠fabrication floor by scoring two of the three real
+  obscure operators (Greenhost 5, OpenBSD Amsterdam 7) into fabrication
+  bands — the §3.2 coverage-bias hazard realized. Full pre-registered
+  composite acceptance is therefore still not met.
+- Cumulative cost v2+v3+v4 including failed rentals: **$77.32** of the $150
+  cap, by account credit delta.
+
 ## Interpretation
 
 Per plan §8, failing the lift criterion while the execution gates hold is a
