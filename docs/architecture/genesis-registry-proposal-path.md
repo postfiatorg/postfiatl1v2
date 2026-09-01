@@ -357,9 +357,12 @@ fixture must fail with a named error.
 2. **Implemented** (commit `83546dcb`) — Reference builder and verifier CLI:
    `python/postfiat_rpc/genesis_registry.py` with
    `python/tests/test_genesis_registry.py`; two-implementation hash agreement.
-3. Checker integration: run the pinned Cobalt checker against fixture
-   `G0`/`T0` pairs across `n_S` = 12–20, including every rejection case, in
-   `crates/consensus_cobalt` tests.
+3. **Implemented** (commit `Add Cobalt checker integration tests for the
+   genesis registry`, same commit as this annotation) — Checker integration:
+   the pinned Cobalt checker runs against fixture `G0`/`T0` pairs across
+   `n_S` = 12–20, including every rejection case, in
+   `crates/consensus_cobalt/tests/genesis_registry_checker.rs`. No adapter
+   was needed: the checker consumes the canonical types directly.
 4. Source admission: `new: crates/consensus_cobalt/src/dynamic_unl_source.rs`
    shared with the deferred milestone's E2, covering the Phase 3A threshold
    checks and named reason codes.
