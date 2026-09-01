@@ -350,13 +350,13 @@ fixture must fail with a named error.
 
 ## 8. Work sequence (for later implementation)
 
-1. Canonical types and fixtures: `new: crates/types/src/genesis_registry.rs`,
-   golden vectors plus one-field mutations under `new:
-   benchmarks/genesis-registry/fixtures/`, reusing archived rounds 12–19 as
-   build inputs.
-2. Reference builder and verifier CLI: `new:
-   python/postfiat_rpc/genesis_registry.py` with `new:
-   python/tests/test_genesis_registry.py`; two-implementation hash agreement.
+1. **Implemented** (commit `fa7e67ff`) — Canonical types and fixtures:
+   `crates/types/src/genesis_registry.rs`, golden vectors plus one-field
+   mutations under `benchmarks/genesis-registry/fixtures/`, reusing archived
+   rounds 12–19 as build inputs.
+2. **Implemented** (commit `83546dcb`) — Reference builder and verifier CLI:
+   `python/postfiat_rpc/genesis_registry.py` with
+   `python/tests/test_genesis_registry.py`; two-implementation hash agreement.
 3. Checker integration: run the pinned Cobalt checker against fixture
    `G0`/`T0` pairs across `n_S` = 12–20, including every rejection case, in
    `crates/consensus_cobalt` tests.
