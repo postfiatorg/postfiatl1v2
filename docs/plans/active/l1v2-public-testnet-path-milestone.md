@@ -60,7 +60,7 @@ operator population; l1v2 supplies the registry-as-protocol-state destination.
 ## D — Public-testnet eligibility gates
 
 - [x] D1 Inventory the non-storage release gates: `SECURITY.md`, `docs/release-process.md`, open security items (`docs/security/`): inventoried in [`docs/status/release-gate-inventory.md`](../../status/release-gate-inventory.md) (21 gates: 4 DONE, 16 OPEN, 1 UNKNOWN)
-- [ ] D2 Public operator runbook: join, key custody (ML-DSA), sidecar, monitoring (`docs/runbooks/`, fork operator docs as template)
+- [x] D2 Public operator runbook: join, key custody (ML-DSA), sidecar, monitoring (`docs/runbooks/`, fork operator docs as template): published [`docs/runbooks/public-operator-runbook.md`](../../runbooks/public-operator-runbook.md) (2026-09-01) — seven operator journeys, commands verified against the current tree; steps an outsider cannot yet perform carry boxed gap notes naming the blocking inventory rows (3 custody, 6–8/10 per-release, 17 launch authority, 18 ops readiness) and milestone items (C3/C4, Gate Zero)
 - [ ] D3 Topology/independence thresholds for launch, reusing the fork's strict-gate machinery (placement preflight, concentration caps)
 - [ ] D4 *(operator decision)* Public-testnet launch — explicitly outside this plan's authority
 

@@ -233,6 +233,7 @@ nav:
       - Public Launch Boundary: security/public-launch-boundary.md
       - Public History Publication: security/public-history-publication.md
   - Runbooks:
+      - Public Operator Runbook: runbooks/public-operator-runbook.md
       - Faucet Testnet Transactions: runbooks/faucet-testnet-transactions.md
       - Operator Day Two: runbooks/operator-day-two.md
       - Python RPC Client: runbooks/python-rpc-client.md

@@ -10,7 +10,7 @@
         > docs/status/testnet-path.md
     ```
 
-Generated at input commit `36a7848c` (2026-09-01), the newest commit touching the input documents at generation time.
+Generated at input commit `ce93fc45` (2026-09-01), the newest commit touching the input documents at generation time.
 
 Inputs: the [testnet-path milestone](../plans/active/l1v2-public-testnet-path-milestone.md),
 the [storage scaling milestone](../plans/active/storage-scaling-milestone.md) gate table,
@@ -62,7 +62,7 @@ No community-facing step may start until all three close.
 | Item | State | What it means |
 | --- | --- | --- |
 | D1 | DONE | Inventory the non-storage release gates: SECURITY.md, docs/release-process.md, open security items… |
-| D2 | OPEN | Public operator runbook: join, key custody (ML-DSA), sidecar, monitoring (docs/runbooks/, fork operator docs… |
+| D2 | DONE | Public operator runbook: join, key custody (ML-DSA), sidecar, monitoring (docs/runbooks/, fork operator docs… |
 | D3 | OPEN | Topology/independence thresholds for launch, reusing the fork's strict-gate machinery (placement preflight… |
 | D4 | OPEN | (operator decision) Public-testnet launch — explicitly outside this plan's authority |
 
