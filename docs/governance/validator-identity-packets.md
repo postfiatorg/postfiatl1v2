@@ -2,6 +2,9 @@
 
 **Status:** Full frozen corpus published — 2026-09-01
 
+Operational verification, review, correction, and publication procedures are in
+the [validator identity packet runbook](../runbooks/validator-identity-packets.md).
+
 ## Purpose
 
 Validator keys and claimed domains do not by themselves provide enough context

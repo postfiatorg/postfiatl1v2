@@ -6,6 +6,11 @@
 
 **Verification:** **PASS — 55/55**
 
+See the
+[operator runbook](../../../docs/runbooks/validator-identity-packets.md) for
+verification, profile review, reruns, successor corpora, publication, disputes,
+and the H200 handoff.
+
 This corpus contains one foundation-publishable Markdown public-identity packet
 and one complete Corbanu Terminal exec JSONL log for every validator in the
 frozen validator set:
