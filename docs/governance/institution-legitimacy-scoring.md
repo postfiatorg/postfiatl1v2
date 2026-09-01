@@ -4,43 +4,47 @@
 
 ## Purpose
 
-Score the legitimacy of the institution claimed by a provider. This is an AI
-judgment task, not a replacement for deterministic validator-performance
-metrics.
+Score the legitimacy and Layer-1 reputational value of the institution claimed
+by a validator provider. If the pinned model does not recognize the institution,
+the score is **0**. Do not replace this judgment with validator-performance
+formulas.
 
-The rule is deliberately simple:
+## Runtime boundary
 
-- ask `qwen/qwen3.8-27b` whether it recognizes the institution;
-- request a 0–100 legitimacy score with a two-to-three-paragraph explanation;
-- if the model does not recognize the institution, the score is **0**; and
-- do not give an unrecognized institution weight merely because it may exist.
+Production and replay inference uses the pinned, self-hosted
+`Qwen/Qwen3.8-27B-FP8` revision through a loopback-only SGLang server. It does
+not call OpenRouter or any other external inference API. Consensus never makes
+a network inference call: a score run produces a frozen, content-addressed
+`SHADOW_ONLY` artifact for review and later ratification.
 
-The exact prompt is:
+The OpenRouter call made on 2026-09-01 was only the operator-requested two-name
+sanity check. It is not part of the runtime design.
 
-```text
-Score how legitimate ENTITY <{entity}> is. Write 2-3 paragraphs justifying your explanation and give a score from 0-100. If you do not recognize the institution, the score is 0.
-```
-
-Run it through OpenRouter:
+The direct CLI is `python/postfiat_rpc/institution_reputation.py`. It refuses
+non-loopback endpoints:
 
 ```bash
-OPENROUTER_API_KEY="$(corbanu vault auth-helper YOUR_OPENROUTER_LABEL)" \
-  PYTHONPATH=python python3 -m postfiat_rpc.institution_reputation \
+PYTHONPATH=python python3 -m postfiat_rpc.institution_reputation \
   "University of Waterloo" "University of Zuzaluca"
 ```
 
-The CLI is `python/postfiat_rpc/institution_reputation.py`. It sends the exact
-prompt to the exact model at temperature zero and prints the model response
-without applying a formula or rewriting the score.
+The [two-UNL H200 results](institution-reputation-unl-h200-results-20260901.md)
+record the complete 5-point rubric, frozen inputs, four raw replay outputs, and
+per-validator scores. The complete artifact lives under
+`benchmarks/ai-governance/institution-reputation-unl-20260901/`.
 
-## Scope correction
+## Scoring rule
 
-The H200 experiment remains a historical experiment. Its censorship,
-sanctions, validator-performance, deterministic-sub-scorer, UNL-overlap, and
-"obscure real operator" rules do not define this institution-legitimacy score.
-In particular, the prior rule that an obscure real organization should receive
-a positive floor is superseded for this score: **unrecognized means zero**.
+The institution name or declared domain is submitted to the pinned model. The
+prompt requires:
 
-Domain ownership and comparison with an operator-supplied authoritative domain
-list are separate identity checks. Passing those checks does not force a
-positive legitimacy score, and this model score does not prove domain control.
+- genuine model recognition before any positive score;
+- exactly 0 for missing or unrecognized institutions;
+- explicit consideration of sanctions and integrity risk;
+- institutional prestige; and
+- positive or negative reputational value to a Layer-1 blockchain.
+
+The H200 package defines every 5-point band from 0–4 through 95–100. Domain
+ownership and matching against an operator-supplied authoritative list remain
+separate identity checks. A domain match does not force a positive reputation
+score, and the model score does not prove domain control.
