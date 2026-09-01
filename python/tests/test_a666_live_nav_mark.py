@@ -50,6 +50,8 @@ def test_primary_market_reserve_is_scaled_and_bound() -> None:
             "route_config_digest": "12" * 48,
             "settlement_asset_id": "02" * 48,
             "settlement_reserve_atoms": 204_000_000,
+            "reported_settlement_reserve_atoms": 204_000_000,
+            "excluded_unbacked_reserve_atoms": 0,
             "value_nav_units": 20_400_000_000,
             "active_bucket_backing_atoms": 205_036_000,
             "live_value_enabled": True,
@@ -58,9 +60,14 @@ def test_primary_market_reserve_is_scaled_and_bound() -> None:
     ]
 
 
-def test_primary_market_reserve_cannot_exceed_vault_backing() -> None:
-    with pytest.raises(RuntimeError, match="exceeds proof-backed vault backing"):
-        MODULE.build_overlay(route_status(204_000_001), vault_status(204_000_000))
+def test_primary_market_reserve_excludes_unbacked_amount() -> None:
+    value, _, report = MODULE.build_overlay(
+        route_status(204_000_001), vault_status(204_000_000)
+    )
+    assert value == 20_400_000_000
+    assert report["primary_market_rows"][0]["settlement_reserve_atoms"] == 204_000_000
+    assert report["primary_market_rows"][0]["reported_settlement_reserve_atoms"] == 204_000_001
+    assert report["primary_market_rows"][0]["excluded_unbacked_reserve_atoms"] == 1
 
 
 def test_packet_epoch_may_skip_shadow_only_epochs() -> None:

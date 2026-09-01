@@ -958,9 +958,8 @@ pub(crate) fn fuzz_external_input(data: &[u8]) {
 mod tests {
     use super::*;
 
-    const HISTORICAL_WITNESS: &str = include_str!(
-        "../../../../../docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/near-receipt-witness.json"
-    );
+    const HISTORICAL_WITNESS: &str =
+        include_str!("../../../../../benchmarks/nav-reserve-proof-historical/near-receipt-witness.json");
 
     #[test]
     fn historical_head_and_light_proof_reconstruct() {

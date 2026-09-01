@@ -875,8 +875,8 @@ mod tests {
             &std::fs::read(manifest_dir.join("portfolio-valuation-policy.json")).unwrap(),
         )
         .unwrap();
-        let evidence_root =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../docs/evidence");
+        let historical_fixture_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../benchmarks/nav-reserve-proof-historical");
         let historical_aave: serde_json::Value = serde_json::from_slice(
             &std::fs::read(
                 manifest_dir
@@ -886,10 +886,7 @@ mod tests {
         )
         .unwrap();
         let historical_spot: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(evidence_root.join(
-                "a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/evm-spot-witness.json",
-            ))
-            .unwrap(),
+            &std::fs::read(historical_fixture_root.join("evm-spot-witness.json")).unwrap(),
         )
         .unwrap();
 

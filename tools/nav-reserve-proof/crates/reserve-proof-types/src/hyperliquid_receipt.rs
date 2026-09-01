@@ -1198,9 +1198,7 @@ mod tests {
         ml_dsa_65_keygen_from_seed, ml_dsa_65_sign_with_context_seed, MlDsa65KeyPair,
     };
 
-    const HISTORICAL_WITNESS: &str = include_str!(
-        "../../../../../docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/hl-receipt-witness.json"
-    );
+    const HISTORICAL_WITNESS: &str = include_str!("../../../../../benchmarks/nav-reserve-proof-historical/hl-receipt-witness.json");
 
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]

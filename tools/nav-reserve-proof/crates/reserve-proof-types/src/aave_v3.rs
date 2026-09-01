@@ -1336,11 +1336,7 @@ mod tests {
         ml_dsa_65_keygen_from_seed, ml_dsa_65_sign_with_context_seed, MlDsa65KeyPair,
     };
 
-    const HISTORICAL_WITNESS: &str = include_str!(concat!(
-        "../../../../../docs/evidence/a666-variable-size-nav-roundtrip-20260728/",
-        "stake",
-        "hub-nav-mark/proof/aave-witness.json"
-    ));
+    const HISTORICAL_WITNESS: &str = include_str!("../../../../../benchmarks/nav-reserve-proof-historical/aave-witness.json");
 
     #[derive(Deserialize)]
     struct HistoricalWitness {

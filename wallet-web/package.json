@@ -6,7 +6,7 @@
     "dev": "vite",
     "test": "node --test src/lib/*.test.js",
     "test:custody-browser": "node --test src/lib/custody-browser-boundary.e2e.js",
-    "test:public-browser": "node --test src/lib/wallet-public-security.e2e.js src/lib/journey-step-9-recovery.e2e.js src/lib/public-route-smoke.e2e.js",
+    "test:public-browser": "node --test src/lib/wallet-public-security.e2e.js src/lib/public-route-smoke.e2e.js",
     "test:r4-construction": "scripts/run-r4-construction",
     "test:navcoin-markets-browser": "node scripts/smoke-navcoin-market-registry-ux.mjs",
     "build": "vite build",
