@@ -15,6 +15,7 @@ exclude_docs: |
   status/**
   !status/chain-state-current.md
   !status/testnet-path.md
+  !status/release-gate-inventory.md
   !status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md
   ai-handoff.md
   cut.md
@@ -89,6 +90,7 @@ nav:
   - Home: index.md
   - Current State: status/chain-state-current.md
   - Testnet Path: status/testnet-path.md
+  - Release Gate Inventory: status/release-gate-inventory.md
   - Whitepaper: whitepaper.md
   - NAVCoins:
       - Overview: navcoins/index.md
