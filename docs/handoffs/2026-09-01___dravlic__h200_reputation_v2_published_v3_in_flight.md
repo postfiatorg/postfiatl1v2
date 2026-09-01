@@ -96,3 +96,88 @@ accepted SSH). The Vast API key is in the vault under label `vast`.
 - [Run plan](../governance/reputation-scoring-h200-run-plan.md)
 - [Prior session handoff](2026-08-31___dravlic__bug_fixes_and_pending_decisions.md)
 - [Pending operator decisions](../governance/pending-operator-decisions.md) — still unanswered
+
+## End of session (Domagoj, 2026-09-01)
+
+The sections above were written by the operator's overnight agent session
+under this operator name; this section is the human-directed day session.
+
+### Delivered today
+
+- **Vast housekeeping** — idle A100 `49076806`
+  (`arc-grant-demo-archive-prover`) STOPPED at 07:20Z after ~78 h idle
+  (≈$108 burned); disk kept, billing now storage-only; destroy or restart
+  is the operator's call.
+- **Testnet-path status CLI + generated page** — `69667346`, `fdc679c5`;
+  `python -m postfiat_rpc.testnet_path` →
+  [docs/status/testnet-path.md](../status/testnet-path.md).
+- **D1 release-gate inventory** — `36a7848c`;
+  [docs/status/release-gate-inventory.md](../status/release-gate-inventory.md)
+  — 21 gates, 4 DONE / 16 OPEN / 1 UNKNOWN.
+- **C2 deterministic sub-scorer shadow evaluation** — v1 `a1161ff9`,
+  `0d152b09`, `e5f46fa1`, `ce93fc45`; v2 `63286b35`, `4dbcdd78`;
+  [note](../governance/dunl-subscorer-shadow-eval-20260901.md). v2
+  headline: one cutoff flip across rounds 12–19, UNL overlap 19–20/20,
+  internal control reproduced all eight published UNLs.
+- **D2 public operator runbook** — `fcbf99c1`;
+  [docs/runbooks/public-operator-runbook.md](../runbooks/public-operator-runbook.md),
+  seven journeys, seven boxed gap notes.
+- **C3 genesis-registry proposal path design** — `9dba8682`;
+  [docs/architecture/genesis-registry-proposal-path.md](../architecture/genesis-registry-proposal-path.md),
+  TIH 88.93.
+- **Pending-decisions sheet** — `3a2256d5` adds the model-authority
+  (Gate Zero Z2) row citing both evidence sets neutrally
+  ([sheet](../governance/pending-operator-decisions.md)).
+- **Evidence-tooling hardening** — `faebbe16`, `d9378c79`, `97f7c41e` —
+  five confirmed silent-wrong-answer defects fixed with
+  executed-failing-case proof; recomputed evidence byte-identical; guard
+  tests now run under every interpreter (38 tests, 0 skipped).
+- **Genesis-registry work-sequence steps 1–2** — `fa7e67ff`, `83546dcb`,
+  `6290175f` — canonical Rust types + 8 golden vectors + 25 mutation
+  fixtures; independent Python builder/verifier; two-implementation hash
+  agreement on all eight rounds.
+- **D3 launch topology thresholds proposal** — `02f9c17b`;
+  [docs/architecture/launch-topology-thresholds.md](../architecture/launch-topology-thresholds.md)
+  — all five dimensions with concrete numbers, explicitly awaiting the
+  operator's confirmation.
+- **Genesis-registry work-sequence step 3** — `9135649c` — Cobalt checker
+  integration tests
+  (`crates/consensus_cobalt/tests/genesis_registry_checker.rs`): 8 golden
+  pairs accepted, full n_S = 12–20 range, all 25 mutation fixtures
+  rejected with named errors, plus hash-mismatch/threshold/tamper
+  rejection cases; one pinned finding — the template's t_S is
+  liveness-degraded at some sizes under full linkage.
+- **D3 placement preflight tool** — `be16121a` —
+  `python/postfiat_rpc/placement_preflight.py` + tests; PASS/FAIL per
+  threshold dimension with `--strict` and fail-closed missing-field
+  behavior; the thresholds document's placement-preflight marker updated
+  (independence verifier stays `new:`).
+
+### Boundaries
+
+No Task Node action; devnet not queried or mutated; the operator's
+campaign workspace `postfiatl1v2-dravlic` untouched (its uncommitted
+`run_host_v3.py` patch left as found); fork clones read-only; all work
+from the `postfiatl1v2-e1` worktree pushed via `HEAD:main`; the only Vast
+write action was the single agreed stop call.
+
+### Decisions for the operator
+
+1. Answer the
+   [pending-decisions sheet](../governance/pending-operator-decisions.md)
+   — now including the model-authority row with both evidence sets.
+2. Confirm or adjust the
+   [D3 launch thresholds](../architecture/launch-topology-thresholds.md).
+3. Name the two data inputs (height-915 archive, height-924 custodian).
+4. Destroy or restart the stopped A100.
+5. Operator-naming collision: overnight agent sessions filing handoffs
+   under the `dravlic` slot collide with the one-file-per-operator
+   convention — propose a distinct operator name for that agent.
+
+### References
+
+- [Pending operator decisions](../governance/pending-operator-decisions.md)
+- [Sub-scorer shadow-eval note](../governance/dunl-subscorer-shadow-eval-20260901.md)
+- [Launch topology thresholds proposal](../architecture/launch-topology-thresholds.md)
+- [Genesis-registry proposal path design](../architecture/genesis-registry-proposal-path.md)
+- [Testnet-path status page](../status/testnet-path.md)
