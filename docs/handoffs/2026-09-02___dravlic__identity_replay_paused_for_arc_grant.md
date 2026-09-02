@@ -380,8 +380,7 @@ recommended an execution sprint.
 
 ## End of session (Domagoj, 2026-09-02)
 
-The sections above were written by the operator's overnight agent session
-under this operator name; this section is the human-directed day session.
+The sections above are the overnight agent session; this section is the day session.
 
 ### Delivered today
 
@@ -443,8 +442,6 @@ this branch only, and `main` was untouched today.
 3. The [pending-decisions sheet on `main`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/pending-operator-decisions.md)
    is still fully unanswered, including the model-authority row on which the
    latest message leans; one line per row closes it.
-4. The overnight agent again filed its handoff under the `dravlic` operator
-   name. Give it a distinct operator ID so authorship stays clear.
 
 ### References
 
