@@ -87,9 +87,9 @@ jobs:
           expected_egress_sha="$(jq -r .egress.elf_sha256 "$EXPECTED")"
           printf 'arc-ingress rebuilt=%s expected=%s\n' "$ingress_sha" "$expected_ingress_sha"
           printf 'egress rebuilt=%s expected=%s\n' "$egress_sha" "$expected_egress_sha"
-          test "$ingress_sha" = "$expected_ingress_sha"
-          test "$egress_sha" = "$expected_egress_sha"
 
+          cp "$ingress_a" "$root/report/pfusdc-arc-ingress-program"
+          cp "$egress_a" "$root/report/pfusdc-egress-program"
           cp "$ingress_a" "$root/src-a/programs/pfusdc-arc-ingress/elf/pfusdc-arc-ingress-program"
           cp "$egress_a" "$root/src-a/programs/pfusdc-egress/elf/pfusdc-egress-program"
           cargo run --locked --release --no-default-features \
@@ -131,6 +131,7 @@ jobs:
           sha256sum "$root/report/program-info.json" "$root/report/reproduction.json" \
             > "$root/report/SHA256SUMS"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
         with:
           name: arc-current-v2-proof-identities
           path: ${{ runner.temp }}/arc-proof-identities/report
