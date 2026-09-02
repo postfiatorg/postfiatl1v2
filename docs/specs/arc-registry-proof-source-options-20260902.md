@@ -219,8 +219,63 @@ may already be in progress. At that rate, continuous compute is approximately
 This research did not touch, probe, or connect to the instance, so its software,
 sync height, retention profile, proof window, and health are unknown.
 
-**Disposition:** recommended primary path because capacity may already be
-running, subject to a full exact-block P7 qualification before any deposit.
+#### Qualification check — 2026-09-02
+
+Read-only observation interval: `2026-09-02T11:30:36Z` through
+`2026-09-02T11:32:14Z`. Vast API `GET /api/v0/instances/` returned exactly one
+matching instance: ID `49602886`, label `arc-archive-proof-20260902`, with both
+actual and intended Vast state `running`. That state describes the rented
+container, not an Arc service. SSH succeeded with the account's existing key;
+no key, package, process, service, configuration, or instance state was changed.
+
+The container was half-provisioned at observation time. PID 1 was Vast's
+`/.launch` wrapper. The only persistent processes were that wrapper, `sshd`, and
+Vast's reverse SSH tunnel. Docker had no daemon socket, systemd was not the init
+system, `ss -lntp` showed only port 22, and no Arc execution or consensus process
+was running. Installed binaries were `arc-node-execution`,
+`arc-node-consensus`, and `arc-snapshots`, all reporting Arc Testnet v0.8.0;
+there was no standalone `reth` binary on `PATH`. The execution binary is Arc's
+Reth-based client, but an installed binary is not a running or qualified node.
+
+The 1,000 GiB root overlay reported 742 GiB used and 259 GiB available (75%).
+`/workspace` accounted for 741 GiB and contained Arc-related directories, but
+the stop-on-half-provisioned rule precluded treating any one directory as the
+active EL/CL data directory. With no running command line, config, or local RPC,
+the archive profile, `--rpc.eth-proof-window`, oldest served block, and local
+sync height were not established. At `2026-09-02T11:32:11Z`, Arc's public RPC
+reported chain ID `0x4cef52` and head `0x394e113` (`60,088,595`). A local height,
+blocks remaining, observed sync rate, and ETA therefore cannot be computed.
+
+The exact support probe was sent to the loopback address on TCP port 8545 from
+inside the instance:
+
+```json
+{"jsonrpc":"2.0","id":1186,"method":"eth_getProof","params":["0x3600000000000000000000000000000000000002",["0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc"],"0x389fcfc"]}
+```
+
+There was no JSON-RPC response. The verbatim client result was:
+
+```text
+curl: (7) Failed to connect to 127.0.0.1 port 8545 after 0 ms: Couldn't connect to server
+RPC_CURL_EXIT=7
+```
+
+**Verdict: NOT SUITABLE — the Vast container is running, but no Arc node or
+local RPC is running, so archive retention, sync, and historical
+`eth_getProof` support are unqualified.**
+
+Full qualification still requires a separately authorized operator action to
+bring the intended EL and CL processes into a stable running state without
+mixing snapshot profiles. A later read-only qualification must then record the
+active archive-profile flags and proof window; attribute EL/CL data size and
+headroom; measure local catch-up against the public head over a timed interval;
+and pass the complete `2 + 5N` P7 request, derived implementation-account proof,
+native verification against the exact header `stateRoot`, and wrong-root/slot
+negatives. None of those gates passed in this check.
+
+**Disposition:** this remains the recommended primary architecture, but the
+current instance is `NOT SUITABLE` and MUST NOT be used until separately
+authorized remediation and a full exact-block P7 qualification succeed.
 
 ### Option 3 — Narrow proof-generation/capture path
 
