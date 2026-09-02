@@ -194,16 +194,33 @@ Before any live transaction, freeze:
 | Test identities | public addresses only |
 | Input amount | exactly 1,000,000 atoms |
 
-The final current-v2 Arc ingress identity expected from the existing candidate
-is:
+The earlier checked current-v2 Arc ingress candidate was:
 
 - ELF SHA-256
   `830634e6bf67333315bda7874ed1155dfc45c7e3b1ebc5e97a1fd34f9af7f130`;
 - vkey
   `0x00d8e761fd2e0034388813ad8febd38beb3b271a83575a05834168450ea814c5`.
 
-These values are candidates until rebuilt from the frozen qualification commit.
-A mismatch stops the run and requires all route/proof bindings to be regenerated.
+The clean Docker qualification rebuild stop condition fired: two independent
+builds agreed byte-for-byte with each other but not with that earlier
+candidate. The earlier candidate is rejected. The accepted reproducible
+current-v2 identities are:
+
+- Arc ingress ELF SHA-256
+  `7660fcc58677cfec433a5f2337b9fe46fa96374a1e3c4bd6fba625b982d881bc`;
+- Arc ingress vkey
+  `0x0050a8b0daed2fa75f44d4102b42204c34668a03d311cb727cc6ca3f8df5cf16`;
+- PFTL egress ELF SHA-256
+  `8b0f266a035a432ef3c0e4233672d8a15b913cefd4c85ff07f91f008601bb744`;
+  and
+- PFTL egress vkey
+  `0x0036cbe7d36bbfe1118a3c544eeba74f3791d2a19bf5ec59b972f72d36416852`.
+
+The manifest and reproduction provenance live in
+`docs/evidence/arc-mvp-20260828/program-info.current-v2-docker-20260902.json`
+and
+`docs/evidence/arc-mvp-20260828/program-reproduction.current-v2-docker-20260902.json`.
+Every route, proof, and deployment binding MUST use these accepted identities.
 
 ## 5. Phase A — Current-source qualification
 

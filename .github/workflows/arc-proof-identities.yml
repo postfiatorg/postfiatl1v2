@@ -34,7 +34,7 @@ jobs:
           cargo prove --version | grep -F 'cargo-prove sp1'
       - name: Build both guests twice from clean source trees
         env:
-          EXPECTED: docs/evidence/arc-mvp-20260828/program-info.candidate-e8b243cc.json
+          EXPECTED: docs/evidence/arc-mvp-20260828/program-info.current-v2-docker-20260902.json
           SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
