@@ -110,7 +110,7 @@
 
 <div class="strip" role="list" aria-label="Round-trip summary">
   <div role="listitem"><div class="k">Deposited on Arc</div><div class="v num">1,000,000<small>atoms · 1.000000 USDC</small></div></div>
-  <div role="listitem"><div class="k">Minted on PFTL</div><div class="v num">1,000,000<small>atoms, exact</small></div></div>
+  <div role="listitem"><div class="k">Minted, burned, released</div><div class="v num">1,000,000<small>atoms, exact each way</small></div></div>
   <div role="listitem"><div class="k">Corrupted witnesses rejected</div><div class="v num">12 + 20<small>ingress + egress</small></div></div>
   <div role="listitem"><div class="k">Committees / multisigs</div><div class="v num">0<small>pause only</small></div></div>
 </div>
@@ -221,16 +221,28 @@
       </ul>
     </article>
 
-    <article class="hop pending" id="hop-egress-proof">
-      <div class="where">Prover · A100 · SP1 v6.1.0</div>
-      <h3>Prove PostFiat finality of the burn (ML-DSA in-circuit) <span class="badge pending">in progress</span></h3>
-      <p>The <code>pfusdc-egress</code> guest verifies every ML-DSA-65 certificate in the ancestry, the burn's inclusion, and the withdrawal packet, and commits the recipient, amount, withdrawal and burn commitments, and packet digest as public values. Program vkey <span class="hash">0x0036cbe7d36bbfe1118a3c544eeba74f3791d2a19bf5ec59b972f72d36416852</span> — the identity pinned immutably in the deployed Arc verifier.</p>
+    <article class="hop" id="hop-egress-proof">
+      <div class="where">Prover · NVIDIA A100 40 GB · SP1 v6.1.0</div>
+      <h3>Prove PostFiat finality of the burn (ML-DSA in-circuit) <span class="badge ok">verified locally</span></h3>
+      <p>The <code>pfusdc-egress</code> guest verifies every ML-DSA-65 certificate in the 16-block ancestry, the burn's inclusion, and the withdrawal packet, and commits the recipient, amount, withdrawal and burn commitments, and packet digest as public values.</p>
+      <dl class="facts">
+        <dt>program vkey</dt><dd class="hash">0x0036cbe7d36bbfe1118a3c544eeba74f3791d2a19bf5ec59b972f72d36416852 — the identity pinned immutably in the deployed Arc verifier</dd>
+        <dt>guest execution</dt><dd class="num">271,252,755 cycles (post-quantum signature checks dominate) · 8.8 s</dd>
+        <dt>proof</dt><dd class="num">356 bytes calldata · 1,486 bytes public values · Groth16 over BN254</dd>
+        <dt>time</dt><dd class="num">core proof ≈ 70 s on GPU; 9.2 min wall including the one-time circuit download</dd>
+      </dl>
     </article>
 
-    <article class="hop arc pending" id="hop-withdraw">
-      <div class="where">Arc testnet · vault 0x160307f3…</div>
-      <h3>Release exactly 1,000,000 USDC against the proof <span class="badge pending">in progress</span></h3>
-      <p><code>withdrawWithProof(publicValues, proof)</code>: the finality verifier at <span class="hash">0x1D436908516D15E3c55A936899B47a885e047F27</span> verifies the Groth16 proof through the SP1 v6.1.0 gateway, checks the checkpoint lineage from height 931, and consumes the withdrawal-id and burn-tx nullifiers; the vault then transfers the amount to the recipient encoded in the proof and asserts both balance deltas exactly. A second submission must revert with <code>WithdrawalAlreadyConsumed</code>.</p>
+    <article class="hop arc" id="hop-withdraw">
+      <div class="where">Arc testnet · block 60,170,160</div>
+      <h3>Release exactly 1,000,000 USDC against the proof <span class="badge ok">status 1 · replay reverts</span></h3>
+      <p><code>withdrawWithProof(publicValues, proof)</code>: the finality verifier at <span class="hash">0x1D436908516D15E3c55A936899B47a885e047F27</span> verified the Groth16 proof through the SP1 v6.1.0 gateway, checked the checkpoint lineage from height 931, and consumed the proof nullifier, withdrawal-id and burn-tx commitments; the vault transferred the amount to the recipient encoded in the proof and asserted both balance deltas exactly. Re-submitting the same proof reverts with <code>ProofAlreadyConsumed(nullifier)</code> (selector 0xfab54c75).</p>
+      <dl class="facts">
+        <dt>tx</dt><dd class="hash">0x86036658acab859dc1ab8200140a33ddadfac603ca402fb041e504a28e77a207</dd>
+        <dt>vault balance</dt><dd class="num">2,000,000 → 1,000,000 atoms (Δ = −1,000,000 exactly; the remaining 1,000,000 is an earlier unrelated deposit)</dd>
+        <dt>recipient</dt><dd class="num">0x0995876e… received 1,000,000 atoms; gas 517,762 paid in USDC</dd>
+        <dt>events</dt><dd class="hash">ProofNativeWithdrawal 0x8955c895… on the vault; verifier checkpoint advance and nullifier events; two ERC-20 Transfer logs</dd>
+      </dl>
     </article>
 
   </div>
