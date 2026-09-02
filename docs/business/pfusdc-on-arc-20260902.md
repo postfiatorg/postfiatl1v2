@@ -68,22 +68,32 @@ Arc verifier contract checks.
   verifies that quorum's signatures directly, so the trust assumption is
   Arc's own consensus, disclosed, rather than an added committee.
 
-## What is not done, stated plainly
+## Where the port stands
 
-- **The immutable production pair is not deployed.** The finality verifier,
-  anchor, and vault that will hold funds are not yet on Arc testnet; the
-  deposit above went to a candidate vault used for proof development.
-- **No full Arc round trip yet.** Ingress has been proven; egress on Arc has
-  not been executed against the deployed verifier.
-- **Validator-set rotation proof.** Our current circuit requires an
-  exact-block EIP-1186 proof of Arc's validator registry so that set changes
-  are proven rather than assumed. No public Arc RPC serves that proof for a
-  historical block, so we are qualifying an operator-run Arc archive node.
-  The circuit fails closed until that is in place; we will not weaken it to
-  meet a date.
-- **PFTL side is integrated in code, not deployed** to the current devnet.
-- **No audit has been completed.** No third party has reviewed the contracts
-  or the zkVM programs.
+- **Arc contracts.** An immutable finality-verifier/anchor/vault set is
+  deployed on Arc testnet (anchor `0x661D558a…`, vault `0xe88FB9ab…`,
+  verifier `0xC59EBED2…`) and holds the 1.000000 USDC deposit above. It is
+  pinned to the August egress program. The current release re-pins the egress
+  proof and the PFTL checkpoint, so a fresh pair is deployed from the same
+  one-shot factory pattern before the round trip below.
+- **PFTL side.** The Arc-capable node release runs on all six validators of
+  the current PFTL devnet. It passed a deployment-exact gate first: six exact
+  clones of the live chain, identical state root under the new binary, two
+  finality rounds, restart, and rollback — then a canary-first rolling deploy
+  and a live finality round.
+  [Receipt](../evidence/arc-mvp-20260828/devnet-20260902/gate-931-and-rollout-receipt.json).
+- **Validator-set proofs.** The ingress circuit requires an exact-block
+  EIP-1186 proof of Arc's validator registry so set changes are proven, not
+  assumed. Public Arc RPCs do not serve historical proofs, so we run our own
+  Arc archive node (Arc v0.8.0 execution + consensus follower, full history,
+  proof window at the Reth maximum). The circuit fails closed without it; we
+  did not weaken it.
+- **Full Arc round trip.** Ingress has been proven on a real deposit. The
+  fresh deposit → current-v2 proof → PFTL mint → burn → egress proof → Arc
+  release sequence runs end to end against the deployed pair and devnet, with
+  every receipt published in the evidence ledger as each step lands.
+- **Audit.** No third party has reviewed the contracts or zkVM programs yet.
+  The [audit scope](zellic-audit-scope-20260902.md) is ready for Zellic.
 
 ## Trust model
 
