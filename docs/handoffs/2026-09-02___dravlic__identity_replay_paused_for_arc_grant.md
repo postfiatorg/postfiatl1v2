@@ -413,7 +413,7 @@ The sections above are the overnight agent session; this section is the day sess
   endorsement is claimed anywhere.
 - **Archive-instance qualification — read-only:**
   [`75c28d72`](https://github.com/postfiatorg/postfiatl1v2/commit/75c28d72b6af22b73db8a9a3f9ceef950f0874d1)
-  recorded the [exact probe](../specs/arc-registry-proof-source-options-20260902.md#qualification-check--2026-09-02).
+  recorded the [exact probe](../specs/arc-registry-proof-source-options-20260902.md#qualification-check-2026-09-02).
   Instance `49602886` has Arc's Reth-based client installed but no node process
   started: `NOT SUITABLE` until provisioned, while billing about $0.28/hour for
   idle compute.
