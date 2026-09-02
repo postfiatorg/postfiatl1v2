@@ -1,0 +1,6 @@
+{
+  "profile": "/home/postfiatchad/.postfiat/deployments/arc-current-v2-a699d560/arc/route-profile.v2.json",
+  "profile_hash": "f7ce6d3cce3bd058a218db6bd829b01be13c576a2270aed362052d12654fc7a911a8423ee2d961ca45dbf72c08df6ae2",
+  "route_binding": "d9e0cd409c5d1e118d65c78ee059adcbba937616353e9675e350d52ee8d498b2",
+  "schema": "postfiat.pfusdc.route_profile_info.v1"
+}

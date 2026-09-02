@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pfUSDC on Arc — proof-verified round trip, 2026-09-02</title>
+<meta name="description" content="Technical review packet: a USDC deposit on Arc testnet, proven into the PostFiat L1 with a zero-knowledge proof of Arc finality, burned, and released back on Arc against a proof of PostFiat finality. Every hop pinned to its hash.">
+<style>
+  :root{
+    --bg:#0b0d10; --surface:#12151a; --surface-2:#171b21; --line:#262c35; --line-strong:#3a424d;
+    --text:#e6e9ee; --muted:#9aa4b2; --faint:#6b7480;
+    --accent:#7ee2c1; --accent-ink:#0b0d10; --warn:#f2c14e; --danger:#ff7a7a; --ok:#7ee2c1; --arc:#8ab4ff; --pftl:#c9a0ff;
+    --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    --radius:4px;
+  }
+  *{box-sizing:border-box}
+  html{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.55;-webkit-font-smoothing:antialiased}
+  body{margin:0;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:48px 48px;background-position:-1px -1px}
+  body::before{content:"";position:fixed;inset:0;background:radial-gradient(1200px 600px at 20% -10%,rgba(126,226,193,.10),transparent 60%),radial-gradient(900px 500px at 100% 0%,rgba(138,180,255,.08),transparent 60%);pointer-events:none}
+  a{color:var(--accent)} a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  .wrap{position:relative;max-width:1080px;margin:0 auto;padding:40px 24px 96px}
+  header.masthead{display:grid;grid-template-columns:1fr auto;gap:24px;align-items:end;border-bottom:1px solid var(--line-strong);padding-bottom:28px;margin-bottom:40px}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}
+  h1{font-size:clamp(28px,4.4vw,44px);line-height:1.08;letter-spacing:-.02em;margin:0 0 14px;font-weight:650}
+  .lede{font-size:18px;color:var(--muted);max-width:62ch;margin:0}
+  .stamp{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right;line-height:1.7}
+  .stamp b{color:var(--text);font-weight:600}
+  .notice{border:1px solid var(--line-strong);border-left:3px solid var(--warn);background:var(--surface);padding:14px 18px;border-radius:var(--radius);font-size:14px;color:var(--muted);margin:0 0 40px}
+  .notice strong{color:var(--text)}
+  section{margin:0 0 56px}
+  h2{font-size:13px;font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 18px;display:flex;align-items:center;gap:14px}
+  h2::after{content:"";flex:1;height:1px;background:var(--line-strong)}
+  h2 .n{color:var(--accent)}
+  p{margin:0 0 14px;max-width:72ch}
+  code,.mono{font-family:var(--mono);font-size:.92em}
+  code{background:var(--surface-2);border:1px solid var(--line);padding:1px 6px;border-radius:3px;color:var(--text)}
+  .hash{font-family:var(--mono);font-variant-numeric:tabular-nums;word-break:break-all;color:var(--text)}
+  .num{font-variant-numeric:tabular-nums}
+  /* summary strip */
+  .strip{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line-strong);border:1px solid var(--line-strong);border-radius:var(--radius);overflow:hidden;margin-bottom:40px}
+  .strip div{background:var(--surface);padding:16px 18px}
+  .strip .k{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+  .strip .v{font-size:22px;font-weight:650;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+  .strip .v small{font-size:13px;color:var(--muted);font-weight:500;margin-left:6px}
+  /* ledger rail */
+  .rail{position:relative;margin-left:8px;padding-left:36px;border-left:2px solid var(--line-strong)}
+  .hop{position:relative;padding:0 0 30px}
+  .hop::before{content:"";position:absolute;left:-45px;top:6px;width:14px;height:14px;border-radius:50%;background:var(--bg);border:2px solid var(--accent)}
+  .hop.arc::before{border-color:var(--arc)} .hop.pftl::before{border-color:var(--pftl)} .hop.pending::before{border-style:dashed;border-color:var(--faint)}
+  .hop .where{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:4px}
+  .hop.arc .where{color:var(--arc)} .hop.pftl .where{color:var(--pftl)}
+  .hop h3{font-size:19px;margin:0 0 8px;font-weight:620;letter-spacing:-.01em}
+  .hop p{color:var(--muted);font-size:15px}
+  .facts{display:grid;grid-template-columns:max-content 1fr;gap:4px 18px;font-size:13.5px;margin:10px 0 0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
+  .facts dt{font-family:var(--mono);color:var(--faint);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding-top:2px}
+  .facts dd{margin:0}
+  .badge{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--line-strong);padding:2px 8px;border-radius:999px;color:var(--muted);vertical-align:middle;margin-left:8px}
+  .badge.ok{color:var(--ok);border-color:rgba(126,226,193,.5)} .badge.pending{color:var(--warn);border-color:rgba(242,193,78,.5)}
+  /* matrices */
+  .matrix{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin:12px 0 0;padding:0;list-style:none}
+  .matrix li{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;font-size:13px;display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:start}
+  .matrix .m{color:var(--text)} .matrix .c{font-family:var(--mono);font-size:11px;color:var(--faint);grid-column:1/-1;word-break:break-all}
+  .matrix .r{font-family:var(--mono);font-size:11px;color:var(--danger);letter-spacing:.06em;white-space:nowrap}
+  .matrix .r::before{content:"✕ ";}
+  /* tables */
+  table{width:100%;border-collapse:collapse;font-size:13.5px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:600;background:var(--surface-2)}
+  tr:last-child td{border-bottom:0}
+  td.hash{font-size:12.5px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  .trust{border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--surface);padding:18px 20px}
+  .trust h4{margin:0 0 8px;font-size:15px}
+  .trust p{font-size:14px;color:var(--muted);margin:0 0 8px}
+  pre{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;overflow:auto;font-size:12.5px;line-height:1.6;color:var(--text)}
+  footer{border-top:1px solid var(--line-strong);padding-top:18px;font-size:13px;color:var(--faint);font-family:var(--mono)}
+  .claims{font-size:14px;color:var(--muted)} .claims li{margin:0 0 6px}
+  @media (max-width:760px){
+    .wrap{padding:28px 16px 64px}
+    header.masthead{grid-template-columns:1fr} .stamp{text-align:left}
+    .strip{grid-template-columns:1fr 1fr} .two{grid-template-columns:1fr}
+    .facts{grid-template-columns:1fr} .facts dt{padding-top:6px}
+    .rail{padding-left:26px;margin-left:4px} .hop::before{left:-35px}
+  }
+  @media (prefers-reduced-motion:no-preference){
+    .hop{animation:rise .5s ease both} .hop:nth-child(2){animation-delay:.05s} .hop:nth-child(3){animation-delay:.1s} .hop:nth-child(4){animation-delay:.15s} .hop:nth-child(5){animation-delay:.2s} .hop:nth-child(6){animation-delay:.25s} .hop:nth-child(7){animation-delay:.3s} .hop:nth-child(8){animation-delay:.35s}
+    @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <div>
+    <p class="kicker">Post Fiat · pfUSDC on Arc · technical review packet</p>
+    <h1>One USDC, there and back, with no one to trust but the chains.</h1>
+    <p class="lede">On 2 September 2026 we deposited 1.000000 USDC into a vault on Arc testnet, proved Arc's own validator quorum finalized it inside a zero-knowledge proof, minted pfUSDC on the PostFiat L1 against that proof, burned it, proved PostFiat finality of the burn under ML-DSA signatures, and released the USDC on Arc against <em>that</em> proof. This page pins every hop to its hash.</p>
+  </div>
+  <div class="stamp">
+    <b>Date</b> 2026-09-02 UTC<br>
+    <b>Arc</b> testnet, chain 5042002<br>
+    <b>PFTL</b> postfiat-wan-devnet-2, 6 validators<br>
+    <b>Source</b> <a href="https://github.com/postfiatorg/postfiatl1v2/pull/37">postfiatorg/postfiatl1v2 #37</a>
+  </div>
+</header>
+
+<div class="notice"><strong>Status of this document.</strong> Prepared for Zellic's independent technical review. Nothing here has been audited, reviewed, endorsed, or co-sponsored by Zellic or Circle. Arc testnet is alpha software operated by Circle; the PostFiat devnet is a controlled six-validator network. Amounts are testnet USDC.</div>
+
+<div class="strip" role="list" aria-label="Round-trip summary">
+  <div role="listitem"><div class="k">Deposited on Arc</div><div class="v num">1,000,000<small>atoms · 1.000000 USDC</small></div></div>
+  <div role="listitem"><div class="k">Minted on PFTL</div><div class="v num">1,000,000<small>atoms, exact</small></div></div>
+  <div role="listitem"><div class="k">Corrupted witnesses rejected</div><div class="v num">12 + 20<small>ingress + egress</small></div></div>
+  <div role="listitem"><div class="k">Committees / multisigs</div><div class="v num">0<small>pause only</small></div></div>
+</div>
+
+<section aria-labelledby="s1">
+  <h2 id="s1"><span class="n">01</span> What was demonstrated</h2>
+  <p>Both directions of the bridge are authorized by succinct proofs of the <em>other chain's finality</em>, verified on-chain. Ingress verifies Arc's Ed25519 commit certificate over the exact block that carries the deposit receipt, plus an EIP-1186 proof of Arc's validator registry at that exact block so the signing set is proven, not assumed. Egress verifies PostFiat's ML-DSA (FIPS-204) consensus certificates inside an SP1 zkVM, wrapped to a constant-size Groth16 proof that an Arc contract checks. There is no attestation layer, no operator checkpoint write, and no signer fallback; the only privileged control is pause.</p>
+  <p>Everything below ran on real infrastructure today: a live Arc testnet deposit, an operator-run Arc node for the registry proofs, an A100 for proving, and the six-validator PostFiat devnet with the Arc-capable release deployed through a six-clone deployment gate earlier in the day.</p>
+</section>
+
+<section aria-labelledby="s2">
+  <h2 id="s2"><span class="n">02</span> The round trip, hop by hop</h2>
+  <div class="rail">
+
+    <article class="hop arc">
+      <div class="where">Arc testnet · block 60,163,641</div>
+      <h3>Deposit 1.000000 USDC into the vault <span class="badge ok">status 1</span></h3>
+      <p>The depositor calls <code>depositV2</code> on the immutable vault. The vault pulls exactly 1,000,000 atoms, derives the canonical deposit id, records it in the direct-mode ingress anchor, and emits the deposit log the proof will open.</p>
+      <dl class="facts">
+        <dt>tx</dt><dd class="hash">0xbc8a1b3875394e0132e99a5815a6a66107afa8b894cd6370440a6fbdd1c7259c</dd>
+        <dt>block hash</dt><dd class="hash">0x89671619436737312c15007d6a83b51d628da356af2de1f37e4229c789d5b11d</dd>
+        <dt>vault</dt><dd class="hash">0x160307f3EfeAd79B6A3629c4b8D90E8301fC250F</dd>
+        <dt>deposit id</dt><dd class="hash">0xfe5f47725604a0112574fac5a0726bd83bb26cdd250d0315f561de21dc5e7e60</dd>
+        <dt>depositor</dt><dd class="hash">0x0995876e5A97C036C0fDa8846F8F47B57B6d2BFc</dd>
+        <dt>recipient</dt><dd class="hash">pffcb93d9f87a843a8aa34e1adf241f5d58143e81b (PostFiat)</dd>
+      </dl>
+    </article>
+
+    <article class="hop arc">
+      <div class="where">Operator-run Arc node · exact block</div>
+      <h3>Capture the witness: certificate, receipt, and registry proofs <span class="badge ok">native verify pass</span></h3>
+      <p>From our own Arc v0.8.0 execution + consensus follower (public Arc RPCs do not serve historical <code>eth_getProof</code>; four were probed and all declined), the capture tool pulled the commit certificate for the block, the receipt trie proof, and EIP-1186 account and storage proofs for the validator-registry proxy and its implementation at exactly that block: 2 + 5N storage slots for N = 20 registered validators. The guest re-derives the validator set from proven storage, requires ≥ ⅔ voting power on the certificate, and binds the deposit log byte-for-byte.</p>
+      <dl class="facts">
+        <dt>validators</dt><dd class="num">20 registered · 19 signatures on the certificate</dd>
+        <dt>set commitment</dt><dd class="hash">75d2bed78b313f681ad0976e67a486032cc83582b414e04d51ff04d51cc0a2fa (in = out, no rotation)</dd>
+        <dt>registry proxy</dt><dd class="hash">0x3600000000000000000000000000000000000002 · code hash pinned in guest</dd>
+        <dt>witness</dt><dd class="hash">witness.v2.json · 1.9 MB · captured seconds after the deposit</dd>
+      </dl>
+      <ul class="matrix" aria-label="Ingress negative suite: twelve corrupted witnesses, all rejected">
+        <li><span class="m">Forged signature</span><span class="r">rejected</span><span class="c">ARC_INGRESS_INVALID_SIGNATURE</span></li>
+        <li><span class="m">Sub-quorum signing power</span><span class="r">rejected</span><span class="c">ARC_INGRESS_SUB_QUORUM</span></li>
+        <li><span class="m">Mutated receipt</span><span class="r">rejected</span><span class="c">ARC_INGRESS_RECEIPT_PROOF</span></li>
+        <li><span class="m">Wrong deposit log fields</span><span class="r">rejected</span><span class="c">ARC_INGRESS_DEPOSIT_MISMATCH</span></li>
+        <li><span class="m">Stale validator-set commitment</span><span class="r">rejected</span><span class="c">ARC_INGRESS_VALIDATOR_SET_COMMITMENT_MISMATCH</span></li>
+        <li><span class="m">Wrong registry account proof</span><span class="r">rejected</span><span class="c">ARC_INGRESS_ROTATION_ACCOUNT_PROOF</span></li>
+        <li><span class="m">Wrong registry storage proof</span><span class="r">rejected</span><span class="c">ARC_INGRESS_ROTATION_STORAGE_PROOF</span></li>
+        <li><span class="m">Wrong storage slot</span><span class="r">rejected</span><span class="c">ARC_INGRESS_ROTATION_STORAGE_LAYOUT</span></li>
+        <li><span class="m">Reordered validator set</span><span class="r">rejected</span><span class="c">ARC_INGRESS_ROTATION_STORAGE_LAYOUT</span></li>
+        <li><span class="m">Zero-power validator kept</span><span class="r">rejected</span><span class="c">ARC_INGRESS_ROTATION_STORAGE_LAYOUT</span></li>
+        <li><span class="m">Duplicate validator</span><span class="r">rejected</span><span class="c">ARC_INGRESS_ROTATION_STORAGE_LAYOUT</span></li>
+        <li><span class="m">Rotation without proof</span><span class="r">rejected</span><span class="c">ARC_INGRESS_ROTATION_PROOF_UNAVAILABLE</span></li>
+      </ul>
+    </article>
+
+    <article class="hop">
+      <div class="where">Prover · NVIDIA A100 80 GB · SP1 v6.1.0</div>
+      <h3>Prove Arc finality + receipt inclusion (Groth16) <span class="badge ok">verified locally</span></h3>
+      <p>The witness is executed by the <code>pfusdc-arc-ingress</code> guest and wrapped to Groth16. The program identity is the one rebuilt independently in CI earlier today from two clean source trees, byte-identical to the checked-in ELF.</p>
+      <dl class="facts">
+        <dt>program vkey</dt><dd class="hash">0x0050a8b0daed2fa75f44d4102b42204c34668a03d311cb727cc6ca3f8df5cf16</dd>
+        <dt>proof</dt><dd class="num">356 bytes calldata · 314 bytes public values · BN254, 15,972,262 constraints</dd>
+        <dt>groth16 wrap</dt><dd class="num">19.3 s on GPU (wall 11.8 min including a one-time 8 GB circuit download)</dd>
+      </dl>
+    </article>
+
+    <article class="hop pftl">
+      <div class="where">PostFiat devnet · blocks 943 – 947</div>
+      <h3>Admit the proof and mint 1,000,000 pfUSDC <span class="badge ok">6/6 converged</span></h3>
+      <p>Governance first bound pfUSDC to the Arc verifier: the Arc proof profile was registered (943), the NAV asset re-registered onto it (944), and the epoch-9 route profile with its Arc finality bootstrap activated by a six-validator signed batch (945). The relay bundle carried the Groth16 proof and public values; the PostFiat node's bounded verifier checked it against the pinned vkey and the governance-pinned Arc finality state, then propose (946) and finalize + claim (947) executed as certified rounds.</p>
+      <dl class="facts">
+        <dt>route</dt><dd class="hash">pfusdc-arc-testnet-tier4-epoch9 · binding d9e0cd409c5d1e118d65c78ee059adcbba937616353e9675e350d52ee8d498b2</dd>
+        <dt>supply</dt><dd class="num">303,700,595 → 304,700,595 atoms issued (Δ = +1,000,000 exactly)</dd>
+        <dt>recipient</dt><dd class="num">pffcb93d… balance 0 → 1,000,000 in the Arc source-series of pfUSDC</dd>
+        <dt>Arc finality state</dt><dd class="num">advanced from block 60,146,559 to 60,163,641, set commitment unchanged</dd>
+      </dl>
+    </article>
+
+    <article class="hop pftl">
+      <div class="where">PostFiat devnet · block 948</div>
+      <h3>Burn 1,000,000 pfUSDC to redeem to Arc <span class="badge ok">accepted</span></h3>
+      <p>The holder burns the full amount with destination <code>evm-erc20:5042002:0x0995876e…</code>. Issued supply returns to exactly 303,700,595. The redemption is recorded with its withdrawal packet and EVM digest — the values the egress proof commits to.</p>
+      <dl class="facts">
+        <dt>redemption</dt><dd class="hash">0a998d305f42f229c98e4f461d28af0a63d16f6553ed0fbc63fe245d300581d035ab3140a9df3adc67fbaae8f75e19f9</dd>
+        <dt>burn tx</dt><dd class="hash">65d00f38a8caf6ca423c9fca63494882fdbe77ea77077efb224fe4b30cc2da04b2095b522f11f2506d775cc975638819</dd>
+        <dt>packet digest</dt><dd class="hash">0x4875362412805c49bd332dd2778bb36707fee198125caa6128b28a3532f26d74</dd>
+      </dl>
+    </article>
+
+    <article class="hop pftl">
+      <div class="where">PostFiat devnet · checkpoint 931 → 947</div>
+      <h3>Capture the egress witness from two validators <span class="badge ok">byte-identical</span></h3>
+      <p>The egress witness carries the burn receipt with its Merkle path, the withdrawal packet, and the 16-block finality ancestry from the verifier's pinned checkpoint (height 931, committee epoch 3) to the burn block, each step a consensus-v2 commit certificate with ML-DSA-65 signatures from the six-validator committee. Captured independently on validators 0 and 3; identical bytes (sha256 <span class="hash">e4d5202be88f8411…</span>).</p>
+      <ul class="matrix" aria-label="Egress adversarial matrix: twenty mutations, all rejected">
+        <li><span class="m">Tampered ancestry certificate</span><span class="r">rejected</span><span class="c">invalid consensus-v2 ancestry finality</span></li>
+        <li><span class="m">Non-contiguous ancestry</span><span class="r">rejected</span><span class="c">finality ancestry is not contiguous</span></li>
+        <li><span class="m">Withdrawal before exit-root activation</span><span class="r">rejected</span><span class="c">predates bridge-exit-root activation</span></li>
+        <li><span class="m">Route profile record mismatch</span><span class="r">rejected</span><span class="c">route profile record hash mismatch</span></li>
+        <li><span class="m">Commit not bound to block</span><span class="r">rejected</span><span class="c">commit does not exactly bind</span></li>
+        <li><span class="m">Missing consensus commit</span><span class="r">rejected</span><span class="c">block has no consensus-v2 commit</span></li>
+        <li><span class="m">Inactive committee</span><span class="r">rejected</span><span class="c">committee is inactive</span></li>
+        <li><span class="m">Committee does not follow prior</span><span class="r">rejected</span><span class="c">committee does not follow</span></li>
+        <li><span class="m">Missing receipt in witness</span><span class="r">rejected</span><span class="c">does not contain the literal receipt</span></li>
+        <li><span class="m">Bad exit-proof leaf bounds</span><span class="r">rejected</span><span class="c">invalid leaf bounds</span></li>
+        <li><span class="m">Exit-proof root mismatch</span><span class="r">rejected</span><span class="c">bridge exit proof root mismatch</span></li>
+        <li><span class="m">Leaf ≠ withdrawal packet</span><span class="r">rejected</span><span class="c">leaf does not exactly match</span></li>
+        <li><span class="m">Packet hash / digest mismatch</span><span class="r">rejected</span><span class="c">withdrawal packet hash/digest mismatch</span></li>
+        <li><span class="m">…and 7 further signature / finality mutations</span><span class="r">rejected</span><span class="c">20 rejected, 0 accepted (egress-negative-suite.json)</span></li>
+      </ul>
+    </article>
+
+    <article class="hop pending" id="hop-egress-proof">
+      <div class="where">Prover · A100 · SP1 v6.1.0</div>
+      <h3>Prove PostFiat finality of the burn (ML-DSA in-circuit) <span class="badge pending">in progress</span></h3>
+      <p>The <code>pfusdc-egress</code> guest verifies every ML-DSA-65 certificate in the ancestry, the burn's inclusion, and the withdrawal packet, and commits the recipient, amount, withdrawal and burn commitments, and packet digest as public values. Program vkey <span class="hash">0x0036cbe7d36bbfe1118a3c544eeba74f3791d2a19bf5ec59b972f72d36416852</span> — the identity pinned immutably in the deployed Arc verifier.</p>
+    </article>
+
+    <article class="hop arc pending" id="hop-withdraw">
+      <div class="where">Arc testnet · vault 0x160307f3…</div>
+      <h3>Release exactly 1,000,000 USDC against the proof <span class="badge pending">in progress</span></h3>
+      <p><code>withdrawWithProof(publicValues, proof)</code>: the finality verifier at <span class="hash">0x1D436908516D15E3c55A936899B47a885e047F27</span> verifies the Groth16 proof through the SP1 v6.1.0 gateway, checks the checkpoint lineage from height 931, and consumes the withdrawal-id and burn-tx nullifiers; the vault then transfers the amount to the recipient encoded in the proof and asserts both balance deltas exactly. A second submission must revert with <code>WithdrawalAlreadyConsumed</code>.</p>
+    </article>
+
+  </div>
+</section>
+
+<section aria-labelledby="s3">
+  <h2 id="s3"><span class="n">03</span> Contracts and identities under review</h2>
+  <table>
+    <thead><tr><th>Object</th><th>Address / identity</th><th>Binding</th></tr></thead>
+    <tbody>
+      <tr><td>SP1 v6.1.0 Groth16 verifier</td><td class="hash">0xd3b199D0C643dab3F28E5C97D0067763e28187b2</td><td>VERIFIER_HASH 0x4388a21c…; runtime hash matches pinned sp1-contracts v6.1.0</td></tr>
+      <tr><td>Arc-local SP1 gateway</td><td class="hash">0x532D3a8035b87646a92245eCaa01e6602a13654e</td><td>route 0x4388a21c registered, not frozen</td></tr>
+      <tr><td>One-shot deployment factory</td><td class="hash">0xC4932b2d2E2E7A97c90c1595a13A5913C70cab81</td><td>CREATE nonces 1 and 2 predict anchor and vault; no setter, no upgrade path</td></tr>
+      <tr><td>PFTL finality verifier</td><td class="hash">0x1D436908516D15E3c55A936899B47a885e047F27</td><td>egress vkey 0x0036cbe7…; route epoch 9; checkpoint 931; committee root ca8da61a…</td></tr>
+      <tr><td>Ingress anchor</td><td class="hash">0x92390D3a2102CB74E4746c05B4d91F61093475D0</td><td>direct mode; pinned vault; route binding d9e0cd40…</td></tr>
+      <tr><td>Vault</td><td class="hash">0x160307f3EfeAd79B6A3629c4b8D90E8301fC250F</td><td>token 0x3600…0000 (Arc USDC); runtime hash 0x8d15bb9d… equals the immutable pinned in the verifier</td></tr>
+      <tr><td>Arc ingress guest</td><td class="hash">vkey 0x0050a8b0daed2fa75f44d4102b42204c34668a03d311cb727cc6ca3f8df5cf16</td><td>ELF sha256 7660fcc5…; CI rebuild byte-identical (run 33586405990)</td></tr>
+      <tr><td>PFTL egress guest</td><td class="hash">vkey 0x0036cbe7d36bbfe1118a3c544eeba74f3791d2a19bf5ec59b972f72d36416852</td><td>ELF sha256 8b0f266a…; same CI rebuild</td></tr>
+      <tr><td>PFTL release</td><td class="hash">arc-current-v2-a699d560 · binary sha256 7f4288f3…</td><td>signed manifest, verified by every validator's unit at start; six-clone gate passed before rollout</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section aria-labelledby="s4">
+  <h2 id="s4"><span class="n">04</span> Trust model, stated plainly</h2>
+  <div class="two">
+    <div class="trust">
+      <h4>Ingress (Arc → PostFiat)</h4>
+      <p>Trust is Arc's own consensus: a ≥ ⅔ voting-power quorum of the validator set proven from registry storage at the exact block. A two-thirds collusion of that permissioned cohort could fabricate an ingress fact. Nothing else can: no relayer, no RPC provider (a dishonest provider can only withhold), no operator key.</p>
+      <p>The registry proof is mandatory even when the set does not change; the guest fails closed without it.</p>
+    </div>
+    <div class="trust">
+      <h4>Egress (PostFiat → Arc)</h4>
+      <p>Trust is PostFiat consensus soundness (ML-DSA-65 committee certificates, quorum 5 of 6 on this devnet) plus SP1/Groth16 soundness. The Arc verifier holds a checkpoint that advances only by proof.</p>
+      <p>Replay is excluded twice: the withdrawal-id commitment and the burn-tx commitment are both consumed on first use.</p>
+    </div>
+  </div>
+  <p style="margin-top:16px">The single privileged control on the vault is <code>setPaused</code>, held by the deployer EOA on testnet. Deposits use Arc's transparent path because the proof opens the deposit log.</p>
+</section>
+
+<section aria-labelledby="s5">
+  <h2 id="s5"><span class="n">05</span> Reproduce and review</h2>
+  <p>Everything is open source at <a href="https://github.com/postfiatorg/postfiatl1v2">github.com/postfiatorg/postfiatl1v2</a>, branch <code>integrate/arc-tier4-current-v2-20260901</code>. The <a href="zellic-review-packet-20260902.md">claim-classification packet</a> maps every statement in the grant proposal to verified / demonstrated / implemented / planned / aspirational, and the <a href="zellic-audit-scope-20260902.md">audit scope</a> lists the components, threat model, and deliverables we are requesting.</p>
+<pre><code># conformance against pinned arc-node source (certificates, receipts, negatives)
+cargo test -p arc-conformance --locked
+
+# vault, anchor, factory, finality verifier (18 tests, mock SP1 verifier)
+forge test --root crates/ethereum-contracts --match-contract PFUSDCTier4Test -vv
+
+# re-run both negative suites against today's witnesses
+pfusdc-tier4-prover arc-ingress-audit --witness witness.v2.json --output out.json
+pfusdc-tier4-prover egress-audit --witness egress-witness.json --output out.json
+
+# verify today's Groth16 proofs against the pinned vkeys
+pfusdc-tier4-prover arc-ingress --witness witness.v2.json --output-dir ./x   # executes; --prove to reproduce</code></pre>
+  <p class="claims">What this page does <em>not</em> claim:</p>
+  <ul class="claims">
+    <li>No third-party audit of the contracts or guests has been performed.</li>
+    <li>No Arc mainnet deployment exists; chain 5042002 is testnet.</li>
+    <li>The PostFiat network here is a controlled devnet, not a public mainnet.</li>
+    <li>“First” claims, TVL forecasts, and operating cadence are commercial statements outside this packet.</li>
+  </ul>
+</section>
+
+<footer>
+  postfiatorg/postfiatl1v2 · evidence: docs/evidence/arc-mvp-20260828/devnet-20260902/ · prepared 2026-09-02 · contact via the PR
+</footer>
+
+</div>
+</body>
+</html>
