@@ -29,7 +29,7 @@ contract DeployArcPfUsdcPair {
 
     uint256 private constant ARC_TESTNET_CHAIN_ID = 5_042_002;
     address private constant ARC_TESTNET_USDC = 0x3600000000000000000000000000000000000000;
-    bytes32 private constant EGRESS_PROGRAM_VKEY = 0x00c8d744e19bc828d1b3fb19709d36863d8c5aba14af0ca939eb85fc806f868f;
+    bytes32 private constant EGRESS_PROGRAM_VKEY = 0x0026a156bfd82ce1d1bf3f966c77daba8d5c266b8cc29928474747c4a02ca89b;
     bytes32 private constant SP1_VERIFIER_RUNTIME_CODE_HASH =
         0xc26a6452cb4fb09bc555e9ba44384da0267da540ec8700a87f8f4801520b2fa1;
     bytes32 private constant SP1_GATEWAY_RUNTIME_CODE_HASH =
