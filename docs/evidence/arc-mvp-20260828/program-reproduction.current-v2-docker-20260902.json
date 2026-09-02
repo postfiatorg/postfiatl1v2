@@ -1,0 +1,18 @@
+{
+  "schema": "postfiat.pfusdc.arc_proof_identity_reproduction.v1",
+  "status": "accepted_reproducible_candidate",
+  "source_commit": "b945bbb321eb4fdc5a57998fadcf0b353f1acb86",
+  "github_run_id": 33586405990,
+  "github_run_url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/33586405990",
+  "sp1_version": "6.3.1",
+  "build_mode": "cargo prove build --docker --tag v6.3.1 --locked",
+  "clean_source_trees": 2,
+  "build_count_per_guest": 2,
+  "byte_exact_replay": true,
+  "arc_ingress_elf_sha256": "7660fcc58677cfec433a5f2337b9fe46fa96374a1e3c4bd6fba625b982d881bc",
+  "arc_ingress_program_vkey": "0x0050a8b0daed2fa75f44d4102b42204c34668a03d311cb727cc6ca3f8df5cf16",
+  "egress_elf_sha256": "8b0f266a035a432ef3c0e4233672d8a15b913cefd4c85ff07f91f008601bb744",
+  "egress_program_vkey": "0x0036cbe7d36bbfe1118a3c544eeba74f3791d2a19bf5ec59b972f72d36416852",
+  "superseded_candidate_manifest": "program-info.candidate-e8b243cc.json",
+  "superseded_candidate_reason": "Both Docker builds agreed byte-for-byte with each other but disagreed with the earlier checked candidate ELFs; the qualification stop condition rejected the earlier candidates."
+}

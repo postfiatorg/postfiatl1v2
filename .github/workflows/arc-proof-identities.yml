@@ -6,6 +6,7 @@ on:
       - programs/pfusdc-arc-ingress/**
       - programs/pfusdc-egress/**
       - tools/pfusdc-tier4-prover/**
+      - docs/evidence/arc-mvp-20260828/program-info.current-v2-docker-20260902.json
       - .github/workflows/arc-proof-identities.yml
   workflow_dispatch:
 
