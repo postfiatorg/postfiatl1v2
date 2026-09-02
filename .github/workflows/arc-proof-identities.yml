@@ -1,6 +1,8 @@
 name: arc-proof-identities
 
 on:
+  push:
+    branches: [integrate/arc-tier4-current-v2-20260901]
   pull_request:
   workflow_dispatch:
 
