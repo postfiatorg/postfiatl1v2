@@ -155,9 +155,16 @@ struct RpcClient {
 
 impl RpcClient {
     fn new() -> Result<Self> {
+        // Historical `eth_getProof` on an operator-run Arc archive node walks
+        // changesets back from the tip and can take minutes; allow up to an
+        // hour per request, overridable through ARC_RPC_TIMEOUT_SECS.
+        let timeout_secs = std::env::var("ARC_RPC_TIMEOUT_SECS")
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(3600);
         Ok(Self {
             http: reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(120))
+                .timeout(std::time::Duration::from_secs(timeout_secs))
                 .user_agent("postfiat-pfusdc-arc-witness/1")
                 .build()?,
         })
