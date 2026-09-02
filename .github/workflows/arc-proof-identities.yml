@@ -2,6 +2,11 @@ name: arc-proof-identities
 
 on:
   pull_request:
+    paths:
+      - programs/pfusdc-arc-ingress/**
+      - programs/pfusdc-egress/**
+      - tools/pfusdc-tier4-prover/**
+      - .github/workflows/arc-proof-identities.yml
   workflow_dispatch:
 
 permissions:
