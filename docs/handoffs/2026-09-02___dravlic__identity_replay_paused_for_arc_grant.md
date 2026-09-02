@@ -377,3 +377,79 @@ recommended an execution sprint.
 - [Arc grant proposal v3](../business/pfusdc-arc-grant-proposal-20260828-v3.md)
 - [Arc current-devnet/Zellic readiness specification](../specs/pfusdc-arc-current-devnet-zellic-readiness-spec-20260902.md)
 - [Current PFTL state authority](../status/chain-state-current.md)
+
+## End of session (Domagoj, 2026-09-02)
+
+The sections above were written by the operator's overnight agent session
+under this operator name; this section is the human-directed day session.
+
+### Delivered today
+
+- **P0-1 — reproducible current-v2 identities:**
+  [`65df4263`](https://github.com/postfiatorg/postfiatl1v2/commit/65df4263746566c90d0e46db8c90a46c23576265)
+  completed the overnight five-file mid-fix without weakening a gate, and
+  [`077b8637`](https://github.com/postfiatorg/postfiatl1v2/commit/077b863708ca741238425bdb15c6faff57bb5e0d)
+  added manifest tracking. The
+  [`reproduce-current-v2-identities` job](https://github.com/postfiatorg/postfiatl1v2/actions/runs/33616296837/job/100202792755)
+  was green in 23m01s: its independent clean builds were byte-identical to each
+  other and the checked-in ELFs. See the
+  [workflow](https://github.com/postfiatorg/postfiatl1v2/blob/077b863708ca741238425bdb15c6faff57bb5e0d/.github/workflows/arc-proof-identities.yml)
+  and [reproduction manifest](../evidence/arc-mvp-20260828/program-reproduction.current-v2-docker-20260902.json).
+- **P0-2 — registry proof-source options:**
+  [`85cb3c91`](https://github.com/postfiatorg/postfiatl1v2/commit/85cb3c9183ce5998e3e9a20a87106fadf7e1f8af)
+  added the [options document](../specs/arc-registry-proof-source-options-20260902.md).
+  Exact-historical `eth_getProof` probes failed on Circle, Blockdaemon, dRPC,
+  and QuickNode. The recommendation is to qualify Option 2 on the account's
+  `arc-archive-proof-20260902` instance; the operator must record owner,
+  deadline, and chosen option.
+- **P0-4 — Zellic review packet:**
+  [`ebfcbdbb`](https://github.com/postfiatorg/postfiatl1v2/commit/ebfcbdbb41bda9b85e944bc603c84e0911428c23)
+  classified all 101 grant-proposal-v3 claims in the
+  [packet](../business/zellic-review-packet-20260902.md), then
+  [`9008e749`](https://github.com/postfiatorg/postfiatl1v2/commit/9008e7490bfca06c4961862dedde99cbaf0c6a27)
+  upgraded it with execution: 24 VERIFIED IN REPO / 15 devnet-demonstrated /
+  12 implemented-unverified / 31 planned / 19 aspirational. One verification
+  failure is recorded: the local egress reproducible build needs `cargo-prove`
+  and Docker; CI covers the reproducible identity gate. No Zellic review or
+  endorsement is claimed anywhere.
+- **Archive-instance qualification — read-only:**
+  [`75c28d72`](https://github.com/postfiatorg/postfiatl1v2/commit/75c28d72b6af22b73db8a9a3f9ceef950f0874d1)
+  recorded the [exact probe](../specs/arc-registry-proof-source-options-20260902.md#qualification-check--2026-09-02).
+  Instance `49602886` has Arc's Reth-based client installed but no node process
+  started: `NOT SUITABLE` until provisioned, while billing about $0.28/hour for
+  idle compute.
+- **PR #37:** its [description](https://github.com/postfiatorg/postfiatl1v2/pull/37)
+  is written and the
+  [five-line status comment](https://github.com/postfiatorg/postfiatl1v2/pull/37#issuecomment-5509120470)
+  is posted. The PR remains draft.
+- **Qualification progress:** the
+  [reproducible current ELFs/vkeys step](../specs/pfusdc-arc-current-devnet-zellic-readiness-spec-20260902.md#a2-rebuild-proof-identities)
+  is satisfied by the green independent-rebuild CI job, byte-identical ELFs,
+  and pinned vkeys.
+
+### Boundaries
+
+Archive-instance access was read-only: nothing was started, stopped, or
+changed. No live Arc transaction occurred; the wallet secret was untouched;
+the PFTL devnet was not contacted; Task Node was not used. Every push was to
+this branch only, and `main` was untouched today.
+
+### Decisions for the operator
+
+1. Provision archive instance `49602886` as the proof source (recommended), or
+   destroy the rental.
+2. Record owner, deadline, and option for the registry proof source as required
+   by the [options document](../specs/arc-registry-proof-source-options-20260902.md#recommendation).
+3. The [pending-decisions sheet on `main`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/pending-operator-decisions.md)
+   is still fully unanswered, including the model-authority row on which the
+   latest message leans; one line per row closes it.
+4. The overnight agent again filed its handoff under the `dravlic` operator
+   name. Give it a distinct operator ID so authorship stays clear.
+
+### References
+
+- [Registry proof-source options](../specs/arc-registry-proof-source-options-20260902.md)
+- [Zellic review packet](../business/zellic-review-packet-20260902.md)
+- [PR #37](https://github.com/postfiatorg/postfiatl1v2/pull/37)
+- [Current-devnet/Zellic qualification specification](../specs/pfusdc-arc-current-devnet-zellic-readiness-spec-20260902.md)
+- [Pending operator decisions on `main`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/pending-operator-decisions.md)
