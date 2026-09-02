@@ -1,7 +1,25 @@
 # Arc testnet deployments
 
-Status: **G0 probes deployed; production pair not deployed**. Chain ID
-5,042,002 and the live receipts were rechecked on 2026-08-28 UTC.
+Status: **G0 probes deployed; epoch-7 pair observed on chain; current-v2 pair
+not deployed**. Chain ID 5,042,002 and the live receipts were rechecked on
+2026-08-28 UTC.
+
+!!! note "On-chain observation 2026-09-02"
+
+    Read-only `cast` readback against `https://rpc.testnet.arc.io` shows the
+    one-shot factory `0xcc8D866C…` reports `deployed() == true`, the predicted
+    anchor `0x661D558a…` (6,171 runtime bytes) and vault `0xe88FB9ab…`
+    (10,571 runtime bytes, `directIngress() == true`, owner `0xdB9b78C8…`)
+    exist, the vault's `finalityVerifier()` is `0xC59EBED2A65B26e203f14C445b904dcf5F1B686b`
+    (`programVKey() == 0x00c8d744…`, `routeEpoch() == 7`, `sp1Verifier()`
+    = the Arc-local gateway), the anchor's `governedRouteBinding()` is
+    `0x6edfa31c57cfeec8955572fd9cdb81b22222beb1dbac432ff7c7f0fc7ad9c520`, and
+    the vault holds exactly 1,000,000 USDC atoms. The deployment transaction
+    hashes were not recovered in this observation and the rows below remain
+    unfilled until they are. That pair is pinned to the August egress vkey;
+    the current-v2 release requires a fresh factory and pair pinned to egress
+    vkey `0x0036cbe7…` and the PFTL height-931 checkpoint (see
+    `docs/business/pfusdc-on-arc-20260902.md`).
 
 At Arc block `59,330,485`, the common SP1 gateway address
 `0x3B6041173B80e77f038f3f2C0f9744f04837185e` had no code. The Arc MVP
