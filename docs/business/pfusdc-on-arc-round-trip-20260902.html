@@ -40,6 +40,14 @@
   .hash a:hover,dd.hash a:hover,td.hash a:hover{text-decoration-color:var(--accent)}
   .ev{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin:10px 0 0}
   .ev a{color:var(--faint)} .ev a:hover{color:var(--accent)}
+  .story{border:1px solid var(--line-strong);border-left:3px solid var(--accent);border-radius:var(--radius);background:var(--surface);padding:22px 26px;margin:0 0 22px}
+  .story h2{margin:0 0 14px;font-size:20px}
+  .story p{font-size:15.5px;line-height:1.6;color:var(--text);margin:0 0 12px}
+  .story p:last-of-type{margin-bottom:0}
+  .story .ms{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:14px 0 4px;padding:0;list-style:none}
+  .story .ms li{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;font-size:13.5px;line-height:1.45}
+  .story .ms b{display:block;color:var(--muted);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px}
+  .story .ms .done b::before{content:"✓ ";color:var(--ok)} .story .ms .open b::before{content:"○ ";color:var(--warn)}
   .num{font-variant-numeric:tabular-nums}
   /* summary strip */
   .strip{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line-strong);border:1px solid var(--line-strong);border-radius:var(--radius);overflow:hidden;margin-bottom:40px}
@@ -109,6 +117,20 @@
     <b>Source</b> <a href="https://github.com/postfiatorg/postfiatl1v2/pull/37">postfiatorg/postfiatl1v2 #37</a>
   </div>
 </header>
+
+<section class="story" aria-labelledby="s0">
+  <h2 id="s0">The story, in plain English: what this is for</h2>
+  <p>Post Fiat is applying to Circle's Arc Ecosystem Program as a launch partner, together with Zellic as the security firm. The ask is $250,000 in four milestone-locked tranches, and the money is earmarked for the two things a startup on its own would defer: independent audits of the bridge contracts and both zero-knowledge programs, and a hardened prover service people can rely on. Post Fiat pays for the core engineering itself. That is why this page exists: <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/business/pfusdc-arc-grant-proposal-20260828-v3.md">the proposal</a> promised that every claim would be anchored to running code, and this is the running code.</p>
+  <p><strong>Why Circle would want this.</strong> Arc is Circle's own chain for stablecoin finance, with USDC as gas and a validator set made of named institutions. What a chain like that needs at launch is usage that is real rather than farmed, and integrations that show off what the chain was built to do. pfUSDC brings both. It is the settlement asset behind Post Fiat's NAVCoin subscription and redemption cycles, so deposits and redemptions recur by construction; the proposal commits to an audited USDC reserve pilot on Arc, a path to migrating the majority of Post Fiat's reserves there, a standing cadence of round trips from live operations, and a working AI-agent economy that gets paid in USDC on Arc. Every one of those is a real USDC transaction with gas paid in USDC.</p>
+  <p><strong>Why the zero-knowledge part matters to Arc specifically.</strong> Almost every bridge to a new chain puts a committee or a multisig in front of it, and committees are where most of the bridge losses of the last few years came from. This bridge has none. Going in, a proof shows that Arc's own validators finalized the deposit, with the validator set itself proven from Arc's registry rather than assumed; going out, an Arc contract checks a constant-size proof that Post Fiat's post-quantum validators finalized the burn. For Circle that is two stories at once: Arc's finality is something other chains can verify cryptographically, and Arc can host an on-chain verifier for post-quantum consensus, which is a direct answer to the quantum-risk programs several of its founding validators run.</p>
+  <p><strong>Why Zellic and Post Fiat together.</strong> A testnet demonstration on its own is a demo. The same demonstration, audited by an independent firm and then run with a capped mainnet reserve, is a product Circle can point at. Post Fiat brings the shipped system; Zellic brings the review that turns it into something institutions can rely on. The packet below is built so Zellic starts from verified facts rather than a pitch: every hop pinned to its hash, 32 corrupted witnesses rejected, and the trust model stated with its one open finding first. That finding, in §04, is exactly the kind of thing the audit tranche exists to close before any reserve goes live.</p>
+  <ul class="ms" aria-label="Proposal milestones and status">
+    <li class="done"><b>M1</b>Testnet contracts live on Arc: vault, anchor, and finality verifier deployed and bound.</li>
+    <li class="done"><b>M2</b>Arc ingress circuit with pinned key; 12-case corrupted-witness suite rejected.</li>
+    <li class="done"><b>M3 · technical half</b>Full round trip on Arc testnet, conservation exact, both proofs on-chain, 20-case egress suite rejected. This page.</li>
+    <li class="open"><b>M3 · audit half → M4</b>Contract and zkVM audits, then the capped mainnet reserve pilot and the agent-settlement demo. This is what the grant funds.</li>
+  </ul>
+</section>
 
 <div class="notice"><strong>Status of this document.</strong> Prepared for Zellic's independent technical review. Nothing here has been audited, reviewed, endorsed, or co-sponsored by Zellic or Circle. Arc testnet is alpha software operated by Circle; the PostFiat devnet is a controlled six-validator network. Amounts are testnet USDC. <strong>One open finding qualifies the egress claim on this deployment:</strong> the SP1 gateway owner key (EOA 0xdB9b78C8…3814) can admit an unproven withdrawal by registering a permissive verifier under a new selector, because the finality verifier does not pin the proof selector. It is stated in full in <a href="#s4">§04</a>, reproduced by a forge test, and its fix is the first item in the audit scope.</div>
 
