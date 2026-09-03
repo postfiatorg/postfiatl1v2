@@ -1,0 +1,60 @@
+You are researching the organization behind one blockchain validator and writing a public identity profile of that organization. Use web search. Return the profile as your final answer only; do not edit files, run repository code, or add commentary outside the profile.
+
+WHAT YOU ARE GIVEN
+- Network: Post Fiat network
+- Validator public key: nHUdwzTWTQJzebbxcanZG2ERXikMLU9aAZa8cHtxosfiKq5N7Vd5
+- Domain the validator claims: pft.whiteguy.eu
+
+These two coordinates are the only starting point. Do not assume an organization name from a pre-filled mapping. If no domain was supplied, search the exact validator key in public validator registries and primary sources. If that does not establish who operates it, return an "identity not established" profile rather than attaching an unrelated organization.
+
+WHAT TO FIND OUT
+1. Who the organization is: its canonical legal or public name, what kind of entity it is (company, university, foundation, nonprofit, government body, individual, pseudonymous operator), and well-supported aliases or former names. Do not treat a similar name as an alias.
+2. Its official website and official X handle, when a primary source supports them. Otherwise "Not established."
+3. Where it is incorporated and where it principally operates, stated separately, from filings, official legal pages, registries, or other strong primary sources. Do not infer incorporation from a server location, IP address, registrar, language, or country-code domain alone.
+4. What it does: its principal activities, products or services, and who its customers or stakeholders are.
+5. How large its public institutional footprint is, using exactly one tier: Unknown, Individual, Micro (about 1-10 people), Small (11-50), Medium (51-250), Large (251-1,000), Very large (over 1,000 or globally prominent). If headcount is not supported, use qualitative footprint evidence and say headcount is not established.
+6. How the organization is connected to this validator: the evidence that links the domain or key to the organization.
+7. What remains uncertain or conflicting. Never invent ownership, control, incorporation, personnel, aliases, or social accounts.
+
+RULES
+- Prefer primary sources: the organization's official site and legal pages, regulator or company registries, official GitHub, official X profile, network documentation, and RDAP.
+- Every material identity, alias, location, activity, and size claim must have a nearby Markdown link to its supporting source, except inside the Business Summary paragraph.
+- Use only public institutional information. No private residential addresses, personal phone numbers, private emails, or other doxxing material.
+- If identity cannot be supported, say "Not established" rather than guessing.
+- Do not assign any legitimacy, reputation, sanctions, credit, or risk judgment. This profile is evidence for a separate assessment.
+- Do not describe the validator's uptime, performance, hardware, or which validator lists it appears on. This profile is about the organization, not the validator's operation.
+- Do not claim to have browsed a page you could not access.
+
+OUTPUT FORMAT
+Return Markdown with exactly these headings in this order:
+
+# Organization Profile
+
+## Identity
+Canonical name, entity type, supported aliases or former names, and the evidence connecting the domain or key to the organization. "Not established" where appropriate.
+
+## Official Web Presence
+Official website and official X handle with the basis for each, or "Not established."
+
+## Incorporation and Operations
+Incorporation jurisdiction and principal operating regions, stated separately, each with confidence, or "Not established."
+
+## Activities
+Concise evidence-backed description of what the organization does and its relationship to the validator when supported.
+
+## Public Footprint
+Exactly one size tier, the evidence, confidence, and whether headcount is established.
+
+## Business Summary
+Exactly one 90-160 word paragraph in neutral business-reference prose, with no Markdown links: the supported name, entity type, incorporation and principal operating base, principal products or services, customer or stakeholder types, geographic reach, and size tier. No credit rating, risk judgment, recommendation, marketing language, or unsupported revenue, ownership, or headcount. If the identity is not established, say so and summarize only the observable public footprint.
+
+## Evidence
+Numbered list of the most important source URLs, titles, source types, access dates, and the specific facts each supports. Still list the strongest URLs checked when identity remains unknown.
+
+## Uncertainty
+Unresolved facts, weak inferences excluded, and any conflicting names or records.
+
+## Machine-Readable Summary
+One fenced JSON object with exactly these keys:
+canonical_entity, entity_type, aliases, official_website, x_handle, incorporation_region, operating_regions, activities, profile_size_tier, profile_size_confidence, identity_confidence, business_summary, evidence_urls, unresolved.
+Use null or empty arrays for unknown values. The business_summary value must reproduce the Business Summary paragraph exactly. The JSON must agree with the prose.
