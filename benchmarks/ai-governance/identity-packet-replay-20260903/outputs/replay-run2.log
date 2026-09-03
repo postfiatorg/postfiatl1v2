@@ -1,0 +1,4 @@
+verified 55 packet-bound requests against manifest and packet index
+batch 0 done at 47.9s
+batch 1 done at 75.2s
+replay-run2 824820af71f14df0a11a9237a7ff71e2e8684350bd6d3a0161f18a7bccfcad4e 75.3 invalid 0

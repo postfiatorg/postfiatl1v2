@@ -1,0 +1,84 @@
+{
+  "provider": "Vast.ai",
+  "account_credit_start_usd": 90.18945196145705,
+  "account_credit_end_usd": 85.36298219145874,
+  "total_spend_usd": 4.82646976999831,
+  "successful_hosts": [
+    {
+      "role": "primary",
+      "instance_id": 49731139,
+      "host_id": 445596,
+      "machine_id": 131697,
+      "rate_usd_per_hour": 4.017543859649122,
+      "started_at": "2026-09-03T08:38:51Z",
+      "start_time_basis": "instance created_at",
+      "workload_started_at": "2026-09-03T08:40:38Z",
+      "destroyed_at": "2026-09-03T08:52:10Z",
+      "destroy_reason": "completed and outputs collected",
+      "destroy_reason_basis": "outputs_collected=true and destroy_success=true in primary teardown state",
+      "destroy_success": true,
+      "post_destroy_absent": true,
+      "credit_before_usd": 90.18945196145705,
+      "credit_after_usd": 88.9699759714581
+    },
+    {
+      "role": "replay",
+      "instance_id": 49734743,
+      "host_id": 207608,
+      "machine_id": 49537,
+      "rate_usd_per_hour": 4.054666666666667,
+      "started_at": "2026-09-03T09:35:28Z",
+      "start_time_basis": "workload START recorded in watchdog event",
+      "watchdog_started_at": "2026-09-03T09:36:39Z",
+      "destroyed_at": "2026-09-03T09:47:14Z",
+      "destroy_reason": "completed and outputs collected",
+      "destroy_success": true,
+      "post_destroy_absent": true,
+      "credit_before_usd": 86.51066404145968,
+      "credit_at_destroy_usd": 85.53445552145877,
+      "credit_after_usd": 85.36298219145874
+    }
+  ],
+  "discarded_attempts": [
+    {
+      "instance_id": 49731142,
+      "host_id": 634408,
+      "machine_id": 148426,
+      "rate_usd_per_hour": null,
+      "started_at": null,
+      "destroyed_at": null,
+      "destroy_reason": "loading >19 min; status 'Error response from daemon: GPU provisioning in progress'",
+      "destroyed": true
+    },
+    {
+      "instance_id": 49732579,
+      "host_id": 634408,
+      "machine_id": 148426,
+      "rate_usd_per_hour": null,
+      "started_at": null,
+      "destroyed_at": null,
+      "destroy_reason": "second attempt, same GPU provisioning error after 16 min",
+      "destroyed": true
+    },
+    {
+      "instance_id": 49733887,
+      "host_id": 207608,
+      "machine_id": 49537,
+      "rate_usd_per_hour": null,
+      "started_at": null,
+      "destroyed_at": null,
+      "destroy_reason": "container reverse tunnel failed: 'remote port forwarding failed for listen port 13886'; ssh never reached container",
+      "destroyed": true
+    }
+  ],
+  "spend_components_usd": {
+    "primary_window_credit_delta": 1.21947598999895,
+    "between_primary_and_replay_credit_delta": 2.45931192999842,
+    "replay_watchdog_window_credit_delta": 1.14768185000094
+  },
+  "notes": [
+    "Total spend is the exact account-credit delta from the primary teardown start to the replay watchdog end and includes the three discarded attempts.",
+    "Rates and timestamps unavailable in the retained state for discarded attempts are represented as null rather than inferred.",
+    "No API keys or secrets are included."
+  ]
+}
