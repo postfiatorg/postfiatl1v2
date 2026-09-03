@@ -36,6 +36,10 @@
   code,.mono{font-family:var(--mono);font-size:.92em}
   code{background:var(--surface-2);border:1px solid var(--line);padding:1px 6px;border-radius:3px;color:var(--text)}
   .hash{font-family:var(--mono);font-variant-numeric:tabular-nums;word-break:break-all;color:var(--text)}
+  .hash a,dd.hash a,td.hash a{color:var(--text);text-decoration:underline;text-decoration-color:var(--line-strong);text-underline-offset:3px}
+  .hash a:hover,dd.hash a:hover,td.hash a:hover{text-decoration-color:var(--accent)}
+  .ev{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin:10px 0 0}
+  .ev a{color:var(--faint)} .ev a:hover{color:var(--accent)}
   .num{font-variant-numeric:tabular-nums}
   /* summary strip */
   .strip{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line-strong);border:1px solid var(--line-strong);border-radius:var(--radius);overflow:hidden;margin-bottom:40px}
@@ -95,7 +99,7 @@
 <header class="masthead">
   <div>
     <p class="kicker">Post Fiat · pfUSDC on Arc · technical review packet</p>
-    <h1>One USDC, there and back, authorized by nothing but the two chains&rsquo; own finality.</h1>
+    <h1>One USDC, there and back, authorized by proofs of the two chains&rsquo; own finality.</h1>
     <p class="lede">On 2 September 2026 we deposited 1.000000 USDC into a vault on Arc testnet, proved Arc's own validator quorum finalized it inside a zero-knowledge proof, minted pfUSDC on the PostFiat L1 against that proof, burned it, proved PostFiat finality of the burn under ML-DSA signatures, and released the USDC on Arc against <em>that</em> proof. This page pins every hop to its hash.</p>
   </div>
   <div class="stamp">
@@ -106,19 +110,19 @@
   </div>
 </header>
 
-<div class="notice"><strong>Status of this document.</strong> Prepared for Zellic's independent technical review. Nothing here has been audited, reviewed, endorsed, or co-sponsored by Zellic or Circle. Arc testnet is alpha software operated by Circle; the PostFiat devnet is a controlled six-validator network. Amounts are testnet USDC.</div>
+<div class="notice"><strong>Status of this document.</strong> Prepared for Zellic's independent technical review. Nothing here has been audited, reviewed, endorsed, or co-sponsored by Zellic or Circle. Arc testnet is alpha software operated by Circle; the PostFiat devnet is a controlled six-validator network. Amounts are testnet USDC. <strong>One open finding qualifies the egress claim on this deployment:</strong> the SP1 gateway owner key (EOA 0xdB9b78C8…3814) can admit an unproven withdrawal by registering a permissive verifier under a new selector, because the finality verifier does not pin the proof selector. It is stated in full in <a href="#s4">§04</a>, reproduced by a forge test, and its fix is the first item in the audit scope.</div>
 
 <div class="strip" role="list" aria-label="Round-trip summary">
   <div role="listitem"><div class="k">Deposited on Arc</div><div class="v num">1,000,000<small>atoms · 1.000000 USDC</small></div></div>
   <div role="listitem"><div class="k">Minted, burned, released</div><div class="v num">1,000,000<small>atoms, exact each way</small></div></div>
   <div role="listitem"><div class="k">Corrupted witnesses rejected</div><div class="v num">12 + 20<small>ingress + egress</small></div></div>
-  <div role="listitem"><div class="k">Committees / multisigs</div><div class="v num">0<small>pause only</small></div></div>
+  <div role="listitem"><div class="k">Administrative keys</div><div class="v num">2<small>one is an open egress-soundness finding, §04</small></div></div>
 </div>
 
 <section aria-labelledby="s1">
   <h2 id="s1"><span class="n">01</span> What was demonstrated</h2>
-  <p>Both directions of the bridge are authorized by succinct proofs of the <em>other chain's finality</em>, verified on-chain. Ingress verifies Arc's Ed25519 commit certificate over the exact block that carries the deposit receipt, plus an EIP-1186 proof of Arc's validator registry at that exact block so the signing set is proven, not assumed. Egress verifies PostFiat's ML-DSA (FIPS-204) consensus certificates inside an SP1 zkVM, wrapped to a constant-size Groth16 proof that an Arc contract checks. There is no attestation layer, no operator checkpoint write, and no signer fallback; the only privileged control is pause.</p>
-  <p>Everything below ran on real infrastructure today: a live Arc testnet deposit, an operator-run Arc node for the registry proofs, an A100 for proving, and the six-validator PostFiat devnet with the Arc-capable release deployed through a six-clone deployment gate earlier in the day.</p>
+  <p>Both directions of the bridge are authorized by succinct proofs of the <em>other chain's finality</em>, verified on-chain. Ingress verifies Arc's Ed25519 commit certificate over the exact block that carries the deposit receipt, plus an EIP-1186 proof of Arc's validator registry at that exact block so the signing set is proven, not assumed. Egress verifies PostFiat's ML-DSA (FIPS-204) consensus certificates inside an SP1 zkVM, wrapped to a constant-size Groth16 proof that an Arc contract checks. There is no attestation layer and no operator checkpoint write. The design intends no signer fallback either; on this testnet deployment that intent is not yet met on egress, because the SP1 gateway owner key can route around the Groth16 check (§04). The transactions below were all authorized by real proofs; the finding is about what the gateway owner <em>could</em> do, and it is what we want audited first.</p>
+  <p>Everything below ran on real infrastructure on 2 September 2026: a live Arc testnet deposit, an operator-run Arc node for the registry proofs, an A100 for proving, and the six-validator PostFiat devnet with the Arc-capable release deployed through a six-clone deployment gate earlier the same day. Every transaction and contract on this page links to the Arc explorer; every artifact links to the evidence file committed on the branch.</p>
 </section>
 
 <section aria-labelledby="s2">
@@ -130,13 +134,14 @@
       <h3>Deposit 1.000000 USDC into the vault <span class="badge ok">status 1</span></h3>
       <p>The depositor calls <code>depositV2</code> on the immutable vault. The vault pulls exactly 1,000,000 atoms, derives the canonical deposit id, records it in the direct-mode ingress anchor, and emits the deposit log the proof will open.</p>
       <dl class="facts">
-        <dt>tx</dt><dd class="hash">0xbc8a1b3875394e0132e99a5815a6a66107afa8b894cd6370440a6fbdd1c7259c</dd>
+        <dt>tx</dt><dd class="hash"><a href="https://testnet.arcscan.app/tx/0xbc8a1b3875394e0132e99a5815a6a66107afa8b894cd6370440a6fbdd1c7259c">0xbc8a1b3875394e0132e99a5815a6a66107afa8b894cd6370440a6fbdd1c7259c</a></dd>
         <dt>block hash</dt><dd class="hash">0x89671619436737312c15007d6a83b51d628da356af2de1f37e4229c789d5b11d</dd>
-        <dt>vault</dt><dd class="hash">0x160307f3EfeAd79B6A3629c4b8D90E8301fC250F</dd>
+        <dt>vault</dt><dd class="hash"><a href="https://testnet.arcscan.app/address/0x160307f3EfeAd79B6A3629c4b8D90E8301fC250F">0x160307f3EfeAd79B6A3629c4b8D90E8301fC250F</a></dd>
         <dt>deposit id</dt><dd class="hash">0xfe5f47725604a0112574fac5a0726bd83bb26cdd250d0315f561de21dc5e7e60</dd>
-        <dt>depositor</dt><dd class="hash">0x0995876e5A97C036C0fDa8846F8F47B57B6d2BFc</dd>
+        <dt>depositor</dt><dd class="hash"><a href="https://testnet.arcscan.app/address/0x0995876e5A97C036C0fDa8846F8F47B57B6d2BFc">0x0995876e5A97C036C0fDa8846F8F47B57B6d2BFc</a></dd>
         <dt>recipient</dt><dd class="hash">pffcb93d9f87a843a8aa34e1adf241f5d58143e81b (PostFiat)</dd>
       </dl>
+      <p class="ev">evidence · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/ingress/deposit.receipt.json">ingress/deposit.receipt.json</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/ingress/deposit.env">ingress/deposit.env</a></p>
     </article>
 
     <article class="hop arc">
@@ -163,6 +168,7 @@
         <li><span class="m">Duplicate validator</span><span class="r">rejected</span><span class="c">ARC_INGRESS_ROTATION_STORAGE_LAYOUT</span></li>
         <li><span class="m">Rotation without proof</span><span class="r">rejected</span><span class="c">ARC_INGRESS_ROTATION_PROOF_UNAVAILABLE</span></li>
       </ul>
+      <p class="ev">evidence · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/ingress/witness.v2.json">ingress/witness.v2.json</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/ingress/capture.log">ingress/capture.log</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/ingress/negative-suite.v2.json">ingress/negative-suite.v2.json</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/ingress/audit.log">ingress/audit.log</a></p>
     </article>
 
     <article class="hop">
@@ -174,6 +180,7 @@
         <dt>proof</dt><dd class="num">356 bytes calldata · 314 bytes public values · BN254, 15,972,262 constraints</dd>
         <dt>groth16 wrap</dt><dd class="num">19.3 s on GPU (wall 11.8 min including a one-time 8 GB circuit download)</dd>
       </dl>
+      <p class="ev">evidence · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/ingress/proof/proof-report.json">ingress/proof/proof-report.json</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/ingress/proof/execute-report.json">execute-report.json</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/ingress/proof/proof-calldata.bin">proof-calldata.bin</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/ingress/proof/public-values.bin">public-values.bin</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/actions/runs/33586405990">CI rebuild run 33586405990</a></p>
     </article>
 
     <article class="hop pftl">
@@ -186,6 +193,7 @@
         <dt>recipient</dt><dd class="num">pffcb93d9f87a843a8aa34e1adf241f5d58143e81b balance 0 → 1,000,000 in the Arc source-series of pfUSDC</dd>
         <dt>Arc finality state</dt><dd class="num">advanced from block 60,146,559 to 60,163,641, set commitment unchanged</dd>
       </dl>
+      <p class="ev">evidence · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/devnet/arc-profile-register-round.finality.json">devnet/arc-profile-register-round.finality.json</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/devnet/relay-bundle.report.json">relay-bundle.report.json</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/devnet/arc-propose.report.json">arc-propose.report.json</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/devnet/arc-finalize-claim.report.json">arc-finalize-claim.report.json</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/ingress/route-profile.v2.json">ingress/route-profile.v2.json</a></p>
     </article>
 
     <article class="hop pftl">
@@ -197,6 +205,7 @@
         <dt>burn tx</dt><dd class="hash">65d00f38a8caf6ca423c9fca63494882fdbe77ea77077efb224fe4b30cc2da04b2095b522f11f2506d775cc975638819</dd>
         <dt>packet digest</dt><dd class="hash">0x4875362412805c49bd332dd2778bb36707fee198125caa6128b28a3532f26d74</dd>
       </dl>
+      <p class="ev">evidence · the accepted burn receipt and the withdrawal packet are carried literally inside <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/egress/egress-witness.json">egress/egress-witness.json</a></p>
     </article>
 
     <article class="hop pftl">
@@ -204,21 +213,28 @@
       <h3>Capture the egress witness from two validators <span class="badge ok">byte-identical</span></h3>
       <p>The egress witness carries three things: the 16-block finality ancestry (blocks 932–947) that links the verifier's pinned checkpoint at height 931 to the burn block; the burn block 948 itself with its consensus-v2 commit certificate (committee epoch 3, ML-DSA-65 signatures from the six-validator committee, quorum 5); and the burn receipt with its Merkle path plus the withdrawal packet. Captured independently on validators 0 and 3; identical bytes (sha256 <span class="hash">e4d5202be88f8411671c9a97228f7f307aa3b2078f96a0806bab673c6fd5975a</span>).</p>
       <ul class="matrix" aria-label="Egress adversarial matrix: twenty mutations, all rejected">
-        <li><span class="m">Tampered ancestry certificate</span><span class="r">rejected</span><span class="c">invalid consensus-v2 ancestry finality</span></li>
-        <li><span class="m">Non-contiguous ancestry</span><span class="r">rejected</span><span class="c">finality ancestry is not contiguous</span></li>
-        <li><span class="m">Withdrawal before exit-root activation</span><span class="r">rejected</span><span class="c">predates bridge-exit-root activation</span></li>
-        <li><span class="m">Route profile record mismatch</span><span class="r">rejected</span><span class="c">route profile record hash mismatch</span></li>
-        <li><span class="m">Commit not bound to block</span><span class="r">rejected</span><span class="c">commit does not exactly bind</span></li>
-        <li><span class="m">Missing consensus commit</span><span class="r">rejected</span><span class="c">block has no consensus-v2 commit</span></li>
-        <li><span class="m">Inactive committee</span><span class="r">rejected</span><span class="c">committee is inactive</span></li>
-        <li><span class="m">Committee does not follow prior</span><span class="r">rejected</span><span class="c">committee does not follow</span></li>
-        <li><span class="m">Missing receipt in witness</span><span class="r">rejected</span><span class="c">does not contain the literal receipt</span></li>
-        <li><span class="m">Bad exit-proof leaf bounds</span><span class="r">rejected</span><span class="c">invalid leaf bounds</span></li>
-        <li><span class="m">Exit-proof root mismatch</span><span class="r">rejected</span><span class="c">bridge exit proof root mismatch</span></li>
-        <li><span class="m">Leaf ≠ withdrawal packet</span><span class="r">rejected</span><span class="c">leaf does not exactly match</span></li>
-        <li><span class="m">Packet hash / digest mismatch</span><span class="r">rejected</span><span class="c">withdrawal packet hash/digest mismatch</span></li>
-        <li><span class="m">…and 7 further signature / finality mutations</span><span class="r">rejected</span><span class="c">20 rejected, 0 accepted (egress-negative-suite.json)</span></li>
+        <li><span class="m">Wrong chain id in QC domain</span><span class="r">rejected</span><span class="c">wrong_chain · QC schema or domain mismatch</span></li>
+        <li><span class="m">Wrong genesis in QC domain</span><span class="r">rejected</span><span class="c">wrong_genesis · QC schema or domain mismatch</span></li>
+        <li><span class="m">Ancestry does not start at the checkpoint</span><span class="r">rejected</span><span class="c">stale_checkpoint · ancestry is not contiguous</span></li>
+        <li><span class="m">Burn predates exit-root activation</span><span class="r">rejected</span><span class="c">wrong_bridge_exit_activation</span></li>
+        <li><span class="m">Route profile record substituted</span><span class="r">rejected</span><span class="c">wrong_route_profile_hash · record hash mismatch</span></li>
+        <li><span class="m">Exit root not bound by the commit</span><span class="r">rejected</span><span class="c">wrong_committed_bridge_exit_root · commit does not bind header</span></li>
+        <li><span class="m">Proposal without commit</span><span class="r">rejected</span><span class="c">proposal_only · block has no consensus-v2 commit</span></li>
+        <li><span class="m">Prepare-phase QC presented as commit</span><span class="r">rejected</span><span class="c">prepare_only · QC vote target mismatch</span></li>
+        <li><span class="m">Four of six signers (sub-quorum)</span><span class="r">rejected</span><span class="c">four_of_six_or_under_quorum · QC committee mismatch</span></li>
+        <li><span class="m">Duplicate validator in committee</span><span class="r">rejected</span><span class="c">duplicate_validator · committee inactive / non-ML-DSA / duplicate</span></li>
+        <li><span class="m">Committee not derived from ancestry</span><span class="r">rejected</span><span class="c">wrong_committee · committee does not follow proved ancestry</span></li>
+        <li><span class="m">Bad ML-DSA signature or context</span><span class="r">rejected</span><span class="c">bad_mldsa_signature_or_context · signature verification failed</span></li>
+        <li><span class="m">Rejected receipt presented as accepted</span><span class="r">rejected</span><span class="c">rejected_receipt · literal accepted burn receipt absent</span></li>
+        <li><span class="m">Receipt status code altered</span><span class="r">rejected</span><span class="c">wrong_receipt_code · literal accepted burn receipt absent</span></li>
+        <li><span class="m">Wrong Merkle path</span><span class="r">rejected</span><span class="c">wrong_merkle_path · invalid leaf bounds</span></li>
+        <li><span class="m">Exit leaf altered</span><span class="r">rejected</span><span class="c">altered_exit_leaf · exit proof root mismatch</span></li>
+        <li><span class="m">Withdrawal packet altered</span><span class="r">rejected</span><span class="c">altered_withdrawal_packet · leaf ≠ packet</span></li>
+        <li><span class="m">Recipient swapped</span><span class="r">rejected</span><span class="c">wrong_recipient · leaf ≠ packet</span></li>
+        <li><span class="m">Packet hash altered</span><span class="r">rejected</span><span class="c">wrong_withdrawal_packet_hash · hash/digest mismatch</span></li>
+        <li><span class="m">EVM digest altered</span><span class="r">rejected</span><span class="c">wrong_withdrawal_packet_evm_digest · hash/digest mismatch</span></li>
       </ul>
+      <p class="ev">evidence · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/egress/egress-witness.json">egress/egress-witness.json</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/egress/egress-negative-suite.json">egress/egress-negative-suite.json</a> (20 cases, 20 rejected, 0 accepted) · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/egress/egress-audit.log">egress/egress-audit.log</a></p>
     </article>
 
     <article class="hop" id="hop-egress-proof">
@@ -231,18 +247,20 @@
         <dt>proof</dt><dd class="num">356 bytes calldata · 1,486 bytes public values · Groth16 over BN254</dd>
         <dt>time</dt><dd class="num">core proof ≈ 70 s on GPU; 9.2 min wall including the one-time circuit download</dd>
       </dl>
+      <p class="ev">evidence · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/egress/proof/proof-report.json">egress/proof/proof-report.json</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/egress/proof/execute-report.json">execute-report.json</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/egress/proof/proof-calldata.bin">proof-calldata.bin</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/egress/proof/public-values.bin">public-values.bin</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/egress/proof/cuda-prover.log">cuda-prover.log</a></p>
     </article>
 
     <article class="hop arc" id="hop-withdraw">
       <div class="where">Arc testnet · block 60,170,160</div>
       <h3>Release exactly 1,000,000 USDC against the proof <span class="badge ok">status 1 · replay reverts</span></h3>
-      <p><code>withdrawWithProof(publicValues, proof)</code>: the finality verifier at <span class="hash">0x1D436908516D15E3c55A936899B47a885e047F27</span> verified the Groth16 proof through the SP1 v6.1.0 gateway, checked the checkpoint lineage from height 931, and consumed the proof nullifier, withdrawal-id and burn-tx commitments; the vault transferred the amount to the recipient encoded in the proof and asserted both balance deltas exactly. Re-submitting the same proof reverts with <code>ProofAlreadyConsumed(nullifier)</code> (selector 0xfab54c75).</p>
+      <p><code>withdrawWithProof(publicValues, proof)</code>: the finality verifier at <span class="hash"><a href="https://testnet.arcscan.app/address/0x1D436908516D15E3c55A936899B47a885e047F27">0x1D436908516D15E3c55A936899B47a885e047F27</a></span> verified the Groth16 proof through the SP1 v6.1.0 gateway, checked the checkpoint lineage from height 931, and consumed the proof nullifier, withdrawal-id and burn-tx commitments; the vault transferred the amount to the recipient encoded in the proof and asserted both balance deltas exactly. Re-submitting the same proof reverts with <code>ProofAlreadyConsumed(nullifier)</code> (selector 0xfab54c75).</p>
       <dl class="facts">
-        <dt>tx</dt><dd class="hash">0x86036658acab859dc1ab8200140a33ddadfac603ca402fb041e504a28e77a207</dd>
+        <dt>tx</dt><dd class="hash"><a href="https://testnet.arcscan.app/tx/0x86036658acab859dc1ab8200140a33ddadfac603ca402fb041e504a28e77a207">0x86036658acab859dc1ab8200140a33ddadfac603ca402fb041e504a28e77a207</a></dd>
         <dt>vault balance</dt><dd class="num">2,000,000 → 1,000,000 atoms (Δ = −1,000,000 exactly; the remaining 1,000,000 is an earlier unrelated deposit)</dd>
         <dt>recipient</dt><dd class="num">0x0995876e5A97C036C0fDa8846F8F47B57B6d2BFc received 1,000,000 atoms; gas 517,762 paid in USDC</dd>
         <dt>events</dt><dd class="hash">ProofNativeWithdrawal (topic 0x8955c89501fd9e0e81ae8abac51a6a5774d6261d19cf3c8cce49cb6fc071f329) on the vault; two verifier events (checkpoint advance, nullifier consumed); two ERC-20 Transfer logs</dd>
       </dl>
+      <p class="ev">evidence · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/egress/withdraw.receipt.json">egress/withdraw.receipt.json</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/egress/withdraw.balances.txt">withdraw.balances.txt</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/egress/withdraw.replay.txt">withdraw.replay.txt</a> · <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902/egress/withdraw.preflight.txt">withdraw.preflight.txt</a></p>
     </article>
 
   </div>
@@ -253,12 +271,12 @@
   <table>
     <thead><tr><th>Object</th><th>Address / identity</th><th>Binding</th></tr></thead>
     <tbody>
-      <tr><td>SP1 v6.1.0 Groth16 verifier</td><td class="hash">0xd3b199D0C643dab3F28E5C97D0067763e28187b2</td><td>VERIFIER_HASH 0x4388a21c687fdd5f218d7e3d13190cac4c5355818d3605fd5fb811df468ee696; runtime code hash 0xc26a6452cb4fb09bc555e9ba44384da0267da540ec8700a87f8f4801520b2fa1 matches pinned sp1-contracts v6.1.0</td></tr>
-      <tr><td>Arc-local SP1 gateway</td><td class="hash">0x532D3a8035b87646a92245eCaa01e6602a13654e</td><td>route 0x4388a21c registered, not frozen</td></tr>
-      <tr><td>One-shot deployment factory</td><td class="hash">0xC4932b2d2E2E7A97c90c1595a13A5913C70cab81</td><td>CREATE nonces 1 and 2 predict anchor and vault; no setter, no upgrade path</td></tr>
-      <tr><td>PFTL finality verifier</td><td class="hash">0x1D436908516D15E3c55A936899B47a885e047F27</td><td>egress vkey 0x0036cbe7d36bbfe1118a3c544eeba74f3791d2a19bf5ec59b972f72d36416852; route epoch 9; checkpoint block id 8e3639ee748255636d09adb8b3fe70f20f8ae0aa9388b024eaffb98b7a94f3c7c4b0e5710f0d8c2479b08d9bc8665c4b (height 931); committee root ca8da61a23bf9d1d1e9ddf57edfe8ee7e26a33ac04c8ff6bee44c3e419083e03b1ecfd3e3299db3f9c6a8b0f5471f6c4</td></tr>
-      <tr><td>Ingress anchor</td><td class="hash">0x92390D3a2102CB74E4746c05B4d91F61093475D0</td><td>direct mode; pinned vault; route binding 0xd9e0cd409c5d1e118d65c78ee059adcbba937616353e9675e350d52ee8d498b2</td></tr>
-      <tr><td>Vault</td><td class="hash">0x160307f3EfeAd79B6A3629c4b8D90E8301fC250F</td><td>token 0x3600000000000000000000000000000000000000 (Arc USDC); runtime code hash 0x8d15bb9dc20c416db72c724eeeb725b8b395cb850a889cde130645dcc752764e equals the immutable pinned in the verifier</td></tr>
+      <tr><td>SP1 v6.1.0 Groth16 verifier</td><td class="hash"><a href="https://testnet.arcscan.app/address/0xd3b199D0C643dab3F28E5C97D0067763e28187b2">0xd3b199D0C643dab3F28E5C97D0067763e28187b2</a></td><td>VERIFIER_HASH 0x4388a21c687fdd5f218d7e3d13190cac4c5355818d3605fd5fb811df468ee696; runtime code hash 0xc26a6452cb4fb09bc555e9ba44384da0267da540ec8700a87f8f4801520b2fa1 matches pinned sp1-contracts v6.1.0</td></tr>
+      <tr><td>Arc-local SP1 gateway</td><td class="hash"><a href="https://testnet.arcscan.app/address/0x532D3a8035b87646a92245eCaa01e6602a13654e">0x532D3a8035b87646a92245eCaa01e6602a13654e</a></td><td>route 0x4388a21c → 0xd3b199D0…, not frozen; <code>owner()</code> = 0xdB9b78C87F76054b204188109b35cE4614d03814 (deployer EOA). The finality verifier's immutable <code>sp1Verifier</code> points here. Owner powers and mitigation in §04.</td></tr>
+      <tr><td>One-shot deployment factory</td><td class="hash"><a href="https://testnet.arcscan.app/address/0xC4932b2d2E2E7A97c90c1595a13A5913C70cab81">0xC4932b2d2E2E7A97c90c1595a13A5913C70cab81</a></td><td>CREATE nonces 1 and 2 predict anchor and vault; no setter, no upgrade path</td></tr>
+      <tr><td>PFTL finality verifier</td><td class="hash"><a href="https://testnet.arcscan.app/address/0x1D436908516D15E3c55A936899B47a885e047F27">0x1D436908516D15E3c55A936899B47a885e047F27</a></td><td>no owner function; egress vkey 0x0036cbe7d36bbfe1118a3c544eeba74f3791d2a19bf5ec59b972f72d36416852; route epoch 9; checkpoint block id 8e3639ee748255636d09adb8b3fe70f20f8ae0aa9388b024eaffb98b7a94f3c7c4b0e5710f0d8c2479b08d9bc8665c4b (height 931); committee root ca8da61a23bf9d1d1e9ddf57edfe8ee7e26a33ac04c8ff6bee44c3e419083e03b1ecfd3e3299db3f9c6a8b0f5471f6c4</td></tr>
+      <tr><td>Ingress anchor</td><td class="hash"><a href="https://testnet.arcscan.app/address/0x92390D3a2102CB74E4746c05B4d91F61093475D0">0x92390D3a2102CB74E4746c05B4d91F61093475D0</a></td><td>direct mode; pinned vault; route binding 0xd9e0cd409c5d1e118d65c78ee059adcbba937616353e9675e350d52ee8d498b2</td></tr>
+      <tr><td>Vault</td><td class="hash"><a href="https://testnet.arcscan.app/address/0x160307f3EfeAd79B6A3629c4b8D90E8301fC250F">0x160307f3EfeAd79B6A3629c4b8D90E8301fC250F</a></td><td>token 0x3600000000000000000000000000000000000000 (Arc USDC); runtime code hash 0x8d15bb9dc20c416db72c724eeeb725b8b395cb850a889cde130645dcc752764e equals the immutable pinned in the verifier; <code>owner()</code> = 0x0995876e5A97C036C0fDa8846F8F47B57B6d2BFc (pause only)</td></tr>
       <tr><td>Arc ingress guest</td><td class="hash">vkey 0x0050a8b0daed2fa75f44d4102b42204c34668a03d311cb727cc6ca3f8df5cf16</td><td>ELF sha256 7660fcc58677cfec433a5f2337b9fe46fa96374a1e3c4bd6fba625b982d881bc; two clean CI rebuilds byte-identical (GitHub Actions run 33586405990)</td></tr>
       <tr><td>PFTL egress guest</td><td class="hash">vkey 0x0036cbe7d36bbfe1118a3c544eeba74f3791d2a19bf5ec59b972f72d36416852</td><td>ELF sha256 8b0f266a035a432ef3c0e4233672d8a15b913cefd4c85ff07f91f008601bb744; same CI rebuild</td></tr>
       <tr><td>PFTL release</td><td class="hash">arc-current-v2-a699d560 (git a699d560a9275ce769d25e5196d819a069a7285b) · binary sha256 7f4288f3b5182933d253c19661fd563d85c5ca94764497d727b37d6f991f9c0b</td><td>signed manifest, verified by every validator's unit at start; six-clone gate passed before rollout</td></tr>
@@ -280,16 +298,23 @@
       <p>Replay is excluded twice: the withdrawal-id commitment and the burn-tx commitment are both consumed on first use.</p>
     </div>
   </div>
-  <p style="margin-top:16px">The single privileged control on the vault is <code>setPaused</code>, held by the deployer EOA on testnet. Deposits use Arc's transparent path because the proof opens the deposit log.</p>
+  <div class="trust" style="margin-top:16px">
+    <h4>Privileged controls on this testnet deployment, enumerated</h4>
+    <p><strong>Vault <code>setPaused</code></strong>, held by EOA 0x0995876e5A97C036C0fDa8846F8F47B57B6d2BFc. Liveness only: pause halts deposits and withdrawals; it cannot move funds, alter the verifier, or admit a proof.</p>
+    <p><strong>SP1 gateway <code>owner()</code></strong>, EOA 0xdB9b78C87F76054b204188109b35cE4614d03814. This is the finding we want reviewed first. The gateway's <code>addRoute</code> reverts <code>RouteAlreadyExists</code> for selector 0x4388a21c, so the owner cannot swap the Groth16 verifier behind today's proofs. The owner can, however, (i) <code>freezeRoute(0x4388a21c)</code>, which halts egress (liveness), and (ii) register a route for a <em>different</em> selector to any contract exposing <code>VERIFIER_HASH()</code>. Because <code>PFTLFinalityVerifierV1</code> forwards <code>proofBytes</code> to the gateway without pinning the four-byte selector, a proof prefixed with such a selector bypasses the Groth16 check. On this testnet that key is therefore a soundness assumption on egress, not only a liveness one. Ingress is unaffected: the PostFiat-side verifier is in-node and governance-pinned.</p>
+    <p><strong>Reproduced, not just asserted.</strong> Four tests in <a href="https://github.com/postfiatorg/postfiatl1v2/blob/integrate/arc-tier4-current-v2-20260901/crates/ethereum-contracts/test/PFUSDCTier4.t.sol"><code>PFUSDCTier4.t.sol</code></a> deploy the unmodified verifier behind a gateway replica with the exact Arc topology and show: the registered 0x4388a21c route cannot be replaced (<code>RouteAlreadyExists</code>); a forged proof under 0x4388a21c is rejected; <code>freezeRoute</code> halts egress; and, the PoC, a route added under selector 0xdeadbeef lets a bare four-byte "proof" release funds. <code>forge test --root crates/ethereum-contracts --match-contract PFUSDCTier4Test --match-test Gateway</code>.</p>
+    <p><strong>Mitigation, planned and not yet deployed:</strong> the finality verifier binds its immutable <code>sp1Verifier</code> directly to the SP1 v6.1.0 Groth16 verifier at 0xd3b199D0… and rejects any <code>proofBytes</code> whose selector is not 0x4388a21c; the gateway leaves the trust base entirely. The contracts here are immutable, so this is a redeploy of the pair (factory → anchor + vault + verifier), which is why it is scheduled with the audit rather than patched in place. Until then the precise statement is: egress soundness = PostFiat consensus + SP1/Groth16 + non-misuse of the gateway owner key.</p>
+    <p>Deposits use Arc's transparent path because the proof opens the deposit log.</p>
+  </div>
 </section>
 
 <section aria-labelledby="s5">
   <h2 id="s5"><span class="n">05</span> Reproduce and review</h2>
-  <p>Everything is open source at <a href="https://github.com/postfiatorg/postfiatl1v2">github.com/postfiatorg/postfiatl1v2</a>, branch <code>integrate/arc-tier4-current-v2-20260901</code>. The <a href="zellic-review-packet-20260902.md">claim-classification packet</a> maps every statement in the grant proposal to verified / demonstrated / implemented / planned / aspirational, and the <a href="zellic-audit-scope-20260902.md">audit scope</a> lists the components, threat model, and deliverables we are requesting.</p>
+  <p>Everything is open source at <a href="https://github.com/postfiatorg/postfiatl1v2">github.com/postfiatorg/postfiatl1v2</a>, branch <a href="https://github.com/postfiatorg/postfiatl1v2/tree/integrate/arc-tier4-current-v2-20260901"><code>integrate/arc-tier4-current-v2-20260901</code></a>. Evidence and source links on this page are pinned to commit <code>1c136a17</code> so they cannot drift; the evidence directory is <a href="https://github.com/postfiatorg/postfiatl1v2/tree/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/evidence/arc-mvp-20260828/devnet-20260902">docs/evidence/arc-mvp-20260828/devnet-20260902</a> (49 files). The <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/business/zellic-review-packet-20260902.md">claim-classification packet</a> maps every statement in the grant proposal to verified / demonstrated / implemented / planned / aspirational, and the <a href="https://github.com/postfiatorg/postfiatl1v2/blob/1c136a17ad6dbf8ff34f1b15502e0521a690afad/docs/business/zellic-audit-scope-20260902.md">audit scope</a> lists the components, threat model, and deliverables we are requesting. Contracts: <a href="https://github.com/postfiatorg/postfiatl1v2/tree/1c136a17ad6dbf8ff34f1b15502e0521a690afad/crates/ethereum-contracts/src">crates/ethereum-contracts/src</a>. Guests: <a href="https://github.com/postfiatorg/postfiatl1v2/tree/1c136a17ad6dbf8ff34f1b15502e0521a690afad/programs/pfusdc-arc-ingress">programs/pfusdc-arc-ingress</a>, <a href="https://github.com/postfiatorg/postfiatl1v2/tree/1c136a17ad6dbf8ff34f1b15502e0521a690afad/programs/pfusdc-egress">programs/pfusdc-egress</a>. Prover and audit tool: <a href="https://github.com/postfiatorg/postfiatl1v2/tree/1c136a17ad6dbf8ff34f1b15502e0521a690afad/tools/pfusdc-tier4-prover">tools/pfusdc-tier4-prover</a>.</p>
 <pre><code># conformance against pinned arc-node source (certificates, receipts, negatives)
 cargo test -p arc-conformance --locked
 
-# vault, anchor, factory, finality verifier (18 tests, mock SP1 verifier)
+# vault, anchor, factory, finality verifier (22 tests, mock SP1 verifier; 4 of them are the §04 gateway PoC)
 forge test --root crates/ethereum-contracts --match-contract PFUSDCTier4Test -vv
 
 # re-run both negative suites against today's witnesses
@@ -303,6 +328,7 @@ pfusdc-tier4-prover arc-ingress --witness witness.v2.json --output-dir ./x   # e
     <li>No third-party audit of the contracts or guests has been performed.</li>
     <li>No Arc mainnet deployment exists; chain 5042002 is testnet.</li>
     <li>The PostFiat network here is a controlled devnet, not a public mainnet.</li>
+    <li>Egress on this deployment is not yet free of administrative keys; the gateway-owner finding in §04 stays open until the verifier is redeployed with a direct binding.</li>
     <li>“First” claims, TVL forecasts, and operating cadence are commercial statements outside this packet.</li>
   </ul>
 </section>

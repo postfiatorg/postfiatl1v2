@@ -51,9 +51,32 @@ inputs; snapshot/restart/replay faults; prover unavailability.
 
 - Ingress: Arc's permissioned validator quorum (≥ 2/3 voting power), verified
   in-circuit from the registry state proven at the exact deposit block.
-- Egress: PFTL consensus soundness plus SP1/Groth16 soundness.
-- No committee, attestation layer, operator checkpoint write, or signer
-  fallback exists. The single privileged control is pause.
+- Egress: PFTL consensus soundness plus SP1/Groth16 soundness, plus (on the
+  current testnet deployment only) non-misuse of the SP1 gateway owner key;
+  see the open finding below.
+- No committee, attestation layer, or operator checkpoint write exists. Two
+  administrative keys exist on the testnet deployment: vault `setPaused`
+  (liveness only) and the SP1 gateway `owner()`.
+
+## Open finding we want reviewed first
+
+`PFTLFinalityVerifierV1` is bound (immutably) to the Arc-local
+`SP1VerifierGateway` at `0x532D3a80…` rather than directly to the
+`SP1VerifierGroth16` at `0xd3b199D0…`, and it forwards `proofBytes` without
+pinning the four-byte selector. The gateway owner (`0xdB9b78C8…3814`) cannot
+replace the registered `0x4388a21c` route (`RouteAlreadyExists`), but can
+`freezeRoute` (halts egress) and can register a route under a *new* selector
+to any contract exposing `VERIFIER_HASH()`; a "proof" carrying that selector
+would then release funds. Reproduced by four tests in
+`crates/ethereum-contracts/test/PFUSDCTier4.t.sol`
+(`forge test --root crates/ethereum-contracts --match-contract PFUSDCTier4Test --match-test Gateway`).
+
+Planned mitigation, to be delivered under this audit: bind `sp1Verifier`
+directly to the Groth16 verifier and require
+`bytes4(proofBytes[:4]) == 0x4388a21c` in the finality verifier; redeploy the
+pair through the factory. The verifier is shared with the Ethereum mainnet
+pfUSDC deployments, so the source change is scoped and reviewed rather than
+patched in place.
 
 ## Evidence available now
 
