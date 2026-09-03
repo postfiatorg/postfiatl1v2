@@ -106,6 +106,7 @@ nav:
       - Archive Summary: evidence/navcoin-archive-summary.md
   - Plans:
       - Active Storage Scaling: plans/active/storage-scaling-milestone.md
+      - Z3 NAVCoin Round-Trip Plan: plans/active/z3-navcoin-roundtrip-plan.md
       - Completed Cobalt Adversarial Verification: plans/completed/cobalt-adversarial-verification-milestone.md
       - Completed Cobalt Activation: plans/completed/cobalt-activate-or-retire-milestone.md
       - Completed Cobalt Milestone: plans/completed/cobalt-governance-milestone.md
