@@ -95,7 +95,7 @@
 <header class="masthead">
   <div>
     <p class="kicker">Post Fiat · pfUSDC on Arc · technical review packet</p>
-    <h1>One USDC, there and back, with no one to trust but the chains.</h1>
+    <h1>One USDC, there and back, authorized by nothing but the two chains&rsquo; own finality.</h1>
     <p class="lede">On 2 September 2026 we deposited 1.000000 USDC into a vault on Arc testnet, proved Arc's own validator quorum finalized it inside a zero-knowledge proof, minted pfUSDC on the PostFiat L1 against that proof, burned it, proved PostFiat finality of the burn under ML-DSA signatures, and released the USDC on Arc against <em>that</em> proof. This page pins every hop to its hash.</p>
   </div>
   <div class="stamp">
@@ -145,7 +145,7 @@
       <p>From our own Arc v0.8.0 execution + consensus follower (public Arc RPCs do not serve historical <code>eth_getProof</code>; four were probed and all declined), the capture tool pulled the commit certificate for the block, the receipt trie proof, and EIP-1186 account and storage proofs for the validator-registry proxy and its implementation at exactly that block: 2 + 5N storage slots for N = 20 registered validators. The guest re-derives the validator set from proven storage, requires ≥ ⅔ voting power on the certificate, and binds the deposit log byte-for-byte.</p>
       <dl class="facts">
         <dt>validators</dt><dd class="num">20 registered · 19 signatures on the certificate</dd>
-        <dt>set commitment</dt><dd class="hash">75d2bed78b313f681ad0976e67a486032cc83582b414e04d51ff04d51cc0a2fa (in = out, no rotation)</dd>
+        <dt>set commitment</dt><dd class="hash">75d2bed78b313f681ad0976e67a486032cc83582b414e04d51ff04d51cc0a2fa (in = out, no rotation; matches the governance-pinned Arc finality state on PostFiat)</dd>
         <dt>registry proxy</dt><dd class="hash">0x3600000000000000000000000000000000000002 · code hash pinned in guest</dd>
         <dt>witness</dt><dd class="hash">witness.v2.json · 1.9 MB · captured seconds after the deposit</dd>
       </dl>
@@ -181,9 +181,9 @@
       <h3>Admit the proof and mint 1,000,000 pfUSDC <span class="badge ok">6/6 converged</span></h3>
       <p>Governance first bound pfUSDC to the Arc verifier: the Arc proof profile was registered (943), the NAV asset re-registered onto it (944), and the epoch-9 route profile with its Arc finality bootstrap activated by a six-validator signed batch (945). The relay bundle carried the Groth16 proof and public values; the PostFiat node's bounded verifier checked it against the pinned vkey and the governance-pinned Arc finality state, then propose (946) and finalize + claim (947) executed as certified rounds.</p>
       <dl class="facts">
-        <dt>route</dt><dd class="hash">pfusdc-arc-testnet-tier4-epoch9 · binding d9e0cd409c5d1e118d65c78ee059adcbba937616353e9675e350d52ee8d498b2</dd>
+        <dt>route</dt><dd class="hash">pfusdc-arc-testnet-tier4-epoch9 · profile hash f7ce6d3cce3bd058a218db6bd829b01be13c576a2270aed362052d12654fc7a911a8423ee2d961ca45dbf72c08df6ae2 · binding 0xd9e0cd409c5d1e118d65c78ee059adcbba937616353e9675e350d52ee8d498b2</dd>
         <dt>supply</dt><dd class="num">303,700,595 → 304,700,595 atoms issued (Δ = +1,000,000 exactly)</dd>
-        <dt>recipient</dt><dd class="num">pffcb93d… balance 0 → 1,000,000 in the Arc source-series of pfUSDC</dd>
+        <dt>recipient</dt><dd class="num">pffcb93d9f87a843a8aa34e1adf241f5d58143e81b balance 0 → 1,000,000 in the Arc source-series of pfUSDC</dd>
         <dt>Arc finality state</dt><dd class="num">advanced from block 60,146,559 to 60,163,641, set commitment unchanged</dd>
       </dl>
     </article>
@@ -191,7 +191,7 @@
     <article class="hop pftl">
       <div class="where">PostFiat devnet · block 948</div>
       <h3>Burn 1,000,000 pfUSDC to redeem to Arc <span class="badge ok">accepted</span></h3>
-      <p>The holder burns the full amount with destination <code>evm-erc20:5042002:0x0995876e…</code>. Issued supply returns to exactly 303,700,595. The redemption is recorded with its withdrawal packet and EVM digest — the values the egress proof commits to.</p>
+      <p>The holder burns the full amount with destination <code>evm-erc20:5042002:0x0995876e5a97c036c0fda8846f8f47b57b6d2bfc</code>. Issued supply returns to exactly 303,700,595. The redemption is recorded with its withdrawal packet and EVM digest — the values the egress proof commits to.</p>
       <dl class="facts">
         <dt>redemption</dt><dd class="hash">0a998d305f42f229c98e4f461d28af0a63d16f6553ed0fbc63fe245d300581d035ab3140a9df3adc67fbaae8f75e19f9</dd>
         <dt>burn tx</dt><dd class="hash">65d00f38a8caf6ca423c9fca63494882fdbe77ea77077efb224fe4b30cc2da04b2095b522f11f2506d775cc975638819</dd>
@@ -200,9 +200,9 @@
     </article>
 
     <article class="hop pftl">
-      <div class="where">PostFiat devnet · checkpoint 931 → 947</div>
+      <div class="where">PostFiat devnet · checkpoint 931 → burn block 948</div>
       <h3>Capture the egress witness from two validators <span class="badge ok">byte-identical</span></h3>
-      <p>The egress witness carries the burn receipt with its Merkle path, the withdrawal packet, and the 16-block finality ancestry from the verifier's pinned checkpoint (height 931, committee epoch 3) to the burn block, each step a consensus-v2 commit certificate with ML-DSA-65 signatures from the six-validator committee. Captured independently on validators 0 and 3; identical bytes (sha256 <span class="hash">e4d5202be88f8411…</span>).</p>
+      <p>The egress witness carries three things: the 16-block finality ancestry (blocks 932–947) that links the verifier's pinned checkpoint at height 931 to the burn block; the burn block 948 itself with its consensus-v2 commit certificate (committee epoch 3, ML-DSA-65 signatures from the six-validator committee, quorum 5); and the burn receipt with its Merkle path plus the withdrawal packet. Captured independently on validators 0 and 3; identical bytes (sha256 <span class="hash">e4d5202be88f8411671c9a97228f7f307aa3b2078f96a0806bab673c6fd5975a</span>).</p>
       <ul class="matrix" aria-label="Egress adversarial matrix: twenty mutations, all rejected">
         <li><span class="m">Tampered ancestry certificate</span><span class="r">rejected</span><span class="c">invalid consensus-v2 ancestry finality</span></li>
         <li><span class="m">Non-contiguous ancestry</span><span class="r">rejected</span><span class="c">finality ancestry is not contiguous</span></li>
@@ -224,7 +224,7 @@
     <article class="hop" id="hop-egress-proof">
       <div class="where">Prover · NVIDIA A100 40 GB · SP1 v6.1.0</div>
       <h3>Prove PostFiat finality of the burn (ML-DSA in-circuit) <span class="badge ok">verified locally</span></h3>
-      <p>The <code>pfusdc-egress</code> guest verifies every ML-DSA-65 certificate in the 16-block ancestry, the burn's inclusion, and the withdrawal packet, and commits the recipient, amount, withdrawal and burn commitments, and packet digest as public values.</p>
+      <p>The <code>pfusdc-egress</code> guest verifies every ML-DSA-65 certificate in the ancestry and on the burn block 948, the burn's inclusion, and the withdrawal packet, and commits the recipient, amount, withdrawal and burn commitments, and packet digest as public values.</p>
       <dl class="facts">
         <dt>program vkey</dt><dd class="hash">0x0036cbe7d36bbfe1118a3c544eeba74f3791d2a19bf5ec59b972f72d36416852 — the identity pinned immutably in the deployed Arc verifier</dd>
         <dt>guest execution</dt><dd class="num">271,252,755 cycles (post-quantum signature checks dominate) · 8.8 s</dd>
@@ -240,8 +240,8 @@
       <dl class="facts">
         <dt>tx</dt><dd class="hash">0x86036658acab859dc1ab8200140a33ddadfac603ca402fb041e504a28e77a207</dd>
         <dt>vault balance</dt><dd class="num">2,000,000 → 1,000,000 atoms (Δ = −1,000,000 exactly; the remaining 1,000,000 is an earlier unrelated deposit)</dd>
-        <dt>recipient</dt><dd class="num">0x0995876e… received 1,000,000 atoms; gas 517,762 paid in USDC</dd>
-        <dt>events</dt><dd class="hash">ProofNativeWithdrawal 0x8955c895… on the vault; verifier checkpoint advance and nullifier events; two ERC-20 Transfer logs</dd>
+        <dt>recipient</dt><dd class="num">0x0995876e5A97C036C0fDa8846F8F47B57B6d2BFc received 1,000,000 atoms; gas 517,762 paid in USDC</dd>
+        <dt>events</dt><dd class="hash">ProofNativeWithdrawal (topic 0x8955c89501fd9e0e81ae8abac51a6a5774d6261d19cf3c8cce49cb6fc071f329) on the vault; two verifier events (checkpoint advance, nullifier consumed); two ERC-20 Transfer logs</dd>
       </dl>
     </article>
 
@@ -253,15 +253,15 @@
   <table>
     <thead><tr><th>Object</th><th>Address / identity</th><th>Binding</th></tr></thead>
     <tbody>
-      <tr><td>SP1 v6.1.0 Groth16 verifier</td><td class="hash">0xd3b199D0C643dab3F28E5C97D0067763e28187b2</td><td>VERIFIER_HASH 0x4388a21c…; runtime hash matches pinned sp1-contracts v6.1.0</td></tr>
+      <tr><td>SP1 v6.1.0 Groth16 verifier</td><td class="hash">0xd3b199D0C643dab3F28E5C97D0067763e28187b2</td><td>VERIFIER_HASH 0x4388a21c687fdd5f218d7e3d13190cac4c5355818d3605fd5fb811df468ee696; runtime code hash 0xc26a6452cb4fb09bc555e9ba44384da0267da540ec8700a87f8f4801520b2fa1 matches pinned sp1-contracts v6.1.0</td></tr>
       <tr><td>Arc-local SP1 gateway</td><td class="hash">0x532D3a8035b87646a92245eCaa01e6602a13654e</td><td>route 0x4388a21c registered, not frozen</td></tr>
       <tr><td>One-shot deployment factory</td><td class="hash">0xC4932b2d2E2E7A97c90c1595a13A5913C70cab81</td><td>CREATE nonces 1 and 2 predict anchor and vault; no setter, no upgrade path</td></tr>
-      <tr><td>PFTL finality verifier</td><td class="hash">0x1D436908516D15E3c55A936899B47a885e047F27</td><td>egress vkey 0x0036cbe7…; route epoch 9; checkpoint 931; committee root ca8da61a…</td></tr>
-      <tr><td>Ingress anchor</td><td class="hash">0x92390D3a2102CB74E4746c05B4d91F61093475D0</td><td>direct mode; pinned vault; route binding d9e0cd40…</td></tr>
-      <tr><td>Vault</td><td class="hash">0x160307f3EfeAd79B6A3629c4b8D90E8301fC250F</td><td>token 0x3600…0000 (Arc USDC); runtime hash 0x8d15bb9d… equals the immutable pinned in the verifier</td></tr>
-      <tr><td>Arc ingress guest</td><td class="hash">vkey 0x0050a8b0daed2fa75f44d4102b42204c34668a03d311cb727cc6ca3f8df5cf16</td><td>ELF sha256 7660fcc5…; CI rebuild byte-identical (run 33586405990)</td></tr>
-      <tr><td>PFTL egress guest</td><td class="hash">vkey 0x0036cbe7d36bbfe1118a3c544eeba74f3791d2a19bf5ec59b972f72d36416852</td><td>ELF sha256 8b0f266a…; same CI rebuild</td></tr>
-      <tr><td>PFTL release</td><td class="hash">arc-current-v2-a699d560 · binary sha256 7f4288f3…</td><td>signed manifest, verified by every validator's unit at start; six-clone gate passed before rollout</td></tr>
+      <tr><td>PFTL finality verifier</td><td class="hash">0x1D436908516D15E3c55A936899B47a885e047F27</td><td>egress vkey 0x0036cbe7d36bbfe1118a3c544eeba74f3791d2a19bf5ec59b972f72d36416852; route epoch 9; checkpoint block id 8e3639ee748255636d09adb8b3fe70f20f8ae0aa9388b024eaffb98b7a94f3c7c4b0e5710f0d8c2479b08d9bc8665c4b (height 931); committee root ca8da61a23bf9d1d1e9ddf57edfe8ee7e26a33ac04c8ff6bee44c3e419083e03b1ecfd3e3299db3f9c6a8b0f5471f6c4</td></tr>
+      <tr><td>Ingress anchor</td><td class="hash">0x92390D3a2102CB74E4746c05B4d91F61093475D0</td><td>direct mode; pinned vault; route binding 0xd9e0cd409c5d1e118d65c78ee059adcbba937616353e9675e350d52ee8d498b2</td></tr>
+      <tr><td>Vault</td><td class="hash">0x160307f3EfeAd79B6A3629c4b8D90E8301fC250F</td><td>token 0x3600000000000000000000000000000000000000 (Arc USDC); runtime code hash 0x8d15bb9dc20c416db72c724eeeb725b8b395cb850a889cde130645dcc752764e equals the immutable pinned in the verifier</td></tr>
+      <tr><td>Arc ingress guest</td><td class="hash">vkey 0x0050a8b0daed2fa75f44d4102b42204c34668a03d311cb727cc6ca3f8df5cf16</td><td>ELF sha256 7660fcc58677cfec433a5f2337b9fe46fa96374a1e3c4bd6fba625b982d881bc; two clean CI rebuilds byte-identical (GitHub Actions run 33586405990)</td></tr>
+      <tr><td>PFTL egress guest</td><td class="hash">vkey 0x0036cbe7d36bbfe1118a3c544eeba74f3791d2a19bf5ec59b972f72d36416852</td><td>ELF sha256 8b0f266a035a432ef3c0e4233672d8a15b913cefd4c85ff07f91f008601bb744; same CI rebuild</td></tr>
+      <tr><td>PFTL release</td><td class="hash">arc-current-v2-a699d560 (git a699d560a9275ce769d25e5196d819a069a7285b) · binary sha256 7f4288f3b5182933d253c19661fd563d85c5ca94764497d727b37d6f991f9c0b</td><td>signed manifest, verified by every validator's unit at start; six-clone gate passed before rollout</td></tr>
     </tbody>
   </table>
 </section>
