@@ -1,6 +1,6 @@
 # Institution Legitimacy Scoring
 
-**Status:** Active operator direction — 2026-09-01
+**Status:** Active operator direction — 2026-09-01; packet-input revision executed 2026-09-03
 
 ## Purpose
 
@@ -32,6 +32,12 @@ The [two-UNL H200 results](institution-reputation-unl-h200-results-20260901.md)
 record the complete 5-point rubric, frozen inputs, four raw replay outputs, and
 per-validator scores. The complete artifact lives under
 `benchmarks/ai-governance/institution-reputation-unl-20260901/`.
+
+The packet-input successor described under "Scoring rule" has now run: see the
+[identity-packet H200 results](institution-reputation-packets-h200-results-20260903.md)
+(192/192 byte-identical on two distinct-owner hosts) and
+`benchmarks/ai-governance/institution-reputation-packets-20260903/`, which also
+publishes a deterministic packet-derived validator correlation.
 
 ## Scoring rule
 
