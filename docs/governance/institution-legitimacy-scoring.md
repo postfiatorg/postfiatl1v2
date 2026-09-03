@@ -35,7 +35,7 @@ per-validator scores. The complete artifact lives under
 
 The packet-input successor described under "Scoring rule" has now run: see the
 [identity-packet H200 results](institution-reputation-packets-h200-results-20260903.md)
-(192/192 byte-identical on two distinct-owner hosts) and
+(192/192 byte-identical on two distinct-owner hosts; superseded by the [identity-only rerun](institution-reputation-packets-h200-results-20260904.md)) and
 `benchmarks/ai-governance/institution-reputation-packets-20260903/`, which also
 publishes a deterministic packet-derived validator correlation.
 

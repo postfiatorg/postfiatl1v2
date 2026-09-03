@@ -17,38 +17,32 @@ EXPECTED_SOURCE_SHA256 = (
     "7687dcd9a23638dca4e0fbe50c2dd3782c6db89fa645802cd5dd9586feb87f27"
 )
 HEADINGS = [
-    "# Validator Identity Packet",
-    "## Packet Status",
-    "## Validator Coordinates",
-    "## Claimed Domain and Official URLs",
-    "## Public Identity",
-    "## Business Summary",
-    "## Public X Handle",
-    "## Region of Incorporation and Operations",
+    "# Organization Profile",
+    "## Identity",
+    "## Official Web Presence",
+    "## Incorporation and Operations",
     "## Activities",
-    "## Estimated Public-Profile Size",
+    "## Public Footprint",
+    "## Business Summary",
     "## Evidence",
-    "## Uncertainty and Conflicts",
+    "## Uncertainty",
     "## Machine-Readable Summary",
 ]
 SUMMARY_KEYS = {
-    "validator_id",
-    "network",
-    "claimed_domain",
-    "domain_verification_status",
     "canonical_entity",
     "entity_type",
     "aliases",
-    "official_urls",
-    "business_summary",
+    "official_website",
     "x_handle",
     "incorporation_region",
     "operating_regions",
+    "activities",
     "profile_size_tier",
     "profile_size_confidence",
     "identity_confidence",
-    "unresolved_fields",
+    "business_summary",
     "evidence_urls",
+    "unresolved",
 }
 PROFILE_TIERS = {
     "Unknown",
@@ -127,10 +121,9 @@ def verify_one(row: dict[str, Any]) -> dict[str, Any]:
     headings = re.findall(r"^#{1,2} .+$", packet_text, flags=re.MULTILINE)
     if headings != HEADINGS:
         raise ValueError(f"heading contract mismatch: {headings}")
-    if "SHADOW_ONLY" not in packet_text:
-        raise ValueError("missing SHADOW_ONLY marker")
-    if validator_id not in packet_text:
-        raise ValueError("missing validator id")
+    for banned in ("SHADOW_ONLY", "uptime", "Validator-list publishers containing", "list publishers containing"):
+        if banned.lower() in packet_text.lower():
+            raise ValueError(f"packet contains excluded operational metadata: {banned}")
     lowered = packet_text.lower()
     for forbidden in (
         "association_score",
@@ -160,14 +153,6 @@ def verify_one(row: dict[str, Any]) -> dict[str, Any]:
             f"summary key mismatch: missing={SUMMARY_KEYS - set(summary)}, "
             f"extra={set(summary) - SUMMARY_KEYS}"
         )
-    if summary["validator_id"] != validator_id:
-        raise ValueError("machine summary validator mismatch")
-    if summary["network"] != row["network_label"]:
-        raise ValueError("machine summary network mismatch")
-    if summary["claimed_domain"] != row["claimed_domain"]:
-        raise ValueError("machine summary claimed domain mismatch")
-    if summary["domain_verification_status"] != row["domain_verification_status"]:
-        raise ValueError("machine summary domain verification mismatch")
     if summary["business_summary"] != business:
         raise ValueError("machine summary business paragraph differs from prose")
     if summary["profile_size_tier"] not in PROFILE_TIERS:
@@ -200,9 +185,9 @@ def verify_one(row: dict[str, Any]) -> dict[str, Any]:
         "network": network,
         "network_label": row["network_label"],
         "claimed_domain": row["claimed_domain"],
-        "domain_verification_status": row["domain_verification_status"],
         "canonical_entity": summary["canonical_entity"],
         "entity_type": summary["entity_type"],
+        "official_website": summary["official_website"],
         "x_handle": summary["x_handle"],
         "incorporation_region": summary["incorporation_region"],
         "operating_regions": summary["operating_regions"],
@@ -305,7 +290,7 @@ def main() -> None:
         for row in records
     ]
     manifest = {
-        "artifact": "validator-identity-packets-20260901",
+        "artifact": "validator-identity-packets-20260904",
         "finalized_at": max(row["finished_at"] for row in records),
         "shadow_only": True,
         "consensus_input": False,

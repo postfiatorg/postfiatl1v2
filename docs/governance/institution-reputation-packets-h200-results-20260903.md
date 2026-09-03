@@ -6,6 +6,8 @@
 
 **Replay verdict:** **PASS** (192/192 byte-identical across two distinct-owner H200-class hosts, two runs each)
 
+**Superseded** by the [2026-09-04 identity-only results](institution-reputation-packets-h200-results-20260904.md): the packets scored here carried validator-list membership lines in 42 of 55 cases, which the scoring rule excludes.
+
 ## Plain-English result
 
 This is the scoring revision the [scoring rule](institution-legitimacy-scoring.md)

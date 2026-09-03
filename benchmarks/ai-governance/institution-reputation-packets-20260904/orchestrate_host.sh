@@ -26,7 +26,13 @@ print('package hashes ok')
 PY"
 
 "${SSH[@]}" "cd $REMOTE && chmod +x bootstrap_host.sh && ./bootstrap_host.sh"
-"${SSH[@]}" "cd $REMOTE && cat host_identity.txt && python3 run_host.py ${PREFIX}-run1 && python3 run_host.py ${PREFIX}-run2"
+# Run detached on the host so a dropped SSH session cannot kill the pass; poll for completion.
+"${SSH[@]}" "cd $REMOTE && cat host_identity.txt && (setsid nohup bash -c 'python3 run_host.py ${PREFIX}-run1 && python3 run_host.py ${PREFIX}-run2; echo RUNS_DONE' > runs.log 2>&1 < /dev/null &)"
+for _ in $(seq 1 120); do
+  sleep 15
+  if "${SSH[@]}" "grep -q RUNS_DONE $REMOTE/runs.log" 2>/dev/null; then break; fi
+done
+"${SSH[@]}" "cat $REMOTE/runs.log"
 
 scp -i "$HOME/.ssh/id_ed25519" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P "$PORT" \
   "root@$HOST:$REMOTE/outputs/${PREFIX}-run1.json" "root@$HOST:$REMOTE/outputs/${PREFIX}-run2.json" \
