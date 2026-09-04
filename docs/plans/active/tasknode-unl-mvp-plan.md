@@ -1,6 +1,6 @@
 # Task Node Identity-Derived UNL MVP Execution Plan
 
-**Status:** Active execution plan — steps A through E complete; every output remains `SHADOW_ONLY`
+**Status:** Active execution plan — steps A through F complete; every output remains `SHADOW_ONLY`
 
 **Date:** 2026-09-04
 
@@ -226,23 +226,26 @@ without packet-root lineage. Nostr private messages are never graph edges.
 `python/tests/fixtures/tasknode_unl/registry-rounds.json`, and
 `python/tests/fixtures/tasknode_unl/baseline-list.json`.
 
-- [ ] Accept at most one list change per round—one addition or one removal, not
+- [x] Accept at most one list change per round—one addition or one removal, not
       both—while the list has fewer than 39 validators. At or above 39, continue
       to enforce the supplied existing trust-graph transition budget rather
-      than inventing a new budget.
-- [ ] Reject a derivation whose registry root is more than one round old, and
+      than inventing a new budget
+      (`python/postfiat_rpc/tasknode_unl_churn.py`).
+- [x] Reject a derivation whose registry root is more than one round old, and
       bind the baseline list, current root, source round, and target round into
-      the result.
-- [ ] Encode and test the proposal's overlap math, where overlap is intersection
+      the result (`python/postfiat_rpc/tasknode_unl_churn.py`).
+- [x] Encode and test the proposal's overlap math, where overlap is intersection
       divided by union. A 20-validator swap gives `19/21 ~= 90.5%` for a node
       one round behind and `18/22 ~= 81.8%` two rounds behind; a swap first
       reaches 95% at `N=39` because `(N-1)/(N+1) >= 0.95`. At `N=20`, a
       single removal gives `19/20 = 95%`, a single addition gives
       `20/21 ~= 95.2%`, and the two-removal lag floor is
-      `18/20 = 90%`.
-- [ ] Treat a newly failed identity condition as a hold first. It becomes
+      `18/20 = 90%`
+      (`python/tests/test_tasknode_unl_churn.py`).
+- [x] Treat a newly failed identity condition as a hold first. It becomes
       eligible for a removal candidate only after a complete evaluation window
-      and remains subject to the one-change and stale-root guards.
+      and remains subject to the one-change and stale-root guards
+      (`python/postfiat_rpc/tasknode_unl_churn.py`).
 
 ### G. Fixture-driven shadow derivation runner
 

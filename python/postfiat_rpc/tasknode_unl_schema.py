@@ -46,6 +46,10 @@ VOUCH_LEDGER_INPUT_SCHEMA = "tasknode-unl-vouch-ledger-input-v1"
 COWORK_POINTER_INPUT_SCHEMA = "tasknode-unl-cowork-pointer-input-v1"
 FUNDING_TRANSFER_INPUT_SCHEMA = "tasknode-unl-funding-transfer-input-v1"
 FUNDING_EXCLUSION_SCHEMA = "tasknode-unl-funding-exclusions-v1"
+CHURN_BASELINE_SCHEMA = "tasknode-unl-churn-baseline-v1"
+CHURN_REGISTRY_HISTORY_SCHEMA = "tasknode-unl-registry-history-v1"
+CHURN_PROPOSAL_SCHEMA = "tasknode-unl-churn-proposal-v1"
+CHURN_RESULT_SCHEMA = "tasknode-unl-churn-result-v1"
 
 ACCOUNTABILITY_WINDOW_DAYS = 180
 ACCOUNTABILITY_WORK_DENOMINATOR = 40

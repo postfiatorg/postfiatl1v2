@@ -1,0 +1,28 @@
+{
+  "schema": "tasknode-unl-churn-baseline-v1",
+  "mode": "SHADOW_ONLY",
+  "registry_round": 20,
+  "registry_root": "2020202020202020202020202020202020202020202020202020202020202020",
+  "validator_ids": [
+    "validator-02",
+    "validator-03",
+    "validator-04",
+    "validator-05",
+    "validator-06",
+    "validator-07",
+    "validator-08",
+    "validator-09",
+    "validator-10",
+    "validator-11",
+    "validator-12",
+    "validator-13",
+    "validator-14",
+    "validator-15",
+    "validator-16",
+    "validator-17",
+    "validator-18",
+    "validator-19",
+    "validator-20",
+    "validator-21"
+  ]
+}
