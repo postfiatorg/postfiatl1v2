@@ -2520,16 +2520,17 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
         == SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1
         && supply_after_claim > nav_asset.circulating_supply
     {
-        let route_id = match record.evidence.source_chain_id {
-            ETHEREUM_MAINNET_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1,
-            ETHEREUM_SEPOLIA_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1,
-            _ => {
-                return Err((
-                    "ethereum_ingress_source_chain_unsupported",
-                    "Ethereum cap growth uses an unregistered source chain".to_string(),
-                ));
-            }
-        };
+        let route_id = vault_bridge_route_id_for_source(
+            &record.source_proof_kind,
+            record.evidence.source_chain_id,
+            &record.evidence.token_address,
+        )
+        .ok_or_else(|| {
+            (
+                "ethereum_ingress_source_route_unsupported",
+                "Ethereum cap growth uses an unregistered source chain/token route".to_string(),
+            )
+        })?;
         let ethereum_backing = ledger
             .vault_bridge_route_backing(&operation.asset_id)
             .map_err(|error| ("bad_route_backing", error))?
@@ -7780,16 +7781,17 @@ fn ensure_ethereum_ingress_public_values_match(
         "{VAULT_BRIDGE_PROFILE_SOURCE_CLASS_PREFIX}erc20_bridge_vault:{}:{}:{}",
         evidence.source_chain_id, evidence.vault_address, evidence.token_address
     );
-    let expected_route_id = match evidence.source_chain_id {
-        ETHEREUM_MAINNET_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1,
-        ETHEREUM_SEPOLIA_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1,
-        _ => {
-            return Err((
-                "ethereum_ingress_source_chain_unsupported",
-                "Ethereum ingress proof uses an unregistered source chain".to_string(),
-            ));
-        }
-    };
+    let expected_route_id = vault_bridge_route_id_for_source(
+        SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1,
+        evidence.source_chain_id,
+        &evidence.token_address,
+    )
+    .ok_or_else(|| {
+        (
+            "ethereum_ingress_source_route_unsupported",
+            "Ethereum ingress proof uses an unregistered source chain/token route".to_string(),
+        )
+    })?;
     let mismatch = profile.source_class != expected_source_class
         || values.route_id != expected_route_id
         || profile.valuation_policy_hash != values.manifest_hash

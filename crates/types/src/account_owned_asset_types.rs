@@ -658,6 +658,13 @@ pub fn issued_asset_id(
     Ok(hash_hex_domain(ISSUED_ASSET_ID_DOMAIN, preimage.as_bytes()))
 }
 
+/// Derive the canonical nine-decimal pfETH issued-asset identifier for a
+/// specific PFTL chain and issuer. The chain and issuer stay explicit because
+/// issued-asset identities are domain-bound and must never cross deployments.
+pub fn pfeth_asset_id(chain_id: &str, issuer: &str) -> Result<String, String> {
+    issued_asset_id(chain_id, issuer, PFETH_ASSET_CODE, PFETH_ASSET_VERSION)
+}
+
 pub fn trustline_id(account: &str, issuer: &str, asset_id: &str) -> Result<String, String> {
     validate_text_field("trustline.account", account)?;
     validate_text_field("trustline.issuer", issuer)?;

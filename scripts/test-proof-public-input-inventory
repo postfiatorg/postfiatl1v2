@@ -24,8 +24,8 @@ def main() -> None:
             )
 
     systems = {item["name"]: item for item in document["systems"]}
-    if len(systems) != 5:
-        raise SystemExit("proof inventory must classify exactly five proof systems")
+    if len(systems) != 7:
+        raise SystemExit("proof inventory must classify exactly seven proof systems")
     expected_layouts = {
         "AssetOrchard swap": (28, "ASSET_ORCHARD_PUBLIC_INSTANCE_LEN: usize = 28"),
         "AssetOrchard private egress": (
@@ -85,8 +85,76 @@ def main() -> None:
     if "sp1_zkvm::io::commit_slice(&public_values)" not in reserve_guest:
         raise SystemExit("provider-neutral NAV guest public-values commitment missing")
 
+    pfeth_ingress = systems["Ethereum mainnet pfETH ingress"]
+    if (
+        pfeth_ingress["proof_system_id"]
+        != "sp1-pfeth-ethereum-mainnet-ingress-v1"
+        or pfeth_ingress["public_values_schema"]
+        != "postfiat.pfeth.ethereum_ingress_public_values.v1"
+        or pfeth_ingress["program_vkey"]
+        != "0x000dd724902a8a24abde9f3fda01477e0d454ac506fbb6a0613fd4486ad4953c"
+    ):
+        raise SystemExit("pfETH ingress proof identity mismatch")
+    ingress_fields = pfeth_ingress["public_values"]
+    if [field["index"] for field in ingress_fields] != list(range(26)):
+        raise SystemExit("pfETH ingress fields must cover exactly indices 0..25")
+    if any(not field.get("name") or not field.get("binding") for field in ingress_fields):
+        raise SystemExit("pfETH ingress public fields need names and bindings")
+    ingress_guest = (
+        ROOT / "programs/pfeth-eth-mainnet-ingress/src/main.rs"
+    ).read_text(encoding="utf-8")
+    ingress_library = (
+        ROOT / "programs/pfusdc-eth-mainnet-ingress/src/lib.rs"
+    ).read_text(encoding="utf-8")
+    ingress_tool = (
+        ROOT / "tools/eth-l1-mainnet-fast-lane-p0/src/main.rs"
+    ).read_text(encoding="utf-8")
+    for marker, source in (
+        ("verify_weth_witness(&witness)", ingress_guest),
+        ("PFETH_PUBLIC_VALUES_SCHEMA", ingress_library),
+        ("WETH_WEI_PER_PFETH_ATOM: u64 = 1_000_000_000", ingress_library),
+        ("PFETH_ELF", ingress_tool),
+    ):
+        if marker not in source:
+            raise SystemExit(f"pfETH ingress source marker missing: {marker}")
+
+    egress = systems["PFTL bridge finality egress"]
+    if (
+        egress["proof_system_id"] != "sp1-pftl-finality-egress-v1"
+        or egress["program_vkey"]
+        != "0x00140f09ca6f1b917e3999a806df5ef4ac4468bd65b85e8580cbc16f832dfe47"
+    ):
+        raise SystemExit("PFTL egress proof identity mismatch")
+    withdrawal_fields = egress["withdrawal_public_values"]
+    checkpoint_fields = egress["checkpoint_public_values"]
+    if [field["tag"] for field in withdrawal_fields] != list(range(1, 40)):
+        raise SystemExit("PFTL withdrawal fields must cover exactly tags 1..39")
+    if [field["tag"] for field in checkpoint_fields] != list(range(1, 16)):
+        raise SystemExit("PFTL checkpoint fields must cover exactly tags 1..15")
+    if any(
+        not field.get("name") or not field.get("binding")
+        for field in withdrawal_fields + checkpoint_fields
+    ):
+        raise SystemExit("PFTL egress public fields need names and bindings")
+    egress_guest = (ROOT / "programs/pfusdc-egress/src/main.rs").read_text(
+        encoding="utf-8"
+    )
+    egress_types = (ROOT / "crates/types/src/pfusdc_tier4_types.rs").read_text(
+        encoding="utf-8"
+    )
+    for marker, source in (
+        ("verify_egress_witness_v1", egress_guest),
+        ("verify_checkpoint_witness_v1", egress_guest),
+        ("pfusdc_append_hex(&mut out, 39, &self.proof_nullifier)?", egress_types),
+        ("pfusdc_append_hex(&mut out, 15, &self.finalized_state_root)?", egress_types),
+    ):
+        if marker not in source:
+            raise SystemExit(f"PFTL egress source marker missing: {marker}")
+
     public_fields = sum(
         len(system.get("public_instances", system.get("public_values", [])))
+        + len(system.get("withdrawal_public_values", []))
+        + len(system.get("checkpoint_public_values", []))
         for system in systems.values()
     )
     print(

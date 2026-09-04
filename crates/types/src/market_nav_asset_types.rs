@@ -3722,6 +3722,7 @@ impl LedgerState {
             let Some(route_id) = vault_bridge_route_id_for_source(
                 &deposit.source_proof_kind,
                 deposit.evidence.source_chain_id,
+                &deposit.evidence.token_address,
             ) else {
                 continue;
             };
@@ -3758,6 +3759,7 @@ impl LedgerState {
                 vault_bridge_route_id_for_source(
                     &deposit.source_proof_kind,
                     deposit.evidence.source_chain_id,
+                    &deposit.evidence.token_address,
                 )
             });
             if let Some(route_id) = route_id {
@@ -4856,24 +4858,33 @@ impl LedgerState {
     }
 }
 
-fn vault_bridge_route_id_for_source(
+pub fn vault_bridge_route_id_for_source(
     source_proof_kind: &str,
     source_chain_id: u64,
+    source_token_address: &str,
 ) -> Option<&'static str> {
-    match (source_proof_kind, source_chain_id) {
-        (SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1, ETHEREUM_MAINNET_CHAIN_ID) => {
-            Some(VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1)
-        }
-        (SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1, ETHEREUM_SEPOLIA_CHAIN_ID) => {
-            Some(VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1)
-        }
+    match (source_proof_kind, source_chain_id, source_token_address) {
+        (
+            SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1,
+            ETHEREUM_MAINNET_CHAIN_ID,
+            ETHEREUM_MAINNET_USDC_ADDRESS,
+        ) => Some(VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1),
+        (
+            SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1,
+            ETHEREUM_MAINNET_CHAIN_ID,
+            ETHEREUM_MAINNET_WETH9_ADDRESS,
+        ) => Some(VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_WETH_V1),
+        (
+            SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1,
+            ETHEREUM_SEPOLIA_CHAIN_ID,
+            ETHEREUM_SEPOLIA_USDC_ADDRESS,
+        ) => Some(VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1),
         (
             NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1,
             ARBITRUM_ONE_CHAIN_ID,
-        ) => {
-            Some(VAULT_BRIDGE_ROUTE_ARBITRUM_ONE_USDC_V1)
-        }
+            ARBITRUM_ONE_USDC_ADDRESS,
+        ) => Some(VAULT_BRIDGE_ROUTE_ARBITRUM_ONE_USDC_V1),
         _ => None,
     }
 }
