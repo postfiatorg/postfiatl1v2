@@ -9,7 +9,7 @@ use alloy::{
     rpc::types::EIP1186AccountProofResponse,
 };
 use anyhow::{anyhow, bail, Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use helios_consensus_core::{
     apply_bootstrap, calc_sync_period,
     consensus_spec::MainnetConsensusSpec,
@@ -17,8 +17,9 @@ use helios_consensus_core::{
     verify_bootstrap,
 };
 use pfusdc_eth_mainnet_ingress_program::{
-    verify_witness, EthIngressPolicyV1, EthIngressWitnessV1, MAINNET_CHAIN_ID,
-    MAINNET_GENESIS_VALIDATORS_ROOT, POLICY_SCHEMA, ROUTE_ID, WITNESS_SCHEMA,
+    verify_weth_witness, verify_witness, EthIngressPolicyV1, EthIngressPublicValuesV1,
+    EthIngressWitnessV1, MAINNET_CHAIN_ID, MAINNET_GENESIS_VALIDATORS_ROOT, PFETH_POLICY_SCHEMA,
+    PFETH_ROUTE_ID, PFETH_WITNESS_SCHEMA, POLICY_SCHEMA, ROUTE_ID, WITNESS_SCHEMA,
 };
 use postfiat_types::{
     vault_bridge_deposit_id, vault_bridge_pftl_recipient_hash, VaultBridgeDepositEvidence,
@@ -34,12 +35,90 @@ use sp1_sdk::{
     SP1Stdin,
 };
 
-const ELF: Elf = Elf::Static(include_bytes!(
+const PFUSDC_ELF: Elf = Elf::Static(include_bytes!(
     "../../../programs/pfusdc-eth-mainnet-ingress/elf/pfusdc-eth-mainnet-ingress-program"
+));
+const PFETH_ELF: Elf = Elf::Static(include_bytes!(
+    "../../../programs/pfeth-eth-mainnet-ingress/elf/pfeth-eth-mainnet-ingress-program"
 ));
 const CHECKPOINTS_BEHIND: u64 = 16;
 const MAX_UPDATES: u8 = 8;
 const USDC: &str = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
+const WETH: &str = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum IngressRoute {
+    Pfusdc,
+    Pfeth,
+}
+
+impl IngressRoute {
+    fn from_deployment(value: Option<&str>) -> Result<Self> {
+        match value.unwrap_or(ROUTE_ID) {
+            ROUTE_ID => Ok(Self::Pfusdc),
+            PFETH_ROUTE_ID => Ok(Self::Pfeth),
+            other => bail!("unsupported Ethereum ingress route `{other}`"),
+        }
+    }
+
+    fn from_witness(witness: &EthIngressWitnessV1) -> Result<Self> {
+        match witness.schema.as_str() {
+            WITNESS_SCHEMA => Ok(Self::Pfusdc),
+            PFETH_WITNESS_SCHEMA => Ok(Self::Pfeth),
+            other => bail!("unsupported Ethereum ingress witness schema `{other}`"),
+        }
+    }
+
+    fn elf(self) -> Elf {
+        match self {
+            Self::Pfusdc => PFUSDC_ELF,
+            Self::Pfeth => PFETH_ELF,
+        }
+    }
+
+    fn route_id(self) -> &'static str {
+        match self {
+            Self::Pfusdc => ROUTE_ID,
+            Self::Pfeth => PFETH_ROUTE_ID,
+        }
+    }
+
+    fn witness_schema(self) -> &'static str {
+        match self {
+            Self::Pfusdc => WITNESS_SCHEMA,
+            Self::Pfeth => PFETH_WITNESS_SCHEMA,
+        }
+    }
+
+    fn policy_schema(self) -> &'static str {
+        match self {
+            Self::Pfusdc => POLICY_SCHEMA,
+            Self::Pfeth => PFETH_POLICY_SCHEMA,
+        }
+    }
+
+    fn token(self) -> &'static str {
+        match self {
+            Self::Pfusdc => USDC,
+            Self::Pfeth => WETH,
+        }
+    }
+
+    fn manifest_domain(self) -> &'static [u8] {
+        match self {
+            Self::Pfusdc => b"postfiat.ethereum-mainnet-usdc-v1.p0\0",
+            Self::Pfeth => b"postfiat.ethereum-mainnet-weth-v1.p0\0",
+        }
+    }
+
+    fn verify(self, witness: &EthIngressWitnessV1) -> Result<EthIngressPublicValuesV1> {
+        let result = match self {
+            Self::Pfusdc => verify_witness(witness),
+            Self::Pfeth => verify_weth_witness(witness),
+        };
+        result.map_err(anyhow::Error::msg)
+    }
+}
 
 #[derive(Parser)]
 struct Cli {
@@ -106,7 +185,10 @@ enum Command {
     /// rejecting any Arbitrum marker or foreign chain id. Prints the profile
     /// JSON, its governed profile hash, and the route binding.
     RouteProfile {
-        /// pfUSDC issued-asset id this route credits.
+        /// Select the Ethereum-mainnet token route.
+        #[arg(long, value_enum, default_value_t = IngressRoute::Pfusdc)]
+        route: IngressRoute,
+        /// Issued-asset id this route credits.
         #[arg(long)]
         asset_id: String,
         /// Deployed ERC20BridgeVaultL1 address on Ethereum mainnet.
@@ -147,11 +229,16 @@ enum Command {
         #[arg(long)]
         output: Option<PathBuf>,
     },
-    ProgramInfo,
+    ProgramInfo {
+        #[arg(long, value_enum, default_value_t = IngressRoute::Pfusdc)]
+        route: IngressRoute,
+    },
 }
 
 #[derive(Deserialize)]
 struct Deployment {
+    #[serde(default)]
+    route_id: Option<String>,
     vault: String,
     deposit_tx: String,
     amount_atoms: u64,
@@ -288,6 +375,7 @@ async fn main() -> Result<()> {
             output,
         } => cross_vkey_audit(&proof, &foreign_elf, &output).await,
         Command::RouteProfile {
+            route,
             asset_id,
             vault_address,
             vault_runtime_code_hash,
@@ -306,6 +394,7 @@ async fn main() -> Result<()> {
             expires_at_height,
             output,
         } => route_profile(
+            route,
             asset_id,
             vault_address,
             vault_runtime_code_hash,
@@ -324,7 +413,7 @@ async fn main() -> Result<()> {
             expires_at_height,
             output,
         ),
-        Command::ProgramInfo => program_info().await,
+        Command::ProgramInfo { route } => program_info(route).await,
     }
 }
 
@@ -413,7 +502,10 @@ async fn run_resumable(
 
     if witness.exists() {
         let decoded: EthIngressWitnessV1 = serde_json::from_slice(&fs::read(&witness)?)?;
-        verify_witness(&decoded).map_err(|e| anyhow!("banked witness invalid: {e}"))?;
+        let route = IngressRoute::from_witness(&decoded)?;
+        route
+            .verify(&decoded)
+            .map_err(|e| anyhow!("banked witness invalid: {e}"))?;
     } else {
         capture(
             deployment,
@@ -472,19 +564,21 @@ async fn verify_banked_proof(
     proof_path: &Path,
 ) -> Result<(String, String, String)> {
     let witness: EthIngressWitnessV1 = serde_json::from_slice(&fs::read(witness_path)?)?;
-    let expected = serde_cbor::to_vec(&verify_witness(&witness).map_err(|error| anyhow!(error))?)?;
+    let route = IngressRoute::from_witness(&witness)?;
+    let expected = serde_cbor::to_vec(&route.verify(&witness)?)?;
     let proof: SP1ProofWithPublicValues = bincode::deserialize(&fs::read(proof_path)?)?;
     anyhow::ensure!(
         proof.public_values.to_vec() == expected,
         "banked proof public values do not match the banked witness"
     );
     let client = ProverClient::from_env().await;
-    let pk = client.setup(ELF).await?;
+    let elf = route.elf();
+    let pk = client.setup(elf.clone()).await?;
     client
         .verify(&proof, pk.verifying_key(), None)
         .context("banked proof does not verify under the compiled guest ELF")?;
     Ok((
-        hex::encode(Sha256::digest(&*ELF)),
+        hex::encode(Sha256::digest(&*elf)),
         pk.verifying_key().bytes32(),
         hex::encode(Sha256::digest(&expected)),
     ))
@@ -498,6 +592,7 @@ async fn capture(
     wait_seconds: u64,
 ) -> Result<()> {
     let d: Deployment = serde_json::from_slice(&fs::read(deployment_path)?)?;
+    let route = IngressRoute::from_deployment(d.route_id.as_deref())?;
     let rpc = Rpc::new()?;
     let tx = with_0x(&d.deposit_tx);
     let receipt: Value = rpc
@@ -561,7 +656,7 @@ async fn capture(
     let vault_code: Bytes = rpc
         .call(execution_rpc, "eth_getCode", json!([vault, block]))
         .await?;
-    let token: Address = USDC.parse()?;
+    let token: Address = route.token().parse()?;
     let token_code: Bytes = rpc
         .call(execution_rpc, "eth_getCode", json!([token, block]))
         .await?;
@@ -580,8 +675,12 @@ async fn capture(
             json!([{"to":token,"data":balance_of_calldata(vault)},block]),
         )
         .await?;
-    let token_balance_key =
-        find_balance_slot(&rpc, execution_rpc, token, vault, token_balance, &block).await?;
+    let token_balance_key = match route {
+        IngressRoute::Pfusdc => {
+            find_balance_slot(&rpc, execution_rpc, token, vault, token_balance, &block).await?
+        }
+        IngressRoute::Pfeth => mapping_owner_slot(vault, 3),
+    };
     let vault_storage = get_proof(&rpc, execution_rpc, vault, &vault_slots, &block).await?;
     let token_storage = get_proof(&rpc, execution_rpc, token, &[token_balance_key], &block).await?;
     anyhow::ensure!(
@@ -614,16 +713,26 @@ async fn capture(
         expected == evidence.deposit_id,
         "on-chain deposit ID differs from canonical evidence"
     );
-    let mut manifest = b"postfiat.ethereum-mainnet-usdc-v1.p0\0".to_vec();
+    let mut manifest = route.manifest_domain().to_vec();
     manifest.extend_from_slice(vault.as_slice());
     manifest.extend_from_slice(token.as_slice());
-    manifest.extend_from_slice(d.creation_bytecode_hash.as_bytes());
+    if route == IngressRoute::Pfeth {
+        let creation_hash = strip0x(&d.creation_bytecode_hash);
+        anyhow::ensure!(
+            creation_hash.len() == 64 && creation_hash.bytes().all(|byte| byte.is_ascii_hexdigit()),
+            "pfETH creation_bytecode_hash must be 32-byte hex"
+        );
+        manifest.extend_from_slice(&hex::decode(creation_hash)?);
+    } else {
+        // Preserve the deployed pfUSDC P0 policy-hash preimage.
+        manifest.extend_from_slice(d.creation_bytecode_hash.as_bytes());
+    }
     let deposit_id_for_report = evidence.deposit_id.clone();
     let witness = EthIngressWitnessV1 {
-        schema: WITNESS_SCHEMA.into(),
+        schema: route.witness_schema().into(),
         policy: EthIngressPolicyV1 {
-            schema: POLICY_SCHEMA.into(),
-            route_id: ROUTE_ID.into(),
+            schema: route.policy_schema().into(),
+            route_id: route.route_id().into(),
             source_chain_id: MAINNET_CHAIN_ID,
             genesis_validators_root: MAINNET_GENESIS_VALIDATORS_ROOT,
             vault_address: vault,
@@ -638,8 +747,9 @@ async fn capture(
         token_storage,
         evidence,
     };
-    let values =
-        verify_witness(&witness).map_err(|e| anyhow!("native verification failed: {e}"))?;
+    let values = route
+        .verify(&witness)
+        .map_err(|e| anyhow!("native verification failed: {e}"))?;
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)?
     };
@@ -664,6 +774,11 @@ fn receipt_sender(receipt: &Value) -> Result<Address> {
 
 fn audit(witness_path: &Path, output: &Path) -> Result<()> {
     let original: Value = serde_json::from_slice(&fs::read(witness_path)?)?;
+    let baseline: EthIngressWitnessV1 = serde_json::from_value(original.clone())?;
+    let route = IngressRoute::from_witness(&baseline)?;
+    route
+        .verify(&baseline)
+        .context("baseline witness is invalid")?;
     let cases = [
         ("non_finalized_or_orphaned_block", "/evidence/block_hash"),
         ("wrong_chain_id", "/policy/source_chain_id"),
@@ -690,7 +805,7 @@ fn audit(witness_path: &Path, output: &Path) -> Result<()> {
                 .ok_or_else(|| anyhow!("missing {pointer}"))?,
         )?;
         let decoded: Result<EthIngressWitnessV1, _> = serde_json::from_value(v);
-        let rejected = decoded.map(|w| verify_witness(&w).is_err()).unwrap_or(true);
+        let rejected = decoded.map(|w| route.verify(&w).is_err()).unwrap_or(true);
         results.push(json!({"case":name,"rejected":rejected}));
     }
     // Duplicates are a stateful admission property; exercise an explicit fail-closed replay set.
@@ -729,7 +844,9 @@ fn enforce_prover_backend(expected: Option<&str>) -> Result<()> {
 
 async fn prove(witness_path: &Path, out: &Path, skip_redundant_execute: bool) -> Result<()> {
     let witness: EthIngressWitnessV1 = serde_json::from_slice(&fs::read(witness_path)?)?;
-    let expected = serde_cbor::to_vec(&verify_witness(&witness).map_err(|e| anyhow!(e))?)?;
+    let route = IngressRoute::from_witness(&witness)?;
+    let expected = serde_cbor::to_vec(&route.verify(&witness)?)?;
+    let elf = route.elf();
     let mut stdin = SP1Stdin::new();
     stdin.write_vec(serde_cbor::to_vec(&witness)?);
     let client = ProverClient::from_env().await;
@@ -737,7 +854,7 @@ async fn prove(witness_path: &Path, out: &Path, skip_redundant_execute: bool) ->
         (None, 0)
     } else {
         let exec_start = Instant::now();
-        let (public_values, report) = client.execute(ELF, stdin.clone()).await?;
+        let (public_values, report) = client.execute(elf.clone(), stdin.clone()).await?;
         anyhow::ensure!(
             public_values.to_vec() == expected,
             "SP1 execute output mismatch"
@@ -750,7 +867,7 @@ async fn prove(witness_path: &Path, out: &Path, skip_redundant_execute: bool) ->
     fs::create_dir_all(out)?;
     write_atomic(&out.join("public-values.bin"), &expected)?;
     let prove_start = Instant::now();
-    let pk = client.setup(ELF).await?;
+    let pk = client.setup(elf.clone()).await?;
     let proof = client.prove(&pk, stdin).groth16().await?;
     client.verify(&proof, pk.verifying_key(), None)?;
     anyhow::ensure!(
@@ -760,7 +877,7 @@ async fn prove(witness_path: &Path, out: &Path, skip_redundant_execute: bool) ->
     write_atomic(&out.join("proof.bin"), &bincode::serialize(&proof)?)?;
     write_atomic(&out.join("proof-calldata.bin"), &proof.bytes())?;
     let result = json!({"schema":"postfiat.eth_l1_fast_lane_p0_proof_report.v1","program_vkey":pk.verifying_key().bytes32(),
-        "elf_sha256":hex::encode(Sha256::digest(&*ELF)),"instruction_count":instruction_count,
+        "route_id":route.route_id(),"elf_sha256":hex::encode(Sha256::digest(&*elf)),"instruction_count":instruction_count,
         "host_execute_skipped":skip_redundant_execute,
         "execute_ms":execute_ms,"setup_and_groth16_ms":prove_start.elapsed().as_millis(),
         "proof_bytes":proof.bytes().len(),"serialized_proof_bytes":fs::metadata(out.join("proof.bin"))?.len(),
@@ -774,12 +891,13 @@ async fn prove(witness_path: &Path, out: &Path, skip_redundant_execute: bool) ->
     Ok(())
 }
 
-async fn program_info() -> Result<()> {
+async fn program_info(route: IngressRoute) -> Result<()> {
     let c = ProverClient::from_env().await;
-    let pk = c.setup(ELF).await?;
+    let elf = route.elf();
+    let pk = c.setup(elf.clone()).await?;
     println!(
         "{}",
-        json!({"vkey":pk.verifying_key().bytes32(),"elf_sha256":hex::encode(Sha256::digest(&*ELF))})
+        json!({"route_id":route.route_id(),"vkey":pk.verifying_key().bytes32(),"elf_sha256":hex::encode(Sha256::digest(&*elf))})
     );
     Ok(())
 }
@@ -798,6 +916,7 @@ fn reject_arbitrum_scope(label: &str, value: &str) -> Result<()> {
 }
 
 fn route_profile(
+    route: IngressRoute,
     asset_id: String,
     vault_address: String,
     vault_runtime_code_hash: String,
@@ -816,7 +935,7 @@ fn route_profile(
     expires_at_height: u64,
     output: Option<PathBuf>,
 ) -> Result<()> {
-    reject_arbitrum_scope("route_id", ROUTE_ID)?;
+    reject_arbitrum_scope("route_id", route.route_id())?;
     reject_arbitrum_scope("asset_id", &asset_id)?;
     reject_arbitrum_scope("verifier_policy_hash", &verifier_policy_hash)?;
     let vault_address = with_0x(&strip0x(&vault_address));
@@ -844,12 +963,12 @@ fn route_profile(
     }
     let profile = VaultBridgeRouteProfileV1 {
         schema: VAULT_BRIDGE_ROUTE_PROFILE_SCHEMA_V1.to_string(),
-        route_id: ROUTE_ID.to_string(),
+        route_id: route.route_id().to_string(),
         asset_id,
         source_chain_id: MAINNET_CHAIN_ID,
         vault_address: vault_address.to_lowercase(),
         vault_runtime_code_hash: vault_runtime_code_hash.to_lowercase(),
-        token_address: USDC.to_lowercase(),
+        token_address: route.token().to_lowercase(),
         token_runtime_code_hash: token_runtime_code_hash.to_lowercase(),
         route_epoch,
         verifier_kind: NAV_PROFILE_VERIFIER_SP1_GROTH16.to_string(),
@@ -1199,6 +1318,7 @@ mod tests {
         let (asset_id, vault, vault_hash, token_hash, vkey, policy) = valid_route_profile_args();
         let base = |asset: String, pol: String| {
             route_profile(
+                IngressRoute::Pfusdc,
                 asset,
                 vault.clone(),
                 vault_hash.clone(),
@@ -1231,10 +1351,54 @@ mod tests {
     fn route_profile_rejects_bad_activation_window() {
         let (asset_id, vault, vault_hash, token_hash, vkey, policy) = valid_route_profile_args();
         assert!(route_profile(
-            asset_id, vault, vault_hash, token_hash, vkey, policy, 1, 900, 64, 128, 256, 1, 4096,
-            4096, 20, 20, None,
+            IngressRoute::Pfusdc,
+            asset_id,
+            vault,
+            vault_hash,
+            token_hash,
+            vkey,
+            policy,
+            1,
+            900,
+            64,
+            128,
+            256,
+            1,
+            4096,
+            4096,
+            20,
+            20,
+            None,
         )
         .is_err());
+    }
+
+    #[test]
+    fn pfeth_route_selects_weth_guest_and_fixed_slot_three() {
+        assert_eq!(
+            IngressRoute::from_deployment(Some(PFETH_ROUTE_ID)).expect("pfETH route"),
+            IngressRoute::Pfeth
+        );
+        assert_eq!(IngressRoute::Pfeth.route_id(), PFETH_ROUTE_ID);
+        assert_eq!(IngressRoute::Pfeth.witness_schema(), PFETH_WITNESS_SCHEMA);
+        assert_eq!(IngressRoute::Pfeth.policy_schema(), PFETH_POLICY_SCHEMA);
+        assert_eq!(IngressRoute::Pfeth.token(), WETH);
+        let vault: Address = "0x1111111111111111111111111111111111111111"
+            .parse()
+            .expect("address");
+        assert_eq!(
+            mapping_owner_slot(vault, 3),
+            keccak256(
+                [
+                    [0u8; 12].as_slice(),
+                    vault.as_slice(),
+                    [0u8; 24].as_slice(),
+                    3u64.to_be_bytes().as_slice(),
+                ]
+                .concat()
+            )
+        );
+        assert!(IngressRoute::from_deployment(Some("ethereum-mainnet-random-v1")).is_err());
     }
 
     #[test]
@@ -1266,7 +1430,7 @@ mod tests {
                 "mainnet fork epoch {e} collides with Sepolia schedule"
             );
         }
-        assert!(reject_arbitrum_scope("route_id", "ethereum-sepolia-usdc-v1").is_ok() || true);
+        assert!(IngressRoute::from_deployment(Some("ethereum-sepolia-usdc-v1")).is_err());
         assert!(reject_arbitrum_scope("route_id", "ethereum-mainnet-usdc-v1").is_ok());
     }
 }

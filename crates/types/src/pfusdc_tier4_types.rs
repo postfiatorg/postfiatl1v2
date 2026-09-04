@@ -10,6 +10,8 @@ pub const PFUSDC_ARC_INGRESS_PUBLIC_VALUES_SCHEMA_V1: &str =
     "postfiat.pfusdc.arc_ingress_public_values.v1";
 pub const PFUSDC_ARC_FINALITY_STATE_SCHEMA_V1: &str =
     "postfiat.pfusdc.arc_finality_state.v1";
+pub const PFETH_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1: &str =
+    "postfiat.pfeth.ethereum_ingress_public_values.v1";
 pub const BRIDGE_EXIT_LEAF_SCHEMA_V1: &str = "postfiat.bridge_exit_leaf.v1";
 pub const BRIDGE_EXIT_ACCEPTED_RECEIPT_CODE: &str = "accepted";
 
@@ -35,7 +37,10 @@ const BRIDGE_EXIT_MAX_LEAVES_PER_BLOCK_V1: usize = 4096;
 
 /// Consensus-decoded public values for `sp1-ethereum-finality-v1`.
 /// The proof authenticates Ethereum finality, code hashes, state/storage
-/// inclusion, the permanent deposit record, and 1:1 vault backing.
+/// inclusion, the permanent deposit record, and route-defined 1:1 backing.
+/// Historical naming is retained for wire compatibility; both pfUSDC and the
+/// WETH-backed, nine-decimal pfETH route use this fixed field layout with
+/// distinct schemas, route IDs, manifests, and verifying keys.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PfUsdcEthereumIngressPublicValuesV1 {
     pub schema: String,
@@ -66,6 +71,10 @@ pub struct PfUsdcEthereumIngressPublicValuesV1 {
     pub vault_token_balance_atoms: String,
 }
 
+/// Semantic alias for the pfETH route. The wire layout remains shared so old
+/// replay code does not need a second decoder.
+pub type PfEthEthereumIngressPublicValuesV1 = PfUsdcEthereumIngressPublicValuesV1;
+
 impl PfUsdcEthereumIngressPublicValuesV1 {
     pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, String> {
         let values: Self = serde_cbor::from_slice(bytes)
@@ -80,7 +89,11 @@ impl PfUsdcEthereumIngressPublicValuesV1 {
     }
 
     pub fn validate(&self) -> Result<(), String> {
-        if self.schema != PFUSDC_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1 {
+        if !matches!(
+            self.schema.as_str(),
+            PFUSDC_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1
+                | PFETH_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1
+        ) {
             return Err("Ethereum ingress public values schema mismatch".to_string());
         }
         if self.route_id.is_empty() || self.source_chain_id == 0 || self.amount_atoms == 0 {

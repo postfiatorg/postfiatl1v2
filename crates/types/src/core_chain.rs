@@ -190,8 +190,24 @@ pub const SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1: &str =
 pub const ETHEREUM_MAINNET_CHAIN_ID: u64 = 1;
 pub const ETHEREUM_SEPOLIA_CHAIN_ID: u64 = 11_155_111;
 pub const ARBITRUM_ONE_CHAIN_ID: u64 = 42_161;
+pub const ETHEREUM_MAINNET_USDC_ADDRESS: &str =
+    "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
+pub const ETHEREUM_SEPOLIA_USDC_ADDRESS: &str =
+    "0x1c7d4b196cb0c7b01d743fbc6116a902379c7238";
+pub const ARBITRUM_ONE_USDC_ADDRESS: &str =
+    "0xaf88d065e77c8cc2239327c5edb3a432268e5831";
+pub const ETHEREUM_MAINNET_WETH9_ADDRESS: &str =
+    "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
+pub const ETHEREUM_MAINNET_WETH9_RUNTIME_CODE_HASH: &str =
+    "0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23";
+pub const PFETH_ASSET_CODE: &str = "PFETH";
+pub const PFETH_ASSET_VERSION: u32 = 1;
+pub const PFETH_ASSET_PRECISION: u8 = 9;
+pub const WETH_WEI_PER_PFETH_ATOM: u64 = 1_000_000_000;
 pub const VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1: &str =
     "ethereum-mainnet-usdc-v1";
+pub const VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_WETH_V1: &str =
+    "ethereum-mainnet-weth-v1";
 pub const VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1: &str =
     "ethereum-sepolia-usdc-v1";
 /// Banked P0 Sepolia verifier identity. This is test-route material only; a
