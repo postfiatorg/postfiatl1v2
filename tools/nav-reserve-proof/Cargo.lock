@@ -4538,7 +4538,21 @@ dependencies = [
  "serde",
  "serde_cbor",
  "serde_json",
+ "sha2 0.10.9",
  "sha3 0.11.0",
+]
+
+[[package]]
+name = "postfiat-yolo-collection"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "postfiat-types",
+ "reserve-proof-types",
+ "serde",
+ "serde_cbor",
+ "serde_json",
 ]
 
 [[package]]
@@ -5105,6 +5119,7 @@ dependencies = [
  "alloy-trie",
  "base64",
  "bs58",
+ "chrono",
  "curve25519-dalek",
  "ed25519-dalek",
  "hex",

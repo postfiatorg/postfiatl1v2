@@ -13,6 +13,7 @@ pub mod market_policy {
     include!("market_policy.rs");
 }
 include!("nav_sp1_verifier.rs");
+include!("yolo_collection_verifier.rs");
 pub mod vault_bridge_policy {
     include!("vault_bridge_policy.rs");
 }

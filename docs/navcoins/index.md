@@ -92,12 +92,15 @@ entering or leaving the shielded pool.
    market-support invariants.
 4. [Proof-of-Reserve Primitives](reserve-primitives.md) explains proof profiles,
    reserve packets, attestors, challenges, and the native NAV transaction path.
-5. [Assets And Venues](assets-and-venues.md) documents a651, a652, a666,
+5. [YOLO Options Reserve Profile](yolo-options-reserve-profile.md) defines the
+   pre-production brokerage commitment adapter and its deliberately attested
+   trust classification.
+6. [Assets And Venues](assets-and-venues.md) documents a651, a652, a666,
    pfUSDC, the
    Ethereum venues, and the bridge/market-operation contracts.
-6. [a651 Uniswap Pool](uniswap-pool.md) retains the legacy a651 venue, pool,
+7. [a651 Uniswap Pool](uniswap-pool.md) retains the legacy a651 venue, pool,
    launch, and migration history.
-7. [PFTL Tools](pftl-tools.md) maps the scripts, CLI commands, Python modules,
+8. [PFTL Tools](pftl-tools.md) maps the scripts, CLI commands, Python modules,
    and Solidity contracts to the evidence they produce.
-8. [Reference Posts](references.md) links the public NAVCoin series and the
+9. [Reference Posts](references.md) links the public NAVCoin series and the
    deeper local implementation documents.

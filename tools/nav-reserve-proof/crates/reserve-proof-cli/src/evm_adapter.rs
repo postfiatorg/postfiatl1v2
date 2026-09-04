@@ -41,8 +41,10 @@ use reserve_proof_types::{
         EvmSpotPolicyV1, EvmSpotQuantityProofV1, EvmSpotTokenProofV1, EvmSpotVerifyContextV1,
         EVM_SPOT_ADAPTER_KIND_V1, EVM_SPOT_CHECKPOINT_KIND_V1,
     },
-    verify_observation_evidence, EvidenceDimensionV1, ReserveProofContextV1, SourceEvidenceV1,
-    SourceManifestEntryV1, SourceManifestV1, SourceObservationV1, TrustClassV1, MAX_WITNESS_BYTES,
+    verify_observation_evidence,
+    yolo_broker::YoloBrokerReserveDisclosureV1,
+    EvidenceDimensionV1, ReserveProofContextV1, SourceEvidenceV1, SourceManifestEntryV1,
+    SourceManifestV1, SourceObservationV1, TrustClassV1, MAX_WITNESS_BYTES,
 };
 use serde::Deserialize;
 
@@ -104,6 +106,20 @@ pub enum AdapterCommand {
     Solana {
         #[command(subcommand)]
         command: SolanaCommand,
+    },
+    /// Derive PostFiat quantity, valuation, and disclosure commitments from a
+    /// private YOLO brokerage disclosure record.
+    YoloBrokerCommitments {
+        #[arg(long)]
+        disclosure: PathBuf,
+        #[arg(long)]
+        gross_assets: u64,
+        #[arg(long)]
+        total_liabilities: u64,
+        #[arg(long)]
+        valuation_scale: u64,
+        #[arg(long)]
+        output: PathBuf,
     },
     /// Emit the canonical statement for an Ed25519 attestation or protocol
     /// receipt already represented in a source observation.
@@ -734,6 +750,19 @@ pub fn run(command: AdapterCommand) -> Result<()> {
         AdapterCommand::Near { command } => near_adapter::run(command),
         AdapterCommand::Monero { command } => monero_adapter::run(command),
         AdapterCommand::Solana { command } => solana_adapter::run(command),
+        AdapterCommand::YoloBrokerCommitments {
+            disclosure,
+            gross_assets,
+            total_liabilities,
+            valuation_scale,
+            output,
+        } => yolo_broker_commitments(
+            disclosure,
+            gross_assets,
+            total_liabilities,
+            valuation_scale,
+            output,
+        ),
         AdapterCommand::Ed25519EvidenceStatement {
             manifest,
             context,
@@ -776,6 +805,35 @@ pub fn run(command: AdapterCommand) -> Result<()> {
             Ok(())
         }
     }
+}
+
+fn yolo_broker_commitments(
+    disclosure_path: PathBuf,
+    gross_assets: u64,
+    total_liabilities: u64,
+    valuation_scale: u64,
+    output: PathBuf,
+) -> Result<()> {
+    let disclosure: YoloBrokerReserveDisclosureV1 = read_json(&disclosure_path)?;
+    let commitments = disclosure
+        .evidence_commitments(gross_assets, total_liabilities, valuation_scale)
+        .map_err(anyhow::Error::msg)?;
+    let result = serde_json::json!({
+        "schema": "postfiat.yolo.broker_evidence_commitments.v1",
+        "quantity_evidence_commitment": commitments.quantity_evidence_commitment,
+        "valuation_evidence_commitment": commitments.valuation_evidence_commitment,
+        "disclosure_commitment": commitments.disclosure_commitment,
+    });
+    write_new(&output, &serde_json::to_vec_pretty(&result)?)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema": "postfiat.yolo.broker_evidence_commitments_report.v1",
+            "input": disclosure_path,
+            "output": output,
+        }))?
+    );
+    Ok(())
 }
 
 fn ed25519_statement(

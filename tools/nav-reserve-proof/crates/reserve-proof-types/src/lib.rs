@@ -28,6 +28,8 @@ pub mod near_receipt;
 pub mod portfolio_valuation;
 #[cfg(feature = "a666-public-adapters-v2")]
 pub mod solana_stake;
+pub mod yolo_broker;
+pub mod yolo_collection;
 
 #[cfg(feature = "a666-public-adapters-v2")]
 use aave_v3::{
