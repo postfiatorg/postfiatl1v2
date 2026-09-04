@@ -1,0 +1,110 @@
+{
+  "schema": "tasknode-unl-cowork-pointer-input-v1",
+  "mode": "SHADOW_ONLY",
+  "window": {
+    "start": "2026-03-08T12:00:00Z",
+    "end": "2026-09-04T12:00:00Z",
+    "days": 180
+  },
+  "pointers": [
+    {
+      "pointer_hash": "0101010101010101010101010101010101010101010101010101010101010101",
+      "pointer_schema": "pf.ptr/v4",
+      "account_id": "account-alice",
+      "work_unit_kind": "hive_project",
+      "work_unit_id": "hive-one",
+      "participation_status": "completed",
+      "close_time": "2026-04-01T12:00:00Z"
+    },
+    {
+      "pointer_hash": "0202020202020202020202020202020202020202020202020202020202020202",
+      "pointer_schema": "pf.ptr/v4",
+      "account_id": "account-bob",
+      "work_unit_kind": "hive_project",
+      "work_unit_id": "hive-one",
+      "participation_status": "completed",
+      "close_time": "2026-04-01T12:01:00Z"
+    },
+    {
+      "pointer_hash": "0303030303030303030303030303030303030303030303030303030303030303",
+      "pointer_schema": "pf.ptr/v4",
+      "account_id": "account-alice",
+      "work_unit_kind": "hive_project",
+      "work_unit_id": "hive-two",
+      "participation_status": "completed",
+      "close_time": "2026-04-02T12:00:00Z"
+    },
+    {
+      "pointer_hash": "0404040404040404040404040404040404040404040404040404040404040404",
+      "pointer_schema": "pf.ptr/v4",
+      "account_id": "account-bob",
+      "work_unit_kind": "hive_project",
+      "work_unit_id": "hive-two",
+      "participation_status": "completed",
+      "close_time": "2026-04-02T12:01:00Z"
+    },
+    {
+      "pointer_hash": "0505050505050505050505050505050505050505050505050505050505050505",
+      "pointer_schema": "pf.ptr/v4",
+      "account_id": "account-alice",
+      "work_unit_kind": "hive_project",
+      "work_unit_id": "hive-three",
+      "participation_status": "completed",
+      "close_time": "2026-04-03T12:00:00Z"
+    },
+    {
+      "pointer_hash": "0606060606060606060606060606060606060606060606060606060606060606",
+      "pointer_schema": "pf.ptr/v4",
+      "account_id": "account-bob",
+      "work_unit_kind": "hive_project",
+      "work_unit_id": "hive-three",
+      "participation_status": "completed",
+      "close_time": "2026-04-03T12:01:00Z"
+    },
+    {
+      "pointer_hash": "0707070707070707070707070707070707070707070707070707070707070707",
+      "pointer_schema": "pf.ptr/v4",
+      "account_id": "account-alice",
+      "work_unit_kind": "hive_project",
+      "work_unit_id": "hive-four",
+      "participation_status": "completed",
+      "close_time": "2026-04-04T12:00:00Z"
+    },
+    {
+      "pointer_hash": "0808080808080808080808080808080808080808080808080808080808080808",
+      "pointer_schema": "pf.ptr/v4",
+      "account_id": "account-bob",
+      "work_unit_kind": "hive_project",
+      "work_unit_id": "hive-four",
+      "participation_status": "completed",
+      "close_time": "2026-04-04T12:01:00Z"
+    },
+    {
+      "pointer_hash": "0909090909090909090909090909090909090909090909090909090909090909",
+      "pointer_schema": "pf.ptr/v4",
+      "account_id": "account-alice",
+      "work_unit_kind": "team_grant",
+      "work_unit_id": "team-grant-one",
+      "participation_status": "shared",
+      "close_time": "2026-05-01T12:00:00Z"
+    },
+    {
+      "pointer_hash": "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a",
+      "pointer_schema": "pf.ptr/v4",
+      "account_id": "account-bob",
+      "work_unit_kind": "team_grant",
+      "work_unit_id": "team-grant-one",
+      "participation_status": "shared",
+      "close_time": "2026-05-01T12:01:00Z"
+    },
+    {
+      "pointer_hash": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+      "pointer_schema": "pf.ptr/v4",
+      "account_id": "account-carol",
+      "work_unit_kind": "hive_project",
+      "work_unit_id": "hive-one",
+      "participation_status": "incomplete",
+      "close_time": "2026-04-01T12:02:00Z"
+    }
+  ]
+}

@@ -39,6 +39,13 @@ WORK_DIGEST_PUBLISHING_KEYS_SCHEMA = (
 WORK_DIGEST_VERIFICATION_RESULT_SCHEMA = (
     "tasknode-unl-work-digest-verification-result-v1"
 )
+EDGE_EXTRACTION_RESULT_SCHEMA = "tasknode-unl-edge-extraction-result-v1"
+VOUCH_STATEMENT_SCHEMA = "tasknode-unl-vouch-statement-v1"
+VOUCH_MEMO_ENVELOPE_SCHEMA = "tasknode-unl-vouch-memo-envelope-v1"
+VOUCH_LEDGER_INPUT_SCHEMA = "tasknode-unl-vouch-ledger-input-v1"
+COWORK_POINTER_INPUT_SCHEMA = "tasknode-unl-cowork-pointer-input-v1"
+FUNDING_TRANSFER_INPUT_SCHEMA = "tasknode-unl-funding-transfer-input-v1"
+FUNDING_EXCLUSION_SCHEMA = "tasknode-unl-funding-exclusions-v1"
 
 ACCOUNTABILITY_WINDOW_DAYS = 180
 ACCOUNTABILITY_WORK_DENOMINATOR = 40
@@ -72,6 +79,8 @@ PFT_LEDGER_MEMO_MAX_BYTES = 512
 BINDING_EVALUATION_WINDOW_DAYS = ACCOUNTABILITY_WINDOW_DAYS
 WORK_DIGEST_DOMAIN = "postfiat/tasknode-unl/work-digest/v1"
 WORK_DIGEST_SIGNATURE_ALGORITHM = BINDING_SIGNATURE_ALGORITHM
+VOUCH_STATEMENT_DOMAIN = "postfiat/tasknode-unl/vouch-statement/v1"
+VOUCH_SIGNATURE_ALGORITHM = BINDING_SIGNATURE_ALGORITHM
 TASKNODE_POINTER_SCHEMA = "pf.ptr/v4"
 TASKNODE_BINDING_EVIDENCE_FIELDS = (
     "validator.identity.tasknode_binding.wallet_address",

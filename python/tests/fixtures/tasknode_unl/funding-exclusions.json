@@ -1,0 +1,19 @@
+{
+  "schema": "tasknode-unl-funding-exclusions-v1",
+  "mode": "SHADOW_ONLY",
+  "version": "test-only-2026-09-04",
+  "publication_tx_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "published_at": "2026-03-01T00:00:00Z",
+  "valid_from": "2026-03-01T00:00:00Z",
+  "valid_until": "2026-12-31T23:59:59Z",
+  "addresses": [
+    {
+      "address": "rTESTONLYExchangeWallet",
+      "category": "exchange"
+    },
+    {
+      "address": "rENZmHsyhJDJksH6hvdBJD29qWTfUoG5AP",
+      "category": "foundation_distribution"
+    }
+  ]
+}

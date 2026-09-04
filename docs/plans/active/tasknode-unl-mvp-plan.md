@@ -1,6 +1,6 @@
 # Task Node Identity-Derived UNL MVP Execution Plan
 
-**Status:** Active execution plan — steps A through D complete; every output remains `SHADOW_ONLY`
+**Status:** Active execution plan — steps A through E complete; every output remains `SHADOW_ONLY`
 
 **Date:** 2026-09-04
 
@@ -197,23 +197,27 @@ without packet-root lineage. Nostr private messages are never graph edges.
 `python/tests/fixtures/tasknode_unl/funding-transfers.json`, and
 `python/tests/fixtures/tasknode_unl/funding-exclusions.json`.
 
-- [ ] Extract vouch edges only from verified signed PFT Ledger memo statements.
+- [x] Extract vouch edges only from verified signed PFT Ledger memo statements.
       Do not consume Nostr events in this MVP, and never consume private
-      messages.
-- [ ] Extract one co-work unit per shared Hive project or Team grant from
+      messages (`python/postfiat_rpc/tasknode_unl_edges.py`).
+- [x] Extract one co-work unit per shared Hive project or Team grant from
       replayed pointers, preserving project/grant provenance and applying the
-      walk's aggregate cap of three.
-- [ ] Extract a funding relation when one wallet was the other's first funder
+      walk's aggregate cap of three
+      (`python/postfiat_rpc/tasknode_unl_edges.py`).
+- [x] Extract a funding relation when one wallet was the other's first funder
       or when more than 50% of either wallet's inbound value over the evaluation
-      window came from the other.
-- [ ] Require a versioned, published exclusion-list fixture for exchange and
+      window came from the other
+      (`python/postfiat_rpc/tasknode_unl_edges.py`).
+- [x] Require a versioned, published exclusion-list fixture for exchange and
       Foundation distribution addresses. Missing, stale, or malformed
       exclusions hold funding extraction; excluded addresses never create a
-      funding edge.
-- [ ] Canonicalize and deduplicate evidence without erasing provenance. Test
+      funding edge
+      (`python/tests/fixtures/tasknode_unl/funding-exclusions.json`).
+- [x] Canonicalize and deduplicate evidence without erasing provenance. Test
       forged vouches, private-message-shaped input, repeated projects, Team
       grants, exactly-50% versus greater-than-50% funding, first-funder
-      poisoning, exclusions, and conflicting source rows.
+      poisoning, exclusions, and conflicting source rows
+      (`python/tests/test_tasknode_unl_edges.py`).
 
 ### F. Churn and overlap guard
 
