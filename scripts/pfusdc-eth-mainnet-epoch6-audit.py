@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -54,6 +55,13 @@ def load_module(path: Path, name: str):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def required_env(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        raise RuntimeError(f"required environment variable {name} is unset")
+    return value
 
 
 def run(*arguments: str) -> str:
@@ -182,7 +190,8 @@ def main() -> int:
 
     checkpoint = json.loads(
         run(
-            "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "root@64.176.220.75",
+            "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8",
+            required_env("PFTL_VALIDATOR_SSH_TARGET"),
             "/opt/postfiat/releases/pnok-private-fix-2246d25-orchard1/postfiat-node verify-finalized-checkpoint --data-dir /var/lib/postfiat/validator-0",
         )
     )

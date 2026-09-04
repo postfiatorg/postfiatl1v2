@@ -25,6 +25,11 @@ def main() -> int:
                 continue
             relative = pathlib.Path(encoded.decode())
             source = ROOT / relative
+            # Gitlinks appear in `git ls-files` as paths but are directories in
+            # a recursive checkout. They are not Cargo workspace members and
+            # must not be passed to copy2 as regular files.
+            if source.is_dir():
+                continue
             destination = checkout / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination, follow_symlinks=False)

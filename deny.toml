@@ -12,6 +12,7 @@ ignore = [
   { id = "RUSTSEC-2021-0139", reason = "ansi_term is logging-only through SP1 slop-utils/tracing-forest; active Groth16 verification does not call the logger. Remove with the next SP1 release by 2026-08-31." },
   { id = "RUSTSEC-2025-0141", reason = "bincode is inherited from SP1 6.3.1. The active Groth16 verifier uses bounded proof/public-value inputs and known-good vectors; compressed proof deserialization is not exposed. Replace with the upstream SP1 migration by 2026-08-31." },
   { id = "RUSTSEC-2026-0173", reason = "proc-macro-error2 is a compile-time-only Orchard 0.14/getset dependency. Orchard 0.15 changes consensus proof encodings and requires a separately gated migration; migrate by 2026-08-31." },
+  { id = "RUSTSEC-2024-0436", reason = "paste is an unmaintained build-time dependency of pinned Alloy 1.5.7 in the Arc conformance tool; the advisory reports no vulnerability and has no safe upgrade. Remove or replace Alloy before promoting the Arc route beyond controlled testnet, target 2026-10-31." },
 ]
 
 [licenses]
@@ -22,6 +23,8 @@ allow = [
   "BSD-2-Clause",
   "BSD-3-Clause",
   "CC0-1.0",
+  "CDLA-Permissive-2.0",
+  "ISC",
   "MIT",
   "MPL-2.0",
   "Unicode-3.0",

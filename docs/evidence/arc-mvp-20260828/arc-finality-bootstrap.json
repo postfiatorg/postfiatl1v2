@@ -1,0 +1,14 @@
+{
+  "schema": "postfiat.pfusdc.arc_finality_state.v1",
+  "route_profile_hash": "bae254164b7babec18f874f2f736fad2325f093d81f0d25c43154d633eb548c53437ccd2f0a31f7c1f6f9c7785bf4ef0",
+  "route_epoch": 8,
+  "arc_chain_id": 5042002,
+  "vault_address": "0xee05b21b920b9367728422eea95c8426154e0de8",
+  "vault_runtime_code_hash": "0xe1e10080538f477e1fc246b60072e256f09344fe06c69953ff239ba633b0af6a",
+  "token_address": "0x3600000000000000000000000000000000000000",
+  "token_runtime_code_hash": "0xc9987bd3af6b26a030951faa7eacc017b68343aeedf3ce5fe68f821c4b93939d",
+  "route_binding": "7e85699a3d915d61597d4e060cb0eabf5a375452e07462794176c1852ad8cbb9",
+  "latest_block_height": 59335779,
+  "latest_block_hash": "3cc24237bd0e6b0b8379970f6b9b14c0322fb71b50a965e2f1db86db9c7e2785",
+  "validator_set_commitment": "75d2bed78b313f681ad0976e67a486032cc83582b414e04d51ff04d51cc0a2fa"
+}

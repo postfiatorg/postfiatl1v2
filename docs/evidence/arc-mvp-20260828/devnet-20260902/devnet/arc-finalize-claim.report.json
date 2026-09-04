@@ -1,0 +1,77 @@
+{
+ "schema": "postfiat-certified-asset-ops-report-v1",
+ "request_schema": "postfiat-certified-asset-ops-request-v1",
+ "data_dir": "/var/lib/postfiat/validator-5",
+ "topology_file": "/etc/postfiat/releases/arc-current-v2-a699d560/topology.json",
+ "artifact_dir": "/var/lib/postfiat/ops/arc-mint/arc-finalize-claim",
+ "operation_count": 2,
+ "max_transactions": 2,
+ "allow_existing_mempool": false,
+ "prepare_only": false,
+ "batch_only": false,
+ "start_height": 946,
+ "start_state_root": "dc5f40160399bc3016ba72e465f9578cd59419cc1f23a8c0514d61fdda9ebf9b845d6b8d8fa5bad48816b7e72148944e",
+ "start_mempool_pending": 0,
+ "end_height": 947,
+ "end_state_root": "ff8ef68ec0bb4425e88f8df032adff82c55c0fea75859dd7c955812d6d6c9cbd5b3009536609f936c4fe4263194a51ec",
+ "end_mempool_pending": 0,
+ "operations": [
+  {
+   "label": "finalize",
+   "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+   "transaction_kind": "vault_bridge_deposit_finalize",
+   "operation_file": "/var/lib/postfiat/ops/arc-mint/arc-finalize-claim/finalize/operation.json",
+   "quote_file": "/var/lib/postfiat/ops/arc-mint/arc-finalize-claim/finalize/quote.json",
+   "signed_file": "/var/lib/postfiat/ops/arc-mint/arc-finalize-claim/finalize/signed.json",
+   "submit_file": "/var/lib/postfiat/ops/arc-mint/arc-finalize-claim/finalize/submit.json",
+   "tx_id": "ab31da324d62a8163a9164e5504b5792bef9ce2f9f62cbbfaf02822f739408135cd27e88bc294b1835c5029878ea60c5",
+   "sequence": 274,
+   "fee": 22,
+   "timings_ms": {
+    "prepare_ms": 0.07166700000000001,
+    "quote_ms": 77.627144,
+    "sign_ms": 3.665284,
+    "submit_ms": 124.093271
+   }
+  },
+  {
+   "label": "claim",
+   "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+   "transaction_kind": "vault_bridge_deposit_claim",
+   "operation_file": "/var/lib/postfiat/ops/arc-mint/arc-finalize-claim/claim/operation.json",
+   "quote_file": "/var/lib/postfiat/ops/arc-mint/arc-finalize-claim/claim/quote.json",
+   "signed_file": "/var/lib/postfiat/ops/arc-mint/arc-finalize-claim/claim/signed.json",
+   "submit_file": "/var/lib/postfiat/ops/arc-mint/arc-finalize-claim/claim/submit.json",
+   "tx_id": "df9f4d163db2253fb15e84fa6313b8a22c8961e374ba66738eae97efbfc7f820348d62f3811330a5b96e2f3e1800e843",
+   "sequence": 275,
+   "fee": 53,
+   "timings_ms": {
+    "prepare_ms": 0.045001,
+    "quote_ms": 95.665712,
+    "sign_ms": 2.546605,
+    "submit_ms": 144.768847
+   }
+  }
+ ],
+ "dependency_report": {
+  "declared_dependency_count": 0,
+  "same_round_dependency_count": 0,
+  "prior_round_dependency_count": 0,
+  "same_round_batch_eligible": true,
+  "candidate_batch_classes": [],
+  "replay_equivalence_required": false,
+  "live_round_compression_ready": true,
+  "live_round_compression_blockers": [],
+  "declarations": []
+ },
+ "batch_file": "/var/lib/postfiat/ops/arc-mint/arc-finalize-claim/peer-certified-mempool-round/mempool-batch.json",
+ "round_artifact_dir": "/var/lib/postfiat/ops/arc-mint/arc-finalize-claim/peer-certified-mempool-round",
+ "round_ok": true,
+ "timings_ms": {
+  "total_ms": 8670.422531,
+  "preflight_ms": 97.543804,
+  "operations_ms": 449.696452,
+  "certify_ms": 8045.647983,
+  "final_status_ms": 76.940832
+ }
+}

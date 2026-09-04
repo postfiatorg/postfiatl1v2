@@ -250,7 +250,7 @@ async function walletAddressFromIndexedDb(page) {
 }
 
 async function createWallet(page, passphrase) {
-  await page.getByRole('button', { name: 'Create Wallet', exact: true }).click();
+  await page.getByRole('button', { name: 'Create a new wallet', exact: true }).click();
   await page.locator('.pf-seed-display').waitFor();
   const seed = (await page.locator('.pf-seed-display').textContent() || '').trim();
   assert.match(seed, /^[0-9a-f]{64}$/, 'production wallet generated a local seed');
@@ -361,12 +361,13 @@ test('fresh self-custody wallet adds pfUSDC with a holder-signed trust_set', {
 
     // Prove the unlock path on the same fresh wallet before the send surface.
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.getByText('Wallet locked', { exact: true }).waitFor();
+    await page.getByText('Unlock this wallet', { exact: true }).waitFor();
     await page.locator('input[placeholder="Passphrase"]').fill(passphrase);
     await page.getByRole('button', { name: 'Unlock', exact: true }).click();
     await page.locator('.pf-shell').waitFor();
 
     await page.locator('.pf-sidebar .pf-nav').filter({ hasText: 'Send' }).click();
+    await page.getByText('Advanced: add an asset by ID', { exact: true }).click();
     const idInput = page.locator('[data-testid="add-asset-id"]');
     const limitInput = page.locator('[data-testid="add-asset-limit"]');
     const addButton = page.locator('[data-testid="add-asset"]');

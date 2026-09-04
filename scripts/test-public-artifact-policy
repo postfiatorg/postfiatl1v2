@@ -23,6 +23,9 @@ MEDIA_SUFFIXES = {
 }
 IMMUTABLE_ARCHIVE_PREFIXES = ("docs/evidence/", "deployments/")
 EXPECTED = {
+    "benchmarks/cobalt-adversarial-verification/e1/initial/classifications.jsonl.gz": "b88464141849cd2fa02f9cbb71656cbe7cbd1d107e561c69cb7eec31cf535b3f",
+    "benchmarks/cobalt-adversarial-verification/e1/initial/disagreements.json.gz": "3951855ea11cf61e4567470a5acf6de6dc7f19e1ca05359346aa720423684e29",
+    "benchmarks/cobalt-adversarial-verification/e1/reconciled/classifications.jsonl.gz": "1638bb7a10e3a59d09d527dba43b171422d17cce686aeac7655c9ebe93476113",
     "crates/execution/tests/fixtures/sp1-aggregate-regen-monero-crypto/aggregate-proof-calldata.bin": "1ae6004199e7567b3f89f6423d6faf9d44bcda23703243bef0eec7e45b9cbf0e",
     "crates/execution/tests/fixtures/sp1-aggregate-regen-monero-crypto/aggregate-public-values.bin": "9c3d5d0afc5d6eefc56ded32ad21330cfa594803b69c86275cdf09873ec7b97e",
     "crates/privacy_orchard/artifacts/asset_orchard_k15_params.v1.bin": "e1fb29749c7bd0870768044d5329b4e293cb2d44dae24db2554605427b19d0dd",
@@ -54,6 +57,8 @@ EXPECTED = {
     "docs/evidence/pfusdc-fast-ingress-20260719/live-roundtrip/proof-calldata.bin": "8b43d6dba21c5af9f03b0cd4fafb5936b7c5e2730e4adf62f49e3d1ceb4fb8d0",
     "docs/evidence/pfusdc-fast-ingress-20260719/live-roundtrip/proof.bin": "437960382c86500c847aa5495213757176f9e95da9024a923028e89cb07f1947",
     "docs/evidence/pfusdc-fast-ingress-20260719/live-roundtrip/public-values.bin": "0c2409a2c4955fafbc7b6c6a2e3bdd893c7cee40957c5bd97a4934a618ab2df8",
+    "docs/assets/cobalt-governance-observatory-mobile.png": "c9c934573bd66afccee87af9fa5711d7d4b62ce44ee9d31a9cb7e00e31169959",
+    "docs/assets/cobalt-governance-observatory.png": "bd11877e8201648804e366d11dff71765aca536ba973329fdd59954ec0ae3902",
     "docs/references/cobalt-bft-governance-in-open-networks.pdf": "d22cc32bb561bc1ce9ce8fa4fbdf59def12a3ed89ff44add47fcd74f9eb9b625",
     "third_party/halo2_proofs/tests/plonk_api_proof.bin": "22abccd530cd2d96e2d4d024dc63764fb5ce7c3874bfc212ade8dbc9d01515c6",
     "wallet-extension/icons/icon128.png": "4e05b9a7cc8d83b110b6d0ce7dc98702a705f8c8427d98e8a6284cc6cbfd0c39",

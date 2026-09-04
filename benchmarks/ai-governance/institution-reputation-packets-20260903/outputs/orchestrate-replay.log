@@ -1,0 +1,47 @@
+Warning: Permanently added '[145.241.108.98]:40142' (ED25519) to the list of known hosts.
+Welcome to vast.ai. If authentication fails, try again after a few seconds, and double check your ssh key.
+Have fun!
+Warning: Permanently added '[145.241.108.98]:40142' (ED25519) to the list of known hosts.
+Welcome to vast.ai. If authentication fails, try again after a few seconds, and double check your ssh key.
+Have fun!
+Warning: Permanently added '[145.241.108.98]:40142' (ED25519) to the list of known hosts.
+Welcome to vast.ai. If authentication fails, try again after a few seconds, and double check your ssh key.
+Have fun!
+Warning: Permanently added '[145.241.108.98]:40142' (ED25519) to the list of known hosts.
+Welcome to vast.ai. If authentication fails, try again after a few seconds, and double check your ssh key.
+Have fun!
+package hashes ok
+Warning: Permanently added '[145.241.108.98]:40142' (ED25519) to the list of known hosts.
+Welcome to vast.ai. If authentication fails, try again after a few seconds, and double check your ssh key.
+Have fun!
+Fetching 81 files:   0%|          | 0/81 [00:00<?, ?it/s]Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Fetching 81 files:   1%|          | 1/81 [00:00<00:30,  2.64it/s]Fetching 81 files:   2%|▏         | 2/81 [00:00<00:18,  4.20it/s]Fetching 81 files:  10%|▉         | 8/81 [00:06<01:03,  1.15it/s]Fetching 81 files:  11%|█         | 9/81 [00:09<01:23,  1.15s/it]Fetching 81 files:  12%|█▏        | 10/81 [00:10<01:26,  1.22s/it]Fetching 81 files:  14%|█▎        | 11/81 [00:11<01:22,  1.18s/it]Fetching 81 files:  15%|█▍        | 12/81 [00:12<01:09,  1.00s/it]Fetching 81 files:  17%|█▋        | 14/81 [00:12<00:45,  1.47it/s]Fetching 81 files:  19%|█▊        | 15/81 [00:12<00:43,  1.53it/s]Fetching 81 files:  20%|█▉        | 16/81 [00:13<00:45,  1.43it/s]Fetching 81 files:  21%|██        | 17/81 [00:14<00:46,  1.38it/s]Fetching 81 files:  22%|██▏       | 18/81 [00:15<00:44,  1.41it/s]Fetching 81 files:  23%|██▎       | 19/81 [00:16<00:45,  1.37it/s]Fetching 81 files:  25%|██▍       | 20/81 [00:16<00:41,  1.45it/s]Fetching 81 files:  26%|██▌       | 21/81 [00:17<00:41,  1.45it/s]Fetching 81 files:  27%|██▋       | 22/81 [00:18<00:39,  1.48it/s]Fetching 81 files:  28%|██▊       | 23/81 [00:18<00:41,  1.41it/s]Fetching 81 files:  30%|██▉       | 24/81 [00:19<00:34,  1.65it/s]Fetching 81 files:  31%|███       | 25/81 [00:19<00:35,  1.58it/s]Fetching 81 files:  32%|███▏      | 26/81 [00:20<00:34,  1.58it/s]Fetching 81 files:  33%|███▎      | 27/81 [00:20<00:31,  1.74it/s]Fetching 81 files:  35%|███▍      | 28/81 [00:21<00:30,  1.76it/s]Fetching 81 files:  36%|███▌      | 29/81 [00:21<00:26,  1.95it/s]Fetching 81 files:  37%|███▋      | 30/81 [00:22<00:24,  2.08it/s]Fetching 81 files:  38%|███▊      | 31/81 [00:23<00:32,  1.53it/s]Fetching 81 files:  41%|████      | 33/81 [00:24<00:27,  1.75it/s]Fetching 81 files:  42%|████▏     | 34/81 [00:24<00:27,  1.69it/s]Fetching 81 files:  43%|████▎     | 35/81 [00:25<00:24,  1.87it/s]Fetching 81 files:  44%|████▍     | 36/81 [00:25<00:24,  1.82it/s]Fetching 81 files:  47%|████▋     | 38/81 [00:26<00:20,  2.05it/s]Fetching 81 files:  48%|████▊     | 39/81 [00:27<00:24,  1.70it/s]Fetching 81 files:  51%|█████     | 41/81 [00:28<00:22,  1.76it/s]Fetching 81 files:  52%|█████▏    | 42/81 [00:29<00:22,  1.72it/s]Fetching 81 files:  53%|█████▎    | 43/81 [00:29<00:18,  2.08it/s]Fetching 81 files:  54%|█████▍    | 44/81 [00:30<00:20,  1.79it/s]Fetching 81 files:  56%|█████▌    | 45/81 [00:30<00:15,  2.27it/s]Fetching 81 files:  57%|█████▋    | 46/81 [00:31<00:18,  1.92it/s]Fetching 81 files:  58%|█████▊    | 47/81 [00:32<00:21,  1.60it/s]Fetching 81 files:  60%|██████    | 49/81 [00:33<00:19,  1.61it/s]Fetching 81 files:  62%|██████▏   | 50/81 [00:33<00:18,  1.70it/s]Fetching 81 files:  64%|██████▍   | 52/81 [00:34<00:15,  1.83it/s]Fetching 81 files:  67%|██████▋   | 54/81 [00:35<00:14,  1.86it/s]Fetching 81 files:  68%|██████▊   | 55/81 [00:36<00:14,  1.86it/s]Fetching 81 files:  69%|██████▉   | 56/81 [00:36<00:11,  2.20it/s]Fetching 81 files:  70%|███████   | 57/81 [00:37<00:15,  1.57it/s]Fetching 81 files:  72%|███████▏  | 58/81 [00:38<00:13,  1.68it/s]Fetching 81 files:  74%|███████▍  | 60/81 [00:39<00:11,  1.77it/s]Fetching 81 files:  77%|███████▋  | 62/81 [00:40<00:09,  1.92it/s]Fetching 81 files:  78%|███████▊  | 63/81 [00:40<00:09,  1.91it/s]Fetching 81 files:  80%|████████  | 65/81 [00:41<00:08,  1.98it/s]Fetching 81 files:  81%|████████▏ | 66/81 [00:41<00:07,  2.10it/s]Fetching 81 files:  84%|████████▍ | 68/81 [00:42<00:04,  2.64it/s]Fetching 81 files:  85%|████████▌ | 69/81 [00:42<00:03,  3.00it/s]Fetching 81 files:  86%|████████▋ | 70/81 [00:42<00:03,  3.31it/s]Fetching 81 files:  88%|████████▊ | 71/81 [00:42<00:02,  3.69it/s]Fetching 81 files:  89%|████████▉ | 72/81 [00:43<00:02,  3.39it/s]Fetching 81 files:  90%|█████████ | 73/81 [00:43<00:02,  3.53it/s]Fetching 81 files:  93%|█████████▎| 75/81 [00:43<00:01,  5.45it/s]Fetching 81 files:  94%|█████████▍| 76/81 [00:43<00:01,  4.53it/s]Fetching 81 files:  95%|█████████▌| 77/81 [00:44<00:01,  3.54it/s]Fetching 81 files:  96%|█████████▋| 78/81 [00:44<00:00,  3.02it/s]Fetching 81 files:  98%|█████████▊| 79/81 [00:45<00:00,  3.36it/s]Fetching 81 files:  99%|█████████▉| 80/81 [00:46<00:00,  1.90it/s]Fetching 81 files: 100%|██████████| 81/81 [00:50<00:00,  1.52s/it]Fetching 81 files: 100%|██████████| 81/81 [00:50<00:00,  1.61it/s]
+model ready
+READY
+Warning: Permanently added '[145.241.108.98]:40142' (ED25519) to the list of known hosts.
+Welcome to vast.ai. If authentication fails, try again after a few seconds, and double check your ssh key.
+Have fun!
+NVIDIA H200, 580.159.03, GPU-a3c98cc1-1abf-d156-04a1-6d93aca5c64a
+Python 3.12.3
+batch 0 done at 61.3s
+batch 1 done at 108.4s
+replay-run1 3458f72dd4614e5e8e02c47f85f68d39ffeae1ff798e8d1c4eb0fceb6c9e4d20 108.4
+batch 0 done at 70.2s
+batch 1 done at 116.7s
+replay-run2 3458f72dd4614e5e8e02c47f85f68d39ffeae1ff798e8d1c4eb0fceb6c9e4d20 116.7
+Warning: Permanently added '[145.241.108.98]:40142' (ED25519) to the list of known hosts.
+Welcome to vast.ai. If authentication fails, try again after a few seconds, and double check your ssh key.
+Have fun!
+Warning: Permanently added '[145.241.108.98]:40142' (ED25519) to the list of known hosts.
+Welcome to vast.ai. If authentication fails, try again after a few seconds, and double check your ssh key.
+Have fun!
+Warning: Permanently added '[145.241.108.98]:40142' (ED25519) to the list of known hosts.
+Welcome to vast.ai. If authentication fails, try again after a few seconds, and double check your ssh key.
+Have fun!
+Warning: Permanently added '[145.241.108.98]:40142' (ED25519) to the list of known hosts.
+Welcome to vast.ai. If authentication fails, try again after a few seconds, and double check your ssh key.
+Have fun!
+[2026-09-03 21:50:25] INFO:     127.0.0.1:47800 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+[2026-09-03 21:50:25] Decode batch, #running-req: 1, #full token: 6219, full token usage: 0.01, mamba num: 1, mamba usage: 0.03, cuda graph: False, gen throughput (token/s): 71.49, #queue-req: 0
+[2026-09-03 21:50:27] INFO:     127.0.0.1:47900 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+DONE replay 2bc20027f3c70da1 800c1b397bba1ec5

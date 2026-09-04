@@ -44,6 +44,7 @@ A method being listed here does not authorize exposing it remotely.
 | `market_ops_status` | public read | Returns NAV market-operation state for an asset and optional epoch. |
 | `vault_bridge_route` | public read | Verifies and returns the governed vault-bridge route for an asset. |
 | `vault_bridge_status` | public read | Returns the vault-bridge operational and accounting status for an asset. |
+| `pfusdc_ingress_preflight` | public read | Simulates an exact pfUSDC ingress claim against current route, supply-cap, and Orchard policy without mutating state. |
 | `pfusdc_egress_witness` | public read | Exports a bounded proof-ready pfUSDC egress witness for a withdrawal and optional prior checkpoint. |
 | `pfusdc_checkpoint_witness` | operator/local only | Exports a bounded checkpoint witness between exact prior and target block IDs; it is not remotely allowlisted. |
 | `pftl_uniswap_receipt_witness` | operator/local only | Exports a bounded PFTL-Uniswap receipt witness for an exact packet hash and prior checkpoint; it is not remotely allowlisted. |

@@ -1,0 +1,52 @@
+{
+ "schema": "postfiat-arc-deployment-exact-gate-and-rollout-receipt-v1",
+ "status": "PASS",
+ "date_utc": "2026-09-02",
+ "chain_id": "postfiat-wan-devnet-2",
+ "candidate": {
+  "release_id": "arc-current-v2-a699d560",
+  "git_revision": "a699d560a9275ce769d25e5196d819a069a7285b",
+  "binary_sha256": "7f4288f3b5182933d253c19661fd563d85c5ca94764497d727b37d6f991f9c0b",
+  "deployment_id": "arc-current-v2-a699d560-20260902",
+  "publisher": "pfba2ba95720ee250ff3178371a03b57bb8ff38bf0",
+  "superseded_release": "storage-lease-af9b83c3"
+ },
+ "gate": {
+  "clones": "six exact height-931 copies of the live data directories, one per real validator host, transactional generation rebuilt in-clone (shared packet root 5f93a4e1d9fa1ffc\u2026)",
+  "identity_reproduced": {
+   "height": 931,
+   "tip": "8e3639ee748255636d09adb8b3fe70f20f8ae0aa9388b024eaffb98b7a94f3c7c4b0e5710f0d8c2479b08d9bc8665c4b",
+   "state_root": "ef18f8ca8eee67e4f25e0752b54012f1e66b8b4de16444d2583a81e890aec1f3492c1544280279e5acf090559fd55e0f"
+  },
+  "rounds": {
+   "arc-932": {
+    "height": 932,
+    "block_hash": "6f01717ad2a06983a78c8eed02af5330a83b214e9894f8161e59a17abaf91ca39ad1e30aaaf310946de87e284726b0e4"
+   },
+   "arc-933": {
+    "height": 933,
+    "block_hash": "2ca0c3185e6ada826e8265a43841284119508512fbf29f3ed834bc066d02b073972d2089921d48a606187f298d2f0496"
+   }
+  },
+  "restart": "identity preserved at 933 after restarting both services on all six",
+  "rollback": "validator-5 clone restored from backup and served by the deployed storage-lease binary at 931",
+  "note": "rpc-serve readers on the storage-lease lineage serve a stale pre-start view; convergence was asserted on-disk via `postfiat-node status`"
+ },
+ "rollout": {
+  "order": "canary validator-1, then validator-0,2,3,4,5 strictly one at a time with fleet identity re-asserted after each",
+  "pre_state": {
+   "height": 931,
+   "tip": "8e3639ee748255636d09adb8b3fe70f20f8ae0aa9388b024eaffb98b7a94f3c7c4b0e5710f0d8c2479b08d9bc8665c4b",
+   "state_root": "ef18f8ca8eee67e4f25e0752b54012f1e66b8b4de16444d2583a81e890aec1f3492c1544280279e5acf090559fd55e0f"
+  },
+  "post_liveness_round": {
+   "height": 932,
+   "block_hash": "e700fa6b2b381ffec46a91bdbea9c1ef97cda7294f63a38a9da69c63a6c73d4e4c7e32487316d0dc90b7818b612b9aa5"
+  },
+  "backups": "/root/postfiat-deploy-backups/arc-current-v2-a699d560/validator-N (units) and /var/lib/postfiat/pre-arc-current-v2-a699d560-raw (data) on each host"
+ },
+ "local_evidence": {
+  "gate": "/home/postfiatchad/.postfiat/deployments/arc-gate-931",
+  "rollout": "/home/postfiatchad/.postfiat/deployments/arc-current-v2-a699d560"
+ }
+}

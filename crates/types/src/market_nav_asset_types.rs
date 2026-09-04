@@ -552,6 +552,7 @@ impl NavProofProfile {
                 | NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
                 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
                 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+                | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
         )
             && self.valuation_policy_hash.is_empty()
         {
@@ -571,6 +572,7 @@ impl NavProofProfile {
                     | NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
                     | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
                     | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+                    | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
             ) {
                 NAV_SP1_POLICY_HASH_HEX_LEN
             } else {
@@ -872,6 +874,7 @@ fn nav_proof_profile_id_with_route_policy(
             | NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+            | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
     ) && valuation_policy_hash.is_empty()
     {
         return Err("nav_profile.valuation_policy_hash is required for sp1-groth16".to_string());
@@ -904,6 +907,7 @@ fn validate_nav_profile_sp1_fields(
             | NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+            | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
     ) {
         if sp1_program_vkey.is_empty() {
             return Err("nav_profile.sp1_program_vkey is required for sp1-groth16".to_string());
@@ -939,7 +943,8 @@ fn validate_nav_profile_verifier_kind(verifier_kind: &str) -> Result<(), String>
         | NAV_PROFILE_VERIFIER_SP1_GROTH16
         | NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
         | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
-        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 => Ok(()),
+        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+        | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1 => Ok(()),
         _ => Err(format!(
             "nav_profile.verifier_kind is unsupported: {verifier_kind}"
         )),
@@ -1368,6 +1373,7 @@ pub fn validate_vault_bridge_deposit_source_proof_fields(
         NAV_PROFILE_VERIFIER_SP1_GROTH16
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+            | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
             | SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1
     ) {
         return Err(format!(
@@ -3699,6 +3705,8 @@ pub struct LedgerState {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ethereum_arbitrum_finality_states: Vec<EthereumArbitrumFinalityStateV2>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub arc_finality_states: Vec<PfUsdcArcFinalityStateV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fast_ingress_campaigns: Vec<FastIngressCampaignStateV1>,
 }
 
@@ -3806,6 +3814,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -3854,6 +3863,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -3903,6 +3913,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -3947,6 +3958,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -3996,6 +4008,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -4040,6 +4053,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -4165,6 +4179,26 @@ impl LedgerState {
             .find(|state| {
                 state.route_profile_hash == route_profile_hash && state.route_epoch == route_epoch
             })
+    }
+
+    pub fn arc_finality_state(
+        &self,
+        route_profile_hash: &str,
+        route_epoch: u64,
+    ) -> Option<&PfUsdcArcFinalityStateV1> {
+        self.arc_finality_states.iter().find(|state| {
+            state.route_profile_hash == route_profile_hash && state.route_epoch == route_epoch
+        })
+    }
+
+    pub fn arc_finality_state_mut(
+        &mut self,
+        route_profile_hash: &str,
+        route_epoch: u64,
+    ) -> Option<&mut PfUsdcArcFinalityStateV1> {
+        self.arc_finality_states.iter_mut().find(|state| {
+            state.route_profile_hash == route_profile_hash && state.route_epoch == route_epoch
+        })
     }
 
     pub fn fast_ingress_campaign(
@@ -4674,6 +4708,12 @@ impl LedgerState {
             if !finality_route_epochs.insert((state.route_profile_hash.clone(), state.route_epoch)) {
                 return Err("duplicate pfUSDC Ethereum/Arbitrum finality-state route epoch"
                     .to_string());
+            }
+        }
+        for state in &self.arc_finality_states {
+            state.validate()?;
+            if !finality_route_epochs.insert((state.route_profile_hash.clone(), state.route_epoch)) {
+                return Err("duplicate pfUSDC Arc finality-state route epoch".to_string());
             }
         }
         let mut fast_campaign_route_epochs = BTreeSet::new();

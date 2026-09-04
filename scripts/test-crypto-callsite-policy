@@ -47,9 +47,13 @@ EXPECTED = {
         "crates/node/src/consensus_artifacts.rs": 1,
         "crates/node/src/storage_commit.rs": 2,
     },
-    # Deterministic key generation is limited to wallet derivation and a
-    # non-live governance evidence fixture that builds a local synthetic chain.
+    # Deterministic key generation is limited to wallet derivation and
+    # synthetic governance, Cobalt harness, rehearsal, and adversarial-drill
+    # identities. None of these seeded keys is a live validator identity.
     "ml_dsa_65_keygen_from_seed": {
+        "crates/cobalt_e2_harness/src/main.rs": 1,
+        "crates/node/src/cobalt_e5_live_drill.rs": 1,
+        "crates/node/src/cobalt_handoff_rehearsal.rs": 1,
         "crates/node/src/governance_agent_parts/implementation_guarded_apply.rs": 1,
         "crates/node/src/storage_commit.rs": 1,
         "crates/rpc_sdk/src/wallet_sdk.rs": 1,
