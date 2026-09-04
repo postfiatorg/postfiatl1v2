@@ -1,6 +1,6 @@
 # Task Node Identity-Derived UNL MVP Execution Plan
 
-**Status:** Active execution plan — implementation has not started; every output is `SHADOW_ONLY`
+**Status:** Active execution plan — steps A and B complete; every output remains `SHADOW_ONLY`
 
 **Date:** 2026-09-04
 
@@ -60,24 +60,28 @@ without packet-root lineage. Nostr private messages are never graph edges.
 `python/tests/test_tasknode_unl_accountability.py`, and
 `python/tests/fixtures/tasknode_unl/accountability.json`.
 
-- [ ] Define a rolling 180-day evaluation window with an explicit end instant.
-      Count only accepted Network Tasks in `work`; Personal tasks never count.
-- [ ] Clamp every term independently to the closed interval `[0, 1]`, then
+- [x] Define a rolling 180-day evaluation window with an explicit end instant.
+      Count only accepted Network Tasks in `work`; Personal tasks never count
+      (`python/postfiat_rpc/tasknode_unl_accountability.py`).
+- [x] Clamp every term independently to the closed interval `[0, 1]`, then
       compute the exact weighted sum:
       `35 * clamp(accepted_network_tasks / 40) + 25 * clamp(days_since_first_rewarded_task / 365) + 20 * clamp(verification_pass_rate) + 10 * clamp(1 - open_disputes / 3) + 10 * badge`,
       where `badge` is one only when the verified operator badge is current at
-      the window end.
-- [ ] Use window events for work, quality, and open-dispute state; use bounded
+      the window end (`python/postfiat_rpc/tasknode_unl_schema.py`).
+- [x] Use window events for work, quality, and open-dispute state; use bounded
       history only to locate the first rewarded task; evaluate badge freshness
       at the window end. A missing verification denominator, first-reward fact,
-      dispute state, or badge state holds instead of becoming zero.
-- [ ] Preserve the weighted result as an exact rational in evidence. At the
+      dispute state, or badge state holds instead of becoming zero
+      (`python/postfiat_rpc/tasknode_unl_accountability.py`).
+- [x] Preserve the weighted result as an exact rational in evidence. At the
       existing integer Admission Policy V1 boundary, take the floor once, after
       the complete sum; never round an input term. Record both the exact value
-      and projected integer so the conversion is auditable.
-- [ ] Prove with boundary fixtures that clamping works, Personal tasks are
+      and projected integer so the conversion is auditable
+      (`python/postfiat_rpc/tasknode_unl_accountability.py`).
+- [x] Prove with boundary fixtures that clamping works, Personal tasks are
       excluded, 69 remains below the existing floor, 70 passes it, and the
-      proposal's representative established operator remains able to exceed 70.
+      proposal's representative established operator remains able to exceed 70
+      (`python/tests/test_tasknode_unl_accountability.py`).
 
 ### B. Trust-graph walk and cluster controls
 
@@ -85,34 +89,40 @@ without packet-root lineage. Nostr private messages are never graph edges.
 `python/tests/test_tasknode_unl_trust_graph.py`, and
 `python/tests/fixtures/tasknode_unl/trust-graphs.json`.
 
-- [ ] Build the seed vector from the currently ratified validator list at the
+- [x] Build the seed vector from the currently ratified validator list at the
       window start after removing Foundation-bound validators. Give every
-      remaining seed equal mass; an empty or ambiguous seed set holds.
-- [ ] Apply proposal weights exactly: vouch `1`; co-work `1` for each shared
+      remaining seed equal mass; an empty or ambiguous seed set holds
+      (`python/postfiat_rpc/tasknode_unl_trust_graph.py`).
+- [x] Apply proposal weights exactly: vouch `1`; co-work `1` for each shared
       Hive project or Team grant, capped at `3`; funding `2`. Normalize each
-      non-empty row to sum to one.
-- [ ] Run exactly 20 power-iteration steps using
+      non-empty row to sum to one
+      (`python/postfiat_rpc/tasknode_unl_trust_graph.py`).
+- [x] Run exactly 20 power-iteration steps using
       `p_next = 0.85 * transpose(P) * p + 0.15 * seed`. Redirect a dangling
       row to the uniform seed vector, retain exact fractions, and sort nodes and
-      edges canonically before every reduction.
-- [ ] Lock graph direction, duplicate-edge treatment, conductance volume,
+      edges canonically before every reduction
+      (`python/postfiat_rpc/tasknode_unl_trust_graph.py`).
+- [x] Lock graph direction, duplicate-edge treatment, conductance volume,
       candidate-cut ordering, and tie-breaking in golden fixtures before
       implementation. Vouches are directed; shared-work and qualifying funding
       relations contribute both directions. These mechanics may disambiguate
-      the published algorithm but must not change a published numeric constant.
-- [ ] Cut clusters only at conductance strictly below `0.1`, with deterministic
+      the published algorithm but must not change a published numeric constant
+      (`python/tests/fixtures/tasknode_unl/trust-graphs.json`).
+- [x] Cut clusters only at conductance strictly below `0.1`, with deterministic
       member ordering. Require stationary mass at least `1 / (2N)`, where
       `N` is baseline-list size; disconnected and just-below-floor accounts
-      hold.
-- [ ] Halve an account's outgoing vouch weight for the next window when two
+      hold (`python/postfiat_rpc/tasknode_unl_trust_graph.py`).
+- [x] Halve an account's outgoing vouch weight for the next window when two
       accounts it vouched for later collapse into the same cluster. Bind the
       penalty to the prior window so current-window iteration cannot feed back
-      into its own inputs.
-- [ ] Enforce no more than `max(2, 10% of N)` seats per cluster by comparing
+      into its own inputs
+      (`python/postfiat_rpc/tasknode_unl_trust_graph.py`).
+- [x] Enforce no more than `max(2, 10% of N)` seats per cluster by comparing
       the integer seat count to the exact rational limit. Test `N=20`, the
       17-seed current-list shape, the threshold boundary, seed exclusion,
       dangling rows, isolated Sybil rings, the two-cross-cluster-edge
-      connectivity case, vouch-weight penalties, and ties.
+      connectivity case, vouch-weight penalties, and ties
+      (`python/tests/test_tasknode_unl_trust_graph.py`).
 
 ### C. Validator-key-to-wallet binding CLI
 

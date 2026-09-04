@@ -1,0 +1,374 @@
+{
+  "schema": "tasknode-unl-trust-graph-fixtures-v1",
+  "cases": [
+    {
+      "name": "current-list-seed-and-dangling-shape",
+      "input": {
+        "schema": "tasknode-unl-trust-graph-input-v1",
+        "nodes": [
+          "account-01",
+          "account-02",
+          "account-03",
+          "account-04",
+          "account-05",
+          "account-06",
+          "account-07",
+          "account-08",
+          "account-09",
+          "account-10",
+          "account-11",
+          "account-12",
+          "account-13",
+          "account-14",
+          "account-15",
+          "account-16",
+          "account-17",
+          "account-18",
+          "account-19",
+          "account-20"
+        ],
+        "ratified_nodes": [
+          "account-01",
+          "account-02",
+          "account-03",
+          "account-04",
+          "account-05",
+          "account-06",
+          "account-07",
+          "account-08",
+          "account-09",
+          "account-10",
+          "account-11",
+          "account-12",
+          "account-13",
+          "account-14",
+          "account-15",
+          "account-16",
+          "account-17",
+          "account-18",
+          "account-19",
+          "account-20"
+        ],
+        "foundation_bound_nodes": [
+          "account-18",
+          "account-19",
+          "account-20"
+        ],
+        "edges": [],
+        "baseline_list_size": 20,
+        "seats": [
+          {
+            "validator_id": "validator-01",
+            "node": "account-01"
+          },
+          {
+            "validator_id": "validator-02",
+            "node": "account-02"
+          },
+          {
+            "validator_id": "validator-03",
+            "node": "account-03"
+          },
+          {
+            "validator_id": "validator-04",
+            "node": "account-04"
+          },
+          {
+            "validator_id": "validator-05",
+            "node": "account-05"
+          },
+          {
+            "validator_id": "validator-06",
+            "node": "account-06"
+          },
+          {
+            "validator_id": "validator-07",
+            "node": "account-07"
+          },
+          {
+            "validator_id": "validator-08",
+            "node": "account-08"
+          },
+          {
+            "validator_id": "validator-09",
+            "node": "account-09"
+          },
+          {
+            "validator_id": "validator-10",
+            "node": "account-10"
+          },
+          {
+            "validator_id": "validator-11",
+            "node": "account-11"
+          },
+          {
+            "validator_id": "validator-12",
+            "node": "account-12"
+          },
+          {
+            "validator_id": "validator-13",
+            "node": "account-13"
+          },
+          {
+            "validator_id": "validator-14",
+            "node": "account-14"
+          },
+          {
+            "validator_id": "validator-15",
+            "node": "account-15"
+          },
+          {
+            "validator_id": "validator-16",
+            "node": "account-16"
+          },
+          {
+            "validator_id": "validator-17",
+            "node": "account-17"
+          },
+          {
+            "validator_id": "validator-18",
+            "node": "account-18"
+          },
+          {
+            "validator_id": "validator-19",
+            "node": "account-19"
+          },
+          {
+            "validator_id": "validator-20",
+            "node": "account-20"
+          }
+        ],
+        "penalized_vouchers": []
+      },
+      "expected": {
+        "seed_count": 17,
+        "seed_mass": {
+          "numerator": 1,
+          "denominator": 17
+        },
+        "foundation_mass": {
+          "numerator": 0,
+          "denominator": 1
+        },
+        "connectivity_floor": {
+          "numerator": 1,
+          "denominator": 40
+        },
+        "connectivity_holds": [
+          "account-18",
+          "account-19",
+          "account-20"
+        ],
+        "cluster_count": 20,
+        "over_cap_clusters": []
+      }
+    },
+    {
+      "name": "low-conductance-cut-and-seat-cap",
+      "input": {
+        "schema": "tasknode-unl-trust-graph-input-v1",
+        "nodes": [
+          "a1",
+          "a2",
+          "a3",
+          "b1",
+          "b2",
+          "b3"
+        ],
+        "ratified_nodes": [
+          "a1",
+          "a2",
+          "a3",
+          "b1",
+          "b2",
+          "b3"
+        ],
+        "foundation_bound_nodes": [
+          "b1",
+          "b2",
+          "b3"
+        ],
+        "edges": [
+          {
+            "source": "a1",
+            "target": "a2",
+            "kind": "cowork",
+            "evidence_id": "a-project-12-1"
+          },
+          {
+            "source": "a1",
+            "target": "a2",
+            "kind": "cowork",
+            "evidence_id": "a-project-12-2"
+          },
+          {
+            "source": "a1",
+            "target": "a2",
+            "kind": "cowork",
+            "evidence_id": "a-project-12-3"
+          },
+          {
+            "source": "a1",
+            "target": "a3",
+            "kind": "cowork",
+            "evidence_id": "a-project-13-1"
+          },
+          {
+            "source": "a1",
+            "target": "a3",
+            "kind": "cowork",
+            "evidence_id": "a-project-13-2"
+          },
+          {
+            "source": "a1",
+            "target": "a3",
+            "kind": "cowork",
+            "evidence_id": "a-project-13-3"
+          },
+          {
+            "source": "a2",
+            "target": "a3",
+            "kind": "cowork",
+            "evidence_id": "a-project-23-1"
+          },
+          {
+            "source": "a2",
+            "target": "a3",
+            "kind": "cowork",
+            "evidence_id": "a-project-23-2"
+          },
+          {
+            "source": "a2",
+            "target": "a3",
+            "kind": "cowork",
+            "evidence_id": "a-project-23-3"
+          },
+          {
+            "source": "b1",
+            "target": "b2",
+            "kind": "cowork",
+            "evidence_id": "b-project-12-1"
+          },
+          {
+            "source": "b1",
+            "target": "b2",
+            "kind": "cowork",
+            "evidence_id": "b-project-12-2"
+          },
+          {
+            "source": "b1",
+            "target": "b2",
+            "kind": "cowork",
+            "evidence_id": "b-project-12-3"
+          },
+          {
+            "source": "b1",
+            "target": "b3",
+            "kind": "cowork",
+            "evidence_id": "b-project-13-1"
+          },
+          {
+            "source": "b1",
+            "target": "b3",
+            "kind": "cowork",
+            "evidence_id": "b-project-13-2"
+          },
+          {
+            "source": "b1",
+            "target": "b3",
+            "kind": "cowork",
+            "evidence_id": "b-project-13-3"
+          },
+          {
+            "source": "b2",
+            "target": "b3",
+            "kind": "cowork",
+            "evidence_id": "b-project-23-1"
+          },
+          {
+            "source": "b2",
+            "target": "b3",
+            "kind": "cowork",
+            "evidence_id": "b-project-23-2"
+          },
+          {
+            "source": "b2",
+            "target": "b3",
+            "kind": "cowork",
+            "evidence_id": "b-project-23-3"
+          },
+          {
+            "source": "b1",
+            "target": "a1",
+            "kind": "vouch",
+            "evidence_id": "vouch-b1-a1"
+          }
+        ],
+        "baseline_list_size": 6,
+        "seats": [
+          {
+            "validator_id": "validator-a1",
+            "node": "a1"
+          },
+          {
+            "validator_id": "validator-a2",
+            "node": "a2"
+          },
+          {
+            "validator_id": "validator-a3",
+            "node": "a3"
+          }
+        ],
+        "penalized_vouchers": []
+      },
+      "expected": {
+        "clusters": [
+          [
+            "a1",
+            "a2",
+            "a3"
+          ],
+          [
+            "b1",
+            "b2",
+            "b3"
+          ]
+        ],
+        "cuts": [
+          {
+            "left": [
+              "a1",
+              "a2",
+              "a3"
+            ],
+            "right": [
+              "b1",
+              "b2",
+              "b3"
+            ],
+            "conductance": {
+              "numerator": 1,
+              "denominator": 37
+            }
+          }
+        ],
+        "connectivity_holds": [
+          "b1",
+          "b2",
+          "b3"
+        ],
+        "cluster_seat_cap": {
+          "numerator": 2,
+          "denominator": 1
+        },
+        "over_cap_clusters": [
+          [
+            "a1",
+            "a2",
+            "a3"
+          ]
+        ]
+      }
+    }
+  ]
+}
