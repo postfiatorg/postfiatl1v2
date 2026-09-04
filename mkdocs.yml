@@ -114,6 +114,7 @@ nav:
       - Completed P0 Remediation: plans/completed/P0-COMPLETE-REMEDIATION-PLAN-20260716.md
       - Completed Capability Restoration: plans/completed/OPEN-SOURCE-CAPABILITY-RESTORATION-PLAN-20260716.md
   - Handoffs:
+      - Task Node UNL MVP Built And Hardened: handoffs/2026-09-04___dravlic__tasknode_unl_mvp_built_and_hardened.md
       - Agent Direction Decided; Z3 Planned: handoffs/2026-09-03___dravlic__agent_direction_decided_z3_planned.md
       - Bug Fixes And Pending Decisions: handoffs/2026-08-31___dravlic__bug_fixes_and_pending_decisions.md
       - Devnet Registry-Continuation Fix Deployed: handoffs/2026-08-31___postfiatchad__devnet_registry_fix_deploy.md
