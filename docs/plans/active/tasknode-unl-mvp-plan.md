@@ -286,11 +286,13 @@ without packet-root lineage. Nostr private messages are never graph edges.
       after the CLI works. Both formats must say `SHADOW_ONLY`, no live
       authority, no transaction, and no ratification
       (`python/tests/fixtures/tasknode_unl/expected-shadow-output.md`).
-- [ ] After all fixture cases pass, attempt one read-only real-data derivation
+- [x] After all fixture cases pass, attempt one read-only real-data derivation
       using frozen local exports or bounded read-only PFT Ledger history plus
       the current baseline. Do not access Task Node servers. If signed digests,
       bindings, publishing keys, exclusions, or required V1 facts are absent,
-      emit an honest coverage-and-holds report; never synthesize missing data.
+      emit an honest coverage-and-holds report; never synthesize missing data
+      (`docs/governance/tasknode-unl-shadow-run-20260904.md` and
+      `docs/governance/tasknode-unl-shadow-run-20260904/shadow-report.json`).
 - [x] Prove repeated runs over identical inputs are byte-identical. Tampered
       signatures, altered pointer ownership, a stale root, forbidden inputs,
       missing evidence, an over-cap cluster, and a two-change pre-39 delta must

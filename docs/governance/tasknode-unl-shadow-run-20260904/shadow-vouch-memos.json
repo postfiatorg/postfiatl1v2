@@ -1,0 +1,10 @@
+{
+  "memos": [],
+  "mode": "SHADOW_ONLY",
+  "schema": "tasknode-unl-vouch-ledger-input-v1",
+  "window": {
+    "days": 180,
+    "end": "2026-09-04T11:57:22Z",
+    "start": "2026-03-08T11:57:22Z"
+  }
+}

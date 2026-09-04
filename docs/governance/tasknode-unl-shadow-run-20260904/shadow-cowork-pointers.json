@@ -1,0 +1,10 @@
+{
+  "mode": "SHADOW_ONLY",
+  "pointers": [],
+  "schema": "tasknode-unl-cowork-pointer-input-v1",
+  "window": {
+    "days": 180,
+    "end": "2026-09-04T11:57:22Z",
+    "start": "2026-03-08T11:57:22Z"
+  }
+}

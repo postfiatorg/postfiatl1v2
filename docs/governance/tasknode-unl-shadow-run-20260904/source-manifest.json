@@ -1,0 +1,125 @@
+{
+  "archive_complete_ledgers_at_capture": "1-6012268",
+  "authentication_used": false,
+  "baseline": {
+    "path": "benchmarks/ai-governance/institution-reputation-unl-20260901/sources/postfiat-current-unl.json",
+    "repository_revision": "deaaa5a280765869af0d5a472921710711b9a37f",
+    "round": 20,
+    "source_sha256": "b4edcf3d752d854f516ea3826a390da036535f33463b7802d240b86454a796b1",
+    "status": "COMPLETE",
+    "validator_count": 20
+  },
+  "bounded_account_tx_pull": {
+    "aggregate_record_cap": 2000,
+    "aggregate_records": 2000,
+    "counterparties": [
+      {
+        "complete": true,
+        "final_marker": null,
+        "ledger_span": [
+          3415,
+          5770533
+        ],
+        "pages": 4,
+        "records": 730,
+        "wallet_address": "rPo8GkCA9YMKzuJGTHbj11kdVfPqSJHxNx"
+      },
+      {
+        "complete": false,
+        "final_marker": {
+          "ledger": 482263,
+          "seq": 0
+        },
+        "ledger_span": [
+          3387,
+          479122
+        ],
+        "pages": 7,
+        "records": 1221,
+        "wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7"
+      }
+    ],
+    "note": "Counterparty responses are summarized, not retained as bulk dumps; the rwdm query stopped at the cap.",
+    "tasknode_wallet": {
+      "complete": true,
+      "final_marker": null,
+      "ledger_span": [
+        5620845,
+        6003432
+      ],
+      "pages": 1,
+      "records": 49
+    }
+  },
+  "capture_date": "2026-09-04",
+  "counts": {
+    "account_transactions": 49,
+    "binding_memos": 0,
+    "counterparty_wallets": 2,
+    "pf_ptr_v4_memos": 48,
+    "signed_work_digests": 0,
+    "successful_payments": 49,
+    "vouch_memos": 0,
+    "wallets": 3
+  },
+  "coverage_limits": [
+    "No validator-key-to-wallet binding evidence exists.",
+    "Observed wallets are coverage rows, not validator identities.",
+    "Candidate public_key_hash values hash observed wallet transaction signing keys, not validator keys; unresolved control-group values only satisfy non-null input syntax and are not evidence.",
+    "The bounded counterparty pull hit its aggregate cap before the rwdm history completed, so funding history and window completeness are false.",
+    "No published funding exclusion list was available; the input is null.",
+    "Encrypted pointer payloads were not fetched or decrypted."
+  ],
+  "endpoint_used": "wss://ws-archive.testnet.postfiat.org",
+  "file_sha256": {
+    "archive-rpc-response.json": "3d538235d0d3c767c98eb54ecfce13ba1c6f57f7091b7914c6fdd58af898ab9e",
+    "repository-round-20-source": "b4edcf3d752d854f516ea3826a390da036535f33463b7802d240b86454a796b1",
+    "round-19-selected-unl.json": "1fb36067ef30d183b1e7443d68bbda5a547302ba3824b5d16b4f7d6d96050862"
+  },
+  "ledger_window": {
+    "maximum": 6012256,
+    "minimum": 1
+  },
+  "mode": "SHADOW_ONLY",
+  "probes": [
+    {
+      "endpoint": "https://rpc.testnet.postfiat.org",
+      "method": "server_info",
+      "result": "HTTP 200; history 5950054-6012252"
+    },
+    {
+      "endpoint": "https://rpc.testnet.postfiat.org:5006/",
+      "method": "server_info",
+      "result": "connection refused"
+    },
+    {
+      "endpoint": "http://178.156.143.199:5005",
+      "method": "server_info",
+      "result": "HTTP 200; history 6011631-6012252"
+    },
+    {
+      "endpoint": "wss://ws-archive.testnet.postfiat.org",
+      "method": "server_info",
+      "result": "success; history 1-6012268"
+    }
+  ],
+  "pull_cap_transactions": 2000,
+  "read_methods": [
+    "server_info",
+    "ledger",
+    "account_tx"
+  ],
+  "round_19_history": {
+    "source_sha256": "1fb36067ef30d183b1e7443d68bbda5a547302ba3824b5d16b4f7d6d96050862",
+    "url": "https://scoring-testnet.postfiat.org/api/scoring/rounds/19/outputs/selected_unl.json",
+    "validator_count": 20
+  },
+  "schema": "tasknode-unl-real-shadow-source-manifest-v1",
+  "tasknode_wallet": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+  "transaction_window": {
+    "first_close_time": "2026-08-21T19:21:52Z",
+    "last_close_time": "2026-09-04T04:32:31Z",
+    "maximum_ledger": 6003432,
+    "minimum_ledger": 5620845
+  }
+}

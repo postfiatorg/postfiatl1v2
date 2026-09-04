@@ -1,0 +1,17 @@
+{
+  "files": {
+    "baseline_list": "baseline-list.json",
+    "binding_replay": "shadow-bindings.json",
+    "cowork_pointers": "shadow-cowork-pointers.json",
+    "funding_exclusions": "funding-exclusions.json",
+    "funding_transfers": "shadow-funding-transfers.json",
+    "ledger_snapshots": "shadow-ledger-snapshots.json",
+    "policy_evidence": "shadow-policy-evidence.json",
+    "publishing_keys": "shadow-publishing-keys.json",
+    "registry_history": "registry-rounds.json",
+    "vouch_ledger": "shadow-vouch-memos.json",
+    "work_digests": "shadow-work-digests.json"
+  },
+  "mode": "SHADOW_ONLY",
+  "schema": "tasknode-unl-shadow-input-manifest-v1"
+}
