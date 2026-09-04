@@ -1,0 +1,164 @@
+{
+  "evaluation_end": "2026-09-04T12:00:00Z",
+  "mode": "SHADOW_ONLY",
+  "reattachments": [],
+  "records": [
+    {
+      "challenge": {
+        "action": "bind",
+        "binding_tx_hash": null,
+        "mode": "SHADOW_ONLY",
+        "nonce_hex": "bfbf6f7d8163af1c7e765d2f2de811021ee518504dfb06503b3b9484cd18985e",
+        "previous_wallet_address": null,
+        "schema": "tasknode-unl-binding-challenge-v1",
+        "signature_algorithm": "secp256k1-recoverable-sha256",
+        "validator_id": "validator-22",
+        "validator_public_key_hex": "02da2c584c244b956effd7b3f6804c7333124950b4dfc112a4c7effc4a4bce03d0",
+        "wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+        "wallet_public_key_hex": "03b2fe3e6335b7bf0778c291324ad18602a44df704ea1e4d5b85c93b5eb3bbeef2"
+      },
+      "close_time": "2026-03-01T12:00:00Z",
+      "ledger_index": 500,
+      "memo": {
+        "d": "30e88dd172131b557ddae3d24881854d0b87c948b164f2b9cd8c7c51c9332698",
+        "m": "SHADOW_ONLY",
+        "o": "bind",
+        "s": "tnub1",
+        "v": "validator-22",
+        "vs": "39144573f64a59ba2da1b8dac62e31f85e5370213828cf8b223465e10cca91e956f8a888cd7c27d88a38b81e9f12de09f61d998a3e1af242c6230d0488f4848f00",
+        "w": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+        "ws": "857c475e76c32940651683eecc2635d22bdc3437867d5005d75dc219e89df36b65f2bee326cf72059a451daa12b8f249f06c8e4b79c8c0c3f298e3368141228500"
+      },
+      "schema": "tasknode-unl-binding-ledger-record-v1",
+      "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+      "transaction_index": 0,
+      "tx_hash": "f63cce3a7c2797e735415b473d4dce7fdf15cbfe0a826c52a6ed19e8c7c7b367"
+    },
+    {
+      "challenge": {
+        "action": "bind",
+        "binding_tx_hash": null,
+        "mode": "SHADOW_ONLY",
+        "nonce_hex": "b9abc862adac112ae7b4f25790d773fb06c1087519515dddf37e4fb74fc5ac29",
+        "previous_wallet_address": null,
+        "schema": "tasknode-unl-binding-challenge-v1",
+        "signature_algorithm": "secp256k1-recoverable-sha256",
+        "validator_id": "validator-23",
+        "validator_public_key_hex": "022fabe0c766fd42e897309fd421486fc1ea6f39ce3aa02edbcc38df3199ee8c2b",
+        "wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+        "wallet_public_key_hex": "020304af9cd149ade104f68d388de88833406b5f0518c8cbb74b5d6f62e07ad092"
+      },
+      "close_time": "2026-03-01T12:01:00Z",
+      "ledger_index": 501,
+      "memo": {
+        "d": "33103fbdf835bd171def7dca636d70784794fbeab8b1888ba740b1f4bfbd3daf",
+        "m": "SHADOW_ONLY",
+        "o": "bind",
+        "s": "tnub1",
+        "v": "validator-23",
+        "vs": "28810ef65b29667dc9a11ce803220499fafbfb38f72f963e8f65f52b9929c6745b805753e94f64bfba87e7c9fcd909aa0ba003560c4f177cd4ff2b4e6411e5dc01",
+        "w": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+        "ws": "ec6f436e93cc07bbcda7453a79543e453587d88b3091479c1bc8652e7ac53faa511017b4ff9bdd5efe9847909fee68089edc48bae82fbce0f3762476a8c9556400"
+      },
+      "schema": "tasknode-unl-binding-ledger-record-v1",
+      "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+      "transaction_index": 0,
+      "tx_hash": "a50458a93caf8c2b4b73af2f2a4a999eeb1ba27b38b1e3c6a34842ebfb5e3b9c"
+    },
+    {
+      "challenge": {
+        "action": "bind",
+        "binding_tx_hash": null,
+        "mode": "SHADOW_ONLY",
+        "nonce_hex": "7f435e85f7d2bc8c76ff1b309b11571a04dedf380bc53e9530b373c765d51e42",
+        "previous_wallet_address": null,
+        "schema": "tasknode-unl-binding-challenge-v1",
+        "signature_algorithm": "secp256k1-recoverable-sha256",
+        "validator_id": "validator-24",
+        "validator_public_key_hex": "03602c0d9cd9d34f4cfcbe24996fb1a3a0232214791729de3e810b67e944f88a77",
+        "wallet_address": "rBcZcJ7skaua7n4iaRPF7sD4EjRsaQ87CE",
+        "wallet_public_key_hex": "02ebf75f2e4b61deed8f518b4a52f31bad89ac30b73fa0a33612c87bbe9ce3e58e"
+      },
+      "close_time": "2026-03-01T12:02:00Z",
+      "ledger_index": 502,
+      "memo": {
+        "d": "a6352472c3dd13ceb36fb393e5ea822e5c1c8f681a2dc3ac35fdf0eef5bbd878",
+        "m": "SHADOW_ONLY",
+        "o": "bind",
+        "s": "tnub1",
+        "v": "validator-24",
+        "vs": "bb2f74ba9d1ae483623b19b25ca8557eb131fed3ea3b79ee737a489bfa35f5c95b94bc8fd4a721723c62e2f2629d73b246afa7e5d68ec380a2f2d56b326bb3de00",
+        "w": "rBcZcJ7skaua7n4iaRPF7sD4EjRsaQ87CE",
+        "ws": "3637e770067fcc56e31ada5d2ac37581f4a581a5ead12bfa4211bb86980c0ae45fa35bf00628ebee140079faca050024a8f21bbb0c25310c3444aa0f92904b6400"
+      },
+      "schema": "tasknode-unl-binding-ledger-record-v1",
+      "sender_wallet_address": "rBcZcJ7skaua7n4iaRPF7sD4EjRsaQ87CE",
+      "transaction_index": 0,
+      "tx_hash": "eac55004df4123159a9030875c9b74e3c614f989d16f1a207feeeae1e84fc695"
+    },
+    {
+      "challenge": {
+        "action": "bind",
+        "binding_tx_hash": null,
+        "mode": "SHADOW_ONLY",
+        "nonce_hex": "bee3f7e7c536031899f75b9a9044d8caa69c61690049ca6a5c8244637fd6ea85",
+        "previous_wallet_address": null,
+        "schema": "tasknode-unl-binding-challenge-v1",
+        "signature_algorithm": "secp256k1-recoverable-sha256",
+        "validator_id": "validator-25",
+        "validator_public_key_hex": "0221bb0696986821b0c2dc4cf66c9c578744306adc9eb99ea98a442f20c507cc76",
+        "wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+        "wallet_public_key_hex": "0242c172f782e2c58a971b45d65a8a1b22b7eab49bd08c30a9e7e3a9f31c0476db"
+      },
+      "close_time": "2026-03-01T12:03:00Z",
+      "ledger_index": 503,
+      "memo": {
+        "d": "19c63b1920558690071cd614299d130870690ee64df5f44d1e0b7639686d1146",
+        "m": "SHADOW_ONLY",
+        "o": "bind",
+        "s": "tnub1",
+        "v": "validator-25",
+        "vs": "f18adf7411144aff2fa398e52751d86695fdb8227fe137ac6bcb38160195b7eb4d1d718786ff7ff6bea9969bf63114c86a940477dbe7b77411102227fa95c3c801",
+        "w": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+        "ws": "db3730d5c7675f27135e8d5791d4a3cd4323a9b1a59f0723eeb69c988ea99d0267db3aa9005d84d30e24709a5145889c8742c638d9784dde0b0bfee3170d2e9b00"
+      },
+      "schema": "tasknode-unl-binding-ledger-record-v1",
+      "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+      "transaction_index": 0,
+      "tx_hash": "fdea298440ccd9e7874e3ebd9f6e5289673606d4fd532973a1afd7b4f8103e40"
+    },
+    {
+      "challenge": {
+        "action": "bind",
+        "binding_tx_hash": null,
+        "mode": "SHADOW_ONLY",
+        "nonce_hex": "1f58ee5449953e994788e5860b20045644b4561f30cdcf053f82c1b2fbfb5f5a",
+        "previous_wallet_address": null,
+        "schema": "tasknode-unl-binding-challenge-v1",
+        "signature_algorithm": "secp256k1-recoverable-sha256",
+        "validator_id": "validator-26",
+        "validator_public_key_hex": "02d129d1a1adcac73c7777d7e444fd4fedb07ecc3578f32186a17da3501c01c305",
+        "wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+        "wallet_public_key_hex": "0328e115dc06ac5917d2b1ee3adce13f11f1f83e2f8a0c694f31f7d39587462700"
+      },
+      "close_time": "2026-03-01T12:04:00Z",
+      "ledger_index": 504,
+      "memo": {
+        "d": "c4a48cceff041a4c1dad299c5064b28c9c48e5a9f65d9f5573823a5803d9b23f",
+        "m": "SHADOW_ONLY",
+        "o": "bind",
+        "s": "tnub1",
+        "v": "validator-26",
+        "vs": "992fe8ce3fc8fdbe865129b60974831e720f8ddb237f67afde983e7175bf19fc4a728f960d6674edb4d187fbf0531f90c67d224aae65275889ba59f2da39ad6700",
+        "w": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+        "ws": "e2d9c1b6f9a72352d9200b3685b78c6c3f5d393ee597c2025eeb260b52cf8c5170b3f608345ff192fc89346f885ba72b533af590c177a443f471555c1685475d01"
+      },
+      "schema": "tasknode-unl-binding-ledger-record-v1",
+      "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+      "transaction_index": 0,
+      "tx_hash": "57e8a665232a8623de1eaa47e5ed8d1a56efbf894034e84dd1514c8452f9e3bb"
+    }
+  ],
+  "rotations": [],
+  "schema": "tasknode-unl-binding-replay-input-v1"
+}

@@ -1,9 +1,10 @@
 """Offline Task Node identity-derived UNL utilities.
 
 This CLI prepares and verifies SHADOW_ONLY validator-to-wallet binding
-artifacts. It has no transaction preparation or submission command, performs
-no network access, and never accepts private keys. Signatures arrive as
-detached envelopes produced by custody-preserving signer adapters.
+artifacts and derives fixture-only shadow reports. It has no transaction
+preparation or submission command, performs no network access, never accepts
+private keys, and cannot mutate registry state. Signatures arrive as detached
+envelopes produced by custody-preserving signer adapters.
 """
 
 from __future__ import annotations
@@ -27,13 +28,22 @@ from .tasknode_unl_binding import (
     verified_record_document,
     verify_binding_record,
 )
+from .tasknode_unl_policy import (
+    SHADOW_INPUT_FILES,
+    derive_shadow_report,
+    render_shadow_markdown,
+)
 from .tasknode_unl_schema import (
+    SHADOW_INPUT_MANIFEST_SCHEMA,
     SHADOW_MODE,
     TaskNodeUnlError,
     canonical_json_bytes,
+    require_closed_keys,
+    require_identifier,
 )
 
 _MAX_INPUT_BYTES = 4 * 1024 * 1024
+_SHADOW_MANIFEST_NAME = "shadow-input.json"
 
 
 def _read_json(path: Path) -> Any:
@@ -52,6 +62,61 @@ def _emit(document: Any, output: Path | None) -> None:
         sys.stdout.buffer.write(encoded)
     else:
         output.write_bytes(encoded)
+
+
+def _shadow_documents(input_dir: Path) -> dict[str, object]:
+    if not input_dir.is_dir():
+        raise TaskNodeUnlError("input_directory_missing", str(input_dir))
+    manifest = require_closed_keys(
+        _read_json(input_dir / _SHADOW_MANIFEST_NAME),
+        required=("schema", "mode", "files"),
+        field="shadow_input_manifest",
+    )
+    if manifest["schema"] != SHADOW_INPUT_MANIFEST_SCHEMA:
+        raise TaskNodeUnlError(
+            "unknown_schema", "shadow_input_manifest.schema"
+        )
+    if manifest["mode"] != SHADOW_MODE:
+        raise TaskNodeUnlError(
+            "mode_mismatch", "shadow_input_manifest.mode"
+        )
+    files = require_closed_keys(
+        manifest["files"],
+        required=SHADOW_INPUT_FILES,
+        field="shadow_input_manifest.files",
+    )
+    selected: dict[str, object] = {}
+    names: set[str] = set()
+    for logical_name in SHADOW_INPUT_FILES:
+        name = require_identifier(
+            files[logical_name],
+            f"shadow_input_manifest.files.{logical_name}",
+        )
+        path = Path(name)
+        if path.name != name or path.is_absolute() or name in (".", ".."):
+            raise TaskNodeUnlError(
+                "unsafe_input_filename",
+                f"shadow_input_manifest.files.{logical_name}",
+            )
+        if name in names:
+            raise TaskNodeUnlError("duplicate_input_filename", name)
+        names.add(name)
+        selected[logical_name] = _read_json(input_dir / name)
+    return selected
+
+
+def _emit_shadow(args: argparse.Namespace) -> None:
+    if args.markdown_output is not None and args.markdown_output == args.output:
+        raise TaskNodeUnlError("output_paths_must_differ")
+    report = derive_shadow_report(_shadow_documents(args.input_dir))
+    markdown = (
+        render_shadow_markdown(report)
+        if args.markdown_output is not None
+        else None
+    )
+    _emit(report, args.output)
+    if markdown is not None:
+        args.markdown_output.write_text(markdown, encoding="utf-8")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -119,6 +184,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     replay.add_argument("--input", type=Path, required=True)
     replay.add_argument("--output", type=Path)
+
+    shadow = commands.add_parser(
+        "shadow-derive",
+        aliases=("derive",),
+        help="derive a fixture-only report; cannot write or submit state",
+    )
+    shadow.add_argument(
+        "--input-dir",
+        "--fixture-dir",
+        dest="input_dir",
+        type=Path,
+        required=True,
+    )
+    shadow.add_argument("--output", type=Path, required=True)
+    shadow.add_argument("--markdown-output", type=Path)
     return parser
 
 
@@ -188,9 +268,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 0
 
-        result = replay_bindings_document(_read_json(args.input))
-        _emit(result.to_dict(), args.output)
-        return 0
+        if args.command == "replay":
+            result = replay_bindings_document(_read_json(args.input))
+            _emit(result.to_dict(), args.output)
+            return 0
+
+        if args.command in ("shadow-derive", "derive"):
+            _emit_shadow(args)
+            return 0
+
+        raise TaskNodeUnlError("unknown_command", args.command)
     except (OSError, TaskNodeUnlError) as exc:
         print(f"tasknode-unl: {exc}", file=sys.stderr)
         return 2

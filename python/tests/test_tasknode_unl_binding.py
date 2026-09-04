@@ -702,6 +702,8 @@ class OfflineCliTests(unittest.TestCase):
                 "finalize-revoke",
                 "verify-record",
                 "replay",
+                "shadow-derive",
+                "derive",
             },
         )
         self.assertNotIn("submit", subparser_action.choices)

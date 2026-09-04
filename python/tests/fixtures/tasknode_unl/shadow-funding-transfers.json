@@ -1,0 +1,35 @@
+{
+  "history_complete_from_ledger_genesis": true,
+  "mode": "SHADOW_ONLY",
+  "schema": "tasknode-unl-funding-transfer-input-v1",
+  "transfers": [],
+  "value_asset": "PFT",
+  "wallet_accounts": [
+    {
+      "account_id": "account-pass",
+      "wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow"
+    },
+    {
+      "account_id": "account-digest-hold",
+      "wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz"
+    },
+    {
+      "account_id": "account-low-score",
+      "wallet_address": "rBcZcJ7skaua7n4iaRPF7sD4EjRsaQ87CE"
+    },
+    {
+      "account_id": "account-cluster-capped",
+      "wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4"
+    },
+    {
+      "account_id": "account-connectivity-hold",
+      "wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE"
+    }
+  ],
+  "window": {
+    "days": 180,
+    "end": "2026-09-04T12:00:00Z",
+    "start": "2026-03-08T12:00:00Z"
+  },
+  "window_complete": true
+}

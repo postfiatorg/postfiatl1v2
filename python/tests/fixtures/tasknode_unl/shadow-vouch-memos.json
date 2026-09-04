@@ -1,0 +1,92 @@
+{
+  "memos": [
+    {
+      "close_time": "2026-06-01T12:01:00Z",
+      "ledger_index": 30000,
+      "memo": {
+        "digest_hash": "56ca553211fce4e69e75b829f2206532f1444c69dc35475b8d3b43328b6479a1",
+        "mode": "SHADOW_ONLY",
+        "public_key_hex": "025ecfea555b009aaa32dc12be5f8e668ffa746ba168a363dc022f2db4040284ea",
+        "schema": "tasknode-unl-vouch-memo-envelope-v1",
+        "signature_algorithm": "secp256k1-recoverable-sha256",
+        "signature_hex": "e43a857981cc05d86f435b8d22a4bc3fb638a94a98fd8873316dc60adf6e0d017f9c234c3a19af2f845bae34f7579094b28fa71fd9d23cea5aef4db81554f20700",
+        "statement": {
+          "claim": "knows_operator",
+          "issued_at": "2026-06-01T12:00:00Z",
+          "mode": "SHADOW_ONLY",
+          "nonce_hex": "cd9cca20a05a2cd029947613b60854bbd84bf724ad90b841bc1330da1fac2769",
+          "schema": "tasknode-unl-vouch-statement-v1",
+          "source_account": "validator-03",
+          "source_wallet_address": "rLujDwn5P2vMAezHknW1QpmMQ5ha9Pkia5",
+          "target_account": "account-pass"
+        }
+      },
+      "memo_index": 0,
+      "sender_wallet_address": "rLujDwn5P2vMAezHknW1QpmMQ5ha9Pkia5",
+      "transaction_index": 0,
+      "tx_hash": "b91f1e52c568d7d451d78d205407173b6126c3ac3ec35a6fb26ef334d9dac777",
+      "visibility": "public"
+    },
+    {
+      "close_time": "2026-06-01T12:02:00Z",
+      "ledger_index": 30001,
+      "memo": {
+        "digest_hash": "8f1bdfd2474ce1c6060eead9882a3eaff4bee18311d4fa2a0bc488ff85c98c32",
+        "mode": "SHADOW_ONLY",
+        "public_key_hex": "02b0e070c0684053fd7ce72dbcd7faf39f5dea27bd9d26e3488c9f832592d4022d",
+        "schema": "tasknode-unl-vouch-memo-envelope-v1",
+        "signature_algorithm": "secp256k1-recoverable-sha256",
+        "signature_hex": "e781cd2944b8ea33b92870243b1917a7f344f8b70fb0a481c18711e7690058f06ebc209541651ed418b82470240f6cb7cdbe9a74129b0839571bddf7d2189b1900",
+        "statement": {
+          "claim": "knows_operator",
+          "issued_at": "2026-06-01T12:01:00Z",
+          "mode": "SHADOW_ONLY",
+          "nonce_hex": "4e05d845f8d409ff488bc95ccaefc0a6bb1c4e16ee15aaee024d81c62ffe2457",
+          "schema": "tasknode-unl-vouch-statement-v1",
+          "source_account": "validator-06",
+          "source_wallet_address": "rh888ExZUM6Gz44LbSJCTwm3EPtbWf9BRB",
+          "target_account": "account-low-score"
+        }
+      },
+      "memo_index": 0,
+      "sender_wallet_address": "rh888ExZUM6Gz44LbSJCTwm3EPtbWf9BRB",
+      "transaction_index": 0,
+      "tx_hash": "2f18271464bcc79a6e2db4e775fdbfa1fd5194c8a86cca2de2ea450b0f0b33ee",
+      "visibility": "public"
+    },
+    {
+      "close_time": "2026-06-01T12:03:00Z",
+      "ledger_index": 30002,
+      "memo": {
+        "digest_hash": "0a77695ec9e5eb68c73ea12e29a7d7b3f4ca75190d9b4f8e0ddcfaa85b079348",
+        "mode": "SHADOW_ONLY",
+        "public_key_hex": "032e1851847bf3421db023b648d50d1918cd9645baac9a99eeff0e854d8430e594",
+        "schema": "tasknode-unl-vouch-memo-envelope-v1",
+        "signature_algorithm": "secp256k1-recoverable-sha256",
+        "signature_hex": "2ff324ca9e200f224c7f842a0b7a87eff835de9c5087f5958a9fda6e2d2076b03f617ece7adefae03310aff3c5376b2a1b8bb192b3f1a77e974442b8781a258a01",
+        "statement": {
+          "claim": "knows_operator",
+          "issued_at": "2026-06-01T12:02:00Z",
+          "mode": "SHADOW_ONLY",
+          "nonce_hex": "775692cbb558646b99e7e56b9aa65f2e98e82a3ea3c6a86976d8800cb6cc865b",
+          "schema": "tasknode-unl-vouch-statement-v1",
+          "source_account": "validator-07",
+          "source_wallet_address": "rGw1D1MG2esersnUNGxGoGPSLkitQKoDFR",
+          "target_account": "account-digest-hold"
+        }
+      },
+      "memo_index": 0,
+      "sender_wallet_address": "rGw1D1MG2esersnUNGxGoGPSLkitQKoDFR",
+      "transaction_index": 0,
+      "tx_hash": "966d65cb9ad5051f4925ab0532705b315f6bf7f4fb2a44801f9d169fa64cd251",
+      "visibility": "public"
+    }
+  ],
+  "mode": "SHADOW_ONLY",
+  "schema": "tasknode-unl-vouch-ledger-input-v1",
+  "window": {
+    "days": 180,
+    "end": "2026-09-04T12:00:00Z",
+    "start": "2026-03-08T12:00:00Z"
+  }
+}

@@ -50,6 +50,11 @@ CHURN_BASELINE_SCHEMA = "tasknode-unl-churn-baseline-v1"
 CHURN_REGISTRY_HISTORY_SCHEMA = "tasknode-unl-registry-history-v1"
 CHURN_PROPOSAL_SCHEMA = "tasknode-unl-churn-proposal-v1"
 CHURN_RESULT_SCHEMA = "tasknode-unl-churn-result-v1"
+SHADOW_INPUT_MANIFEST_SCHEMA = "tasknode-unl-shadow-input-manifest-v1"
+SHADOW_WORK_DIGEST_BUNDLE_SCHEMA = "tasknode-unl-work-digest-bundle-v1"
+SHADOW_LEDGER_SNAPSHOT_BUNDLE_SCHEMA = "tasknode-unl-ledger-snapshot-bundle-v1"
+SHADOW_POLICY_EVIDENCE_SCHEMA = "tasknode-unl-shadow-policy-evidence-v1"
+SHADOW_REPORT_SCHEMA = "tasknode-unl-shadow-report-v1"
 
 ACCOUNTABILITY_WINDOW_DAYS = 180
 ACCOUNTABILITY_WORK_DENOMINATOR = 40

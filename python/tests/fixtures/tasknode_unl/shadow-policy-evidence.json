@@ -1,0 +1,349 @@
+{
+  "active_validators": [
+    {
+      "account_id": "validator-02",
+      "control_group": {
+        "funding_source_group": "funding-02",
+        "key_management_group": "kms-02",
+        "operator_group": "operator-02",
+        "release_manager_group": "release-02"
+      },
+      "validator_id": "validator-02"
+    },
+    {
+      "account_id": "validator-03",
+      "control_group": {
+        "funding_source_group": "funding-03",
+        "key_management_group": "kms-03",
+        "operator_group": "operator-03",
+        "release_manager_group": "release-03"
+      },
+      "validator_id": "validator-03"
+    },
+    {
+      "account_id": "validator-04",
+      "control_group": {
+        "funding_source_group": "funding-04",
+        "key_management_group": "kms-04",
+        "operator_group": "operator-04",
+        "release_manager_group": "release-04"
+      },
+      "validator_id": "validator-04"
+    },
+    {
+      "account_id": "validator-05",
+      "control_group": {
+        "funding_source_group": "funding-05",
+        "key_management_group": "kms-05",
+        "operator_group": "operator-05",
+        "release_manager_group": "release-05"
+      },
+      "validator_id": "validator-05"
+    },
+    {
+      "account_id": "validator-06",
+      "control_group": {
+        "funding_source_group": "funding-06",
+        "key_management_group": "kms-06",
+        "operator_group": "operator-06",
+        "release_manager_group": "release-06"
+      },
+      "validator_id": "validator-06"
+    },
+    {
+      "account_id": "validator-07",
+      "control_group": {
+        "funding_source_group": "funding-07",
+        "key_management_group": "kms-07",
+        "operator_group": "operator-07",
+        "release_manager_group": "release-07"
+      },
+      "validator_id": "validator-07"
+    },
+    {
+      "account_id": "validator-08",
+      "control_group": {
+        "funding_source_group": "funding-08",
+        "key_management_group": "kms-08",
+        "operator_group": "operator-08",
+        "release_manager_group": "release-08"
+      },
+      "validator_id": "validator-08"
+    },
+    {
+      "account_id": "validator-09",
+      "control_group": {
+        "funding_source_group": "funding-09",
+        "key_management_group": "kms-09",
+        "operator_group": "operator-09",
+        "release_manager_group": "release-09"
+      },
+      "validator_id": "validator-09"
+    },
+    {
+      "account_id": "validator-10",
+      "control_group": {
+        "funding_source_group": "funding-10",
+        "key_management_group": "kms-10",
+        "operator_group": "operator-10",
+        "release_manager_group": "release-10"
+      },
+      "validator_id": "validator-10"
+    },
+    {
+      "account_id": "validator-11",
+      "control_group": {
+        "funding_source_group": "funding-11",
+        "key_management_group": "kms-11",
+        "operator_group": "operator-11",
+        "release_manager_group": "release-11"
+      },
+      "validator_id": "validator-11"
+    },
+    {
+      "account_id": "validator-12",
+      "control_group": {
+        "funding_source_group": "funding-12",
+        "key_management_group": "kms-12",
+        "operator_group": "operator-12",
+        "release_manager_group": "release-12"
+      },
+      "validator_id": "validator-12"
+    },
+    {
+      "account_id": "validator-13",
+      "control_group": {
+        "funding_source_group": "funding-13",
+        "key_management_group": "kms-13",
+        "operator_group": "operator-13",
+        "release_manager_group": "release-13"
+      },
+      "validator_id": "validator-13"
+    },
+    {
+      "account_id": "validator-14",
+      "control_group": {
+        "funding_source_group": "funding-14",
+        "key_management_group": "kms-14",
+        "operator_group": "operator-14",
+        "release_manager_group": "release-14"
+      },
+      "validator_id": "validator-14"
+    },
+    {
+      "account_id": "validator-15",
+      "control_group": {
+        "funding_source_group": "funding-15",
+        "key_management_group": "kms-15",
+        "operator_group": "operator-15",
+        "release_manager_group": "release-15"
+      },
+      "validator_id": "validator-15"
+    },
+    {
+      "account_id": "validator-16",
+      "control_group": {
+        "funding_source_group": "funding-16",
+        "key_management_group": "kms-16",
+        "operator_group": "operator-16",
+        "release_manager_group": "release-16"
+      },
+      "validator_id": "validator-16"
+    },
+    {
+      "account_id": "validator-17",
+      "control_group": {
+        "funding_source_group": "funding-17",
+        "key_management_group": "kms-17",
+        "operator_group": "operator-17",
+        "release_manager_group": "release-17"
+      },
+      "validator_id": "validator-17"
+    },
+    {
+      "account_id": "validator-18",
+      "control_group": {
+        "funding_source_group": "funding-18",
+        "key_management_group": "kms-18",
+        "operator_group": "operator-18",
+        "release_manager_group": "release-18"
+      },
+      "validator_id": "validator-18"
+    },
+    {
+      "account_id": "validator-19",
+      "control_group": {
+        "funding_source_group": "funding-19",
+        "key_management_group": "kms-19",
+        "operator_group": "operator-19",
+        "release_manager_group": "release-19"
+      },
+      "validator_id": "validator-19"
+    },
+    {
+      "account_id": "validator-20",
+      "control_group": {
+        "funding_source_group": "funding-20",
+        "key_management_group": "kms-20",
+        "operator_group": "operator-20",
+        "release_manager_group": "release-20"
+      },
+      "validator_id": "validator-20"
+    },
+    {
+      "account_id": "validator-21",
+      "control_group": {
+        "funding_source_group": "funding-21",
+        "key_management_group": "kms-21",
+        "operator_group": "operator-21",
+        "release_manager_group": "release-21"
+      },
+      "validator_id": "validator-21"
+    }
+  ],
+  "candidates": [
+    {
+      "account_id": "account-pass",
+      "cobalt_linkedness_safe": true,
+      "control_group": {
+        "funding_source_group": "funding-22",
+        "key_management_group": "kms-22",
+        "operator_group": "operator-22",
+        "release_manager_group": "release-22"
+      },
+      "domain_control_proved": true,
+      "model_output": {
+        "cited_fields": [
+          "validator.identity.key_domain_binding.status",
+          "validator.topology.funding_source_group",
+          "validator.topology.key_management_group",
+          "validator.topology.operator_group",
+          "validator.topology.release_manager_group"
+        ],
+        "classification": "independent",
+        "parsed_output_root": "b3f7b65c0adeda55dfa411ab7e58dd1894c99ae279d1b4184f2c400a38d2676b",
+        "replay_certificate_root": "e3f5a1201d2b99dc70a7809dcc7d68c6827ce5974d3d0b134797c5339d7d9a22"
+      },
+      "operator_manifest_signed": true,
+      "public_key_hash": "b88a807ffb2c33ed659d29b8b923072929789bbaa902d52e305134712361168f",
+      "reliability_bps": 9980,
+      "validator_id": "validator-22"
+    },
+    {
+      "account_id": "account-digest-hold",
+      "cobalt_linkedness_safe": true,
+      "control_group": {
+        "funding_source_group": "funding-23",
+        "key_management_group": "kms-23",
+        "operator_group": "operator-23",
+        "release_manager_group": "release-23"
+      },
+      "domain_control_proved": true,
+      "model_output": {
+        "cited_fields": [
+          "validator.identity.key_domain_binding.status",
+          "validator.topology.funding_source_group",
+          "validator.topology.key_management_group",
+          "validator.topology.operator_group",
+          "validator.topology.release_manager_group"
+        ],
+        "classification": "independent",
+        "parsed_output_root": "0dc28c3aae14293023bdad9e74401fccd938f18ec67680918fd1d3f2a1b883a5",
+        "replay_certificate_root": "8f88b18e12e388959c990847dee2062656ffe5913b91f34adcb7c9100771ac94"
+      },
+      "operator_manifest_signed": true,
+      "public_key_hash": "c6d7921104b42678b576f71808ffceb2cce25a5869d0224c1e11f28e5b39b07f",
+      "reliability_bps": 9980,
+      "validator_id": "validator-23"
+    },
+    {
+      "account_id": "account-low-score",
+      "cobalt_linkedness_safe": true,
+      "control_group": {
+        "funding_source_group": "funding-24",
+        "key_management_group": "kms-24",
+        "operator_group": "operator-24",
+        "release_manager_group": "release-24"
+      },
+      "domain_control_proved": true,
+      "model_output": {
+        "cited_fields": [
+          "validator.identity.key_domain_binding.status",
+          "validator.topology.funding_source_group",
+          "validator.topology.key_management_group",
+          "validator.topology.operator_group",
+          "validator.topology.release_manager_group"
+        ],
+        "classification": "independent",
+        "parsed_output_root": "53e17d8195147093cfb41ad4dc5b7e3cf2dbd141215656e0c9e650af4a54bdfa",
+        "replay_certificate_root": "9eb8b995f6fd9f6007c0ffa094d516048fc7da4d7965828a13a3ca6040aaf832"
+      },
+      "operator_manifest_signed": true,
+      "public_key_hash": "1faefc86027056e323daa5abc18c5f63750db9c41d0fb1aba426b4a6e9df0bf5",
+      "reliability_bps": 9980,
+      "validator_id": "validator-24"
+    },
+    {
+      "account_id": "account-cluster-capped",
+      "cobalt_linkedness_safe": true,
+      "control_group": {
+        "funding_source_group": "funding-25",
+        "key_management_group": "kms-25",
+        "operator_group": "operator-25",
+        "release_manager_group": "release-25"
+      },
+      "domain_control_proved": true,
+      "model_output": {
+        "cited_fields": [
+          "validator.identity.key_domain_binding.status",
+          "validator.topology.funding_source_group",
+          "validator.topology.key_management_group",
+          "validator.topology.operator_group",
+          "validator.topology.release_manager_group"
+        ],
+        "classification": "independent",
+        "parsed_output_root": "8fbddefb004d50b03840ab1144f5c3c5aac11222b3e6ccaca2a632a6b2e64641",
+        "replay_certificate_root": "653a91a36e121fd4d132e04aab2add827fc7da959546d67e81665eb5437d2ce8"
+      },
+      "operator_manifest_signed": true,
+      "public_key_hash": "965fe20c12cebbb9affc97e751442f34c7c358aab57797e056f20cb6d679d325",
+      "reliability_bps": 9980,
+      "validator_id": "validator-25"
+    },
+    {
+      "account_id": "account-connectivity-hold",
+      "cobalt_linkedness_safe": true,
+      "control_group": {
+        "funding_source_group": "funding-26",
+        "key_management_group": "kms-26",
+        "operator_group": "operator-26",
+        "release_manager_group": "release-26"
+      },
+      "domain_control_proved": true,
+      "model_output": {
+        "cited_fields": [
+          "validator.identity.key_domain_binding.status",
+          "validator.topology.funding_source_group",
+          "validator.topology.key_management_group",
+          "validator.topology.operator_group",
+          "validator.topology.release_manager_group"
+        ],
+        "classification": "independent",
+        "parsed_output_root": "29827d68b8216ec417cb3cf1b18c0e395118f0b2acbadadde86a8083556968d3",
+        "replay_certificate_root": "877a46de4d209524f51d4698c6b9299d8ef7870427505caa4f6ae7e256f29468"
+      },
+      "operator_manifest_signed": true,
+      "public_key_hash": "3f1822d7b6a1e59692a9bf0ac59597eaa79746534c9f7916b9136eb5a7ed66c3",
+      "reliability_bps": 9980,
+      "validator_id": "validator-26"
+    }
+  ],
+  "evaluation_end": "2026-09-04T12:00:00Z",
+  "foundation_bound_validator_ids": [
+    "validator-02"
+  ],
+  "mode": "SHADOW_ONLY",
+  "schema": "tasknode-unl-shadow-policy-evidence-v1",
+  "target_round": 21,
+  "transition_budget": 1
+}

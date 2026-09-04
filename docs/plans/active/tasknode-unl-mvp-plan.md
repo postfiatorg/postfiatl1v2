@@ -1,6 +1,6 @@
 # Task Node Identity-Derived UNL MVP Execution Plan
 
-**Status:** Active execution plan — steps A through F complete; every output remains `SHADOW_ONLY`
+**Status:** Active execution plan — steps A through F and the fixture-driven slice of G complete; every output remains `SHADOW_ONLY`
 
 **Date:** 2026-09-04
 
@@ -255,40 +255,47 @@ without packet-root lineage. Nostr private messages are never graph edges.
 `python/tests/fixtures/tasknode_unl/expected-shadow-output.json`, and
 `python/tests/fixtures/tasknode_unl/expected-shadow-output.md`.
 
-- [ ] Wire bindings, work digests, ledger pointers, edge evidence, exclusions,
+- [x] Wire bindings, work digests, ledger pointers, edge evidence, exclusions,
       the ratified seed list, existing Admission Policy V1 evidence, registry
       roots, and a baseline list into one offline command:
-      `PYTHONPATH=python python3 -m postfiat_rpc.tasknode_unl derive --fixture-dir python/tests/fixtures/tasknode_unl`.
-- [ ] Derive accountability and graph results, connectivity holds, cluster
+      `PYTHONPATH=python python3 -m postfiat_rpc.tasknode_unl shadow-derive --input-dir python/tests/fixtures/tasknode_unl --output shadow.json`
+      (with `derive` and `--fixture-dir` retained as aliases;
+      `python/postfiat_rpc/tasknode_unl.py`).
+- [x] Derive accountability and graph results, connectivity holds, cluster
       assignments, seat-cap holds, one-wallet/shared-funding control groups, and
       a conservative V1-compatible `rho_score`: `0` only after all required
       independence evidence passes, positive on detected correlation, and
-      missing on incomplete or conflicting evidence so the selector holds.
-- [ ] Project those results into the existing
+      missing on incomplete or conflicting evidence so the selector holds
+      (`python/postfiat_rpc/tasknode_unl_policy.py`).
+- [x] Project those results into the existing
       `ValidatorAdmissionEvidencePacket` and
       `ValidatorAdmissionDecision` field shape without changing Admission
       Policy V1. Apply its existing `accountability_score >= 70`,
       `rho_score <= 0`, and no-shared-control-group gates; carry the fixture's
       existing uptime, operator-manifest, key-domain, and
-      `cobalt.linkedness_safe` facts unchanged.
-- [ ] Emit a canonical JSON shadow result containing the input roots, constants,
+      `cobalt.linkedness_safe` facts unchanged
+      (`python/postfiat_rpc/tasknode_unl_policy.py`).
+- [x] Emit a canonical JSON shadow result containing the input roots, constants,
       per-candidate calculations, holds/rejections, eligible set, churn-limited
       shadow candidate list, and a baseline diff. Every addition, removal, or
       hold-induced difference must include at least one stable reason code and
-      the evidence references that caused it.
-- [ ] Also support a human-readable Markdown rendering from the verified JSON
+      the evidence references that caused it
+      (`python/tests/fixtures/tasknode_unl/expected-shadow-output.json`).
+- [x] Also support a human-readable Markdown rendering from the verified JSON
       so an operator can understand the candidate list and every difference
       after the CLI works. Both formats must say `SHADOW_ONLY`, no live
-      authority, no transaction, and no ratification.
+      authority, no transaction, and no ratification
+      (`python/tests/fixtures/tasknode_unl/expected-shadow-output.md`).
 - [ ] After all fixture cases pass, attempt one read-only real-data derivation
       using frozen local exports or bounded read-only PFT Ledger history plus
       the current baseline. Do not access Task Node servers. If signed digests,
       bindings, publishing keys, exclusions, or required V1 facts are absent,
       emit an honest coverage-and-holds report; never synthesize missing data.
-- [ ] Prove repeated runs over identical inputs are byte-identical. Tampered
+- [x] Prove repeated runs over identical inputs are byte-identical. Tampered
       signatures, altered pointer ownership, a stale root, forbidden inputs,
       missing evidence, an over-cap cluster, and a two-change pre-39 delta must
-      all fail closed without partial output.
+      all fail closed without partial output
+      (`python/tests/test_tasknode_unl.py` and the focused A–F tests).
 
 ### H. Fresh-context adversarial review
 
