@@ -105,6 +105,7 @@ nav:
       - Python Example: business/navcoin-python-example.md
       - Archive Summary: evidence/navcoin-archive-summary.md
   - Plans:
+      - Task Node UNL MVP Plan: plans/active/tasknode-unl-mvp-plan.md
       - Active Storage Scaling: plans/active/storage-scaling-milestone.md
       - Z3 NAVCoin Round-Trip Plan: plans/active/z3-navcoin-roundtrip-plan.md
       - Completed Cobalt Adversarial Verification: plans/completed/cobalt-adversarial-verification-milestone.md
