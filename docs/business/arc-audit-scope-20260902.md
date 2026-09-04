@@ -1,7 +1,7 @@
-# pfUSDC on Arc: audit scope request for Zellic
+# pfUSDC on Arc: audit scope request for an independent auditor
 
 **Date:** 2026-09-02
-**Status:** Request for quotation and technical review. Zellic has not reviewed,
+**Status:** Request for quotation and technical review. The auditor has not reviewed,
 audited, endorsed, or co-sponsored anything as of this document.
 
 ## What we are asking for
@@ -10,10 +10,10 @@ audited, endorsed, or co-sponsored anything as of this document.
    named commit, with a remediation re-review.
 2. Independent review of the technical claims in the
    [public post](pfusdc-on-arc-20260902.md) using the
-   [claim-classification packet](zellic-review-packet-20260902.md), so that
-   Zellic can decide whether to co-sponsor the Circle Developer Grants
-   application. Every claim is pre-classified; nothing in the post is worded as
-   reviewed until Zellic says so.
+   [claim-classification packet](arc-grant-claim-classification-20260902.md), so that
+   the auditor can quote the scope and Post Fiat can attach the audit to its
+   Circle Arc Ecosystem Program application. Every claim is pre-classified;
+   nothing in the post is worded as reviewed until the auditor says so.
 
 ## Scope
 
@@ -96,7 +96,7 @@ patched in place.
 
 Findings report with severity and reproduction; remediation re-review bound to
 the fix commit; a short public statement of scope and result that we may link
-from the post (wording controlled by Zellic).
+from the post (wording controlled by the auditor).
 
 ## Contact and logistics
 

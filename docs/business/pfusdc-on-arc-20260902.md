@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-02
 **Status:** Draft for founder review. Not yet published. Nothing in this
-document is reviewed, audited, endorsed, or co-sponsored by Zellic or Circle.
+document is reviewed, audited, endorsed, or co-sponsored by the auditor or Circle.
 
 ---
 
@@ -93,7 +93,7 @@ Arc verifier contract checks.
   release sequence runs end to end against the deployed pair and devnet, with
   every receipt published in the evidence ledger as each step lands.
 - **Audit.** No third party has reviewed the contracts or zkVM programs yet.
-  The [audit scope](zellic-audit-scope-20260902.md) is ready for Zellic.
+  The [audit scope](arc-audit-scope-20260902.md) is ready for the auditor.
 
 ## Trust model
 
@@ -129,12 +129,12 @@ in the application, not here.
 
 ## Independent review
 
-We are asking Zellic to review the technical claims in this post and the
+We are asking the auditor to review the technical claims in this post and the
 underlying source, and we have prepared a
-[claim-by-claim packet](zellic-review-packet-20260902.md) that classifies
+[claim-by-claim packet](arc-grant-claim-classification-20260902.md) that classifies
 every statement in our proposal as verified in the repository, demonstrated
 on a controlled devnet, implemented but not independently verified, planned,
-or aspirational. Zellic has not yet reviewed, audited, endorsed, or
+or aspirational. The auditor has not yet reviewed, audited, endorsed, or
 co-sponsored anything; if that changes, it will be stated by them.
 
 ## Reproduce it
