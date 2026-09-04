@@ -336,7 +336,7 @@ fn validate_commitment(commitment: &YoloSnapshotCommitmentV2) -> Result<(), Stri
     Ok(())
 }
 
-fn parse_date(name: &str, value: &str) -> Result<NaiveDate, String> {
+pub(crate) fn parse_date(name: &str, value: &str) -> Result<NaiveDate, String> {
     let parsed = NaiveDate::parse_from_str(value, "%Y-%m-%d")
         .map_err(|_| format!("{name} must be a canonical ISO-8601 date"))?;
     if parsed.format("%Y-%m-%d").to_string() != value {
@@ -345,7 +345,7 @@ fn parse_date(name: &str, value: &str) -> Result<NaiveDate, String> {
     Ok(parsed)
 }
 
-fn parse_python_utc(name: &str, value: &str) -> Result<DateTime<Utc>, String> {
+pub(crate) fn parse_python_utc(name: &str, value: &str) -> Result<DateTime<Utc>, String> {
     if !value.ends_with('Z') {
         return Err(format!("{name} must use canonical UTC Z form"));
     }
@@ -367,7 +367,7 @@ fn parse_python_utc(name: &str, value: &str) -> Result<DateTime<Utc>, String> {
     Ok(parsed)
 }
 
-fn validate_digest(name: &str, value: &str) -> Result<(), String> {
+pub(crate) fn validate_digest(name: &str, value: &str) -> Result<(), String> {
     if value.len() != 64
         || !value
             .bytes()
@@ -378,7 +378,7 @@ fn validate_digest(name: &str, value: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn domain_sha256<T: Serialize>(domain: &str, value: &T) -> Result<String, String> {
+pub(crate) fn domain_sha256<T: Serialize>(domain: &str, value: &T) -> Result<String, String> {
     if domain.is_empty() || domain.as_bytes().contains(&0) {
         return Err("YOLO commitment domain is invalid".to_string());
     }

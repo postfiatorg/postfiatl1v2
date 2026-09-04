@@ -3,6 +3,7 @@ members = [
     "crates/reserve-proof-types",
     "crates/reserve-proof-cli",
     "crates/yolo-collection-cli",
+    "crates/yolo-target-cli",
 ]
 exclude = [
     "contracts/near-stake-reader",

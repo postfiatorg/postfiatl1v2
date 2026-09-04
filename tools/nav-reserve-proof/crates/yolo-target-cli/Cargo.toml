@@ -1,0 +1,16 @@
+[package]
+name = "postfiat-yolo-target"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+hex.workspace = true
+reserve-proof-types.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
