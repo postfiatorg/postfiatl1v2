@@ -1,6 +1,6 @@
 # Task Node Identity-Derived UNL MVP Execution Plan
 
-**Status:** Active execution plan — steps A and B complete; every output remains `SHADOW_ONLY`
+**Status:** Active execution plan — steps A through C complete; every output remains `SHADOW_ONLY`
 
 **Date:** 2026-09-04
 
@@ -131,29 +131,33 @@ without packet-root lineage. Nostr private messages are never graph edges.
 `python/tests/test_tasknode_unl_binding.py`, and
 `python/tests/fixtures/tasknode_unl/bindings.json`.
 
-- [ ] Add an offline CLI workflow that prepares canonical, domain-separated
+- [x] Add an offline CLI workflow that prepares canonical, domain-separated
       challenge bytes; obtains a validator-master-key signature and a Task Node
       wallet countersignature through custody-preserving signer adapters;
       verifies both; and prints the bounded PFT Ledger memo payload. The CLI
-      must never accept, print, log, or persist either private key.
-- [ ] Emit the new evidence fields
+      never accepts, prints, logs, or persists either private key
+      (`python/postfiat_rpc/tasknode_unl.py`).
+- [x] Emit the new evidence fields
       `validator.identity.tasknode_binding.wallet_address`,
       `validator.identity.tasknode_binding.tx_hash`,
       `validator.identity.tasknode_binding.challenge_digest`,
       `validator.identity.tasknode_binding.validator_signature`, and
-      `validator.identity.tasknode_binding.wallet_signature`.
-- [ ] Implement replay rules: one wallet binds at most one validator; a second
+      `validator.identity.tasknode_binding.wallet_signature`
+      (`python/postfiat_rpc/tasknode_unl_schema.py`).
+- [x] Implement replay rules: one wallet binds at most one validator; a second
       binding attempt is shared-control evidence; a later valid memo from the
       same wallet supersedes the earlier binding; a memo signed by either key
       revokes; and a validator-key rotation must be rebound within one
-      evaluation window or hold.
-- [ ] On validator-side revocation of a compromised wallet, freeze that wallet's
+      evaluation window or hold
+      (`python/postfiat_rpc/tasknode_unl_binding.py`).
+- [x] On validator-side revocation of a compromised wallet, freeze that wallet's
       work history at the revocation ledger index. Permit reattachment to a new
       wallet only when two accounts that held co-work edges with the old wallet
-      publish valid vouches; otherwise hold.
-- [ ] Keep memo creation separate from transaction preparation or submission.
+      publish valid vouches; otherwise hold
+      (`python/tests/test_tasknode_unl_binding.py`).
+- [x] Keep memo creation separate from transaction preparation or submission.
       No CLI subcommand may send a memo, contact Task Node, mutate a registry,
-      or invoke Cobalt.
+      or invoke Cobalt (`python/postfiat_rpc/tasknode_unl.py`).
 
 ### D. Signed work digest and verifier
 

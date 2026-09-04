@@ -18,6 +18,16 @@ ACCOUNTABILITY_INPUT_SCHEMA = "tasknode-unl-accountability-input-v1"
 ACCOUNTABILITY_RESULT_SCHEMA = "tasknode-unl-accountability-result-v1"
 TRUST_GRAPH_INPUT_SCHEMA = "tasknode-unl-trust-graph-input-v1"
 TRUST_GRAPH_RESULT_SCHEMA = "tasknode-unl-trust-graph-result-v1"
+BINDING_CHALLENGE_SCHEMA = "tasknode-unl-binding-challenge-v1"
+BINDING_SIGNATURE_SCHEMA = "tasknode-unl-binding-signature-v1"
+BINDING_MEMO_SCHEMA = "tnub1"
+BINDING_MEMO_ARTIFACT_SCHEMA = "tasknode-unl-binding-memo-artifact-v1"
+BINDING_LEDGER_RECORD_SCHEMA = "tasknode-unl-binding-ledger-record-v1"
+BINDING_REPLAY_INPUT_SCHEMA = "tasknode-unl-binding-replay-input-v1"
+BINDING_REPLAY_RESULT_SCHEMA = "tasknode-unl-binding-replay-result-v1"
+BINDING_VERIFICATION_RESULT_SCHEMA = (
+    "tasknode-unl-binding-verification-result-v1"
+)
 
 ACCOUNTABILITY_WINDOW_DAYS = 180
 ACCOUNTABILITY_WORK_DENOMINATOR = 40
@@ -44,6 +54,18 @@ MIN_CLUSTER_SEATS = 2
 CLUSTER_SEAT_FRACTION = Fraction(1, 10)
 SINGLE_CHANGE_UNTIL_VALIDATOR_COUNT = 39
 MAX_CHANGES_BELOW_VALIDATOR_THRESHOLD = 1
+
+BINDING_CHALLENGE_DOMAIN = "postfiat/tasknode-unl/binding-challenge/v1"
+BINDING_SIGNATURE_ALGORITHM = "secp256k1-recoverable-sha256"
+PFT_LEDGER_MEMO_MAX_BYTES = 512
+BINDING_EVALUATION_WINDOW_DAYS = ACCOUNTABILITY_WINDOW_DAYS
+TASKNODE_BINDING_EVIDENCE_FIELDS = (
+    "validator.identity.tasknode_binding.wallet_address",
+    "validator.identity.tasknode_binding.tx_hash",
+    "validator.identity.tasknode_binding.challenge_digest",
+    "validator.identity.tasknode_binding.validator_signature",
+    "validator.identity.tasknode_binding.wallet_signature",
+)
 
 ACCOUNTABILITY_TERMS = tuple(name for name, _weight in ACCOUNTABILITY_TERM_WEIGHTS)
 EDGE_KINDS = ("vouch", "cowork", "funding")
