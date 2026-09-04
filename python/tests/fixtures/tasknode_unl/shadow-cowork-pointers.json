@@ -4,27 +4,36 @@
     {
       "account_id": "validator-04",
       "close_time": "2026-05-01T12:00:00Z",
+      "ledger_index": 700,
       "participation_status": "completed",
       "pointer_hash": "199b0da8e4c49a154b6422be02a0e8d392c3f15c3938c9b4e5791dd2295b54f0",
       "pointer_schema": "pf.ptr/v4",
+      "sender_wallet_address": "rBd3FR14F4g8kV8pUj7xdJrTSc6JA4bd38",
+      "transaction_index": 0,
       "work_unit_id": "test-only-shadow-cluster-project",
       "work_unit_kind": "hive_project"
     },
     {
       "account_id": "validator-05",
       "close_time": "2026-05-01T12:01:00Z",
+      "ledger_index": 701,
       "participation_status": "completed",
       "pointer_hash": "4ea304ab24a9b42574bb8f6ec879007cd836902f598a712797f63d330226d4c6",
       "pointer_schema": "pf.ptr/v4",
+      "sender_wallet_address": "rEZd8pgifJpv3SQCqna1GCsYNkbcf4Pxwq",
+      "transaction_index": 0,
       "work_unit_id": "test-only-shadow-cluster-project",
       "work_unit_kind": "hive_project"
     },
     {
       "account_id": "account-cluster-capped",
       "close_time": "2026-05-01T12:02:00Z",
+      "ledger_index": 702,
       "participation_status": "completed",
       "pointer_hash": "45ae448102a701aa8df4bcaa05399f016650ba556c3a83a8e34759f0e02fd0d7",
       "pointer_schema": "pf.ptr/v4",
+      "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+      "transaction_index": 0,
       "work_unit_id": "test-only-shadow-cluster-project",
       "work_unit_kind": "hive_project"
     }

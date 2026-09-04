@@ -23,7 +23,11 @@ from .tasknode_unl_binding import (
     replay_bindings_document,
 )
 from .tasknode_unl_churn import evaluate_churn_guard
-from .tasknode_unl_edges import EdgeExtractionResult, extract_public_edges
+from .tasknode_unl_edges import (
+    EdgeExtractionResult,
+    extract_public_edges,
+    funding_wallet_account_maps,
+)
 from .tasknode_unl_schema import (
     ACCOUNTABILITY_FLOOR,
     ACCOUNTABILITY_INPUT_SCHEMA,
@@ -48,7 +52,9 @@ from .tasknode_unl_schema import (
     VOUCH_EDGE_WEIGHT,
     TaskNodeUnlError,
     canonical_json_bytes,
+    format_utc_timestamp,
     fraction_document,
+    parse_utc_timestamp,
     require_closed_keys,
     require_identifier,
     require_int,
@@ -485,9 +491,14 @@ def policy_evidence_from_dict(document: object) -> PolicyEvidence:
         raise TaskNodeUnlError("unknown_schema", "policy_evidence.schema")
     if row["mode"] != SHADOW_MODE:
         raise TaskNodeUnlError("mode_mismatch", "policy_evidence.mode")
-    evaluation_end = require_identifier(
+    evaluation_time = parse_utc_timestamp(
         row["evaluation_end"], "policy_evidence.evaluation_end"
     )
+    evaluation_end = format_utc_timestamp(evaluation_time)
+    if row["evaluation_end"] != evaluation_end:
+        raise TaskNodeUnlError(
+            "non_canonical_timestamp", "policy_evidence.evaluation_end"
+        )
     active_values = row["active_validators"]
     candidate_values = row["candidates"]
     foundation_values = row["foundation_bound_validator_ids"]
@@ -1018,6 +1029,10 @@ def _evaluate_v1_projection(
     else:
         model = _require_mapping(model, "evidence_packet.model_output")
         classification = model["classification"]
+        cited_fields = model["cited_fields"]
+        if not cited_fields:
+            holds.add("model_cited_no_fields")
+            failed.add(FIELD_MODEL_CLASSIFICATION)
         if classification != "independent":
             code = {
                 "cosmetic_diversity": "model_classified_cosmetic_diversity",
@@ -1026,7 +1041,7 @@ def _evaluate_v1_projection(
             }.get(str(classification), "model_classification_unknown")
             holds.add(code)
             failed.add(FIELD_MODEL_CLASSIFICATION)
-        for field in model["cited_fields"]:
+        for field in cited_fields:
             if field not in V1_REQUIRED_FIELDS:
                 holds.add("model_cited_unknown_field")
                 failed.add(str(field))
@@ -1212,6 +1227,9 @@ def derive_shadow_report(
 
     source = _require_documents(documents)
     policy = policy_evidence_from_dict(source["policy_evidence"])
+    evaluation_end = parse_utc_timestamp(
+        policy.evaluation_end, "policy_evidence.evaluation_end"
+    )
     baseline_ids = _baseline_ids(source["baseline_list"])
     registry_root = _registry_root(source["baseline_list"])
     active_ids = tuple(
@@ -1222,7 +1240,31 @@ def derive_shadow_report(
             "active_baseline_mismatch", "policy_evidence.active_validators"
         )
 
-    binding_result = replay_bindings_document(source["binding_replay"])
+    edge_result = extract_public_edges(
+        vouch_ledger=source["vouch_ledger"],
+        cowork_pointers=source["cowork_pointers"],
+        funding_transfers=source["funding_transfers"],
+        funding_exclusions=source["funding_exclusions"],
+        expected_window_end=evaluation_end,
+    )
+    account_by_wallet: Mapping[str, str] = {}
+    if edge_result.status == "extracted":
+        account_by_wallet, _wallet_by_account = (
+            funding_wallet_account_maps(source["funding_transfers"])
+        )
+
+    binding_input = _require_mapping(
+        source["binding_replay"], "binding_replay"
+    )
+    binding_evaluation_end = parse_utc_timestamp(
+        binding_input.get("evaluation_end"), "binding_replay.evaluation_end"
+    )
+    binding_window_matches = binding_evaluation_end == evaluation_end
+    binding_result = replay_bindings_document(
+        binding_input,
+        verified_edges=edge_result.edges,
+        account_by_wallet=account_by_wallet,
+    )
     binding_by_validator = _active_binding_map(binding_result)
     shared_control_validators = {
         validator_id
@@ -1267,6 +1309,7 @@ def derive_shadow_report(
             source["publishing_keys"],
             expected_account_id=candidate.account_id,
             bound_wallet_address=binding.wallet_address,
+            expected_window_end=evaluation_end,
         )
         digest_results[candidate.account_id] = result
         if result.status == "verified":
@@ -1275,13 +1318,6 @@ def derive_shadow_report(
                     _accountability_document(digest)
                 )
             )
-
-    edge_result = extract_public_edges(
-        vouch_ledger=source["vouch_ledger"],
-        cowork_pointers=source["cowork_pointers"],
-        funding_transfers=source["funding_transfers"],
-        funding_exclusions=source["funding_exclusions"],
-    )
 
     active_accounts = tuple(
         item.account_id for item in policy.active_validators
@@ -1358,6 +1394,10 @@ def derive_shadow_report(
         binding_issues = _binding_issue_codes(
             binding_result, candidate.validator_id
         )
+        if not binding_window_matches:
+            binding_issues = tuple(
+                sorted(set(binding_issues + ("binding_window_mismatch",)))
+            )
         digest_result = digest_results.get(candidate.account_id)
         accountability = accountabilities.get(candidate.account_id)
         graph_projection = _graph_projection(candidate.account_id, graph)

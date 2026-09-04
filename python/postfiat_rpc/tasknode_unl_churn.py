@@ -899,7 +899,7 @@ def _identity_rule(
             }
         )
         cause = causes.get(validator_id)
-        if removal_requested and cause in _IDENTITY_CAUSES:
+        if removal_requested:
             if cause != failure.reason:
                 reasons.append(
                     GuardReason(

@@ -78,6 +78,9 @@ def _verify(envelope: dict, ledger: dict, publishing_keys: dict):
         publishing_keys,
         expected_account_id=body["account_id"],
         bound_wallet_address=body["bound_wallet_address"],
+        expected_window_end=schema.parse_utc_timestamp(
+            body["window"]["end"], "body.window.end"
+        ),
     )
 
 
@@ -188,8 +191,55 @@ class LedgerReconciliationTests(unittest.TestCase):
         self.assertIn("incomplete_frozen_view", _failure_codes(result))
         self.assertIsNone(result.reconciled_inputs)
 
+    def test_task_events_after_pointer_close_cannot_affect_score(self) -> None:
+        body = _body()
+        outcome = body["pointers"][0]["outcome"]
+        outcome["accepted_at"] = "2026-08-01T12:00:00Z"
+        outcome["verified_at"] = "2026-08-02T12:00:00Z"
+        outcome["rewarded_at"] = "2026-08-02T12:00:00Z"
+        envelope, ledger, publishing_keys = _signed_case(body=body)
+
+        result = _verify(envelope, ledger, publishing_keys)
+
+        self.assertEqual(result.status, "hold")
+        self.assertIn(
+            "task_event_after_pointer_close", _failure_codes(result)
+        )
+        self.assertIsNone(result.reconciled_inputs)
+
+    def test_pointer_after_digest_anchor_is_not_in_frozen_view(self) -> None:
+        envelope, ledger, publishing_keys = _signed_case()
+        ledger["pointers"][0]["ledger_index"] = 2001
+        ledger["pointers"].sort(
+            key=lambda pointer: (
+                pointer["ledger_index"],
+                pointer["transaction_index"],
+                pointer["pointer_hash"],
+            )
+        )
+
+        result = _verify(envelope, ledger, publishing_keys)
+
+        self.assertEqual(result.status, "hold")
+        self.assertIn(
+            "pointer_not_frozen_by_anchor", _failure_codes(result)
+        )
+        self.assertIsNone(result.reconciled_inputs)
+
 
 class SignatureAndInputTests(unittest.TestCase):
+    def test_key_expired_before_anchor_cannot_sign_digest(self) -> None:
+        envelope, ledger, publishing_keys = _signed_case()
+        publishing_keys["keys"][0]["valid_until"] = (
+            "2026-09-04T12:03:00Z"
+        )
+
+        result = _verify(envelope, ledger, publishing_keys)
+
+        self.assertEqual(result.status, "hold")
+        self.assertIn("publishing_key_not_current", _failure_codes(result))
+        self.assertIsNone(result.reconciled_inputs)
+
     def test_wrong_publishing_key_signature_holds(self) -> None:
         envelope, ledger, publishing_keys = _signed_case(
             signer=ThrowawayWorkDigestSigner("wrong-publisher")

@@ -6,6 +6,26 @@
   "value_asset": "PFT",
   "wallet_accounts": [
     {
+      "account_id": "validator-03",
+      "wallet_address": "rLujDwn5P2vMAezHknW1QpmMQ5ha9Pkia5"
+    },
+    {
+      "account_id": "validator-04",
+      "wallet_address": "rBd3FR14F4g8kV8pUj7xdJrTSc6JA4bd38"
+    },
+    {
+      "account_id": "validator-05",
+      "wallet_address": "rEZd8pgifJpv3SQCqna1GCsYNkbcf4Pxwq"
+    },
+    {
+      "account_id": "validator-06",
+      "wallet_address": "rh888ExZUM6Gz44LbSJCTwm3EPtbWf9BRB"
+    },
+    {
+      "account_id": "validator-07",
+      "wallet_address": "rGw1D1MG2esersnUNGxGoGPSLkitQKoDFR"
+    },
+    {
       "account_id": "account-pass",
       "wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow"
     },

@@ -589,8 +589,10 @@ def _verify_signature(
 def _publishing_key(
     document: object,
     publishing_key_id: str,
-    at_time: datetime,
-) -> tuple[str | None, tuple[VerificationFailure, ...]]:
+) -> tuple[
+    tuple[str, datetime, datetime | None] | None,
+    tuple[VerificationFailure, ...],
+]:
     try:
         row = require_closed_keys(
             document,
@@ -670,16 +672,7 @@ def _publishing_key(
                 ),
             )
         _, public_key_hex, valid_from, valid_until = match
-        if at_time < valid_from or (
-            valid_until is not None and at_time >= valid_until
-        ):
-            return None, (
-                _failure(
-                    "body.publishing_key_id",
-                    "publishing_key_not_current",
-                ),
-            )
-        return public_key_hex, ()
+        return (public_key_hex, valid_from, valid_until), ()
     except TaskNodeUnlError as error:
         return None, (_from_error(error, "publishing_keys"),)
 
@@ -929,6 +922,19 @@ def _reconcile_pointers(
         close_time = _canonical_timestamp(
             ledger_pointer["close_time"], "ledger_pointer.close_time"
         )
+        outcome = pointer["outcome"]
+        for event_field in ("accepted_at", "verified_at", "rewarded_at"):
+            event_time = _optional_timestamp(
+                outcome[event_field],
+                f"{field}.outcome.{event_field}",
+            )
+            if event_time is not None and event_time > close_time:
+                failures.append(
+                    _failure(
+                        f"{field}.outcome.{event_field}",
+                        "task_event_after_pointer_close",
+                    )
+                )
         if not body.window_start <= close_time <= body.window_end:
             failures.append(
                 _failure(f"{field}.close_time", "pointer_outside_window")
@@ -992,6 +998,7 @@ def verify_work_digest(
     *,
     expected_account_id: str,
     bound_wallet_address: str,
+    expected_window_end: datetime,
 ) -> WorkDigestVerificationResult:
     """Verify one signed digest against explicit local registry and ledger data."""
 
@@ -1001,6 +1008,10 @@ def verify_work_digest(
         )
         expected_wallet = _require_identifier(
             bound_wallet_address, "bound_wallet_address"
+        )
+        expected_end = _canonical_timestamp(
+            format_utc_timestamp(expected_window_end),
+            "expected_window_end",
         )
         envelope = require_closed_keys(
             document,
@@ -1039,6 +1050,10 @@ def verify_work_digest(
                 "body.bound_wallet_address", "wallet_binding_mismatch"
             )
         )
+    if body.window_end != expected_end:
+        failures.append(
+            _failure("body.window.end", "window_binding_mismatch")
+        )
     if claimed_digest != actual_digest.hex():
         failures.append(
             _failure("work_digest.digest_hash", "digest_hash_mismatch")
@@ -1051,13 +1066,13 @@ def verify_work_digest(
             )
         )
 
-    public_key_hex, key_failures = _publishing_key(
+    publishing_key, key_failures = _publishing_key(
         publishing_keys,
         body.publishing_key_id,
-        body.window_end,
     )
     failures.extend(key_failures)
-    if public_key_hex is not None:
+    if publishing_key is not None:
+        public_key_hex, _valid_from, _valid_until = publishing_key
         signature_failure = _verify_signature(
             public_key_hex,
             envelope["signature_hex"],
@@ -1140,6 +1155,36 @@ def verify_work_digest(
                 "anchor_precedes_window_end",
             )
         )
+    if publishing_key is not None:
+        _public_key_hex, valid_from, valid_until = publishing_key
+        if anchor_time < valid_from or (
+            valid_until is not None and anchor_time >= valid_until
+        ):
+            failures.append(
+                _failure(
+                    "body.publishing_key_id",
+                    "publishing_key_not_current",
+                )
+            )
+    anchor_position = (
+        anchor["ledger_index"],
+        anchor["transaction_index"],
+    )
+    for pointer in snapshot.pointers:
+        pointer_position = (
+            pointer["ledger_index"],
+            pointer["transaction_index"],
+        )
+        if pointer_position >= anchor_position:
+            failures.append(
+                _failure(
+                    (
+                        "ledger_snapshot.pointers["
+                        f"{pointer['pointer_hash']}].ledger_position"
+                    ),
+                    "pointer_not_frozen_by_anchor",
+                )
+            )
 
     if failures:
         return _hold(

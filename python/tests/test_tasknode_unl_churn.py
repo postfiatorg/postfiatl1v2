@@ -523,6 +523,37 @@ class FreshnessAndIdentityTests(unittest.TestCase):
         self.assertEqual(rejected_state["stage"], "hold")
         self.assertEqual(rejected_state["removal_requested"], "yes")
 
+    def test_identity_failure_cannot_be_relabelled_to_skip_hold(self) -> None:
+        baseline = _baseline()
+        validator_id = baseline["validator_ids"][0]
+
+        verdict = evaluate_churn_guard(
+            baseline,
+            _history(),
+            _proposal(
+                baseline["validator_ids"][1:],
+                transition_budget=1,
+                identity_failures=[
+                    _identity_failure(
+                        validator_id,
+                        started_at=IMMATURE_HOLD_START,
+                        reason="new_control_group",
+                    )
+                ],
+                removal_causes=[
+                    _removal_cause(validator_id, "other")
+                ],
+            ),
+        )
+
+        self.assertEqual(verdict.status, "reject")
+        self.assertIn(
+            "identity_removal_cause_mismatch", _reason_codes(verdict)
+        )
+        self.assertIn(
+            "identity_hold_window_not_elapsed", _reason_codes(verdict)
+        )
+
 
 class VerdictShapeAndDeterminismTests(unittest.TestCase):
     def test_every_applied_rule_is_named_and_carries_values(self) -> None:

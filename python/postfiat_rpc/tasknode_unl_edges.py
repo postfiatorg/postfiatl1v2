@@ -405,7 +405,13 @@ def _verified_vouch_record(
     value: object,
     index: int,
     window: _Window,
-) -> tuple[TrustEdge, EdgeProvenance, tuple[str, int]]:
+    wallet_by_account: Mapping[str, str],
+) -> tuple[
+    TrustEdge,
+    EdgeProvenance,
+    tuple[str, int],
+    tuple[int, int],
+]:
     field = f"vouch_ledger.memos[{index}]"
     row = require_closed_keys(
         value,
@@ -490,6 +496,17 @@ def _verified_vouch_record(
         raise TaskNodeUnlError(
             "vouch_sender_mismatch", f"{field}.sender_wallet_address"
         )
+    source_wallet = wallet_by_account.get(statement["source_account"])
+    if source_wallet is None:
+        raise TaskNodeUnlError(
+            "vouch_source_binding_missing",
+            f"{field}.memo.statement.source_account",
+        )
+    if source_wallet != sender:
+        raise TaskNodeUnlError(
+            "vouch_source_binding_mismatch",
+            f"{field}.memo.statement.source_account",
+        )
     public_key_hex = _require_lower_hex(
         memo["public_key_hex"],
         f"{field}.memo.public_key_hex",
@@ -532,7 +549,12 @@ def _verified_vouch_record(
         source_record_ids=(f"{tx_hash}:{memo_index}",),
         qualification_reasons=("signed_public_ledger_vouch",),
     )
-    return edge, provenance, (tx_hash, memo_index)
+    return (
+        edge,
+        provenance,
+        (tx_hash, memo_index),
+        (ledger_index, transaction_index),
+    )
 
 
 def _canonical_extracted(
@@ -555,7 +577,11 @@ def _canonical_extracted(
     )
 
 
-def extract_vouch_edges(document: object) -> ExtractedEdges:
+def extract_vouch_edges(
+    document: object,
+    *,
+    wallet_accounts: object,
+) -> ExtractedEdges:
     """Verify public ledger vouches and emit directed weight-one edge facts."""
 
     row = _parse_document_header(
@@ -566,12 +592,17 @@ def extract_vouch_edges(document: object) -> ExtractedEdges:
     )
     window = _parse_window(row["window"], "vouch_ledger.window")
     values = _require_array(row["memos"], "vouch_ledger.memos")
+    _account_by_wallet, wallet_by_account = _wallet_accounts(
+        wallet_accounts
+    )
     records: dict[tuple[str, int], bytes] = {}
+    tx_hash_by_position: dict[tuple[int, int], str] = {}
+    position_by_tx_hash: dict[str, tuple[int, int]] = {}
     edges: list[TrustEdge] = []
     provenance: list[EdgeProvenance] = []
     for index, value in enumerate(values):
-        edge, source, record_id = _verified_vouch_record(
-            value, index, window
+        edge, source, record_id, position = _verified_vouch_record(
+            value, index, window, wallet_by_account
         )
         encoded = canonical_json_bytes(value)
         previous = records.get(record_id)
@@ -581,6 +612,19 @@ def extract_vouch_edges(document: object) -> ExtractedEdges:
                 f"{record_id[0]}:{record_id[1]}",
             )
         records[record_id] = encoded
+        previous_hash = tx_hash_by_position.get(position)
+        if previous_hash is not None and previous_hash != record_id[0]:
+            raise TaskNodeUnlError(
+                "conflicting_ledger_position",
+                f"{position[0]}:{position[1]}",
+            )
+        tx_hash_by_position[position] = record_id[0]
+        previous_position = position_by_tx_hash.get(record_id[0])
+        if previous_position is not None and previous_position != position:
+            raise TaskNodeUnlError(
+                "conflicting_ledger_position", record_id[0]
+            )
+        position_by_tx_hash[record_id[0]] = position
         edges.append(edge)
         provenance.append(source)
     return _canonical_extracted(edges, provenance)
@@ -590,7 +634,8 @@ def _cowork_record(
     value: object,
     index: int,
     window: _Window,
-) -> tuple[str, str, str, str, str]:
+    wallet_by_account: Mapping[str, str],
+) -> tuple[str, str, str, str, str, tuple[int, int]]:
     field = f"cowork_pointers.pointers[{index}]"
     row = require_closed_keys(
         value,
@@ -598,6 +643,9 @@ def _cowork_record(
             "pointer_hash",
             "pointer_schema",
             "account_id",
+            "sender_wallet_address",
+            "ledger_index",
+            "transaction_index",
             "work_unit_kind",
             "work_unit_id",
             "participation_status",
@@ -617,6 +665,31 @@ def _cowork_record(
     account_id = _require_identifier(
         row["account_id"], f"{field}.account_id"
     )
+    sender = _require_identifier(
+        row["sender_wallet_address"], f"{field}.sender_wallet_address"
+    )
+    expected_wallet = wallet_by_account.get(account_id)
+    if expected_wallet is None:
+        raise TaskNodeUnlError(
+            "cowork_account_binding_missing", f"{field}.account_id"
+        )
+    if expected_wallet != sender:
+        raise TaskNodeUnlError(
+            "cowork_account_binding_mismatch", f"{field}.account_id"
+        )
+    ledger_index = require_int(
+        row["ledger_index"], f"{field}.ledger_index", minimum=1
+    )
+    transaction_index = require_int(
+        row["transaction_index"],
+        f"{field}.transaction_index",
+        minimum=0,
+    )
+    if (
+        ledger_index > _MAX_LEDGER_INDEX
+        or transaction_index > _MAX_LEDGER_INDEX
+    ):
+        raise TaskNodeUnlError("ledger_position_out_of_range", field)
     kind = row["work_unit_kind"]
     if kind not in _WORK_UNIT_KINDS:
         raise TaskNodeUnlError(
@@ -636,10 +709,21 @@ def _cowork_record(
     )
     if not window.start <= close_time <= window.end:
         raise TaskNodeUnlError("record_outside_window", f"{field}.close_time")
-    return pointer_hash, account_id, kind, unit_id, status
+    return (
+        pointer_hash,
+        account_id,
+        kind,
+        unit_id,
+        status,
+        (ledger_index, transaction_index),
+    )
 
 
-def extract_cowork_edges(document: object) -> ExtractedEdges:
+def extract_cowork_edges(
+    document: object,
+    *,
+    wallet_accounts: object,
+) -> ExtractedEdges:
     """Emit one undirected edge fact per distinct qualifying shared unit."""
 
     row = _parse_document_header(
@@ -650,12 +734,21 @@ def extract_cowork_edges(document: object) -> ExtractedEdges:
     )
     window = _parse_window(row["window"], "cowork_pointers.window")
     values = _require_array(row["pointers"], "cowork_pointers.pointers")
+    _account_by_wallet, wallet_by_account = _wallet_accounts(
+        wallet_accounts
+    )
     records: dict[str, bytes] = {}
+    pointer_by_position: dict[tuple[int, int], str] = {}
     units: dict[tuple[str, str], dict[str, set[str]]] = {}
     for index, value in enumerate(values):
-        pointer_hash, account, kind, unit_id, status = _cowork_record(
-            value, index, window
-        )
+        (
+            pointer_hash,
+            account,
+            kind,
+            unit_id,
+            status,
+            position,
+        ) = _cowork_record(value, index, window, wallet_by_account)
         encoded = canonical_json_bytes(value)
         previous = records.get(pointer_hash)
         if previous is not None and previous != encoded:
@@ -663,6 +756,13 @@ def extract_cowork_edges(document: object) -> ExtractedEdges:
                 "conflicting_pointer_record", pointer_hash
             )
         records[pointer_hash] = encoded
+        previous_hash = pointer_by_position.get(position)
+        if previous_hash is not None and previous_hash != pointer_hash:
+            raise TaskNodeUnlError(
+                "conflicting_ledger_position",
+                f"{position[0]}:{position[1]}",
+            )
+        pointer_by_position[position] = pointer_hash
         qualifies = (
             (kind == "hive_project" and status == "completed")
             or (kind == "team_grant" and status == "shared")
@@ -826,6 +926,26 @@ def _wallet_accounts(
     return account_by_wallet, wallet_by_account
 
 
+def funding_wallet_account_maps(
+    document: object,
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Return the validated one-to-one wallet/account map for edge evidence."""
+
+    row = _parse_document_header(
+        document,
+        schema=FUNDING_TRANSFER_INPUT_SCHEMA,
+        field="funding_transfers",
+        required=(
+            "value_asset",
+            "history_complete_from_ledger_genesis",
+            "window_complete",
+            "wallet_accounts",
+            "transfers",
+        ),
+    )
+    return _wallet_accounts(row["wallet_accounts"])
+
+
 def _transfer_record(
     value: object,
     index: int,
@@ -959,6 +1079,7 @@ def extract_funding_edges(
         row["transfers"], "funding_transfers.transfers"
     )
     records: dict[str, bytes] = {}
+    tx_hash_by_position: dict[tuple[int, int], str] = {}
     transfers: list[_Transfer] = []
     for index, value in enumerate(values):
         transfer = _transfer_record(
@@ -974,6 +1095,17 @@ def extract_funding_edges(
                 "conflicting_transfer_record", transfer.tx_hash
             )
         records[transfer.tx_hash] = encoded
+        ledger_position = (
+            transfer.ledger_index,
+            transfer.transaction_index,
+        )
+        previous_hash = tx_hash_by_position.get(ledger_position)
+        if previous_hash is not None and previous_hash != transfer.tx_hash:
+            raise TaskNodeUnlError(
+                "conflicting_ledger_position",
+                f"{ledger_position[0]}:{ledger_position[1]}",
+            )
+        tx_hash_by_position[ledger_position] = transfer.tx_hash
         transfers.append(transfer)
     transfers = sorted(set(transfers), key=lambda item: item.position)
 
@@ -1065,6 +1197,7 @@ def extract_public_edges(
     cowork_pointers: object,
     funding_transfers: object,
     funding_exclusions: object,
+    expected_window_end: datetime,
 ) -> EdgeExtractionResult:
     """Extract all public sources atomically, holding on any invalid input."""
 
@@ -1104,9 +1237,19 @@ def extract_public_edges(
             raise TaskNodeUnlError(
                 "edge_window_mismatch", "edge_sources.window"
             )
+        if windows[0].end != expected_window_end:
+            raise TaskNodeUnlError(
+                "edge_window_mismatch", "policy_evidence.evaluation_end"
+            )
         extracted = (
-            extract_vouch_edges(vouch_ledger),
-            extract_cowork_edges(cowork_pointers),
+            extract_vouch_edges(
+                vouch_ledger,
+                wallet_accounts=funding_row["wallet_accounts"],
+            ),
+            extract_cowork_edges(
+                cowork_pointers,
+                wallet_accounts=funding_row["wallet_accounts"],
+            ),
             extract_funding_edges(
                 funding_transfers, funding_exclusions
             ),

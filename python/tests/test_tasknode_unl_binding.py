@@ -33,6 +33,7 @@ from postfiat_rpc.tasknode_unl_binding import (
     verify_binding_record,
     wallet_address_from_public_key,
 )
+from postfiat_rpc.tasknode_unl_trust_graph import TrustEdge
 
 FIXTURE_PATH = (
     Path(__file__).resolve().parent
@@ -336,6 +337,37 @@ class ReplayRuleTests(unittest.TestCase):
             ).canonical_bytes(),
         )
 
+    def test_wallet_cannot_change_validator_key_without_l1_rotation(
+        self,
+    ) -> None:
+        first = _bind_record(self.validator, self.wallet)
+        replacement = ThrowawayTestSigner("unrecorded-validator-key")
+        second = _bind_record(
+            replacement,
+            self.wallet,
+            tx_name="bind_two",
+            nonce="bind_two",
+            ledger_index=2,
+            close_time="2026-01-02T00:00:00Z",
+        )
+
+        result = replay_bindings(
+            (first, second),
+            (),
+            (),
+            evaluation_end=self.evaluation_end,
+        )
+
+        self.assertEqual(result.status, "hold")
+        self.assertEqual(
+            result.active_bindings[0].validator_public_key_hex,
+            self.validator.public_key_hex,
+        )
+        self.assertIn(
+            f"validator_key_change_without_rotation:{_validator()}",
+            result.hold_reasons,
+        )
+
     def test_revoke_is_accepted_from_each_bound_key(self) -> None:
         bind = _bind_record(self.validator, self.wallet)
         relay = ThrowawayTestSigner("revoke-relay")
@@ -406,6 +438,15 @@ class ReplayRuleTests(unittest.TestCase):
                     (_validator(), _validator("secondary")),
                 ),
             ),
+        )
+        self.assertEqual(result.status, "hold")
+        self.assertIn(
+            f"wallet_shared_control:{_validator()}",
+            result.hold_reasons,
+        )
+        self.assertIn(
+            f"wallet_shared_control:{_validator('secondary')}",
+            result.hold_reasons,
         )
         self.assertEqual(result.decisions[-1].outcome, "shared_control")
 
@@ -532,11 +573,34 @@ class ReplayRuleTests(unittest.TestCase):
             cowork_accounts=("account-a", "account-b", "account-c"),
             valid_vouch_accounts=("account-b", "account-c", "outsider"),
         )
+        unverified = replay_bindings(
+            (reattach, revoke, old_bind),
+            (),
+            (evidence,),
+            evaluation_end=self.evaluation_end,
+        )
+        self.assertEqual(unverified.status, "hold")
+        self.assertIn(
+            f"reattachment_vouches_missing:{_validator()}",
+            unverified.hold_reasons,
+        )
+
+        verified_edges = (
+            TrustEdge("account-old", "account-b", "cowork", "work-b"),
+            TrustEdge("account-old", "account-c", "cowork", "work-c"),
+            TrustEdge("account-b", "account-new", "vouch", "vouch-b"),
+            TrustEdge("account-c", "account-new", "vouch", "vouch-c"),
+        )
         accepted = replay_bindings(
             (reattach, revoke, old_bind),
             (),
             (evidence,),
             evaluation_end=self.evaluation_end,
+            verified_edges=verified_edges,
+            account_by_wallet={
+                old_bind.sender_wallet_address: "account-old",
+                reattach.sender_wallet_address: "account-new",
+            },
         )
         self.assertEqual(accepted.status, "ready")
         self.assertEqual(

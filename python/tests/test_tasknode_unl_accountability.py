@@ -202,6 +202,40 @@ class FixtureEvaluationTests(unittest.TestCase):
         )
         self.assertIsNone(result.calculation)
 
+    def test_dispute_open_before_window_still_reduces_standing(self) -> None:
+        document = copy.deepcopy(_fixtures()["cases"][0]["input"])
+        document["disputes"] = [
+            {
+                "dispute_id": "old-but-open",
+                "opened_at": "2025-01-01T00:00:00Z",
+                "resolved_at": None,
+            }
+        ]
+
+        result = evaluate_accountability_document(document)
+
+        self.assertEqual(result.status, "scored")
+        self.assertEqual(result.open_disputes, 1)
+        assert result.calculation is not None
+        self.assertEqual(
+            dict(result.calculation.raw_terms)["standing"],
+            Fraction(2, 3),
+        )
+
+    def test_reward_before_task_lifecycle_cannot_manufacture_tenure(self) -> None:
+        document = copy.deepcopy(_fixtures()["cases"][0]["input"])
+        task = next(
+            task
+            for task in document["tasks"]
+            if task["verified_at"] is not None
+        )
+        task["rewarded_at"] = "2024-01-01T00:00:00Z"
+
+        with self.assertRaisesRegex(
+            schema.TaskNodeUnlError, "reward_before_"
+        ):
+            evaluate_accountability_document(document)
+
     def test_input_order_does_not_change_canonical_output(self) -> None:
         original = copy.deepcopy(_fixtures()["cases"][0]["input"])
         reordered = copy.deepcopy(original)

@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Protocol, Sequence
+from typing import Any, Mapping, Protocol, Sequence
 
 from eth_keys import keys
 from eth_keys.constants import SECPK1_N
@@ -40,6 +40,7 @@ from .tasknode_unl_schema import (
     require_identifier,
     require_int,
 )
+from .tasknode_unl_trust_graph import TrustEdge
 
 _BIND_ACTION = "bind"
 _REVOKE_ACTION = "revoke"
@@ -901,6 +902,32 @@ def _validated_reattachments(
     return result
 
 
+def _verified_reattachment_vouchers(
+    evidence: ReattachmentEvidence,
+    *,
+    frozen_wallet_address: str,
+    replacement_wallet_address: str,
+    verified_edges: Sequence[TrustEdge],
+    account_by_wallet: Mapping[str, str],
+) -> tuple[str, ...]:
+    frozen_account = account_by_wallet.get(frozen_wallet_address)
+    replacement_account = account_by_wallet.get(replacement_wallet_address)
+    if frozen_account is None or replacement_account is None:
+        return ()
+    coworkers: set[str] = set()
+    vouchers: set[str] = set()
+    for edge in verified_edges:
+        if edge.kind == "cowork":
+            if edge.source == frozen_account:
+                coworkers.add(edge.target)
+            elif edge.target == frozen_account:
+                coworkers.add(edge.source)
+        elif edge.kind == "vouch" and edge.target == replacement_account:
+            vouchers.add(edge.source)
+    claimed = set(evidence.qualifying_vouchers())
+    return tuple(sorted(claimed & coworkers & vouchers))
+
+
 def _expected_validator_key(
     validator_id: str,
     position: tuple[int, int],
@@ -928,6 +955,8 @@ def replay_bindings(
     reattachments: Sequence[ReattachmentEvidence],
     *,
     evaluation_end: datetime,
+    verified_edges: Sequence[TrustEdge] = (),
+    account_by_wallet: Mapping[str, str] | None = None,
 ) -> BindingReplayResult:
     """Replay verified memo records and enforce all step-three binding rules."""
 
@@ -972,6 +1001,7 @@ def replay_bindings(
             raise TaskNodeUnlError("ledger_time_order_mismatch")
 
     reattachment_by_tx = _validated_reattachments(reattachments)
+    wallet_accounts = account_by_wallet or {}
     record_hashes = {event.tx_hash for event in verified}
     orphaned = sorted(set(reattachment_by_tx) - record_hashes)
     if orphaned:
@@ -1012,6 +1042,27 @@ def replay_bindings(
                     )
                 )
                 continue
+            current_binding = active_by_validator.get(event.validator_id)
+            if (
+                expected_key is None
+                and current_binding is not None
+                and event.validator_public_key_hex
+                != current_binding.validator_public_key_hex
+            ):
+                reason = (
+                    "validator_key_change_without_rotation:"
+                    f"{event.validator_id}"
+                )
+                hold_reasons.add(reason)
+                decisions.append(
+                    ReplayDecision(
+                        event.tx_hash,
+                        event.action,
+                        "hold",
+                        reason,
+                    )
+                )
+                continue
 
             seen_for_wallet = wallet_validators.setdefault(
                 event.wallet_address,
@@ -1019,6 +1070,10 @@ def replay_bindings(
             )
             seen_for_wallet.add(event.validator_id)
             if len(seen_for_wallet) > 1:
+                hold_reasons.update(
+                    f"wallet_shared_control:{validator_id}"
+                    for validator_id in seen_for_wallet
+                )
                 decisions.append(
                     ReplayDecision(
                         event.tx_hash,
@@ -1049,7 +1104,16 @@ def replay_bindings(
                     event.previous_wallet_address != frozen_wallet
                     or evidence is None
                     or evidence.frozen_wallet_address != frozen_wallet
-                    or len(evidence.qualifying_vouchers()) < 2
+                    or len(
+                        _verified_reattachment_vouchers(
+                            evidence,
+                            frozen_wallet_address=frozen_wallet,
+                            replacement_wallet_address=event.wallet_address,
+                            verified_edges=verified_edges,
+                            account_by_wallet=wallet_accounts,
+                        )
+                    )
+                    < 2
                 ):
                     reason = (
                         f"reattachment_vouches_missing:{event.validator_id}"
@@ -1509,7 +1573,12 @@ def _reattachment_from_dict(
     )
 
 
-def replay_bindings_document(value: object) -> BindingReplayResult:
+def replay_bindings_document(
+    value: object,
+    *,
+    verified_edges: Sequence[TrustEdge] = (),
+    account_by_wallet: Mapping[str, str] | None = None,
+) -> BindingReplayResult:
     row = require_closed_keys(
         value,
         required=(
@@ -1552,6 +1621,8 @@ def replay_bindings_document(value: object) -> BindingReplayResult:
             row["evaluation_end"],
             "evaluation_end",
         ),
+        verified_edges=verified_edges,
+        account_by_wallet=account_by_wallet,
     )
 
 

@@ -56,6 +56,16 @@ def _exclusions() -> dict:
     return copy.deepcopy(_fixture("funding-exclusions.json"))
 
 
+def _wallet_accounts() -> list[dict]:
+    return _funding()["wallet_accounts"]
+
+
+def _evaluation_end():
+    return schema.parse_utc_timestamp(
+        _vouches()["window"]["end"], "vouch_ledger.window.end"
+    )
+
+
 def _edge_pairs(extracted, kind: str) -> set[tuple[str, str]]:
     return {
         (edge.source, edge.target)
@@ -84,7 +94,9 @@ class VouchEdgeTests(unittest.TestCase):
     def test_valid_signed_public_ledger_vouch_produces_directed_edge(
         self,
     ) -> None:
-        extracted = extract_vouch_edges(_vouches())
+        extracted = extract_vouch_edges(
+            _vouches(), wallet_accounts=_wallet_accounts()
+        )
 
         self.assertEqual(len(extracted.edges), 1)
         edge = extracted.edges[0]
@@ -117,7 +129,9 @@ class VouchEdgeTests(unittest.TestCase):
         document["memos"][0]["visibility"] = "encrypted"
 
         with self.assertRaises(TaskNodeUnlError) as caught:
-            extract_vouch_edges(document)
+            extract_vouch_edges(
+                document, wallet_accounts=_wallet_accounts()
+            )
 
         self.assertEqual(caught.exception.code, "private_vouch_forbidden")
 
@@ -126,6 +140,7 @@ class VouchEdgeTests(unittest.TestCase):
             cowork_pointers=_cowork(),
             funding_transfers=_funding(),
             funding_exclusions=_exclusions(),
+            expected_window_end=_evaluation_end(),
         )
         self.assertEqual(combined.status, "hold")
         self.assertEqual(combined.edges, ())
@@ -140,7 +155,9 @@ class VouchEdgeTests(unittest.TestCase):
         document["memos"][0]["memo"]["signature_hex"] = "00" * 65
 
         with self.assertRaises(TaskNodeUnlError) as caught:
-            extract_vouch_edges(document)
+            extract_vouch_edges(
+                document, wallet_accounts=_wallet_accounts()
+            )
 
         self.assertIn(
             caught.exception.code,
@@ -151,10 +168,51 @@ class VouchEdgeTests(unittest.TestCase):
             },
         )
 
+    def test_signer_cannot_claim_another_source_account(self) -> None:
+        document = _vouches()
+        statement = document["memos"][0]["memo"]["statement"]
+        statement["source_account"] = "account-carol"
+        document["memos"][0]["memo"] = sign_vouch_statement(
+            statement, ThrowawayVouchSigner()
+        )
+
+        with self.assertRaises(TaskNodeUnlError) as caught:
+            extract_vouch_edges(
+                document, wallet_accounts=_wallet_accounts()
+            )
+
+        self.assertEqual(
+            caught.exception.code, "vouch_source_binding_mismatch"
+        )
+
+    def test_one_transaction_hash_cannot_occupy_two_positions(self) -> None:
+        document = _vouches()
+        conflict = copy.deepcopy(document["memos"][0])
+        conflict["ledger_index"] += 1
+        conflict["memo_index"] = 1
+        conflict["memo"]["statement"]["target_account"] = (
+            "account-carol"
+        )
+        conflict["memo"] = sign_vouch_statement(
+            conflict["memo"]["statement"], ThrowawayVouchSigner()
+        )
+        document["memos"].append(conflict)
+
+        with self.assertRaises(TaskNodeUnlError) as caught:
+            extract_vouch_edges(
+                document, wallet_accounts=_wallet_accounts()
+            )
+
+        self.assertEqual(
+            caught.exception.code, "conflicting_ledger_position"
+        )
+
 
 class CoworkEdgeTests(unittest.TestCase):
     def test_hive_projects_and_team_grants_produce_edges(self) -> None:
-        extracted = extract_cowork_edges(_cowork())
+        extracted = extract_cowork_edges(
+            _cowork(), wallet_accounts=_wallet_accounts()
+        )
         evidence_ids = {edge.evidence_id for edge in extracted.edges}
 
         self.assertIn(
@@ -171,7 +229,9 @@ class CoworkEdgeTests(unittest.TestCase):
     def test_distinct_unit_provenance_is_preserved_and_walk_caps_at_three(
         self,
     ) -> None:
-        extracted = extract_cowork_edges(_cowork())
+        extracted = extract_cowork_edges(
+            _cowork(), wallet_accounts=_wallet_accounts()
+        )
 
         pair_edges = [
             edge
@@ -197,14 +257,51 @@ class CoworkEdgeTests(unittest.TestCase):
 
     def test_repeated_pointer_is_deduplicated_without_new_edge(self) -> None:
         document = _cowork()
-        baseline = extract_cowork_edges(document)
+        baseline = extract_cowork_edges(
+            document, wallet_accounts=_wallet_accounts()
+        )
         document["pointers"].append(
             copy.deepcopy(document["pointers"][0])
         )
 
-        repeated = extract_cowork_edges(document)
+        repeated = extract_cowork_edges(
+            document, wallet_accounts=_wallet_accounts()
+        )
 
         self.assertEqual(repeated, baseline)
+
+    def test_pointer_cannot_claim_another_bound_account(self) -> None:
+        document = _cowork()
+        document["pointers"][0]["account_id"] = "account-carol"
+
+        with self.assertRaises(TaskNodeUnlError) as caught:
+            extract_cowork_edges(
+                document, wallet_accounts=_wallet_accounts()
+            )
+
+        self.assertEqual(
+            caught.exception.code, "cowork_account_binding_mismatch"
+        )
+
+    def test_distinct_cowork_pointers_cannot_share_ledger_position(
+        self,
+    ) -> None:
+        document = _cowork()
+        document["pointers"][1]["ledger_index"] = document["pointers"][0][
+            "ledger_index"
+        ]
+        document["pointers"][1]["transaction_index"] = document[
+            "pointers"
+        ][0]["transaction_index"]
+
+        with self.assertRaises(TaskNodeUnlError) as caught:
+            extract_cowork_edges(
+                document, wallet_accounts=_wallet_accounts()
+            )
+
+        self.assertEqual(
+            caught.exception.code, "conflicting_ledger_position"
+        )
 
 
 class FundingEdgeTests(unittest.TestCase):
@@ -328,6 +425,7 @@ class FundingEdgeTests(unittest.TestCase):
             cowork_pointers=_cowork(),
             funding_transfers=_funding(),
             funding_exclusions=None,
+            expected_window_end=_evaluation_end(),
         )
         stale_exclusions = _exclusions()
         stale_exclusions["valid_until"] = "2026-06-01T00:00:00Z"
@@ -336,6 +434,7 @@ class FundingEdgeTests(unittest.TestCase):
             cowork_pointers=_cowork(),
             funding_transfers=_funding(),
             funding_exclusions=stale_exclusions,
+            expected_window_end=_evaluation_end(),
         )
 
         self.assertEqual(missing.status, "hold")
@@ -364,6 +463,7 @@ class FundingEdgeTests(unittest.TestCase):
             cowork_pointers=_cowork(),
             funding_transfers=_funding(),
             funding_exclusions=exclusions,
+            expected_window_end=_evaluation_end(),
         )
 
         self.assertEqual(extracted.status, "hold")
@@ -389,6 +489,19 @@ class FundingEdgeTests(unittest.TestCase):
             caught.exception.code, "conflicting_transfer_record"
         )
 
+    def test_distinct_hashes_cannot_share_one_ledger_position(self) -> None:
+        document = _funding()
+        conflict = copy.deepcopy(document["transfers"][0])
+        conflict["tx_hash"] = "ee" * 32
+        document["transfers"].append(conflict)
+
+        with self.assertRaises(TaskNodeUnlError) as caught:
+            extract_funding_edges(document, _exclusions())
+
+        self.assertEqual(
+            caught.exception.code, "conflicting_ledger_position"
+        )
+
 
 class CombinedExtractionTests(unittest.TestCase):
     def test_input_order_does_not_change_canonical_output(self) -> None:
@@ -397,6 +510,7 @@ class CombinedExtractionTests(unittest.TestCase):
             cowork_pointers=_cowork(),
             funding_transfers=_funding(),
             funding_exclusions=_exclusions(),
+            expected_window_end=_evaluation_end(),
         )
         vouches = _vouches()
         vouches["memos"] += copy.deepcopy(vouches["memos"])
@@ -418,6 +532,7 @@ class CombinedExtractionTests(unittest.TestCase):
             cowork_pointers=cowork,
             funding_transfers=funding,
             funding_exclusions=exclusions,
+            expected_window_end=_evaluation_end(),
         )
 
         self.assertEqual(baseline.status, "extracted")
@@ -437,6 +552,7 @@ class CombinedExtractionTests(unittest.TestCase):
             cowork_pointers=cowork,
             funding_transfers=_funding(),
             funding_exclusions=_exclusions(),
+            expected_window_end=_evaluation_end(),
         )
 
         self.assertEqual(extracted.status, "hold")
@@ -454,6 +570,7 @@ class CombinedExtractionTests(unittest.TestCase):
             cowork_pointers=_cowork(),
             funding_transfers=_funding(),
             funding_exclusions=_exclusions(),
+            expected_window_end=_evaluation_end(),
         )
         evidence = TrustGraphEvidence(
             nodes=(

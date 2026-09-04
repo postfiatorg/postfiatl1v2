@@ -229,6 +229,30 @@ def _validate_tasks(
                 raise TaskNodeUnlError(
                     "future_task_event", f"{task.task_id}.{field_name}"
                 )
+        if (
+            task.accepted_at is not None
+            and task.verified_at is not None
+            and task.verified_at < task.accepted_at
+        ):
+            raise TaskNodeUnlError(
+                "verification_before_acceptance", task.task_id
+            )
+        if (
+            task.accepted_at is not None
+            and task.rewarded_at is not None
+            and task.rewarded_at < task.accepted_at
+        ):
+            raise TaskNodeUnlError(
+                "reward_before_acceptance", task.task_id
+            )
+        if (
+            task.verified_at is not None
+            and task.rewarded_at is not None
+            and task.rewarded_at < task.verified_at
+        ):
+            raise TaskNodeUnlError(
+                "reward_before_verification", task.task_id
+            )
     return tuple(ordered)
 
 
@@ -300,8 +324,7 @@ def evaluate_accountability(
     else:
         disputes = _validate_disputes(evidence.disputes, window_end)
         open_disputes = sum(
-            dispute.opened_at >= window_start and dispute.resolved_at is None
-            for dispute in disputes
+            dispute.resolved_at is None for dispute in disputes
         )
 
     badge_current: bool | None = None

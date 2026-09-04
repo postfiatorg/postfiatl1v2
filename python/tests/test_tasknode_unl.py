@@ -141,6 +141,58 @@ class ShadowDerivationFixtureTests(unittest.TestCase):
             canonical_json_bytes(derive_shadow_report(reordered)),
         )
 
+    def test_stale_source_windows_hold_instead_of_reusing_old_passes(
+        self,
+    ) -> None:
+        documents = _documents()
+        documents["policy_evidence"]["evaluation_end"] = (
+            "2026-09-04T12:01:00Z"
+        )
+
+        report = derive_shadow_report(documents)
+        passing = _candidate(report, "validator-22")
+
+        self.assertEqual(passing["status"], "hold")
+        self.assertEqual(report["eligible_set"], [])
+        self.assertTrue(
+            any(
+                item["detail"] == "binding_window_mismatch"
+                for item in passing["upstream_holds"]
+            )
+        )
+        self.assertTrue(
+            any(
+                item["code"] == "work_digest_window_binding_mismatch"
+                for item in passing["upstream_holds"]
+            )
+        )
+        self.assertTrue(
+            any(
+                item["code"] == "edge_extraction_hold"
+                for item in passing["upstream_holds"]
+            )
+        )
+
+    def test_empty_model_citations_hold_like_admission_policy_v1(
+        self,
+    ) -> None:
+        documents = _documents()
+        passing = next(
+            candidate
+            for candidate in documents["policy_evidence"]["candidates"]
+            if candidate["validator_id"] == "validator-22"
+        )
+        passing["model_output"]["cited_fields"] = []
+
+        report = derive_shadow_report(documents)
+        candidate = _candidate(report, "validator-22")
+
+        self.assertEqual(candidate["status"], "hold")
+        self.assertIn(
+            "model_cited_no_fields",
+            candidate["admission_decision"]["reason_codes"],
+        )
+
     def test_cli_writes_only_the_requested_shadow_reports(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "shadow.json"
