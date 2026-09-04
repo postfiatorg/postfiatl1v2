@@ -28,6 +28,17 @@ BINDING_REPLAY_RESULT_SCHEMA = "tasknode-unl-binding-replay-result-v1"
 BINDING_VERIFICATION_RESULT_SCHEMA = (
     "tasknode-unl-binding-verification-result-v1"
 )
+WORK_DIGEST_BODY_SCHEMA = "tasknode-unl-work-digest-body-v1"
+WORK_DIGEST_ENVELOPE_SCHEMA = "tasknode-unl-work-digest-envelope-v1"
+WORK_DIGEST_LEDGER_SNAPSHOT_SCHEMA = (
+    "tasknode-unl-work-digest-ledger-snapshot-v1"
+)
+WORK_DIGEST_PUBLISHING_KEYS_SCHEMA = (
+    "tasknode-unl-work-digest-publishing-keys-v1"
+)
+WORK_DIGEST_VERIFICATION_RESULT_SCHEMA = (
+    "tasknode-unl-work-digest-verification-result-v1"
+)
 
 ACCOUNTABILITY_WINDOW_DAYS = 180
 ACCOUNTABILITY_WORK_DENOMINATOR = 40
@@ -59,6 +70,9 @@ BINDING_CHALLENGE_DOMAIN = "postfiat/tasknode-unl/binding-challenge/v1"
 BINDING_SIGNATURE_ALGORITHM = "secp256k1-recoverable-sha256"
 PFT_LEDGER_MEMO_MAX_BYTES = 512
 BINDING_EVALUATION_WINDOW_DAYS = ACCOUNTABILITY_WINDOW_DAYS
+WORK_DIGEST_DOMAIN = "postfiat/tasknode-unl/work-digest/v1"
+WORK_DIGEST_SIGNATURE_ALGORITHM = BINDING_SIGNATURE_ALGORITHM
+TASKNODE_POINTER_SCHEMA = "pf.ptr/v4"
 TASKNODE_BINDING_EVIDENCE_FIELDS = (
     "validator.identity.tasknode_binding.wallet_address",
     "validator.identity.tasknode_binding.tx_hash",

@@ -1,0 +1,81 @@
+{
+  "schema": "tasknode-unl-work-digest-fixtures-v1",
+  "cases": [
+    {
+      "name": "clean-three-pointer-window",
+      "body": {
+        "schema": "tasknode-unl-work-digest-body-v1",
+        "mode": "SHADOW_ONLY",
+        "account_id": "test-only-tasknode-account-alpha",
+        "bound_wallet_address": "rTESTONLYWorkDigestWallet",
+        "window": {
+          "start": "2026-03-08T12:00:00Z",
+          "end": "2026-09-04T12:00:00Z",
+          "days": 180
+        },
+        "publishing_key_id": "test-only-tasknode-publishing-2026-09",
+        "snapshot_id": "test-only-ledger-view-2026-09-04",
+        "anchor_tx_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "pointers": [
+          {
+            "pointer_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+            "outcome": {
+              "task_id": "test-only-network-task-one",
+              "kind": "network",
+              "accepted_at": "2026-03-10T12:00:00Z",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-11T12:00:00Z",
+              "rewarded_at": "2026-03-11T12:00:00Z",
+              "verdict_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          },
+          {
+            "pointer_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+            "outcome": {
+              "task_id": "test-only-network-task-two",
+              "kind": "network",
+              "accepted_at": "2026-04-01T12:00:00Z",
+              "verification_outcome": "fail",
+              "verified_at": "2026-04-03T12:00:00Z",
+              "rewarded_at": null,
+              "verdict_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          },
+          {
+            "pointer_hash": "3333333333333333333333333333333333333333333333333333333333333333",
+            "outcome": {
+              "task_id": "test-only-personal-task-three",
+              "kind": "personal",
+              "accepted_at": "2026-05-02T12:00:00Z",
+              "verification_outcome": "pass",
+              "verified_at": "2026-05-04T12:00:00Z",
+              "rewarded_at": "2026-05-04T12:00:00Z",
+              "verdict_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            }
+          }
+        ],
+        "disputes": [
+          {
+            "dispute_id": "test-only-open-dispute",
+            "opened_at": "2026-06-01T12:00:00Z",
+            "resolved_at": null
+          }
+        ],
+        "badge": {
+          "verified": true,
+          "valid_from": "2026-01-01T00:00:00Z",
+          "expires_at": null,
+          "revoked_at": null
+        },
+        "score_inputs": {
+          "accepted_network_tasks": 2,
+          "verification_passes": 2,
+          "verification_total": 3,
+          "open_disputes": 1,
+          "first_rewarded_at": "2026-03-11T12:00:00Z",
+          "badge_current": true
+        }
+      }
+    }
+  ]
+}

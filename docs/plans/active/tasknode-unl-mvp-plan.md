@@ -1,6 +1,6 @@
 # Task Node Identity-Derived UNL MVP Execution Plan
 
-**Status:** Active execution plan — steps A through C complete; every output remains `SHADOW_ONLY`
+**Status:** Active execution plan — steps A through D complete; every output remains `SHADOW_ONLY`
 
 **Date:** 2026-09-04
 
@@ -167,22 +167,26 @@ without packet-root lineage. Nostr private messages are never graph edges.
 `python/tests/fixtures/tasknode_unl/ledger-pointers.json`, and
 `python/tests/fixtures/tasknode_unl/publishing-keys.json`.
 
-- [ ] Define a canonical signed digest per account and evaluation window. It
+- [x] Define a canonical signed digest per account and evaluation window. It
       contains the ordered `pf.ptr/v4` pointer hashes counted, the outcome
       assigned to each pointer, the resulting inputs to all five accountability
       terms, its schema and window, the Task Node publishing-key identity, and
-      the digest's PFT Ledger anchor transaction hash.
-- [ ] Verify the publishing-key signature, schema, bounds, canonical order,
+      the digest's PFT Ledger anchor transaction hash
+      (`python/postfiat_rpc/tasknode_unl_work_digest.py`).
+- [x] Verify the publishing-key signature, schema, bounds, canonical order,
       account/window binding, digest hash, and frozen-view anchor transaction
-      before using any score input.
-- [ ] Reconcile every listed pointer against a frozen PFT Ledger view: it must
+      before using any score input
+      (`python/postfiat_rpc/tasknode_unl_work_digest.py`).
+- [x] Reconcile every listed pointer against a frozen PFT Ledger view: it must
       exist, match the claimed hash and window, and have been emitted by the
       wallet bound to the validator. Any mismatch, duplicate, unknown outcome,
-      wrong sender, or missing pointer holds.
-- [ ] State the evidence limit honestly: public reconciliation proves existence
+      wrong sender, or missing pointer holds
+      (`python/tests/test_tasknode_unl_work_digest.py`).
+- [x] State the evidence limit honestly: public reconciliation proves existence
       and sender of counted pointers, not the encrypted review outcome or
       completeness of eligible tasks. Do not read the live Task Node database
-      or claim the signed digest removes the Foundation attestation boundary.
+      or claim the signed digest removes the Foundation attestation boundary
+      (`python/postfiat_rpc/tasknode_unl_work_digest.py`).
 
 ### E. Public edge extractors
 
