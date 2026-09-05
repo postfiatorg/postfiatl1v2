@@ -78,6 +78,8 @@ The proof command verifies its result before writing `proof.bin`,
 create-only. `verify` requires Groth16, exact ABI, independent public pins, actual
 ELF hash and the verification key derived from that ELF. No network prover,
 broker order, reserve submission, or chain transaction is invoked.
+Execution, identity and verification use SP1's local light client with full
+cryptographic verification. They do not initialize CPU proving workers.
 SDK progress goes to stderr; stdout remains JSON. The CLI rejects SDK witness/
 trace-dump switches and circuit/verification overrides before starting SP1,
 so inherited debug settings cannot export private inputs or bypass proving.
@@ -102,3 +104,16 @@ preserve cross-language protocol regressions; ephemeral signing keys are never
 exported. The shared 38-case Nitro corpus must match Python and native Rust,
 including warmed-cache rejection tests. Retain full logs locally; promote only
 disclosure-safe measurements and artifact hashes to qualification reports.
+
+`programs/yolo-nitro-test-guest` is a separate qualification harness that executes
+the entire 38-case Nitro corpus using the target's exact crypto dependency locks
+and patches. Its output is only a vector of test results; it is not a target
+receipt program and must never be registered as one. Build it with the same
+pinned Docker image, then run the ignored `nitro_guest_qualification` test with
+`YOLO_NITRO_TEST_GUEST_ELF` and `YOLO_NITRO_TEST_ELF_SHA256` set explicitly.
+
+After a proof exists, run the ignored `proof_qualification` test with
+`YOLO_TARGET_PROOF`, `YOLO_TARGET_GUEST_ELF`, `YOLO_OTHER_GUEST_ELF` (a different
+built guest) and independently supplied `YOLO_TARGET_ACCEPTANCE`. It checks real
+Groth16 verification and rejection of corrupted proofs, changed/truncated public
+values and the wrong program verification key.

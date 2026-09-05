@@ -277,9 +277,15 @@ fn write_new(path: &PathBuf, bytes: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let mut output = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        // The same writer handles private witnesses and unsealed target files.
+        options.mode(0o600);
+    }
+    let mut output = options
         .open(path)
         .with_context(|| format!("create new output {}", path.display()))?;
     output.write_all(bytes)?;

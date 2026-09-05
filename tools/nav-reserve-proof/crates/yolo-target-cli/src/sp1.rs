@@ -74,7 +74,7 @@ pub(super) fn execute(
     let witness_bytes = encoded.len();
     let start = Instant::now();
     let (actual, execution) = runtime()?.block_on(async {
-        let client = ProverClient::builder().cpu().build().await;
+        let client = ProverClient::builder().light().build().await;
         client.execute(elf, input(encoded)).await
     })?;
     let expected = expected.encode().map_err(anyhow::Error::msg)?;
@@ -160,7 +160,7 @@ pub(super) fn verify(proof_path: PathBuf, acceptance_path: PathBuf, elf: PathBuf
     let elf = pinned_elf(&elf, &pins)?;
     let start = Instant::now();
     let vkey = runtime()?.block_on(async {
-        let client = ProverClient::builder().cpu().build().await;
+        let client = ProverClient::builder().light().build().await;
         let key = client.setup(elf).await?;
         client.verify(&proof, key.verifying_key(), None)?;
         Ok::<_, anyhow::Error>(key.verifying_key().bytes32())
@@ -175,7 +175,7 @@ pub(super) fn identity(elf: PathBuf) -> Result<()> {
     let bytes = read_bounded(&elf, MAX_ELF_BYTES, "SP1 ELF")?;
     let hash = hex::encode(Sha256::digest(&bytes));
     let key = runtime()?.block_on(async {
-        let client = ProverClient::builder().cpu().build().await;
+        let client = ProverClient::builder().light().build().await;
         let key = client.setup(Elf::from(bytes)).await?;
         Ok::<_, anyhow::Error>(key.verifying_key().bytes32())
     })?;
