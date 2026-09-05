@@ -1,7 +1,7 @@
 //! Nitro COSE/X.509 verification with deterministic, caller-committed time.
 //! x509-parser is used only for parsing; RustCrypto verifies every signature.
 
-use crate::yolo_cbor::{decode_strict_cbor, NITRO_CBOR_LIMITS};
+use crate::yolo_cbor::{decode_nitro_cbor, decode_strict_cbor, NITRO_CBOR_LIMITS};
 use crate::yolo_collection::{canonical_bytes, validate_digest};
 use crate::yolo_witness::{decode_hex, NitroProofPolicyV1};
 use p384::ecdsa::{signature::Verifier, Signature, VerifyingKey};
@@ -235,7 +235,7 @@ impl<'a> NitroVerifier<'a> {
         let policy = self.policy;
         let verification_time_ms = self.verification_time_ms;
         validate_digest("attestation binding", binding_digest)?;
-        let outer = decode_strict_cbor(document, NITRO_CBOR_LIMITS)?;
+        let outer = decode_nitro_cbor(document)?;
         let outer = match outer {
             Value::Tag(18, value) => *value,
             value => value,
@@ -257,7 +257,7 @@ impl<'a> NitroVerifier<'a> {
         }
         let payload_bytes = bytes(&parts[2], 16 * 1024, "payload")?;
         let signature = bytes(&parts[3], 96, "signature")?;
-        let payload_value = decode_strict_cbor(payload_bytes, NITRO_CBOR_LIMITS)?;
+        let payload_value = decode_nitro_cbor(payload_bytes)?;
         let payload = map(&payload_value, "payload")?;
         let required = [
             "module_id",

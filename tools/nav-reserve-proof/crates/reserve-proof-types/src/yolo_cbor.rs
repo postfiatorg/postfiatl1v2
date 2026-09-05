@@ -1,7 +1,8 @@
 //! Bounded CBOR decoding before typed YOLO witness or Nitro interpretation.
 //!
 //! Map duplicates must be rejected before a general deserializer can collapse
-//! them. No indefinite lengths, floats, reserved values, or non-minimal heads.
+//! them. Nitro's signed payloads also permit bounded indefinite maps/arrays.
+//! Witness inputs retain definite lengths. No floats or non-minimal heads.
 
 use serde_cbor::Value;
 use std::collections::BTreeMap;
@@ -20,6 +21,18 @@ pub const NITRO_CBOR_LIMITS: CborLimits = CborLimits {
 };
 
 pub fn decode_strict_cbor(input: &[u8], limits: CborLimits) -> Result<Value, String> {
+    decode_cbor(input, limits, false)
+}
+
+pub fn decode_nitro_cbor(input: &[u8]) -> Result<Value, String> {
+    decode_cbor(input, NITRO_CBOR_LIMITS, true)
+}
+
+fn decode_cbor(
+    input: &[u8],
+    limits: CborLimits,
+    indefinite_containers: bool,
+) -> Result<Value, String> {
     if input.is_empty() || input.len() > limits.bytes {
         return Err("CBOR input size exceeds its bounds".into());
     }
@@ -28,6 +41,7 @@ pub fn decode_strict_cbor(input: &[u8], limits: CborLimits) -> Result<Value, Str
         offset: 0,
         remaining_items: limits.items,
         limits,
+        indefinite_containers,
     };
     let value = reader.item(0)?;
     if reader.offset != input.len() {
@@ -41,6 +55,7 @@ struct Reader<'a> {
     offset: usize,
     remaining_items: usize,
     limits: CborLimits,
+    indefinite_containers: bool,
 }
 
 impl<'a> Reader<'a> {
@@ -87,7 +102,12 @@ impl<'a> Reader<'a> {
         let initial = self.take(1)?[0];
         let major = initial >> 5;
         let additional = initial & 31;
-        let argument = self.argument(additional)?;
+        let indefinite = self.indefinite_containers && additional == 31 && matches!(major, 4 | 5);
+        let argument = if indefinite {
+            0
+        } else {
+            self.argument(additional)?
+        };
         match major {
             0 => Ok(Value::Integer(i128::from(argument))),
             1 => Ok(Value::Integer(-1 - i128::from(argument))),
@@ -116,13 +136,21 @@ impl<'a> Reader<'a> {
                 }
                 if major == 4 {
                     let mut values = Vec::with_capacity(count);
-                    for _ in 0..count {
+                    while indefinite || values.len() < count {
+                        if indefinite && self.input.get(self.offset) == Some(&0xff) {
+                            self.offset += 1;
+                            break;
+                        }
                         values.push(self.item(depth + 1)?);
                     }
                     Ok(Value::Array(values))
                 } else {
                     let mut values = BTreeMap::new();
-                    for _ in 0..count {
+                    while indefinite || values.len() < count {
+                        if indefinite && self.input.get(self.offset) == Some(&0xff) {
+                            self.offset += 1;
+                            break;
+                        }
                         let key = self.item(depth + 1)?;
                         if !matches!(key, Value::Integer(_) | Value::Text(_) | Value::Bytes(_)) {
                             return Err("CBOR map key type is unsupported".into());
@@ -154,6 +182,39 @@ impl<'a> Reader<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nitro_indefinite_containers_preserve_all_bounds_and_map_rules() {
+        let data = [0xbf, 0x61, b'a', 0x9f, 0x00, 0x01, 0xff, 0xff];
+        let expected =
+            decode_strict_cbor(&[0xa1, 0x61, b'a', 0x82, 0x00, 0x01], NITRO_CBOR_LIMITS).unwrap();
+        assert_eq!(decode_nitro_cbor(&data).unwrap(), expected);
+        assert!(decode_strict_cbor(&data, NITRO_CBOR_LIMITS).is_err());
+        for bad in [
+            vec![0xbf],
+            vec![0xbf, 0x00, 0xff],
+            vec![0xff],
+            vec![0xbf, 0x00, 0x01, 0x00, 0x02, 0xff],
+            vec![0x9f, 0xbf, 0x00, 0x01, 0x00, 0x02, 0xff, 0xff],
+            vec![0x9f, 0x01],
+            vec![0x5f, 0x41, 0x01, 0xff],
+            vec![0xbf, 0xf4, 0x00, 0xff],
+            vec![0x9f, 0xff, 0xff],
+        ] {
+            assert!(decode_nitro_cbor(&bad).is_err(), "accepted {bad:?}");
+        }
+        let mut too_many = vec![0x9f];
+        too_many.extend(vec![0x00; 4096]);
+        too_many.push(0xff);
+        assert!(decode_nitro_cbor(&too_many)
+            .unwrap_err()
+            .contains("item limit"));
+        let mut too_deep = vec![0x9f; 34];
+        too_deep.extend(vec![0xff; 34]);
+        assert!(decode_nitro_cbor(&too_deep)
+            .unwrap_err()
+            .contains("nesting"));
+    }
 
     #[test]
     fn preserves_signed_cose_bytes_and_typed_values() {

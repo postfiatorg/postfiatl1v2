@@ -14,9 +14,15 @@ fn all_shared_nitro_cases_match_inside_sp1_with_pinned_crypto_patches() {
     assert_eq!(hex::encode(Sha256::digest(&elf)), hash);
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../reserve-proof-types/tests/fixtures/yolo_nitro_validation_v2.json");
-    let corpus: serde_json::Value = serde_json::from_slice(&fs::read(fixture).unwrap()).unwrap();
-    let cases = corpus["cases"].as_array().unwrap();
-    assert_eq!(cases.len(), 38);
+    let corpus: serde_json::Value = serde_json::from_slice(&fs::read(&fixture).unwrap()).unwrap();
+    let hardware: serde_json::Value = serde_json::from_slice(
+        &fs::read(fixture.with_file_name("yolo_nitro_aws_20260905.json")).unwrap(),
+    )
+    .unwrap();
+    let mut combined = corpus["cases"].as_array().unwrap().clone();
+    combined.extend(hardware["cases"].as_array().unwrap().iter().cloned());
+    let cases = &combined;
+    assert_eq!(cases.len(), 43);
     let input: Vec<_> = cases
         .iter()
         .map(|case| {
