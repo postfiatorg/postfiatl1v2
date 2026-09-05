@@ -8014,7 +8014,13 @@ fn validate_vault_bridge_reserve_packet_fields(
                 .to_string(),
         ));
     }
-    let current_supply = issued_asset_supply(ledger, &operation.asset_id)?;
+    // Count the whole family (base asset plus its source-series assets) so the
+    // packet bound matches the state-commitment invariant, which compares the
+    // finalized circulating supply against the family-wide issued supply. A
+    // series-only vault bridge asset (every claim credited a source series and
+    // nobody holds the base id) has a base-only supply of zero, which would
+    // reject every honest packet and leave NAV unfinalizable.
+    let current_supply = issued_asset_family_supply(ledger, &operation.asset_id)?;
     let maximum_proof_backed_supply = current_supply
         .checked_add(finalized_unclaimed_sp1_backing)
         .ok_or_else(|| {
