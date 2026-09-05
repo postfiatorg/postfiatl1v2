@@ -406,11 +406,8 @@ fn write_canonical_json(value: &Value, output: &mut Vec<u8>) -> Result<(), Strin
         Value::Bool(true) => output.extend_from_slice(b"true"),
         Value::Bool(false) => output.extend_from_slice(b"false"),
         Value::Number(number) => output.extend_from_slice(number.to_string().as_bytes()),
-        Value::String(text) => output.extend_from_slice(
-            serde_json::to_string(text)
-                .map_err(|_| "YOLO JSON string serialization failed".to_string())?
-                .as_bytes(),
-        ),
+        Value::String(text) => serde_json::to_writer(&mut *output, text)
+            .map_err(|_| "YOLO JSON string serialization failed".to_string())?,
         Value::Array(items) => {
             output.push(b'[');
             for (index, item) in items.iter().enumerate() {
@@ -423,19 +420,16 @@ fn write_canonical_json(value: &Value, output: &mut Vec<u8>) -> Result<(), Strin
         }
         Value::Object(object) => {
             output.push(b'{');
-            let mut keys: Vec<&String> = object.keys().collect();
-            keys.sort_unstable();
-            for (index, key) in keys.iter().enumerate() {
+            let mut entries: Vec<_> = object.iter().collect();
+            entries.sort_unstable_by(|(left, _), (right, _)| left.cmp(right));
+            for (index, (key, item)) in entries.into_iter().enumerate() {
                 if index != 0 {
                     output.push(b',');
                 }
-                output.extend_from_slice(
-                    serde_json::to_string(key)
-                        .map_err(|_| "YOLO JSON key serialization failed".to_string())?
-                        .as_bytes(),
-                );
+                serde_json::to_writer(&mut *output, key)
+                    .map_err(|_| "YOLO JSON key serialization failed".to_string())?;
                 output.push(b':');
-                write_canonical_json(&object[*key], output)?;
+                write_canonical_json(item, output)?;
             }
             output.push(b'}');
         }

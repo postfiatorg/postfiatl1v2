@@ -321,7 +321,10 @@ pub fn decode_target_witness(input: &[u8]) -> Result<TargetProofWitnessV1, Strin
     if !matches!(value, serde_cbor::Value::Map(_)) {
         return Err("target witness must be a CBOR map".into());
     }
-    let witness: TargetProofWitnessV1 = serde_cbor::value::from_value(value)
+    // The strict pass has already rejected duplicates, non-minimal heads and
+    // all size/depth violations. Decode the original bytes directly instead
+    // of serializing the entire generic Value back into a second CBOR buffer.
+    let witness: TargetProofWitnessV1 = serde_cbor::from_slice(input)
         .map_err(|_| "target witness fields or types do not match")?;
     witness.validate_bounds()?;
     Ok(witness)
