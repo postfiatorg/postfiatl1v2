@@ -56,6 +56,19 @@ def test_docker_preflight_accepts_accessible_daemon() -> None:
     assert observed[0][1]["timeout"] == 20
 
 
+def test_target_command_preserves_independent_acceptance_file() -> None:
+    command = build_command(
+        prover=Path("/proof kit/postfiat-yolo-target"),
+        witness=Path("/private/witness.cbor"),
+        elf=Path("/approved/target.elf"),
+        output_dir=Path("/evidence/proof"),
+        acceptance=Path("/approved/public pins.json"),
+    )
+    assert command[0] == "/proof kit/postfiat-yolo-target"
+    assert command[-2:] == ["--acceptance", "/approved/public pins.json"]
+    assert command.count("--acceptance") == 1
+
+
 def test_docker_preflight_rejects_stale_systemd_groups() -> None:
     def runner(command, **_options):
         return subprocess.CompletedProcess(

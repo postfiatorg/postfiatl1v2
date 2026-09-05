@@ -393,6 +393,13 @@ pub(crate) fn domain_sha256<T: Serialize>(domain: &str, value: &T) -> Result<Str
     Ok(hex::encode(hasher.finalize()))
 }
 
+pub(crate) fn canonical_bytes<T: Serialize>(value: &T) -> Result<Vec<u8>, String> {
+    let value = serde_json::to_value(value).map_err(|_| "YOLO canonical value serialization failed")?;
+    let mut output = Vec::new();
+    write_canonical_json(&value, &mut output)?;
+    Ok(output)
+}
+
 fn write_canonical_json(value: &Value, output: &mut Vec<u8>) -> Result<(), String> {
     match value {
         Value::Null => output.extend_from_slice(b"null"),

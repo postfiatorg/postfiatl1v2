@@ -29,8 +29,12 @@ pub mod portfolio_valuation;
 #[cfg(feature = "a666-public-adapters-v2")]
 pub mod solana_stake;
 pub mod yolo_broker;
+pub mod yolo_cbor;
 pub mod yolo_collection;
+pub mod yolo_nitro;
 pub mod yolo_target;
+pub mod yolo_target_proof;
+pub mod yolo_witness;
 
 #[cfg(feature = "a666-public-adapters-v2")]
 use aave_v3::{
