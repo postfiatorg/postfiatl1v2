@@ -21,6 +21,21 @@ From this directory, use the repository Rust pin and a working `protoc`:
 cargo build --release --locked -p postfiat-yolo-target --features sp1
 ```
 
+That profile uses Docker for the final Gnark stage. The private Nitro prover
+uses the native profile instead, built with the recorded Rust, Go, C/C++ and
+protobuf toolchains in a runtime-compatible Linux image:
+
+```bash
+cargo build --release --locked -p postfiat-yolo-target --features sp1-native
+```
+
+The qualified native build uses source `9b74999e`, Rust 1.95.0 and Go 1.27.1;
+binary SHA-256 is
+`f9f22381fce0b2cd188429acb72aed4f584013e93d6f630831113121dfa50950`.
+NAV's `docs/pre_production/yolo_phase6_private_prover_v1.md` records its exact
+build image, circuits, runtime and proof qualification. Do not infer binary
+identity from a later node revision or a different host libc/toolchain.
+
 Install SP1 6.3.1 and build `programs/yolo-target-guest` using
 `cargo prove build --docker --tag v6.3.1 --locked`, with `--workspace-directory`
 set to the repository root and a new `--output-directory`. Record the image
@@ -84,6 +99,15 @@ SDK progress goes to stderr; stdout remains JSON. The CLI rejects SDK witness/
 trace-dump switches and circuit/verification overrides before starting SP1,
 so inherited debug settings cannot export private inputs or bypass proving.
 
+For private production inputs, these witness/prove commands run only through
+NAV's measured `nitro_prover_entrypoint` inside Nitro. Its parent accepts an
+encrypted replay and pinned public circuits; the parent receives only public
+proof bytes and encrypted diagnostics. Do not use the Docker-checking CPU
+launcher inside the enclave. The fixed native environment supplies its bounded
+workers and `TMPDIR=/private-tmp` because Nitro mounts `/tmp` non-executable.
+The offline container qualification also requires explicit shared memory
+(`--shm-size 16g`); Docker's default 64 MiB is insufficient for SP1's executor.
+
 ## Qualification
 
 ```bash
@@ -101,12 +125,13 @@ witnesses, bypassing host prechecks to test guest rejection.
 The durable fixtures in `crates/reserve-proof-types/tests/fixtures` contain only
 synthetic public certificates/documents and synthetic portfolio inputs. They
 preserve cross-language protocol regressions; ephemeral signing keys are never
-exported. The shared 38-case Nitro corpus must match Python and native Rust,
-including warmed-cache rejection tests. Retain full logs locally; promote only
+exported. The shared 38-case corpus plus six actual-AWS-document cases must
+match Python and native Rust, including warmed-cache rejection tests.
+Retain full logs locally; promote only
 disclosure-safe measurements and artifact hashes to qualification reports.
 
 `programs/yolo-nitro-test-guest` is a separate qualification harness that executes
-the entire 38-case Nitro corpus using the target's exact crypto dependency locks
+the combined 44-case Nitro corpus using the target's exact crypto dependency locks
 and patches. Its output is only a vector of test results; it is not a target
 receipt program and must never be registered as one. Build it with the same
 pinned Docker image, then run the ignored `nitro_guest_qualification` test with
@@ -120,14 +145,15 @@ values and the wrong program verification key.
 
 ## Independent guest and node revisions
 
-The accepted guest is built from source `38909717` with the pinned SP1 Docker
+The accepted AWS-compatible guest is built from source `459a6d3d` with the pinned SP1 Docker
 toolchain. Its ELF SHA-256 is
-`4e87fac38c061c7a1a992a23db53b9a78a2d721bd20164b41c31e4cd68a127e1` and
+`9aa40d86cc478a01fd7c6b2a63308188fb7e671079bd3321b405e7ac1a275cff` and
 verification key is
-`0x0043b435aa5a89fde8e2900c6648863f3358750127456224808cc1f51bca1297`.
+`0x0008ed5f9307fc00d9e60fbcd0e463e10d1bb3143ce3f73bcb2c807aa0670968`.
+The earlier `38909717` identity remains historical synthetic evidence.
 
 Later node receipt changes also change shared `postfiat-types` source. Do not
 assume rebuilding the guest from a later node HEAD preserves its identity. Use
-the qualified ELF or a clean checkout of `38909717` and compare the exact hash.
+the qualified ELF or a clean checkout of `459a6d3d` and compare the exact hash.
 The target receipt verifier accepts the explicitly registered key independently
 of the node build revision. See `docs/yolo/target-receipt-v1.md`.
