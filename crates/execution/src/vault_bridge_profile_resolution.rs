@@ -81,25 +81,45 @@ fn vault_bridge_profile_for_pinned_policy<'a>(
     ensure_vault_bridge_asset_registration(ledger, nav_asset)?;
     let expected_source_class =
         format!("{VAULT_BRIDGE_PROFILE_SOURCE_CLASS_PREFIX}{source_domain}");
-    let mut matches = ledger.nav_proof_profiles.iter().filter(|profile| {
-        profile.source_class == expected_source_class
-            && vault_bridge_route_policy_hash(profile) == policy_hash
-            && (profile.registered_by == nav_asset.issuer
-                || profile.registered_by == nav_asset.reserve_operator)
-    });
-    let profile = matches.next().ok_or_else(|| {
-        (
-            "missing_vault_bridge_pinned_profile",
-            "vault bridge lifecycle references a source/policy profile that is not registered"
-                .to_string(),
-        )
-    })?;
-    if matches.next().is_some() {
-        return Err((
-            "ambiguous_vault_bridge_pinned_profile",
-            "vault bridge lifecycle source/policy profile resolves ambiguously".to_string(),
-        ));
-    }
+    let matches: Vec<&NavProofProfile> = ledger
+        .nav_proof_profiles
+        .iter()
+        .filter(|profile| {
+            profile.source_class == expected_source_class
+                && vault_bridge_route_policy_hash(profile) == policy_hash
+                && (profile.registered_by == nav_asset.issuer
+                    || profile.registered_by == nav_asset.reserve_operator)
+        })
+        .collect();
+    let profile = match matches.as_slice() {
+        [] => {
+            return Err((
+                "missing_vault_bridge_pinned_profile",
+                "vault bridge lifecycle references a source/policy profile that is not registered"
+                    .to_string(),
+            ));
+        }
+        [single] => *single,
+        many => {
+            // Several sibling profiles can legitimately share one source domain
+            // and route policy (for example a verifier-kind rotation). The
+            // asset's currently pinned proof profile is the unambiguous choice;
+            // only when the asset points elsewhere is the set truly ambiguous.
+            match many
+                .iter()
+                .find(|profile| profile.profile_id == nav_asset.proof_profile)
+            {
+                Some(pinned) => *pinned,
+                None => {
+                    return Err((
+                        "ambiguous_vault_bridge_pinned_profile",
+                        "vault bridge lifecycle source/policy profile resolves ambiguously"
+                            .to_string(),
+                    ));
+                }
+            }
+        }
+    };
     ensure_vault_bridge_source_policy(profile, source_domain, policy_hash)?;
     Ok(profile)
 }
