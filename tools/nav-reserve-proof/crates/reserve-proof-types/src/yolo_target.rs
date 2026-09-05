@@ -427,26 +427,28 @@ fn aggregate(
             .map(|snapshot| snapshot.underlier_midpoint_microdollars)
             .collect(),
     )?;
-    let symbols: BTreeSet<&str> = snapshots
-        .iter()
-        .flat_map(|snapshot| {
-            snapshot
-                .contracts
-                .iter()
-                .map(|contract| contract.occ_symbol.as_str())
-        })
-        .collect();
+    // Index every raw observation once. BTreeMap preserves the former sorted
+    // symbol order; each vector preserves chronological snapshot/quote order.
+    // Quote validation stays below so the first reported error is unchanged.
+    let mut by_symbol: BTreeMap<
+        &str,
+        Vec<(&YoloMethodologySnapshotV1, &YoloContractQuoteV1)>,
+    > = BTreeMap::new();
+    for snapshot in &snapshots {
+        for quote in &snapshot.contracts {
+            by_symbol
+                .entry(quote.occ_symbol.as_str())
+                .or_default()
+                .push((snapshot, quote));
+        }
+    }
     let trade_date = parse_date("tradeDate", &target.trade_date)?;
     let mut contracts = Vec::new();
-    for symbol in symbols {
+    for (symbol, raw_observations) in by_symbol {
         let mut observations: Vec<(&YoloMethodologySnapshotV1, &YoloContractQuoteV1)> = Vec::new();
-        for snapshot in &snapshots {
-            for quote in &snapshot.contracts {
-                if quote.occ_symbol == symbol
-                    && valid_quote(quote, &snapshot.observed_at_utc, parameters)?
-                {
-                    observations.push((snapshot, quote));
-                }
+        for &(snapshot, quote) in &raw_observations {
+            if valid_quote(quote, &snapshot.observed_at_utc, parameters)? {
+                observations.push((snapshot, quote));
             }
         }
         if observations.is_empty() {
@@ -502,11 +504,11 @@ fn aggregate(
                 / u128::from(underlier),
         )
         .map_err(|_| "moneyness exceeds numeric bounds".to_string())?;
-        let final_quote = snapshots.last().and_then(|snapshot| {
-            snapshot
-                .contracts
+        let final_quote = snapshots.last().and_then(|last| {
+            raw_observations
                 .iter()
-                .find(|quote| quote.occ_symbol == symbol)
+                .find(|(snapshot, _)| snapshot.sequence == last.sequence)
+                .map(|(_, quote)| *quote)
         });
         let halted = final_quote.is_none_or(|quote| quote.option_halted);
         let mandate = consistent
@@ -971,6 +973,33 @@ pub fn create_yolo_portfolio_target_v1(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn indexed_observations_preserve_final_flags_and_reordering() {
+        let mut value = input(&[("2026-11-03", &[47, 48, 49, 50, 51, 52, 53])]);
+        // Missing final observations remain halted/missing even with four valid
+        // earlier quotes. A stale final quote still supplies its halt flag.
+        value.snapshots[4].contracts.remove(0);
+        value.snapshots[4].contracts[0].quote_timestamp_utc =
+            "2026-09-03T14:30:00Z".to_string();
+        value.snapshots[4].contracts[0].option_halted = true;
+        // Invalid quotes contribute neither prices nor liquidity medians.
+        value.snapshots[0].contracts[2].bid_microdollars = 0;
+        let (_, rows) = aggregate(&value, &parameters()).unwrap();
+        assert_eq!(rows.len(), 7);
+        assert_eq!(rows[0].valid_quote_count, 4);
+        assert!(rows[0].option_halted);
+        assert_eq!(rows[1].valid_quote_count, 4);
+        assert!(rows[1].option_halted);
+        assert_eq!(rows[2].valid_quote_count, 4);
+        assert_eq!(rows[2].bid_microdollars, 4_900_000);
+        let original = create_yolo_portfolio_target_v1(&value, &parameters()).unwrap();
+        value.snapshots.reverse();
+        for snapshot in &mut value.snapshots {
+            snapshot.contracts.reverse();
+        }
+        assert_eq!(original, create_yolo_portfolio_target_v1(&value, &parameters()).unwrap());
+    }
 
     fn parameters() -> YoloPortfolioParametersV1 {
         YoloPortfolioParametersV1 {
