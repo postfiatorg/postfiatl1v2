@@ -93,7 +93,7 @@ fn yolo_real_groth16_verifier_binds_every_redundant_field_and_registered_expecta
 #[test]
 fn yolo_malformed_and_changed_proof_public_bytes_reject() {
     let (registration, submission) = yolo_fixture();
-    for mode in 0..6 {
+    for mode in 0..8 {
         let mut changed = submission.clone();
         match mode {
             0 => {
@@ -105,6 +105,8 @@ fn yolo_malformed_and_changed_proof_public_bytes_reject() {
                 changed.sp1_public_values.pop();
             }
             4 => changed.sp1_public_values.push(0),
+            6 => changed.sp1_public_values[0] ^= 1,
+            7 => changed.sp1_public_values[8..12].copy_from_slice(&2_u32.to_be_bytes()),
             _ => {
                 changed.values.target_sha256 = "ee".repeat(32);
                 changed.sp1_public_values = changed.values.encode().unwrap();
@@ -112,6 +114,46 @@ fn yolo_malformed_and_changed_proof_public_bytes_reject() {
         }
         assert!(verify_yolo_target_sp1_groth16(&registration, &changed).is_err());
     }
+}
+
+#[test]
+fn yolo_registration_conflicts_are_scoped_to_registrant_and_unknown_runs_reject() {
+    let (registration, submission) = yolo_fixture();
+    let mut ledger = LedgerState::new(vec![]);
+    assert_eq!(
+        submit_yolo_target_receipt(&mut ledger, &submission, &"12".repeat(48), 12)
+            .unwrap_err()
+            .0,
+        "unknown_yolo_registration"
+    );
+    assert!(ledger.yolo_target_receipts.is_empty());
+    assert_eq!(
+        register_yolo_target_run(&mut ledger, &registration, 12)
+            .unwrap_err()
+            .0,
+        "invalid_yolo_activation"
+    );
+    register_yolo_target_run(&mut ledger, &registration, 10).unwrap();
+    for same_replay in [false, true] {
+        let mut conflict = registration.clone();
+        if same_replay {
+            conflict.epoch_sha256 = "cd".repeat(32);
+        } else {
+            conflict.replay_id_sha256 = "cd".repeat(32);
+        }
+        let before = ledger.clone();
+        assert_eq!(
+            register_yolo_target_run(&mut ledger, &conflict, 10)
+                .unwrap_err()
+                .0,
+            "duplicate_yolo_registration"
+        );
+        assert_eq!(ledger, before);
+    }
+    let mut independent = registration;
+    independent.registrant = "another-synthetic-registrant".to_string();
+    register_yolo_target_run(&mut ledger, &independent, 10).unwrap();
+    assert_eq!(ledger.yolo_target_registrations.len(), 2);
 }
 
 #[test]
@@ -204,7 +246,7 @@ fn yolo_signed_lifecycle_activation_replay_persistence_and_no_asset_authority() 
     let restored: LedgerState =
         serde_json::from_slice(&serde_json::to_vec(&ledger).unwrap()).unwrap();
     assert_eq!(restored, ledger);
-    let mut replay = initial;
+    let mut replay = initial.clone();
     assert!(
         execute_asset_transaction_with_compatibility(&genesis, &mut replay, &register, 10, active)
             .accepted
@@ -222,7 +264,7 @@ fn yolo_signed_lifecycle_activation_replay_persistence_and_no_asset_authority() 
     assert!(
         !execute_asset_transaction_with_compatibility(
             &genesis,
-            &mut LedgerState::new(replay.accounts.clone()),
+            &mut initial.clone(),
             &tampered,
             10,
             active
