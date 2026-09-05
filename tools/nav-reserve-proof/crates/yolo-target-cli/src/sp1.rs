@@ -11,7 +11,37 @@ use std::time::Instant;
 const MAX_ELF_BYTES: usize = 64 * 1024 * 1024;
 const MAX_PROOF_BYTES: usize = 32 * 1024 * 1024;
 
+fn validate_environment(is_set: impl Fn(&str) -> bool) -> Result<()> {
+    // The SDK has debugging switches that write private witness/trace files,
+    // exit without proving, or change verification/circuit behavior.
+    for name in [
+        "SP1_DUMP",
+        "SP1_RECORD_WRITE_DIR",
+        "SP1_RECORD_MAX_ARITY_INPUT",
+        "SP1_RECORD_SHRINK_INPUT",
+        "TRACE_FILE",
+        "DUMP_ELF_OUTPUT",
+        "WITHOUT_VK_VERIFICATION",
+        "SP1_CIRCUIT_MODE",
+        "SP1_GROTH16_CIRCUIT_PATH",
+        "SP1_PLONK_CIRCUIT_PATH",
+    ] {
+        anyhow::ensure!(
+            !is_set(name),
+            "unsupported SP1 debug or circuit override: {name}"
+        );
+    }
+    Ok(())
+}
+
 fn runtime() -> Result<tokio::runtime::Runtime> {
+    validate_environment(|name| std::env::var_os(name).is_some())?;
+    // Keep SDK progress separate from the CLI's machine-readable stdout.
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter("sp1_sdk=info,sp1_prover=info")
+        .with_writer(std::io::stderr)
+        .with_ansi(false)
+        .try_init();
     Ok(tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?)
@@ -152,4 +182,24 @@ pub(super) fn identity(elf: PathBuf) -> Result<()> {
     report(
         &serde_json::json!({"schema": "postfiat.yolo.program_identity.v1", "elfSha256": hash, "programVkey": key, "sp1Version": "6.3.1"}),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn private_dumps_and_circuit_overrides_are_rejected_before_sdk_start() {
+        validate_environment(|_| false).unwrap();
+        for name in [
+            "SP1_DUMP",
+            "SP1_RECORD_WRITE_DIR",
+            "TRACE_FILE",
+            "WITHOUT_VK_VERIFICATION",
+            "SP1_GROTH16_CIRCUIT_PATH",
+        ] {
+            let error = validate_environment(|candidate| candidate == name).unwrap_err();
+            assert!(error.to_string().contains(name));
+        }
+    }
 }

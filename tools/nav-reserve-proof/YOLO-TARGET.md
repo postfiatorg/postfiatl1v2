@@ -78,6 +78,9 @@ The proof command verifies its result before writing `proof.bin`,
 create-only. `verify` requires Groth16, exact ABI, independent public pins, actual
 ELF hash and the verification key derived from that ELF. No network prover,
 broker order, reserve submission, or chain transaction is invoked.
+SDK progress goes to stderr; stdout remains JSON. The CLI rejects SDK witness/
+trace-dump switches and circuit/verification overrides before starting SP1,
+so inherited debug settings cannot export private inputs or bypass proving.
 
 ## Qualification
 
