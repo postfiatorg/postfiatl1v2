@@ -1,6 +1,8 @@
 //! Versioned private inputs and independently supplied public acceptance pins.
 
-use crate::yolo_cbor::{decode_strict_cbor, CborLimits};
+use crate::yolo_cbor::{validate_strict_cbor, CborLimits};
+#[cfg(test)]
+use crate::yolo_cbor::decode_strict_cbor;
 use crate::yolo_collection::{
     domain_sha256, parse_date, parse_python_utc, validate_digest, YoloCollectionEpochV2,
     YoloSnapshotCommitmentV2,
@@ -310,7 +312,7 @@ impl TargetProofWitnessV1 {
 }
 
 pub fn decode_target_witness(input: &[u8]) -> Result<TargetProofWitnessV1, String> {
-    let value = decode_strict_cbor(
+    validate_strict_cbor(
         input,
         CborLimits {
             bytes: MAX_TARGET_WITNESS_BYTES,
@@ -318,7 +320,7 @@ pub fn decode_target_witness(input: &[u8]) -> Result<TargetProofWitnessV1, Strin
             depth: 32,
         },
     )?;
-    if !matches!(value, serde_cbor::Value::Map(_)) {
+    if input[0] >> 5 != 5 {
         return Err("target witness must be a CBOR map".into());
     }
     // The strict pass has already rejected duplicates, non-minimal heads and

@@ -86,6 +86,7 @@ pub(super) fn execute(
     report(&serde_json::json!({
         "schema": "postfiat.yolo.guest_execution.v1", "witnessBytes": witness_bytes,
         "publicValuesBytes": expected.len(), "instructionCount": execution.total_instruction_count(),
+        "cycleTracker": execution.cycle_tracker,
         "touchedMemoryAddresses": (execution.touched_memory_addresses > 0).then_some(execution.touched_memory_addresses),
         "syscallCount": (execution.total_syscall_count() > 0).then_some(execution.total_syscall_count()),
         "gas": execution.gas(),

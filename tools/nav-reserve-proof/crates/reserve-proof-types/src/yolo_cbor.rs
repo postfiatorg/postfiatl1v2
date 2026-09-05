@@ -5,7 +5,7 @@
 //! Witness inputs retain definite lengths. No floats or non-minimal heads.
 
 use serde_cbor::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Copy)]
 pub struct CborLimits {
@@ -22,6 +22,24 @@ pub const NITRO_CBOR_LIMITS: CborLimits = CborLimits {
 
 pub fn decode_strict_cbor(input: &[u8], limits: CborLimits) -> Result<Value, String> {
     decode_cbor(input, limits, false)
+}
+
+/// Validate definite CBOR without allocating a second tree of witness values.
+/// Primitive map keys have a unique encoding because heads must be minimal.
+/// Borrowing those encoded keys therefore preserves duplicate-key rejection.
+pub fn validate_strict_cbor(input: &[u8], limits: CborLimits) -> Result<(), String> {
+    if input.is_empty() || input.len() > limits.bytes {
+        return Err("CBOR input size exceeds its bounds".into());
+    }
+    let mut reader = Reader {
+        input, offset: 0, remaining_items: limits.items, limits,
+        indefinite_containers: false,
+    };
+    reader.skip_definite(0)?;
+    if reader.offset != input.len() {
+        return Err("CBOR input has trailing bytes".into());
+    }
+    Ok(())
 }
 
 pub fn decode_nitro_cbor(input: &[u8]) -> Result<Value, String> {
@@ -59,6 +77,59 @@ struct Reader<'a> {
 }
 
 impl<'a> Reader<'a> {
+    fn skip_definite(&mut self, depth: usize) -> Result<(), String> {
+        if depth > self.limits.depth {
+            return Err("CBOR nesting exceeds its bound".into());
+        }
+        self.remaining_items = self.remaining_items.checked_sub(1)
+            .ok_or("CBOR item limit exceeded")?;
+        let initial = self.take(1)?[0];
+        let major = initial >> 5;
+        let additional = initial & 31;
+        let argument = self.argument(additional)?;
+        match major {
+            0 | 1 => Ok(()),
+            2 | 3 => {
+                let length = usize::try_from(argument).map_err(|_| "CBOR length overflow")?;
+                let bytes = self.take(length)?;
+                if major == 3 {
+                    std::str::from_utf8(bytes).map_err(|_| "CBOR text is not UTF-8")?;
+                }
+                Ok(())
+            }
+            4 | 5 => {
+                let count = usize::try_from(argument).map_err(|_| "CBOR count overflow")?;
+                let child_count = count.checked_mul(if major == 5 { 2 } else { 1 })
+                    .ok_or("CBOR count overflow")?;
+                if child_count > self.remaining_items || child_count > self.input.len() - self.offset {
+                    return Err("CBOR container exceeds remaining bounds".into());
+                }
+                let input = self.input;
+                let mut keys = BTreeSet::new();
+                for _ in 0..count {
+                    if major == 5 {
+                        let start = self.offset;
+                        let key_major = input.get(start).ok_or("CBOR input is truncated")? >> 5;
+                        if key_major > 3 {
+                            return Err("CBOR map key type is unsupported".into());
+                        }
+                        self.skip_definite(depth + 1)?;
+                        if !keys.insert(&input[start..self.offset]) {
+                            return Err("CBOR map contains a duplicate key".into());
+                        }
+                    }
+                    self.skip_definite(depth + 1)?;
+                }
+                Ok(())
+            }
+            6 if argument == 18 && depth == 0 => self.skip_definite(depth + 1),
+            6 => Err("CBOR tag is unsupported here".into()),
+            7 if matches!(additional, 20..=22) => Ok(()),
+            7 => Err("CBOR simple or floating-point value is unsupported".into()),
+            _ => Err("CBOR type is unsupported".into()),
+        }
+    }
+
     fn take(&mut self, count: usize) -> Result<&'a [u8], String> {
         let end = self
             .offset
@@ -182,6 +253,45 @@ impl<'a> Reader<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn borrowed_validation_matches_strict_decoder() {
+        let limits = CborLimits { bytes: 4096, items: 1024, depth: 8 };
+        let cases = [
+            vec![0xa2, 0x61, b'a', 0, 0x61, b'a', 1],
+            vec![0xa2, 0, 0, 0x18, 0, 1], // non-minimal duplicate integer
+            vec![0xa2, 0x41, 0, 0, 0x41, 0, 1],
+            vec![0xa2, 0x61, b'a', 0, 0x41, b'a', 1], // distinct text/bytes
+            vec![0xa1, 0xf4, 0], vec![0x61, 0xff], vec![0x9f, 0xff],
+            vec![0xd2, 0x84, 0x40, 0xa0, 0x40, 0x40],
+            vec![0x81, 0xd2, 0x80], vec![0xfa, 0, 0, 0, 0],
+        ];
+        for encoded in cases {
+            assert_eq!(validate_strict_cbor(&encoded, limits).is_ok(),
+                decode_strict_cbor(&encoded, limits).is_ok(), "{encoded:?}");
+        }
+        for count in 0..40 {
+            let values = serde_json::json!({"rows": (0..count).map(|i|
+                serde_json::json!({"id":i,"name":"é","flags":[true,false,null],"items":[1,2,3]})
+            ).collect::<Vec<_>>()});
+            let encoded = serde_cbor::to_vec(&values).unwrap();
+            for limit in [limits, CborLimits { bytes: 4096, items: 12, depth: 2 }] {
+                assert_eq!(validate_strict_cbor(&encoded, limit).is_ok(),
+                    decode_strict_cbor(&encoded, limit).is_ok());
+            }
+        }
+        let mut random = 0x9e37_79b9_u32;
+        for length in 0..64 {
+            for _ in 0..64 {
+                let encoded: Vec<u8> = (0..length).map(|_| {
+                    random ^= random << 13; random ^= random >> 17; random ^= random << 5;
+                    random as u8
+                }).collect();
+                assert_eq!(validate_strict_cbor(&encoded, limits).is_ok(),
+                    decode_strict_cbor(&encoded, limits).is_ok(), "{encoded:?}");
+            }
+        }
+    }
 
     #[test]
     fn nitro_indefinite_containers_preserve_all_bounds_and_map_rules() {
