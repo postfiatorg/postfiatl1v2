@@ -10,6 +10,7 @@ publish = false
 [features]
 default = []
 sp1 = ["dep:sp1-sdk", "dep:tokio", "dep:bincode", "dep:tracing-subscriber"]
+sp1-native = ["sp1", "sp1-sdk/native-gnark"]
 
 [dependencies]
 anyhow.workspace = true
