@@ -108,12 +108,24 @@ Python CLI tests and the existing asset conservation/replay test pass. The real
 node binary also prepared, queried and rendered the finalized synthetic receipt
 through the Python CLI. No retained test private keys are in these artifacts.
 
-The accepted SP1 guest still comes from source `38909717`, with ELF SHA-256
-`4e87fac38c061c7a1a992a23db53b9a78a2d721bd20164b41c31e4cd68a127e1` and key
-`0x0043b435aa5a89fde8e2900c6648863f3358750127456224808cc1f51bca1297`.
-Build the node from the receipt implementation revision. Do not assume a guest
-rebuilt from that newer node source retains the accepted ELF identity.
+The current accepted guest is source `459a6d3d`, ELF SHA-256
+`9aa40d86cc478a01fd7c6b2a63308188fb7e671079bd3321b405e7ac1a275cff`, key
+`0x0008ed5f9307fc00d9e60fbcd0e463e10d1bb3143ce3f73bcb2c807aa0670968`.
+It adds bounded decoding for real AWS NSM CBOR documents. The original proof
+fixture remains a regression case. A second real Groth16 proof of synthetic
+inputs uses the new guest; it passed the same five certified rounds, four-store
+finality/replay and Python CLI/HTML qualification. See the
+[new summary](evidence/target-receipt-v1-aws-compatible-summary-20260905.json)
+and [public validator report](evidence/target-receipt-v1-aws-compatible-20260905.json.gz).
+Both fixtures contain only public proof bytes and commitments. Real AWS
+attestation is qualified separately in the 44-case SP1 attestation corpus;
+do not describe this synthetic proof as a live collection proof.
 
-AWS/KMS hardware qualification, owner-approved live sources, network deployment,
-real collection/proving, external finality, authorized private replay and
-teardown remain later acceptance work.
+```bash
+cargo test --locked -p postfiat-node --lib yolo_aws_compatible_guest_four_validator_finality_restart_and_replay
+```
+
+Synthetic AWS Nitro/KMS qualification is complete and its temporary resources
+are removed; NAV's Phase 5 journal contains exact evidence. Private enclave
+prover packaging, owner-approved live inputs, network deployment, real
+collection/proving, external finality and authorized live replay remain.

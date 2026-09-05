@@ -149,6 +149,19 @@ fn yolo_state_commitment_covers_each_new_field_and_preserves_absent_legacy_field
 
 #[test]
 fn yolo_four_validator_certificates_finality_restart_and_chain_replay() {
+    qualify_yolo_four_validator_chain(include_str!(
+        "../../../execution/testdata/yolo-target-v1-synthetic-proof.json"
+    ));
+}
+
+#[test]
+fn yolo_aws_compatible_guest_four_validator_finality_restart_and_replay() {
+    qualify_yolo_four_validator_chain(include_str!(
+        "../../../execution/testdata/yolo-target-v1-aws-compatible-proof.json"
+    ));
+}
+
+fn qualify_yolo_four_validator_chain(fixture_json: &str) {
     let root = unique_test_dir("yolo-four-validator-chain");
     let primary = root.join("validator-0");
     init(InitOptions {
@@ -265,10 +278,7 @@ fn yolo_four_validator_certificates_finality_restart_and_chain_replay() {
     let store = NodeStore::new(&primary);
     let genesis = store.read_genesis().unwrap();
     let signer = read_transfer_key_file(&primary, None).unwrap();
-    let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../execution/testdata/yolo-target-v1-synthetic-proof.json"
-    ))
-    .unwrap();
+    let fixture: serde_json::Value = serde_json::from_str(fixture_json).unwrap();
     let public = hex_to_bytes(fixture["publicValuesHex"].as_str().unwrap()).unwrap();
     let values = postfiat_types::YoloTargetPublicValuesV1::decode(&public).unwrap();
     let registration = postfiat_types::YoloTargetRegisterOperationV1 {
