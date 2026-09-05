@@ -4,7 +4,7 @@
 //! methodology. It produces theoretical target quantities only and contains no
 //! broker client, order type, execution loop, or account mutation capability.
 
-use crate::yolo_collection::{domain_sha256, parse_date, parse_python_utc, validate_digest};
+use crate::yolo_collection::{domain_sha256, domain_sha256_canonical_bytes, parse_date, parse_python_utc, validate_digest};
 use serde::{Deserialize, Serialize};
 use std::cmp::{Ordering, Reverse};
 use std::collections::{BTreeMap, BTreeSet};
@@ -121,25 +121,27 @@ impl YoloPortfolioParametersV1 {
     }
 }
 
+// Target input/output structures below declare fields in canonical JSON key
+// order. Tests compare direct serialization with the general canonical writer.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct YoloContractQuoteV1 {
-    pub occ_symbol: String,
-    pub expiration_date: String,
-    pub strike_microdollars: u64,
-    pub bid_microdollars: u64,
     pub ask_microdollars: u64,
-    pub bid_size: u64,
     pub ask_size: u64,
-    pub session_volume: u64,
-    pub open_interest: u64,
-    pub quote_timestamp_utc: String,
-    pub option_type: String,
-    pub multiplier: u64,
+    pub bid_microdollars: u64,
+    pub bid_size: u64,
     pub deliverable_shares: u64,
     pub exercise_style: String,
-    pub standard: bool,
+    pub expiration_date: String,
+    pub multiplier: u64,
+    pub occ_symbol: String,
+    pub open_interest: u64,
     pub option_halted: bool,
+    pub option_type: String,
+    pub quote_timestamp_utc: String,
+    pub session_volume: u64,
+    pub standard: bool,
+    pub strike_microdollars: u64,
 }
 
 impl YoloContractQuoteV1 {
@@ -172,12 +174,12 @@ impl YoloContractQuoteV1 {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct YoloMethodologySnapshotV1 {
-    pub sequence: u32,
-    pub scheduled_at_utc: String,
-    pub observed_at_utc: String,
-    pub underlier_midpoint_microdollars: u64,
-    pub underlier_halted: bool,
     pub contracts: Vec<YoloContractQuoteV1>,
+    pub observed_at_utc: String,
+    pub scheduled_at_utc: String,
+    pub sequence: u32,
+    pub underlier_halted: bool,
+    pub underlier_midpoint_microdollars: u64,
 }
 
 impl YoloMethodologySnapshotV1 {
@@ -208,19 +210,19 @@ pub struct YoloCurrentPositionV1 {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct YoloPortfolioTargetInputV1 {
-    pub schema: String,
-    pub series_id: String,
-    pub underlier_id: String,
-    pub trade_date: String,
-    pub methodology_sha256: String,
-    pub collection_sha256: String,
-    pub snapshots: Vec<YoloMethodologySnapshotV1>,
-    pub positions: Vec<YoloCurrentPositionV1>,
-    pub settled_cash_microdollars: u64,
-    pub unsettled_cash_microdollars: u64,
     pub accrued_liabilities_microdollars: u64,
+    pub collection_sha256: String,
     pub incumbent_expiration: Option<String>,
     pub incumbent_symbols: Vec<String>,
+    pub methodology_sha256: String,
+    pub positions: Vec<YoloCurrentPositionV1>,
+    pub schema: String,
+    pub series_id: String,
+    pub settled_cash_microdollars: u64,
+    pub snapshots: Vec<YoloMethodologySnapshotV1>,
+    pub trade_date: String,
+    pub underlier_id: String,
+    pub unsettled_cash_microdollars: u64,
 }
 
 impl YoloPortfolioTargetInputV1 {
@@ -265,38 +267,38 @@ impl YoloPortfolioTargetInputV1 {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct YoloAggregatedContractV1 {
-    pub occ_symbol: String,
-    pub expiration_date: String,
-    pub strike_microdollars: u64,
-    pub multiplier: u64,
-    pub bid_microdollars: u64,
     pub ask_microdollars: u64,
-    pub midpoint_microdollars: u64,
-    pub two_sided_size: u64,
-    pub session_volume: u64,
-    pub open_interest: u64,
-    pub spread_bps: u64,
-    pub moneyness_ppb: u64,
+    pub bid_microdollars: u64,
     pub dte: i64,
-    pub valid_quote_count: u64,
-    pub option_halted: bool,
-    pub mandate_eligible: bool,
-    pub liquidity_ppb: u64,
     pub exclusions: Vec<String>,
+    pub expiration_date: String,
+    pub liquidity_ppb: u64,
+    pub mandate_eligible: bool,
+    pub midpoint_microdollars: u64,
+    pub moneyness_ppb: u64,
+    pub multiplier: u64,
+    pub occ_symbol: String,
+    pub open_interest: u64,
+    pub option_halted: bool,
+    pub session_volume: u64,
+    pub spread_bps: u64,
+    pub strike_microdollars: u64,
+    pub two_sided_size: u64,
+    pub valid_quote_count: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct YoloTargetPositionV1 {
-    pub occ_symbol: String,
+    pub current_quantity: u64,
     pub expiration_date: String,
+    pub liquidity_ppb: u64,
     pub midpoint_microdollars: u64,
     pub multiplier: u64,
-    pub current_quantity: u64,
-    pub target_quantity: u64,
-    pub target_delta: i128,
-    pub liquidity_ppb: u64,
+    pub occ_symbol: String,
     pub retained_incumbent: bool,
+    pub target_delta: i128,
+    pub target_quantity: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -312,23 +314,33 @@ pub enum YoloPortfolioTargetStatusV1 {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct YoloPortfolioTargetV1 {
-    pub schema: String,
-    pub status: YoloPortfolioTargetStatusV1,
-    pub reason: String,
-    pub parameter_manifest_sha256: String,
-    pub methodology_sha256: String,
     pub collection_sha256: String,
-    pub selected_expiration: Option<String>,
     pub decision_nav_microdollars: Option<i128>,
-    pub premium_budget_microdollars: Option<i128>,
-    pub sleeve_microdollars: Option<i128>,
-    pub positions: Vec<YoloTargetPositionV1>,
     pub excluded_contracts: Vec<YoloAggregatedContractV1>,
+    pub methodology_sha256: String,
+    pub parameter_manifest_sha256: String,
+    pub positions: Vec<YoloTargetPositionV1>,
+    pub premium_budget_microdollars: Option<i128>,
+    pub reason: String,
+    pub schema: String,
+    pub selected_expiration: Option<String>,
+    pub sleeve_microdollars: Option<i128>,
+    pub status: YoloPortfolioTargetStatusV1,
 }
 
 impl YoloPortfolioTargetV1 {
     pub fn sha256(&self) -> Result<String, String> {
-        domain_sha256(YOLO_PORTFOLIO_TARGET_SCHEMA_V1, self)
+        // Preserve the integer range accepted by the former serde_json::Value
+        // conversion; direct serialization otherwise supports larger i128s.
+        let numbers = self.decision_nav_microdollars.into_iter()
+            .chain(self.premium_budget_microdollars)
+            .chain(self.sleeve_microdollars)
+            .chain(self.positions.iter().map(|position| position.target_delta));
+        if numbers.into_iter().any(|value| value < i128::from(i64::MIN) || value > i128::from(u64::MAX)) {
+            return Err("YOLO canonical JSON serialization failed".into());
+        }
+        let bytes = serde_json::to_vec(self).map_err(|_| "YOLO canonical JSON serialization failed")?;
+        domain_sha256_canonical_bytes(YOLO_PORTFOLIO_TARGET_SCHEMA_V1, &bytes)
     }
 }
 
@@ -973,6 +985,24 @@ pub fn create_yolo_portfolio_target_v1(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn direct_target_serialization_matches_canonical_json_and_integer_bounds() {
+        let mut value = input(&[("2026-11-03", &[47, 48, 49, 50, 51, 52, 53])]);
+        for snapshot in &mut value.snapshots {
+            snapshot.contracts[0].occ_symbol = "quote-\"é\\\n".to_string();
+        }
+        value.positions = vec![YoloCurrentPositionV1 { occ_symbol: "quote-\"é\\\n".into(), quantity: 1 }];
+        assert_eq!(serde_json::to_vec(&value).unwrap(), crate::yolo_collection::canonical_bytes(&value).unwrap());
+        let mut target = create_yolo_portfolio_target_v1(&value, &parameters()).unwrap();
+        assert_eq!(serde_json::to_vec(&target).unwrap(), crate::yolo_collection::canonical_bytes(&target).unwrap());
+        assert_eq!(target.sha256().unwrap(), domain_sha256(YOLO_PORTFOLIO_TARGET_SCHEMA_V1, &target).unwrap());
+        for boundary in [i128::from(i64::MIN), i128::from(u64::MAX), i128::from(i64::MIN)-1,
+                         i128::from(u64::MAX)+1, i128::MIN, i128::MAX] {
+            target.decision_nav_microdollars = Some(boundary);
+            assert_eq!(target.sha256(), domain_sha256(YOLO_PORTFOLIO_TARGET_SCHEMA_V1, &target));
+        }
+    }
 
     #[test]
     fn indexed_observations_preserve_final_flags_and_reordering() {

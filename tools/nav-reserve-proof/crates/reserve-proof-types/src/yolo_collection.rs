@@ -400,6 +400,18 @@ pub(crate) fn canonical_bytes<T: Serialize>(value: &T) -> Result<Vec<u8>, String
     Ok(output)
 }
 
+/// For typed payloads whose field order is checked against canonical JSON.
+pub(crate) fn domain_sha256_canonical_bytes(domain: &str, bytes: &[u8]) -> Result<String, String> {
+    if domain.is_empty() || domain.as_bytes().contains(&0) {
+        return Err("YOLO commitment domain is invalid".to_string());
+    }
+    let mut hasher = Sha256::new();
+    hasher.update(domain.as_bytes());
+    hasher.update([0]);
+    hasher.update(bytes);
+    Ok(hex::encode(hasher.finalize()))
+}
+
 fn write_canonical_json(value: &Value, output: &mut Vec<u8>) -> Result<(), String> {
     match value {
         Value::Null => output.extend_from_slice(b"null"),

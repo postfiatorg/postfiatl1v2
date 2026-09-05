@@ -1,7 +1,7 @@
 //! Prove attested normalized-input provenance and the unchanged target function.
 
 use crate::yolo_collection::{
-    domain_sha256, execute_yolo_collection_proof, YoloCollectionProofWitnessV1,
+    domain_sha256, domain_sha256_canonical_bytes, execute_yolo_collection_proof, YoloCollectionProofWitnessV1,
     YOLO_COLLECTION_WITNESS_SCHEMA_V1, YOLO_EPOCH_SCHEMA_V2, YOLO_SNAPSHOT_COMMITMENT_SCHEMA_V2,
 };
 use crate::yolo_nitro::NitroVerifier;
@@ -19,15 +19,23 @@ pub const TARGET_INPUT_BINDING_SCHEMA: &str = "postfiat.yolo.attested_target_inp
 pub const TARGET_ATTESTED_COLLECTION_SCHEMA: &str = "postfiat.yolo.target_attested_collection.v1";
 
 pub fn target_input_commitment(witness: &TargetProofWitnessV1) -> Result<String, String> {
-    domain_sha256(
-        TARGET_INPUT_BINDING_SCHEMA,
-        &json!({
-            "schema": TARGET_INPUT_BINDING_SCHEMA,
-            "collectionManifestSha256": witness.manifest.sha256()?,
-            "parameterManifestSha256": witness.parameters.sha256()?,
-            "targetInput": &witness.target_input,
-        }),
-    )
+    // This wrapper and the nested typed input use canonical JSON field order.
+    // Avoid two full generic JSON trees for the large attested chain payload.
+    #[derive(serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Binding<'a> {
+        collection_manifest_sha256: String,
+        parameter_manifest_sha256: String,
+        schema: &'static str,
+        target_input: &'a crate::yolo_target::YoloPortfolioTargetInputV1,
+    }
+    let bytes = serde_json::to_vec(&Binding {
+        collection_manifest_sha256: witness.manifest.sha256()?,
+        parameter_manifest_sha256: witness.parameters.sha256()?,
+        schema: TARGET_INPUT_BINDING_SCHEMA,
+        target_input: &witness.target_input,
+    }).map_err(|_| "YOLO canonical JSON serialization failed")?;
+    domain_sha256_canonical_bytes(TARGET_INPUT_BINDING_SCHEMA, &bytes)
 }
 
 /// This derives claims; acceptance additionally requires independently approved
