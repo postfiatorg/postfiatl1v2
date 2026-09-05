@@ -100,7 +100,13 @@ The four-validator test can retain a public JSON report at an explicitly new
 `YOLO_QUALIFICATION_REPORT` path. `YOLO_QUALIFICATION_KEEP_DIRECTORY=1` retains
 its isolated synthetic node directories for a subsequent process-level CLI
 check; these contain test keys and must not be published. Normal tests remove
-them. Durable public results are in `docs/yolo/evidence`.
+them. The [qualification summary](evidence/target-receipt-v1-qualification-20260905.json)
+and [compressed public validator report](evidence/target-receipt-v1-local-20260905.json.gz)
+are durable acceptance evidence. Implementation source is `f8edad6b`; additional
+rejection tests are `978612ac`. Six execution tests, three node tests, five
+Python CLI tests and the existing asset conservation/replay test pass. The real
+node binary also prepared, queried and rendered the finalized synthetic receipt
+through the Python CLI. No retained test private keys are in these artifacts.
 
 The accepted SP1 guest still comes from source `38909717`, with ELF SHA-256
 `4e87fac38c061c7a1a992a23db53b9a78a2d721bd20164b41c31e4cd68a127e1` and key
