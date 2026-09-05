@@ -16,7 +16,9 @@ fn execute(encoded: &[u8]) -> Result<Vec<u8>, String> {
         encoded,
         CborLimits {
             bytes: MAX_BYTES,
-            items: 100_000,
+            // The hardware corpus includes full AWS certificate chains; bytes
+            // in this test-only Vec<u8> wire format are individual CBOR items.
+            items: 200_000,
             depth: 32,
         },
     )?;

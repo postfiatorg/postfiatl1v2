@@ -22,7 +22,7 @@ fn all_shared_nitro_cases_match_inside_sp1_with_pinned_crypto_patches() {
     let mut combined = corpus["cases"].as_array().unwrap().clone();
     combined.extend(hardware["cases"].as_array().unwrap().iter().cloned());
     let cases = &combined;
-    assert_eq!(cases.len(), 43);
+    assert_eq!(cases.len(), 44);
     let input: Vec<_> = cases
         .iter()
         .map(|case| {
@@ -40,7 +40,17 @@ fn all_shared_nitro_cases_match_inside_sp1_with_pinned_crypto_patches() {
         .map(|case| u8::from(case["valid"].as_bool().unwrap()))
         .collect();
     let mut stdin = SP1Stdin::new();
-    stdin.write_vec(serde_cbor::to_vec(&input).unwrap());
+    let encoded = serde_cbor::to_vec(&input).unwrap();
+    reserve_proof_types::yolo_cbor::decode_strict_cbor(
+        &encoded,
+        reserve_proof_types::yolo_cbor::CborLimits {
+            bytes: 4 * 1024 * 1024,
+            items: 200_000,
+            depth: 32,
+        },
+    )
+    .expect("corpus must fit the qualification guest input bounds");
+    stdin.write_vec(encoded);
     tokio::runtime::Runtime::new().unwrap().block_on(async {
         let client = ProverClient::builder().cpu().build().await;
         let start = Instant::now();
