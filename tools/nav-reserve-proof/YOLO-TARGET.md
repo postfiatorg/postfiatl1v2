@@ -117,3 +117,17 @@ After a proof exists, run the ignored `proof_qualification` test with
 built guest) and independently supplied `YOLO_TARGET_ACCEPTANCE`. It checks real
 Groth16 verification and rejection of corrupted proofs, changed/truncated public
 values and the wrong program verification key.
+
+## Independent guest and node revisions
+
+The accepted guest is built from source `38909717` with the pinned SP1 Docker
+toolchain. Its ELF SHA-256 is
+`4e87fac38c061c7a1a992a23db53b9a78a2d721bd20164b41c31e4cd68a127e1` and
+verification key is
+`0x0043b435aa5a89fde8e2900c6648863f3358750127456224808cc1f51bca1297`.
+
+Later node receipt changes also change shared `postfiat-types` source. Do not
+assume rebuilding the guest from a later node HEAD preserves its identity. Use
+the qualified ELF or a clean checkout of `38909717` and compare the exact hash.
+The target receipt verifier accepts the explicitly registered key independently
+of the node build revision. See `docs/yolo/target-receipt-v1.md`.

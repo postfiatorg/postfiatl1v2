@@ -1362,6 +1362,12 @@ pub(super) fn run_rpc(flags: &[String]) -> Result<(), String> {
                 vec![RpcEvent::new("receipts", target, "receipts queried")],
             )
         }
+        "yolo_target_receipt" => {
+            let registration_id = flag_value(flags, "--registration-id").ok_or("missing --registration-id")?;
+            let report = postfiat_node::yolo_target_receipt_query(NodeOptions { data_dir }, registration_id)
+                .map_err(|error| format!("target receipt query failed: {error}"))?;
+            print_rpc_success(id, &report, vec![RpcEvent::new("yolo_target_receipt", registration_id, "target receipt queried")])
+        }
         "tx" => {
             let tx_id = flag_value(flags, "--tx-id").ok_or("missing --tx-id")?;
             let report = tx_finality(TxFinalityQueryOptions {

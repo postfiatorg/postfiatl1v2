@@ -1240,6 +1240,12 @@ fn account_tx_rows_for_transparent_block(
                 None,
                 None,
             ),
+            AssetTransactionOperation::YoloTargetRegisterV1(operation) => (
+                operation.registrant.clone(), operation.registrant.clone(), 0, None, None, None, None,
+            ),
+            AssetTransactionOperation::YoloTargetSubmitV1(operation) => (
+                operation.submitter.clone(), operation.submitter.clone(), 0, None, None, None, None,
+            ),
             AssetTransactionOperation::NavProfileRegister(operation) => (
                 operation.registrant.clone(),
                 operation.registrant.clone(),
