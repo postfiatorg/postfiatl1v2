@@ -9,6 +9,27 @@ use serde::{Deserialize, Serialize};
 use std::cmp::{Ordering, Reverse};
 use std::collections::{BTreeMap, BTreeSet};
 
+#[derive(Default)]
+struct ParsedDates<'a> {
+    dates: BTreeMap<&'a str, chrono::NaiveDate>,
+    utc: BTreeMap<&'a str, chrono::DateTime<chrono::Utc>>,
+}
+
+impl<'a> ParsedDates<'a> {
+    fn date(&mut self, name: &str, text: &'a str) -> Result<chrono::NaiveDate, String> {
+        if let Some(value) = self.dates.get(text) { return Ok(*value); }
+        let value = parse_date(name, text)?;
+        self.dates.insert(text, value);
+        Ok(value)
+    }
+    fn utc(&mut self, name: &str, text: &'a str) -> Result<chrono::DateTime<chrono::Utc>, String> {
+        if let Some(value) = self.utc.get(text) { return Ok(*value); }
+        let value = parse_python_utc(name, text)?;
+        self.utc.insert(text, value);
+        Ok(value)
+    }
+}
+
 pub const YOLO_PPB: u64 = 1_000_000_000;
 pub const YOLO_PORTFOLIO_PARAMETER_SCHEMA_V1: &str = "postfiat.yolo.portfolio_parameters.v1";
 pub const YOLO_PORTFOLIO_TARGET_INPUT_SCHEMA_V1: &str = "postfiat.yolo.portfolio_target_input.v1";
@@ -145,18 +166,18 @@ pub struct YoloContractQuoteV1 {
 }
 
 impl YoloContractQuoteV1 {
-    fn validate(&self) -> Result<(), String> {
+    fn validate<'a>(&'a self, dates: &mut ParsedDates<'a>) -> Result<(), String> {
         if self.occ_symbol.is_empty() {
             return Err("occ_symbol is required".to_string());
         }
-        parse_date("expirationDate", &self.expiration_date)?;
+        dates.date("expirationDate", &self.expiration_date)?;
         if self.strike_microdollars == 0 {
             return Err("strike_microdollars must be a positive integer".to_string());
         }
         if self.multiplier == 0 || self.deliverable_shares == 0 {
             return Err("contract multiplier and deliverable shares must be positive".to_string());
         }
-        parse_python_utc("quoteTimestampUtc", &self.quote_timestamp_utc)?;
+        dates.utc("quoteTimestampUtc", &self.quote_timestamp_utc)?;
         Ok(())
     }
 
@@ -190,8 +211,9 @@ impl YoloMethodologySnapshotV1 {
             return Err("underlier_midpoint_microdollars must be a positive integer".to_string());
         }
         let mut symbols = BTreeSet::new();
+        let mut dates = ParsedDates::default();
         for contract in &self.contracts {
-            contract.validate()?;
+            contract.validate(&mut dates)?;
             if !symbols.insert(contract.occ_symbol.as_str()) {
                 return Err("contract identifiers must be unique in each snapshot".to_string());
             }
@@ -358,13 +380,14 @@ fn median(mut values: Vec<u64>) -> Result<u64, String> {
     }
 }
 
-fn valid_quote(
-    quote: &YoloContractQuoteV1,
-    observed_at: &str,
+fn valid_quote<'a>(
+    quote: &'a YoloContractQuoteV1,
+    observed_at: &'a str,
     parameters: &YoloPortfolioParametersV1,
+    dates: &mut ParsedDates<'a>,
 ) -> Result<bool, String> {
-    let observed = parse_python_utc("observed_at", observed_at)?;
-    let quote_time = parse_python_utc("quote_timestamp", &quote.quote_timestamp_utc)?;
+    let observed = dates.utc("observed_at", observed_at)?;
+    let quote_time = dates.utc("quote_timestamp", &quote.quote_timestamp_utc)?;
     let age = observed.signed_duration_since(quote_time);
     let maximum = i64::try_from(parameters.maximum_quote_age_seconds)
         .map_err(|_| "maximum quote age exceeds duration bounds".to_string())?
@@ -456,10 +479,11 @@ fn aggregate(
     }
     let trade_date = parse_date("tradeDate", &target.trade_date)?;
     let mut contracts = Vec::new();
+    let mut dates = ParsedDates::default();
     for (symbol, raw_observations) in by_symbol {
         let mut observations: Vec<(&YoloMethodologySnapshotV1, &YoloContractQuoteV1)> = Vec::new();
         for &(snapshot, quote) in &raw_observations {
-            if valid_quote(quote, &snapshot.observed_at_utc, parameters)? {
+            if valid_quote(quote, &snapshot.observed_at_utc, parameters, &mut dates)? {
                 observations.push((snapshot, quote));
             }
         }
@@ -509,7 +533,7 @@ fn aggregate(
             .map(|(_, quote)| quote.session_volume)
             .max()
             .ok_or_else(|| "volume aggregation is empty".to_string())?;
-        let expiration = parse_date("expirationDate", &representative.expiration_date)?;
+        let expiration = dates.date("expirationDate", &representative.expiration_date)?;
         let dte = expiration.signed_duration_since(trade_date).num_days();
         let moneyness = u64::try_from(
             u128::from(representative.strike_microdollars) * u128::from(YOLO_PPB)
