@@ -129,3 +129,20 @@ Synthetic AWS Nitro/KMS qualification is complete and its temporary resources
 are removed; NAV's Phase 5 journal contains exact evidence. Private enclave
 prover packaging, owner-approved live inputs, network deployment, real
 collection/proving, external finality and authorized live replay remain.
+
+For a newly generated, independently verified public proof, the same local
+four-validator qualification can run without replacing either regression
+fixture. Supply a JSON fixture with `program.programVkey`, `publicValuesHex`
+and `proofCalldataHex` (maximum 128 KiB). It must contain public artifacts only.
+
+```bash
+YOLO_QUALIFICATION_PROOF_FIXTURE=/absolute/new-public-proof.json \
+YOLO_QUALIFICATION_REPORT=/absolute/new-validator-report.json \
+YOLO_QUALIFICATION_KEEP_DIRECTORY=1 \
+cargo test --locked -p postfiat-node --lib \
+  yolo_supplied_public_proof_four_validator_finality_restart_and_replay -- --ignored
+```
+
+This opt-in test checks signed registration, early/duplicate rejection,
+four-validator certification, receipt persistence and restart/replay using the
+supplied proof. It does not activate an external network.

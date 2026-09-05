@@ -161,6 +161,17 @@ fn yolo_aws_compatible_guest_four_validator_finality_restart_and_replay() {
     ));
 }
 
+#[test]
+#[ignore = "requires an independently verified public proof fixture from an opt-in qualification run"]
+fn yolo_supplied_public_proof_four_validator_finality_restart_and_replay() {
+    let path = std::env::var_os("YOLO_QUALIFICATION_PROOF_FIXTURE")
+        .expect("set YOLO_QUALIFICATION_PROOF_FIXTURE to the public fixture JSON");
+    let path = std::path::PathBuf::from(path);
+    assert!(std::fs::metadata(&path).unwrap().len() <= 128 * 1024);
+    let fixture = std::fs::read_to_string(path).unwrap();
+    qualify_yolo_four_validator_chain(&fixture);
+}
+
 fn qualify_yolo_four_validator_chain(fixture_json: &str) {
     let root = unique_test_dir("yolo-four-validator-chain");
     let primary = root.join("validator-0");
