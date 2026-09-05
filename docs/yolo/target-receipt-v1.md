@@ -125,10 +125,10 @@ do not describe this synthetic proof as a live collection proof.
 cargo test --locked -p postfiat-node --lib yolo_aws_compatible_guest_four_validator_finality_restart_and_replay
 ```
 
-Synthetic AWS Nitro/KMS qualification is complete and its temporary resources
-are removed; NAV's Phase 5 journal contains exact evidence. Private enclave
-prover packaging, owner-approved live inputs, network deployment, real
-collection/proving, external finality and authorized live replay remain.
+Synthetic AWS Nitro/KMS and native private-prover qualification are complete;
+temporary resources are removed. NAV's Phase 5 and Phase 6 journals contain
+exact hardware evidence. Owner-approved live inputs, external deployment,
+real collection/proving, external finality and authorized live replay remain.
 
 For a newly generated, independently verified public proof, the same local
 four-validator qualification can run without replacing either regression
@@ -146,3 +146,18 @@ cargo test --locked -p postfiat-node --lib \
 This opt-in test checks signed registration, early/duplicate rejection,
 four-validator certification, receipt persistence and restart/replay using the
 supplied proof. It does not activate an external network.
+
+The supplied-proof harness at `aaad0c48` passed using the real non-debug Nitro
+native proof on September 5, 2026. Its 122.64-second run certified five rounds
+with four votes each, rejected early/duplicate submissions, confirmed the proof
+receipt and replayed all four reopened stores. The actual Python CLI prepared
+the same certified operation, queried the receipt with independent pins and
+generated its standalone HTML viewer. See the
+[Nitro receipt summary](evidence/target-receipt-v1-nitro-native-summary-20260905.json)
+and [public validator report](evidence/target-receipt-v1-nitro-native-20260905.json.gz).
+NAV retains the hardware proof, measurements, independent verification,
+six tamper negatives, encrypted diagnostics, HTML and AWS cleanup in
+`docs/pre_production/evidence/yolo_phase6_nitro_proof_20260905.json` and its linked
+artifacts. The proof inputs and embedded collection attestations are synthetic;
+the prover hardware and Groth16 proof are real. This is local finality
+qualification, not an external network receipt or a live Schwab collection.

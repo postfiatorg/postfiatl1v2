@@ -1,0 +1,40 @@
+{
+  "schema": "postfiat.yolo.nitro_receipt_cli_qualification.v1",
+  "chainId": "yolo-synthetic-certified",
+  "genesisHash": "9b72471be40fca489d3e53cd391e8bb0575e2a7a0a51ec020311c7d41bcf6c32e41b131d15d22c76b5d6102d0b359cda",
+  "registrationId": "ebdb61c5372f17b886c1541239ffba4cd5dd49b7361aa90141c86f3e9430807df49be13e03e33c9ae36a61b6bb3048ff",
+  "transactionHash": "b71c94d63d2094869a6478096aa98b7c80d15816ec5f6c7483fe319ee288030e6b3ecdcab53b326c18b431749e338dfa",
+  "inclusionHeight": 4,
+  "confirmed": true,
+  "fourValidatorReplayVerified": true,
+  "certifiedRounds": 5,
+  "votesPerRound": 4,
+  "earlyAndDuplicateRejected": true,
+  "preparedSubmissionMatchesCertifiedOperation": true,
+  "htmlGenerated": true,
+  "scope": "synthetic inputs, real Nitro proof, local certified validator stores; no external network deployment",
+  "source": {
+    "navProverAndParent": "a57ac902f17a8b21aede7072e34c8e7da9bff516",
+    "nativeProver": "9b74999e",
+    "nativeProverSha256": "f9f22381fce0b2cd188429acb72aed4f584013e93d6f630831113121dfa50950",
+    "targetGuest": "459a6d3d",
+    "nodeReceiptImplementation": "f8edad6b",
+    "suppliedProofReceiptHarness": "aaad0c48",
+    "sp1": "6.3.1",
+    "circuitVersion": "v6.1.0"
+  },
+  "programSha256": "9aa40d86cc478a01fd7c6b2a63308188fb7e671079bd3321b405e7ac1a275cff",
+  "programVkey": "0x0008ed5f9307fc00d9e60fbcd0e463e10d1bb3143ce3f73bcb2c807aa0670968",
+  "proofSha256": "7b7c68b234f46ac341dd3a3dafb18704354a1b8e7882b5baebf42b5e15422332",
+  "proofCalldataHex": "4388a21c0000000000000000000000000000000000000000000000000000000000000000002f850ee998974d6cc00e50cd0814b098c05bfade466d28573240d057f25352000000000000000000000000000000000000000000000000000000000000000000147b148342ad767c3f0b4da742290c967a17af86c8f806bf1b5c8f1a54d05e183a9fad8a630c8d90f5007a0beb6d801444e311a395c08bfc5b75703f1e29440374cb7b6a38e9636c5f424015467651d489ef954e73fd7d6d2d57da1ca8c98a0a77a0419a36ff7aff8325e9647db2e1d212f5ea4819aadde9c09214a04240c7233b2856556e659c824c227b02d6e0d4586ead3e57db77ba236ea51a2a4dc7022cd018fc7044663bf4823648bcef9cc5aea0f1ed3dbf4b56fa001a4bf319800e23dac3eb3478a251444c9c2399692d5550765bde50bce39b96dc17f8231fc6820c307709817fc65a6625c57a22f02af1527be16e0d436cd47094c2f5aa9be326",
+  "publicValuesHex": "5046545954475431000000019aa40d86cc478a01fd7c6b2a63308188fb7e671079bd3321b405e7ac1a275cffaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa9d00d2032b1e96a4ebff029f6d52e2ec0f1f9570a2ff92eb1c514e12fcbb37ccb9d42b1f3f9d6737a3184d7a75cc5acc7d070739d726cfabc6aa0bc1d2a1b01786362c99ec707ef1f04ec384d21bb1ab70d3350dac2cd10399948e3d64c348f93664d35556e1c528a820decd4ee4e4d08574b00a65ee9d279ad03e3fd85ff0edd9b145df4dcfd02ec5e0f6c09130888ced782909c4f381af5550ed4e9d446c3013b3224215821a4cde62cbee7954db336ed6e00b0f4edaf2c5dc86fb8fa097e9fff700ed7e9635a55e689e60240c8c8ce376e5c4d49ed708f39224fc769b71253e7c3a44aadda6033029f4825cbcda622ecbfbfbdd3f9c98fc231366360debe46476a17498303ed0ca984cc5c5f2846a6e3b3706defdf3b5d52c5df5d3c9a06ae3fae5ef8912f8eef27e55bdcfc2b59dad154f59d47cc951f249b70a68a2c14e000000010000000500000005",
+  "test": {
+    "elapsedSeconds": 122.64971062913537,
+    "exitCode": 0
+  },
+  "validatorReport": "target-receipt-v1-nitro-native-20260905.json.gz",
+  "validatorReportSha256": "deb51c27c99a56ba876e6234a11fce9c2ff5344cd632bce7de086979f6157a32",
+  "navHardwareEvidence": "docs/pre_production/evidence/yolo_phase6_nitro_proof_20260905.json",
+  "navHtmlReceipt": "docs/pre_production/evidence/yolo_phase6_nitro_receipt_20260905.html",
+  "privateTestKeysPublished": false
+}
