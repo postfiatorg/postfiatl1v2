@@ -193,3 +193,31 @@ qualification uses its own isolated local validator stores. Temporary AWS
 compute is terminated and final inventory passed. NAV's combined report is
 `docs/pre_production/evidence/yolo_closed_market_targets_20260906.html`.
 External network deployment and trading are not claimed.
+
+## Liquid rebalance qualification — September 6, 2026
+
+The subsequent owner-delegated run produced `TARGET_COMPUTED` with five funded
+November 20 calls each for MU and NVDA. The hard 45–75-day band was replaced for
+this demo by choosing the qualifying captured expiry closest to 60 DTE beyond
+the existing 30-day roll threshold; other portfolio rules were retained. Both
+actual Python/native replays match the funded quantities checked locally before
+paid compute. This corrects the requested basket outcome; the earlier empty
+proofs above remain evidence for their original parameters.
+
+Both real private Nitro Groth16 proofs (83m01.71s MU; 42m35.66s NVDA) passed
+independent verification, six tampering checks and exact 408-byte replay. Each
+also passed five certified local rounds with four votes per round, early and
+duplicate rejection, four-store reopening/replay, and Python CLI preparation,
+query and HTML. No node or guest source changed; the qualified Rust source and
+program identity remain `d3aeb780` and the optimized identity recorded above.
+
+- [MU summary](evidence/target-receipt-v1-liquid-mu-20260906-summary.json) and [public validator report](evidence/target-receipt-v1-liquid-mu-20260906.json.gz)
+- [NVDA summary](evidence/target-receipt-v1-liquid-nvda-20260906-summary.json) and [public validator report](evidence/target-receipt-v1-liquid-nvda-20260906.json.gz)
+
+NAV's combined report is
+`docs/pre_production/evidence/yolo_liquid_rebalance_20260906.html`; its linked
+self-contained public proofs and encrypted replay archive retain the full
+verification evidence. Exact demo rules are in `yolo_liquid_rebalance_demo_v1.md`.
+Detailed target quantities remain owner-local. Temporary AWS compute is removed.
+These are isolated local Post Fiat receipts and hypothetical portfolio targets,
+with no brokerage orders or external network deployment.

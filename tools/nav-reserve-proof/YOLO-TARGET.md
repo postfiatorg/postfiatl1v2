@@ -185,3 +185,16 @@ See `docs/yolo/target-receipt-v1.md` for the public proof/report links and exact
 one-observation closed-market demo disclosures. Both returned
 `NO_ELIGIBLE_SUCCESSOR`; eligibility was unchanged.
 The old synthetic artifacts remain evidence for their original identities.
+
+The later September 6 liquid-rebalance qualification uses the same Rust source,
+guest, verification key and AVX-512 prover. MU and NVDA each return
+`TARGET_COMPUTED` with five funded November 20 calls. Both were checked with the
+exact local Python/native calculators before paid compute, and the actual
+private proofs completed in 83m01.71s and 42m35.66s respectively. Independent
+Groth16 verification, six negatives each, all 408 replay bytes, local
+four-validator receipt/restart tests and the Python CLI/HTML passed. The owner
+explicitly delegated liquid-expiry selection; NAV's
+`docs/pre_production/yolo_liquid_rebalance_demo_v1.md` binds the demo parameters.
+See the liquid-rebalance section of `docs/yolo/target-receipt-v1.md` for new public
+evidence. Earlier empty-result artifacts retain their original meaning. No
+trading or external network deployment is claimed.
