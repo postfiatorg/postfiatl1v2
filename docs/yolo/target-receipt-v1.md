@@ -169,10 +169,21 @@ The September 5–6 real-data continuation uses the optimized guest at
 Thirty-nine Rust tests, fourteen guest vectors and thirteen malformed guest
 witnesses pass. The same retained MU witness falls from 4.09 billion to 477.84
 million instructions, preserving every public byte except program identity.
-The actual MU replay passed independent Python/native checks, but its private
-proof did not finish before the approved 02:00 UTC cutoff; NVDA had not started.
-AWS is closed out. No real-data proof receipt is claimed. NAV retains the
-incomplete checkpoint at
-`docs/pre_production/evidence/yolo_closed_market_target_checkpoint_20260906.json`.
-A rebuilt NAV package refreshes KMS sessions for a proposed longer run; that
-package and resource window are not a completed hardware qualification.
+An earlier MU attempt was interrupted at the historical 02:00 UTC cutoff.
+The owner then removed calendar approval windows while retaining the cumulative
+spend cap. On September 6, the accelerated AVX-512 package completed the actual
+MU private Nitro proof in **79m01.18s**. Independent verification, six tampering
+negatives and all 408 public bytes matched the authorized replay. Five certified
+local rounds, four-validator reopening/replay and the Python CLI/HTML passed at
+14:54 UTC. See the [MU summary](evidence/target-receipt-v1-closed-market-mu-20260906-summary.json)
+and [public validator report](evidence/target-receipt-v1-closed-market-mu-20260906.json.gz).
+NAV retains the self-contained public proof in
+`docs/pre_production/evidence/yolo_closed_market_targets_20260906_mu_verification.json`.
+
+This is the approved closed-market replay demo: one retained attested CALL
+response, a 48-hour quote-age bound, September 4 DTE reference date, $100,000
+hypothetical options cash, no holdings and explicit demo no-halts facts. All
+other portfolio parameters are unchanged. MU returned `NO_ELIGIBLE_SUCCESSOR`;
+no basket was forced. NVDA's authorized replay has passed and its proof is
+running. Each receipt qualification uses isolated local validator stores.
+External network deployment and trading are not claimed.

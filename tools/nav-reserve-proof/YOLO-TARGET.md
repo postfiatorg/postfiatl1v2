@@ -172,8 +172,14 @@ caching parsed dates. Thirty-nine Rust tests and the full 14-vector/13-malformed
 witness guest matrix pass. The retained MU execution needs 477,840,455
 instructions instead of 4,086,275,416; all non-program public bytes match.
 
-The September 6 02:00 UTC resource cutoff interrupted the actual MU proof before
-completion. This qualifies the optimized build and execution, not a completed
-real-data Groth16 proof or receipt. The old synthetic/hardware proof artifacts
-above remain historical evidence for their original guest identities. NAV's
-closed-market checkpoint and restart package retain the exact status and pins.
+The September 6 02:00 UTC resource cutoff interrupted an earlier MU attempt.
+The owner subsequently removed calendar approval windows. The same Rust source
+and guest now have a completed real-data private Nitro Groth16 qualification:
+the native prover built with explicit Ice Lake AVX-512 has SHA-256
+`97e0b169c7a69eca5420dbb76550ce0184dace61a7ab9921e3a292ce7114d874`.
+MU completed in 79m01.18s and passed independent verification, six tampering
+checks, authorized Python/native replay and the local four-validator receipt,
+CLI and HTML. NVDA's proof is running. See `docs/yolo/target-receipt-v1.md` for
+the public proof/report links and exact one-observation closed-market demo
+disclosures. MU returned `NO_ELIGIBLE_SUCCESSOR`; eligibility was unchanged.
+The old synthetic artifacts remain evidence for their original identities.
