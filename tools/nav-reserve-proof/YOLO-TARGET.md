@@ -179,7 +179,9 @@ the native prover built with explicit Ice Lake AVX-512 has SHA-256
 `97e0b169c7a69eca5420dbb76550ce0184dace61a7ab9921e3a292ce7114d874`.
 MU completed in 79m01.18s and passed independent verification, six tampering
 checks, authorized Python/native replay and the local four-validator receipt,
-CLI and HTML. NVDA's proof is running. See `docs/yolo/target-receipt-v1.md` for
-the public proof/report links and exact one-observation closed-market demo
-disclosures. MU returned `NO_ELIGIBLE_SUCCESSOR`; eligibility was unchanged.
+CLI and HTML. NVDA completed in 39m31.36s and passed the same full workflow.
+Temporary AWS compute is removed and final inventory passed.
+See `docs/yolo/target-receipt-v1.md` for the public proof/report links and exact
+one-observation closed-market demo disclosures. Both returned
+`NO_ELIGIBLE_SUCCESSOR`; eligibility was unchanged.
 The old synthetic artifacts remain evidence for their original identities.

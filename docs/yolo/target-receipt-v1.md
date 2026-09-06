@@ -183,7 +183,13 @@ NAV retains the self-contained public proof in
 This is the approved closed-market replay demo: one retained attested CALL
 response, a 48-hour quote-age bound, September 4 DTE reference date, $100,000
 hypothetical options cash, no holdings and explicit demo no-halts facts. All
-other portfolio parameters are unchanged. MU returned `NO_ELIGIBLE_SUCCESSOR`;
-no basket was forced. NVDA's authorized replay has passed and its proof is
-running. Each receipt qualification uses isolated local validator stores.
+other portfolio parameters are unchanged. NVDA also completed its actual
+private proof in **39m31.36s**, with independent verification, six negatives,
+authorized 408-byte replay and the full local receipt/CLI/HTML checks. See the
+[NVDA summary](evidence/target-receipt-v1-closed-market-nvda-20260906-summary.json)
+and [public validator report](evidence/target-receipt-v1-closed-market-nvda-20260906.json.gz).
+Both results are `NO_ELIGIBLE_SUCCESSOR`; no basket was forced. Each receipt
+qualification uses its own isolated local validator stores. Temporary AWS
+compute is terminated and final inventory passed. NAV's combined report is
+`docs/pre_production/evidence/yolo_closed_market_targets_20260906.html`.
 External network deployment and trading are not claimed.
