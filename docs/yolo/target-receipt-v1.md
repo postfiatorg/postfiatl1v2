@@ -108,7 +108,7 @@ Python CLI tests and the existing asset conservation/replay test pass. The real
 node binary also prepared, queried and rendered the finalized synthetic receipt
 through the Python CLI. No retained test private keys are in these artifacts.
 
-The current accepted guest is source `459a6d3d`, ELF SHA-256
+The earlier AWS-compatible guest qualification used source `459a6d3d`, ELF SHA-256
 `9aa40d86cc478a01fd7c6b2a63308188fb7e671079bd3321b405e7ac1a275cff`, key
 `0x0008ed5f9307fc00d9e60fbcd0e463e10d1bb3143ce3f73bcb2c807aa0670968`.
 It adds bounded decoding for real AWS NSM CBOR documents. The original proof
@@ -161,3 +161,18 @@ six tamper negatives, encrypted diagnostics, HTML and AWS cleanup in
 artifacts. The proof inputs and embedded collection attestations are synthetic;
 the prover hardware and Groth16 proof are real. This is local finality
 qualification, not an external network receipt or a live Schwab collection.
+
+The September 5–6 real-data continuation uses the optimized guest at
+`d3aeb780bff327bc2d9734226770aba7433ba5d9`, ELF
+`7a348b7484a1f7933fa79f3b77a1855174885d09c76da1abb3bd715445503142`, key
+`0x002e0440a99b9a755ff45d2837b2ad5f2779437f94c62db4142b306ba5e2846d`.
+Thirty-nine Rust tests, fourteen guest vectors and thirteen malformed guest
+witnesses pass. The same retained MU witness falls from 4.09 billion to 477.84
+million instructions, preserving every public byte except program identity.
+The actual MU replay passed independent Python/native checks, but its private
+proof did not finish before the approved 02:00 UTC cutoff; NVDA had not started.
+AWS is closed out. No real-data proof receipt is claimed. NAV retains the
+incomplete checkpoint at
+`docs/pre_production/evidence/yolo_closed_market_target_checkpoint_20260906.json`.
+A rebuilt NAV package refreshes KMS sessions for a proposed longer run; that
+package and resource window are not a completed hardware qualification.

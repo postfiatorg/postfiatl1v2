@@ -29,7 +29,7 @@ protobuf toolchains in a runtime-compatible Linux image:
 cargo build --release --locked -p postfiat-yolo-target --features sp1-native
 ```
 
-The qualified native build uses source `9b74999e`, Rust 1.95.0 and Go 1.27.1;
+The earlier native proof qualification used source `9b74999e`, Rust 1.95.0 and Go 1.27.1;
 binary SHA-256 is
 `f9f22381fce0b2cd188429acb72aed4f584013e93d6f630831113121dfa50950`.
 NAV's `docs/pre_production/yolo_phase6_private_prover_v1.md` records its exact
@@ -145,7 +145,7 @@ values and the wrong program verification key.
 
 ## Independent guest and node revisions
 
-The accepted AWS-compatible guest is built from source `459a6d3d` with the pinned SP1 Docker
+The earlier AWS-compatible guest qualification used source `459a6d3d` with the pinned SP1 Docker
 toolchain. Its ELF SHA-256 is
 `9aa40d86cc478a01fd7c6b2a63308188fb7e671079bd3321b405e7ac1a275cff` and
 verification key is
@@ -157,3 +157,23 @@ assume rebuilding the guest from a later node HEAD preserves its identity. Use
 the qualified ELF or a clean checkout of `459a6d3d` and compare the exact hash.
 The target receipt verifier accepts the explicitly registered key independently
 of the node build revision. See `docs/yolo/target-receipt-v1.md`.
+
+The optimized real-chain implementation is source
+`d3aeb780bff327bc2d9734226770aba7433ba5d9`. Its independently matched guest
+builds have SHA-256
+`7a348b7484a1f7933fa79f3b77a1855174885d09c76da1abb3bd715445503142`
+and verification key
+`0x002e0440a99b9a755ff45d2837b2ad5f2779437f94c62db4142b306ba5e2846d`.
+The compatible native CLI SHA-256 is
+`43f7a076d14d0bc2e219d4d0a7b49396f81fefdc4ce5ac583950f68432af17f4`.
+It preserves calculation/commitment semantics while indexing observations,
+validating CBOR without a second tree, serializing canonical typed inputs and
+caching parsed dates. Thirty-nine Rust tests and the full 14-vector/13-malformed
+witness guest matrix pass. The retained MU execution needs 477,840,455
+instructions instead of 4,086,275,416; all non-program public bytes match.
+
+The September 6 02:00 UTC resource cutoff interrupted the actual MU proof before
+completion. This qualifies the optimized build and execution, not a completed
+real-data Groth16 proof or receipt. The old synthetic/hardware proof artifacts
+above remain historical evidence for their original guest identities. NAV's
+closed-market checkpoint and restart package retain the exact status and pins.
