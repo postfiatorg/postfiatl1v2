@@ -6,6 +6,10 @@
   "value_asset": "PFT",
   "wallet_accounts": [
     {
+      "account_id": "validator-02",
+      "wallet_address": "rfxfN589F6bkuziG96kvkdrxC5G32KD2uk"
+    },
+    {
       "account_id": "validator-03",
       "wallet_address": "rLujDwn5P2vMAezHknW1QpmMQ5ha9Pkia5"
     },
@@ -24,6 +28,62 @@
     {
       "account_id": "validator-07",
       "wallet_address": "rGw1D1MG2esersnUNGxGoGPSLkitQKoDFR"
+    },
+    {
+      "account_id": "validator-08",
+      "wallet_address": "rNDrsMCZpjdiv76dePEvuU6biNSX8tf37B"
+    },
+    {
+      "account_id": "validator-09",
+      "wallet_address": "rJitEUrrUqqNbksGm8FFrJTDtHhDLyMhxh"
+    },
+    {
+      "account_id": "validator-10",
+      "wallet_address": "rH3XvZdS3UV4po81op7zvuq6RjriJvdiPL"
+    },
+    {
+      "account_id": "validator-11",
+      "wallet_address": "rGpjko2HftGmPLGqQYb56r9tjU3EsjU8VG"
+    },
+    {
+      "account_id": "validator-12",
+      "wallet_address": "rHt74qX93Pt6KvVaj9ZuksJz5AHRTnhyEF"
+    },
+    {
+      "account_id": "validator-13",
+      "wallet_address": "r4wMtkAsnnusbJ6GHCLbPfmgF3nBv1Yqic"
+    },
+    {
+      "account_id": "validator-14",
+      "wallet_address": "rHLf57hwkYg3y1P7XUWbVuEiuBAkifuEjm"
+    },
+    {
+      "account_id": "validator-15",
+      "wallet_address": "rEUzvdj5TnCNQn67sgTcfLt3Qqfpbr1M8U"
+    },
+    {
+      "account_id": "validator-16",
+      "wallet_address": "rwGiwFPG8f55JZiUekvCf3x2tdPzrAkSQ"
+    },
+    {
+      "account_id": "validator-17",
+      "wallet_address": "raR3xfMj9jbsmswNz1daveGCS3ttuyxWeQ"
+    },
+    {
+      "account_id": "validator-18",
+      "wallet_address": "rDhHw72WgS176jpigKkwhWy75dKcagxgEP"
+    },
+    {
+      "account_id": "validator-19",
+      "wallet_address": "rBvSeJx7E3FXBojEAjyhv5kGyyBHLbWQFw"
+    },
+    {
+      "account_id": "validator-20",
+      "wallet_address": "rnfAoZi6KjZoMbQLWBomhnaCWxRGrmcATA"
+    },
+    {
+      "account_id": "validator-21",
+      "wallet_address": "rErCPcgCawaX5cnSqHRmmBotU5shCukxK2"
     },
     {
       "account_id": "account-pass",

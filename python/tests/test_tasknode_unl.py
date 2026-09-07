@@ -45,7 +45,7 @@ def _candidate(report: dict, validator_id: str) -> dict:
 
 class ShadowDerivationFixtureTests(unittest.TestCase):
     def test_end_to_end_report_matches_full_committed_fixture(self) -> None:
-        """The synthetic golden now holds incomplete key and wallet joins."""
+        """The synthetic golden includes one fully evidenced admission."""
 
         derived = derive_shadow_report(_documents())
         report = json.loads(canonical_json_bytes(derived))
@@ -53,23 +53,28 @@ class ShadowDerivationFixtureTests(unittest.TestCase):
 
         self.assertEqual(report, expected)
         self.assertEqual(report["mode"], "SHADOW_ONLY")
-        self.assertEqual(report["eligible_set"], [])
+        self.assertEqual(report["eligible_set"], ["validator-22"])
         self.assertEqual(
             report["selection"]["selected_additions"],
-            [],
+            ["validator-22"],
         )
-        self.assertEqual(report["baseline_diff"]["additions"], [])
+        self.assertEqual(
+            report["baseline_diff"]["additions"][0]["validator_id"],
+            "validator-22",
+        )
         self.assertEqual(report["churn_guard"]["status"], "allow")
 
-        incomplete = _candidate(report, "validator-22")
-        self.assertEqual(incomplete["status"], "hold")
-        self.assertIn(
-            "binding_registry_key_join_hold",
-            incomplete["admission_decision"]["reason_codes"],
+        passing = _candidate(report, "validator-22")
+        self.assertEqual(passing["status"], "admit")
+        self.assertEqual(
+            passing["admission_decision"]["reason_codes"],
+            ["all_gates_passed"],
         )
         self.assertIn(
-            "wallet_account_mapping_hold",
-            incomplete["admission_decision"]["reason_codes"],
+            "- Add `validator-22` — eligible_admission_candidate; "
+            "all_gates_passed; selected_by_canonical_order; "
+            "churn_guard_allow.",
+            render_shadow_markdown(report),
         )
 
         digest_hold = _candidate(report, "validator-23")
@@ -148,6 +153,13 @@ class ShadowDerivationFixtureTests(unittest.TestCase):
         self,
     ) -> None:
         documents = _documents()
+        candidate_wallet = next(
+            item["wallet_address"]
+            for item in documents["funding_transfers"][
+                "wallet_accounts"
+            ]
+            if item["account_id"] == "account-pass"
+        )
         documents["funding_transfers"]["transfers"].append(
             {
                 "tx_hash": "11" * 32,
@@ -157,9 +169,7 @@ class ShadowDerivationFixtureTests(unittest.TestCase):
                 "source_wallet_address": (
                     "rLujDwn5P2vMAezHknW1QpmMQ5ha9Pkia5"
                 ),
-                "target_wallet_address": (
-                    "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow"
-                ),
+                "target_wallet_address": candidate_wallet,
                 "asset": "PFT",
                 "value_units": 1,
             }
@@ -215,7 +225,7 @@ class ShadowDerivationFixtureTests(unittest.TestCase):
                     )
                 )
 
-    def test_candidate_key_substitution_without_authenticated_join_holds(
+    def test_candidate_key_substitution_holds_against_authenticated_join(
         self,
     ) -> None:
         documents = _documents()
@@ -224,6 +234,7 @@ class ShadowDerivationFixtureTests(unittest.TestCase):
             for candidate in documents["policy_evidence"]["candidates"]
             if candidate["validator_id"] == "validator-22"
         )
+        authenticated_hash = candidate_input["public_key_hash"]
         candidate_input["public_key_hash"] = "ab" * 32
 
         candidate = _candidate(
@@ -243,7 +254,10 @@ class ShadowDerivationFixtureTests(unittest.TestCase):
         self.assertTrue(
             any(
                 item["detail"]
-                == f"authenticated_hash_missing:candidate={'ab' * 32}"
+                == (
+                    f"authenticated_hash_mismatch:candidate={'ab' * 32};"
+                    f"binding={authenticated_hash}"
+                )
                 for item in candidate["upstream_holds"]
             )
         )
@@ -329,9 +343,12 @@ class ShadowDerivationFixtureTests(unittest.TestCase):
         rendered = render_shadow_markdown(report)
 
         self.assertEqual(rendered, EXPECTED_MARKDOWN.read_text())
-        self.assertIn("- No change.", rendered)
-        self.assertIn("binding_registry_key_join_hold", rendered)
-        self.assertIn("wallet_account_mapping_hold", rendered)
+        self.assertIn(
+            "- Add `validator-22` — eligible_admission_candidate; "
+            "all_gates_passed; selected_by_canonical_order; "
+            "churn_guard_allow.",
+            rendered,
+        )
         for validator_id in ("validator-23", "validator-25", "validator-26"):
             with self.subTest(validator_id=validator_id):
                 self.assertIn(f"`{validator_id}`", rendered)
