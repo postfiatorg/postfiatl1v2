@@ -1,0 +1,18 @@
+{
+  "base_commit": "707e006fe2460048b1c7df0d4dc0a04d487f8542",
+  "previous_release": "pfeth-replay-v4-20260905",
+  "previous_binary_sha256": "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2",
+  "files": {
+    "crates/execution/src/nav_vault_asset_execution.rs": "2750f67c7998d87dacfe60f846e10ba31ae0a5656a6bac3b7c2818f429bf8f19",
+    "crates/execution/src/nft_escrow_asset_execution.rs": "07b182b67fc4b182567ac53049e24fba2d4433c58145e31ae3bf2c44817bef93",
+    "crates/node/src/block_replay_wallet.rs": "2d6ba34580ce67a5b63140325abc5e68583c3ab0d6af7039dbe864d80038bf97",
+    "crates/node/src/execution_actions.rs": "340e0ea56bcd4812141b6316302f5a57081c5343d0aa9a6016aba7d4e72dd1a8",
+    "crates/node/src/main_parts/tests/rpc_serve_request_tests.rs": "69fcef95981c9374fdc74166967b86e537a88610a9250f7d6c80b8dabbaf7354",
+    "crates/node/src/rpc_cli.rs": "a5b4613f29f23386765dc4964bf854d3b7491bea43852fe3b4106817536050a6"
+  },
+  "source_patch_sha256": "88732a4a3cb0536d6457ee18f966041d98ec42eac94c4a13f0f70fa3a66e695d",
+  "p1_patch_sha256": "81f59617ceae69783c2de9af6c0695df203dd28d7c6670a33d02d3319a83e95f",
+  "binary_sha256": "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46",
+  "build_command": "cargo build --release --locked --target-dir /home/postfiat/repos/postfiatl1v2/target -p postfiat-node --bin postfiat-node",
+  "committed": false
+}

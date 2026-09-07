@@ -1,0 +1,16 @@
+{
+  "research_locked": true,
+  "scored_sha256": "fbc7e9f92f2f30bdc2b8e0470cded631e1c4260af9720e2e6a9c070489aa73e1",
+  "locked_sha256": "b489ccd8b6e16e193e59d293807372b97d48f2aee662668fea252566c8b519b5",
+  "average": 86.46666666666667,
+  "runs": 15,
+  "models": [
+    "anthropic/claude-fable-5.1",
+    "gpt-6-astra",
+    "z-ai/glm-5.3"
+  ],
+  "task_id": "task_1b81da68342923f814770ea149d3f048",
+  "changes_after_score": "research-status declaration only; no substantive design edits",
+  "implementation_complete": false,
+  "funded_privacy_verified": false
+}

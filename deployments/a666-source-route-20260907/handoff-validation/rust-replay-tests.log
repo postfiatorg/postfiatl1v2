@@ -1,0 +1,10 @@
+   Compiling postfiat-node v0.1.0 (/home/postfiat/repos/postfiatl1v2-handoff-20260907/crates/node)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.37s
+     Running unittests src/lib.rs (/home/postfiat/repos/postfiatl1v2-rpc-status-fix-20260906/target/debug/deps/postfiat_node-d8915e1a3b6c8f91)
+
+running 2 tests
+test execution_actions::pfeth_reserve_replay_tests::pfeth_reserve_new_execution_rejects_understatement_but_archive_recomputes_old_rule ... ok
+test execution_actions::pfeth_reserve_replay_tests::pfeth_reserve_replay_is_pinned_to_exact_historical_packets ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 343 filtered out; finished in 0.07s
+

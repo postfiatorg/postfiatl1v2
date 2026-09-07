@@ -1,0 +1,31 @@
+{
+  "schema": "funding-local-integration-verification-v1",
+  "date": "2026-09-05",
+  "python_shielded_dashboard": {
+    "passed": 254,
+    "skipped": 3,
+    "native_opt_in": false
+  },
+  "final_focused_source_actions_hardening": {
+    "passed": 43
+  },
+  "mkdocs_strict": "passed",
+  "browser": {
+    "desktop": "passed",
+    "mobile": "passed",
+    "source_action": "passed",
+    "exact_eth_display": "passed",
+    "javascript_errors": []
+  },
+  "activation_file_hashes": "verified",
+  "ready_for_live_funding": false,
+  "funds_moved_in_this_work": false,
+  "remaining": [
+    "complete production route controller",
+    "authenticated finalized history importer",
+    "full route pin review and certified burn/release conformance",
+    "capital and fee budgets",
+    "funded route and privacy qualification",
+    "bounded reverted-transaction recovery"
+  ]
+}

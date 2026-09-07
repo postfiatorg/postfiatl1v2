@@ -1,0 +1,60 @@
+{
+  "replacements": [
+    {
+      "old": "| `T'` | Authenticated private-side owner or recipient used for the source-series mint and Orchard ingress. |\n| `E_i` | Fresh Ethereum EOA credited by Lighter. Its key remains on user-controlled hardware. |\n| `P_i` | Fresh PFTL destination associated with `E_i`; activated by the common PFT sponsor. |\n| PFTL | The private funding ledger/network inherited from the parent specification. |\n| PFT | Native PFTL fee or activation asset. |\n| pfETH | Authenticated private representation of the deposited WETH, retaining its exact source-series identity. |\n| Asset-Orchard | The encrypted 1-ETH note ingress and private-egress mechanism inherited from the parent specification. |",
+      "new": "| `T'` | Authenticated public PFTL recipient used for the public source-series mint before Orchard ingress. |\n| `E_i` | Fresh Ethereum EOA credited by Lighter. Its key remains on user-controlled hardware. |\n| `P_i` | Fresh public PFTL destination associated with `E_i`; activated by the common PFTL sponsor before egress can deliver to it. |\n| PFTL | The public Post Fiat L1 inherited from the parent specification. |\n| PFT | Native PFTL fee or activation asset. |\n| pfETH | Authenticated public issued asset outside Orchard representing the deposited WETH and retaining its exact source-series identity. |\n| Asset-Orchard | The encrypted 1-ETH note ingress and private-egress mechanism inherited from the parent specification. |"
+    },
+    {
+      "old": "| Common sponsor | Sponsor used for PFTL activation and the bounded Ethereum type-4 transaction. |",
+      "new": "| Common sponsors | The common PFTL sponsor and common Ethereum sponsor are separate keys with separate nonce ledgers on their respective chains. The PFTL sponsor performs PFTL activation; the Ethereum sponsor submits the bounded Ethereum type-4 transaction. |"
+    },
+    {
+      "old": "| 1 | Ethereum source | `T` deposits exactly 1 WETH into the pinned shared WETH vault. Native fees are separate from principal. |\n| 2 | Source-series issuance | Authenticated mint of the exact pfETH source-series asset to `T'`. |\n| 3 | Private ingress | Encrypted 1-ETH Asset-Orchard ingress using that exact source series. |\n| 4 | Hold and history | Enforce the inherited holding policy and import authenticated history before release analysis. |\n| 5 | Privacy gate | Run local proof checks and the versioned public-observer and operator-aware inference models. |\n| 6 | PFTL egress | Export the exact public exit proof to fresh `P_i`. This is the first irreversible privacy boundary. |\n| 7 | Activation | Activate `P_i` through the common PFT sponsor. Include any public activation data in privacy analysis. |\n| 8 | Burn and release | Burn the exact held source-series asset and release exactly 1 WETH, proof-bound, to fresh Ethereum EOA `E_i`. |\n| 9 | Ethereum batch | Use the reviewed `ExitExecutorV1` builder\u2019s chain-1 EIP-7702 authorization and EIP-712 batch to unwrap WETH and submit the Lighter deposit atomically under common sponsorship. |",
+      "new": "| 1 | Ethereum source | `T` deposits exactly 1 WETH into the pinned shared WETH vault. Native fees are separate from principal. |\n| 2 | Public source-series issuance | Authenticated public mint of the exact pfETH source-series asset to public PFTL recipient `T'` outside Orchard. |\n| 3 | Private ingress | Encrypted 1-ETH Asset-Orchard ingress using that exact source series. |\n| 4 | Hold and history | Enforce the inherited holding policy and import authenticated history before release analysis. |\n| 5 | Activation | Activate `P_i` through the common PFTL sponsor under its PFTL nonce ledger, and record the public activation data. Egress cannot deliver to `P_i` before activation. |\n| 6 | Privacy gate | After activation, run local proof checks and the versioned public-observer and operator-aware inference models, including the public activation data. |\n| 7 | PFTL egress | Export the exact public exit proof to the already activated fresh `P_i`. This is the first irreversible privacy boundary. |\n| 8 | Burn and release | Burn the exact held source-series asset and release exactly 1 WETH, proof-bound, to fresh Ethereum EOA `E_i`. |\n| 9 | Ethereum batch | Use the reviewed `ExitExecutorV1` builder\u2019s chain-1 EIP-7702 authorization and EIP-712 batch to unwrap WETH and submit the Lighter deposit atomically under common Ethereum sponsorship. |"
+    },
+    {
+      "old": "The sponsor may receive public exit signatures and the bounded transaction material required for sponsorship. It must never receive `E_i`\u2019s private key, the source wallet, a private note, a witness, or the private ownership map.",
+      "new": "The common PFTL sponsor may receive the public activation material required on PFTL, and the separate common Ethereum sponsor may receive public exit signatures and the bounded transaction material required for Ethereum sponsorship. Neither sponsor may receive `E_i`\u2019s private key, the source wallet, a private note, a witness, or the private ownership map."
+    },
+    {
+      "old": "3. **Sponsor:** may delay, censor, replay, or mishandle a response, but must be constrained by exact signed payloads, deadlines, nonces, and durable reconciliation.",
+      "new": "3. **Sponsors:** the separate common PFTL and Ethereum sponsors may delay, censor, replay, or mishandle a response, but each must be constrained by exact signed payloads, deadlines, its chain-specific key and nonce ledger, and durable reconciliation."
+    },
+    {
+      "old": "The sponsor signs only its own bounded type-4 transaction under a shared durable nonce lock.\n\n**Pass evidence:** decoded signed payload, deadline, sponsor nonce-lock record, and local secret scan.",
+      "new": "The common Ethereum sponsor signs only its own bounded type-4 transaction under a shared durable Ethereum nonce lock. Its key and nonce ledger must be separate from the common PFTL sponsor\u2019s key and PFTL nonce ledger.\n\n**Pass evidence:** decoded signed payload, deadline, Ethereum sponsor nonce-lock record, separation from the PFTL sponsor key and nonce ledger, and local secret scan."
+    },
+    {
+      "old": "Immediately before exporting the public PFTL exit proof, obtain fresh authenticated history and run the same four precisely versioned inherited inference models:",
+      "new": "After `P_i` has been activated and immediately before exporting the public PFTL exit proof, obtain fresh authenticated history and run the same four precisely versioned inherited inference models. The gate must include the confirmed public activation, its common PFTL sponsor, timing, key-visible data, and other public activation data in every applicable model:"
+    },
+    {
+      "old": "**Pass evidence:** versioned model inputs, outputs, claim selection, policy hashes, and proof-payload binding.  \n**Failure result:** proof export blocked for users. An explicit no-privacy operator label may be used only for operator cover bootstrap.",
+      "new": "**Pass evidence:** confirmed prior activation of `P_i`, versioned model inputs including public activation data, outputs, claim selection, policy hashes, and proof-payload binding.  \n**Failure result:** proof export blocked for users. An explicit no-privacy operator label may be used only for operator cover bootstrap."
+    },
+    {
+      "old": "- public activation by the common PFT sponsor;",
+      "new": "- public activation by the common PFTL sponsor, including its separate PFTL key and nonce-ledger effects;"
+    },
+    {
+      "old": "Cover must consist of actual operator-funded 1-ETH notes using the same vault, source series, proof, activation, sponsor, Lighter deposit, and venue behavior as users.",
+      "new": "Cover must consist of actual operator-funded 1-ETH notes using the same vault, source series, proof, activation, common PFTL sponsor, separate common Ethereum sponsor, Lighter deposit, and venue behavior as users."
+    },
+    {
+      "old": "- sponsor nonce;\n- executor and account nonces;",
+      "new": "- PFTL activation sponsor key and nonce;\n- Ethereum sponsor key and transaction nonce;\n- executor and account nonces;"
+    },
+    {
+      "old": "| Sponsorship | Shared nonce concurrency, lost responses, restart recovery, bounded deadline, and exact signed-byte reconciliation. |",
+      "new": "| Sponsorship | Separate common PFTL and Ethereum sponsor keys and chain-specific nonce ledgers; per-chain shared nonce concurrency, lost responses, restart recovery, bounded deadline, and exact signed-byte reconciliation. |"
+    },
+    {
+      "old": "## 12. Research-lock blockers and residual trust\n\nBefore this extension can be considered for research lock, record and review:",
+      "new": "## 12. Implementation, activation, and qualification gates and residual trust\n\nThe repository may lock the research design before implementation. Research lock does not verify or close the following implementation, activation, mainnet-admission, or funded-qualification gates. Record, review, and satisfy each item before the implementation stage or live action to which it applies:"
+    },
+    {
+      "old": "These are unresolved research and verification items, not claims about deployed behavior.",
+      "new": "These remain explicit implementation, activation, mainnet-admission, or funded-qualification verification gates after research lock, not claims about deployed behavior. Research lock records the design and does not represent satisfaction or closure of any of these gates."
+    }
+  ]
+}

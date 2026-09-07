@@ -1,0 +1,881 @@
+{
+  "mode": "SHADOW_ONLY",
+  "schema": "tasknode-unl-ledger-snapshot-bundle-v1",
+  "snapshots": [
+    {
+      "account_id": "account-pass",
+      "anchor": {
+        "anchored_digest_hash": "061945686380e0da462a371da78f2b92585a63632caa45fa5be9bf0097b0ec2a",
+        "close_time": "2026-09-04T12:05:00Z",
+        "ledger_index": 50000,
+        "transaction_index": 0,
+        "tx_hash": "db64cb221dcddb169b0deef2678551843c0951dff32b107dc7de5dfeb5f2f8ed"
+      },
+      "bound_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+      "complete_for_account_window": true,
+      "mode": "SHADOW_ONLY",
+      "pointers": [
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-14T12:03:00Z",
+          "ledger_index": 10000,
+          "pointer_hash": "01a5911145af66137a24d06dfdf8a0be23365e544af2600a0b4af992c1abf1b6",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-27T12:03:00Z",
+          "ledger_index": 10001,
+          "pointer_hash": "0d5b73a7f13bb55bf5ba391d23d6bb4d0501d50df759c4bb5647fdc675f74eb2",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-21T12:03:00Z",
+          "ledger_index": 10002,
+          "pointer_hash": "19f93dda1e8ebe791121f7c871da5dd5c34017df0e3670311ddeb45e12e6b4b3",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-13T12:03:00Z",
+          "ledger_index": 10003,
+          "pointer_hash": "23aed32f75b9d9c150c30d607cc200fcb30edb5ca6da48a582f76cdb04ee5706",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-22T12:03:00Z",
+          "ledger_index": 10004,
+          "pointer_hash": "24f862feb4ce8895371923a2bae4420cf1f201375a51ba9c219cd37be059dfa2",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-29T12:03:00Z",
+          "ledger_index": 10005,
+          "pointer_hash": "2a3df55794d2b7d0dab82a12ace44e7008c427601da85f03c1e256779ad38d19",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-18T12:03:00Z",
+          "ledger_index": 10006,
+          "pointer_hash": "413f085b6b17a5d6b6c31a042e7b0230d12ced73b73334854601c5db5d7e2539",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-11T12:03:00Z",
+          "ledger_index": 10007,
+          "pointer_hash": "46eefef0bd7e87b12a4df14ec4517f4a01b0fcaa3c2be18fa360136cdc96b668",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-28T12:03:00Z",
+          "ledger_index": 10008,
+          "pointer_hash": "6a976763870aa676acb377c1e8fbfd7eed950de4525e89920501f2d60fc26962",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-17T12:03:00Z",
+          "ledger_index": 10009,
+          "pointer_hash": "73ec4698f6b7687082dffada22a4c2654df30db4b400002d0ef39971d959ee6b",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-26T12:03:00Z",
+          "ledger_index": 10010,
+          "pointer_hash": "75d449975ec4002f3fecb2f0f18384b36b053eec573b9364a21809c858d91612",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-23T12:03:00Z",
+          "ledger_index": 10011,
+          "pointer_hash": "7c03860d3b20a42a045778b75225d045898495948550a265c92718259e03ef85",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-09T12:03:00Z",
+          "ledger_index": 10012,
+          "pointer_hash": "aa5f6ea99ab6112fc6ee599aa3cd0c63447dc31136b50f2a0977b4e15d065641",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-25T12:03:00Z",
+          "ledger_index": 10013,
+          "pointer_hash": "b72e30d4911663c049930c86251174bebf2339f54233e58e3112e460a502d6d8",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-15T12:03:00Z",
+          "ledger_index": 10014,
+          "pointer_hash": "bdfd53e5161c4b115028f7e2c1c922d294f4146eb7f5e93b10bf4efc38ea779a",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-12T12:03:00Z",
+          "ledger_index": 10015,
+          "pointer_hash": "be1142a38df8ae47706fefc29fb415ac372efb72e783f901264e5bf2c33358d1",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-20T12:03:00Z",
+          "ledger_index": 10016,
+          "pointer_hash": "c420c98dccfe1db2f06e57c0110e68123d962d1c613bce943397d732c03abd3c",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-16T12:03:00Z",
+          "ledger_index": 10017,
+          "pointer_hash": "c84538601a11950a62591abe1981e524bfe28428a082b1ffc68d1b32cb70ebbe",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-24T12:03:00Z",
+          "ledger_index": 10018,
+          "pointer_hash": "d4a221e99e1c752d7ad3724c3c5eac7d1d51c587028adae1063181435a98e761",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-19T12:03:00Z",
+          "ledger_index": 10019,
+          "pointer_hash": "e89e7dc058305d6ddebf1b651b77c0a836d4cf4543ee8b724807a5945dd4c4df",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-pass",
+          "close_time": "2026-03-10T12:03:00Z",
+          "ledger_index": 10020,
+          "pointer_hash": "ea73e42b336f70de41b6744db07c468ae9f55407c3e6af403176b40cd0c44cb4",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+          "transaction_index": 0
+        }
+      ],
+      "schema": "tasknode-unl-work-digest-ledger-snapshot-v1",
+      "snapshot_id": "test-only-shadow-snapshot-account-pass",
+      "window": {
+        "days": 180,
+        "end": "2026-09-04T12:00:00Z",
+        "start": "2026-03-08T12:00:00Z"
+      }
+    },
+    {
+      "account_id": "account-digest-hold",
+      "anchor": {
+        "anchored_digest_hash": "fdf6c896160ed30c484e38f51b42dedbbbeea5d09ccad42eac237f371990cfe8",
+        "close_time": "2026-09-04T12:05:00Z",
+        "ledger_index": 50001,
+        "transaction_index": 0,
+        "tx_hash": "3c762377b32a01081ceca8e82ceba3ff87c0a00d9e7bc2d00561c8e1e073bbbb"
+      },
+      "bound_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+      "complete_for_account_window": true,
+      "mode": "SHADOW_ONLY",
+      "pointers": [
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-20T12:03:00Z",
+          "ledger_index": 11000,
+          "pointer_hash": "017dd5bf0f6e901b751b1a0f9557d2198892a3c38a27cf3fd27f4b2c9d8f9aa4",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-13T12:03:00Z",
+          "ledger_index": 11001,
+          "pointer_hash": "0a878cb0514a87a8257fded319cfb19358329211f9bfb45185936edac176428f",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-18T12:03:00Z",
+          "ledger_index": 11002,
+          "pointer_hash": "0e391fb22760c38c003d62fda86b4b3851bcf8b6aa9af92d965fd5a32f7a9d88",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-23T12:03:00Z",
+          "ledger_index": 11003,
+          "pointer_hash": "40bb9aaba9feddbab4a7a9bb04330e298da20e0f5da10fe9fbea62c71fea563b",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-12T12:03:00Z",
+          "ledger_index": 11004,
+          "pointer_hash": "440ff493fa5b7e395a61afec08d8b6b46e6d52f8c030d161c8ffa4f17054a1e1",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-26T12:03:00Z",
+          "ledger_index": 11005,
+          "pointer_hash": "47a417885d9847a70bd6930a1424375a61c749570ae79430b2040975fcc648ed",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-28T12:03:00Z",
+          "ledger_index": 11006,
+          "pointer_hash": "5588ff4c18e9f88caa9842678045c9dda304716893b7592e1a3ad247ffc21063",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-10T12:03:00Z",
+          "ledger_index": 11007,
+          "pointer_hash": "5bed3bc7b7fe252ab9ec74a91ba6745c4b3434e5afd4bc30bf4f79f33017d5ca",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-22T12:03:00Z",
+          "ledger_index": 11008,
+          "pointer_hash": "7968d560e839daf3adf67e3f0d776c6d0a592162f6b6041f21487d122d8f220d",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-16T12:03:00Z",
+          "ledger_index": 11009,
+          "pointer_hash": "7dbca2efee6bf5341174a5a8dbc1fe326d24c0ba9ee55317b3d5eacd814adeb7",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-25T12:03:00Z",
+          "ledger_index": 11010,
+          "pointer_hash": "84e52a20058b239bf57a84fc1f29dbb36523c2fc31d386a35d1fa965a9182c28",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-21T12:03:00Z",
+          "ledger_index": 11011,
+          "pointer_hash": "983bbbeaf16eaf50dd243478479c3f69d104228bc8d0f9707346ce01bb213d77",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-24T12:03:00Z",
+          "ledger_index": 11012,
+          "pointer_hash": "9fe14aeb2c148eeecb4e03801f9e5dc1e896b2e0788eee6f08f11bc2cf78c4a8",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-17T12:03:00Z",
+          "ledger_index": 11013,
+          "pointer_hash": "b289e774cba9e1c1ee6b4254ac8e2942c08d361807e11fc94e227c8856eba00a",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-19T12:03:00Z",
+          "ledger_index": 11014,
+          "pointer_hash": "b8b08b8790c32e0d9051ab389d9b405afbcaf3733fd52e56ac5710dd28e74f5f",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-11T12:03:00Z",
+          "ledger_index": 11015,
+          "pointer_hash": "bac24ccde14329c3c9b226864f35435227420eb552c2e77737391444e52ced4d",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-27T12:03:00Z",
+          "ledger_index": 11016,
+          "pointer_hash": "cead8afb696c2a7334f42f2fd0ff2bd09932af87400f1a93a9ba5f938270b0c4",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-14T12:03:00Z",
+          "ledger_index": 11017,
+          "pointer_hash": "e5a3f05b1ced4b3e68b337a640bec129b4c0d70b5f3001f2443df8c0829ba78f",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-15T12:03:00Z",
+          "ledger_index": 11018,
+          "pointer_hash": "f0c58b0c5d814780c0df752fdda9c11ae99efd8610b57b4a42ca362ed6abffea",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-09T12:03:00Z",
+          "ledger_index": 11019,
+          "pointer_hash": "f7fade4e3eb4591b606153ee9439fa407ac404f38b12dba89f700ef01759eb6e",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-digest-hold",
+          "close_time": "2026-03-29T12:03:00Z",
+          "ledger_index": 11020,
+          "pointer_hash": "fdea7f9af726d5e80035562ea52460444a73cb4bd911402740bd188e339bdc77",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+          "transaction_index": 0
+        }
+      ],
+      "schema": "tasknode-unl-work-digest-ledger-snapshot-v1",
+      "snapshot_id": "test-only-shadow-snapshot-account-digest-hold",
+      "window": {
+        "days": 180,
+        "end": "2026-09-04T12:00:00Z",
+        "start": "2026-03-08T12:00:00Z"
+      }
+    },
+    {
+      "account_id": "account-low-score",
+      "anchor": {
+        "anchored_digest_hash": "a770acbf9f1b8814eb6cb9c68cdc68f1b0c387a8c6ff9cdb84965e9cbf79670e",
+        "close_time": "2026-09-04T12:05:00Z",
+        "ledger_index": 50002,
+        "transaction_index": 0,
+        "tx_hash": "7f44a72c0c78d6a2a2cf91e55a874882e7d603d39948fe83384238937d8f689d"
+      },
+      "bound_wallet_address": "rBcZcJ7skaua7n4iaRPF7sD4EjRsaQ87CE",
+      "complete_for_account_window": true,
+      "mode": "SHADOW_ONLY",
+      "pointers": [
+        {
+          "account_id": "account-low-score",
+          "close_time": "2026-03-09T12:03:00Z",
+          "ledger_index": 12000,
+          "pointer_hash": "0b684450e9f739792e9efdc9308569c587bb24038d878ea3cfb604e3c1cd6bc7",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rBcZcJ7skaua7n4iaRPF7sD4EjRsaQ87CE",
+          "transaction_index": 0
+        }
+      ],
+      "schema": "tasknode-unl-work-digest-ledger-snapshot-v1",
+      "snapshot_id": "test-only-shadow-snapshot-account-low-score",
+      "window": {
+        "days": 180,
+        "end": "2026-09-04T12:00:00Z",
+        "start": "2026-03-08T12:00:00Z"
+      }
+    },
+    {
+      "account_id": "account-cluster-capped",
+      "anchor": {
+        "anchored_digest_hash": "53e91fc75d166fef7f5133ca9087ab50e6101a271453ba266c3ae7f74a067525",
+        "close_time": "2026-09-04T12:05:00Z",
+        "ledger_index": 50003,
+        "transaction_index": 0,
+        "tx_hash": "6fda5bab7518ef0bc0d1596992c1e9164be22bfa2889df12bba9a026fa632369"
+      },
+      "bound_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+      "complete_for_account_window": true,
+      "mode": "SHADOW_ONLY",
+      "pointers": [
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-14T12:03:00Z",
+          "ledger_index": 13000,
+          "pointer_hash": "096a80ef8add7c985be6830af86b4d59c2729eddf4d3ae432edf5764f80c0c16",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-18T12:03:00Z",
+          "ledger_index": 13001,
+          "pointer_hash": "10076c247f3c94f85490488d225e17e2dee0f8c6478a81a6685ae75ac53773b0",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-11T12:03:00Z",
+          "ledger_index": 13002,
+          "pointer_hash": "1029515625c78376fffe8478450a187c2daa8f5d639f85eed6201b0393b03f37",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-09T12:03:00Z",
+          "ledger_index": 13003,
+          "pointer_hash": "14cad26b8fb53637d6de72f781175f219fa11cb186f22720f26ea939397e63af",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-21T12:03:00Z",
+          "ledger_index": 13004,
+          "pointer_hash": "18a61790f0811159763ee851870d0163787f5f9bd210fc9633c0032749e214cc",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-13T12:03:00Z",
+          "ledger_index": 13005,
+          "pointer_hash": "1c3d87f2393f63d38749a6aef3360a76354049669d2fb99484f9beec4b37a5ce",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-29T12:03:00Z",
+          "ledger_index": 13006,
+          "pointer_hash": "21163fb30d77ad3e96551705763f9d23ff570b6a3efb183502f2ec6f60b90f4b",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-24T12:03:00Z",
+          "ledger_index": 13007,
+          "pointer_hash": "3f08eb1c4f58fa177f7f2f311da5e4025b272a93ee33ce6886b8953ea8e496b1",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-20T12:03:00Z",
+          "ledger_index": 13008,
+          "pointer_hash": "521d9317c91235ba19147200509979b3cf206454831f0e9e9f2a362b371cc1a0",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-19T12:03:00Z",
+          "ledger_index": 13009,
+          "pointer_hash": "5d72961190ae8b94e1eee24d7e8e7b806f480130093bc4b691cf51dd16d0f1d9",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-23T12:03:00Z",
+          "ledger_index": 13010,
+          "pointer_hash": "5d88dda60b18a9bbec0c7bef0700b64b600bb6f21386f02665f944b5c957b47e",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-27T12:03:00Z",
+          "ledger_index": 13011,
+          "pointer_hash": "611fb1e1711038d6821821ffb895b3cf18ec9651094253e67263b7f5517409fb",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-16T12:03:00Z",
+          "ledger_index": 13012,
+          "pointer_hash": "6a0437cfa00abf2b82d62c7277e0d43d2edafe17f9e204eebc3a0923357544a8",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-25T12:03:00Z",
+          "ledger_index": 13013,
+          "pointer_hash": "6a9528ebae88ee056efadd2357081c0c27b28066f01f5c2600e29a6bbaa3f9b8",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-10T12:03:00Z",
+          "ledger_index": 13014,
+          "pointer_hash": "6d79a38824172465129cacabaa20c69f35ccd8fda1f69a837ee6a2fd08fdb964",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-12T12:03:00Z",
+          "ledger_index": 13015,
+          "pointer_hash": "7573bc0e0b89792bcccae1e8a4766a71eebc07dcafec4ef66b605c7897fcb35a",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-15T12:03:00Z",
+          "ledger_index": 13016,
+          "pointer_hash": "8efd142ce7abd4ddc2bd25fde66d9466796eead6391203d36d97d32a74aa81be",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-17T12:03:00Z",
+          "ledger_index": 13017,
+          "pointer_hash": "afb84e67417cbb811976cf79583f9e63db4b69204560fe9eb282597676f2faa3",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-26T12:03:00Z",
+          "ledger_index": 13018,
+          "pointer_hash": "b2abc592c2d03b95e85be7e19fa61855b342efc520c3d6451172a803838b504a",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-22T12:03:00Z",
+          "ledger_index": 13019,
+          "pointer_hash": "cee8cc90eb45e14889d656046f7ed2f077decfa5e0d431c90b0c9d34f5b0be1c",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-cluster-capped",
+          "close_time": "2026-03-28T12:03:00Z",
+          "ledger_index": 13020,
+          "pointer_hash": "d460db49dd917f7100ed73e698ae8411acfe329dfef3b74ad644051d3be9a203",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+          "transaction_index": 0
+        }
+      ],
+      "schema": "tasknode-unl-work-digest-ledger-snapshot-v1",
+      "snapshot_id": "test-only-shadow-snapshot-account-cluster-capped",
+      "window": {
+        "days": 180,
+        "end": "2026-09-04T12:00:00Z",
+        "start": "2026-03-08T12:00:00Z"
+      }
+    },
+    {
+      "account_id": "account-connectivity-hold",
+      "anchor": {
+        "anchored_digest_hash": "5844e0d96d7840bd2a9270f6d7ff00bbace58822cab69a39ad01cc2ce327b299",
+        "close_time": "2026-09-04T12:05:00Z",
+        "ledger_index": 50004,
+        "transaction_index": 0,
+        "tx_hash": "0dc8b1d62ab0caa174146473f493cd7a079f859d817d4e6c2181318103015554"
+      },
+      "bound_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+      "complete_for_account_window": true,
+      "mode": "SHADOW_ONLY",
+      "pointers": [
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-10T12:03:00Z",
+          "ledger_index": 14000,
+          "pointer_hash": "0a4fceabb84c4b4817539e52de5c46b857cf85b7af82a973cccdd3da72520c80",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-25T12:03:00Z",
+          "ledger_index": 14001,
+          "pointer_hash": "1b2c913212e7f9916b6a1ae19bcd599b5af25e206d29de197a46454c840b8fa7",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-28T12:03:00Z",
+          "ledger_index": 14002,
+          "pointer_hash": "244399c003f89383ad0fcb64667d972ef6ba1689fda5cf5ba483b8cf2a4bc1e8",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-11T12:03:00Z",
+          "ledger_index": 14003,
+          "pointer_hash": "32aec46397840633357195b23b817a37854fe7f177bbb3da736ff18af74ace14",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-26T12:03:00Z",
+          "ledger_index": 14004,
+          "pointer_hash": "467bd33d0b6d09df5d7a37dfea4a42210c5d6c4958b656fb7c672a5ce2bc3c23",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-13T12:03:00Z",
+          "ledger_index": 14005,
+          "pointer_hash": "4fe1ddebb5f0aa3ee5ffa4b7b662be6bf8023428ccb7156c822e3e4edcfda826",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-14T12:03:00Z",
+          "ledger_index": 14006,
+          "pointer_hash": "64cb293c51b66d446e69c5f325f3b0db8b582617564c370841b501659905e43d",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-12T12:03:00Z",
+          "ledger_index": 14007,
+          "pointer_hash": "68af85318c3587365b7dbd13629af089d6721f1ea13298c5fb645825ac71f688",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-19T12:03:00Z",
+          "ledger_index": 14008,
+          "pointer_hash": "85cbdd74f59b8c0500122f079d464305a49785a90f0d5b7499fdf7f18975d7e7",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-15T12:03:00Z",
+          "ledger_index": 14009,
+          "pointer_hash": "8ae7ce9fedd58b7cfa5ec59c767aa817d79d51499ca3312d0361bf17f6c06c0d",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-23T12:03:00Z",
+          "ledger_index": 14010,
+          "pointer_hash": "8ff4823834e37e19699e42b831b982e13a1568eef850f54b28e26bd8aa7324d7",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-21T12:03:00Z",
+          "ledger_index": 14011,
+          "pointer_hash": "95e1f4ef1d5e9e76ec3be75a058e00b926129a55e38a9469ed76cccb350a0aec",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-18T12:03:00Z",
+          "ledger_index": 14012,
+          "pointer_hash": "a3fdbef5cb89b0e98e7e2c8bc1eed5c4d2496125da10c104c2307eeaf0faee96",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-24T12:03:00Z",
+          "ledger_index": 14013,
+          "pointer_hash": "a8bb93f1e0c2e9967a84851ddc34381ebf7b414f4f2e75c8a767128b4b4f83ec",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-22T12:03:00Z",
+          "ledger_index": 14014,
+          "pointer_hash": "aafed34979f1c36945cc8062cf4a974d2eb4c030ade007170c3b875a7b809d09",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-16T12:03:00Z",
+          "ledger_index": 14015,
+          "pointer_hash": "cdf640f9879c9066039e6e17dc632858e2cd88092a5ee27d195fc18e5bd839dd",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-29T12:03:00Z",
+          "ledger_index": 14016,
+          "pointer_hash": "dbf47ae028e2ee8cf94f1ddb1b13665ce6e5526ee525de24e4d69128b5bff30f",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-09T12:03:00Z",
+          "ledger_index": 14017,
+          "pointer_hash": "e7ddb735694499ba7af0170b019b597e827fa9c56f80567f3d712ebeebc1cca6",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-17T12:03:00Z",
+          "ledger_index": 14018,
+          "pointer_hash": "ecefb45f3ce504abfbe9e41c040cf72ec194f102e43458e84c792ad51f9ca157",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-27T12:03:00Z",
+          "ledger_index": 14019,
+          "pointer_hash": "f6268daa90277209bd9e8a8bc6a9f706091accb9c190f068ffc2681da9a823f4",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        },
+        {
+          "account_id": "account-connectivity-hold",
+          "close_time": "2026-03-20T12:03:00Z",
+          "ledger_index": 14020,
+          "pointer_hash": "fa4870e27c84d276975ab70e46fd2c2901815a8c02e1c3cc7d9cf95432531725",
+          "pointer_schema": "pf.ptr/v4",
+          "sender_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+          "transaction_index": 0
+        }
+      ],
+      "schema": "tasknode-unl-work-digest-ledger-snapshot-v1",
+      "snapshot_id": "test-only-shadow-snapshot-account-connectivity-hold",
+      "window": {
+        "days": 180,
+        "end": "2026-09-04T12:00:00Z",
+        "start": "2026-03-08T12:00:00Z"
+      }
+    }
+  ]
+}

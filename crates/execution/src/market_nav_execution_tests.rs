@@ -2128,6 +2128,101 @@ fn arc_ingress_real_groth16_fixture_verifies_and_rejects_mutations() {
 }
 
 #[test]
+fn pfeth_ethereum_ingress_selects_only_the_weth_route() {
+    let recipient = "pf-pfeth-ingress-consensus-test".to_string();
+    let mut evidence = VaultBridgeDepositEvidence {
+        source_chain_id: ETHEREUM_MAINNET_CHAIN_ID,
+        vault_address: "0x1111111111111111111111111111111111111111".to_string(),
+        token_address: postfiat_types::ETHEREUM_MAINNET_WETH9_ADDRESS.to_string(),
+        depositor: "0x3333333333333333333333333333333333333333".to_string(),
+        pftl_recipient_hash: vault_bridge_pftl_recipient_hash(&recipient).expect("recipient hash"),
+        pftl_recipient: recipient,
+        amount_atoms: 1_000_000_000,
+        nonce: "44".repeat(32),
+        route_binding: "55".repeat(32),
+        deposit_id: String::new(),
+        block_hash: "66".repeat(32),
+        tx_hash: "77".repeat(32),
+        log_index: 0,
+    };
+    evidence.deposit_id = vault_bridge_deposit_id(&evidence).expect("deposit id");
+    let evidence_root = vault_bridge_deposit_evidence_root(&evidence).expect("evidence root");
+    let route_policy_hash = "88".repeat(48);
+    let manifest_hash = "99".repeat(32);
+    let profile = NavProofProfile::new(
+        "operator",
+        NAV_PROFILE_VERIFIER_SP1_GROTH16,
+        format!("vault_bridge:{}", evidence.source_domain()),
+        7_200,
+        1,
+        7_200,
+        7_200,
+        0,
+        0,
+        0,
+        manifest_hash.clone(),
+        format!("0x{}", "aa".repeat(32)),
+        NAV_SP1_PROOF_ENCODING_GROTH16,
+        DEFAULT_MAX_NAV_SP1_PROOF_BYTES,
+        DEFAULT_MAX_NAV_SP1_PUBLIC_VALUES_BYTES,
+    )
+    .expect("SP1 profile")
+    .with_vault_bridge_route_policy_hash(route_policy_hash.clone())
+    .expect("route-bound profile");
+    let values = postfiat_types::PfEthEthereumIngressPublicValuesV1 {
+        schema: postfiat_types::PFETH_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1.to_string(),
+        route_id: VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_WETH_V1.to_string(),
+        source_chain_id: evidence.source_chain_id,
+        prior_finalized_beacon_root: "01".repeat(32),
+        prior_finalized_slot: 100,
+        finalized_beacon_root: "02".repeat(32),
+        finalized_slot: 132,
+        finalized_execution_block_hash: evidence.block_hash.clone(),
+        finalized_execution_block_number: 1_000,
+        execution_state_root: "03".repeat(32),
+        vault_address: evidence.vault_address.clone(),
+        vault_runtime_code_hash: "04".repeat(32),
+        token_address: evidence.token_address.clone(),
+        token_runtime_code_hash: postfiat_types::ETHEREUM_MAINNET_WETH9_RUNTIME_CODE_HASH
+            .trim_start_matches("0x")
+            .to_string(),
+        depositor: evidence.depositor.clone(),
+        pftl_recipient: evidence.pftl_recipient.clone(),
+        pftl_recipient_hash: evidence.pftl_recipient_hash.clone(),
+        amount_atoms: evidence.amount_atoms,
+        nonce: evidence.nonce.clone(),
+        route_binding: evidence.route_binding.clone(),
+        deposit_id: evidence.deposit_id.clone(),
+        evidence_root: evidence_root.clone(),
+        manifest_hash,
+        deposit_nullifier: "06".repeat(32),
+        total_obligations_atoms: evidence.amount_atoms.to_string(),
+        vault_token_balance_atoms: evidence.amount_atoms.to_string(),
+    };
+    values.validate().expect("pfETH public values");
+    ensure_ethereum_ingress_public_values_match(
+        &profile,
+        &evidence,
+        &evidence_root,
+        &route_policy_hash,
+        &values,
+    )
+    .expect("exact WETH route binding");
+
+    let mut arbitrary_token = evidence;
+    arbitrary_token.token_address = "0x2222222222222222222222222222222222222222".to_string();
+    let error = ensure_ethereum_ingress_public_values_match(
+        &profile,
+        &arbitrary_token,
+        &evidence_root,
+        &route_policy_hash,
+        &values,
+    )
+    .expect_err("an arbitrary token must not inherit the WETH route");
+    assert_eq!(error.0, "ethereum_ingress_source_route_unsupported");
+}
+
+#[test]
 fn ethereum_backed_claim_grows_cap_and_converges_across_six_replicas() {
     let genesis = Genesis::new("postfiat-ethereum-cap-growth-test");
     let issuer = "pf-ethereum-cap-growth-issuer".to_string();
@@ -5808,6 +5903,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         ledger.account(&subscriber).expect("subscriber").sequence + 1,
         AssetTransactionOperation::PftlUniswapOrderReserve(
             PftlUniswapOrderReserveOperation {
+                settlement_source_asset_id: None,
                 subscriber: subscriber.clone(),
                 route_id: v2_route_id.clone(),
                 reservation_id: "b0".repeat(48),
@@ -5869,7 +5965,8 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         ledger.account(&operator).expect("operator").sequence + 1,
         AssetTransactionOperation::PftlUniswapRouteEpochAdvance(
             PftlUniswapRouteEpochAdvanceOperation {
-                operator: operator.clone(),
+                                settlement_source_asset_ids: None,
+operator: operator.clone(),
                 route_id: v2_route_id.clone(),
                 prior_route_epoch: 1,
                 next_route_epoch: 2,
@@ -5896,6 +5993,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         ledger.account(&subscriber).expect("subscriber").sequence + 1,
         AssetTransactionOperation::PftlUniswapOrderReserve(
             PftlUniswapOrderReserveOperation {
+                settlement_source_asset_id: None,
                 subscriber: subscriber.clone(),
                 route_id: v2_route_id.clone(),
                 reservation_id: reservation_id.clone(),
@@ -6216,6 +6314,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
         ledger.account(&subscriber).expect("subscriber").sequence + 1,
         AssetTransactionOperation::PftlUniswapPrimaryRedeem(
             PftlUniswapPrimaryRedeemOperation {
+                settlement_source_asset_id: None,
                 owner: subscriber.clone(),
                 settlement_recipient: subscriber.clone(),
                 route_id: v2_route_id.clone(),
@@ -6685,8 +6784,7 @@ fn ar11_issued_asset_supply_counts_non_nav_spread_custody() {
 /// untouched. Reproduces the controlled-qualification retry-6 failure of
 /// 2026-08-03, where a 500_000-atom redemption was submitted against the
 /// production minimum order of 1_000_000 atoms.
-#[test]
-fn pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09() {
+fn primary_redeem_source_fixture(source_mode: bool) {
     let mut genesis = Genesis::new_with_validator_count("postfiat-wan-devnet-2", 6);
     genesis.consensus_v2_activation_height = Some(1);
     // The qualified reserve-proof fixture binds the deterministic qNAV asset
@@ -7031,21 +7129,98 @@ fn pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09
         .expect("AR-09 route")
         .live_value_enabled = true;
 
+    let mut source_id = None;
+    if source_mode {
+        let family = ledger.asset_definition(&settlement_asset_id).unwrap().clone();
+        let domain = "erc20_bridge_vault:1:0x1111111111111111111111111111111111111111:0x2222222222222222222222222222222222222222";
+        let mut bucket = VaultBridgeBucketState::new(settlement_asset_id.clone(), domain, "11".repeat(48), 24).unwrap();
+        bucket.gross_receipt_atoms = 100_000_000;
+        bucket.counted_value_atoms = 100_000_000;
+        bucket.outstanding_vault_bridge_atoms = 100_000_000;
+        let id = postfiat_types::pfusdc_source_series_id(&genesis.chain_id, &settlement_asset_id, 1,
+            "0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222", 6, &bucket.policy_hash).unwrap();
+        let asset = AssetDefinition::new_source_series(&family, &id, &bucket.bucket_id, "Ethereum pfUSDC").unwrap();
+        ledger.asset_definitions.push(asset);
+        let mut source_line = TrustLine::new(subscriber.clone(), family.issuer.clone(), id.clone(),100_000_000,0).unwrap();
+        source_line.balance=100_000_000;
+        ledger.trustlines.push(source_line);
+        ledger.vault_bridge_bucket_states.push(bucket);
+        policy.policy_epoch = 2;
+        policy.policy_hash = policy.computed_hash();
+        let receipt = submit(&mut ledger,&operator_key,&operator,
+            postfiat_types::PFTL_UNISWAP_ROUTE_EPOCH_ADVANCE_TRANSACTION_KIND,
+            AssetTransactionOperation::PftlUniswapRouteEpochAdvance(postfiat_types::PftlUniswapRouteEpochAdvanceOperation {
+                settlement_source_asset_ids: Some(vec![id.clone()]), operator:operator.clone(),route_id:route_id.clone(),prior_route_epoch:1,next_route_epoch:2,
+                next_route_config_digest:"c1".repeat(48),live_value_enabled:true,next_primary_market_policy:policy.clone(),
+            }),24);
+        assert!(receipt.accepted,"govern source: {receipt:?}");
+        source_id = Some(id);
+    }
+    let family_balance_before = ledger.trustline_for_account_asset(&subscriber,&settlement_asset_id).unwrap().balance;
+    let family_supply_before = issued_asset_family_supply(&ledger,&settlement_asset_id).unwrap();
     // Fund the route reserve and the holder's NAV balance through a real
     // subscription: 2_000_000 atoms at 7 settlement atoms per NAV atom.
     let reservation_id = "c2".repeat(48);
+    if let Some(id) = &source_id {
+        let reserve = |tag: &str| PftlUniswapOrderReserveOperation {
+            settlement_source_asset_id: Some(id.clone()), subscriber: subscriber.clone(),
+            route_id: route_id.clone(), reservation_id: tag.repeat(48),
+            ethereum_recipient: "0x4444444444444444444444444444444444444444".to_string(),
+            route_epoch: policy.policy_epoch, policy_epoch: policy.policy_epoch,
+            policy_hash: policy.policy_hash.clone(), mint_amount_atoms: 2_000_000,
+            max_settlement_value_atoms: 14_070_000, expires_at_height: 30,
+        };
+        // A failed debit must roll back the source escrow inserted before it.
+        let line = ledger.trustlines.iter().position(|l| l.account == subscriber && l.asset_id == *id).unwrap();
+        let balance = ledger.trustlines[line].balance;
+        ledger.trustlines[line].balance = 0;
+        let before = ledger.clone();
+        let receipt = submit(&mut ledger, &subscriber_key, &subscriber,
+            PFTL_UNISWAP_ORDER_RESERVE_TRANSACTION_KIND,
+            AssetTransactionOperation::PftlUniswapOrderReserve(reserve("a1")), 24);
+        assert!(!receipt.accepted, "insufficient source balance: {receipt:?}");
+        assert_eq!(ledger, before);
+        ledger.trustlines[line].balance = balance;
+        // Disabling issuance cannot leave a new reservation behind.
+        ledger.pftl_uniswap_source_custody[0].enabled_for_issue = false;
+        let before = ledger.clone();
+        let receipt = submit(&mut ledger, &subscriber_key, &subscriber,
+            PFTL_UNISWAP_ORDER_RESERVE_TRANSACTION_KIND,
+            AssetTransactionOperation::PftlUniswapOrderReserve(reserve("a2")), 24);
+        assert_eq!(receipt.code, "pftl_source_not_governed");
+        assert_eq!(ledger, before);
+        ledger.pftl_uniswap_source_custody[0].enabled_for_issue = true;
+        // Cancelled reservations return exactly the asset placed in custody.
+        let receipt = submit(&mut ledger, &subscriber_key, &subscriber,
+            PFTL_UNISWAP_ORDER_RESERVE_TRANSACTION_KIND,
+            AssetTransactionOperation::PftlUniswapOrderReserve(reserve("a3")), 24);
+        assert!(receipt.accepted, "source reserve: {receipt:?}");
+        assert_eq!(issued_asset_family_supply(&ledger, &settlement_asset_id).unwrap(), family_supply_before);
+        ledger.validate_pftl_source_custody().unwrap();
+        let receipt = submit(&mut ledger, &subscriber_key, &subscriber,
+            postfiat_types::PFTL_UNISWAP_ORDER_RELEASE_TRANSACTION_KIND,
+            AssetTransactionOperation::PftlUniswapOrderRelease(postfiat_types::PftlUniswapOrderReleaseOperation {
+                releaser: subscriber.clone(), route_id: route_id.clone(), reservation_id: "a3".repeat(48),
+            }), 24);
+        assert!(receipt.accepted, "source refund: {receipt:?}");
+        assert_eq!(ledger.trustlines[line].balance, balance);
+        assert_eq!(issued_asset_family_supply(&ledger, &settlement_asset_id).unwrap(), family_supply_before);
+        assert_eq!(ledger.trustline_for_account_asset(&subscriber, &settlement_asset_id).unwrap().balance, family_balance_before);
+        assert!(ledger.pftl_uniswap_source_custody[0].reservation_escrows.is_empty());
+    }
     let receipt = submit(
         &mut ledger,
         &subscriber_key,
         &subscriber,
         PFTL_UNISWAP_ORDER_RESERVE_TRANSACTION_KIND,
         AssetTransactionOperation::PftlUniswapOrderReserve(PftlUniswapOrderReserveOperation {
+            settlement_source_asset_id: source_id.clone(),
             subscriber: subscriber.clone(),
             route_id: route_id.clone(),
             reservation_id: reservation_id.clone(),
             ethereum_recipient: "0x4444444444444444444444444444444444444444".to_string(),
-            route_epoch: 1,
-            policy_epoch: 1,
+            route_epoch: policy.policy_epoch,
+            policy_epoch: policy.policy_epoch,
             policy_hash: policy.policy_hash.clone(),
             mint_amount_atoms: 2_000_000,
             max_settlement_value_atoms: 14_070_000,
@@ -7076,14 +7251,15 @@ fn pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09
     assert!(receipt.accepted, "{receipt:?}");
 
     let valid_redeem = |nonce: String| PftlUniswapPrimaryRedeemOperation {
+        settlement_source_asset_id: source_id.clone(),
         owner: subscriber.clone(),
         settlement_recipient: subscriber.clone(),
         route_id: route_id.clone(),
         redemption_nonce: nonce,
         nav_amount_atoms: 1_000_000,
         min_settlement_value_atoms: 6_996_500,
-        route_epoch: 1,
-        policy_epoch: 1,
+        route_epoch: policy.policy_epoch,
+        policy_epoch: policy.policy_epoch,
         policy_hash: policy.policy_hash.clone(),
         pricing_nav_epoch: 7,
         pricing_reserve_packet_hash: pricing_reserve_packet_hash.clone(),
@@ -7128,11 +7304,11 @@ fn pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09
     expect_policy_mismatch(&mut ledger, "above maximum order", above_maximum);
 
     let mut wrong_route_epoch = valid_redeem("d3".repeat(32));
-    wrong_route_epoch.route_epoch = 2;
+    wrong_route_epoch.route_epoch = policy.policy_epoch + 1;
     expect_policy_mismatch(&mut ledger, "wrong route epoch", wrong_route_epoch);
 
     let mut wrong_policy_epoch = valid_redeem("d4".repeat(32));
-    wrong_policy_epoch.policy_epoch = 2;
+    wrong_policy_epoch.policy_epoch = policy.policy_epoch + 1;
     expect_policy_mismatch(&mut ledger, "wrong policy epoch", wrong_policy_epoch);
 
     let mut wrong_policy_hash = valid_redeem("d5".repeat(32));
@@ -7143,6 +7319,28 @@ fn pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09
     expired.expires_at_height = 25;
     expect_policy_mismatch(&mut ledger, "expired redemption", expired);
 
+    if let Some(id) = &source_id {
+        assert_eq!(issued_asset_family_supply(&ledger,&settlement_asset_id).unwrap(),family_supply_before);
+        assert_eq!(ledger.trustline_for_account_asset(&subscriber,&settlement_asset_id).unwrap().balance,family_balance_before);
+        ledger.validate_pftl_source_custody().unwrap();
+        let source = &ledger.pftl_uniswap_source_custody[0];
+        assert_eq!(source.principal_atoms,14_000_000);
+        assert_eq!(source.spread_atoms,70_000);
+        assert!(source.reservation_escrows.is_empty());
+        assert_eq!(source.asset_id,*id);
+        let before = ledger.clone();
+        let mut pooled = valid_redeem("ee".repeat(32));
+        pooled.settlement_source_asset_id = None;
+        let receipt = submit(&mut ledger,&subscriber_key,&subscriber,PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND,
+            AssetTransactionOperation::PftlUniswapPrimaryRedeem(pooled),26);
+        assert!(!receipt.accepted,"pooled redemption must not drain source reserves");
+        assert_eq!(receipt.code,"pftl_legacy_reserve_unavailable");
+        assert_eq!(ledger,before);
+    }
+    if source_mode {
+        ledger.pftl_uniswap_source_custody[0].enabled_for_issue = false;
+    }
+    // Existing source custody remains redeemable after issuance is disabled.
     // The exact valid tuple is admitted.
     let accepted_nonce = "d8".repeat(32);
     let transaction = signed_asset_transaction_with_minimum_fee(
@@ -7167,8 +7365,26 @@ fn pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09
         assert!(v2.redemption_nonces.contains_key(&accepted_nonce));
     }
 
+    if source_mode {
+        assert_eq!(issued_asset_family_supply(&ledger,&settlement_asset_id).unwrap(),family_supply_before);
+        assert_eq!(ledger.trustline_for_account_asset(&subscriber,&settlement_asset_id).unwrap().balance,family_balance_before);
+        ledger.validate_pftl_source_custody().unwrap();
+        let row=&ledger.pftl_uniswap_source_custody[0];
+        assert_eq!(row.principal_atoms,7_000_000);
+        assert_eq!(row.spread_atoms,73_500);
+    }
     // Nonce replay of the accepted redemption must fail closed.
     expect_policy_mismatch(&mut ledger, "nonce replay", valid_redeem(accepted_nonce));
+}
+
+#[test]
+fn pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09() {
+    primary_redeem_source_fixture(false);
+}
+
+#[test]
+fn pftl_source_settlement_roundtrip_preserves_source_and_pooled_custody() {
+    primary_redeem_source_fixture(true);
 }
 
 #[test]
@@ -7717,7 +7933,8 @@ fn ar05_active_export_entitlement_blocks_route_epoch_advance_until_closed() {
     next_policy.policy_epoch = 2;
     next_policy.policy_hash = next_policy.computed_hash();
     let epoch_advance = PftlUniswapRouteEpochAdvanceOperation {
-        operator: operator.clone(),
+                settlement_source_asset_ids: None,
+operator: operator.clone(),
         route_id: route_id.clone(),
         prior_route_epoch: 1,
         next_route_epoch: 2,

@@ -1,0 +1,9 @@
+{
+  "operation": "nav_asset_register",
+  "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "asset_id": "629f1ba8f36963662d6e36243aea85627787cd72d41a9e92c5f01b60e3e68c1b951af771d16780bf13c4036b8d2a4996",
+  "reserve_operator": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "proof_profile": "5865db3c8276465797027dacfe2e15cfe773ae48582f62d3674c273b06aa9b975627c7becca33ebebf8fe935fe4b0708",
+  "valuation_unit": "ETH",
+  "redemption_account": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8"
+}

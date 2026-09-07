@@ -72,6 +72,8 @@ a100_prover=${A666_PFUSDC_EGRESS_PROVER_BIN:-/workspace/a666-acceptance/live/a66
 local_prover=${A666_PFUSDC_EGRESS_LOCAL_PROVER_BIN:-$repo/tools/pfusdc-tier4-prover/target/release/pfusdc-tier4-prover}
 egress_elf=${A666_PFUSDC_EGRESS_ELF:-$repo/programs/pfusdc-egress/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/pfusdc-egress-program}
 expected_a100_prover_sha256=${A666_PFUSDC_EGRESS_PROVER_SHA256:-}
+prover_threads=${A666_PFUSDC_PROVER_THREADS:-16}
+[[ "$prover_threads" =~ ^[1-9][0-9]*$ ]]
 validator2_host=$(jq -er '."validator-2"' "$hosts_file")
 pfusdc_issuer=pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8
 pfusdc=02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b
@@ -98,6 +100,38 @@ if ! "$resume"; then
   fi
 fi
 mkdir -p "$egress_dir"
+
+# Both hosts embed their guest; verify that identity before burning native funds.
+if test "$prover_backend" = cpu; then
+  test -x "$local_prover"
+  test -s "$egress_elf"
+  SP1_PROVER=cpu "$local_prover" program-info \
+    --output "$egress_dir/local-prover-program-info.json" \
+    > "$egress_dir/local-prover-program-info.log"
+  expected_elf_sha256=$(sha256sum "$egress_elf" | awk '{print $1}')
+  jq -e --arg vkey "$program_vkey" --arg elf "$expected_elf_sha256" \
+    '.egress.program_vkey==$vkey and .egress.elf_sha256==$elf' \
+    "$egress_dir/local-prover-program-info.json" >/dev/null
+  python3 - <<'PY'
+import runpy
+runpy.run_path("scripts/nav-reserve-proof-cpu-bounded")["require_docker_access"]()
+PY
+else
+  test -s "$egress_elf"
+  remote_prover_sha256=$(ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" "sha256sum '$a100_prover' | cut -d' ' -f1")
+  if test -n "$expected_a100_prover_sha256"; then
+    test "$remote_prover_sha256" = "$expected_a100_prover_sha256"
+  fi
+  ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
+    "SP1_PROVER=cpu RAYON_NUM_THREADS='$prover_threads' '$a100_prover' program-info --output '${a100_root}-program-info.json'" \
+    > "$egress_dir/remote-prover-program-info.log"
+  scp -q -P "$a100_port" "root@$a100_host:${a100_root}-program-info.json" \
+    "$egress_dir/remote-prover-program-info.json"
+  expected_elf_sha256=$(sha256sum "$egress_elf" | awk '{print $1}')
+  jq -e --arg vkey "$program_vkey" --arg elf "$expected_elf_sha256" \
+    '.egress.program_vkey==$vkey and .egress.elf_sha256==$elf' \
+    "$egress_dir/remote-prover-program-info.json" >/dev/null
+fi
 
 round_args=(
   --node-bin "$local_node"
@@ -274,14 +308,20 @@ if ! test -s "$proof_dir/proof-report.json"; then
     test -x "$local_prover"
     test -s "$egress_elf"
     mkdir -p "$proof_dir"
-    SP1_PROVER=cpu "$local_prover" egress --elf "$egress_elf" --witness "$egress_dir/witness.json" --output-dir "$proof_dir" --prove
+    python3 - "$local_prover" "$egress_dir/witness.json" "$proof_dir" <<'PY'
+import runpy, subprocess, sys
+helpers = runpy.run_path("scripts/nav-reserve-proof-cpu-bounded")
+subprocess.run([sys.argv[1], "egress", "--witness", sys.argv[2],
+                "--output-dir", sys.argv[3], "--prove"],
+               env=helpers["bounded_environment"](), check=True)
+PY
   else
   ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
     "test ! -e '$a100_root'; install -d -m 700 '$a100_root'"
   scp -q -P "$a100_port" "$egress_dir/witness.json" \
     "root@$a100_host:$a100_root/witness.json"
   ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
-    "SP1_PROVER=cuda '$a100_prover' egress \
+    "SP1_PROVER=cuda RAYON_NUM_THREADS='$prover_threads' GOMAXPROCS='$prover_threads' RUST_LOG=info '$a100_prover' egress \
       --witness '$a100_root/witness.json' \
       --output-dir '$a100_root/proof' \
       --prove"

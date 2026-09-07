@@ -1,0 +1,1016 @@
+[
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/execution/src/entrypoints.rs",
+    "source_sha256": "fbb67a18de9b0d56d254e13721adf9f28e9087595176014516927a509a22513a",
+    "result": "merged"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/execution/src/market_nav_execution_tests.rs",
+    "source_sha256": "7040bbdbce9cf9c7b0ad2690b8a4046e95a694fe0acf6852ad6667290c5170a2",
+    "result": "resolved preserving Arc additions and deployed replay compatibility"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/execution/src/nav_vault_asset_execution.rs",
+    "source_sha256": "625383e062346e0fb66ad45e6cc551149f11d30cd6f241a4696439c7323e9bc0",
+    "result": "resolved preserving Arc additions and deployed replay compatibility"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/execution/src/nft_escrow_asset_execution.rs",
+    "source_sha256": "07b182b67fc4b182567ac53049e24fba2d4433c58145e31ae3bf2c44817bef93",
+    "result": "copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/execution/src/vault_bridge_profile_resolution.rs",
+    "source_sha256": "8ffdb016183c6afce588c08625b00071bab0c231506d1065787a963c9962ae16",
+    "result": "already present"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/node/src/block_replay_wallet.rs",
+    "source_sha256": "2b40890bc3580a27150bf9f5ab5da58116dcdc178b32f293a4a8986934793ae6",
+    "result": "merged"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/node/src/execution_actions.rs",
+    "source_sha256": "960a7d2afbbea05e3ff680ea3c69c49432bcc12d5810a4d5d4cb21bc9c0e68b7",
+    "result": "merged"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/node/src/main_parts/tests/rpc_serve_request_tests.rs",
+    "source_sha256": "69fcef95981c9374fdc74166967b86e537a88610a9250f7d6c80b8dabbaf7354",
+    "result": "copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/node/src/rpc_cli.rs",
+    "source_sha256": "a5b4613f29f23386765dc4964bf854d3b7491bea43852fe3b4106817536050a6",
+    "result": "copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/node/src/tests/vault_bridge_governed_route.rs",
+    "source_sha256": "f7e1670d9eccec2adc3aa7b16e3a28a6615e666b8b204b4d37203e0490a5f46a",
+    "result": "merged"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/node/src/vault_bridge_workflows.rs",
+    "source_sha256": "894cc83a19fe6972702d5edbbaad73a31659a9b8a7376f8a4e4df01fc22b3538",
+    "result": "merged"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/types/src/account_owned_asset_types.rs",
+    "source_sha256": "336f67d91bbaba1ffccca6292cf97734a2260338dc91bc62b3cf25c21a88d954",
+    "result": "merged"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/types/src/core_chain.rs",
+    "source_sha256": "6a22eacfe648b6a5530ebc910cb335c1378121405800ebad18cc90d28b4c35bc",
+    "result": "merged"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/types/src/market_nav_asset_types.rs",
+    "source_sha256": "697260b8b4061d43fbc1175d4c46fecc8d44379f0bbc2e2aed306ce2f84e8e24",
+    "result": "merged"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/types/src/pfusdc_tier4_types.rs",
+    "source_sha256": "e2d497c0a7e3897c8bd3c2d2d0dd6a53500cce929ab2c87b2a302686c0d04706",
+    "result": "resolved preserving Arc additions and deployed replay compatibility"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/types/src/tests.rs",
+    "source_sha256": "7e91b07bbbc746de718f6f9935b5dc35463e454c7c72a35ba7110aadcdc71cf4",
+    "result": "merged"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/OPEN-SOURCE-PROOF-PUBLIC-INPUT-INVENTORY-20260716.json",
+    "source_sha256": "1db07b4bf662e3318261cbd5f795ff5940f01b3cd291eb10014413e052126792",
+    "result": "merged"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/chain-state-current.md",
+    "source_sha256": "c43c5d093e45a679777aedb624433432330fcf4a6c7e9e503476e8970925b318",
+    "result": "copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "programs/pfusdc-egress/Cargo.lock",
+    "source_sha256": "71225bed4ec4d8cecbeb05cf16071d8dd60ab09bf70cef57c2b7012d97a32a63",
+    "result": "already present"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "programs/pfusdc-egress/elf/pfusdc-egress-program",
+    "source_sha256": "0ea4dbabc8a36b44824c861cf2e1ae90454df2a6e4bb8a357f9d3a8672696d83",
+    "result": "already present"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "programs/pfusdc-eth-mainnet-ingress/Cargo.lock",
+    "source_sha256": "4c7d63b68387db42db472f02b188ff11479c2e811cc69a2808a5a5140cfb72ac",
+    "result": "already present"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "programs/pfusdc-eth-mainnet-ingress/src/lib.rs",
+    "source_sha256": "7d1baeb587f0d96c14596718fe2560bfc4c790c19f1a89c9acff5474b3157b91",
+    "result": "already present"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "scripts/a666-ce22-remote-finality-op.py",
+    "source_sha256": "3cdf6ffc7a9c5de98eaadd9329fb7e9ca8bdd8e68f15c49ca7fe292d4b7128fd",
+    "result": "copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "scripts/test-proof-public-input-inventory",
+    "source_sha256": "42225e37480bc542a0020ca09da1f98fa88de2d3c095e8bc775eff9e4d7f870a",
+    "result": "already present"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "tools/eth-l1-mainnet-fast-lane-p0/Cargo.lock",
+    "source_sha256": "3b76d1872d9b53e79ede189adafaa91fe4a23bd8b9bc5887741b26285cf303a8",
+    "result": "already present"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "tools/eth-l1-mainnet-fast-lane-p0/src/main.rs",
+    "source_sha256": "aae5805fcd10b42c0429f096e850ee7eb7e0bbaafbee43c1344c289ca37fa979",
+    "result": "already present"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/ethereum-contracts/src/ExitExecutorV1.sol",
+    "source_sha256": "259b75c1a407a30424cbfc209ccb683c409d3de9f855acea7ff1f4ae5f663de4",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/ethereum-contracts/src/WETHBridgeVaultL1.sol",
+    "source_sha256": "7d6a25df0f73e832ea15d2743f110974648323fc574ff78e74f548a7d25eeb12",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/ethereum-contracts/test/ExitExecutorV1.t.sol",
+    "source_sha256": "55fbe6647bdccc6fd172a1e47fdb17eaf948d2d05609842cdbef70e20efdde5a",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/ethereum-contracts/test/WETHBridgeVaultL1.t.sol",
+    "source_sha256": "1a625301fa1aa75c9e0892b9498735144e5cea83fb8a1bd0109b47017007fec5",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/node/testdata/pfeth-reserve-replay/README.md",
+    "source_sha256": "41335a92946d4c77ff25873d38553d3c59ccc057b809fd36980cc1fa61f5a903",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/node/testdata/pfeth-reserve-replay/block-962.json",
+    "source_sha256": "35c017f0a8aae983ee3d0b8e8bb3ee4693af08ce84e556f21d5113b1e9cd898b",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/node/testdata/pfeth-reserve-replay/block-967.json",
+    "source_sha256": "33bf8642e6cbf0c6ac74fb3c9cac8a1f98435da7242fdb2beca0fc5e0e723c10",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/node/testdata/pfeth-reserve-replay/deposit.json",
+    "source_sha256": "04f92bf16b9c04d643a35bd776be3eebd3a67554dcf8bb1757d6a7754c47328c",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/node/testdata/pfeth-reserve-replay/genesis.json",
+    "source_sha256": "d6ae81ee0732756ea8e67c2e6456e859ab345173d4ba2d4d055b554180fcb55c",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/node/testdata/pfeth-reserve-replay/reserve-packet.json",
+    "source_sha256": "507a6ade2d6eae51fa87f013df812dedc79ec1e474100067a036f083f26c457c",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/node/testdata/pfeth-reserve-replay/synthetic-series-ledger.json",
+    "source_sha256": "3482f2c0c9d7ed0c6d4397e7aff4dbb04c9c106a8a73a2437a0f0d7397b29ce8",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/node/testdata/pfeth-reserve-replay/tx-962.json",
+    "source_sha256": "64bf94b2f41f05d973b6e3d83f14d945c7028152db4256f62b07ff59aad1d46b",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "crates/node/testdata/pfeth-reserve-replay/tx-967.json",
+    "source_sha256": "d67d9b2a757900a2ab1b29334482b838d7a5829e2280f5c735e485143a2599fc",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/deployment-consumer.json",
+    "source_sha256": "22d377009bd7a111e17bc75b3bab74192b12600b2cc23b203a71b77ac6878290",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/deployment-receipt.json",
+    "source_sha256": "eccdfe12f25233815068450bb66c6fa8a53c1982a1564ca3df2ac77052a8ea19",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/external-review.json",
+    "source_sha256": "bf115bbcb269d2084408e1f65f4b9bbaa66767642686aee02ad2ba6b1b623036",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/governance-route-profile.json",
+    "source_sha256": "b65e4cde356e81dfd97909897eca0603911378af533615bb9ae1b99bc0a35d7f",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/ingress-policy.json",
+    "source_sha256": "301b864cf42936345c021fd4a3fb75c1e8612611de5f9570ed0b2339d85aa310",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/input.json",
+    "source_sha256": "ab12fc6c2f4ea93200a98ff30c0f500c09df9b4bdca07b538f6285b784a677b0",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/manifest.json",
+    "source_sha256": "a36cdf91023b15fe3055f683d8f847cee236bf4eee3c67d8f4fd2c48d723164c",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/package-summary.json",
+    "source_sha256": "038e77733e31b722524b0a420d236f6271f67d10607946d5da0721e470233a2a",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/pftl-bootstrap-report.json",
+    "source_sha256": "e7a33ced2e27ab64cdb059d5d9849c2fd30b8562e6347e2fa3ac3cea8b4b3029",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/pftl-bootstrap/asset-create.operation.json",
+    "source_sha256": "4eb7a7e321e28896fcc14dd1ed72a6d24f103fbe4e4323f090c9087b6e188df3",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/pftl-bootstrap/commands.sh",
+    "source_sha256": "302eefeb7051a3c116392a8a25319776262b1062e37b69cced3c53f04ab60383",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/pftl-bootstrap/nav-asset-register.operation.json",
+    "source_sha256": "6db5cebdd6683464c2c2cdf22bfaaac852fdeec1b8b86285ad72224b6ff68c33",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/pftl-bootstrap/profile-register.operation.json",
+    "source_sha256": "3250e6f98c648c30d87c8b22fbc021b974b9785b4c2336339542e0c377dde7ea",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/pftl-checkpoint-gate.json",
+    "source_sha256": "d8cb15bce33166a86b68db2e63ba1f72fcc2819b3186672fcb94f859f91d7787",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/route-activation-instructions.json",
+    "source_sha256": "556b151c8308fdbdcc32effeedabaf16377c1c24b99d1429ff8308ff59b19668",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/route-profile.json",
+    "source_sha256": "e666591688f46544a0523d3f2d325f5be35db48650ac0ac7a155f96b6910f63e",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/vault-init-code.hex",
+    "source_sha256": "247d12820265150bc046ff609812fae6317ea9cc48ff88746f161e292a1d007d",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/pfeth-eth-mainnet-20260904/verifier-init-code.hex",
+    "source_sha256": "195b4c64919ed46f1ae9e6bdfe6406a4de2a96d6238e1a40304f979351614afa",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/rpc-status-cache-20260906/SHA256SUMS",
+    "source_sha256": "8e495f6a15c5770b0810c7ad173e5ea7d4cae8247c801c74c286648721a6c832",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/rpc-status-cache-20260906/canary-rpc.json",
+    "source_sha256": "772874814b15846f2ddbbc17a426009b85719e99507be372981133e7e2fc98d0",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/rpc-status-cache-20260906/deploy-receipt.json",
+    "source_sha256": "6d827f157853f938a1679159e507f097693c2359def4b8fe8db9d62b9acc33d0",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/rpc-status-cache-20260906/fleet-after.json",
+    "source_sha256": "61f4cd633037bd227351ae2765cd6f2f9de63a4a69765f3f54f99e37b947e726",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/rpc-status-cache-20260906/p1.patch",
+    "source_sha256": "81f59617ceae69783c2de9af6c0695df203dd28d7c6670a33d02d3319a83e95f",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/rpc-status-cache-20260906/regression-before.log",
+    "source_sha256": "3a18ae81cac5d3a06b375c6b814013eb88cb93d098d2078c47ae72b6dd733c96",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/rpc-status-cache-20260906/rpc-tests-main.log",
+    "source_sha256": "073ebc27a468f3038b9df65c896cf7216d54fe6fe155afcd375e1e1ec2dd1647",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/rpc-status-cache-20260906/rpc-tests-release.log",
+    "source_sha256": "454dcac8847e5454549741e770eb023b6f1e51dfdba3ef8a59ac01054a724e3d",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/rpc-status-cache-20260906/source-manifest.json",
+    "source_sha256": "35c18e08b2e92d69aaf03cddd4c474288d90bec62e072bbcea26a02f9cc6b4ac",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/rpc-status-cache-20260906/source.patch",
+    "source_sha256": "88732a4a3cb0536d6457ee18f966041d98ec42eac94c4a13f0f70fa3a66e695d",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "deployments/rpc-status-cache-20260906/stage-verification.json",
+    "source_sha256": "a07bca479be4d4e1f582fac8c73871defdee0beb7e308433541000a8a8c8137b",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/handoffs/2026-09-06___codex__rpc_status_cache_fix.md",
+    "source_sha256": "ecaa37ecaa458d9a070825bb0f0db849e59ae289cd45d55a992574497cf452f6",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/plans/active/shielded-hyperliquid-cover-implementation-20260905.md",
+    "source_sha256": "1438b7aba15d5ff479b1cf132f253b70229ff84c00cac395fc567aff1f12a473",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/plans/active/shielded-lighter-funding-implementation-20260905.md",
+    "source_sha256": "e5ab31cf95364aa8c03dd6d82b1d2aa2f71b300c557bd680b0ee6843627e5a35",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/plans/pft-flare-deterministic-index-demo-execution-spec.md",
+    "source_sha256": "a4a7133e865ef9a8fd157041e1c7ba69828a1682b49d9342f94b37b1a7a9c945",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/review/storage-cobalt-tasknode-handoff-review-20260906.md",
+    "source_sha256": "cacf0727448f628a910ac3f396a4c354b4910a8ce78e8a6fc46187d45d6bae3c",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/specs/pftl-native-deterministic-sec-index-protocol.md",
+    "source_sha256": "7cfb62b4f36ea80d8048e97d29d8177b31eb3886a016861bcb6dda12fe515de9",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/specs/shielded-funding-configurable-denomination-20260905.md",
+    "source_sha256": "43900b0ddb8fca27a931bf88023cbd6036435452fdb526f8d5fe4645e059c203",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/specs/shielded-lighter-funding-hardening-20260905.md",
+    "source_sha256": "b489ccd8b6e16e193e59d293807372b97d48f2aee662668fea252566c8b519b5",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/specs/shielded-perp-venue-funding-implementation-20260904.md",
+    "source_sha256": "831799a28dcc32191979de6f67a394adbe4c39730cf37016cec4c3bdcc8e7a73",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/specs/shielded-perp-venue-funding-mvp-spec.md",
+    "source_sha256": "0c911bdcc5972405eb96d5484e2a0a7c3cf55a11977c157453f99da7627515ea",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/specs/shielded-perp-venue-funding-privacy-hardening-20260905.md",
+    "source_sha256": "5fea0fa99d8372f7e09828b1f7cae081cbefa600d90d39aada75eedeaa626d48",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/SHIELDED-PERP-VENUE-FUNDING-COMPLETION-MANIFEST-20260904.md",
+    "source_sha256": "fd5545294c77b56d52caa07bed7943c39f129feae3d8b11997f2ba86f94b79ca",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/activation/README.md",
+    "source_sha256": "589d2500c37580575c4db03b1370d1c18c6b3257799f0d9a8775a601aa1fc65a",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/activation/activation.json",
+    "source_sha256": "cce4510510aa3d82249517419473bde0ce28c922aab85436a7a47135c9e5a564",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/activation/observer-policy.json",
+    "source_sha256": "d29713eb546e06cfc0efb717db749eee039ee01cd6fe8d9b2361275205f8f6b0",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/live-deployed-state-replay.json",
+    "source_sha256": "d8a7e411c6ca9aced51fe49b597a89cf20a559b4297cd80c2b1776410c0fc6d6",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/live-pftl-index.json",
+    "source_sha256": "266c877dcefaf0d2bb37cdcd90f71ad206928fc95bb3642cb28c87e29a7b71a2",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/live-public-state-replay.json",
+    "source_sha256": "53b847df5ff361b52789cb89015f1a24ec9a70f1012cf65c7e181011f6dfa070",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/local-integration-verification.json",
+    "source_sha256": "808ff53c80b86303e8e66365532626092c831945b34d717cfee9be22455e9cbc",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/native-transaction-identity.json",
+    "source_sha256": "b24a47ed4fbf799dcc58e213d21f900ac4bfb3dd352cd4524ecdd2fbdbafe811",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/README.md",
+    "source_sha256": "67c9e98ee68a113d7371c36e4c0ede8b124293ed65ec6f8c6d73f58a9c8ff95d",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/diagnosis.json",
+    "source_sha256": "e6ae2117c45252226396318f1f19bc5df54079100ff1958b9e38ff4f5c60c9e8",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/fleet-after.json",
+    "source_sha256": "42459d457bf4f41bacfb3e34ecac2637df72af7cf3a9d1989a04b21c829ebe97",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/fleet-deployment.json",
+    "source_sha256": "5c024a8d4588516ca2ddf573b7cc6bee530c1c34f345bd8f25a29acf8f40372a",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/full-snapshot-import.json",
+    "source_sha256": "55285b123bdca5c1902c9f1ebb0ceecb7dfc9ccf39baf8385ef53d0a13a95128",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/live-replay-0.json",
+    "source_sha256": "3c582fd2e5950e3cec4c7e333c4a36545330218660423656ed5601052064b940",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/mkdocs.log",
+    "source_sha256": "69531860bbdb98384fab87276ae939b3a0604cd84d7369f7b6370cbf755f509b",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/native-custody-tests.log",
+    "source_sha256": "eb28beaa4e53752da434f9f0c2975baa521b13c50c137afb9a74783e37e0d9e6",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/native-regression-tests.log",
+    "source_sha256": "e1342fce62bc14b1574e551930c82bcf029138309f13efd936eff4a81d973a51",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/python-native-conformance.log",
+    "source_sha256": "e17a6f157ca4dd80321b41558b0bc556d3d950258853d1bfccbe5a114c9135f1",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/repair-source.tar.gz",
+    "source_sha256": "e1634aeea994e65d14871fb3ca45400d28c78da1c21699a145f3d8b71e5cee81",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/served-rpc-after.json",
+    "source_sha256": "178f291f652f62bde87e88b3ea71a2df12eca4a45e5751614845fcacd385795d",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/source-manifest.json",
+    "source_sha256": "b1cb95cca245fe3fdd86d19baa9284f370a126dc88cde6c3c00f01b0fcb0398c",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/source-series-index.json",
+    "source_sha256": "c792574925a74ee508ffd5e6fde6a4390df95bcc6a9ea60e5f454f68301dc751",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/source.patch",
+    "source_sha256": "5f448ad9e121660082b1eb5670eb0572ea7708359294d53079126d7a64c3af60",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/stage-report.json",
+    "source_sha256": "2fb20efd9d064198b7baa7ee6774cf63388aba9247d421e912d54bb79aa0771c",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/wallet-config-update.json",
+    "source_sha256": "9e90ba11eede24a9a841d7f89b6e46b304561b5916e8cb09a0c1ee2c7b63c418",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/wallet-six-status.json",
+    "source_sha256": "a59f4a51fc2c9552346f47283cefb8778cce84663526f4c17535aa378f7b95da",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pftl-asset_info.json",
+    "source_sha256": "1593b395262d3f00ba095ae1a73154576d328269b2f4a4458c0efa4c90342b55",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/pftl-vault_bridge_status.json",
+    "source_sha256": "b96693f7b03ff3439bebbb3eb1d604c5fb94322bd19491eb69b26da5a227c43e",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/public-evidence.sqlite3",
+    "source_sha256": "fcc21b97786609c62b8a814fb82f2c76a09a8cdc42f88467c2efab7d6cae0b2a",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/public-snapshot-acquisition.json",
+    "source_sha256": "c0b3d5aa101664ba81c401960f7598a169baee5245ab224a5998b920617655f6",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/review-interface.png",
+    "source_sha256": "f63cb742d5181af943481961c0cfa10efb2b7750c9f78c39e9e3b7c62d7c0305",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/simulation-current.json",
+    "source_sha256": "6bb88c45b5b43f89c75e8a246570514b5070c8b81fbb85144d1b467d5584aa2f",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/simulation.json",
+    "source_sha256": "eba656407b12dbbc28ef50a4cb9153375450bb3778fcbbde2c512df1c1ce389f",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/small-denomination/mkdocs.log",
+    "source_sha256": "d6dcc5531d2ed6226a036648167e15008d878f2ee3e90bf897837255e6eb96e0",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/small-denomination/native-proof-conformance.log",
+    "source_sha256": "57f22c90ad70db65b3586699fccc8361c7757ae89d4207e86335b318fefb7e66",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/small-denomination/python-regression.log",
+    "source_sha256": "04e84a8060a6b31c655fffa28252f46efb4ab0856243a6c3b28961242a32d36d",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/small-denomination/simulation.json",
+    "source_sha256": "ce8ba3f666ba26dcb887ce267a46f149cb2ad9a7cf146ed69531bf82285b7045",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/small-denomination/verification.json",
+    "source_sha256": "ecb27aabfcdf81e35cd8af14d58f7d4afee417978f0d056f8ec16ea802fa3de8",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-implementation-20260905/verification.json",
+    "source_sha256": "ac824ad60ed171798cea89df252e8bb8c195ae2ef88291e1e7f66f56d0d29e23",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-research-lock-20260905/candidate-r3.md",
+    "source_sha256": "939c1d2cd4282fb4fa4ee626b1afaf8717eba7b1083dbdf1fb38e32680978c33",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-research-lock-20260905/implementation-baseline-hashes.json",
+    "source_sha256": "8611b4139afa712711618ff07193c0e04d72ce245a3267c968a61cf4404ffaab",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-research-lock-20260905/initial-evidence.md",
+    "source_sha256": "04006c917ecf88da9f36ee072d92a4c181320197c3122565a293ad84ef24c697",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-research-lock-20260905/initial-state.json",
+    "source_sha256": "db57cc0f326f08a350d46c407e909530823a30e24cfc5fb5217889e4dd7f516b",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-research-lock-20260905/lock.json",
+    "source_sha256": "bd1600b027d68af3e591a50792f929d0c3fdcebbe16a8c4d595af382a6643ef8",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-research-lock-20260905/r3-score.log",
+    "source_sha256": "65d3ec1bca50822a4e7a69f5eb2f77da04f13fcb9ecd9f581dba6e1cedb36466",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-research-lock-20260905/score-table.md",
+    "source_sha256": "cafec837556302fa0ea3474bc6ab779ad7ac45d7d8b56f6e39f5b4b6998e5006",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-research-lock-20260905/scores.json",
+    "source_sha256": "d0a16bf62a5966f7a9047875e9035d1c4650c10b4161b04885aacad3ce414682",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-research-lock-20260905/task-after-evidence.json",
+    "source_sha256": "9d13848fb4d0f656e7fd2a8eb1cbd2e147a62c596904a6a6df1ecead954e0f7c",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-research-lock-20260905/task-after-verification.json",
+    "source_sha256": "255602bdc64672b7b0d2b942d474caba8f5c38c67e1128503c9d5f625c64725c",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-research-lock-20260905/task-before-evidence.json",
+    "source_sha256": "bb31af0d209cedad0084481fbb75bac4731b9bf82e42a5b6c81d55111ffc0e18",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-research-lock-20260905/task-rewarded.json",
+    "source_sha256": "179d5d9d843888118dc6f112a51c4294517531a139750edad81de1090b6f6104",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-funding-hardening-research-lock-20260905/verification-response.md",
+    "source_sha256": "6e691775ab5fa4868102d952e30a1e7821aa3ff567a055e0a1e14f1239469221",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-lighter-hardening-20260905/candidate-r1.md",
+    "source_sha256": "1552a9f3159c8aaa45d3b6c36ac7a21ddf8909ea3798094e0cc09d3d0ddc8a31",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-lighter-hardening-20260905/candidate-r2.md",
+    "source_sha256": "fbc7e9f92f2f30bdc2b8e0470cded631e1c4260af9720e2e6a9c070489aa73e1",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-lighter-hardening-20260905/lock.json",
+    "source_sha256": "9a70fdfd5f985db3a14e69d474bbde700ab58ec71b6ecea9aef20877cce70ce4",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-lighter-hardening-20260905/r1-scores.json",
+    "source_sha256": "810fd9023e6f5b058534ef09aa32edb2703a9a4edea3f0f5988766b576e9a9fd",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-lighter-hardening-20260905/r2-corrections.json",
+    "source_sha256": "df752b85982a27be1cdd80ffe097c850bf4a9b6a1f6d933e0c24ee98ad130212",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-lighter-hardening-20260905/r2-scores.json",
+    "source_sha256": "2ce24be6d56392adc1e6491078ac513f7d2a53bcd7cff2107fe5e793ae16aaf7",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "docs/status/shielded-lighter-hardening-20260905/rewrite.json",
+    "source_sha256": "9dfc5783202ebca61671b77fa80e0063aa65743d3f2141aa2a822e04709a92ca",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "programs/pfeth-eth-mainnet-ingress/Cargo.lock",
+    "source_sha256": "f8437e44437d8888e629f6bd03e980a4c971de9e43c5886021c4e088603a6562",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "programs/pfeth-eth-mainnet-ingress/Cargo.toml",
+    "source_sha256": "812c7781f006e038047d3f90c8ffbb3dd5ecef6dd48d236130cf987290008ba0",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "programs/pfeth-eth-mainnet-ingress/elf/pfeth-eth-mainnet-ingress-program",
+    "source_sha256": "d49f826e9d8850e3d4762e475a2c7841b82b30dd79a78bde2d7cd449ea9b12aa",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "programs/pfeth-eth-mainnet-ingress/src/main.rs",
+    "source_sha256": "67782df70bad2a243115c401088d274874cda3e5fa8a96b85a9577546df71469",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "scripts/pfeth-eth-mainnet-deploy.py",
+    "source_sha256": "55da978c5d97c9235d593541d0845cd1f9340abc3a380d01329499503eba6ea6",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "scripts/pfeth-eth-mainnet-package.py",
+    "source_sha256": "f90345d9df634897bdba0ca9ceee6fc8cb98faef0782cf94e8f1588eac90ae8c",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "scripts/pfeth-eth-mainnet-rebase.py",
+    "source_sha256": "c5857a0d8440421c071a5d749831027aec2d3b43e65d6dc295bba08d6c3ca381",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2",
+    "path": "scripts/test-pfeth-eth-mainnet-package",
+    "source_sha256": "c66ea356b991e9fd68ef7bb0f910189c05230e88df6320209dc7ef3d36cb27b4",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/bridge/src/lib.rs",
+    "source_sha256": "65fb8975f0481b52aeb4ab7e5745f114c32606c431c997b591bcd04994526fb4",
+    "result": "copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/execution/src/issued_asset_ledger_helpers.rs",
+    "source_sha256": "8295f8227c5da960583e5db3ef5d2cb0bfa650150175b249d6eb6faaebd98035",
+    "result": "copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/execution/src/lib.rs",
+    "source_sha256": "ede4d53f044cbb79cb8ad8fcf6e22d12c5584cf539cf1c590de32b3a33078682",
+    "result": "copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/execution/src/market_nav_execution_tests.rs",
+    "source_sha256": "669261a9b51e896e65d3390b8aa6018356d11eadb5a0047bd05e6d25fab6799b",
+    "result": "merged"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/execution/src/nav_vault_asset_execution.rs",
+    "source_sha256": "a324668ae55ff7f5e926915478f0530dd3725051318e518303e119724e4a2236",
+    "result": "merged"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/node/src/block_replay_wallet.rs",
+    "source_sha256": "966d648ba69061900b8bad739896a0035826c89ece2cbdd44aeb5cd5575ac2b4",
+    "result": "copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/node/src/market_bridge.rs",
+    "source_sha256": "76d53b4f21e9d8459f2ace4a5dd313506bb29a4386e6df2c4c3d32f516e1b031",
+    "result": "copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/node/src/state_commitment.rs",
+    "source_sha256": "5276d93d6bc5596adb7639b953968959084c1a0613a2fe9cbffc41dc45577ea0",
+    "result": "copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/node/tests/atomic_swap_local_six.rs",
+    "source_sha256": "edb018e3cf984c4223dbf8f7f018db09f3c0a7f947a47572b7ae7001a13d994c",
+    "result": "copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/types/src/market_nav_asset_types.rs",
+    "source_sha256": "cc7a813af36cbf1b4565d8a28c892845961031a28cdd24fcdc519707c646bb9d",
+    "result": "copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/types/src/tests.rs",
+    "source_sha256": "6515535d61fc9799533407d52b46e00bd6fd58d4d57c7a48320651fddc52408d",
+    "result": "copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/types/src/transactions_mempool_receipts.rs",
+    "source_sha256": "589cde2ed2cd109f31eedc8087c7f5e8b596cd0ec5d02c3b325833d76c5c5398",
+    "result": "copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/execution/src/pftl_source_settlement.rs",
+    "source_sha256": "51124cc95bcfa266f6c2a0c02711651d0430c3cb06bc6c9f9fbe3cdf248beb10",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/node/testdata/pfeth-reserve-replay/README.md",
+    "source_sha256": "41335a92946d4c77ff25873d38553d3c59ccc057b809fd36980cc1fa61f5a903",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/node/testdata/pfeth-reserve-replay/block-962.json",
+    "source_sha256": "35c017f0a8aae983ee3d0b8e8bb3ee4693af08ce84e556f21d5113b1e9cd898b",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/node/testdata/pfeth-reserve-replay/block-967.json",
+    "source_sha256": "33bf8642e6cbf0c6ac74fb3c9cac8a1f98435da7242fdb2beca0fc5e0e723c10",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/node/testdata/pfeth-reserve-replay/deposit.json",
+    "source_sha256": "04f92bf16b9c04d643a35bd776be3eebd3a67554dcf8bb1757d6a7754c47328c",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/node/testdata/pfeth-reserve-replay/genesis.json",
+    "source_sha256": "d6ae81ee0732756ea8e67c2e6456e859ab345173d4ba2d4d055b554180fcb55c",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/node/testdata/pfeth-reserve-replay/reserve-packet.json",
+    "source_sha256": "507a6ade2d6eae51fa87f013df812dedc79ec1e474100067a036f083f26c457c",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/node/testdata/pfeth-reserve-replay/synthetic-series-ledger.json",
+    "source_sha256": "3482f2c0c9d7ed0c6d4397e7aff4dbb04c9c106a8a73a2437a0f0d7397b29ce8",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/node/testdata/pfeth-reserve-replay/tx-962.json",
+    "source_sha256": "64bf94b2f41f05d973b6e3d83f14d945c7028152db4256f62b07ff59aad1d46b",
+    "result": "untracked copied"
+  },
+  {
+    "source": "postfiatl1v2-a666-source-route-20260907",
+    "path": "crates/node/testdata/pfeth-reserve-replay/tx-967.json",
+    "source_sha256": "d67d9b2a757900a2ab1b29334482b838d7a5829e2280f5c735e485143a2599fc",
+    "result": "untracked copied"
+  }
+]

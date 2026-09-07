@@ -25,7 +25,7 @@ No community-facing step may start until all three close.
 | --- | --- | --- |
 | Z1 | OPEN | Cobalt is live: Cobalt-ratified transitions are the sole registry-change path on the running devnet with the… |
 | Z2 | OPEN | AI-governance decision made and live: the C2 shadow evaluation is complete, the model-authority decision… |
-| Z3 | OPEN | NAVCoin swaps work end to end: full round trips (deposit → mint → swap → redemption) succeed repeatedly on… |
+| Z3 | OPEN | NAVCoin swaps work end to end (Z3 NAVCoin round-trip plan; Z3 remains OPEN): full round trips (deposit → mint… |
 
 ## Phases A–E
 

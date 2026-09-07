@@ -1,0 +1,63 @@
+{
+  "schema": "postfiat.yolo.local_receipt_qualification.v1",
+  "scope": "Real Groth16 proof of synthetic target inputs using the AWS-compatible guest; four local validator stores, no network deployment",
+  "program": {
+    "elfSha256": "9aa40d86cc478a01fd7c6b2a63308188fb7e671079bd3321b405e7ac1a275cff",
+    "programVkey": "0x0008ed5f9307fc00d9e60fbcd0e463e10d1bb3143ce3f73bcb2c807aa0670968",
+    "schema": "postfiat.yolo.program_identity.v1",
+    "sp1Version": "6.3.1"
+  },
+  "registrationId": "f99dab8bc5578d4f18f80c22ee3721636d769439199e4b0afe73079b22af163b09dda6e561d40f8a7e1617f467b14331",
+  "transactionId": "ce3b9f3228199e0593a489ca2c5f5e53f8b10d0e62d7d07f34001b4ba45481a4b77cdf7db9500824d68183b57b266635",
+  "inclusionHeight": 4,
+  "roundCount": 5,
+  "votesPerRound": [
+    4,
+    4,
+    4,
+    4,
+    4
+  ],
+  "validators": [
+    {
+      "validator": "validator-0",
+      "confirmed": true,
+      "block_count": 5,
+      "state_root": "0a6d915cd10cbdf1274c70b0a7c479dab762d20c09aa402b2d63c12fd1fa45f8d76b956768e37d0eb54ac281953d7982",
+      "tip_hash": "bcbdb872d0f7f6517d113611ede001613e4a0de8c2035206d78c65083913abcdcc16b97e50d2c4106c381e3448331843",
+      "verified": true
+    },
+    {
+      "validator": "validator-1",
+      "confirmed": true,
+      "block_count": 5,
+      "state_root": "0a6d915cd10cbdf1274c70b0a7c479dab762d20c09aa402b2d63c12fd1fa45f8d76b956768e37d0eb54ac281953d7982",
+      "tip_hash": "bcbdb872d0f7f6517d113611ede001613e4a0de8c2035206d78c65083913abcdcc16b97e50d2c4106c381e3448331843",
+      "verified": true
+    },
+    {
+      "validator": "validator-2",
+      "confirmed": true,
+      "block_count": 5,
+      "state_root": "0a6d915cd10cbdf1274c70b0a7c479dab762d20c09aa402b2d63c12fd1fa45f8d76b956768e37d0eb54ac281953d7982",
+      "tip_hash": "bcbdb872d0f7f6517d113611ede001613e4a0de8c2035206d78c65083913abcdcc16b97e50d2c4106c381e3448331843",
+      "verified": true
+    },
+    {
+      "validator": "validator-3",
+      "confirmed": true,
+      "block_count": 5,
+      "state_root": "0a6d915cd10cbdf1274c70b0a7c479dab762d20c09aa402b2d63c12fd1fa45f8d76b956768e37d0eb54ac281953d7982",
+      "tip_hash": "bcbdb872d0f7f6517d113611ede001613e4a0de8c2035206d78c65083913abcdcc16b97e50d2c4106c381e3448331843",
+      "verified": true
+    }
+  ],
+  "cli": [
+    "prepare-register",
+    "prepare-submit",
+    "query",
+    "html"
+  ],
+  "publicReportSha256": "52d73c832e8b9451f165cec2344e8d1b01d6880b2578202c110afa1592d7b2c8",
+  "fixture": "../../../crates/execution/testdata/yolo-target-v1-aws-compatible-proof.json"
+}

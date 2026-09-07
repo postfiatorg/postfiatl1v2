@@ -1,0 +1,34 @@
+   Compiling postfiat-node v0.1.0 (/home/postfiat/repos/postfiatl1v2-rpc-status-fix-20260906/crates/node)
+    Finished `release` profile [optimized] target(s) in 2m 04s
+     Running unittests src/main.rs (/home/postfiat/repos/postfiatl1v2/target/release/deps/postfiat_node-572d61552753696e)
+
+running 25 tests
+test rpc_dispatch::rpc_cli_tests::rpc_serve_rate_limit_window_prunes_old_attempts ... ok
+test rpc_serve_request_tests::atomic_swap_quote_rpc_preserves_typed_market_binding_codes ... ok
+test rpc_serve_request_tests::finality_parent_overshoot_is_immediately_typed_as_stale ... ok
+test rpc_serve_request_tests::rpc_serve_allows_navswap_planner_read_methods ... ok
+test rpc_serve_request_tests::rpc_serve_classifies_write_errors_for_edge_metrics ... ok
+test rpc_serve_request_tests::rpc_owned_sign_accepts_bounded_gzip_transport_without_changing_payload ... ok
+test rpc_serve_request_tests::rpc_serve_metrics_include_direct_connection_saturation ... ok
+test rpc_serve_request_tests::rpc_serve_internal_failures_do_not_expose_operator_paths ... ok
+test rpc_serve_request_tests::rpc_serve_orchard_batch_create_policy_is_gated ... ok
+test rpc_serve_request_tests::rpc_serve_rejects_public_bind_even_with_legacy_override ... ok
+test rpc_serve_request_tests::rpc_serve_orchard_worker_counter_enforces_concurrency ... ok
+test rpc_serve_request_tests::rpc_serve_spool_root_rejects_non_directory ... ok
+test rpc_serve_request_tests::rpc_serve_child_request_spool_uses_private_directory ... ok
+test rpc_serve_request_tests::rpc_serve_storage_failures_are_typed_for_operator_recovery ... ok
+test rpc_serve_request_tests::rpc_serve_spool_root_rejects_symlink ... ok
+test rpc_serve_request_tests::rpc_serve_health_cache_stamp_invalidates_on_state_change ... ok
+ERROR rpc serve telemetry disabled after write failure: transport event log write failed: No space left on device (os error 28)
+test rpc_serve_request_tests::rpc_serve_event_log_failure_degrades_without_failing_listener_path ... ok
+test rpc_serve_request_tests::rpc_serve_rejects_oversized_request_lines_before_parse ... ok
+test rpc_serve_request_tests::tx_not_found_is_a_typed_protocol_error_and_other_tx_errors_remain_generic ... ok
+test rpc_serve_request_tests::fastpay_v3_loopback_rpc_exposes_live_capabilities_and_bounded_reads ... ok
+test rpc_serve_request_tests::finality_submit_conflicting_duplicate_still_fails ... ok
+test rpc_serve_request_tests::consensus_v2_timeout_vote_rpc_is_finality_gated_and_durably_signed ... ok
+test rpc_serve_request_tests::finality_submit_retry_after_own_commit_replays_committed_finality ... ok
+test rpc_serve_request_tests::rpc_serve_status_cache_expires_after_transactional_commit ... ok
+test rpc_serve_request_tests::rpc_serve_drops_stalled_client_reads_without_blocking_other_connections ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 130 filtered out; finished in 1.92s
+

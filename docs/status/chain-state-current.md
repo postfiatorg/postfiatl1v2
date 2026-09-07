@@ -1,8 +1,22 @@
 # PostFiat L1 Current State
 
-Updated: `2026-08-31T04:30:00Z`
+Updated: `2026-09-06T20:04:03.087166+00:00`
 
 Status: **canonical operational-state reference**
+
+!!! success "2026-09-06: RPC status cache repair deployed and verified at height 992"
+
+    All six validators run release `rpc-status-cache-20260906`, binary
+    `740d2610…4b46`. The status report now expires after one second and
+    refreshes from authoritative state even when legacy JSON files are
+    unchanged. All twelve transport/RPC process hashes matched; all 18 served
+    status samples across cache expiration agreed with the same block 992,
+    tip `066ae1e8…dac111d`, state root `beb33019…f52a8e8`.
+    Transactional storage remains active. No new blocks or wallet transactions
+    were created by the repair. See the
+    [repair handoff](../handoffs/2026-09-06___codex__rpc_status_cache_fix.md)
+    and `deployments/rpc-status-cache-20260906/deploy-receipt.json`.
+    The August observations below describe earlier releases and checkpoints.
 
 !!! success "2026-08-31: transactional storage DEPLOYED AND ACTIVE at height 931"
 

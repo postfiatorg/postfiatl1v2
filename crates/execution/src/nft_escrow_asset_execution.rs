@@ -619,14 +619,22 @@ pub struct AssetExecutionCompatibility {
     pub allow_incremental_age_release_replay: bool,
     pub allow_legacy_pftl_uniswap_disabled_live_value_replay: bool,
     pub allow_legacy_non_nav_spread_supply_omission: bool,
+    /// Archive-only: pre-family reserve accounting. Never selected for new execution.
+    pub allow_legacy_base_only_vault_reserve_supply: bool,
     pub bridge_verification_activation_height: Option<u64>,
     pub orchard_aware_bridge_claim_activation_height: Option<u64>,
     pub pfusdc_source_series_activation_height: Option<u64>,
     pub atomic_swap_activation_height: Option<u64>,
     pub atomic_swap_paused: bool,
+    pub yolo_target_activation_height: Option<u64>,
 }
 
 impl AssetExecutionCompatibility {
+    pub const fn with_yolo_target_activation_height(mut self, height: Option<u64>) -> Self {
+        self.yolo_target_activation_height = height;
+        self
+    }
+
     pub const fn strict() -> Self {
         Self {
             allow_legacy_nav_subscription_source_root: false,
@@ -637,11 +645,13 @@ impl AssetExecutionCompatibility {
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             allow_legacy_non_nav_spread_supply_omission: false,
+            allow_legacy_base_only_vault_reserve_supply: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: Some(0),
             atomic_swap_paused: false,
+            yolo_target_activation_height: None,
         }
     }
 
@@ -655,11 +665,13 @@ impl AssetExecutionCompatibility {
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             allow_legacy_non_nav_spread_supply_omission: false,
+            allow_legacy_base_only_vault_reserve_supply: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
+            yolo_target_activation_height: None,
         }
     }
 
@@ -673,11 +685,13 @@ impl AssetExecutionCompatibility {
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             allow_legacy_non_nav_spread_supply_omission: false,
+            allow_legacy_base_only_vault_reserve_supply: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
+            yolo_target_activation_height: None,
         }
     }
 
@@ -691,11 +705,13 @@ impl AssetExecutionCompatibility {
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             allow_legacy_non_nav_spread_supply_omission: false,
+            allow_legacy_base_only_vault_reserve_supply: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
+            yolo_target_activation_height: None,
         }
     }
 
@@ -709,11 +725,13 @@ impl AssetExecutionCompatibility {
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             allow_legacy_non_nav_spread_supply_omission: false,
+            allow_legacy_base_only_vault_reserve_supply: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
+            yolo_target_activation_height: None,
         }
     }
 
@@ -807,6 +825,20 @@ fn apply_asset_operation(
     orchard_balances: &[AssetOrchardAssetBalance],
 ) -> Result<(), (&'static str, String)> {
     match &transaction.unsigned.operation {
+        AssetTransactionOperation::YoloTargetRegisterV1(operation) => {
+            if transaction.unsigned.transaction_kind != postfiat_types::YOLO_TARGET_REGISTER_TRANSACTION_KIND_V1 {
+                return Err(("wrong_transaction_kind", "target registration transaction kind differs".to_string()));
+            }
+            require_yolo_target_activation(compatibility, block_height)?;
+            register_yolo_target_run(ledger, operation, block_height)
+        }
+        AssetTransactionOperation::YoloTargetSubmitV1(operation) => {
+            if transaction.unsigned.transaction_kind != postfiat_types::YOLO_TARGET_SUBMIT_TRANSACTION_KIND_V1 {
+                return Err(("wrong_transaction_kind", "target submission transaction kind differs".to_string()));
+            }
+            require_yolo_target_activation(compatibility, block_height)?;
+            submit_yolo_target_receipt(ledger, operation, &asset_transaction_tx_id(transaction), block_height)
+        }
         AssetTransactionOperation::AssetCreate(operation) => {
             if transaction.unsigned.transaction_kind != ASSET_CREATE_TRANSACTION_KIND {
                 return Err((
@@ -1379,7 +1411,7 @@ fn apply_asset_operation(
                     decoded_reserve_public_values = Some(decoded);
                 }
                 if profile.source_class.starts_with(VAULT_BRIDGE_PROFILE_SOURCE_CLASS_PREFIX) {
-                    validate_vault_bridge_reserve_packet_fields(ledger, &nav_asset, profile, operation)?;
+                    validate_vault_bridge_reserve_packet_fields(ledger, &nav_asset, profile, operation, compatibility)?;
                 }
             }
             let mut packet = NavReservePacket::new(

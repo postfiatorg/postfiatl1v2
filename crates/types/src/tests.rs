@@ -246,6 +246,26 @@ fn issued_asset_id_is_deterministic_and_domain_separated() {
 }
 
 #[test]
+fn pfeth_asset_id_is_deterministic_and_uses_the_nine_decimal_definition() {
+    let issuer = "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8";
+    let asset_id = pfeth_asset_id("postfiat-wan-devnet-2", issuer).expect("pfETH asset id");
+    assert_eq!(
+        asset_id,
+        "629f1ba8f36963662d6e36243aea85627787cd72d41a9e92c5f01b60e3e68c1b951af771d16780bf13c4036b8d2a4996"
+    );
+    let definition = AssetDefinition::new(
+        "postfiat-wan-devnet-2",
+        issuer,
+        PFETH_ASSET_CODE,
+        PFETH_ASSET_VERSION,
+        PFETH_ASSET_PRECISION,
+    )
+    .expect("pfETH definition");
+    assert_eq!(definition.asset_id, asset_id);
+    assert_eq!(WETH_WEI_PER_PFETH_ATOM, 1_000_000_000);
+}
+
+#[test]
 fn asset_definition_and_trustline_validate_deterministic_ids() {
     let chain_id = "postfiat-local";
     let issuer = "pfissuer000000000000000000000000000000000";
@@ -2492,6 +2512,44 @@ fn vault_bridge_receipt_bucket_and_allocation_ids_are_deterministic() {
 }
 
 #[test]
+fn vault_bridge_routes_bind_the_exact_chain_token_and_proof_kind() {
+    assert_eq!(
+        vault_bridge_route_id_for_source(
+            SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1,
+            ETHEREUM_MAINNET_CHAIN_ID,
+            ETHEREUM_MAINNET_WETH9_ADDRESS,
+        ),
+        Some(VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_WETH_V1)
+    );
+    assert_eq!(
+        vault_bridge_route_id_for_source(
+            SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1,
+            ETHEREUM_MAINNET_CHAIN_ID,
+            ETHEREUM_MAINNET_USDC_ADDRESS,
+        ),
+        Some(VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1)
+    );
+    assert_eq!(
+        vault_bridge_route_id_for_source(
+            SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1,
+            ETHEREUM_MAINNET_CHAIN_ID,
+            "0x2222222222222222222222222222222222222222",
+        ),
+        None,
+        "an arbitrary mainnet token must never inherit a registered route"
+    );
+    assert_eq!(
+        vault_bridge_route_id_for_source(
+            NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1,
+            ARBITRUM_ONE_CHAIN_ID,
+            ETHEREUM_MAINNET_WETH9_ADDRESS,
+        ),
+        None,
+        "a token address from another chain must never select a route"
+    );
+}
+
+#[test]
 fn ethereum_route_backing_is_route_indexed_and_six_replica_deterministic() {
     let asset_id = "ab".repeat(48);
     let policy_hash = "cd".repeat(48);
@@ -2499,7 +2557,7 @@ fn ethereum_route_backing_is_route_indexed_and_six_replica_deterministic() {
     let mut evidence = VaultBridgeDepositEvidence {
         source_chain_id: 1,
         vault_address: "0x1111111111111111111111111111111111111111".to_string(),
-        token_address: "0x2222222222222222222222222222222222222222".to_string(),
+        token_address: ETHEREUM_MAINNET_USDC_ADDRESS.to_string(),
         depositor: "0x3333333333333333333333333333333333333333".to_string(),
         pftl_recipient_hash: vault_bridge_pftl_recipient_hash(&recipient).expect("recipient hash"),
         pftl_recipient: recipient,
@@ -2572,7 +2630,7 @@ fn arbitrum_confirmed_and_bonded_backing_share_one_route_across_six_replicas() {
         let mut evidence = VaultBridgeDepositEvidence {
             source_chain_id: ARBITRUM_ONE_CHAIN_ID,
             vault_address: "0x1111111111111111111111111111111111111111".to_string(),
-            token_address: "0x2222222222222222222222222222222222222222".to_string(),
+            token_address: ARBITRUM_ONE_USDC_ADDRESS.to_string(),
             depositor: "0x3333333333333333333333333333333333333333".to_string(),
             pftl_recipient_hash: vault_bridge_pftl_recipient_hash(&recipient)
                 .expect("recipient hash"),
@@ -2728,6 +2786,14 @@ fn ethereum_ingress_public_values_are_canonical_and_source_kind_is_proof_native(
         PfUsdcEthereumIngressPublicValuesV1::from_canonical_bytes(&encoded).expect("decode"),
         values
     );
+    let mut pfeth_values = values.clone();
+    pfeth_values.schema = PFETH_ETHEREUM_INGRESS_PUBLIC_VALUES_SCHEMA_V1.to_string();
+    pfeth_values.route_id = VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_WETH_V1.to_string();
+    pfeth_values.token_address = ETHEREUM_MAINNET_WETH9_ADDRESS.to_string();
+    pfeth_values
+        .validate()
+        .expect("pfETH shares the canonical wire layout under a distinct schema");
+
     let mut underbacked = values.clone();
     underbacked.vault_token_balance_atoms = "9".to_string();
     assert!(underbacked.validate().is_err());
@@ -3405,4 +3471,68 @@ fn fastswap_hash48_newtypes_round_trip_json_and_cbor() {
             .expect("decode hash48 CBOR bytes"),
         root
     );
+}
+
+#[test]
+fn pftl_source_selections_are_signed() {
+    let reserve: PftlUniswapOrderReserveOperation = serde_json::from_value(serde_json::json!({
+        "subscriber":"pfholder", "route_id":"route", "reservation_id":"11".repeat(48),
+        "ethereum_recipient":"0x1111111111111111111111111111111111111111",
+        "route_epoch":1,"policy_epoch":1,"policy_hash":"22".repeat(48),
+        "mint_amount_atoms":1000000,"max_settlement_value_atoms":1005000,"expires_at_height":100
+    })).unwrap();
+    let legacy=reserve.signing_bytes();
+    let mut source=reserve.clone();
+    source.settlement_source_asset_id=Some("33".repeat(48));
+    source.validate().unwrap();
+    assert!(source.signing_bytes().starts_with(&legacy));
+    assert_ne!(source.signing_bytes(),legacy);
+    source.settlement_source_asset_id=Some("44".repeat(48));
+    assert_ne!(source.signing_bytes(),{ let mut r=reserve.clone();r.settlement_source_asset_id=Some("33".repeat(48));r.signing_bytes() });
+    assert!(!serde_json::to_value(&reserve).unwrap().as_object().unwrap().contains_key("settlement_source_asset_id"));
+    source.settlement_source_asset_id=Some("bad\nsource=other".to_string());
+    assert!(source.validate().is_err());
+
+    let mut redeem: PftlUniswapPrimaryRedeemOperation=serde_json::from_value(serde_json::json!({
+        "owner":"pfholder","settlement_recipient":"pfholder","route_id":"route","redemption_nonce":"55".repeat(32),
+        "nav_amount_atoms":1000000,"min_settlement_value_atoms":999500,"route_epoch":1,"policy_epoch":1,
+        "policy_hash":"22".repeat(48),"pricing_nav_epoch":1,"pricing_reserve_packet_hash":"66".repeat(48),"expires_at_height":100
+    })).unwrap();
+    let legacy=redeem.signing_bytes();
+    redeem.settlement_source_asset_id=Some("33".repeat(48));
+    redeem.validate().unwrap();
+    assert!(redeem.signing_bytes().starts_with(&legacy));
+    assert_ne!(redeem.signing_bytes(),legacy);
+}
+
+#[test]
+fn pftl_source_governance_signs_unchanged_disabled_and_selected_states() {
+    let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        policy_hash: String::new(), policy_epoch: 2, issue_multiplier_bps: 10050,
+        redeem_multiplier_bps: 9995, issue_capacity_atoms: 100000000,
+        redeem_capacity_atoms: 100000000, max_order_atoms: 10000000, min_order_atoms: 1,
+        valid_from_height: 1, expires_at_height: 100, max_nav_age_blocks: 100,
+        pricing_nav_epoch: 1, pricing_reserve_packet_hash: "11".repeat(48),
+    };
+    policy.policy_hash = policy.computed_hash();
+    let mut op = PftlUniswapRouteEpochAdvanceOperation {
+        settlement_source_asset_ids: None, operator: "pfissuer".to_string(),
+        route_id: "route".to_string(), prior_route_epoch: 1, next_route_epoch: 2,
+        next_route_config_digest: "22".repeat(48), live_value_enabled: true,
+        next_primary_market_policy: policy,
+    };
+    op.validate().unwrap();
+    let unchanged = op.signing_bytes();
+    op.settlement_source_asset_ids = Some(Vec::new());
+    op.validate().unwrap();
+    let disabled = op.signing_bytes();
+    assert_ne!(unchanged, disabled);
+    op.settlement_source_asset_ids = Some(vec!["33".repeat(48)]);
+    op.validate().unwrap();
+    assert_ne!(disabled, op.signing_bytes());
+    let selected = op.signing_bytes();
+    op.settlement_source_asset_ids = Some(vec!["44".repeat(48)]);
+    assert_ne!(selected, op.signing_bytes());
+    op.settlement_source_asset_ids = Some(vec!["33".repeat(48), "33".repeat(48)]);
+    assert!(op.validate().is_err());
 }

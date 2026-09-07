@@ -1,0 +1,39 @@
+{
+  "packet_id": "9d44f843a06cc6585dc05b4fc5e67522b825f3253311f31d1d6663b6a56b4a1f11c7e41b483d1683f760c5eebd07b33d",
+  "asset_id": "629f1ba8f36963662d6e36243aea85627787cd72d41a9e92c5f01b60e3e68c1b951af771d16780bf13c4036b8d2a4996",
+  "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "submitter": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "epoch": 2,
+  "nav_per_unit": 1000000,
+  "circulating_supply": 0,
+  "verified_net_assets": 5000000,
+  "proof_profile": "13a0b3b87033639dfe67476d11ada0705be690960769d91d3041b47f18315491b6f4defc8d928cff0891e51f76076b3a",
+  "source_root": "be9bebccb4e63b7e613cf209ce685ce0d0a28a177b2409402adf2ca3a1c40c093adf691e48ea6ec7972e92d058518e49",
+  "attestor_root": "9c5fcb64807b54d60cac3484ba4efc363c59954962398ac952ff3a5451ad3a63b27757a1e460026d404a0420ee3b2b73",
+  "reserve_packet_hash": "d8ed79e395008ce495cc0c9cf2e3e1e67bf99986399ed04e9dcf710879cc4dfb6c1b5f4397e4332352938360f2817d6b",
+  "state": "submitted",
+  "submitted_at_height": 962,
+  "reserve_accounts": [
+    "evm:1:0x40187922ab0761c11e50bb971cc5a8c77164bec4:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+  ],
+  "challenge_bond": 0,
+  "attestations": [
+    {
+      "attestor": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+      "pass": true,
+      "observation_root": "9c5fcb64807b54d60cac3484ba4efc363c59954962398ac952ff3a5451ad3a63b27757a1e460026d404a0420ee3b2b73",
+      "attested_at_height": 964
+    }
+  ],
+  "source_count": 0,
+  "quantity_trust_counts": {
+    "cryptographic": 0,
+    "attested": 0,
+    "controlled": 0
+  },
+  "valuation_trust_counts": {
+    "cryptographic": 0,
+    "attested": 0,
+    "controlled": 0
+  }
+}

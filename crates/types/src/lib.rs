@@ -10,6 +10,9 @@ include!("transactions_mempool_receipts.rs");
 include!("pfusdc_tier4_types.rs");
 include!("pfusdc_bonded_ingress_types.rs");
 include!("nav_reserve_public_values.rs");
+include!("yolo_collection_public_values.rs");
+include!("yolo_target_public_values.rs");
+include!("yolo_target_receipt.rs");
 include!("genesis_registry.rs");
 
 #[cfg(test)]

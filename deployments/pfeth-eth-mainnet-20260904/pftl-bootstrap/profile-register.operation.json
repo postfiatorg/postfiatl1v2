@@ -1,0 +1,19 @@
+{
+  "operation": "nav_profile_register",
+  "registrant": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "verifier_kind": "sp1-groth16",
+  "source_class": "vault_bridge:erc20_bridge_vault:1:0x40187922ab0761c11e50bb971cc5a8c77164bec4:0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+  "max_snapshot_age_blocks": 900,
+  "challenge_window_blocks": 64,
+  "max_epoch_gap_blocks": 128,
+  "settle_deadline_blocks": 256,
+  "min_challenge_bond": 1,
+  "min_attestations": 0,
+  "tolerance_bp": 0,
+  "valuation_policy_hash": "02d83d20d6b523d1d047a2d6343704cf11b89ebc0428282db2bed001a5595764",
+  "vault_bridge_route_policy_hash": "d0befbd8e77440464b98c3f2c5f1ffedcd99802206349727f18f9b4d54d53b0e715eb2a9e230a64ca396acca3fb63394",
+  "sp1_program_vkey": "0x000dd724902a8a24abde9f3fda01477e0d454ac506fbb6a0613fd4486ad4953c",
+  "sp1_proof_encoding": "groth16",
+  "max_proof_bytes": 4096,
+  "max_public_values_bytes": 4096
+}

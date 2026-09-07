@@ -1,0 +1,10 @@
+{
+  "status": "failed",
+  "elapsed_seconds": 163.30756092071533,
+  "error": "native public snapshot import/replay failed; existing output retained",
+  "native_error": "error: snapshot-import failed: block 962 replay receipt `8acd66d1ac46597b20045928462bdf5e5ab581bc7a5d7480e68e93b6b384421d37be9ea334022b141c419a087cdcf814` differs from persisted receipt: replayed tx_id=8acd66d1ac46597b20045928462bdf5e5ab581bc7a5d7480e68e93b6b384421d37be9ea334022b141c419a087cdcf814 accepted=false code=vault_bridge_circulating_supply_mismatch message=\"vault bridge reserve packet circulating_supply must be at least current issued supply and may lead it only by finalized, unclaimed SP1-backed deposits\" fee_charged=0 fee_burned=0 minimum_fee=34 account_reserve=10 state_expansion_fee=10 nft_issuer_transfer_fee=0 nft_issuer_transfer_fee_recipient=None nft_collection_flags=0 offer_id=None offer_fills=0 atomic_swap_legs=0; persisted tx_id=8acd66d1ac46597b20045928462bdf5e5ab581bc7a5d7480e68e93b6b384421d37be9ea334022b141c419a087cdcf814 accepted=true code=accepted message=\"asset transaction applied; fee burned\" fee_charged=34 fee_burned=34 minimum_fee=34 account_reserve=10 state_expansion_fee=10 nft_issuer_transfer_fee=0 nft_issuer_transfer_fee_recipient=None nft_collection_flags=0 offer_id=None offer_fills=0 atomic_swap_legs=0",
+  "funds_moved": false,
+  "failed_block": 962,
+  "replay_code": "vault_bridge_circulating_supply_mismatch",
+  "local_node_sha256": "5cbd992b54f7b998a155b01ab3693673b7935f3d5636b9cfdc30ea3ae7c52a41"
+}

@@ -1,0 +1,27 @@
+{
+  "schema": "tasknode-unl-binding-test-fixtures-v1",
+  "notice": "TEST ONLY. This fixture contains synthetic identifiers, timestamps, nonces, and transaction hashes. It contains no private keys or operator credentials.",
+  "validator_ids": {
+    "primary": "test-validator-alpha",
+    "secondary": "test-validator-beta"
+  },
+  "nonces": {
+    "bind_one": "1111111111111111111111111111111111111111111111111111111111111111",
+    "bind_two": "2222222222222222222222222222222222222222222222222222222222222222",
+    "revoke": "3333333333333333333333333333333333333333333333333333333333333333",
+    "reattach": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "transaction_hashes": {
+    "bind_one": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bind_two": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "revoke": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "reattach": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "times": {
+    "bind_one": "2026-01-01T00:00:00Z",
+    "rotation": "2026-01-02T00:00:00Z",
+    "bind_two": "2026-01-03T00:00:00Z",
+    "expired_evaluation": "2026-07-02T00:00:01Z",
+    "timely_evaluation": "2026-06-30T00:00:00Z"
+  }
+}

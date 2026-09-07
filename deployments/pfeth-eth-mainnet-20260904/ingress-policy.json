@@ -1,0 +1,13 @@
+{
+  "genesis_validators_root": "0x4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95",
+  "manifest_hash": "0x02d83d20d6b523d1d047a2d6343704cf11b89ebc0428282db2bed001a5595764",
+  "manifest_preimage_hex": "0x706f7374666961742e657468657265756d2d6d61696e6e65742d776574682d76312e70300040187922ab0761c11e50bb971cc5a8c77164bec4c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2e66463c2762b26a8889d4db85052fa72a845b6fd435f81f380450ea8e467b82f",
+  "route_id": "ethereum-mainnet-weth-v1",
+  "schema": "postfiat.pfeth.ethereum_ingress_policy.v1",
+  "source_chain_id": 1,
+  "token_address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+  "token_balance_storage_key": "0x25d747faf6f02f0d07eab024eff40bc82c7ad523ec327010b7b97ea509ebf471",
+  "token_runtime_code_hash": "0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
+  "vault_address": "0x40187922ab0761c11e50bb971cc5a8c77164bec4",
+  "vault_runtime_code_hash": "0x2453f23d0ca464f4599f0c2526a7f82867a1058fec3f62751bdae2a0b8a9cd81"
+}

@@ -1,0 +1,18 @@
+{
+  "version": "funding-destination-v1",
+  "k_target": 8,
+  "window_s": 3600,
+  "hold_s": 21600,
+  "max_search_nodes": 1000000,
+  "max_assignments": 100000,
+  "max_dp_states": 100000,
+  "max_analysis_notes": 18,
+  "models": {
+    "uniform": "each feasible injective assignment has weight 1",
+    "timing": "product 1/(1+floor(note age/3600)); no maximum age",
+    "ownership": "product 1/(number of notes in the assigned source group)",
+    "cover_behavior": "timing weight times 1/16 for cover-to-active or user-to-idle; unknown and same-policy behavior weight 1"
+  },
+  "clustering": "known common source ownership and known common destination ownership are merged; unknown identities are not certified independent",
+  "conditioning": "at least one exit assigned to target source; whole source group"
+}

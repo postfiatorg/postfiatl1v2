@@ -1,0 +1,9 @@
+{
+  "changed_fields": {
+    "node_binary": "/home/postfiat/.local/lib/postfiat/releases/pfeth-replay-v4-20260905/postfiat-node",
+    "runtime_binary": "/opt/postfiat/releases/pfeth-replay-v4-20260905/postfiat-node"
+  },
+  "backup": "/home/postfiat/tmp/pfeth-replay-fix-20260905/wallet-config-before.toml",
+  "binary_sha256": "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2",
+  "other_settings_unchanged": true
+}

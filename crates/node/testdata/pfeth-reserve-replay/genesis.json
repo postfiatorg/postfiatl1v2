@@ -1,0 +1,8 @@
+{
+  "chain_id": "postfiat-wan-devnet-2",
+  "protocol_version": 1,
+  "validator_count": 6,
+  "native_supply_atoms": 1000000000,
+  "replicated_state_v2_activation_height": 0,
+  "consensus_v2_activation_height": 1
+}

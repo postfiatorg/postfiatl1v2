@@ -2520,16 +2520,17 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
         == SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1
         && supply_after_claim > nav_asset.circulating_supply
     {
-        let route_id = match record.evidence.source_chain_id {
-            ETHEREUM_MAINNET_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1,
-            ETHEREUM_SEPOLIA_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1,
-            _ => {
-                return Err((
-                    "ethereum_ingress_source_chain_unsupported",
-                    "Ethereum cap growth uses an unregistered source chain".to_string(),
-                ));
-            }
-        };
+        let route_id = vault_bridge_route_id_for_source(
+            &record.source_proof_kind,
+            record.evidence.source_chain_id,
+            &record.evidence.token_address,
+        )
+        .ok_or_else(|| {
+            (
+                "ethereum_ingress_source_route_unsupported",
+                "Ethereum cap growth uses an unregistered source chain/token route".to_string(),
+            )
+        })?;
         let ethereum_backing = ledger
             .vault_bridge_route_backing(&operation.asset_id)
             .map_err(|error| ("bad_route_backing", error))?
@@ -4558,10 +4559,12 @@ fn apply_pftl_uniswap_order_reserve(
     // The signed maximum is held immediately. This makes reservations
     // sybil-resistant and guarantees the later subscription can settle
     // without an operator or a second value authorization.
+    let source_route = ledger.pftl_uniswap_routes[route_index].clone();
+    let funding_asset = pftl_source_reserve(ledger, &source_route, operation)?;
     debit_issued_asset_balance(
         ledger,
         &operation.subscriber,
-        &next_route.settlement_asset_id,
+        &funding_asset,
         operation.max_settlement_value_atoms,
         "PFTL-Uniswap order reservation escrow",
     )?;
@@ -4662,10 +4665,12 @@ fn apply_pftl_uniswap_order_release(
             ));
         };
     if let Some(refund_atoms) = escrow_refund {
+        let source_route = ledger.pftl_uniswap_routes[route_index].clone();
+        let funding_asset = pftl_source_release(ledger, &source_route, &operation.reservation_id, refund_atoms)?;
         credit_issued_asset_balance_from_custody(
             ledger,
             &owner,
-            &next_route.settlement_asset_id,
+            &funding_asset,
             refund_atoms,
             "PFTL-Uniswap released reservation refund",
         )?;
@@ -4808,11 +4813,12 @@ fn apply_pftl_uniswap_primary_subscribe_v2(
                 "reservation escrow is below settlement due".to_string(),
             )
         })?;
+    let funding_asset = pftl_source_subscription(ledger, &route, &operation.reservation_id, base_value, spread)?;
     if reservation_refund != 0 {
         credit_issued_asset_balance_from_custody(
             ledger,
             &operation.subscriber,
-            &operation.settlement_asset_id,
+            &funding_asset,
             reservation_refund,
             "PFTL-Uniswap subscription reservation refund",
         )?;
@@ -5221,7 +5227,7 @@ pub fn apply_asset_orchard_private_primary_redeem_route_transition(
         postfiat_types::PFTL_UNISWAP_BPS_DENOMINATOR,
     )?;
     if operation.settlement_value_atoms != settlement_output
-        || route.settlement_reserve_atoms < base_value
+        || pftl_legacy_principal(ledger, &route)? < base_value
     {
         return Err((
             "pftl_uniswap_private_redemption_unavailable",
@@ -5415,6 +5421,7 @@ fn apply_pftl_uniswap_primary_redeem(
             "redemption output exceeds base NAV".to_string(),
         )
     })?;
+    let payout_asset = pftl_source_redeem(ledger, &route, operation.settlement_source_asset_id.as_deref(), base_value, spread)?;
     debit_issued_asset_balance(
         ledger,
         &operation.owner,
@@ -5425,7 +5432,7 @@ fn apply_pftl_uniswap_primary_redeem(
     credit_issued_asset_balance_from_custody(
         ledger,
         &operation.settlement_recipient,
-        &route.settlement_asset_id,
+        &payout_asset,
         settlement_output,
         "PFTL-Uniswap primary redemption settlement credit",
     )?;
@@ -5597,6 +5604,7 @@ fn apply_pftl_uniswap_route_epoch_advance(
     next_route
         .validate()
         .map_err(|error| ("bad_pftl_uniswap_route", error))?;
+    pftl_source_govern(ledger, &next_route, operation.settlement_source_asset_ids.as_ref())?;
     let state_after_hash = pftl_uniswap_route_state_hash(&next_route);
     ledger.pftl_uniswap_routes[route_index] = next_route;
     append_pftl_uniswap_consensus_receipt(
@@ -7780,16 +7788,17 @@ fn ensure_ethereum_ingress_public_values_match(
         "{VAULT_BRIDGE_PROFILE_SOURCE_CLASS_PREFIX}erc20_bridge_vault:{}:{}:{}",
         evidence.source_chain_id, evidence.vault_address, evidence.token_address
     );
-    let expected_route_id = match evidence.source_chain_id {
-        ETHEREUM_MAINNET_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1,
-        ETHEREUM_SEPOLIA_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1,
-        _ => {
-            return Err((
-                "ethereum_ingress_source_chain_unsupported",
-                "Ethereum ingress proof uses an unregistered source chain".to_string(),
-            ));
-        }
-    };
+    let expected_route_id = vault_bridge_route_id_for_source(
+        SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1,
+        evidence.source_chain_id,
+        &evidence.token_address,
+    )
+    .ok_or_else(|| {
+        (
+            "ethereum_ingress_source_route_unsupported",
+            "Ethereum ingress proof uses an unregistered source chain/token route".to_string(),
+        )
+    })?;
     let mismatch = profile.source_class != expected_source_class
         || values.route_id != expected_route_id
         || profile.valuation_policy_hash != values.manifest_hash
@@ -7972,6 +7981,7 @@ fn validate_vault_bridge_reserve_packet_fields(
     nav_asset: &NavTrackedAsset,
     profile: &NavProofProfile,
     operation: &NavReserveSubmitOperation,
+    compatibility: AssetExecutionCompatibility,
 ) -> Result<(), (&'static str, String)> {
     ensure_vault_bridge_asset_policy(ledger, nav_asset, &operation.submitter)?;
     if operation.nav_per_unit != VAULT_BRIDGE_UNIT {
@@ -8012,7 +8022,13 @@ fn validate_vault_bridge_reserve_packet_fields(
                 .to_string(),
         ));
     }
-    let current_supply = issued_asset_supply(ledger, &operation.asset_id)?;
+    // New packets count the base asset plus its source-specific series.
+    // Archive replay can select the old calculation only for pinned packets.
+    let current_supply = if compatibility.allow_legacy_base_only_vault_reserve_supply {
+        issued_asset_supply(ledger, &operation.asset_id)?
+    } else {
+        issued_asset_family_supply(ledger, &operation.asset_id)?
+    };
     let maximum_proof_backed_supply = current_supply
         .checked_add(finalized_unclaimed_sp1_backing)
         .ok_or_else(|| {

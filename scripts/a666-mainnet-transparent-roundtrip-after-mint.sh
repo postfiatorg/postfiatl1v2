@@ -44,6 +44,23 @@ test -s "$nav_manifest"
 test -s "$phase_dir/destination-consume/summary.json"
 jq -e '.verdict=="PASS"' "$phase_dir/destination-consume/summary.json" >/dev/null
 mint_amount=$(jq -er '.mint_amount_atoms' "$phase_dir/a666/ops/manifest.json")
+settlement_source=$(jq -r '.settlement_source_asset_id // empty' "$phase_dir/a666/ops/manifest.json")
+redeem_source_args=()
+egress_bucket_args=()
+if test -n "$settlement_source"; then
+  [[ "$settlement_source" =~ ^[0-9a-f]{96}$ ]]
+  redeem_source_args=(--settlement-source-asset-id "$settlement_source")
+  ssh -o BatchMode=yes "root@$validator2_host" \
+    "$remote_node asset-info --data-dir /var/lib/postfiat/validator-2 --asset-id '$settlement_source'" \
+    > "$phase_dir/settlement-source-asset.json"
+  jq -e --arg source "$settlement_source" --arg family "$pfusdc" \
+    '.found==true and .asset_id==$source and .asset.source_series_id==$source
+     and .asset.asset_family_id==$family and .asset.precision==6' \
+    "$phase_dir/settlement-source-asset.json" >/dev/null
+  source_bucket=$(jq -er '.asset.source_bucket_id' "$phase_dir/settlement-source-asset.json")
+  [[ "$source_bucket" =~ ^[0-9a-f]{96}$ ]]
+  egress_bucket_args=(--bucket-id "$source_bucket")
+fi
 packet_binding=$(sha256sum "$phase_dir/a666/ops/manifest.json" | awk '{print $1}')
 mkdir -p "$phase_dir/uniswap"
 
@@ -60,6 +77,7 @@ revoke_uniswap_allowances() {
 trap revoke_uniswap_allowances EXIT
 python3 scripts/a666-mainnet-uniswap-allowances.py prepare \
   --output "$allowance_prepare_file" \
+  --token wa666 --amount-atoms "$mint_amount" \
   --ttl-seconds 86400
 jq -e '.verdict=="PASS" and .mode=="prepare"' "$allowance_prepare_file" >/dev/null
 
@@ -102,11 +120,15 @@ python3 scripts/pftl-uniswap-mainnet-swap.py \
   --rpc-url "$rpc" \
   --packet-sha256 "$packet_binding" \
   --quote-from-stateview \
-  --execute > "$phase_dir/uniswap/forward-execution.json"
+  --execute --output "$phase_dir/uniswap/forward-execution.json" \
+  > "$phase_dir/uniswap/forward-execution.log"
 jq -e --argjson amount "$mint_amount" --argjson minimum "$forward_min" \
   '.tx_status==1 and .input_spent_atoms==$amount and .output_received_atoms >= $minimum' \
   "$phase_dir/uniswap/forward-execution.json" >/dev/null
 forward_output=$(jq -er '.output_received_atoms' "$phase_dir/uniswap/forward-execution.json")
+python3 scripts/a666-mainnet-uniswap-allowances.py prepare \
+  --token usdc --amount-atoms "$forward_output" --ttl-seconds 86400 \
+  --output "$phase_dir/uniswap/allowances-reverse-$allowance_event_id.json"
 
 deadline=$(( $(date +%s) + 1800 ))
 reverse_binding=$(sha256sum "$phase_dir/uniswap/forward-execution.json" | awk '{print $1}')
@@ -148,7 +170,8 @@ python3 scripts/pftl-uniswap-mainnet-swap.py \
   --rpc-url "$rpc" \
   --packet-sha256 "$reverse_binding" \
   --quote-from-stateview \
-  --execute > "$phase_dir/uniswap/reverse-execution.json"
+  --execute --output "$phase_dir/uniswap/reverse-execution.json" \
+  > "$phase_dir/uniswap/reverse-execution.log"
 jq -e --argjson amount "$forward_output" --argjson minimum "$reverse_min" \
   '.tx_status==1 and .input_spent_atoms==$amount and .output_received_atoms >= $minimum' \
   "$phase_dir/uniswap/reverse-execution.json" >/dev/null
@@ -211,6 +234,7 @@ if ! test -s "$phase_dir/primary-redeem/primary-redeem-manifest.json" || \
   current_height=$(ssh -o BatchMode=yes "root@$validator2_host" \
     "$remote_node status --data-dir /var/lib/postfiat/validator-2" | jq -er '.block_height')
   python3 scripts/a666-build-transparent-redeem-op.py \
+    "${redeem_source_args[@]}" \
     --route-status "$phase_dir/route-status-before-redeem.json" \
     --nav-manifest "$nav_manifest" \
     --nav-amount-atoms "$return_amount" \
@@ -234,6 +258,7 @@ if ! test -s "$phase_dir/pfusdc-egress/summary.json"; then
   bash scripts/a666-mainnet-pfusdc-proof-egress.sh \
     --phase-dir "$phase_dir" \
     --workflow-id "$workflow_id" \
+    "${egress_bucket_args[@]}" \
     --amount-atoms "$settlement_output"
 fi
 jq -e --argjson amount "$settlement_output" \
@@ -244,7 +269,7 @@ ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node navcoin-bridge-supply-status --data-dir /var/lib/postfiat/validator-2 --route-id pftl-a666-ethereum-wA666-usdc-v1" \
   > "$phase_dir/final-pftl-supply-status.json"
 ssh -o BatchMode=yes "root@$validator2_host" \
-  "$remote_node account-assets --data-dir /var/lib/postfiat/validator-2 --account $joe --asset-id $pfusdc" \
+  "$remote_node account-assets --data-dir /var/lib/postfiat/validator-2 --account $joe --asset-id ${settlement_source:-$pfusdc}" \
   > "$phase_dir/final-holder-pfusdc.json"
 ssh -o BatchMode=yes "root@$validator2_host" \
   "$remote_node account-assets --data-dir /var/lib/postfiat/validator-2 --account $joe --asset-id $a666" \

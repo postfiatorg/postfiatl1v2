@@ -1,5 +1,7 @@
 # PostFiat L1
 
+[September 7 NAVCoin/Cobalt machine handoff](docs/handoffs/2026-09-07___codex__navcoin_cobalt_machine_handoff.md)
+
 > **Maturity:** controlled pre-testnet research software. This repository is
 > not a production/mainnet release. Validator operation currently requires an
 > explicit `--unsafe-devnet-file-signer` acknowledgement because HSM/remote

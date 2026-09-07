@@ -1,0 +1,1216 @@
+{
+  "digests": [
+    {
+      "body": {
+        "account_id": "account-pass",
+        "anchor_tx_hash": "db64cb221dcddb169b0deef2678551843c0951dff32b107dc7de5dfeb5f2f8ed",
+        "badge": {
+          "expires_at": null,
+          "revoked_at": null,
+          "valid_from": "2026-01-01T00:00:00Z",
+          "verified": true
+        },
+        "bound_wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow",
+        "disputes": [],
+        "mode": "SHADOW_ONLY",
+        "pointers": [
+          {
+            "outcome": {
+              "accepted_at": "2026-03-14T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-14T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0005",
+              "verdict_hash": "5ca678105a3dccdcaf565525b24f41db24a22963fc2d27a80ad10e77a1484552",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-14T12:01:00Z"
+            },
+            "pointer_hash": "01a5911145af66137a24d06dfdf8a0be23365e544af2600a0b4af992c1abf1b6"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-27T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-27T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0018",
+              "verdict_hash": "7e64466d27d788935dd523390db4e34363217f231441e6772d4e1e39713a8a7e",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-27T12:01:00Z"
+            },
+            "pointer_hash": "0d5b73a7f13bb55bf5ba391d23d6bb4d0501d50df759c4bb5647fdc675f74eb2"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-21T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-21T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0012",
+              "verdict_hash": "7f373129a7c149998a48e115a152bc208ac6e67efda3eadd9b346b8aeb532708",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-21T12:01:00Z"
+            },
+            "pointer_hash": "19f93dda1e8ebe791121f7c871da5dd5c34017df0e3670311ddeb45e12e6b4b3"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-13T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-13T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0004",
+              "verdict_hash": "f7286f1a082a7c8fad7265fbb49ebdfd4872d6e3d056fa97531883a24bfe421b",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-13T12:01:00Z"
+            },
+            "pointer_hash": "23aed32f75b9d9c150c30d607cc200fcb30edb5ca6da48a582f76cdb04ee5706"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-22T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-22T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0013",
+              "verdict_hash": "872d7804806905560f97256250d530f3bf1d6da75ad75aa232d5c4278e8db0e6",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-22T12:01:00Z"
+            },
+            "pointer_hash": "24f862feb4ce8895371923a2bae4420cf1f201375a51ba9c219cd37be059dfa2"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-29T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-29T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0020",
+              "verdict_hash": "fc52b2f1c74e28460db9cc0ccfbb99fa8a9d7e2225351476733711f5415c548a",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-29T12:01:00Z"
+            },
+            "pointer_hash": "2a3df55794d2b7d0dab82a12ace44e7008c427601da85f03c1e256779ad38d19"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-18T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-18T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0009",
+              "verdict_hash": "ae79b60bca62fe1c7c69c129bb7d0a5774e8ab3061eddc11a16a6b66e3da5794",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-18T12:01:00Z"
+            },
+            "pointer_hash": "413f085b6b17a5d6b6c31a042e7b0230d12ced73b73334854601c5db5d7e2539"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-11T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-11T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0002",
+              "verdict_hash": "4605f5b8125fbb4a4af462693f20478c314e2f1f45a0a89a34bc0003161cf5e1",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-11T12:01:00Z"
+            },
+            "pointer_hash": "46eefef0bd7e87b12a4df14ec4517f4a01b0fcaa3c2be18fa360136cdc96b668"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-28T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-28T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0019",
+              "verdict_hash": "9fc423e9463bd8a6ca30422502a9f700dd49402e287a5435cf701634cf7c18cb",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-28T12:01:00Z"
+            },
+            "pointer_hash": "6a976763870aa676acb377c1e8fbfd7eed950de4525e89920501f2d60fc26962"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-17T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-17T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0008",
+              "verdict_hash": "033a80f5ae41002d20411510736fa0794c5714dcb03c0b5af12fd51bd049ced4",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-17T12:01:00Z"
+            },
+            "pointer_hash": "73ec4698f6b7687082dffada22a4c2654df30db4b400002d0ef39971d959ee6b"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-26T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-26T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0017",
+              "verdict_hash": "73845239f7fa652366663a2712804d9e960dcd17ea1c0af44c9823f329406819",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-26T12:01:00Z"
+            },
+            "pointer_hash": "75d449975ec4002f3fecb2f0f18384b36b053eec573b9364a21809c858d91612"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-23T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-23T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0014",
+              "verdict_hash": "dedd33fe2692b493d3b1eb54736615a914093e36d1f2a7f7d737194f9d7cac29",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-23T12:01:00Z"
+            },
+            "pointer_hash": "7c03860d3b20a42a045778b75225d045898495948550a265c92718259e03ef85"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-09T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-09T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0000",
+              "verdict_hash": "4effbb8f3bd69869f128a5eff562678ee13979bfceb8068e755784ff8ac046b3",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-09T12:01:00Z"
+            },
+            "pointer_hash": "aa5f6ea99ab6112fc6ee599aa3cd0c63447dc31136b50f2a0977b4e15d065641"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-25T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-25T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0016",
+              "verdict_hash": "03645924ff0f329abab9c367f94d4e812dafecf355f9c53c69f90f4b56b083f1",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-25T12:01:00Z"
+            },
+            "pointer_hash": "b72e30d4911663c049930c86251174bebf2339f54233e58e3112e460a502d6d8"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-15T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-15T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0006",
+              "verdict_hash": "1d41ff5db37b7f995e00ccfac83c8de0af359b5c515f09e605ea526e72a3c672",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-15T12:01:00Z"
+            },
+            "pointer_hash": "bdfd53e5161c4b115028f7e2c1c922d294f4146eb7f5e93b10bf4efc38ea779a"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-12T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-12T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0003",
+              "verdict_hash": "3acce25c13041916d0e27f562a619fda126727d91504cf3bb5ceef8f6f44c2a1",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-12T12:01:00Z"
+            },
+            "pointer_hash": "be1142a38df8ae47706fefc29fb415ac372efb72e783f901264e5bf2c33358d1"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-20T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-20T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0011",
+              "verdict_hash": "9453e5454abacb919426bdc35ab021863a6339998694a613174ae30b80aa884c",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-20T12:01:00Z"
+            },
+            "pointer_hash": "c420c98dccfe1db2f06e57c0110e68123d962d1c613bce943397d732c03abd3c"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-16T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-16T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0007",
+              "verdict_hash": "0a3eec2a72b4808661286553ff8db5c8bf69733ec9fa8a69bc44275ec7947c65",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-16T12:01:00Z"
+            },
+            "pointer_hash": "c84538601a11950a62591abe1981e524bfe28428a082b1ffc68d1b32cb70ebbe"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-24T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-24T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0015",
+              "verdict_hash": "05ec9dc9dd0f2263bd1b75e94fac7f1c55a4d3741839fbce6888813f5d5a536f",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-24T12:01:00Z"
+            },
+            "pointer_hash": "d4a221e99e1c752d7ad3724c3c5eac7d1d51c587028adae1063181435a98e761"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-19T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-19T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0010",
+              "verdict_hash": "7bd8d362bccc776cf7a550e56016f875a663096df54644688849e179c2233aae",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-19T12:01:00Z"
+            },
+            "pointer_hash": "e89e7dc058305d6ddebf1b651b77c0a836d4cf4543ee8b724807a5945dd4c4df"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-10T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-10T12:02:00Z",
+              "task_id": "test-only-account-pass-network-task-0001",
+              "verdict_hash": "d7d421d06eccb6bcaafd6d6a132fa980de35e1ba29c2915f36a9ed4f2cc202b7",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-10T12:01:00Z"
+            },
+            "pointer_hash": "ea73e42b336f70de41b6744db07c468ae9f55407c3e6af403176b40cd0c44cb4"
+          }
+        ],
+        "publishing_key_id": "test-only-shadow-publishing-key",
+        "schema": "tasknode-unl-work-digest-body-v1",
+        "score_inputs": {
+          "accepted_network_tasks": 21,
+          "badge_current": true,
+          "first_rewarded_at": "2026-03-09T12:02:00Z",
+          "open_disputes": 0,
+          "verification_passes": 21,
+          "verification_total": 21
+        },
+        "snapshot_id": "test-only-shadow-snapshot-account-pass",
+        "window": {
+          "days": 180,
+          "end": "2026-09-04T12:00:00Z",
+          "start": "2026-03-08T12:00:00Z"
+        }
+      },
+      "digest_hash": "061945686380e0da462a371da78f2b92585a63632caa45fa5be9bf0097b0ec2a",
+      "mode": "SHADOW_ONLY",
+      "schema": "tasknode-unl-work-digest-envelope-v1",
+      "signature_algorithm": "secp256k1-recoverable-sha256",
+      "signature_hex": "7b0fae4b59f57374dfe7c1a080721fffd6a928422712b1af18610d94341219772e5fe55f3b05e98d69908b4f1cc4ce2782f19640320c93d17cc1406a7fdfa47100"
+    },
+    {
+      "body": {
+        "account_id": "account-digest-hold",
+        "anchor_tx_hash": "3c762377b32a01081ceca8e82ceba3ff87c0a00d9e7bc2d00561c8e1e073bbbb",
+        "badge": {
+          "expires_at": null,
+          "revoked_at": null,
+          "valid_from": "2026-01-01T00:00:00Z",
+          "verified": true
+        },
+        "bound_wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz",
+        "disputes": [],
+        "mode": "SHADOW_ONLY",
+        "pointers": [
+          {
+            "outcome": {
+              "accepted_at": "2026-03-20T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-20T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0011",
+              "verdict_hash": "a9d40424fc14191c6bf7cca49ff8742e158f8656157cdecdc83865aa40e1e371",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-20T12:01:00Z"
+            },
+            "pointer_hash": "017dd5bf0f6e901b751b1a0f9557d2198892a3c38a27cf3fd27f4b2c9d8f9aa4"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-13T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-13T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0004",
+              "verdict_hash": "a2dcb3e67b020695e0862abd24682cf07fb2e601e21e9ad542d0caf0898f02fa",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-13T12:01:00Z"
+            },
+            "pointer_hash": "0a878cb0514a87a8257fded319cfb19358329211f9bfb45185936edac176428f"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-18T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-18T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0009",
+              "verdict_hash": "47f2f22c3893174a6e6d5c4b8e4adb7e63f4f38b050866d2871edfabf450781f",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-18T12:01:00Z"
+            },
+            "pointer_hash": "0e391fb22760c38c003d62fda86b4b3851bcf8b6aa9af92d965fd5a32f7a9d88"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-23T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-23T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0014",
+              "verdict_hash": "7170bc9cf659e4e02ea0f84b2f7af9e4c7520f26b23ef8c015b1682efd60813f",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-23T12:01:00Z"
+            },
+            "pointer_hash": "40bb9aaba9feddbab4a7a9bb04330e298da20e0f5da10fe9fbea62c71fea563b"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-12T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-12T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0003",
+              "verdict_hash": "25a1ab1381398e2a81e9f6208883d51083d83cd902e49d499baacfdb6f1f9742",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-12T12:01:00Z"
+            },
+            "pointer_hash": "440ff493fa5b7e395a61afec08d8b6b46e6d52f8c030d161c8ffa4f17054a1e1"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-26T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-26T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0017",
+              "verdict_hash": "f9f87e691dedeb9d8ca6bf85ae2a83a42237996fa9ef792e81399bb1f3105002",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-26T12:01:00Z"
+            },
+            "pointer_hash": "47a417885d9847a70bd6930a1424375a61c749570ae79430b2040975fcc648ed"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-28T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-28T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0019",
+              "verdict_hash": "9019a35d38c8049856d0bc0cf6e1428f8ccbdecae01c5667ac4ced191fd49467",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-28T12:01:00Z"
+            },
+            "pointer_hash": "5588ff4c18e9f88caa9842678045c9dda304716893b7592e1a3ad247ffc21063"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-10T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-10T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0001",
+              "verdict_hash": "08ab112bcb6bdf103f95f2efa379002bc28ecfab5daaf7668de0a796fb37e04d",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-10T12:01:00Z"
+            },
+            "pointer_hash": "5bed3bc7b7fe252ab9ec74a91ba6745c4b3434e5afd4bc30bf4f79f33017d5ca"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-22T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-22T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0013",
+              "verdict_hash": "dc7d69259c6c323c720a5216b4496f9357ab9ffca9530edd1d22ad6913bca07e",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-22T12:01:00Z"
+            },
+            "pointer_hash": "7968d560e839daf3adf67e3f0d776c6d0a592162f6b6041f21487d122d8f220d"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-16T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-16T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0007",
+              "verdict_hash": "92c9373b94ac163844d19a9fa4f279c817e3e8593baa1a4eda5537cc72048f4a",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-16T12:01:00Z"
+            },
+            "pointer_hash": "7dbca2efee6bf5341174a5a8dbc1fe326d24c0ba9ee55317b3d5eacd814adeb7"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-25T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-25T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0016",
+              "verdict_hash": "22887c638977519e4d5fc80e4686e1d63f4bec5862cca5f57fc17042d6fcd219",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-25T12:01:00Z"
+            },
+            "pointer_hash": "84e52a20058b239bf57a84fc1f29dbb36523c2fc31d386a35d1fa965a9182c28"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-21T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-21T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0012",
+              "verdict_hash": "2605d3f57fa7d5191d0e30849b913617ee2d34ca5672254868b1cacf89eec50c",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-21T12:01:00Z"
+            },
+            "pointer_hash": "983bbbeaf16eaf50dd243478479c3f69d104228bc8d0f9707346ce01bb213d77"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-24T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-24T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0015",
+              "verdict_hash": "b3de122ac70e7ad38a6d561a82eb2b674d0e85b4a7b483e0e7a5076e08b8557b",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-24T12:01:00Z"
+            },
+            "pointer_hash": "9fe14aeb2c148eeecb4e03801f9e5dc1e896b2e0788eee6f08f11bc2cf78c4a8"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-17T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-17T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0008",
+              "verdict_hash": "67e0fdbe3551a961f44b38e77394a0523eb22f9d1687a59148e1e7d9bba31afb",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-17T12:01:00Z"
+            },
+            "pointer_hash": "b289e774cba9e1c1ee6b4254ac8e2942c08d361807e11fc94e227c8856eba00a"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-19T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-19T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0010",
+              "verdict_hash": "6f9190ad42960f4d6a37d0dc44dbaa615c40032b941f82b1cb29ced1c20aca85",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-19T12:01:00Z"
+            },
+            "pointer_hash": "b8b08b8790c32e0d9051ab389d9b405afbcaf3733fd52e56ac5710dd28e74f5f"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-11T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-11T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0002",
+              "verdict_hash": "436f91ac30d213f4264672f952ffcb66d68888f5025bd2ebcb8d6d1491f15bb5",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-11T12:01:00Z"
+            },
+            "pointer_hash": "bac24ccde14329c3c9b226864f35435227420eb552c2e77737391444e52ced4d"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-27T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-27T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0018",
+              "verdict_hash": "d49bad892f2e90e4e0519ed947e5cfedd5e6d51c7ba5fd5b6be6e80d1f65e63b",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-27T12:01:00Z"
+            },
+            "pointer_hash": "cead8afb696c2a7334f42f2fd0ff2bd09932af87400f1a93a9ba5f938270b0c4"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-14T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-14T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0005",
+              "verdict_hash": "a057115cf5001576149e2c9f14e9f9bf66203188be98ee6bfb03ad2a6d6d73e4",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-14T12:01:00Z"
+            },
+            "pointer_hash": "e5a3f05b1ced4b3e68b337a640bec129b4c0d70b5f3001f2443df8c0829ba78f"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-15T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-15T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0006",
+              "verdict_hash": "b7b5e27bf45c46e7a37e7ab118e92dc7aae5e45bfcb5e9aa7a4a60ee5bbcc91b",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-15T12:01:00Z"
+            },
+            "pointer_hash": "f0c58b0c5d814780c0df752fdda9c11ae99efd8610b57b4a42ca362ed6abffea"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-09T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-09T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0000",
+              "verdict_hash": "ed13f6c56caff82458ee01c020198fcd528cad5199ed2410b1053caded58acf5",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-09T12:01:00Z"
+            },
+            "pointer_hash": "f7fade4e3eb4591b606153ee9439fa407ac404f38b12dba89f700ef01759eb6e"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-29T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-29T12:02:00Z",
+              "task_id": "test-only-account-digest-hold-network-task-0020",
+              "verdict_hash": "af2449a4a0a0dd97618e012de5fee3b28a34d0c0b122d6c34a0e785c1ff23bf8",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-29T12:01:00Z"
+            },
+            "pointer_hash": "fdea7f9af726d5e80035562ea52460444a73cb4bd911402740bd188e339bdc77"
+          }
+        ],
+        "publishing_key_id": "test-only-shadow-publishing-key",
+        "schema": "tasknode-unl-work-digest-body-v1",
+        "score_inputs": {
+          "accepted_network_tasks": 21,
+          "badge_current": true,
+          "first_rewarded_at": "2026-03-09T12:02:00Z",
+          "open_disputes": 0,
+          "verification_passes": 21,
+          "verification_total": 21
+        },
+        "snapshot_id": "test-only-shadow-snapshot-account-digest-hold",
+        "window": {
+          "days": 180,
+          "end": "2026-09-04T12:00:00Z",
+          "start": "2026-03-08T12:00:00Z"
+        }
+      },
+      "digest_hash": "fdf6c896160ed30c484e38f51b42dedbbbeea5d09ccad42eac237f371990cfe8",
+      "mode": "SHADOW_ONLY",
+      "schema": "tasknode-unl-work-digest-envelope-v1",
+      "signature_algorithm": "secp256k1-recoverable-sha256",
+      "signature_hex": "712030c4f9ee5bbdee292ac7c813465b4f51c90e1f007945cae23d86c73fd83237a75676519ec07391b8246e320e2d57fa62e771df37338c7897f26250187e3a00"
+    },
+    {
+      "body": {
+        "account_id": "account-low-score",
+        "anchor_tx_hash": "7f44a72c0c78d6a2a2cf91e55a874882e7d603d39948fe83384238937d8f689d",
+        "badge": {
+          "expires_at": null,
+          "revoked_at": null,
+          "valid_from": "2026-01-01T00:00:00Z",
+          "verified": true
+        },
+        "bound_wallet_address": "rBcZcJ7skaua7n4iaRPF7sD4EjRsaQ87CE",
+        "disputes": [],
+        "mode": "SHADOW_ONLY",
+        "pointers": [
+          {
+            "outcome": {
+              "accepted_at": "2026-03-09T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-09T12:02:00Z",
+              "task_id": "test-only-account-low-score-network-task-0000",
+              "verdict_hash": "0887e3016b9954b26efd80de7e12e81486f70c94cc3e6e98b427206b1ad4e868",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-09T12:01:00Z"
+            },
+            "pointer_hash": "0b684450e9f739792e9efdc9308569c587bb24038d878ea3cfb604e3c1cd6bc7"
+          }
+        ],
+        "publishing_key_id": "test-only-shadow-publishing-key",
+        "schema": "tasknode-unl-work-digest-body-v1",
+        "score_inputs": {
+          "accepted_network_tasks": 1,
+          "badge_current": true,
+          "first_rewarded_at": "2026-03-09T12:02:00Z",
+          "open_disputes": 0,
+          "verification_passes": 1,
+          "verification_total": 1
+        },
+        "snapshot_id": "test-only-shadow-snapshot-account-low-score",
+        "window": {
+          "days": 180,
+          "end": "2026-09-04T12:00:00Z",
+          "start": "2026-03-08T12:00:00Z"
+        }
+      },
+      "digest_hash": "a770acbf9f1b8814eb6cb9c68cdc68f1b0c387a8c6ff9cdb84965e9cbf79670e",
+      "mode": "SHADOW_ONLY",
+      "schema": "tasknode-unl-work-digest-envelope-v1",
+      "signature_algorithm": "secp256k1-recoverable-sha256",
+      "signature_hex": "831b7ca8da0d7e039dbe6bd5eb88d59d25a258cbe7b87b24a4fe9d348f6c6a4f4dacf465c5207cc5fa5a6a170524d0a2d7d1fb3ce21801e37db61a112dc96abc00"
+    },
+    {
+      "body": {
+        "account_id": "account-cluster-capped",
+        "anchor_tx_hash": "6fda5bab7518ef0bc0d1596992c1e9164be22bfa2889df12bba9a026fa632369",
+        "badge": {
+          "expires_at": null,
+          "revoked_at": null,
+          "valid_from": "2026-01-01T00:00:00Z",
+          "verified": true
+        },
+        "bound_wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4",
+        "disputes": [],
+        "mode": "SHADOW_ONLY",
+        "pointers": [
+          {
+            "outcome": {
+              "accepted_at": "2026-03-14T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-14T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0005",
+              "verdict_hash": "ed4fb2d967a638ebf4985f0da5662d6ad43b074a82dc239934554bed1c13b67d",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-14T12:01:00Z"
+            },
+            "pointer_hash": "096a80ef8add7c985be6830af86b4d59c2729eddf4d3ae432edf5764f80c0c16"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-18T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-18T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0009",
+              "verdict_hash": "d74955c5a77d47cf0084bf1ad834f3b384150b24582783269d727df9daefea92",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-18T12:01:00Z"
+            },
+            "pointer_hash": "10076c247f3c94f85490488d225e17e2dee0f8c6478a81a6685ae75ac53773b0"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-11T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-11T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0002",
+              "verdict_hash": "e58ca50cc692bc6de2a5118314170b23916506a3c240292018fb0a0a8d4d50ae",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-11T12:01:00Z"
+            },
+            "pointer_hash": "1029515625c78376fffe8478450a187c2daa8f5d639f85eed6201b0393b03f37"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-09T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-09T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0000",
+              "verdict_hash": "ae6653273b2ae770b041c68d6440407453f1713e68d1caa55fad21ff4ce7b9f8",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-09T12:01:00Z"
+            },
+            "pointer_hash": "14cad26b8fb53637d6de72f781175f219fa11cb186f22720f26ea939397e63af"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-21T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-21T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0012",
+              "verdict_hash": "118d328c0d17f83e5482d2c5df143c37d26aae9f2ba4e6918bc28bfb72bb9fe3",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-21T12:01:00Z"
+            },
+            "pointer_hash": "18a61790f0811159763ee851870d0163787f5f9bd210fc9633c0032749e214cc"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-13T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-13T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0004",
+              "verdict_hash": "5cecb431ae7a13f8d97e6357fd62077e9dc44754683aabc697c2148850acf3a8",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-13T12:01:00Z"
+            },
+            "pointer_hash": "1c3d87f2393f63d38749a6aef3360a76354049669d2fb99484f9beec4b37a5ce"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-29T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-29T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0020",
+              "verdict_hash": "f51b891d6e22a6baa9544a5be9630858c4fe61e68fa4abc095d4c25e78de4942",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-29T12:01:00Z"
+            },
+            "pointer_hash": "21163fb30d77ad3e96551705763f9d23ff570b6a3efb183502f2ec6f60b90f4b"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-24T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-24T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0015",
+              "verdict_hash": "913ebbee2b677dd483ac444808ac130df5b3dfea75efb288d8ee57bbb561b6ab",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-24T12:01:00Z"
+            },
+            "pointer_hash": "3f08eb1c4f58fa177f7f2f311da5e4025b272a93ee33ce6886b8953ea8e496b1"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-20T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-20T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0011",
+              "verdict_hash": "872cd7dcfc6d0e2e67ad7ec171f58200bccf00f458a2104df715470e897acb2a",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-20T12:01:00Z"
+            },
+            "pointer_hash": "521d9317c91235ba19147200509979b3cf206454831f0e9e9f2a362b371cc1a0"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-19T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-19T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0010",
+              "verdict_hash": "27f65a32f9df6e8de3eb16c10ed537d60177e625fb92ded5c337c29ba2e7c6b9",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-19T12:01:00Z"
+            },
+            "pointer_hash": "5d72961190ae8b94e1eee24d7e8e7b806f480130093bc4b691cf51dd16d0f1d9"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-23T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-23T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0014",
+              "verdict_hash": "e05719d163baaee46a4417cd05df0f7a9ae76142b0b8d98aa7ff1a2da60f26e8",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-23T12:01:00Z"
+            },
+            "pointer_hash": "5d88dda60b18a9bbec0c7bef0700b64b600bb6f21386f02665f944b5c957b47e"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-27T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-27T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0018",
+              "verdict_hash": "7e4d037ec6309bc05bf2da9f54561f7895ae59a286410a05c1debd169c07d354",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-27T12:01:00Z"
+            },
+            "pointer_hash": "611fb1e1711038d6821821ffb895b3cf18ec9651094253e67263b7f5517409fb"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-16T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-16T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0007",
+              "verdict_hash": "7aafee1fb6af3dad417e9217a58b128b240869f0dadb77e82d49b7356a53d619",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-16T12:01:00Z"
+            },
+            "pointer_hash": "6a0437cfa00abf2b82d62c7277e0d43d2edafe17f9e204eebc3a0923357544a8"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-25T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-25T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0016",
+              "verdict_hash": "7050ec70cf2d8195db29fe63190a7211e8792bb8d76e14fe06181cbf96688084",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-25T12:01:00Z"
+            },
+            "pointer_hash": "6a9528ebae88ee056efadd2357081c0c27b28066f01f5c2600e29a6bbaa3f9b8"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-10T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-10T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0001",
+              "verdict_hash": "a4663b445c04f3d83b814e4cc762c2ca7a6e0efd57780f2a73d367c49bd2d463",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-10T12:01:00Z"
+            },
+            "pointer_hash": "6d79a38824172465129cacabaa20c69f35ccd8fda1f69a837ee6a2fd08fdb964"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-12T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-12T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0003",
+              "verdict_hash": "d83e03f9855fa9d47ab5f4bb25a47c48e1cd0e501eefda045d56b686179d9dc8",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-12T12:01:00Z"
+            },
+            "pointer_hash": "7573bc0e0b89792bcccae1e8a4766a71eebc07dcafec4ef66b605c7897fcb35a"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-15T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-15T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0006",
+              "verdict_hash": "15c27e58578f4c262c21e2cad6747a7743288eea8879c4651c07ea34bbf6074a",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-15T12:01:00Z"
+            },
+            "pointer_hash": "8efd142ce7abd4ddc2bd25fde66d9466796eead6391203d36d97d32a74aa81be"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-17T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-17T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0008",
+              "verdict_hash": "2a25ab49982b81308a238fd964950c4d52017aa05a20cf6472d7cd3a43533a85",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-17T12:01:00Z"
+            },
+            "pointer_hash": "afb84e67417cbb811976cf79583f9e63db4b69204560fe9eb282597676f2faa3"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-26T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-26T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0017",
+              "verdict_hash": "2518280fb7b2f4c353cfb5c5e462341b12acbcf06559499d1d85f3fc028d565c",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-26T12:01:00Z"
+            },
+            "pointer_hash": "b2abc592c2d03b95e85be7e19fa61855b342efc520c3d6451172a803838b504a"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-22T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-22T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0013",
+              "verdict_hash": "476ba0bb37746e4fafe0a35f0418ce9c8377d536ae302bb0f08d64f4bf8c008b",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-22T12:01:00Z"
+            },
+            "pointer_hash": "cee8cc90eb45e14889d656046f7ed2f077decfa5e0d431c90b0c9d34f5b0be1c"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-28T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-28T12:02:00Z",
+              "task_id": "test-only-account-cluster-capped-network-task-0019",
+              "verdict_hash": "96af72e76c7e5a95bed36740ca00799d2e4d6405f618558ba55a21d4cb9b2439",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-28T12:01:00Z"
+            },
+            "pointer_hash": "d460db49dd917f7100ed73e698ae8411acfe329dfef3b74ad644051d3be9a203"
+          }
+        ],
+        "publishing_key_id": "test-only-shadow-publishing-key",
+        "schema": "tasknode-unl-work-digest-body-v1",
+        "score_inputs": {
+          "accepted_network_tasks": 21,
+          "badge_current": true,
+          "first_rewarded_at": "2026-03-09T12:02:00Z",
+          "open_disputes": 0,
+          "verification_passes": 21,
+          "verification_total": 21
+        },
+        "snapshot_id": "test-only-shadow-snapshot-account-cluster-capped",
+        "window": {
+          "days": 180,
+          "end": "2026-09-04T12:00:00Z",
+          "start": "2026-03-08T12:00:00Z"
+        }
+      },
+      "digest_hash": "53e91fc75d166fef7f5133ca9087ab50e6101a271453ba266c3ae7f74a067525",
+      "mode": "SHADOW_ONLY",
+      "schema": "tasknode-unl-work-digest-envelope-v1",
+      "signature_algorithm": "secp256k1-recoverable-sha256",
+      "signature_hex": "d3186d71cfa758df84f562059b7a49dcc977a4af8aafc112c233c714333a236d5dcfcb875102ed8283d3632dde9d1a676d5f4bcef07fe13568d50a665ee31ffa01"
+    },
+    {
+      "body": {
+        "account_id": "account-connectivity-hold",
+        "anchor_tx_hash": "0dc8b1d62ab0caa174146473f493cd7a079f859d817d4e6c2181318103015554",
+        "badge": {
+          "expires_at": null,
+          "revoked_at": null,
+          "valid_from": "2026-01-01T00:00:00Z",
+          "verified": true
+        },
+        "bound_wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE",
+        "disputes": [],
+        "mode": "SHADOW_ONLY",
+        "pointers": [
+          {
+            "outcome": {
+              "accepted_at": "2026-03-10T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-10T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0001",
+              "verdict_hash": "aacaee6bdf6dc6d518104d019811411583f352dbc8975c1f7efda4e1544ef0d1",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-10T12:01:00Z"
+            },
+            "pointer_hash": "0a4fceabb84c4b4817539e52de5c46b857cf85b7af82a973cccdd3da72520c80"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-25T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-25T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0016",
+              "verdict_hash": "21538d16c697a456262d5895d07c5bfa21e2ba5136bb53afe0e129ac7e1bbf4d",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-25T12:01:00Z"
+            },
+            "pointer_hash": "1b2c913212e7f9916b6a1ae19bcd599b5af25e206d29de197a46454c840b8fa7"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-28T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-28T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0019",
+              "verdict_hash": "5dff6df2b51a26bdaa1a89bda927a287c708900409cac1aaf3d60a5cd80d6530",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-28T12:01:00Z"
+            },
+            "pointer_hash": "244399c003f89383ad0fcb64667d972ef6ba1689fda5cf5ba483b8cf2a4bc1e8"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-11T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-11T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0002",
+              "verdict_hash": "a8d77e5048b06aca3ecd45b18db092088c752b929a0a1bd911a59548b7e8a7a7",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-11T12:01:00Z"
+            },
+            "pointer_hash": "32aec46397840633357195b23b817a37854fe7f177bbb3da736ff18af74ace14"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-26T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-26T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0017",
+              "verdict_hash": "d843fd310cf4024e0dd014484164ea654f6ddfac0cea5c0aca1fd513e9011946",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-26T12:01:00Z"
+            },
+            "pointer_hash": "467bd33d0b6d09df5d7a37dfea4a42210c5d6c4958b656fb7c672a5ce2bc3c23"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-13T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-13T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0004",
+              "verdict_hash": "bf488067761ccfc4002f63acc2390caf969792d09df0363870c20a811ee5c3cb",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-13T12:01:00Z"
+            },
+            "pointer_hash": "4fe1ddebb5f0aa3ee5ffa4b7b662be6bf8023428ccb7156c822e3e4edcfda826"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-14T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-14T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0005",
+              "verdict_hash": "7953654d7d92e9b56bd2928bd5b82062b882b03f533fcfe1efa1606fbd056a95",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-14T12:01:00Z"
+            },
+            "pointer_hash": "64cb293c51b66d446e69c5f325f3b0db8b582617564c370841b501659905e43d"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-12T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-12T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0003",
+              "verdict_hash": "50276d8afb1a8d036c966c07223cbc3d71d20cc480ef09ad7a39f5dc8cfe872d",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-12T12:01:00Z"
+            },
+            "pointer_hash": "68af85318c3587365b7dbd13629af089d6721f1ea13298c5fb645825ac71f688"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-19T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-19T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0010",
+              "verdict_hash": "0eb00c8d19fb87fd90555e5391024b95cbd5d708975046f0d599765785720288",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-19T12:01:00Z"
+            },
+            "pointer_hash": "85cbdd74f59b8c0500122f079d464305a49785a90f0d5b7499fdf7f18975d7e7"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-15T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-15T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0006",
+              "verdict_hash": "407c2f5b43720a4a30770c1238933c7370c94b88b6a41d6bdf86c455100c6a04",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-15T12:01:00Z"
+            },
+            "pointer_hash": "8ae7ce9fedd58b7cfa5ec59c767aa817d79d51499ca3312d0361bf17f6c06c0d"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-23T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-23T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0014",
+              "verdict_hash": "57874d0127a8f8e85148b3b8fb134378d8f4ec806a819ca2417f358ffeb5000b",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-23T12:01:00Z"
+            },
+            "pointer_hash": "8ff4823834e37e19699e42b831b982e13a1568eef850f54b28e26bd8aa7324d7"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-21T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-21T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0012",
+              "verdict_hash": "175a19c878291e5263491a8bca4c6676e9a7084dc90bb8f2458b8b0106e53e39",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-21T12:01:00Z"
+            },
+            "pointer_hash": "95e1f4ef1d5e9e76ec3be75a058e00b926129a55e38a9469ed76cccb350a0aec"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-18T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-18T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0009",
+              "verdict_hash": "122f7cc2e6d7ada0f224ccdfd415bfd0c08cc9ca15c55f4d0924be9f072e7f39",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-18T12:01:00Z"
+            },
+            "pointer_hash": "a3fdbef5cb89b0e98e7e2c8bc1eed5c4d2496125da10c104c2307eeaf0faee96"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-24T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-24T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0015",
+              "verdict_hash": "eb7fe4946fff24dd899b8dfda679e18d97de90f50587ac688a0f2f95c8bd0fb9",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-24T12:01:00Z"
+            },
+            "pointer_hash": "a8bb93f1e0c2e9967a84851ddc34381ebf7b414f4f2e75c8a767128b4b4f83ec"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-22T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-22T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0013",
+              "verdict_hash": "12ae97ac93f53a6b2fa8bb25d09b5e391c28f873adcd25f0e1ffd3386c5d4a62",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-22T12:01:00Z"
+            },
+            "pointer_hash": "aafed34979f1c36945cc8062cf4a974d2eb4c030ade007170c3b875a7b809d09"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-16T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-16T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0007",
+              "verdict_hash": "d6bc2c2c8fbed0267ab39b4a2a49b36987079971b9c7deb37f27cc3ce39395c1",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-16T12:01:00Z"
+            },
+            "pointer_hash": "cdf640f9879c9066039e6e17dc632858e2cd88092a5ee27d195fc18e5bd839dd"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-29T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-29T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0020",
+              "verdict_hash": "4cf0d0c72d1b4491ee7c58b0188f653dc3a2d1b0c43d89b0f11e1200aeb0c81a",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-29T12:01:00Z"
+            },
+            "pointer_hash": "dbf47ae028e2ee8cf94f1ddb1b13665ce6e5526ee525de24e4d69128b5bff30f"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-09T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-09T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0000",
+              "verdict_hash": "ac1b0159165a9513eebf7d7e4052360e3b7b603a76d8aa9ed08bb09f5616dc43",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-09T12:01:00Z"
+            },
+            "pointer_hash": "e7ddb735694499ba7af0170b019b597e827fa9c56f80567f3d712ebeebc1cca6"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-17T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-17T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0008",
+              "verdict_hash": "6b8e60b5463f9e37e380a1badd0aae04e10fac3692c83dc5cc9721b8f3b513b3",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-17T12:01:00Z"
+            },
+            "pointer_hash": "ecefb45f3ce504abfbe9e41c040cf72ec194f102e43458e84c792ad51f9ca157"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-27T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-27T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0018",
+              "verdict_hash": "2ac81ae3f1a9259e23d32aa0c0bed593aa62996859395f7d6801d1313da72b9e",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-27T12:01:00Z"
+            },
+            "pointer_hash": "f6268daa90277209bd9e8a8bc6a9f706091accb9c190f068ffc2681da9a823f4"
+          },
+          {
+            "outcome": {
+              "accepted_at": "2026-03-20T12:00:00Z",
+              "kind": "network",
+              "rewarded_at": "2026-03-20T12:02:00Z",
+              "task_id": "test-only-account-connectivity-hold-network-task-0011",
+              "verdict_hash": "abe8561e109bc7332e33164e9094a821dc7b41ef847b91749525a2326f3a21bf",
+              "verification_outcome": "pass",
+              "verified_at": "2026-03-20T12:01:00Z"
+            },
+            "pointer_hash": "fa4870e27c84d276975ab70e46fd2c2901815a8c02e1c3cc7d9cf95432531725"
+          }
+        ],
+        "publishing_key_id": "test-only-shadow-publishing-key",
+        "schema": "tasknode-unl-work-digest-body-v1",
+        "score_inputs": {
+          "accepted_network_tasks": 21,
+          "badge_current": true,
+          "first_rewarded_at": "2026-03-09T12:02:00Z",
+          "open_disputes": 0,
+          "verification_passes": 21,
+          "verification_total": 21
+        },
+        "snapshot_id": "test-only-shadow-snapshot-account-connectivity-hold",
+        "window": {
+          "days": 180,
+          "end": "2026-09-04T12:00:00Z",
+          "start": "2026-03-08T12:00:00Z"
+        }
+      },
+      "digest_hash": "5844e0d96d7840bd2a9270f6d7ff00bbace58822cab69a39ad01cc2ce327b299",
+      "mode": "SHADOW_ONLY",
+      "schema": "tasknode-unl-work-digest-envelope-v1",
+      "signature_algorithm": "secp256k1-recoverable-sha256",
+      "signature_hex": "003b56f37c01b3a0e1c0945988763c2733e0bdc4b88062a677c51f29e5c03f837adff981cb2102218ac4d9388de20b07587fd1c7304f093d9b6ac82c067aa0f400"
+    }
+  ],
+  "mode": "SHADOW_ONLY",
+  "schema": "tasknode-unl-work-digest-bundle-v1"
+}

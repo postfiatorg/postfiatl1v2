@@ -1,0 +1,12 @@
+
+running 1 test
+test block_replay_wallet::native_bond_custody_tests::native_bond_custody_is_conserved_and_duplicate_custody_rejected ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 342 filtered out; finished in 0.00s
+
+
+running 1 test
+test tests::native_supply_oracle_counts_each_live_custody_lane_once_and_checks_overflow ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 342 filtered out; finished in 0.00s
+

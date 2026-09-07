@@ -2677,10 +2677,12 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) -> 
         nfts: _,
         offers,
         nav_assets: _,
-        nav_reserve_packets: _,
+        nav_reserve_packets,
         nav_redemptions: _,
         nav_proof_profiles: _,
-        nav_attestors: _,
+        yolo_target_registrations: _,
+        yolo_target_receipts: _,
+        nav_attestors,
         market_ops_policies: _,
         market_ops_envelopes: _,
         fx_fix_states: _,
@@ -2689,7 +2691,8 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) -> 
         vault_bridge_bucket_states: _,
         vault_bridge_allocations: _,
         vault_bridge_redemptions: _,
-        vault_bridge_deposits: _,
+        vault_bridge_deposits,
+        pftl_uniswap_source_custody: _, // issued pfUSDC custody, never native PFT
         pftl_uniswap_routes: _,
         pftl_uniswap_receipts: _,
         owned_objects,
@@ -2732,6 +2735,27 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) -> 
             return Err(duplicate("account", &account.address));
         }
         add(&mut total, u128::from(account.balance), "account balances")?;
+    }
+    let mut attestor_ids = std::collections::BTreeSet::new();
+    for attestor in nav_attestors {
+        if !attestor_ids.insert(attestor.address.as_str()) {
+            return Err(duplicate("NAV attestor", &attestor.address));
+        }
+        add(&mut total, u128::from(attestor.bond), "NAV attestor bonds")?;
+    }
+    let mut packet_ids = std::collections::BTreeSet::new();
+    for packet in nav_reserve_packets {
+        if !packet_ids.insert(packet.packet_id.as_str()) {
+            return Err(duplicate("NAV reserve packet", &packet.packet_id));
+        }
+        add(&mut total, u128::from(packet.challenge_bond), "NAV challenge bonds")?;
+    }
+    let mut deposit_ids = std::collections::BTreeSet::new();
+    for deposit in vault_bridge_deposits {
+        if !deposit_ids.insert((deposit.asset_id.as_str(), deposit.evidence_root.as_str())) {
+            return Err(duplicate("vault deposit", &deposit.evidence_root));
+        }
+        add(&mut total, u128::from(deposit.challenge_bond), "vault deposit challenge bonds")?;
     }
     let mut escrow_ids = std::collections::BTreeSet::new();
     for escrow in escrows {
@@ -3477,4 +3501,55 @@ pub fn wallet_test_vector(options: WalletTestVectorOptions) -> io::Result<Wallet
         signature_verified,
         private_key_material_redacted: true,
     })
+}
+
+#[cfg(test)]
+mod native_bond_custody_tests {
+    use super::*;
+
+    #[test]
+    fn native_bond_custody_is_conserved_and_duplicate_custody_rejected() {
+        let shielded = ShieldedState::empty();
+        let mut ledger = LedgerState::new(vec![Account::new("pfbondowner", 100, None)]);
+        let before = native_pft_live_total(&ledger, &shielded).unwrap();
+        ledger.accounts[0].balance -= 7;
+        ledger.nav_attestors.push(postfiat_types::NavAttestor {
+            address: "pfbondowner".to_string(), domain: "test".to_string(),
+            bond: 7, registered_at_height: 1,
+        });
+        assert_eq!(native_pft_live_total(&ledger, &shielded).unwrap(), before);
+        let mut packet: postfiat_types::NavReservePacket = serde_json::from_str(include_str!(
+            "../testdata/pfeth-reserve-replay/reserve-packet.json"
+        )).unwrap();
+        packet.challenge_bond = 11;
+        ledger.accounts[0].balance -= 11;
+        ledger.nav_reserve_packets.push(packet);
+        assert_eq!(native_pft_live_total(&ledger, &shielded).unwrap(), before);
+        let mut deposit: postfiat_types::VaultBridgeDepositRecord = serde_json::from_str(include_str!(
+            "../testdata/pfeth-reserve-replay/deposit.json"
+        )).unwrap();
+        deposit.challenge_bond = 13;
+        ledger.accounts[0].balance -= 13;
+        ledger.vault_bridge_deposits.push(deposit);
+        assert_eq!(native_pft_live_total(&ledger, &shielded).unwrap(), before);
+        for lane in ["attestor", "packet", "deposit"] {
+            let mut duplicate = ledger.clone();
+            match lane {
+                "attestor" => duplicate.nav_attestors.push(ledger.nav_attestors[0].clone()),
+                "packet" => duplicate.nav_reserve_packets.push(ledger.nav_reserve_packets[0].clone()),
+                "deposit" => duplicate.vault_bridge_deposits.push(ledger.vault_bridge_deposits[0].clone()),
+                _ => unreachable!(),
+            }
+            assert!(native_pft_live_total(&duplicate, &shielded).unwrap_err().to_string()
+                .contains("duplicate native custody"));
+        }
+        // Payouts clear the outstanding bond. Counting it after payout would inflate supply.
+        ledger.accounts[0].balance += 24;
+        ledger.nav_reserve_packets[0].challenge_bond = 0;
+        ledger.vault_bridge_deposits[0].challenge_bond = 0;
+        assert_eq!(native_pft_live_total(&ledger, &shielded).unwrap(), before);
+        ledger.accounts[0].balance -= 1;
+        assert!(verify_native_pft_transition(963, before,
+            native_pft_live_total(&ledger, &shielded).unwrap(), &[]).is_err());
+    }
 }

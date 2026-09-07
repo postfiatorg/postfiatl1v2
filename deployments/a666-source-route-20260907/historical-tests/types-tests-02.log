@@ -1,0 +1,10 @@
+   Compiling postfiat-types v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/types)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.29s
+     Running unittests src/lib.rs (/home/postfiat/repos/postfiatl1v2-rpc-status-fix-20260906/target/debug/deps/postfiat_types-7be9905a7a6b707f)
+
+running 2 tests
+test tests::pftl_source_selections_are_signed ... ok
+test tests::pftl_source_governance_signs_unchanged_disabled_and_selected_states ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 132 filtered out; finished in 0.00s
+

@@ -1,0 +1,21 @@
+   Compiling postfiat-types v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/types)
+   Compiling postfiat-node v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/node)
+   Compiling postfiat-mempool-dag v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/mempool_dag)
+   Compiling postfiat-consensus-cobalt v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/consensus_cobalt)
+   Compiling postfiat-bridge v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/bridge)
+   Compiling postfiat-nav-reserve-protocol v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/nav_reserve_protocol)
+   Compiling postfiat-storage v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/storage)
+   Compiling postfiat-privacy v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/privacy)
+   Compiling postfiat-ordering-fast v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/ordering_fast)
+   Compiling postfiat-execution v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/execution)
+   Compiling postfiat-pfusdc-proofs v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/pfusdc_proofs)
+   Compiling postfiat-pftl-uniswap-proofs v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/pftl_uniswap_proofs)
+   Compiling postfiat-rpc-sdk v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/rpc_sdk)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 42.77s
+     Running unittests src/lib.rs (/home/postfiat/repos/postfiatl1v2-rpc-status-fix-20260906/target/debug/deps/postfiat_node-d8915e1a3b6c8f91)
+
+running 1 test
+test state_commitment::source_settlement_commitment_tests::source_custody_is_committed_and_empty_state_preserves_legacy_bytes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 343 filtered out; finished in 0.00s
+
