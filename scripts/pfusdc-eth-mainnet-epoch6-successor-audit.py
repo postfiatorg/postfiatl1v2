@@ -131,7 +131,7 @@ def main() -> int:
             "BatchMode=yes",
             "-o",
             "ConnectTimeout=8",
-            "root@64.176.220.75",
+            A.required_env("PFTL_VALIDATOR_SSH_TARGET"),
             "/opt/postfiat/releases/pnok-private-fix-2246d25-orchard1/postfiat-node "
             "verify-finalized-checkpoint --data-dir /var/lib/postfiat/validator-0",
         )

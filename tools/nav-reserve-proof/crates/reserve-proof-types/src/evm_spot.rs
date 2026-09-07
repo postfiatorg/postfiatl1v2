@@ -1194,7 +1194,7 @@ mod tests {
     fn historical_a666_spot_artifact_reconstructs_all_state_proofs() {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../../../docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/evm-spot-witness.json"
+            "/../../../../benchmarks/nav-reserve-proof-historical/evm-spot-witness.json"
         );
         let historical: HistoricalWitness =
             serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();

@@ -17,14 +17,27 @@ fn profile_public_attestation_cost_with_the_target_runs_certificate_cache() {
         .join("../reserve-proof-types/tests/fixtures/yolo_target_proof_v1/baseline.json");
     let value: serde_json::Value = serde_json::from_slice(&fs::read(fixture).unwrap()).unwrap();
     let witness: TargetProofWitnessV1 = serde_json::from_value(value["witness"].clone()).unwrap();
-    let documents: Vec<_> = witness.attestation_documents_hex.iter().zip(&witness.statements)
-        .map(|(document, statement)| (hex::decode(document).unwrap(), statement.attestation_binding_digest().unwrap()))
+    let documents: Vec<_> = witness
+        .attestation_documents_hex
+        .iter()
+        .zip(&witness.statements)
+        .map(|(document, statement)| {
+            (
+                hex::decode(document).unwrap(),
+                statement.attestation_binding_digest().unwrap(),
+            )
+        })
         .collect();
     let expected = vec![1u8; documents.len()];
     let time = witness.manifest.verification_time_ms().unwrap();
-    let encoded = serde_cbor::to_vec(&("postfiat.yolo.public_nitro_profile.v1",
-        hex::decode(witness.root_certificate_der_hex).unwrap(), witness.manifest.proof_policy,
-        time, documents)).unwrap();
+    let encoded = serde_cbor::to_vec(&(
+        "postfiat.yolo.public_nitro_profile.v1",
+        hex::decode(witness.root_certificate_der_hex).unwrap(),
+        witness.manifest.proof_policy,
+        time,
+        documents,
+    ))
+    .unwrap();
     let input_bytes = encoded.len();
     let mut stdin = SP1Stdin::new();
     stdin.write_vec(encoded);

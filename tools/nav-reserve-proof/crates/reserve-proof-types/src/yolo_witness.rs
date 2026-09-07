@@ -1,8 +1,8 @@
 //! Versioned private inputs and independently supplied public acceptance pins.
 
-use crate::yolo_cbor::{validate_strict_cbor, CborLimits};
 #[cfg(test)]
 use crate::yolo_cbor::decode_strict_cbor;
+use crate::yolo_cbor::{validate_strict_cbor, CborLimits};
 use crate::yolo_collection::{
     domain_sha256, parse_date, parse_python_utc, validate_digest, YoloCollectionEpochV2,
     YoloSnapshotCommitmentV2,
@@ -326,8 +326,8 @@ pub fn decode_target_witness(input: &[u8]) -> Result<TargetProofWitnessV1, Strin
     // The strict pass has already rejected duplicates, non-minimal heads and
     // all size/depth violations. Decode the original bytes directly instead
     // of serializing the entire generic Value back into a second CBOR buffer.
-    let witness: TargetProofWitnessV1 = serde_cbor::from_slice(input)
-        .map_err(|_| "target witness fields or types do not match")?;
+    let witness: TargetProofWitnessV1 =
+        serde_cbor::from_slice(input).map_err(|_| "target witness fields or types do not match")?;
     witness.validate_bounds()?;
     Ok(witness)
 }

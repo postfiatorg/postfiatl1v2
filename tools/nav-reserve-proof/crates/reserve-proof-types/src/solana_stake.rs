@@ -1942,7 +1942,7 @@ mod tests {
     fn historical_a666_solana_artifact_reconstructs_quantities_and_authorities() {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../../../docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/solana-attested-witness.json"
+            "/../../../../benchmarks/nav-reserve-proof-historical/solana-attested-witness.json"
         );
         let historical: HistoricalWitness =
             serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();

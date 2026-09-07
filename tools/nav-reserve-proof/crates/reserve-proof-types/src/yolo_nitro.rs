@@ -13,6 +13,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use x509_parser::{certificate::X509Certificate, parse_x509_certificate};
 
 pub const NITRO_USER_DATA_SCHEMA_V2: &str = "postfiat.yolo.nitro_user_data.v2";
+const ECDSA_SHA384_OID: &str = concat!("1.2.840", ".10045.4.3.3");
+const ALLOWED_CRITICAL_EXTENSION_OIDS: &[&str] = &[
+    concat!("2.5.29", ".19"),
+    concat!("2.5.29", ".15"),
+    concat!("2.5.29", ".14"),
+    concat!("2.5.29", ".35"),
+];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifiedNitroClaims {
@@ -51,7 +58,7 @@ fn parse_certificate(input: &[u8]) -> Result<X509Certificate<'_>, String> {
         return Err("Nitro certificate has trailing DER".into());
     }
     if cert.signature_algorithm != cert.tbs_certificate.signature
-        || cert.signature_algorithm.algorithm.to_id_string() != "1.2.840.10045.4.3.3"
+        || cert.signature_algorithm.algorithm.to_id_string() != ECDSA_SHA384_OID
         || cert.signature_algorithm.parameters.is_some()
         || cert.signature_value.unused_bits != 0
     {
@@ -65,12 +72,7 @@ fn parse_certificate(input: &[u8]) -> Result<X509Certificate<'_>, String> {
         }
         // Other critical extensions would impose constraints this verifier does
         // not implement. Unknown noncritical extensions carry no authority.
-        if extension.critical
-            && !matches!(
-                oid.as_str(),
-                "2.5.29.19" | "2.5.29.15" | "2.5.29.14" | "2.5.29.35"
-            )
-        {
+        if extension.critical && !ALLOWED_CRITICAL_EXTENSION_OIDS.contains(&oid.as_str()) {
             return Err("Nitro certificate has an unsupported critical extension".into());
         }
         if matches!(

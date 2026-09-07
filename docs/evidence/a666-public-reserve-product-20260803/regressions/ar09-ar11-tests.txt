@@ -1,0 +1,60 @@
+AR-09, AR-10, and AR-11 regression verification
+Verification revision: 77b4b3595406f0319af9a6bee0e57fb90055aeb0
+Date: 2026-08-04 UTC
+
+AR-09
+First-passing commit: 81bacfc63b2d01bf28ca6304e4856d759156fec9
+Command:
+cargo test -p postfiat-execution tests::pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09 -- --exact --nocapture
+Exit code: 0
+Wall-clock elapsed: 7616ms
+Matched count: 1
+Final:
+test tests::pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09 ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 188 filtered out; finished in 7.42s
+
+AR-10 issue replay
+First-passing commit: f059bdba8768e130aab2178fb313af8e7786b71e
+Command:
+cargo test -p postfiat-node --lib tests::private_primary_replay_gate_tests::ar10_private_primary_issue_replay_matches_live_execution_path -- --exact --nocapture
+Exit code: 0
+Wall-clock elapsed: 7950ms
+Matched count: 1
+Final:
+test tests::private_primary_replay_gate_tests::ar10_private_primary_issue_replay_matches_live_execution_path ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 265 filtered out; finished in 0.00s
+
+AR-10 redeem replay
+First-passing commit: f059bdba8768e130aab2178fb313af8e7786b71e
+Command:
+cargo test -p postfiat-node --lib tests::private_primary_replay_gate_tests::ar10_private_primary_redeem_replay_matches_live_execution_path -- --exact --nocapture
+Exit code: 0
+Wall-clock elapsed: 6980ms
+Matched count: 1
+Final:
+test tests::private_primary_replay_gate_tests::ar10_private_primary_redeem_replay_matches_live_execution_path ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 265 filtered out; finished in 0.00s
+
+AR-10 allowlist
+First-passing commit: f059bdba8768e130aab2178fb313af8e7786b71e
+Command:
+cargo test -p postfiat-node --lib tests::private_primary_replay_gate_tests::ar10_historical_private_primary_allowlist_stays_exact -- --exact --nocapture
+Exit code: 0
+Wall-clock elapsed: 7102ms
+Matched count: 1
+Final:
+test tests::private_primary_replay_gate_tests::ar10_historical_private_primary_allowlist_stays_exact ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 265 filtered out; finished in 0.00s
+
+AR-11
+First-passing commit: 83ac75de9575bedbab8062272281e0ab3feedbd2
+Command:
+cargo test -p postfiat-execution tests::ar11_issued_asset_supply_counts_non_nav_spread_custody -- --exact --nocapture
+Exit code: 0
+Wall-clock elapsed: 176ms
+Matched count: 1
+Final:
+test tests::ar11_issued_asset_supply_counts_non_nav_spread_custody ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 188 filtered out; finished in 0.00s
+
+All standalone invocations matched exactly one test, exited zero, and completed under the 120-second budget. No live chain, credentials, keys, or vault were used.

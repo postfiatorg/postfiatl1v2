@@ -617,7 +617,11 @@ mod tests {
         );
         assert!(validate_listen_address("10.1.2.3:9700".parse().expect("private"), false).is_err());
         assert!(validate_listen_address("10.1.2.3:9700".parse().expect("private"), true).is_ok());
-        assert!(validate_listen_address("8.8.8.8:9700".parse().expect("public"), true).is_err());
+        assert!(validate_listen_address(
+            "[2001:4860:4860::8888]:9700".parse().expect("public"),
+            true,
+        )
+        .is_err());
     }
 
     #[test]

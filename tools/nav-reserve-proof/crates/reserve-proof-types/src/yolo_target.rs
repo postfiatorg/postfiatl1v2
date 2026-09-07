@@ -4,7 +4,9 @@
 //! methodology. It produces theoretical target quantities only and contains no
 //! broker client, order type, execution loop, or account mutation capability.
 
-use crate::yolo_collection::{domain_sha256, domain_sha256_canonical_bytes, parse_date, parse_python_utc, validate_digest};
+use crate::yolo_collection::{
+    domain_sha256, domain_sha256_canonical_bytes, parse_date, parse_python_utc, validate_digest,
+};
 use serde::{Deserialize, Serialize};
 use std::cmp::{Ordering, Reverse};
 use std::collections::{BTreeMap, BTreeSet};
@@ -17,13 +19,17 @@ struct ParsedDates<'a> {
 
 impl<'a> ParsedDates<'a> {
     fn date(&mut self, name: &str, text: &'a str) -> Result<chrono::NaiveDate, String> {
-        if let Some(value) = self.dates.get(text) { return Ok(*value); }
+        if let Some(value) = self.dates.get(text) {
+            return Ok(*value);
+        }
         let value = parse_date(name, text)?;
         self.dates.insert(text, value);
         Ok(value)
     }
     fn utc(&mut self, name: &str, text: &'a str) -> Result<chrono::DateTime<chrono::Utc>, String> {
-        if let Some(value) = self.utc.get(text) { return Ok(*value); }
+        if let Some(value) = self.utc.get(text) {
+            return Ok(*value);
+        }
         let value = parse_python_utc(name, text)?;
         self.utc.insert(text, value);
         Ok(value)
@@ -354,14 +360,20 @@ impl YoloPortfolioTargetV1 {
     pub fn sha256(&self) -> Result<String, String> {
         // Preserve the integer range accepted by the former serde_json::Value
         // conversion; direct serialization otherwise supports larger i128s.
-        let numbers = self.decision_nav_microdollars.into_iter()
+        let numbers = self
+            .decision_nav_microdollars
+            .into_iter()
             .chain(self.premium_budget_microdollars)
             .chain(self.sleeve_microdollars)
             .chain(self.positions.iter().map(|position| position.target_delta));
-        if numbers.into_iter().any(|value| value < i128::from(i64::MIN) || value > i128::from(u64::MAX)) {
+        if numbers
+            .into_iter()
+            .any(|value| value < i128::from(i64::MIN) || value > i128::from(u64::MAX))
+        {
             return Err("YOLO canonical JSON serialization failed".into());
         }
-        let bytes = serde_json::to_vec(self).map_err(|_| "YOLO canonical JSON serialization failed")?;
+        let bytes =
+            serde_json::to_vec(self).map_err(|_| "YOLO canonical JSON serialization failed")?;
         domain_sha256_canonical_bytes(YOLO_PORTFOLIO_TARGET_SCHEMA_V1, &bytes)
     }
 }
@@ -465,10 +477,8 @@ fn aggregate(
     // Index every raw observation once. BTreeMap preserves the former sorted
     // symbol order; each vector preserves chronological snapshot/quote order.
     // Quote validation stays below so the first reported error is unchanged.
-    let mut by_symbol: BTreeMap<
-        &str,
-        Vec<(&YoloMethodologySnapshotV1, &YoloContractQuoteV1)>,
-    > = BTreeMap::new();
+    let mut by_symbol: BTreeMap<&str, Vec<(&YoloMethodologySnapshotV1, &YoloContractQuoteV1)>> =
+        BTreeMap::new();
     for snapshot in &snapshots {
         for quote in &snapshot.contracts {
             by_symbol
@@ -1016,15 +1026,36 @@ mod tests {
         for snapshot in &mut value.snapshots {
             snapshot.contracts[0].occ_symbol = "quote-\"é\\\n".to_string();
         }
-        value.positions = vec![YoloCurrentPositionV1 { occ_symbol: "quote-\"é\\\n".into(), quantity: 1 }];
-        assert_eq!(serde_json::to_vec(&value).unwrap(), crate::yolo_collection::canonical_bytes(&value).unwrap());
+        value.positions = vec![YoloCurrentPositionV1 {
+            occ_symbol: "quote-\"é\\\n".into(),
+            quantity: 1,
+        }];
+        assert_eq!(
+            serde_json::to_vec(&value).unwrap(),
+            crate::yolo_collection::canonical_bytes(&value).unwrap()
+        );
         let mut target = create_yolo_portfolio_target_v1(&value, &parameters()).unwrap();
-        assert_eq!(serde_json::to_vec(&target).unwrap(), crate::yolo_collection::canonical_bytes(&target).unwrap());
-        assert_eq!(target.sha256().unwrap(), domain_sha256(YOLO_PORTFOLIO_TARGET_SCHEMA_V1, &target).unwrap());
-        for boundary in [i128::from(i64::MIN), i128::from(u64::MAX), i128::from(i64::MIN)-1,
-                         i128::from(u64::MAX)+1, i128::MIN, i128::MAX] {
+        assert_eq!(
+            serde_json::to_vec(&target).unwrap(),
+            crate::yolo_collection::canonical_bytes(&target).unwrap()
+        );
+        assert_eq!(
+            target.sha256().unwrap(),
+            domain_sha256(YOLO_PORTFOLIO_TARGET_SCHEMA_V1, &target).unwrap()
+        );
+        for boundary in [
+            i128::from(i64::MIN),
+            i128::from(u64::MAX),
+            i128::from(i64::MIN) - 1,
+            i128::from(u64::MAX) + 1,
+            i128::MIN,
+            i128::MAX,
+        ] {
             target.decision_nav_microdollars = Some(boundary);
-            assert_eq!(target.sha256(), domain_sha256(YOLO_PORTFOLIO_TARGET_SCHEMA_V1, &target));
+            assert_eq!(
+                target.sha256(),
+                domain_sha256(YOLO_PORTFOLIO_TARGET_SCHEMA_V1, &target)
+            );
         }
     }
 
@@ -1034,8 +1065,7 @@ mod tests {
         // Missing final observations remain halted/missing even with four valid
         // earlier quotes. A stale final quote still supplies its halt flag.
         value.snapshots[4].contracts.remove(0);
-        value.snapshots[4].contracts[0].quote_timestamp_utc =
-            "2026-09-03T14:30:00Z".to_string();
+        value.snapshots[4].contracts[0].quote_timestamp_utc = "2026-09-03T14:30:00Z".to_string();
         value.snapshots[4].contracts[0].option_halted = true;
         // Invalid quotes contribute neither prices nor liquidity medians.
         value.snapshots[0].contracts[2].bid_microdollars = 0;
@@ -1052,7 +1082,10 @@ mod tests {
         for snapshot in &mut value.snapshots {
             snapshot.contracts.reverse();
         }
-        assert_eq!(original, create_yolo_portfolio_target_v1(&value, &parameters()).unwrap());
+        assert_eq!(
+            original,
+            create_yolo_portfolio_target_v1(&value, &parameters()).unwrap()
+        );
     }
 
     fn parameters() -> YoloPortfolioParametersV1 {

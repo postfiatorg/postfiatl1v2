@@ -32,7 +32,10 @@ pub fn validate_strict_cbor(input: &[u8], limits: CborLimits) -> Result<(), Stri
         return Err("CBOR input size exceeds its bounds".into());
     }
     let mut reader = Reader {
-        input, offset: 0, remaining_items: limits.items, limits,
+        input,
+        offset: 0,
+        remaining_items: limits.items,
+        limits,
         indefinite_containers: false,
     };
     reader.skip_definite(0)?;
@@ -81,7 +84,9 @@ impl<'a> Reader<'a> {
         if depth > self.limits.depth {
             return Err("CBOR nesting exceeds its bound".into());
         }
-        self.remaining_items = self.remaining_items.checked_sub(1)
+        self.remaining_items = self
+            .remaining_items
+            .checked_sub(1)
             .ok_or("CBOR item limit exceeded")?;
         let initial = self.take(1)?[0];
         let major = initial >> 5;
@@ -99,9 +104,12 @@ impl<'a> Reader<'a> {
             }
             4 | 5 => {
                 let count = usize::try_from(argument).map_err(|_| "CBOR count overflow")?;
-                let child_count = count.checked_mul(if major == 5 { 2 } else { 1 })
+                let child_count = count
+                    .checked_mul(if major == 5 { 2 } else { 1 })
                     .ok_or("CBOR count overflow")?;
-                if child_count > self.remaining_items || child_count > self.input.len() - self.offset {
+                if child_count > self.remaining_items
+                    || child_count > self.input.len() - self.offset
+                {
                     return Err("CBOR container exceeds remaining bounds".into());
                 }
                 let input = self.input;
@@ -256,39 +264,65 @@ mod tests {
 
     #[test]
     fn borrowed_validation_matches_strict_decoder() {
-        let limits = CborLimits { bytes: 4096, items: 1024, depth: 8 };
+        let limits = CborLimits {
+            bytes: 4096,
+            items: 1024,
+            depth: 8,
+        };
         let cases = [
             vec![0xa2, 0x61, b'a', 0, 0x61, b'a', 1],
             vec![0xa2, 0, 0, 0x18, 0, 1], // non-minimal duplicate integer
             vec![0xa2, 0x41, 0, 0, 0x41, 0, 1],
             vec![0xa2, 0x61, b'a', 0, 0x41, b'a', 1], // distinct text/bytes
-            vec![0xa1, 0xf4, 0], vec![0x61, 0xff], vec![0x9f, 0xff],
+            vec![0xa1, 0xf4, 0],
+            vec![0x61, 0xff],
+            vec![0x9f, 0xff],
             vec![0xd2, 0x84, 0x40, 0xa0, 0x40, 0x40],
-            vec![0x81, 0xd2, 0x80], vec![0xfa, 0, 0, 0, 0],
+            vec![0x81, 0xd2, 0x80],
+            vec![0xfa, 0, 0, 0, 0],
         ];
         for encoded in cases {
-            assert_eq!(validate_strict_cbor(&encoded, limits).is_ok(),
-                decode_strict_cbor(&encoded, limits).is_ok(), "{encoded:?}");
+            assert_eq!(
+                validate_strict_cbor(&encoded, limits).is_ok(),
+                decode_strict_cbor(&encoded, limits).is_ok(),
+                "{encoded:?}"
+            );
         }
         for count in 0..40 {
             let values = serde_json::json!({"rows": (0..count).map(|i|
                 serde_json::json!({"id":i,"name":"é","flags":[true,false,null],"items":[1,2,3]})
             ).collect::<Vec<_>>()});
             let encoded = serde_cbor::to_vec(&values).unwrap();
-            for limit in [limits, CborLimits { bytes: 4096, items: 12, depth: 2 }] {
-                assert_eq!(validate_strict_cbor(&encoded, limit).is_ok(),
-                    decode_strict_cbor(&encoded, limit).is_ok());
+            for limit in [
+                limits,
+                CborLimits {
+                    bytes: 4096,
+                    items: 12,
+                    depth: 2,
+                },
+            ] {
+                assert_eq!(
+                    validate_strict_cbor(&encoded, limit).is_ok(),
+                    decode_strict_cbor(&encoded, limit).is_ok()
+                );
             }
         }
         let mut random = 0x9e37_79b9_u32;
         for length in 0..64 {
             for _ in 0..64 {
-                let encoded: Vec<u8> = (0..length).map(|_| {
-                    random ^= random << 13; random ^= random >> 17; random ^= random << 5;
-                    random as u8
-                }).collect();
-                assert_eq!(validate_strict_cbor(&encoded, limits).is_ok(),
-                    decode_strict_cbor(&encoded, limits).is_ok(), "{encoded:?}");
+                let encoded: Vec<u8> = (0..length)
+                    .map(|_| {
+                        random ^= random << 13;
+                        random ^= random >> 17;
+                        random ^= random << 5;
+                        random as u8
+                    })
+                    .collect();
+                assert_eq!(
+                    validate_strict_cbor(&encoded, limits).is_ok(),
+                    decode_strict_cbor(&encoded, limits).is_ok(),
+                    "{encoded:?}"
+                );
             }
         }
     }
