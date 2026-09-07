@@ -9,7 +9,7 @@ The resumed Ethereum → pfUSDC → A666 → Uniswap → A666 → pfUSDC → Eth
 - [x] Register the proof profile at PFTL 1006, bind it at 1007, and activate the governed route at 1008. All six validators agree; mempools are empty.
 - [x] Deposit 10.000000 USDC (10,000,000 atoms) to the epoch-10 vault for `pfab9b9228942e5c529633a13aa271d5297bec6353`. [Ethereum deposit receipt](https://etherscan.io/tx/0x639893f4c8d3df16baa392a1f958acd7549586f7b186068cd73ad5cd14806772). Wallet, vault, obligations, event, and deposit record reconcile exactly. The capture binds deposit block 25922792 to finalized Ethereum block 25922794.
 - [ ] Finish the ingress proof and claim the source-series pfUSDC.
-- [ ] Complete and submit the existing A666 verifier checkpoints 881→917→924→989. All three canonical witnesses execute with the frozen `004e44` guest; no completed proof is claimed yet.
+- [ ] Complete and submit the existing A666 verifier checkpoints 881→917→924→989. The 917→924 CPU Groth16 proof completed and passed local verification with the frozen `004e44` guest (356 proof bytes; 256 public-value bytes; about 104 minutes including setup). It must wait for 881→917 before on-chain submission. The other segments remain pending.
 - [ ] Authorize the new settlement source, subscribe at NAV, export, prove, and mint wA666.
 - [ ] Execute both Uniswap directions, burn the actual buyback output, and import the return.
 - [ ] Redeem at NAV into the same pfUSDC source, withdraw Ethereum USDC, settle on PFTL, and reconcile the whole lineage.
@@ -33,6 +33,8 @@ For each Uniswap direction, `a666-mainnet-uniswap-allowances.py --token … --am
 The captured ingress witness also passed all 16 native adversarial rejection cases. That audit does not replace the pending Groth16 proof or the remaining live route legs.
 
 The after-mint wrapper carries the issue manifest's source-series asset into NAV redemption and resolves its bucket explicitly for withdrawal. Its two swap calls use the durable output interface and exact input approvals. The CPU egress wrapper verifies the embedded program's vkey and ELF hash before a native burn, checks Docker access, and runs the supported `egress` command with bounded worker settings. These command-path repairs are not evidence that the pending trade or withdrawal has executed.
+
+Return preflight found that the original PublicNode endpoint rejects older numbered contract-state queries without an archive token. The resumed workflow now has a separate loopback proxy at `http://127.0.0.1:28703` on all six validators, forwarding to `https://eth.drpc.org`; set `A666_VALIDATOR_ETHEREUM_RPC` to that loopback URL. The native observer verified historical block 25922792, its receipt root, and the governed contract code hashes. Five validators signed and the native node assembled a valid checkpoint certificate under the existing five-of-six policy. Validator 5's current key differs from this older Ethereum route committee and is excluded. This was a preflight checkpoint, not a return import; the actual burn receipt still needs its own certificate. The return verification class remains `BFT_CHECKPOINT`.
 
 The original host's durable job and receipt directory is `~/.local/share/stakehub/a666-full-route-20260907/`. Its `active-resume.json` points to the current jobs and immutable transaction records. The private StakeHub companion archive contains a receipt snapshot in `docs/handoffs/navcoin-recovery-20260907/resumed-epoch10/`. Local paths and loopback endpoints require host-specific configuration.
 
