@@ -61,6 +61,9 @@ checkout: eight inventory tests could not read the pinned baseline. The workflow
 now fetches full history for `python-sdk`, matching the CLI's documented history
 requirement. The other 446 Python tests passed and three were skipped in that
 initial run. The local 12-test audit suite remains green with the baseline present.
+The repeat hosted `python-sdk` job at `69015d31` passed: **454 passed, 3 skipped**
+in the Python suite, followed by 6 remote-sync and 4 remote-finality operations
+regressions. `docs-build` passed again.
 
 The same run's `public-tree-hygiene` job failed the existing proof inventory:
 `scripts/check-nav-reserve-proof-fuzz-smoke` has source digest
@@ -86,3 +89,9 @@ The August 31 storage deployment receipt was read as retained evidence, not
 reproduced or independently attested. No signing, fleet mutation, runtime
 configuration change or value movement occurred. The original main checkout's
 unrelated work was excluded from this branch.
+
+Task Node reported both the audit and specification/milestone tasks **Rewarded**
+on September 7, 2026 after their initial evidence and verification responses.
+The [completed milestone](../plans/completed/whitepaper-audit-milestone.md) records
+retirement. The draft PR remains a review artifact; reward does not imply a merge,
+release, protocol proof or closure of the gap backlog.

@@ -12,7 +12,9 @@ The locked specification is `docs/specs/whitepaper-alignment-audit-20260907.md`;
 - [x] Implement the offline Python inventory CLI at `python/postfiat_rpc/whitepaper_audit.py`; verify invalid inventory, anchors, coverage, section filtering, and JSON output.
 - [x] Expose the same inventory through MkDocs navigation; validate the rendered table and inspect the reader-facing pages.
 - [x] Run proportional existing protocol tests plus documentation, link, redaction, and strict-build checks; record exact results and omissions.
-- [ ] Package durable review artifacts and satisfy Task Node verification for both tasks.
-- [ ] Move this milestone into completed plans once the CLI, documentation interface, validation, and task evidence are complete.
+- [x] Package durable review artifacts and satisfy Task Node verification for both tasks.
+- [x] Move this milestone into completed plans once the CLI, documentation interface, validation, and task evidence are complete.
+
+Completed September 7, 2026. [Draft PR 40](https://github.com/postfiatorg/postfiatl1v2/pull/40) contains the reviewable patch. Task Node reports both tasks **Rewarded** after initial evidence and verification responses. The [validation record](../../architecture/whitepaper-validation.md) preserves passed checks, missing empirical evidence and the unchanged baseline proof-inventory CI failure. Completion of this audit does not close its 11 protocol/evidence follow-ups.
 
 Runtime semantics, validator configuration, live fleet operation, signing, and value movement are outside this milestone.

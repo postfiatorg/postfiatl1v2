@@ -112,6 +112,7 @@ nav:
       - Python Example: business/navcoin-python-example.md
       - Archive Summary: evidence/navcoin-archive-summary.md
   - Plans:
+      - Completed Whitepaper Audit: plans/completed/whitepaper-audit-milestone.md
       - Completed Task Node UNL MVP Plan: plans/completed/tasknode-unl-mvp-plan.md
       - Active Storage Scaling: plans/active/storage-scaling-milestone.md
       - Z3 NAVCoin Round-Trip Plan: plans/active/z3-navcoin-roundtrip-plan.md
