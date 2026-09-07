@@ -1,0 +1,77 @@
+{
+  "schema": "tasknode-unl-shadow-report-v1",
+  "mode": "SHADOW_ONLY",
+  "authority_boundary": {
+    "live_authority": "none",
+    "registry_write_supported": false,
+    "transaction_submission_supported": false,
+    "ratification_supported": false,
+    "signable_delta_emitted": false,
+    "notice": "Decision support only; this report authorizes no live action."
+  },
+  "candidates": [
+    {
+      "validator_id": "validator-hold",
+      "account_id": "account-hold",
+      "status": "hold",
+      "upstream_holds": [
+        {
+          "code": "work_digest_hold",
+          "detail": "fixture_missing_digest",
+          "evidence_references": [
+            "work_digest_verifications"
+          ],
+          "field": "work_digest"
+        }
+      ]
+    }
+  ],
+  "baseline_validator_ids": [
+    "validator-a",
+    "validator-b",
+    "validator-c"
+  ],
+  "shadow_candidate_list": [
+    "validator-d",
+    "validator-c",
+    "validator-b"
+  ],
+  "baseline_diff": {
+    "additions": [
+      {
+        "validator_id": "validator-d",
+        "reason_codes": [
+          "eligible_admission_candidate",
+          "all_gates_passed"
+        ],
+        "evidence_references": [
+          "input_roots.policy_evidence"
+        ]
+      }
+    ],
+    "removals": [
+      {
+        "validator_id": "validator-a",
+        "reason_codes": [
+          "churn_guard_approved_removal"
+        ],
+        "evidence_references": [
+          "churn_guard"
+        ]
+      }
+    ],
+    "holds": [
+      {
+        "validator_id": "validator-hold",
+        "reason_codes": [
+          "work_digest_hold"
+        ],
+        "evidence_references": [
+          "work_digest_verifications"
+        ]
+      }
+    ],
+    "rejections": []
+  },
+  "report_hash": "fixture-shadow-report-hash"
+}

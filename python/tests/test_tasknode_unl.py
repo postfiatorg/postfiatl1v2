@@ -314,6 +314,80 @@ class ShadowDerivationFixtureTests(unittest.TestCase):
             candidate["admission_decision"]["reason_codes"],
         )
 
+    def test_shadow_diff_covers_all_paths_and_is_deterministic(self) -> None:
+        baseline = FIXTURE_DIR / "shadow-diff-baseline.json"
+        shadow_report = FIXTURE_DIR / "shadow-diff-report.json"
+
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / "first.json"
+            second = Path(directory) / "second.json"
+            command = [
+                "shadow-diff",
+                "--baseline",
+                str(baseline),
+                "--shadow-report",
+                str(shadow_report),
+            ]
+
+            self.assertEqual(main([*command, "--output", str(first)]), 0)
+            self.assertEqual(main([*command, "--output", str(second)]), 0)
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+
+            result = json.loads(first.read_text(encoding="utf-8"))
+            self.assertEqual(
+                result["counts"],
+                {
+                    "added": 1,
+                    "removed": 1,
+                    "retained": 2,
+                    "held_accounts": 1,
+                },
+            )
+            self.assertEqual(
+                result["diff"]["added"][0],
+                {
+                    "validator_id": "validator-d",
+                    "reason_codes": [
+                        "eligible_admission_candidate",
+                        "all_gates_passed",
+                    ],
+                    "evidence_references": [
+                        "input_roots.policy_evidence"
+                    ],
+                },
+            )
+            self.assertEqual(
+                result["diff"]["removed"][0]["validator_id"],
+                "validator-a",
+            )
+            self.assertEqual(
+                [
+                    item["validator_id"]
+                    for item in result["diff"]["retained"]
+                ],
+                ["validator-b", "validator-c"],
+            )
+            hold = result["diff"]["held_accounts"][0]
+            self.assertEqual(hold["account_id"], "account-hold")
+            self.assertEqual(hold["validator_id"], "validator-hold")
+            self.assertEqual(
+                hold["decision_reason"]["reason_codes"],
+                ["work_digest_hold"],
+            )
+            self.assertEqual(
+                hold["upstream_reason_objects"],
+                [
+                    {
+                        "code": "work_digest_hold",
+                        "detail": "fixture_missing_digest",
+                        "evidence_references": [
+                            "work_digest_verifications"
+                        ],
+                        "field": "work_digest",
+                    }
+                ],
+            )
+
     def test_cli_writes_only_the_requested_shadow_reports(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "shadow.json"

@@ -812,6 +812,7 @@ class OfflineCliTests(unittest.TestCase):
                 "replay",
                 "shadow-derive",
                 "derive",
+                "shadow-diff",
             },
         )
         self.assertNotIn("submit", subparser_action.choices)

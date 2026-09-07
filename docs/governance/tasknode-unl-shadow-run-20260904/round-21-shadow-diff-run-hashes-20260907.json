@@ -1,0 +1,17 @@
+{
+  "schema": "tasknode-unl-shadow-diff-determinism-record-v1",
+  "baseline_file": "round-21-selected-unl-20260907.json",
+  "shadow_report_file": "shadow-report.json",
+  "diff_file": "round-21-shadow-diff-20260907.json",
+  "runs": [
+    {
+      "run": 1,
+      "sha256": "cad5d4e0af5498e92c1acc495eef83095f403f5d5b30ffaeeec14167284ef7f5"
+    },
+    {
+      "run": 2,
+      "sha256": "cad5d4e0af5498e92c1acc495eef83095f403f5d5b30ffaeeec14167284ef7f5"
+    }
+  ],
+  "byte_identical": true
+}

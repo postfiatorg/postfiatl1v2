@@ -55,6 +55,7 @@ SHADOW_WORK_DIGEST_BUNDLE_SCHEMA = "tasknode-unl-work-digest-bundle-v1"
 SHADOW_LEDGER_SNAPSHOT_BUNDLE_SCHEMA = "tasknode-unl-ledger-snapshot-bundle-v1"
 SHADOW_POLICY_EVIDENCE_SCHEMA = "tasknode-unl-shadow-policy-evidence-v1"
 SHADOW_REPORT_SCHEMA = "tasknode-unl-shadow-report-v1"
+SHADOW_BASELINE_DIFF_SCHEMA = "tasknode-unl-shadow-baseline-diff-v1"
 
 ACCOUNTABILITY_WINDOW_DAYS = 180
 ACCOUNTABILITY_WORK_DENOMINATOR = 40
