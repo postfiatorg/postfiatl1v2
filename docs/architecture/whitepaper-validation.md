@@ -2,7 +2,8 @@
 
 Audit source: `d351353e57b295368450a57866ace17b5e1ce6ad`. All Rust evidence below
 uses unchanged runtime code from that baseline in the isolated audit worktree.
-The Python CLI and documentation are the only implementation changes.
+Changes are limited to the Python CLI, documentation and the Python CI checkout's
+history requirement.
 
 ## Specification gate
 
@@ -52,6 +53,21 @@ The corrected canonical whitepaper and downloadable copy share SHA-256
 `a905c4de38c9dc9540c9ca49d0281a5a64ff547cb7368d84ebf7be006a92bd4a`.
 The original paper identity remains in the inventory; it is not overwritten by
 the corrected-text identity.
+
+## Hosted CI follow-up
+
+The first PR run passed `docs-build` but exposed the Python job's shallow Git
+checkout: eight inventory tests could not read the pinned baseline. The workflow
+now fetches full history for `python-sdk`, matching the CLI's documented history
+requirement. The other 446 Python tests passed and three were skipped in that
+initial run. The local 12-test audit suite remains green with the baseline present.
+
+The same run's `public-tree-hygiene` job failed the existing proof inventory:
+`scripts/check-nav-reserve-proof-fuzz-smoke` has source digest
+`e0c814a53c3b81f7b72c6ca3c7a71d739ed0efae62505fd9effba15326acb4b7`, while the
+inventory expects `d9bae0c68f8448eba9c99092546a7780026b277901980bec56730b5d66418d79`.
+Those source/inventory files are unchanged by this audit. This PR does not claim
+all hosted checks passed; that baseline gate needs its separate reviewed repair.
 
 ## Evidence interpretation
 
