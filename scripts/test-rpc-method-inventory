@@ -292,6 +292,8 @@ def main() -> int:
         "owned_unwrap_sign_v3": "owned_lane_gated",
         "owned_unwrap_apply_v3": "owned_lane_gated",
         "vault_bridge_route": "read_only_public",
+        "pfusdc_ingress_preflight": "read_only_public",
+        "yolo_target_receipt": "read_only_public",
         "apply_batch": "operator_or_local_only",
     }
     for method, posture in expected.items():

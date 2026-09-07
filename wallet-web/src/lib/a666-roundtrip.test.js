@@ -9,7 +9,7 @@ import {
 } from './a666-roundtrip.js';
 
 const statusPayload = {
-  schema: 'stakehub-a666-wallet-roundtrip-v1',
+  schema: 'postfiat-a666-wallet-roundtrip-v1',
   ok: true,
   route: 'pftl-a666-ethereum-wA666-usdc-v1',
   amount: '10.000000',
