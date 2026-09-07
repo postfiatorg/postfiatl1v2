@@ -5,6 +5,12 @@ Qwen governance profile. It is evidence for replayability under a pinned
 profile, not a claim that all LLM inference is deterministic under all
 hardware, batching, tensor-parallel, or runtime settings.
 
+The original report/vector files named below are unavailable in the pinned
+whitepaper-audit checkout. These are retained summaries, not measurements
+rerun or independently verified by that audit. In particular, the separate
+small-profile probes must not be substituted for the exact E7 experiment in
+the whitepaper. See the [E5–E7 provenance findings](../architecture/whitepaper-alignment.md#appendix-a).
+
 ## Vast H100/H200 Run
 
 Run date: 2026-05-26

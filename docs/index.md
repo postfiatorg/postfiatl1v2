@@ -42,7 +42,7 @@ they are not listed one-by-one in the primary navigation.
 | A666 primary market | Mainnet components and full economic loop are functionally proven; resident private swaps remain limited availability and production GA is closed. Multi-asset reserve facilities are proposed, not deployed. | [A666 current state](status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md), [deferred production hardening](deferred-plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md), [deferred reserve redemption system](deferred-plans/NAVCOIN-RESERVE-REDEMPTION-SYSTEM-SPEC-20260730.md) |
 | YOLO target receipts | Consensus-verified receipts for Nitro-attested, SP1-proven options portfolio targets: a signed registration pins program/key, methodology, collection and submitter; a later submission verifies the Groth16 proof on-chain and records the target with transaction finality. Implemented and locally qualified on a four-validator receipt workflow (PR #38, merged 2026-09-07); feature defaults to disabled, and testnet deployment and governance activation have not occurred. Receipts confer no trading, minting or reserve authority. | [Target Receipt v1](yolo/target-receipt-v1.md), [YOLO Options Reserve Profile](navcoins/yolo-options-reserve-profile.md) |
 | Core chain | Rust L1 with accounts, signed transfers, fees, blocks, receipts, deterministic replay, and state roots. | [Architecture](architecture/overview.md) |
-| Storage scaling | Candidate `d0ae79f3` passed G4, then failed exact height-924 G6 on the first certified continuation round after six rebuild/verify passes. It is not clone-qualified and was not deployed; a successor needs owning-boundary repair and repeated affected gates. Public testnet is blocked. | [Active milestone](plans/active/storage-scaling-milestone.md), [State and Storage](architecture/state-and-storage.md) |
+| Storage scaling | The retained August 31 `storage-lease-af9b83c3` receipt records transactional activation at 930 and six-validator continuation at 931. Earlier failed candidates remain disqualified; public-testnet gate closure and fresh health require separate evidence. | [Current State](status/chain-state-current.md), [State and Storage](architecture/state-and-storage.md) |
 | Finality | Versioned certified ordering: legacy single-view mode and activated consensus v2 with durable prepare/precommit, timeout certificates, and proposer rotation. | [Finality](architecture/finality.md) |
 | Settlement lanes | Consensus transactions, W6 dual-authorized atomic swap, FastPay payments, FastSwap DvP, and Asset-Orchard private settlement have distinct finality and recovery boundaries. | [Settlement Lanes](architecture/settlement-lanes.md) |
 | Governance | The final E5 audit verified Cobalt ratifying validator-registry and trust-graph changes at height 924; unrelated scopes and the current proposal/authorization custody remain Foundation-administered. | [Current State](status/chain-state-current.md), [Validator Registry](governance/validator-registry.md) |
@@ -58,7 +58,7 @@ they are not listed one-by-one in the primary navigation.
 
 ## Fast Reading Path
 
-1. Read the [Whitepaper](whitepaper.md) for the thesis.
+1. Read the [Whitepaper](whitepaper.md) for the thesis and the [overview and alignment audit](architecture/whitepaper-overview.md) for its code-backed boundaries.
 2. Read [First Day](start/first-day.md) for build and local workflow.
 3. Read [Settlement Lanes](architecture/settlement-lanes.md), the
    [Constitution](governance/verifiable-constitution.md), [Cobalt](governance/cobalt.md),

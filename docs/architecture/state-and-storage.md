@@ -48,9 +48,9 @@ flowchart LR
   ValidatorRegistry --> GovernanceReplay[Governance replay checks]
 ```
 
-## Transactional finality-path candidate
+## Transactional finality path
 
-The active storage-scaling milestone selects an embedded transactional `redb`
+The implementation uses an explicitly activated embedded transactional `redb`
 store for finalized blocks, receipts, archived batches, ordered membership,
 current state, history indexes, and chain-tip metadata. One finalized height is
 committed in one write transaction with an expected-parent check. Proposal,
@@ -86,7 +86,12 @@ crash-suffix truncation/checkpointing, manifest writes, and export writes are
 not. Whole-directory mutation-sentinel tests cover successful verification and
 each repair/refusal boundary.
 
-This source is an undeployed development candidate. Canonical snapshot/restore,
+The August 31 retained `storage-lease-af9b83c3` deployment receipt records
+transactional activation at height 930 and six-validator continuation at 931.
+See [Current State](../status/chain-state-current.md) for exact source/binary
+identity and observation limits. This audit did not re-probe that fleet.
+
+The following earlier candidate results are historical. Canonical snapshot/restore,
 rebuild, retained-history equality, exact height-915 replay, the closed 69-case
 tamper/crash matrix, compatible two-binary rollback, and a development-only
 height-501 six-clone migration rehearsal pass offline. Candidate `d0ae79f3`
@@ -127,9 +132,11 @@ The repair landed at commit `2c7aa36f` with an exact regression — drill
 rotation, signed rollback, later rotation of the same validator record, then a
 successful next certified height — plus stale, reordered, duplicated, missing,
 and wrong-root history coverage in
-`crates/node/src/tests/validator_registry_continuation_tests.rs`. The repair is
-part of the repository lineage only: it does not make `d0ae79f3` deployable,
-and no qualification gate has been rerun for a successor candidate.
+`crates/node/src/tests/validator_registry_continuation_tests.rs`. The repair does not make the failed `d0ae79f3` candidate deployable.
+A separate August 31 `registry-fix-291d1eb1` receipt records its backport to the
+previous deployed lineage and continuation through heights 925/926, followed by
+the distinct transactional rollout through 931. These are dated retained
+records, not permission to deploy an arbitrary descendant.
 
 ## Partial History
 

@@ -92,6 +92,14 @@ nav:
   - Testnet Path: status/testnet-path.md
   - Release Gate Inventory: status/release-gate-inventory.md
   - Whitepaper: whitepaper.md
+  - Whitepaper Audit:
+      - Overview and Section Guide: architecture/whitepaper-overview.md
+      - Claim Alignment: architecture/whitepaper-alignment.md
+      - Remaining Gaps: architecture/whitepaper-gaps.md
+      - Validation: architecture/whitepaper-validation.md
+      - GPT-6 Rewrite Candidate: whitepaper-gpt6-rewrite.md
+      - GPT-6 Rewrite Review: architecture/whitepaper-gpt6-rewrite-review.md
+      - Cobalt and Admission Publication Review: architecture/cobalt-admission-publication-review.md
   - NAVCoins:
       - Overview: navcoins/index.md
       - A666 Current State: status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md
@@ -107,6 +115,8 @@ nav:
       - Python Example: business/navcoin-python-example.md
       - Archive Summary: evidence/navcoin-archive-summary.md
   - Plans:
+      - Cobalt Publication Follow-up: plans/completed/cobalt-admission-publication-milestone.md
+      - Completed Whitepaper Audit: plans/completed/whitepaper-audit-milestone.md
       - Completed Task Node UNL MVP Plan: plans/completed/tasknode-unl-mvp-plan.md
       - Active Storage Scaling: plans/active/storage-scaling-milestone.md
       - Z3 NAVCoin Round-Trip Plan: plans/active/z3-navcoin-roundtrip-plan.md

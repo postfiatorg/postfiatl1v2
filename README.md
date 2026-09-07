@@ -3,12 +3,13 @@
 > **Maturity:** controlled pre-testnet research software. This repository is
 > not a production/mainnet release. Validator operation currently requires an
 > explicit `--unsafe-devnet-file-signer` acknowledgement because HSM/remote
-> signing is not implemented, and long-running validator/RPC services require
-> `--unsafe-devnet-json-storage` because the bounded JSON/JSONL store is not a
-> transactional indexed production engine. Do not place real-value keys or
-> value on this controlled-devnet configuration.
+> signing is not implemented. Long-running legacy/JSONL services require
+> `--unsafe-devnet-json-storage`; an authenticated transactional generation can
+> satisfy the separate activation/readiness gate. Transactional storage does
+> not remove the controlled-devnet maturity boundary. Do not place real-value
+> keys or value on this configuration.
 
-PostFiat is a Rust Layer 1 settlement system for post-quantum, privacy-aware institutional value transfer: transparent accounts use ML-DSA authorization from genesis, shielded settlement is built around Orchard/Halo2-style proofs, and quorum certificates provide deterministic finality. The final authenticated Cobalt drill observation ran from `2026-08-26T06:34:55Z` through `06:35:50Z` with all six `postfiat-wan-devnet-2` validators converged at height 924 and all validator, RPC, and shadow services active. Cobalt remains the bounded validator-trust authority; Consensus v2 remains block finality. The adversarial campaign closed `KEEP_ACTIVE`. Current Git HEAD is not itself proof of the running validator release.
+PostFiat is a Rust Layer 1 settlement system: transparent accounts use ML-DSA authorization, private Asset-Orchard actions use Orchard/Halo2, and Consensus v2 supplies activated block finality. Cobalt has a separate bounded validator-trust authority scope. The retained August 31 storage deployment receipt records activation at height 930 and six-validator continuation at 931. Earlier Cobalt drills through height 924 closed `KEEP_ACTIVE`. These are dated observations, not a fresh fleet-health query; current Git HEAD is not a running-release identity.
 
 See [Current State](docs/status/chain-state-current.md) for the exact live observation, deployed release lineage, repository HEAD, adversarial campaign status, and freshness boundary.
 
@@ -65,7 +66,7 @@ flowchart LR
 | FastSwap | Implemented for prefunded dual-owner objects with durable reservation, Confirm-or-Cancel certificates, conserved effects, catch-up, and restart recovery. Shared-network activation is a separate deployment decision. |
 | Asset-Orchard | Implemented private ingress, transfer/swap, recovery, and egress path; legacy cleartext note actions are historical-replay-only. |
 | Governance | The final E5 audit found Cobalt active for validator-trust evolution with all six nodes converged at height 924 after the signed rollback/return drills and legitimate validator-5 rotation. Consensus v2 remains the sole block-finality protocol. The deployed node binary SHA-256 was `d5e5ef63…c2696caf`; current source HEAD is a separate evidence plane. See [Current State](docs/status/chain-state-current.md), the [adversarial results](docs/governance/cobalt-adversarial-verification-results.md), and the [E5 packet](benchmarks/cobalt-adversarial-verification/e5/README.md). |
-| Storage scaling | No candidate is deployment-eligible. `d0ae79f3` failed exact height-924 continuation. Successor `10dd9f20` fixed that defect and passed the old clone runner, but its live canary exposed an omitted concurrent transport/RPC topology and incomplete exact rollback proof. Validator-1 was rolled back; both candidates must not deploy. Public testnet is blocked. See the [active milestone](docs/plans/active/storage-scaling-milestone.md). |
+| Storage scaling | Transactional `redb` storage is implemented. The retained `storage-lease-af9b83c3` receipt records six-validator activation/continuation at heights 930/931 on August 31. Earlier `d0ae79f3`/`10dd9f20` failures remain historical disqualifications. Deployment does not close every public-testnet gate; see [Current State](docs/status/chain-state-current.md) and the [active milestone](docs/plans/active/storage-scaling-milestone.md). |
 
 See [Settlement Lanes](docs/architecture/settlement-lanes.md) for the protocol
 boundaries and [Public Launch Boundary](docs/security/public-launch-boundary.md)
@@ -105,6 +106,7 @@ scripts/devnet-down
 ## Documentation
 
 - Whitepaper: [docs/whitepaper.md](docs/whitepaper.md)
+- Whitepaper overview and code alignment: [audit guide](docs/architecture/whitepaper-overview.md), [claim matrix](docs/architecture/whitepaper-alignment.md), [remaining gaps](docs/architecture/whitepaper-gaps.md)
 - MkDocs site: [http://127.0.0.1:8088/](http://127.0.0.1:8088/) by default when served locally
 - Engineering docs source: [docs/](docs/)
 - MkDocs config: [mkdocs.yml](mkdocs.yml)

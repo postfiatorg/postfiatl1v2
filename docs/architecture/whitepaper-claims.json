@@ -1,0 +1,1998 @@
+{
+  "schema": "postfiat.whitepaper-audit.v1",
+  "baseline": {
+    "commit": "d351353e57b295368450a57866ace17b5e1ce6ad",
+    "whitepaper": "docs/whitepaper.md",
+    "sha256": "83fa0951a27d8278b0fa6435d49931e406941a6860adf13f28d376fea600cc98",
+    "version": "Version 3 — June 2026; implementation boundary reconciled July 2026"
+  },
+  "claims": [
+    {
+      "id": "WP-01",
+      "sections": [
+        "Abstract"
+      ],
+      "locator": "PostFiat is a Layer 1 settlement-ledger design",
+      "claim": "Canonical protocol candidate and July governance boundary",
+      "status": "divergent",
+      "plane": "source",
+      "finding": "The source has a versioned Cobalt authority handoff and signed RBC/ABBA/MVBA/DABC certificate consumer. Calling all Cobalt authority future work is stale. Cobalt is limited to validator trust; it is not block consensus.",
+      "evidence": [
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "verify_governance_authority_batch",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "authority_modes_are_exclusive_and_cobalt_scope_is_validator_trust_only",
+          "role": "test"
+        }
+      ],
+      "followup": "Corrected Abstract and §§3, 6, 8; G01 tracks remaining target composition."
+    },
+    {
+      "id": "WP-73",
+      "sections": [
+        "Abstract"
+      ],
+      "locator": "> **Current implementation boundary (July 2026):**",
+      "claim": "Downloadable whitepaper is a stale alternate text",
+      "status": "divergent",
+      "plane": "source",
+      "finding": "The original downloadable copy predates July's implementation-boundary corrections and differs from the canonical paper. Copying it would reintroduce broader governance/privacy claims. The patch synchronizes exact bytes and makes the CLI check detect drift.",
+      "evidence": [
+        {
+          "path": "docs/assets/raw/whitepaper.md.txt",
+          "anchor": "**Whitepaper, Version 3 — June 2026**",
+          "role": "documentation"
+        },
+        {
+          "path": "docs/whitepaper.md",
+          "anchor": "**Canonical protocol-document candidate.**",
+          "role": "documentation"
+        }
+      ],
+      "followup": "Corrected copy and integrity check; preserve one canonical source."
+    },
+    {
+      "id": "WP-02",
+      "sections": [
+        "1"
+      ],
+      "locator": "The category claim is that proof of authority",
+      "claim": "Economic thesis, governed trust, privacy aspiration and post-quantum authorization",
+      "status": "partial",
+      "plane": "research-target",
+      "finding": "The settlement-category argument is a design position. Transparent accounts remain supported, and known controlled validators do not establish the claimed natural-stakeholder incentives or independent operators.",
+      "evidence": [
+        {
+          "path": "README.md",
+          "anchor": "controlled",
+          "role": "documentation"
+        },
+        {
+          "path": "docs/business/whitepaper.md",
+          "anchor": "non-normative",
+          "role": "documentation"
+        },
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "verify_cobalt_validator_trust_update",
+          "role": "code"
+        }
+      ],
+      "followup": "G03: establish independently sourced admission evidence and operator diversity."
+    },
+    {
+      "id": "WP-03",
+      "sections": [
+        "1.1"
+      ],
+      "locator": "*Fail closed.*",
+      "claim": "Fail-closed validation, old-rules authorization and hash-bound artifacts",
+      "status": "implemented-and-tested",
+      "plane": "source",
+      "finding": "Scope checks reject mixed authority and invalid transitions; this establishes the named governance boundary, not a universal proof that every repository input fails closed.",
+      "evidence": [
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "verify_cobalt_authority_transition",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "handoff_requires_distinct_mldsa65_quorum_approvals",
+          "role": "test"
+        }
+      ],
+      "followup": "Retain the narrower boundary and its named regression coverage."
+    },
+    {
+      "id": "WP-04",
+      "sections": [
+        "1.1"
+      ],
+      "locator": "*Deletion monotonicity.*",
+      "claim": "Deleting machine classification can only make decisions more conservative",
+      "status": "partial",
+      "plane": "source",
+      "finding": "The controlled selector with require_model_classification=true holds absent classifications. That is a profile-specific gate, not a theorem over all model profiles or off-chain tooling; alternate policies and later Task Node shadow scoring must be assessed separately.",
+      "evidence": [
+        {
+          "path": "crates/consensus_cobalt/src/validator_admission_policy.rs",
+          "anchor": "require_model_classification",
+          "role": "code"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/validator_admission_policy.rs",
+          "anchor": "missing_model_classification",
+          "role": "code"
+        },
+        {
+          "path": "docs/governance/ai-governance-direction-20260903.md",
+          "anchor": "SHADOW_ONLY",
+          "role": "documentation"
+        }
+      ],
+      "followup": "G04: profile-specific dependency and deletion-monotonicity checks."
+    },
+    {
+      "id": "WP-05",
+      "sections": [
+        "1.2"
+      ],
+      "locator": "This paper is the protocol argument.",
+      "claim": "Empirical claims are supported by named hash-bound artifacts",
+      "status": "partial",
+      "plane": "unresolved",
+      "finding": "All E1–E8 entries were inventoried, but several original reports are absent from the pinned tree. A repeated number or digest in a document cannot authenticate an unavailable measurement.",
+      "evidence": [
+        {
+          "path": "docs/evidence/sglang-determinism.md",
+          "anchor": "archived outside the repository",
+          "role": "documentation"
+        },
+        {
+          "path": "docs/quantum/signature-size-and-certificates.md",
+          "anchor": "reports/testnet-ml-dsa-performance/",
+          "role": "documentation"
+        }
+      ],
+      "followup": "G07: restore immutable redacted measurement packets."
+    },
+    {
+      "id": "WP-06",
+      "sections": [
+        "2"
+      ],
+      "locator": "PostFiat is designed against five adversary classes.",
+      "claim": "Five adversary classes and asynchronous safety/partially synchronous liveness",
+      "status": "partial",
+      "plane": "research-target",
+      "finding": "The threat model states assumptions about faults, independence and cryptography. Quorum and signed timeout checks implement mechanisms under those assumptions; tests do not prove the assumptions true in an actual fleet.",
+      "evidence": [
+        {
+          "path": "crates/ordering_fast/src/consensus_v2.rs",
+          "anchor": "verify_consensus_v2_timeout_certificate",
+          "role": "code"
+        },
+        {
+          "path": "crates/ordering_fast/src/consensus_v2/tests.rs",
+          "anchor": "exhaustive_quorum_model_covers_n4_and_n6",
+          "role": "test"
+        },
+        {
+          "path": "docs/security/threat-model.md",
+          "anchor": "#",
+          "role": "documentation"
+        }
+      ],
+      "followup": "Retain explicit fault and liveness assumptions; G03 covers correlated operators."
+    },
+    {
+      "id": "WP-07",
+      "sections": [
+        "2"
+      ],
+      "locator": "The cryptographic assumptions include EUF-CMA",
+      "claim": "Hybrid cryptographic boundary",
+      "status": "implemented-with-insufficient-verification",
+      "plane": "source",
+      "finding": "ML-DSA-65 is the account/validator family; Asset-Orchard uses classical RedPallas/Halo2/encryption, and NAV profiles can use SP1/Groth16. This audit verifies the split by source, not cryptographic soundness or side-channel resistance.",
+      "evidence": [
+        {
+          "path": "crates/crypto_provider/src/lib.rs",
+          "anchor": "ML_DSA_65_ALGORITHM",
+          "role": "code"
+        },
+        {
+          "path": "crates/privacy_orchard/src/asset_orchard.rs",
+          "anchor": "asset_orchard_private_egress_sighash",
+          "role": "code"
+        },
+        {
+          "path": "crates/execution/src/nav_sp1_verifier.rs",
+          "anchor": "verify_bounded_sp1_groth16",
+          "role": "code"
+        },
+        {
+          "path": "docs/security/halo2-dependency.md",
+          "anchor": "#",
+          "role": "documentation"
+        }
+      ],
+      "followup": "G05: preserve cryptography review and hybrid-security limits."
+    },
+    {
+      "id": "WP-08",
+      "sections": [
+        "3"
+      ],
+      "locator": "The implemented replicated state is broader than four components.",
+      "claim": "Ledger domains and canonical state commitments",
+      "status": "implemented-and-tested",
+      "plane": "source",
+      "finding": "LedgerState includes issued assets, NAV/bridge and object-lane state; replicated roots also commit governance, shielded and bridge domains. Separate activation fields govern full FastLane coverage and the ordered-history accumulator.",
+      "evidence": [
+        {
+          "path": "crates/types/src/market_nav_asset_types.rs",
+          "anchor": "pub struct LedgerState",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/state_commitment.rs",
+          "anchor": "replicated_state_root_v2",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/tests/replicated_state_activation.rs",
+          "anchor": "ordered_history_v2_state_root_is_domain_bound_and_activation_gated",
+          "role": "test"
+        }
+      ],
+      "followup": "Retain the narrower boundary and its named regression coverage."
+    },
+    {
+      "id": "WP-09",
+      "sections": [
+        "3"
+      ],
+      "locator": "The native unit has a fixed supply set at genesis.",
+      "claim": "Fixed native supply, fee burn, and 'no issuance of any kind'",
+      "status": "divergent",
+      "plane": "source",
+      "finding": "Native PFT supply is genesis-bound and replay checks holdings against burns. Issued-asset/NAV minting exists, so the unqualified no-issuance wording is false outside native PFT.",
+      "evidence": [
+        {
+          "path": "crates/types/src/core_chain.rs",
+          "anchor": "expected_native_supply_atoms",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/block_replay_wallet.rs",
+          "anchor": "native_pft_live_total",
+          "role": "code"
+        },
+        {
+          "path": "crates/execution/src/fee_replay_execution_tests.rs",
+          "anchor": "transfer_to_fee_collector_keeps_amount_and_burns_fee",
+          "role": "test"
+        },
+        {
+          "path": "crates/execution/src/core_asset_execution_tests.rs",
+          "anchor": "asset_transactions_create_trust_pay_burn_and_reject_frozen_lines",
+          "role": "test"
+        }
+      ],
+      "followup": "Corrected §3 to distinguish native issuance, issued assets and application transfers."
+    },
+    {
+      "id": "WP-10",
+      "sections": [
+        "3"
+      ],
+      "locator": "Fee classes price bytes, signature verifications",
+      "claim": "A unified resource-class fee model and fee burn as the only economic flow",
+      "status": "partial",
+      "plane": "source",
+      "finding": "Byte floors and state-expansion fees exist, plus Orchard resource fees. This is not evidence of one complete governed tariff over signatures, governance and every proof class. Issuer transfer fees and market transfers also exist.",
+      "evidence": [
+        {
+          "path": "crates/execution/src/fees_offer_planning.rs",
+          "anchor": "minimum_transfer_fee",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/orchard_state_application.rs",
+          "anchor": "orchard_minimum_resource_fee_for_action",
+          "role": "code"
+        },
+        {
+          "path": "crates/execution/src/core_asset_execution_tests.rs",
+          "anchor": "nft_transaction_enforces_issuer_transfer_fee",
+          "role": "test"
+        }
+      ],
+      "followup": "Corrected §3; G06: publish a per-family fee and exemption inventory."
+    },
+    {
+      "id": "WP-11",
+      "sections": [
+        "3"
+      ],
+      "locator": "Live transaction families include transparent payments",
+      "claim": "Account, asset, escrow, NFT, offer and W6 atomic-swap paths",
+      "status": "implemented-and-tested",
+      "plane": "source",
+      "finding": "Typed transaction families and tests support the listed account surface. W6 is an authorized atomic consensus transition; an accepted block still requires the matching accepted receipt for transaction success.",
+      "evidence": [
+        {
+          "path": "crates/types/src/transactions_mempool_receipts.rs",
+          "anchor": "Receipt",
+          "role": "code"
+        },
+        {
+          "path": "crates/execution/src/atomic_swap_execution_tests.rs",
+          "anchor": "atomic_swap_applies_both_legs_fees_sequences_and_receipt_once",
+          "role": "test"
+        },
+        {
+          "path": "docs/architecture/transaction-lifecycle.md",
+          "anchor": "Receipt semantics are mandatory",
+          "role": "documentation"
+        }
+      ],
+      "followup": "Retain the narrower boundary and its named regression coverage."
+    },
+    {
+      "id": "WP-12",
+      "sections": [
+        "3"
+      ],
+      "locator": "FastLane primary operations, Asset-Orchard",
+      "claim": "FastPay/FastSwap certificates and ledger anchoring",
+      "status": "implemented-with-insufficient-verification",
+      "plane": "source",
+      "finding": "Owned-object certificates have distinct authorization, terminal-decision and durable-apply rules. They do not replace Consensus v2 or prove shared-network activation. This audit inspected the boundaries and did not rerun complete lane campaigns.",
+      "evidence": [
+        {
+          "path": "crates/execution/src/owned_transfer_recovery.rs",
+          "anchor": "verify_fastpay_apply_ack_v1",
+          "role": "code"
+        },
+        {
+          "path": "crates/execution/src/fastswap_decision.rs",
+          "anchor": "verify_fastswap_new_round_certificate",
+          "role": "code"
+        },
+        {
+          "path": "docs/architecture/settlement-lanes.md",
+          "anchor": "FastSwap",
+          "role": "documentation"
+        }
+      ],
+      "followup": "Keep lane-specific finality and activation labels; retain full lane campaigns for lane changes."
+    },
+    {
+      "id": "WP-13",
+      "sections": [
+        "3"
+      ],
+      "locator": "NAV and vault-bridge operations,",
+      "claim": "NAV, reserve evidence and bridge scope",
+      "status": "implemented-with-insufficient-verification",
+      "plane": "source",
+      "finding": "Typed reserve profiles, freshness/challenge fields and bounded SP1 verification exist. A verified packet describes its disclosed perimeter, not undisclosed liabilities or custody solvency; route activation and external settlement require their own proof.",
+      "evidence": [
+        {
+          "path": "crates/types/src/account_owned_asset_types.rs",
+          "anchor": "pub struct NavProofProfile",
+          "role": "code"
+        },
+        {
+          "path": "crates/execution/src/nav_sp1_verifier.rs",
+          "anchor": "validate_nav_reserve_public_values_context",
+          "role": "code"
+        },
+        {
+          "path": "crates/execution/src/nft_escrow_asset_execution.rs",
+          "anchor": "nav_epoch_finalize",
+          "role": "code"
+        },
+        {
+          "path": "docs/navcoins/reserve-primitives.md",
+          "anchor": "#",
+          "role": "documentation"
+        }
+      ],
+      "followup": "G08: keep source labels, proof profiles and external-route activation explicit."
+    },
+    {
+      "id": "WP-14",
+      "sections": [
+        "3"
+      ],
+      "locator": "Every block is verified under exactly one active registry root",
+      "claim": "Registry-bound ordered transitions and durable storage",
+      "status": "implemented-and-tested",
+      "plane": "source",
+      "finding": "Consensus binds the current committee; a transactional finality commit groups state/receipts/history. Registry history must skip the applied prefix after rotations. This does not by itself prove every shielded rotation adversarial case.",
+      "evidence": [
+        {
+          "path": "crates/node/src/consensus_v2_store.rs",
+          "anchor": "live_consensus_v2_context",
+          "role": "code"
+        },
+        {
+          "path": "crates/storage/src/transactional.rs",
+          "anchor": "validate_commit_against_previous_tip",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/tests/validator_registry_continuation_tests.rs",
+          "anchor": "superseded_registry_rotation_history_continues_to_next_certified_height",
+          "role": "test"
+        }
+      ],
+      "followup": "Retain the narrower boundary and its named regression coverage."
+    },
+    {
+      "id": "WP-15",
+      "sections": [
+        "3"
+      ],
+      "locator": "New networks activate the complete replicated-state-v2 commitment",
+      "claim": "Irreversible commitment activation and legacy replay",
+      "status": "implemented-and-tested",
+      "plane": "source",
+      "finding": "The FastLane replicated-state activation and ordered-history-v2 activation are distinct, explicit boundaries. Pending journal recovery and one-database-transaction tests support the current source; old roots remain version-specific.",
+      "evidence": [
+        {
+          "path": "crates/node/src/state_commitment.rs",
+          "anchor": "effective_storage_commitment_activation_height",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/tests/replicated_state_activation.rs",
+          "anchor": "replicated_state_v2_activation_journal_recovers_every_persist_prefix",
+          "role": "test"
+        },
+        {
+          "path": "crates/node/src/tests/replicated_state_activation.rs",
+          "anchor": "ordered_history_v2_active_commit_uses_one_database_transaction_without_jsonl",
+          "role": "test"
+        }
+      ],
+      "followup": "Retain the narrower boundary and its named regression coverage."
+    },
+    {
+      "id": "WP-72",
+      "sections": [
+        "3"
+      ],
+      "locator": "including every FastLane reserve, receipt, authorization, policy, committee,",
+      "claim": "Storage deployment and source-state documentation drift",
+      "status": "divergent",
+      "plane": "observed-deployment",
+      "finding": "The August 31 retained receipt records transactional activation at 930 and six-validator continuation at 931. README/STATUS/storage summaries still say no candidate deployed, while the operational page appends the newer record above older 'current' tables. The audit did not query the fleet or independently reenact the receipt.",
+      "evidence": [
+        {
+          "path": "deployments/storage-lease-20260831/deploy-receipt.json",
+          "anchor": "\"status\": \"DEPLOYED_AND_ACTIVE\"",
+          "role": "receipt"
+        },
+        {
+          "path": "README.md",
+          "anchor": "No candidate is deployment-eligible.",
+          "role": "documentation"
+        },
+        {
+          "path": "crates/node/src/main_parts/runtime_helpers.rs",
+          "anchor": "fn require_transactional_or_unsafe_devnet_json_storage",
+          "role": "code"
+        }
+      ],
+      "followup": "Corrected dated summaries and conditional storage-flag wording; G11 retains fresh-probe and gate-reconciliation work."
+    },
+    {
+      "id": "WP-16",
+      "sections": [
+        "4",
+        "4.1"
+      ],
+      "locator": "The candidate implements two explicitly versioned ordering modes.",
+      "claim": "Legacy single-view versus activated Consensus v2",
+      "status": "implemented-and-tested",
+      "plane": "source",
+      "finding": "Activation selects the finality rule. Prepare alone cannot commit; the exact non-nil precommit QC is required. This is explicit two-phase BFT, not chained HotStuff.",
+      "evidence": [
+        {
+          "path": "crates/node/src/consensus_v2_finality.rs",
+          "anchor": "consensus_v2_active_at",
+          "role": "code"
+        },
+        {
+          "path": "crates/ordering_fast/src/consensus_v2.rs",
+          "anchor": "verify_consensus_v2_commit",
+          "role": "code"
+        },
+        {
+          "path": "crates/ordering_fast/src/consensus_v2/tests.rs",
+          "anchor": "durable_lock_rejects_conflict_and_precommit_qc_is_the_only_commit_boundary",
+          "role": "test"
+        }
+      ],
+      "followup": "Corrected STATUS's HotStuff shorthand; preserve versioned activation."
+    },
+    {
+      "id": "WP-17",
+      "sections": [
+        "4.1"
+      ],
+      "locator": "In consensus v2, for $n$ active validators",
+      "claim": "Quorum, proposer selection and artifact domain binding",
+      "status": "implemented-and-tested",
+      "plane": "source",
+      "finding": "V2 artifacts bind chain/genesis/version, committee, round and exact block data; verified distinct signers form the quorum. The n=4/n=6 model covers quorum intersection within its enumerated scope.",
+      "evidence": [
+        {
+          "path": "crates/types/src/consensus_v2_types.rs",
+          "anchor": "pub struct ConsensusV2Domain",
+          "role": "code"
+        },
+        {
+          "path": "crates/ordering_fast/src/consensus_v2/tests.rs",
+          "anchor": "canonical_v2_artifacts_bind_domain_committee_round_block_phase_and_signer",
+          "role": "test"
+        },
+        {
+          "path": "crates/ordering_fast/src/consensus_v2/tests.rs",
+          "anchor": "exhaustive_quorum_model_covers_n4_and_n6",
+          "role": "test"
+        }
+      ],
+      "followup": "Retain the narrower boundary and its named regression coverage."
+    },
+    {
+      "id": "WP-18",
+      "sections": [
+        "4.1"
+      ],
+      "locator": "Safety state—highest prepare, precommit and",
+      "claim": "Persist-before-sign locks and snapshot safety",
+      "status": "implemented-and-tested",
+      "plane": "source",
+      "finding": "Prepare/precommit/timeout authorization persists state before callers sign. Snapshot handling and QC retention are distinct storage surfaces; this audit's bounded tests do not replace every crash/restart test.",
+      "evidence": [
+        {
+          "path": "crates/node/src/consensus_v2_store.rs",
+          "anchor": "persist_consensus_v2_precommit_authorization",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/consensus_v2_store.rs",
+          "anchor": "prepare_authorization_is_persisted_before_duplicate_or_conflicting_vote",
+          "role": "test"
+        },
+        {
+          "path": "crates/node/src/batch_snapshot.rs",
+          "anchor": "consensus_v2",
+          "role": "code"
+        }
+      ],
+      "followup": "Retain the narrower boundary and its named regression coverage."
+    },
+    {
+      "id": "WP-19",
+      "sections": [
+        "4.1"
+      ],
+      "locator": "If a view fails, a quorum of signed timeout votes",
+      "claim": "Timeout ancestry, later-view recovery and adversarial models",
+      "status": "implemented-and-tested",
+      "plane": "source",
+      "finding": "Typed QC references must resolve; numeric rounds rank ancestry. Failed-proposer and schedule tests exercise n=4/n=6 with restart-safe locks, rather than claiming arbitrary-network liveness.",
+      "evidence": [
+        {
+          "path": "crates/ordering_fast/src/consensus_v2.rs",
+          "anchor": "verify_consensus_v2_timeout_certificate",
+          "role": "code"
+        },
+        {
+          "path": "crates/ordering_fast/src/consensus_v2/tests.rs",
+          "anchor": "typed_timeout_qc_ranking_uses_numeric_round_and_resolves_every_reference",
+          "role": "test"
+        },
+        {
+          "path": "crates/ordering_fast/src/consensus_v2/tests.rs",
+          "anchor": "failed_proposer_advances_and_commits_for_n4_and_n6_with_restart_safe_locks",
+          "role": "test"
+        }
+      ],
+      "followup": "Retain the narrower boundary and its named regression coverage."
+    },
+    {
+      "id": "WP-20",
+      "sections": [
+        "4.2"
+      ],
+      "locator": "The production mempool groups transactions",
+      "claim": "Family/insertion ordering and proposer power",
+      "status": "implemented-with-insufficient-verification",
+      "plane": "source",
+      "finding": "create_mempool_batch consumes family vectors in fixed sequence and retains within-family order. This is deterministic for the same admitted state, not cross-node ingress equality, a fee auction, or MEV resistance.",
+      "evidence": [
+        {
+          "path": "crates/node/src/mempool_proposals.rs",
+          "anchor": "pub fn create_mempool_batch",
+          "role": "code"
+        },
+        {
+          "path": "docs/architecture/settlement-lanes.md",
+          "anchor": "#",
+          "role": "documentation"
+        }
+      ],
+      "followup": "Retain the explicit ordering/omission risk."
+    },
+    {
+      "id": "WP-21",
+      "sections": [
+        "4.3"
+      ],
+      "locator": "The production node does not currently issue threshold",
+      "claim": "Threshold admission receipts and censorship attribution",
+      "status": "planned",
+      "plane": "research-target",
+      "finding": "Reference receipt types/signing contexts exist, but no production inclusion/omission-accountability consumer was established. Ordinary mempool and block observation cannot prove quorum first-seen time.",
+      "evidence": [
+        {
+          "path": "crates/crypto_provider/src/lib.rs",
+          "anchor": "ADMISSION_RECEIPT_SIGNATURE_CONTEXT",
+          "role": "code"
+        },
+        {
+          "path": "crates/ordering_fast/src/lib.rs",
+          "anchor": "admission",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/mempool_proposals.rs",
+          "anchor": "create_mempool_batch",
+          "role": "code"
+        }
+      ],
+      "followup": "G09: implement receipt issuance, aggregation and attributable omission validation before claiming it."
+    },
+    {
+      "id": "WP-22",
+      "sections": [
+        "4.4"
+      ],
+      "locator": "The live protocol has no automatic Negative-UNL-style",
+      "claim": "Automatic availability suspension and reduced quorum",
+      "status": "planned",
+      "plane": "research-target",
+      "finding": "The current authority path changes validator trust through explicit signed/ordered updates; no automatic Negative-UNL missed-round state machine was found in the searched node/types/execution surfaces.",
+      "evidence": [
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "verify_cobalt_validator_trust_update",
+          "role": "code"
+        },
+        {
+          "path": "crates/ordering_fast/src/consensus_v2.rs",
+          "anchor": "verify_consensus_v2_qc",
+          "role": "code"
+        }
+      ],
+      "followup": "G09: preserve normal-quorum halt behavior unless a versioned recovery protocol is added."
+    },
+    {
+      "id": "WP-23",
+      "sections": [
+        "5",
+        "5.1"
+      ],
+      "locator": "Proof of authority is usually described as a compromise.",
+      "claim": "Authority validation as an economic security purchase",
+      "status": "unresolved",
+      "plane": "research-target",
+      "finding": "Known-operator accountability and natural business exposure are the paper's economic thesis. Source code cannot establish operator incentives, resistance to capture, or superiority to other consensus economies.",
+      "evidence": [
+        {
+          "path": "docs/business/whitepaper.md",
+          "anchor": "Validators are natural",
+          "role": "documentation"
+        },
+        {
+          "path": "docs/governance/cobalt-independent-operator-proposal-path-research-spec.md",
+          "anchor": "#",
+          "role": "documentation"
+        }
+      ],
+      "followup": "G03: test stakeholder recruitment and independence assumptions with public evidence."
+    },
+    {
+      "id": "WP-24",
+      "sections": [
+        "5.2"
+      ],
+      "locator": "Zero issuance is therefore justified conditionally",
+      "claim": "Zero validator subsidy depends on verifiable natural stakeholders",
+      "status": "partial",
+      "plane": "research-target",
+      "finding": "The absence of native rewards is separable from the economic sufficiency argument. The controlled selector alone does not prove reliable independent participation without subsidy.",
+      "evidence": [
+        {
+          "path": "crates/consensus_cobalt/src/validator_admission_policy.rs",
+          "anchor": "ValidatorAdmissionCandidate",
+          "role": "code"
+        },
+        {
+          "path": "docs/governance/cobalt-independent-operator-proposal-path-research-spec.md",
+          "anchor": "#",
+          "role": "documentation"
+        }
+      ],
+      "followup": "G03: retain the conditional economic claim."
+    },
+    {
+      "id": "WP-25",
+      "sections": [
+        "5.3"
+      ],
+      "locator": "A candidate must provide source-bound evidence across five fields",
+      "claim": "Full exposure/accountability/reliability/attack/correlation/linkedness predicate",
+      "status": "partial",
+      "plane": "source",
+      "finding": "The selector checks reliability_bps, accountability_score, rho_score, group labels and supplied manifest/domain/linkedness booleans. The displayed exposure and attack thresholds are not separately implemented in this selector, and supplied linkedness is not recomputed from a graph there.",
+      "evidence": [
+        {
+          "path": "crates/consensus_cobalt/src/validator_admission_policy.rs",
+          "anchor": "evaluate_validator_admission",
+          "role": "code"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/validator_admission_policy.rs",
+          "anchor": "pub struct ValidatorAdmissionCandidate",
+          "role": "code"
+        }
+      ],
+      "followup": "Corrected §5.3; G03: bind source verification and graph recomputation to any live admission consumer."
+    },
+    {
+      "id": "WP-26",
+      "sections": [
+        "5.3"
+      ],
+      "locator": "Fixture coverage spans clean admit",
+      "claim": "Controlled admission fixtures, defaults and fail-closed model parsing",
+      "status": "implemented-and-tested",
+      "plane": "source",
+      "finding": "The controlled profile uses 9,950 bps reliability, accountability 70 and rho cap 0; shared control rejects, missing/conflicting evidence holds unless a reject reason takes precedence. Unknown model citations hold. This is a candidate generator.",
+      "evidence": [
+        {
+          "path": "crates/consensus_cobalt/src/validator_admission_policy.rs",
+          "anchor": "pub fn controlled_testnet_v1",
+          "role": "code"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/tests.rs",
+          "anchor": "validator_admission_policy_admits_clean_independent_candidate",
+          "role": "test"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/tests.rs",
+          "anchor": "validator_admission_policy_rejects_shared_control_groups",
+          "role": "test"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/tests.rs",
+          "anchor": "validator_admission_policy_fails_closed_on_unknown_model_field",
+          "role": "test"
+        }
+      ],
+      "followup": "Retain the narrower boundary and its named regression coverage."
+    },
+    {
+      "id": "WP-27",
+      "sections": [
+        "5.4"
+      ],
+      "locator": "The genesis validator set is the unavoidable bootstrap act.",
+      "claim": "Exact LaunchCertificate and seven-ratifier minimum",
+      "status": "planned",
+      "plane": "research-target",
+      "finding": "Genesis and registry records exist, but the exact seven-ratifier LaunchCertificate verifier and whole manifest object were not found. The paper correctly labels this subsection a public-launch target; other sections must do the same.",
+      "evidence": [
+        {
+          "path": "crates/types/src/core_chain.rs",
+          "anchor": "pub struct Genesis",
+          "role": "code"
+        },
+        {
+          "path": "docs/security/public-launch-boundary.md",
+          "anchor": "#",
+          "role": "documentation"
+        }
+      ],
+      "followup": "G02: implement/audit the certificate and topology policy before claiming that launch condition."
+    },
+    {
+      "id": "WP-28",
+      "sections": [
+        "6"
+      ],
+      "locator": "This section specifies the stronger Cobalt-ratified transition target.",
+      "claim": "Cobalt target versus implemented scoped authority",
+      "status": "divergent",
+      "plane": "source",
+      "finding": "The blanket research-only label is obsolete: verify_cobalt_validator_trust_update requires a real signed protocol decision and current-registry authorizations after activation. It still does not implement every target governance object described in §6.",
+      "evidence": [
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "verify_cobalt_validator_trust_update",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/cobalt_authority_certificate.rs",
+          "anchor": "verify_cobalt_validator_update_decision_certificate",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "cobalt_authority_rejects_quorum_only_and_tampered_protocol_decisions",
+          "role": "test"
+        }
+      ],
+      "followup": "Corrected section introduction; G01 retains target-composition gaps."
+    },
+    {
+      "id": "WP-29",
+      "sections": [
+        "6.1"
+      ],
+      "locator": "Genesis commits to one manifest root",
+      "claim": "Complete genesis trust/checker/profile/witness/launch manifest",
+      "status": "partial",
+      "plane": "research-target",
+      "finding": "Chain/genesis, registry and governed trust roots exist, but the exact unified manifest including LaunchCertificate is not implemented as written. No new graph may self-authorize; that narrower rule is enforced by current-registry checks.",
+      "evidence": [
+        {
+          "path": "crates/types/src/core_chain.rs",
+          "anchor": "pub struct Genesis",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "verify_cobalt_authority_transition_binding",
+          "role": "code"
+        }
+      ],
+      "followup": "Corrected §6.1 to target tense; G02 owns the missing genesis artifact."
+    },
+    {
+      "id": "WP-30",
+      "sections": [
+        "6.2"
+      ],
+      "locator": "A transition from $G_t$ to $G_{t+1}$",
+      "claim": "Transition packet and SafetyWitness commitments",
+      "status": "partial",
+      "plane": "source",
+      "finding": "The library binds roots/profile/challenge/activation in witness reports and the node binds active authority progress and exact update payload. The paper's complete checker/profile/evidence tuple is not one demonstrated universal on-chain transition type.",
+      "evidence": [
+        {
+          "path": "crates/consensus_cobalt/src/trust_graph_governance.rs",
+          "anchor": "verify_cobalt_safety_witness",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "verify_cobalt_validator_trust_update",
+          "role": "code"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/dabc_registry.rs",
+          "anchor": "bind_dabc_ratification_to_validator_registry_update",
+          "role": "code"
+        }
+      ],
+      "followup": "G01: enumerate each target field and exact live consumer before generalizing authority."
+    },
+    {
+      "id": "WP-31",
+      "sections": [
+        "6.3"
+      ],
+      "locator": "For each essential subset $S$",
+      "claim": "Local Cobalt safety inequalities",
+      "status": "implemented-and-tested",
+      "plane": "source",
+      "finding": "validate_essential_subset checks cardinality, t < 2q-n, 2t < q and canonical subset identity. These are assumptions/checks for declared sets, not proof that real operators are independent.",
+      "evidence": [
+        {
+          "path": "crates/consensus_cobalt/src/trust_graph_governance.rs",
+          "anchor": "pub fn validate_essential_subset",
+          "role": "code"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/tests.rs",
+          "anchor": "cobalt_cover_extractor_derives_complete_cover_and_hash",
+          "role": "test"
+        }
+      ],
+      "followup": "Retain the narrower boundary and its named regression coverage."
+    },
+    {
+      "id": "WP-32",
+      "sections": [
+        "6.4"
+      ],
+      "locator": "The linkedness predicate is a graph check",
+      "claim": "Linked/full linkage and rooted-graph closure",
+      "status": "partial",
+      "plane": "source",
+      "finding": "analyze_trust_graph recomputes linkage and closure using an explicit CobaltFaultModel. The report is not derivable from the graph alone without a supplied/assumed fault set; the admission selector's bool is another boundary.",
+      "evidence": [
+        {
+          "path": "crates/consensus_cobalt/src/trust_graph_governance.rs",
+          "anchor": "pub fn analyze_trust_graph",
+          "role": "code"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/internal_validation.rs",
+          "anchor": "closure_is_fully_linked",
+          "role": "code"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/validator_admission_policy.rs",
+          "anchor": "cobalt_linkedness_safe",
+          "role": "code"
+        }
+      ],
+      "followup": "Corrected graph-alone wording; G03 tracks binding the fault model and independently verified evidence."
+    },
+    {
+      "id": "WP-33",
+      "sections": [
+        "6.5"
+      ],
+      "locator": "Local rows are necessary but not sufficient.",
+      "claim": "Cross-registry quorum intersection exceeds the Byzantine budget",
+      "status": "implemented-and-tested",
+      "plane": "source",
+      "finding": "The witness computes conservative old/new cover intersection bounds and rejects an unsafe pair. This supports the bounded checker, not an unrestricted open-network theorem.",
+      "evidence": [
+        {
+          "path": "crates/consensus_cobalt/src/internal_validation.rs",
+          "anchor": "safety_witness_intersections",
+          "role": "code"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/tests.rs",
+          "anchor": "cobalt_cover_extractor_completes_before_unsafe_intersection_rejection",
+          "role": "test"
+        }
+      ],
+      "followup": "Retain the narrower boundary and its named regression coverage."
+    },
+    {
+      "id": "WP-34",
+      "sections": [
+        "6.6"
+      ],
+      "locator": "The intersection matrix is only as good",
+      "claim": "Proposer-independent bounded cover extraction",
+      "status": "implemented-and-tested",
+      "plane": "source",
+      "finding": "Extraction walks validated old/new graphs, deduplicates rows and rejects inactive/conflicting subsets, excessive cover and a budget above the weakest subset. Witness omission is detected; the quoted sizing measurements remain separate evidence.",
+      "evidence": [
+        {
+          "path": "crates/consensus_cobalt/src/cobalt_cover_extractor.rs",
+          "anchor": "extract_cobalt_safety_cover",
+          "role": "code"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/tests.rs",
+          "anchor": "cobalt_cover_extractor_detects_witness_cover_omission",
+          "role": "test"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/tests.rs",
+          "anchor": "cobalt_cover_extractor_rejects_budget_above_weakest_subset",
+          "role": "test"
+        }
+      ],
+      "followup": "Retain the narrower boundary and its named regression coverage."
+    },
+    {
+      "id": "WP-35",
+      "sections": [
+        "6.7"
+      ],
+      "locator": "**Proposition (transition safety).**",
+      "claim": "Transition-safety proposition and composition",
+      "status": "partial",
+      "plane": "research-target",
+      "finding": "The proposition is conditional on cover completeness, linkage, quorum intersections, honest signing and bounded faults. Library checks and bounded adversarial packets are relevant evidence; this audit is not a formal proof review or proof of every live consumer's composition.",
+      "evidence": [
+        {
+          "path": "crates/consensus_cobalt/src/trust_graph_governance.rs",
+          "anchor": "verify_cobalt_safety_witness",
+          "role": "code"
+        },
+        {
+          "path": "docs/governance/cobalt-transition-safety-proof.md",
+          "anchor": "#",
+          "role": "documentation"
+        },
+        {
+          "path": "benchmarks/cobalt-adversarial-verification/e1/README.md",
+          "anchor": "#",
+          "role": "documentation"
+        }
+      ],
+      "followup": "G01: independently review proof-to-consumer composition and its stated assumptions."
+    },
+    {
+      "id": "WP-36",
+      "sections": [
+        "6.8"
+      ],
+      "locator": "Adversarial covers inside $M_{cover}$",
+      "claim": "No cover omission escape hatch; undeclared social edges remain invisible",
+      "status": "implemented-and-tested",
+      "plane": "source",
+      "finding": "The cover rejects inactive or conflicting rows and verifies exact derived covers; source cannot discover an undeclared shared operator or funding dependency.",
+      "evidence": [
+        {
+          "path": "crates/consensus_cobalt/src/cobalt_cover_extractor.rs",
+          "anchor": "verify_cobalt_cover_extraction_matches_safety_witness",
+          "role": "code"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/tests.rs",
+          "anchor": "cobalt_cover_extractor_fails_closed_on_inactive_subset",
+          "role": "test"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/tests.rs",
+          "anchor": "cobalt_cover_extractor_detects_witness_cover_omission",
+          "role": "test"
+        }
+      ],
+      "followup": "G03: operator evidence is independent of declared-graph correctness."
+    },
+    {
+      "id": "WP-37",
+      "sections": [
+        "6.9"
+      ],
+      "locator": "Cobalt deadlock preserves the last valid registry",
+      "claim": "Deadlock, expiry and bounded recovery",
+      "status": "partial",
+      "plane": "source",
+      "finding": "Rejected transitions leave authority unchanged. Current source also has signed forward authority rollback/return with replay rejection; it does not provide the general four-action emergency or automatic availability-suspension design.",
+      "evidence": [
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "verify_transition_direction",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "transition_replay_and_non_forward_rollback_are_rejected",
+          "role": "test"
+        },
+        {
+          "path": "benchmarks/cobalt-adversarial-verification/e5/README.md",
+          "anchor": "#",
+          "role": "documentation"
+        }
+      ],
+      "followup": "Corrected §6.9 with the implemented signed handoff and its limits."
+    },
+    {
+      "id": "WP-38",
+      "sections": [
+        "7",
+        "7.1"
+      ],
+      "locator": "A private Asset-Orchard spend exposes",
+      "claim": "Notes, private swaps and action-specific public fields",
+      "status": "partial",
+      "plane": "source",
+      "finding": "Private swap serialization hides note openings and raw asset/value identity; ingress and egress expose asset, amount and public endpoints. The compact public/hidden sets describe a private action class, not all shielded actions or metadata.",
+      "evidence": [
+        {
+          "path": "crates/privacy_orchard/src/asset_orchard.rs",
+          "anchor": "asset_orchard_swap_accounting_records",
+          "role": "code"
+        },
+        {
+          "path": "crates/privacy_orchard/src/asset_orchard.rs",
+          "anchor": "swap_accounting_serialization_hides_asset_identity",
+          "role": "test"
+        },
+        {
+          "path": "crates/privacy_orchard/src/asset_orchard.rs",
+          "anchor": "private_egress_action_serialization_does_not_disclose_note_opening",
+          "role": "test"
+        }
+      ],
+      "followup": "Corrected §7.6 leakage wording; G05 retains wire/log and anonymity testing."
+    },
+    {
+      "id": "WP-39",
+      "sections": [
+        "7.1"
+      ],
+      "locator": "Historical ingress v1 carried a clear note opening",
+      "claim": "Legacy cleartext actions and ingress-v1 replay restriction",
+      "status": "implemented-with-insufficient-verification",
+      "plane": "source",
+      "finding": "Live construction/application distinguishes ingress-v2 from archive replay. Private egress has a separate exact historical pre-repin path. Historical decoding does not establish a supported live private action.",
+      "evidence": [
+        {
+          "path": "crates/node/src/orchard_state_application.rs",
+          "anchor": "asset_orchard_ingress_v1_state_payload",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/orchard_state_application.rs",
+          "anchor": "archived_pre_repin",
+          "role": "code"
+        },
+        {
+          "path": "docs/privacy/orchard-halo2.md",
+          "anchor": "#",
+          "role": "documentation"
+        }
+      ],
+      "followup": "Retain exact archive allowlists and live-rejection tests; no replay change in this audit."
+    },
+    {
+      "id": "WP-40",
+      "sections": [
+        "7.2"
+      ],
+      "locator": "The proof-system posture is explicit",
+      "claim": "Real verification, verifier caching, action limits and prover separation",
+      "status": "implemented-with-insufficient-verification",
+      "plane": "source",
+      "finding": "The adapter uses upstream Orchard/Halo2 with a documented vendored compatibility patch. Proof verification and resource policy exist, but workspace prover-service code is not evidence of deployment separation or a fresh cost benchmark.",
+      "evidence": [
+        {
+          "path": "crates/privacy_orchard/src/verify.rs",
+          "anchor": "verify",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/orchard_policy_actions.rs",
+          "anchor": "orchard",
+          "role": "code"
+        },
+        {
+          "path": "docs/security/halo2-dependency.md",
+          "anchor": "#",
+          "role": "documentation"
+        },
+        {
+          "path": "crates/node/src/bin/asset_orchard_local_service.rs",
+          "anchor": "fn main",
+          "role": "code"
+        }
+      ],
+      "followup": "G05/G07: audit exact circuit/VK/public-input boundary and retain measured verifier budgets."
+    },
+    {
+      "id": "WP-41",
+      "sections": [
+        "7.3"
+      ],
+      "locator": "The PostFiat-specific boundary is authorization.",
+      "claim": "RedPallas action binding, proof instance and no ML-DSA outer envelope",
+      "status": "implemented-with-insufficient-verification",
+      "plane": "source",
+      "finding": "The action sighash binds domain and payload. ShieldedActionBatch contains batch_id/actions, without an account ML-DSA outer signature; validators' block signatures authenticate inclusion. Complete cryptographic validation is outside this documentation audit.",
+      "evidence": [
+        {
+          "path": "crates/privacy_orchard/src/asset_orchard.rs",
+          "anchor": "asset_orchard_private_egress_sighash",
+          "role": "code"
+        },
+        {
+          "path": "crates/types/src/shielded_bridge_governance.rs",
+          "anchor": "pub struct ShieldedActionBatch",
+          "role": "code"
+        },
+        {
+          "path": "scripts/test-whitepaper-implementation-boundaries",
+          "anchor": "does not add an account-level ML-DSA",
+          "role": "documentation"
+        }
+      ],
+      "followup": "Preserve the existing boundary regression; G05 retains cryptography review."
+    },
+    {
+      "id": "WP-42",
+      "sections": [
+        "7.4"
+      ],
+      "locator": "Supply integrity does not rest on proof-system soundness alone.",
+      "claim": "Turnstile bounds and automatic proof-failure freeze",
+      "status": "divergent",
+      "plane": "source",
+      "finding": "debit_asset_orchard_balance rejects egress above live per-asset value; state validation checks ingress minus egress equals live total. This does not detect counterfeit spending within that balance, guarantee depositor recovery, or automatically set a governed pause.",
+      "evidence": [
+        {
+          "path": "crates/node/src/orchard_state_application.rs",
+          "anchor": "fn debit_asset_orchard_balance",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/shielded_batch_actions.rs",
+          "anchor": "fn verify_asset_orchard_asset_balances",
+          "role": "code"
+        },
+        {
+          "path": "crates/types/src/shielded_bridge_governance.rs",
+          "anchor": "GOVERNANCE_KIND_ORCHARD_POOL_PAUSE => self.orchard_pool_paused",
+          "role": "code"
+        }
+      ],
+      "followup": "Corrected §7.4; G05: explicit incident trigger, pause consumer and counterfeit-value containment tests."
+    },
+    {
+      "id": "WP-43",
+      "sections": [
+        "7.5"
+      ],
+      "locator": "Registry rotation is atomic with respect to shielded state.",
+      "claim": "Registry boundary and nullifier continuity",
+      "status": "partial",
+      "plane": "source",
+      "finding": "Registry/governance and shielded/nullifier state are committed together; transactional activation tests cover persisted prefixes. A dedicated end-to-end nullifier/rotation adversarial proof was not established by this audit.",
+      "evidence": [
+        {
+          "path": "crates/node/src/state_commitment.rs",
+          "anchor": "append_shielded_state",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/tests/replicated_state_activation.rs",
+          "anchor": "replicated_state_v2_activation_journal_recovers_every_persist_prefix",
+          "role": "test"
+        },
+        {
+          "path": "crates/node/src/orchard_state_application.rs",
+          "anchor": "nullifier",
+          "role": "code"
+        }
+      ],
+      "followup": "G05: exact rotation/restart/duplicate-nullifier integration coverage."
+    },
+    {
+      "id": "WP-44",
+      "sections": [
+        "7.6"
+      ],
+      "locator": "Selective disclosure is chosen by the holder",
+      "claim": "Holder disclosure, scoped assurance and metadata leakage",
+      "status": "partial",
+      "plane": "source",
+      "finding": "Local disclosure tooling can produce and verify a packet. The assurance-policy docs include archived fixtures and a broader governed policy story; they are not evidence that all claims are live Cobalt-enforced. Timing, public accounting and ingress/egress disclosures remain visible.",
+      "evidence": [
+        {
+          "path": "docs/privacy/disclosure.md",
+          "anchor": "archived outside this repository",
+          "role": "documentation"
+        },
+        {
+          "path": "crates/node/src/orchard_policy_actions.rs",
+          "anchor": "pub fn orchard_disclosure_packet",
+          "role": "code"
+        },
+        {
+          "path": "docs/privacy/metadata-anonymity-bounds.md",
+          "anchor": "#",
+          "role": "documentation"
+        }
+      ],
+      "followup": "Corrected disclosure and privacy overview boundaries; G05 tracks real consuming gates."
+    },
+    {
+      "id": "WP-45",
+      "sections": [
+        "7.6"
+      ],
+      "locator": "One further asymmetry is named rather than hidden",
+      "claim": "Classical note encryption and future post-quantum KEM",
+      "status": "planned",
+      "plane": "research-target",
+      "finding": "Current note encryption is classical. ML-DSA validator/account authorization does not protect recorded ciphertext from a future key-agreement break, and no post-quantum KEM migration is claimed implemented.",
+      "evidence": [
+        {
+          "path": "crates/privacy_orchard/src/asset_orchard_note_encryption.rs",
+          "anchor": "ChaCha20Poly1305",
+          "role": "code"
+        },
+        {
+          "path": "docs/quantum/authorization.md",
+          "anchor": "#",
+          "role": "documentation"
+        }
+      ],
+      "followup": "G10: versioned KEM migration and independent cryptographic review before changing confidentiality claims."
+    },
+    {
+      "id": "WP-46",
+      "sections": [
+        "8",
+        "8.1"
+      ],
+      "locator": "No model runs inside consensus.",
+      "claim": "Machine classification outside consensus and later shadow-only direction",
+      "status": "partial",
+      "plane": "source",
+      "finding": "Model requests live in operational governance tooling. Consensus admission consumes deterministic signed artifacts. Later Task Node UNL tooling produces shadow reports, not registry updates; source presence alone is not a dependency-proof for every future change.",
+      "evidence": [
+        {
+          "path": "crates/node/src/governance_agent_parts/implementation_guarded_apply.rs",
+          "anchor": "build_governance_agent_model_request",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "verify_governance_authority_batch",
+          "role": "code"
+        },
+        {
+          "path": "python/postfiat_rpc/tasknode_unl.py",
+          "anchor": "derive_shadow_report",
+          "role": "code"
+        }
+      ],
+      "followup": "Corrected §8 introduction; G04 keeps model output outside live authority."
+    },
+    {
+      "id": "WP-47",
+      "sections": [
+        "8.2"
+      ],
+      "locator": "A valid $A$ contains only labels from $Q$",
+      "claim": "Closed labels/citations and deterministic candidate selection",
+      "status": "implemented-and-tested",
+      "plane": "source",
+      "finding": "The controlled selector checks allowed cited fields and classification, then emits admit/reject/hold candidate output. Replay roots are syntactically checked here; that is not independent cryptographic replay-certificate verification.",
+      "evidence": [
+        {
+          "path": "crates/consensus_cobalt/src/validator_admission_policy.rs",
+          "anchor": "evaluate_validator_admission_model_output",
+          "role": "code"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/tests.rs",
+          "anchor": "validator_admission_policy_fails_closed_on_unknown_model_field",
+          "role": "test"
+        }
+      ],
+      "followup": "G04: separate parser validation from replay signer verification."
+    },
+    {
+      "id": "WP-48",
+      "sections": [
+        "8.2"
+      ],
+      "locator": "The implemented live path treats that output only as candidate evidence.",
+      "claim": "Current/target authority pipeline",
+      "status": "divergent",
+      "plane": "source",
+      "finding": "Candidate evidence cannot directly mutate state, but the paper's current pipeline omits activated Cobalt. In Cobalt mode trust updates require its decision certificate and Cobalt authorizations; unrelated governance retains the Foundation path.",
+      "evidence": [
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "old-rule signed authorizations are forbidden after Cobalt activation",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "cobalt_validator_update_fits_and_verifies_through_the_live_governance_batch_path",
+          "role": "test"
+        }
+      ],
+      "followup": "Corrected §8.2 flow; G01/G04 retain the full replay-to-selector target."
+    },
+    {
+      "id": "WP-49",
+      "sections": [
+        "8.3"
+      ],
+      "locator": "Replay is a property of a pinned profile",
+      "claim": "ReplayProfile fields and independent replay-key certificate quorum",
+      "status": "partial",
+      "plane": "research-target",
+      "finding": "Pinned roots and archived replay tooling describe the intended profile boundary. The admission selector verifies root shape, not q_R independent replay signatures. The Cobalt consensus certificate verifies a different protocol; it cannot stand in for a replay certificate.",
+      "evidence": [
+        {
+          "path": "crates/consensus_cobalt/src/validator_admission_policy.rs",
+          "anchor": "validator admission model replay certificate root",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/cobalt_authority_certificate.rs",
+          "anchor": "verify_cobalt_validator_update_decision_certificate",
+          "role": "code"
+        },
+        {
+          "path": "docs/evidence/sglang-determinism.md",
+          "anchor": "profile",
+          "role": "documentation"
+        }
+      ],
+      "followup": "G04: define and verify the independent replay-certificate consumer before claiming the full path."
+    },
+    {
+      "id": "WP-50",
+      "sections": [
+        "8.4"
+      ],
+      "locator": "A concrete case shows what the model layer buys.",
+      "claim": "Worked shared-control candidate produces hold-no-op",
+      "status": "divergent",
+      "plane": "source",
+      "finding": "The worked example is illustrative. The current selector gives reject reasons precedence: shared release/funding control rejects; cosmetic_diversity is also a hold reason, but reject wins. The example cannot be described as exact runtime output.",
+      "evidence": [
+        {
+          "path": "crates/consensus_cobalt/src/validator_admission_policy.rs",
+          "anchor": "let action = if !reject_reasons.is_empty()",
+          "role": "code"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/tests.rs",
+          "anchor": "validator_admission_policy_rejects_shared_control_groups",
+          "role": "test"
+        }
+      ],
+      "followup": "Corrected §8.4 to distinguish target illustration from implemented reject output."
+    },
+    {
+      "id": "WP-51",
+      "sections": [
+        "8.5"
+      ],
+      "locator": "The empirical record has three layers",
+      "claim": "Repeatability, hardware convergence and runtime portability",
+      "status": "unresolved",
+      "plane": "unresolved",
+      "finding": "The numerical E5–E7 claims were read and cross-checked against retained summaries, but original response/vector/report files were not available in this pinned checkout. They remain historical reports, not independently reverified measurements.",
+      "evidence": [
+        {
+          "path": "docs/evidence/sglang-determinism.md",
+          "anchor": "Main report",
+          "role": "documentation"
+        },
+        {
+          "path": "docs/evidence/sglang-determinism.md",
+          "anchor": "Small Profile Admission Probes",
+          "role": "documentation"
+        }
+      ],
+      "followup": "G07: recover exact profiles, raw artifacts and hash-verification instructions."
+    },
+    {
+      "id": "WP-52",
+      "sections": [
+        "8.6"
+      ],
+      "locator": "Profile admission says one exact tuple",
+      "claim": "Admission versus promotion and model replacement by Cobalt",
+      "status": "divergent",
+      "plane": "research-target",
+      "finding": "Separating profile admission from promotion is sound design intent. The implemented Cobalt scope is validator trust only, so unconditional model replacement as a Cobalt transition is not an implemented authority rule.",
+      "evidence": [
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "All other governance domains continue",
+          "role": "code"
+        },
+        {
+          "path": "docs/governance/ai-governance-direction-20260903.md",
+          "anchor": "recorded governance decision",
+          "role": "documentation"
+        }
+      ],
+      "followup": "Corrected §8.6 as a promotion target; G04 specifies future authority requirements."
+    },
+    {
+      "id": "WP-53",
+      "sections": [
+        "9",
+        "9.1"
+      ],
+      "locator": "PostFiat uses ML-DSA because",
+      "claim": "ML-DSA-65 for transparent accounts and validator signatures",
+      "status": "implemented-with-insufficient-verification",
+      "plane": "source",
+      "finding": "The provider uses FIPS 204 ML-DSA-65 and purpose-specific contexts. This is an implementation/standards identification, not a FIPS validation certificate, side-channel audit, or claim about Orchard spend authorization.",
+      "evidence": [
+        {
+          "path": "crates/crypto_provider/src/lib.rs",
+          "anchor": "ml_dsa_65_verify_with_context",
+          "role": "code"
+        },
+        {
+          "path": "crates/crypto_provider/src/lib.rs",
+          "anchor": "BLOCK_CERTIFICATE_SIGNATURE_CONTEXT",
+          "role": "code"
+        },
+        {
+          "path": "docs/quantum/authorization.md",
+          "anchor": "#",
+          "role": "documentation"
+        }
+      ],
+      "followup": "G10: preserve HSM/remote signer and independent cryptography review gates."
+    },
+    {
+      "id": "WP-54",
+      "sections": [
+        "9.1"
+      ],
+      "locator": "Validator certificates bind to registry roots and compact validator identifiers",
+      "claim": "Compact identifiers without repeated public keys",
+      "status": "divergent",
+      "plane": "source",
+      "finding": "ConsensusV2Signature serializes signer, algorithm_id, public_key_hex and signature_hex. V2 certificates therefore repeat public-key material in signatures; the paper's compact detached model is not the current wire representation.",
+      "evidence": [
+        {
+          "path": "crates/types/src/consensus_v2_types.rs",
+          "anchor": "pub struct ConsensusV2Signature",
+          "role": "code"
+        },
+        {
+          "path": "crates/ordering_fast/src/consensus_v2.rs",
+          "anchor": "fn append_signature",
+          "role": "code"
+        }
+      ],
+      "followup": "Corrected §§9.1–9.2; G06: actual encoded certificate byte accounting."
+    },
+    {
+      "id": "WP-55",
+      "sections": [
+        "9.2"
+      ],
+      "locator": "For ML-DSA-65 in the current provider",
+      "claim": "Signature lengths and certificate arithmetic",
+      "status": "partial",
+      "plane": "source",
+      "finding": "Provider constants give 1,952-byte public keys and 3,309-byte signatures. 24×(3309+32)=80,184 and 67×(3309+32)=223,847 are correct simplified single-signature-set arithmetic, excluding repeated public keys, two QCs, JSON/hex and framing.",
+      "evidence": [
+        {
+          "path": "crates/crypto_provider/src/lib.rs",
+          "anchor": "ML_DSA_65_PUBLIC_KEY_BYTES",
+          "role": "code"
+        },
+        {
+          "path": "crates/types/src/consensus_v2_types.rs",
+          "anchor": "pub struct ConsensusV2Signature",
+          "role": "code"
+        }
+      ],
+      "followup": "Corrected §9.2 and E1 labels; G06/G07 require real serialization measurements."
+    },
+    {
+      "id": "WP-56",
+      "sections": [
+        "9.2"
+      ],
+      "locator": "Current release-build measurements are roughly",
+      "claim": "ML-DSA verifier throughput and share of round budget",
+      "status": "unresolved",
+      "plane": "unresolved",
+      "finding": "The original release measurement packet was not retained at its cited reports path. Arithmetic can be recomputed; 6,000 verifications/s, latency and round-share claims cannot be revalidated by that arithmetic or a test pass.",
+      "evidence": [
+        {
+          "path": "docs/quantum/signature-size-and-certificates.md",
+          "anchor": "reports/testnet-ml-dsa-performance/",
+          "role": "documentation"
+        },
+        {
+          "path": "docs/evidence/latency.md",
+          "anchor": "#",
+          "role": "documentation"
+        }
+      ],
+      "followup": "G07: rerun with pinned source, hardware, command and raw timing output."
+    },
+    {
+      "id": "WP-57",
+      "sections": [
+        "9.3"
+      ],
+      "locator": "The alternatives were weighed, not ignored.",
+      "claim": "Alternative signature tradeoffs and cryptographic upgrade process",
+      "status": "partial",
+      "plane": "research-target",
+      "finding": "Falcon/hash-based/hybrid comparisons are design discussion, not a repository benchmark. The current authority scope does not make every cryptographic upgrade a Cobalt operation.",
+      "evidence": [
+        {
+          "path": "crates/crypto_provider/src/lib.rs",
+          "anchor": "ML_DSA_65_ALGORITHM",
+          "role": "code"
+        },
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "All other governance domains continue",
+          "role": "code"
+        }
+      ],
+      "followup": "Corrected upgrade-scope wording; G10 requires a versioned migration specification."
+    },
+    {
+      "id": "WP-58",
+      "sections": [
+        "9.3"
+      ],
+      "locator": "The current genesis and validator-registration schemas do not contain",
+      "claim": "No SLH-DSA recovery commitment or activation path",
+      "status": "planned",
+      "plane": "research-target",
+      "finding": "The current schemas and provider implement ML-DSA-65 without a found SLH-DSA/FIPS-205 runtime. A second family needs commitment, verifier, activation and migration work; a standards reference does not supply those paths.",
+      "evidence": [
+        {
+          "path": "crates/types/src/core_chain.rs",
+          "anchor": "pub struct Genesis",
+          "role": "code"
+        },
+        {
+          "path": "crates/crypto_provider/src/lib.rs",
+          "anchor": "ML_DSA_65_ALGORITHM",
+          "role": "code"
+        }
+      ],
+      "followup": "G10: implement/review an independent recovery family before claiming precommitted crypto recovery."
+    },
+    {
+      "id": "WP-59",
+      "sections": [
+        "10"
+      ],
+      "locator": "Some failure classes have fail-closed state-machine responses",
+      "claim": "Recovery matrix: quorum loss, invalid transitions, replay split and crypto break",
+      "status": "partial",
+      "plane": "source",
+      "finding": "Signed handoff rollback and lane-specific recovery exist; under-quorum certificates reject. No general automatic missed-round quorum reduction, counterfeit detector or alternative-signature activation was found. A stopped unsafe action is not proof of restored liveness.",
+      "evidence": [
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "transition_replay_and_non_forward_rollback_are_rejected",
+          "role": "test"
+        },
+        {
+          "path": "crates/ordering_fast/src/consensus_v2.rs",
+          "anchor": "verify_consensus_v2_qc",
+          "role": "code"
+        },
+        {
+          "path": "crates/execution/src/owned_transfer_recovery.rs",
+          "anchor": "verify_fastpay_apply_ack_v1",
+          "role": "code"
+        }
+      ],
+      "followup": "G05/G09/G10: keep each recovery mechanism, authority and missing control explicit."
+    },
+    {
+      "id": "WP-60",
+      "sections": [
+        "11"
+      ],
+      "locator": "Genesis is trusted.",
+      "claim": "Trusted genesis, invisible social dependencies and launch-certificate wording",
+      "status": "partial",
+      "plane": "research-target",
+      "finding": "Trusted bootstrap and undeclared-correlation limits are valid caveats; the paragraph must not imply the unimplemented LaunchCertificate already exists.",
+      "evidence": [
+        {
+          "path": "crates/types/src/core_chain.rs",
+          "anchor": "pub struct Genesis",
+          "role": "code"
+        },
+        {
+          "path": "docs/security/public-launch-boundary.md",
+          "anchor": "#",
+          "role": "documentation"
+        }
+      ],
+      "followup": "Corrected §11 launch-certificate tense; G02/G03 retain deployment requirements."
+    },
+    {
+      "id": "WP-61",
+      "sections": [
+        "11"
+      ],
+      "locator": "The privacy model reduces ambient leakage",
+      "claim": "Privacy, replay, bounded Cobalt and controlled-evidence non-claims",
+      "status": "partial",
+      "plane": "research-target",
+      "finding": "The limitations are useful but must inherit action-specific leakage, model-profile bounds and current certificate encoding. Controlled test passes and a retained six-node receipt do not establish public-network diversity, anonymity or current health.",
+      "evidence": [
+        {
+          "path": "docs/security/public-launch-boundary.md",
+          "anchor": "#",
+          "role": "documentation"
+        },
+        {
+          "path": "docs/privacy/overview.md",
+          "anchor": "#",
+          "role": "documentation"
+        },
+        {
+          "path": "crates/types/src/consensus_v2_types.rs",
+          "anchor": "public_key_hex",
+          "role": "code"
+        }
+      ],
+      "followup": "Corrected detached-certificate and scope wording; preserve G03/G05/G07 limits."
+    },
+    {
+      "id": "WP-62",
+      "sections": [
+        "12"
+      ],
+      "locator": "PostFiat draws on the XRP Ledger lineage",
+      "claim": "Related work and source attribution",
+      "status": "partial",
+      "plane": "research-target",
+      "finding": "The lineage is conceptual: Consensus v2 is not chained HotStuff, Cobalt's open-network paper is broader than this bounded implementation, and upstream Orchard/NIST standards do not prove PostFiat conformance. Representative primary sources were checked; this is not a full comparative literature or proof review.",
+      "evidence": [
+        {
+          "path": "docs/governance/cobalt-transition-safety-proof.md",
+          "anchor": "#",
+          "role": "documentation"
+        },
+        {
+          "path": "docs/security/halo2-dependency.md",
+          "anchor": "#",
+          "role": "documentation"
+        },
+        {
+          "path": "crates/ordering_fast/src/consensus_v2.rs",
+          "anchor": "verify_consensus_v2_commit",
+          "role": "code"
+        }
+      ],
+      "followup": "Add primary links and explicit comparison limits in the overview; G01/G05 retain specialist review."
+    },
+    {
+      "id": "WP-63",
+      "sections": [
+        "Appendix A"
+      ],
+      "locator": "**[E1] ML-DSA-65 verification budget.**",
+      "claim": "E1 signature budget provenance",
+      "status": "unresolved",
+      "plane": "unresolved",
+      "finding": "Original timing report absent; simplified arithmetic verified separately. E1 is not the actual V2 encoded certificate size or a new benchmark.",
+      "evidence": [
+        {
+          "path": "docs/quantum/signature-size-and-certificates.md",
+          "anchor": "reports/testnet-ml-dsa-performance/",
+          "role": "documentation"
+        },
+        {
+          "path": "crates/types/src/consensus_v2_types.rs",
+          "anchor": "pub struct ConsensusV2Signature",
+          "role": "code"
+        }
+      ],
+      "followup": "G07: restore immutable E1 packet; G06: measure actual wire format."
+    },
+    {
+      "id": "WP-64",
+      "sections": [
+        "Appendix A"
+      ],
+      "locator": "**[E2] Orchard verification budget.**",
+      "claim": "E2 proof bytes and cached verification timing",
+      "status": "unresolved",
+      "plane": "unresolved",
+      "finding": "The retained privacy page names an absent orchard-verification-budget-v1-report.json. Proof size and 80 ms cached timing are historical assertions, not rerun evidence for current circuits.",
+      "evidence": [
+        {
+          "path": "docs/evidence/privacy.md",
+          "anchor": "reports/orchard-verification-budget-v1-report.json",
+          "role": "documentation"
+        },
+        {
+          "path": "docs/privacy/orchard-halo2.md",
+          "anchor": "#",
+          "role": "documentation"
+        }
+      ],
+      "followup": "G07: retain exact circuit/VK/profile and measurement artifact."
+    },
+    {
+      "id": "WP-65",
+      "sections": [
+        "Appendix A"
+      ],
+      "locator": "**[E3] Cobalt cover sizing.**",
+      "claim": "E3 grouped cover M=12/M=22 sizing",
+      "status": "partial",
+      "plane": "unresolved",
+      "finding": "Cover extraction and bounded rejection are tested, but the original 35/100-validator sizing run is not identified by a retained hash-bound report in this entry. The library proof boundary and empirical sizing claim are different.",
+      "evidence": [
+        {
+          "path": "crates/consensus_cobalt/src/cobalt_cover_extractor.rs",
+          "anchor": "max_cover_subsets",
+          "role": "code"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/tests.rs",
+          "anchor": "cobalt_cover_extractor_derives_complete_cover_and_hash",
+          "role": "test"
+        }
+      ],
+      "followup": "G07: publish reproducible grouped-graph inputs and exact extractor output."
+    },
+    {
+      "id": "WP-66",
+      "sections": [
+        "Appendix A"
+      ],
+      "locator": "**[E4] Admission selector fixtures.**",
+      "claim": "E4 five admission fixture classes",
+      "status": "implemented-and-tested",
+      "plane": "source",
+      "finding": "All five named fixture classes exist in consensus_cobalt tests and were rerun during this audit. They validate supplied-packet handling and candidate output, not external evidence truth or live admission authority.",
+      "evidence": [
+        {
+          "path": "crates/consensus_cobalt/src/tests.rs",
+          "anchor": "validator_admission_policy_admits_clean_independent_candidate",
+          "role": "test"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/tests.rs",
+          "anchor": "validator_admission_policy_holds_missing_domain_proof",
+          "role": "test"
+        },
+        {
+          "path": "crates/consensus_cobalt/src/tests.rs",
+          "anchor": "validator_admission_policy_holds_contradictory_release_and_funding_evidence",
+          "role": "test"
+        }
+      ],
+      "followup": "Retain the five-test result and §5.3 input-trust limitation."
+    },
+    {
+      "id": "WP-67",
+      "sections": [
+        "Appendix A"
+      ],
+      "locator": "**[E5] Same-stack repeatability.**",
+      "claim": "E5 2,900 responses and score-map hash",
+      "status": "unresolved",
+      "plane": "unresolved",
+      "finding": "The paper gives a digest and cohort counts, but no available raw response bundle was established in this checkout. The value cannot be independently recomputed from the summary.",
+      "evidence": [
+        {
+          "path": "docs/whitepaper.md",
+          "anchor": "9f7f95a7be238e2b6bb1cc081986f8b5dffc07b9397578d723c6f6d7c77c81c8",
+          "role": "documentation"
+        },
+        {
+          "path": "docs/evidence/sglang-determinism.md",
+          "anchor": "profile",
+          "role": "documentation"
+        }
+      ],
+      "followup": "G07: restore cohort, prompt/profile, responses, parser and manifest."
+    },
+    {
+      "id": "WP-68",
+      "sections": [
+        "Appendix A"
+      ],
+      "locator": "**[E6] Cross-hardware convergence.**",
+      "claim": "E6 six questions and 248,320-entry vector",
+      "status": "unresolved",
+      "plane": "unresolved",
+      "finding": "The retained SGLang summary repeats the vector root and points to archived reports/vector files. It also records simple-output and separate profile probes; those summaries are not interchangeable with the paper's six-question packet.",
+      "evidence": [
+        {
+          "path": "docs/evidence/sglang-determinism.md",
+          "anchor": "560ea13c99f73a60c184ec07ba3554ea11c72487d56ac28c366495d58ce8913c",
+          "role": "documentation"
+        },
+        {
+          "path": "docs/evidence/sglang-determinism.md",
+          "anchor": "Main report",
+          "role": "documentation"
+        }
+      ],
+      "followup": "G07: reconcile exact experiments using original reports, without inventing a contradiction or equivalence."
+    },
+    {
+      "id": "WP-69",
+      "sections": [
+        "Appendix A"
+      ],
+      "locator": "**[E7] Cross-runtime constitutional packet.**",
+      "claim": "E7 Apple M5/H200 packet and parsed roots",
+      "status": "unresolved",
+      "plane": "unresolved",
+      "finding": "The exact timestamped reports named in E7 are absent. The engineering page also discusses different M2/A100 probes that explicitly do not establish cross-profile parsed-root identity. These may be separate runs; the audit cannot resolve the original claim from summaries.",
+      "evidence": [
+        {
+          "path": "docs/whitepaper.md",
+          "anchor": "reports/qwen-mlx-profile-portability/20260528T155652Z/machine_report.json",
+          "role": "documentation"
+        },
+        {
+          "path": "docs/evidence/sglang-determinism.md",
+          "anchor": "Small Profile Admission Probes",
+          "role": "documentation"
+        }
+      ],
+      "followup": "G07: recover the exact E7 profile/runtime packets and verify their roots."
+    },
+    {
+      "id": "WP-70",
+      "sections": [
+        "Appendix A"
+      ],
+      "locator": "**[E8] Consensus and registry fixtures.**",
+      "claim": "E8 mixes finality, reference ordering and governance tests",
+      "status": "partial",
+      "plane": "source",
+      "finding": "Modern V2 and scoped Cobalt tests now give stronger source support than the broad original entry. Reference receipt/omission fixtures still do not prove production censorship accountability, and old-rule registry mutation alone is no longer the whole authority boundary.",
+      "evidence": [
+        {
+          "path": "crates/ordering_fast/src/consensus_v2/tests.rs",
+          "anchor": "durable_lock_rejects_conflict_and_precommit_qc_is_the_only_commit_boundary",
+          "role": "test"
+        },
+        {
+          "path": "crates/node/src/cobalt_handoff.rs",
+          "anchor": "cobalt_authority_rejects_quorum_only_and_tampered_protocol_decisions",
+          "role": "test"
+        },
+        {
+          "path": "crates/node/src/mempool_proposals.rs",
+          "anchor": "create_mempool_batch",
+          "role": "code"
+        }
+      ],
+      "followup": "Link exact modern tests and keep reference-lane evidence separate."
+    },
+    {
+      "id": "WP-71",
+      "sections": [
+        "References"
+      ],
+      "locator": "David Schwartz, Noah Youngs, and Arthur Britto.",
+      "claim": "Bibliography coverage and reproducibility",
+      "status": "partial",
+      "plane": "research-target",
+      "finding": "All listed references were read as part of the paper. Primary NIST FIPS 204/205, Cobalt and Orchard ZIP 224 pages were checked for identity/scope. The remaining bibliography was not independently rederived or fully reviewed; it is context, not implementation evidence.",
+      "evidence": [
+        {
+          "path": "docs/whitepaper.md",
+          "anchor": "## References",
+          "role": "documentation"
+        },
+        {
+          "path": "docs/security/halo2-dependency.md",
+          "anchor": "#",
+          "role": "documentation"
+        }
+      ],
+      "followup": "Overview links primary sources and discloses the literature-review limit."
+    }
+  ]
+}

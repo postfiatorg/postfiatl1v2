@@ -37,6 +37,11 @@ flowchart LR
   Execution --> OrchardPool[Orchard pool state]
 ```
 
+The [whitepaper overview and alignment audit](whitepaper-overview.md) connects
+each protocol section to its implemented source, retained tests and remaining
+targets. Use [Current State](../status/chain-state-current.md) for dated deployment
+records; this architecture map is a source description.
+
 ## Core Crates
 
 | Crate | Role |

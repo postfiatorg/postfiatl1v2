@@ -1,6 +1,8 @@
 # Storage Scaling: Time-Budgeted Qualification and Release Gates
 
-**Status:** Active — no deployment-eligible candidate. Candidate `d0ae79f3` passed G4 but failed the exact height-924 G6 continuation. Successor `10dd9f20` repaired that defect and passed the existing clone runner, but the first live canary proved the runner was not deployment-exact: it omitted concurrent transport and RPC access to one transactional database and did not prove exact old-binary/data rollback. The canary was rolled back, both candidates are **DO NOT DEPLOY**, G5 still lacks the height-915 quarantine input, and public testnet remains blocked.
+**Status:** Active — gate journal requires reconciliation against the later August 31 rollout. The retained `storage-lease-af9b83c3` receipt records transactional activation at height 930 and six-validator continuation at 931; see [Current State](../../status/chain-state-current.md). The earlier candidates `d0ae79f3` and `10dd9f20` remain **DO NOT DEPLOY** for their recorded continuation/topology failures. The historical gate rows below have not been retrospectively marked passed by the whitepaper audit: deployment alone does not close every replay, performance or public-testnet gate.
+
+**Reading boundary:** The candidate narrative and gate dispositions below describe the earlier qualification campaign. Use the dated operational-state record for subsequent deployment observations and require explicit evidence to update each remaining gate.
 
 **Decision date:** 2026-08-27
 
