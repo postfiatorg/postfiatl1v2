@@ -626,9 +626,15 @@ pub struct AssetExecutionCompatibility {
     pub pfusdc_source_series_activation_height: Option<u64>,
     pub atomic_swap_activation_height: Option<u64>,
     pub atomic_swap_paused: bool,
+    pub yolo_target_activation_height: Option<u64>,
 }
 
 impl AssetExecutionCompatibility {
+    pub const fn with_yolo_target_activation_height(mut self, height: Option<u64>) -> Self {
+        self.yolo_target_activation_height = height;
+        self
+    }
+
     pub const fn strict() -> Self {
         Self {
             allow_legacy_nav_subscription_source_root: false,
@@ -645,6 +651,7 @@ impl AssetExecutionCompatibility {
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: Some(0),
             atomic_swap_paused: false,
+            yolo_target_activation_height: None,
         }
     }
 
@@ -664,6 +671,7 @@ impl AssetExecutionCompatibility {
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
+            yolo_target_activation_height: None,
         }
     }
 
@@ -683,6 +691,7 @@ impl AssetExecutionCompatibility {
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
+            yolo_target_activation_height: None,
         }
     }
 
@@ -702,6 +711,7 @@ impl AssetExecutionCompatibility {
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
+            yolo_target_activation_height: None,
         }
     }
 
@@ -721,6 +731,7 @@ impl AssetExecutionCompatibility {
             pfusdc_source_series_activation_height: None,
             atomic_swap_activation_height: None,
             atomic_swap_paused: false,
+            yolo_target_activation_height: None,
         }
     }
 
@@ -814,6 +825,20 @@ fn apply_asset_operation(
     orchard_balances: &[AssetOrchardAssetBalance],
 ) -> Result<(), (&'static str, String)> {
     match &transaction.unsigned.operation {
+        AssetTransactionOperation::YoloTargetRegisterV1(operation) => {
+            if transaction.unsigned.transaction_kind != postfiat_types::YOLO_TARGET_REGISTER_TRANSACTION_KIND_V1 {
+                return Err(("wrong_transaction_kind", "target registration transaction kind differs".to_string()));
+            }
+            require_yolo_target_activation(compatibility, block_height)?;
+            register_yolo_target_run(ledger, operation, block_height)
+        }
+        AssetTransactionOperation::YoloTargetSubmitV1(operation) => {
+            if transaction.unsigned.transaction_kind != postfiat_types::YOLO_TARGET_SUBMIT_TRANSACTION_KIND_V1 {
+                return Err(("wrong_transaction_kind", "target submission transaction kind differs".to_string()));
+            }
+            require_yolo_target_activation(compatibility, block_height)?;
+            submit_yolo_target_receipt(ledger, operation, &asset_transaction_tx_id(transaction), block_height)
+        }
         AssetTransactionOperation::AssetCreate(operation) => {
             if transaction.unsigned.transaction_kind != ASSET_CREATE_TRANSACTION_KIND {
                 return Err((

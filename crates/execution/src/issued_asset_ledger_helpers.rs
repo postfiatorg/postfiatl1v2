@@ -847,6 +847,9 @@ fn assert_issued_supply_ledger_inventory_complete(ledger: &LedgerState) {
         nav_reserve_packets: _,
         nav_redemptions: _,
         nav_proof_profiles: _,
+        // Target receipts carry no asset balances or reserve authority.
+        yolo_target_registrations: _,
+        yolo_target_receipts: _,
         nav_attestors: _,
         market_ops_policies: _,
         market_ops_envelopes: _,

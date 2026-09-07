@@ -2680,6 +2680,8 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) -> 
         nav_reserve_packets,
         nav_redemptions: _,
         nav_proof_profiles: _,
+        yolo_target_registrations: _,
+        yolo_target_receipts: _,
         nav_attestors,
         market_ops_policies: _,
         market_ops_envelopes: _,

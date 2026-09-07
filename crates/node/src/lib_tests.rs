@@ -4,6 +4,7 @@ mod tests {
     include!("tests/asset_orchard_issued_tests.rs");
     include!("tests/asset_nft_offer_tests.rs");
     include!("tests/fx_fix_query_tests.rs");
+    include!("tests/yolo_target_receipt_tests.rs");
     include!("tests/nav_reserve_proof_status_tests.rs");
     mod a666_recovery_regression_tests;
     mod consensus_history;
