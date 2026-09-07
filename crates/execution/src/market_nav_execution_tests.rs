@@ -2022,6 +2022,112 @@ fn ethereum_ingress_consensus_binding_rejects_route_manifest_and_domain_mutation
 }
 
 #[test]
+fn arc_ingress_real_groth16_fixture_verifies_and_rejects_mutations() {
+    let route: postfiat_types::VaultBridgeRouteProfileV1 = serde_json::from_slice(include_bytes!(
+        "../../../docs/evidence/arc-mvp-20260828/route-profile.corrected.json"
+    ))
+    .expect("decode qualified Arc route");
+    route.validate().expect("qualified Arc route");
+    let evidence: VaultBridgeDepositEvidence = serde_json::from_slice(include_bytes!(
+        "../../../docs/evidence/arc-mvp-20260828/deposit-evidence.json"
+    ))
+    .expect("decode qualified Arc deposit evidence");
+    let proof = include_bytes!(
+        "../../../docs/evidence/arc-mvp-20260828/arc-ingress-proof/proof-calldata.bin"
+    )
+    .to_vec();
+    let public_values = include_bytes!(
+        "../../../docs/evidence/arc-mvp-20260828/arc-ingress-proof/public-values.bin"
+    )
+    .to_vec();
+    let route_policy_hash = route.profile_hash().expect("Arc route profile hash");
+    let profile = NavProofProfile::new_with_bridge_observer_min_confirmations(
+        "arc-proof-operator",
+        route.verifier_kind.clone(),
+        format!("vault_bridge:{}", route.source_domain()),
+        route.max_snapshot_age_blocks,
+        route.challenge_window_blocks,
+        route.max_epoch_gap_blocks,
+        route.settle_deadline_blocks,
+        route.min_challenge_bond,
+        route.min_attestations,
+        10,
+        0,
+        route.verifier_policy_hash.clone(),
+        route.verifier_program_vkey.clone(),
+        route.verifier_proof_encoding.clone(),
+        route.max_proof_bytes,
+        route.max_public_values_bytes,
+    )
+    .expect("Arc proof profile")
+    .with_vault_bridge_route_policy_hash(route_policy_hash.clone())
+    .expect("route-bound Arc proof profile");
+    let evidence_root = vault_bridge_deposit_evidence_root(&evidence).expect("Arc evidence root");
+    let proof_hash = postfiat_types::pfusdc_ingress_proof_hash_v1(&proof);
+    let public_values_hash = postfiat_types::pfusdc_ingress_public_values_hash_v1(&public_values);
+    let genesis = Genesis::new("postfiat-arc-real-proof-test");
+
+    let verified = ensure_vault_bridge_deposit_source_proof(VaultBridgeDepositSourceProof {
+        genesis: Some(&genesis),
+        profile: &profile,
+        evidence: &evidence,
+        evidence_root: &evidence_root,
+        policy_hash: &route_policy_hash,
+        source_proof_kind: NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1,
+        source_proof_hash: &proof_hash,
+        source_public_values_hash: &public_values_hash,
+        source_proof_bytes: &proof,
+        source_public_values: &public_values,
+        fast_ingress_verifier: None,
+    })
+    .expect("qualified Arc Groth16 proof verifies");
+    assert!(matches!(
+        verified,
+        Some(VerifiedIngressPublicValues::Arc(_))
+    ));
+
+    let mut mutated_proof = proof.clone();
+    mutated_proof[0] ^= 1;
+    let mutated_proof_hash = postfiat_types::pfusdc_ingress_proof_hash_v1(&mutated_proof);
+    let proof_error = ensure_vault_bridge_deposit_source_proof(VaultBridgeDepositSourceProof {
+        genesis: Some(&genesis),
+        profile: &profile,
+        evidence: &evidence,
+        evidence_root: &evidence_root,
+        policy_hash: &route_policy_hash,
+        source_proof_kind: NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1,
+        source_proof_hash: &mutated_proof_hash,
+        source_public_values_hash: &public_values_hash,
+        source_proof_bytes: &mutated_proof,
+        source_public_values: &public_values,
+        fast_ingress_verifier: None,
+    })
+    .expect_err("mutated Arc Groth16 proof must fail");
+    assert_eq!(proof_error.0, "sp1_proof_invalid");
+
+    let mut wrong_route = evidence.clone();
+    wrong_route.route_binding = "01".repeat(32);
+    wrong_route.deposit_id = vault_bridge_deposit_id(&wrong_route).expect("wrong-route deposit ID");
+    let wrong_route_root =
+        vault_bridge_deposit_evidence_root(&wrong_route).expect("wrong-route evidence root");
+    let route_error = ensure_vault_bridge_deposit_source_proof(VaultBridgeDepositSourceProof {
+        genesis: Some(&genesis),
+        profile: &profile,
+        evidence: &wrong_route,
+        evidence_root: &wrong_route_root,
+        policy_hash: &route_policy_hash,
+        source_proof_kind: NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1,
+        source_proof_hash: &proof_hash,
+        source_public_values_hash: &public_values_hash,
+        source_proof_bytes: &proof,
+        source_public_values: &public_values,
+        fast_ingress_verifier: None,
+    })
+    .expect_err("valid Arc proof under the wrong route must fail");
+    assert_eq!(route_error.0, "pfusdc_arc_ingress_public_values_mismatch");
+}
+
+#[test]
 fn ethereum_backed_claim_grows_cap_and_converges_across_six_replicas() {
     let genesis = Genesis::new("postfiat-ethereum-cap-growth-test");
     let issuer = "pf-ethereum-cap-growth-issuer".to_string();

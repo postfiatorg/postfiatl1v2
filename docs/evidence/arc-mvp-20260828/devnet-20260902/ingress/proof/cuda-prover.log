@@ -1,0 +1,29 @@
+[2m2026-09-02T22:56:03.214315Z[0m [32m INFO[0m initializing cuda prover
+Running sp1-gpu-server 6.3.1 with device 0
+[2m2026-09-02T22:56:12.456064Z[0m [33m WARN[0m [2msp1_gpu_server::server[0m[2m:[0m Failed to remove orphaned socket: No such file or directory (os error 2)
+[2m2026-09-02T22:56:12.456211Z[0m [32m INFO[0m [2msp1_gpu_server::server[0m[2m:[0m Server listening @ /tmp/sp1-cuda-0.sock
+[2m2026-09-02T22:56:12.507190Z[0m [32m INFO[0m [2msp1_gpu_server::server[0m[2m:[0m Connection accepted
+[2m2026-09-02T22:56:13.488847Z[0m [32m INFO[0m public_value_stream: [80, 70, 84, 76, 45, 80, 70, 85, 83, 68, 67, 45, 65, 82, 67, 45, 73, 78, 71, 82, 69, 83, 83, 45, 86, 49, 217, 224, 205, 64, 156, 93, 30, 17, 141, 101, 199, 142, 224, 89, 173, 203, 186, 147, 118, 22, 53, 62, 150, 117, 227, 80, 213, 46, 232, 212, 152, 178, 0, 0, 0, 0, 0, 76, 239, 82, 22, 3, 7, 243, 239, 234, 215, 155, 106, 54, 41, 196, 184, 217, 14, 131, 1, 252, 37, 15, 54, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 254, 95, 71, 114, 86, 4, 160, 17, 37, 116, 250, 197, 160, 114, 107, 216, 59, 178, 108, 221, 37, 13, 3, 21, 245, 97, 222, 33, 220, 94, 126, 96, 0, 0, 0, 0, 0, 15, 66, 64, 39, 180, 134, 34, 207, 249, 196, 164, 15, 139, 103, 104, 143, 116, 124, 74, 6, 142, 153, 75, 131, 126, 47, 12, 68, 176, 113, 112, 196, 106, 196, 118, 110, 91, 186, 224, 126, 76, 4, 173, 1, 246, 57, 213, 34, 48, 222, 244, 28, 242, 87, 203, 66, 64, 75, 112, 234, 71, 41, 158, 237, 93, 174, 75, 137, 103, 22, 25, 67, 103, 55, 49, 44, 21, 0, 125, 106, 131, 181, 29, 98, 141, 163, 86, 175, 45, 225, 243, 126, 66, 41, 199, 137, 213, 177, 29, 0, 0, 0, 0, 3, 150, 6, 57, 117, 210, 190, 215, 139, 49, 63, 104, 26, 208, 151, 110, 103, 164, 134, 3, 44, 200, 53, 130, 180, 20, 224, 77, 81, 255, 4, 213, 28, 192, 162, 250, 117, 210, 190, 215, 139, 49, 63, 104, 26, 208, 151, 110, 103, 164, 134, 3, 44, 200, 53, 130, 180, 20, 224, 77, 81, 255, 4, 213, 28, 192, 162, 250]
+[2m2026-09-02T22:56:13.840175Z[0m [32m INFO[0m [1mexecute_program[0m: close [3mtime.busy[0m[2m=[0m12.2ms [3mtime.idle[0m[2m=[0m1.32s
+Arc ingress witness executed: 13784989 cycles in 1333 ms
+[2m2026-09-02T22:56:29.027956Z[0m [32m INFO[0m [2msp1_gpu_server::server[0m[2m:[0m Running setup
+[2m2026-09-02T22:56:29.152730Z[0m [32m INFO[0m starting proof generation [3mmode[0m[2m=[0mGroth16
+[2m2026-09-02T22:56:29.153667Z[0m [32m INFO[0m [2msp1_gpu_server::server[0m[2m:[0m Proving with mode: Groth16
+[2m2026-09-02T22:56:47.182967Z[0m [32m INFO[0m [2msp1_prover::build[0m[2m:[0m [sp1] groth16 circuit artifacts for version v6.1.0 do not exist at /root/.sp1/circuits/groth16/v6.1.0. downloading...
+[sp1] downloaded https://sp1-circuits.s3-us-east-2.amazonaws.com/v6.1.0-groth16.tar.gz to /root/.sp1/circuits/groth16/v6.1.0
+Setting environment variables took 31.43µs
+Reading R1CS took 19.762176831s
+Reading proving key took 4.744572151s
+Reading witness file took 1.615246ms
+Deserializing JSON data took 23.722661ms
+Generating witness took 745.985282ms
+[90m23:07:43[0m DBG constraint system solver done [36mnbConstraints=[0m15972262 [36mtook=[0m6231.208034
+[90m23:08:02[0m DBG prover done [36macceleration=[0mnone [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mnbConstraints=[0m15972262 [36mtook=[0m19328.777378
+Generating proof took 25.560716251s
+[90m23:08:02[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m23:08:02[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m23:08:02[0m [33mWRN[0m [1mignoring uninitialized slice[0m [36mslice name=[0mVars [36mslice type=[0m[]frontend.Variable
+[90m23:08:02[0m DBG verifier done [36mbackend=[0mgroth16 [36mcurve=[0mbn254 [36mtook=[0m0.91755
+verified Arc ingress Groth16 proof; vkey 0x0050a8b0daed2fa75f44d4102b42204c34668a03d311cb727cc6ca3f8df5cf16
+[2m2026-09-02T23:08:02.925737Z[0m [32m INFO[0m [2msp1_gpu_server::server[0m[2m:[0m Destroying key
+rc=0

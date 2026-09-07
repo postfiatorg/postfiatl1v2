@@ -1,0 +1,3 @@
+vault_before=2000000 [2e6] eoa_before=17853799 [1.785e7]
+withdraw tx 0x86036658acab859dc1ab8200140a33ddadfac603ca402fb041e504a28e77a207 block 60170160 status 0x1 gasUsed 517762
+vault_after=1000000 [1e6] eoa_after=18843340 [1.884e7]

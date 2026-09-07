@@ -23,6 +23,9 @@ FIXTURES = REPO_ROOT / "benchmarks/genesis-registry/fixtures"
 ROUNDS = REPO_ROOT / "benchmarks/ai-governance/dunl-subscorer-shadow-20260901/rounds"
 FIXTURE_ROUNDS = tuple(range(12, 20))
 MUTATION_COUNT = 25
+ROUND_ARCHIVE_AVAILABLE = (
+    ROUNDS / "testnet-r12/inputs/model_request.json"
+).is_file()
 
 
 def _golden(round_number: int) -> dict:
@@ -38,6 +41,10 @@ def _build(round_number: int) -> dict:
 
 
 class TwoImplementationAgreementTests(unittest.TestCase):
+    @unittest.skipUnless(
+        ROUND_ARCHIVE_AVAILABLE,
+        "frozen round archive is intentionally fetched out-of-tree",
+    )
     def test_python_build_reproduces_rust_golden_hashes(self) -> None:
         """The Rust fixture generation and the Python builder must agree."""
         for round_number in FIXTURE_ROUNDS:
@@ -120,6 +127,10 @@ class CliTests(unittest.TestCase):
             code = genesis_registry.main(argv)
         return code, stream.getvalue()
 
+    @unittest.skipUnless(
+        ROUND_ARCHIVE_AVAILABLE,
+        "frozen round archive is intentionally fetched out-of-tree",
+    )
     def test_build_json_matches_golden_hash(self) -> None:
         code, output = self._run(
             [
@@ -137,6 +148,10 @@ class CliTests(unittest.TestCase):
             _golden(12)["proposed_registry_hash_hex"],
         )
 
+    @unittest.skipUnless(
+        ROUND_ARCHIVE_AVAILABLE,
+        "frozen round archive is intentionally fetched out-of-tree",
+    )
     def test_verify_golden_payload_ok(self) -> None:
         code, output = self._run(
             [

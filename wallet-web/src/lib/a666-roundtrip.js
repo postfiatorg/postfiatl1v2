@@ -1,4 +1,4 @@
-export const A666_ROUNDTRIP_SCHEMA = 'stakehub-a666-wallet-roundtrip-v1';
+export const A666_ROUNDTRIP_SCHEMA = 'postfiat-a666-wallet-roundtrip-v1';
 export const A666_ROUNDTRIP_ROUTE = 'pftl-a666-ethereum-wA666-usdc-v1';
 export const A666_ROUNDTRIP_AMOUNT = '10.000000';
 export const A666_ROUNDTRIP_CONFIRMATION = 'RUN A666 ROUND TRIP';

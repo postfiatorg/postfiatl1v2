@@ -1305,6 +1305,7 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
             fast_ingress_verifier,
         })?;
     let mut advanced_finality = None;
+    let mut advanced_arc_finality = None;
     let mut advanced_campaign = None;
     let mut source_nullifier = String::new();
     if let Some(public_values) = proof_public_values {
@@ -1400,6 +1401,23 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
                 advanced_campaign = Some(campaign);
                 advanced_finality = Some(state);
             }
+            VerifiedIngressPublicValues::Arc(values) => {
+                let mut state = ledger
+                    .arc_finality_states
+                    .iter()
+                    .find(|state| state.route_profile_hash == operation.policy_hash)
+                    .ok_or_else(|| {
+                        (
+                            "pfusdc_arc_finality_state_missing",
+                            "proof-native pfUSDC Arc ingress requires a governance-pinned Arc finality state".to_string(),
+                        )
+                    })?
+                    .clone();
+                state
+                    .verify_and_advance(&values)
+                    .map_err(|error| ("pfusdc_arc_finality_state_rejected", error))?;
+                advanced_arc_finality = Some(state);
+            }
             VerifiedIngressPublicValues::Ethereum { nullifier } => {
                 source_nullifier = nullifier;
             }
@@ -1437,6 +1455,17 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
                 (
                     "pfusdc_finality_state_missing",
                     "proof-native finality state disappeared during commit".to_string(),
+                )
+            })?;
+        *current = state;
+    }
+    if let Some(state) = advanced_arc_finality {
+        let current = ledger
+            .arc_finality_state_mut(&state.route_profile_hash, state.route_epoch)
+            .ok_or_else(|| {
+                (
+                    "pfusdc_arc_finality_state_missing",
+                    "proof-native Arc finality state disappeared during commit".to_string(),
                 )
             })?;
         *current = state;
@@ -2126,7 +2155,8 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
         }
         NAV_PROFILE_VERIFIER_SP1_GROTH16
         | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
-        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 => {}
+        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+        | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1 => {}
         _ => {
             return Err((
                 "unsupported_vault_bridge_deposit_verifier",
@@ -7387,6 +7417,7 @@ fn vault_bridge_source_proof_is_consensus_verified(source_proof_kind: &str) -> b
     matches!(
         source_proof_kind,
         SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+            | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
     )
 }
 
@@ -7409,6 +7440,7 @@ enum VerifiedIngressPublicValues {
     Confirmed(postfiat_types::PfUsdcIngressPublicValuesV3),
     Bonded(postfiat_types::PfUsdcBondedIngressPublicValuesV1),
     Ethereum { nullifier: String },
+    Arc(postfiat_types::PfUsdcArcIngressPublicValuesV1),
 }
 
 fn ensure_vault_bridge_deposit_source_proof(
@@ -7660,12 +7692,81 @@ fn ensure_vault_bridge_deposit_source_proof(
             )?;
             Ok(Some(VerifiedIngressPublicValues::Confirmed(public_values)))
         }
+        NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1 => {
+            if source_proof_kind != NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
+                || source_proof_hash.is_empty()
+                || source_public_values_hash.is_empty()
+            {
+                return Err((
+                    "missing_vault_bridge_deposit_source_proof",
+                    "proof-native Arc vault deposit requires its dedicated proof kind and proof commitments"
+                        .to_string(),
+                ));
+            }
+            let Some(_genesis) = genesis else {
+                return Ok(None);
+            };
+            if postfiat_types::pfusdc_ingress_proof_hash_v1(source_proof_bytes)
+                != source_proof_hash
+            {
+                return Err((
+                    "vault_bridge_deposit_source_proof_hash_mismatch",
+                    "source_proof_hash does not commit the supplied Arc proof bytes".to_string(),
+                ));
+            }
+            if postfiat_types::pfusdc_ingress_public_values_hash_v1(source_public_values)
+                != source_public_values_hash
+            {
+                return Err((
+                    "vault_bridge_deposit_source_public_values_hash_mismatch",
+                    "source_public_values_hash does not commit the supplied Arc public values"
+                        .to_string(),
+                ));
+            }
+            verify_bounded_sp1_groth16(
+                profile,
+                NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1,
+                source_proof_bytes,
+                source_public_values,
+            )
+            .map_err(|error| (error.code(), error.message()))?;
+            let public_values =
+                postfiat_types::PfUsdcArcIngressPublicValuesV1::from_canonical_bytes(
+                    source_public_values,
+                )
+                .map_err(|error| ("pfusdc_arc_ingress_public_values_invalid", error))?;
+            ensure_pfusdc_arc_ingress_public_values_match(evidence, &public_values)?;
+            Ok(Some(VerifiedIngressPublicValues::Arc(public_values)))
+        }
         _ => Err((
             "unsupported_vault_bridge_deposit_verifier",
             "vault bridge asset bridge deposits require a multi-fetch-quorum or sp1-groth16 profile"
                 .to_string(),
         )),
     }
+}
+
+fn ensure_pfusdc_arc_ingress_public_values_match(
+    evidence: &VaultBridgeDepositEvidence,
+    values: &postfiat_types::PfUsdcArcIngressPublicValuesV1,
+) -> Result<(), (&'static str, String)> {
+    let mismatch = values.arc_chain_id != evidence.source_chain_id
+        || values.vault_address != evidence.vault_address
+        || values.token_address != evidence.token_address
+        || values.route_id != evidence.route_binding
+        || values.deposit_id != evidence.deposit_id
+        || values.amount_atoms != evidence.amount_atoms
+        || values.pftl_recipient_hash != evidence.pftl_recipient_hash
+        || values.deposit_nonce != evidence.nonce
+        || values.arc_block_hash != evidence.block_hash;
+    if mismatch {
+        return Err((
+            "pfusdc_arc_ingress_public_values_mismatch",
+            "proof-verified Arc ingress public values do not exactly match the governed route and deposit evidence"
+                .to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn ensure_ethereum_ingress_public_values_match(

@@ -66,7 +66,7 @@ while IFS= read -r evidence; do
   printf '%s\n' "$evidence" > "$evidence_corpus/$evidence_hash.json"
 done
 
-evidence_root="$repository_root/docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue"
+evidence_root="$repository_root/benchmarks/nav-reserve-proof-historical"
 printf '%s\n' '["0x80"]' > "$evm_corpus/minimal-proof-nodes.json"
 cp "$evidence_root/evm-spot-witness.json" "$evm_corpus/historical-spot.json"
 cp "$evidence_root/hl-receipt-witness.json" \

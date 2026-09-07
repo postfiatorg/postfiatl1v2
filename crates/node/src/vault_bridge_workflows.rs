@@ -733,6 +733,52 @@ pub fn vault_bridge_deposit_plan(
             ));
         }
         (computed_proof_hash, computed_public_values_hash)
+    } else if source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1 {
+        if source_proof_bytes.is_empty() || source_public_values.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "proof-native Arc route requires --source-proof-file and --source-public-values-file",
+            ));
+        }
+        let computed_proof_hash = postfiat_types::pfusdc_ingress_proof_hash_v1(&source_proof_bytes);
+        let computed_public_values_hash =
+            postfiat_types::pfusdc_ingress_public_values_hash_v1(&source_public_values);
+        if !provided_source_proof_hash.is_empty()
+            && provided_source_proof_hash != computed_proof_hash
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "--source-proof-hash does not match --source-proof-file",
+            ));
+        }
+        if !provided_source_public_values_hash.is_empty()
+            && provided_source_public_values_hash != computed_public_values_hash
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "--source-public-values-hash does not match --source-public-values-file",
+            ));
+        }
+        let public_values = postfiat_types::PfUsdcArcIngressPublicValuesV1::from_canonical_bytes(
+            &source_public_values,
+        )
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+        if public_values.arc_chain_id != evidence.source_chain_id
+            || public_values.vault_address != evidence.vault_address
+            || public_values.token_address != evidence.token_address
+            || public_values.route_id != evidence.route_binding
+            || public_values.deposit_id != evidence.deposit_id
+            || public_values.amount_atoms != evidence.amount_atoms
+            || public_values.pftl_recipient_hash != evidence.pftl_recipient_hash
+            || public_values.deposit_nonce != evidence.nonce
+            || public_values.arc_block_hash != evidence.block_hash
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "proof-native Arc public values do not match the canonical vault deposit receipt",
+            ));
+        }
+        (computed_proof_hash, computed_public_values_hash)
     } else {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,

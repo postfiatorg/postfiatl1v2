@@ -2520,6 +2520,8 @@ fn cross_view_vote_and_legacy_lock_migration_fail_closed() {
     )
     .expect("write legacy vote lock");
     fs::remove_file(current_lock_path).expect("remove v2 lock to exercise migration scan");
+    fs::remove_file(lock_dir.join(".vote_lock_index_state.v1"))
+        .expect("simulate a pre-index legacy vote-lock directory");
 
     let second_proposal_file = data_dir.join("second-view-zero.block_proposal.json");
     let second_proposal = propose_batch(BatchProposalOptions {

@@ -40,11 +40,11 @@ DIRECT_API_RE = re.compile(r"(?:\.|::)(?:prove|prove_plonk|prove_groth16)\s*\(")
 DIRECT_PROVING_TEST_ALLOWLIST = {
     (
         "scripts/test_native_campaign_driver.py",
-        435,
+        445,
     ): "fd4cccbcaefc0040fb263db387af57235c4b07111f389379240cc22185a11601",
     (
         "scripts/test_native_campaign_driver.py",
-        626,
+        636,
     ): "2033a7c776cc503fb9fb3aa66ca43797fc310a927426f48077a14fbbd901dde6",
     (
         "scripts/test_native_prover_leaf.py",

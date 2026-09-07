@@ -10,7 +10,7 @@ import pathlib
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 READINESS = ROOT / "docs/status/A666-PUBLIC-ADAPTER-READINESS-20260802.json"
 PLAN = ROOT / (
-    "docs/plans/"
+    "docs/deferred-plans/"
     "STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md"
 )
 RETIRED_HANDOFF = ROOT / (
@@ -63,7 +63,7 @@ def main() -> None:
         fail("retired continuation handoff must remain deleted; update the canonical plan")
     architecture_documents = sorted(
         path
-        for directory in (ROOT / "docs/plans", ROOT / "docs/handoffs")
+        for directory in (ROOT / "docs/deferred-plans", ROOT / "docs/handoffs")
         for path in directory.glob("*STAKEHUB*DECOUPLING*.md")
     )
     if architecture_documents != [PLAN]:
@@ -114,9 +114,9 @@ def main() -> None:
     )
     if not deprecated:
         required_markers = (
-            "**Status:** **INCOMPLETE — StakeHub is not deprecated",
+            "**Status:** **Deferred — incomplete",
             "| `G3` Public A666 adapters",
-            "| **FAIL/OPEN** |",
+            "| **FAIL/OPEN — 0/6 production-qualified** |",
             "StakeHub is not deprecated.",
         )
         for marker in required_markers:

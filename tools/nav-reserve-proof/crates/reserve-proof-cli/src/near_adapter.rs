@@ -959,7 +959,7 @@ mod tests {
     use super::*;
 
     const HISTORICAL_WITNESS: &str = include_str!(
-        "../../../../../docs/evidence/a666-pfusdc-reserve-demo-20260730/live-run-01/por-preissue/near-receipt-witness.json"
+        "../../../../../benchmarks/nav-reserve-proof-historical/near-receipt-witness.json"
     );
 
     #[test]

@@ -1,0 +1,38 @@
+{
+  "baseline_accepted": true,
+  "replay_scope": "PFTL state transition; deposit_id replay is not a stateless guest property",
+  "results": [
+    {
+      "accepted": false,
+      "error_code": "ARC_INGRESS_INVALID_SIGNATURE",
+      "mutation": "forged_signature"
+    },
+    {
+      "accepted": false,
+      "error_code": "ARC_INGRESS_SUB_QUORUM",
+      "mutation": "subquorum"
+    },
+    {
+      "accepted": false,
+      "error_code": "ARC_INGRESS_RECEIPT_PROOF",
+      "mutation": "mutated_receipt"
+    },
+    {
+      "accepted": false,
+      "error_code": "ARC_INGRESS_DEPOSIT_MISMATCH",
+      "mutation": "wrong_log_fields"
+    },
+    {
+      "accepted": false,
+      "error_code": "ARC_INGRESS_VALIDATOR_SET_COMMITMENT_MISMATCH",
+      "mutation": "stale_validator_set_commitment"
+    },
+    {
+      "accepted": false,
+      "error_code": "ARC_INGRESS_ROTATION_PROOF_UNAVAILABLE",
+      "mutation": "unauthenticated_rotation"
+    }
+  ],
+  "schema": "postfiat.pfusdc.arc_ingress_negative_suite.v1",
+  "witness": "docs/evidence/arc-mvp-20260828/arc-ingress-witness.json"
+}

@@ -10,6 +10,7 @@ import {
 } from "../src/ERC20BridgeVaultV2.sol";
 import {PFTLFinalityVerifierV1, ISP1Verifier} from "../src/PFTLFinalityVerifierV1.sol";
 import {PfUsdcIngressAnchorV1, IArbitrumBridgeV1, IArbitrumOutboxV1} from "../src/PfUsdcIngressAnchorV1.sol";
+import {ArcPfUsdcDeploymentFactory} from "../src/ArcPfUsdcDeploymentFactory.sol";
 
 contract Tier4MockToken is IERC20BridgeTokenV2 {
     mapping(address => uint256) public balanceOf;
@@ -155,6 +156,77 @@ contract Tier4MockOutbox is IArbitrumOutboxV1 {
 
     function relay(address destination, bytes calldata data) external returns (bool, bytes memory) {
         return destination.call(data);
+    }
+}
+
+/// Faithful replica of the routing, `addRoute`, and `freezeRoute` semantics of
+/// `external/sp1-contracts/contracts/src/SP1VerifierGateway.sol` (the contract deployed on Arc
+/// testnet at 0x532D3a80…). Kept in-test so the suite does not depend on `allow_paths`.
+contract Tier4GatewayReplica is ISP1Verifier {
+    struct VerifierRoute {
+        address verifier;
+        bool frozen;
+    }
+
+    error RouteNotFound(bytes4 selector);
+    error RouteIsFrozen(bytes4 selector);
+    error RouteAlreadyExists(address verifier);
+    error SelectorCannotBeZero();
+    error NotOwner();
+
+    address public immutable owner;
+    mapping(bytes4 => VerifierRoute) public routes;
+
+    constructor(address initialOwner) {
+        owner = initialOwner;
+    }
+
+    function verifyProof(bytes32 programVKey, bytes calldata publicValues, bytes calldata proofBytes) external view {
+        bytes4 selector = bytes4(proofBytes[:4]);
+        VerifierRoute memory route = routes[selector];
+        if (route.verifier == address(0)) {
+            revert RouteNotFound(selector);
+        } else if (route.frozen) {
+            revert RouteIsFrozen(selector);
+        }
+        ISP1Verifier(route.verifier).verifyProof(programVKey, publicValues, proofBytes);
+    }
+
+    function addRoute(address verifier) external {
+        if (msg.sender != owner) revert NotOwner();
+        bytes4 selector = bytes4(Tier4HashedVerifier(verifier).VERIFIER_HASH());
+        if (selector == bytes4(0)) revert SelectorCannotBeZero();
+        VerifierRoute storage route = routes[selector];
+        if (route.verifier != address(0)) revert RouteAlreadyExists(route.verifier);
+        route.verifier = verifier;
+    }
+
+    function freezeRoute(bytes4 selector) external {
+        if (msg.sender != owner) revert NotOwner();
+        VerifierRoute storage route = routes[selector];
+        if (route.verifier == address(0)) revert RouteNotFound(selector);
+        if (route.frozen) revert RouteIsFrozen(selector);
+        route.frozen = true;
+    }
+}
+
+/// Stand-in for a routed SP1 verifier. `strict` models the real Groth16 verifier (which rejects
+/// anything that is not a valid proof); `!strict` models an attacker-supplied permissive contract.
+contract Tier4HashedVerifier is ISP1Verifier {
+    bytes32 private immutable verifierHash;
+    bool private immutable strict;
+
+    constructor(bytes32 verifierHash_, bool strict_) {
+        verifierHash = verifierHash_;
+        strict = strict_;
+    }
+
+    function VERIFIER_HASH() external view returns (bytes32) {
+        return verifierHash;
+    }
+
+    function verifyProof(bytes32, bytes calldata, bytes calldata) external view {
+        require(!strict, "groth16: invalid proof");
     }
 }
 
@@ -326,6 +398,74 @@ contract PFUSDCTier4Test {
         _assertTrue(
             first.governedRouteBinding() != second.governedRouteBinding(), "route binding remains instance-pinned"
         );
+    }
+
+    function testArcDirectIngressPinsVaultAndRevertsAtomicallyOnWrongRoute() public {
+        ArcPfUsdcDeploymentFactory factory = new ArcPfUsdcDeploymentFactory();
+        Tier4TemporaryFinality temporary = new Tier4TemporaryFinality();
+        bytes32 routeBinding = keccak256("arc-direct-route");
+        Tier4MockOutbox unauthorizedCaller = new Tier4MockOutbox();
+        (bool unauthorizedFactoryOk,) = unauthorizedCaller.relay(
+            address(factory),
+            abi.encodeCall(
+                ArcPfUsdcDeploymentFactory.deploy,
+                (token, IPFTLFinalityVerifierV1(address(temporary)), routeBinding, address(this))
+            )
+        );
+        _assertTrue(!unauthorizedFactoryOk, "non-deployer factory call accepted");
+        (PfUsdcIngressAnchorV1 directAnchor, ERC20BridgeVaultV2 directVault) =
+            factory.deploy(token, temporary, routeBinding, address(this));
+
+        (bool factoryReplayOk,) = address(factory)
+            .call(
+                abi.encodeCall(
+                    ArcPfUsdcDeploymentFactory.deploy,
+                    (token, IPFTLFinalityVerifierV1(address(temporary)), routeBinding, address(this))
+                )
+            );
+        _assertTrue(!factoryReplayOk, "direct factory replay accepted");
+
+        _assertTrue(directAnchor.directIngress(), "anchor direct mode disabled");
+        _assertTrue(directVault.directIngress(), "vault direct mode disabled");
+        _assertTrue(directAnchor.l2Vault() == address(directVault), "anchor vault binding");
+
+        token.mint(address(this), 2_000_000);
+        token.approve(address(directVault), 2_000_000);
+        bytes32 depositId =
+            directVault.depositV2(1_000_000, "pf-arc-recipient", keccak256("arc-direct-nonce"), routeBinding);
+        _assertTrue(directAnchor.depositSeen(depositId), "direct anchor omitted deposit");
+        _assertEq(token.balanceOf(address(directVault)), 1_000_000, "direct vault pull");
+
+        uint256 walletBefore = token.balanceOf(address(this));
+        uint256 vaultBefore = token.balanceOf(address(directVault));
+        (bool ok,) = address(directVault)
+            .call(
+                abi.encodeCall(
+                    ERC20BridgeVaultV2.depositV2,
+                    (500_000, "pf-arc-recipient", keccak256("wrong-route-nonce"), keccak256("wrong-route"))
+                )
+            );
+        _assertTrue(!ok, "wrong direct route accepted");
+        _assertEq(token.balanceOf(address(this)), walletBefore, "failed direct deposit changed wallet");
+        _assertEq(token.balanceOf(address(directVault)), vaultBefore, "failed direct deposit changed vault");
+
+        bytes memory unauthorized = abi.encodeCall(
+            IPfUsdcIngressAnchorV1.recordDepositV1,
+            (
+                keccak256("forged-direct-id"),
+                address(this),
+                keccak256(bytes("pf-arc-recipient")),
+                "pf-arc-recipient",
+                1,
+                keccak256("forged-direct-nonce"),
+                routeBinding,
+                block.chainid,
+                address(directVault),
+                address(token)
+            )
+        );
+        (ok,) = address(directAnchor).call(unauthorized);
+        _assertTrue(!ok, "non-vault direct anchor caller accepted");
     }
 
     function testProofNativeWithdrawalPaysExactlyAndConsumesReplayKeys() public {
@@ -538,6 +678,119 @@ contract PFUSDCTier4Test {
         _assertTrue(vault.tokenRuntimeCodeHash() == address(token).codehash, "vault token code hash changed");
         _assertTrue(address(verifier.sp1Verifier()) == address(sp1), "SP1 verifier binding changed");
         _assertTrue(verifier.programVKey() == PROGRAM_VKEY, "program vkey changed");
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Gateway-owner finding (pfUSDC on Arc review packet, §04). These tests pin the exact power
+    // of the SP1 gateway owner when PFTLFinalityVerifierV1 is bound to a gateway rather than
+    // directly to the Groth16 verifier, as on Arc testnet (verifier 0x1D436908… → gateway
+    // 0x532D3a80… → route 0x4388a21c → SP1VerifierGroth16 0xd3b199D0…).
+    // ---------------------------------------------------------------------------------------
+
+    bytes4 private constant GROTH16_V6_1_0_SELECTOR = 0x4388a21c;
+    bytes32 private constant GROTH16_V6_1_0_VERIFIER_HASH =
+        0x4388a21c687fdd5f218d7e3d13190cac4c5355818d3605fd5fb811df468ee696;
+
+    function testGatewayOwnerCannotReplaceTheRegisteredGroth16Route() public {
+        (Tier4GatewayReplica gateway,,) = _gatewayBoundPair();
+        Tier4HashedVerifier impostor = new Tier4HashedVerifier(GROTH16_V6_1_0_VERIFIER_HASH, false);
+        (bool ok, bytes memory ret) = address(gateway).call(abi.encodeCall(gateway.addRoute, (address(impostor))));
+        _assertTrue(!ok, "gateway owner replaced the registered route");
+        _assertTrue(bytes4(ret) == Tier4GatewayReplica.RouteAlreadyExists.selector, "unexpected revert reason");
+    }
+
+    function testGatewayBoundVerifierRejectsForgedProofUnderRegisteredSelector() public {
+        (, PFTLFinalityVerifierV1 gwVerifier, ERC20BridgeVaultV2 gwVault) = _gatewayBoundPair();
+        bytes memory publicValues = _publicValues(address(gwVault), true, 11, _h48(0x44), _h32(0x99));
+        (bool ok,) = address(gwVault)
+            .call(
+                abi.encodeCall(
+                    ERC20BridgeVaultV2.withdrawWithProof, (publicValues, abi.encodePacked(GROTH16_V6_1_0_SELECTOR))
+                )
+            );
+        _assertTrue(!ok, "forged proof accepted under the Groth16 selector");
+        _assertEq(gwVerifier.latestFinalizedHeight(), 10, "checkpoint moved on rejected proof");
+    }
+
+    /// PoC for the open finding: the gateway owner registers a permissive verifier under a *new*
+    /// selector, and because PFTLFinalityVerifierV1 forwards `proofBytes` without pinning the
+    /// selector, a "proof" carrying that selector releases funds. Mitigation under audit: bind
+    /// `sp1Verifier` directly to the Groth16 verifier and/or require `bytes4(proofBytes) ==
+    /// GROTH16_V6_1_0_SELECTOR` in the finality verifier.
+    function testGatewayOwnerCanAdmitUnprovenWithdrawalViaForeignSelectorPoC() public {
+        (Tier4GatewayReplica gateway,, ERC20BridgeVaultV2 gwVault) = _gatewayBoundPair();
+        bytes memory publicValues = _publicValues(address(gwVault), true, 11, _h48(0x44), _h32(0x99));
+        bytes4 foreignSelector = 0xdeadbeef;
+        bytes memory foreignProof = abi.encodePacked(foreignSelector);
+
+        // Before the owner acts, the foreign selector has no route and the withdrawal reverts.
+        (bool okBefore,) =
+            address(gwVault).call(abi.encodeCall(ERC20BridgeVaultV2.withdrawWithProof, (publicValues, foreignProof)));
+        _assertTrue(!okBefore, "unrouted selector accepted");
+
+        Tier4HashedVerifier permissive = new Tier4HashedVerifier(bytes32(foreignSelector), false);
+        gateway.addRoute(address(permissive)); // this test contract is the gateway owner
+
+        uint256 vaultBefore = token.balanceOf(address(gwVault));
+        uint256 recipientBefore = token.balanceOf(RECIPIENT);
+        gwVault.withdrawWithProof(publicValues, foreignProof);
+        _assertEq(token.balanceOf(address(gwVault)), vaultBefore - 125, "PoC: vault not debited");
+        _assertEq(token.balanceOf(RECIPIENT), recipientBefore + 125, "PoC: recipient not credited");
+    }
+
+    function testGatewayOwnerCanFreezeTheRouteAndHaltEgress() public {
+        (Tier4GatewayReplica gateway,, ERC20BridgeVaultV2 gwVault) = _gatewayBoundPair();
+        bytes memory publicValues = _publicValues(address(gwVault), true, 11, _h48(0x44), _h32(0x99));
+        gateway.freezeRoute(GROTH16_V6_1_0_SELECTOR);
+        (bool ok, bytes memory ret) = address(gwVault)
+            .call(
+                abi.encodeCall(
+                    ERC20BridgeVaultV2.withdrawWithProof, (publicValues, abi.encodePacked(GROTH16_V6_1_0_SELECTOR))
+                )
+            );
+        _assertTrue(!ok, "frozen route still served a withdrawal");
+        _assertTrue(bytes4(ret) == Tier4GatewayReplica.RouteIsFrozen.selector, "unexpected revert reason");
+    }
+
+    /// Deploys a verifier + vault pair whose `sp1Verifier` is a gateway (owned by this test) with
+    /// the Groth16 v6.1.0 selector routed to a strict verifier, mirroring the Arc testnet topology.
+    function _gatewayBoundPair()
+        private
+        returns (Tier4GatewayReplica gateway, PFTLFinalityVerifierV1 gwVerifier, ERC20BridgeVaultV2 gwVault)
+    {
+        gateway = new Tier4GatewayReplica(address(this));
+        gateway.addRoute(address(new Tier4HashedVerifier(GROTH16_V6_1_0_VERIFIER_HASH, true)));
+
+        PFTLFinalityVerifierV1.Config memory config = PFTLFinalityVerifierV1.Config({
+            sp1Verifier: ISP1Verifier(address(gateway)),
+            programVKey: PROGRAM_VKEY,
+            pftlChainIdHash: keccak256(bytes("postfiat-tier4-test")),
+            pftlGenesisHashCommitment: keccak256(genesis48),
+            pftlProtocolVersion: 1,
+            routeProfileHashCommitment: keccak256(route48),
+            routeEpoch: 7,
+            assetIdCommitment: keccak256(asset48),
+            arbitrumChainId: uint64(block.chainid),
+            vaultRuntimeCodeHash: address(vault).codehash,
+            token: address(token),
+            tokenRuntimeCodeHash: address(token).codehash,
+            maxProofBytes: 4096,
+            maxPublicValuesBytes: 16384,
+            initialCheckpointCommitment: initialCheckpoint,
+            initialFinalizedHeight: 10,
+            initialCommitteeRootCommitment: keccak256(_h48(0x41))
+        });
+        gwVerifier = new PFTLFinalityVerifierV1(config);
+        gwVault = new ERC20BridgeVaultV2(
+            token,
+            IPFTLFinalityVerifierV1(address(gwVerifier)),
+            address(token).codehash,
+            arbSys,
+            address(ingressAnchor),
+            address(this)
+        );
+        _assertEq(address(gwVault).codehash, address(vault).codehash, "gateway-bound vault code hash drifted");
+        token.mint(address(gwVault), 1_000_000);
     }
 
     function _publicValues(
