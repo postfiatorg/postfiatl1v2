@@ -8,9 +8,10 @@ The resumed Ethereum → pfUSDC → A666 → Uniswap → A666 → pfUSDC → Eth
 - [x] Deploy verifier `0xc398a26BD997168C3C966763B0A97829d14dB655` and vault `0xE7A432a28b20621A70E845C7F202004Cf98e7A2C`. Readback verifies the frozen `0015b046` program, checkpoint 1001, current committee root, route hash, token, owner, and zero initial obligations.
 - [x] Register the proof profile at PFTL 1006, bind it at 1007, and activate the governed route at 1008. All six validators agree; mempools are empty.
 - [x] Deposit 10.000000 USDC (10,000,000 atoms) to the epoch-10 vault for `pfab9b9228942e5c529633a13aa271d5297bec6353`. [Ethereum deposit receipt](https://etherscan.io/tx/0x639893f4c8d3df16baa392a1f958acd7549586f7b186068cd73ad5cd14806772). Wallet, vault, obligations, event, and deposit record reconcile exactly. The capture binds deposit block 25922792 to finalized Ethereum block 25922794.
-- [ ] Finish the ingress proof and claim the source-series pfUSDC.
+- [x] Complete the CPU ingress Groth16 proof in 1471.57 seconds and claim exactly 10 source-series pfUSDC at PFTL 1011. The claim binds governed route epoch 10. Source asset: `2bae082a6703375b9405af44715e1e64623265392627767b040fa2c30abb100a09da403724a6f105317292d9c0073df7`.
 - [ ] Complete and submit the existing A666 verifier checkpoints 881→917→924→989. The 917→924 CPU Groth16 proof completed and passed local verification with the frozen `004e44` guest (356 proof bytes; 256 public-value bytes; about 104 minutes including setup). It must wait for 881→917 before on-chain submission. The other segments remain pending.
-- [ ] Authorize the new settlement source, subscribe at NAV, export, prove, and mint wA666.
+- [x] Authorize the source at 1012, reserve at 1013, subscribe at NAV at 1014, and export 9.611565 A666 at 1015. The exact export witness is captured; pre-existing holder inventories are unchanged.
+- [ ] Prove the accepted export and mint its wA666 on Ethereum.
 - [ ] Execute both Uniswap directions, burn the actual buyback output, and import the return.
 - [ ] Redeem at NAV into the same pfUSDC source, withdraw Ethereum USDC, settle on PFTL, and reconcile the whole lineage.
 
@@ -30,7 +31,7 @@ The issuance and redemption builders accept `--settlement-source-asset-id`. Sour
 
 For each Uniswap direction, `a666-mainnet-uniswap-allowances.py --token … --amount-atoms …` can authorize only that trade's input amount at both the ERC-20 and Permit2 layers. The swap runner requires an evidence output path for execution. Both scripts persist intent before calling StakeHub and save any returned transaction hash before receipt processing; an existing journal requires reconciliation. Six focused tests cover exact one-atom inputs, preserving unrelated balances/allowances, expiration bounds, positive minimum output, and an interrupted signer response without a second send. Actual gas accounting uses receipt gas consumption and effective gas price, not the signer's budget metadata.
 
-The captured ingress witness also passed all 16 native adversarial rejection cases. That audit does not replace the pending Groth16 proof or the remaining live route legs.
+The captured ingress witness also passed all 16 native adversarial rejection cases. The completed Groth16 proof additionally passed local verification; the remaining live route legs are still pending.
 
 The after-mint wrapper carries the issue manifest's source-series asset into NAV redemption and resolves its bucket explicitly for withdrawal. Its two swap calls use the durable output interface and exact input approvals. The CPU egress wrapper verifies the embedded program's vkey and ELF hash before a native burn, checks Docker access, and runs the supported `egress` command with bounded worker settings. These command-path repairs are not evidence that the pending trade or withdrawal has executed.
 
