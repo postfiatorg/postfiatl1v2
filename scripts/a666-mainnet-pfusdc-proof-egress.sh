@@ -99,7 +99,7 @@ if ! "$resume"; then
 fi
 mkdir -p "$egress_dir"
 
-# This host embeds its guest; verify that identity before burning native funds.
+# Both hosts embed their guest; verify that identity before burning native funds.
 if test "$prover_backend" = cpu; then
   test -x "$local_prover"
   test -s "$egress_elf"
@@ -114,6 +114,21 @@ if test "$prover_backend" = cpu; then
 import runpy
 runpy.run_path("scripts/nav-reserve-proof-cpu-bounded")["require_docker_access"]()
 PY
+else
+  test -s "$egress_elf"
+  remote_prover_sha256=$(ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" "sha256sum '$a100_prover' | cut -d' ' -f1")
+  if test -n "$expected_a100_prover_sha256"; then
+    test "$remote_prover_sha256" = "$expected_a100_prover_sha256"
+  fi
+  ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
+    "SP1_PROVER=cpu '$a100_prover' program-info --output '${a100_root}-program-info.json'" \
+    > "$egress_dir/remote-prover-program-info.log"
+  scp -q -P "$a100_port" "root@$a100_host:${a100_root}-program-info.json" \
+    "$egress_dir/remote-prover-program-info.json"
+  expected_elf_sha256=$(sha256sum "$egress_elf" | awk '{print $1}')
+  jq -e --arg vkey "$program_vkey" --arg elf "$expected_elf_sha256" \
+    '.egress.program_vkey==$vkey and .egress.elf_sha256==$elf' \
+    "$egress_dir/remote-prover-program-info.json" >/dev/null
 fi
 
 round_args=(
