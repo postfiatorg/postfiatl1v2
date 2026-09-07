@@ -28,6 +28,10 @@ StakeHub's `python -m stakehub.navcoin_deposit` checks the deployed manifest aga
 
 The issuance and redemption builders accept `--settlement-source-asset-id`. Source selection belongs to the signed reservation/redemption operation; the existing mint packet retains its canonical family asset field. The source-custody consensus implementation is unchanged by these CLI additions.
 
+For each Uniswap direction, `a666-mainnet-uniswap-allowances.py --token … --amount-atoms …` can authorize only that trade's input amount at both the ERC-20 and Permit2 layers. The swap runner requires an evidence output path for execution. Both scripts persist intent before calling StakeHub and save any returned transaction hash before receipt processing; an existing journal requires reconciliation. Six focused tests cover exact one-atom inputs, preserving unrelated balances/allowances, expiration bounds, positive minimum output, and an interrupted signer response without a second send. Actual gas accounting uses receipt gas consumption and effective gas price, not the signer's budget metadata.
+
+The captured ingress witness also passed all 16 native adversarial rejection cases. That audit does not replace the pending Groth16 proof or the remaining live route legs.
+
 The original host's durable job and receipt directory is `~/.local/share/stakehub/a666-full-route-20260907/`. Its `active-resume.json` points to the current jobs and immutable transaction records. The private StakeHub companion archive contains a receipt snapshot in `docs/handoffs/navcoin-recovery-20260907/resumed-epoch10/`. Local paths and loopback endpoints require host-specific configuration.
 
 The empty epoch-7 contracts remain invalid and must never be funded. The old epoch-6 verifier's committee-transition incompatibility is not claimed fixed: the fresh epoch-10 verifier starts after those rotations. A complete withdrawal proof is still required. The historical Cobalt publication-binding defect and the paused private-funding objective are unchanged.
