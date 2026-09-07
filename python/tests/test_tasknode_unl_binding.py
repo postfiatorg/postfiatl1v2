@@ -8,6 +8,7 @@ import io
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -80,6 +81,12 @@ def _validator(name: str = "primary") -> str:
     return _fixtures()["validator_ids"][name]
 
 
+def _registry_public_key_hash(validator_id: str) -> str:
+    return hashlib.sha256(
+        f"TEST-ONLY:L1:{validator_id}".encode()
+    ).hexdigest()
+
+
 def _bind_challenge(
     validator_signer: ThrowawayTestSigner,
     wallet_signer: ThrowawayTestSigner,
@@ -91,9 +98,13 @@ def _bind_challenge(
     wallet_address = wallet_address_from_public_key(
         wallet_signer.public_key_hex
     )
+    selected_validator_id = validator_id or _validator()
     return prepare_bind_challenge(
-        validator_id=validator_id or _validator(),
+        validator_id=selected_validator_id,
         validator_public_key_hex=validator_signer.public_key_hex,
+        validator_registry_public_key_hash=_registry_public_key_hash(
+            selected_validator_id
+        ),
         wallet_address=wallet_address,
         wallet_public_key_hex=wallet_signer.public_key_hex,
         nonce_hex=_nonce(nonce),
@@ -224,6 +235,31 @@ class BindingRoundTripTests(unittest.TestCase):
             "SHADOW_ONLY",
         )
 
+    def test_registry_key_hash_is_bound_by_both_signatures(
+        self,
+    ) -> None:
+        record = _bind_record(self.validator, self.wallet)
+        expected_hash = _registry_public_key_hash(_validator())
+
+        event = verify_binding_record(record)
+
+        self.assertEqual(
+            event.validator_registry_public_key_hash,
+            expected_hash,
+        )
+        tampered = replace(
+            record,
+            challenge=replace(
+                record.challenge,
+                validator_registry_public_key_hash="ab" * 32,
+            ),
+        )
+        with self.assertRaisesRegex(
+            schema.TaskNodeUnlError,
+            "memo_challenge_mismatch",
+        ):
+            verify_binding_record(tampered)
+
     def test_wrong_key_wallet_countersign_is_rejected(self) -> None:
         challenge = _bind_challenge(self.validator, self.wallet)
         validator_signature = sign_challenge(
@@ -259,6 +295,9 @@ class BindingRoundTripTests(unittest.TestCase):
             prepare_bind_challenge(
                 validator_id=_validator(),
                 validator_public_key_hex=self.validator.public_key_hex,
+                validator_registry_public_key_hash=(
+                    _registry_public_key_hash(_validator())
+                ),
                 wallet_address=wallet_address_from_public_key(
                     other.public_key_hex
                 ),
@@ -637,6 +676,8 @@ class OfflineCliTests(unittest.TestCase):
                     _validator(),
                     "--validator-public-key-hex",
                     self.validator.public_key_hex,
+                    "--validator-registry-public-key-hash",
+                    _registry_public_key_hash(_validator()),
                     "--wallet-address",
                     wallet_address_from_public_key(
                         self.wallet.public_key_hex
@@ -654,6 +695,9 @@ class OfflineCliTests(unittest.TestCase):
                 action="bind",
                 validator_id=_validator(),
                 validator_public_key_hex=self.validator.public_key_hex,
+                validator_registry_public_key_hash=(
+                    _registry_public_key_hash(_validator())
+                ),
                 wallet_address=wallet_address_from_public_key(
                     self.wallet.public_key_hex
                 ),

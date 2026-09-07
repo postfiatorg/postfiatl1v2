@@ -45,28 +45,31 @@ def _candidate(report: dict, validator_id: str) -> dict:
 
 class ShadowDerivationFixtureTests(unittest.TestCase):
     def test_end_to_end_report_matches_full_committed_fixture(self) -> None:
+        """The synthetic golden now holds incomplete key and wallet joins."""
+
         derived = derive_shadow_report(_documents())
         report = json.loads(canonical_json_bytes(derived))
         expected = json.loads(EXPECTED_JSON.read_text(encoding="utf-8"))
 
         self.assertEqual(report, expected)
         self.assertEqual(report["mode"], "SHADOW_ONLY")
-        self.assertEqual(report["eligible_set"], ["validator-22"])
+        self.assertEqual(report["eligible_set"], [])
         self.assertEqual(
             report["selection"]["selected_additions"],
-            ["validator-22"],
+            [],
         )
-        self.assertEqual(
-            report["baseline_diff"]["additions"][0]["validator_id"],
-            "validator-22",
-        )
+        self.assertEqual(report["baseline_diff"]["additions"], [])
         self.assertEqual(report["churn_guard"]["status"], "allow")
 
-        passing = _candidate(report, "validator-22")
-        self.assertEqual(passing["status"], "admit")
-        self.assertEqual(
-            passing["admission_decision"]["reason_codes"],
-            ["all_gates_passed"],
+        incomplete = _candidate(report, "validator-22")
+        self.assertEqual(incomplete["status"], "hold")
+        self.assertIn(
+            "binding_registry_key_join_hold",
+            incomplete["admission_decision"]["reason_codes"],
+        )
+        self.assertIn(
+            "wallet_account_mapping_hold",
+            incomplete["admission_decision"]["reason_codes"],
         )
 
         digest_hold = _candidate(report, "validator-23")
@@ -78,9 +81,9 @@ class ShadowDerivationFixtureTests(unittest.TestCase):
 
         below_floor = _candidate(report, "validator-24")
         self.assertEqual(below_floor["status"], "reject")
-        self.assertEqual(
+        self.assertIn(
+            "accountability_below_floor",
             below_floor["admission_decision"]["reason_codes"],
-            ["accountability_below_floor"],
         )
 
         cluster_hold = _candidate(report, "validator-25")
@@ -139,6 +142,110 @@ class ShadowDerivationFixtureTests(unittest.TestCase):
         self.assertEqual(
             canonical_json_bytes(derive_shadow_report(original)),
             canonical_json_bytes(derive_shadow_report(reordered)),
+        )
+
+    def test_missing_or_substituted_wallet_mapping_holds_candidate(
+        self,
+    ) -> None:
+        documents = _documents()
+        documents["funding_transfers"]["transfers"].append(
+            {
+                "tx_hash": "11" * 32,
+                "ledger_index": 900,
+                "transaction_index": 0,
+                "close_time": "2026-04-01T00:00:00Z",
+                "source_wallet_address": (
+                    "rLujDwn5P2vMAezHknW1QpmMQ5ha9Pkia5"
+                ),
+                "target_wallet_address": (
+                    "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow"
+                ),
+                "asset": "PFT",
+                "value_units": 1,
+            }
+        )
+
+        for mutation in ("missing", "substituted"):
+            with self.subTest(mutation=mutation):
+                changed = copy.deepcopy(documents)
+                mapping = next(
+                    item
+                    for item in changed["funding_transfers"][
+                        "wallet_accounts"
+                    ]
+                    if item["account_id"] == "account-pass"
+                )
+                if mutation == "missing":
+                    changed["funding_transfers"][
+                        "wallet_accounts"
+                    ].remove(mapping)
+                    expected_detail = (
+                        "candidate_account_missing:account-pass"
+                    )
+                else:
+                    mapping["wallet_address"] = (
+                        "rTESTONLYUnrelatedWallet"
+                    )
+                    expected_detail = (
+                        "candidate_account_wallet_mismatch:"
+                        "account-pass=rTESTONLYUnrelatedWallet"
+                    )
+
+                candidate = _candidate(
+                    derive_shadow_report(changed),
+                    "validator-22",
+                )
+
+                self.assertEqual(candidate["status"], "hold")
+                self.assertIsNone(
+                    candidate["independence"]["rho_score"]
+                )
+                self.assertIn(
+                    "wallet_account_mapping_hold",
+                    candidate["admission_decision"]["reason_codes"],
+                )
+                self.assertIn(
+                    "funding_transfers.wallet_accounts",
+                    candidate["admission_decision"]["failed_fields"],
+                )
+                self.assertTrue(
+                    any(
+                        item["detail"] == expected_detail
+                        for item in candidate["upstream_holds"]
+                    )
+                )
+
+    def test_candidate_key_substitution_without_authenticated_join_holds(
+        self,
+    ) -> None:
+        documents = _documents()
+        candidate_input = next(
+            candidate
+            for candidate in documents["policy_evidence"]["candidates"]
+            if candidate["validator_id"] == "validator-22"
+        )
+        candidate_input["public_key_hash"] = "ab" * 32
+
+        candidate = _candidate(
+            derive_shadow_report(documents),
+            "validator-22",
+        )
+
+        self.assertEqual(candidate["status"], "hold")
+        self.assertIn(
+            "binding_registry_key_join_hold",
+            candidate["admission_decision"]["reason_codes"],
+        )
+        self.assertIn(
+            "validator.registry.public_key_hash",
+            candidate["admission_decision"]["failed_fields"],
+        )
+        self.assertTrue(
+            any(
+                item["detail"]
+                == f"authenticated_hash_missing:candidate={'ab' * 32}"
+                for item in candidate["upstream_holds"]
+            )
         )
 
     def test_stale_source_windows_hold_instead_of_reusing_old_passes(
@@ -222,12 +329,9 @@ class ShadowDerivationFixtureTests(unittest.TestCase):
         rendered = render_shadow_markdown(report)
 
         self.assertEqual(rendered, EXPECTED_MARKDOWN.read_text())
-        self.assertIn(
-            "- Add `validator-22` — eligible_admission_candidate; "
-            "all_gates_passed; selected_by_canonical_order; "
-            "churn_guard_allow.",
-            rendered,
-        )
+        self.assertIn("- No change.", rendered)
+        self.assertIn("binding_registry_key_join_hold", rendered)
+        self.assertIn("wallet_account_mapping_hold", rendered)
         for validator_id in ("validator-23", "validator-25", "validator-26"):
             with self.subTest(validator_id=validator_id):
                 self.assertIn(f"`{validator_id}`", rendered)

@@ -103,6 +103,8 @@ FIELD_COBALT_LINKEDNESS = "validator.cobalt.linkedness_safe"
 FIELD_MODEL_CLASSIFICATION = (
     "validator.model.operator_independence_classification"
 )
+FIELD_REGISTRY_PUBLIC_KEY_HASH = "validator.registry.public_key_hash"
+FIELD_WALLET_ACCOUNT_MAPPING = "funding_transfers.wallet_accounts"
 V1_REQUIRED_FIELDS = tuple(
     sorted(
         (
@@ -715,6 +717,71 @@ def _binding_issue_codes(
     return tuple(sorted(set(scoped + generic)))
 
 
+def _wallet_account_mapping_issues(
+    candidate: CandidateFacts,
+    active: Sequence[ActiveValidator],
+    binding: ActiveBinding | None,
+    account_by_wallet: Mapping[str, str],
+    wallet_by_account: Mapping[str, str],
+) -> tuple[str, ...]:
+    issues: set[str] = set()
+    candidate_wallet = wallet_by_account.get(candidate.account_id)
+    if candidate_wallet is None:
+        issues.add(
+            f"candidate_account_missing:{candidate.account_id}"
+        )
+    missing_active_accounts = sorted(
+        current.account_id
+        for current in active
+        if current.account_id not in wallet_by_account
+    )
+    if missing_active_accounts:
+        issues.add(
+            "active_accounts_missing:"
+            + ",".join(missing_active_accounts)
+        )
+    if binding is not None:
+        mapped_account = account_by_wallet.get(binding.wallet_address)
+        if mapped_account is None:
+            issues.add(
+                f"binding_wallet_missing:{binding.wallet_address}"
+            )
+        elif mapped_account != candidate.account_id:
+            issues.add(
+                "binding_wallet_account_mismatch:"
+                f"{binding.wallet_address}={mapped_account}"
+            )
+        if (
+            candidate_wallet is not None
+            and candidate_wallet != binding.wallet_address
+        ):
+            issues.add(
+                "candidate_account_wallet_mismatch:"
+                f"{candidate.account_id}={candidate_wallet}"
+            )
+    return tuple(sorted(issues))
+
+
+def _binding_key_join_issue(
+    candidate: CandidateFacts,
+    binding: ActiveBinding | None,
+) -> str | None:
+    if binding is None:
+        return None
+    bound_hash = binding.validator_registry_public_key_hash
+    if bound_hash is None:
+        return (
+            "authenticated_hash_missing:"
+            f"candidate={candidate.public_key_hash}"
+        )
+    if bound_hash != candidate.public_key_hash:
+        return (
+            "authenticated_hash_mismatch:"
+            f"candidate={candidate.public_key_hash};binding={bound_hash}"
+        )
+    return None
+
+
 def _funding_links(
     edges: EdgeExtractionResult,
     candidate_account: str,
@@ -1248,8 +1315,9 @@ def derive_shadow_report(
         expected_window_end=evaluation_end,
     )
     account_by_wallet: Mapping[str, str] = {}
+    wallet_by_account: Mapping[str, str] = {}
     if edge_result.status == "extracted":
-        account_by_wallet, _wallet_by_account = (
+        account_by_wallet, wallet_by_account = (
             funding_wallet_account_maps(source["funding_transfers"])
         )
 
@@ -1398,6 +1466,14 @@ def derive_shadow_report(
             binding_issues = tuple(
                 sorted(set(binding_issues + ("binding_window_mismatch",)))
             )
+        wallet_mapping_issues = _wallet_account_mapping_issues(
+            candidate,
+            policy.active_validators,
+            binding,
+            account_by_wallet,
+            wallet_by_account,
+        )
+        binding_key_issue = _binding_key_join_issue(candidate, binding)
         digest_result = digest_results.get(candidate.account_id)
         accountability = accountabilities.get(candidate.account_id)
         graph_projection = _graph_projection(candidate.account_id, graph)
@@ -1410,6 +1486,8 @@ def derive_shadow_report(
         independence_complete = (
             binding is not None
             and not binding_issues
+            and not wallet_mapping_issues
+            and binding_key_issue is None
             and candidate.validator_id not in shared_control_validators
             and edge_result.status == "extracted"
         )
@@ -1433,6 +1511,7 @@ def derive_shadow_report(
                 "pass"
                 if binding is not None
                 and not binding_issues
+                and not wallet_mapping_issues
                 and candidate.validator_id not in shared_control_validators
                 else "hold"
             ),
@@ -1458,6 +1537,8 @@ def derive_shadow_report(
                 "facts": candidate,
                 "binding": binding,
                 "binding_issues": binding_issues,
+                "wallet_mapping_issues": wallet_mapping_issues,
+                "binding_key_issue": binding_key_issue,
                 "digest_result": digest_result,
                 "accountability": accountability,
                 "graph": graph_projection,
@@ -1490,6 +1571,16 @@ def derive_shadow_report(
         binding_issues = intermediate["binding_issues"]
         if not isinstance(binding_issues, tuple):
             raise TaskNodeUnlError("invalid_internal_binding_issues")
+        wallet_mapping_issues = intermediate["wallet_mapping_issues"]
+        if not isinstance(wallet_mapping_issues, tuple):
+            raise TaskNodeUnlError(
+                "invalid_internal_wallet_mapping_issues"
+            )
+        binding_key_issue = intermediate["binding_key_issue"]
+        if binding_key_issue is not None and not isinstance(
+            binding_key_issue, str
+        ):
+            raise TaskNodeUnlError("invalid_internal_binding_key_issue")
         digest_result = intermediate["digest_result"]
         accountability = intermediate["accountability"]
         graph_projection = _require_mapping(
@@ -1515,6 +1606,31 @@ def derive_shadow_report(
                     "validator.identity.tasknode_binding",
                     ("input_roots.binding_replay",),
                     issue,
+                )
+            )
+        for issue in wallet_mapping_issues:
+            upstream.append(
+                _reason(
+                    "wallet_account_mapping_hold",
+                    FIELD_WALLET_ACCOUNT_MAPPING,
+                    (
+                        "input_roots.binding_replay",
+                        "input_roots.policy_evidence",
+                        "input_roots.public_edges",
+                    ),
+                    issue,
+                )
+            )
+        if binding_key_issue is not None:
+            upstream.append(
+                _reason(
+                    "binding_registry_key_join_hold",
+                    FIELD_REGISTRY_PUBLIC_KEY_HASH,
+                    (
+                        "input_roots.binding_replay",
+                        "input_roots.policy_evidence",
+                    ),
+                    binding_key_issue,
                 )
             )
         if candidate.validator_id in shared_control_validators:

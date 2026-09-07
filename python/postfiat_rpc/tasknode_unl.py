@@ -132,6 +132,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     prepare_bind.add_argument("--validator-id", required=True)
     prepare_bind.add_argument("--validator-public-key-hex", required=True)
+    prepare_bind.add_argument(
+        "--validator-registry-public-key-hash",
+        required=True,
+    )
     prepare_bind.add_argument("--wallet-address", required=True)
     prepare_bind.add_argument("--wallet-public-key-hex", required=True)
     prepare_bind.add_argument("--nonce-hex", required=True)
@@ -209,6 +213,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             challenge = prepare_bind_challenge(
                 validator_id=args.validator_id,
                 validator_public_key_hex=args.validator_public_key_hex,
+                validator_registry_public_key_hash=(
+                    args.validator_registry_public_key_hash
+                ),
                 wallet_address=args.wallet_address,
                 wallet_public_key_hex=args.wallet_public_key_hex,
                 nonce_hex=args.nonce_hex,

@@ -168,6 +168,7 @@ class BindingChallenge:
     wallet_address: str
     wallet_public_key_hex: str
     nonce_hex: str
+    validator_registry_public_key_hash: str | None = None
     binding_tx_hash: str | None = None
     previous_wallet_address: str | None = None
 
@@ -196,6 +197,12 @@ class BindingChallenge:
             "nonce_hex",
             byte_length=_SHA256_BYTES,
         )
+        if self.validator_registry_public_key_hash is not None:
+            _require_lower_hex(
+                self.validator_registry_public_key_hash,
+                "validator_registry_public_key_hash",
+                byte_length=_SHA256_BYTES,
+            )
         if self.action == _BIND_ACTION:
             if self.binding_tx_hash is not None:
                 raise TaskNodeUnlError("bind_has_binding_tx_hash")
@@ -221,7 +228,7 @@ class BindingChallenge:
             raise TaskNodeUnlError("binding_challenge_too_large")
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        document = {
             "schema": BINDING_CHALLENGE_SCHEMA,
             "mode": SHADOW_MODE,
             "signature_algorithm": BINDING_SIGNATURE_ALGORITHM,
@@ -234,6 +241,11 @@ class BindingChallenge:
             "binding_tx_hash": self.binding_tx_hash,
             "previous_wallet_address": self.previous_wallet_address,
         }
+        if self.validator_registry_public_key_hash is not None:
+            document["validator_registry_public_key_hash"] = (
+                self.validator_registry_public_key_hash
+            )
+        return document
 
     def signing_bytes(self) -> bytes:
         self.validate()
@@ -534,6 +546,7 @@ class VerifiedBindingEvent:
     action: str
     validator_id: str
     validator_public_key_hex: str
+    validator_registry_public_key_hash: str | None
     wallet_address: str
     wallet_public_key_hex: str
     challenge_digest: str
@@ -642,6 +655,9 @@ def verify_binding_record(record: BindingLedgerRecord) -> VerifiedBindingEvent:
         action=challenge.action,
         validator_id=challenge.validator_id,
         validator_public_key_hex=challenge.validator_public_key_hex,
+        validator_registry_public_key_hash=(
+            challenge.validator_registry_public_key_hash
+        ),
         wallet_address=challenge.wallet_address,
         wallet_public_key_hex=challenge.wallet_public_key_hex,
         challenge_digest=digest,
@@ -742,6 +758,7 @@ class ReplayDecision:
 class ActiveBinding:
     validator_id: str
     validator_public_key_hex: str
+    validator_registry_public_key_hash: str | None
     wallet_address: str
     wallet_public_key_hex: str
     tx_hash: str
@@ -751,7 +768,7 @@ class ActiveBinding:
     evidence_fields: tuple[tuple[str, str], ...]
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        document = {
             "validator_id": self.validator_id,
             "validator_public_key_hex": self.validator_public_key_hex,
             "wallet_address": self.wallet_address,
@@ -762,6 +779,11 @@ class ActiveBinding:
             "close_time": format_utc_timestamp(self.close_time),
             "evidence_fields": dict(self.evidence_fields),
         }
+        if self.validator_registry_public_key_hash is not None:
+            document["validator_registry_public_key_hash"] = (
+                self.validator_registry_public_key_hash
+            )
+        return document
 
 
 @dataclass(frozen=True)
@@ -1251,6 +1273,9 @@ def replay_bindings(
         ActiveBinding(
             validator_id=event.validator_id,
             validator_public_key_hex=event.validator_public_key_hex,
+            validator_registry_public_key_hash=(
+                event.validator_registry_public_key_hash
+            ),
             wallet_address=event.wallet_address,
             wallet_public_key_hex=event.wallet_public_key_hex,
             tx_hash=event.tx_hash,
@@ -1293,6 +1318,7 @@ def binding_challenge_from_dict(value: object) -> BindingChallenge:
             "binding_tx_hash",
             "previous_wallet_address",
         ),
+        optional=("validator_registry_public_key_hash",),
         field="binding_challenge",
     )
     if row["schema"] != BINDING_CHALLENGE_SCHEMA:
@@ -1330,6 +1356,15 @@ def binding_challenge_from_dict(value: object) -> BindingChallenge:
             row["nonce_hex"],
             "nonce_hex",
             byte_length=_SHA256_BYTES,
+        ),
+        validator_registry_public_key_hash=(
+            None
+            if "validator_registry_public_key_hash" not in row
+            else _require_lower_hex(
+                row["validator_registry_public_key_hash"],
+                "validator_registry_public_key_hash",
+                byte_length=_SHA256_BYTES,
+            )
         ),
         binding_tx_hash=(
             None
@@ -1630,6 +1665,7 @@ def prepare_bind_challenge(
     *,
     validator_id: str,
     validator_public_key_hex: str,
+    validator_registry_public_key_hash: str,
     wallet_address: str,
     wallet_public_key_hex: str,
     nonce_hex: str,
@@ -1639,6 +1675,9 @@ def prepare_bind_challenge(
         action=_BIND_ACTION,
         validator_id=validator_id,
         validator_public_key_hex=validator_public_key_hex,
+        validator_registry_public_key_hash=(
+            validator_registry_public_key_hash
+        ),
         wallet_address=wallet_address,
         wallet_public_key_hex=wallet_public_key_hex,
         nonce_hex=nonce_hex,
@@ -1659,6 +1698,9 @@ def prepare_revoke_challenge(
         action=_REVOKE_ACTION,
         validator_id=active_binding.validator_id,
         validator_public_key_hex=active_binding.validator_public_key_hex,
+        validator_registry_public_key_hash=(
+            active_binding.validator_registry_public_key_hash
+        ),
         wallet_address=active_binding.wallet_address,
         wallet_public_key_hex=active_binding.wallet_public_key_hex,
         nonce_hex=nonce_hex,
