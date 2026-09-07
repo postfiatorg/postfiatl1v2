@@ -2,7 +2,7 @@
 
 PostFiat is an authority-validated settlement ledger with several distinct settlement and governance paths. Its code supports substantially more than the whitepaper's July Cobalt boundary describes, while some of the paper's admission, privacy-containment and certificate-cost statements are broader than the implementation or retained evidence supports. This audit corrects those statements and records the remaining limits.
 
-Read the [whitepaper](../whitepaper.md) for the protocol argument, the [73-claim alignment table](whitepaper-alignment.md) for source/test references, the [prioritized gaps](whitepaper-gaps.md) for follow-up work, and the [validation record](whitepaper-validation.md) for checks actually run. These documents do not certify mainnet readiness or current fleet health.
+Read the [whitepaper](../whitepaper.md) for the protocol argument, the [73-claim alignment table](whitepaper-alignment.md) for source/test references, the [prioritized gaps](whitepaper-gaps.md) for follow-up work, and the [validation record](whitepaper-validation.md) for checks actually run. The [Cobalt and admission publication follow-up](cobalt-admission-publication-review.md) explains the expanded whitepaper and blog corrections. These documents do not certify mainnet readiness or current fleet health.
 
 ## Identity and reading order
 

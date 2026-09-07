@@ -97,6 +97,7 @@ nav:
       - Claim Alignment: architecture/whitepaper-alignment.md
       - Remaining Gaps: architecture/whitepaper-gaps.md
       - Validation: architecture/whitepaper-validation.md
+      - Cobalt and Admission Publication Review: architecture/cobalt-admission-publication-review.md
   - NAVCoins:
       - Overview: navcoins/index.md
       - A666 Current State: status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md
@@ -112,6 +113,7 @@ nav:
       - Python Example: business/navcoin-python-example.md
       - Archive Summary: evidence/navcoin-archive-summary.md
   - Plans:
+      - Cobalt Publication Follow-up: plans/completed/cobalt-admission-publication-milestone.md
       - Completed Whitepaper Audit: plans/completed/whitepaper-audit-milestone.md
       - Completed Task Node UNL MVP Plan: plans/completed/tasknode-unl-mvp-plan.md
       - Active Storage Scaling: plans/active/storage-scaling-milestone.md

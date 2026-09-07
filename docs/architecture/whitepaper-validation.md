@@ -49,7 +49,8 @@ safety/liveness proofs.
 - Built-HTML inspection found all four audit pages and exactly 73 claim rows; the table's links resolve to the declared source commit and anchors.
 - Headless Chromium inspection confirmed readable overview/navigation at 1440×1100 and 390×844, and a readable alignment table at 1440×1400. Local captures were retained outside Git. The installed full Chromium binary lacked shared libraries; the installed headless shell worked with the existing temporary browser-library directory. This was a local documentation preview, not a deployed-site check.
 
-The corrected canonical whitepaper and downloadable copy share SHA-256
+At the original audit delivery (`f2db323b`), the corrected canonical whitepaper
+and downloadable copy shared SHA-256
 `a905c4de38c9dc9540c9ca49d0281a5a64ff547cb7368d84ebf7be006a92bd4a`.
 The original paper identity remains in the inventory; it is not overwritten by
 the corrected-text identity.

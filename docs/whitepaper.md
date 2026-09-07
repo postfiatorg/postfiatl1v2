@@ -231,7 +231,7 @@ not retroactively alter certificate thresholds.
 
 Proof of authority is usually described as a compromise. For financial settlement it is better understood as a different security purchase. Proof of work buys Sybil resistance with energy and hardware. Proof of stake buys it with bonded capital and a reward schedule. Authority validation buys it with known operators, reputational and legal exposure, operational history, and organic economic reliance on the ledger working correctly.
 
-That purchase is not weaker by definition. It is weaker when the validator set is opaque, captured, too small, or chosen for convenience — which is exactly the surface §6 exists to govern. And when validators are natural stakeholders, manufacturing a paid validator class can make incentives strictly worse: a reward schedule recruits participants whose only stake is the reward, and over time the rewarded class becomes a constituency that politically entrenches the reward.
+That purchase is not weaker by definition. It is weaker when the validator set is opaque, captured, too small, or chosen for convenience. Admission evidence (§5.3) must justify the operator choice; Cobalt (§6) governs the authorized transition between declared trust states. And when validators are natural stakeholders, manufacturing a paid validator class can make incentives strictly worse: a reward schedule recruits participants whose only stake is the reward, and over time the rewarded class becomes a constituency that politically entrenches the reward.
 
 ### 5.2 Zero issuance as a conditional claim
 
@@ -239,31 +239,51 @@ Zero issuance is therefore justified conditionally, not ideologically. When natu
 
 $$\text{fixed supply} + \text{fee burn} + \text{natural validators}.$$
 
-The condition creates the engineering burden: "natural stakeholder" must be verifiable about a specific candidate from source-bound public evidence, not asserted by a foundation. The economic premise is operationalized as an admission predicate, not as private dollar modeling.
+The condition creates the engineering burden: natural stake must be supported by verifiable evidence about a specific candidate. The admission policy expresses that requirement, but the current supplied-packet selector does not establish the economic premise independently. Whether this policy recruits a sufficiently independent and durable operator set remains an empirical question.
 
-### 5.3 The admission predicate
+### 5.3 Admission policy and the evidence boundary
 
-A candidate must provide source-bound evidence across five fields, each of which the selector maps into ordinal bins. Missing or conflicting required evidence holds the candidate rather than defaulting in either direction.
+Admission has three separate obligations: establish facts about an operator, evaluate those facts under a policy, and authorize a registry change. The implemented selector covers the second obligation over a supplied packet. A successful decision does not itself establish the first or perform the third.
 
-| Field | Evidence mapping |
+**Target economic policy.** The broader design asks for evidence in five areas:
+
+| Field | Evidence the target policy needs |
 |---|---|
-| $exposure_i$ | Source-bound reliance on finality: exchange, custody, gateway, public volume class, or on-chain usage. |
-| $accountability_i$ | Signed operator manifest, domain control, jurisdiction and contact surface, incident history, revocation path. |
-| $reliability_i$ | Uptime, version freshness, monitoring, history retention, infrastructure redundancy. |
-| $attack_i$ | Governance power, transaction-flow access, conflicting incentives, value at risk during the influence window. |
-| $\rho_i$ | Correlation: shared operator, ASN, cloud, country, funding source, release manager, monitoring endpoint, or affiliate evidence. |
+| Economic exposure (`exposure_i`) | Reliance on finality: exchange, custody, gateway, public volume class, or on-chain usage. |
+| Accountability (`accountability_i`) | Operator identity, domain control, jurisdiction, incident history, contact and revocation paths. |
+| Reliability (`reliability_i`) | Uptime, version freshness, monitoring, history retention and infrastructure redundancy. |
+| Attack risk (`attack_i`) | Governance power, transaction-flow access, conflicting incentives and value at risk during the influence window. |
+| Correlation (`rho_i`) | Shared operator, infrastructure, funding, release management, key custody or other control dependencies. |
 
-The selector evaluates evidence fields rather than a single model-owned number:
+The intended policy can be written as
 
-$$
-admit_i = \mathbf{1}[exposure_i \ge x_{min}] \cdot \mathbf{1}[reliability_i \ge r_{min}] \cdot \mathbf{1}[accountability_i \ge a_{min}] \cdot \mathbf{1}[attack_i \le b_{max}] \cdot \mathbf{1}[\rho_i \le \rho_{max}] \cdot \mathbf{1}[linkedness(G_t, i) = safe].
-$$
+    target_admit(i) =
+        exposure_i >= x_min
+        AND reliability_i >= r_min
+        AND accountability_i >= a_min
+        AND attack_i <= b_max
+        AND rho_i <= rho_max
+        AND linkedness(G_t, i) == safe
 
-Weights, floors, and caps are governance parameters, but they are public parameters bound to evidence fields. Launch defaults require source-bound reliance; $r_{min} = 0.995$ over the active observation window; signed operator identity plus domain control; no direct conflict above $b_{max}$; and $\rho_{max} = 0$ for a shared release manager, key-management vendor, or funding controller with an existing validator, unless a later Cobalt packet raises the cap for a named exception.
+This formula is a policy target, not a description of a fully implemented verifier. In particular, the current selector has no separate economic-exposure or attack-risk threshold checks. High economic exposure is not intended to excuse shared control.
 
-The target economic screen does not override the correlation veto: high exposure must not excuse shared control. The controlled-testnet selector implements a narrower executable screen over `ValidatorAdmissionEvidencePacket` and emits `ValidatorAdmissionDecision`. It checks supplied reliability, accountability, correlation and control-group fields, plus manifest, domain-control and linkedness flags. It does not independently fetch or authenticate those external facts, recompute graph linkedness at this boundary, or separately implement the formula's exposure and attack thresholds.
+**Implemented supplied-packet checks.** `evaluate_validator_admission` consumes a `ValidatorAdmissionEvidencePacket` and emits a `ValidatorAdmissionDecision`. Its `controlled_testnet_v1` profile has the following boundary:
 
-Missing or conflicting required evidence creates hold reasons; explicit policy failures create reject reasons, which take precedence over holds. Only a clean pass emits an *add* candidate. The controlled profile sets reliability to 9,950 basis points, accountability to 70 and correlation cap to zero. The five retained fixture classes in [E4] test this supplied-packet behavior. A candidate is not a live admission authorization: the complete active-authority path must still verify and order any state change.
+| Input | What the selector does | What it does not establish |
+|---|---|---|
+| Reliability, accountability and correlation scores | Requires at least 9,950 basis points of supplied reliability, accountability at least 70, and correlation score at most zero. | That observations are complete, scores are justified, or undeclared correlations are absent. |
+| Operator, release-manager, key-management and funding-source group labels | Rejects a candidate sharing a prohibited nonempty group label with an incumbent in the supplied active-validator list. | That two different labels represent independent controllers, or that the supplied list describes every relevant relationship. |
+| Manifest signature and domain-control flags | Requires the supplied boolean results to be true. | Independent signature verification, a fresh domain challenge, or the truth of an operator's legal identity at this selector boundary. |
+| Linkedness flag | Requires the supplied `cobalt_linkedness_safe` result. | Graph recomputation here. The separate trust-graph analyzer requires the graph and an explicit fault model (§6.4). |
+| Evidence references and model output | Checks required fields, reference shape, supplied missing/stale/conflicting flags, and the configured classification/citation rules. | Fetching the cited source, independently determining freshness, proving the model's judgment correct, or verifying an independent replay-signature quorum (§8.3). |
+
+A source hash identifies the evidence being claimed; it does not authenticate the claim's real-world truth. The evaluator performs no independent external observation. Evidence collection, identity verification and challenges must supply justified inputs before this policy can support an admission decision.
+
+Missing, stale or conflicting required evidence creates **hold** reasons. Explicit policy failures create **reject** reasons, which take precedence. For example, a candidate with excellent supplied uptime but the same release-manager or funding-source group as an incumbent is rejected; adding a missing-evidence flag does not downgrade that rejection to a hold. If shared control is omitted or falsely labeled as independent, this comparison cannot discover it. The five retained fixture classes in [E4] exercise these supplied-packet decisions.
+
+A clean pass emits an **add candidate**, not an authorized registry mutation. After Cobalt activation, the active validator-trust authority must validate the signed decision, current-registry authorizations and exact transition bindings, and Consensus v2 must order the accepted update (§6). Cobalt agreement cannot turn an unsupported operator claim into an independently verified fact.
+
+The [admission source](https://github.com/postfiatorg/postfiatl1v2/blob/d351353e57b295368450a57866ace17b5e1ce6ad/crates/consensus_cobalt/src/validator_admission_policy.rs) and [retained fixtures](https://github.com/postfiatorg/postfiatl1v2/blob/d351353e57b295368450a57866ace17b5e1ce6ad/crates/consensus_cobalt/src/tests.rs) support this narrower description. The remaining work is to bind authenticated observations, reproducible scoring and disputed-evidence handling to the actual proposal consumer; independent-operator participation remains an empirical requirement.
 
 ### 5.4 Target public launch certificate
 
@@ -294,19 +314,24 @@ assumption explicit, auditable, and frozen.
 
 ---
 
-## 6. Cobalt-Governed Registry Evolution Target
+## 6. Implemented Cobalt Governance and Remaining Targets
 
-The source implements a bounded Cobalt validator-trust authority path, including
-signed protocol decisions, an authorized handoff and forward rollback/return.
-Its consumer is `verify_cobalt_validator_trust_update` in
-`crates/node/src/cobalt_handoff.rs`; unrelated governance remains outside this
-Cobalt scope. Consensus v2 continues to finalize blocks.
+PostFiat implements a bounded Cobalt authority for validator-registry and trust-graph changes. It includes signed protocol decisions, an authorized Foundation-to-Cobalt handoff, durable ratification history, and signed forward rollback/return. Consensus v2 continues to order transactions and finalize blocks; unrelated governance retains its Foundation authorization path.
 
-The full genesis manifest, universal transition commitment tuple and complete
-proof-to-consumer composition below remain a stronger target. Library witness
-checks or a successful controlled rotation do not establish every target
-property. The [alignment matrix](architecture/whitepaper-alignment.md#6) records
-which checks exist and where that inference stops.
+**How an implemented update takes effect.** A proposed trust update passes through distinct checks:
+
+1. The active registry authorizes the handoff at its bound activation height. The handoff commits chain/genesis domains, authority scope, registry and trust-graph roots, the Cobalt lock, sequence and current signers.
+2. Once that scope is active, a validator-trust update carries a key-bound **RBC → ABBA → MVBA → DABC** protocol decision certificate. These stages provide reliable broadcast, binary and multivalue agreement, and ratification under the declared trust views.
+3. The live consumer verifies the exact update payload, current registry and trust graph, decision round, previous ratification and activation height. It also requires distinct current-registry ML-DSA-65 Cobalt authorizations bound to the transition, parent lock, sequence, slot and expiry. Foundation authorizations cannot substitute after activation, and the proposed new registry cannot authorize itself.
+4. Consensus v2 orders the governance action. Execution must accept it before registry state changes; a block certificate alone does not establish a successful update.
+
+The owning consumers are [`verify_cobalt_validator_trust_update`](https://github.com/postfiatorg/postfiatl1v2/blob/d351353e57b295368450a57866ace17b5e1ce6ad/crates/node/src/cobalt_handoff.rs) and [`verify_cobalt_validator_update_decision_certificate`](https://github.com/postfiatorg/postfiatl1v2/blob/d351353e57b295368450a57866ace17b5e1ce6ad/crates/node/src/cobalt_authority_certificate.rs). The sidecar assists the protocol and its recovery; consensus-ordered governance state owns authority.
+
+**What the retained deployment evidence shows.** The August 2026 [activation record](governance/cobalt-implementation.md) records activation at height **916** and the first Cobalt-authorized key rotation at **917**. The later [adversarial campaign](governance/cobalt-adversarial-verification-results.md) records generated-graph and Byzantine-schedule tests, history/catch-up attacks, governance stress during Consensus v2 finality, and live authority drills. Its final accepted rollback/return pair committed at **922/923**, followed by a legitimate key rotation and six-validator convergence at **924**. The earlier 920/921 pair remains recorded with its trust-binding remediation.
+
+That campaign concluded **KEEP_ACTIVE** for the controlled devnet. Its operator-independence review required a separate follow-up: Foundation administration still controlled the proposal and authorization custody boundary. These are dated receipts and bounded experiments, not a fresh fleet observation, proof of independent operators or a public-mainnet authorization. The public XRPL-derived PFT Ledger's signed validator-list publication pipeline is a separate network and authority surface.
+
+**What remains a target.** The full genesis manifest, universal transition commitment tuple and complete proof-to-consumer composition below are broader than this implemented lane. Library safety-witness checks are separate from the live signed-certificate consumer; a successful controlled rotation does not establish every target property. Cobalt checks agreement and authorized changes over declared trust. It does not independently investigate an operator's economic exposure, hidden control relationships or the truth of admission inputs (§5.3). The [alignment matrix](architecture/whitepaper-alignment.md#6) records the remaining boundaries.
 
 ### 6.1 From recommended lists to protocol state
 
@@ -686,7 +711,7 @@ Stellar's SCP is the closest cousin in spirit: both replace global membership wi
 
 ## Appendix A: Evidence Register
 
-Each entry is limited to the sentence and experiment it identifies. The [alignment inventory](architecture/whitepaper-alignment.md#appendix-a) records which original packets are available at the audit baseline. E1/E2/E3/E5/E6/E7 have incomplete original measurement provenance in this checkout; retained prose and digests alone cannot reproduce their claims. E4 has five retained admission tests; E8 maps to current finality/governance tests and separate reference-ordering machinery.
+Each entry is limited to the sentence and experiment it identifies. The [alignment inventory](architecture/whitepaper-alignment.md#appendix-a) records which original packets are available at the audit baseline. E1/E2/E3/E5/E6/E7 have incomplete original measurement provenance in this checkout; retained prose and digests alone cannot reproduce their claims. E4 has five retained admission tests; E8 maps to current finality/governance tests and separate reference-ordering machinery. The subsequent [blog publication review](architecture/cobalt-admission-publication-review.md#additional-historical-artifacts-found-through-the-blog) located additional cover and replay summaries in the website's June bundle and verified its 15 manifest entries. Those dated summaries add provenance, especially for E3/E7, without supplying every original raw measurement input and output.
 
 **[E1] ML-DSA-65 verification budget.** Supports the historical estimate in §9.2: ~6,000 verifications/s (~160 µs each), with ≈4/11 ms illustrative quorum verification. The 80,184/223,847-byte values are simplified one-signature-set arithmetic, not encoded V2 certificate sizes. The original timing packet is unavailable in the audit checkout; no current-release benchmark is claimed.
 
