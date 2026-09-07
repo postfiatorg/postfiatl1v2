@@ -742,10 +742,10 @@ fn ordered_history_v2_active_commit_uses_one_database_transaction_without_jsonl(
     let legacy_blocks_before = std::fs::read(data_dir.join(BLOCKS_FILE)).expect("read legacy blocks");
     let legacy_ordered_before =
         std::fs::read(data_dir.join(ORDERED_BATCHES_FILE)).expect("read legacy ordered batches");
-    store
+    let transactional = store
         .transactional_store()
-        .expect("open transactional store")
-        .reset_work_counters();
+        .expect("open transactional store");
+    transactional.reset_work_counters();
     let commit_lock = store.lock_ordered_commit().expect("lock ordered commit");
     write_ordered_commit_with_journal_locked(
         &store,
@@ -783,9 +783,6 @@ fn ordered_history_v2_active_commit_uses_one_database_transaction_without_jsonl(
     assert!(!data_dir
         .join(postfiat_storage::ORDERED_COMMIT_JOURNAL_FILE)
         .exists());
-    let transactional = store
-        .transactional_store()
-        .expect("open transactional store");
     let commit_work = transactional.work_counters();
     assert_eq!(
         commit_work.committed_write_transactions, 1,

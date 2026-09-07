@@ -47,9 +47,15 @@ EXPECTED = {
         "crates/node/src/consensus_artifacts.rs": 1,
         "crates/node/src/storage_commit.rs": 2,
     },
-    # Deterministic key generation is limited to wallet derivation and a
-    # non-live governance evidence fixture that builds a local synthetic chain.
+    # Deterministic key generation is limited to wallet derivation and
+    # explicitly audited non-live drill or harness evidence paths.
     "ml_dsa_65_keygen_from_seed": {
+        # E2 derives a synthetic committee solely for deterministic adversarial simulation.
+        "crates/cobalt_e2_harness/src/main.rs": 1,
+        # E5 derives an in-memory attacker identity solely for read-only rejection checks.
+        "crates/node/src/cobalt_e5_live_drill.rs": 1,
+        # The handoff rehearsal derives a disposable-clone replacement when none is supplied.
+        "crates/node/src/cobalt_handoff_rehearsal.rs": 1,
         "crates/node/src/governance_agent_parts/implementation_guarded_apply.rs": 1,
         "crates/node/src/storage_commit.rs": 1,
         "crates/rpc_sdk/src/wallet_sdk.rs": 1,
