@@ -1,0 +1,28 @@
+{
+  "schema": "postfiat.pfeth.deployment_consumer.v1",
+  "vault_constructor": {
+    "finalityVerifier": "0xBCF1Aab56BA21edbc5b77124a7cE8b4C68B535ca",
+    "initialOwner": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+    "token": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    "tokenRuntimeCodeHash": "0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23"
+  },
+  "verifier_constructor": {
+    "arbitrumChainId": 1,
+    "assetIdCommitment": "0xa8743b1fdf2c242142d73f6d1d9939230453e1adc68e99ba0f39b9d00d322178",
+    "initialCheckpointCommitment": "0x2e64ef8e780c00ffb7b94272143f7d03f3655111f806b33e0a9b7e47b7dfa3da",
+    "initialCommitteeRootCommitment": "0xfdc302352eb65ad7e321c677e27dcb0ca56e718c478fe7d2447a7aa59eaeab4b",
+    "initialFinalizedHeight": 948,
+    "maxProofBytes": 4096,
+    "maxPublicValuesBytes": 4096,
+    "pftlChainIdHash": "0xe61f64cfb4299057c29b1c1dbf031c81beeb1b016878f4a087824eaa14c2cc00",
+    "pftlGenesisHashCommitment": "0x396aceff4e14037223cc2781a3197c8eef78f44903b4e00d2e5441abec789418",
+    "pftlProtocolVersion": 1,
+    "programVKey": "0x00140f09ca6f1b917e3999a806df5ef4ac4468bd65b85e8580cbc16f832dfe47",
+    "routeEpoch": 1,
+    "routeProfileHashCommitment": "0x32b9d770809beef4367a6ccbd7db30e83c6097631f5bcffd95ad02fce585594b",
+    "sp1Verifier": "0x397a5f7f3dbd538f23de225b51f532c34448da9b",
+    "token": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    "tokenRuntimeCodeHash": "0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
+    "vaultRuntimeCodeHash": "0x2453f23d0ca464f4599f0c2526a7f82867a1058fec3f62751bdae2a0b8a9cd81"
+  }
+}

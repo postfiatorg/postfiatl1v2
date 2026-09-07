@@ -1,0 +1,18 @@
+{
+  "status": "research_locked",
+  "locked_at": "2026-09-05T13:11:06.153059+00:00",
+  "task_id": "task_aaeebe5e21ba7286e29503a3696d80c4",
+  "request_id": "req_348f1cd6-e1cc-411e-a23c-61b580001be1",
+  "first_compliant_full_gate": true,
+  "run_group": "shielded-hardening-r3-full-20260905",
+  "scored_document_sha256": "939c1d2cd4282fb4fa4ee626b1afaf8717eba7b1083dbdf1fb38e32680978c33",
+  "locked_document_sha256": "5fea0fa99d8372f7e09828b1f7cae081cbefa600d90d39aada75eedeaa626d48",
+  "score_count": 15,
+  "average": 86.2,
+  "threshold": 86,
+  "rewrite_rounds": 0,
+  "metadata_only_change": true,
+  "implemented": false,
+  "deployed": false,
+  "production_privacy_verified": false
+}

@@ -1,0 +1,9 @@
+{
+  "schema": "pft-ce22-exact-six-status-v1",
+  "ok": true,
+  "height": 972,
+  "block_tip_hash": "1ecacd536cba2ae2bc98eea11ab5e46293e094318900c19c5aff5de9aace8386ece25b52afbf281cce67415edb149ca5",
+  "state_root": "3debf11e7ba94ee95cb68e8fdad181ec7b50c56a658addf8fcddcee2e86dca1803c96b79c82949805b98bd1ecb144455",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "validator_count": 6
+}

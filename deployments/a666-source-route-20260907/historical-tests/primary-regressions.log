@@ -1,0 +1,21 @@
+   Compiling postfiat-types v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/types)
+   Compiling postfiat-bridge v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/bridge)
+   Compiling postfiat-nav-reserve-protocol v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/nav_reserve_protocol)
+   Compiling postfiat-execution v0.1.0 (/home/postfiat/repos/postfiatl1v2-a666-source-route-20260907/crates/execution)
+warning: unused import: `VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_WETH_V1`
+   --> crates/execution/src/entrypoints.rs:129:5
+    |
+129 |     VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_WETH_V1,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `postfiat-execution` (lib test) generated 1 warning (run `cargo fix --lib -p postfiat-execution --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.52s
+     Running unittests src/lib.rs (/home/postfiat/repos/postfiatl1v2-rpc-status-fix-20260906/target/debug/deps/postfiat_execution-8272e39e1fe1c085)
+
+running 1 test
+test tests::pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09 ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 190 filtered out; finished in 7.51s
+

@@ -1,0 +1,18 @@
+{
+  "status": "INCOMPLETE",
+  "full_route_started": false,
+  "fresh_usdc_deposit_sent": false,
+  "active_chain_height": 1005,
+  "six_validators_converged": true,
+  "original_pfUSDC_profile_restored": true,
+  "restoration_evidence": "restore-arc-profile/summary.json",
+  "route_evidence": "restored-status-0145/pfusdc-route.json",
+  "unused_deployment_directory": "epoch7",
+  "unused_deployment_reason": "Global pfUSDC route epoch is 9. Attempted epoch 7 was rejected at height 1004. Empty contracts must not be funded.",
+  "next_route_epoch_minimum": 10,
+  "proof_status": "Process absent; execution report and public values only, no completed proof. Termination cause unconfirmed.",
+  "proof_directory": "checkpoint-881-917/proof-cpu",
+  "ethereum_evidence": "recovery-ethereum-0144.json",
+  "source_accounting_release": "a666-source-route-20260907",
+  "followup": "Verify prover completion path and full route package compatibility before deploying another immutable vault. Read authoritative global route epoch again before any new deployment."
+}

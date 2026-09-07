@@ -1,0 +1,21 @@
+{
+  "base_commit": "707e006fe2460048b1c7df0d4dc0a04d487f8542",
+  "files": {
+    "crates/execution/src/nav_vault_asset_execution.rs": "2750f67c7998d87dacfe60f846e10ba31ae0a5656a6bac3b7c2818f429bf8f19",
+    "crates/execution/src/nft_escrow_asset_execution.rs": "07b182b67fc4b182567ac53049e24fba2d4433c58145e31ae3bf2c44817bef93",
+    "crates/node/src/block_replay_wallet.rs": "2d6ba34580ce67a5b63140325abc5e68583c3ab0d6af7039dbe864d80038bf97",
+    "crates/node/src/execution_actions.rs": "340e0ea56bcd4812141b6316302f5a57081c5343d0aa9a6016aba7d4e72dd1a8",
+    "crates/node/testdata/pfeth-reserve-replay/README.md": "41335a92946d4c77ff25873d38553d3c59ccc057b809fd36980cc1fa61f5a903",
+    "crates/node/testdata/pfeth-reserve-replay/block-962.json": "35c017f0a8aae983ee3d0b8e8bb3ee4693af08ce84e556f21d5113b1e9cd898b",
+    "crates/node/testdata/pfeth-reserve-replay/block-967.json": "33bf8642e6cbf0c6ac74fb3c9cac8a1f98435da7242fdb2beca0fc5e0e723c10",
+    "crates/node/testdata/pfeth-reserve-replay/deposit.json": "04f92bf16b9c04d643a35bd776be3eebd3a67554dcf8bb1757d6a7754c47328c",
+    "crates/node/testdata/pfeth-reserve-replay/genesis.json": "d6ae81ee0732756ea8e67c2e6456e859ab345173d4ba2d4d055b554180fcb55c",
+    "crates/node/testdata/pfeth-reserve-replay/reserve-packet.json": "507a6ade2d6eae51fa87f013df812dedc79ec1e474100067a036f083f26c457c",
+    "crates/node/testdata/pfeth-reserve-replay/synthetic-series-ledger.json": "3482f2c0c9d7ed0c6d4397e7aff4dbb04c9c106a8a73a2437a0f0d7397b29ce8",
+    "crates/node/testdata/pfeth-reserve-replay/tx-962.json": "64bf94b2f41f05d973b6e3d83f14d945c7028152db4256f62b07ff59aad1d46b",
+    "crates/node/testdata/pfeth-reserve-replay/tx-967.json": "d67d9b2a757900a2ab1b29334482b838d7a5829e2280f5c735e485143a2599fc"
+  },
+  "binary_sha256": "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2",
+  "build_command": "cargo build --release --locked --target-dir /home/postfiat/repos/postfiatl1v2/target -p postfiat-node --bin postfiat-node",
+  "committed": false
+}

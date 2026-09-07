@@ -1506,33 +1506,42 @@ pub fn vault_bridge_burn_to_redeem_bundle(
         ));
     }
 
-    let owner_line = ledger
-        .trustline_for_account_asset(&options.owner, &options.asset_id)
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                format!(
-                    "owner `{}` has no trustline for vault bridge asset `{}`",
-                    options.owner, options.asset_id
-                ),
-            )
-        })?;
-    if owner_line.balance < options.amount_atoms {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!(
-                "owner balance {} is below burn amount {}",
-                owner_line.balance, options.amount_atoms
-            ),
-        ));
-    }
-
     let bucket = vault_bridge_select_burn_bucket(
         &ledger,
         &options.asset_id,
         options.bucket_id.as_deref(),
         options.amount_atoms,
     )?;
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let next_height = store.read_chain_tip()?.height.checked_add(1).ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "chain height overflow")
+    })?;
+    let compatibility = asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance);
+    let movement_asset = if compatibility.pfusdc_source_series_active(next_height) {
+        let mut series = ledger.asset_definitions.iter().filter(|asset| {
+            asset.asset_family_id == options.asset_id
+                && asset.source_bucket_id == bucket.bucket_id
+                && asset.asset_id == asset.source_series_id
+        });
+        let selected = series.next().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "source-series asset missing for burn bucket")
+        })?;
+        if series.next().is_some() {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "duplicate source-series assets for burn bucket"));
+        }
+        &selected.asset_id
+    } else {
+        &options.asset_id
+    };
+    let owner_line = ledger.trustline_for_account_asset(&options.owner, movement_asset)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound,
+            format!("owner `{}` has no trustline for burn movement asset `{movement_asset}`", options.owner)))?;
+    if owner_line.balance < options.amount_atoms {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput,
+            format!("owner source balance {} is below burn amount {}", owner_line.balance, options.amount_atoms)));
+    }
+
     let issuer = options
         .issuer
         .clone()

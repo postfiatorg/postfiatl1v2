@@ -1,0 +1,129 @@
+{
+  "contracts": {
+    "ExitExecutorV1": {
+      "artifact": "crates/ethereum-contracts/out/ExitExecutorV1.sol/ExitExecutorV1.json",
+      "artifact_sha256": "59354e1ddbae64c505bfc22c8c3274597816778bb5bd7cb98f27d141760ec378",
+      "creation_bytecode_keccak256": "0xdae2aa5f56839f5271c389c457144b0875be1ee4f14c1cff073e39fad80b0758",
+      "deployed_runtime_code_keccak256": "0x2b0c9d92b80e03a3062960d48460c9127b3bb6f813e58979759d2a70f9e9008d",
+      "deployment_status": "external-review-then-redeploy-on-both-chains",
+      "source": "crates/ethereum-contracts/src/ExitExecutorV1.sol",
+      "source_sha256": "259b75c1a407a30424cbfc209ccb683c409d3de9f855acea7ff1f4ae5f663de4"
+    },
+    "PFTLFinalityVerifierV1": {
+      "artifact": "crates/ethereum-contracts/out/PFTLFinalityVerifierV1.sol/PFTLFinalityVerifierV1.json",
+      "artifact_sha256": "0702f2762415fa36cc72a6822bba3bd1be4d6b2e5958bd852cb5a36d389a4a7a",
+      "init_code_keccak256": "0x73f8348a51d67dcf0fa25627da46cf2e194d71ae990c6a8b5438241604a30a8f"
+    },
+    "WETHBridgeVaultL1": {
+      "artifact": "crates/ethereum-contracts/out/WETHBridgeVaultL1.sol/WETHBridgeVaultL1.json",
+      "artifact_sha256": "689d12f10045ef336e36bb3933c72e74a3ae2fb62c3f8cfc48cf08a40af3ac29",
+      "creation_bytecode_keccak256": "0xe66463c2762b26a8889d4db85052fa72a845b6fd435f81f380450ea8e467b82f",
+      "deployed_runtime_code_keccak256": "0x2453f23d0ca464f4599f0c2526a7f82867a1058fec3f62751bdae2a0b8a9cd81",
+      "immutable_layout": {
+        "988": "token",
+        "993": "tokenRuntimeCodeHash"
+      },
+      "init_code_keccak256": "0xeb2634667a54eb2ea385be86ee7a447940042a03f4cc96778e243686beb86fd4"
+    }
+  },
+  "deployer": "0x1455Bd7FBfBF92a171eF36025E13959E3b0ad8c0",
+  "deployer_nonce": 420,
+  "gates": {
+    "external_contract_and_circuit_review": "PENDING",
+    "live_0_01_eth_round_trips": "PENDING",
+    "live_nonce_recheck": "PENDING",
+    "validator_route_activation": "PENDING"
+  },
+  "ingress_policy": {
+    "genesis_validators_root": "0x4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95",
+    "manifest_hash": "0x02d83d20d6b523d1d047a2d6343704cf11b89ebc0428282db2bed001a5595764",
+    "manifest_preimage_hex": "0x706f7374666961742e657468657265756d2d6d61696e6e65742d776574682d76312e70300040187922ab0761c11e50bb971cc5a8c77164bec4c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2e66463c2762b26a8889d4db85052fa72a845b6fd435f81f380450ea8e467b82f",
+    "route_id": "ethereum-mainnet-weth-v1",
+    "schema": "postfiat.pfeth.ethereum_ingress_policy.v1",
+    "source_chain_id": 1,
+    "token_address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    "token_balance_storage_key": "0x25d747faf6f02f0d07eab024eff40bc82c7ad523ec327010b7b97ea509ebf471",
+    "token_runtime_code_hash": "0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
+    "vault_address": "0x40187922ab0761c11e50bb971cc5a8c77164bec4",
+    "vault_runtime_code_hash": "0x2453f23d0ca464f4599f0c2526a7f82867a1058fec3f62751bdae2a0b8a9cd81"
+  },
+  "network": "ethereum-mainnet",
+  "pftl": {
+    "asset_code": "PFETH",
+    "asset_id": "629f1ba8f36963662d6e36243aea85627787cd72d41a9e92c5f01b60e3e68c1b951af771d16780bf13c4036b8d2a4996",
+    "asset_precision": 9,
+    "asset_version": 1,
+    "bootstrap": {
+      "artifact_sha256": {
+        "asset-create.operation.json": "4eb7a7e321e28896fcc14dd1ed72a6d24f103fbe4e4323f090c9087b6e188df3",
+        "commands.sh": "302eefeb7051a3c116392a8a25319776262b1062e37b69cced3c53f04ab60383",
+        "nav-asset-register.operation.json": "6db5cebdd6683464c2c2cdf22bfaaac852fdeec1b8b86285ad72224b6ff68c33",
+        "profile-register.operation.json": "3250e6f98c648c30d87c8b22fbc021b974b9785b4c2336339542e0c377dde7ea"
+      },
+      "asset_id": "629f1ba8f36963662d6e36243aea85627787cd72d41a9e92c5f01b60e3e68c1b951af771d16780bf13c4036b8d2a4996",
+      "profile_id": "5865db3c8276465797027dacfe2e15cfe773ae48582f62d3674c273b06aa9b975627c7becca33ebebf8fe935fe4b0708",
+      "schema": "postfiat-vault-bridge-bootstrap-bundle-v1"
+    },
+    "chain_id": "postfiat-wan-devnet-2",
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "initial_checkpoint_block_id": "7c0559cf330a78db15dc4f391ea5e8381a6265ac248d043f87f093df54628c8100d06a88bf0422f5ea272d3358400c89",
+    "initial_committee_root": "ca8da61a23bf9d1d1e9ddf57edfe8ee7e26a33ac04c8ff6bee44c3e419083e03b1ecfd3e3299db3f9c6a8b0f5471f6c4",
+    "initial_finalized_height": 948
+  },
+  "predicted_addresses": {
+    "vault": "0x40187922Ab0761C11E50Bb971cc5a8c77164BEc4",
+    "verifier": "0xBCF1Aab56BA21edbc5b77124a7cE8b4C68B535ca"
+  },
+  "programs": {
+    "egress": {
+      "path": "programs/pfusdc-egress/elf/pfusdc-egress-program",
+      "sha256": "0ea4dbabc8a36b44824c861cf2e1ae90454df2a6e4bb8a357f9d3a8672696d83",
+      "vkey": "0x00140f09ca6f1b917e3999a806df5ef4ac4468bd65b85e8580cbc16f832dfe47"
+    },
+    "ingress": {
+      "path": "programs/pfeth-eth-mainnet-ingress/elf/pfeth-eth-mainnet-ingress-program",
+      "sha256": "d49f826e9d8850e3d4762e475a2c7841b82b30dd79a78bde2d7cd449ea9b12aa",
+      "vkey": "0x000dd724902a8a24abde9f3fda01477e0d454ac506fbb6a0613fd4486ad4953c"
+    }
+  },
+  "route": {
+    "route_binding": "865d0eae0e8f354e3f3adc9a3373b861f8724df0c2826f7ff656cc2409fb3c48",
+    "route_profile": {
+      "activation_height": 950,
+      "asset_id": "629f1ba8f36963662d6e36243aea85627787cd72d41a9e92c5f01b60e3e68c1b951af771d16780bf13c4036b8d2a4996",
+      "challenge_window_blocks": 64,
+      "evidence_tier": "receipt-proven",
+      "expires_at_height": 1000000,
+      "max_epoch_gap_blocks": 128,
+      "max_proof_bytes": 4096,
+      "max_public_values_bytes": 4096,
+      "max_snapshot_age_blocks": 900,
+      "min_attestations": 0,
+      "min_challenge_bond": 1,
+      "minimum_confirmations": 0,
+      "route_epoch": 1,
+      "route_id": "ethereum-mainnet-weth-v1",
+      "schema": "postfiat.vault_bridge.route_profile.v1",
+      "settle_deadline_blocks": 256,
+      "source_chain_id": 1,
+      "token_address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "token_runtime_code_hash": "0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
+      "vault_address": "0x40187922ab0761c11e50bb971cc5a8c77164bec4",
+      "vault_runtime_code_hash": "0x2453f23d0ca464f4599f0c2526a7f82867a1058fec3f62751bdae2a0b8a9cd81",
+      "verifier_kind": "sp1-groth16",
+      "verifier_policy_hash": "02d83d20d6b523d1d047a2d6343704cf11b89ebc0428282db2bed001a5595764",
+      "verifier_program_vkey": "0x000dd724902a8a24abde9f3fda01477e0d454ac506fbb6a0613fd4486ad4953c",
+      "verifier_proof_encoding": "groth16"
+    },
+    "route_profile_hash": "d0befbd8e77440464b98c3f2c5f1ffedcd99802206349727f18f9b4d54d53b0e715eb2a9e230a64ca396acca3fb63394",
+    "route_profile_hash_commitment": "0x32b9d770809beef4367a6ccbd7db30e83c6097631f5bcffd95ad02fce585594b",
+    "schema": "postfiat.vault_bridge.route_profile_document.v1"
+  },
+  "schema": "postfiat.pfeth.ethereum_mainnet_deployment_manifest.v1",
+  "source_chain_id": 1,
+  "sp1_verifier": {
+    "address": "0x397A5f7f3dBd538f23DE225B51f532c34448dA9B",
+    "runtime_code_hash": "0x11612dc6695484a4dfcac5ae1a7bcb093f891eb93d8aa9ddeca7f24a1f3b7d57"
+  },
+  "status": "generated-not-reviewed-not-deployed"
+}

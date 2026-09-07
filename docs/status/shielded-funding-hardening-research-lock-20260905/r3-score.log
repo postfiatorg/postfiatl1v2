@@ -1,0 +1,23 @@
+openai credential source=/home/postfiat/repos/openai.txt
+openrouter credential source=/home/postfiat/repos/openx.txt
+dispatching 15 score calls with concurrency=15
+gpt run=5 score=89 attempt=1 elapsed=12.3s
+gpt run=3 score=89 attempt=1 elapsed=12.8s
+gpt run=1 score=89 attempt=1 elapsed=13.3s
+gpt run=2 score=89 attempt=1 elapsed=13.5s
+gpt run=4 score=90 attempt=1 elapsed=14.5s
+glm run=1 score=90 attempt=1 elapsed=21.1s
+fable run=3 score=80 attempt=1 elapsed=24.5s
+glm run=2 score=87 attempt=1 elapsed=26.1s
+glm run=5 score=90 attempt=1 elapsed=26.2s
+fable run=2 score=79 attempt=1 elapsed=27.7s
+glm run=4 score=88 attempt=1 elapsed=29.0s
+glm run=3 score=85 attempt=1 elapsed=35.3s
+fable run=4 score=84 attempt=2 elapsed=37.7s
+fable run=5 score=80 attempt=2 elapsed=45.7s
+fable run=1 score=84 attempt=2 elapsed=49.7s
+document_sha256=939c1d2cd4282fb4fa4ee626b1afaf8717eba7b1083dbdf1fb38e32680978c33
+openrouter anthropic/claude-fable-5.1 runs=5 avg=81.40 min=79 max=84
+openrouter z-ai/glm-5.3 runs=5 avg=88.00 min=85 max=90
+openai gpt-6-astra runs=5 avg=89.20 min=89 max=90
+new_scores_avg=86.20

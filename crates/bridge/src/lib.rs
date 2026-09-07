@@ -428,6 +428,8 @@ pub struct PftlUniswapRouteStatusRow {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PftlUniswapSupplyStatusReport {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source_settlement_custody: Vec<postfiat_types::PftlUniswapSourceCustody>,
     pub schema: String,
     pub route_id: String,
     pub route_config_digest: String,
@@ -1881,6 +1883,7 @@ pub fn pftl_uniswap_bridge_supply_status(
         ledger.ethereum_spendable_supply_atoms
     };
     Ok(PftlUniswapSupplyStatusReport {
+        source_settlement_custody: Vec::new(),
         schema: "postfiat-pftl-uniswap-supply-status-v1".to_string(),
         route_id: ledger.route_id.clone(),
         route_config_digest: ledger.route_config_digest.clone(),

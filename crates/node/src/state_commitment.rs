@@ -805,6 +805,7 @@ fn validate_issued_supply_custody_inventory(
         vault_bridge_allocations: _,
         vault_bridge_redemptions: _,
         vault_bridge_deposits: _,
+        pftl_uniswap_source_custody,
         pftl_uniswap_routes,
         pftl_uniswap_receipts: _,
         owned_objects,
@@ -959,6 +960,11 @@ fn validate_issued_supply_custody_inventory(
         }
     }
 
+    for row in pftl_uniswap_source_custody {
+        if !known(&row.asset_id) {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "source custody references an unknown issued asset"));
+        }
+    }
     let mut route_ids = BTreeSet::new();
     for route in pftl_uniswap_routes {
         if !route_ids.insert(route.route_id.as_str()) {
@@ -1494,6 +1500,14 @@ pub(super) fn append_ledger_state(
         }
     }
 
+    if !ledger.pftl_uniswap_source_custody.is_empty() {
+        let mut rows = ledger.pftl_uniswap_source_custody.iter().collect::<Vec<_>>();
+        rows.sort_by(|a,b| (&a.route_id,&a.asset_id).cmp(&(&b.route_id,&b.asset_id)));
+        append_canonical_usize(bytes, "ledger.pftl_source_custody_count", rows.len());
+        for row in rows {
+            append_canonical_bytes_commitment(bytes, "ledger.pftl_source_custody", &serde_json::to_vec(row).expect("source custody is serializable"));
+        }
+    }
     if commit_complete_nav_state && !ledger.pftl_uniswap_routes.is_empty() {
         let mut pftl_uniswap_routes = ledger.pftl_uniswap_routes.iter().collect::<Vec<_>>();
         pftl_uniswap_routes.sort_by(|left, right| left.route_id.cmp(&right.route_id));
@@ -1736,6 +1750,7 @@ fn assert_ledger_state_commitment_inventory_complete(ledger: &LedgerState) {
         vault_bridge_allocations: _,
         vault_bridge_redemptions: _,
         vault_bridge_deposits: _,
+        pftl_uniswap_source_custody: _,
         pftl_uniswap_routes: _,
         pftl_uniswap_receipts: _,
         owned_objects: _,
@@ -5665,4 +5680,40 @@ pub(super) fn append_canonical_i64(bytes: &mut Vec<u8>, label: &str, value: i64)
     bytes.push(b'=');
     bytes.extend_from_slice(value.to_string().as_bytes());
     bytes.push(b'\n');
+}
+
+#[cfg(test)]
+mod source_settlement_commitment_tests {
+    use super::*;
+    #[test]
+    fn source_custody_is_committed_and_empty_state_preserves_legacy_bytes() {
+        fn encoded(ledger: &LedgerState) -> Vec<u8> {
+            let mut bytes=Vec::new();
+            append_ledger_state(&mut bytes,ledger,true,true,false,false,true,false,false).unwrap();
+            bytes
+        }
+        let mut ledger=LedgerState::new(Vec::new());
+        let legacy=encoded(&ledger);
+        assert!(!serde_json::to_value(&ledger).unwrap().as_object().unwrap().contains_key("pftl_uniswap_source_custody"));
+        let row=postfiat_types::PftlUniswapSourceCustody {
+            route_id:"route".to_string(),asset_id:"11".repeat(48),enabled_for_issue:true,
+            principal_atoms:100,spread_atoms:2,reservation_escrows:Default::default(),
+        };
+        ledger.pftl_uniswap_source_custody.push(row.clone());
+        let approved=encoded(&ledger);
+        assert_ne!(approved,legacy);
+        ledger.pftl_uniswap_source_custody[0].enabled_for_issue=false;
+        assert_ne!(encoded(&ledger),approved);
+        ledger.pftl_uniswap_source_custody[0]=row.clone();
+        ledger.pftl_uniswap_source_custody[0].principal_atoms+=1;
+        assert_ne!(encoded(&ledger),approved);
+        ledger.pftl_uniswap_source_custody[0]=row.clone();
+        ledger.pftl_uniswap_source_custody[0].spread_atoms+=1;
+        assert_ne!(encoded(&ledger),approved);
+        ledger.pftl_uniswap_source_custody[0]=row.clone();
+        ledger.pftl_uniswap_source_custody[0].reservation_escrows.insert("aa".repeat(48),10);
+        assert_ne!(encoded(&ledger),approved);
+        ledger.pftl_uniswap_source_custody.clear();
+        assert_eq!(encoded(&ledger),legacy);
+    }
 }

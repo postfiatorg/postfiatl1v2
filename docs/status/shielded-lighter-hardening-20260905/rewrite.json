@@ -1,0 +1,7 @@
+{
+  "model": "openai/gpt-5.6-sol-pro",
+  "provider": "direct-openrouter",
+  "input_sha256": "1552a9f3159c8aaa45d3b6c36ac7a21ddf8909ea3798094e0cc09d3d0ddc8a31",
+  "output_sha256": "1202ac57bc5840439ed0fcb1151291093a553a23f6da5e20db1cdfc42e0eb30d",
+  "reason": "first compliant full average 85.00 below 86"
+}

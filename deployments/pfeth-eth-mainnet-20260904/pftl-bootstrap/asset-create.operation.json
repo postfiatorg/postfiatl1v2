@@ -1,0 +1,12 @@
+{
+  "operation": "asset_create",
+  "issuer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "code": "PFETH",
+  "version": 1,
+  "precision": 9,
+  "display_name": "PostFiat WETH Bridge Asset",
+  "max_supply": 18446744073709551615,
+  "requires_authorization": false,
+  "freeze_enabled": true,
+  "clawback_enabled": false
+}

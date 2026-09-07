@@ -4559,10 +4559,12 @@ fn apply_pftl_uniswap_order_reserve(
     // The signed maximum is held immediately. This makes reservations
     // sybil-resistant and guarantees the later subscription can settle
     // without an operator or a second value authorization.
+    let source_route = ledger.pftl_uniswap_routes[route_index].clone();
+    let funding_asset = pftl_source_reserve(ledger, &source_route, operation)?;
     debit_issued_asset_balance(
         ledger,
         &operation.subscriber,
-        &next_route.settlement_asset_id,
+        &funding_asset,
         operation.max_settlement_value_atoms,
         "PFTL-Uniswap order reservation escrow",
     )?;
@@ -4663,10 +4665,12 @@ fn apply_pftl_uniswap_order_release(
             ));
         };
     if let Some(refund_atoms) = escrow_refund {
+        let source_route = ledger.pftl_uniswap_routes[route_index].clone();
+        let funding_asset = pftl_source_release(ledger, &source_route, &operation.reservation_id, refund_atoms)?;
         credit_issued_asset_balance_from_custody(
             ledger,
             &owner,
-            &next_route.settlement_asset_id,
+            &funding_asset,
             refund_atoms,
             "PFTL-Uniswap released reservation refund",
         )?;
@@ -4809,11 +4813,12 @@ fn apply_pftl_uniswap_primary_subscribe_v2(
                 "reservation escrow is below settlement due".to_string(),
             )
         })?;
+    let funding_asset = pftl_source_subscription(ledger, &route, &operation.reservation_id, base_value, spread)?;
     if reservation_refund != 0 {
         credit_issued_asset_balance_from_custody(
             ledger,
             &operation.subscriber,
-            &operation.settlement_asset_id,
+            &funding_asset,
             reservation_refund,
             "PFTL-Uniswap subscription reservation refund",
         )?;
@@ -5222,7 +5227,7 @@ pub fn apply_asset_orchard_private_primary_redeem_route_transition(
         postfiat_types::PFTL_UNISWAP_BPS_DENOMINATOR,
     )?;
     if operation.settlement_value_atoms != settlement_output
-        || route.settlement_reserve_atoms < base_value
+        || pftl_legacy_principal(ledger, &route)? < base_value
     {
         return Err((
             "pftl_uniswap_private_redemption_unavailable",
@@ -5416,6 +5421,7 @@ fn apply_pftl_uniswap_primary_redeem(
             "redemption output exceeds base NAV".to_string(),
         )
     })?;
+    let payout_asset = pftl_source_redeem(ledger, &route, operation.settlement_source_asset_id.as_deref(), base_value, spread)?;
     debit_issued_asset_balance(
         ledger,
         &operation.owner,
@@ -5426,7 +5432,7 @@ fn apply_pftl_uniswap_primary_redeem(
     credit_issued_asset_balance_from_custody(
         ledger,
         &operation.settlement_recipient,
-        &route.settlement_asset_id,
+        &payout_asset,
         settlement_output,
         "PFTL-Uniswap primary redemption settlement credit",
     )?;
@@ -5598,6 +5604,7 @@ fn apply_pftl_uniswap_route_epoch_advance(
     next_route
         .validate()
         .map_err(|error| ("bad_pftl_uniswap_route", error))?;
+    pftl_source_govern(ledger, &next_route, operation.settlement_source_asset_ids.as_ref())?;
     let state_after_hash = pftl_uniswap_route_state_hash(&next_route);
     ledger.pftl_uniswap_routes[route_index] = next_route;
     append_pftl_uniswap_consensus_receipt(
@@ -7974,6 +7981,7 @@ fn validate_vault_bridge_reserve_packet_fields(
     nav_asset: &NavTrackedAsset,
     profile: &NavProofProfile,
     operation: &NavReserveSubmitOperation,
+    compatibility: AssetExecutionCompatibility,
 ) -> Result<(), (&'static str, String)> {
     ensure_vault_bridge_asset_policy(ledger, nav_asset, &operation.submitter)?;
     if operation.nav_per_unit != VAULT_BRIDGE_UNIT {
@@ -8014,13 +8022,13 @@ fn validate_vault_bridge_reserve_packet_fields(
                 .to_string(),
         ));
     }
-    // Count the whole family (base asset plus its source-series assets) so the
-    // packet bound matches the state-commitment invariant, which compares the
-    // finalized circulating supply against the family-wide issued supply. A
-    // series-only vault bridge asset (every claim credited a source series and
-    // nobody holds the base id) has a base-only supply of zero, which would
-    // reject every honest packet and leave NAV unfinalizable.
-    let current_supply = issued_asset_family_supply(ledger, &operation.asset_id)?;
+    // New packets count the base asset plus its source-specific series.
+    // Archive replay can select the old calculation only for pinned packets.
+    let current_supply = if compatibility.allow_legacy_base_only_vault_reserve_supply {
+        issued_asset_supply(ledger, &operation.asset_id)?
+    } else {
+        issued_asset_family_supply(ledger, &operation.asset_id)?
+    };
     let maximum_proof_backed_supply = current_supply
         .checked_add(finalized_unclaimed_sp1_backing)
         .ok_or_else(|| {

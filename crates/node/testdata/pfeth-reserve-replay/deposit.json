@@ -1,0 +1,32 @@
+{
+  "asset_id": "629f1ba8f36963662d6e36243aea85627787cd72d41a9e92c5f01b60e3e68c1b951af771d16780bf13c4036b8d2a4996",
+  "evidence_root": "3ed87f62feb31833009581b6cf77e744b310b6a2a63cc4c434f04eb370c65ef143b56acbbf9e667df4b20d462fb017d2",
+  "evidence": {
+    "source_chain_id": 1,
+    "vault_address": "0x40187922ab0761c11e50bb971cc5a8c77164bec4",
+    "token_address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    "depositor": "0x62ef50a792641cd1a064fd0b1da933b14fd0d6c9",
+    "pftl_recipient": "pf2fcfb218888e2de9d314c6d0532c934fdefa6c6a",
+    "pftl_recipient_hash": "be3a6ff4e7acead23bcf6c4d6ac51ffbaf2e8a35e0c8da43420273da3eae26d0",
+    "amount_atoms": 5000000,
+    "nonce": "ae2b1ad9477e189bf6f4530784e0c6ac2ab36cdbb01b78cc892c74c6f757af61",
+    "route_binding": "865d0eae0e8f354e3f3adc9a3373b861f8724df0c2826f7ff656cc2409fb3c48",
+    "deposit_id": "3c8f405c422a59c8a1bb6b9f827506a87f5ad9fae01909117c30dce725e98230",
+    "block_hash": "db483836ae617e18ff885752314722e9e23dd1ad413b8a74446bdea3e56f0712",
+    "tx_hash": "2ce5163b5b4fe7881dd0910a240313f6fb8cf4f96cff2e5169490f8edc184d05",
+    "log_index": 0
+  },
+  "policy_hash": "d0befbd8e77440464b98c3f2c5f1ffedcd99802206349727f18f9b4d54d53b0e715eb2a9e230a64ca396acca3fb63394",
+  "source_proof_kind": "sp1-ethereum-finality-v1",
+  "source_proof_hash": "d19182cf53622c2be2f31f1b505c7fe0bbdeebef635cbb2cc1ebbe3a1824681d476b36c5bc1573c9a51e4e9fd83259af",
+  "source_public_values_hash": "e680f5ab771c368f8c0589a4b68488e794c8530e26acf25a055935617a9fcddd6a429b597a09690979592d1be1640ee6",
+  "source_nullifier": "d0f9ae4af450204029acbb5e3b7bf7a0ffc2ffcc0b5909ceeec15238b176328c",
+  "proposer": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+  "status": "finalized",
+  "submitted_at_height": 953,
+  "finalized_at_height": 954,
+  "expires_at_height": 2000,
+  "challenger": "",
+  "challenge_hash": "",
+  "challenge_bond": 0
+}

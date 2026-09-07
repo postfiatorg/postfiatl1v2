@@ -91,8 +91,8 @@
     "programs/pfusdc-eth-mainnet-ingress/src/lib.rs": "7d1baeb587f0d96c14596718fe2560bfc4c790c19f1a89c9acff5474b3157b91",
     "programs/pfeth-eth-mainnet-ingress/src/main.rs": "67782df70bad2a243115c401088d274874cda3e5fa8a96b85a9577546df71469",
     "programs/pfusdc-egress/src/main.rs": "c1cfd019f37a70d7862226f17659e72730bdae4c861f920dd93aba181ad67945",
-    "crates/types/src/pfusdc_tier4_types.rs": "e2d497c0a7e3897c8bd3c2d2d0dd6a53500cce929ab2c87b2a302686c0d04706",
-    "crates/execution/src/nav_vault_asset_execution.rs": "9a3d067d891b75cd6129ccab27f8f56829435fbe0facb00e7578d358a571a1e9",
+    "crates/types/src/pfusdc_tier4_types.rs": "9af8e316fcfb555aff35248ede7dd891f1e81ad95f222295dc677080e46ca4d4",
+    "crates/execution/src/nav_vault_asset_execution.rs": "5179fd74f2f0f0890be63ff263d2902f04496c70c5abac73434a0a2bd3629897",
     "tools/eth-l1-mainnet-fast-lane-p0/src/main.rs": "aae5805fcd10b42c0429f096e850ee7eb7e0bbaafbee43c1344c289ca37fa979",
     "crates/ethereum-contracts/src/WETHBridgeVaultL1.sol": "7d6a25df0f73e832ea15d2743f110974648323fc574ff78e74f548a7d25eeb12",
     "crates/ethereum-contracts/src/PFTLFinalityVerifierV1.sol": "8e0139eeb4cb41030234c34293099bd8722d2ca53998b5be3b42906dafe60da7"
@@ -107,34 +107,146 @@
       "public_instance_length": 28,
       "public_instance_layout_hash": "4a97e6254fe6ce1416723ebc0908f6a2a617a8d223f902905a91d7f006a8d1e8cee4cb2ccd81decd29c85b4a2c0f7ed1",
       "public_instances": [
-        {"index": 0, "name": "pool_domain", "binding": "host recomputes from chain_id, genesis_hash, protocol_version, pool_id and note_version"},
-        {"index": 1, "name": "anchor", "binding": "both input Merkle paths terminate at this root"},
-        {"index": 2, "name": "input_0_nullifier", "binding": "derived in circuit from input note opening and nullifier key"},
-        {"index": 3, "name": "input_1_nullifier", "binding": "derived in circuit from input note opening and nullifier key"},
-        {"index": 4, "name": "input_0_rk_x", "binding": "randomized spend verification key constrained from ak and alpha"},
-        {"index": 5, "name": "input_0_rk_y", "binding": "randomized spend verification key constrained from ak and alpha"},
-        {"index": 6, "name": "input_1_rk_x", "binding": "randomized spend verification key constrained from ak and alpha"},
-        {"index": 7, "name": "input_1_rk_y", "binding": "randomized spend verification key constrained from ak and alpha"},
-        {"index": 8, "name": "output_0_commitment", "binding": "recomputed from complete output note opening"},
-        {"index": 9, "name": "output_1_commitment", "binding": "recomputed from complete output note opening"},
-        {"index": 10, "name": "encrypted_output_0_hash_limb_0", "binding": "H_action commitment"},
-        {"index": 11, "name": "encrypted_output_0_hash_limb_1", "binding": "H_action commitment"},
-        {"index": 12, "name": "encrypted_output_0_hash_limb_2", "binding": "H_action commitment"},
-        {"index": 13, "name": "encrypted_output_1_hash_limb_0", "binding": "H_action commitment"},
-        {"index": 14, "name": "encrypted_output_1_hash_limb_1", "binding": "H_action commitment"},
-        {"index": 15, "name": "encrypted_output_1_hash_limb_2", "binding": "H_action commitment"},
-        {"index": 16, "name": "fee", "binding": "v1 requires zero and circuit binds it"},
-        {"index": 17, "name": "base_asset_tag_lo", "binding": "pricing and private-leg permutation constraints"},
-        {"index": 18, "name": "base_asset_tag_hi", "binding": "pricing and private-leg permutation constraints"},
-        {"index": 19, "name": "quote_asset_tag_lo", "binding": "pricing and private-leg permutation constraints"},
-        {"index": 20, "name": "quote_asset_tag_hi", "binding": "pricing and private-leg permutation constraints"},
-        {"index": 21, "name": "ratio_numerator", "binding": "exact integer pricing equation with bounded rounding witness"},
-        {"index": 22, "name": "ratio_denominator", "binding": "exact integer pricing equation with bounded rounding witness"},
-        {"index": 23, "name": "pricing_commitment_limb_0", "binding": "SHA3-384 commitment to epoch, reserve packet, ratio, mode, band and asset tags"},
-        {"index": 24, "name": "pricing_commitment_limb_1", "binding": "SHA3-384 commitment to epoch, reserve packet, ratio, mode, band and asset tags"},
-        {"index": 25, "name": "pricing_commitment_limb_2", "binding": "SHA3-384 commitment to epoch, reserve packet, ratio, mode, band and asset tags"},
-        {"index": 26, "name": "h_action_limb_0", "binding": "in-circuit Poseidon over domain constants and public indices 0 through 25"},
-        {"index": 27, "name": "h_action_limb_1", "binding": "in-circuit Poseidon over domain constants and public indices 0 through 25"}
+        {
+          "index": 0,
+          "name": "pool_domain",
+          "binding": "host recomputes from chain_id, genesis_hash, protocol_version, pool_id and note_version"
+        },
+        {
+          "index": 1,
+          "name": "anchor",
+          "binding": "both input Merkle paths terminate at this root"
+        },
+        {
+          "index": 2,
+          "name": "input_0_nullifier",
+          "binding": "derived in circuit from input note opening and nullifier key"
+        },
+        {
+          "index": 3,
+          "name": "input_1_nullifier",
+          "binding": "derived in circuit from input note opening and nullifier key"
+        },
+        {
+          "index": 4,
+          "name": "input_0_rk_x",
+          "binding": "randomized spend verification key constrained from ak and alpha"
+        },
+        {
+          "index": 5,
+          "name": "input_0_rk_y",
+          "binding": "randomized spend verification key constrained from ak and alpha"
+        },
+        {
+          "index": 6,
+          "name": "input_1_rk_x",
+          "binding": "randomized spend verification key constrained from ak and alpha"
+        },
+        {
+          "index": 7,
+          "name": "input_1_rk_y",
+          "binding": "randomized spend verification key constrained from ak and alpha"
+        },
+        {
+          "index": 8,
+          "name": "output_0_commitment",
+          "binding": "recomputed from complete output note opening"
+        },
+        {
+          "index": 9,
+          "name": "output_1_commitment",
+          "binding": "recomputed from complete output note opening"
+        },
+        {
+          "index": 10,
+          "name": "encrypted_output_0_hash_limb_0",
+          "binding": "H_action commitment"
+        },
+        {
+          "index": 11,
+          "name": "encrypted_output_0_hash_limb_1",
+          "binding": "H_action commitment"
+        },
+        {
+          "index": 12,
+          "name": "encrypted_output_0_hash_limb_2",
+          "binding": "H_action commitment"
+        },
+        {
+          "index": 13,
+          "name": "encrypted_output_1_hash_limb_0",
+          "binding": "H_action commitment"
+        },
+        {
+          "index": 14,
+          "name": "encrypted_output_1_hash_limb_1",
+          "binding": "H_action commitment"
+        },
+        {
+          "index": 15,
+          "name": "encrypted_output_1_hash_limb_2",
+          "binding": "H_action commitment"
+        },
+        {
+          "index": 16,
+          "name": "fee",
+          "binding": "v1 requires zero and circuit binds it"
+        },
+        {
+          "index": 17,
+          "name": "base_asset_tag_lo",
+          "binding": "pricing and private-leg permutation constraints"
+        },
+        {
+          "index": 18,
+          "name": "base_asset_tag_hi",
+          "binding": "pricing and private-leg permutation constraints"
+        },
+        {
+          "index": 19,
+          "name": "quote_asset_tag_lo",
+          "binding": "pricing and private-leg permutation constraints"
+        },
+        {
+          "index": 20,
+          "name": "quote_asset_tag_hi",
+          "binding": "pricing and private-leg permutation constraints"
+        },
+        {
+          "index": 21,
+          "name": "ratio_numerator",
+          "binding": "exact integer pricing equation with bounded rounding witness"
+        },
+        {
+          "index": 22,
+          "name": "ratio_denominator",
+          "binding": "exact integer pricing equation with bounded rounding witness"
+        },
+        {
+          "index": 23,
+          "name": "pricing_commitment_limb_0",
+          "binding": "SHA3-384 commitment to epoch, reserve packet, ratio, mode, band and asset tags"
+        },
+        {
+          "index": 24,
+          "name": "pricing_commitment_limb_1",
+          "binding": "SHA3-384 commitment to epoch, reserve packet, ratio, mode, band and asset tags"
+        },
+        {
+          "index": 25,
+          "name": "pricing_commitment_limb_2",
+          "binding": "SHA3-384 commitment to epoch, reserve packet, ratio, mode, band and asset tags"
+        },
+        {
+          "index": 26,
+          "name": "h_action_limb_0",
+          "binding": "in-circuit Poseidon over domain constants and public indices 0 through 25"
+        },
+        {
+          "index": 27,
+          "name": "h_action_limb_1",
+          "binding": "in-circuit Poseidon over domain constants and public indices 0 through 25"
+        }
       ],
       "private_witnesses": [
         "four complete note openings: diversifier, g_d, pk_d, asset tag, value, rho, psi and rcm",
@@ -162,19 +274,71 @@
       "public_instance_length": 13,
       "public_instance_layout_hash": "21e4ba88556d23e3d1c53d3f309ee90bc6321a9f6f8e7b1662083e2d712c9d576020248dd1727b2ca154e8203d09dc44",
       "public_instances": [
-        {"index": 0, "name": "pool_domain", "binding": "host recomputes chain/genesis/protocol/pool domain"},
-        {"index": 1, "name": "anchor", "binding": "input Merkle path terminates at this root"},
-        {"index": 2, "name": "nullifier", "binding": "derived in circuit from the input note"},
-        {"index": 3, "name": "rk_x", "binding": "randomized spend verification key"},
-        {"index": 4, "name": "rk_y", "binding": "randomized spend verification key"},
-        {"index": 5, "name": "asset_tag_lo", "binding": "must equal the spent note asset tag"},
-        {"index": 6, "name": "asset_tag_hi", "binding": "must equal the spent note asset tag"},
-        {"index": 7, "name": "amount", "binding": "nonzero and must equal the spent note value"},
-        {"index": 8, "name": "fee", "binding": "v1 action requires zero"},
-        {"index": 9, "name": "exit_binding_hash_limb_0", "binding": "recipient, public asset ID, amount, fee, policy, disclosure, chain/genesis/protocol and pool"},
-        {"index": 10, "name": "exit_binding_hash_limb_1", "binding": "recipient, public asset ID, amount, fee, policy, disclosure, chain/genesis/protocol and pool"},
-        {"index": 11, "name": "h_action_limb_0", "binding": "in-circuit Poseidon over domain constants and public indices 0 through 10"},
-        {"index": 12, "name": "h_action_limb_1", "binding": "in-circuit Poseidon over domain constants and public indices 0 through 10"}
+        {
+          "index": 0,
+          "name": "pool_domain",
+          "binding": "host recomputes chain/genesis/protocol/pool domain"
+        },
+        {
+          "index": 1,
+          "name": "anchor",
+          "binding": "input Merkle path terminates at this root"
+        },
+        {
+          "index": 2,
+          "name": "nullifier",
+          "binding": "derived in circuit from the input note"
+        },
+        {
+          "index": 3,
+          "name": "rk_x",
+          "binding": "randomized spend verification key"
+        },
+        {
+          "index": 4,
+          "name": "rk_y",
+          "binding": "randomized spend verification key"
+        },
+        {
+          "index": 5,
+          "name": "asset_tag_lo",
+          "binding": "must equal the spent note asset tag"
+        },
+        {
+          "index": 6,
+          "name": "asset_tag_hi",
+          "binding": "must equal the spent note asset tag"
+        },
+        {
+          "index": 7,
+          "name": "amount",
+          "binding": "nonzero and must equal the spent note value"
+        },
+        {
+          "index": 8,
+          "name": "fee",
+          "binding": "v1 action requires zero"
+        },
+        {
+          "index": 9,
+          "name": "exit_binding_hash_limb_0",
+          "binding": "recipient, public asset ID, amount, fee, policy, disclosure, chain/genesis/protocol and pool"
+        },
+        {
+          "index": 10,
+          "name": "exit_binding_hash_limb_1",
+          "binding": "recipient, public asset ID, amount, fee, policy, disclosure, chain/genesis/protocol and pool"
+        },
+        {
+          "index": 11,
+          "name": "h_action_limb_0",
+          "binding": "in-circuit Poseidon over domain constants and public indices 0 through 10"
+        },
+        {
+          "index": 12,
+          "name": "h_action_limb_1",
+          "binding": "in-circuit Poseidon over domain constants and public indices 0 through 10"
+        }
       ],
       "private_witnesses": [
         "one complete note opening",
@@ -196,11 +360,31 @@
       "proof_system_id": "sp1-groth16",
       "proof_binding": "Groth16Verifier verifies the entire public-values byte string against the profile-bound 32-byte SP1 program vkey and the pinned sp1-verifier Groth16 VK",
       "host_decoded_fields": [
-        {"abi_offset": 32, "name": "schema_version", "constraint": "must equal AggregatePublicValuesV2 (2)"},
-        {"abi_offset": 96, "name": "valuation_policy_hash", "constraint": "must equal profile valuation_policy_hash"},
-        {"abi_offset": 128, "name": "spot_total", "constraint": "included in checked net-assets arithmetic"},
-        {"abi_offset": 224, "name": "cash_total", "constraint": "included in checked net-assets arithmetic"},
-        {"abi_offset": 352, "name": "liability", "constraint": "subtracted with checked arithmetic"}
+        {
+          "abi_offset": 32,
+          "name": "schema_version",
+          "constraint": "must equal AggregatePublicValuesV2 (2)"
+        },
+        {
+          "abi_offset": 96,
+          "name": "valuation_policy_hash",
+          "constraint": "must equal profile valuation_policy_hash"
+        },
+        {
+          "abi_offset": 128,
+          "name": "spot_total",
+          "constraint": "included in checked net-assets arithmetic"
+        },
+        {
+          "abi_offset": 224,
+          "name": "cash_total",
+          "constraint": "included in checked net-assets arithmetic"
+        },
+        {
+          "abi_offset": 352,
+          "name": "liability",
+          "constraint": "subtracted with checked arithmetic"
+        }
       ],
       "packet_binding": "decoded spot_total + cash_total - liability must equal reserve_packet.verified_net_assets",
       "residual_gate": "The aggregate guest source, build recipe and program-vkey reproduction are not present in this repository. The host decodes only the fields above and accepts a minimum ABI length; production activation requires exact guest provenance, a canonical ABI/vector package and governed program/VK activation evidence.",
@@ -215,35 +399,180 @@
       "encoding": "fixed-width, big-endian integers, no dynamic fields",
       "public_values_length": 584,
       "public_values": [
-        {"byte_offset": 0, "byte_length": 8, "name": "magic", "binding": "must equal ASCII PFNAV001"},
-        {"byte_offset": 8, "byte_length": 4, "name": "version", "binding": "must equal 1"},
-        {"byte_offset": 12, "byte_length": 48, "name": "pftl_genesis_hash", "binding": "host requires the active chain genesis hash"},
-        {"byte_offset": 60, "byte_length": 48, "name": "nav_asset_id", "binding": "host requires the reserve packet NAV asset"},
-        {"byte_offset": 108, "byte_length": 48, "name": "proof_profile_id", "binding": "host requires the governed proof profile"},
-        {"byte_offset": 156, "byte_length": 32, "name": "valuation_policy_hash", "binding": "host requires the profile valuation policy hash"},
-        {"byte_offset": 188, "byte_length": 48, "name": "source_manifest_hash", "binding": "host requires the manifest pinned by the profile"},
-        {"byte_offset": 236, "byte_length": 48, "name": "valuation_unit_id", "binding": "host requires the profile valuation unit"},
-        {"byte_offset": 284, "byte_length": 8, "name": "valuation_scale", "binding": "nonzero scale committed by the guest"},
-        {"byte_offset": 292, "byte_length": 8, "name": "observation_epoch", "binding": "host requires the reserve packet epoch"},
-        {"byte_offset": 300, "byte_length": 8, "name": "observation_not_before", "binding": "host checks interval ordering and maximum span"},
-        {"byte_offset": 308, "byte_length": 8, "name": "observation_not_after", "binding": "host checks future and staleness bounds against current height"},
-        {"byte_offset": 316, "byte_length": 48, "name": "source_observation_root", "binding": "host requires the packet source root, or binds it into the explicit subscription-overlay composite root"},
-        {"byte_offset": 364, "byte_length": 8, "name": "gross_assets", "binding": "guest checks asset aggregation with checked arithmetic"},
-        {"byte_offset": 372, "byte_length": 8, "name": "total_liabilities", "binding": "guest checks liabilities do not exceed gross assets"},
-        {"byte_offset": 380, "byte_length": 8, "name": "verified_net_assets", "binding": "guest requires gross assets minus liabilities; host requires the packet proof-backed value"},
-        {"byte_offset": 388, "byte_length": 8, "name": "cryptographically_verified_value", "binding": "guest classifies verified value by manifest-pinned evidence type"},
-        {"byte_offset": 396, "byte_length": 8, "name": "attested_value", "binding": "guest classifies attested value separately"},
-        {"byte_offset": 404, "byte_length": 8, "name": "controlled_value", "binding": "host rejects nonzero controlled value when the profile forbids controlled sources"},
-        {"byte_offset": 412, "byte_length": 4, "name": "source_count", "binding": "guest requires 1 through 64 sources and exact manifest/observation cardinality"},
-        {"byte_offset": 416, "byte_length": 4, "name": "quantity_cryptographic_count", "binding": "guest-derived quantity-evidence trust count"},
-        {"byte_offset": 420, "byte_length": 4, "name": "quantity_attested_count", "binding": "guest-derived quantity-evidence trust count"},
-        {"byte_offset": 424, "byte_length": 4, "name": "quantity_controlled_count", "binding": "guest-derived quantity-evidence trust count and host controlled-source gate"},
-        {"byte_offset": 428, "byte_length": 4, "name": "valuation_cryptographic_count", "binding": "guest-derived valuation-evidence trust count"},
-        {"byte_offset": 432, "byte_length": 4, "name": "valuation_attested_count", "binding": "guest-derived valuation-evidence trust count"},
-        {"byte_offset": 436, "byte_length": 4, "name": "valuation_controlled_count", "binding": "guest-derived valuation-evidence trust count and host controlled-source gate"},
-        {"byte_offset": 440, "byte_length": 48, "name": "quantity_trust_root", "binding": "guest commits source identities and quantity evidence classes"},
-        {"byte_offset": 488, "byte_length": 48, "name": "valuation_trust_root", "binding": "host requires the reserve packet attestor root"},
-        {"byte_offset": 536, "byte_length": 48, "name": "source_disclosure_root", "binding": "guest commits source disclosure commitments independently of trust classification"}
+        {
+          "byte_offset": 0,
+          "byte_length": 8,
+          "name": "magic",
+          "binding": "must equal ASCII PFNAV001"
+        },
+        {
+          "byte_offset": 8,
+          "byte_length": 4,
+          "name": "version",
+          "binding": "must equal 1"
+        },
+        {
+          "byte_offset": 12,
+          "byte_length": 48,
+          "name": "pftl_genesis_hash",
+          "binding": "host requires the active chain genesis hash"
+        },
+        {
+          "byte_offset": 60,
+          "byte_length": 48,
+          "name": "nav_asset_id",
+          "binding": "host requires the reserve packet NAV asset"
+        },
+        {
+          "byte_offset": 108,
+          "byte_length": 48,
+          "name": "proof_profile_id",
+          "binding": "host requires the governed proof profile"
+        },
+        {
+          "byte_offset": 156,
+          "byte_length": 32,
+          "name": "valuation_policy_hash",
+          "binding": "host requires the profile valuation policy hash"
+        },
+        {
+          "byte_offset": 188,
+          "byte_length": 48,
+          "name": "source_manifest_hash",
+          "binding": "host requires the manifest pinned by the profile"
+        },
+        {
+          "byte_offset": 236,
+          "byte_length": 48,
+          "name": "valuation_unit_id",
+          "binding": "host requires the profile valuation unit"
+        },
+        {
+          "byte_offset": 284,
+          "byte_length": 8,
+          "name": "valuation_scale",
+          "binding": "nonzero scale committed by the guest"
+        },
+        {
+          "byte_offset": 292,
+          "byte_length": 8,
+          "name": "observation_epoch",
+          "binding": "host requires the reserve packet epoch"
+        },
+        {
+          "byte_offset": 300,
+          "byte_length": 8,
+          "name": "observation_not_before",
+          "binding": "host checks interval ordering and maximum span"
+        },
+        {
+          "byte_offset": 308,
+          "byte_length": 8,
+          "name": "observation_not_after",
+          "binding": "host checks future and staleness bounds against current height"
+        },
+        {
+          "byte_offset": 316,
+          "byte_length": 48,
+          "name": "source_observation_root",
+          "binding": "host requires the packet source root, or binds it into the explicit subscription-overlay composite root"
+        },
+        {
+          "byte_offset": 364,
+          "byte_length": 8,
+          "name": "gross_assets",
+          "binding": "guest checks asset aggregation with checked arithmetic"
+        },
+        {
+          "byte_offset": 372,
+          "byte_length": 8,
+          "name": "total_liabilities",
+          "binding": "guest checks liabilities do not exceed gross assets"
+        },
+        {
+          "byte_offset": 380,
+          "byte_length": 8,
+          "name": "verified_net_assets",
+          "binding": "guest requires gross assets minus liabilities; host requires the packet proof-backed value"
+        },
+        {
+          "byte_offset": 388,
+          "byte_length": 8,
+          "name": "cryptographically_verified_value",
+          "binding": "guest classifies verified value by manifest-pinned evidence type"
+        },
+        {
+          "byte_offset": 396,
+          "byte_length": 8,
+          "name": "attested_value",
+          "binding": "guest classifies attested value separately"
+        },
+        {
+          "byte_offset": 404,
+          "byte_length": 8,
+          "name": "controlled_value",
+          "binding": "host rejects nonzero controlled value when the profile forbids controlled sources"
+        },
+        {
+          "byte_offset": 412,
+          "byte_length": 4,
+          "name": "source_count",
+          "binding": "guest requires 1 through 64 sources and exact manifest/observation cardinality"
+        },
+        {
+          "byte_offset": 416,
+          "byte_length": 4,
+          "name": "quantity_cryptographic_count",
+          "binding": "guest-derived quantity-evidence trust count"
+        },
+        {
+          "byte_offset": 420,
+          "byte_length": 4,
+          "name": "quantity_attested_count",
+          "binding": "guest-derived quantity-evidence trust count"
+        },
+        {
+          "byte_offset": 424,
+          "byte_length": 4,
+          "name": "quantity_controlled_count",
+          "binding": "guest-derived quantity-evidence trust count and host controlled-source gate"
+        },
+        {
+          "byte_offset": 428,
+          "byte_length": 4,
+          "name": "valuation_cryptographic_count",
+          "binding": "guest-derived valuation-evidence trust count"
+        },
+        {
+          "byte_offset": 432,
+          "byte_length": 4,
+          "name": "valuation_attested_count",
+          "binding": "guest-derived valuation-evidence trust count"
+        },
+        {
+          "byte_offset": 436,
+          "byte_length": 4,
+          "name": "valuation_controlled_count",
+          "binding": "guest-derived valuation-evidence trust count and host controlled-source gate"
+        },
+        {
+          "byte_offset": 440,
+          "byte_length": 48,
+          "name": "quantity_trust_root",
+          "binding": "guest commits source identities and quantity evidence classes"
+        },
+        {
+          "byte_offset": 488,
+          "byte_length": 48,
+          "name": "valuation_trust_root",
+          "binding": "host requires the reserve packet attestor root"
+        },
+        {
+          "byte_offset": 536,
+          "byte_length": 48,
+          "name": "source_disclosure_root",
+          "binding": "guest commits source disclosure commitments independently of trust classification"
+        }
       ],
       "private_witnesses": [
         "canonical CBOR reserve witness bounded to 8 MiB",
@@ -269,32 +598,136 @@
       "public_values_schema": "postfiat.pfeth.ethereum_ingress_public_values.v1",
       "encoding": "serde CBOR of EthIngressPublicValuesV1 in declared field order",
       "public_values": [
-        {"index": 0, "name": "schema", "binding": "host requires the pfETH Ethereum ingress schema"},
-        {"index": 1, "name": "route_id", "binding": "guest and host require ethereum-mainnet-weth-v1"},
-        {"index": 2, "name": "source_chain_id", "binding": "guest and route profile require Ethereum chain 1"},
-        {"index": 3, "name": "prior_finalized_beacon_root", "binding": "Helios bootstrap state before the proved advance"},
-        {"index": 4, "name": "prior_finalized_slot", "binding": "slot of the authenticated prior root"},
-        {"index": 5, "name": "finalized_beacon_root", "binding": "root after verified sync-committee updates"},
-        {"index": 6, "name": "finalized_slot", "binding": "must canonically advance the prior slot"},
-        {"index": 7, "name": "finalized_execution_block_hash", "binding": "execution payload authenticated by the finalized beacon header"},
-        {"index": 8, "name": "finalized_execution_block_number", "binding": "height of the authenticated execution payload"},
-        {"index": 9, "name": "execution_state_root", "binding": "root used for both account and storage proofs"},
-        {"index": 10, "name": "vault_address", "binding": "must equal the route-policy vault"},
-        {"index": 11, "name": "vault_runtime_code_hash", "binding": "proved account code hash and governed profile binding"},
-        {"index": 12, "name": "token_address", "binding": "must equal canonical Ethereum WETH9"},
-        {"index": 13, "name": "token_runtime_code_hash", "binding": "proved WETH9 account code hash and governed profile binding"},
-        {"index": 14, "name": "depositor", "binding": "reproduced from the deposit record packed slot"},
-        {"index": 15, "name": "pftl_recipient", "binding": "host credits this exact PFTL account"},
-        {"index": 16, "name": "pftl_recipient_hash", "binding": "reproduced from the deposit record and recipient text"},
-        {"index": 17, "name": "amount_atoms", "binding": "nonzero u64 nine-decimal pfETH amount reproduced from vault state"},
-        {"index": 18, "name": "nonce", "binding": "reproduced from the deposit record"},
-        {"index": 19, "name": "route_binding", "binding": "nonzero deposit binding checked against the active route profile"},
-        {"index": 20, "name": "deposit_id", "binding": "guest recomputes the canonical deposit identifier"},
-        {"index": 21, "name": "evidence_root", "binding": "guest recomputes the complete deposit evidence root"},
-        {"index": 22, "name": "manifest_hash", "binding": "policy commitment to route domain, vault, WETH9 and vault creation bytecode hash"},
-        {"index": 23, "name": "deposit_nullifier", "binding": "guest derives a route-separated replay nullifier"},
-        {"index": 24, "name": "total_obligations_atoms", "binding": "proved vault slot zero in nine-decimal pfETH atoms"},
-        {"index": 25, "name": "vault_token_balance_atoms", "binding": "proved WETH9 balance floor-divided by 10^9; backing check uses the unfloored wei balance"}
+        {
+          "index": 0,
+          "name": "schema",
+          "binding": "host requires the pfETH Ethereum ingress schema"
+        },
+        {
+          "index": 1,
+          "name": "route_id",
+          "binding": "guest and host require ethereum-mainnet-weth-v1"
+        },
+        {
+          "index": 2,
+          "name": "source_chain_id",
+          "binding": "guest and route profile require Ethereum chain 1"
+        },
+        {
+          "index": 3,
+          "name": "prior_finalized_beacon_root",
+          "binding": "Helios bootstrap state before the proved advance"
+        },
+        {
+          "index": 4,
+          "name": "prior_finalized_slot",
+          "binding": "slot of the authenticated prior root"
+        },
+        {
+          "index": 5,
+          "name": "finalized_beacon_root",
+          "binding": "root after verified sync-committee updates"
+        },
+        {
+          "index": 6,
+          "name": "finalized_slot",
+          "binding": "must canonically advance the prior slot"
+        },
+        {
+          "index": 7,
+          "name": "finalized_execution_block_hash",
+          "binding": "execution payload authenticated by the finalized beacon header"
+        },
+        {
+          "index": 8,
+          "name": "finalized_execution_block_number",
+          "binding": "height of the authenticated execution payload"
+        },
+        {
+          "index": 9,
+          "name": "execution_state_root",
+          "binding": "root used for both account and storage proofs"
+        },
+        {
+          "index": 10,
+          "name": "vault_address",
+          "binding": "must equal the route-policy vault"
+        },
+        {
+          "index": 11,
+          "name": "vault_runtime_code_hash",
+          "binding": "proved account code hash and governed profile binding"
+        },
+        {
+          "index": 12,
+          "name": "token_address",
+          "binding": "must equal canonical Ethereum WETH9"
+        },
+        {
+          "index": 13,
+          "name": "token_runtime_code_hash",
+          "binding": "proved WETH9 account code hash and governed profile binding"
+        },
+        {
+          "index": 14,
+          "name": "depositor",
+          "binding": "reproduced from the deposit record packed slot"
+        },
+        {
+          "index": 15,
+          "name": "pftl_recipient",
+          "binding": "host credits this exact PFTL account"
+        },
+        {
+          "index": 16,
+          "name": "pftl_recipient_hash",
+          "binding": "reproduced from the deposit record and recipient text"
+        },
+        {
+          "index": 17,
+          "name": "amount_atoms",
+          "binding": "nonzero u64 nine-decimal pfETH amount reproduced from vault state"
+        },
+        {
+          "index": 18,
+          "name": "nonce",
+          "binding": "reproduced from the deposit record"
+        },
+        {
+          "index": 19,
+          "name": "route_binding",
+          "binding": "nonzero deposit binding checked against the active route profile"
+        },
+        {
+          "index": 20,
+          "name": "deposit_id",
+          "binding": "guest recomputes the canonical deposit identifier"
+        },
+        {
+          "index": 21,
+          "name": "evidence_root",
+          "binding": "guest recomputes the complete deposit evidence root"
+        },
+        {
+          "index": 22,
+          "name": "manifest_hash",
+          "binding": "policy commitment to route domain, vault, WETH9 and vault creation bytecode hash"
+        },
+        {
+          "index": 23,
+          "name": "deposit_nullifier",
+          "binding": "guest derives a route-separated replay nullifier"
+        },
+        {
+          "index": 24,
+          "name": "total_obligations_atoms",
+          "binding": "proved vault slot zero in nine-decimal pfETH atoms"
+        },
+        {
+          "index": 25,
+          "name": "vault_token_balance_atoms",
+          "binding": "proved WETH9 balance floor-divided by 10^9; backing check uses the unfloored wei balance"
+        }
       ],
       "private_witnesses": [
         "bounded Helios bootstrap, sync-committee updates and finality update",
@@ -318,62 +751,278 @@
       "checkpoint_public_values_schema": "postfiat.pfusdc.checkpoint_public_values.v1",
       "encoding": "versioned canonical tagged fields; the final commitment field is recomputed and omitted from committed bytes",
       "withdrawal_public_values": [
-        {"tag": 1, "name": "schema", "binding": "exact egress schema"},
-        {"tag": 2, "name": "proof_program_version", "binding": "nonzero guest version"},
-        {"tag": 3, "name": "pftl_chain_id", "binding": "immutable verifier chain hash"},
-        {"tag": 4, "name": "pftl_genesis_hash", "binding": "immutable verifier genesis commitment"},
-        {"tag": 5, "name": "pftl_protocol_version", "binding": "immutable verifier protocol version"},
-        {"tag": 6, "name": "route_profile_hash", "binding": "immutable verifier route-profile commitment"},
-        {"tag": 7, "name": "route_epoch", "binding": "immutable verifier route epoch"},
-        {"tag": 8, "name": "prior_checkpoint_block_id", "binding": "must equal verifier checkpoint"},
-        {"tag": 9, "name": "resulting_checkpoint_block_id", "binding": "advances verifier checkpoint to the finalized block"},
-        {"tag": 10, "name": "committee_epoch", "binding": "finalized block authority epoch"},
-        {"tag": 11, "name": "committee_root", "binding": "verified committee and verifier checkpoint authority"},
-        {"tag": 12, "name": "committee_transition_commitment", "binding": "optional proved committee transition"},
-        {"tag": 13, "name": "finalized_block_height", "binding": "strictly advances verifier finalized height"},
-        {"tag": 14, "name": "finalized_block_view", "binding": "consensus certificate view"},
-        {"tag": 15, "name": "finalized_block_id", "binding": "certificate and block identity"},
-        {"tag": 16, "name": "finalized_parent_block_id", "binding": "bounded ancestry continuity"},
-        {"tag": 17, "name": "finalized_state_root", "binding": "committed PFTL state at exit finality"},
-        {"tag": 18, "name": "bridge_exit_root", "binding": "Merkle root containing the accepted withdrawal leaf"},
-        {"tag": 19, "name": "exit_leaf_index", "binding": "bounded Merkle position"},
-        {"tag": 20, "name": "exit_leaf_commitment", "binding": "recomputed withdrawal leaf"},
-        {"tag": 21, "name": "accepted_receipt_id", "binding": "receipt accepted in the finalized block"},
-        {"tag": 22, "name": "accepted_receipt_code", "binding": "host and guest require the accepted code"},
-        {"tag": 23, "name": "asset_id", "binding": "immutable verifier pfETH asset commitment"},
-        {"tag": 24, "name": "burn_tx_id", "binding": "finalized bridge-out burn transaction"},
-        {"tag": 25, "name": "withdrawal_id", "binding": "canonical withdrawal identity"},
-        {"tag": 26, "name": "source_bucket_id", "binding": "source accounting bucket burned by the exit"},
-        {"tag": 27, "name": "amount_atoms", "binding": "u64 pfETH atoms scaled by the WETH vault on release"},
-        {"tag": 28, "name": "recipient", "binding": "Ethereum recipient released by the vault"},
-        {"tag": 29, "name": "destination_hash", "binding": "withdrawal destination commitment"},
-        {"tag": 30, "name": "evidence_root", "binding": "complete withdrawal evidence root"},
-        {"tag": 31, "name": "withdrawal_finalized_height", "binding": "finalized withdrawal height"},
-        {"tag": 32, "name": "source_chain_id", "binding": "legacy field name arbitrum_chain_id; immutable verifier requires Ethereum chain 1 for pfETH"},
-        {"tag": 33, "name": "vault_address", "binding": "executing vault runtime address"},
-        {"tag": 34, "name": "vault_runtime_code_hash", "binding": "immutable verifier vault runtime binding"},
-        {"tag": 35, "name": "token_address", "binding": "immutable verifier WETH9 address"},
-        {"tag": 36, "name": "token_runtime_code_hash", "binding": "immutable verifier WETH9 code identity"},
-        {"tag": 37, "name": "withdrawal_packet_digest", "binding": "EVM-native digest consumed by the vault"},
-        {"tag": 38, "name": "withdrawal_packet_hash", "binding": "canonical PFTL withdrawal packet hash"},
-        {"tag": 39, "name": "proof_nullifier", "binding": "route-separated burn/withdrawal/finalized-block replay key"}
+        {
+          "tag": 1,
+          "name": "schema",
+          "binding": "exact egress schema"
+        },
+        {
+          "tag": 2,
+          "name": "proof_program_version",
+          "binding": "nonzero guest version"
+        },
+        {
+          "tag": 3,
+          "name": "pftl_chain_id",
+          "binding": "immutable verifier chain hash"
+        },
+        {
+          "tag": 4,
+          "name": "pftl_genesis_hash",
+          "binding": "immutable verifier genesis commitment"
+        },
+        {
+          "tag": 5,
+          "name": "pftl_protocol_version",
+          "binding": "immutable verifier protocol version"
+        },
+        {
+          "tag": 6,
+          "name": "route_profile_hash",
+          "binding": "immutable verifier route-profile commitment"
+        },
+        {
+          "tag": 7,
+          "name": "route_epoch",
+          "binding": "immutable verifier route epoch"
+        },
+        {
+          "tag": 8,
+          "name": "prior_checkpoint_block_id",
+          "binding": "must equal verifier checkpoint"
+        },
+        {
+          "tag": 9,
+          "name": "resulting_checkpoint_block_id",
+          "binding": "advances verifier checkpoint to the finalized block"
+        },
+        {
+          "tag": 10,
+          "name": "committee_epoch",
+          "binding": "finalized block authority epoch"
+        },
+        {
+          "tag": 11,
+          "name": "committee_root",
+          "binding": "verified committee and verifier checkpoint authority"
+        },
+        {
+          "tag": 12,
+          "name": "committee_transition_commitment",
+          "binding": "optional proved committee transition"
+        },
+        {
+          "tag": 13,
+          "name": "finalized_block_height",
+          "binding": "strictly advances verifier finalized height"
+        },
+        {
+          "tag": 14,
+          "name": "finalized_block_view",
+          "binding": "consensus certificate view"
+        },
+        {
+          "tag": 15,
+          "name": "finalized_block_id",
+          "binding": "certificate and block identity"
+        },
+        {
+          "tag": 16,
+          "name": "finalized_parent_block_id",
+          "binding": "bounded ancestry continuity"
+        },
+        {
+          "tag": 17,
+          "name": "finalized_state_root",
+          "binding": "committed PFTL state at exit finality"
+        },
+        {
+          "tag": 18,
+          "name": "bridge_exit_root",
+          "binding": "Merkle root containing the accepted withdrawal leaf"
+        },
+        {
+          "tag": 19,
+          "name": "exit_leaf_index",
+          "binding": "bounded Merkle position"
+        },
+        {
+          "tag": 20,
+          "name": "exit_leaf_commitment",
+          "binding": "recomputed withdrawal leaf"
+        },
+        {
+          "tag": 21,
+          "name": "accepted_receipt_id",
+          "binding": "receipt accepted in the finalized block"
+        },
+        {
+          "tag": 22,
+          "name": "accepted_receipt_code",
+          "binding": "host and guest require the accepted code"
+        },
+        {
+          "tag": 23,
+          "name": "asset_id",
+          "binding": "immutable verifier pfETH asset commitment"
+        },
+        {
+          "tag": 24,
+          "name": "burn_tx_id",
+          "binding": "finalized bridge-out burn transaction"
+        },
+        {
+          "tag": 25,
+          "name": "withdrawal_id",
+          "binding": "canonical withdrawal identity"
+        },
+        {
+          "tag": 26,
+          "name": "source_bucket_id",
+          "binding": "source accounting bucket burned by the exit"
+        },
+        {
+          "tag": 27,
+          "name": "amount_atoms",
+          "binding": "u64 pfETH atoms scaled by the WETH vault on release"
+        },
+        {
+          "tag": 28,
+          "name": "recipient",
+          "binding": "Ethereum recipient released by the vault"
+        },
+        {
+          "tag": 29,
+          "name": "destination_hash",
+          "binding": "withdrawal destination commitment"
+        },
+        {
+          "tag": 30,
+          "name": "evidence_root",
+          "binding": "complete withdrawal evidence root"
+        },
+        {
+          "tag": 31,
+          "name": "withdrawal_finalized_height",
+          "binding": "finalized withdrawal height"
+        },
+        {
+          "tag": 32,
+          "name": "source_chain_id",
+          "binding": "legacy field name arbitrum_chain_id; immutable verifier requires Ethereum chain 1 for pfETH"
+        },
+        {
+          "tag": 33,
+          "name": "vault_address",
+          "binding": "executing vault runtime address"
+        },
+        {
+          "tag": 34,
+          "name": "vault_runtime_code_hash",
+          "binding": "immutable verifier vault runtime binding"
+        },
+        {
+          "tag": 35,
+          "name": "token_address",
+          "binding": "immutable verifier WETH9 address"
+        },
+        {
+          "tag": 36,
+          "name": "token_runtime_code_hash",
+          "binding": "immutable verifier WETH9 code identity"
+        },
+        {
+          "tag": 37,
+          "name": "withdrawal_packet_digest",
+          "binding": "EVM-native digest consumed by the vault"
+        },
+        {
+          "tag": 38,
+          "name": "withdrawal_packet_hash",
+          "binding": "canonical PFTL withdrawal packet hash"
+        },
+        {
+          "tag": 39,
+          "name": "proof_nullifier",
+          "binding": "route-separated burn/withdrawal/finalized-block replay key"
+        }
       ],
       "checkpoint_public_values": [
-        {"tag": 1, "name": "schema", "binding": "exact checkpoint schema"},
-        {"tag": 2, "name": "proof_program_version", "binding": "nonzero guest version"},
-        {"tag": 3, "name": "pftl_chain_id", "binding": "immutable verifier chain hash"},
-        {"tag": 4, "name": "pftl_genesis_hash", "binding": "immutable verifier genesis commitment"},
-        {"tag": 5, "name": "pftl_protocol_version", "binding": "immutable verifier protocol version"},
-        {"tag": 6, "name": "prior_checkpoint_block_id", "binding": "must equal verifier checkpoint"},
-        {"tag": 7, "name": "resulting_checkpoint_block_id", "binding": "new finalized checkpoint"},
-        {"tag": 8, "name": "committee_epoch", "binding": "finalized block authority epoch"},
-        {"tag": 9, "name": "committee_root", "binding": "verified committee root"},
-        {"tag": 10, "name": "committee_transition_commitment", "binding": "optional proved committee transition"},
-        {"tag": 11, "name": "finalized_block_height", "binding": "strictly advances verifier finalized height"},
-        {"tag": 12, "name": "finalized_block_view", "binding": "consensus certificate view"},
-        {"tag": 13, "name": "finalized_block_id", "binding": "certificate and block identity"},
-        {"tag": 14, "name": "finalized_parent_block_id", "binding": "bounded ancestry continuity"},
-        {"tag": 15, "name": "finalized_state_root", "binding": "committed PFTL state"}
+        {
+          "tag": 1,
+          "name": "schema",
+          "binding": "exact checkpoint schema"
+        },
+        {
+          "tag": 2,
+          "name": "proof_program_version",
+          "binding": "nonzero guest version"
+        },
+        {
+          "tag": 3,
+          "name": "pftl_chain_id",
+          "binding": "immutable verifier chain hash"
+        },
+        {
+          "tag": 4,
+          "name": "pftl_genesis_hash",
+          "binding": "immutable verifier genesis commitment"
+        },
+        {
+          "tag": 5,
+          "name": "pftl_protocol_version",
+          "binding": "immutable verifier protocol version"
+        },
+        {
+          "tag": 6,
+          "name": "prior_checkpoint_block_id",
+          "binding": "must equal verifier checkpoint"
+        },
+        {
+          "tag": 7,
+          "name": "resulting_checkpoint_block_id",
+          "binding": "new finalized checkpoint"
+        },
+        {
+          "tag": 8,
+          "name": "committee_epoch",
+          "binding": "finalized block authority epoch"
+        },
+        {
+          "tag": 9,
+          "name": "committee_root",
+          "binding": "verified committee root"
+        },
+        {
+          "tag": 10,
+          "name": "committee_transition_commitment",
+          "binding": "optional proved committee transition"
+        },
+        {
+          "tag": 11,
+          "name": "finalized_block_height",
+          "binding": "strictly advances verifier finalized height"
+        },
+        {
+          "tag": 12,
+          "name": "finalized_block_view",
+          "binding": "consensus certificate view"
+        },
+        {
+          "tag": 13,
+          "name": "finalized_block_id",
+          "binding": "certificate and block identity"
+        },
+        {
+          "tag": 14,
+          "name": "finalized_parent_block_id",
+          "binding": "bounded ancestry continuity"
+        },
+        {
+          "tag": 15,
+          "name": "finalized_state_root",
+          "binding": "committed PFTL state"
+        }
       ],
       "private_witnesses": [
         "bounded finalized PFTL ancestry and exact consensus certificates",
@@ -398,5 +1047,9 @@
   "verdict": {
     "source_publication": "AssetOrchard live public-instance and witness bindings and the provider-neutral NAV reserve proof ABI are fully inventoried. The successor NAV guest, build recipe, adapters and deterministic vectors are public and locally reproducible. The legacy NAV aggregate and debug adapter remain explicitly contained compatibility surfaces.",
     "real_value": "The provider-neutral framework is locally qualified, but the six A666 source adapters are 0/6 production-qualified. Live real-value activation remains gated on public collectors, adversarial and fuzz qualification, fresh A666 epochs and complete reconciliation, a reproducible successor guest/program identity, governed profile/program registration, validator rollout and rollback evidence, an independent operator reproduction, and exact live candidate-run evidence."
+  },
+  "handoff_source_refresh": {
+    "date": "2026-09-07",
+    "scope": "Arc constants retained; deployed historical reserve replay and A666 source custody merged. Public-values field layout and deployed proof identities unchanged by this inventory refresh. This is not a new external audit or proof reproduction."
   }
 }

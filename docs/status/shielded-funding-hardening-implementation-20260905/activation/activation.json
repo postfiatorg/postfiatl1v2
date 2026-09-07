@@ -1,0 +1,88 @@
+{
+  "schema": "funding-activation-review-v1",
+  "ready_for_live_funding": false,
+  "locked_spec_sha256": "5fea0fa99d8372f7e09828b1f7cae081cbefa600d90d39aada75eedeaa626d48",
+  "model_policy_hash": "ff4be0d69454fc923c0af96d45fc8e929bd0b1da697ed9ed20dd02abd8c8497b",
+  "lighter_spec_sha256": "b489ccd8b6e16e193e59d293807372b97d48f2aee662668fea252566c8b519b5",
+  "denomination_amendment_sha256": "43900b0ddb8fca27a931bf88023cbd6036435452fdb526f8d5fe4645e059c203",
+  "principal_selection": "explicit integer amount; no fixed ETH or USD funding minimum",
+  "venue_policy_hashes": {
+    "hyperliquid": "785207839befea27b7d76a7b83013a76965927837765f916acf98d6a198b3588",
+    "lighter": "593777b00a11a34757015064d00209f6d82b89ea9d9abe7aa35f76459791f2fd"
+  },
+  "files": {
+    "stakehub/shielded_exit_actions.py": "4b7df805062d32d3df115b1994f175d76c32dccd217b81f7deeae5c26facd96b",
+    "stakehub/shielded_exit_activation.py": "7566194e658c5e4ac696e65db5bebde201910dbddfa9befb51fd1f37760abef8",
+    "stakehub/shielded_exit_amount.py": "b41b10a3da273393cc27335c5ed78a1f5a49f8b1c294fb669b49607d9f146c0f",
+    "stakehub/shielded_exit_bridge.py": "a9ccfbbbaf034d67513f96920281c29b2b8467080af669c3ecb69a88c7429fe7",
+    "stakehub/shielded_exit_cli.py": "b65ce4e501e9a53bd7fd2a352c8f8a510bf2e42f0c299c550017aa4132e20aad",
+    "stakehub/shielded_exit_controller.py": "29132b4dab9fddc773894f6fc0147d117f45a2b2b3cbd9d5de82160002a5ff5a",
+    "stakehub/shielded_exit_cover.py": "0aa6f8bdeefd868a622580518d71f4b98b0a495bda053ede11535e34587d73e2",
+    "stakehub/shielded_exit_cover_cli.py": "01b4dd3a878fea781269ce17c1366cf3529a61efc3d4c5ab81e7d8269dc51d5a",
+    "stakehub/shielded_exit_cover_ui.py": "2ca221e6177211c91fef36e1f3d9c8dae5395031b308ce822e9d38543c2429da",
+    "stakehub/shielded_exit_executor.py": "af1cc26bfd9a29d72b47b54cbbfbe5b8d6344adf7c5763d02ad5ae533d752c9c",
+    "stakehub/shielded_exit_flow.py": "2e34b71608c703060d139107c1f1e3496f49f1586e6ca9382a21d909db05ccfd",
+    "stakehub/shielded_exit_history.py": "080729994e922dc0c8facc69c60c8cadfb8dfe70fcf27811b76887dda063c45a",
+    "stakehub/shielded_exit_jobs.py": "f75ab42befb277e1282aac651dc55f5ebc3f9b2414c5196e06c589d2a6fd50e5",
+    "stakehub/shielded_exit_lighter_settlement.py": "85673acbf3288a149acb5bb6bbce67272af24b9aedc2f4b84a8a9960b4805241",
+    "stakehub/shielded_exit_local.py": "a5ad92e4d9cc039d7b32b313bef62adb1ec3b1b36005777cf8ee4a90ac6da277",
+    "stakehub/shielded_exit_observer.py": "f78890fac9ead65c60d944eddf2f83cfe4c73848e8a4987392950b63dea4e709",
+    "stakehub/shielded_exit_pftl.py": "22b2c5168ed108a3ec984a686188b45d3f18d4d2dcfbfa679612156ba3d34a4a",
+    "stakehub/shielded_exit_pftl_index.py": "0d5f33fd6dbd724f2882b58a0be20800e09d43a7f681dea5bb567d8490fd6806",
+    "stakehub/shielded_exit_pftl_transport.py": "199b2f8d125994f814a57ea5bdfc8e5d176a3a68312ad384b4e236686779a7f3",
+    "stakehub/shielded_exit_planner.py": "b61cfd9596315e45aba5b60b9f6438fbf0a4577bb8a6f16e851b89b0a70d66f5",
+    "stakehub/shielded_exit_privacy.py": "6c426c0404651493eb6811b6111de1a7f33c434f9d0284c052e7af94e7b2f127",
+    "stakehub/shielded_exit_public_state.py": "77fb8bba36b2b94830275dab11c9a37c6bdd57ca84a1e8c157ae21117866fc24",
+    "stakehub/shielded_exit_relayer.py": "6a5a65fc540e0d462d90d12f28d151509715067c78bcfa3ea3834989713ac5bb",
+    "stakehub/shielded_exit_simulation.py": "9d7eeb6a53fac5d6fc1b5d996caf2231731e2042febc015e482175675905e13f",
+    "stakehub/shielded_exit_source.py": "ef4eca524b41c8410e242d3f10ac095bd73c11ce8c393c564fc769d4da5ff1e9",
+    "stakehub/shielded_exit_sponsor.py": "32bc205e6165fe39eab0082a367af05308764d2560204e22eb7318df6f3f79d9",
+    "stakehub/shielded_exit_venue_settlement.py": "b1238f93ba128587c327636f1266af968acbbe3bae6c5cf55fa3c36b1081f15b",
+    "stakehub/shielded_exit_venues.py": "0218f91356972592aa1d319f644ba5a7f02915ee58531a30dc3279c211b04ab3",
+    "dashboard/shielded-cover.html": "ff8cd11e44ea4837e6bc2399c69458e4548d829821d9392f9c669caec9672a79",
+    "native/pftl-transaction-inspect/Cargo.toml": "81593f2a26d0ae8d6bc1cf4d934fac6502aee1b9e6a3869c69eaa21347f21b00",
+    "native/pftl-transaction-inspect/Cargo.lock": "50034e819aab2b0d1fc4e2ecb2c7a5f98a0d83afbb23fd39b351f873c2fab90e",
+    "native/pftl-transaction-inspect/src/main.rs": "d5691b3ae2db130ef59a978680d7a63aaa946d0026412c6b6564a19e2a2c6af1",
+    "native/pftl-transaction-inspect/README.md": "ef2fecb72ad97eb669bc7c992d94b6a1f8b3adcbf669398ea4c849a20b7ce13a"
+  },
+  "gates": [
+    {
+      "id": "operator_budget",
+      "status": "open",
+      "requires": "manager-selected isolated wallet, exact capital, native ETH/PFT and proof/quote budgets, pilot holding horizon"
+    },
+    {
+      "id": "route_verification",
+      "status": "open",
+      "requires": "fresh chain pins, review of vault/verifier/route/Inbox and Lighter proxy/implementation/additional implementation, certified ingress/burn/release conformance"
+    },
+    {
+      "id": "archive_importer",
+      "status": "open",
+      "requires": "complete finalized Ethereum/PFTL/Arbitrum/venue history importer, ownership/sponsor/behavior evidence and source lineage; normalized JSON alone is insufficient"
+    },
+    {
+      "id": "production_driver",
+      "status": "open",
+      "requires": "integrate local note creation, public-state synchronization, ingress proof relay, shared sponsorship, finalized burn/release and venue credit into the common stage runner"
+    },
+    {
+      "id": "funded_probe",
+      "status": "open",
+      "requires": "source-to-Hyperliquid and source-to-Lighter functional runs at an explicitly selected affordable denomination; exact bridge delivery where applicable and independently verified venue credit"
+    },
+    {
+      "id": "cover_privacy",
+      "status": "open",
+      "requires": "actual funded cover history passes every selected model; separate operator result and later disclosure sensitivity"
+    },
+    {
+      "id": "operating_capacity",
+      "status": "open",
+      "requires": "measured fees, inventory, finite venue holding capacity, restart/recovery and disclosure behavior"
+    }
+  ],
+  "funds_moved": false,
+  "task_node": "task_ed942369a9d92007a389dc32ffbefa5c",
+  "lighter_task_node": "task_1b81da68342923f814770ea149d3f048"
+}

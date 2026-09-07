@@ -3283,3 +3283,58 @@ fn mint_settlement_real_anvil_release_matches_accepted_pftl_backing() {
 
     std::fs::remove_dir_all(root).expect("remove isolated mint-settlement state");
 }
+
+#[test]
+fn burn_bundle_uses_governed_source_series_balance() {
+    let data_dir = unique_test_dir("postfiat-burn-source-series-builder");
+    let store = NodeStore::new(&data_dir);
+    let mut genesis = Genesis::new("postfiat-local");
+    genesis.pfusdc_source_series_activation_height = Some(1);
+    let profile = route(1, 1, "22");
+    let mut ledger = route_ledger(&profile);
+    ledger.nav_assets[0].finalized_epoch = 1;
+    ledger.nav_assets[0].finalized_reserve_packet_hash = "91".repeat(48);
+    let mut bucket = postfiat_types::VaultBridgeBucketState::new(
+        profile.asset_id.clone(), profile.source_domain(), profile.profile_hash().unwrap(), 1,
+    ).unwrap();
+    bucket.outstanding_vault_bridge_atoms = 5_000_000;
+    let mut source = AssetDefinition::new(&genesis.chain_id, "issuer", "TEST", 1, 9).unwrap();
+    source.asset_id = "bb".repeat(48);
+    source.asset_family_id = profile.asset_id.clone();
+    source.source_series_id = source.asset_id.clone();
+    source.source_bucket_id = bucket.bucket_id.clone();
+    let mut line = TrustLine::new("holder", "issuer", source.asset_id.clone(), 5_000_000, 10).unwrap();
+    line.balance = 5_000_000;
+    ledger.asset_definitions.push(source);
+    ledger.trustlines.push(line);
+    ledger.vault_bridge_bucket_states.push(bucket);
+    let governance = GovernanceState::new(1);
+    store.write_genesis(&genesis).unwrap();
+    persist_governed_bridge_state(&store, &governance, &ledger, 1, 0);
+    let options = VaultBridgeBurnToRedeemBundleOptions {
+        data_dir: data_dir.clone(), owner: "holder".into(), issuer: Some("issuer".into()),
+        asset_id: profile.asset_id.clone(), bucket_id: None, amount_atoms: 5_000_000,
+        epoch: Some(1), reserve_packet_hash: None,
+        destination_ref: format!("evm-erc20:1:{}", "0x11".to_string() + &"11".repeat(19)),
+        bundle_dir: data_dir.join("bundle"), overwrite: false,
+    };
+    let report = vault_bridge_burn_to_redeem_bundle(options.clone()).expect("source balance suffices without a base trustline");
+    assert_eq!(report.asset_id, profile.asset_id);
+    assert_eq!(report.amount_atoms, 5_000_000);
+    // A base-family balance cannot cover a missing balance in this source.
+    let mut base = TrustLine::new("holder", "issuer", profile.asset_id, 5_000_000, 10).unwrap();
+    base.balance = 5_000_000;
+    ledger.trustlines.push(base);
+    ledger.trustlines[0].balance = 0;
+    store.write_ledger(&ledger).unwrap();
+    assert!(vault_bridge_burn_to_redeem_bundle(options.clone()).unwrap_err().to_string().contains("source balance"));
+    // Nor may another source series for the same bucket be silently selected.
+    ledger.trustlines[0].balance = 5_000_000;
+    let mut duplicate = ledger.asset_definitions[0].clone();
+    duplicate.asset_id = "cc".repeat(48);
+    duplicate.source_series_id = duplicate.asset_id.clone();
+    ledger.asset_definitions.push(duplicate);
+    store.write_ledger(&ledger).unwrap();
+    assert!(vault_bridge_burn_to_redeem_bundle(options).unwrap_err().to_string().contains("duplicate source-series"));
+    let _ = fs::remove_dir_all(data_dir);
+}
