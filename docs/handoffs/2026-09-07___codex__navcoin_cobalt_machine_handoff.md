@@ -1,6 +1,6 @@
 # NAVCoin, Cobalt, and storage: machine handoff
 
-This branch collects the unpublished NAVCoin work and the current Cobalt/Task Node sources. It is a development handoff. **The September 7 Ethereum → pfUSDC → A666 → Uniswap → A666 → pfUSDC → Ethereum reproduction is incomplete.** No new USDC deposit was made in that attempt.
+This branch collects the unpublished NAVCoin work and the current Cobalt/Task Node sources. It is a development handoff. **The September 7 Ethereum → pfUSDC → A666 → Uniswap → A666 → pfUSDC → Ethereum reproduction is incomplete.** The initial attempt made no new USDC deposit. The resumed run has since deployed and activated epoch 10 and deposited 10 USDC; see the [current external-route record](../status/NAVCOIN-EXTERNAL-ROUTE-20260907.md). Do not repeat that deposit.
 
 ## Check out the working set
 
@@ -49,7 +49,7 @@ Generated StakeHub `site/`, egg metadata, local `.postfiat` state, compiler outp
 
 ## Verified recovery point and deployed source
 
-Last reconciled observation: September 7, 2026, block **1005**, all six validators agreed, mempools empty. State root:
+Initial handoff recovery observation: September 7, 2026, block **1005**, all six validators agreed, mempools empty. State root:
 
 ```text
 6ed69ca9479b291c01d8265a914d1c005e28964496e5e63f4f93458401189f09cc64f046b4307fe9ee299419ced065f9
@@ -65,7 +65,7 @@ Release: `a666-source-route-20260907`; deployed binary SHA-256:
 
 **This consolidated branch is not the exact deployed source tree.** It merges later main/Arc content. Do not label its build with the deployed binary hash or assume a new build is authorized for deployment just because it compiles.
 
-## Where the full NAVCoin attempt stopped
+## Where the initial full NAVCoin attempt stopped
 
 Read the [round-trip definition](../runbooks/A666-ROUND-TRIP-DEFINITION.md). The required route includes both Uniswap directions, export/mint, return burn/import, NAV redemption into the same pfUSDC source, external USDC withdrawal, PFTL settlement, and final reconciliation.
 
