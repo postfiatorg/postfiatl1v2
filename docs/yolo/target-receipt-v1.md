@@ -5,6 +5,30 @@ move portfolio capital, establish reserves, or authorize issuance. Existing
 transaction fees still apply. This implements Phase 7 of NAVStrategies'
 `docs/pre_production/yolo_e2e_tee_proof_runbook.md`.
 
+## Where verification lives
+
+The SP1 guest verifies the private witness and derives the portfolio target.
+PFTL validators verify the resulting Groth16 proof against immutable registered
+expectations. A validator does not download the options chain or rerun the
+hours-long prover to accept a receipt.
+
+| Boundary | Implementation | Checks |
+| --- | --- | --- |
+| Guest entrypoint | [`yolo-target-guest/src/main.rs`](../../tools/nav-reserve-proof/programs/yolo-target-guest/src/main.rs) | Decode the bounded witness, execute the proof logic and commit exactly 408 public bytes. |
+| Nitro attestation | [`yolo_nitro.rs`](../../tools/nav-reserve-proof/crates/reserve-proof-types/src/yolo_nitro.rs) | X.509 chain and pinned root, COSE/P-384 signatures, non-debug PCR policy, committed time, nonce and statement-key binding. |
+| Provenance and target | [`yolo_target_proof.rs`](../../tools/nav-reserve-proof/crates/reserve-proof-types/src/yolo_target_proof.rs), [`yolo_collection.rs`](../../tools/nav-reserve-proof/crates/reserve-proof-types/src/yolo_collection.rs), [`yolo_target.rs`](../../tools/nav-reserve-proof/crates/reserve-proof-types/src/yolo_target.rs) | Collection completeness, attested statement chain/signatures, normalized-input commitment, explicit parameters/prior state and deterministic target calculation. |
+| Consensus receipt acceptance | [`yolo_target_verifier.rs`](../../crates/execution/src/yolo_target_verifier.rs), [`nav_sp1_verifier.rs`](../../crates/execution/src/nav_sp1_verifier.rs) | Registered program/key and public fields, proof/ABI bounds, Groth16 verification, activation, submitter/replay identity and duplicate rejection. Existing transaction processing verifies the outer signatures. |
+| Public ABI and registration | [`yolo_target_public_values.rs`](../../crates/types/src/yolo_target_public_values.rs), [`yolo_target_receipt.rs`](../../crates/types/src/yolo_target_receipt.rs) | Strict versioned encoding, canonical registration commitments and comparison of registered expectations with the proved public fields. |
+| Independent operator verification | [`yolo-target-cli/src/sp1.rs`](../../tools/nav-reserve-proof/crates/yolo-target-cli/src/sp1.rs) | The `verify` command checks public acceptance pins, the actual guest ELF and its derived verification key, then verifies Groth16. |
+| Receipt query and finality | [`yolo_target_queries.rs`](../../crates/node/src/yolo_target_queries.rs), [`block_finality.rs`](../../crates/node/src/block_finality.rs), [`yolo_target.py`](../../python/postfiat_rpc/yolo_target.py) | Expose persisted receipt and canonical transaction finality; the Python client checks expected chain/genesis, program/key and registration identity. |
+
+The guest proves that the committed enclave statements bind the normalized
+inputs. The measured NAV collector owns Schwab TLS, raw-response capture and
+normalization; authorized NAV replay separately checks those retained raw inputs
+against the normalized input and the same public bytes. The guest does not
+independently prove a TLS transcript. Correct root/PCR/program/manifest selection
+remains an explicit registration and consumer trust policy.
+
 ## Operations and authority
 
 `yolo_target_register_v1` signs immutable run metadata. All fields are required:
