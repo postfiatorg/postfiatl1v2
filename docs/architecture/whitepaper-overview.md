@@ -1,15 +1,15 @@
 # Whitepaper overview and implementation guide
 
-PostFiat is an authority-validated settlement ledger with several distinct settlement and governance paths. Its code supports substantially more than the whitepaper's July Cobalt boundary describes, while some of the paper's admission, privacy-containment and certificate-cost statements are broader than the implementation or retained evidence supports. This audit corrects those statements and records the remaining limits.
+The [whitepaper](../whitepaper.md) presents PostFiat's protocol design, economic thesis, and conditional security argument. This companion guide records the implementation audit against the original paper and pinned source below. Its findings describe that audit baseline, not a new conformance assessment of every subsequent editorial revision.
 
-Read the [whitepaper](../whitepaper.md) for the protocol argument, the [73-claim alignment table](whitepaper-alignment.md) for source/test references, the [prioritized gaps](whitepaper-gaps.md) for follow-up work, and the [validation record](whitepaper-validation.md) for checks actually run. The [Cobalt and admission publication follow-up](cobalt-admission-publication-review.md) explains the expanded whitepaper and blog corrections. These documents do not certify mainnet readiness or current fleet health.
+Read the [73-claim alignment table](whitepaper-alignment.md) for source/test references, the [prioritized gaps](whitepaper-gaps.md) for follow-up work, and the [validation record](whitepaper-validation.md) for checks actually run. The [Cobalt and admission publication review](cobalt-admission-publication-review.md) retains the implementation findings and blog corrections. Deployment history remains in the [Cobalt implementation record](../governance/cobalt-implementation.md); the former evidence appendix is preserved in the [historical measurement register](whitepaper-measurement-register.md). These records are separate from the whitepaper and do not certify mainnet readiness or current fleet health.
 
 ## Identity and reading order
 
 | Input | Audited identity |
 | --- | --- |
 | Repository | `postfiatorg/postfiatl1v2` at `d351353e57b295368450a57866ace17b5e1ce6ad` |
-| Canonical protocol candidate | `docs/whitepaper.md`, Version 3, June 2026; July 2026 implementation reconciliation |
+| Original audited paper | `docs/whitepaper.md` at the source pin above, Version 3, June 2026; July 2026 implementation reconciliation |
 | Original paper SHA-256 | `83fa0951a27d8278b0fa6435d49931e406941a6860adf13f28d376fea600cc98` |
 | Original downloadable copy SHA-256 | `07263d9e45359dcc8d5e27b2dc113c80588a634a192bb2af3a86f2a89bf4578e`; stale before this patch |
 | Commercial paper | `docs/business/whitepaper.md`; explicitly non-normative, not an alternate protocol specification |
@@ -42,9 +42,16 @@ flowchart TD
 
 Consensus orders a block; execution decides whether each transaction succeeds. A valid block certificate can accompany a rejected receipt. FastPay and FastSwap have their own owned-object certificates and recovery conditions. Cobalt decides a bounded validator-trust action; it does not finalize blocks or choose trustworthy institutions from raw evidence. Asset-Orchard proofs protect a specific private-action boundary; public ingress and egress deliberately reveal more.
 
-## Section-by-section guide
+## Guide to the original audit
 
-| Paper section | Meaning and audited implementation boundary |
+Section labels in this table follow the audited paper and its publication
+corrections. The current paper separates protocol requirements from these
+implementation findings. In particular, its admission example now rejects
+confirmed prohibited shared control, and its transition argument states the
+persistent signing assumption across views and registries. The old Appendix A
+is retained in the historical measurement register linked above.
+
+| Historical paper section | Meaning and audited implementation boundary |
 | --- | --- |
 | Abstract; §1 and §§1.1–1.2 | The thesis is known-operator settlement without native validator subsidies, with explicit trust evolution and privacy. Fail-closed and old-rules-first are engineering invariants; least machinery and natural-stakeholder economics are design principles. Missing model input holds in the controlled required-model profile, not in every imaginable policy. The canonical paper and evidence identities must remain separate. |
 | §2 | The argument assumes a bounded Byzantine population, sufficient honest quorum, partial synchrony for liveness and unbroken cryptography. Code checks signatures, domains and arithmetic; it cannot prove operator independence or detect every correlated fault. ML-DSA account/validator authorization coexists with classical privacy, proof and external-chain assumptions. |
@@ -60,7 +67,7 @@ Consensus orders a block; execution decides whether each transaction succeeds. A
 | §§7.1–7.3 | Asset-Orchard private swaps hide note openings and raw private asset/value data. Ingress/egress have public amounts/assets/endpoints. Validators verify upstream-backed proofs and authorization; proving belongs outside validator services. RedPallas binds private actions; ShieldedActionBatch has no account ML-DSA outer envelope. Legacy/pre-repin archive handling is a separate, exact replay boundary. |
 | §§7.4–7.6 | Per-asset turnstiles bound public withdrawals; counterfeit notes could still consume existing pool value. An underflow rejection does not automatically pause the pool or restore funds. Registry and nullifier state share commitments, but dedicated cross-boundary coverage needs care. Local disclosure works; archived assurance/metadata fixtures are not universal live privacy controls. Timing and public boundary fields remain visible; note encryption is classical. |
 | §§8.1–8.2 | Model work stays in off-chain tooling. A parser/selector can convert supplied evidence into a candidate, but active authority must validate and order a live action. Later Task Node UNL work is shadow-only. The paper's old “current” pipeline omitted activated Cobalt and has been corrected. |
-| §§8.3–8.4 | A root-shaped replay-certificate field is not verification of independent replay signatures. The complete replay-profile/quorum pipeline remains a target. The worked shared-control hold is illustrative; current selector policy rejects the explicit shared-control case. |
+| §§8.3–8.4 | A root-shaped replay-certificate field is not verification of independent replay signatures. The complete replay-profile/quorum pipeline remains a target. The historical worked example used a hold despite explicit shared control; the current paper correctly uses rejection, consistent with the selector's precedence rule. |
 | §§8.5–8.6 | Repeatability is profile- and packet-specific. Original E5–E7 reports are absent here, and summaries of different Apple/GPU probes cannot be conflated. Model promotion is separate from admission and is not automatically within current Cobalt authority. |
 | §§9.1–9.3 | ML-DSA-65 has 1,952-byte public keys and 3,309-byte signatures. V2 serializes public keys and multiple signed stages; the paper's 80,184/223,847-byte examples are simplified single-set arithmetic, not wire sizes. Original timing evidence is unavailable. No implemented SLH-DSA recovery commitment, alternate verifier or automatic migration was found. |
 | §§10–11 | Recovery and non-claims must be stated per mechanism. Quorum loss, classification ambiguity, invalid transitions and a cryptographic break have different responses. Trusted genesis, undeclared social dependencies, metadata leakage and controlled-testnet limits remain. |

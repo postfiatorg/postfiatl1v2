@@ -13,7 +13,7 @@ The method separates implemented source, dated deployment observations, research
 
 ## The corrected explanation
 
-The [whitepaper](../whitepaper.md#53-admission-policy-and-the-evidence-boundary) now separates three obligations:
+The [publication revision](https://github.com/postfiatorg/postfiatl1v2/blob/f920f63c845eaafe05c4bee998314e7a4f77e19d/docs/whitepaper.md#53-admission-policy-and-the-evidence-boundary) separated three obligations. This review records that revision's implementation findings; the current whitepaper retains the protocol argument, while source details remain here.
 
 1. **Establish facts.** Authenticate operator identity, observations and control relationships, and expose disputed or missing evidence.
 2. **Evaluate the supplied packet.** `evaluate_validator_admission` checks its configured scores, labels, flags and evidence references. It does not independently perform the first obligation or implement the full economic-exposure/attack-risk formula.
@@ -21,7 +21,7 @@ The [whitepaper](../whitepaper.md#53-admission-policy-and-the-evidence-boundary)
 
 The controlled selector requires reliability at least 9,950 basis points, accountability at least 70, correlation at most zero, no prohibited shared nonempty control-group label, and true manifest/domain/linkedness flags. A supplied false flag or explicit shared-control failure rejects; missing/stale/conflicting evidence creates hold reasons; rejection takes precedence. Different labels do not establish different real controllers. Source-hash and replay-root shape checks do not authenticate facts or independent replay signatures.
 
-The [expanded Cobalt section](../whitepaper.md#6-implemented-cobalt-governance-and-remaining-targets) explains the signed RBC → ABBA → MVBA → DABC certificate, active-registry authorization, payload/root/parent/round/slot bindings, scope exclusivity and Consensus v2 ordering. It cites retained activation at 916, first rotation at 917, final rollback/return at 922/923, and rotation/convergence at 924. The earlier 920/921 trust-binding remediation remains visible. E6 still requires independent operators; the complete target manifest and proof composition remain separate requirements.
+The publication revision described the signed RBC → ABBA → MVBA → DABC certificate, active-registry authorization, payload/root/parent/round/slot bindings, scope exclusivity and Consensus v2 ordering. The [implementation record](../governance/cobalt-implementation.md) retains activation at 916 and first rotation at 917; the [adversarial campaign](../governance/cobalt-adversarial-verification-results.md) retains the final rollback/return at 922/923 and rotation/convergence at 924, including the earlier 920/921 remediation. These deployment details belong in those records. The current [Cobalt section](../whitepaper.md#6-cobalt-trust-evolution) develops the protocol and conditional safety argument. E6 still requires independent operators; the complete target manifest and proof composition remain separate requirements.
 
 ## Blog corpus disposition
 
@@ -56,7 +56,7 @@ These add provenance beyond the original L1 checkout, especially for E3/E7. The 
 
 ## Validation and delivery
 
-The revised canonical paper and download share SHA-256 `8424dab97149a4d038f8bf0512c38b16eb4f92dff1fda39c0037ec94970212c5`. The locked research specification remains byte-identical at its recorded hash. The [retired implementation journal](../plans/completed/cobalt-admission-publication-milestone.md) tracks delivery and Task Node closeout.
+At the publication revision linked above, the canonical paper and download shared SHA-256 `8424dab97149a4d038f8bf0512c38b16eb4f92dff1fda39c0037ec94970212c5`. The locked research specification remains byte-identical at its recorded hash. The [retired implementation journal](../plans/completed/cobalt-admission-publication-milestone.md) tracks delivery and Task Node closeout.
 
 - `PYTHONPATH=python python3 -m postfiat_rpc.whitepaper_audit --check`: passed all 73 original claim references, coverage, generated table and synchronized download checks.
 - `scripts/test-whitepaper-implementation-boundaries`: passed.
