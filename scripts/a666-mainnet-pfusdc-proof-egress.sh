@@ -99,6 +99,23 @@ if ! "$resume"; then
 fi
 mkdir -p "$egress_dir"
 
+# This host embeds its guest; verify that identity before burning native funds.
+if test "$prover_backend" = cpu; then
+  test -x "$local_prover"
+  test -s "$egress_elf"
+  SP1_PROVER=cpu "$local_prover" program-info \
+    --output "$egress_dir/local-prover-program-info.json" \
+    > "$egress_dir/local-prover-program-info.log"
+  expected_elf_sha256=$(sha256sum "$egress_elf" | awk '{print $1}')
+  jq -e --arg vkey "$program_vkey" --arg elf "$expected_elf_sha256" \
+    '.egress.program_vkey==$vkey and .egress.elf_sha256==$elf' \
+    "$egress_dir/local-prover-program-info.json" >/dev/null
+  python3 - <<'PY'
+import runpy
+runpy.run_path("scripts/nav-reserve-proof-cpu-bounded")["require_docker_access"]()
+PY
+fi
+
 round_args=(
   --node-bin "$local_node"
   --remote-runner scripts/a666-remote-sync-round.py
@@ -274,7 +291,13 @@ if ! test -s "$proof_dir/proof-report.json"; then
     test -x "$local_prover"
     test -s "$egress_elf"
     mkdir -p "$proof_dir"
-    SP1_PROVER=cpu "$local_prover" egress --elf "$egress_elf" --witness "$egress_dir/witness.json" --output-dir "$proof_dir" --prove
+    python3 - "$local_prover" "$egress_dir/witness.json" "$proof_dir" <<'PY'
+import runpy, subprocess, sys
+helpers = runpy.run_path("scripts/nav-reserve-proof-cpu-bounded")
+subprocess.run([sys.argv[1], "egress", "--witness", sys.argv[2],
+                "--output-dir", sys.argv[3], "--prove"],
+               env=helpers["bounded_environment"](), check=True)
+PY
   else
   ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
     "test ! -e '$a100_root'; install -d -m 700 '$a100_root'"

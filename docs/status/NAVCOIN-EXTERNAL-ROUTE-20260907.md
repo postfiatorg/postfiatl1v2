@@ -32,6 +32,8 @@ For each Uniswap direction, `a666-mainnet-uniswap-allowances.py --token … --am
 
 The captured ingress witness also passed all 16 native adversarial rejection cases. That audit does not replace the pending Groth16 proof or the remaining live route legs.
 
+The after-mint wrapper carries the issue manifest's source-series asset into NAV redemption and resolves its bucket explicitly for withdrawal. Its two swap calls use the durable output interface and exact input approvals. The CPU egress wrapper verifies the embedded program's vkey and ELF hash before a native burn, checks Docker access, and runs the supported `egress` command with bounded worker settings. These command-path repairs are not evidence that the pending trade or withdrawal has executed.
+
 The original host's durable job and receipt directory is `~/.local/share/stakehub/a666-full-route-20260907/`. Its `active-resume.json` points to the current jobs and immutable transaction records. The private StakeHub companion archive contains a receipt snapshot in `docs/handoffs/navcoin-recovery-20260907/resumed-epoch10/`. Local paths and loopback endpoints require host-specific configuration.
 
 The empty epoch-7 contracts remain invalid and must never be funded. The old epoch-6 verifier's committee-transition incompatibility is not claimed fixed: the fresh epoch-10 verifier starts after those rotations. A complete withdrawal proof is still required. The historical Cobalt publication-binding defect and the paused private-funding objective are unchanged.
