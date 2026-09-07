@@ -10,6 +10,20 @@ The goal is confidential settlement for workflows where transparent ledgers leak
 too much: balances, counterparties, timing, execution intent, treasury movement,
 and position changes.
 
+## Source and evidence boundary
+
+The supported private settlement path is Asset-Orchard; transparent transactions
+remain supported. Ingress and egress disclose public asset/amount/endpoints,
+while private swaps hide their note openings. The turnstile caps public value
+release but does not detect every counterfeit spend or automatically pause the
+pool. See the [whitepaper audit](../architecture/whitepaper-alignment.md#7).
+
+The list below mixes source functionality with **historical fixtures and
+reports**. Several referenced scripts/reports were archived outside this
+repository. Assurance, metadata, anonymity and inference fixtures do not by
+themselves establish live enforcement or measured anonymity for current users.
+Use [Privacy Evidence](../evidence/privacy.md) for that provenance boundary.
+
 ## What Exists
 
 - Orchard/Halo2 adapter using the upstream Rust/Zcash Orchard stack.

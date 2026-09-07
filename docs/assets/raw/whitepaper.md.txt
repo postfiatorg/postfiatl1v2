@@ -2,15 +2,52 @@
 
 ### Governed trust evolution, shielded settlement, replayable machine classification, and post-quantum authorization
 
-**Whitepaper, Version 3 — June 2026**
+**Whitepaper, Version 3 — June 2026; implementation boundary reconciled September 2026**
+
+**Canonical protocol-document candidate.** This is the only repository document
+intended to describe the protocol. It remains a controlled pre-testnet
+conformance draft: present-tense statements are limited by the explicit current
+implementation boundaries in this document and by `SECURITY.md`.
+
+The [whitepaper overview](architecture/whitepaper-overview.md) and
+[claim-by-claim alignment audit](architecture/whitepaper-alignment.md) review the
+original July text against source commit
+`d351353e57b295368450a57866ace17b5e1ce6ad`. The
+[gap backlog](architecture/whitepaper-gaps.md) separates documentation corrections
+from remaining implementation and evidence requirements. Source availability,
+retained deployment observations and current network health are distinct claims.
 
 ---
 
 ## Abstract
 
-PostFiat is a Layer 1 settlement ledger in the XRP category — known validators, fast deterministic finality, fixed supply, fee burn, and no native validator rewards — rebuilt around the surfaces where that category has historically been weakest. Validator-list evolution becomes protocol state governed by Cobalt-checked transitions instead of recommended-list publication. Settlement privacy becomes a baseline note-based path with public supply accounting instead of a later overlay. Qualitative governance judgment becomes a public, typed, replayable artifact instead of private committee discretion. Authorization is post-quantum from genesis instead of deferred to an emergency migration.
+PostFiat is a Layer 1 settlement-ledger design in the XRP category — known
+validators, deterministic certificate finality, fixed native supply, fee burn,
+and no native validator rewards — with implemented versioned governance,
+Asset-Orchard privacy, and post-quantum account/validator authorization. Activated
+Cobalt ratifies the bounded validator-trust scope; broader trust-governance and
+replayable machine-classification composition remain target architecture. The repository implements multiple consensus and
+certificate-settlement lanes while keeping deployment and real-value claims
+separate from source availability.
 
-This paper states the protocol argument: the threat model and assumptions, the ledger and consensus design, the admission economics that justify zero issuance, the Cobalt transition machinery and its safety argument, the shielded settlement path and its honest leakage profile, the bounded role of machine classification, the cryptographic cost accounting, and the named recovery surface for every failure mode. Empirical measurements appear only as hash-bound artifacts in an evidence register; every empirical sentence in the body names the artifact that backs it, and every artifact backs only its own sentence.
+> **Current source boundary (September 2026):** Governance authority is
+> versioned. Foundation mode uses distinct ML-DSA-65 authorizations from the
+> active registry. After an authorized handoff, validator-trust updates require
+> a key-bound RBC → ABBA → MVBA → DABC decision certificate and distinct
+> current-registry Cobalt authorizations; old Foundation authorizations cannot
+> substitute for that path. Unrelated governance retains Foundation authority.
+> Consensus v2 orders the mutation in either mode. Unsigned legacy artifacts
+> remain historical-replay-only. Section 6 distinguishes this implemented
+> bounded scope from its broader target objects and proof assumptions. See
+> [Cobalt implementation](governance/cobalt-implementation.md) and the dated
+> [operational-state record](status/chain-state-current.md).
+
+> **Privacy boundary:** Asset-Orchard is the supported private settlement path.
+> The legacy cleartext note decoder is historical replay only, and transparent
+> transfers remain supported; this candidate does not claim all routine state is
+> private by default.
+
+This paper states the protocol argument: threat assumptions, ledger and consensus design, conditional admission economics, Cobalt transitions, shielded settlement and leakage, bounded machine classification, cryptographic costs, and recovery limits. Appendix A identifies the historical measurements cited in the body. Several original measurement packets are absent from the pinned public checkout; their retained summaries are not independent verification of those measurements. The alignment audit records that provenance limit for each entry.
 
 ---
 
@@ -56,21 +93,59 @@ PostFiat is designed against five adversary classes.
 | Model or runtime operator | Prompt injection, hidden evidence substitution, model drift, nonreproducible inference. | Closed option sets, source hashes, pinned replay profiles, replay certificates, governed replacement (§8). |
 | Public observer | Balance analysis, flow correlation, timing analysis, fee fingerprinting, strategy inference. | Shielded notes remove routine state from public view; disclosure is explicit, scoped, and holder-controlled (§7). |
 
-The formal assumptions behind these responses are explicit. Within an epoch with $n$ active validators, at most $f=\lfloor(n-1)/3\rfloor$ are Byzantine. Across a registry transition, the actively Byzantine set is bounded by the transition profile's budget $B$. Safety is asynchronous: no commit, registry transition, or shielded state update depends on timing, only on certificate arithmetic. Liveness assumes partial synchrony: after an unknown stabilization time, messages between correct validators arrive within a bound, which is what view changes and challenge-window progress require.
+The formal assumptions behind these responses are explicit. Within an epoch with $n$ active validators, at most $f=\lfloor(n-1)/3\rfloor$ are Byzantine. Across a registry transition, the actively Byzantine set is bounded by the transition profile's budget $B$. Safety is asynchronous: no commit, registry transition, or shielded state update depends on timing, only on certificate arithmetic. Consensus v2 safety therefore does not use a clock; its liveness after a failed proposer assumes partial synchrony so a quorum of timeout and phase votes can eventually be delivered. Networks whose genesis omits the v2 activation height retain the legacy safety-first single-view mode and can halt after a failed proposer. Challenge-window progress separately assumes partial synchrony.
 
-The cryptographic assumptions are EUF-CMA security of ML-DSA signatures, collision resistance of SHA3-384, and the soundness and zero-knowledge properties of the Halo2 proving system over its curve cycle, which carries no per-circuit trusted setup. The signature and hash assumptions are post-quantum; the proof-system soundness assumption is classical, and §7 and §11 treat that asymmetry honestly rather than hiding it. A break of any single assumption maps to a named recovery surface (§10), not a silent failure.
+The cryptographic assumptions include EUF-CMA security of ML-DSA signatures;
+collision resistance of the domain-separated SHA3 constructions; RedPallas
+spend-authorization security; ChaCha20-Poly1305 note confidentiality and
+integrity; and the soundness and zero-knowledge properties of the Halo2 proving
+system over its curve cycle, which carries no per-circuit trusted setup. The NAV
+proof profile separately depends on its pinned SP1/Groth16 verifier and program
+key. ML-DSA is post-quantum; RedPallas, Halo2, Groth16, Orchard note encryption,
+and Ethereum-compatible paths are classical assumptions. Sections 7, 9, and 11
+treat that hybrid boundary explicitly rather than presenting the entire system
+as post-quantum. A break maps to a named containment or recovery requirement
+(§10), not a silent security claim.
 
 ---
 
 ## 3. Ledger Model
 
-The ledger state has four components: a transparent account map; a shielded pool consisting of a note-commitment tree and a nullifier set; registry state, comprising the active validator registry root, trust-graph root, checker root, and safety-profile root; and governed parameters, including fee classes, per-block action caps, and admission thresholds.
+The implemented replicated state is broader than four components. It contains a
+transparent account map; issued assets and trustlines; escrows, NFTs, offers and
+matching state; NAV assets, reserve packets, redemption/challenge and proof
+profiles; vault-bridge and currently disabled external-handoff history;
+FastLane/FastSwap policy, reserve, object and checkpoint state; an Asset-Orchard
+pool with commitment tree and nullifier set; generic bridge state; ordered
+batch/receipt history; and the active validator/governance state. The canonical
+state commitment tags and length-delimits these domains. Caches and local
+operator artifacts are excluded and must be reproducibly rebuildable.
 
-The native unit has a fixed supply set at genesis. There is no issuance of any kind. All transaction fees are burned, so supply is monotonically non-increasing. Fee classes price bytes, signature verifications, shielded actions, and registry operations as distinct resources rather than through a single gas scalar, and fee burn is the only protocol-level economic flow: no validator rewards, no foundation tax, no fee redistribution.
+The native PFT unit has a fixed genesis supply and no subsequent native issuance or validator subsidy. Consensus transaction fees burn native PFT; replay checks live native holdings against receipt-recorded burns. Issued assets and NAVCoins have their own authorized mint/burn rules, so this is not a prohibition on issued-asset creation. Payments, market settlement and issuer transfer fees remain application economic flows.
 
-Transactions fall into governed classes: transparent transfers between accounts; shielded bundles that spend and create notes (§7); registry transitions and their supporting evidence anchors (§6, §8); receipt aggregates for ordering accountability (§4.3); and parameter changes, which are themselves Cobalt-gated. Shielded notes carry an asset type inside the commitment, so issued assets within governed asset classes settle shielded under the same public-accounting discipline as the native unit.
+The implementation has transaction-family byte floors, state-expansion charges and Orchard resource fees. A single governed fee-class schedule covering every signature, proof and registry operation is not established by this release; §9's illustrative signature budgets are not fee constants. See the [fee-accounting gap](architecture/whitepaper-gaps.md#g06-fees-and-certificate-costs).
 
-Every block is verified under exactly one active registry root, and a block commits one ordered state transition across all four state components. There is no height at which two registry roots are simultaneously authoritative, a property §6 and §7 both depend on.
+Live transaction families include transparent payments, issued-asset
+operations, escrows, NFTs, offers, NAV and vault-bridge operations,
+dual-authorized atomic swaps, FastLane primary operations, Asset-Orchard
+actions, and governance batches authorized under the active authority mode.
+Bounded Cobalt validator-trust updates are implemented; the broader transition
+composition described in §6 and receipt-aggregate ordering accountability
+retain the limitations stated in their respective sections. Asset-Orchard
+notes carry asset and value inside commitments so supported issued assets can
+settle under per-asset public turnstile accounting.
+
+Every block is verified under exactly one active registry root and commits one
+ordered transition across all replicated domains. An authorized registry
+transition is validated by the old registry, commits at one ordered boundary,
+and preserves the one-root-per-height property described in §6 and §7.
+
+New networks activate the complete replicated-state-v2 commitment at genesis,
+including every FastLane reserve, receipt, authorization, policy, committee,
+fence, checkpoint, and activation field. A legacy chain can cross that encoding
+boundary only at an irreversible, future height committed before the validator
+upgrade; an uncoordinated restart or a permissive legacy-root fallback is not a
+valid migration.
 
 ---
 
@@ -78,27 +153,75 @@ Every block is verified under exactly one active registry root, and a block comm
 
 ### 4.1 Certified ordering
 
-Ordering uses a HotStuff-style certified path. For $n$ active validators, the fault bound is $f=\lfloor(n-1)/3\rfloor$ and the quorum is $q=\lfloor 2n/3\rfloor+1$, with leader rotation
+The candidate implements two explicitly versioned ordering modes. If genesis
+omits `consensus_v2_activation_height`, the legacy single-view direct-certificate
+rule remains in force and every nonzero view fails closed. A network configured
+with an activation height uses that legacy rule below the height and consensus
+v2 at and above it. Existing networks cannot silently rewrite genesis to enable
+v2. A typed future activation may be committed only through the signed old-rule
+governance path and still requires every node to run a release that understands
+the same irreversible boundary. A network without that committed boundary
+requires a new genesis/reset with the old chain retained as independently
+replayable history.
 
-$$\text{leader}(height, view) = validators[(height + view) \bmod n].$$
+In consensus v2, for $n$ active validators the fault bound is
+$f=\lfloor(n-1)/3\rfloor$ and the quorum is
+$q=\lfloor 2n/3\rfloor+1$. The deterministic proposer is selected from the
+canonical committee by height and view. Every proposal, vote, QC and timeout
+certificate binds chain ID, genesis hash, protocol version, committee epoch and
+root, height, view, parent block ID, payload hash, resulting state root,
+validator identity and phase.
 
-A proposal binds the parent block, the justifying quorum certificate, the payload hash, the active registry root, and the proposer identity. A quorum certificate requires $q$ canonical votes for the same proposal id. A timeout certificate advances a failed view. Equivocation evidence — conflicting proposals or conflicting votes for the same height and view — is retained as validator evidence and feeds admission and removal (§5, §6). A two-chain rule commits a certified parent when a certified child names it. Safety of this path is pure certificate arithmetic and holds under asynchrony; liveness requires partial synchrony for views to stabilize on a correct leader. A simulation harness exercising the certified path, view changes, and equivocation handling is artifact [E8].
+The commit rule is explicit two-phase BFT, not chained HotStuff. A quorum of
+`prepare` votes forms a prepare QC and establishes each honest validator's
+durable lock. A quorum of `precommit` votes for that exact non-nil block forms a
+precommit QC; only that QC commits. A prepare QC or the legacy certificate alone
+cannot commit after activation. Safety state—highest prepare, precommit and
+timeout rounds, locked/high QC and last signed digests—is atomically persisted
+before a signature leaves the validator and is preserved in snapshot v6.
+
+If a view fails, a quorum of signed timeout votes forms a timeout certificate.
+A proposal for view $v+1$ must carry the certificate for view $v$ and its highest
+typed prepare-QC reference. Every reference resolves to a full verified QC;
+opaque or lexicographically ranked QC identifiers have no v2 authority. A
+locked block may be reproposed in the later view, while a conflicting block
+cannot use the lock's QC as ancestry. The final block record embeds the proposal,
+timeout ancestry, prepare QC and precommit QC, making replay independent of an
+in-memory cache. Exact `n=4` and `n=6` transport regressions cover a failed
+view-zero proposer and view-one recovery; adversarial models cover loss,
+duplication, reorder, partition, Byzantine equivocation and restart. Equivocation
+evidence remains available for admission and removal (§5, §6).
 
 ### 4.2 Deterministic inclusion order
 
-Ordering power is part of the threat model, not an afterthought. Included valid transactions are sorted canonically by governed fee class, then admission bucket, then transaction hash. The proposer chooses which transactions to include but not how to order what it includes, and not which fee class or bucket a transaction occupies. Sandwich-style reordering inside a block is therefore not available to the leader; the residual extraction attack is censorship by omission, which is why omission is made attributable.
+The production mempool groups transactions by transaction family and drains
+those families in a fixed implementation-defined sequence. Within each family,
+currently admitted entries retain insertion order. This is deterministic for a
+given replicated mempool state, but it is not a fee-class/admission-bucket/hash
+auction and does not remove proposer or ingress ordering power. Operators and
+wallets must therefore treat transaction ordering and omission as observable
+but not yet protocol-attributable risks. The stronger canonical-order model in
+`crates/ordering_fast` is a reference model, not the production inclusion path.
 
 ### 4.3 Censorship accountability
 
-Admission buckets are backed by signed validator receipts rather than one leader's claimed observation time. For one transaction and one observation window, a v1 receipt aggregate requires $q$ distinct ML-DSA-signed receipts under the active validator set, rejects stale windows and conflicting duplicate receipts, and adopts the maximum observed bucket as the conservative bucket. Omission evidence against a proposer requires at least $k_{omit}$ valid receipt aggregates across distinct windows, plus the heights of that proposer's eligible blocks that omitted the transaction.
-
-Colluding validators can withhold receipts, but then the failure is a named receipt-coverage failure rather than a successful frame: they cannot manufacture a false omission accusation without signing the receipt trail, and signed receipts are exactly the evidence that feeds removal.
-
-A worked example fixes intuition. In a seven-validator set with $q=5$ and $k_{omit}=2$, a censorship claim against proposer $P$ requires two distinct window aggregates, each containing five valid receipts for the same transaction, plus proof that $P$'s eligible blocks in those windows omitted it. One receipt is not enough, and five receipts in a single window are not enough; attribution requires repeated, threshold-observed omission. Receipt aggregation fixtures are part of artifact [E8].
+The production node does not currently issue threshold admission-receipt
+aggregates or consume omission evidence in consensus or governance. Related
+types and fixtures in `crates/ordering_fast` are research/reference machinery.
+The current public evidence can show that a transaction was included or
+omitted from an observed block and mempool snapshot; it cannot prove when a
+quorum first observed that transaction or automatically attribute censorship
+to a proposer. No stronger accountability claim is made for this release.
 
 ### 4.4 Availability suspension
 
-Liveness degradation from offline validators is handled by a precommitted availability suspension, the authority-validation analog of XRPL's Negative UNL. A validator that fails to sign in more than a governed fraction of recent certified rounds may be temporarily removed from quorum accounting by a suspension certificate signed by $q$ of the remaining active validators. A suspension is evidence-backed by the missed-round record, time-bounded, auto-expiring, and capped: at most $\lfloor n/5 \rfloor$ validators may be concurrently suspended at launch defaults, and quorum arithmetic over the effective set can never fall below the safety thresholds implied by the active trust graph (§6). Suspension changes quorum accounting, not registry membership; permanent removal remains a full Cobalt transition. Because a suspension certificate itself requires a quorum, a Byzantine minority cannot use the mechanism to eject honest validators and lower the bar for itself.
+The live protocol has no automatic Negative-UNL-style missed-round suspension,
+expiry, or reduced-quorum state machine. If a validator is unavailable, the
+current committee either still forms the normal quorum or the chain halts.
+The current candidate can change validator state only through an authorized,
+ordered old-rule transition. It has no automatic Negative-UNL-style suspension
+shortcut: a signed registry change is an explicit governance action and must
+not retroactively alter certificate thresholds.
 
 ---
 
@@ -138,11 +261,17 @@ $$
 
 Weights, floors, and caps are governance parameters, but they are public parameters bound to evidence fields. Launch defaults require source-bound reliance; $r_{min} = 0.995$ over the active observation window; signed operator identity plus domain control; no direct conflict above $b_{max}$; and $\rho_{max} = 0$ for a shared release manager, key-management vendor, or funding controller with an existing validator, unless a later Cobalt packet raises the cap for a named exception.
 
-Two properties of the predicate deserve emphasis. First, the economic screen does not override the correlation veto: a high-exposure candidate with shared release management, key management, or funding control still fails, because natural stake does not launder cosmetic diversity. Second, the predicate is executable, not aspirational. The controlled-testnet selector consumes a `ValidatorAdmissionEvidencePacket` and emits a `ValidatorAdmissionDecision`: missing or conflicting required fields hold, below-floor reliability or accountability and above-cap correlation reject, and only a clean pass emits an *add* registry-delta candidate. Fixture coverage spans clean admit, shared-control reject, missing-domain hold, contradictory-evidence hold, and unknown-model-field hold [E4]. The $linkedness$ term is defined in §6.4; admission and registry governance share one trust-graph vocabulary by construction.
+The target economic screen does not override the correlation veto: high exposure must not excuse shared control. The controlled-testnet selector implements a narrower executable screen over `ValidatorAdmissionEvidencePacket` and emits `ValidatorAdmissionDecision`. It checks supplied reliability, accountability, correlation and control-group fields, plus manifest, domain-control and linkedness flags. It does not independently fetch or authenticate those external facts, recompute graph linkedness at this boundary, or separately implement the formula's exposure and attack thresholds.
 
-### 5.4 The launch certificate
+Missing or conflicting required evidence creates hold reasons; explicit policy failures create reject reasons, which take precedence over holds. Only a clean pass emits an *add* candidate. The controlled profile sets reliability to 9,950 basis points, accountability to 70 and correlation cap to zero. The five retained fixture classes in [E4] test this supplied-packet behavior. A candidate is not a live admission authorization: the complete active-authority path must still verify and order any state change.
 
-The genesis validator set is the unavoidable bootstrap act. PostFiat treats it as a launch certificate rather than pretending it is already decentralization:
+### 5.4 Target public launch certificate
+
+The genesis validator set is the unavoidable bootstrap act. A future public
+launch is intended to freeze that act in the following signed certificate rather
+than pretending it is already decentralization. The current controlled pre-testnet
+has genesis bundles and operator manifests but does not implement this exact
+`LaunchCertificate` type or enforce the seven-ratifier public-launch minimum:
 
 ```
 LaunchCertificate = {
@@ -156,17 +285,34 @@ LaunchCertificate = {
 }
 ```
 
-After launch, the same operators cannot mutate those roots by private instruction; any change is a governed transition under the previous active rules (§6). A public launch profile requires at least seven ratifiers, no single control group above one third, and no silent shared release manager, key-management vendor, or funding controller across a quorum. The launch certificate does not make genesis trustless — nothing can — but it makes the trust assumption explicit, auditable, and frozen, so that every later deviation from it is a detectable hash mismatch rather than a quiet edit.
+No public launch may be claimed until this artifact and its verification path are
+implemented. The target profile requires at least seven ratifiers, no single
+control group above one third, and no silent shared release manager,
+key-management vendor, or funding controller across a quorum. Even then, the
+certificate would not make genesis trustless; it would make the bootstrap trust
+assumption explicit, auditable, and frozen.
 
 ---
 
-## 6. Cobalt-Governed Registry Evolution
+## 6. Cobalt-Governed Registry Evolution Target
+
+The source implements a bounded Cobalt validator-trust authority path, including
+signed protocol decisions, an authorized handoff and forward rollback/return.
+Its consumer is `verify_cobalt_validator_trust_update` in
+`crates/node/src/cobalt_handoff.rs`; unrelated governance remains outside this
+Cobalt scope. Consensus v2 continues to finalize blocks.
+
+The full genesis manifest, universal transition commitment tuple and complete
+proof-to-consumer composition below remain a stronger target. Library witness
+checks or a successful controlled rotation do not establish every target
+property. The [alignment matrix](architecture/whitepaper-alignment.md#6) records
+which checks exist and where that inference stops.
 
 ### 6.1 From recommended lists to protocol state
 
 XRP's strongest design idea is also its governance weakness: each server trusts a Unique Node List, and safety depends on sufficient overlap between local trust lists. This avoids proof-of-work and proof-of-stake markets, but it leaves validator-list evolution as social coordination around privately published recommendations. The live question — *will this list change preserve safety?* — is answered by reputation rather than by a checkable object.
 
-PostFiat makes validator-list evolution protocol state. Genesis commits to one manifest root covering the initial registry $G_0$, trust graph $T_0$, checker $\chi_0$, safety profile $\pi_0$, witness schema $\omega_0$, chain id, and launch ratification certificate. After finalization, genesis ratifiers have no override opcode. Changing the genesis manifest changes chain identity; it is a fork, not governance.
+PostFiat makes validator-trust evolution protocol state. The target genesis manifest commits the initial registry $G_0$, trust graph $T_0$, checker $\chi_0$, safety profile $\pi_0$, witness schema $\omega_0$, chain id and launch ratification certificate. The current genesis and governance schemas do not implement that exact complete manifest or §5.4's certificate. Current live changes must pass the active authority rules; genesis identity cannot be silently rewritten as an ordinary governance update.
 
 ### 6.2 Transition packets
 
@@ -196,7 +342,7 @@ The linkedness predicate is a graph check, not a trust score. A trust view $V_i$
 
 $$faults(S) \le t_S, \qquad |S| - faults(S) \ge q_S.$$
 
-For a validator $i$, $linkedness(G_t, i) = safe$ means: follow derived-UNL edges through the rooted trust graph and require every pair of views in that closure to be fully linked. The linkage report is recomputable from the rooted graph alone:
+For a validator $i$, $linkedness(G_t, i) = safe$ means: follow derived-UNL edges through the rooted trust graph and require every pair of views in that closure to be fully linked. The linkage report is recomputable from the rooted graph and an explicitly supplied fault model. The graph alone does not identify real Byzantine operators:
 
 ```
 LinkageReport = {
@@ -244,7 +390,14 @@ Adversarial covers inside $M_{cover}$ get no special escape hatch. The extractor
 
 ### 6.9 Deadlock and bounded recovery
 
-Cobalt deadlock preserves safety but is still a liveness failure, so it is bounded rather than improvised. Challenge windows are time-limited. If no valid transition clears the window before expiry, the old registry remains active, and every failed proposal, missing vote, and veto signature is retained as validator evidence. Emergency recovery is limited to precommitted actions: pause the pending delta, extend the challenge window, revert to the last valid registry root, or apply availability suspensions within the caps of §4.4. Each action is signed by the active registry quorum under the previous active rules; anything broader is a governed amendment, not an emergency override.
+Cobalt deadlock preserves the last valid registry but remains a liveness
+failure. Challenge windows are time-limited, and an expired transition leaves
+the parent registry active. The current implementation does not provide the
+four-action emergency recovery or capped availability-suspension state machine
+described in earlier drafts. The implemented signed authority handoff supports forward rollback/return
+under its active-registry, parent and replay checks; it is not the general
+four-action recovery design. Recovery beyond those supported transitions
+requires an authorized action under the applicable active rules.
 
 This is the concrete improvement over recommended-list publication: the live question becomes whether an exact transition packet verifies under rules that were active before it was proposed — a question with a yes/no answer and a replayable witness — rather than whether enough operators copied the right file.
 
@@ -254,9 +407,9 @@ This is the concrete improvement over recommended-list publication: the live que
 
 ### 7.1 Notes, not private balances
 
-Transparent ledgers reveal balances, counterparties, timing, inventory shifts, fund flows, liquidation levels, and strategy. For buy-side finance, market making, custody, treasury, and institutional settlement, that leakage has direct economic cost. The useful primitive is not a private account balance; it is a private spend of a note with public supply accounting, which is why PostFiat adopts Orchard/Halo2-style note semantics rather than account-level obfuscation.
+Transparent ledgers reveal balances, counterparties, timing, inventory shifts, fund flows, liquidation levels, and strategy. For buy-side finance, market making, custody, treasury, and institutional settlement, that leakage has direct economic cost. The useful primitive is not a private account balance; it is a private spend of a note with public supply accounting, which is why PostFiat adopts Orchard/Halo2-style note semantics rather than account-level obfuscation. The implementation uses the upstream Rust/Zcash Orchard and Halo2 libraries; PostFiat defines the chain adapter and application circuits rather than a new Halo2 proof system.
 
-A shielded action exposes
+A private Asset-Orchard spend exposes
 
 $$public = \{root,\ nullifier,\ outputCommitments,\ fee,\ burn,\ policyHash,\ disclosureHash\}$$
 
@@ -264,19 +417,54 @@ and hides
 
 $$hidden = \{asset,\ value,\ owner,\ memo,\ noteRandomness,\ witnessPath\}.$$
 
-A valid spend proves note opening, membership under an accepted commitment root, correct nullifier derivation, value conservation, valid output commitments, and fee or burn correctness. Validators check the proof, nullifier uniqueness, root availability, resource limits, policy hash, and transaction envelope. They never learn the spent note, the recipient note, the amount, or the memo.
+A valid spend proves note opening, membership under an accepted commitment root, correct nullifier derivation, value conservation, valid output commitments, and fee or burn correctness. Validators check the proof, nullifier uniqueness, root availability, resource limits, policy hash, and transaction envelope. For the private swap action they do not learn the spent or recipient note openings, raw asset IDs, values, owners, recipients, bilateral price, or memo.
+
+The privacy statement is action-specific at the turnstile. Asset-Orchard ingress
+v2 publicly reveals the signed burn source, asset, amount, pool, output
+commitment, and authenticated `PFAOENC1` ciphertext; the note opening remains
+wallet-local. Private egress deliberately reveals the public destination,
+asset, amount, fee, nullifier, policy/disclosure bindings, and proof material.
+Timing, action count, public pool accounting, and the ingress/egress linkage
+remain observable. Historical ingress v1 carried a clear note opening and is
+accepted only by archive replay; live proposal and execution reject it without
+mutation. Legacy cleartext Mint/Spend actions have the same replay-only status
+and are not represented as private settlement.
 
 ### 7.2 Verification is the consensus surface
 
-The proof-system posture is explicit: Halo2 with no per-circuit trusted setup, and the consensus surface is verification only. Proving is wallet-side work. Validators cache the action verifying key and enforce a per-block action-count cap before verification, making shielded settlement a priced transaction class rather than a free path. A local release-build budget run measured a two-action output proof at 7,264 bytes and cached verification at 80 ms median [E2]; these are budget measurements that justify the cap design, not consensus constants.
+The proof-system posture is explicit: Halo2 has no per-circuit trusted setup,
+and the consensus transition verifies rather than generates proofs. The
+repository also contains wallet/prover tooling and local prover-service code;
+that code's presence in the workspace is not evidence that a validator process
+generates proofs. A production deployment must keep proving work outside the
+validator service boundary. Validators cache the action verifying key and
+enforce a per-block action-count cap before verification, making shielded
+settlement a priced transaction class rather than a free path. A local
+release-build budget run measured a two-action output proof at 7,264 bytes and
+cached verification at 80 ms median [E2]; these are budget measurements that
+justify the cap design, not consensus constants.
 
 ### 7.3 Envelope binding
 
-The PostFiat-specific boundary is authorization. Orchard-style note authorization remains inside the shielded proof, while ML-DSA signs the outer transaction envelope and all validator certificates (§9). The canonical envelope digest — including fee policy, registry root, action class, and disclosure policy — is bound into the shielded action, and validators reject when the proof-bound digest and the ML-DSA-signed envelope digest differ. This closes the proof-stripping attack: a valid shielded proof cannot be detached and replayed under a different fee, account authorization, registry root, or disclosure policy.
+The PostFiat-specific boundary is authorization. Asset-Orchard swap and private
+egress actions use randomized RedPallas spend-authorization signatures over a
+chain/genesis/protocol-bound action sighash. That sighash binds the action's
+anchor, nullifiers, randomized keys, commitments, encrypted outputs, accounting
+records, fee, and swap/egress binding fields; the Halo2 public instance binds
+the corresponding proof statement. `ShieldedActionBatch` is chain-bound by its
+batch id, but the current action batch does not add an account-level ML-DSA
+outer signature or carry a registry root/disclosure policy envelope. ML-DSA
+instead authenticates validator proposals and certificate votes over the block
+that contains the verified action (§9). The narrower implemented claim is that
+action-field substitution or cross-chain replay invalidates the RedPallas/proof
+bindings and that a quorum-certified block authenticates inclusion. This paper
+does not claim a nonexistent ML-DSA shielded-envelope layer.
 
 ### 7.4 Turnstile accounting
 
-Supply integrity does not rest on proof-system soundness alone. The boundary between transparent and shielded state is a turnstile: the protocol tracks net value entering each shielded pool, and cumulative withdrawals from a pool can never exceed its net deposits. If a soundness failure ever allowed counterfeit notes inside a pool, the counterfeit value could not exit past the turnstile without becoming arithmetically visible, at which point the affected action class freezes (§10) while transparent settlement continues. This is the containment discipline Zcash adopted for its pools, and it converts the worst-case cryptographic failure from silent inflation into a detectable, scoped incident. It also directly addresses the assumption asymmetry of §2: authorization is post-quantum, proof soundness is classical, and the turnstile bounds the damage of the classical assumption failing.
+The turnstile tracks value entering and leaving the shielded pool. Asset-Orchard maintains per-asset ingress, egress and live totals; an egress above the live balance rejects, and state verification checks that ingress minus egress equals the live total. Native Orchard accounting also reconciles deposits, withdrawals and fee burn.
+
+These checks bound public value release; they do not establish proof-system soundness. Counterfeit notes could still compete for existing pool value without exceeding the turnstile, so the bound does not guarantee depositor recovery or detect every counterfeit spend. An accounting rejection does not automatically activate a governed pool pause. The available pause controls, their action-specific consumers, incident detection and recovery require separate verification (§10). No automatic soundness-failure detector or transparent-service continuity guarantee is claimed.
 
 ### 7.5 Atomicity with registry rotation
 
@@ -284,9 +472,13 @@ Registry rotation is atomic with respect to shielded state. Each block is verifi
 
 ### 7.6 Disclosure and honest leakage
 
-Selective disclosure is chosen by the holder of viewing material. A custodian or wallet can reveal a scoped note opening, policy tag, auditor proof, or transaction binding to a chosen party; the public chain receives only the commitment, nullifier, root, fee, and disclosure hash unless the holder elects to disclose more.
+A holder can use local wallet disclosure tooling to produce and verify an Orchard disclosure packet without exporting spending or viewing material. Broader policy-scoped assurance workflows include historical fixtures and target controls; they are not all demonstrated live governance consumers. See [Selective Disclosure](privacy/disclosure.md).
 
-The privacy claim is correspondingly narrow and stated as such. Fee classes, admission buckets, timing, and disclosure hashes still leak metadata. The public observer learns that some shielded action paid a fee class, used an accepted root, consumed a nullifier, created commitments, and bound to a policy hash — and learns nothing else from the ledger. Timing remains visible, so wallets and custodians must still manage batching, relaying, withdrawal timing, and disclosure discipline; a careless workflow or a narrow anonymity set leaks regardless of the protocol. One further asymmetry is named rather than hidden: note encryption currently uses classical key agreement, so confidentiality — unlike authorization — is exposed to harvest-now, decrypt-later adversaries, and migrating note encryption to a post-quantum KEM is a governed upgrade path (§9, §11). PostFiat treats privacy as a baseline reduction in ambient leakage, not as anonymity insurance.
+Disclosure is action-specific: ingress and egress already reveal the public fields listed in §7.1, regardless of whether the holder later sends a separate disclosure packet.
+
+Public timing, action count, fee and policy/disclosure bindings, ciphertexts and pool accounting remain observable. Private swaps hide their note openings; ingress/egress disclose asset, amount and public endpoints as specified in §7.1. The implementation does not establish the earlier claim that an observer learns nothing else, nor a production admission-bucket privacy mechanism. Wallet batching, relaying, withdrawal timing, disclosure choices and anonymity-set size affect practical linkage.
+
+Note encryption uses classical key agreement, so recorded ciphertext is exposed to harvest-now, decrypt-later risk. A post-quantum KEM would require a versioned, reviewed migration; it is not implemented here. Privacy reduces some ambient leakage and is not anonymity insurance.
 
 ---
 
@@ -296,7 +488,7 @@ The privacy claim is correspondingly narrow and stated as such. Fee classes, adm
 
 Validator governance contains irreducibly qualitative evidence: operator independence, source conflicts, domain-control ambiguity, infrastructure concentration, behavior inconsistent with stated control. A static rubric handles exact predicates but punts interpretation of conflicting evidence to a committee, and a committee interprets privately. PostFiat uses a model for exactly one narrow step: converting public evidence into a typed classification that can be replayed, parsed, challenged, and ignored when it fails process checks. The design goal is not "AI governance." It is removing the last private room from a governance process that is otherwise hash-bound end to end.
 
-No model runs inside consensus. Consensus consumes roots, certificates, and deterministic selector output, and by the deletion-monotonicity principle (§1.1), removing the model layer entirely leaves a chain that holds on ambiguous cases instead of adjudicating them — more conservative, never less safe.
+Model invocation belongs to off-chain governance tooling. Consensus admission verifies deterministic signed artifacts; a model response cannot directly change the registry. The controlled selector's required-model profile holds missing classifications, but that profile behavior is not a universal proof over every possible selector or policy. Later [AI governance direction](governance/ai-governance-direction-20260903.md) and [Task Node UNL shadow tooling](governance/tasknode-unl-shadow-run-20260904.md) keep model-derived proposals outside live authority; this section's full replay-certificate pipeline remains a target.
 
 ### 8.2 The pipeline and its hard boundaries
 
@@ -310,15 +502,29 @@ After replay convergence, the deterministic selector computes
 
 $$\Gamma = S(policy_t, G_t, E, A),$$
 
-where $S$ is total, hash-bound code with no model calls and no network access. The Cobalt proposal carries the full commitment tuple
+where $S$ is total, hash-bound code with no model calls and no network access.
+In the target pipeline, the Cobalt proposal carries the full commitment tuple
 
 $$(h(P),\ h(E),\ h(Q),\ h(M),\ h(V_Q),\ h(A),\ h(S),\ h(\Gamma),\ C_R),$$
 
-and only a valid Cobalt transition changes protocol state. The live-effect boundary is therefore a one-way pipe:
+The implemented selector treats its output as candidate evidence. The active
+authority mode determines which complete governance action can change state:
 
 ```
-model classification -> replay certificate -> deterministic selector -> Cobalt transition
+current proposal tooling -> candidate evidence (or shadow-only report)
+  -> active authority check
+     Foundation mode/unrelated scope: signed Foundation action
+     activated validator-trust scope: signed Cobalt protocol decision + authorizations
+  -> Consensus v2 ordering -> accepted execution receipt
+
+target replay pipeline: pinned classification -> verified replay certificate
+  -> deterministic selector -> applicable authorized transition
 ```
+
+The selector validates replay-root shape, but that alone is not verification of
+independent replay-key signatures or their quorum. The Cobalt protocol
+certificate authenticates a different boundary; it cannot substitute for the
+replay certificate defined in §8.3.
 
 By the least-machinery principle, the model is justified only where it handles conflicts a score table would punt to a private committee; where a static rule is equally good, the static rule is mandatory. Schema validation, signature checks, root matching, unknown-field rejection, stale-evidence rejection, concentration caps, churn limits, and Cobalt certificate validation are all exact predicates in code and never depend on model judgment.
 
@@ -347,7 +553,7 @@ Raw response hashes and provider envelopes are audit evidence only; they may leg
 
 ### 8.4 A worked admission packet
 
-A concrete case shows what the model layer buys. Consider candidate evidence:
+The following target-pipeline illustration shows how classification could explain a hold. It is not an exact serialization of current selector output: the implemented policy rejects shared release/funding control, and reject reasons take precedence over hold reasons. Consider candidate evidence:
 
 ```
 ValidatorAdmissionEvidencePacket {
@@ -393,7 +599,9 @@ The claim this supports is narrow and useful: under bounded packets and pinned p
 
 ### 8.6 Admission is not promotion
 
-Profile admission says one exact tuple — model, tokenizer, runtime, kernel, hardware class, batching policy, parser, quantizer — may produce replay-bound artifacts for one question class. Promotion to governance default is a separate, heavier event: an old/new shadow run on the same packet set, a published replay signer set and quorum, zero selector-relevant parsed-root divergence, published disagreement classes, cost and latency evidence, a defined rollback, and a Cobalt transition. Model replacement is itself a Cobalt transition, and until promotion completes, the old profile remains the historical replay anchor. The model layer is governed by exactly the machinery it serves.
+In the target design, profile admission permits one exact model/tokenizer/runtime/kernel/hardware/batching/parser/quantizer tuple for one question class. Promotion is a separate requirement: old/new shadow runs, a published independent replay signer set and quorum, selector-relevant parsed-root comparison, disagreement classes, cost/latency evidence and a defined rollback.
+
+The implemented Cobalt authority scope is validator trust; it does not make arbitrary model, prompt or selector replacement a Cobalt transition. Any future binding promotion must specify its actual governance scope, signed action and consuming verifier. Until those gates pass, retain the prior profile for historical replay and keep new model outputs in their documented advisory/shadow role.
 
 ---
 
@@ -403,31 +611,49 @@ Profile admission says one exact tuple — model, tokenizer, runtime, kernel, ha
 
 Settlement chains carry long-lived value and long-lived public keys. A chain launched on classical signatures is betting that a coordinated migration will complete before cryptographically relevant quantum attacks matter — after years of exposing public keys on a permanent ledger. A new chain does not have to make that bet: it can make the default authorization path post-quantum from genesis and treat the known byte and CPU costs as a priced design input rather than a future emergency.
 
-PostFiat uses ML-DSA because it is the standardized lattice signature family for general digital signatures (FIPS 204), with straightforward deterministic verification. Validator certificates bind to registry roots and compact validator identifiers rather than repeating full public keys in every vote:
+PostFiat uses the ML-DSA signature family standardized in FIPS 204. Validator certificates bind committee identity and verified signatures. The following is a conceptual certificate model; current `ConsensusV2Signature` records also carry `algorithm_id`, `signer`, `public_key_hex` and `signature_hex`, so public keys are repeated in the serialized votes:
 
 $$Cert_B = \{(validatorID_i,\ sig_i)\}_{i \in Q} + registryRoot.$$
 
 ### 9.2 The cost accounting
 
-For ML-DSA-65 in the current provider, public keys are 1,952 bytes and signatures are 3,309 bytes. A 35-validator set with $q = 24$ carries 79,416 signature bytes plus 768 bytes of validator identifiers — 80,184 detached certificate bytes before framing. A 100-validator set with $q = 67$ carries 223,847 detached certificate bytes. The certificate is large but bounded and separable: block headers commit to a certificate digest while audit nodes fetch and re-verify the detached certificate.
+For ML-DSA-65, provider constants specify 1,952-byte public keys and 3,309-byte signatures. With an illustrative 32-byte identifier per signer, a 35-validator set with $q=24$ costs $24(3309+32)=80{,}184$ bytes for one signature set; a 100-validator set with $q=67$ costs 223,847 bytes. These calculations omit public keys, JSON/hex encoding and framing, and are not actual V2 certificate sizes. V2 commits embed proposal and prepare/precommit evidence, potentially including timeout ancestry. A compact detached transport is not established by this arithmetic. See [Signature Size And Certificates](quantum/signature-size-and-certificates.md).
 
-Current release-build measurements are roughly 6,000 ML-DSA-65 verifications per second, about 160 microseconds each; serialized verification of the 35-validator certificate is about 4 ms and of the 100-validator certificate about 11 ms [E1]. At a one-second certified-round target, 11 ms is about 1.1% of the round; on the observed 1.5-second submit-to-finality path it is below 1%. Certificate bytes, not signature CPU, are the dominant operational cost of the current profile, and every release profile must publish verifier throughput, certificate bytes, and the signature share of the block verification budget.
+The historical [E1] summary reports roughly 6,000 verifications/s and approximately 4/11 ms for the illustrative quorum sizes. Its original measurement packet is unavailable in the audited checkout, so these are retained historical estimates, not current release measurements. Actual release accounting must measure the encoded artifacts, all verification work and the named round metric on pinned hardware; this audit does not establish which cost dominates.
 
-### 9.3 Alternatives, and precommitted recovery
+### 9.3 Alternatives and current recovery limitation
 
-The alternatives were weighed, not ignored. Falcon-class schemes are smaller on the wire but carry a more delicate implementation and side-channel posture. Hash-based signatures are the most conservative assumption but make validator certificates and high-frequency account authorization substantially heavier. Hybrid classical-plus-post-quantum signatures are valuable for migrating legacy chains; a greenfield chain can simply not carry the classical dependency in its default path. Parameter and library changes are governed cryptographic upgrades under §6.
+The alternatives were weighed, not ignored. Falcon-class schemes are smaller on the wire but carry a more delicate implementation and side-channel posture. Hash-based signatures are the most conservative assumption but make validator certificates and high-frequency account authorization substantially heavier. Hybrid classical-plus-post-quantum signatures are valuable for migrating legacy chains; a greenfield chain can simply not carry the classical dependency in its default path. Parameter and library changes require an explicit versioned cryptographic upgrade and authorization under the applicable governance scope; the implemented validator-trust Cobalt scope does not automatically authorize every cryptographic change.
 
-Recovery beyond parameter upgrades is precommitted rather than improvised. The genesis manifest names a second signature family with an unrelated hardness assumption — SLH-DSA, the standardized stateless hash-based scheme of FIPS 205 — as the recovery family. Every validator key registration includes a hash commitment to an SLH-DSA recovery key; account holders may register the same commitment optionally. Because the commitment is hash-based, it remains binding even if lattice assumptions fail. Activating the recovery family is a governed emergency profile (§10) that rotates authorization to the precommitted keys without inventing cryptography mid-incident. The asymmetry is the point: a few hundred dormant bytes per key today against a standardization-and-migration scramble later. The remaining classical surfaces — Halo2 proof soundness and note-encryption key agreement — are bounded by the turnstile (§7.4) and named as upgrade paths (§7.6, §11) respectively.
+The current genesis and validator-registration schemas do not contain an
+SLH-DSA recovery-key commitment, and the runtime has no FIPS 205 verification
+or activation path. ML-DSA-65 is therefore the only implemented validator and
+transparent-account signature family. A future independent recovery family
+requires a versioned commitment schema, activation rules, migration tooling,
+and external cryptographic review before it can become a protocol claim. The
+remaining classical surfaces — Halo2 proof soundness and note-encryption key
+agreement — are bounded by the turnstile (§7.4) and named as upgrade paths
+(§7.6, §11), not solved by a currently deployed recovery key.
 
 ---
 
 ## 10. Failure Modes and Recovery
 
-Every subsystem resolves to a named fallback surface, and every fallback is precommitted, so an incident is a state machine rather than a negotiation.
+Some failure classes have fail-closed state-machine responses; others remain
+operational recovery gaps. This section states the current boundary instead of
+assuming every future recovery path is precommitted.
 
-A correlated validator quorum routes through Cobalt removal or trust-weight reduction under §6, with the correlation evidence of §5.3 as the input. Governance deadlock preserves the last valid registry, with recovery limited to the four precommitted quorum-signed actions of §6.9. Replay divergence in the classification pipeline is hold/no-op and becomes challenge evidence; by deletion monotonicity, even total loss of the model layer degrades governance to conservative holds rather than to unsafe defaults. A shielded-pool soundness or implementation failure freezes the affected privacy action classes behind the turnstile of §7.4 while transparent settlement continues, so a cryptographic incident in the pool is scoped and detectable rather than inflationary and silent. An ML-DSA break activates the precommitted SLH-DSA recovery profile of §9.3 under governed emergency rules. Availability collapse beyond the suspension caps of §4.4 halts liveness with safety intact: the chain prefers stopping to forking.
+A governed registry transition can remove or suspend a validator under the
+active registry's authorization rules. Replay divergence in the classification
+pipeline is hold/no-op evidence. Shielded accounting limits remain visible
+through the turnstile. An ML-DSA break, however, has no precommitted alternate
+signature activation path in the current release and requires a coordinated
+software and governance migration while affected authorization is halted.
+Availability below the normal quorum likewise halts liveness; there is no
+automatic suspension that lowers the certificate threshold.
 
-The common shape across all six surfaces is the fail-closed principle of §1.1. No failure mode resolves to discretion, and no recovery action is broader than what was committed before the failure occurred.
+Implemented recovery checks aim to fail closed. That principle is a review
+requirement, not evidence that unimplemented recovery mechanisms already exist.
 
 ---
 
@@ -435,11 +661,11 @@ The common shape across all six surfaces is the fail-closed principle of §1.1. 
 
 A paper that hedges every paragraph hides its real limits, so they are consolidated here and stated plainly.
 
-Genesis is trusted. The launch certificate (§5.4) makes the bootstrap assumption explicit, frozen, and auditable; it does not make it disappear, and nothing can. Authority validation retains residual capture risk: a sufficiently patient coalition of natural stakeholders, or a jurisdictional correlation no evidence packet captures, is not eliminated by the machinery — it is made expensive, visible, and contestable. Relatedly, the protocol verifies only declared trust edges and registered evidence fields; an off-chain social dependency that no one declares is invisible to the Cobalt checker and must be caught, if at all, at the admission and correlation layer.
+Genesis is trusted. The target launch certificate (§5.4), once implemented and verified, would make the bootstrap assumption explicit, frozen, and auditable; it does not make it disappear, and nothing can. Authority validation retains residual capture risk: a sufficiently patient coalition of natural stakeholders, or a jurisdictional correlation no evidence packet captures, is not eliminated by the machinery — it is made expensive, visible, and contestable. Relatedly, the protocol verifies only declared trust edges and registered evidence fields; an off-chain social dependency that no one declares is invisible to the Cobalt checker and must be caught, if at all, at the admission and correlation layer.
 
 The privacy model reduces ambient leakage; it is not anonymity insurance. Timing, fee classes, and disclosure hashes remain visible, anonymity sets must be managed by wallets and custodians, and a careless workflow leaks regardless of the protocol. Note confidentiality rests on classical key agreement and is exposed to harvest-now, decrypt-later adversaries until the governed KEM migration; proof-system soundness is likewise a classical assumption, bounded by the turnstile but not removed by it.
 
-The replay evidence is narrow by design and the paper claims nothing beyond it: one model family, pinned profiles, bounded packets, no cross-vendor convergence claim, no adversarial-prompt robustness claim. The Cobalt deployment is a rooted, bounded profile of MacBrough's construction, not the full open-network result; the transition-safety proposition holds for the narrowed profile and its stated assumptions only. ML-DSA certificate bytes are a real and growing cost at larger validator sets, mitigated by digest commitment and detached verification but not eliminated. And the availability-suspension mechanism trades a small, capped liveness-for-safety window: within its caps it cannot reduce the effective set below the trust graph's safety thresholds, but the caps themselves are governed parameters that deserve adversarial review.
+The replay evidence is narrow by design and the paper claims nothing beyond it: one model family, pinned profiles, bounded packets, no cross-vendor convergence claim, no adversarial-prompt robustness claim. The Cobalt deployment is a rooted, bounded profile of MacBrough's construction, not the full open-network result; the transition-safety proposition holds for the narrowed profile and its stated assumptions only. ML-DSA certificate bytes grow with validator count; the current V2 encoding includes public keys and multiple certificate stages. The illustrative compact size model is not evidence of deployed detached transport. The current committee has no automatic availability-suspension shortcut; loss of the normal quorum is a liveness halt.
 
 Finally, the controlled evidence supports controlled claims only. Replay-profile convergence is not public validator diversity; controlled registry mutation is not market legitimacy; shielded accounting is not wallet anonymity. Missing evidence defaults to hold, no-op, or continued operation under the last valid rules — never to the favorable interpretation.
 
@@ -447,17 +673,22 @@ Finally, the controlled evidence supports controlled claims only. Replay-profile
 
 ## 12. Related Work
 
-PostFiat descends directly from the XRP Ledger lineage: the original Ripple consensus design of Schwartz, Youngs, and Britto, and the Chase–MacBrough analysis that made the UNL-overlap safety condition precise. The Negative UNL mechanism motivates the availability suspension of §4.4, recast for a registry that is protocol state rather than a published file. MacBrough's Cobalt provides the theoretical machinery for safe trust evolution in open networks; PostFiat's contribution there is deployment narrowing — rooted graphs, bounded covers, proposer-independent extraction, and fail-closed transition packets — rather than new theory.
+PostFiat draws on the XRP Ledger lineage: the original Ripple consensus design
+of Schwartz, Youngs, and Britto, and the Chase–MacBrough analysis of UNL-overlap
+safety. The current runtime does not implement XRPL's Negative UNL. MacBrough's
+Cobalt motivates the trust-evolution checker; PostFiat narrows that machinery
+to rooted graphs, bounded covers, proposer-independent extraction, and
+fail-closed transition packets.
 
-Stellar's SCP is the closest cousin in spirit: both replace global membership with locally declared trust. The difference is the governance object. SCP quorum slices are discovered, open, and continuously self-asserted; PostFiat trust views are registered, rooted, and changed only through checkable transitions, trading openness for a transition-safety argument that a checker can actually evaluate. The ordering path follows the HotStuff line of chained BFT with linear view change, the same lineage that produced LibraBFT/DiemBFT for an earlier authority-validated settlement attempt. The shielded pool adapts Zcash's Orchard action model, Halo2's setup-free proving, and Zcash's pool turnstile discipline. Ordering accountability responds to the extraction taxonomy of Flash Boys 2.0 by removing reordering and pricing omission. The post-quantum posture follows NIST FIPS 204 and 205, choosing the standardized lattice family as default and the standardized hash-based family as precommitted recovery. The replay design draws on recent work in deterministic LLM inference — batch-invariant kernels and reproducible serving — while deliberately claiming only profile-pinned, packet-bounded convergence.
+Stellar's SCP is the closest cousin in spirit: both replace global membership with locally declared trust. The difference is the governance object. SCP quorum slices are discovered, open, and continuously self-asserted; PostFiat trust views are registered, rooted, and changed only through checkable transitions, trading openness for a transition-safety argument that a checker can actually evaluate. Consensus v2 uses quorum-certificate arithmetic and deterministic proposer rotation common to authority-validated BFT systems, but its explicit prepare/precommit rule is not a claim of HotStuff's chained commit protocol. The shielded pool adapts Zcash's Orchard action model, Halo2's setup-free proving, and Zcash's pool turnstile discipline. Ordering and omission remain explicit risks because the production lane does not yet consume the reference admission-receipt protocol. The implemented post-quantum authorization posture follows NIST FIPS 204; FIPS 205 recovery remains future work. The replay design draws on recent work in deterministic LLM inference — batch-invariant kernels and reproducible serving — while deliberately claiming only profile-pinned, packet-bounded convergence.
 
 ---
 
 ## Appendix A: Evidence Register
 
-Each artifact backs the specific sentences that cite it and nothing more. Roots are SHA3-384 or provider-native commitments as produced by the runs; machine reports are retained alongside the artifacts.
+Each entry is limited to the sentence and experiment it identifies. The [alignment inventory](architecture/whitepaper-alignment.md#appendix-a) records which original packets are available at the audit baseline. E1/E2/E3/E5/E6/E7 have incomplete original measurement provenance in this checkout; retained prose and digests alone cannot reproduce their claims. E4 has five retained admission tests; E8 maps to current finality/governance tests and separate reference-ordering machinery.
 
-**[E1] ML-DSA-65 verification budget.** Supports §9.2. Release-build measurements: ~6,000 verifications/s (~160 µs each); detached certificate of 80,184 bytes for a 35-validator, $q=24$ set and 223,847 bytes for a 100-validator, $q=67$ set; serialized certificate verification ≈ 4 ms and ≈ 11 ms respectively. Budget evidence, not consensus constants.
+**[E1] ML-DSA-65 verification budget.** Supports the historical estimate in §9.2: ~6,000 verifications/s (~160 µs each), with ≈4/11 ms illustrative quorum verification. The 80,184/223,847-byte values are simplified one-signature-set arithmetic, not encoded V2 certificate sizes. The original timing packet is unavailable in the audit checkout; no current-release benchmark is claimed.
 
 **[E2] Orchard verification budget.** Supports §7.2. Local release-build run: two-action output proof of 7,264 bytes; cached verification 80 ms median. Justifies per-block action caps and the priced-class design.
 
@@ -471,7 +702,7 @@ Each artifact backs the specific sentences that cite it and nothing more. Roots 
 
 **[E7] Cross-runtime constitutional packet.** Supports §8.5. Closed options `adopt-cobalt-registrar | retain-offchain-unl | hold-no-op`; prompt hash `277e4174662841fe8d0802f0d055fec0528afbae09173a49d1f9067fc9a5ad68`. Apple M5 MLX BF16 with Qwen3-1.7B: 300/300 parseable. Vast H200 SGLang deterministic-inference profile with Qwen3-1.7B: 100/100 parseable, one top-logprob root. Both selected `adopt-cobalt-registrar`. Decision root: `08b3d570e746a4bd4c761ab280aa1f6f4992704810f03de2377c8a38b0fc0cf8`. Parsed-output root: `1f667e5d8d63fbc8852b10085062e13579f864f27f3b3c53481b68bc4b2fbc1e`. H200 top-logprob root: `af228110a9782fcfdca48dd681636360d24d3a995933443bd06e1374e8cbda07`. Machine reports: `reports/qwen-mlx-profile-portability/20260528T155652Z/machine_report.json`, `reports/qwen-sglang-profile-portability/20260528T162243Z/machine_report.json`.
 
-**[E8] Consensus and registry fixtures.** Supports §4.1, §4.3, §6.7. HotStuff-style ordering simulation with view change and equivocation handling; signed admission-receipt aggregation fixtures; Cobalt parent-root rejection; controlled registry mutation under the previous active rules.
+**[E8] Consensus and registry fixtures.** Current source anchors are `crates/ordering_fast/src/consensus_v2/tests.rs` for domain, lock, quorum and timeout/commit tests and `crates/node/src/cobalt_handoff.rs` for signed scoped-authority, replay and certificate rejection tests. Reference admission-receipt/ordering fixtures do not establish production censorship attribution. See the [validation record](architecture/whitepaper-validation.md) for tests actually run during this audit; these tests do not prove all assumptions in §6.7.
 
 ---
 

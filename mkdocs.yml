@@ -92,6 +92,11 @@ nav:
   - Testnet Path: status/testnet-path.md
   - Release Gate Inventory: status/release-gate-inventory.md
   - Whitepaper: whitepaper.md
+  - Whitepaper Audit:
+      - Overview and Section Guide: architecture/whitepaper-overview.md
+      - Claim Alignment: architecture/whitepaper-alignment.md
+      - Remaining Gaps: architecture/whitepaper-gaps.md
+      - Validation: architecture/whitepaper-validation.md
   - NAVCoins:
       - Overview: navcoins/index.md
       - A666 Current State: status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md

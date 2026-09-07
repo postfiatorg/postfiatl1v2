@@ -22,13 +22,19 @@ The packet includes:
 
 The packet omits secret spending and viewing material.
 
-## Governed Disclosure Flow
+## Target governed disclosure flow
+
+The local packet commands below are implemented. This diagram describes the
+broader policy/assurance target; its archived fixtures do not establish a live
+consumer for every gate. Current Cobalt authority covers validator trust, so
+calling an arbitrary disclosure-policy root “Cobalt-governed” is not a supported
+current-authority claim.
 
 ```mermaid
 flowchart TD
   Holder[Holder controls decrypted Orchard output]
   Request[Disclosure request<br/>recipient, scope, expiry, statement]
-  Policy[Cobalt-governed policy root<br/>recipient class and allowed claim]
+  Policy[Target governed policy root<br/>recipient class and allowed claim]
   Authorize{Authorization gate}
   Packet[Redacted disclosure packet<br/>note commitment, nullifier,<br/>value, memo, finality evidence]
   Receipt[Assurance receipt<br/>bounded claim and statement hash]
@@ -41,10 +47,11 @@ flowchart TD
 
 ## Assurance Receipts
 
-Selective disclosure proves facts to a chosen party. Assurance receipts add a
-policy layer around that disclosure: the packet binds a shielded subject to a
-Cobalt-governed policy root, list-provider root, scoped recipient class, expiry,
-and statement hash.
+Local disclosure verifies a bounded packet against available commitments and
+finality evidence. The assurance-receipt design adds a policy layer binding a
+shielded subject, policy root, list-provider root, recipient class, expiry and
+statement hash. The fixture/verifier references below are historical; they do
+not prove current live policy enforcement or Cobalt authority over this scope.
 
 The important boundary is negative. An assurance receipt is not a full viewing
 key, not future-history access, and not a full-wallet audit grant. It is a

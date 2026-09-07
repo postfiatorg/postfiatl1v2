@@ -1,6 +1,10 @@
 # Privacy Evidence
 
-Privacy evidence proves the Orchard/Halo2 controlled privacy path.
+This page catalogs historical reports about the Orchard/Halo2 controlled privacy
+path. The report paths below are not all retained in the current public tree;
+listing one is not verification of its contents. The [whitepaper audit](../architecture/whitepaper-alignment.md#appendix-a)
+marks the unavailable original E2 budget packet and separates source checks
+from fixture/measurement claims.
 
 ## Main Packets
 
@@ -17,7 +21,7 @@ Privacy evidence proves the Orchard/Halo2 controlled privacy path.
 - `reports/privacy-floor-calibration/*/privacy-floor-calibration-report.json`
 - `reports/privacy-longitudinal-linkage/*/privacy-longitudinal-linkage-report.json`
 
-## What They Prove
+## Claims recorded by those historical reports
 
 - transparent-to-Orchard deposit;
 - Orchard spend;
