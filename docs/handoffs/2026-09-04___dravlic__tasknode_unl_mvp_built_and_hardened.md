@@ -8,7 +8,7 @@
 The operator's Telegram pointed to the published proposal,
 [Derive the UNL from Task Node identity and ratify it through Cobalt](https://postfiat.org/research/deterministic-unl-task-node-cobalt/),
 with the note that an MVP was next. This session produced the
-[execution plan](../plans/active/tasknode-unl-mvp-plan.md) (Text Improvement
+[execution plan](../plans/completed/tasknode-unl-mvp-plan.md) (Text Improvement
 Harness: **89.80/100**), implemented the deterministic Python pipeline, ran its
 first fixture-driven end-to-end shadow round and first frozen public-ledger
 shadow round, and fixed 14 fail-closed defects found by a fresh-context
@@ -17,7 +17,7 @@ these outputs has live authority.
 
 ## Current state
 
-- **Plan:** The [MVP plan](../plans/active/tasknode-unl-mvp-plan.md)
+- **Plan:** The [MVP plan](../plans/completed/tasknode-unl-mvp-plan.md)
   ([`5ec21e0f`](https://github.com/postfiatorg/postfiatl1v2/commit/5ec21e0f4448ee53008928f68b586f9eaefef874))
   has steps A–G checked off with code references. The published proposal
   remains authoritative for formulas, walk parameters, edge and binding rules,
@@ -72,7 +72,7 @@ these outputs has live authority.
 
 ## Next decision or action
 
-1. Review the [MVP plan](../plans/active/tasknode-unl-mvp-plan.md) against the
+1. Review the [MVP plan](../plans/completed/tasknode-unl-mvp-plan.md) against the
    proposal's intent; use the
    [real-data note](../governance/tasknode-unl-shadow-run-20260904.md) to see
    how the fail-closed pipeline treated the frozen ledger inputs. Redirect now
@@ -94,7 +94,7 @@ these outputs has live authority.
   and its verified source commits
   [`85ee464`](https://github.com/postfiatorg/postfiatorg.github.io/commit/85ee4642288f3731456e120bd8e313d67be8c247) and
   [`2e2f25e`](https://github.com/postfiatorg/postfiatorg.github.io/commit/2e2f25ea66eca20b7f0b637f90cbb5151487bbeb)
-- [Task Node UNL MVP execution plan](../plans/active/tasknode-unl-mvp-plan.md)
+- [Task Node UNL MVP execution plan](../plans/completed/tasknode-unl-mvp-plan.md)
 - [Task Node UNL shadow-run note](../governance/tasknode-unl-shadow-run-20260904.md)
   and [frozen evidence](https://github.com/postfiatorg/postfiatl1v2/tree/bfec6bd9ac70e005027675530b925cf8181d2466/docs/governance/tasknode-unl-shadow-run-20260904)
 - [2026-09-03 operator handoff](2026-09-03___dravlic__agent_direction_decided_z3_planned.md)

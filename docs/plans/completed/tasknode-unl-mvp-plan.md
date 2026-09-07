@@ -1,8 +1,24 @@
 # Task Node Identity-Derived UNL MVP Execution Plan
 
-**Status:** Active execution plan — steps A through F and the fixture-driven slice of G complete; every output remains `SHADOW_ONLY`
+**Status:** Completed — steps A through H and all focused completion gates passed; every output remains `SHADOW_ONLY`
 
-**Date:** 2026-09-04
+**Started:** 2026-09-04
+
+**Completed:** 2026-09-07
+
+**Completion note:** The
+[2026-09-04 handoff](../../handoffs/2026-09-04___dravlic__tasknode_unl_mvp_built_and_hardened.md)
+records the implementation, frozen real-data shadow run, and
+[fresh-context adversarial-review fixes](https://github.com/postfiatorg/postfiatl1v2/commit/3d0e5c012950399cad0ab4af967cfc1291077e40).
+Final admission and binding hardening landed in
+[`1267df6a`](https://github.com/postfiatorg/postfiatl1v2/commit/1267df6a8cfd563136a8256ee06da563ec01372c)
+and
+[`7f266371`](https://github.com/postfiatorg/postfiatl1v2/commit/7f2663717a07f515ff9478910b2416cdaaf100cb);
+the reproducible shadow-diff command landed in
+[`5261a8b8`](https://github.com/postfiatorg/postfiatl1v2/commit/5261a8b89c8a31ecdbfff465d2dd64ab815df5c2).
+The
+[adversarial attack simulation and weight-sensitivity evidence](../../governance/tasknode-unl-attack-simulation-20260907.md)
+remains synthetic, deterministic, local, and shadow-only.
 
 **Source proposal:** [Derive the UNL from Task Node identity and ratify it through Cobalt](https://postfiat.org/research/deterministic-unl-task-node-cobalt/)
 
@@ -312,41 +328,41 @@ without packet-root lineage. Nostr private messages are never graph edges.
 `python/postfiat_rpc/tasknode_unl_policy.py`; their exact test and fixture paths
 listed in A–G.
 
-- [ ] At the end of the implementation day, give a fresh-context reviewer the
+- [x] At the end of the implementation day, give a fresh-context reviewer the
       source proposal, this plan, the complete diff, and focused test commands.
       The reviewer must not rely on the implementation author's unstated
       assumptions.
-- [ ] Require adversarial findings for score arithmetic and window boundaries;
+- [x] Require adversarial findings for score arithmetic and window boundaries;
       canonicalization and iteration determinism; graph direction, dangling
       rows, conductance, connectivity, and cluster caps; signature domains and
       key custody; supersession, revocation, rotation, and shared control;
       pointer reconciliation and double counting; exclusion-list and funding
       attacks; stale roots, churn, and overlap; forbidden/private inputs; and
       `SHADOW_ONLY` labeling.
-- [ ] Fix every correctness or safety finding, rerun the focused Python suite,
+- [x] Fix every correctness or safety finding, rerun the focused Python suite,
       rerun the byte-identical fixture derivation, and record unresolved
       specification ambiguities as holds rather than silently choosing live
       semantics.
-- [ ] Run no workspace-wide or Orchard/Halo2 suite for this Python-only,
+- [x] Run no workspace-wide or Orchard/Halo2 suite for this Python-only,
       shadow-only slice. A broad suite is reserved for an explicit milestone or
       release gate if later work crosses those boundaries.
 
 ## Focused completion gates
 
-- [ ] `PYTHONPATH=python python3 -m pytest python/tests/test_tasknode_unl*.py`
+- [x] `PYTHONPATH=python python3 -m pytest python/tests/test_tasknode_unl*.py`
       passes.
-- [ ] The canonical fixture derivation is byte-identical across repeated runs
+- [x] The canonical fixture derivation is byte-identical across repeated runs
       and matches `expected-shadow-output.json`.
-- [ ] The binding CLI emits and verifies a memo payload but exposes no submit
+- [x] The binding CLI emits and verifies a memo payload but exposes no submit
       path and no secret material.
-- [ ] The read-only real-data attempt either emits a valid shadow diff or an
+- [x] The read-only real-data attempt either emits a valid shadow diff or an
       explicit coverage-and-holds report; absence of required evidence is not
       treated as success.
-- [ ] JSON and Markdown outputs both carry the complete
+- [x] JSON and Markdown outputs both carry the complete
       `SHADOW_ONLY`/no-authority boundary.
-- [ ] Fresh-context adversarial review is closed or every open finding is named
+- [x] Fresh-context adversarial review is closed or every open finding is named
       as a blocker.
-- [ ] Existing Cobalt, validator-registry, governance, Orchard/Halo2, Task Node,
+- [x] Existing Cobalt, validator-registry, governance, Orchard/Halo2, Task Node,
       and website files remain unchanged by implementation except for later
       concise documentation explicitly approved for that milestone.
 
