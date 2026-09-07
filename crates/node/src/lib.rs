@@ -261,6 +261,8 @@ pub mod cobalt_shadow;
 pub mod cobalt_shadow_runtime;
 pub mod operator_attestations;
 pub use operator_attestations::*;
+mod yolo_target_queries;
+pub use yolo_target_queries::*;
 mod lifecycle_queries;
 pub use lifecycle_queries::*;
 mod atomic_swap_rpc;

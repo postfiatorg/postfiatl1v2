@@ -1,0 +1,33 @@
+{
+  "schema": "postfiat.yolo.closed_market_local_receipt.v1",
+  "verifiedAtUtc": "2026-09-06T20:31:36.633122+00:00",
+  "symbol": "NVDA",
+  "scope": "Real Schwab capture and real Nitro Groth16 proof; isolated local four-validator certificate qualification, no external network deployment",
+  "methodologyStatus": "TARGET_COMPUTED",
+  "selectedContractCount": 5,
+  "chainId": "yolo-synthetic-certified",
+  "genesisHash": "9b72471be40fca489d3e53cd391e8bb0575e2a7a0a51ec020311c7d41bcf6c32e41b131d15d22c76b5d6102d0b359cda",
+  "registrationId": "4594e71fc94ca02828db48653395d603a63e9e889cdbb0796ca62ae0e0aa9012aeca0f737ec20c8ede2ca040d139eecb",
+  "transactionHash": "d835c9fbc4f3ac8512346068f8d592aeb3b2e1a4494296ea75d4137b8b942d68b7be98031adfe48dcb82aaf9a27a1965",
+  "inclusionHeight": 4,
+  "confirmed": true,
+  "certifiedRounds": 5,
+  "votesPerRound": 4,
+  "fourValidatorReplayVerified": true,
+  "earlyAndDuplicateRejected": true,
+  "independentVerificationPassed": true,
+  "proofNegativeTestsPassed": true,
+  "preparedOperationsMatchCertified": true,
+  "pythonCliQueryPassed": true,
+  "htmlGenerated": true,
+  "nativeReplayMatchesProofPublicValues": true,
+  "selectedExpiration": "2026-11-20",
+  "validatorReport": {
+    "file": "target-receipt-v1-liquid-nvda-20260906.json.gz",
+    "sha256": "4183d8ca46420c1a1e14b67c52cc8855b0fb0d96177e5b0f4884d692f4a37497"
+  },
+  "navProofEvidence": "docs/pre_production/evidence/yolo_liquid_rebalance_20260906_nvda_verification.json",
+  "proverElapsedMilliseconds": 2555657,
+  "navMeasuredRevision": "b464843e4c7c6ce912b24be78809578642ff8937",
+  "pftlSourceRevision": "d3aeb780bff327bc2d9734226770aba7433ba5d9"
+}

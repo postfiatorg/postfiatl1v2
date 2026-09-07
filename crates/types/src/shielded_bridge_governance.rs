@@ -1,3 +1,4 @@
+pub const GOVERNANCE_KIND_YOLO_TARGET_ACTIVATION_HEIGHT: &str = "yolo_target_activation_height";
 
 pub const DEFAULT_SHIELDED_ASSET_ID: &str = "POSTFIAT";
 pub const GOVERNANCE_KIND_VALIDATOR_SET: &str = "validator_set";
@@ -1434,6 +1435,12 @@ impl GovernanceState {
             );
         }
         Ok(amendment)
+    }
+
+    pub fn yolo_target_activation_height(&self) -> Option<u64> {
+        self.amendments.iter().rev()
+            .find(|a| a.kind == GOVERNANCE_KIND_YOLO_TARGET_ACTIVATION_HEIGHT)
+            .map(|a| u64::from(a.value))
     }
 
     pub fn atomic_swap_activation_height(&self) -> Option<u64> {

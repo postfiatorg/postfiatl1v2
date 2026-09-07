@@ -328,6 +328,8 @@ fn certified_asset_op_source(
     operation: &postfiat_types::AssetTransactionOperation,
 ) -> Result<&str, String> {
     match operation {
+        postfiat_types::AssetTransactionOperation::YoloTargetRegisterV1(operation) => Ok(&operation.registrant),
+        postfiat_types::AssetTransactionOperation::YoloTargetSubmitV1(operation) => Ok(&operation.submitter),
         postfiat_types::AssetTransactionOperation::AssetCreate(operation) => Ok(&operation.issuer),
         postfiat_types::AssetTransactionOperation::TrustSet(operation) => Ok(&operation.account),
         postfiat_types::AssetTransactionOperation::IssuedPayment(operation) => Ok(&operation.from),

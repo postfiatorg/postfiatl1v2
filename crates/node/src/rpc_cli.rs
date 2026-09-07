@@ -4061,6 +4061,7 @@ fn rpc_serve_method_allowed_with_owned_lane(
             | "account_offers"
             | "book_offers"
             | "asset_info"
+            | "yolo_target_receipt"
             | "nav_reserve_proof_status"
             | "fx_fix_list"
             | "fx_fix_info"

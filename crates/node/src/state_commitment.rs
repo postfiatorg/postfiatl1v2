@@ -795,6 +795,8 @@ fn validate_issued_supply_custody_inventory(
         nav_reserve_packets: _,
         nav_redemptions: _,
         nav_proof_profiles: _,
+        yolo_target_registrations: _,
+        yolo_target_receipts: _,
         nav_attestors: _,
         market_ops_policies: _,
         market_ops_envelopes: _,
@@ -1321,6 +1323,27 @@ pub(super) fn append_ledger_state(
         append_nav_redemption(bytes, "ledger.nav_redemption", redemption);
     }
 
+    // These domains are impossible before explicit YOLO feature activation.
+    // Empty vectors append nothing, preserving every historical empty-state root.
+    if !ledger.yolo_target_registrations.is_empty() {
+        let mut rows = ledger.yolo_target_registrations.iter().collect::<Vec<_>>();
+        rows.sort_by(|a, b| a.registration_id.cmp(&b.registration_id));
+        append_canonical_usize(bytes, "ledger.yolo_target_registration_count", rows.len());
+        for row in rows {
+            let encoded = serde_json::to_vec(row).expect("YOLO registration serialization");
+            append_canonical_bytes_commitment(bytes, "ledger.yolo_target_registration", &encoded);
+        }
+    }
+    if !ledger.yolo_target_receipts.is_empty() {
+        let mut rows = ledger.yolo_target_receipts.iter().collect::<Vec<_>>();
+        rows.sort_by(|a, b| a.registration_id.cmp(&b.registration_id));
+        append_canonical_usize(bytes, "ledger.yolo_target_receipt_count", rows.len());
+        for row in rows {
+            let encoded = serde_json::to_vec(row).expect("YOLO receipt serialization");
+            append_canonical_bytes_commitment(bytes, "ledger.yolo_target_receipt", &encoded);
+        }
+    }
+
     if commit_complete_nav_state && !ledger.nav_proof_profiles.is_empty() {
         let mut nav_proof_profiles = ledger.nav_proof_profiles.iter().collect::<Vec<_>>();
         nav_proof_profiles.sort_by(|left, right| left.profile_id.cmp(&right.profile_id));
@@ -1715,6 +1738,8 @@ fn assert_ledger_state_commitment_inventory_complete(ledger: &LedgerState) {
         nav_reserve_packets: _,
         nav_redemptions: _,
         nav_proof_profiles: _,
+        yolo_target_registrations: _,
+        yolo_target_receipts: _,
         nav_attestors: _,
         market_ops_policies: _,
         market_ops_envelopes: _,

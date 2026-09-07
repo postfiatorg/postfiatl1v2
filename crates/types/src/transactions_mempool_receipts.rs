@@ -3406,6 +3406,10 @@ fn append_external_event_proof_commitment(
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "operation")]
 pub enum AssetTransactionOperation {
+    #[serde(rename = "yolo_target_register_v1")]
+    YoloTargetRegisterV1(YoloTargetRegisterOperationV1),
+    #[serde(rename = "yolo_target_submit_v1")]
+    YoloTargetSubmitV1(YoloTargetSubmitOperationV1),
     #[serde(rename = "asset_create")]
     AssetCreate(AssetCreateOperation),
     #[serde(rename = "trust_set")]
@@ -3527,6 +3531,8 @@ impl<'de> Deserialize<'de> for AssetTransactionOperation {
             };
         }
         match operation {
+            "yolo_target_register_v1" => decode_operation!(YoloTargetRegisterOperationV1, YoloTargetRegisterV1),
+            "yolo_target_submit_v1" => decode_operation!(YoloTargetSubmitOperationV1, YoloTargetSubmitV1),
             "asset_create" => decode_operation!(AssetCreateOperation, AssetCreate),
             "trust_set" => decode_operation!(TrustSetOperation, TrustSet),
             "issued_payment" => decode_operation!(IssuedPaymentOperation, IssuedPayment),
@@ -3680,6 +3686,8 @@ impl<'de> Deserialize<'de> for AssetTransactionOperation {
 impl AssetTransactionOperation {
     pub fn transaction_kind(&self) -> &'static str {
         match self {
+            Self::YoloTargetRegisterV1(_) => YOLO_TARGET_REGISTER_TRANSACTION_KIND_V1,
+            Self::YoloTargetSubmitV1(_) => YOLO_TARGET_SUBMIT_TRANSACTION_KIND_V1,
             Self::AssetCreate(_) => ASSET_CREATE_TRANSACTION_KIND,
             Self::TrustSet(_) => TRUST_SET_TRANSACTION_KIND,
             Self::IssuedPayment(_) => ISSUED_PAYMENT_TRANSACTION_KIND,
@@ -3752,6 +3760,8 @@ impl AssetTransactionOperation {
 
     pub fn validate(&self) -> Result<(), String> {
         match self {
+            Self::YoloTargetRegisterV1(operation) => operation.validate(),
+            Self::YoloTargetSubmitV1(operation) => operation.validate(),
             Self::AssetCreate(operation) => operation.validate(),
             Self::TrustSet(operation) => operation.validate(),
             Self::IssuedPayment(operation) => operation.validate(),
@@ -3814,6 +3824,8 @@ impl AssetTransactionOperation {
         allow_legacy_vault_bridge_consume_supply_operator: bool,
     ) -> bool {
         match self {
+            Self::YoloTargetRegisterV1(operation) => operation.registrant == source,
+            Self::YoloTargetSubmitV1(operation) => operation.submitter == source,
             Self::AssetCreate(operation) => operation.issuer == source,
             Self::TrustSet(operation) => operation.account == source || operation.issuer == source,
             Self::IssuedPayment(operation) => operation.from == source,
@@ -3883,6 +3895,8 @@ impl AssetTransactionOperation {
     fn signing_bytes(&self) -> Vec<u8> {
         let mut bytes = format!("operation={}\n", self.transaction_kind()).into_bytes();
         match self {
+            Self::YoloTargetRegisterV1(operation) => bytes.extend_from_slice(&operation.signing_bytes()),
+            Self::YoloTargetSubmitV1(operation) => bytes.extend_from_slice(&operation.signing_bytes()),
             Self::AssetCreate(operation) => bytes.extend_from_slice(&operation.signing_bytes()),
             Self::TrustSet(operation) => bytes.extend_from_slice(&operation.signing_bytes()),
             Self::IssuedPayment(operation) => bytes.extend_from_slice(&operation.signing_bytes()),

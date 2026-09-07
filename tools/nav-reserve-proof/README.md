@@ -721,6 +721,14 @@ For wrapped-NAVCoin export/return deployment, continue with the
 The relay is route-configured and uses the standalone constrained signer; it
 does not import an operator portfolio product.
 
+## YOLO portfolio target proof
+
+The separate `postfiat-yolo-target` CLI proves the ordered Nitro statement chain,
+attested normalized inputs, and deterministic portfolio target. Its public ABI
+is exactly 408 bytes. See [the target operator guide](YOLO-TARGET.md) for pinned
+builds, independent acceptance inputs, local proving, and qualification commands.
+This path has no order, reserve, or issuance authority.
+
 ## License
 
 This directory is licensed under the repository's dual

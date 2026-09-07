@@ -410,6 +410,7 @@ pub(super) fn asset_execution_compatibility_for_genesis_and_governance(
         .with_atomic_swap_activation_height(atomic_swap_activation_height_for_chain(
             genesis, governance,
         ))
+        .with_yolo_target_activation_height(governance.yolo_target_activation_height())
         .with_atomic_swap_paused(governance.atomic_swap_paused)
 }
 
@@ -431,6 +432,7 @@ pub(super) fn asset_execution_compatibility_with_chain_activation(
         .with_atomic_swap_activation_height(atomic_swap_activation_height_for_chain(
             genesis, governance,
         ))
+        .with_yolo_target_activation_height(governance.yolo_target_activation_height())
         .with_atomic_swap_paused(governance.atomic_swap_paused)
 }
 
@@ -1638,6 +1640,15 @@ pub(super) fn governance_amendment_lifecycle_rejection(
     amendment: &GovernanceAmendment,
     block_height: u64,
 ) -> Option<(&'static str, String)> {
+    if amendment.kind == postfiat_types::GOVERNANCE_KIND_YOLO_TARGET_ACTIVATION_HEIGHT
+        && u64::from(amendment.value) <= block_height
+    {
+        return Some((
+            "invalid_yolo_target_activation_height",
+            "YOLO target activation must be scheduled strictly after the amendment block"
+                .to_string(),
+        ));
+    }
     if amendment.kind == GOVERNANCE_KIND_ORCHARD_POOL_PAUSE && amendment.value > 1 {
         return Some((
             "invalid_orchard_pool_pause_value",
@@ -1818,6 +1829,10 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
             .pfusdc_source_series_activation_height()
             .and_then(|height| u32::try_from(height).ok())
             .unwrap_or(0),
+        postfiat_types::GOVERNANCE_KIND_YOLO_TARGET_ACTIVATION_HEIGHT => governance
+            .yolo_target_activation_height()
+            .and_then(|h| u32::try_from(h).ok())
+            .unwrap_or(0),
         GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT => governance
             .atomic_swap_activation_height()
             .and_then(|height| u32::try_from(height).ok())
@@ -1850,6 +1865,7 @@ fn governance_amendment_has_materialized_current_value(kind: &str) -> bool {
             | GOVERNANCE_KIND_BRIDGE_VERIFICATION_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_ORCHARD_AWARE_BRIDGE_CLAIM_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_PFUSDC_SOURCE_SERIES_ACTIVATION_HEIGHT
+            | postfiat_types::GOVERNANCE_KIND_YOLO_TARGET_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_REPLICATED_STATE_V2_ACTIVATION_HEIGHT
             | GOVERNANCE_KIND_BRIDGE_EXIT_ROOT_ACTIVATION_HEIGHT

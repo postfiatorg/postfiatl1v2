@@ -1,0 +1,120 @@
+{
+  "schema": "postfiat.yolo.local_receipt_qualification.v1",
+  "runId": "yolo-phase7-local-20260905",
+  "sourceRevision": "f8edad6b702619633a8af62dae639b2294b28e69",
+  "status": "LOCAL_RECEIPT_GATE_PASSED",
+  "scope": "Synthetic proof, four validator stores, signed governance and block certificates. No AWS or network deployment.",
+  "registrationId": "aa4b1c5887af196e7dccc450231bbd6e68d9517cb94a950d3eeb53037539395aea98bf0b7d9249a0e1e7b4d9b6dbb33b",
+  "programSha256": "4e87fac38c061c7a1a992a23db53b9a78a2d721bd20164b41c31e4cd68a127e1",
+  "programVkey": "0x0043b435aa5a89fde8e2900c6648863f3358750127456224808cc1f51bca1297",
+  "rounds": [
+    {
+      "height": 1,
+      "votes": 4,
+      "roundOk": true,
+      "certificateId": "606b85969230611460194b54bd35d779165ca35a2cb122401e09ff93122f7f97fa98e1cd9b5e8cee99951cf4ab2f7a47"
+    },
+    {
+      "height": 2,
+      "votes": 4,
+      "roundOk": true,
+      "certificateId": "7d2117c864aab3569e757266b90f4f0bf3481f646a7192d3c60dbca7dadd6890570b8e37efd7eaf32467bea2fac61769"
+    },
+    {
+      "height": 3,
+      "votes": 4,
+      "roundOk": true,
+      "certificateId": "8f5a98a1eef3b6d37701bcb1cfbdc1f6f4707d963caa4e2203c01eb2a6dcafe260b94cbd4c911a9f286049fa6026272b"
+    },
+    {
+      "height": 4,
+      "votes": 4,
+      "roundOk": true,
+      "certificateId": "5ab7531a330116dffee5128fbdc7655c71415c5b56e466fd1fe765dda642d24d2bfff120d42b8a8b693356e2b5041987"
+    },
+    {
+      "height": 5,
+      "votes": 4,
+      "roundOk": true,
+      "certificateId": "6666b6b58fa325d5559c40e302a54779d51d3a69ef7104ac36febdc5309144ab6960dc56ad156d0382be64976e25f1b2"
+    }
+  ],
+  "rejections": [
+    "feature inactive",
+    "run inactive",
+    "duplicate registration or replay identifier",
+    "duplicate receipt",
+    "unknown registration",
+    "wrong registered verification key",
+    "every redundant public field",
+    "each registered expectation",
+    "modified or truncated proof",
+    "wrong ABI size/version",
+    "altered transaction signature"
+  ],
+  "validatorResults": [
+    {
+      "validator": "validator-0",
+      "verifiedReplay": true,
+      "confirmed": true,
+      "blockCount": 5,
+      "stateRoot": "8f818f9ee060a2c7b65158abf67e27f4d7e1fef781d1a3f5fb8f701a9e1305ae0ea5422bf057fc5ef0954ed3301da0db"
+    },
+    {
+      "validator": "validator-1",
+      "verifiedReplay": true,
+      "confirmed": true,
+      "blockCount": 5,
+      "stateRoot": "8f818f9ee060a2c7b65158abf67e27f4d7e1fef781d1a3f5fb8f701a9e1305ae0ea5422bf057fc5ef0954ed3301da0db"
+    },
+    {
+      "validator": "validator-2",
+      "verifiedReplay": true,
+      "confirmed": true,
+      "blockCount": 5,
+      "stateRoot": "8f818f9ee060a2c7b65158abf67e27f4d7e1fef781d1a3f5fb8f701a9e1305ae0ea5422bf057fc5ef0954ed3301da0db"
+    },
+    {
+      "validator": "validator-3",
+      "verifiedReplay": true,
+      "confirmed": true,
+      "blockCount": 5,
+      "stateRoot": "8f818f9ee060a2c7b65158abf67e27f4d7e1fef781d1a3f5fb8f701a9e1305ae0ea5422bf057fc5ef0954ed3301da0db"
+    }
+  ],
+  "transactionId": "a4e507b6e9c356ad9184024ae392609070763ca4f1dcc5db678da3971c3f704455a5316106640f021bc63f18bf408489",
+  "inclusionHeight": 4,
+  "tests": {
+    "executionYolo": 6,
+    "nodeStorageAndCommitments": 2,
+    "nodeFourValidator": 1,
+    "legacyAssetReplay": 1,
+    "pythonCli": 5,
+    "fourValidatorElapsedSeconds": 122.23,
+    "malformedProofPublicVariants": 8,
+    "redundantPublicFields": 16,
+    "registeredExpectations": 11
+  },
+  "publicReport": {
+    "file": "target-receipt-v1-local-20260905.json.gz",
+    "uncompressedSha256": "dfba3c5143d029357112bfc018dc47b47bb5405917c3fe2982190f363ace2cbe"
+  },
+  "evidenceHashes": {
+    "/tmp/yolo-phase7-node-tests.log": "e20073e32cfd6fe6afe59ebce05f0e519487bba07e252f01b398da2b8dbb3f6c",
+    "/tmp/yolo-phase7-four-validator-final.log": "d7a989e0e192d821864386864a594769f9ae5cf2f2ffa1d5d8d1dfd1bb90c3f8",
+    "/tmp/yolo-phase7-legacy-replay.log": "461b9eeb9fc86be03edbb31b8fd5a8602af3205fe44deb77e0af043841e9f832",
+    "/tmp/yolo-phase7-python-tests-final.log": "f9a6e669c615b0769010751c91cf60dcc8b3811a1850056d00bd35162387c85f",
+    "/tmp/yolo-phase7-node-build.log": "67c28b1a5ba397c0545eb5f6ac63de6d66447e0e29687c7491d33e792e32c352",
+    "/tmp/yolo-phase7-cli-qualification/receipt.json": "9189bd54487070eb7924e3a937b5e40d9a75492208fa2575cfc7abf9454f2d20",
+    "/tmp/yolo-phase7-cli-qualification/receipt.html": "9547f3380f576e1a77d8345581d59f499b9acdc09a39f22fe98c001411a53611",
+    "/tmp/yolo-phase7-execution-tests-complete.log": "af48b0d127b87eacb3af42630df30a2a6fe42b90ee4f991aa69b34584a6bb7d8"
+  },
+  "remaining": [
+    "Owner-approved AWS/KMS and source provenance qualification",
+    "Owner-approved network/devnet activation and deployment",
+    "Live collection and private in-enclave proof",
+    "Real receipt/finality, authorized replay and closeout"
+  ],
+  "guestBuildSource": "38909717; newer node source is not assumed to reproduce the qualified guest ELF",
+  "testRevision": "978612ac"
+}
