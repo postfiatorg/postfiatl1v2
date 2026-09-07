@@ -37,9 +37,9 @@ fn require_yolo_target_activation(
     compatibility: AssetExecutionCompatibility,
     height: u64,
 ) -> Result<(), (&'static str, String)> {
-    if !compatibility
+    if compatibility
         .yolo_target_activation_height
-        .is_some_and(|activation| height >= activation)
+        .is_none_or(|activation| height < activation)
     {
         return Err((
             "yolo_target_inactive",
