@@ -9,9 +9,9 @@ The resumed Ethereum → pfUSDC → A666 → Uniswap → A666 → pfUSDC → Eth
 - [x] Register the proof profile at PFTL 1006, bind it at 1007, and activate the governed route at 1008. All six validators agree; mempools are empty.
 - [x] Deposit 10.000000 USDC (10,000,000 atoms) to the epoch-10 vault for `pfab9b9228942e5c529633a13aa271d5297bec6353`. [Ethereum deposit receipt](https://etherscan.io/tx/0x639893f4c8d3df16baa392a1f958acd7549586f7b186068cd73ad5cd14806772). Wallet, vault, obligations, event, and deposit record reconcile exactly. The capture binds deposit block 25922792 to finalized Ethereum block 25922794.
 - [x] Complete the CPU ingress Groth16 proof in 1471.57 seconds and claim exactly 10 source-series pfUSDC at PFTL 1011. The claim binds governed route epoch 10. Source asset: `2bae082a6703375b9405af44715e1e64623265392627767b040fa2c30abb100a09da403724a6f105317292d9c0073df7`.
-- [ ] Complete and submit the existing A666 verifier checkpoints 881→917→924→989. The 917→924 CPU Groth16 proof completed and passed local verification with the frozen `004e44` guest (356 proof bytes; 256 public-value bytes; about 104 minutes including setup). It must wait for 881→917 before on-chain submission. The other segments remain pending.
+- [x] Complete and submit A666 verifier checkpoints 881→917→924→989. Both rotation segments and the later ancestry are accepted by the deployed verifier. The 917→924 proof used CPU; 881→917 and 924→989 used an A100 with the same frozen `004e44` guest.
 - [x] Authorize the source at 1012, reserve at 1013, subscribe at NAV at 1014, and export 9.611565 A666 at 1015. The exact export witness is captured; pre-existing holder inventories are unchanged.
-- [ ] Prove the accepted export and mint its wA666 on Ethereum.
+- [x] Prove the accepted export and mint exactly 9.611565 wA666. [Ethereum mint receipt](https://etherscan.io/tx/0x08b001efba5fd3ddabc084d1080107189891654ba1cbfc52559b0c4f4ccaa9fe). The original 103 wA666 remain unchanged. The export proof took about 182 seconds on the A100 and passed an independent deployed SP1 verifier call.
 - [ ] Execute both Uniswap directions, burn the actual buyback output, and import the return.
 - [ ] Redeem at NAV into the same pfUSDC source, withdraw Ethereum USDC, settle on PFTL, and reconcile the whole lineage.
 

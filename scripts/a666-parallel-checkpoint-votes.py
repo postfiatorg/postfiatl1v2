@@ -214,13 +214,6 @@ def main() -> None:
                         }
                     )
 
-    if len(rows) < QUORUM_VALIDATORS:
-        failed = ", ".join(sorted(row["validator"] for row in failures))
-        raise RuntimeError(
-            f"checkpoint vote quorum not reached: {len(rows)}/{EXPECTED_VALIDATORS}; "
-            f"failed validators: {failed}"
-        )
-
     rows.sort(key=lambda row: row["validator"])
     remote_vote_files = [row["remote_vote_file"] for row in rows]
     result = {
@@ -238,7 +231,16 @@ def main() -> None:
         "remote_vote_files_csv": ",".join(remote_vote_files),
         "validators": rows,
     }
-    print(json.dumps(result, indent=2, sort_keys=True))
+    # Preserve successful votes and each failure even when quorum is incomplete.
+    # The assembler still rejects insufficient quorum; this supports diagnosis
+    # and retry without discarding independently signed evidence.
+    print(json.dumps(result, indent=2, sort_keys=True), flush=True)
+    if len(rows) < QUORUM_VALIDATORS:
+        failed = ", ".join(sorted(row["validator"] for row in failures))
+        raise RuntimeError(
+            f"checkpoint vote quorum not reached: {len(rows)}/{EXPECTED_VALIDATORS}; "
+            f"failed validators: {failed}"
+        )
 
 
 if __name__ == "__main__":
