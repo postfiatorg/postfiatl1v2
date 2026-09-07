@@ -1,0 +1,38 @@
+{
+  "schema": "tasknode-unl-vouch-ledger-input-v1",
+  "mode": "SHADOW_ONLY",
+  "window": {
+    "start": "2026-03-08T12:00:00Z",
+    "end": "2026-09-04T12:00:00Z",
+    "days": 180
+  },
+  "memos": [
+    {
+      "tx_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+      "ledger_index": 1201,
+      "transaction_index": 0,
+      "memo_index": 0,
+      "close_time": "2026-06-01T12:00:00Z",
+      "sender_wallet_address": "r9RRdMKcF6Jace2RevZtAb64ZfVtgob5aP",
+      "visibility": "public",
+      "memo": {
+        "schema": "tasknode-unl-vouch-memo-envelope-v1",
+        "mode": "SHADOW_ONLY",
+        "digest_hash": "febe8a7d8bc618736448c182255e731598d317abe30074e61b90c9fa0ddfc022",
+        "signature_algorithm": "secp256k1-recoverable-sha256",
+        "public_key_hex": "03f0031f769e84a96943cdec1f4cf0bd0f2725374ceca7594ad3525935a2eb317a",
+        "signature_hex": "45e3daa10e2b5e323839f05806eca1e3c4c43552c1322100410322ffc8d3b6af4fb92ed06ac9b5f37384c2cdf89537e4d62c2c8cee7dcd230e6c77e7f8723f8000",
+        "statement": {
+          "schema": "tasknode-unl-vouch-statement-v1",
+          "mode": "SHADOW_ONLY",
+          "source_account": "account-alice",
+          "target_account": "account-bob",
+          "source_wallet_address": "r9RRdMKcF6Jace2RevZtAb64ZfVtgob5aP",
+          "issued_at": "2026-06-01T12:00:00Z",
+          "claim": "knows_operator",
+          "nonce_hex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    }
+  ]
+}

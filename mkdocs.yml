@@ -105,13 +105,17 @@ nav:
       - Python Example: business/navcoin-python-example.md
       - Archive Summary: evidence/navcoin-archive-summary.md
   - Plans:
+      - Task Node UNL MVP Plan: plans/active/tasknode-unl-mvp-plan.md
       - Active Storage Scaling: plans/active/storage-scaling-milestone.md
+      - Z3 NAVCoin Round-Trip Plan: plans/active/z3-navcoin-roundtrip-plan.md
       - Completed Cobalt Adversarial Verification: plans/completed/cobalt-adversarial-verification-milestone.md
       - Completed Cobalt Activation: plans/completed/cobalt-activate-or-retire-milestone.md
       - Completed Cobalt Milestone: plans/completed/cobalt-governance-milestone.md
       - Completed P0 Remediation: plans/completed/P0-COMPLETE-REMEDIATION-PLAN-20260716.md
       - Completed Capability Restoration: plans/completed/OPEN-SOURCE-CAPABILITY-RESTORATION-PLAN-20260716.md
   - Handoffs:
+      - Task Node UNL MVP Built And Hardened: handoffs/2026-09-04___dravlic__tasknode_unl_mvp_built_and_hardened.md
+      - Agent Direction Decided; Z3 Planned: handoffs/2026-09-03___dravlic__agent_direction_decided_z3_planned.md
       - Bug Fixes And Pending Decisions: handoffs/2026-08-31___dravlic__bug_fixes_and_pending_decisions.md
       - Devnet Registry-Continuation Fix Deployed: handoffs/2026-08-31___postfiatchad__devnet_registry_fix_deploy.md
       - Storage Single-Writer Gate Passed: handoffs/2026-08-31___postfiatchad__storage_gate_passed_rollout_pending.md
@@ -167,7 +171,10 @@ nav:
       - Institution Legitimacy Scoring: governance/institution-legitimacy-scoring.md
       - Validator Identity Packets: governance/validator-identity-packets.md
       - Institution Reputation H200 Results: governance/institution-reputation-unl-h200-results-20260901.md
+      - Identity Packet Replay Results: governance/identity-packet-replay-results-20260903.md
+      - Task Node UNL Real-Data Shadow Run: governance/tasknode-unl-shadow-run-20260904.md
       - Pending Operator Decisions: governance/pending-operator-decisions.md
+      - AI Governance Direction Decision: governance/ai-governance-direction-20260903.md
       - Verifiable Constitution: governance/verifiable-constitution.md
       - Validator Registry: governance/validator-registry.md
       - Validator Admission Bin Policy: governance/validator-admission-bin-policy.md

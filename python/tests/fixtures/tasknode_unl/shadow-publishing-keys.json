@@ -1,0 +1,13 @@
+{
+  "keys": [
+    {
+      "algorithm": "secp256k1-recoverable-sha256",
+      "public_key_hex": "032a91b4890be0f797e589b32521f6fc96333170e621fd4fcca5f0644c3e62f478",
+      "publishing_key_id": "test-only-shadow-publishing-key",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": null
+    }
+  ],
+  "mode": "SHADOW_ONLY",
+  "schema": "tasknode-unl-work-digest-publishing-keys-v1"
+}

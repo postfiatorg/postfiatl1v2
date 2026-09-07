@@ -1,0 +1,55 @@
+{
+  "history_complete_from_ledger_genesis": true,
+  "mode": "SHADOW_ONLY",
+  "schema": "tasknode-unl-funding-transfer-input-v1",
+  "transfers": [],
+  "value_asset": "PFT",
+  "wallet_accounts": [
+    {
+      "account_id": "validator-03",
+      "wallet_address": "rLujDwn5P2vMAezHknW1QpmMQ5ha9Pkia5"
+    },
+    {
+      "account_id": "validator-04",
+      "wallet_address": "rBd3FR14F4g8kV8pUj7xdJrTSc6JA4bd38"
+    },
+    {
+      "account_id": "validator-05",
+      "wallet_address": "rEZd8pgifJpv3SQCqna1GCsYNkbcf4Pxwq"
+    },
+    {
+      "account_id": "validator-06",
+      "wallet_address": "rh888ExZUM6Gz44LbSJCTwm3EPtbWf9BRB"
+    },
+    {
+      "account_id": "validator-07",
+      "wallet_address": "rGw1D1MG2esersnUNGxGoGPSLkitQKoDFR"
+    },
+    {
+      "account_id": "account-pass",
+      "wallet_address": "rNGEEsuk9H98W5vHnjD9CUaknosRRso6ow"
+    },
+    {
+      "account_id": "account-digest-hold",
+      "wallet_address": "rndTrSEpZpL9wfotfgp2q2EVijqbadRnbz"
+    },
+    {
+      "account_id": "account-low-score",
+      "wallet_address": "rBcZcJ7skaua7n4iaRPF7sD4EjRsaQ87CE"
+    },
+    {
+      "account_id": "account-cluster-capped",
+      "wallet_address": "rhha9shJNYkMD1S3p98hKLkYWWNBmeaoH4"
+    },
+    {
+      "account_id": "account-connectivity-hold",
+      "wallet_address": "rUzYw6SEm7z3G8biMnYMS3ydxeMyuubrUE"
+    }
+  ],
+  "window": {
+    "days": 180,
+    "end": "2026-09-04T12:00:00Z",
+    "start": "2026-03-08T12:00:00Z"
+  },
+  "window_complete": true
+}

@@ -1,0 +1,227 @@
+{
+  "schema": "tasknode-unl-accountability-fixtures-v1",
+  "cases": [
+    {
+      "name": "proposal-established-operator",
+      "input": {
+        "schema": "tasknode-unl-accountability-input-v1",
+        "window_end": "2026-09-04T12:00:00Z",
+        "tasks": [
+          {
+            "task_id": "history-reward",
+            "kind": "personal",
+            "accepted_at": null,
+            "verification_outcome": null,
+            "verified_at": null,
+            "rewarded_at": "2025-09-04T12:00:00Z"
+          },
+          {
+            "task_id": "network-01",
+            "kind": "network",
+            "accepted_at": "2026-08-01T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-01T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-02",
+            "kind": "network",
+            "accepted_at": "2026-08-02T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-02T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-03",
+            "kind": "network",
+            "accepted_at": "2026-08-03T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-03T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-04",
+            "kind": "network",
+            "accepted_at": "2026-08-04T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-04T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-05",
+            "kind": "network",
+            "accepted_at": "2026-08-05T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-05T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-06",
+            "kind": "network",
+            "accepted_at": "2026-08-06T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-06T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-07",
+            "kind": "network",
+            "accepted_at": "2026-08-07T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-07T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-08",
+            "kind": "network",
+            "accepted_at": "2026-08-08T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-08T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-09",
+            "kind": "network",
+            "accepted_at": "2026-08-09T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-09T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-10",
+            "kind": "network",
+            "accepted_at": "2026-08-10T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-10T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-11",
+            "kind": "network",
+            "accepted_at": "2026-08-11T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-11T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-12",
+            "kind": "network",
+            "accepted_at": "2026-08-12T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-12T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-13",
+            "kind": "network",
+            "accepted_at": "2026-08-13T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-13T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-14",
+            "kind": "network",
+            "accepted_at": "2026-08-14T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-14T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-15",
+            "kind": "network",
+            "accepted_at": "2026-08-15T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-15T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-16",
+            "kind": "network",
+            "accepted_at": "2026-08-16T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-16T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-17",
+            "kind": "network",
+            "accepted_at": "2026-08-17T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-17T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-18",
+            "kind": "network",
+            "accepted_at": "2026-08-18T12:00:00Z",
+            "verification_outcome": "pass",
+            "verified_at": "2026-08-18T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-19",
+            "kind": "network",
+            "accepted_at": "2026-08-19T12:00:00Z",
+            "verification_outcome": "fail",
+            "verified_at": "2026-08-19T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "network-20",
+            "kind": "network",
+            "accepted_at": "2026-08-20T12:00:00Z",
+            "verification_outcome": "fail",
+            "verified_at": "2026-08-20T13:00:00Z",
+            "rewarded_at": null
+          },
+          {
+            "task_id": "personal-in-window",
+            "kind": "personal",
+            "accepted_at": "2026-08-21T12:00:00Z",
+            "verification_outcome": null,
+            "verified_at": null,
+            "rewarded_at": null
+          }
+        ],
+        "disputes": [],
+        "badge": {
+          "verified": true,
+          "valid_from": "2026-01-01T00:00:00Z",
+          "expires_at": "2027-01-01T00:00:00Z",
+          "revoked_at": null
+        }
+      },
+      "expected": {
+        "accepted_network_tasks": 20,
+        "verification_passes": 18,
+        "verification_total": 20,
+        "exact_score": {
+          "numerator": 161,
+          "denominator": 2
+        },
+        "projected_score": 80,
+        "meets_floor": true
+      }
+    },
+    {
+      "name": "missing-required-evidence-holds",
+      "input": {
+        "schema": "tasknode-unl-accountability-input-v1",
+        "window_end": "2026-09-04T12:00:00Z",
+        "tasks": [],
+        "disputes": null,
+        "badge": null
+      },
+      "expected": {
+        "status": "hold",
+        "hold_reasons": [
+          "missing_badge_state",
+          "missing_dispute_state",
+          "missing_first_rewarded_task",
+          "missing_verification_denominator"
+        ]
+      }
+    }
+  ]
+}

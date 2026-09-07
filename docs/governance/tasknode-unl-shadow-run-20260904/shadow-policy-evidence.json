@@ -1,0 +1,264 @@
+{
+  "active_validators": [
+    {
+      "account_id": "nHB6Zc7mhr7swksEgpwTE7Hw7SvZ9cz22T2MECMSXjBeMTeHXQB7",
+      "control_group": {
+        "funding_source_group": "unresolved-funding-nHB6Zc7mhr7swksEgpwTE7Hw7SvZ9cz22T2MECMSXjBeMTeHXQB7",
+        "key_management_group": "unresolved-key-management-nHB6Zc7mhr7swksEgpwTE7Hw7SvZ9cz22T2MECMSXjBeMTeHXQB7",
+        "operator_group": "unresolved-operator-nHB6Zc7mhr7swksEgpwTE7Hw7SvZ9cz22T2MECMSXjBeMTeHXQB7",
+        "release_manager_group": "unresolved-release-nHB6Zc7mhr7swksEgpwTE7Hw7SvZ9cz22T2MECMSXjBeMTeHXQB7"
+      },
+      "validator_id": "nHB6Zc7mhr7swksEgpwTE7Hw7SvZ9cz22T2MECMSXjBeMTeHXQB7"
+    },
+    {
+      "account_id": "nHBM2nzq3pZUg8JsxvEt3G7gAAtc5Sukaef6YmvVx64uAoRK4QWM",
+      "control_group": {
+        "funding_source_group": "unresolved-funding-nHBM2nzq3pZUg8JsxvEt3G7gAAtc5Sukaef6YmvVx64uAoRK4QWM",
+        "key_management_group": "unresolved-key-management-nHBM2nzq3pZUg8JsxvEt3G7gAAtc5Sukaef6YmvVx64uAoRK4QWM",
+        "operator_group": "unresolved-operator-nHBM2nzq3pZUg8JsxvEt3G7gAAtc5Sukaef6YmvVx64uAoRK4QWM",
+        "release_manager_group": "unresolved-release-nHBM2nzq3pZUg8JsxvEt3G7gAAtc5Sukaef6YmvVx64uAoRK4QWM"
+      },
+      "validator_id": "nHBM2nzq3pZUg8JsxvEt3G7gAAtc5Sukaef6YmvVx64uAoRK4QWM"
+    },
+    {
+      "account_id": "nHBYKjxjbzxRzrS3XkhpgM7KXJ25jbgPHkbAjjSCQPm8PaPS5y4v",
+      "control_group": {
+        "funding_source_group": "unresolved-funding-nHBYKjxjbzxRzrS3XkhpgM7KXJ25jbgPHkbAjjSCQPm8PaPS5y4v",
+        "key_management_group": "unresolved-key-management-nHBYKjxjbzxRzrS3XkhpgM7KXJ25jbgPHkbAjjSCQPm8PaPS5y4v",
+        "operator_group": "unresolved-operator-nHBYKjxjbzxRzrS3XkhpgM7KXJ25jbgPHkbAjjSCQPm8PaPS5y4v",
+        "release_manager_group": "unresolved-release-nHBYKjxjbzxRzrS3XkhpgM7KXJ25jbgPHkbAjjSCQPm8PaPS5y4v"
+      },
+      "validator_id": "nHBYKjxjbzxRzrS3XkhpgM7KXJ25jbgPHkbAjjSCQPm8PaPS5y4v"
+    },
+    {
+      "account_id": "nHBcLEB4S6moQGrhMjJo1jbp58WL5psHY9EMDWNAtdqykUYiA1rF",
+      "control_group": {
+        "funding_source_group": "unresolved-funding-nHBcLEB4S6moQGrhMjJo1jbp58WL5psHY9EMDWNAtdqykUYiA1rF",
+        "key_management_group": "unresolved-key-management-nHBcLEB4S6moQGrhMjJo1jbp58WL5psHY9EMDWNAtdqykUYiA1rF",
+        "operator_group": "unresolved-operator-nHBcLEB4S6moQGrhMjJo1jbp58WL5psHY9EMDWNAtdqykUYiA1rF",
+        "release_manager_group": "unresolved-release-nHBcLEB4S6moQGrhMjJo1jbp58WL5psHY9EMDWNAtdqykUYiA1rF"
+      },
+      "validator_id": "nHBcLEB4S6moQGrhMjJo1jbp58WL5psHY9EMDWNAtdqykUYiA1rF"
+    },
+    {
+      "account_id": "nHBmj7zUY2yMc9f5wgNcCuWj79BUieNmc1GG8PqiEP1tgNZZWLVM",
+      "control_group": {
+        "funding_source_group": "unresolved-funding-nHBmj7zUY2yMc9f5wgNcCuWj79BUieNmc1GG8PqiEP1tgNZZWLVM",
+        "key_management_group": "unresolved-key-management-nHBmj7zUY2yMc9f5wgNcCuWj79BUieNmc1GG8PqiEP1tgNZZWLVM",
+        "operator_group": "unresolved-operator-nHBmj7zUY2yMc9f5wgNcCuWj79BUieNmc1GG8PqiEP1tgNZZWLVM",
+        "release_manager_group": "unresolved-release-nHBmj7zUY2yMc9f5wgNcCuWj79BUieNmc1GG8PqiEP1tgNZZWLVM"
+      },
+      "validator_id": "nHBmj7zUY2yMc9f5wgNcCuWj79BUieNmc1GG8PqiEP1tgNZZWLVM"
+    },
+    {
+      "account_id": "nHByMXejvHJgjcGJ1f9bhcAGcFeNR6ecsDmzN4t3HkhyRHZtM6Lj",
+      "control_group": {
+        "funding_source_group": "unresolved-funding-nHByMXejvHJgjcGJ1f9bhcAGcFeNR6ecsDmzN4t3HkhyRHZtM6Lj",
+        "key_management_group": "unresolved-key-management-nHByMXejvHJgjcGJ1f9bhcAGcFeNR6ecsDmzN4t3HkhyRHZtM6Lj",
+        "operator_group": "unresolved-operator-nHByMXejvHJgjcGJ1f9bhcAGcFeNR6ecsDmzN4t3HkhyRHZtM6Lj",
+        "release_manager_group": "unresolved-release-nHByMXejvHJgjcGJ1f9bhcAGcFeNR6ecsDmzN4t3HkhyRHZtM6Lj"
+      },
+      "validator_id": "nHByMXejvHJgjcGJ1f9bhcAGcFeNR6ecsDmzN4t3HkhyRHZtM6Lj"
+    },
+    {
+      "account_id": "nHDHCvsJi8UwHMAbkinuJhPYsG5ZR9rtmGAjJZwo8uibf8N1tz3e",
+      "control_group": {
+        "funding_source_group": "unresolved-funding-nHDHCvsJi8UwHMAbkinuJhPYsG5ZR9rtmGAjJZwo8uibf8N1tz3e",
+        "key_management_group": "unresolved-key-management-nHDHCvsJi8UwHMAbkinuJhPYsG5ZR9rtmGAjJZwo8uibf8N1tz3e",
+        "operator_group": "unresolved-operator-nHDHCvsJi8UwHMAbkinuJhPYsG5ZR9rtmGAjJZwo8uibf8N1tz3e",
+        "release_manager_group": "unresolved-release-nHDHCvsJi8UwHMAbkinuJhPYsG5ZR9rtmGAjJZwo8uibf8N1tz3e"
+      },
+      "validator_id": "nHDHCvsJi8UwHMAbkinuJhPYsG5ZR9rtmGAjJZwo8uibf8N1tz3e"
+    },
+    {
+      "account_id": "nHDfSHLutR7QqttAkx3AiYG2bukCdfAa3P9hrYL4yNJZQpvEpW1A",
+      "control_group": {
+        "funding_source_group": "unresolved-funding-nHDfSHLutR7QqttAkx3AiYG2bukCdfAa3P9hrYL4yNJZQpvEpW1A",
+        "key_management_group": "unresolved-key-management-nHDfSHLutR7QqttAkx3AiYG2bukCdfAa3P9hrYL4yNJZQpvEpW1A",
+        "operator_group": "unresolved-operator-nHDfSHLutR7QqttAkx3AiYG2bukCdfAa3P9hrYL4yNJZQpvEpW1A",
+        "release_manager_group": "unresolved-release-nHDfSHLutR7QqttAkx3AiYG2bukCdfAa3P9hrYL4yNJZQpvEpW1A"
+      },
+      "validator_id": "nHDfSHLutR7QqttAkx3AiYG2bukCdfAa3P9hrYL4yNJZQpvEpW1A"
+    },
+    {
+      "account_id": "nHU74qX4tCQDSpE6zBS5PB3jybuGZJ7QMbeyLWDQRy3Lhb4DYDSR",
+      "control_group": {
+        "funding_source_group": "unresolved-funding-nHU74qX4tCQDSpE6zBS5PB3jybuGZJ7QMbeyLWDQRy3Lhb4DYDSR",
+        "key_management_group": "unresolved-key-management-nHU74qX4tCQDSpE6zBS5PB3jybuGZJ7QMbeyLWDQRy3Lhb4DYDSR",
+        "operator_group": "unresolved-operator-nHU74qX4tCQDSpE6zBS5PB3jybuGZJ7QMbeyLWDQRy3Lhb4DYDSR",
+        "release_manager_group": "unresolved-release-nHU74qX4tCQDSpE6zBS5PB3jybuGZJ7QMbeyLWDQRy3Lhb4DYDSR"
+      },
+      "validator_id": "nHU74qX4tCQDSpE6zBS5PB3jybuGZJ7QMbeyLWDQRy3Lhb4DYDSR"
+    },
+    {
+      "account_id": "nHUCEXpC5LhFAm1Mmf8TqrzVGt3QCuwWoW2V8PYynDpjZe8m8mHj",
+      "control_group": {
+        "funding_source_group": "unresolved-funding-nHUCEXpC5LhFAm1Mmf8TqrzVGt3QCuwWoW2V8PYynDpjZe8m8mHj",
+        "key_management_group": "unresolved-key-management-nHUCEXpC5LhFAm1Mmf8TqrzVGt3QCuwWoW2V8PYynDpjZe8m8mHj",
+        "operator_group": "unresolved-operator-nHUCEXpC5LhFAm1Mmf8TqrzVGt3QCuwWoW2V8PYynDpjZe8m8mHj",
+        "release_manager_group": "unresolved-release-nHUCEXpC5LhFAm1Mmf8TqrzVGt3QCuwWoW2V8PYynDpjZe8m8mHj"
+      },
+      "validator_id": "nHUCEXpC5LhFAm1Mmf8TqrzVGt3QCuwWoW2V8PYynDpjZe8m8mHj"
+    },
+    {
+      "account_id": "nHUUXMXfPEdnKAT8u2AB89LxTWT1tWsTecDPQURoMw2XJ2WP85MK",
+      "control_group": {
+        "funding_source_group": "unresolved-funding-nHUUXMXfPEdnKAT8u2AB89LxTWT1tWsTecDPQURoMw2XJ2WP85MK",
+        "key_management_group": "unresolved-key-management-nHUUXMXfPEdnKAT8u2AB89LxTWT1tWsTecDPQURoMw2XJ2WP85MK",
+        "operator_group": "unresolved-operator-nHUUXMXfPEdnKAT8u2AB89LxTWT1tWsTecDPQURoMw2XJ2WP85MK",
+        "release_manager_group": "unresolved-release-nHUUXMXfPEdnKAT8u2AB89LxTWT1tWsTecDPQURoMw2XJ2WP85MK"
+      },
+      "validator_id": "nHUUXMXfPEdnKAT8u2AB89LxTWT1tWsTecDPQURoMw2XJ2WP85MK"
+    },
+    {
+      "account_id": "nHUWciHX8W9PgM3sQmgkRiKpkuaJjTxFSyvZce4bP4WeMz81HefX",
+      "control_group": {
+        "funding_source_group": "unresolved-funding-nHUWciHX8W9PgM3sQmgkRiKpkuaJjTxFSyvZce4bP4WeMz81HefX",
+        "key_management_group": "unresolved-key-management-nHUWciHX8W9PgM3sQmgkRiKpkuaJjTxFSyvZce4bP4WeMz81HefX",
+        "operator_group": "unresolved-operator-nHUWciHX8W9PgM3sQmgkRiKpkuaJjTxFSyvZce4bP4WeMz81HefX",
+        "release_manager_group": "unresolved-release-nHUWciHX8W9PgM3sQmgkRiKpkuaJjTxFSyvZce4bP4WeMz81HefX"
+      },
+      "validator_id": "nHUWciHX8W9PgM3sQmgkRiKpkuaJjTxFSyvZce4bP4WeMz81HefX"
+    },
+    {
+      "account_id": "nHUatddiVB2GN6zHHCk1gtepjANF8BdjPKuVcN6jwG2JwBYPea3k",
+      "control_group": {
+        "funding_source_group": "unresolved-funding-nHUatddiVB2GN6zHHCk1gtepjANF8BdjPKuVcN6jwG2JwBYPea3k",
+        "key_management_group": "unresolved-key-management-nHUatddiVB2GN6zHHCk1gtepjANF8BdjPKuVcN6jwG2JwBYPea3k",
+        "operator_group": "unresolved-operator-nHUatddiVB2GN6zHHCk1gtepjANF8BdjPKuVcN6jwG2JwBYPea3k",
+        "release_manager_group": "unresolved-release-nHUatddiVB2GN6zHHCk1gtepjANF8BdjPKuVcN6jwG2JwBYPea3k"
+      },
+      "validator_id": "nHUatddiVB2GN6zHHCk1gtepjANF8BdjPKuVcN6jwG2JwBYPea3k"
+    },
+    {
+      "account_id": "nHUc7VSYA6xvFakSvuTojJQucBNukKwmtguUG2HMT9Xp9dKzkpvJ",
+      "control_group": {
+        "funding_source_group": "postfiat-foundation",
+        "key_management_group": "postfiat-foundation",
+        "operator_group": "postfiat-foundation",
+        "release_manager_group": "postfiat-foundation"
+      },
+      "validator_id": "nHUc7VSYA6xvFakSvuTojJQucBNukKwmtguUG2HMT9Xp9dKzkpvJ"
+    },
+    {
+      "account_id": "nHUdwzTWTQJzebbxcanZG2ERXikMLU9aAZa8cHtxosfiKq5N7Vd5",
+      "control_group": {
+        "funding_source_group": "unresolved-funding-nHUdwzTWTQJzebbxcanZG2ERXikMLU9aAZa8cHtxosfiKq5N7Vd5",
+        "key_management_group": "unresolved-key-management-nHUdwzTWTQJzebbxcanZG2ERXikMLU9aAZa8cHtxosfiKq5N7Vd5",
+        "operator_group": "unresolved-operator-nHUdwzTWTQJzebbxcanZG2ERXikMLU9aAZa8cHtxosfiKq5N7Vd5",
+        "release_manager_group": "unresolved-release-nHUdwzTWTQJzebbxcanZG2ERXikMLU9aAZa8cHtxosfiKq5N7Vd5"
+      },
+      "validator_id": "nHUdwzTWTQJzebbxcanZG2ERXikMLU9aAZa8cHtxosfiKq5N7Vd5"
+    },
+    {
+      "account_id": "nHUhL4QzULuXt2WK5v5mvzEMZSo6wM9ZWUaaQC1eYw2qa1ATFw1c",
+      "control_group": {
+        "funding_source_group": "unresolved-funding-nHUhL4QzULuXt2WK5v5mvzEMZSo6wM9ZWUaaQC1eYw2qa1ATFw1c",
+        "key_management_group": "unresolved-key-management-nHUhL4QzULuXt2WK5v5mvzEMZSo6wM9ZWUaaQC1eYw2qa1ATFw1c",
+        "operator_group": "unresolved-operator-nHUhL4QzULuXt2WK5v5mvzEMZSo6wM9ZWUaaQC1eYw2qa1ATFw1c",
+        "release_manager_group": "unresolved-release-nHUhL4QzULuXt2WK5v5mvzEMZSo6wM9ZWUaaQC1eYw2qa1ATFw1c"
+      },
+      "validator_id": "nHUhL4QzULuXt2WK5v5mvzEMZSo6wM9ZWUaaQC1eYw2qa1ATFw1c"
+    },
+    {
+      "account_id": "nHUif4sukXu9pJGyyBaeVMwmE8L1fJ5KJj4X4ksgTKhgjG6k96s2",
+      "control_group": {
+        "funding_source_group": "unresolved-funding-nHUif4sukXu9pJGyyBaeVMwmE8L1fJ5KJj4X4ksgTKhgjG6k96s2",
+        "key_management_group": "unresolved-key-management-nHUif4sukXu9pJGyyBaeVMwmE8L1fJ5KJj4X4ksgTKhgjG6k96s2",
+        "operator_group": "unresolved-operator-nHUif4sukXu9pJGyyBaeVMwmE8L1fJ5KJj4X4ksgTKhgjG6k96s2",
+        "release_manager_group": "unresolved-release-nHUif4sukXu9pJGyyBaeVMwmE8L1fJ5KJj4X4ksgTKhgjG6k96s2"
+      },
+      "validator_id": "nHUif4sukXu9pJGyyBaeVMwmE8L1fJ5KJj4X4ksgTKhgjG6k96s2"
+    },
+    {
+      "account_id": "nHUkhbZe9ncdmhn6dbd5x7391ymwCS3YZEMWjysP9fSiDtau9YEe",
+      "control_group": {
+        "funding_source_group": "postfiat-foundation",
+        "key_management_group": "postfiat-foundation",
+        "operator_group": "postfiat-foundation",
+        "release_manager_group": "postfiat-foundation"
+      },
+      "validator_id": "nHUkhbZe9ncdmhn6dbd5x7391ymwCS3YZEMWjysP9fSiDtau9YEe"
+    },
+    {
+      "account_id": "nHUso5gdgQnewAsk5QT1aFr897g6YLaL697iyuknmSqd7pbqz5Td",
+      "control_group": {
+        "funding_source_group": "postfiat-foundation",
+        "key_management_group": "postfiat-foundation",
+        "operator_group": "postfiat-foundation",
+        "release_manager_group": "postfiat-foundation"
+      },
+      "validator_id": "nHUso5gdgQnewAsk5QT1aFr897g6YLaL697iyuknmSqd7pbqz5Td"
+    },
+    {
+      "account_id": "nHUzc5XzsmweRV6aNyUQJD5eRUM4TT4tVCBv5DKx6T7Buq4gn9Lr",
+      "control_group": {
+        "funding_source_group": "unresolved-funding-nHUzc5XzsmweRV6aNyUQJD5eRUM4TT4tVCBv5DKx6T7Buq4gn9Lr",
+        "key_management_group": "unresolved-key-management-nHUzc5XzsmweRV6aNyUQJD5eRUM4TT4tVCBv5DKx6T7Buq4gn9Lr",
+        "operator_group": "unresolved-operator-nHUzc5XzsmweRV6aNyUQJD5eRUM4TT4tVCBv5DKx6T7Buq4gn9Lr",
+        "release_manager_group": "unresolved-release-nHUzc5XzsmweRV6aNyUQJD5eRUM4TT4tVCBv5DKx6T7Buq4gn9Lr"
+      },
+      "validator_id": "nHUzc5XzsmweRV6aNyUQJD5eRUM4TT4tVCBv5DKx6T7Buq4gn9Lr"
+    }
+  ],
+  "candidates": [
+    {
+      "account_id": "observed-wallet-rPo8GkCA9YMKzuJGTHbj11kdVfPqSJHxNx",
+      "cobalt_linkedness_safe": null,
+      "control_group": {
+        "funding_source_group": "unresolved-funding-unbound-wallet-rPo8GkCA9YMKzuJGTHbj11kdVfPqSJHxNx",
+        "key_management_group": "unresolved-key-management-unbound-wallet-rPo8GkCA9YMKzuJGTHbj11kdVfPqSJHxNx",
+        "operator_group": "unresolved-operator-unbound-wallet-rPo8GkCA9YMKzuJGTHbj11kdVfPqSJHxNx",
+        "release_manager_group": "unresolved-release-unbound-wallet-rPo8GkCA9YMKzuJGTHbj11kdVfPqSJHxNx"
+      },
+      "domain_control_proved": null,
+      "model_output": null,
+      "operator_manifest_signed": null,
+      "public_key_hash": "5753548b08d53d091eeeac10cd14b7493856a24f309dfe8d5f6120c92e37c70a",
+      "reliability_bps": null,
+      "validator_id": "unbound-wallet-rPo8GkCA9YMKzuJGTHbj11kdVfPqSJHxNx"
+    },
+    {
+      "account_id": "observed-wallet-rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "cobalt_linkedness_safe": null,
+      "control_group": {
+        "funding_source_group": "unresolved-funding-unbound-wallet-rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+        "key_management_group": "unresolved-key-management-unbound-wallet-rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+        "operator_group": "unresolved-operator-unbound-wallet-rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+        "release_manager_group": "unresolved-release-unbound-wallet-rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA"
+      },
+      "domain_control_proved": null,
+      "model_output": null,
+      "operator_manifest_signed": null,
+      "public_key_hash": "d13f78fd9fa85f6dbb41a82b485ef44f9d882975869208f0d1159752b5b45f68",
+      "reliability_bps": null,
+      "validator_id": "unbound-wallet-rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA"
+    },
+    {
+      "account_id": "observed-wallet-rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "cobalt_linkedness_safe": null,
+      "control_group": {
+        "funding_source_group": "unresolved-funding-unbound-wallet-rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+        "key_management_group": "unresolved-key-management-unbound-wallet-rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+        "operator_group": "unresolved-operator-unbound-wallet-rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+        "release_manager_group": "unresolved-release-unbound-wallet-rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7"
+      },
+      "domain_control_proved": null,
+      "model_output": null,
+      "operator_manifest_signed": null,
+      "public_key_hash": "0e3dbd9bef6426d3abb8b13b9a2671359c30ea3dabaf59d1f44e907ceaf937ee",
+      "reliability_bps": null,
+      "validator_id": "unbound-wallet-rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7"
+    }
+  ],
+  "evaluation_end": "2026-09-04T11:57:22Z",
+  "foundation_bound_validator_ids": [
+    "nHUc7VSYA6xvFakSvuTojJQucBNukKwmtguUG2HMT9Xp9dKzkpvJ",
+    "nHUkhbZe9ncdmhn6dbd5x7391ymwCS3YZEMWjysP9fSiDtau9YEe",
+    "nHUso5gdgQnewAsk5QT1aFr897g6YLaL697iyuknmSqd7pbqz5Td"
+  ],
+  "mode": "SHADOW_ONLY",
+  "schema": "tasknode-unl-shadow-policy-evidence-v1",
+  "target_round": 21,
+  "transition_budget": 1
+}

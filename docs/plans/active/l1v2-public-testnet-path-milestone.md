@@ -26,7 +26,7 @@ operationalizations; the operator may tighten or restate them.
       is complete, the model-authority decision (keep or demote) is recorded,
       and the decided configuration is what actually runs the fork's weekly
       production rounds
-- [ ] Z3 **NAVCoin swaps work end to end**: full round trips
+- [ ] Z3 **NAVCoin swaps work end to end** ([Z3 NAVCoin round-trip plan](z3-navcoin-roundtrip-plan.md); Z3 remains OPEN): full round trips
       (deposit → mint → swap → redemption) succeed repeatedly on the
       qualified lineage over a sustained window **without requiring any
       consensus upgrade during that window** — consensus-surface churn on

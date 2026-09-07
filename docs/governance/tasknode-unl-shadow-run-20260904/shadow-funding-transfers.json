@@ -1,0 +1,518 @@
+{
+  "history_complete_from_ledger_genesis": false,
+  "mode": "SHADOW_ONLY",
+  "schema": "tasknode-unl-funding-transfer-input-v1",
+  "transfers": [
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-21T19:21:52Z",
+      "ledger_index": 5620845,
+      "source_wallet_address": "rPo8GkCA9YMKzuJGTHbj11kdVfPqSJHxNx",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "089760699b24d8e9f1612b0839d338b92a2900f9ec6e26eba7244e267236344b",
+      "value_units": 20000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-22T13:48:10Z",
+      "ledger_index": 5642833,
+      "source_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "target_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "transaction_index": 0,
+      "tx_hash": "b271cefee6981f0e94fb9413db155692722f8a87bf7408bde968bb641d3a2fad",
+      "value_units": 1
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-22T19:27:22Z",
+      "ledger_index": 5649571,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "11223f061cc9baf361bdafe727b65bd970e6ca7689d19e791146139321c7eab1",
+      "value_units": 2000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-22T19:58:12Z",
+      "ledger_index": 5650183,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "33be99bb91a192b87a99023891dcb361aa69e4e4fa7bd30292b3eed5fe7787ff",
+      "value_units": 30000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-22T20:00:11Z",
+      "ledger_index": 5650222,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "b5d556b97b80947325075bf874af5850b5761a1d4e0fcc0183782bf1cad8d306",
+      "value_units": 2000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-22T20:15:40Z",
+      "ledger_index": 5650528,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "bfd6c5a13972bdad61a3e0cb0334d268245a6f972865c29e28eded87b8bb2259",
+      "value_units": 1500000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-22T20:36:10Z",
+      "ledger_index": 5650935,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "887e4c83459001a14e4161f8a02c47c0c2cd4ca428836b4f0d5a968f5c2267d0",
+      "value_units": 1
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-22T21:16:00Z",
+      "ledger_index": 5651724,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "d6097bc88c5f1969d2ef5107c6ed50386613474b015407532138c68d3add6545",
+      "value_units": 2700000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-22T21:40:21Z",
+      "ledger_index": 5652208,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "ddef54e433bf2c3c3a7b74c2ffd5f1f0f4b6762e7757414a507efff62de0075c",
+      "value_units": 4000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-22T22:33:31Z",
+      "ledger_index": 5653262,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "03853b4af242595bc09ec90628c54fd688ed724764260f82bb707ddc313bd78e",
+      "value_units": 2400000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-22T22:43:31Z",
+      "ledger_index": 5653461,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "29a433e666d63f49d3957f73f187bd8cd133f4b7c96cdb76d864a536be66a236",
+      "value_units": 2500000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-22T23:17:51Z",
+      "ledger_index": 5654143,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "5cca8f96dad07b5dc862c783b06107208367d2b0077b2e6bd03a96735c216cca",
+      "value_units": 2400000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-22T23:46:52Z",
+      "ledger_index": 5654720,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "4a8293a5a9ddca433a9250df82f386dfe84c12a1bf13c230a18c2ee996f5cb63",
+      "value_units": 2000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-23T01:09:52Z",
+      "ledger_index": 5656370,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "4c3097a17a49831c2f04e0b11416b867ca82b0f989c8b9d7fa1d9a5003a777a5",
+      "value_units": 45000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-23T12:59:40Z",
+      "ledger_index": 5670464,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "b772604fcfa739da8235b4d142820309570790b144404671c663b652c4d35478",
+      "value_units": 3500000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-23T15:57:41Z",
+      "ledger_index": 5674000,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "305cd61f11abc08d0f38487a3cdabba31ce046b66893a62d8e0868971675874c",
+      "value_units": 2700000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-23T18:08:30Z",
+      "ledger_index": 5676601,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "e07b2195d0424220b72ab330abd12db690e940e848f6c83c7d51027dea4d00f4",
+      "value_units": 1500000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-23T21:00:42Z",
+      "ledger_index": 5680028,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "8ca12458c246e51b6844d8528224dbe115dbc43c6d037aca2eede6d06c985897",
+      "value_units": 4500000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-23T21:59:52Z",
+      "ledger_index": 5681206,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 2,
+      "tx_hash": "bbf961411161292f8b6ca4c5a1e04649a54e263ac7aaf9eb15dfb34410afb2ca",
+      "value_units": 2000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-23T23:52:41Z",
+      "ledger_index": 5683447,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "69a7c835e712d4c6e9c8995386637fe3c84957dce91636aaf945e0ceb39dfba1",
+      "value_units": 2000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-23T23:56:22Z",
+      "ledger_index": 5683521,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "bab5298765ecc2190c7a1c5f79e26c86c8e9a22d64ad7d5d743ae47379209eb7",
+      "value_units": 2500000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-24T00:30:30Z",
+      "ledger_index": 5684198,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "ef1ec85ee01f5ac59bd1ff04f8b40c12d9dec41788b69f4bfa15c45aba3034e8",
+      "value_units": 2700000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-24T00:46:50Z",
+      "ledger_index": 5684522,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "c962a4215f84b0294fd1d15180ce632e0c9a714fcc90b450b0e07086700214b8",
+      "value_units": 35000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-24T03:54:02Z",
+      "ledger_index": 5688239,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "6ee31086f03645d754246d829eac14b173925c35c8036010566ab7b4a30d0242",
+      "value_units": 2500000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-24T20:56:00Z",
+      "ledger_index": 5708533,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "cf1668c0978b7c31e2766dbdfaa9b0c45ee9113e7a43ded9575df2c32023fe8a",
+      "value_units": 4500000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-24T22:13:50Z",
+      "ledger_index": 5710082,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "e616e14b0cd0d82f96c7f0cb3976eb1a626237ec4f0fd493d2532329896f25c5",
+      "value_units": 1000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-25T00:34:50Z",
+      "ledger_index": 5712886,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "139281126653b7d40159657a8e1820d7895eae0daac0f5db83729a6cd7045573",
+      "value_units": 45000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-25T05:33:01Z",
+      "ledger_index": 5718815,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "f1bd02c1a93a98e28425f7b2c31baf670a5ea1d008eb8eae7a237a3086ac77e2",
+      "value_units": 2500000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-25T13:07:53Z",
+      "ledger_index": 5727857,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "3e339674adef9ba3031d338d803a25d7b9392676db6c6438c799f34da41ac57c",
+      "value_units": 1000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-25T13:24:23Z",
+      "ledger_index": 5728185,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "daacbc59f51fb54b8b2ac817d1ceab546793bfe3f8db045045520d3ce3551d01",
+      "value_units": 2500000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-25T14:24:23Z",
+      "ledger_index": 5729377,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "702613167a49848c8eb8464bb2f4442fd3747a7a8e9b7e4bd17e299358016e10",
+      "value_units": 3250000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-26T00:55:12Z",
+      "ledger_index": 5741905,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "63f590e20cb0b0b8257a6bbdb1140aeea796a6ec1cfd007674e8eda68b57e0a5",
+      "value_units": 45000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-27T00:55:22Z",
+      "ledger_index": 5770508,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "578b38c0556d786590a675b73c09304bb1035456cbc459b3f038a91a82d0e64d",
+      "value_units": 50000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-28T01:58:32Z",
+      "ledger_index": 5800350,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "1792e45f8de6af4e1fb8997125eae3e609d28e1291bce2f0748b439d2dbd8829",
+      "value_units": 55000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-29T00:38:52Z",
+      "ledger_index": 5827349,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "0326eabf80a805ee093c79e8857b773c9d4ddaa95e36d391edf9a7a235f729c1",
+      "value_units": 55000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-30T00:06:30Z",
+      "ledger_index": 5855265,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "83800301f97192133d5b992b874ceadc218eed95cee73b3bfdd1b46d3316d797",
+      "value_units": 18000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-30T12:43:03Z",
+      "ledger_index": 5870278,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "313c60cc5c5c57232805753ba8d715b64eb76b9ea2b3873e8161011fc4efb9c1",
+      "value_units": 3000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-30T13:18:12Z",
+      "ledger_index": 5870974,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "aa353400051e93b7ba305278512ac52a1989979a1841e800f3cbbb0c3be702da",
+      "value_units": 400000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-30T14:56:21Z",
+      "ledger_index": 5872923,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "04726ae49d8c6a71663a30ee8d8a8b4250c82fbb2766d8a890341a912cb7aafb",
+      "value_units": 2000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-30T16:11:12Z",
+      "ledger_index": 5874413,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "d56b01988cf4a4b58977431c97df5807a516ff3332afb098d8c28a55c00850bb",
+      "value_units": 2500000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-31T04:47:52Z",
+      "ledger_index": 5889426,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "75901ed12217dbb7a37d05352cdc8f19c0c20ba35c45e08956d90937b8db2574",
+      "value_units": 18000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-08-31T22:42:11Z",
+      "ledger_index": 5910750,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "6d824054edf6fa0d0987c6bf1f47bf9951198d371753a957a6f493f8fa165e11",
+      "value_units": 3000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-09-01T00:08:10Z",
+      "ledger_index": 5912458,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "aa985d7094c1bdfb9cd63cdf0a63ae4502deb99bc5f9ae60e297c7629fb500a3",
+      "value_units": 6000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-09-01T15:12:40Z",
+      "ledger_index": 5930399,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "2f384826ae661a8f2140f6fccd870481487c8a9c49128ebbe419c34f1b2b1491",
+      "value_units": 5000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-09-01T17:43:02Z",
+      "ledger_index": 5933384,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "ba18a012ff11a3f2ba2c434cf1db507d3f5be8f073f7972dbd9f252f0a0661f4",
+      "value_units": 2500000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-09-02T00:52:40Z",
+      "ledger_index": 5941915,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "feef5f035fdecd54af3fccd813014bbaa7df350b50f89c479ed3969e7c28a105",
+      "value_units": 55000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-09-02T11:38:41Z",
+      "ledger_index": 5954728,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "121c48bb1466001ea3b901121b291dd5b05559a8c8eaad1b838ae97cac5b884e",
+      "value_units": 2400000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-09-03T00:32:33Z",
+      "ledger_index": 5970089,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "96f8bc58c400d4cb7bc4db640701652a54a68b6337deb16c67ce364b93724441",
+      "value_units": 45000000
+    },
+    {
+      "asset": "PFT",
+      "close_time": "2026-09-04T04:32:31Z",
+      "ledger_index": 6003432,
+      "source_wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "target_wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "transaction_index": 0,
+      "tx_hash": "5786e1ca3e0ebb88d36cd653228d67478e87ea0e0640dd4ef3f5a637176e3251",
+      "value_units": 55000000
+    }
+  ],
+  "value_asset": "PFT",
+  "wallet_accounts": [
+    {
+      "account_id": "observed-wallet-rPo8GkCA9YMKzuJGTHbj11kdVfPqSJHxNx",
+      "wallet_address": "rPo8GkCA9YMKzuJGTHbj11kdVfPqSJHxNx"
+    },
+    {
+      "account_id": "observed-wallet-rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA",
+      "wallet_address": "rpHvzMCKZ7JrzGfRseXohC3RsMWqcnEKkA"
+    },
+    {
+      "account_id": "observed-wallet-rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+      "wallet_address": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7"
+    }
+  ],
+  "window": {
+    "days": 180,
+    "end": "2026-09-04T11:57:22Z",
+    "start": "2026-03-08T11:57:22Z"
+  },
+  "window_complete": false
+}

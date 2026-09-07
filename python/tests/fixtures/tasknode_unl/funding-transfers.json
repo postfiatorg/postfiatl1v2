@@ -1,0 +1,116 @@
+{
+  "schema": "tasknode-unl-funding-transfer-input-v1",
+  "mode": "SHADOW_ONLY",
+  "window": {
+    "start": "2026-03-08T12:00:00Z",
+    "end": "2026-09-04T12:00:00Z",
+    "days": 180
+  },
+  "value_asset": "PFT",
+  "history_complete_from_ledger_genesis": true,
+  "window_complete": true,
+  "wallet_accounts": [
+    {
+      "wallet_address": "r9RRdMKcF6Jace2RevZtAb64ZfVtgob5aP",
+      "account_id": "account-alice"
+    },
+    {
+      "wallet_address": "r4WQQVTsGXQM8hjixgcr968gYv4SerqbKA",
+      "account_id": "account-bob"
+    },
+    {
+      "wallet_address": "rGi5FS9oYuDdnFRFkrQJaSeDZVGQF5x93W",
+      "account_id": "account-carol"
+    },
+    {
+      "wallet_address": "rEDN45ke8JucHyfMNpS92Ti95YHbt4hdJf",
+      "account_id": "account-dave"
+    },
+    {
+      "wallet_address": "rENZmHsyhJDJksH6hvdBJD29qWTfUoG5AP",
+      "account_id": "account-foundation"
+    }
+  ],
+  "transfers": [
+    {
+      "tx_hash": "2121212121212121212121212121212121212121212121212121212121212121",
+      "ledger_index": 101,
+      "transaction_index": 0,
+      "close_time": "2026-01-01T00:00:00Z",
+      "source_wallet_address": "rTESTONLYExternalWallet",
+      "target_wallet_address": "r4WQQVTsGXQM8hjixgcr968gYv4SerqbKA",
+      "asset": "PFT",
+      "value_units": 1
+    },
+    {
+      "tx_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+      "ledger_index": 102,
+      "transaction_index": 0,
+      "close_time": "2026-01-02T00:00:00Z",
+      "source_wallet_address": "rTESTONLYExternalWallet",
+      "target_wallet_address": "rGi5FS9oYuDdnFRFkrQJaSeDZVGQF5x93W",
+      "asset": "PFT",
+      "value_units": 1
+    },
+    {
+      "tx_hash": "2323232323232323232323232323232323232323232323232323232323232323",
+      "ledger_index": 1200,
+      "transaction_index": 0,
+      "close_time": "2026-04-01T00:00:00Z",
+      "source_wallet_address": "rGi5FS9oYuDdnFRFkrQJaSeDZVGQF5x93W",
+      "target_wallet_address": "rEDN45ke8JucHyfMNpS92Ti95YHbt4hdJf",
+      "asset": "PFT",
+      "value_units": 1
+    },
+    {
+      "tx_hash": "2424242424242424242424242424242424242424242424242424242424242424",
+      "ledger_index": 1300,
+      "transaction_index": 0,
+      "close_time": "2026-06-01T00:00:00Z",
+      "source_wallet_address": "r9RRdMKcF6Jace2RevZtAb64ZfVtgob5aP",
+      "target_wallet_address": "rGi5FS9oYuDdnFRFkrQJaSeDZVGQF5x93W",
+      "asset": "PFT",
+      "value_units": 60
+    },
+    {
+      "tx_hash": "2525252525252525252525252525252525252525252525252525252525252525",
+      "ledger_index": 1301,
+      "transaction_index": 0,
+      "close_time": "2026-06-01T00:01:00Z",
+      "source_wallet_address": "rTESTONLYExternalWallet",
+      "target_wallet_address": "rGi5FS9oYuDdnFRFkrQJaSeDZVGQF5x93W",
+      "asset": "PFT",
+      "value_units": 40
+    },
+    {
+      "tx_hash": "2626262626262626262626262626262626262626262626262626262626262626",
+      "ledger_index": 1302,
+      "transaction_index": 0,
+      "close_time": "2026-06-02T00:00:00Z",
+      "source_wallet_address": "r9RRdMKcF6Jace2RevZtAb64ZfVtgob5aP",
+      "target_wallet_address": "r4WQQVTsGXQM8hjixgcr968gYv4SerqbKA",
+      "asset": "PFT",
+      "value_units": 10
+    },
+    {
+      "tx_hash": "2727272727272727272727272727272727272727272727272727272727272727",
+      "ledger_index": 1303,
+      "transaction_index": 0,
+      "close_time": "2026-06-02T00:01:00Z",
+      "source_wallet_address": "rENZmHsyhJDJksH6hvdBJD29qWTfUoG5AP",
+      "target_wallet_address": "r4WQQVTsGXQM8hjixgcr968gYv4SerqbKA",
+      "asset": "PFT",
+      "value_units": 90
+    },
+    {
+      "tx_hash": "2828282828282828282828282828282828282828282828282828282828282828",
+      "ledger_index": 1304,
+      "transaction_index": 0,
+      "close_time": "2026-06-03T00:00:00Z",
+      "source_wallet_address": "rENZmHsyhJDJksH6hvdBJD29qWTfUoG5AP",
+      "target_wallet_address": "rEDN45ke8JucHyfMNpS92Ti95YHbt4hdJf",
+      "asset": "PFT",
+      "value_units": 100
+    }
+  ]
+}

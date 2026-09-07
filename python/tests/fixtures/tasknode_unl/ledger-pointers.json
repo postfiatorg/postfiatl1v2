@@ -1,0 +1,49 @@
+{
+  "schema": "tasknode-unl-work-digest-ledger-snapshot-v1",
+  "mode": "SHADOW_ONLY",
+  "snapshot_id": "test-only-ledger-view-2026-09-04",
+  "account_id": "test-only-tasknode-account-alpha",
+  "bound_wallet_address": "rTESTONLYWorkDigestWallet",
+  "window": {
+    "start": "2026-03-08T12:00:00Z",
+    "end": "2026-09-04T12:00:00Z",
+    "days": 180
+  },
+  "complete_for_account_window": true,
+  "pointers": [
+    {
+      "pointer_hash": "1111111111111111111111111111111111111111111111111111111111111111",
+      "pointer_schema": "pf.ptr/v4",
+      "sender_wallet_address": "rTESTONLYWorkDigestWallet",
+      "account_id": "test-only-tasknode-account-alpha",
+      "ledger_index": 1001,
+      "transaction_index": 0,
+      "close_time": "2026-03-11T12:00:00Z"
+    },
+    {
+      "pointer_hash": "2222222222222222222222222222222222222222222222222222222222222222",
+      "pointer_schema": "pf.ptr/v4",
+      "sender_wallet_address": "rTESTONLYWorkDigestWallet",
+      "account_id": "test-only-tasknode-account-alpha",
+      "ledger_index": 1002,
+      "transaction_index": 0,
+      "close_time": "2026-04-03T12:00:00Z"
+    },
+    {
+      "pointer_hash": "3333333333333333333333333333333333333333333333333333333333333333",
+      "pointer_schema": "pf.ptr/v4",
+      "sender_wallet_address": "rTESTONLYWorkDigestWallet",
+      "account_id": "test-only-tasknode-account-alpha",
+      "ledger_index": 1003,
+      "transaction_index": 0,
+      "close_time": "2026-05-04T12:00:00Z"
+    }
+  ],
+  "anchor": {
+    "tx_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "ledger_index": 2000,
+    "transaction_index": 0,
+    "close_time": "2026-09-04T12:05:00Z",
+    "anchored_digest_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}
