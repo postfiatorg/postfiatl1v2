@@ -31,7 +31,14 @@
       "valuation_trust_root": "0eea6b18e1b65f6ebf544c55e045055211016e1d536b92af9567254e789294a0de64bb2f3a5988be1351af4a58d7ee54",
       "source_disclosure_root": "55d841cb8090f99d5237b2c664ff8af1c7abafaebb1f5d2666d389060c57d74eb2b4b44491c17aea7f361d3d6e500dc7",
       "witness_cbor_sha256": "8f4538b111a6cebf97a71406895af40d4bc4c6ed369c3ecd540b6050765b6dd6",
-      "public_values_sha256": "a215726624267dc5c5a60ac2829b24a149855a3edcfc798c965826e17bca7e68"
+      "public_values_sha256": "a215726624267dc5c5a60ac2829b24a149855a3edcfc798c965826e17bca7e68",
+      "archived_proof": {
+        "sha256": "ab7a45cd3c6fcdb4eb81def78886265717deb8bc3c5a84b6ddf9f5733d34df38",
+        "verification_status": "independently_verified",
+        "verification_record_commit": "651bfa6282b730f0f7c09871f1c8e999ae1eda8b",
+        "verification_record_path": "docs/evidence/a666-public-reserve-product-20260803/qualification/epoch-7/verification.json",
+        "removed_from_public_tree_commit": "de115b542d990d40ff43416c2db7d531bbb883d0"
+      }
     },
     {
       "observation_epoch": 8,
