@@ -94,7 +94,8 @@ entering or leaving the shielded pool.
    reserve packets, attestors, challenges, and the native NAV transaction path.
 5. [YOLO Options Reserve Profile](yolo-options-reserve-profile.md) defines the
    pre-production brokerage commitment adapter and its deliberately attested
-   trust classification.
+   trust classification. The consensus receipt that records a proved target on PFTL is
+   specified in [YOLO Target Receipt v1](../yolo/target-receipt-v1.md).
 6. [Assets And Venues](assets-and-venues.md) documents a651, a652, a666,
    pfUSDC, the
    Ethereum venues, and the bridge/market-operation contracts.
