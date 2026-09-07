@@ -17,6 +17,7 @@ with one line in his next handoff. The recommendations below are pre-filled so
 | Height-924 validator-directory custodian + read-only copy authorization (G3/G5 external input) | Name the host and authorize one copy | [Storage milestone](../plans/active/storage-scaling-milestone.md) G3 external input; handoff decision 2; G5 cannot be `OFFLINE QUALIFIED` without it | — |
 | Height-915 quarantine archive re-supply (the other G3 input) | Re-supply, or record it as lost | Storage milestone G3 status `HEIGHT 915 INPUT OPEN`; testnet-path task A1 | — |
 | Lock the L1 observer and anchor-profile research specs via Task Node | Lock both | Both Status lines read "Task Node lock pending the operator's decision" ([observer](l1-observer-research-spec.md), [anchor profile](l1-anchor-profile-research-spec.md)); handoff decision 6; he has resumed Task Node himself for his own plans | — |
+| Whether the next validator release carries merged, default-disabled PR #38 YOLO target-receipt code | [A — Carry it in the next routine release; leave activation unscheduled](yolo-deploy-decision-20260907.md) | PR #38 merge `1412b4dc`; [YOLO target receipt v1](../yolo/target-receipt-v1.md); release and rollback guidance summarized in the decision sheet | — |
 
 When every row is answered, the deferred Dynamic UNL milestone can be activated
 at the G7 boundary without further preparation.
