@@ -8,8 +8,9 @@
 ## BLUF
 
 Four threads moved. (1) PR #38, the Nitro-proven YOLO portfolio target receipts, is
-merged to `main` at `1412b4dc` after a one-line clippy fix, and the repo docs now surface
-it (`d8ff6f13`). It is merged and **not deployed**; the feature defaults to disabled and no
+merged to `main` at `1412b4dc` after a one-line clippy fix, the repo docs surface it
+(`d8ff6f13`), and its public explainer is live on postfiat.org (being retitled "A Framework
+for Trustless Single Stock Option Indices"). It is merged and **not deployed**; the feature defaults to disabled and no
 testnet activation has occurred. (2) The pfUSDC-on-Arc grant material is live at
 https://postfiat.org/research/pfusdc-on-arc-round-trip/ as a nine-slide deck on top of the
 technical packet, with the named co-applicant and every grant dollar amount removed. (3)
@@ -63,6 +64,35 @@ handoff with its capture time.
   exists; after that, do not assume a pre-feature binary can replay new state. Canary
   checks are matching state roots, receipt finality/replay, and rejection of early,
   malformed, substituted and duplicate submissions.
+- **Public explainer published** (site PR #13, merged `1598b63`, 2026-09-07):
+  https://postfiat.org/research/single-stock-options-trackers/ , ten responsive diagrams
+  plus an interactive verification walkthrough (`layouts/partials/options-tee/`,
+  `data/options_tee_diagrams.json`, `static/research/options-tee-indices/`). It is being
+  retitled to **"A Framework for Trustless Single Stock Option Indices"** at
+  `/blog/trustless-single-stock-option-indices/` with the research URL kept as an alias;
+  that move was in progress on the other machine at handoff time and had not been pushed.
+  What the article says, in one paragraph: a single-stock options tracker is a rulebook
+  that maintains a rolling basket of calls on one company (the demo: five November 20
+  calls each on Micron and Nvidia, 90 % premium budget in five equal sleeves, maturity
+  closest to 60 days beyond a 30-day roll threshold, $100,000 hypothetical cash, zero
+  holdings); the collector runs inside an AWS Nitro enclave that terminates the Schwab TLS
+  session, Nitro attests the measured collector, an SP1 guest verifies the attestation and
+  recomputes the target, and PFTL records the Groth16-verified result as a receipt bound
+  to 408 public bytes. The "trustless" claim is scoped precisely: a verifier need not trust
+  the operator's assertion that it applied the registered calculation; rulebook review,
+  program/collector identity selection, data-source correctness, Nitro and SP1 assumptions,
+  and any future custody/execution layer remain outside the proof. It states plainly that
+  no trades were executed, no funded tracker exists, and the receipts were accepted only on
+  an isolated local four-validator network.
+- TIH on the article, first pass, five ratings per model: GPT-5.6-Sol 90.2, Claude Fable 5
+  84.0, GLM 5.2 88.2, overall 87.47. Several judges scored the text export as missing
+  figures; a second pass with the diagram format explained was running at handoff. The
+  substantive criticism was "needs one concrete worked example, fewer repeated caveats."
+- Relationship to the rest of this document: this is the NAVCoin "index layer" made
+  concrete for one asset class. The Arc deck's market slide ("NAVCoins index tokenized
+  stocks") and this primitive are the same product direction; the receipt is the
+  verifiable strategy engine that a tokenized tracker, model portfolio or managed account
+  would consume. It is not yet wired to any reserve, NAV or subscription/redemption path.
 
 ### Arc grant material (published; PR #37 still open)
 
@@ -212,6 +242,7 @@ handoff with its capture time.
 ## References
 
 - PR #38: https://github.com/postfiatorg/postfiatl1v2/pull/38 · merge `1412b4dc` · docs `d8ff6f13`
+- Options tracker explainer: https://postfiat.org/research/single-stock-options-trackers/ (moving to `/blog/trustless-single-stock-option-indices/`); site PR https://github.com/postfiatorg/postfiatorg.github.io/pull/13; demo record `static/research/options-tee-indices/demo-record.json`; article plan `docs/research/options-tee-trackers-article-plan.md` (site repo)
 - PR #39: https://github.com/postfiatorg/postfiatl1v2/pull/39 · head `55330121` · StakeHub #8: https://github.com/postfiatorg/StakeHub/pull/8
 - Machine handoff: `docs/handoffs/2026-09-07___codex__navcoin_cobalt_machine_handoff.md`; validation `docs/status/NAVCOIN-HANDOFF-VALIDATION-20260907.md`; deployment evidence `deployments/a666-source-route-20260907/`
 - Task Node UNL MVP: `docs/handoffs/2026-09-04___dravlic__tasknode_unl_mvp_built_and_hardened.md`, `docs/plans/active/tasknode-unl-mvp-plan.md`, `python/postfiat_rpc/tasknode_unl*.py`, `docs/governance/tasknode-unl-shadow-run-20260904.md`
