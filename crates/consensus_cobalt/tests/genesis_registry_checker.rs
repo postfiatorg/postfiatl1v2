@@ -31,9 +31,7 @@ use postfiat_consensus_cobalt::{
     TrustGraph,
 };
 use postfiat_crypto_provider::hash_hex;
-use postfiat_types::{
-    template_trust_graph_for, ProposedGenesisEntryV1, ProposedGenesisRegistryV1,
-};
+use postfiat_types::{template_trust_graph_for, ProposedGenesisEntryV1, ProposedGenesisRegistryV1};
 use std::path::PathBuf;
 
 /// Launch-profile registry floor (design §5.2 item 4 and §7).
@@ -124,7 +122,13 @@ fn build_cobalt_pair(registry: &ProposedGenesisRegistryV1) -> Result<TrustGraph,
     )?;
     let mut views = Vec::with_capacity(validators.len());
     for validator in &validators {
-        views.push(build_trust_view(&domain, validator, 1, vec![subset.clone()], "")?);
+        views.push(build_trust_view(
+            &domain,
+            validator,
+            1,
+            vec![subset.clone()],
+            "",
+        )?);
     }
     let graph = build_trust_graph(&domain, 1, cobalt_registry_root(registry), 1, None, views)?;
     validate_trust_graph(&domain, &graph)?;
@@ -140,11 +144,9 @@ fn run_pinned_checker(
 ) -> Result<(ProposedGenesisRegistryV1, TrustGraph), String> {
     let registry = ProposedGenesisRegistryV1::decode_canonical(canonical_bytes)
         .map_err(|error| error.code().to_string())?;
-    let recomputed = hex(
-        &registry
-            .proposed_registry_hash()
-            .map_err(|error| error.code().to_string())?,
-    );
+    let recomputed = hex(&registry
+        .proposed_registry_hash()
+        .map_err(|error| error.code().to_string())?);
     if let Some(announced) = announced_hash_hex {
         if announced != recomputed {
             return Err("hash_mismatch".to_string());
@@ -154,8 +156,8 @@ fn run_pinned_checker(
     if !(LAUNCH_PROFILE_MIN_ENTRIES..=FORK_SELECTOR_MAX_ENTRIES).contains(&member_count) {
         return Err("launch_profile_size".to_string());
     }
-    let expected_template = template_trust_graph_for(member_count as u64)
-        .map_err(|error| error.code().to_string())?;
+    let expected_template =
+        template_trust_graph_for(member_count as u64).map_err(|error| error.code().to_string())?;
     if expected_template != registry.template_trust_graph {
         return Err("trust_graph_mismatch".to_string());
     }
@@ -233,8 +235,7 @@ fn golden_g0_t0_pairs_accepted_by_pinned_cobalt_checker() {
         let expected_members = if round == 19 { 18 } else { 20 };
         assert_eq!(registry.entries.len(), expected_members, "round {round}");
         assert_eq!(
-            registry.template_trust_graph.n_s,
-            expected_members as u64,
+            registry.template_trust_graph.n_s, expected_members as u64,
             "round {round}"
         );
         assert_eq!(graph.trust_views.len(), expected_members, "round {round}");
@@ -440,5 +441,8 @@ fn registry_root_swap_rejected_by_trust_graph_root_binding() {
     let mut graph = build_cobalt_pair(&r12).expect("cobalt pair");
     graph.registry_root = cobalt_registry_root(&r13);
     let rejection = validate_trust_graph(&domain, &graph).expect_err("swapped registry root");
-    assert!(rejection.contains("trust graph root mismatch"), "{rejection}");
+    assert!(
+        rejection.contains("trust graph root mismatch"),
+        "{rejection}"
+    );
 }

@@ -94,8 +94,7 @@ const ALLOWED_ADDITIONAL_STATE_DOMAINS: &[&str] = &[
 ];
 const FASTPAY_ANCHOR_KEY_PREFIX: &[u8] = b"fastpay_anchor_v1\0";
 
-static SHARED_STORES: OnceLock<Mutex<HashMap<PathBuf, Weak<TransactionalStore>>>> =
-    OnceLock::new();
+static SHARED_STORES: OnceLock<Mutex<HashMap<PathBuf, Weak<TransactionalStore>>>> = OnceLock::new();
 
 /// Total time a writer-lease acquisition retries against a database held by
 /// another process before failing closed with `storage_writer_busy`.
@@ -2684,10 +2683,8 @@ fn shared_transactional_store(
             if let Some(store) = stores.get(&database_path).and_then(Weak::upgrade) {
                 return Ok(store);
             }
-            match TransactionalStore::open_with_integrity_key(
-                &canonical_dir,
-                integrity_key.clone(),
-            ) {
+            match TransactionalStore::open_with_integrity_key(&canonical_dir, integrity_key.clone())
+            {
                 Ok(store) => {
                     let store = Arc::new(store);
                     stores.insert(database_path, Arc::downgrade(&store));
@@ -5719,7 +5716,9 @@ mod tests {
         // must see the state committed under the lease.
         let direct = TransactionalStore::open_with_integrity_key(&dir.0, key)
             .expect("idle lease must release the redb file lock");
-        direct.meta().expect("committed state visible after lease release");
+        direct
+            .meta()
+            .expect("committed state visible after lease release");
         drop(direct);
     }
 
@@ -5737,7 +5736,9 @@ mod tests {
 
     #[test]
     fn writer_lease_fails_closed_when_database_is_held() {
-        let _env = LEASE_ENV_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let _env = LEASE_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let dir = TestDir::new("writer-lease-busy");
         let key = lease_test_key(&dir);
         // Simulate the sibling process: a direct handle that bypasses the
@@ -5759,7 +5760,9 @@ mod tests {
 
     #[test]
     fn writer_lease_acquires_after_holder_releases() {
-        let _env = LEASE_ENV_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let _env = LEASE_ENV_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let dir = TestDir::new("writer-lease-retry");
         let key = lease_test_key(&dir);
         let held = TransactionalStore::open_with_integrity_key(&dir.0, key.clone())

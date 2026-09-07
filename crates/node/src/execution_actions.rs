@@ -1641,9 +1641,13 @@ pub(super) fn governance_amendment_lifecycle_rejection(
     block_height: u64,
 ) -> Option<(&'static str, String)> {
     if amendment.kind == postfiat_types::GOVERNANCE_KIND_YOLO_TARGET_ACTIVATION_HEIGHT
-        && u64::from(amendment.value) <= block_height {
-        return Some(("invalid_yolo_target_activation_height",
-            "YOLO target activation must be scheduled strictly after the amendment block".to_string()));
+        && u64::from(amendment.value) <= block_height
+    {
+        return Some((
+            "invalid_yolo_target_activation_height",
+            "YOLO target activation must be scheduled strictly after the amendment block"
+                .to_string(),
+        ));
     }
     if amendment.kind == GOVERNANCE_KIND_ORCHARD_POOL_PAUSE && amendment.value > 1 {
         return Some((
@@ -1826,7 +1830,9 @@ pub(super) fn governance_amendment_current_value(governance: &GovernanceState, k
             .and_then(|height| u32::try_from(height).ok())
             .unwrap_or(0),
         postfiat_types::GOVERNANCE_KIND_YOLO_TARGET_ACTIVATION_HEIGHT => governance
-            .yolo_target_activation_height().and_then(|h| u32::try_from(h).ok()).unwrap_or(0),
+            .yolo_target_activation_height()
+            .and_then(|h| u32::try_from(h).ok())
+            .unwrap_or(0),
         GOVERNANCE_KIND_ATOMIC_SWAP_ACTIVATION_HEIGHT => governance
             .atomic_swap_activation_height()
             .and_then(|height| u32::try_from(height).ok())
