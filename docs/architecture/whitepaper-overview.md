@@ -4,6 +4,8 @@ The [whitepaper](../whitepaper.md) presents PostFiat's protocol design, economic
 
 Read the [73-claim alignment table](whitepaper-alignment.md) for source/test references, the [prioritized gaps](whitepaper-gaps.md) for follow-up work, and the [validation record](whitepaper-validation.md) for checks actually run. The [Cobalt and admission publication review](cobalt-admission-publication-review.md) retains the implementation findings and blog corrections. Deployment history remains in the [Cobalt implementation record](../governance/cobalt-implementation.md); the former evidence appendix is preserved in the [historical measurement register](whitepaper-measurement-register.md). These records are separate from the whitepaper and do not certify mainnet readiness or current fleet health.
 
+The [GPT-6 Pro rewrite candidate](../whitepaper-gpt6-rewrite.md) and its [review and TIH comparison](whitepaper-gpt6-rewrite-review.md) are available separately. The review identifies a newly explicit cross-phase signing requirement that remains an implementation-conformance question; the candidate has not replaced the canonical paper.
+
 ## Identity and reading order
 
 | Input | Audited identity |

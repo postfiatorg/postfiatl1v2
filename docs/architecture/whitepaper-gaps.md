@@ -58,3 +58,14 @@ The [alignment inventory](whitepaper-alignment.md) preserves findings at `d35135
 ### G11: Operational freshness and gate reconciliation
 
 **Priority: P2 — operator decisions.** The retained August 31 receipt records storage activation/continuation through height 931, superseding the older undeployed-candidate summaries. This audit did not query services or verify a new release. Reconcile the active storage/testnet gate journal against its exact receipts without inferring that every old gate passed; obtain a fresh authenticated fleet observation before any “running now” claim. Close with dated fleet/binary identities and explicit disposition of unresolved gates. The existing snapshot-export issue and pending public-testnet decisions stay open unless separately verified. Related: WP-72.
+
+### G12: Cross-phase consensus view discipline
+
+**Priority: P1 — consensus safety and source conformance.** The [GPT-6 Pro rewrite candidate](../whitepaper-gpt6-rewrite.md) derives its cross-view safety argument from a durable current-view fence spanning prepare, precommit, and timeout. The inspected signing helpers use separate phase high-water marks; the precommit helper does not reject a lower-view vote merely because a higher prepare or timeout has already been signed. The source-based delayed-certificate trace is recorded in the [rewrite review](whitepaper-gpt6-rewrite-review.md#material-source-conformance-gap). It is not an executed Rust regression or a demonstrated network exploit.
+
+- [ ] Reproduce the four-validator delayed-prepare-certificate schedule against the live authorization path, including proposal/timeout verification and block-vote persistence; establish whether any consumer already excludes it.
+- [ ] If no equivalent fence exists, specify and implement durable cross-phase signing authorization, including migration and restart semantics. Preserve the ability to verify delayed history and learn a finality certificate without issuing a new lower-view vote.
+- [ ] Add regression coverage for delayed lower-view precommit, higher-view prepare and timeout, restart/rollback, same-view retransmission, and registry activation.
+- [ ] Review the complete safety argument and progress conditions together, including a highest lock omitted from a timeout quorum. Close only with executable evidence for the actual consuming path and an independently reviewed argument.
+
+The candidate's theorem is a statement about its explicit protocol requirements, not evidence that the current runtime already meets them. This documentation change does not close the gap.

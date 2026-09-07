@@ -97,6 +97,8 @@ nav:
       - Claim Alignment: architecture/whitepaper-alignment.md
       - Remaining Gaps: architecture/whitepaper-gaps.md
       - Validation: architecture/whitepaper-validation.md
+      - GPT-6 Rewrite Candidate: whitepaper-gpt6-rewrite.md
+      - GPT-6 Rewrite Review: architecture/whitepaper-gpt6-rewrite-review.md
       - Cobalt and Admission Publication Review: architecture/cobalt-admission-publication-review.md
   - NAVCoins:
       - Overview: navcoins/index.md
