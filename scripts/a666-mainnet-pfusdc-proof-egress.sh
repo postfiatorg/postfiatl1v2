@@ -72,6 +72,8 @@ a100_prover=${A666_PFUSDC_EGRESS_PROVER_BIN:-/workspace/a666-acceptance/live/a66
 local_prover=${A666_PFUSDC_EGRESS_LOCAL_PROVER_BIN:-$repo/tools/pfusdc-tier4-prover/target/release/pfusdc-tier4-prover}
 egress_elf=${A666_PFUSDC_EGRESS_ELF:-$repo/programs/pfusdc-egress/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/pfusdc-egress-program}
 expected_a100_prover_sha256=${A666_PFUSDC_EGRESS_PROVER_SHA256:-}
+prover_threads=${A666_PFUSDC_PROVER_THREADS:-16}
+[[ "$prover_threads" =~ ^[1-9][0-9]*$ ]]
 validator2_host=$(jq -er '."validator-2"' "$hosts_file")
 pfusdc_issuer=pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8
 pfusdc=02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b
@@ -121,7 +123,7 @@ else
     test "$remote_prover_sha256" = "$expected_a100_prover_sha256"
   fi
   ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
-    "SP1_PROVER=cpu '$a100_prover' program-info --output '${a100_root}-program-info.json'" \
+    "SP1_PROVER=cpu RAYON_NUM_THREADS='$prover_threads' '$a100_prover' program-info --output '${a100_root}-program-info.json'" \
     > "$egress_dir/remote-prover-program-info.log"
   scp -q -P "$a100_port" "root@$a100_host:${a100_root}-program-info.json" \
     "$egress_dir/remote-prover-program-info.json"
@@ -319,7 +321,7 @@ PY
   scp -q -P "$a100_port" "$egress_dir/witness.json" \
     "root@$a100_host:$a100_root/witness.json"
   ssh -o BatchMode=yes -p "$a100_port" "root@$a100_host" \
-    "SP1_PROVER=cuda '$a100_prover' egress \
+    "SP1_PROVER=cuda RAYON_NUM_THREADS='$prover_threads' GOMAXPROCS='$prover_threads' RUST_LOG=info '$a100_prover' egress \
       --witness '$a100_root/witness.json' \
       --output-dir '$a100_root/proof' \
       --prove"
