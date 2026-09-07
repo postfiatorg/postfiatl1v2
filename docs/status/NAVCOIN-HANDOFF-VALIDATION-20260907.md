@@ -25,4 +25,16 @@ The initial combined-source inventory check caught two changed source digests: t
 
 Known failing check: `PYTHONPATH=python python3 benchmarks/cobalt-adversarial-verification/packet/verify_packet.py` still exits with `adversarial packet semantic verifier is missing, failed, or inconsistent`. The September 6 review traced the historical publication-binding failure. This handoff does not mark it repaired.
 
-Not rerun for this packaging task: full Rust workspace/Orchard suites, full live archived-chain replay of the merged branch, sustained storage-contention qualification, SP1 guest reproduction, and the external Ethereum/Uniswap round trip. No live chain or wallet operation was performed while preparing these PRs. The deployed September 7 source's historical replay through block 1001 is retained as historical evidence, not a result for this merged branch.
+Not rerun during the initial packaging pass: full Rust workspace/Orchard suites, full live archived-chain replay of the merged branch, sustained storage-contention qualification, SP1 guest reproduction, and the external Ethereum/Uniswap round trip. That initial packaging pass performed no live chain or wallet operation; the subsequent authorized external-route execution is recorded below. The deployed September 7 source's historical replay through block 1001 is retained as historical evidence, not a result for this merged branch.
+
+## Completed external-route resumption
+
+The subsequent authorized run completed the real Ethereum mainnet → PFTL devnet → Uniswap → PFTL → Ethereum traversal. The [execution record](NAVCOIN-EXTERNAL-ROUTE-20260907.md) gives accepted transactions and the diagram. The existing deployed node release remained unchanged.
+
+- Actual 10 USDC ingress, source-series claim, NAV issuance/export, all three historical A666 checkpoint advancements including committee rotations, Ethereum mint, both Uniswap trades, burn/import, same-source NAV redemption, 9.932860 USDC Ethereum payout, and native settlement passed through PFTL 1020.
+- Independent read-only reconciliation passed on all six validators: equal state roots, empty mempools, protected balances, source claims including dedicated custody, vault obligations, and wrapped supply. Duplicate withdrawal was rejected.
+- Focused changed-path checks passed: 8 issue/NAV arithmetic tests, 4 withdrawal recovery tests, 3 allowance tests, 3 swap-journal tests, 1 partial-fanout evidence test, and 5 checkpoint vote-file tests. StakeHub passed 15 checkpoint tests, including the existing-contract signer path and refusal to resend a durable journal; route and deposit regression tests passed separately.
+- Final `mkdocs build --strict` and both repository whitespace checks passed. All 190 resumed-run archive hashes matched; structured nonempty secret-field scans passed. Private billing responses, wallet state, and keys are excluded.
+- Temporary GPU instance 50127946 was deleted and independently confirmed absent from the provider instance list at 06:37:54 UTC. All completed proofs were retrieved before deletion.
+
+The initial broad-suite counts above are separate from these later focused checks. No full merged-branch replay, independent-operator qualification, or repair of the separate historical Cobalt publication-binding defect is claimed.

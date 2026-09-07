@@ -1,42 +1,74 @@
-# NAVCoin external route — September 7, 2026
+# NAVCoin external round trip — completed September 7, 2026
 
-The resumed Ethereum → pfUSDC → A666 → Uniswap → A666 → pfUSDC → Ethereum run is **incomplete**. One new 10 USDC deposit is funded and finalized. Resume its existing lineage; do not create a replacement deposit.
+**PASS: the actual Ethereum mainnet → PFTL devnet → Uniswap → PFTL → Ethereum route completed through the existing StakeHub signer.** This is the external traversal, including both real Uniswap trades and the final USDC payout. No replacement deposit is needed.
 
-## Current receipts
-
-- [x] Derive the next pfUSDC route epoch from the full governance state: Arc holds global epoch 9, so the new Ethereum route uses epoch 10.
-- [x] Deploy verifier `0xc398a26BD997168C3C966763B0A97829d14dB655` and vault `0xE7A432a28b20621A70E845C7F202004Cf98e7A2C`. Readback verifies the frozen `0015b046` program, checkpoint 1001, current committee root, route hash, token, owner, and zero initial obligations.
-- [x] Register the proof profile at PFTL 1006, bind it at 1007, and activate the governed route at 1008. All six validators agree; mempools are empty.
-- [x] Deposit 10.000000 USDC (10,000,000 atoms) to the epoch-10 vault for `pfab9b9228942e5c529633a13aa271d5297bec6353`. [Ethereum deposit receipt](https://etherscan.io/tx/0x639893f4c8d3df16baa392a1f958acd7549586f7b186068cd73ad5cd14806772). Wallet, vault, obligations, event, and deposit record reconcile exactly. The capture binds deposit block 25922792 to finalized Ethereum block 25922794.
-- [x] Complete the CPU ingress Groth16 proof in 1471.57 seconds and claim exactly 10 source-series pfUSDC at PFTL 1011. The claim binds governed route epoch 10. Source asset: `2bae082a6703375b9405af44715e1e64623265392627767b040fa2c30abb100a09da403724a6f105317292d9c0073df7`.
-- [x] Complete and submit A666 verifier checkpoints 881→917→924→989. Both rotation segments and the later ancestry are accepted by the deployed verifier. The 917→924 proof used CPU; 881→917 and 924→989 used an A100 with the same frozen `004e44` guest.
-- [x] Authorize the source at 1012, reserve at 1013, subscribe at NAV at 1014, and export 9.611565 A666 at 1015. The exact export witness is captured; pre-existing holder inventories are unchanged.
-- [x] Prove the accepted export and mint exactly 9.611565 wA666. [Ethereum mint receipt](https://etherscan.io/tx/0x08b001efba5fd3ddabc084d1080107189891654ba1cbfc52559b0c4f4ccaa9fe). The original 103 wA666 remain unchanged. The export proof took about 182 seconds on the A100 and passed an independent deployed SP1 verifier call.
-- [ ] Execute both Uniswap directions, burn the actual buyback output, and import the return.
-- [ ] Redeem at NAV into the same pfUSDC source, withdraw Ethereum USDC, settle on PFTL, and reconcile the whole lineage.
-
-PFTL state root at 1008:
-
-```text
-aebb760941ff6126ad21615e09d3d35bb4ac34c3fcf991e4284d56f40117e9653041eda8a5d4c864407e61b6b1114327
+```mermaid
+flowchart LR
+    A["Ethereum: 10 USDC"] --> B["PFTL: 10 pfUSDC · source epoch 10"]
+    B --> C["NAV issue: 9.611565 A666"]
+    C --> D["SP1 export → Ethereum wA666"]
+    D --> E["Uniswap sell: 7.357995 USDC"]
+    E --> F["Uniswap buy: 9.599569 wA666"]
+    F --> G["Burn → PFTL return import"]
+    G --> H["NAV redeem: 9.932860 pfUSDC · same source"]
+    H --> I["SP1 withdrawal: 9.932860 Ethereum USDC"]
 ```
 
-The deployed node release and binary remain `a666-source-route-20260907` and `57b0f4d1d42d66878d7dbb8c33919c7fa0f87c6cc1a4b9cc1a85d75b634eec83`. The merged handoff branch includes later source changes and is not that deployed binary.
+## Accepted execution
 
-## Execution and recovery
+| Step | Actual result | Evidence |
+| --- | --- | --- |
+| Ethereum deposit | 10.000000 USDC into the epoch-10 vault | [Deposit](https://etherscan.io/tx/0x639893f4c8d3df16baa392a1f958acd7549586f7b186068cd73ad5cd14806772) |
+| Proven ingress claim | 10.000000 source-series pfUSDC | PFTL 1011 |
+| Source authorization, NAV issue, export | 9.611565 A666 using NAV epoch 8 | PFTL 1012–1015 |
+| Historical verifier synchronization | Checkpoints 881→917→924→989 accepted, including both committee rotations | Three Ethereum advancement receipts in the recovery archive |
+| Ethereum proof acceptance and mint | Exactly 9.611565 new wA666; verifier advances to 1015 | [Mint](https://etherscan.io/tx/0x08b001efba5fd3ddabc084d1080107189891654ba1cbfc52559b0c4f4ccaa9fe) |
+| Mint acknowledgement | Governed five-signature checkpoint certificate | PFTL 1016 |
+| Uniswap sell | 9.611565 wA666 → 7.357995 USDC | [Sell](https://etherscan.io/tx/0x95b1dafdb8bd9a04691257f80b4620e3a210443fc444459a9e39df9271acfbe6) |
+| Uniswap buyback | Same 7.357995 USDC → 9.599569 wA666 | [Buyback](https://etherscan.io/tx/0xfc0cdd8f7df48ec7a5221604943967ad27b1a09973701e4325b41720e4c1eba1) |
+| Return burn and import | Exactly the buyback output | [Burn](https://etherscan.io/tx/0x589ee45820fe35e92e9a4cb1d8f0f90e66f26cd5ec55ed9759c8e884cd635cc3), PFTL 1017 |
+| NAV redemption | 9.932860 pfUSDC from the original source series | PFTL 1018 |
+| Native withdrawal burn | Exact source bucket; 9.932860 pfUSDC | PFTL 1019 |
+| Ethereum payout | 9.932860 USDC; duplicate withdrawal rejected | [Withdrawal](https://etherscan.io/tx/0x713b43d9746ea70277baac528fd3e1f309734a0ba02b4b7522e547526bfc8575) |
+| PFTL settlement | Actual Ethereum receipt bound to the native redemption | PFTL 1020 |
 
-StakeHub's `python -m stakehub.navcoin_deposit` checks the deployed manifest against the active PFTL route before signing. It saves the deposit nonce and calldata before broadcast, then saves each agent response before waiting for its receipt. Existing output directories require reconciliation rather than a second deposit. `python -m stakehub.navcoin_checkpoint` verifies checkpoint public values and simulates the proof against the deployed Ethereum verifier before sending through the unlocked agent.
+## Conservation and costs
 
-The issuance and redemption builders accept `--settlement-source-asset-id`. Source selection belongs to the signed reservation/redemption operation; the existing mint packet retains its canonical family asset field. The source-custody consensus implementation is unchanged by these CLI additions.
+All six validators agree at PFTL **1020**, with empty mempools and state root:
 
-For each Uniswap direction, `a666-mainnet-uniswap-allowances.py --token … --amount-atoms …` can authorize only that trade's input amount at both the ERC-20 and Permit2 layers. The swap runner requires an evidence output path for execution. Both scripts persist intent before calling StakeHub and save any returned transaction hash before receipt processing; an existing journal requires reconciliation. Six focused tests cover exact one-atom inputs, preserving unrelated balances/allowances, expiration bounds, positive minimum output, and an interrupted signer response without a second send. Actual gas accounting uses receipt gas consumption and effective gas price, not the signer's budget metadata.
+```text
+587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6
+```
 
-The captured ingress witness also passed all 16 native adversarial rejection cases. The completed Groth16 proof additionally passed local verification; the remaining live route legs are still pending.
+The original **103 wA666**, **99 native A666**, **14 pfUSDC from the old Ethereum source**, and every other pre-existing PFTL holder asset balance are preserved. Final wallet USDC is **534.012751**, exactly its initial 534.079891 minus the 10 deposit plus the 9.932860 payout. The new source has no remaining holder balance or pending redemption. Ethereum wrapped supply equals PFTL's Ethereum supply accounting.
 
-The after-mint wrapper carries the issue manifest's source-series asset into NAV redemption and resolves its bucket explicitly for withdrawal. Its two swap calls use the durable output interface and exact input approvals. The CPU egress wrapper verifies the embedded program's vkey and ELF hash before a native burn, checks Docker access, and runs the supported `egress` command with bounded worker settings. These command-path repairs are not evidence that the pending trade or withdrawal has executed.
+The remaining **0.067140 USDC** in the new vault equals its obligations and its PFTL source claims: **0.012419** in A666 primary principal custody plus **0.054721** in spread custody. Source custody is separate from transparent holder supply; `asset_info.outstanding_supply` alone does not measure it. The principal difference is exactly 0.049752 issue spread, 0.012419 for the units retained by the AMM valued at NAV with rounding, and 0.004969 redemption spread.
 
-Return preflight found that the original PublicNode endpoint rejects older numbered contract-state queries without an archive token. The resumed workflow now has a separate loopback proxy at `http://127.0.0.1:28703` on all six validators, forwarding to `https://eth.drpc.org`; set `A666_VALIDATOR_ETHEREUM_RPC` to that loopback URL. The native observer verified historical block 25922792, its receipt root, and the governed contract code hashes. Five validators signed and the native node assembled a valid checkpoint certificate under the existing five-of-six policy. Validator 5's current key differs from this older Ethereum route committee and is excluded. This was a preflight checkpoint, not a return import; the actual burn receipt still needs its own certificate. The return verification class remains `BFT_CHECKPOINT`.
+Receipt-based Ethereum gas across 17 transactions:
 
-The original host's durable job and receipt directory is `~/.local/share/stakehub/a666-full-route-20260907/`. Its `active-resume.json` points to the current jobs and immutable transaction records. The private StakeHub companion archive contains a receipt snapshot in `docs/handoffs/navcoin-recovery-20260907/resumed-epoch10/`. Local paths and loopback endpoints require host-specific configuration.
+| Category | Gas paid, ETH |
+| --- | ---: |
+| Actual route traversal, including approvals | 0.000114043116345626 |
+| Historical verifier synchronization | 0.000060738864755576 |
+| New route verifier/vault deployment | 0.000311639191122977 |
+| Total | 0.000486421172224179 |
 
-The empty epoch-7 contracts remain invalid and must never be funded. The old epoch-6 verifier's committee-transition incompatibility is not claimed fixed: the fresh epoch-10 verifier starts after those rotations. A complete withdrawal proof is still required. The historical Cobalt publication-binding defect and the paused private-funding objective are unchanged.
+Gas is `gasUsed × effectiveGasPrice`. The StakeHub response's `charged_usd` field is budget metadata and is excluded. GPU credit funding is also separate from Ethereum gas.
+
+## Implementation and proof identity
+
+- StakeHub `stakehub/navcoin_route.py` derives the next epoch from authoritative governance; pfUSDC epochs are global per asset. Arc's epoch 9 therefore led to Ethereum epoch 10.
+- StakeHub `stakehub/navcoin_deposit.py` checks the active route and deployment, journals before signing, and reconciles the exact deposit event and balance deltas. `stakehub/navcoin_checkpoint.py` simulates the actual proof against the existing verifier and uses the agent's contract authorization. Its sender test verifies that an existing journal cannot trigger a second send.
+- [Ingress relay](../../scripts/a666-mainnet-pfusdc-relay.sh) carries the governed route epoch into the signed claim. [Issuance](../../scripts/a666-mainnet-primary-issue-ops.py) and [redemption](../../scripts/a666-build-transparent-redeem-op.py) explicitly select the source-series settlement asset while preserving the mint packet's canonical family field.
+- [Uniswap approvals](../../scripts/a666-mainnet-uniswap-allowances.py) authorize exact trade inputs. The [swap runner](../../scripts/pftl-uniswap-mainnet-swap.py) journals intent and returned transaction hashes. Both trade deltas were verified; no spendable approval remains.
+- [Return and redemption wrapper](../../scripts/a666-mainnet-transparent-roundtrip-after-mint.sh) propagates source custody through the return. The [egress wrapper](../../scripts/a666-mainnet-pfusdc-proof-egress.sh) verifies the embedded guest before burning, proves the selected withdrawal, pays Ethereum USDC, and settles the actual receipt on PFTL.
+
+A666 uses the frozen `004e44` guest, vkey `0x004e44aca326861252ee5ff7863b1174635b727759b75d46b28bb28d4a7b34f9`. The new pfUSDC verifier uses frozen `0015b046`, vkey `0x0015b046ba4b80c0ca7e2d9429a1f5fd88bc6d1d328cca6acec29ffdf48a9d87`, anchored after the rotations at checkpoint 1001. Its accepted withdrawal proves through 1019. The successful GPU hosts used SP1 SDK 6.3.1. The ingress CPU proof took about 24.5 minutes; A100 export and egress proving took about 182 and 136 seconds respectively. These are individual successful proof jobs, not total workflow elapsed time.
+
+Ethereum mint acknowledgement and return import use the existing `BFT_CHECKPOINT` class with five-of-six signatures and governed confirmation depth. Validator 5's current key differs from the older Ethereum route committee; the other five form its quorum. Validators use a workflow-specific archive RPC proxy at `http://127.0.0.1:28703`, forwarding to `https://eth.drpc.org`. This remains a Foundation-operated PFTL devnet demonstration; it does not establish independent operator decentralization or a cryptographic Ethereum light-client return path.
+
+## Evidence and continuation
+
+Original host: `~/.local/share/stakehub/a666-full-route-20260907/roundtrip-PASS.json` and `final-audit/summary.json`. The private StakeHub handoff archive `docs/handoffs/navcoin-recovery-20260907/resumed-epoch10/` preserves proofs, accepted receipts, source selection, six validator snapshots, and exact gas receipts under a hash inventory. The temporary GPU instance was removed after retrieving the proofs.
+
+The empty epoch-7 contracts remain invalid and must not be funded. This traversal does not repair the old epoch-6 verifier or resolve the separate historical Cobalt publication-binding defect. The paused Hyperliquid/Lighter privacy objective remains separate. The consolidated handoff source is not the exact deployed node binary; follow the [machine handoff](../handoffs/2026-09-07___codex__navcoin_cobalt_machine_handoff.md) for release provenance.

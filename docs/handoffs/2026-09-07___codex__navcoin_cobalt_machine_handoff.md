@@ -1,6 +1,6 @@
 # NAVCoin, Cobalt, and storage: machine handoff
 
-This branch collects the unpublished NAVCoin work and the current Cobalt/Task Node sources. It is a development handoff. **The September 7 Ethereum → pfUSDC → A666 → Uniswap → A666 → pfUSDC → Ethereum reproduction is incomplete.** The initial attempt made no new USDC deposit. The resumed run has since deployed and activated epoch 10 and deposited 10 USDC; see the [current external-route record](../status/NAVCOIN-EXTERNAL-ROUTE-20260907.md). Do not repeat that deposit.
+This branch collects the unpublished NAVCoin work and the current Cobalt/Task Node sources. It is a development handoff. **The resumed September 7 Ethereum → pfUSDC → A666 → Uniswap → A666 → pfUSDC → Ethereum reproduction completed at PFTL 1020.** The 10 USDC deposit returned 9.932860 USDC after both real Uniswap trades and same-source NAV redemption; all six validators and source conservation checks pass. See the [completed external-route record](../status/NAVCOIN-EXTERNAL-ROUTE-20260907.md). The earlier stopped attempt below remains historical context. Do not repeat the completed deposit.
 
 ## Check out the working set
 
@@ -40,7 +40,7 @@ The L1 PR is stacked on [Arc integration PR #37](https://github.com/postfiatorg/
 | Historical pfETH replay | `crates/node/src/block_replay_wallet.rs`, `crates/execution/src/nav_vault_asset_execution.rs`, `crates/node/testdata/pfeth-reserve-replay/` | Preserves the narrowly pinned historical reserve-packet semantics while new packets use family supply. |
 | Ethereum pfETH bridge | `programs/pfeth-eth-mainnet-ingress/`, `crates/ethereum-contracts/src/WETHBridgeVaultL1.sol`, `scripts/pfeth-eth-mainnet-*.py` | Local source, package, and deployment evidence preserved. |
 | A666 source custody | `crates/execution/src/pftl_source_settlement.rs`, `crates/types/src/market_nav_asset_types.rs`, `crates/node/src/state_commitment.rs` | Deployed September 7. Signed source selection keeps primary issue/redemption in the selected pfUSDC source series. |
-| StakeHub | Companion branch: `stakehub/navcoin_roundtrip.py`, `stakehub/governed_reserves.py`, CLI/dashboard, bridge/funding modules and tests | Native round-trip runner exists. It does not complete the external Ethereum/Uniswap route. |
+| StakeHub | Companion branch: `stakehub/navcoin_roundtrip.py`, `stakehub/governed_reserves.py`, CLI/dashboard, bridge/funding modules and tests | Native CLI covers the native cycle. StakeHub deposit/checkpoint modules and L1 orchestration completed the external Ethereum/Uniswap route at PFTL 1020; companion archive contains final proofs and receipts. |
 | Paused private funding | `docs/specs/shielded-*`, `docs/status/shielded-*`, StakeHub `shielded_exit_*` | Preserved for continuity. No claim that the private Hyperliquid/Lighter objective succeeded. |
 
 The [source inventory](../../deployments/a666-source-route-20260907/local-source-inventory.json) records copied local files and their original hashes. The three unpublished pfETH commits (`ef2dec31`, `1bcd0f0d`, `707e006f`) were cherry-picked; the unpublished source-custody delta was merged with the current Arc and main sources. Original dirty checkouts were left untouched.
