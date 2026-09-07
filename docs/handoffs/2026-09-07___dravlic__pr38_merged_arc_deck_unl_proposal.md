@@ -234,6 +234,11 @@ handoff with its capture time.
 
 ## To add before this handoff is final
 
+- Options-tracker article: confirm the retitle to "A Framework for Trustless Single Stock
+  Option Indices" has landed at https://postfiat.org/blog/trustless-single-stock-option-indices/
+  (404 as of this commit; the research URL is live and becomes an alias), record the
+  corrected second-pass TIH score, and link the final URL from the YOLO row in
+  `docs/index.md` on `main`.
 - Archive-instance status for the Arc historical proof (the 09-02 handoff left it
   provisioned but not running a node; not verified this session).
 - Current fleet observation with capture time, per the handoff standard.
