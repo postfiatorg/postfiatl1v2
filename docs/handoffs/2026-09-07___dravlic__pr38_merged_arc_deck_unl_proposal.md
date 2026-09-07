@@ -1,4 +1,4 @@
-# PR #38 merged; Arc proposal deck published; UNL-from-Task-Node proposal published
+# PR #38 merged; Arc proposal deck published; UNL proposal published; NAVCoin/Cobalt handoff branch (#39) reconciled
 
 - **Operator:** Domagoj Ravlić (`dravlic`)
 - **Date:** 2026-09-07 UTC
@@ -7,7 +7,7 @@
 
 ## BLUF
 
-Three threads moved. (1) PR #38, the Nitro-proven YOLO portfolio target receipts, is
+Four threads moved. (1) PR #38, the Nitro-proven YOLO portfolio target receipts, is
 merged to `main` at `1412b4dc` after a one-line clippy fix, and the repo docs now surface
 it (`d8ff6f13`). It is merged and **not deployed**; the feature defaults to disabled and no
 testnet activation has occurred. (2) The pfUSDC-on-Arc grant material is live at
@@ -16,8 +16,13 @@ technical packet, with the named co-applicant and every grant dollar amount remo
 The validator-identity work concluded that an institution-prestige rubric is the wrong
 identity definition for Post Fiat; the replacement proposal, deriving the UNL from Task
 Node identity and ratifying through Cobalt, is published at
-https://postfiat.org/research/deterministic-unl-task-node-cobalt/ (TIH 88.8). No fleet
-probe was performed this session; nothing below is a claim about running validators.
+https://postfiat.org/research/deterministic-unl-task-node-cobalt/ (TIH 88.8), and a
+SHADOW_ONLY MVP of it is already on `main` (see below). (4) The other machine's
+consolidation of the NAVCoin repairs, Cobalt/Task Node sources and storage fixes arrived
+as draft PRs L1 #39 and StakeHub #8; #39 has been merged up to current `main` (one
+mechanical conflict resolved, focused tests green) and now stacks cleanly. No fleet probe
+was performed this session; the only fleet facts below are quoted from the other machine's
+handoff with its capture time.
 
 ## Current state
 
@@ -108,7 +113,72 @@ probe was performed this session; nothing below is a claim about running validat
   only; one change per round below 39 validators to hold 95 % overlap; SHADOW_ONLY until an
   independent ratifier signs. TIH 86.2 → 88.8 over three passes; remaining judge asks are
   clustering pseudocode, weight sensitivity and adversarial simulation.
+- **MVP already built on `main`** (09-04 session, [handoff](2026-09-04___dravlic__tasknode_unl_mvp_built_and_hardened.md),
+  [plan](../plans/active/tasknode-unl-mvp-plan.md)): `python/postfiat_rpc/tasknode_unl*.py`
+  implements the schema, accountability formula, exact-rational trust walk, offline binding
+  CLI (prepare/finalize/verify/replay only, no submit), signed work-digest verification,
+  vouch/co-work/funding edge extraction, the churn/overlap guard, and a shadow-derive CLI
+  with golden fixtures. A frozen read-only testnet-ledger shadow round (49 transactions,
+  three wallets, 48 `pf.ptr/v4` memos) produced an empty candidate set with named holds
+  because no binding or digest emissions exist yet. A fresh-context adversarial review
+  fixed 14 fail-closed defects. 103 tests + 34 subtests pass. Nothing has live authority.
+  The published proposal remains authoritative for constants and rules; the MVP's Phase 0
+  gap is the Task Node side (binding memos, signed digests, vouch memos, exclusion list).
 - All Vast rentals destroyed; `vastai show instances` is empty as of this handoff.
+
+### NAVCoin / Cobalt / storage consolidation from the other machine (draft PRs #39, StakeHub #8)
+
+- Source of truth: [machine handoff](2026-09-07___codex__navcoin_cobalt_machine_handoff.md)
+  on branch `handoff/navcoin-cobalt-local-20260907`, and
+  [validation](../status/NAVCOIN-HANDOFF-VALIDATION-20260907.md). Companion StakeHub branch
+  `handoff/navcoin-local-20260907` ([PR #8](https://github.com/postfiatorg/StakeHub/pull/8),
+  targets `master`). Keep the two repos as siblings named `postfiatl1v2` and `StakeHub`;
+  the StakeHub native inspector has a relative Cargo dependency on L1.
+- What #39 carries: pfETH Ethereum ingress program, `WETHBridgeVaultL1.sol` and package
+  scripts; exact historical pfETH reserve-replay repair; the transactional RPC-status cache
+  fix (deployed 09-06); signed A666 source-series custody (`pftl_source_settlement.rs`,
+  deployed 09-07); public regression fixtures; deployment evidence under
+  `deployments/a666-source-route-20260907/`; the paused shielded-funding specs. It also
+  includes the Task Node UNL MVP and Cobalt sources through its `main` merge.
+- **Stacking, as of this handoff.** #39 targets `integrate/arc-tier4-current-v2-20260901`
+  (i.e. it is stacked on PR #37) and originally merged `main` at `f2f09881`, which predates
+  #38. I merged current `main` (`d8ff6f13`, includes #38) into it at `55330121`. One
+  conflict, `crates/node/src/block_replay_wallet.rs`: the ledger destructure needed both the
+  handoff's bound `nav_attestors` and #38's `yolo_target_registrations` /
+  `yolo_target_receipts`. Resolved by keeping all three. `cargo build --locked -p
+  postfiat-node` passes; `cargo test -p postfiat-node --lib -- pfeth_reserve
+  source_settlement_commitment yolo_` 7 passed, 1 ignored (the supplied-proof test, as
+  documented in #38). #39 now contains `main` and the integrate branch up to `b089a4b2`;
+  it lacks only the integrate handoff commits (`817d93f7` and this one), which touch
+  `docs/handoffs/` only. Merge order stays: **#37 → main, then retarget #39 to main**, or
+  merge #39 into the integrate branch first if #37 is going to stay open as the review
+  artifact.
+- **Deployed fleet facts quoted from the other machine (not re-probed here):** last
+  reconciled observation 2026-09-07, block 1005, six validators agreed, mempools empty,
+  state root `6ed69ca9…65f9`; release `a666-source-route-20260907`, binary SHA-256
+  `57b0f4d1…ec83`; deployed base preserved as branch `handoff/navcoin-deployed-base-20260907`
+  at `707e006f` plus `source.patch` and `untracked-source/`. The consolidated branch is
+  **not** the deployed source tree; do not label its build with the deployed hash.
+- **Where the full NAVCoin round trip stopped** (Ethereum → pfUSDC → A666 → Uniswap → A666
+  → pfUSDC → Ethereum): source custody shipped; the epoch-6 Ethereum verifier checkpoint 909
+  predates the Cobalt committee rotations at 917/924 and no compatible proof was produced;
+  an epoch-7 verifier/vault pair was deployed and then **rejected at block 1004** because
+  route epochs are global per asset and Arc had already taken pfUSDC epoch 9 (the Arc
+  binding was restored at 1005; the epoch-7 contracts must not be funded); the 881→917 A666
+  witness executed (544.8M instructions, ~14.7 s) but the CPU prover died without a proof
+  and no prover is running. No new USDC was deposited; protected balances at recovery were
+  534.079891 Ethereum USDC and 103 wA666.
+- Open P2 findings carried forward (09-06 review, `docs/review/storage-cobalt-tasknode-handoff-review-20260906.md`):
+  Task Node shadow admission does not require a complete wallet/account mapping; candidate
+  key identity is not joined to the authenticated binding key; the consolidated historical
+  Cobalt packet verifier (`benchmarks/cobalt-adversarial-verification/packet/verify_packet.py`)
+  still fails because it binds mutable publication documents, which is documented, not
+  fixed; some storage-plan prose overstates concurrent-reader support.
+- Credentials, wallet material, local `.postfiat` state and the private StakeHub recovery
+  archive (`docs/handoffs/navcoin-recovery-20260907/`, with the frozen A666/pfUSDC guest
+  ELFs and witness) are not in Git. A second host needs its own RPC/SSH access, endpoints,
+  proof artifacts and unlocked StakeHub signer, and must re-query all six validators before
+  signing anything.
 
 ## Next decision or action
 
@@ -116,13 +186,20 @@ probe was performed this session; nothing below is a claim about running validat
    next validator release carries it (feature stays disabled until governance schedules
    `yolo_target_activation_height`), and who owns fixing the pre-existing CI failures on
    `main` so the merge queue is green again.
-2. **PR #37.** Either close the gateway-owner finding and the historical-proof gap on the
-   integrate branch and merge, or keep it open as the review artifact and say so on the PR.
-3. **UNL from Task Node, Phase 0.** If the proposal stands: publish the scoring constants
-   in `postfiat-consensus-cobalt`, implement the binding CLI and Task Node signed work
-   digest, add `validator.identity.tasknode_binding.*` to the evidence field registry, and
-   shadow-derive against the round-20 list.
-4. **Association/collusion packet pipeline** (Corbanu per-entity association packets →
+2. **PR #37, and therefore #39.** #39 cannot reach `main` until #37 does. Either close the
+   gateway-owner finding and the historical-proof gap on the integrate branch and merge
+   #37, then retarget and merge #39; or merge #39 into the integrate branch now and keep
+   #37 as the single review artifact. StakeHub #8 has no such dependency and can be
+   reviewed on its own.
+3. **NAVCoin round trip.** Two blockers before any new deposit: a proof path compatible
+   with the Cobalt committee rotations at 917/924 for the Ethereum epoch-6 verifier, and a
+   next route epoch derived from governance (not 7). Then a full deployment-package
+   preflight, then wire the traversal through StakeHub `wallet nav-roundtrip` and retain
+   every receipt.
+4. **UNL from Task Node, Phase 0.** The L1 side exists on `main`. What is missing is on the
+   Task Node side: binding memos, signed work digests, vouch memos, the funding exclusion
+   list. Then rerun the shadow derive against a live ledger view and diff against round 20.
+5. **Association/collusion packet pipeline** (Corbanu per-entity association packets →
    deterministic join → pairwise research → pinned-model R0–R4) is designed, not built.
 
 ## To add before this handoff is final
@@ -135,6 +212,9 @@ probe was performed this session; nothing below is a claim about running validat
 ## References
 
 - PR #38: https://github.com/postfiatorg/postfiatl1v2/pull/38 · merge `1412b4dc` · docs `d8ff6f13`
+- PR #39: https://github.com/postfiatorg/postfiatl1v2/pull/39 · head `55330121` · StakeHub #8: https://github.com/postfiatorg/StakeHub/pull/8
+- Machine handoff: `docs/handoffs/2026-09-07___codex__navcoin_cobalt_machine_handoff.md`; validation `docs/status/NAVCOIN-HANDOFF-VALIDATION-20260907.md`; deployment evidence `deployments/a666-source-route-20260907/`
+- Task Node UNL MVP: `docs/handoffs/2026-09-04___dravlic__tasknode_unl_mvp_built_and_hardened.md`, `docs/plans/active/tasknode-unl-mvp-plan.md`, `python/postfiat_rpc/tasknode_unl*.py`, `docs/governance/tasknode-unl-shadow-run-20260904.md`
 - `docs/yolo/target-receipt-v1.md`, `docs/navcoins/yolo-options-reserve-profile.md`, `docs/yolo/evidence/`
 - PR #37: https://github.com/postfiatorg/postfiatl1v2/pull/37
 - Arc packet: `docs/business/pfusdc-on-arc-round-trip-20260902.html`, `docs/business/arc-grant-claim-classification-20260902.md`, `docs/business/arc-audit-scope-20260902.md`, `docs/business/pfusdc-arc-grant-proposal-20260828-v3.md`
