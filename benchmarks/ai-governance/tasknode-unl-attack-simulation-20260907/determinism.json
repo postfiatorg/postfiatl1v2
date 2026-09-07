@@ -1,0 +1,25 @@
+{
+  "schema": "tasknode-unl-attack-simulation-determinism-v1",
+  "command": "python3 benchmarks/ai-governance/tasknode-unl-attack-simulation-20260907/run_simulation.py --output-dir <run-directory>",
+  "run_1_results_sha256": "81e27d4c16d689e2a1361b76720abe10030faee0e8962efe6387fd543137c2bd",
+  "run_2_results_sha256": "81e27d4c16d689e2a1361b76720abe10030faee0e8962efe6387fd543137c2bd",
+  "byte_identical": true,
+  "compared_files": {
+    "attack-sweep.csv": {
+      "run_1_sha256": "1473201a07bce3c2f81eb710fe3bd45672ca792703734c6bce49accc3f43c022",
+      "run_2_sha256": "1473201a07bce3c2f81eb710fe3bd45672ca792703734c6bce49accc3f43c022"
+    },
+    "output-manifest.json": {
+      "run_1_sha256": "e286e9c4214aab90d08c8ec1f81563d6216506863a3c372ea1ded064f1e3b664",
+      "run_2_sha256": "e286e9c4214aab90d08c8ec1f81563d6216506863a3c372ea1ded064f1e3b664"
+    },
+    "results.json": {
+      "run_1_sha256": "81e27d4c16d689e2a1361b76720abe10030faee0e8962efe6387fd543137c2bd",
+      "run_2_sha256": "81e27d4c16d689e2a1361b76720abe10030faee0e8962efe6387fd543137c2bd"
+    },
+    "sensitivity.csv": {
+      "run_1_sha256": "d46ff92d80f4d1b209b1792cd0d957b7464ff1adcdb43baf269a052630cb33ed",
+      "run_2_sha256": "d46ff92d80f4d1b209b1792cd0d957b7464ff1adcdb43baf269a052630cb33ed"
+    }
+  }
+}
