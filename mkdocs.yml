@@ -92,6 +92,7 @@ nav:
   - Testnet Path: status/testnet-path.md
   - Release Gate Inventory: status/release-gate-inventory.md
   - Whitepaper: whitepaper.md
+  - Legacy Whitepaper: whitepaper_legacy.md
   - NAVCoins:
       - Overview: navcoins/index.md
       - A666 Current State: status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md
@@ -116,6 +117,7 @@ nav:
       - Completed P0 Remediation: plans/completed/P0-COMPLETE-REMEDIATION-PLAN-20260716.md
       - Completed Capability Restoration: plans/completed/OPEN-SOURCE-CAPABILITY-RESTORATION-PLAN-20260716.md
   - Handoffs:
+      - Whitepaper Update For Dravlic: handoffs/2026-09-08___codex__whitepaper_to_dravlic.md
       - CI Repair, UNL Hardening, And StakeHub Review: handoffs/2026-09-07___dravlic__ci_repair_unl_hardening_stakehub_review.md
       - Task Node UNL MVP Built And Hardened: handoffs/2026-09-04___dravlic__tasknode_unl_mvp_built_and_hardened.md
       - Agent Direction Decided; Z3 Planned: handoffs/2026-09-03___dravlic__agent_direction_decided_z3_planned.md

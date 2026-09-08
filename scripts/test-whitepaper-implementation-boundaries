@@ -9,7 +9,7 @@ if rg -Fq 'while ML-DSA signs the outer transaction envelope' docs/whitepaper.md
   exit 1
 fi
 
-rg -Fq 'does not add an account-level ML-DSA' docs/whitepaper.md
+rg -Fq 'the batch that carries them has no account-level ML-DSA outer envelope' docs/whitepaper.md
 rg -Fq 'pub struct ShieldedActionBatch {' crates/types/src/shielded_bridge_governance.rs
 rg -Fq 'pub batch_id: String' crates/types/src/shielded_bridge_governance.rs
 rg -Fq 'pub actions: Vec<ShieldedAction>' crates/types/src/shielded_bridge_governance.rs

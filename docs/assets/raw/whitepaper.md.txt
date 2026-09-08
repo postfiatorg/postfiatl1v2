@@ -1,506 +1,563 @@
-# PostFiat: An Authority-Validated Settlement Ledger
+# Post Fiat: A Buy-Side Internet of Value
 
-### Governed trust evolution, shielded settlement, replayable machine classification, and post-quantum authorization
-
-**Whitepaper, Version 3 — June 2026**
+### NAVCoins, verified value, and private exchange of economic exposure on an authority-validated ledger with governed trust, ML-DSA authorization, and Asset-Orchard settlement
 
 ---
 
 ## Abstract
 
-PostFiat is a Layer 1 settlement ledger in the XRP category — known validators, fast deterministic finality, fixed supply, fee burn, and no native validator rewards — rebuilt around the surfaces where that category has historically been weakest. Validator-list evolution becomes protocol state governed by Cobalt-checked transitions instead of recommended-list publication. Settlement privacy becomes a baseline note-based path with public supply accounting instead of a later overlay. Qualitative governance judgment becomes a public, typed, replayable artifact instead of private committee discretion. Authorization is post-quantum from genesis instead of deferred to an emergency migration.
+A ledger earns its existence by settling claims that people want to hold. The claims most in demand on public chains today are not payment messages; they are ownership and exposure: tokenized shares, debt, perpetual swaps, and rules-based portfolios. Post Fiat is built for that market. Its central instrument is the NAVCoin, a floating-value economic unit whose reserve valuation, valid supply, methodology, custody perimeter, primary-market operations, and settlement representation can each be inspected separately. Its central capability is the private exchange of those units: two assets change hands in one atomic state transition while the ledger publishes commitments, nullifiers, and per-asset pool accounting rather than positions.
 
-This paper states the protocol argument: the threat model and assumptions, the ledger and consensus design, the admission economics that justify zero issuance, the Cobalt transition machinery and its safety argument, the shielded settlement path and its honest leakage profile, the bounded role of machine classification, the cryptographic cost accounting, and the named recovery surface for every failure mode. Empirical measurements appear only as hash-bound artifacts in an evidence register; every empirical sentence in the body names the artifact that backs it, and every artifact backs only its own sentence.
+The protocol treats value verification and settlement as one design problem. Reserve evidence, attested observation, deterministic computation, and proof verification are separate steps with separate failure modes; the ledger finalizes a NAV epoch only after the profile it registered has been satisfied, and issues or retires units only against that finalized state. Market price and verified NAV are different objects, and the paper explains why the primary market rather than a venue pool is the channel that connects them.
 
----
-
-## 1. Introduction
-
-XRP demonstrated that a financial settlement ledger can operate without proof of work, proof of stake, validator rewards, or inflationary block subsidies. Known validators, deterministic finality in seconds, fixed supply, and fee burn form a coherent economic model, not a historical accident: the parties who depend on settlement finality operate the machines that produce it, and resource use is priced by destroying the native unit rather than by paying rent to a block-producer class.
-
-PostFiat keeps that category. The paper makes one claim about the category and four claims about its weakest surfaces.
-
-The category claim is that proof of authority is the correct settlement primitive when validators are natural stakeholders rather than subsidy-seeking block producers (§5). The four surface claims are: validator-list evolution should be protocol state under Cobalt-checked transitions rather than social coordination around privately published lists (§6); routine financial state should be shielded by default, with public supply accounting and holder-controlled disclosure (§7); machine judgment is admissible in governance only as a typed, public, replayable artifact that the protocol is free to ignore (§8); and authorization should be post-quantum from genesis, because settlement keys and settlement value outlive cryptographic eras (§9).
-
-The claim is not that the underlying risks disappear. The claim is that they become typed, priced, replayable, and governable instead of being hidden in inflation schedules, opaque list publication, transparent portfolio state, or migrate-later cryptography.
-
-### 1.1 Design principles
-
-Five principles recur throughout the protocol and are worth naming once, because every later section is an application of them.
-
-*Fail closed.* Missing, stale, conflicting, or oversized evidence produces a hold, a no-op, or continued operation under the last valid rules. No surface of the protocol defaults to permit.
-
-*Old rules validate new rules.* No object — registry, trust graph, checker, safety profile, model profile, or selector — participates in validating its own activation. Every transition is judged by the rules that were active before it was proposed. Changing the rules that judge transitions is itself a transition under the previous rules; changing them any other way is a fork, not governance.
-
-*Least machinery.* An exact predicate in code is preferred to a model; a deterministic selector is preferred to a committee; a precommitted recovery action is preferred to discretion. Heavier machinery must earn its place by handling cases the lighter machinery demonstrably cannot.
-
-*Hash-bound artifacts.* Every governance input and output is committed by root before it can take effect. Deviation from the accepted process is detectable by hash mismatch rather than contestable by narrative.
-
-*Deletion monotonicity.* Removing the machine-classification layer (§8) can only make outcomes more conservative — more holds, never more admissions. The chain must remain safe, merely slower at adjudicating ambiguity, with the model deleted.
-
-### 1.2 Scope
-
-This paper is the protocol argument. Engineering measurements, benchmark hashes, fixture inventories, and machine reports are evidence for specific sentences, not part of the argument itself; they are collected in the Evidence Register (Appendix A) and referenced inline as [E1]–[E8]. Numbers quoted from the register are budget measurements on named hardware and software profiles, never consensus constants.
+Post Fiat inherits the XRP category—known validators, deterministic finality, fixed native supply, fee burn, no native validator subsidy—and changes three things. Validator-trust evolution is protocol state ratified by Cobalt rather than a published file. Accounts and validators are authorized with ML-DSA from genesis. Settlement can be private through Asset-Orchard, in the Zcash Orchard lineage, with public turnstile accounting per asset. The paper develops the theory of these mechanisms under stated assumptions, argues the business case for entering through asset ownership and trading rather than by replacing correspondent-banking messaging, and closes with a claim-by-claim implementation table that names, for each claim, the kind of proof that supports it and the pinned source or record that carries it.
 
 ---
 
-## 2. Threat Model and Assumptions
+## Part 1 — Theory
 
-PostFiat is designed against five adversary classes.
+### 1.1 The economic reason for the chain
 
-| Adversary | Capability | Protocol response |
-|---|---|---|
-| Byzantine validator minority | Equivocation, invalid certificates, stale votes, liveness disruption below the fault threshold. | BFT certificates, canonical state transitions, replay rejection, bounded registry updates, fail-closed recovery (§4, §10). |
-| Correlated validator group | Shared operator, hosting provider, jurisdiction, funding source, or release path masquerading as independence. | Evidence packets, concentration caps, trust-graph constraints, Cobalt-linked registry changes (§5, §6). |
-| Founder or foundation override | Publishing a validator, prompt, model, or selector change outside the accepted process. | Hash-bound packet roots, selector roots, registry-delta roots, and Cobalt gates make any deviation detectable (§6, §8). |
-| Model or runtime operator | Prompt injection, hidden evidence substitution, model drift, nonreproducible inference. | Closed option sets, source hashes, pinned replay profiles, replay certificates, governed replacement (§8). |
-| Public observer | Balance analysis, flow correlation, timing analysis, fee fingerprinting, strategy inference. | Shielded notes remove routine state from public view; disclosure is explicit, scoped, and holder-controlled (§7). |
+An investor who holds an exposure wants four things at once: to know what backs it, to know how many claims exist against that backing, to acquire and dispose of it without telling the market, and to be able to prove all of this to a counterparty, an auditor, or a court without trusting the issuer's prose. Conventional fund administration delivers the first two on a reporting cadence and the fourth by attestation letter; it delivers the third by keeping everything off any shared ledger. Transparent blockchains deliver machine-checkable accounting and destroy the third property entirely.
 
-The formal assumptions behind these responses are explicit. Within an epoch with $n$ active validators, at most $f=\lfloor(n-1)/3\rfloor$ are Byzantine. Across a registry transition, the actively Byzantine set is bounded by the transition profile's budget $B$. Safety is asynchronous: no commit, registry transition, or shielded state update depends on timing, only on certificate arithmetic. Liveness assumes partial synchrony: after an unknown stabilization time, messages between correct validators arrive within a bound, which is what view changes and challenge-window progress require.
+Post Fiat's thesis is that these four properties are one design problem. If the ledger that verifies value is the same ledger that settles ownership, then the verification can gate issuance, the settlement can be private without becoming unaccountable, and the holder's claim can be stated as an object rather than a promise. The paper separates four things throughout, because confusing them is the source of most overclaims in this field:
 
-The cryptographic assumptions are EUF-CMA security of ML-DSA signatures, collision resistance of SHA3-384, and the soundness and zero-knowledge properties of the Halo2 proving system over its curve cycle, which carries no per-circuit trusted setup. The signature and hash assumptions are post-quantum; the proof-system soundness assumption is classical, and §7 and §11 treat that asymmetry honestly rather than hiding it. A break of any single assumption maps to a named recovery surface (§10), not a silent failure.
+- the **asset**: the economic exposure a unit represents (a share of a reserve portfolio, an index, an options program, a currency claim);
+- the **methodology**: the rules that determine what the reserve holds and how it is valued;
+- the **custody perimeter**: where the backing physically sits and who can move it;
+- the **settlement representation**: the ledger object a holder actually owns and transfers, whether a transparent balance, a wrapped ERC-20, or a shielded note.
 
----
+A NAVCoin is a settlement representation of an asset defined by a methodology and held inside a custody perimeter. The protocol can verify the arithmetic that links them. It cannot make a custodian honest, and it does not try to.
 
-## 3. Ledger Model
+### 1.2 NAV as net marked assets per valid economic unit
 
-The ledger state has four components: a transparent account map; a shielded pool consisting of a note-commitment tree and a nullifier set; registry state, comprising the active validator registry root, trust-graph root, checker root, and safety-profile root; and governed parameters, including fee classes, per-block action caps, and admission thresholds.
-
-The native unit has a fixed supply set at genesis. There is no issuance of any kind. All transaction fees are burned, so supply is monotonically non-increasing. Fee classes price bytes, signature verifications, shielded actions, and registry operations as distinct resources rather than through a single gas scalar, and fee burn is the only protocol-level economic flow: no validator rewards, no foundation tax, no fee redistribution.
-
-Transactions fall into governed classes: transparent transfers between accounts; shielded bundles that spend and create notes (§7); registry transitions and their supporting evidence anchors (§6, §8); receipt aggregates for ordering accountability (§4.3); and parameter changes, which are themselves Cobalt-gated. Shielded notes carry an asset type inside the commitment, so issued assets within governed asset classes settle shielded under the same public-accounting discipline as the native unit.
-
-Every block is verified under exactly one active registry root, and a block commits one ordered state transition across all four state components. There is no height at which two registry roots are simultaneously authoritative, a property §6 and §7 both depend on.
-
----
-
-## 4. Consensus and Ordering
-
-### 4.1 Certified ordering
-
-Ordering uses a HotStuff-style certified path. For $n$ active validators, the fault bound is $f=\lfloor(n-1)/3\rfloor$ and the quorum is $q=\lfloor 2n/3\rfloor+1$, with leader rotation
-
-$$\text{leader}(height, view) = validators[(height + view) \bmod n].$$
-
-A proposal binds the parent block, the justifying quorum certificate, the payload hash, the active registry root, and the proposer identity. A quorum certificate requires $q$ canonical votes for the same proposal id. A timeout certificate advances a failed view. Equivocation evidence — conflicting proposals or conflicting votes for the same height and view — is retained as validator evidence and feeds admission and removal (§5, §6). A two-chain rule commits a certified parent when a certified child names it. Safety of this path is pure certificate arithmetic and holds under asynchrony; liveness requires partial synchrony for views to stabilize on a correct leader. A simulation harness exercising the certified path, view changes, and equivocation handling is artifact [E8].
-
-### 4.2 Deterministic inclusion order
-
-Ordering power is part of the threat model, not an afterthought. Included valid transactions are sorted canonically by governed fee class, then admission bucket, then transaction hash. The proposer chooses which transactions to include but not how to order what it includes, and not which fee class or bucket a transaction occupies. Sandwich-style reordering inside a block is therefore not available to the leader; the residual extraction attack is censorship by omission, which is why omission is made attributable.
-
-### 4.3 Censorship accountability
-
-Admission buckets are backed by signed validator receipts rather than one leader's claimed observation time. For one transaction and one observation window, a v1 receipt aggregate requires $q$ distinct ML-DSA-signed receipts under the active validator set, rejects stale windows and conflicting duplicate receipts, and adopts the maximum observed bucket as the conservative bucket. Omission evidence against a proposer requires at least $k_{omit}$ valid receipt aggregates across distinct windows, plus the heights of that proposer's eligible blocks that omitted the transaction.
-
-Colluding validators can withhold receipts, but then the failure is a named receipt-coverage failure rather than a successful frame: they cannot manufacture a false omission accusation without signing the receipt trail, and signed receipts are exactly the evidence that feeds removal.
-
-A worked example fixes intuition. In a seven-validator set with $q=5$ and $k_{omit}=2$, a censorship claim against proposer $P$ requires two distinct window aggregates, each containing five valid receipts for the same transaction, plus proof that $P$'s eligible blocks in those windows omitted it. One receipt is not enough, and five receipts in a single window are not enough; attribution requires repeated, threshold-observed omission. Receipt aggregation fixtures are part of artifact [E8].
-
-### 4.4 Availability suspension
-
-Liveness degradation from offline validators is handled by a precommitted availability suspension, the authority-validation analog of XRPL's Negative UNL. A validator that fails to sign in more than a governed fraction of recent certified rounds may be temporarily removed from quorum accounting by a suspension certificate signed by $q$ of the remaining active validators. A suspension is evidence-backed by the missed-round record, time-bounded, auto-expiring, and capped: at most $\lfloor n/5 \rfloor$ validators may be concurrently suspended at launch defaults, and quorum arithmetic over the effective set can never fall below the safety thresholds implied by the active trust graph (§6). Suspension changes quorum accounting, not registry membership; permanent removal remains a full Cobalt transition. Because a suspension certificate itself requires a quorum, a Byzantine minority cannot use the mechanism to eject honest validators and lower the bar for itself.
-
----
-
-## 5. Authority Validation: Economics and Admission
-
-### 5.1 A different security purchase, not a compromise
-
-Proof of authority is usually described as a compromise. For financial settlement it is better understood as a different security purchase. Proof of work buys Sybil resistance with energy and hardware. Proof of stake buys it with bonded capital and a reward schedule. Authority validation buys it with known operators, reputational and legal exposure, operational history, and organic economic reliance on the ledger working correctly.
-
-That purchase is not weaker by definition. It is weaker when the validator set is opaque, captured, too small, or chosen for convenience — which is exactly the surface §6 exists to govern. And when validators are natural stakeholders, manufacturing a paid validator class can make incentives strictly worse: a reward schedule recruits participants whose only stake is the reward, and over time the rewarded class becomes a constituency that politically entrenches the reward.
-
-### 5.2 Zero issuance as a conditional claim
-
-Zero issuance is therefore justified conditionally, not ideologically. When natural exposure and accountability are publicly visible enough to pass an admission predicate, native validator rewards are not needed to recruit validators, and fee burn prices resource use without creating a validator-rent market:
-
-$$\text{fixed supply} + \text{fee burn} + \text{natural validators}.$$
-
-The condition creates the engineering burden: "natural stakeholder" must be verifiable about a specific candidate from source-bound public evidence, not asserted by a foundation. The economic premise is operationalized as an admission predicate, not as private dollar modeling.
-
-### 5.3 The admission predicate
-
-A candidate must provide source-bound evidence across five fields, each of which the selector maps into ordinal bins. Missing or conflicting required evidence holds the candidate rather than defaulting in either direction.
-
-| Field | Evidence mapping |
-|---|---|
-| $exposure_i$ | Source-bound reliance on finality: exchange, custody, gateway, public volume class, or on-chain usage. |
-| $accountability_i$ | Signed operator manifest, domain control, jurisdiction and contact surface, incident history, revocation path. |
-| $reliability_i$ | Uptime, version freshness, monitoring, history retention, infrastructure redundancy. |
-| $attack_i$ | Governance power, transaction-flow access, conflicting incentives, value at risk during the influence window. |
-| $\rho_i$ | Correlation: shared operator, ASN, cloud, country, funding source, release manager, monitoring endpoint, or affiliate evidence. |
-
-The selector evaluates evidence fields rather than a single model-owned number:
+Fix a NAVCoin instance and a valuation unit (for example, USD with six or eight decimals of scale). At epoch $t$ the issuer's registered proof profile admits a set of holdings $j$ with quantities $q_j$, marks $p_j$, and policy haircuts $h_j \in [0,1]$, together with disclosed liabilities $L_t$. Net marked assets are
 
 $$
-admit_i = \mathbf{1}[exposure_i \ge x_{min}] \cdot \mathbf{1}[reliability_i \ge r_{min}] \cdot \mathbf{1}[accountability_i \ge a_{min}] \cdot \mathbf{1}[attack_i \le b_{max}] \cdot \mathbf{1}[\rho_i \le \rho_{max}] \cdot \mathbf{1}[linkedness(G_t, i) = safe].
+V_t \;=\; \sum_j h_j\, q_j\, p_j \;-\; L_t ,
 $$
 
-Weights, floors, and caps are governance parameters, but they are public parameters bound to evidence fields. Launch defaults require source-bound reliance; $r_{min} = 0.995$ over the active observation window; signed operator identity plus domain control; no direct conflict above $b_{max}$; and $\rho_{max} = 0$ for a shared release manager, key-management vendor, or funding controller with an existing validator, unless a later Cobalt packet raises the cap for a named exception.
+computed under the valuation policy whose hash the profile commits to. Let $S_t$ be the **valid global economic supply**: every unit that is a claim on this reserve, across every representation—native balances, shielded notes, wrapped units on an external chain, and in-flight bridge claims—counted once. Then, for $S_t > 0$,
 
-Two properties of the predicate deserve emphasis. First, the economic screen does not override the correlation veto: a high-exposure candidate with shared release management, key management, or funding control still fails, because natural stake does not launder cosmetic diversity. Second, the predicate is executable, not aspirational. The controlled-testnet selector consumes a `ValidatorAdmissionEvidencePacket` and emits a `ValidatorAdmissionDecision`: missing or conflicting required fields hold, below-floor reliability or accountability and above-cap correlation reject, and only a clean pass emits an *add* registry-delta candidate. Fixture coverage spans clean admit, shared-control reject, missing-domain hold, contradictory-evidence hold, and unknown-model-field hold [E4]. The $linkedness$ term is defined in §6.4; admission and registry governance share one trust-graph vocabulary by construction.
+$$
+\mathrm{NAV}_t \;=\; \frac{V_t}{S_t}.
+$$
 
-### 5.4 The launch certificate
+When $S_t = 0$ there is no NAV; the opening supply of a new instance is created by an explicit opening rule against a finalized reserve proof, not by dividing by zero. The A666 lineage, for example, opened at $31{,}386.197455$ units against $\$31{,}386.19745591$ of verified net assets, an opening NAV of $\$1.000000$ with $\$0.00000091$ of rounding overcollateral; the entire opening supply was locked in an ownerless migration contract and became spendable only as legacy a651 was burned against it ([primary-market accounting][pma]).
 
-The genesis validator set is the unavoidable bootstrap act. PostFiat treats it as a launch certificate rather than pretending it is already decentralization:
+Consensus never computes with floating point. Let $v_t$ denote net assets in valuation atoms, $s_t$ supply in token atoms, and $u=10^d$ token atoms per whole unit, where $d$ is the token's precision. The stored value $n_t$ is valuation atoms per whole unit. Reserve submission enforces
 
+$$
+v_t u \;\ge\; s_t n_t.
+$$
+
+The provider-neutral SP1 reserve profile also requires the exact conservative floor
+
+$$
+n_t \;=\; \left\lfloor \frac{v_t u}{s_t} \right\rfloor \qquad (s_t>0).
+$$
+
+These checks establish arithmetic consistency with the supplied denominator. Establishing valid NAV also requires the denominator to match the authorized economic supply defined above; understating $s_t$ can inflate even an exactly computed floor. Other profiles may register a floor factor or haircut policy, so the profile identifies the valuation rule alongside the supply perimeter ([reserve submission source][nav-exec]).
+
+Freshness has a direct financial consequence. Suppose $S$ existing units have current net assets $S N^*$, while the active epoch permits subscriptions at an earlier value $\bar N$. Issuing $x$ units against $x\bar N$ of new principal gives, before fees and integer rounding,
+
+$$
+N_{\mathrm{after}} = \frac{S N^*+x\bar N}{S+x},
+\qquad
+N_{\mathrm{after}}-N^* = \frac{x(\bar N-N^*)}{S+x}.
+$$
+
+If the reserve has appreciated since the snapshot, $\bar N<N^*$ and the subscriber dilutes existing holders. Their aggregate loss is $Sx(N^*-\bar N)/(S+x)$, equal to the subscriber's gain. The effect grows with the stale-price error and the subscription's share of the enlarged fund. Epoch cadence and issuance caps therefore govern transfers of wealth as well as availability.
+
+A profile registers a maximum snapshot age for finalization, a challenge window that must close before a packet becomes the active epoch, and a maximum epoch gap after which minting and redemption initiation fail closed ([reserve primitives][rp]). Those controls bound the age and use of a valuation; market movement within the permitted interval remains an economic risk.
+
+Precision and rounding are directional. For $x$ token atoms at the finalized pre-inflow value $n_t$ and issue multiplier $m_I$,
+
+$$
+\text{base} = \left\lceil \frac{x n_t}{u} \right\rceil,\qquad
+\text{due} = \lceil \text{base}\cdot m_I \rceil,\qquad
+\text{fee} = \text{due}-\text{base},
+$$
+
+all in valuation atoms. Redemption uses the finalized pre-outflow value and redeem multiplier $m_R$:
+
+$$
+\text{base} = \left\lfloor \frac{x n_t}{u} \right\rfloor,\qquad
+\text{out} = \lfloor \text{base}\cdot m_R \rfloor,\qquad
+\text{fee} = \text{base}-\text{out}.
+$$
+
+The deployed A666 policy uses $m_I=10050/10000$ and $m_R=9995/10000$; the spread is custodied outside NAV assets. The fee itself leaves NAV unchanged, while conservative integer rounding leaves any residual with the reserve ([primary-market accounting][pma]). A policy that distributes fees to holders must specify that NAV accretion separately.
+
+### 1.3 Primary and secondary markets, and why wrapped units are not backing
+
+Primary operations change backing and supply together. In the integer notation above, a **primary subscription** moves counted settlement value into the reserve and creates units:
+
+$$
+v \leftarrow v+\text{base},\qquad s \leftarrow s+x.
+$$
+
+A **primary redemption** retires units and releases the corresponding principal:
+
+$$
+v \leftarrow v-\text{base},\qquad s \leftarrow s-x.
+$$
+
+Marks, income, expenses, and liabilities can change net assets independently of supply. A **secondary exchange**—an offer-book fill, a Uniswap swap, or a private Asset-Orchard swap—changes ownership while preserving both. Primary-market evidence therefore consists of the before/after change in verified net assets and valid supply across an issue or a redemption.
+
+Representations complicate counting without changing it. Partition the authorized supply into disjoint economic claims, all measured in the same token atoms:
+
+$$
+s_{\mathrm{native}}+s_{\mathrm{shielded}}+s_{\mathrm{external}}+s_{\mathrm{in\text{-}flight}}
+\;=\;s_{\mathrm{authorized}}.
+$$
+
+A claim belongs to exactly one category at each stage of its lifecycle. Export moves it from native ownership through an in-flight claim to an external representation; shielding moves it between native and shielded ownership. Source escrow and the destination token it backs represent one claim, counted at its current economic location. Migration likewise exchanges representations of the opening supply. These operations preserve net assets. Venue liquidity supplies market depth; escrow supplies representation backing; neither adds fresh reserve value merely because units move through it.
+
+The same discipline governs the cash leg. A source-labelled receipt such as pfUSDC is a claim on USDC locked in a source-chain vault under a named route and finality rule. Let $W_{\mathrm{cash}}$ be the vault balance, $S_{\mathrm{cash}}$ outstanding receipt atoms, $D$ deposits awaiting credit, $B$ cumulative accepted receipt burns, and $R$ the corresponding cumulative vault releases. All use the same cash-atom scale. Then
+
+$$
+W_{\mathrm{cash}} \;=\; S_{\mathrm{cash}}+D+B-R,
+$$
+
+where $B-R$ is the amount awaiting release. A deposit raises $W_{\mathrm{cash}}$ and $D$; credit moves $D$ into $S_{\mathrm{cash}}$; a burn moves $S_{\mathrm{cash}}$ into $B$; release raises $R$ and reduces $W_{\mathrm{cash}}$. The identity thus holds during transit as well as at rest ([wrapped stablecoins on PFTL][wrapped]). A reserve packet counts only finalized, allocated receipts and identifies their source domain and finality proof. Each receipt carries the source and redemption risk of that route.
+
+### 1.4 Market price and verified NAV are different objects
+
+Let $P_t$ be a venue price and define the discount
+
+$$
+d_t \;=\; \frac{P_t - \mathrm{NAV}_t}{\mathrm{NAV}_t}.
+$$
+
+A valid reserve proof says nothing about $d_t$. What connects the two objects is a channel through which someone can profit from their divergence: a redemption right at $\mathrm{NAV}_t$ makes a persistent negative $d_t$ an opportunity for anyone who can redeem; a subscription right at $\mathrm{NAV}_t$ does the same for a positive $d_t$. The strength of the channel is determined by who has access to the primary market, what the round trip costs (the spread $m_I/m_R$, bridge fees, gas), how long it takes relative to the freshness of the epoch, and whether funded participants exist to use it. None of these is guaranteed by the proof, and Post Fiat makes no claim that $d_t \to 0$. What it claims is narrower and checkable: the primary channel is available at a verified value rather than at an issuer's quote, and its capacity is bounded by proven backing and policy caps rather than by an operator's inventory or a pool's depth ([A666 current state][a666]).
+
+### 1.5 Four separate steps: evidence, attestation, computation, verification
+
+"Proof of reserves" bundles four steps that fail differently. Post Fiat keeps them apart.
+
+**Reserve evidence** is what a source exposes: an on-ledger balance, a public venue API, a broker response, a custodian statement. Its honesty is a property of the source.
+
+**Attested observation** is a signed statement by an identified party that it observed particular evidence at a particular time. For public sources, the multi-fetch profile requires a configured minimum of registered attestors to submit passing verdicts and zero failing verdicts; a single failing verdict blocks finalization and forces supersession rather than debate. Observation roots are evidence commitments, compared under a registered tolerance band, because live accounts do not produce bit-identical snapshots: a drift study over a roughly $\$275$M venue vault found equity drift of $0.0005$ bp across ten samples and zero identical snapshots ([proof of reserves][por]). For authenticated brokerage sources, the YOLO adapter classifies both quantity and valuation as `Attested`, so the resulting value appears in the public `attested_value` bucket and never in `cryptographically_verified_value` ([YOLO reserve profile][yolo-profile]).
+
+**Deterministic computation** turns admitted observations into net assets under a committed policy. In the SP1 reserve guest, the computation runs inside a zkVM over a bounded CBOR witness and commits a fixed-width public-values record: genesis hash, asset, profile, valuation policy hash, source manifest hash, valuation unit and scale, observation epoch and interval, gross assets, total liabilities, verified net assets, the three trust-class value buckets, source counts, and trust and disclosure roots—584 bytes in the v1 ABI ([public values][pv]; [reserve guest][guest]).
+
+**Proof verification** is what consensus does: it verifies the Groth16 proof against the program key pinned in the registered profile, decodes the public values, and binds every field to the packet and to ledger context, rejecting on any mismatch of genesis, asset, profile, policy, manifest, valuation unit, epoch, freshness, span, source root, or attestor root, and rejecting controlled value where the profile forbids it ([SP1 verifier][sp1v]).
+
+Verification establishes exactly this: the stated computation was performed over inputs bound to the disclosed sources and policy, and the outputs are the ones the packet claims. It does not establish that the sources told the truth, that no undisclosed liability exists elsewhere, that the custodian can deliver, or that a legal claim would be honored in insolvency. Those are separate economic inputs. The public proof-of-disclosed-leverage record on Arbitrum One makes the point concretely: six legs across six verification domains reconcile exactly to public buckets, each leg labelled cryptographic or attested, and the record states plainly that it does not prove total assets, total liabilities, or solvency ([proof of leverage][pol]).
+
+### 1.6 Private per-asset conservation and atomic exchange
+
+Asset-Orchard extends the Orchard note model to typed assets. A note commits to an asset tag, a value, an owner's diversified key, and randomness. A swap action spends two input notes and creates two output notes under a Halo2 proof whose public instance carries the anchor, two nullifiers, two randomized verification keys, two output commitments, encrypted-output hashes, the pricing binding, and the fee. For every asset $a$ appearing in the action,
+
+$$
+\sum_{\text{inputs of } a} v \;+\; \text{publicInflow}_a \;=\; \sum_{\text{outputs of } a} v \;+\; \text{publicOutflow}_a \;+\; \text{fee}_a ,
+$$
+
+with values range-checked and asset tags bound inside the note commitments so that one asset's surplus cannot pay for another's deficit ([asset-orchard circuit][circuit]). Each spent note publishes a nullifier derived from the nullifier key, the note's $\rho$, and its commitment; consensus rejects any nullifier it has already recorded. Nullifier uniqueness prevents reuse of an accepted spend; proof soundness is what makes the nullifier correspond to a valid note. They are different guarantees.
+
+Atomicity is a property of the state transition, not of a coordinator. A multi-leg action either applies in full—both nullifiers recorded, both commitments appended—or is rejected with no value movement. In the controlled pNOK experiment of 1 August 2026, a buyer's 20 pfUSDC note and a facility's 210 pNOK note were consumed and two outputs created in one transition under a public fixed quote; there was no valid outcome in which only one leg settled ([pNOK acceptance report][pnok-report]; [pNOK article][pnok-blog]).
+
+What the public pool balance controls is precise. For each asset, the pool tracks $P_a$ with
+
+$$
+P_a' \;=\; P_a + I_a - O_a - F_a \;\ge\; 0 ,
+$$
+
+so cumulative public withdrawals cannot exceed accounted inflows. This turnstile caps what can leave; it cannot identify a counterfeit note created by a soundness failure, and it cannot protect a legitimate depositor whose share of the pool a counterfeit note consumes before the cap binds. An underflow rejection does not automatically pause the pool or restore funds; incident response is a governed action ([privacy overview][priv]).
+
+Confidential notes do not imply confidential everything. Ingress publicly reveals the source, asset, amount, and output commitment; egress reveals destination, asset, and amount; timing and action counts are observable; a public fixed quote reveals the ratio; and a coordinator that arranges a bilateral trade sees the orders it arranges. The pNOK run had cryptographically private note state and weak statistical cover, because every acquisition repeated the same 20-for-210 size against the only available quote ([pNOK article][pnok-blog]). Statistical privacy is a property of the crowd, and Section 1.7 quantifies it.
+
+Authorization boundaries also differ. Shielded spends are authorized by randomized RedPallas signatures over a chain-bound action digest; the batch that carries them has no account-level ML-DSA outer envelope. ML-DSA authorizes transparent accounts and validator signatures over the block that certifies inclusion. Neither substitutes for the other.
+
+### 1.7 Market design for private exchange
+
+Settlement risk and information leakage are distinct costs, and the two mechanisms above address them separately: atomicity removes the asynchrony that creates principal risk; confidential notes conceal the ownership and values represented inside the shielded pool. Neither removes the information carried by aggregate flow. The FX proposal's market-design argument develops this ([private FX settlement][fx]); the derivations below restate it under explicit assumptions so the reader can see where each result stops.
+
+**Impact is information.** Kyle's one-period model makes the connection explicit. Let the terminal payoff $F$ be Gaussian with mean $\mu$ and variance $\Sigma_0$, independent of uninformed flow $Z\sim\mathcal N(0,\sigma_u^2)$. An informed trader observes $F$ and submits $X=\beta(F-\mu)$. A competitive market maker sees only aggregate flow $Y=X+Z$ and quotes its conditional expected payoff:
+
+$$
+P(Y)=\mathbb E[F\mid Y]=\mu+\lambda Y,\qquad
+\lambda=\frac{\beta\Sigma_0}{\beta^2\Sigma_0+\sigma_u^2}.
+$$
+
+Taking the linear pricing rule as given, the trader chooses $X$ to maximize expected profit,
+
+$$
+\mathbb E[X(F-P)\mid F]=X(F-\mu)-\lambda X^2.
+$$
+
+The first-order condition gives $X=(F-\mu)/(2\lambda)$, hence $\beta=1/(2\lambda)$. Substituting into the market maker's pricing rule yields
+
+$$
+\beta^2\Sigma_0=\sigma_u^2,\qquad
+\beta=\frac{\sigma_u}{\sqrt{\Sigma_0}},\qquad
+\lambda=\frac{\sqrt{\Sigma_0}}{2\sigma_u}.
+$$
+
+Size moves price because observable flow reveals information. Greater uncertainty about value raises impact; more uninformed flow lowers it. Crossing orders inside a batch reduces the quantity exposed to that inference. The equilibrium is a mechanism model under Gaussian flow and competitive pricing, rather than a calibration of Post Fiat's market.
+
+**Netting residual.** Let $n$ signed orders $X_i$ be independent, mean zero, with finite variance $\sigma_X^2$ and $\mathbb{E}|X_i| = \mu_{\text{abs}}$. Gross flow is $G = \sum_i |X_i|$ with $\mathbb{E}[G] = n\,\mu_{\text{abs}}$. The net $N = \sum_i X_i$ has variance $n\sigma_X^2$, and by the central limit approximation $N \approx \mathcal N(0, n\sigma_X^2)$, whose mean absolute value is $\sqrt{2/\pi}\,\sigma_X\sqrt{n}$. Hence
+
+$$
+\frac{\mathbb{E}|N|}{\mathbb{E}[G]} \;\approx\; \sqrt{\frac{2}{\pi}}\;\frac{\sigma_X}{\mu_{\text{abs}}\sqrt{n}} .
+$$
+
+If order magnitudes have coefficient of variation 1, then $\sigma_X^2 = \mathbb{E}[X^2] = 2\mu_{\text{abs}}^2$ and the ratio becomes $2/\sqrt{\pi n}$: about $36\%$ at $n=10$, $11\%$ at $n=100$, $3.6\%$ at $n=1000$. This is a model of the residual under balanced, independent flow. Persistently one-sided flow with buy probability $p$ drives the ratio to a floor of $|2p-1|$ regardless of $n$; heavy tails, unequal sizes, and a thin batch all weaken it. Netting hides composition, never direction.
+
+**What the residual reveals.** Under the same assumptions with Gaussian orders of equal variance $\sigma^2$, the published net $N = X_i + R$, where $R = \sum_{j\ne i} X_j$ is independent of $X_i$ with variance $(n-1)\sigma^2$. This is a Gaussian channel with signal $\sigma^2$ and noise $(n-1)\sigma^2$, so
+
+$$
+I(X_i;\,N) \;=\; \tfrac12 \ln\!\left(1 + \frac{1}{n-1}\right) \;=\; \tfrac12 \ln\!\frac{n}{n-1} \;\approx\; \frac{1}{2n}\ \text{nats}.
+$$
+
+At $n = 51$ this is about one hundredth of a nat per batch. The bound concerns what the batch residual leaks about one participant's signed order; it says nothing about public quotes, repeated participation across batches, timing, or an operator who sees the book. For independent Gaussian orders with unequal variances, the corresponding expression is $\tfrac12\ln(1+\sigma_i^2/\sigma_R^2)$, where $\sigma_i^2$ is the participant's order variance and $\sigma_R^2$ the rest of the batch's. A participant who dominates that variance receives little cover. This result motivates size limits; a particular realized order size alone supplies insufficient information to calculate mutual information.
+
+**Batch length.** Model per-unit cost as staleness plus residual impact,
+
+$$
+\text{cost}(\tau) \;=\; a\sqrt{\tau} \;+\; \frac{b}{\sqrt{\Lambda\tau}},
+$$
+
+where $\Lambda$ is order arrival rate, $a$ prices the clearing price going stale, and $b$ prices externalized impact. Setting the derivative to zero, $a/(2\sqrt{\tau}) = b/(2\sqrt{\Lambda}\,\tau^{3/2})$, gives
+
+$$
+\tau^* \;=\; \frac{b}{a\sqrt{\Lambda}},
+$$
+
+at which both terms equal $\sqrt{ab/\sqrt{\Lambda}}$. Busier venues run shorter batches with more depth ($n^* = \Lambda\tau^*$ grows like $\sqrt{\Lambda}$); volatile days want shorter batches. The result is a property of this cost model. It does not describe a deployed matcher, and the FX post's illustrative seven-minute calibration is a model number rather than measured performance.
+
+The boundary between demonstrated and proposed is sharp. Bilateral atomic settlement under a public, expiring, capacity-bounded fixed quote has run on the controlled devnet with real mainnet USDC on the dollar leg and sandbox WNOK on the krone leg ([pNOK article][pnok-blog]). The shielded frequent batch auction—uniform-price clearing over committed orders, internal crossing, and eventually an operator-blind matcher—is a design whose first proposed version still requires the matcher to see the book for one interval ([private FX settlement][fx]).
+
+### 1.8 Fixed supply, fee burn, and validators without a subsidy
+
+Native PFT has a fixed genesis supply and every native transaction fee is burned; there is no validator reward and no protocol treasury. Issued assets, including NAVCoins, follow their own issuance rules under their own reserve accounting. The economic question is therefore not how validators are paid but why an institution would operate a validator at all.
+
+The correct comparison is between operating and using the same ledger passively. For operator $i$ over an accounting period, let $C_i$ be operating cost, $K_i$ opportunity and operational-risk cost, $\Delta p_i D_i$ the reduction in the operator's own expected settlement-disruption loss attributable to its participation, $O_i$ the operational-control and assurance benefit, and $J_i$ the incremental service margin or retention benefit. The participation surplus is
+
+$$
+U_i^{\text{op}} - U_i^{\text{passive}} \;=\; \Delta p_i D_i + O_i + J_i - C_i - K_i .
+$$
+
+Broad exposure to the ledger's success cancels from this difference unless the operator's participation changes the outcome. For a small operator in an already robust committee, $\Delta p_i$ is small, and the case rests on $O_i$ and $J_i$: an issuer that verifies its own NAV epochs, a custodian that wants its own copy of finality, an index sponsor whose product depends on the registry it helps govern. Positive passive exposure alone does not make validation rational; free riding is the default, and recruitment must anticipate exits early enough to complete a safe transition.
+
+Deterrence is a separate question. With no stake to slash, a coalition $C$ over an influence window $W$ is deterred when attack gains $G_C$ fall short of business losses $L_C$, expected accountable consequences $p_C A_C$, and execution cost $E_C$:
+
+$$
+G_C(W) \;<\; L_C(W) + p_C(W)\,A_C(W) + E_C(W).
+$$
+
+Individual break-even does not imply coalition deterrence: shared funding, common vendors, or a correlated shock can align otherwise viable operators. This is why admission and trust transitions carry explicit control-group and dependency checks, and why the current controlled fleet—six Foundation-administered validators using separate keys—does not establish independent control ([Cobalt adversarial results][cobalt-adv]). Hypothetical sensitivities can illustrate the model; only observed business behavior can calibrate it.
+
+### 1.9 The chain of authority: block committee, Cobalt, admission, activation
+
+Two thresholds govern two decisions. For an active block committee of $n$ validators,
+
+$$
+f = \left\lfloor \frac{n-1}{3} \right\rfloor, \qquad q = \left\lfloor \frac{2n}{3} \right\rfloor + 1, \qquad 2q - n > f ,
+$$
+
+and the last inequality holds for every $n$: writing $n = 3k + r$ with $r \in \{0,1,2\}$ gives $2q - n \in \{k+2, k+1, k+2\}$ against $f \in \{k-1, k, k\}$. Any two $q$-sets therefore share a correct validator, which is what makes a prepare certificate at one view unique and a precommit certificate commit. Consensus v2 is an explicit prepare/precommit protocol: $q$ prepare votes form the durable lock, $q$ precommit votes for the same non-nil block form the only commit certificate, and a proposal at view $v+1$ must carry a verified timeout certificate for view $v$ together with its highest typed prepare-QC reference ([finality][fin]; [consensus v2 source][cv2]).
+
+Cobalt governs a different object: agreement over declared validator trust. A trust view lists essential subsets; a subset $S$ with size $n_S$, fault budget $t_S$, and threshold $q_S$ must satisfy
+
+$$
+0 \le t_S, q_S \le n_S, \qquad t_S < 2q_S - n_S, \qquad 2t_S < q_S .
+$$
+
+The middle inequality gives two threshold sets a correct common member under the subset's own budget; the last keeps any threshold set from being majority-Byzantine. Two views are fully linked when they share a subset whose actual faults fit its budget and which retains enough correct members to reach threshold. The controlled devnet's trust graph is one six-validator subset with $t_S = 1$, $q_S = 5$: $1 < 10 - 6$ and $2 < 5$, so any valid five-of-six certificate ratifies and every four-of-six set fails ([Cobalt implementation][cobalt-impl]).
+
+A registry transition must also pass a cross-registry check. Let $\beta$ bound the number of distinct Byzantine identities across the transition's entire influence window—a union across time, which need not equal any single committee's $f$. For every covered old row $S_o$ and new row $S_n$ with key-continuous shared members $C_{on}$,
+
+$$
+I_{on} \;=\; \max\!\big(0,\; |C_{on}| - (|S_o| - q_o) - (|S_n| - q_n)\big) \;>\; \beta .
+$$
+
+The seven-validator counterexample shows why local rows are insufficient: old $\{A,\dots,G\}$ and new $\{A,B,H,\dots,L\}$, each a single subset with $n_S = 7$, $q_S = 5$, $t_S = 2$, both pass locally, yet quorums $\{A,B,C,D,E\}$ and $\{A,B,H,I,J\}$ share only $\{A,B\}$, and with $\beta = 2$ the whole intersection can be Byzantine. The transition fails and the old registry stays active. The cover that feeds this matrix is extracted by the checker from the two rooted graphs, deduplicated by subset identity, bounded by a profile limit, and required to match the proposer's witness exactly; a proposer cannot omit an unfavorable row ([cover extractor][cover]). Completeness is bounded: it covers declared threshold rows in the rooted model, not arbitrary open-network quorum enumeration.
+
+The end-to-end path, as exercised in the August 2026 campaign, is:
+
+```mermaid
+flowchart TD
+    A[Admission evidence packet: supplied scores, control groups, flags] --> B[Deterministic selector: reject > hold > add-candidate]
+    B --> C[Cobalt RBC → ABBA → MVBA → DABC decision under the current trust graph]
+    C --> D[Distinct ML-DSA-65 authorizations from the current registry, one per support vote, ≥ q]
+    D --> E[Consensus v2 orders the update at its exact activation height]
+    E --> F[Execution verifies bindings and applies the registry change]
+    F --> G[New registry root active from the next height]
 ```
-LaunchCertificate = {
-  genesisRegistryRoot,
-  trustGraphRoot,
-  checkerRoot,
-  safetyProfileRoot,
-  evidenceRoot,
-  ratifierSet,
-  signatures
-}
-```
 
-After launch, the same operators cannot mutate those roots by private instruction; any change is a governed transition under the previous active rules (§6). A public launch profile requires at least seven ratifiers, no single control group above one third, and no silent shared release manager, key-management vendor, or funding controller across a quorum. The launch certificate does not make genesis trustless — nothing can — but it makes the trust assumption explicit, auditable, and frozen, so that every later deviation from it is a detectable hash mismatch rather than a quiet edit.
+Each authority can do one thing and not another. The selector can only produce a candidate; it checks supplied fields and cannot discover concealed shared control. Cobalt ratifies a scoped validator-trust decision; it does not finalize blocks. Current-registry signers authorize the exact payload, parent lock, sequence, slot, and expiry, and old-rule signed authorizations are forbidden after activation ([handoff consumer][handoff]). The block committee orders the update; execution activates it; a rejected receipt leaves the registry unchanged. The Foundation retains authority over unrelated governance scopes. No authority can retroactively alter certificate thresholds, and loss of the normal quorum halts the chain rather than lowering $q$.
+
+A concrete instance: at height 924 the legitimate rotation of validator 5 carried authorizations from validators 0–4, excluded the old validator-5 key, and committed; the treated-as-stolen old key's attempt had one signature and a decision certificate but rejected for lack of current-registry authorization ([Cobalt adversarial results][cobalt-adv]).
+
+**The consensus obligation, stated exactly.** The inspected signer keeps separate durable high-water marks for prepare, precommit, and timeout, plus a lock and high QC. The precommit authorization checks the precommit mark, the lock, and that the prepare QC is newer and non-nil; it does not compare the proposed precommit view with a higher prepare or timeout view already signed ([consensus v2 source][cv2]). An analytical four-validator schedule shows what separate counters admit: prepare $X$ at view 0 with the certificate withheld; open view 1 and prepare $Y$ with an overlapping correct signer; deliver $X$'s certificate to obtain a first-ever lower-view precommit; then deliver $Y$'s newer certificate to replace the lock. A durable cross-phase current-view fence—no new signature in any phase at a view below the highest view entered—excludes that schedule. That fence is a proposed normative rule; the source review did not establish that the current runtime enforces it, no executed regression reproduces the schedule, and no network exploit is claimed ([rewrite review][review]). Progress under the fence has its own obligations: a correct validator whose lock is not among the $q$ timeout signers is not represented in the certificate's high QC, so a proposer following that certificate may repropose below some correct lock and be refused. Eventual progress requires that every correct validator's highest QC reach some subsequent timeout certificate, and a pacemaker that gives a correct proposer enough synchronous time. Assuming that every timeout certificate already contains the globally highest lock would be assuming the conclusion, and this paper does not do so. The implementation table carries this item as an open assurance obligation.
+
+### 1.10 Bounded, replayable classification
+
+Some inputs to public methodologies and evidence interpretation are qualitative: whether a company expresses a theme, whether two documents describe one controller. Post Fiat admits machine interpretation for exactly one step—converting committed evidence into a typed, cited answer under a closed schema—and confines everything else to deterministic code.
+
+Let $E$ be the evidence packet, $P$ the prompt, $Q$ the closed schema, $M$ the pinned inference profile, and $V_Q$ the parser. The model step is $A = V_Q(M(P,E,Q))$; a deterministic selector $S$ then computes the result from policy, current state, $E$, and $A$ with no model calls. Replay means that an independent operator running the same profile on the same request bytes obtains the same response bytes. It proves reproduction under a pinned profile. It does not prove that the classification is semantically true, that the source data are correct, or that any resulting portfolio will perform.
+
+The agentic-index methodology makes the division concrete. A frozen model scores each company in a 1,000-company universe against a public rubric; scores of 70 or more qualify; for a qualifying company $i$,
+
+$$
+\text{strength}_i = \frac{s_i - 70}{30}, \qquad
+\text{scale}_i = \sqrt{\text{mcap}_i}\;\exp\!\big(0.03\, z_i\big),
+$$
+
+$$
+w_i^{\text{pre}} = 0.2\,\frac{\text{strength}_i}{\sum_k \text{strength}_k} + 0.8\,\frac{\text{scale}_i}{\sum_k \text{scale}_k},
+$$
+
+with $z_i$ the population z-score of routed profitability, weights above 20% clipped and redistributed proportionally, and the result normalized to one trillion integer units by a largest-remainder rule with CIK tie-break. A universe with fewer than five qualifying names cannot satisfy the cap and is rejected rather than accommodated ([agentic indexing][agentic]). These are one published methodology's parameters. Authorization is separate: a replayed score changes no ledger state until a registered series and epoch policy accept it, and the proposed PFTL series and epoch registry is not implied to be live because the off-chain experiment succeeded.
+
+Methodology inputs also obey a deletion-monotonicity rule: removing required evidence can only preserve or reduce authorization. Let $E'\subseteq E$ result from deleting inputs required by a registered methodology, and let $\mathcal A(E)$ be the ledger actions those inputs authorize. The rule is $\mathcal A(E')\subseteq\mathcal A(E)$. A missing liability, failed constituent record, or absent replay receipt must block the dependent action instead of silently improving a valuation, dropping a constituent, or renormalizing the survivors. The numerical result may move either way when evidence changes; the restriction governs permission to act. This is a requirement for methodology profiles and the proposed index registry, alongside the existing fail-closed reserve checks.
+
+### 1.11 What ML-DSA from inception covers
+
+Accounts and validators sign with ML-DSA-65 from genesis: 1,952-byte public keys, 3,309-byte signatures, deterministic verification, domain-separated contexts for transactions, block certificates, bridge witnesses, and admission receipts ([crypto provider][crypto]). Launching with post-quantum authorization avoids a future migration in which years of public keys already sit on a permanent ledger. A quorum of $q = 24$ from 35 validators carries 79,416 signature bytes plus identifiers; prepare and precommit sets double that before framing, and this byte cost is the dominant operational cost of the choice.
+
+The scope stops there. Asset-Orchard authorization uses RedPallas, its proofs use Halo2 over the Pasta curves, note encryption uses classical key agreement, SP1 reserve and bridge proofs are wrapped in Groth16, and external-chain contracts use their own cryptography. None of these is post-quantum, and a break in note encryption would expose historical ciphertexts without moving value. The turnstile bounds what a soundness break can withdraw; it does not repair it. Naming this asymmetry is part of the design, and the claim is exactly "post-quantum account and validator authorization from inception," not "post-quantum system."
 
 ---
 
-## 6. Cobalt-Governed Registry Evolution
+## Part 2 — Business Case
 
-### 6.1 From recommended lists to protocol state
+### 2.1 The buy-side entry point
 
-XRP's strongest design idea is also its governance weakness: each server trusts a Unique Node List, and safety depends on sufficient overlap between local trust lists. This avoids proof-of-work and proof-of-stake markets, but it leaves validator-list evolution as social coordination around privately published recommendations. The live question — *will this list change preserve safety?* — is answered by reputation rather than by a checkable object.
+XRP proposed an internet of value and pursued it through payments, positioning a public ledger against correspondent-banking messaging. That path required displacing incumbents whose rails are not standing still: SWIFT reports a tokenized-deposit ledger ready for initial use with 17 banks preparing live pilots, orchestrating payments while final settlement remains in existing systems ([SWIFT][swift]). Competing there means competing with the incumbent's own tokenization.
 
-PostFiat makes validator-list evolution protocol state. Genesis commits to one manifest root covering the initial registry $G_0$, trust graph $T_0$, checker $\chi_0$, safety profile $\pi_0$, witness schema $\omega_0$, chain id, and launch ratification certificate. After finalization, genesis ratifiers have no override opcode. Changing the genesis manifest changes chain identity; it is a fork, not governance.
+Crypto's demonstrated use cases point elsewhere. On-chain perpetual futures have become deployer-extensible infrastructure: HIP-3 lets builders define markets, oracles, leverage, and settlement controls over shared margining and order books ([HIP-3][hip3]). Tokenized shares now exist with regulated custody and institutional primary mint and redemption ([Coinbase Tokenize][coinbase]). Published model portfolios are implemented directly in users' wallets by an execution platform, separating methodology authorship from rebalancing ([Bitwise ATP][bitwise]). Every one of these is a buy-side activity: owning, valuing, hedging, and rebalancing exposures. None of them is a payment message.
 
-### 6.2 Transition packets
+Post Fiat's strategic claim is that the compelling path to an internet of value runs through this market. The reasoning is structural rather than a forecast. Ownership and trading create recurring demand for exactly the properties a settlement ledger can supply and a messaging network cannot: verified value bound to issuance, private transfer with public accounting, and atomic exchange of two exposures. FX settlement illustrates the scale of the unsolved settlement-risk problem even among sophisticated counterparties—about $\$5.2$ trillion of daily obligations settled payment-versus-payment against $\$1.4$ trillion still settled gross and bilaterally ([BIS settlement survey][bis-settle])—but the argument does not depend on converting those figures into an addressable market, and payments remain a use of the chain rather than its entry point.
 
-A transition from $G_t$ to $G_{t+1}$ must bind the parent registry root, parent trust-graph root, delta root, next registry root, evidence root, active safety profile, checker root, challenge state, activation epoch, expiry, and governance certificate. The previous active rules validate the transition; a new checker, policy, or trust graph cannot validate itself. The accompanying safety witness has a fixed schema:
+### 2.2 NAVCoins: the product
 
-```
-SafetyWitness = {
-  local_threshold_rows,
-  essential_subset_cover,
-  old_new_intersection_bounds,
-  linkedness_paths,
-  rejected_counterexamples
-}
-```
+A NAVCoin is a floating-value unit whose backing, supply, methodology, custody, primary operations, and settlement representation can be inspected separately. It is not a stablecoin; if the reserve loses value, the NAV falls. The protocol's promise is that current backing, liabilities, valuation policy, freshness, and supply discipline are explicit, hash-bound, machine-checked, and mechanically tied to issuance and redemption ([NAVCoins][navcoins]).
 
-### 6.3 Local safety rows
+The first asset classes are those crypto has already proven demand for:
 
-For each essential subset $S$ with $n_S = |S|$, Byzantine budget $t_S$, and quorum $q_S$, the local Cobalt inequalities are
+- **Tokenized equities.** A NAVCoin over a custodied share basket, valued at policy marks, with primary subscription and redemption at NAV. The holder's economic claim runs through the issuer's legal structure; the ledger verifies the accounting and gates issuance.
+- **Debt and cash-like reserves.** Source-labelled cash receipts (pfUSDC) and, by extension, other receipt-backed instruments where the source, finality proof, and haircut are part of the packet.
+- **Perpetual-swap exposure.** A rules-based short or long perpetual strategy on a venue whose state is publicly observable; the UltraShort proposal specifies an isolated, autonomously managed short-perpetual NAVCoin whose collateral, execution, funding, NAV, supply, and redemption would be verified end to end, and states plainly that no such token should be called trustless until the full path has passed adversarial tests with live funds ([UltraShort][ultrashort]).
+- **Rules-based portfolios.** An index defined by a public methodology, constructed deterministically, and replayed independently before an epoch is published.
 
-$$0 \le t_S, q_S \le n_S, \qquad t_S < 2 q_S - n_S, \qquad 2 t_S < q_S.$$
+Across all four, the differentiating primitive is the same: the unit is created only against counted value at a verified NAV while the proof is fresh, and the unit can be exchanged privately without leaving the accounting perimeter.
 
-The first bound is well-formedness; the second guarantees that any two quorums of $S$ intersect in at least one correct validator under the subset's own fault budget; the third keeps the budget small enough that a quorum cannot be majority-Byzantine.
+### 2.3 Users and workflows
 
-### 6.4 Linkedness
+**Issuers and managers** register a proof profile and a NAV asset, submit reserve packets, and finalize epochs. Their incentive is a unit whose backing is checkable without publishing positions: a Tier-2 aggregate disclosure with an attested trust class is a legitimate profile, and the market prices its opacity.
 
-The linkedness predicate is a graph check, not a trust score. A trust view $V_i$ declares essential subsets $ES_i$. Two views $V_i, V_j$ are *linked* when they share an essential subset $S \in ES_i \cap ES_j$ whose active-fault count is at most $t_S$, and *fully linked* when the same subset also leaves at least $q_S$ correct validators:
+**Holders** hold transparent balances, shielded notes, or wrapped representations. They acquire units through primary subscription at NAV or through secondary exchange, and they dispose of them the same way. Managers need privacy for the obvious reason: a position being built or unwound is information with a price, and a transparent ledger hands it to the market. Holders need it for the less obvious one: their own balances, counterparties, and timing are the raw material of front-running and of inference about strategy.
 
-$$faults(S) \le t_S, \qquad |S| - faults(S) \ge q_S.$$
+**Authorized participants and desks** use the primary market. Their edge is access and speed relative to epoch freshness; the protocol gives them a verified value to trade against rather than a quote to negotiate.
 
-For a validator $i$, $linkedness(G_t, i) = safe$ means: follow derived-UNL edges through the rooted trust graph and require every pair of views in that closure to be fully linked. The linkage report is recomputable from the rooted graph alone:
+**Observers and attestors** perform paid extra-consensus service work: fetching public sources, attesting under registered tolerance bands, and, where a profile requires it, operating measured collectors. Registration is open and not validator-gated, and payment attaches to service delivery rather than to validation ([proof of reserves][por]).
 
-```
-LinkageReport = {
-  trustGraphRoot,
-  activelyByzantineSet,
-  linkedPairs,
-  fullyLinkedPairs,
-  unsafePairs,
-  weaklyConnectedValidators,
-  stronglyConnectedValidators
-}
-```
+**Index sponsors and methodology authors** publish rubrics, universes, and construction rules, and submit or verify replay receipts.
 
-An unsafe pair fails the transition. A proposer cannot declare linkedness by supplying a favorable summary; the checker recomputes it. Essential subsets are themselves governed objects: an edit replaces one validator's trust view or subset list, records old and new view ids and graph roots, and is validated by the previous active graph before the new graph can matter.
+**Validators** order blocks, verify proofs, and, through Cobalt, govern their own membership. Their return is incremental (Section 1.8), which is why the natural candidates are the issuers, custodians, and sponsors whose products depend on the ledger.
 
-### 6.5 Cross-registry quorum intersection
+### 2.4 An end-to-end example
 
-Local rows are necessary but not sufficient. Let $Q_{old}$ be the covered old governance quorums, $Q_{new}$ the covered proposed quorums, and $B$ the active Byzantine budget for the transition profile. The old–new check is
+The example follows one investor, Dana, through a NAVCoin whose asset is a rules-based thematic equity portfolio. Numbers are illustrative; each step names the primitive it uses and whether that primitive has been demonstrated or is proposed.
 
-$$\forall q_o \in Q_{old},\ \forall q_n \in Q_{new}: \quad |q_o \cap q_n| > B.$$
+**The asset and its methodology.** A sponsor publishes an index series: universe (the 1,000 largest U.S. reporting companies by trailing revenue), a public rubric for a theme, the 70-point threshold, the 20/80 blend of thematic strength and fundamental scale, the 20% cap, and the largest-remainder normalization. An epoch is generated on one pinned H200 profile and replayed on a second; 4,000 score responses across four themes matched byte for byte in the August demonstration, and one theme was rejected because only three names cleared the threshold ([agentic indexing][agentic]). This is the demonstrated part of the methodology layer. The series registry and epoch object on PFTL are proposed.
 
-A counterexample shows why the check exists. Take an old registry $\{A,B,C,D,E,F,G\}$ and a proposed registry $\{A,B,H,I,J,K,L\}$, each declared as a single essential subset with $n_S = 7$, $q_S = 5$, $t_S = 2$. Both local rows pass. But the old quorum $\{A,B,C,D,E\}$ and the new quorum $\{A,B,H,I,J\}$ intersect only in $\{A,B\}$, and under a budget $B = 2$ that entire intersection can be Byzantine: the old quorum could certify one transition while the new quorum certifies a conflicting one, with no correct validator forced to sign both. The local rows pass, the old–new matrix fails, and the old registry remains active. This is exactly the failure class that recommended-list publication cannot even express, because there is no protocol object on which to check it.
+**The custody perimeter.** The sponsor's reserve holds the constituent shares at a broker under a regulated custody arrangement, plus a cash buffer. Custody is a legal fact outside the ledger; the ledger records which perimeter the profile discloses.
 
-### 6.6 Bounded cover extraction
+**The reserve proof.** At each epoch the collector observes the brokerage account, the deterministic reserve program computes gross assets, liabilities, and net assets under the registered valuation policy, and a proof is verified on PFTL. Because the quantity source is a broker response, its value lands in `attested_value`, not the cryptographic bucket; the public values say so ([public values][pv]). Suppose the finalized epoch shows $V = \$10{,}000{,}000$ and $S = 10{,}000{,}000$ units, so $\mathrm{NAV} = \$1.000000$.
 
-The intersection matrix is only as good as the set of quorums it covers, so cover construction is taken away from the proposer. The active profile fixes $M_{cover}$, the maximum number of old plus new essential subsets that may participate in one transition. If the cover exceeds the bound, the old registry remains active — fail closed, not best effort. Within the bound, the cover extractor takes only the old and new rooted trust graphs as input, walks every trust view, deduplicates every distinct active essential subset by subset id, rejects inactive or conflicting rows, and emits a hash-bound `CobaltCoverExtractionReport`. The safety witness is accepted only if its old and new cover exactly matches the derived report; a proposer cannot omit an unfavorable subset from the matrix.
+**Primary acquisition.** Dana deposits 1,005,000 USDC into the Ethereum-mainnet vault, receives 1,005,000 pfUSDC on PFTL after the ingress proof is verified—the demonstrated mainnet run completed deposit inclusion through withdrawal inclusion in 20 minutes 12 seconds ([A666 current state][a666])—and submits a primary subscription for 1,000,000 units at the finalized pre-inflow NAV with $m_I = 1.005$. Base value $\$1{,}000{,}000$ enters the reserve, $\$5{,}000$ enters non-NAV fee custody, supply becomes 11,000,000, and NAV remains $\$1.000000$. No venue pool was touched; the same accounting ran on mainnet for 100.5 USDC → 100 A666 → 100 wA666, with canonical and wrapped supply each rising by exactly 100,000,000 atoms ([A666 current state][a666]). A private variant—private primary issue and redemption—has committed on the six-validator fleet, with the latest qualification passing the redemption latency gate and missing the issue gate ([A666 current state][a666]).
 
-Let $m_o = |cover_{old}|$, $m_n = |cover_{new}|$, $M = m_o + m_n$, and $V = |G_t \cup G_{t+1}|$. Extraction plus matrix evaluation costs
+**Product lineage.** The a651 instance and the a652 cross-NAVCoin swap are historical: a651's Ethereum pool had zero liquidity at its last inspection, its launch controller model is not the canonical primary market, and a652 exists as controlled devnet evidence only ([assets and venues][venues]). The A666 v2 lineage with Ethereum-mainnet pfUSDC carries the current product evidence. The Arbitrum pfUSDC route is deprecated for new ingress because its trustless confirmation path took roughly 6.4 days; its earlier round-trip records remain conservation history.
 
-$$O(M \log M) + O(m_o\, m_n\, V \log V) \le O(M_{cover}^2\, V \log V).$$
+**Private exchange.** Dana shields the units into Asset-Orchard notes. Later she agrees with a counterparty to exchange 200,000 units for a second NAVCoin representing a short-duration debt reserve. Both notes are consumed and two outputs created in one state transition; per-asset conservation and both nullifiers are checked; the ledger records commitments and nullifiers, not amounts or owners. The primitive is the one exercised in the pNOK swap (20 pfUSDC for 210 pNOK, 19 controlled private jobs, exact replays rejected without effect, six validators converged) ([pNOK acceptance report][pnok-report]). Neither $V$ nor $S$ of either NAVCoin changes. Statistical cover depends on how many other trades share the pool and the batch; a single trade against a single quote has little.
 
-There is no proposer-supplied branch pruning. A pathological trust graph either fits inside $M_{cover}$ and is fully enumerated, or exceeds it and fails closed. A sizing run over grouped institutional-style trust views fits comfortably inside the current $M_{cover} = 64$ profile: a 35-validator graph with five seven-validator groups produced $M = 12$, and a 100-validator graph with ten ten-validator groups produced $M = 22$ [E3]. The point is not that these are the only valid shapes; it is that ordinary global-plus-group subset declarations do not make the extractor unusable, while deeply nested or adversarial covers still fail closed.
+**Verification.** A counterparty performing diligence checks four objects that answer four different questions: the index epoch's replay receipts (was the portfolio constructed as the methodology says?), the reserve proof's public values (do disclosed holdings and liabilities net to the stated value under the stated policy, and which trust class does each source carry?), the primary-market receipts (did supply and reserve move together?), and the swap's nullifiers and commitments (did the transfer settle atomically?). A target proof is not a holdings proof; a holdings proof is not a reserve proof; a reserve proof is not a trade receipt ([single-stock option indices][options]).
 
-### 6.7 Transition safety
+**The holder's claim.** Dana's units are a pro-rata claim on the reserve at the finalized NAV, redeemable through the primary market at $m_R = 0.9995$ while the epoch is fresh and the asset is not halted. The claim's economic value depends on the broker's honesty, the custodian's ability to deliver, and the legal structure through which the shares are held; the ledger verifies that issuance never outran counted value and that redemption releases the principal it counted. If the sponsor stops proving, minting and redemption initiation fail closed, which protects the accounting and can trap holders during distress—an explicit reason the design calls for a separately specified emergency exit before production use ([Post Fiat, Canton, and XRP][canton]).
 
-**Proposition (transition safety).** Fix an active graph $G_t$, proposed graph $G_{t+1}$, and transition profile $\pi$. Assume: graph roots, registry roots, signatures, and parent links verify; the extracted cover is complete and within $M_{cover}$; every active essential subset in the cover satisfies the local Cobalt inequalities; the linkedness closure is safe for every signing view; every covered old quorum and new quorum intersect in more than $B$ validators; at most $B$ validators in the transition window are actively Byzantine; and correct validators sign at most one value for a given height, view, registry root, and transition root. Then an accepted transition preserves agreement and transition validity across the registry boundary.
+### 2.5 Indexing as the methodology layer
 
-*Proof sketch.* Cover completeness means the checker enumerates every quorum row that can authorize the old or the new side of the transition under the rooted graphs. Local rows plus linkedness supply the same-graph agreement premise for the covered trust views. The old–new matrix supplies the cross-graph premise: because every old and new quorum pair intersects in more than $B$ validators, each old/new certificate pair shares at least one correct validator, and that validator cannot sign both a parent-root-valid transition and a conflicting one. The child graph cannot validate itself, because the old active checker must accept the parent root, challenge state, complete cover, and intersection matrix before the child root can become active. A conflicting child certificate therefore requires an omitted cover row, a failed intersection bound, a bad linkedness report, a forged signature, or more than $B$ Byzantine validators — all outside the accepted-transition assumptions. The argument composes over a finite chain $G_0 \rightarrow \cdots \rightarrow G_n$ by induction on accepted, parent-root-bound steps, each step carrying its own Byzantine budget, challenge state, complete cover, and intersection witness. ∎
+Thematic indices have always contained a qualitative step—deciding which companies belong—performed privately by a committee. Post Fiat makes that step a public, replayable artifact. In the top-1,000 test, 2,552 of 2,552 tested artifacts replayed byte for byte on a second H200, covering 85.38% of a 2,989-artifact corpus at the stated cutoff; 11 outputs were initially unresolved, nine of which later produced valid byte-exact pairs under a stricter profile while two hit the same generation limit on both attempts; a separate fixed-24 profile produced one mismatch in 137 comparable outputs ([deterministic financial indices][detindex]; [replay summary][replay-summary]). The determinism runbook records the exact profile: pinned model revision, runtime image digest, single H200, fixed 32-request batches, radix cache and CUDA graphs disabled, greedy decode with a fixed seed ([runbook][runbook]). Replay is a serving discipline for one model, one runtime, and one hardware class; cross-vendor portability is out of scope.
 
-The honest scope of the proposition: it relies on MacBrough's pen-and-paper Cobalt construction and deliberately narrows deployment to rooted, bounded transition packets. The checker accepts bounded rotations and rejects large unsafe deltas, stale parent roots, open challenges, and oversized covers. Parent-root rejection and controlled registry mutation are exercised in artifact [E8].
+Two things make this commercially useful. Reusable evidence packets lower the cost of maintaining a thematic methodology from a research department to a versioned scoring program, which makes long-tail themes feasible. And a methodology that can be forked—same universe, one changed rubric clause—turns disagreement into a new lineage rather than an argument. Replay fidelity is not analytical validity: the historical large-cap backtest of the fundamental discipline (10.92% CAGR against 8.98% for SPY over 1998–2026, correlation 0.949, insignificant five-factor alpha) validates reasonableness of the accounting route, not the live thematic blend and not alpha ([agentic indexing][agentic]).
 
-### 6.8 Adversarial covers
+### 2.6 From instruments to portfolios
 
-Adversarial covers inside $M_{cover}$ get no special escape hatch. The extractor recognizes only declared protocol trust: every active essential subset referenced by any rooted trust view is included, deduplicated by a subset id derived from the subset contents, and checked against its declared validators, $t_S$, and $q_S$. Adding extra subsets increases $M$ and adds rows to the matrix; it cannot hide a bad pair. Reusing a subset id for different contents fails validation by construction. Marking an unfavorable subset inactive, stale, or outside the activation window fails extraction. Omitting an off-chain social dependency is not a cover attack at all — the protocol can only verify declared trust edges — it is an admission-evidence or operator-correlation failure, handled in §5. Within the declared rooted graphs, a Byzantine-controlled old/new certificate pair can pass only if the stated budget $B$ is false, a correct signer violates the signing rule, or a signature or checker assumption breaks.
+The same primitives extend from a single instrument to a portfolio because the objects compose rather than multiply.
 
-### 6.9 Deadlock and bounded recovery
+A **single-stock options tracker** is a rulebook that selects and rolls call contracts on one company. The September demonstration computed targets for Micron and Nvidia from Nitro-attested Schwab observations, verified two real SP1 proofs, and accepted both through isolated four-validator receipt tests; the public interface is 408 bytes binding program, methodology, parameters, collection, prior state, and target ([options demo record][options-record]). Starting cash was hypothetical, no options were bought, and no funded tracker launched. A target proof establishes verifiable rule execution over attested inputs; a funded product would add execution, reconciliation, custody, and a reserve profile around it.
 
-Cobalt deadlock preserves safety but is still a liveness failure, so it is bounded rather than improvised. Challenge windows are time-limited. If no valid transition clears the window before expiry, the old registry remains active, and every failed proposal, missing vote, and veto signature is retained as validator evidence. Emergency recovery is limited to precommitted actions: pause the pending delta, extend the challenge window, revert to the last valid registry root, or apply availability suspensions within the caps of §4.4. Each action is signed by the active registry quorum under the previous active rules; anything broader is a governed amendment, not an emergency override.
+A **short-perpetual NAVCoin** would package one isolated strategy as a fungible unit; leverage must belong to the series, not to individual holders, so a "leverage slider" selects among series rather than mixing unlike claims. The 90-day funding study across 47 eligible HIP-3 markets found shorts paid in 85.11% of markets with a median $+2.50\%$ of constant $1\times$ notional; volume-weighted across 30 matched U.S.-listed markets, $+2.56\%$ against a $+0.83\%$ stock-loan rebate proxy ([UltraShort][ultrashort]). This is historical funding cash flow under a fixed rule. It is not a forecast, not a token return, and no funding income is guaranteed.
 
-This is the concrete improvement over recommended-list publication: the live question becomes whether an exact transition packet verifies under rules that were active before it was proposed — a question with a yes/no answer and a replayable witness — rather than whether enough operators copied the right file.
+A **private FX pair** is two reserve-backed currency assets and one atomic swap; the batch-auction layer over it is proposed (Section 1.7).
 
----
+A **rules-based portfolio** is a NAVCoin whose reserve is itself constructed by a replayable methodology—the example in Section 2.4. Nothing new is required of the ledger: the reserve packet, the epoch, the primary market, and the swap are the same objects. What changes is that the methodology's replay receipt becomes one more thing the reserve profile binds. A managed account, a model-portfolio feed, and a tokenized fund can all consume the same target and reserve objects with different custody and disclosure arrangements ([options][options]).
 
-## 7. Shielded Settlement
+### 2.7 Economics of the network
 
-### 7.1 Notes, not private balances
+Value flows are deliberately simple. Native fees burn. Issue and redeem spreads accrue to non-NAV fee custody under each series' published policy. Observers, collectors, replay operators, and challengers are paid for measurable service work. Methodology sponsors earn per the terms they publish; an ATP-style delivery separates that fee from execution fees ([Bitwise ATP][bitwise]). The protocol pays no native validator reward; service revenue and separately disclosed funding support its operators.
 
-Transparent ledgers reveal balances, counterparties, timing, inventory shifts, fund flows, liquidation levels, and strategy. For buy-side finance, market making, custody, treasury, and institutional settlement, that leakage has direct economic cost. The useful primitive is not a private account balance; it is a private spend of a note with public supply accounting, which is why PostFiat adopts Orchard/Halo2-style note semantics rather than account-level obfuscation.
+For a validator, the return is the incremental surplus of Section 1.8. The operators for whom $O_i$ and $J_i$ are large are the ones whose products run on the ledger: an issuer verifying its own epochs, a custodian holding its own finality, a sponsor governing the registry that admits the next sponsor. The network's growth model is therefore that products recruit validators, not that rewards do. The obligation this creates is stated in the trust-governance design: independent control must be established by evidence and independent custody, and the current Foundation-administered fleet has not established it ([Cobalt E6 decision][e6]).
 
-A shielded action exposes
+### 2.8 Differentiated capabilities
 
-$$public = \{root,\ nullifier,\ outputCommitments,\ fee,\ burn,\ policyHash,\ disclosureHash\}$$
+Compared with issuing a tokenized fund on a transparent contract chain, a NAVCoin on Post Fiat binds issuance to a finalized, profile-verified NAV epoch in the ledger's own validity rules; the Ethereum contracts in the A666 route enforce compact PFTL outputs and do not reinterpret the NAV calculation ([assets and venues][venues]). Compared with an OTC desk, the private swap settles both legs atomically with no principal risk between them and no ledger record of amounts or owners. Compared with a published validator list, Cobalt makes a trust change a checkable object rather than a file. Compared with a launch on classical signatures, ML-DSA from genesis removes a migration.
 
-and hides
+These are comparisons of mechanism, not claims of priority or of universal superiority. Other systems provide privacy, atomic settlement, or governed membership in their own ways; Coinbase's B20 tokens provide primary redemption and regulated custody without any of Post Fiat's machinery ([Coinbase Tokenize][coinbase]). Post Fiat's differentiation is that verification, private settlement, and governed trust are one ledger's validity rules, so a holder's diligence is a sequence of object checks rather than a sequence of counterparty inquiries.
 
-$$hidden = \{asset,\ value,\ owner,\ memo,\ noteRandomness,\ witnessPath\}.$$
+### 2.9 Risks that define the claim
 
-A valid spend proves note opening, membership under an accepted commitment root, correct nullifier derivation, value conservation, valid output commitments, and fee or burn correctness. Validators check the proof, nullifier uniqueness, root availability, resource limits, policy hash, and transaction envelope. They never learn the spent note, the recipient note, the amount, or the memo.
-
-### 7.2 Verification is the consensus surface
-
-The proof-system posture is explicit: Halo2 with no per-circuit trusted setup, and the consensus surface is verification only. Proving is wallet-side work. Validators cache the action verifying key and enforce a per-block action-count cap before verification, making shielded settlement a priced transaction class rather than a free path. A local release-build budget run measured a two-action output proof at 7,264 bytes and cached verification at 80 ms median [E2]; these are budget measurements that justify the cap design, not consensus constants.
-
-### 7.3 Envelope binding
-
-The PostFiat-specific boundary is authorization. Orchard-style note authorization remains inside the shielded proof, while ML-DSA signs the outer transaction envelope and all validator certificates (§9). The canonical envelope digest — including fee policy, registry root, action class, and disclosure policy — is bound into the shielded action, and validators reject when the proof-bound digest and the ML-DSA-signed envelope digest differ. This closes the proof-stripping attack: a valid shielded proof cannot be detached and replayed under a different fee, account authorization, registry root, or disclosure policy.
-
-### 7.4 Turnstile accounting
-
-Supply integrity does not rest on proof-system soundness alone. The boundary between transparent and shielded state is a turnstile: the protocol tracks net value entering each shielded pool, and cumulative withdrawals from a pool can never exceed its net deposits. If a soundness failure ever allowed counterfeit notes inside a pool, the counterfeit value could not exit past the turnstile without becoming arithmetically visible, at which point the affected action class freezes (§10) while transparent settlement continues. This is the containment discipline Zcash adopted for its pools, and it converts the worst-case cryptographic failure from silent inflation into a detectable, scoped incident. It also directly addresses the assumption asymmetry of §2: authorization is post-quantum, proof soundness is classical, and the turnstile bounds the damage of the classical assumption failing.
-
-### 7.5 Atomicity with registry rotation
-
-Registry rotation is atomic with respect to shielded state. Each block is verified under exactly one active registry root, and nullifier insertions, commitment-root updates, fee accounting, and any registry transition commit as one ordered state transition. A nullifier spent before a registry boundary is already spent after it; there is no rotation window in which a note can be double-spent across registries.
-
-### 7.6 Disclosure and honest leakage
-
-Selective disclosure is chosen by the holder of viewing material. A custodian or wallet can reveal a scoped note opening, policy tag, auditor proof, or transaction binding to a chosen party; the public chain receives only the commitment, nullifier, root, fee, and disclosure hash unless the holder elects to disclose more.
-
-The privacy claim is correspondingly narrow and stated as such. Fee classes, admission buckets, timing, and disclosure hashes still leak metadata. The public observer learns that some shielded action paid a fee class, used an accepted root, consumed a nullifier, created commitments, and bound to a policy hash — and learns nothing else from the ledger. Timing remains visible, so wallets and custodians must still manage batching, relaying, withdrawal timing, and disclosure discipline; a careless workflow or a narrow anonymity set leaks regardless of the protocol. One further asymmetry is named rather than hidden: note encryption currently uses classical key agreement, so confidentiality — unlike authorization — is exposed to harvest-now, decrypt-later adversaries, and migrating note encryption to a post-quantum KEM is a governed upgrade path (§9, §11). PostFiat treats privacy as a baseline reduction in ambient leakage, not as anonymity insurance.
+A NAVCoin's risks are the definition of the financial claim, not boilerplate around it. **Source risk**: a broker or venue can misreport; the proof verifies the disclosed perimeter, and the trust-class buckets say which values rest on attestation. **Issuer risk**: an issuer can stop proving, in which case the asset fails closed; an issuer can also hold undisclosed liabilities, which no proof detects. **Execution risk**: a rules-based strategy can be liquidated, gapped, or mis-marked; funding can turn negative; a primary order can fail its freshness check and refund rather than fill. **Legal risk**: an on-ledger redemption claim is not a court judgment; the legal wrapper, jurisdiction, and custody agreement determine what a holder recovers in insolvency. **Cryptographic risk**: the shielded stack is classical; a soundness failure can consume legitimate backing within the turnstile's aggregate withdrawal ceiling (§1.6). **Governance risk**: fail-closed rejection preserves a captured or deadlocked registry as readily as a good one. Each of these is priced by the market when it is visible, which is the reason the protocol makes them visible.
 
 ---
 
-## 8. Replayable Machine Classification
+## Part 3 — Implementation Details
 
-### 8.1 Where the judgment already lives
+The table below states each claim at the scope its evidence supports. "Proof" identifies the kind of evidence: a derivation under assumptions, an inspectable source with retained tests, a cryptographic verifier, or a project-authored execution or replay report under named conditions. Source references are pinned to `postfiatl1v2` at `aa8b365f` and `postfiatorg.github.io` at `f930703e`. None of the rows certifies production readiness; the A666 service is limited availability, the Cobalt fleet is Foundation-administered, and the batch matcher and index registry are proposed.
 
-Validator governance contains irreducibly qualitative evidence: operator independence, source conflicts, domain-control ambiguity, infrastructure concentration, behavior inconsistent with stated control. A static rubric handles exact predicates but punts interpretation of conflicting evidence to a committee, and a committee interprets privately. PostFiat uses a model for exactly one narrow step: converting public evidence into a typed classification that can be replayed, parsed, challenged, and ignored when it fails process checks. The design goal is not "AI governance." It is removing the last private room from a governance process that is otherwise hash-bound end to end.
-
-No model runs inside consensus. Consensus consumes roots, certificates, and deterministic selector output, and by the deletion-monotonicity principle (§1.1), removing the model layer entirely leaves a chain that holds on ambiguous cases instead of adjudicating them — more conservative, never less safe.
-
-### 8.2 The pipeline and its hard boundaries
-
-Let $E$ be the evidence packet, $P$ the prompt and governed question, $Q$ the closed option set and schema, $M$ the pinned replay profile, $V_Q$ the parser, $A$ the parsed output, $S$ the selector, and $G_t$ the active registry. The model step is only
-
-$$Y_{raw} = M(P, E, Q), \qquad A = V_Q(Y_{raw}).$$
-
-A valid $A$ contains only labels from $Q$ and citations to field ids inside $E$. Unknown fields, uncited claims, or output outside the closed schema invalidate the result. The model cannot admit validators, alter thresholds, change its own prompt, modify the selector, or cast a governance vote; the only thing it can move is a typed classification, and only through the parser.
-
-After replay convergence, the deterministic selector computes
-
-$$\Gamma = S(policy_t, G_t, E, A),$$
-
-where $S$ is total, hash-bound code with no model calls and no network access. The Cobalt proposal carries the full commitment tuple
-
-$$(h(P),\ h(E),\ h(Q),\ h(M),\ h(V_Q),\ h(A),\ h(S),\ h(\Gamma),\ C_R),$$
-
-and only a valid Cobalt transition changes protocol state. The live-effect boundary is therefore a one-way pipe:
-
-```
-model classification -> replay certificate -> deterministic selector -> Cobalt transition
+```mermaid
+flowchart LR
+    RE[Reserve evidence] --> AO[Attested observation]
+    AO --> DC[Deterministic computation: SP1 guest]
+    DC --> PV[Proof verification on PFTL]
+    PV --> EP[Finalized NAV epoch]
+    EP --> PI[Primary issue / redeem at NAV]
+    EP --> SW[Private Asset-Orchard swap]
+    EP --> BR[Bridge: native ↔ wrapped]
 ```
 
-By the least-machinery principle, the model is justified only where it handles conflicts a score table would punt to a private committee; where a static rule is equally good, the static rule is mandatory. Schema validation, signature checks, root matching, unknown-field rejection, stale-evidence rejection, concentration caps, churn limits, and Cobalt certificate validation are all exact predicates in code and never depend on model judgment.
-
-### 8.3 Replay is profile-specific
-
-Replay is a property of a pinned profile, not a claim of universal LLM determinism:
-
-```
-ReplayProfile = {
-  model_weights_root,
-  tokenizer_root,
-  runtime_image_root,
-  kernel_backend,
-  hardware_class,
-  batching_policy,
-  parser_root,
-  quantization_rule
-}
-```
-
-A replay certificate is valid only if $q_R$ admitted independent replay keys sign the same packet root, replay-profile root, parser root, quantization root, and parsed-output root. Agreement means equality of the parsed-output root the selector consumes:
-
-$$root(A) = \mathrm{SHA3\text{-}384}(canonicalJSON(validate_Q(A))).$$
-
-Raw response hashes and provider envelopes are audit evidence only; they may legitimately differ across servers that add timing, request identifiers, or formatting outside the parsed decision. Top-logprob and full-vocabulary fixed-point roots are stronger replay evidence used for profile admission, dispute, and promotion; they are not hidden authority and never replace the parsed root. If the parsed root, packet root, profile root, parser root, or a required logprob root is missing, stale, below quorum, or split across certificates, the result is hold/no-op and becomes challenge evidence.
-
-### 8.4 A worked admission packet
-
-A concrete case shows what the model layer buys. Consider candidate evidence:
-
-```
-ValidatorAdmissionEvidencePacket {
-  candidate:            validator-V
-  uptime_30d:           0.997
-  operator_manifest:    signed
-  domain_control:       verified
-  asn_country:          distinct from current registry
-  release_manager:      same as validator-17
-  monitoring_endpoint:  same as validator-17
-  funding_control:      shared disclosure with validator-17
-}
-```
-
-A static rubric checking only uptime, manifest, domain, ASN, and country would admit. The governed question is narrower: classify `operator_independence_evidence` as `independent | cosmetic_diversity | contradictory | insufficient`, citing only registered fields. The valid parsed answer is
-
-```json
-{
-  "classification": "cosmetic_diversity",
-  "citations": ["release_manager", "monitoring_endpoint", "funding_control"]
-}
-```
-
-Replay keys sign the same evidence root, profile root, parser root, parsed-output root, and required logprob root. The selector consumes the parsed root and emits
-
-```
-Gamma = {
-  candidate: validator-V,
-  reliability_floor: pass,
-  accountability_floor: pass,
-  rho_cluster_after_admission: fail,
-  action: hold-no-op
-}
-```
-
-The Cobalt-facing packet is a non-transition: the parent registry root remains active, the next registry root equals the parent, the failed constraints are public, and any later admission must either resolve the shared-control cluster with new evidence or pass a governed selector change. The model did not admit or reject by fiat; it converted a qualitative conflict into a typed input that forced the deterministic selector to hold.
-
-### 8.5 What the replay evidence shows — and only that
-
-The empirical record has three layers, each backing one sentence. Same-stack repeatability: a saved 29-validator UNL cohort scored under one pinned Qwen/SGLang profile produced 2,900 of 2,900 parseable responses, 100 complete score maps, a single score-map hash, and zero variance in both scores and raw output [E5]. Cross-hardware convergence: six governed questions, each run three times on H100 NVL and three times on H200 under one named profile family, converged on identical parsed-output roots and top-logprob commitment roots, and a separate full-vocabulary next-token probe converged across 248,320 fixed-point logprob entries [E6]. Cross-runtime constitutional convergence: the first small-profile constitutional packet — adopt a Cobalt-governed on-chain registrar, or retain XRP-style off-chain UNL authority, with options `adopt-cobalt-registrar | retain-offchain-unl | hold-no-op` — was run on Apple M5 MLX BF16 (300/300 parseable) and on an H200 SGLang deterministic-inference profile (100/100 parseable); both runtime families selected `adopt-cobalt-registrar` and produced identical decision and parsed-output roots [E7].
-
-The claim this supports is narrow and useful: under bounded packets and pinned profiles, independent runtimes converged on the same selector-facing decision. It is not a proof of universal LLM determinism, and it says nothing yet about cross-vendor profiles, cross-version drift, or adversarial prompts.
-
-### 8.6 Admission is not promotion
-
-Profile admission says one exact tuple — model, tokenizer, runtime, kernel, hardware class, batching policy, parser, quantizer — may produce replay-bound artifacts for one question class. Promotion to governance default is a separate, heavier event: an old/new shadow run on the same packet set, a published replay signer set and quorum, zero selector-relevant parsed-root divergence, published disagreement classes, cost and latency evidence, a defined rollback, and a Cobalt transition. Model replacement is itself a Cobalt transition, and until promotion completes, the old profile remains the historical replay anchor. The model layer is governed by exactly the machinery it serves.
-
----
-
-## 9. Post-Quantum Authorization
-
-### 9.1 Why genesis, not migration
-
-Settlement chains carry long-lived value and long-lived public keys. A chain launched on classical signatures is betting that a coordinated migration will complete before cryptographically relevant quantum attacks matter — after years of exposing public keys on a permanent ledger. A new chain does not have to make that bet: it can make the default authorization path post-quantum from genesis and treat the known byte and CPU costs as a priced design input rather than a future emergency.
-
-PostFiat uses ML-DSA because it is the standardized lattice signature family for general digital signatures (FIPS 204), with straightforward deterministic verification. Validator certificates bind to registry roots and compact validator identifiers rather than repeating full public keys in every vote:
-
-$$Cert_B = \{(validatorID_i,\ sig_i)\}_{i \in Q} + registryRoot.$$
-
-### 9.2 The cost accounting
-
-For ML-DSA-65 in the current provider, public keys are 1,952 bytes and signatures are 3,309 bytes. A 35-validator set with $q = 24$ carries 79,416 signature bytes plus 768 bytes of validator identifiers — 80,184 detached certificate bytes before framing. A 100-validator set with $q = 67$ carries 223,847 detached certificate bytes. The certificate is large but bounded and separable: block headers commit to a certificate digest while audit nodes fetch and re-verify the detached certificate.
-
-Current release-build measurements are roughly 6,000 ML-DSA-65 verifications per second, about 160 microseconds each; serialized verification of the 35-validator certificate is about 4 ms and of the 100-validator certificate about 11 ms [E1]. At a one-second certified-round target, 11 ms is about 1.1% of the round; on the observed 1.5-second submit-to-finality path it is below 1%. Certificate bytes, not signature CPU, are the dominant operational cost of the current profile, and every release profile must publish verifier throughput, certificate bytes, and the signature share of the block verification budget.
-
-### 9.3 Alternatives, and precommitted recovery
-
-The alternatives were weighed, not ignored. Falcon-class schemes are smaller on the wire but carry a more delicate implementation and side-channel posture. Hash-based signatures are the most conservative assumption but make validator certificates and high-frequency account authorization substantially heavier. Hybrid classical-plus-post-quantum signatures are valuable for migrating legacy chains; a greenfield chain can simply not carry the classical dependency in its default path. Parameter and library changes are governed cryptographic upgrades under §6.
-
-Recovery beyond parameter upgrades is precommitted rather than improvised. The genesis manifest names a second signature family with an unrelated hardness assumption — SLH-DSA, the standardized stateless hash-based scheme of FIPS 205 — as the recovery family. Every validator key registration includes a hash commitment to an SLH-DSA recovery key; account holders may register the same commitment optionally. Because the commitment is hash-based, it remains binding even if lattice assumptions fail. Activating the recovery family is a governed emergency profile (§10) that rotates authorization to the precommitted keys without inventing cryptography mid-incident. The asymmetry is the point: a few hundred dormant bytes per key today against a standardization-and-migration scramble later. The remaining classical surfaces — Halo2 proof soundness and note-encryption key agreement — are bounded by the turnstile (§7.4) and named as upgrade paths (§7.6, §11) respectively.
-
----
-
-## 10. Failure Modes and Recovery
-
-Every subsystem resolves to a named fallback surface, and every fallback is precommitted, so an incident is a state machine rather than a negotiation.
-
-A correlated validator quorum routes through Cobalt removal or trust-weight reduction under §6, with the correlation evidence of §5.3 as the input. Governance deadlock preserves the last valid registry, with recovery limited to the four precommitted quorum-signed actions of §6.9. Replay divergence in the classification pipeline is hold/no-op and becomes challenge evidence; by deletion monotonicity, even total loss of the model layer degrades governance to conservative holds rather than to unsafe defaults. A shielded-pool soundness or implementation failure freezes the affected privacy action classes behind the turnstile of §7.4 while transparent settlement continues, so a cryptographic incident in the pool is scoped and detectable rather than inflationary and silent. An ML-DSA break activates the precommitted SLH-DSA recovery profile of §9.3 under governed emergency rules. Availability collapse beyond the suspension caps of §4.4 halts liveness with safety intact: the chain prefers stopping to forking.
-
-The common shape across all six surfaces is the fail-closed principle of §1.1. No failure mode resolves to discretion, and no recovery action is broader than what was committed before the failure occurred.
-
----
-
-## 11. Limitations and Non-Claims
-
-A paper that hedges every paragraph hides its real limits, so they are consolidated here and stated plainly.
-
-Genesis is trusted. The launch certificate (§5.4) makes the bootstrap assumption explicit, frozen, and auditable; it does not make it disappear, and nothing can. Authority validation retains residual capture risk: a sufficiently patient coalition of natural stakeholders, or a jurisdictional correlation no evidence packet captures, is not eliminated by the machinery — it is made expensive, visible, and contestable. Relatedly, the protocol verifies only declared trust edges and registered evidence fields; an off-chain social dependency that no one declares is invisible to the Cobalt checker and must be caught, if at all, at the admission and correlation layer.
-
-The privacy model reduces ambient leakage; it is not anonymity insurance. Timing, fee classes, and disclosure hashes remain visible, anonymity sets must be managed by wallets and custodians, and a careless workflow leaks regardless of the protocol. Note confidentiality rests on classical key agreement and is exposed to harvest-now, decrypt-later adversaries until the governed KEM migration; proof-system soundness is likewise a classical assumption, bounded by the turnstile but not removed by it.
-
-The replay evidence is narrow by design and the paper claims nothing beyond it: one model family, pinned profiles, bounded packets, no cross-vendor convergence claim, no adversarial-prompt robustness claim. The Cobalt deployment is a rooted, bounded profile of MacBrough's construction, not the full open-network result; the transition-safety proposition holds for the narrowed profile and its stated assumptions only. ML-DSA certificate bytes are a real and growing cost at larger validator sets, mitigated by digest commitment and detached verification but not eliminated. And the availability-suspension mechanism trades a small, capped liveness-for-safety window: within its caps it cannot reduce the effective set below the trust graph's safety thresholds, but the caps themselves are governed parameters that deserve adversarial review.
-
-Finally, the controlled evidence supports controlled claims only. Replay-profile convergence is not public validator diversity; controlled registry mutation is not market legitimacy; shielded accounting is not wallet anonymity. Missing evidence defaults to hold, no-op, or continued operation under the last valid rules — never to the favorable interpretation.
-
----
-
-## 12. Related Work
-
-PostFiat descends directly from the XRP Ledger lineage: the original Ripple consensus design of Schwartz, Youngs, and Britto, and the Chase–MacBrough analysis that made the UNL-overlap safety condition precise. The Negative UNL mechanism motivates the availability suspension of §4.4, recast for a registry that is protocol state rather than a published file. MacBrough's Cobalt provides the theoretical machinery for safe trust evolution in open networks; PostFiat's contribution there is deployment narrowing — rooted graphs, bounded covers, proposer-independent extraction, and fail-closed transition packets — rather than new theory.
-
-Stellar's SCP is the closest cousin in spirit: both replace global membership with locally declared trust. The difference is the governance object. SCP quorum slices are discovered, open, and continuously self-asserted; PostFiat trust views are registered, rooted, and changed only through checkable transitions, trading openness for a transition-safety argument that a checker can actually evaluate. The ordering path follows the HotStuff line of chained BFT with linear view change, the same lineage that produced LibraBFT/DiemBFT for an earlier authority-validated settlement attempt. The shielded pool adapts Zcash's Orchard action model, Halo2's setup-free proving, and Zcash's pool turnstile discipline. Ordering accountability responds to the extraction taxonomy of Flash Boys 2.0 by removing reordering and pricing omission. The post-quantum posture follows NIST FIPS 204 and 205, choosing the standardized lattice family as default and the standardized hash-based family as precommitted recovery. The replay design draws on recent work in deterministic LLM inference — batch-invariant kernels and reproducible serving — while deliberately claiming only profile-pinned, packet-bounded convergence.
-
----
-
-## Appendix A: Evidence Register
-
-Each artifact backs the specific sentences that cite it and nothing more. Roots are SHA3-384 or provider-native commitments as produced by the runs; machine reports are retained alongside the artifacts.
-
-**[E1] ML-DSA-65 verification budget.** Supports §9.2. Release-build measurements: ~6,000 verifications/s (~160 µs each); detached certificate of 80,184 bytes for a 35-validator, $q=24$ set and 223,847 bytes for a 100-validator, $q=67$ set; serialized certificate verification ≈ 4 ms and ≈ 11 ms respectively. Budget evidence, not consensus constants.
-
-**[E2] Orchard verification budget.** Supports §7.2. Local release-build run: two-action output proof of 7,264 bytes; cached verification 80 ms median. Justifies per-block action caps and the priced-class design.
-
-**[E3] Cobalt cover sizing.** Supports §6.6. Grouped institutional-style trust views under the $M_{cover}=64$ profile: 35 validators in five seven-validator groups → $M=12$; 100 validators in ten ten-validator groups → $M=22$.
-
-**[E4] Admission selector fixtures.** Supports §5.3. Deterministic selector over `ValidatorAdmissionEvidencePacket` inputs with fixture coverage: clean admit, shared-control reject, missing-domain hold, contradictory-evidence hold, unknown-model-field hold.
-
-**[E5] Same-stack repeatability.** Supports §8.5. Qwen3.6/SGLang pinned profile; saved 29-validator XRPL UNL cohort; one validator-domain record per request; temperature 0, JSON response mode, non-thinking output; prompt: "score this validator's credibility on a scale from 0-100 where credibility is defined as useful institutional proof of a blockchain's legitimacy"; parser accepts only JSON with one integer score field in [0,100]. Two batches × 50 repeats per domain: 2,900/2,900 parseable responses, 100 complete score maps, zero score variance, zero raw-output variance. Score-map hash: `9f7f95a7be238e2b6bb1cc081986f8b5dffc07b9397578d723c6f6d7c77c81c8`.
-
-**[E6] Cross-hardware convergence.** Supports §8.5. One named Qwen/SGLang profile family; six governed questions, three runs each on H100 NVL and on H200; parsed-output roots and top-logprob commitment roots converged for every question. Separate H100/H200 full-vocabulary next-token probe converged over 248,320 fixed-point logprob entries; vector root: `560ea13c99f73a60c184ec07ba3554ea11c72487d56ac28c366495d58ce8913c`.
-
-**[E7] Cross-runtime constitutional packet.** Supports §8.5. Closed options `adopt-cobalt-registrar | retain-offchain-unl | hold-no-op`; prompt hash `277e4174662841fe8d0802f0d055fec0528afbae09173a49d1f9067fc9a5ad68`. Apple M5 MLX BF16 with Qwen3-1.7B: 300/300 parseable. Vast H200 SGLang deterministic-inference profile with Qwen3-1.7B: 100/100 parseable, one top-logprob root. Both selected `adopt-cobalt-registrar`. Decision root: `08b3d570e746a4bd4c761ab280aa1f6f4992704810f03de2377c8a38b0fc0cf8`. Parsed-output root: `1f667e5d8d63fbc8852b10085062e13579f864f27f3b3c53481b68bc4b2fbc1e`. H200 top-logprob root: `af228110a9782fcfdca48dd681636360d24d3a995933443bd06e1374e8cbda07`. Machine reports: `reports/qwen-mlx-profile-portability/20260528T155652Z/machine_report.json`, `reports/qwen-sglang-profile-portability/20260528T162243Z/machine_report.json`.
-
-**[E8] Consensus and registry fixtures.** Supports §4.1, §4.3, §6.7. HotStuff-style ordering simulation with view change and equivocation handling; signed admission-receipt aggregation fixtures; Cobalt parent-root rejection; controlled registry mutation under the previous active rules.
+| Claim | Proof | Codebase reference |
+| --- | --- | --- |
+| Floating-NAV assets have explicit proof profiles, reserve epochs, supply bounds, and freshness rules enforced at submission, finalization, mint, and redeem. | Inspectable source and retained execution tests. The lifecycle test uses a placeholder profile; it establishes state-machine behavior, not reserve truth. | [market_nav_asset_types.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/types/src/market_nav_asset_types.rs); [nft_escrow_asset_execution.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/execution/src/nft_escrow_asset_execution.rs) |
+| Consensus rejects a reserve packet unless `verified_net_assets × u ≥ supply × nav_per_unit`; the provider-neutral profile additionally requires the exact conservative floor. | Inspectable validity rule in the `NavReserveSubmit` arm; derivation in §1.2. | [nft_escrow_asset_execution.rs (reserve submit)](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/execution/src/nft_escrow_asset_execution.rs) |
+| Primary subscription increases reserve principal and valid supply together; primary redemption contracts both; issue/redeem spreads are custodied outside NAV assets. | Canonical accounting document plus the private primary issue and redeem transitions, which credit or debit `settlement_reserve_atoms`, `authorized_valid_supply_atoms`, and `non_nav_spread_atoms` in one transition. | [primary-market-accounting.md](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/navcoins/primary-market-accounting.md); [nav_vault_asset_execution.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/execution/src/nav_vault_asset_execution.rs) |
+| A secondary exchange changes ownership and neither reserves nor economic supply. | Accounting model; retained execution tests cover mint, offer-book trade, and redeem separately. Swap validity is a separate obligation from primary accounting. | [market_nav_execution_tests.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/execution/src/market_nav_execution_tests.rs); [primary-market-accounting.md](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/navcoins/primary-market-accounting.md) |
+| SP1 reserve verification binds disclosed inputs, policy, freshness, and outputs, and separates cryptographic, attested, and controlled value buckets. | Cryptographic verifier (Groth16 against a profile-pinned program key) plus a fixed 584-byte public-values ABI. Establishes the stated computation and bindings, not undisclosed liabilities or custody solvency. | [nav_sp1_verifier.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/execution/src/nav_sp1_verifier.rs); [nav_reserve_public_values.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/types/src/nav_reserve_public_values.rs); [reserve-proof-guest main.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/tools/nav-reserve-proof/programs/reserve-proof-guest/src/main.rs) |
+| Brokerage-sourced reserve observations are classified as attested, never cryptographic. | Inspectable adapter design and golden commitment vectors; no asset registration, capital, or trading authorization is inferred. | [yolo-options-reserve-profile.md](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/navcoins/yolo-options-reserve-profile.md) |
+| Multi-fetch reserve observations are reproducible under a declared source and policy, compared under tolerance rather than byte equality. | Inspectable observation and valuation code; project drift study over a live venue vault (0.0005 bp span, zero identical snapshots). | [hyperliquid.py](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/python/postfiat_rpc/hyperliquid.py); [basis_policy.py](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/python/postfiat_rpc/basis_policy.py); [navcoin-proof-of-reserves.md](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/business/navcoin-proof-of-reserves.md) |
+| Source-labelled cash receipts have explicit route, finality, allocation, and egress boundaries, with SP1 ingress and egress programs. | Inspectable execution code and zkVM guest programs; the Ethereum-mainnet route is the current pfUSDC source and the Arbitrum route is deprecated. | [pfusdc-ingress main.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/programs/pfusdc-ingress/src/main.rs); [pfusdc-egress main.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/programs/pfusdc-egress/src/main.rs); [nav_vault_asset_execution.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/execution/src/nav_vault_asset_execution.rs) |
+| A wrapped NAVCoin is a representation of the same economic supply; the destination controller mints only against an accepted PFTL receipt and enforces route and packet caps. | Inspectable Solidity source; venue liquidity is not backing. Mainnet deployment and the 100.5 USDC → 100 A666 → 100 wA666 run are a project-authored dated record. | [PFTLUniswapPrimaryMarketV2.sol](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/ethereum-contracts/src/PFTLUniswapPrimaryMarketV2.sol); [A666 current state](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md) |
+| Asset-Orchard proves per-asset value conservation and spend authorization for two-leg swaps; nullifiers, anchors, statement, and authorization are separate checks. | Inspectable circuit and retained tests under a local Halo2 profile. Security requires both Halo2 soundness and correctness of the custom circuit's constraints. | [asset_orchard.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/privacy_orchard/src/asset_orchard.rs); [asset_orchard_circuit.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/privacy_orchard/src/asset_orchard_circuit.rs); [asset_orchard_circuit_tests.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/privacy_orchard/src/asset_orchard_circuit_tests.rs) |
+| A controlled private currency swap settled both legs atomically under a public fixed quote: 20 pfUSDC for 210 pNOK, ten browser acquisitions and nine inverse swaps, 18 of 18 checks passing. | Project-authored acceptance report. Sandbox WNOK, operator-controlled source checkpoint, pre-arranged rate; no price discovery, redemption, or independent audit. | [pnok acceptance report.json](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/deployments/pnok-private-fix-20260801/acceptance/public/report.json); [shielded_batch_actions.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/node/src/shielded_batch_actions.rs) |
+| Duplicate submission is idempotent and the private swap path recovered from validator, prover, and wallet-proxy restarts. | Project-authored recovery-fault report (`retry_count: 2`, supply unchanged, replay rejected without effect). Controlled demo only. | [pnok recovery-faults report.json](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/deployments/pnok-private-fix-20260801/recovery-faults/report.json) |
+| Private primary issue and redemption are explicit state transitions bound to the policy-pinned finalized NAV packet and its freshness limit. | Inspectable transition functions (`apply_asset_orchard_private_primary_issue/redeem_route_transition`); A666 record of committed transitions and a qualification that passed the redeem latency gate and missed the issue gate. | [nav_vault_asset_execution.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/execution/src/nav_vault_asset_execution.rs); [A666 current state](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md) |
+| Cobalt ratifies scoped validator-trust updates; a live update requires a decision certificate plus distinct current-registry ML-DSA authorizations bound to payload, parent lock, sequence, slot, and expiry; block finality is separate. | Inspectable consumer source and retained handoff tests; RBC/ABBA/MVBA/DABC message construction and signing. | [cobalt_handoff.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/node/src/cobalt_handoff.rs); [rbc_abba_mvba.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/consensus_cobalt/src/rbc_abba_mvba.rs); [dabc_registry.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/consensus_cobalt/src/dabc_registry.rs) |
+| Trust graphs are rooted objects and the safety cover is extracted from the graphs, deduplicated by subset id, bounded by profile, and required to match the witness. | Inspectable extractor and graph source; bounded input model and supplied fault budget are essential assumptions (§1.9). | [cobalt_cover_extractor.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/consensus_cobalt/src/cobalt_cover_extractor.rs); [trust_graph_governance.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/consensus_cobalt/src/trust_graph_governance.rs) |
+| Old/new transition obligations—local rows, budget binding, cover bound, key-continuity intersection, same-registry and old/new conflict—are executable checks with valid and invalid fixtures. | Project fixture report (May 2026): one-validator rotation accepted; seven invalid fixtures rejected for named reasons. Controlled checker, not a production proof. | [cobalt-transition-safety-proof.md](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/governance/cobalt-transition-safety-proof.md); [June proof report](https://github.com/postfiatorg/postfiatorg.github.io/blob/f930703e32433a9eb9d74708c2423ebde17832b4/static/benchmarks/cobalt-devnet-evidence-20260609/postfiatl1v2/reports/cobalt-transition-safety-proof/20260529T081141Z/cobalt-transition-safety-proof-report.json) |
+| Admission selection checks supplied evidence, holds on missing or conflicting fields, and rejects established shared control with rejection outranking hold. | Inspectable selector and retained tests (clean candidate, shared-control rejection, missing domain, conflicting evidence, unknown model citation). Independent exposure, control, and evidence truth are upstream obligations. | [validator_admission_policy.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/consensus_cobalt/src/validator_admission_policy.rs) |
+| Production and two independent oracles agreed on 10,240 generated trust-graph cases; 108 Byzantine cases and 442,368 searched schedules produced zero conflicting roots, false accepts, or false halts. | Project-authored experiment summaries (E1, E2), bounded to the generated corpus and the six-validator graph. | [e1 summary.json](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/benchmarks/cobalt-adversarial-verification/e1/clean-rerun/summary.json); [e2 summary.json](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/benchmarks/cobalt-adversarial-verification/e2/clean-rerun/summary.json) |
+| Tampered durable history and forged catch-up were rejected (24 and 18 cases) and six interrupted recoveries restored byte-identical accepted history; live rollback/return committed at 922/923 and a legitimate key rotation at 924 with a stolen-key attempt rejected. | Project-authored experiment summaries (E3, E5). Six Foundation-administered validators; the independent-operator gate remains a separate open milestone (E6). | [e3 summary.json](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/benchmarks/cobalt-adversarial-verification/e3/clean-rerun/summary.json); [e5 verifier.json](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/benchmarks/cobalt-adversarial-verification/e5/verifier.json); [e6 decision.json](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/benchmarks/cobalt-adversarial-verification/e6/decision.json) |
+| Consensus v2 persists prepare, precommit, and timeout high-water marks, a lock, and a high QC before signing, and commits only on a non-nil precommit QC. | Inspectable signer state and durable store. **Open obligation (G12):** the precommit authorization does not enforce a cross-phase current-view fence; the delayed-certificate schedule of §1.9 is an analytical trace, not an executed regression or a demonstrated exploit, and no progress theorem is claimed. | [consensus_v2.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/ordering_fast/src/consensus_v2.rs); [consensus_v2_store.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/node/src/consensus_v2_store.rs); [rewrite review](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/architecture/whitepaper-gpt6-rewrite-review.md) |
+| Accounts and validators use ML-DSA-65 with domain-separated signing contexts; the provider is differentially tested against a reference verifier. | Inspectable provider source and retained differential tests. Shielded authorization and note encryption remain classical. | [crypto_provider lib.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/crypto_provider/src/lib.rs) |
+| Option-target calculation and verification bind methodology, parameters, attested collection, and prior state; the public ABI is 408 bytes; a target receipt grants no trading, reserve, or issuance authority. | Deterministic calculator, SP1 guest, and registered receipt verifier with retained tests for malformed proofs and duplicate or conflicting registrations. | [yolo_target.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/tools/nav-reserve-proof/crates/reserve-proof-types/src/yolo_target.rs); [yolo-target-guest main.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/tools/nav-reserve-proof/programs/yolo-target-guest/src/main.rs); [yolo_target_verifier.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/execution/src/yolo_target_verifier.rs); [yolo_target_public_values.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/types/src/yolo_target_public_values.rs); [yolo_target_execution_tests.rs](https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/execution/src/yolo_target_execution_tests.rs) |
+| Two option-target proofs (MU, NVDA) were verified and accepted through isolated four-validator receipt tests. | Project-authored dated record: hypothetical $100,000 starting cash per tracker, one retained observation per stock, no brokerage orders, no external network submission. | [options demo-record.json](https://github.com/postfiatorg/postfiatorg.github.io/blob/f930703e32433a9eb9d74708c2423ebde17832b4/static/research/options-tee-indices/demo-record.json) |
+| 2,552 of 2,552 tested index score artifacts replayed byte for byte on a second H200, covering 85.38% of a 2,989-artifact corpus; a different batch profile produced one mismatch. | Project-authored replay summary under pinned profiles; reproduction, not semantic truth or investment performance. | [replay summary](https://github.com/postfiatorg/postfiatorg.github.io/blob/f930703e32433a9eb9d74708c2423ebde17832b4/static/benchmarks/qwen38-top1000-byte-replay-20260817-summary.json); [determinism runbook](https://github.com/postfiatorg/postfiatorg.github.io/blob/f930703e32433a9eb9d74708c2423ebde17832b4/content/research/qwen-3-8-determinism-runbook.md) |
+| Model classification feeds deterministic portfolio construction (threshold 70, 20/80 blend, 20% cap, largest-remainder integer weights), and an infeasible universe is rejected. | Public evidence-builder script and original/replay byte-comparison files for four themes; the proposed PFTL series registry is not inferred to be active. | [build_agentic_index_evidence.py](https://github.com/postfiatorg/postfiatorg.github.io/blob/f930703e32433a9eb9d74708c2423ebde17832b4/scripts/build_agentic_index_evidence.py); [agentic-indexing.md](https://github.com/postfiatorg/postfiatorg.github.io/blob/f930703e32433a9eb9d74708c2423ebde17832b4/content/blog/agentic-indexing.md) |
+| A disclosed-leverage statement over six legs is verifiable from public Arbitrum state with a standard-library script. | Cryptographic verifier on Arbitrum One plus a public checker of the on-chain buckets, policy hash, and program key. Hidden-witness reproduction and liability completeness are stronger, separate claims. | [verify_proof_of_leverage.py](https://github.com/postfiatorg/postfiatorg.github.io/blob/f930703e32433a9eb9d74708c2423ebde17832b4/scripts/verify_proof_of_leverage.py); [proof-of-leverage.md](https://github.com/postfiatorg/postfiatorg.github.io/blob/f930703e32433a9eb9d74708c2423ebde17832b4/content/blog/proof-of-leverage.md) |
 
 ---
 
 ## References
 
-David Schwartz, Noah Youngs, and Arthur Britto. "The Ripple Protocol Consensus Algorithm." Ripple Labs, 2014.
+[pma]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/navcoins/primary-market-accounting.md
+[nav-exec]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/execution/src/nft_escrow_asset_execution.rs
+[rp]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/navcoins/reserve-primitives.md
+[wrapped]: https://postfiat.org/research/trustless-wrapped-stablecoins/
+[a666]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md
+[por]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/business/navcoin-proof-of-reserves.md
+[yolo-profile]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/navcoins/yolo-options-reserve-profile.md
+[pv]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/types/src/nav_reserve_public_values.rs
+[guest]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/tools/nav-reserve-proof/programs/reserve-proof-guest/src/main.rs
+[sp1v]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/execution/src/nav_sp1_verifier.rs
+[pol]: https://postfiat.org/blog/proof-of-leverage/
+[circuit]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/privacy_orchard/src/asset_orchard_circuit.rs
+[pnok-report]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/deployments/pnok-private-fix-20260801/acceptance/public/report.json
+[pnok-blog]: https://postfiat.org/private-fx-executed-pnok/
+[priv]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/privacy/overview.md
+[fx]: https://postfiat.org/private-fx-settlement/
+[cobalt-adv]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/governance/cobalt-adversarial-verification-results.md
+[fin]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/architecture/finality.md
+[cv2]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/ordering_fast/src/consensus_v2.rs
+[cobalt-impl]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/governance/cobalt-implementation.md
+[cover]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/consensus_cobalt/src/cobalt_cover_extractor.rs
+[handoff]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/node/src/cobalt_handoff.rs
+[review]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/architecture/whitepaper-gpt6-rewrite-review.md
+[agentic]: https://postfiat.org/blog/agentic-indexing/
+[crypto]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/crates/crypto_provider/src/lib.rs
+[swift]: https://www.swift.com/news-events/press-releases/swifts-blockchain-ledger-ready-use-17-banks-set-pioneer-tokenised-cross-border-payments-trusted-global-infrastructure
+[hip3]: https://hyperliquid.gitbook.io/hyperliquid-docs/hyperliquid-improvement-proposals-hips/hip-3-builder-deployed-perpetuals
+[coinbase]: https://www.coinbase.com/tokenize
+[bitwise]: https://bitwiseinvestments.com/newsroom/bitwise-launches-automated-token-portfolios-atps-powered-by-coinbase-and-glider
+[bis-settle]: https://www.bis.org/publications/uncovering-fx-settlement-risk-new-measures-2025-bis-triennial-survey
+[navcoins]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/navcoins/index.md
+[ultrashort]: https://postfiat.org/blog/trustless-ultrashort-tokens/
+[options]: https://postfiat.org/blog/trustless-single-stock-option-indices/
+[options-record]: https://postfiat.org/research/options-tee-indices/demo-record.json
+[detindex]: https://postfiat.org/blog/deterministic-financial-indices/
+[replay-summary]: https://postfiat.org/benchmarks/qwen38-top1000-byte-replay-20260817-summary.json
+[runbook]: https://postfiat.org/research/qwen-3-8-determinism-runbook/
+[canton]: https://postfiat.org/blog/postfiat-canton-xrp/
+[e6]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/benchmarks/cobalt-adversarial-verification/e6/decision.json
+[venues]: https://github.com/postfiatorg/postfiatl1v2/blob/aa8b365f5cf97be05a5222b55de63150cab275c6/docs/navcoins/assets-and-venues.md
 
-Brad Chase and Ethan MacBrough. "Analysis of the XRP Ledger Consensus Protocol." arXiv:1802.07242, 2018.
+**Post Fiat protocol documentation and source (pinned at `aa8b365f5cf97be05a5222b55de63150cab275c6`)**
 
-Ethan MacBrough. "Cobalt: BFT Governance in Open Networks." arXiv:1802.07240, 2018.
+1. NAVCoins overview — [docs/navcoins/index.md][navcoins]
+2. Canonical NAVCoin Primary-Market Accounting — [docs/navcoins/primary-market-accounting.md][pma]
+3. NAVCoin Proof-of-Reserve Primitives — [docs/navcoins/reserve-primitives.md][rp]
+4. NAVCoin Assets and Venues — [docs/navcoins/assets-and-venues.md][venues]
+5. YOLO Options Reserve Profile — [docs/navcoins/yolo-options-reserve-profile.md][yolo-profile]
+6. NAVCOIN Proof of Reserves — [docs/business/navcoin-proof-of-reserves.md][por]
+7. A666, pfUSDC, Private Swap, Bridge, and Uniswap Current State (2026-07-30) — [docs/status/A666-PFUSDC-PRIVATE-SWAP-CURRENT-STATE-20260730.md][a666]
+8. Privacy Overview — [docs/privacy/overview.md][priv]
+9. Finality — [docs/architecture/finality.md][fin]
+10. Cobalt Implementation — [docs/governance/cobalt-implementation.md][cobalt-impl]
+11. Cobalt Adversarial Verification Results — [docs/governance/cobalt-adversarial-verification-results.md][cobalt-adv]
+12. Consensus source-conformance review (G12) — [docs/architecture/whitepaper-gpt6-rewrite-review.md][review]
+13. Consensus v2 signer — [crates/ordering_fast/src/consensus_v2.rs][cv2]
+14. Cobalt handoff consumer — [crates/node/src/cobalt_handoff.rs][handoff]
+15. Cobalt cover extractor — [crates/consensus_cobalt/src/cobalt_cover_extractor.rs][cover]
+16. Asset-Orchard circuit — [crates/privacy_orchard/src/asset_orchard_circuit.rs][circuit]
+17. NAV SP1 verifier — [crates/execution/src/nav_sp1_verifier.rs][sp1v]
+18. NAV reserve public values — [crates/types/src/nav_reserve_public_values.rs][pv]
+19. Reserve-proof SP1 guest — [tools/nav-reserve-proof/programs/reserve-proof-guest/src/main.rs][guest]
+20. ML-DSA-65 crypto provider — [crates/crypto_provider/src/lib.rs][crypto]
+21. pNOK private-fix acceptance report — [deployments/pnok-private-fix-20260801/acceptance/public/report.json][pnok-report]
+22. Cobalt E6 independent-operator decision — [benchmarks/cobalt-adversarial-verification/e6/decision.json][e6]
 
-Maofan Yin, Dahlia Malkhi, Michael K. Reiter, Guy Golan Gueta, and Ittai Abraham. "HotStuff: BFT Consensus with Linearity and Responsiveness." PODC 2019.
+**Post Fiat research articles and retained artifacts**
 
-Miguel Castro and Barbara Liskov. "Practical Byzantine Fault Tolerance." OSDI 1999.
+23. A Proposal for Better Private FX Settlement (July 2026) — [postfiat.org/private-fx-settlement/][fx]
+24. A Controlled Private FX Swap: pfUSDC–pNOK Atomic Settlement (August 2026) — [postfiat.org/private-fx-executed-pnok/][pnok-blog]
+25. Agentic Indexing: Financial Indices That Replay Byte for Byte (August 2026) — [postfiat.org/blog/agentic-indexing/][agentic]
+26. Deterministic Financial Indices (August 2026) — [postfiat.org/blog/deterministic-financial-indices/][detindex]; replay summary — [qwen38-top1000-byte-replay-20260817-summary.json][replay-summary]
+27. Runbook: Deterministic Qwen 3.8 Inference for Replayable Index Scoring — [postfiat.org/research/qwen-3-8-determinism-runbook/][runbook]
+28. A Framework for Trustless Single Stock Option Indices (September 2026) — [postfiat.org/blog/trustless-single-stock-option-indices/][options]; demo record — [demo-record.json][options-record]
+29. Trustless UltraShort Tokens (August 2026) — [postfiat.org/blog/trustless-ultrashort-tokens/][ultrashort]
+30. Proof of Disclosed Leverage (June 2026) — [postfiat.org/blog/proof-of-leverage/][pol]
+31. Trustless Wrapped Stablecoins on PFTL (July 2026) — [postfiat.org/research/trustless-wrapped-stablecoins/][wrapped]
+32. Post Fiat, Canton, and XRP: Three Bets on the Future of Settlement (August 2026) — [postfiat.org/blog/postfiat-canton-xrp/][canton]
+33. Cobalt: Further Evaluation (August 2026) — https://postfiat.org/blog/cobalt-further-evaluation/
+34. pfUSDC: A Stablecoin Bridge Secured by Proofs, Not Committees (July 2026) — https://postfiat.org/pfusdc-trustless-bridge/
+35. The NAVCoin Proposal (June 2026; early design history superseded on primary-market and redemption mechanics by references 2 and 7) — https://postfiat.org/blog/navcoin-proposal/
 
-Cynthia Dwork, Nancy Lynch, and Larry Stockmeyer. "Consensus in the Presence of Partial Synchrony." Journal of the ACM, 1988.
+**External primary sources**
 
-Leslie Lamport, Robert Shostak, and Marshall Pease. "The Byzantine Generals Problem." ACM TOPLAS, 1982.
+36. Bitwise, "Bitwise Launches Automated Token Portfolios (ATPs) Powered by Coinbase and Glider," 25 August 2026 — [bitwiseinvestments.com][bitwise]
+37. Coinbase, "Tokenize" (B20 tokenized shares) — [coinbase.com/tokenize][coinbase]
+38. Hyperliquid, "HIP-3: Builder-Deployed Perpetuals" — [hyperliquid.gitbook.io][hip3]
+39. SWIFT, "Swift's blockchain ledger ready for use; 17 banks set to pioneer tokenised cross-border payments," 9 July 2026 — [swift.com][swift]
+40. Bank for International Settlements, "Uncovering FX settlement risk: new measures from the 2025 BIS Triennial Survey" (2026) — [bis.org][bis-settle]
+41. Bank for International Settlements, Triennial Central Bank Survey of Foreign Exchange and OTC Derivatives Markets 2025 — https://www.bis.org/publications/triennial-central-bank-survey-foreign-exchange-and-over-the-counter-otc-derivatives-markets-2025
 
-Gabriel Bracha. "Asynchronous Byzantine Agreement Protocols." Information and Computation, 1987.
+**Standards and prior work**
 
-David Mazières. "The Stellar Consensus Protocol: A Federated Model for Internet-Level Consensus." Stellar Development Foundation, 2015.
-
-XRP Ledger documentation: Unique Node List, Consensus Protocol, Negative UNL, Transaction Cost, XRP Overview.
-
-Zcash Improvement Proposal 224, "Orchard Shielded Protocol"; Zcash Protocol Specification; the halo2 Book.
-
-NIST FIPS 204, "Module-Lattice-Based Digital Signature Standard"; NIST FIPS 205, "Stateless Hash-Based Digital Signature Standard"; CRYSTALS-Dilithium specification; Open Quantum Safe ML-DSA parameter summaries.
-
-Philip Daian, Steven Goldfeder, Tyler Kell, Yunqi Li, Xueyuan Zhao, Iddo Bentov, Lorenz Breidenbach, and Ari Juels. "Flash Boys 2.0: Frontrunning in Decentralized Exchanges, Miner Extractable Value, and Consensus Instability." IEEE S&P 2020.
-
-SGLang deterministic inference documentation; vLLM batch-invariance and reproducibility documentation; Thinking Machines Lab, "Defeating Nondeterminism in LLM Inference," 2025.
+42. Ethan MacBrough, "Cobalt: BFT Governance in Open Networks," arXiv:1802.07240 (2018) — https://arxiv.org/abs/1802.07240
+43. NIST, FIPS 204: Module-Lattice-Based Digital Signature Standard (2024) — https://csrc.nist.gov/pubs/fips/204/final
+44. Zcash Improvement Proposal 224, "Orchard Shielded Protocol" — https://zips.z.cash/zip-0224
+45. Albert S. Kyle, "Continuous Auctions and Insider Trading," Econometrica 53(6), 1985.
+46. Eric Budish, Peter Cramton, and John Shim, "The High-Frequency Trading Arms Race: Frequent Batch Auctions as a Market Design Response," Quarterly Journal of Economics 130(4), 2015.
