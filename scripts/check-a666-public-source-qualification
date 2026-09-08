@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -20,15 +21,38 @@ SOURCE_RECORD = EVIDENCE / "source-qualification-draft.json"
 AGGREGATE_RECORD = EVIDENCE / "aggregate-proof-comparison.json"
 EXPECTED_RESULTS = QUALIFICATION / "expected-results.json"
 MANIFEST = QUALIFICATION / "manifest.json"
+# Exact parent of the documentation-retirement commit de115b54. Read retained
+# evidence, never manufacture a replacement or treat it as a fresh qualification.
+ARCHIVE_COMMIT = "6edf57f84fc78bada1f108f8c12a4a59277ce34a"
+PROOF_ARTIFACTS = {
+    "witness.cbor", "proof.bin", "proof-calldata.bin", "public-values.bin",
+    "proof-report.json",
+}
 
 
 def fail(message: str) -> None:
     raise SystemExit(f"a666 public source qualification: {message}")
 
 
+def read_bytes(path: Path) -> bytes:
+    """Use the working tree, or the whole retired packet at one pinned commit."""
+    if path.is_relative_to(EVIDENCE) and not EVIDENCE.exists():
+        relative = path.relative_to(ROOT)
+        if ".." in relative.parts:
+            fail("archive path must remain inside the qualification packet")
+        result = subprocess.run(
+            ["git", "show", f"{ARCHIVE_COMMIT}:{relative.as_posix()}"],
+            cwd=ROOT, capture_output=True, check=False,
+        )
+        if result.returncode != 0:
+            fail(f"pinned archive object unavailable: {relative} at {ARCHIVE_COMMIT}")
+        return result.stdout
+    return path.read_bytes()
+
+
 def load(path: Path) -> dict[str, Any]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        value = json.loads(read_bytes(path).decode("utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         fail(f"cannot read {path.relative_to(ROOT)}: {error}")
     if not isinstance(value, dict):
@@ -37,11 +61,7 @@ def load(path: Path) -> dict[str, Any]:
 
 
 def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return hashlib.sha256(read_bytes(path)).hexdigest()
 
 
 def exact_map(entries: object, key: str, expected: set[str], label: str) -> dict[str, Any]:
@@ -286,11 +306,10 @@ def main() -> None:
         artifacts = verification.get("artifacts")
         if not isinstance(artifacts, list) or len(artifacts) != 5:
             fail(f"epoch {epoch} must inventory five proof artifacts")
+        exact_map(artifacts, "path", PROOF_ARTIFACTS, f"epoch {epoch} proof artifacts")
         for artifact in artifacts:
-            if not isinstance(artifact, dict) or not isinstance(artifact.get("path"), str):
-                fail(f"epoch {epoch} has an invalid artifact inventory row")
             artifact_path = EVIDENCE / f"epoch-{epoch}" / artifact["path"]
-            require_equal(artifact_path.stat().st_size, artifact.get("size_bytes"), f"{artifact_path.name} size")
+            require_equal(len(read_bytes(artifact_path)), artifact.get("size_bytes"), f"{artifact_path.name} size")
             require_equal(sha256(artifact_path), artifact.get("sha256"), f"{artifact_path.name} SHA-256")
 
     acceptance = aggregate.get("acceptance")
@@ -314,7 +333,8 @@ def main() -> None:
 
     print(
         "a666_public_source_qualification=ok "
-        "sources=6 epochs=2 inputs=12 proofs=2 attested=0 controlled=0"
+        "sources=6 epochs=2 inputs=12 proofs=2 attested=0 controlled=0 "
+        f"evidence={'working-tree' if EVIDENCE.exists() else 'git-archive:' + ARCHIVE_COMMIT}"
     )
 
 

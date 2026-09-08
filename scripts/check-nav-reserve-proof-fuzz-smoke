@@ -15,6 +15,12 @@ if [[ ! "$fuzz_toolchain" =~ ^[A-Za-z0-9._-]+$ ]]; then
   exit 2
 fi
 
+# cargo-fuzz does not expose --locked. Reject stale dependency resolution before
+# invoking it, and verify afterward that it did not rewrite the reviewed lockfile.
+cargo "+$fuzz_toolchain" metadata --locked --format-version 1 \
+  --manifest-path "$proof_root/fuzz/Cargo.toml" >/dev/null
+fuzz_lock_digest="$(sha256sum "$proof_root/fuzz/Cargo.lock")"
+
 fuzz_root="$(mktemp -d /tmp/postfiat-nav-reserve-fuzz.XXXXXX)"
 case "$fuzz_root" in
   /tmp/postfiat-nav-reserve-fuzz.*) ;;
@@ -113,3 +119,8 @@ run_target solana_external_input "$solana_corpus" 2097152
 run_target monero_external_input "$monero_corpus" 131072
 run_target source_checkpoint_external_input "$checkpoint_corpus" 8388608
 run_target manifest_build_json "$manifest_build_corpus" 8388608
+
+if [[ "$(sha256sum "$proof_root/fuzz/Cargo.lock")" != "$fuzz_lock_digest" ]]; then
+  echo "cargo-fuzz changed the reviewed lockfile" >&2
+  exit 1
+fi

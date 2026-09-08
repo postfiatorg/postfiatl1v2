@@ -6,13 +6,15 @@ validator or fleet.
 
 **Question:** Does the next validator release carry the merged, default-disabled PR #38 code?
 
-**Recommended one-line answer:** `A — carry PR #38 in the next routine validator release; leave YOLO target activation unscheduled.`
+**Recorded local decision (2026-09-07):** `A — carry PR #38 in the next qualified routine validator release; leave YOLO target activation unscheduled.`
+
+This follows the operator's instruction to proceed with the recommended next steps. It chooses release composition only; it does not authorize deployment or assert a green release candidate.
 
 ## What is true today
 
-- PR #38 is merged into `main` at `1412b4dc`. Its YOLO target-receipt code
-  is running nowhere and has not been activated on a testnet or validator
-  fleet.
+- PR #38 is merged into `main` at `1412b4dc`. The last deployment handoff
+  reports its YOLO target-receipt code was not deployed or activated. This
+  closeout performed no fresh fleet probe and no deployment.
 - The feature defaults to disabled. It can activate only after a future
   governance amendment schedules `yolo_target_activation_height` strictly
   after the amendment block.
@@ -108,14 +110,11 @@ This sheet does not decide or authorize:
   execution, or other fleet action; or
 - any other on-chain action.
 
-## Operator answer
+## Recorded answer
 
-Reply with one line:
+`A — carry it in the next qualified routine validator release; leave activation unscheduled.`
 
-`A — carry it in the next routine validator release; leave activation unscheduled.`
-
-The operator may instead answer `B` or `C` with the option wording above.
-No answer by itself performs the selected action.
+No release date or activation height is selected. Local proof-inventory and public-tree repairs pass; they remain uncommitted and cannot establish remote CI success. At the 2026-09-07 check, main Rust run `34129297733` still had `test` running. Recheck every required job at the exact future release candidate. All release preconditions above remain open until evidenced.
 
 ## Sources
 

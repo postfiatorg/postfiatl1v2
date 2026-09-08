@@ -243,6 +243,27 @@ mod tests {
     }
 
     #[test]
+    fn disclosure_rejects_invalid_context_and_totals() {
+        assert!(disclosure().evidence_commitments(100, 101, 1).is_err());
+        assert!(disclosure().evidence_commitments(100, 0, 0).is_err());
+        let mut invalid = disclosure();
+        invalid.schema.push_str("-unknown");
+        assert!(invalid.evidence_commitments(100, 0, 1).is_err());
+        let mut invalid = disclosure();
+        invalid.broker_source_id.clear();
+        assert!(invalid.evidence_commitments(100, 0, 1).is_err());
+        let mut invalid = disclosure();
+        invalid.observed_at_unix_millis = 0;
+        assert!(invalid.evidence_commitments(100, 0, 1).is_err());
+        let mut invalid = disclosure();
+        invalid.account_application_identity_sha256 = "00".repeat(31);
+        assert!(invalid.evidence_commitments(100, 0, 1).is_err());
+        let mut invalid = disclosure();
+        invalid.valuation_inputs_root_sha256 = "zz".repeat(32);
+        assert!(invalid.evidence_commitments(100, 0, 1).is_err());
+    }
+
+    #[test]
     fn complete_reserve_proof_keeps_brokerage_value_attested() {
         let signing_key = SigningKey::from_bytes(&[7u8; 32]);
         let verifying_key = hex::encode(signing_key.verifying_key().to_bytes());
