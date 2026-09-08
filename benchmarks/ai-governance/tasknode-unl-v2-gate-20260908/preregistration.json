@@ -1,0 +1,154 @@
+{
+  "schema": "tasknode-unl-v2-gate-preregistration-v1",
+  "status": "LOCKED_BEFORE_TRIALS",
+  "locked_at": "2026-09-08",
+  "specification": {
+    "amendment_path": "docs/governance/tasknode-unl-amendment-v2-20260907.md",
+    "amendment_sha256": "a74bdf603c70ebc3432499b555b470d87da93e13c54424b3687f834bf02f892f",
+    "milestone_path": "docs/plans/active/tasknode-unl-amendment-v2-milestone.md",
+    "sections": ["1", "5"],
+    "mode": "SHADOW_ONLY",
+    "network_access": false
+  },
+  "frozen_v1_baseline": {
+    "directory": "benchmarks/ai-governance/tasknode-unl-attack-simulation-20260907",
+    "interpretation": "BYTE_REFERENCE_ONLY",
+    "artifacts": [
+      {"path": "attack-sweep.csv", "bytes": 2669, "sha256": "1473201a07bce3c2f81eb710fe3bd45672ca792703734c6bce49accc3f43c022"},
+      {"path": "determinism.json", "bytes": 1287, "sha256": "d0cf2d9c71e25de46aa01f0fc873c0dcded819ec95c2e170210ba4e554336629"},
+      {"path": "harness-gate.json", "bytes": 949, "sha256": "169578e7b454e0686dbd1b69b130d614e267e3977f17638373bdfcccc9b80c24"},
+      {"path": "output-manifest.json", "bytes": 399, "sha256": "e286e9c4214aab90d08c8ec1f81563d6216506863a3c372ea1ded064f1e3b664"},
+      {"path": "results.json", "bytes": 26559, "sha256": "81e27d4c16d689e2a1361b76720abe10030faee0e8962efe6387fd543137c2bd"},
+      {"path": "run_simulation.py", "bytes": 44030, "sha256": "658e0cabdd2c88c39e79d0de941f9b77373508e2100ff9c30ae1e4cdea2fe5fa"},
+      {"path": "sensitivity.csv", "bytes": 1480, "sha256": "d46ff92d80f4d1b209b1792cd0d957b7464ff1adcdb43baf269a052630cb33ed"}
+    ],
+    "published_v1_honest_control_count": 14,
+    "published_v1_results_sha256": "81e27d4c16d689e2a1361b76720abe10030faee0e8962efe6387fd543137c2bd"
+  },
+  "generator": {
+    "id": "paired-v2-topology-v1",
+    "population_size": 240,
+    "community_count": 20,
+    "accounts_per_community": 12,
+    "opening_list_size": 20,
+    "foundation_seat_count": 3,
+    "window_indices": [7, 8, 9],
+    "window_days": 180,
+    "topology_seeds": [
+      2026090801, 2026090802, 2026090803, 2026090804, 2026090805,
+      2026090806, 2026090807, 2026090808, 2026090809, 2026090810,
+      2026090811, 2026090812, 2026090813, 2026090814, 2026090815,
+      2026090816, 2026090817, 2026090818, 2026090819, 2026090820,
+      2026090821, 2026090822, 2026090823, 2026090824, 2026090825,
+      2026090826, 2026090827, 2026090828, 2026090829, 2026090830
+    ],
+    "canonical_ordering": "lexicographic_account_relation_and_output_keys",
+    "integer_randomness": "python_random_mt19937_seeded_only",
+    "special_cases": {
+      "exact_floor_boundaries": [2026090801, 2026090802],
+      "dangling_nodes": [2026090803],
+      "empty_eligible_seeds": [2026090804],
+      "duplicate_credit_records": [2026090805],
+      "control_rotations": [2026090806],
+      "authorized_removals": [2026090807],
+      "persistent_breaches": [2026090808]
+    }
+  },
+  "labels": {
+    "paired_honest_controls": [
+      "honest-c00-n01", "honest-c01-n01", "honest-c02-n01", "honest-c03-n01",
+      "honest-c04-n01", "honest-c05-n01", "honest-c06-n01", "honest-c07-n01",
+      "honest-c08-n01", "honest-c09-n01", "honest-c10-n01", "honest-c11-n01",
+      "honest-c12-n01", "honest-c13-n01"
+    ],
+    "honest_fixture": "paired_consent_complete",
+    "attacker_prefix": "attack-",
+    "incumbent_prefix": "validator-incumbent-",
+    "foundation_prefix": "foundation-",
+    "outcomes": ["PROPOSE_ADD", "HOLD", "NO_PROPOSAL"],
+    "continuity": ["READY", "HOLD_CONTINUITY"],
+    "cluster_states": ["CLEAR", "SATURATED", "EXISTING_BREACH"],
+    "control_change_cases": [
+      "declared_change_incomplete_window",
+      "hidden_unchanged_key_change",
+      "renewal_complete_window",
+      "recovery_incomplete_window",
+      "recovery_complete_window"
+    ]
+  },
+  "attack_budgets": {
+    "unsolicited_funding": {
+      "quiet_window_dust_transfers": [0, 1, 2, 4, 8, 16, 32, 64],
+      "larger_inflow_value_units": [0, 100, 1000, 1000000]
+    },
+    "declared_vs_hidden_control": [0, 1],
+    "renewal_recovery": [0, 1, 2],
+    "accepted_bridge": [0, 1, 2, 3, 4, 6, 8, 12, 16],
+    "undeclared_common_funding": [0, 1, 2, 3, 4, 6, 8, 12, 16],
+    "revocation": [0, 1, 2, 4, 8, 16],
+    "cap_merging_grief": [0, 1, 2, 3, 4, 6, 8]
+  },
+  "parameter_grid": {
+    "acknowledgement_availability_percent": [100, 75, 50, 0],
+    "original_low_base_high": [
+      {"constant": "vouch_weight", "labels": ["1/2", "1", "2"], "values": ["1/2", "1/1", "2/1"]},
+      {"constant": "cowork_weight", "labels": ["1/2", "1", "2"], "values": ["1/2", "1/1", "2/1"]},
+      {"constant": "cowork_cap", "labels": ["1", "3", "5"], "values": [1, 3, 5]},
+      {"constant": "funding_weight", "labels": ["1", "2", "4"], "values": ["1/1", "2/1", "4/1"], "v2_role": "AUDIT_ONLY_NO_MASS_NO_VETO"},
+      {"constant": "walk_damping", "labels": ["0.75", "0.85", "0.90"], "values": ["3/4", "17/20", "9/10"]},
+      {"constant": "walk_steps", "labels": ["10", "20", "40"], "values": [10, 20, 40]},
+      {"constant": "conductance_cut", "labels": ["0.05", "0.10", "0.15"], "values": ["1/20", "1/10", "3/20"]},
+      {"constant": "connectivity_floor", "labels": ["1/N", "1/(2N)", "1/(4N)"], "values": [1, 2, 4]},
+      {"constant": "minimum_cluster_seats", "labels": ["1", "2", "3"], "values": [1, 2, 3]},
+      {"constant": "cluster_seat_fraction", "labels": ["5%", "10%", "15%"], "values": ["1/20", "1/10", "3/20"]}
+    ],
+    "damping_steps_floor_cartesian": {
+      "damping": ["3/4", "17/20", "9/10"],
+      "steps": [10, 20, 40],
+      "floor_divisor": [1, 2, 4],
+      "expected_cells": 27
+    }
+  },
+  "attack_oracles": {
+    "unsolicited_funding": "all inflow variants preserve target stationary mass, social cluster id, declared control group id and admission result while observations remain auditable",
+    "declared_vs_hidden_control": "declared change holds until a complete post-epoch window; unchanged-key hidden transfer remains explicitly undetectable",
+    "renewal_recovery": "incomplete post-event evidence holds and a complete renewed post-event window may proceed",
+    "accepted_bridge": "measure attacker seats obtainable only through bilaterally accepted relations",
+    "undeclared_common_funding": "funding is audit-only and must not create positive mass or a unilateral veto; hidden coordination is reported, not synthesized",
+    "revocation": "revoked bilateral credit disappears at the next window boundary",
+    "cap_merging_grief": "merged breach preserves incumbent seats, blocks affected additions and does not block unrelated clusters"
+  },
+  "metrics": {
+    "honest_admission": "count of paired honest controls receiving PROPOSE_ADD",
+    "honest_waiting": "paired honest controls minus honest_admission",
+    "zero_admission_windows": "count of topology windows with zero honest proposals",
+    "best_attacker_seats_within_budget": "running maximum proposed attacker seats at or below each budget",
+    "unsolicited_denials": "honest target denials caused solely by unaccepted funding observations",
+    "concentration_ppm": "largest declared-control or social-cluster occupied seat count divided by total seats, floored to parts per million",
+    "breach_duration_windows": "inclusive windows from first observed breach through current unresolved window"
+  },
+  "determinism": {
+    "normal_runs": 2,
+    "reordered_input_runs": 1,
+    "required_comparison": "canonical results bytes identical across both normal builds and the reordered-input build",
+    "hash_algorithm": "sha256"
+  },
+  "gate": {
+    "honest_controls_required": 14,
+    "honest_controls_total": 14,
+    "failure_action": "REPORT_NO_PROMOTION_WITHOUT_TUNING",
+    "attack_family_action": "REPORT_EACH_ORACLE_AND_RESIDUAL_RISK",
+    "trial_deviation_action": "INVALID_TRIAL",
+    "v1_mutation_action": "ABORT"
+  },
+  "outputs": [
+    "results.json",
+    "attack-audit.json",
+    "acknowledgement-sweep.csv",
+    "sensitivity.csv",
+    "damping-steps-floor.csv",
+    "topology-windows.csv",
+    "determinism.json",
+    "output-manifest.json"
+  ]
+}

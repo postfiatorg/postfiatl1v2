@@ -1,6 +1,6 @@
 # Task Node UNL amendment V2 implementation journal
 
-**Status:** Sections A–B are implemented under the accepted Task Node items below. Sections C–E remain **future Task Node-governed work, not completed functionality**; V2 remains `SHADOW_ONLY`.
+**Status:** Sections A–C are implemented. Sections D–E remain **future work, not completed functionality**; V2 remains `SHADOW_ONLY`.
 
 **Documentation task:** `task_fbdc96a15de43ad360a81c25173d8d5b`.
 **Locked source:** [UNL amendment V2](../../governance/tasknode-unl-amendment-v2-20260907.md), SHA-256 `a74bdf603c70ebc3432499b555b470d87da93e13c54424b3687f834bf02f892f`.
@@ -9,8 +9,8 @@
 This journal changes no admission rule. Preserve the locked amendment, original
 blog, V1 MVP and its committed attack outputs. V2 is a separate, explicitly
 selected, `SHADOW_ONLY` policy. No submit, ratify, deploy or fund operation
-belongs to this milestone. Sections A–B's V2 evidence and policy files now
-exist; later proposed filenames do not. Existing V1 references identify
+belongs to this milestone. Sections A–C's V2 evidence, policy and gate files
+now exist; later proposed filenames do not. Existing V1 references identify
 boundaries, not permission to rewrite V1.
 
 ## A. Versioned evidence contract — amendment §§2–3, 6
@@ -47,17 +47,20 @@ Implementation surface: separate `tasknode_unl_v2_policy.py` and tests.
 
 ## C. Paired adversarial and liveness gate — amendment §§1, 5
 
+**Implementation task:** Task Node lifecycle skipped by operator decision 2026-09-08; generation requests req_cf56f893… and req_6948d197… failed with taskgen_provider_output_invalid.
+
 Existing baseline: `benchmarks/ai-governance/tasknode-unl-attack-simulation-20260907/run_simulation.py`,
 its manifest/results and `python/tests/test_tasknode_unl_*.py`.
-Future implementation surface: a separate V2 experiment directory and fixtures.
+Implementation surface: `benchmarks/ai-governance/tasknode-unl-v2-gate-20260908/`
+and `python/tests/fixtures/tasknode_unl_v2/gate-golden.json`.
 
-- [ ] Preregister and hash generators, budgets, labels, parameter grid and metrics before V2 trials. Reproduce V1 bytes unchanged; report V2 separately.
-- [ ] Test quiet-window dust and larger unsolicited inflows for identical target mass, cluster, group and result; retain the observations for audit.
-- [ ] Test declared versus hidden control changes, renewal/recovery, accepted-bridge attacks, undeclared common funding, revocation and cap-merging grief.
-- [ ] Require all fourteen original honest controls to remain admissible in the paired consent-complete fixture; report failures rather than adjusting the gate.
-- [ ] Sweep acknowledgement availability at 100/75/50/0%; repeat the original low/base/high grid and all 27 damping/steps/floor combinations, reporting honest and attacker outcomes together.
-- [ ] Run at least thirty published seeded topology variants and at least three changing windows; cover exact floor boundaries, dangling nodes, no seeds, duplicates, rotations, removals and persistent breaches.
-- [ ] Report honest admission/waiting, zero-admission windows, best attacker seats within budget, unsolicited denials, concentration and breach duration. Require two-run and reordered-input byte determinism.
+- [x] Preregister and hash generators, budgets, labels, parameter grid and metrics before V2 trials. Reproduce V1 bytes unchanged; report V2 separately. (`preregistration.json`, `preregistration-extension.json`, `PREREGISTRATION*.sha256`; `load_and_verify_preregistration`, `verify_frozen_v1` in `run_gate.py`)
+- [x] Test quiet-window dust and larger unsolicited inflows for identical target mass, cluster, group and result; retain the observations for audit. (`run_unsolicited_funding`; `outputs/attack-audit.json`)
+- [x] Test declared versus hidden control changes, renewal/recovery, accepted-bridge attacks, undeclared common funding, revocation and cap-merging grief. (`run_control_change`, `run_renewal_recovery`, `run_accepted_bridge`, `run_undeclared_common_funding`, `run_revocation`, `run_cap_merging_grief`)
+- [x] Require all fourteen original honest controls to remain admissible in the paired consent-complete fixture; report failures rather than adjusting the gate. (`run_honest_gate`; `outputs/results.json`)
+- [x] Sweep acknowledgement availability at 100/75/50/0%; repeat the original low/base/high grid and all 27 damping/steps/floor combinations, reporting honest and attacker outcomes together. (`run_acknowledgement_sweep`, `run_sensitivity`, `run_cartesian_grid`; `outputs/*.csv`)
+- [x] Run at least thirty published seeded topology variants and at least three changing windows; cover exact floor boundaries, dangling nodes, no seeds, duplicates, rotations, removals and persistent breaches. (`build_variable_topology_scenario`, `run_topology_windows`; `outputs/topology-windows.csv`)
+- [x] Report honest admission/waiting, zero-admission windows, best attacker seats within budget, unsolicited denials, concentration and breach duration. Require two-run and reordered-input byte determinism. (`build_results`, `run_experiment`; `outputs/determinism.json`, `outputs/output-manifest.json`)
 
 ## D. Human-operable Python CLI — amendment §6
 
@@ -93,3 +96,4 @@ Foundation score provenance or token economics as an incidental V2 change.
 - [x] 2026-09-07: verified the locked research hash and drafted this documentation-only journal. V1 source and original blog are unchanged. All implementation/CLI/UI boxes remain unchecked.
 - [x] 2026-09-08: accepted Task Node task `task_aece75f855b2633598b89dffd266a024` and completed section A in `tasknode_unl_v2_schema.py`, `tasknode_unl_v2_evidence.py` and the V2 fixture/tests. The combined V1/V2 selection passed 123 tests and strict MkDocs passed.
 - [x] 2026-09-08: accepted Task Node task `task_91a089bd14dedf6b6fb681fae7e49561` and completed section B in `tasknode_unl_v2_policy.py` and its golden fixture/tests. V1 passed 107 tests/36 subtests, V2 passed 32 tests/7 subtests and the combined selection passed 139 tests/43 subtests; strict MkDocs passed. Sections C–E remain unchecked.
+- [x] 2026-09-08: completed the separately preregistered Section C offline gate after the operator skipped Task Node because both generation requests failed. The frozen V1 artifacts remained byte-identical, the paired honest fixture admitted 14/14 controls, all 30 seeds ran over three windows, and normal/reordered V2 result bytes matched. Sections D–E remain unchecked.

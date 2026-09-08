@@ -1,0 +1,32 @@
+{
+  "schema": "tasknode-unl-v2-gate-golden-v1",
+  "preregistration_sha256": "94bc0979d95dbbfcb60b31ddb28fdc3ae5f96d284eb3b62438ff166083eb1206",
+  "preregistration_extension_sha256": "180698bd9930351f6eb23f9079296cb5fd5f3b8e765412a3c2b82c84c9eb99b9",
+  "results_sha256": "ae08a625675ded91dfbfb08c7acad3991d0b027a188bd31069107aec51b0f024",
+  "honest_controls": {
+    "admitted": 14,
+    "waiting": 0,
+    "verdict": "PASS"
+  },
+  "attack_family_verdicts": {
+    "accepted_bridge": "OBSERVED_ADMISSION_WITH_ACCEPTED_CONSENT",
+    "aged_account_control_change": "PASS_WITH_UNRESOLVED_HIDDEN_CHANGES",
+    "cap_merging_grief": "PASS_PRESERVED_AND_SCOPED",
+    "declared_vs_hidden_control": "PASS_WITH_UNDETECTABLE_HIDDEN_CHANGE",
+    "disconnected_vouch_ring": "PASS",
+    "first_funder_manipulation": "PASS",
+    "foundation_supported_favorite": "PASS",
+    "parallel_identities": "PASS",
+    "renewal_recovery": "PASS",
+    "revocation": "PASS",
+    "undeclared_common_funding": "EXPECTED_UNDETECTABLE_COORDINATION",
+    "unsolicited_funding": "PASS"
+  },
+  "coverage": {
+    "acknowledgement_cells": 4,
+    "damping_steps_floor_cells": 27,
+    "original_low_base_high_cells": 30,
+    "topology_seed_count": 30,
+    "topology_window_count": 90
+  }
+}
