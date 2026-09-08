@@ -1,0 +1,791 @@
+{
+  "control_registry": {
+    "chain_id": "pftl-testnet",
+    "entries": [
+      {
+        "account_id": "account-alice",
+        "authorization_source": "binding",
+        "binding_event_digest": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+        "chain_id": "pftl-testnet",
+        "event_at": "2026-01-01T00:00:00Z",
+        "event_kind": "baseline_binding",
+        "genesis_hash": "b20a00f08e211819a3e3ae7b5dcaaac7fdeb9412eda90238af7cb14fcf02d099",
+        "incumbent": true,
+        "mode": "SHADOW_ONLY",
+        "policy_id": "tasknode-unl-evidence-v2",
+        "public_key_hex": "029e8d033c697de7fe7fe3804256afe91f680dbedc4ed25ae7290eaca0ed8e19fb",
+        "schema": "tasknode-unl-v2-control-event-v2",
+        "version": 2
+      },
+      {
+        "account_id": "account-bob",
+        "authorization_source": "binding",
+        "binding_event_digest": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+        "chain_id": "pftl-testnet",
+        "event_at": "2026-01-01T00:00:00Z",
+        "event_kind": "baseline_binding",
+        "genesis_hash": "b20a00f08e211819a3e3ae7b5dcaaac7fdeb9412eda90238af7cb14fcf02d099",
+        "incumbent": false,
+        "mode": "SHADOW_ONLY",
+        "policy_id": "tasknode-unl-evidence-v2",
+        "public_key_hex": "03ccd3004a070832199f27c7e99481741bc1f9cf1f066b86ace9dcfbcb4fc21724",
+        "schema": "tasknode-unl-v2-control-event-v2",
+        "version": 2
+      },
+      {
+        "account_id": "account-carol",
+        "authorization_source": "binding",
+        "binding_event_digest": "7b0dc153ed8447c628859da4715bc61b88bf24da3f25b04356dd9a93ea44114e",
+        "chain_id": "pftl-testnet",
+        "event_at": "2026-01-01T00:00:00Z",
+        "event_kind": "baseline_binding",
+        "genesis_hash": "b20a00f08e211819a3e3ae7b5dcaaac7fdeb9412eda90238af7cb14fcf02d099",
+        "incumbent": false,
+        "mode": "SHADOW_ONLY",
+        "policy_id": "tasknode-unl-evidence-v2",
+        "public_key_hex": "0289ddcaee28dced918c2e1532bb5e0337bfc9b7cc47ca63e75c8fef0644f11797",
+        "schema": "tasknode-unl-v2-control-event-v2",
+        "version": 2
+      }
+    ],
+    "genesis_hash": "b20a00f08e211819a3e3ae7b5dcaaac7fdeb9412eda90238af7cb14fcf02d099",
+    "mode": "SHADOW_ONLY",
+    "policy_id": "tasknode-unl-evidence-v2",
+    "schema": "tasknode-unl-v2-control-registry-v2",
+    "version": 2
+  },
+  "evidence": {
+    "bilateral_records": [
+      {
+        "acknowledged_at": "2026-01-03T00:00:00Z",
+        "action": "grant",
+        "chain_id": "pftl-testnet",
+        "effective_window": 7,
+        "expiry_window": 9,
+        "finalized_window": 6,
+        "genesis_hash": "b20a00f08e211819a3e3ae7b5dcaaac7fdeb9412eda90238af7cb14fcf02d099",
+        "ledger_finality_digest": "b2648cf08144216850f0aa1627f9e64d9b7bd200393d3fc47b39580d25cb5c44",
+        "mode": "SHADOW_ONLY",
+        "policy_id": "tasknode-unl-evidence-v2",
+        "relation_kind": "vouch",
+        "schema": "tasknode-unl-v2-bilateral-record-v2",
+        "signatures": [
+          {
+            "account_id": "account-alice",
+            "algorithm": "secp256k1-recoverable-sha256",
+            "control_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+            "mode": "SHADOW_ONLY",
+            "public_key_hex": "029e8d033c697de7fe7fe3804256afe91f680dbedc4ed25ae7290eaca0ed8e19fb",
+            "schema": "tasknode-unl-v2-signature-v2",
+            "signature_hex": "4d1f696109dcfa2f799031835b497034f8178aea0ca8d34cab7f515f22926ac1470b47c8b8ca6d4d81d201f8588056cd944eb8bc9888bfeaf46cfd342dd58a8300",
+            "signed_digest": "9591d8390113a99d2fada17a6aba022efb8164e9ea306d6e337df1920a77c899",
+            "version": 2
+          },
+          {
+            "account_id": "account-bob",
+            "algorithm": "secp256k1-recoverable-sha256",
+            "control_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+            "mode": "SHADOW_ONLY",
+            "public_key_hex": "03ccd3004a070832199f27c7e99481741bc1f9cf1f066b86ace9dcfbcb4fc21724",
+            "schema": "tasknode-unl-v2-signature-v2",
+            "signature_hex": "ed0d659740e51ee7060379c695a9fc19b32e8c5bb31cf22bb7740ac8c2631dee36d0e1da8fa6d0c8de24ebe946bdb572f38fc4f06827ca1fe1671ac3fc8f148b01",
+            "signed_digest": "9591d8390113a99d2fada17a6aba022efb8164e9ea306d6e337df1920a77c899",
+            "version": 2
+          }
+        ],
+        "source_account": "account-alice",
+        "source_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+        "statement_digest": "e7245df839625d0a35f24f9a90a055850ea39fc30b6c0e1d48e6a7d3560c6e90",
+        "target_account": "account-bob",
+        "target_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+        "version": 2,
+        "work_completed_at": null
+      },
+      {
+        "acknowledged_at": "2026-01-03T00:00:00Z",
+        "action": "grant",
+        "chain_id": "pftl-testnet",
+        "effective_window": 7,
+        "expiry_window": 9,
+        "finalized_window": 6,
+        "genesis_hash": "b20a00f08e211819a3e3ae7b5dcaaac7fdeb9412eda90238af7cb14fcf02d099",
+        "ledger_finality_digest": "b2648cf08144216850f0aa1627f9e64d9b7bd200393d3fc47b39580d25cb5c44",
+        "mode": "SHADOW_ONLY",
+        "policy_id": "tasknode-unl-evidence-v2",
+        "relation_kind": "cowork",
+        "schema": "tasknode-unl-v2-bilateral-record-v2",
+        "signatures": [
+          {
+            "account_id": "account-alice",
+            "algorithm": "secp256k1-recoverable-sha256",
+            "control_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+            "mode": "SHADOW_ONLY",
+            "public_key_hex": "029e8d033c697de7fe7fe3804256afe91f680dbedc4ed25ae7290eaca0ed8e19fb",
+            "schema": "tasknode-unl-v2-signature-v2",
+            "signature_hex": "a541a5720d892a058f0679ce43b1dc7c758d3fd2b74a4d9ea35d857f4304f3ca00a74f9e5977522e78c8a93dfe797d052fa7a5f33b4c209a6fa565cbe1149a2c00",
+            "signed_digest": "9ef4e0aaa1eac09bbe4451c4bafc5af5abac9352b542016e55044df8b4377c8c",
+            "version": 2
+          },
+          {
+            "account_id": "account-bob",
+            "algorithm": "secp256k1-recoverable-sha256",
+            "control_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+            "mode": "SHADOW_ONLY",
+            "public_key_hex": "03ccd3004a070832199f27c7e99481741bc1f9cf1f066b86ace9dcfbcb4fc21724",
+            "schema": "tasknode-unl-v2-signature-v2",
+            "signature_hex": "ac4a853a4f06408c5706b612b17f3b9d9ea624a63530acd3101936222afeac1f5a700ac4a51b0326af8595c826c70be008687887d8535c08278f7442c38630be01",
+            "signed_digest": "9ef4e0aaa1eac09bbe4451c4bafc5af5abac9352b542016e55044df8b4377c8c",
+            "version": 2
+          }
+        ],
+        "source_account": "account-alice",
+        "source_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+        "statement_digest": "94e0a6f204d8c16f6402a0ec4a3d28131abf0b477ea9751edb2d2ae264fba736",
+        "target_account": "account-bob",
+        "target_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+        "version": 2,
+        "work_completed_at": "2026-01-02T00:00:00Z"
+      }
+    ],
+    "chain_id": "pftl-testnet",
+    "control_declarations": [
+      {
+        "acknowledged_at": "2026-01-03T00:00:00Z",
+        "action": "declare",
+        "chain_id": "pftl-testnet",
+        "effective_window": 7,
+        "expiry_window": 9,
+        "finalized_window": 6,
+        "genesis_hash": "b20a00f08e211819a3e3ae7b5dcaaac7fdeb9412eda90238af7cb14fcf02d099",
+        "ledger_finality_digest": "b2648cf08144216850f0aa1627f9e64d9b7bd200393d3fc47b39580d25cb5c44",
+        "members": [
+          {
+            "account_id": "account-alice",
+            "control_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db"
+          },
+          {
+            "account_id": "account-bob",
+            "control_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c"
+          }
+        ],
+        "mode": "SHADOW_ONLY",
+        "policy_id": "tasknode-unl-evidence-v2",
+        "schema": "tasknode-unl-v2-control-declaration-v2",
+        "signatures": [
+          {
+            "account_id": "account-alice",
+            "algorithm": "secp256k1-recoverable-sha256",
+            "control_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+            "mode": "SHADOW_ONLY",
+            "public_key_hex": "029e8d033c697de7fe7fe3804256afe91f680dbedc4ed25ae7290eaca0ed8e19fb",
+            "schema": "tasknode-unl-v2-signature-v2",
+            "signature_hex": "4fd1cea31a27e055503784b9170534680784df23037579a34918e1dc85e72df613251486f45b5e0e90e8c30e63da8853079a5d2c9edd4443a5e80f27c2de404d01",
+            "signed_digest": "3b5b43d92beac9cccc04e5fec2f204404b7021fc3bfe6186640a2dfdf88126a3",
+            "version": 2
+          },
+          {
+            "account_id": "account-bob",
+            "algorithm": "secp256k1-recoverable-sha256",
+            "control_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+            "mode": "SHADOW_ONLY",
+            "public_key_hex": "03ccd3004a070832199f27c7e99481741bc1f9cf1f066b86ace9dcfbcb4fc21724",
+            "schema": "tasknode-unl-v2-signature-v2",
+            "signature_hex": "eb439a1e26f2c6d2bfd909f19e4574ccfd06ecec9a554596c79b6ce27ba871045a74a3d1a5156c91221175a9e6db6ea915d6c6870bcba59be63f07d80b8708c500",
+            "signed_digest": "3b5b43d92beac9cccc04e5fec2f204404b7021fc3bfe6186640a2dfdf88126a3",
+            "version": 2
+          }
+        ],
+        "statement_digest": "d72368eb3444f4def51e5222631e9e3d281ffbcf27b55d3202722c39f4488714",
+        "version": 2
+      }
+    ],
+    "funding_observations": [
+      {
+        "mode": "SHADOW_ONLY",
+        "observation_digest": "1b7e774f8b4faf3c11e34d6cfe01b3eb00280ca556ac64dc2168aff13e0ce34c",
+        "observation_kind": "first_funder",
+        "observed_at": "2026-03-01T00:00:00Z",
+        "schema": "tasknode-unl-v2-funding-observation-v2",
+        "source_account": "account-alice",
+        "source_record_digests": [
+          "292b8795582d4b3ecaf5cfd573670bd22728e62bc9432d4d378ef2f2b3db13af"
+        ],
+        "target_account": "account-carol",
+        "value_units": 1,
+        "version": 2
+      }
+    ],
+    "genesis_hash": "b20a00f08e211819a3e3ae7b5dcaaac7fdeb9412eda90238af7cb14fcf02d099",
+    "mode": "SHADOW_ONLY",
+    "policy_id": "tasknode-unl-evidence-v2",
+    "schema": "tasknode-unl-v2-evidence-input-v2",
+    "score_evidence": [
+      {
+        "account_id": "account-alice",
+        "control_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+        "evidence_at": "2026-01-04T00:00:00Z",
+        "evidence_digest": "da9cd91644e66bed56c6b96f51f3bc62904cf1cab0e7fff79c376bc474813000",
+        "evidence_kind": "work",
+        "mode": "SHADOW_ONLY",
+        "schema": "tasknode-unl-v2-score-evidence-v2",
+        "version": 2
+      },
+      {
+        "account_id": "account-alice",
+        "control_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+        "evidence_at": "2026-01-04T00:00:00Z",
+        "evidence_digest": "a3aa17361aecfe4361454c3675854a7f04a613a305d4bbce981e8659e91674be",
+        "evidence_kind": "quality",
+        "mode": "SHADOW_ONLY",
+        "schema": "tasknode-unl-v2-score-evidence-v2",
+        "version": 2
+      },
+      {
+        "account_id": "account-alice",
+        "control_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+        "evidence_at": "2026-01-04T00:00:00Z",
+        "evidence_digest": "bc8fac8126658962636b6d194d241e90bed766f53791a7e143d47b34b2b6cf87",
+        "evidence_kind": "standing",
+        "mode": "SHADOW_ONLY",
+        "schema": "tasknode-unl-v2-score-evidence-v2",
+        "version": 2
+      },
+      {
+        "account_id": "account-alice",
+        "control_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+        "evidence_at": "2026-01-04T00:00:00Z",
+        "evidence_digest": "107de3720debb19c7955b4519f8e4529df207725147c9dc350db1e02358a08c3",
+        "evidence_kind": "accountability",
+        "mode": "SHADOW_ONLY",
+        "schema": "tasknode-unl-v2-score-evidence-v2",
+        "version": 2
+      },
+      {
+        "account_id": "account-bob",
+        "control_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+        "evidence_at": "2026-01-04T00:00:00Z",
+        "evidence_digest": "d80db61ec476b2cfd1ee3e040c71f7c52a61a368c23b856fe176c68467d86e16",
+        "evidence_kind": "work",
+        "mode": "SHADOW_ONLY",
+        "schema": "tasknode-unl-v2-score-evidence-v2",
+        "version": 2
+      },
+      {
+        "account_id": "account-bob",
+        "control_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+        "evidence_at": "2026-01-04T00:00:00Z",
+        "evidence_digest": "d4934985ceb11ceddcc0a2a63cc255a55c6bef9b159a63d05d70ae15f55c71c9",
+        "evidence_kind": "quality",
+        "mode": "SHADOW_ONLY",
+        "schema": "tasknode-unl-v2-score-evidence-v2",
+        "version": 2
+      },
+      {
+        "account_id": "account-bob",
+        "control_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+        "evidence_at": "2026-01-04T00:00:00Z",
+        "evidence_digest": "d2c6c420d7d3a1f68db8145e75eae3c15ce7d4ed9d852f7469419e307042647a",
+        "evidence_kind": "standing",
+        "mode": "SHADOW_ONLY",
+        "schema": "tasknode-unl-v2-score-evidence-v2",
+        "version": 2
+      },
+      {
+        "account_id": "account-bob",
+        "control_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+        "evidence_at": "2026-01-04T00:00:00Z",
+        "evidence_digest": "f697858ad977d7a3cf06264230b8655b81a9505807a2b765f586860144775c5d",
+        "evidence_kind": "accountability",
+        "mode": "SHADOW_ONLY",
+        "schema": "tasknode-unl-v2-score-evidence-v2",
+        "version": 2
+      },
+      {
+        "account_id": "account-carol",
+        "control_epoch": "7b0dc153ed8447c628859da4715bc61b88bf24da3f25b04356dd9a93ea44114e",
+        "evidence_at": "2026-01-04T00:00:00Z",
+        "evidence_digest": "bdb98240a82b054e441e25a914c35676d0f173bec5b218cc8972ce9b328f8570",
+        "evidence_kind": "work",
+        "mode": "SHADOW_ONLY",
+        "schema": "tasknode-unl-v2-score-evidence-v2",
+        "version": 2
+      },
+      {
+        "account_id": "account-carol",
+        "control_epoch": "7b0dc153ed8447c628859da4715bc61b88bf24da3f25b04356dd9a93ea44114e",
+        "evidence_at": "2026-01-04T00:00:00Z",
+        "evidence_digest": "913bce434fcbf6de45e7b39aff6c14b1d1ca76fa5852db6a5bd71983f1e88bee",
+        "evidence_kind": "quality",
+        "mode": "SHADOW_ONLY",
+        "schema": "tasknode-unl-v2-score-evidence-v2",
+        "version": 2
+      },
+      {
+        "account_id": "account-carol",
+        "control_epoch": "7b0dc153ed8447c628859da4715bc61b88bf24da3f25b04356dd9a93ea44114e",
+        "evidence_at": "2026-01-04T00:00:00Z",
+        "evidence_digest": "3f0e493ed1a1e86c3241c739fd3880b2f83eadb213506d29e0e92ff9e2172503",
+        "evidence_kind": "standing",
+        "mode": "SHADOW_ONLY",
+        "schema": "tasknode-unl-v2-score-evidence-v2",
+        "version": 2
+      },
+      {
+        "account_id": "account-carol",
+        "control_epoch": "7b0dc153ed8447c628859da4715bc61b88bf24da3f25b04356dd9a93ea44114e",
+        "evidence_at": "2026-01-04T00:00:00Z",
+        "evidence_digest": "af767aee5579c6ce0cd50815aa8411c0729bb5c99b345935420ca6f3b99da5ab",
+        "evidence_kind": "accountability",
+        "mode": "SHADOW_ONLY",
+        "schema": "tasknode-unl-v2-score-evidence-v2",
+        "version": 2
+      }
+    ],
+    "version": 2,
+    "window": {
+      "days": 180,
+      "end": "2026-06-30T00:00:00Z",
+      "index": 7,
+      "mode": "SHADOW_ONLY",
+      "schema": "tasknode-unl-v2-window-v2",
+      "start": "2026-01-01T00:00:00Z",
+      "version": 2
+    }
+  },
+  "expected_result": {
+    "active_control_declarations": [
+      {
+        "effective_window": 7,
+        "expiry_window": 9,
+        "members": [
+          "account-alice",
+          "account-bob"
+        ],
+        "record_digest": "940eec1cd9bc021101d5d088773a80ab36583048411338240289677dba0fd05a",
+        "statement_digest": "d72368eb3444f4def51e5222631e9e3d281ffbcf27b55d3202722c39f4488714"
+      }
+    ],
+    "active_cowork": [
+      {
+        "credit_id": "64888deae42c00d6c8e3bfb88321e04f1316b1178646610ae710f9f334dd6744",
+        "effective_window": 7,
+        "expiry_window": 9,
+        "record_digest": "e3451e882c2e17d5b13f78a36e7ccb0c1ca1104cde737f12f83dc848e01842ac",
+        "relation_kind": "cowork",
+        "source_account": "account-alice",
+        "statement_digest": "94e0a6f204d8c16f6402a0ec4a3d28131abf0b477ea9751edb2d2ae264fba736",
+        "target_account": "account-bob"
+      }
+    ],
+    "active_vouches": [
+      {
+        "credit_id": "ddd14dd4fc1102d63ffb0b99a112abe4ae62a6919373b42ae702bdfa56a131a0",
+        "effective_window": 7,
+        "expiry_window": 9,
+        "record_digest": "0942a8e5cdf4bb370bbbc320285d684bf7443af4424b01f9b6beedb98367e88a",
+        "relation_kind": "vouch",
+        "source_account": "account-alice",
+        "statement_digest": "e7245df839625d0a35f24f9a90a055850ea39fc30b6c0e1d48e6a7d3560c6e90",
+        "target_account": "account-bob"
+      }
+    ],
+    "audit_funding_observations": [
+      {
+        "mode": "SHADOW_ONLY",
+        "observation_digest": "1b7e774f8b4faf3c11e34d6cfe01b3eb00280ca556ac64dc2168aff13e0ce34c",
+        "observation_kind": "first_funder",
+        "observed_at": "2026-03-01T00:00:00Z",
+        "schema": "tasknode-unl-v2-funding-observation-v2",
+        "source_account": "account-alice",
+        "source_record_digests": [
+          "292b8795582d4b3ecaf5cfd573670bd22728e62bc9432d4d378ef2f2b3db13af"
+        ],
+        "target_account": "account-carol",
+        "value_units": 1,
+        "version": 2
+      }
+    ],
+    "commitments": {
+      "input_root": "411a5f1937aafed44ca3bfe1f60ce7da60ca27d90f05b8ce3c556652b8305b3a",
+      "policy_root": "1b697d1302a1a21bb576cdeac59c2a20fba8aa4ac4f3b311ebbe5ea56f3cda76",
+      "registry_root": "28d80fb8c1017f34eb5d3e1082a7e0e5ee89ec0eea890496b676b3107f8afd2a"
+    },
+    "continuity": [
+      {
+        "account_id": "account-alice",
+        "control_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+        "fresh_score_evidence": 4,
+        "incumbent": true,
+        "post_epoch_cowork": 1,
+        "reasons": [],
+        "renewed_vouches": 1,
+        "retain_incumbent": true,
+        "status": "READY"
+      },
+      {
+        "account_id": "account-bob",
+        "control_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+        "fresh_score_evidence": 4,
+        "incumbent": false,
+        "post_epoch_cowork": 1,
+        "reasons": [],
+        "renewed_vouches": 1,
+        "retain_incumbent": false,
+        "status": "READY"
+      },
+      {
+        "account_id": "account-carol",
+        "control_epoch": "7b0dc153ed8447c628859da4715bc61b88bf24da3f25b04356dd9a93ea44114e",
+        "fresh_score_evidence": 4,
+        "incumbent": false,
+        "post_epoch_cowork": 0,
+        "reasons": [],
+        "renewed_vouches": 0,
+        "retain_incumbent": false,
+        "status": "READY"
+      }
+    ],
+    "evidence_limitations": [
+      "An unchanged-key control transfer is undetectable by these public inputs.",
+      "A valid custody signature proves key control, not personhood or continuity of a human operator.",
+      "Funding observations are audit-only and cannot create admission trust, control-group membership, or a veto."
+    ],
+    "failures": [],
+    "historical_score_evidence": [],
+    "hold_accounts": [],
+    "mode": "SHADOW_ONLY",
+    "policy_id": "tasknode-unl-evidence-v2",
+    "record_rejections": [],
+    "schema": "tasknode-unl-v2-evidence-result-v2",
+    "status": "verified",
+    "version": 2,
+    "window": {
+      "days": 180,
+      "end": "2026-06-30T00:00:00Z",
+      "index": 7,
+      "mode": "SHADOW_ONLY",
+      "schema": "tasknode-unl-v2-window-v2",
+      "start": "2026-01-01T00:00:00Z",
+      "version": 2
+    }
+  },
+  "fixture_schema": "tasknode-unl-v2-evidence-golden-v1",
+  "snapshot": {
+    "commitments": {
+      "input_root": "411a5f1937aafed44ca3bfe1f60ce7da60ca27d90f05b8ce3c556652b8305b3a",
+      "policy_root": "1b697d1302a1a21bb576cdeac59c2a20fba8aa4ac4f3b311ebbe5ea56f3cda76",
+      "registry_root": "28d80fb8c1017f34eb5d3e1082a7e0e5ee89ec0eea890496b676b3107f8afd2a"
+    },
+    "evidence": {
+      "bilateral_records": [
+        {
+          "acknowledged_at": "2026-01-03T00:00:00Z",
+          "action": "grant",
+          "chain_id": "pftl-testnet",
+          "effective_window": 7,
+          "expiry_window": 9,
+          "finalized_window": 6,
+          "genesis_hash": "b20a00f08e211819a3e3ae7b5dcaaac7fdeb9412eda90238af7cb14fcf02d099",
+          "ledger_finality_digest": "b2648cf08144216850f0aa1627f9e64d9b7bd200393d3fc47b39580d25cb5c44",
+          "mode": "SHADOW_ONLY",
+          "policy_id": "tasknode-unl-evidence-v2",
+          "relation_kind": "vouch",
+          "schema": "tasknode-unl-v2-bilateral-record-v2",
+          "signatures": [
+            {
+              "account_id": "account-alice",
+              "algorithm": "secp256k1-recoverable-sha256",
+              "control_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+              "mode": "SHADOW_ONLY",
+              "public_key_hex": "029e8d033c697de7fe7fe3804256afe91f680dbedc4ed25ae7290eaca0ed8e19fb",
+              "schema": "tasknode-unl-v2-signature-v2",
+              "signature_hex": "4d1f696109dcfa2f799031835b497034f8178aea0ca8d34cab7f515f22926ac1470b47c8b8ca6d4d81d201f8588056cd944eb8bc9888bfeaf46cfd342dd58a8300",
+              "signed_digest": "9591d8390113a99d2fada17a6aba022efb8164e9ea306d6e337df1920a77c899",
+              "version": 2
+            },
+            {
+              "account_id": "account-bob",
+              "algorithm": "secp256k1-recoverable-sha256",
+              "control_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+              "mode": "SHADOW_ONLY",
+              "public_key_hex": "03ccd3004a070832199f27c7e99481741bc1f9cf1f066b86ace9dcfbcb4fc21724",
+              "schema": "tasknode-unl-v2-signature-v2",
+              "signature_hex": "ed0d659740e51ee7060379c695a9fc19b32e8c5bb31cf22bb7740ac8c2631dee36d0e1da8fa6d0c8de24ebe946bdb572f38fc4f06827ca1fe1671ac3fc8f148b01",
+              "signed_digest": "9591d8390113a99d2fada17a6aba022efb8164e9ea306d6e337df1920a77c899",
+              "version": 2
+            }
+          ],
+          "source_account": "account-alice",
+          "source_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+          "statement_digest": "e7245df839625d0a35f24f9a90a055850ea39fc30b6c0e1d48e6a7d3560c6e90",
+          "target_account": "account-bob",
+          "target_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+          "version": 2,
+          "work_completed_at": null
+        },
+        {
+          "acknowledged_at": "2026-01-03T00:00:00Z",
+          "action": "grant",
+          "chain_id": "pftl-testnet",
+          "effective_window": 7,
+          "expiry_window": 9,
+          "finalized_window": 6,
+          "genesis_hash": "b20a00f08e211819a3e3ae7b5dcaaac7fdeb9412eda90238af7cb14fcf02d099",
+          "ledger_finality_digest": "b2648cf08144216850f0aa1627f9e64d9b7bd200393d3fc47b39580d25cb5c44",
+          "mode": "SHADOW_ONLY",
+          "policy_id": "tasknode-unl-evidence-v2",
+          "relation_kind": "cowork",
+          "schema": "tasknode-unl-v2-bilateral-record-v2",
+          "signatures": [
+            {
+              "account_id": "account-alice",
+              "algorithm": "secp256k1-recoverable-sha256",
+              "control_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+              "mode": "SHADOW_ONLY",
+              "public_key_hex": "029e8d033c697de7fe7fe3804256afe91f680dbedc4ed25ae7290eaca0ed8e19fb",
+              "schema": "tasknode-unl-v2-signature-v2",
+              "signature_hex": "a541a5720d892a058f0679ce43b1dc7c758d3fd2b74a4d9ea35d857f4304f3ca00a74f9e5977522e78c8a93dfe797d052fa7a5f33b4c209a6fa565cbe1149a2c00",
+              "signed_digest": "9ef4e0aaa1eac09bbe4451c4bafc5af5abac9352b542016e55044df8b4377c8c",
+              "version": 2
+            },
+            {
+              "account_id": "account-bob",
+              "algorithm": "secp256k1-recoverable-sha256",
+              "control_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+              "mode": "SHADOW_ONLY",
+              "public_key_hex": "03ccd3004a070832199f27c7e99481741bc1f9cf1f066b86ace9dcfbcb4fc21724",
+              "schema": "tasknode-unl-v2-signature-v2",
+              "signature_hex": "ac4a853a4f06408c5706b612b17f3b9d9ea624a63530acd3101936222afeac1f5a700ac4a51b0326af8595c826c70be008687887d8535c08278f7442c38630be01",
+              "signed_digest": "9ef4e0aaa1eac09bbe4451c4bafc5af5abac9352b542016e55044df8b4377c8c",
+              "version": 2
+            }
+          ],
+          "source_account": "account-alice",
+          "source_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+          "statement_digest": "94e0a6f204d8c16f6402a0ec4a3d28131abf0b477ea9751edb2d2ae264fba736",
+          "target_account": "account-bob",
+          "target_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+          "version": 2,
+          "work_completed_at": "2026-01-02T00:00:00Z"
+        }
+      ],
+      "chain_id": "pftl-testnet",
+      "control_declarations": [
+        {
+          "acknowledged_at": "2026-01-03T00:00:00Z",
+          "action": "declare",
+          "chain_id": "pftl-testnet",
+          "effective_window": 7,
+          "expiry_window": 9,
+          "finalized_window": 6,
+          "genesis_hash": "b20a00f08e211819a3e3ae7b5dcaaac7fdeb9412eda90238af7cb14fcf02d099",
+          "ledger_finality_digest": "b2648cf08144216850f0aa1627f9e64d9b7bd200393d3fc47b39580d25cb5c44",
+          "members": [
+            {
+              "account_id": "account-alice",
+              "control_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db"
+            },
+            {
+              "account_id": "account-bob",
+              "control_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c"
+            }
+          ],
+          "mode": "SHADOW_ONLY",
+          "policy_id": "tasknode-unl-evidence-v2",
+          "schema": "tasknode-unl-v2-control-declaration-v2",
+          "signatures": [
+            {
+              "account_id": "account-alice",
+              "algorithm": "secp256k1-recoverable-sha256",
+              "control_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+              "mode": "SHADOW_ONLY",
+              "public_key_hex": "029e8d033c697de7fe7fe3804256afe91f680dbedc4ed25ae7290eaca0ed8e19fb",
+              "schema": "tasknode-unl-v2-signature-v2",
+              "signature_hex": "4fd1cea31a27e055503784b9170534680784df23037579a34918e1dc85e72df613251486f45b5e0e90e8c30e63da8853079a5d2c9edd4443a5e80f27c2de404d01",
+              "signed_digest": "3b5b43d92beac9cccc04e5fec2f204404b7021fc3bfe6186640a2dfdf88126a3",
+              "version": 2
+            },
+            {
+              "account_id": "account-bob",
+              "algorithm": "secp256k1-recoverable-sha256",
+              "control_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+              "mode": "SHADOW_ONLY",
+              "public_key_hex": "03ccd3004a070832199f27c7e99481741bc1f9cf1f066b86ace9dcfbcb4fc21724",
+              "schema": "tasknode-unl-v2-signature-v2",
+              "signature_hex": "eb439a1e26f2c6d2bfd909f19e4574ccfd06ecec9a554596c79b6ce27ba871045a74a3d1a5156c91221175a9e6db6ea915d6c6870bcba59be63f07d80b8708c500",
+              "signed_digest": "3b5b43d92beac9cccc04e5fec2f204404b7021fc3bfe6186640a2dfdf88126a3",
+              "version": 2
+            }
+          ],
+          "statement_digest": "d72368eb3444f4def51e5222631e9e3d281ffbcf27b55d3202722c39f4488714",
+          "version": 2
+        }
+      ],
+      "funding_observations": [
+        {
+          "mode": "SHADOW_ONLY",
+          "observation_digest": "1b7e774f8b4faf3c11e34d6cfe01b3eb00280ca556ac64dc2168aff13e0ce34c",
+          "observation_kind": "first_funder",
+          "observed_at": "2026-03-01T00:00:00Z",
+          "schema": "tasknode-unl-v2-funding-observation-v2",
+          "source_account": "account-alice",
+          "source_record_digests": [
+            "292b8795582d4b3ecaf5cfd573670bd22728e62bc9432d4d378ef2f2b3db13af"
+          ],
+          "target_account": "account-carol",
+          "value_units": 1,
+          "version": 2
+        }
+      ],
+      "genesis_hash": "b20a00f08e211819a3e3ae7b5dcaaac7fdeb9412eda90238af7cb14fcf02d099",
+      "mode": "SHADOW_ONLY",
+      "policy_id": "tasknode-unl-evidence-v2",
+      "schema": "tasknode-unl-v2-evidence-input-v2",
+      "score_evidence": [
+        {
+          "account_id": "account-alice",
+          "control_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+          "evidence_at": "2026-01-04T00:00:00Z",
+          "evidence_digest": "da9cd91644e66bed56c6b96f51f3bc62904cf1cab0e7fff79c376bc474813000",
+          "evidence_kind": "work",
+          "mode": "SHADOW_ONLY",
+          "schema": "tasknode-unl-v2-score-evidence-v2",
+          "version": 2
+        },
+        {
+          "account_id": "account-alice",
+          "control_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+          "evidence_at": "2026-01-04T00:00:00Z",
+          "evidence_digest": "a3aa17361aecfe4361454c3675854a7f04a613a305d4bbce981e8659e91674be",
+          "evidence_kind": "quality",
+          "mode": "SHADOW_ONLY",
+          "schema": "tasknode-unl-v2-score-evidence-v2",
+          "version": 2
+        },
+        {
+          "account_id": "account-alice",
+          "control_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+          "evidence_at": "2026-01-04T00:00:00Z",
+          "evidence_digest": "bc8fac8126658962636b6d194d241e90bed766f53791a7e143d47b34b2b6cf87",
+          "evidence_kind": "standing",
+          "mode": "SHADOW_ONLY",
+          "schema": "tasknode-unl-v2-score-evidence-v2",
+          "version": 2
+        },
+        {
+          "account_id": "account-alice",
+          "control_epoch": "d54cc04c346155d6b2a404c680d821404589ff0030d729dece72358114cf97db",
+          "evidence_at": "2026-01-04T00:00:00Z",
+          "evidence_digest": "107de3720debb19c7955b4519f8e4529df207725147c9dc350db1e02358a08c3",
+          "evidence_kind": "accountability",
+          "mode": "SHADOW_ONLY",
+          "schema": "tasknode-unl-v2-score-evidence-v2",
+          "version": 2
+        },
+        {
+          "account_id": "account-bob",
+          "control_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+          "evidence_at": "2026-01-04T00:00:00Z",
+          "evidence_digest": "d80db61ec476b2cfd1ee3e040c71f7c52a61a368c23b856fe176c68467d86e16",
+          "evidence_kind": "work",
+          "mode": "SHADOW_ONLY",
+          "schema": "tasknode-unl-v2-score-evidence-v2",
+          "version": 2
+        },
+        {
+          "account_id": "account-bob",
+          "control_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+          "evidence_at": "2026-01-04T00:00:00Z",
+          "evidence_digest": "d4934985ceb11ceddcc0a2a63cc255a55c6bef9b159a63d05d70ae15f55c71c9",
+          "evidence_kind": "quality",
+          "mode": "SHADOW_ONLY",
+          "schema": "tasknode-unl-v2-score-evidence-v2",
+          "version": 2
+        },
+        {
+          "account_id": "account-bob",
+          "control_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+          "evidence_at": "2026-01-04T00:00:00Z",
+          "evidence_digest": "d2c6c420d7d3a1f68db8145e75eae3c15ce7d4ed9d852f7469419e307042647a",
+          "evidence_kind": "standing",
+          "mode": "SHADOW_ONLY",
+          "schema": "tasknode-unl-v2-score-evidence-v2",
+          "version": 2
+        },
+        {
+          "account_id": "account-bob",
+          "control_epoch": "aa1dc480a006c2a46d2b6e0ac8eee51e3ebc64d86917e3069d271ac3aad4280c",
+          "evidence_at": "2026-01-04T00:00:00Z",
+          "evidence_digest": "f697858ad977d7a3cf06264230b8655b81a9505807a2b765f586860144775c5d",
+          "evidence_kind": "accountability",
+          "mode": "SHADOW_ONLY",
+          "schema": "tasknode-unl-v2-score-evidence-v2",
+          "version": 2
+        },
+        {
+          "account_id": "account-carol",
+          "control_epoch": "7b0dc153ed8447c628859da4715bc61b88bf24da3f25b04356dd9a93ea44114e",
+          "evidence_at": "2026-01-04T00:00:00Z",
+          "evidence_digest": "bdb98240a82b054e441e25a914c35676d0f173bec5b218cc8972ce9b328f8570",
+          "evidence_kind": "work",
+          "mode": "SHADOW_ONLY",
+          "schema": "tasknode-unl-v2-score-evidence-v2",
+          "version": 2
+        },
+        {
+          "account_id": "account-carol",
+          "control_epoch": "7b0dc153ed8447c628859da4715bc61b88bf24da3f25b04356dd9a93ea44114e",
+          "evidence_at": "2026-01-04T00:00:00Z",
+          "evidence_digest": "913bce434fcbf6de45e7b39aff6c14b1d1ca76fa5852db6a5bd71983f1e88bee",
+          "evidence_kind": "quality",
+          "mode": "SHADOW_ONLY",
+          "schema": "tasknode-unl-v2-score-evidence-v2",
+          "version": 2
+        },
+        {
+          "account_id": "account-carol",
+          "control_epoch": "7b0dc153ed8447c628859da4715bc61b88bf24da3f25b04356dd9a93ea44114e",
+          "evidence_at": "2026-01-04T00:00:00Z",
+          "evidence_digest": "3f0e493ed1a1e86c3241c739fd3880b2f83eadb213506d29e0e92ff9e2172503",
+          "evidence_kind": "standing",
+          "mode": "SHADOW_ONLY",
+          "schema": "tasknode-unl-v2-score-evidence-v2",
+          "version": 2
+        },
+        {
+          "account_id": "account-carol",
+          "control_epoch": "7b0dc153ed8447c628859da4715bc61b88bf24da3f25b04356dd9a93ea44114e",
+          "evidence_at": "2026-01-04T00:00:00Z",
+          "evidence_digest": "af767aee5579c6ce0cd50815aa8411c0729bb5c99b345935420ca6f3b99da5ab",
+          "evidence_kind": "accountability",
+          "mode": "SHADOW_ONLY",
+          "schema": "tasknode-unl-v2-score-evidence-v2",
+          "version": 2
+        }
+      ],
+      "version": 2,
+      "window": {
+        "days": 180,
+        "end": "2026-06-30T00:00:00Z",
+        "index": 7,
+        "mode": "SHADOW_ONLY",
+        "schema": "tasknode-unl-v2-window-v2",
+        "start": "2026-01-01T00:00:00Z",
+        "version": 2
+      }
+    },
+    "mode": "SHADOW_ONLY",
+    "schema": "tasknode-unl-v2-evidence-snapshot-v2",
+    "version": 2
+  },
+  "vectors": {
+    "cowork_signed_digest": "9ef4e0aaa1eac09bbe4451c4bafc5af5abac9352b542016e55044df8b4377c8c",
+    "declaration_signed_digest": "3b5b43d92beac9cccc04e5fec2f204404b7021fc3bfe6186640a2dfdf88126a3",
+    "input_root": "411a5f1937aafed44ca3bfe1f60ce7da60ca27d90f05b8ce3c556652b8305b3a",
+    "policy_root": "1b697d1302a1a21bb576cdeac59c2a20fba8aa4ac4f3b311ebbe5ea56f3cda76",
+    "registry_root": "28d80fb8c1017f34eb5d3e1082a7e0e5ee89ec0eea890496b676b3107f8afd2a",
+    "result_sha256": "775a48404a3ff55f7807c83d003e8a967b8d28f5cec2e70a14405da2b040104a",
+    "snapshot_sha256": "32035b53b81dcb55a5c728a81f9bb09cf9163ac22013ec85bdd6f2e8b8ff04b1",
+    "vouch_signed_digest": "9591d8390113a99d2fada17a6aba022efb8164e9ea306d6e337df1920a77c899"
+  }
+}

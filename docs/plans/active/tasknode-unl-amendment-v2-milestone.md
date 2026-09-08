@@ -1,30 +1,33 @@
 # Task Node UNL amendment V2 implementation journal
 
-**Status:** Planned only. Every implementation and CLI/UI item below is **future Task Node-governed work, not completed functionality**.
+**Status:** Section A implemented under the accepted Task Node item below. Sections B–E remain **future Task Node-governed work, not completed functionality**; V2 remains `SHADOW_ONLY`.
 
 **Documentation task:** `task_fbdc96a15de43ad360a81c25173d8d5b`.
 **Locked source:** [UNL amendment V2](../../governance/tasknode-unl-amendment-v2-20260907.md), SHA-256 `a74bdf603c70ebc3432499b555b470d87da93e13c54424b3687f834bf02f892f`.
 **Research evidence:** [first full gate: 90.53/100](../../review/tasknode-unl-amendment-v2-lock-20260907.md), research task `task_c26d27a9e112a7ad1c27682b95f0790e`.
 
-This journal changes no code or admission rule. Preserve the locked amendment,
-original blog, V1 MVP and its committed attack outputs. V2 is a separate,
-explicitly selected, `SHADOW_ONLY` policy. No submit, ratify, deploy or fund
-operation belongs to this milestone. Proposed V2 filenames below do not yet
-exist; existing V1 references identify boundaries, not permission to rewrite V1.
+This journal changes no admission rule. Preserve the locked amendment, original
+blog, V1 MVP and its committed attack outputs. V2 is a separate, explicitly
+selected, `SHADOW_ONLY` policy. No submit, ratify, deploy or fund operation
+belongs to this milestone. Section A's V2 evidence files now exist; later
+proposed filenames do not. Existing V1 references identify boundaries, not
+permission to rewrite V1.
 
 ## A. Versioned evidence contract — amendment §§2–3, 6
 
+**Implementation task:** `task_aece75f855b2633598b89dffd266a024` (accepted 2026-09-08).
+
 Existing references: `python/postfiat_rpc/tasknode_unl_schema.py`,
 `tasknode_unl_binding.py`, `tasknode_unl_edges.py`, `tasknode_unl_work_digest.py`.
-Future implementation surface: separate `tasknode_unl_v2_schema.py` and
+Implementation surface: separate `tasknode_unl_v2_schema.py` and
 `tasknode_unl_v2_evidence.py`, with tests under `python/tests/`.
 
-- [ ] Freeze closed, bounded V2 schemas, domain-separated canonical statements, signature/custody contract, policy/input/registry roots and deterministic golden vectors. Reject unknown versions and mismatched commitments.
-- [ ] Implement public control epochs for authorized transfer, binding/key replacement and recovery; untrusted accusations or transfers cannot reset them.
-- [ ] Require a full fresh 180-day window for additions, including post-event score evidence, renewed vouches and post-event co-work. Incumbent rotations report continuity holds, not automatic eviction.
-- [ ] Keep unchanged-key account sales explicitly undetectable; never synthesize personhood or “sale detected” evidence.
-- [ ] Separate audit-only funding observations from bilateral accepted vouches/co-work and all-member-signed control declarations. Bind each acknowledgement to exact accounts, control epochs, statement and effective/expiry windows.
-- [ ] Implement boundary-only updates, duplicate credit suppression, next-window trust revocation and a full-window delay after jointly signed control-group dissolution. Malformed individual declarations cannot poison a valid whole snapshot.
+- [x] Freeze closed, bounded V2 schemas, domain-separated canonical statements, signature/custody contract, policy/input/registry roots and deterministic golden vectors. Reject unknown versions and mismatched commitments. (`python/postfiat_rpc/tasknode_unl_v2_schema.py`; `tasknode_unl_v2_evidence.py`; `python/tests/fixtures/tasknode_unl_v2/evidence-golden.json`)
+- [x] Implement public control epochs for authorized transfer, binding/key replacement and recovery; untrusted accusations or transfers cannot reset them. (`ControlEpoch`, `control_epoch_from_event` in `tasknode_unl_v2_evidence.py`)
+- [x] Require a full fresh 180-day window for additions, including post-event score evidence, renewed vouches and post-event co-work. Incumbent rotations report continuity holds, not automatic eviction. (`assess_fresh_window`, `ContinuityAssessment` in `tasknode_unl_v2_evidence.py`)
+- [x] Keep unchanged-key account sales explicitly undetectable; never synthesize personhood or “sale detected” evidence. (`EVIDENCE_LIMITATIONS` in `tasknode_unl_v2_schema.py`; `EvidenceSnapshotResult` in `tasknode_unl_v2_evidence.py`)
+- [x] Separate audit-only funding observations from bilateral accepted vouches/co-work and all-member-signed control declarations. Bind each acknowledgement to exact accounts, control epochs, statement and effective/expiry windows. (`V2_FUNDING_OBSERVATION_SCHEMA`, `V2_BILATERAL_RECORD_SCHEMA`, `V2_CONTROL_DECLARATION_SCHEMA`; `verify_evidence_snapshot`)
+- [x] Implement boundary-only updates, duplicate credit suppression, next-window trust revocation and a full-window delay after jointly signed control-group dissolution. Malformed individual declarations cannot poison a valid whole snapshot. (`_active_relations`, `_active_declarations`, `RecordRejection`; `python/tests/test_tasknode_unl_v2_evidence.py`)
 
 ## B. Graph and admission state — amendment §§3–4, 6
 
@@ -86,3 +89,4 @@ Foundation score provenance or token economics as an incidental V2 change.
 ## Journal
 
 - [x] 2026-09-07: verified the locked research hash and drafted this documentation-only journal. V1 source and original blog are unchanged. All implementation/CLI/UI boxes remain unchecked.
+- [x] 2026-09-08: accepted Task Node task `task_aece75f855b2633598b89dffd266a024` and completed section A in `tasknode_unl_v2_schema.py`, `tasknode_unl_v2_evidence.py` and the V2 fixture/tests. The combined V1/V2 selection passed 123 tests and strict MkDocs passed; sections B–E remain unchecked.
