@@ -1,5 +1,7 @@
 # Whitepaper update for Dravlic
 
+> Historical handoff. The later [candidate 04 promotion](2026-09-08___codex__whitepaper_candidate_04_promotion.md) supersedes the current-paper selection below. Its score and hash are recorded separately.
+
 - **Operator:** Codex (`codex`)
 - **Recipient:** Domagoj Ravlić (`dravlic`)
 - **Date:** 2026-09-08 UTC
