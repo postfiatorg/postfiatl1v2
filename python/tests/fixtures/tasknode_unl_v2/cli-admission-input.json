@@ -1,0 +1,82 @@
+{
+  "schema": "tasknode-unl-v2-cli-admission-input-v2",
+  "version": 2,
+  "mode": "SHADOW_ONLY",
+  "policy_id": "tasknode-unl-admission-v2",
+  "opening_registry_root": "4a705ed273aa87bf8e5e24b102deec9e8ca16937ab4491a3a44dbadb2d7446e0",
+  "nodes": [
+    "account-alice",
+    "account-bob",
+    "account-carol"
+  ],
+  "opening_seats": [
+    {
+      "validator_id": "validator-alice",
+      "account_id": "account-alice"
+    },
+    {
+      "validator_id": "validator-bob",
+      "account_id": "account-bob"
+    }
+  ],
+  "foundation_accounts": [],
+  "prior_breaches": [],
+  "registry_state": {
+    "round_index": 700,
+    "current_registry_root": "c9497656e03b117b52cbd7f297294b5827581038b73a68fc610278c798ee4093",
+    "prior_registry_root": null,
+    "prior_registry_round": null,
+    "seats": [
+      {
+        "validator_id": "validator-alice",
+        "account_id": "account-alice"
+      },
+      {
+        "validator_id": "validator-bob",
+        "account_id": "account-bob"
+      }
+    ],
+    "changes_this_round": 0,
+    "transition_budget": 1
+  },
+  "candidates": [
+    {
+      "validator_id": "validator-bob-rotation",
+      "account_id": "account-bob",
+      "control_epoch": "0000000000000000000000000000000000000000000000000000000000000000",
+      "source_registry_root": "c9497656e03b117b52cbd7f297294b5827581038b73a68fc610278c798ee4093",
+      "source_registry_round": 700
+    },
+    {
+      "validator_id": "validator-carol",
+      "account_id": "account-carol",
+      "control_epoch": "7b0dc153ed8447c628859da4715bc61b88bf24da3f25b04356dd9a93ea44114e",
+      "source_registry_root": "c9497656e03b117b52cbd7f297294b5827581038b73a68fc610278c798ee4093",
+      "source_registry_round": 700
+    }
+  ],
+  "v1_reference": {
+    "schema": "tasknode-unl-v1-admission-reference-v1",
+    "policy_id": "tasknode-unl-admission-v1",
+    "candidates": [
+      {
+        "validator_id": "validator-bob-rotation",
+        "account_id": "account-bob",
+        "action": "hold",
+        "reason_codes": [
+          "account_already_seated",
+          "control_epoch_changed"
+        ]
+      },
+      {
+        "validator_id": "validator-carol",
+        "account_id": "account-carol",
+        "action": "hold",
+        "reason_codes": [
+          "connectivity_below_floor"
+        ]
+      }
+    ],
+    "reference_root": "b0be5a7ccb2d744ac73225a474246fa36cb613c9344d29be5ebabd3966804fa4"
+  }
+}

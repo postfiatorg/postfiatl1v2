@@ -12,6 +12,7 @@ Only current execution plans and completed plans belong here.
 
 ## Completed
 
+- [Task Node UNL Amendment V2 Implementation Journal](completed/tasknode-unl-amendment-v2-milestone.md)
 - [Task Node Identity-Derived UNL MVP Execution Plan](completed/tasknode-unl-mvp-plan.md)
 - [Cobalt Adversarial Verification Milestone](completed/cobalt-adversarial-verification-milestone.md)
 - [Cobalt Activation Milestone](completed/cobalt-activate-or-retire-milestone.md)

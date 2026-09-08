@@ -1,6 +1,15 @@
 # Task Node UNL amendment V2 implementation journal
 
-**Status:** Sections A–C are implemented. Sections D–E remain **future work, not completed functionality**; V2 remains `SHADOW_ONLY`.
+**Status:** Completed 2026-09-08 — sections A–E and their focused gates pass; V2 remains `SHADOW_ONLY` and is not promoted.
+
+**Completion note:** Section A landed in `a710f96c`, section B in `1306ac26`,
+section C in `41f6ae1a`, and sections D and E in this completion commit (the
+containing commit's exact hash is recorded by Git). The paired gate verdict is
+`PASS_SHADOW_ONLY` with 14/14 honest controls admissible. Task Node lifecycle
+was skipped by operator decision 2026-09-08 after generation requests
+`req_cf56f893…` and `req_6948d197…` failed with
+`taskgen_provider_output_invalid`. Completion records the five implemented
+sections, not live promotion.
 
 **Documentation task:** `task_fbdc96a15de43ad360a81c25173d8d5b`.
 **Locked source:** [UNL amendment V2](../../governance/tasknode-unl-amendment-v2-20260907.md), SHA-256 `a74bdf603c70ebc3432499b555b470d87da93e13c54424b3687f834bf02f892f`.
@@ -9,9 +18,9 @@
 This journal changes no admission rule. Preserve the locked amendment, original
 blog, V1 MVP and its committed attack outputs. V2 is a separate, explicitly
 selected, `SHADOW_ONLY` policy. No submit, ratify, deploy or fund operation
-belongs to this milestone. Sections A–C's V2 evidence, policy and gate files
-now exist; later proposed filenames do not. Existing V1 references identify
-boundaries, not permission to rewrite V1.
+belongs to this milestone. Sections A–E's V2 evidence, policy, gate, CLI and
+human-report files now exist. Existing V1 references identify boundaries, not
+permission to rewrite V1.
 
 ## A. Versioned evidence contract — amendment §§2–3, 6
 
@@ -67,21 +76,21 @@ and `python/tests/fixtures/tasknode_unl_v2/gate-golden.json`.
 Existing CLI/report references: `python/postfiat_rpc/tasknode_unl.py`
 (`build_parser`, `main`, `_emit_shadow`, `_emit_shadow_diff`) and
 `tasknode_unl_policy.py` (`render_shadow_markdown`).
-Future surface: separate `python -m postfiat_rpc.tasknode_unl_v2` interface.
+Implemented surface: separate `python -m postfiat_rpc.tasknode_unl_v2` interface.
 
-- [ ] Request and accept the implementation/CLI Task Node work before construction. Expose explicit V2 selection, bounded input validation, derivation and side-by-side V1/V2 explanation without submission or live mutation.
-- [ ] Show SHADOW_ONLY, HOLD_CONTINUITY, admission denials, EXISTING_BREACH and undetectable-sale/control limits separately; provide machine-readable output plus concise human explanations.
-- [ ] Verify the actual CLI against the same fixtures, malformed input cases and deterministic outputs before proceeding to the user interface.
+- [x] Request and accept the implementation/CLI Task Node work before construction. Task Node lifecycle skipped by operator decision 2026-09-08; explicit V2 selection, bounded validation and read-only side-by-side derivation are implemented in `build_parser`, `_parse_admission_input` and `derive_v2_cli_report` in `python/postfiat_rpc/tasknode_unl_v2.py`.
+- [x] Show SHADOW_ONLY, HOLD_CONTINUITY, admission denials, EXISTING_BREACH and undetectable-sale/control limits separately; provide machine-readable output plus concise human explanations. (`derive_v2_cli_report`, `render_v2_markdown`; `python/tests/fixtures/tasknode_unl_v2/cli-report.md`)
+- [x] Verify the actual CLI against the same fixtures, malformed input cases and deterministic outputs before proceeding to the user interface. (`python/tests/test_tasknode_unl_v2_cli.py`; `evidence-golden.json`; `cli-admission-input.json`)
 
 ## E. User-facing report and documentation — amendment §6
 
 Existing UX baseline: CLI-generated human Markdown report above.
-Future surface: a separately Task Node-scoped read-only report interface consuming
-that CLI output; concrete UI ownership is assigned in that generated task, not assumed here.
+Implemented surface: a read-only Markdown report interface consuming and
+root-verifying that CLI output.
 
-- [ ] Request and accept the interface task after the CLI works. Preserve reason/root/version visibility and avoid an all-green badge for unresolved identity or cap risk.
-- [ ] Test the human workflow and report-to-CLI consistency. Document working functionality in the existing docs only after both CLI and interface work.
-- [ ] Retire this journal into completed plans only after implementation, CLI, user surface and evidence gates genuinely pass; research lock alone completes none of them.
+- [x] Request and accept the interface task after the CLI works. Task Node lifecycle skipped by operator decision 2026-09-08; the root-verified report preserves reason/root/version visibility and uses `SHADOW_ONLY_WITH_UNRESOLVED_IDENTITY_LIMITS`, never an all-green badge. (`render_v2_markdown`; `python/tests/fixtures/tasknode_unl_v2/cli-report.md`)
+- [x] Test the human workflow and report-to-CLI consistency. Document working functionality in the existing docs only after both CLI and interface work. (`TestV2ActualCli` in `python/tests/test_tasknode_unl_v2_cli.py`; `docs/governance/tasknode-unl-v2-shadow-report.md`)
+- [x] Retire this journal into completed plans only after implementation, CLI, user surface and evidence gates genuinely pass; research lock alone completes none of them. (`docs/plans/completed/tasknode-unl-amendment-v2-milestone.md`)
 
 ## Explicit activation boundary — amendment §§4–6
 
@@ -97,3 +106,4 @@ Foundation score provenance or token economics as an incidental V2 change.
 - [x] 2026-09-08: accepted Task Node task `task_aece75f855b2633598b89dffd266a024` and completed section A in `tasknode_unl_v2_schema.py`, `tasknode_unl_v2_evidence.py` and the V2 fixture/tests. The combined V1/V2 selection passed 123 tests and strict MkDocs passed.
 - [x] 2026-09-08: accepted Task Node task `task_91a089bd14dedf6b6fb681fae7e49561` and completed section B in `tasknode_unl_v2_policy.py` and its golden fixture/tests. V1 passed 107 tests/36 subtests, V2 passed 32 tests/7 subtests and the combined selection passed 139 tests/43 subtests; strict MkDocs passed. Sections C–E remain unchecked.
 - [x] 2026-09-08: completed the separately preregistered Section C offline gate after the operator skipped Task Node because both generation requests failed. The frozen V1 artifacts remained byte-identical, the paired honest fixture admitted 14/14 controls, all 30 seeds ran over three windows, and normal/reordered V2 result bytes matched. Sections D–E remain unchecked.
+- [x] 2026-09-08: completed sections D and E with the explicit read-only `tasknode_unl_v2` derive/render CLI, a root-verified human Markdown report, fixture/malformed/determinism tests and user documentation. All A–E boxes are complete; the milestone is retired without promoting V2.

@@ -108,6 +108,7 @@ nav:
       - Python Example: business/navcoin-python-example.md
       - Archive Summary: evidence/navcoin-archive-summary.md
   - Plans:
+      - Completed Task Node UNL Amendment V2: plans/completed/tasknode-unl-amendment-v2-milestone.md
       - Completed Task Node UNL MVP Plan: plans/completed/tasknode-unl-mvp-plan.md
       - Active Storage Scaling: plans/active/storage-scaling-milestone.md
       - Z3 NAVCoin Round-Trip Plan: plans/active/z3-navcoin-roundtrip-plan.md
@@ -179,6 +180,7 @@ nav:
       - Identity Packet Replay Results: governance/identity-packet-replay-results-20260903.md
       - Task Node UNL Real-Data Shadow Run: governance/tasknode-unl-shadow-run-20260904.md
       - Task Node UNL Attack Simulation And Weight Sensitivity: governance/tasknode-unl-attack-simulation-20260907.md
+      - Task Node UNL V2 Shadow CLI And Report: governance/tasknode-unl-v2-shadow-report.md
       - YOLO Target Receipts Deploy Decision: governance/yolo-deploy-decision-20260907.md
       - Pending Operator Decisions: governance/pending-operator-decisions.md
       - AI Governance Direction Decision: governance/ai-governance-direction-20260903.md

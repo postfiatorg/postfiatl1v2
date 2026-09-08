@@ -29,7 +29,7 @@ Node were used for state/evidence; OpenRouter was used for the required text gat
 | Proof review, eleven original mismatches and extra repairs | [Proof-input review](../review/proof-input-review-20260907.md) |
 | New UNL policy design and explicit limits | [Locked amendment V2](../governance/tasknode-unl-amendment-v2-20260907.md) |
 | Exact scored hash and all model scores | [Research lock](../review/tasknode-unl-amendment-v2-lock-20260907.md) |
-| Future implementation, CLI and user report | [V2 milestone journal](../plans/active/tasknode-unl-amendment-v2-milestone.md) |
+| V2 implementation, CLI and user report | [Completed V2 milestone journal](../plans/completed/tasknode-unl-amendment-v2-milestone.md) |
 | Dormant-code composition decision | [PR #38 sheet](../governance/yolo-deploy-decision-20260907.md) |
 | StakeHub fixes/dispositions | `/home/postfiatchad/repos/StakeHub-safety-20260907/docs/review/pr8-safety-repairs-20260907.md` |
 
