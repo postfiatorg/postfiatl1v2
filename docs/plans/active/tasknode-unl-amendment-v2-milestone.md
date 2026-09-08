@@ -1,6 +1,6 @@
 # Task Node UNL amendment V2 implementation journal
 
-**Status:** Section A implemented under the accepted Task Node item below. Sections B–E remain **future Task Node-governed work, not completed functionality**; V2 remains `SHADOW_ONLY`.
+**Status:** Sections A–B are implemented under the accepted Task Node items below. Sections C–E remain **future Task Node-governed work, not completed functionality**; V2 remains `SHADOW_ONLY`.
 
 **Documentation task:** `task_fbdc96a15de43ad360a81c25173d8d5b`.
 **Locked source:** [UNL amendment V2](../../governance/tasknode-unl-amendment-v2-20260907.md), SHA-256 `a74bdf603c70ebc3432499b555b470d87da93e13c54424b3687f834bf02f892f`.
@@ -9,9 +9,9 @@
 This journal changes no admission rule. Preserve the locked amendment, original
 blog, V1 MVP and its committed attack outputs. V2 is a separate, explicitly
 selected, `SHADOW_ONLY` policy. No submit, ratify, deploy or fund operation
-belongs to this milestone. Section A's V2 evidence files now exist; later
-proposed filenames do not. Existing V1 references identify boundaries, not
-permission to rewrite V1.
+belongs to this milestone. Sections A–B's V2 evidence and policy files now
+exist; later proposed filenames do not. Existing V1 references identify
+boundaries, not permission to rewrite V1.
 
 ## A. Versioned evidence contract — amendment §§2–3, 6
 
@@ -31,17 +31,19 @@ Implementation surface: separate `tasknode_unl_v2_schema.py` and
 
 ## B. Graph and admission state — amendment §§3–4, 6
 
+**Implementation task:** `task_91a089bd14dedf6b6fb681fae7e49561` (accepted 2026-09-08).
+
 Existing references: `tasknode_unl_trust_graph.py`, `tasknode_unl_policy.py`,
 `tasknode_unl_accountability.py`, `tasknode_unl_churn.py` under the same package;
 `crates/consensus_cobalt/src/validator_admission_policy.rs` is a **read-only live-authority reference**.
-Future implementation surface: separate `tasknode_unl_v2_policy.py` and tests.
+Implementation surface: separate `tasknode_unl_v2_policy.py` and tests.
 
-- [ ] Preserve exact rational arithmetic, canonical ordering and the locked numerical constants; use no funding-derived positive mass or unilateral funding veto in V2.
-- [ ] Freeze graph, partition, N and non-Foundation seeds per window; recount current seats after every conceptual round. New validators become seeds only at the next boundary.
-- [ ] Enforce both the exact social cap `max(2,N/10)` and declared-control-group one-seat restriction for additions; do not round fractional limits upward.
-- [ ] Distinguish CLEAR, SATURATED and EXISTING_BREACH, including excess seats and causative evidence. Block affected additions, not every unrelated cluster.
-- [ ] Preserve and report incumbent breaches instead of silently deleting seats. Model full-window review, persistent unresolved state, existing authorized churn and one-round old-root overlap; do not invent an eviction selector or correction override.
-- [ ] Bind every candidate reason and unresolved limit into canonical shadow reports. Empty eligible seeds or invalid snapshot commitments produce no proposal.
+- [x] Preserve exact rational arithmetic, canonical ordering and the locked numerical constants; use no funding-derived positive mass or unilateral funding veto in V2. (`admission_policy_document`, `_credits`, `_walk` in `python/postfiat_rpc/tasknode_unl_v2_policy.py`)
+- [x] Freeze graph, partition, N and non-Foundation seeds per window; recount current seats after every conceptual round. New validators become seeds only at the next boundary. (`freeze_admission_window`, `recount_limit_states`, `advance_shadow_round`)
+- [x] Enforce both the exact social cap `max(2,N/10)` and declared-control-group one-seat restriction for additions; do not round fractional limits upward. (`social_seat_limit`, `permitted_integer_seats`, `_control_groups`)
+- [x] Distinguish CLEAR, SATURATED and EXISTING_BREACH, including excess seats and causative evidence. Block affected additions, not every unrelated cluster. (`LimitState`, `_limit_state`, `evaluate_admission_round`)
+- [x] Preserve and report incumbent breaches instead of silently deleting seats. Model full-window review, persistent unresolved state, existing authorized churn and one-round old-root overlap; do not invent an eviction selector or correction override. (`prior_breaches_from_report`, `RegistryRoundState`, `ShadowAdmissionReport`)
+- [x] Bind every candidate reason and unresolved limit into canonical shadow reports. Empty eligible seeds or invalid snapshot commitments produce no proposal. (`CandidateDecision`, `ShadowAdmissionReport.canonical_bytes`, `freeze_admission_window`; `python/tests/fixtures/tasknode_unl_v2/policy-golden.json`)
 
 ## C. Paired adversarial and liveness gate — amendment §§1, 5
 
@@ -89,4 +91,5 @@ Foundation score provenance or token economics as an incidental V2 change.
 ## Journal
 
 - [x] 2026-09-07: verified the locked research hash and drafted this documentation-only journal. V1 source and original blog are unchanged. All implementation/CLI/UI boxes remain unchecked.
-- [x] 2026-09-08: accepted Task Node task `task_aece75f855b2633598b89dffd266a024` and completed section A in `tasknode_unl_v2_schema.py`, `tasknode_unl_v2_evidence.py` and the V2 fixture/tests. The combined V1/V2 selection passed 123 tests and strict MkDocs passed; sections B–E remain unchecked.
+- [x] 2026-09-08: accepted Task Node task `task_aece75f855b2633598b89dffd266a024` and completed section A in `tasknode_unl_v2_schema.py`, `tasknode_unl_v2_evidence.py` and the V2 fixture/tests. The combined V1/V2 selection passed 123 tests and strict MkDocs passed.
+- [x] 2026-09-08: accepted Task Node task `task_91a089bd14dedf6b6fb681fae7e49561` and completed section B in `tasknode_unl_v2_policy.py` and its golden fixture/tests. V1 passed 107 tests/36 subtests, V2 passed 32 tests/7 subtests and the combined selection passed 139 tests/43 subtests; strict MkDocs passed. Sections C–E remain unchecked.
