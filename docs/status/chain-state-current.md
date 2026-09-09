@@ -1,8 +1,21 @@
 # PostFiat L1 Current State
 
-Updated: `2026-08-31T04:30:00Z`
+Updated: `2026-09-09T09:27:00Z`
 
 Status: **canonical operational-state reference**
+
+!!! warning "2026-09-09: fresh read-only observation has five-of-six RPC agreement"
+
+    The capture ran from `2026-09-09T09:24:54Z` through `09:27:00Z`.
+    Validators 1–5 answered `status`, `server_info`, and `mempool_status` and
+    agreed at height 1020, tip `9d02b8ee…b1768feb`, state root
+    `587c6526…d39bead6`, with empty mempools. Validator-0's three RPC reads
+    each timed out after eight seconds, so its height, root, and mempool are
+    unknown for this observation; its host remained reachable and both node
+    services were active. Read-only process-identity checks found all 12
+    validator/RPC processes running release `a666-source-route-20260907`,
+    binary `57b0f4d1…634eec83`. No corrective action or fleet/chain write was
+    performed.
 
 !!! success "2026-08-31: transactional storage DEPLOYED AND ACTIVE at height 931"
 
@@ -42,17 +55,19 @@ binary to the running services.
 
 !!! warning "Point-in-time evidence"
 
-    The latest authenticated all-six observation ran from
-    `2026-08-30T23:00:24Z` through `2026-08-30T23:00:39Z`, after validator-1
-    was rolled back from the failed successor storage canary. It is a
-    point-in-time observation, not a real-time query now. Re-probe before making
-    a later “right now” claim.
+    The latest read-only observation is the partial six-validator capture from
+    `2026-09-09T09:24:54Z` through `09:27:00Z`: five RPC endpoints agreed and
+    validator-0's RPC timed out. The prior authenticated all-six observation
+    from `2026-08-30T23:00:24Z` through `23:00:39Z` remains historical below.
+    Every observation is point-in-time evidence, not a real-time query now.
 
 ## Operational summary
 
 | Plane | Recorded state | Exact identifier | Observed or updated at | Evidence and freshness |
 | --- | --- | --- | --- | --- |
-| Running devnet | Six validators converged at height 924 with empty mempools after validator-1 was rolled back from the failed storage canary; all validator, RPC, and advisory shadow services were active. | Chain `postfiat-wan-devnet-2`; genesis `ce22ca8c…e90a9`; tip `ebeb0e1e…a7649fbef`; state `0854bc47…1ee6f413e`. | `2026-08-30T23:00:24Z`–`23:00:39Z` | Authenticated post-rollback fleet observation; point in time, not a current network query. |
+| Running devnet, latest read-only observation | Validators 1–5 answered all three health reads and agreed at height 1020 with empty mempools. Validator-0's RPC timed out; its host and both services were reachable/active, but full-six ledger agreement is not established by this capture. | Chain `postfiat-wan-devnet-2`; genesis `ce22ca8c…e90a9`; tip `9d02b8ee…b1768feb`; state `587c6526…d39bead6` on validators 1–5. | `2026-09-09T09:24:54Z`–`09:27:00Z` | Authenticated SSH forwarding to loopback RPC plus read-only process identity; point in time. |
+| Deployed runtime, latest identity | All 12 validator and RPC service processes were active/running from one release and one executable hash. No process runs a build containing repository signing fix `bbb291ce`. | Release `a666-source-route-20260907`; node SHA-256 `57b0f4d1d42d66878d7dbb8c33919c7fa0f87c6cc1a4b9cc1a85d75b634eec83`. | `2026-09-09T09:26:45Z`–`09:27:00Z` | Direct read-only systemd, `/proc`, release-path, and SHA-256 identity checks on all six hosts. |
+| Running devnet, historical 2026-08-30 observation | Six validators converged at height 924 with empty mempools after validator-1 was rolled back from the failed storage canary; all validator, RPC, and advisory shadow services were active. | Chain `postfiat-wan-devnet-2`; genesis `ce22ca8c…e90a9`; tip `ebeb0e1e…a7649fbef`; state `0854bc47…1ee6f413e`. | `2026-08-30T23:00:24Z`–`23:00:39Z` | Authenticated post-rollback fleet observation; point in time, not a current network query. |
 | Validator-trust authority | Cobalt remains active for validator-registry and trust-graph ratification. The final signed drill rollback committed at 922, return to Cobalt at 923, and legitimate validator-5 rotation at 924. Consensus v2 remains block finality. | Registry root `08a451e0…2b9b1d`; trust root `89f18aef…08f0307`; ratification anchor sequence 2, ID `5eada38d…c21153c8`. | Accepted history through height 924; fleet-audited through `2026-08-30T23:00:39Z`. | The recovery probe found authority mode 1 and identical registry/trust roots on all six. |
 | Deployed runtime | Every validator uses the pre-storage node binary again; every validator, RPC, and shadow service is active. Validator-1 briefly ran successor transport while its RPC failed, then returned to the signed `8cc7d15e` deployment. | Node SHA-256 `d5e5ef630155e61b001b84edb404a4def7d29a9205f23d33d2ad9c37c2696caf`; stopped candidate `0cc664a3…ad4183` is inactive. | `2026-08-30T23:00:24Z`–`23:00:39Z` | Direct process, binary, status, service, signed-unit, and post-rollback storage comparisons. |
 | Storage rollout | `d0ae79f3` failed height-925 continuation. Successor `10dd9f20` fixed that defect and passed the old G6 runner, but is **not deployment-qualified and must not deploy**: the runner omitted the live concurrent transport/RPC topology. The validator-1 canary hit an exclusive `redb` lock and required exact data-plus-binary rollback. | Successor `10dd9f20`; binary `0cc664a3…ad4183`; reason `TRANSACTIONAL_DATABASE_MULTI_PROCESS_LOCK_CONFLICT`. | Canary stopped and rollback verified through `2026-08-30T23:00:39Z`. | [Canary rollback report](../postmortems/devnet-storage-live-canary-rollback-2026-08-30.md) and `benchmarks/storage-scaling/devnet-rollout/canary-rollback-20260830.json`. No block, governance, Cobalt, or storage activation occurred; Z1 did not start. |
@@ -109,6 +124,47 @@ Nothing in this section proves deployment. See the
 [development evidence](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling).
 
 ## Last observed devnet values
+
+| Field | Value |
+| --- | --- |
+| Chain | `postfiat-wan-devnet-2` |
+| Genesis hash | `ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9` |
+| Observation window | `2026-09-09T09:24:54Z`–`2026-09-09T09:27:00Z` |
+| Agreement | Validators 1–5 agree; validator-0 RPC status is unknown after timeouts. Full-six agreement is not established by this observation. |
+| Height | 1020 on validators 1–5; validator-0 unknown |
+| Mempool | 0 pending on validators 1–5; validator-0 unknown |
+| Tip hash | `9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb` on validators 1–5 |
+| State root | `587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6` on validators 1–5 |
+| Running release | `a666-source-route-20260907` on all 12 validator/RPC processes |
+| Running binary | SHA-256 `57b0f4d1d42d66878d7dbb8c33919c7fa0f87c6cc1a4b9cc1a85d75b634eec83` on all 12 processes |
+| Repository/fleet boundary | `origin/main` signing fix `bbb291ce` is not deployed on any validator. |
+
+| Validator | RPC status, server info, mempool | Observed ledger | Running identity | Identity captured |
+| --- | --- | --- | --- | --- |
+| validator-0 | Timed out after 8 seconds on each read; host reachable; validator and RPC services active/running | Height, tip, root, and mempool unknown | `a666-source-route-20260907`; `57b0f4d1…634eec83` | `2026-09-09T09:26:45Z` |
+| validator-1 | Running; mempool 0 | Height 1020; `9d02b8ee…b1768feb`; `587c6526…d39bead6` | `a666-source-route-20260907`; `57b0f4d1…634eec83` | `2026-09-09T09:26:47Z` |
+| validator-2 | Running; mempool 0 | Height 1020; `9d02b8ee…b1768feb`; `587c6526…d39bead6` | `a666-source-route-20260907`; `57b0f4d1…634eec83` | `2026-09-09T09:26:52Z` |
+| validator-3 | Running; mempool 0 | Height 1020; `9d02b8ee…b1768feb`; `587c6526…d39bead6` | `a666-source-route-20260907`; `57b0f4d1…634eec83` | `2026-09-09T09:26:55Z` |
+| validator-4 | Running; mempool 0 | Height 1020; `9d02b8ee…b1768feb`; `587c6526…d39bead6` | `a666-source-route-20260907`; `57b0f4d1…634eec83` | `2026-09-09T09:26:56Z` |
+| validator-5 | Running; mempool 0 | Height 1020; `9d02b8ee…b1768feb`; `587c6526…d39bead6` | `a666-source-route-20260907`; `57b0f4d1…634eec83` | `2026-09-09T09:27:00Z` |
+
+### Drift from the 2026-09-07 machine handoff
+
+The five validators with readable RPC status advanced from height 1005 to 1020
+(+15 blocks), and their state root changed from `6ed69ca9…ced065f9` to
+`587c6526…d39bead6`. They agree with one another. Validator-0's current ledger
+state could not be compared because its RPC timed out. All six hosts still run
+the same release and byte-identical binary recorded on September 7. Because the
+running SHA-256 remains `57b0f4d1…634eec83`, none runs a build containing the
+later signing fix `bbb291ce`.
+
+The observation used authenticated SSH forwarding to each loopback-bound RPC
+and the repository's read-only `status`/`server_info`/`mempool_status` checks.
+Release identity came from read-only systemd `MainPID`, `/proc/<pid>/exe`, and
+SHA-256 inspection. No restart, deployment, configuration change, host write,
+or chain write was performed.
+
+### Historical 2026-08-30 all-six values
 
 | Field | Value |
 | --- | --- |
