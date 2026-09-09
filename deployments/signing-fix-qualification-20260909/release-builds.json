@@ -1,0 +1,34 @@
+{
+  "schema": "postfiat-signing-fix-release-builds-v1",
+  "qualification_date_utc": "2026-09-09",
+  "source_commit": "4153376b8097670ed1af0319affdf204ed85b2f5",
+  "source_tree": "47db14387edf0a3eb9f348529ede2cf8625332b7",
+  "cargo_lock_sha256": "254016576480eda44ac36107037fddb37ff2781f552b8ad0e8ffd88ec0f72cf9",
+  "source_date_epoch": 1788946594,
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "host": "x86_64-unknown-linux-gnu",
+  "command": "CARGO_INCREMENTAL=0 SOURCE_DATE_EPOCH=1788946594 CARGO_TARGET_DIR=<same-absolute-target> RUSTFLAGS='--remap-path-prefix=<clean-source>=/src/postfiatl1v2 --remap-path-prefix=<same-absolute-target>=/target' cargo build --release --locked -p postfiat-node --bin postfiat-node",
+  "builds": [
+    {
+      "builder": "clean-worktree-1",
+      "binary_sha256": "af4ccc3e3f7ca626b309de92e1172ccd60f0f0854f2731a6edd3dbbc9a947def",
+      "binary_size": 52642664,
+      "used_for_local_clone_gate": true
+    },
+    {
+      "builder": "clean-worktree-2",
+      "binary_sha256": "f82dc42ef177403f0d7b0f0f8252eeb7b32fa03115870807189f3ce07bb9611c",
+      "binary_size": 52642664,
+      "used_for_local_clone_gate": false
+    }
+  ],
+  "byte_comparison": {
+    "equal": false,
+    "different_byte_count": 6,
+    "one_based_offsets": [8682, 8683, 8684, 8685, 8686, 8687],
+    "classification": "randomized rustc temporary-directory component in ELF RUNPATH",
+    "post_build_normalization_accepted": false
+  },
+  "result": "FAIL_REPRODUCIBILITY"
+}

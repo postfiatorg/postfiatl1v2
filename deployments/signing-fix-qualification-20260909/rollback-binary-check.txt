@@ -1,0 +1,10 @@
+Date: 2026-09-09 UTC
+Search roots: local deployment evidence, repositories, build cache, and /opt/postfiat
+Files named postfiat-node hashed: 50
+Required deployed SHA-256: 57b0f4d1d42d66878d7dbb8c33919c7fa0f87c6cc1a4b9cc1a85d75b634eec83
+Required deployed binary present: no
+Result: FAIL_EXACT_ROLLBACK_BINARY_ABSENT
+
+The private local path inventory is intentionally not published. This receipt
+records only the bounded search and result; it does not claim that the fleet
+lacks its running binary or retained rollback material.

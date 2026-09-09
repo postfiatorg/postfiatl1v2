@@ -1,0 +1,53 @@
+{
+  "schema": "postfiat-signing-fix-local-clone-gate-v1",
+  "qualification_date_utc": "2026-09-09",
+  "scope": "local_disposable_clones_only",
+  "network_boundary": "loopback_only",
+  "live_fleet_touched": false,
+  "candidate": {
+    "source_commit": "4153376b8097670ed1af0319affdf204ed85b2f5",
+    "binary_sha256": "af4ccc3e3f7ca626b309de92e1172ccd60f0f0854f2731a6edd3dbbc9a947def"
+  },
+  "input": {
+    "kind": "signed_archival_real_host_snapshot",
+    "signed_manifest_sha256": "32ac4900dfaaf336efbc3075a34b444ef8abe44ec33b16e4f68492ae9bb73105",
+    "height": 931,
+    "block_tip_hash": "8e3639ee748255636d09adb8b3fe70f20f8ae0aa9388b024eaffb98b7a94f3c7c4b0e5710f0d8c2479b08d9bc8665c4b",
+    "state_root": "ef18f8ca8eee67e4f25e0752b54012f1e66b8b4de16444d2583a81e890aec1f3492c1544280279e5acf090559fd55e0f",
+    "current_observed_fleet_height": 1020,
+    "current_state_clone_available": false
+  },
+  "archive_checks": {
+    "signed_import_clones": 6,
+    "status": "PASS_6_OF_6",
+    "verify_state": "PASS_6_OF_6",
+    "verify_blocks": "PASS_6_OF_6",
+    "transactional_rebuild": "PASS_6_OF_6",
+    "rebuild_verify": "PASS_6_OF_6",
+    "shared_migration_packet_root": "5f93a4e1d9fa1ffcb89a403c2cd7eab7a986661724db9fa12916f683d57de64d1ce7750be9184526fa917e1d40aa11d1"
+  },
+  "service_gate": {
+    "runner_sha256": "ed00dc62943af61139a89791166e2daabefebf2578510985d50daac406647c79",
+    "private_full_receipt_sha256": "e25eddeb9e62c58d3546dcab95ae37d31818d02d28facfe9b1932497448e43c0",
+    "topology_sha256": "f222915addedcc6322cb935816727b3b597807880e57df24a3e6a2d34f69e8eb",
+    "key_staging": "PASS_6_OF_6_DISPOSABLE_CLONES_ONLY",
+    "start_orders": {
+      "transport_first": ["validator-0", "validator-2", "validator-4"],
+      "rpc_first": ["validator-1", "validator-3", "validator-5"]
+    },
+    "initial_height": 933,
+    "initial_state_root": "0c182c3b0122d053eee68625082803232e6a3dd1ce78b93580d123ce896aa41c3a30d87b7323f5f3aa6811333bae9bbf",
+    "final_height": 934,
+    "final_block_tip_hash": "f45342536fdd7b1e65bccbcd1a3019f2a16e0bc52df4febafe98b578558ffdc0f6e34965250749b724748c8f28a472d0",
+    "final_state_root": "b724a689f141cd26d0fa8503f69c7fbf7a130fe8621033d4f85e9a12f57c56bc354c66df49b661e6bee67d8b17c7f971",
+    "on_disk_convergence": "PASS_6_OF_6",
+    "post_restart_rpc_identity": "PASS_6_OF_6",
+    "mempool_pending": 0,
+    "result": "PASS_ARCHIVAL_SERVICE_COMPATIBILITY"
+  },
+  "preflight_notes": [
+    "The signed snapshot excludes private keys by contract; the runner was corrected to stage each isolated signer into its disposable clone before service start.",
+    "Two valid setup rounds converged on disk while the evidence harness was corrected to distinguish cached pre-restart RPC health from on-disk transport writes; neither runner issue was accepted as a protocol failure or pass."
+  ],
+  "result": "PASS_ARCHIVAL_ONLY_NOT_CURRENT_STATE_QUALIFICATION"
+}

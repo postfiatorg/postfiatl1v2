@@ -1,0 +1,34 @@
+{
+  "schema": "postfiat-signing-fix-qualification-receipt-v1",
+  "qualification_date_utc": "2026-09-09",
+  "source_commit": "4153376b8097670ed1af0319affdf204ed85b2f5",
+  "candidate_binary_sha256": "af4ccc3e3f7ca626b309de92e1172ccd60f0f0854f2731a6edd3dbbc9a947def",
+  "deployed_binary_sha256": "57b0f4d1d42d66878d7dbb8c33919c7fa0f87c6cc1a4b9cc1a85d75b634eec83",
+  "live_fleet_touched": false,
+  "external_spend": false,
+  "gates": [
+    {"gate": "locked_release_build", "result": "PASS"},
+    {"gate": "exact_hash_reproducibility", "result": "FAIL_BINARY_HASH_MISMATCH"},
+    {"gate": "deployed_source_manifest_reconstruction", "result": "PASS_26_OF_26"},
+    {"gate": "signing_only_source_lineage", "result": "FAIL_DIVERGENT_RUNTIME_LINEAGE"},
+    {"gate": "signed_archival_snapshot_import_verify_rebuild", "result": "PASS_6_OF_6"},
+    {"gate": "archival_loopback_service_finality_restart", "result": "PASS_6_OF_6"},
+    {"gate": "current_height_all_six_clone", "result": "FAIL_INPUT_NOT_AVAILABLE"},
+    {"gate": "delayed_certificate_regression", "result": "PASS_1_OF_1"},
+    {"gate": "focused_consensus_libraries", "result": "PASS_20_OF_20"},
+    {"gate": "transport_rpc_consensus", "result": "PASS_3_OF_3"},
+    {"gate": "focused_clippy_warnings_denied", "result": "PASS"},
+    {"gate": "exact_local_rollback_binary", "result": "FAIL_NOT_PRESENT"},
+    {"gate": "decision_sheet_text_improvement", "result": "PASS_89.7333_GE_86"},
+    {"gate": "strict_documentation_build", "result": "PASS"}
+  ],
+  "blocking_conditions": [
+    "Current main omits deployed A666 Arc/PFETH source-route validator runtime behavior and is not a signing-only descendant.",
+    "Two clean locked builds differ in six ELF RUNPATH bytes and do not reproduce one binary hash.",
+    "No authorized current-height all-six state clone is available locally; the archival input is height 931 while the latest observation is height 1020 and validator-0 is unknown.",
+    "The exact deployed rollback binary is not present on this server."
+  ],
+  "result": "HOLD_NOT_DEPLOYMENT_QUALIFIED",
+  "lean": "C_HOLD_FOR_FULLER_CAMPAIGN",
+  "authorization": "NONE"
+}

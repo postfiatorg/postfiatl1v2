@@ -1,0 +1,74 @@
+Command: git log --format='%h %s' 707e006fe2460048b1c7df0d4dc0a04d487f8542..4153376b8097670ed1af0319affdf204ed85b2f5
+
+4153376b Record a fresh controlled devnet fleet observation
+bbb291ce Enforce durable consensus rounds across all signing phases
+cb175ef3 Promote the 87.13 TIH whitepaper candidate
+e1493d62 Add the safety landing and V2 milestone handoff
+74c9e732 Complete the UNL amendment V2 milestone with the CLI and user report
+41f6ae1a Implement the UNL amendment V2 paired adversarial and liveness gate
+1306ac26 Implement the UNL amendment V2 graph and admission state
+a710f96c Implement the UNL amendment V2 evidence contract
+519b1bad Restore genesis registry golden vector agreement
+80f2232b Land the safety closeout with the proof inventory repairs and UNL amendment V2
+82828f58 Replace internal editorial citations with consensus source references
+32fe38f5 Publish revised whitepaper and preserve legacy draft
+d351353e Add the CI repair and UNL hardening handoff
+d46f1cd8 Move the Task Node UNL MVP plan to completed
+09cb4e00 Audit the new crypto call sites and fix the failing node tests
+336a271f Add the StakeHub PR 8 review
+5261a8b8 Add the Task Node UNL shadow baseline diff command
+a02b29fb Classify new public artifacts and pin the absent epoch seven qualification
+566accbf Add the YOLO target receipts deploy decision sheet
+363084b8 Add the Task Node UNL attack simulation and weight sensitivity results
+343a2fe9 Fix the remaining CI failures on main
+7f266371 Restore admission path coverage in the Task Node UNL shadow fixtures
+1267df6a Require complete wallet mapping and binding key join in Task Node UNL shadow admission
+4a961eeb Fix the pre-existing CI failures on main
+d8ff6f13 docs: surface YOLO target receipts (PR #38) in nav, front door and NAVCoins overview
+1412b4dc Merge PR #38: Nitro-proven YOLO portfolio targets and PFTL receipts
+59598baf fix(yolo): satisfy clippy nonminimal_bool in activation check
+c1b3a6be docs(yolo): keep verification links valid in the docs site
+edbf2e82 docs(yolo): map guest and consensus verification boundaries
+402b6f1b style: satisfy workspace rustfmt checks for YOLO review
+912c476a docs(yolo): qualify funded MU and NVDA target receipts
+99aa6199 docs(yolo): complete Nvidia real-data proof receipt qualification
+f62688bf docs(yolo): qualify real-data Micron proof and local receipt
+5b76e1e0 docs(yolo): record optimized guest and incomplete real-data run
+d3aeb780 perf(yolo): reuse parsed dates within each calculation
+21ddcdfe perf(yolo): hash typed target payloads in canonical field order
+61a28109 perf(yolo): validate witness CBOR without a duplicate value tree
+36a48f82 perf(yolo): avoid redundant witness and canonical JSON buffers
+9424d5a3 perf(yolo): index contract observations without changing targets
+ff0720ef docs(yolo): qualify Nitro native proof through local PFTL receipt
+91ad77be docs(yolo): align operator guide with accepted native prover
+aaad0c48 test(yolo): qualify newly supplied public proofs through local finality
+9b74999e test(yolo): profile public Nitro work for GPU proof splitting
+34521d0a build(yolo): add native Gnark prover packaging option
+38b3731b test(yolo): qualify updated proof through four-validator receipts
+a4ed7b51 test(yolo): qualify actual collector attestation in bounded SP1 corpus
+459a6d3d fix(yolo): verify bounded indefinite CBOR from real Nitro documents
+d203be5c docs(yolo): retain local receipt finality and replay qualification
+978612ac test(yolo): cover registration conflicts and independent signature rejection
+f8edad6b feat(yolo): add activated target receipts with proved consensus validation
+38909717 test(yolo): qualify the complete Nitro matrix in SP1
+dd281ca3 fix(yolo): constrain SP1 debug overrides and report progress
+1c28fdbf feat(yolo): prove Nitro target provenance in SP1
+9e15181c feat(yolo): port portfolio target to Rust
+c74a9944 feat(yolo): lock target public values ABI
+145563e9 feat(yolo): add collection proof and broker evidence foundation
+f2f09881 Add the Task Node UNL MVP handoff
+3d0e5c01 Fix defects found in the Task Node UNL adversarial review
+bfec6bd9 Add the first real-data Task Node UNL shadow run
+deaaa5a2 Add the Task Node UNL shadow derivation runner
+09838ea9 Add the Task Node UNL churn and overlap guard
+1b68a2d4 Add the Task Node UNL trust graph edge extractors
+ffc01e7d Add the Task Node UNL work digest format and verifier
+70651f83 Add the Task Node UNL validator binding CLI
+a782c23a Implement the Task Node UNL accountability engine and trust walk
+5ec21e0f Add the Task Node UNL MVP execution plan
+ef1103e1 Add the agent direction and Z3 planning handoff
+331ed515 Add the Z3 NAVCoin round-trip execution plan
+f0773c0a Record the packet-input identity replay results
+22ee7db4 Add the AI governance direction decision
+40bb8c73 Add primary-host raw runs for identity-packet replay (replay host in flight)
+e5d6bfaf Add packet-input H200 identity replay package (inputs frozen, runs pending)

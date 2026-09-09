@@ -1,0 +1,26 @@
+{
+  "schema": "postfiat-text-improvement-score-v1",
+  "document": "docs/governance/signing-fix-deploy-decision-20260909.md",
+  "document_sha256": "9df01a540f1ac423e8962af03ee6cbc106ec367d07393f30d867cfcc59d7b1f7",
+  "gate": 86.0,
+  "runs_per_model": 5,
+  "models": {
+    "openai/gpt-6-astra-pro": {
+      "average": 92.0,
+      "scores": [92, 92, 92, 92, 92]
+    },
+    "anthropic/claude-fable-5.1": {
+      "average": 85.6,
+      "scores": [86, 86, 86, 84, 86]
+    },
+    "z-ai/glm-5.3": {
+      "average": 91.6,
+      "scores": [91, 92, 92, 90, 93]
+    }
+  },
+  "overall_average": 89.73333333333333,
+  "result": "PASS_FIRST_COMPLIANT_FULL_SCORE",
+  "rewrite_performed": false,
+  "round_log_sha256": "973023144f2d0f2bd055ebfaf6d7f4b0dbf4b3069e55c7092f94c12881664ce0",
+  "database_sha256": "f54ab74730e098e30464678cc48c56a5b3123313bc81b530817387f904e6d9f9"
+}

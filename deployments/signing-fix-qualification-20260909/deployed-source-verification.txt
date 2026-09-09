@@ -1,0 +1,10 @@
+Reconstructed deployed source verification
+Date: 2026-09-09 UTC
+Manifest historical commit: cfdeccd6
+Base: 707e006fe2460048b1c7df0d4dc0a04d487f8542
+Patch SHA-256: deaf05d46707bdb00d2d2d383fd40b18678f8378fb8b87f69898a5180066586c
+Manifest files checked: 26
+Manifest mismatches: 0
+Deployed binary SHA-256: 57b0f4d1d42d66878d7dbb8c33919c7fa0f87c6cc1a4b9cc1a85d75b634eec83
+Deployed base is ancestor of candidate source: no
+Merge base with candidate source: 3f393b76ef0b55f52273caa7d5159660b31e888d

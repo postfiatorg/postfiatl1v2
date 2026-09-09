@@ -1,0 +1,25 @@
+Source: 4153376b8097670ed1af0319affdf204ed85b2f5
+Date: 2026-09-09 UTC
+
+Command: cargo test -p postfiat-node delayed_precommit_is_rejected_after_preparing_a_newer_view --locked -- --nocapture
+Result: test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 346 filtered out; finished in 5.98s
+Raw log SHA-256: d3db8fe7cad741864ff88018072c4c4121574800fade7a1e8ba521027f2789a8
+
+Command: cargo test -p postfiat-ordering-fast -p postfiat-node --lib consensus_v2 --locked -- --nocapture
+Result: test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 338 filtered out; finished in 11.51s
+Result: test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; finished in 1.63s
+Raw log SHA-256: 792498b435c6083ecefd2a809606e05e978029c8db3cef3e2c2a4329d7e28939
+
+Command: cargo test -p postfiat-node --bin postfiat-node consensus_v2 --locked -- --nocapture
+Result: test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 151 filtered out; finished in 238.87s
+Raw log SHA-256: a784c368561aabdcec0106ae81dbde636480421f0f6c8552347729b80a9532d5
+
+Command: cargo clippy -p postfiat-ordering-fast -p postfiat-node --all-targets --locked -- -D warnings
+Result: Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 00s
+Raw log SHA-256: 752e26a5db0ef6978ff485ece3b754f72ed0ba1d0528bac999c193b9ebe010f0
+
+Note: the first attempt at the single delayed-certificate command stopped before
+running a test because the isolated worktree's tmpfs build cache reached its
+quota. The cache was moved to the local disk and the exact command above passed.
+The failed-attempt log SHA-256 is
+01d9b8423b9bb6930f5a429df486a9e499cd39576bc41319fd3f57752c659cfc.
