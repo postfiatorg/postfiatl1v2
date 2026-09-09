@@ -146,6 +146,7 @@ nav:
       - Cobalt Governance Activation: handoffs/2026-08-25___postfiatchad__cobalt_governance_activation.md
   - Business:
       - Business Whitepaper: business/whitepaper.md
+      - Private Exchange Models: business/private-exchange-models.md
   - Start Here:
       - First Day: start/first-day.md
       - Glossary: start/glossary.md
@@ -162,6 +163,7 @@ nav:
       - Genesis Registry Proposal Path: architecture/genesis-registry-proposal-path.md
       - Launch Topology Thresholds (proposal): architecture/launch-topology-thresholds.md
       - Finality: architecture/finality.md
+      - Consensus Signing Rounds: architecture/consensus-signing-rounds.md
       - Evidence Model: architecture/evidence-model.md
   - Governance:
       - Cobalt: governance/cobalt.md

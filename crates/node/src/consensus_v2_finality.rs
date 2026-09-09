@@ -406,6 +406,10 @@ fn invalid_data(error: impl std::fmt::Display) -> io::Error {
 }
 
 #[cfg(test)]
+#[path = "consensus_v2_delayed_certificate_tests.rs"]
+mod delayed_certificate_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::path::PathBuf;

@@ -51,7 +51,11 @@ proposal must carry that exact timeout ID and the same valid-QC reference. If it
 is locked, the proposal must repropose the certified block rather than switch to
 a conflicting state transition.
 
-Timeout and vote high-water marks are persisted before signatures are returned.
+Prepare, precommit, and timeout authorization share one durable round floor:
+the maximum of their three persisted high-water marks. Every phase rejects a
+round below that floor; phases at the same round may still complete. The floor
+is derived from the existing state fields, including after restart or snapshot
+restore. Authorization persists the new state before returning a signature.
 The production transport uses these same types and store calls from
 `crates/ordering_fast`; the ordering crate is no longer merely a disconnected
 reference model for activated consensus v2.
@@ -64,6 +68,9 @@ boundary. A network without such a committed boundary requires a coordinated
 new genesis/reset, with the old history frozen and independently replayable.
 New networks may choose an activation height at genesis and replay the legacy
 prefix followed by v2 blocks.
+
+The [signing-round contract](consensus-signing-rounds.md) gives the fixed-height
+safety argument, implementation boundary, and focused regression coverage.
 
 ## Certificate lanes are not block consensus
 

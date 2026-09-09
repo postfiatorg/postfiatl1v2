@@ -768,6 +768,7 @@ pub fn authorize_consensus_v2_timeout_vote(
             "consensus v2 timeout vote would violate durable round monotonicity",
         ));
     }
+    require_consensus_v2_monotone_round(state, round)?;
     if let Some(reference) = high_qc {
         if reference.round.height != round.height
             || reference.round.view > round.view
@@ -821,6 +822,7 @@ fn apply_consensus_v2_prepare_vote_to_safety(
             "consensus v2 prepare vote would violate durable round monotonicity",
         ));
     }
+    require_consensus_v2_monotone_round(state, proposal.round)?;
     if let Some(locked_qc) = &state.locked_qc {
         let unlocks = proposal.valid_qc.as_ref().is_some_and(|valid_qc| {
             valid_qc.round > locked_qc.round
@@ -879,6 +881,7 @@ fn apply_consensus_v2_precommit_vote_to_safety(
             "consensus v2 precommit vote is not authorized by a newer non-nil prepare QC",
         ));
     }
+    require_consensus_v2_monotone_round(state, prepare_qc.round)?;
     let reference = consensus_v2_qc_ref(prepare_qc)?;
     if let Some(locked_qc) = &state.locked_qc {
         if reference.round < locked_qc.round
@@ -1094,6 +1097,29 @@ fn validate_timeout_vote_shape(vote: &ConsensusV2TimeoutVote) -> Result<(), Orde
     }
     validate_text("consensus v2 timeout validator", &vote.validator)?;
     validate_signature_shape(&vote.signature)
+}
+
+/// All signing phases share one durable round floor. Derive it from the
+/// existing persisted marks so restored v2 state retains the same protection
+/// without changing signed artifacts or historical certificate verification.
+fn require_consensus_v2_monotone_round(
+    state: &ConsensusV2SafetyState,
+    round: ConsensusV2Round,
+) -> Result<(), OrderingError> {
+    if [
+        state.highest_prepare_round,
+        state.highest_precommit_round,
+        state.highest_timeout_round,
+    ]
+    .into_iter()
+    .flatten()
+    .any(|highest| highest > round)
+    {
+        return Err(OrderingError::new(
+            "consensus v2 signing would regress the durable cross-phase round",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_safety_state(state: &ConsensusV2SafetyState) -> Result<(), OrderingError> {

@@ -4,6 +4,8 @@ use postfiat_crypto_provider::{
 };
 use postfiat_types::ConsensusV2Signature;
 
+mod round_monotonicity;
+
 fn committee(count: usize) -> (ConsensusV2ValidatorSet, Vec<MlDsa65KeyPair>) {
     let keys = (0..count)
         .map(|index| ml_dsa_65_keygen_from_seed(&[index as u8 + 1; 32]))
