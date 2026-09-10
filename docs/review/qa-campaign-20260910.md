@@ -8,7 +8,7 @@ This is the canonical progress record for the [2026-09-10 QA campaign](qa-campai
 | --- | --- | --- | ---: | ---: | ---: | --- |
 | A1 | Arc-facing code | done | 2 | 0 | 1 | [Findings](arc-facing-review-20260910.md) `1c67ec07`; repair `dbc73fea` |
 | D | Bounded whitepaper corrections | done | — | — | — | Candidate `6fbcee8e…`; 85.47; not promoted |
-| B1 | Initial defect inventory | pending | — | — | — | Pending |
+| B1 | Initial defect inventory | done | — | — | — | [Inventory](defect-inventory-20260910.md); 46 classified rows |
 | C | Validator-0 RPC diagnosis | pending | — | — | — | Pending |
 | A2 | Consensus and storage | pending | 0 | 0 | 0 | Pending |
 | A3 | Wallet, proxy, and RPC SDK | pending | 0 | 0 | 0 | Pending |
@@ -41,6 +41,11 @@ whitepaper candidate scored 85.47 and was not promoted.
   85.47 across 15 fresh reviews. Because 85.47 does not strictly exceed 87.13,
   neither the published paper nor its Markdown download was changed; both
   remain SHA-256 `28f004a6a0e08a87561e62d14ace6a87659718c4845feba21eb468b3fe314202`.
+- Initial defect inventory completed with 46 rows from the campaign and the
+  named 2026-09-06, StakeHub, proof-input, and signing-qualification sources:
+  20 reproduced defects, 21 evidence gaps, one economic assumption, and four
+  proposed capabilities. The final campaign pass will append later findings,
+  reconcile statuses, recalculate counts, and run the required TIH gate.
 
 ## Skips and boundary decisions
 
