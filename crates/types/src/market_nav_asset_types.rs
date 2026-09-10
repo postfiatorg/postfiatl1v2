@@ -4411,6 +4411,14 @@ impl LedgerState {
     }
 
     pub fn validate_asset_state(&self, chain_id: &str) -> Result<(), String> {
+        if self.yolo_target_registrations.len() > MAX_YOLO_TARGET_REGISTRATIONS {
+            return Err(
+                "yolo target registration count exceeds bounded consensus limit".to_string(),
+            );
+        }
+        if self.yolo_target_receipts.len() > MAX_YOLO_TARGET_RECEIPTS {
+            return Err("yolo target receipt count exceeds bounded consensus limit".to_string());
+        }
         let mut asset_ids = BTreeSet::new();
         let mut assets_by_id = BTreeMap::new();
         for asset in &self.asset_definitions {

@@ -63,6 +63,12 @@ fn register_yolo_target_run(
             "target run activation must be strictly in the future".to_string(),
         ));
     }
+    if ledger.yolo_target_registrations.len() >= MAX_YOLO_TARGET_REGISTRATIONS {
+        return Err((
+            "yolo_registration_limit",
+            "target registration count reached bounded consensus limit".to_string(),
+        ));
+    }
     if ledger.yolo_target_registrations.iter().any(|row| {
         row.operation.registrant == operation.registrant
             && (row.operation.replay_id_sha256 == operation.replay_id_sha256
@@ -93,6 +99,12 @@ fn submit_yolo_target_receipt(
     operation
         .validate()
         .map_err(|e| ("invalid_yolo_submission", e))?;
+    if ledger.yolo_target_receipts.len() >= MAX_YOLO_TARGET_RECEIPTS {
+        return Err((
+            "yolo_receipt_limit",
+            "target receipt count reached bounded consensus limit".to_string(),
+        ));
+    }
     let registration = ledger
         .yolo_target_registrations
         .iter()

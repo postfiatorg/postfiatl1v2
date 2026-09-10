@@ -125,6 +125,21 @@ pub fn asset_transaction_state_expansion_fee(
         AssetTransactionOperation::VaultBridgeDepositClaim(_) => {
             TRUSTLINE_STATE_EXPANSION_FEE.saturating_mul(3)
         }
+        AssetTransactionOperation::YoloTargetRegisterV1(operation)
+            if !ledger.yolo_target_registrations.iter().any(|row| {
+                row.registration_id == operation.registration_id()
+            }) =>
+        {
+            YOLO_TARGET_REGISTRATION_STATE_EXPANSION_FEE
+        }
+        AssetTransactionOperation::YoloTargetSubmitV1(operation)
+            if !ledger
+                .yolo_target_receipts
+                .iter()
+                .any(|row| row.registration_id == operation.registration_id) =>
+        {
+            YOLO_TARGET_RECEIPT_STATE_EXPANSION_FEE
+        }
         _ => 0,
     }
 }

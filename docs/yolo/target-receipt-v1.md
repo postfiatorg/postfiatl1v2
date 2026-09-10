@@ -68,7 +68,10 @@ The ledger stores separate `yolo_target_registrations` and
 `yolo_target_receipts`. Empty fields are omitted from serialization and state
 commitment, preserving legacy empty-state roots. Populated records are sorted by
 registration ID and fully committed. The issued-supply inventories explicitly
-exclude them because they contain no asset balances.
+exclude them because they contain no asset balances. Each vector has a
+consensus limit of 4,096 rows. A newly created registration or receipt carries
+a 10-PFT state-expansion fee in addition to the existing byte fee; duplicate
+rows do not receive positive state-expansion credit.
 
 A receipt binds transaction ID and inclusion height. Canonical transaction
 finality evidence supplies the containing block/certificate and current tip;

@@ -22,13 +22,16 @@ use postfiat_types::{
 use zeroize::Zeroizing;
 
 use crate::{
-    live_consensus_v2_context, persist_consensus_v2_precommit_authorization,
-    persist_consensus_v2_prepare_authorization, persist_consensus_v2_qc,
-    persist_consensus_v2_timeout_authorization, read_consensus_v2_qc_graph,
-    read_consensus_v2_qc_graph_for_view, read_consensus_v2_safety_state, read_validator_key_file,
-    select_validator_key_record, validate_validator_key_file, write_block_certificate_file,
-    BlockCertificateFile, BlockProposalFile,
+    live_consensus_v2_context, persist_consensus_v2_current_timeout_authorization_with,
+    persist_consensus_v2_precommit_authorization_with,
+    persist_consensus_v2_prepare_authorization_with, persist_consensus_v2_qc,
+    read_consensus_v2_qc_graph_for_view, read_validator_key_file, select_validator_key_record,
+    validate_validator_key_file, write_block_certificate_file, BlockCertificateFile,
+    BlockProposalFile,
 };
+
+#[cfg(test)]
+use crate::{read_consensus_v2_qc_graph, read_consensus_v2_safety_state};
 
 pub fn consensus_v2_active_at(genesis: &Genesis, height: u64) -> bool {
     genesis
@@ -127,15 +130,22 @@ pub fn create_consensus_v2_prepare_vote(
     let (domain, validators) = live_consensus_v2_context(data_dir)?;
     let graph =
         read_consensus_v2_qc_graph_for_view(data_dir, &domain, &validators, proposal.round.view)?;
-    persist_consensus_v2_prepare_authorization(data_dir, proposal, timeout_certificate, &graph)?;
-    sign_consensus_v2_vote(
-        key_file,
-        validator_id,
-        domain,
-        &validators,
-        proposal.round,
-        ConsensusV2Phase::Prepare,
-        Some(proposal.block.clone()),
+    persist_consensus_v2_prepare_authorization_with(
+        data_dir,
+        proposal,
+        timeout_certificate,
+        &graph,
+        |authorized_domain, authorized_validators, _| {
+            sign_consensus_v2_vote(
+                key_file,
+                validator_id,
+                authorized_domain.clone(),
+                authorized_validators,
+                proposal.round,
+                ConsensusV2Phase::Prepare,
+                Some(proposal.block.clone()),
+            )
+        },
     )
 }
 
@@ -150,17 +160,21 @@ pub fn create_consensus_v2_precommit_vote(
         prepare_qc.round.height,
         None,
     )?;
-    let (domain, validators) = live_consensus_v2_context(data_dir)?;
     persist_consensus_v2_qc(data_dir, prepare_qc)?;
-    persist_consensus_v2_precommit_authorization(data_dir, prepare_qc)?;
-    sign_consensus_v2_vote(
-        key_file,
-        validator_id,
-        domain,
-        &validators,
-        prepare_qc.round,
-        ConsensusV2Phase::Precommit,
-        prepare_qc.block.clone(),
+    persist_consensus_v2_precommit_authorization_with(
+        data_dir,
+        prepare_qc,
+        |authorized_domain, authorized_validators, _| {
+            sign_consensus_v2_vote(
+                key_file,
+                validator_id,
+                authorized_domain.clone(),
+                authorized_validators,
+                prepare_qc.round,
+                ConsensusV2Phase::Precommit,
+                prepare_qc.block.clone(),
+            )
+        },
     )
 }
 
@@ -172,32 +186,38 @@ pub fn create_consensus_v2_timeout_vote(
     validator_id: &str,
 ) -> io::Result<ConsensusV2TimeoutVote> {
     crate::storage_vote_guard::require_unambiguous_storage_for_vote(data_dir, round.height, None)?;
-    let (domain, validators) = live_consensus_v2_context(data_dir)?;
-    let graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)?;
-    let state = read_consensus_v2_safety_state(data_dir, &domain, round.height)?;
-    let high_qc = state.high_qc.clone();
-    persist_consensus_v2_timeout_authorization(data_dir, round, high_qc.as_ref())?;
-    let keys = read_validator_key_file(key_file)?;
-    validate_validator_key_file(&keys)?;
-    let key = select_validator_key_record(&keys, Some(validator_id))?;
-    let mut vote = ConsensusV2TimeoutVote {
-        schema: CONSENSUS_V2_TIMEOUT_VOTE_SCHEMA.to_string(),
-        domain: domain.clone(),
+    persist_consensus_v2_current_timeout_authorization_with(
+        data_dir,
         round,
-        phase: ConsensusV2Phase::Precommit,
-        high_qc,
-        validator: validator_id.to_string(),
-        signature: signature_shell(validator_id, &key.public_key_hex),
-    };
-    let message = consensus_v2_timeout_vote_signing_bytes(&vote).map_err(ordering_error)?;
-    vote.signature.signature_hex = sign_message(
-        &key.private_key_hex,
-        &message,
-        CONSENSUS_V2_TIMEOUT_VOTE_CONTEXT,
-    )?;
-    verify_consensus_v2_timeout_vote(&domain, &validators, &vote, &graph)
-        .map_err(ordering_error)?;
-    Ok(vote)
+        |authorized_domain, authorized_validators, graph, high_qc, _| {
+            let keys = read_validator_key_file(key_file)?;
+            validate_validator_key_file(&keys)?;
+            let key = select_validator_key_record(&keys, Some(validator_id))?;
+            let mut vote = ConsensusV2TimeoutVote {
+                schema: CONSENSUS_V2_TIMEOUT_VOTE_SCHEMA.to_string(),
+                domain: authorized_domain.clone(),
+                round,
+                phase: ConsensusV2Phase::Precommit,
+                high_qc: high_qc.cloned(),
+                validator: validator_id.to_string(),
+                signature: signature_shell(validator_id, &key.public_key_hex),
+            };
+            let message = consensus_v2_timeout_vote_signing_bytes(&vote).map_err(ordering_error)?;
+            vote.signature.signature_hex = sign_message(
+                &key.private_key_hex,
+                &message,
+                CONSENSUS_V2_TIMEOUT_VOTE_CONTEXT,
+            )?;
+            verify_consensus_v2_timeout_vote(
+                authorized_domain,
+                authorized_validators,
+                &vote,
+                graph,
+            )
+            .map_err(ordering_error)?;
+            Ok(vote)
+        },
+    )
 }
 
 pub fn certify_and_persist_consensus_v2_votes(

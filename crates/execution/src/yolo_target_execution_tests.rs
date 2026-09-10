@@ -157,6 +157,62 @@ fn yolo_registration_conflicts_are_scoped_to_registrant_and_unknown_runs_reject(
 }
 
 #[test]
+fn yolo_consensus_state_limits_are_exact() {
+    let (registration, submission) = yolo_fixture();
+    let registration_row = |index: usize| {
+        let mut operation = registration.clone();
+        operation.series_id_sha256 = format!("{index:064x}");
+        operation.replay_id_sha256 = format!("{:064x}", index + MAX_YOLO_TARGET_REGISTRATIONS);
+        postfiat_types::YoloTargetRegistrationV1 {
+            registration_id: operation.registration_id(),
+            registered_height: 10,
+            operation,
+        }
+    };
+    let mut ledger = LedgerState::new(vec![]);
+    ledger.yolo_target_registrations = (0..MAX_YOLO_TARGET_REGISTRATIONS)
+        .map(registration_row)
+        .collect();
+    assert!(ledger.validate_asset_state("bounded-yolo").is_ok());
+
+    let mut additional = registration.clone();
+    additional.series_id_sha256 = "fe".repeat(32);
+    additional.replay_id_sha256 = "fd".repeat(32);
+    assert_eq!(
+        register_yolo_target_run(&mut ledger, &additional, 10)
+            .unwrap_err()
+            .0,
+        "yolo_registration_limit"
+    );
+    ledger.yolo_target_registrations.pop();
+    register_yolo_target_run(&mut ledger, &additional, 10).unwrap();
+    assert_eq!(
+        ledger.yolo_target_registrations.len(),
+        MAX_YOLO_TARGET_REGISTRATIONS
+    );
+
+    let receipt = postfiat_types::YoloTargetReceiptV1 {
+        registration_id: submission.registration_id.clone(),
+        transaction_hash: "12".repeat(48),
+        inclusion_height: 12,
+        operation: submission.clone(),
+    };
+    ledger.yolo_target_receipts = vec![receipt.clone(); MAX_YOLO_TARGET_RECEIPTS];
+    assert!(ledger.validate_asset_state("bounded-yolo").is_ok());
+    assert_eq!(
+        submit_yolo_target_receipt(&mut ledger, &submission, &"34".repeat(48), 12)
+            .unwrap_err()
+            .0,
+        "yolo_receipt_limit"
+    );
+    ledger.yolo_target_receipts.push(receipt);
+    assert!(ledger
+        .validate_asset_state("bounded-yolo")
+        .unwrap_err()
+        .contains("receipt count exceeds"));
+}
+
+#[test]
 fn yolo_signed_lifecycle_activation_replay_persistence_and_no_asset_authority() {
     let genesis = Genesis::new("yolo-synthetic-local");
     let keys = ml_dsa_65_keygen().unwrap();
@@ -189,6 +245,11 @@ fn yolo_signed_lifecycle_activation_replay_persistence_and_no_asset_authority() 
     let receipt =
         execute_asset_transaction_with_compatibility(&genesis, &mut ledger, &register, 10, active);
     assert!(receipt.accepted, "{receipt:?}");
+    assert_eq!(
+        receipt.state_expansion_fee,
+        YOLO_TARGET_REGISTRATION_STATE_EXPANSION_FEE
+    );
+    assert_eq!(asset_transaction_state_expansion_fee(&ledger, &register), 0);
     let submit = signed_asset_transaction_with_minimum_fee(
         &genesis,
         &ledger,
@@ -213,6 +274,11 @@ fn yolo_signed_lifecycle_activation_replay_persistence_and_no_asset_authority() 
     let receipt =
         execute_asset_transaction_with_compatibility(&genesis, &mut ledger, &submit, 12, active);
     assert!(receipt.accepted, "{receipt:?}");
+    assert_eq!(
+        receipt.state_expansion_fee,
+        YOLO_TARGET_RECEIPT_STATE_EXPANSION_FEE
+    );
+    assert_eq!(asset_transaction_state_expansion_fee(&ledger, &submit), 0);
     assert_eq!(ledger.yolo_target_receipts.len(), 1);
     assert_eq!(
         ledger.yolo_target_receipts[0].transaction_hash,

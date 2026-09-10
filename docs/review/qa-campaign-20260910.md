@@ -10,7 +10,7 @@ This is the canonical progress record for the [2026-09-10 QA campaign](qa-campai
 | D | Bounded whitepaper corrections | done | — | — | — | Candidate `6fbcee8e…`; 85.47; not promoted |
 | B1 | Initial defect inventory | done | — | — | — | [Inventory](defect-inventory-20260910.md); 46 initial, 49 current rows |
 | C | Validator-0 RPC diagnosis | done | 1 | 0 | 0 | Root cause recorded in [chain state](../status/chain-state-current.md#validator-0-rpc-diagnosis-20260910) |
-| A2 | Consensus and storage | fixing | 1 | 1 | 0 | [Findings](consensus-storage-review-20260910.md); repairs pending |
+| A2 | Consensus and storage | done | 1 | 1 | 0 | [Findings and repair evidence](consensus-storage-review-20260910.md) |
 | A3 | Wallet, proxy, and RPC SDK | pending | 0 | 0 | 0 | Pending |
 | A4 | StakeHub `fix/pr8-safety-20260907` | pending | 0 | 0 | 0 | Read-only review only |
 | A5 | Task Node UNL V1 and V2 modules | pending | 0 | 0 | 0 | Pending |
@@ -60,7 +60,12 @@ whitepaper candidate scored 85.47 and was not promoted.
   authorization and signature emission, plus one P2 unbounded, uncharged YOLO
   consensus-state growth path. Pre-repair focused baselines remain green at
   20 Consensus v2 library, 3 Consensus v2 binary, and 6 YOLO execution tests;
-  the missing adversarial cases will accompany the repairs.
+  the missing adversarial cases accompany the repairs. Authorization and
+  signature construction now share one per-height critical section. YOLO
+  registrations and receipts each have an exact 4,096-row cap and a 10-PFT
+  state-expansion fee. Post-repair gates pass at 20 Consensus v2 library, 3
+  Consensus v2 binary, 7 YOLO execution, and 4 YOLO node tests, with the one
+  documented external-proof opt-in case ignored; strict focused Clippy passes.
 
 ## Skips and boundary decisions
 

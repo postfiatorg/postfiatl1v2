@@ -1,6 +1,6 @@
 # Consensus and storage review — 2026-09-10
 
-Status: findings recorded; P1 and P2 repairs pending
+Status: source repairs verified; no release or deployment authorized
 
 Reviewed checkout: `314952a9249698b9075c1ff14cb896c11b660773`
 
@@ -87,3 +87,28 @@ that proves lower-round emission cannot follow higher-round emission. Finding
 2 requires deterministic consensus bounds and state-expansion fees for newly
 created YOLO rows, with exact boundary and fee regressions. Neither repair
 authorizes a release, activation, or deployment.
+
+## Repair disposition
+
+- **Finding 1 — fixed.** The prepare and precommit persistence helpers now
+  retain the per-height guard through a supplied signing callback. Timeout
+  signing selects the durable high QC inside that same critical section. All
+  three production entrypoints construct and verify their signatures before
+  releasing the guard. A synchronized regression pauses the callback and
+  proves a competing authorization cannot acquire the guard until signature
+  construction returns.
+- **Finding 2 — fixed.** Registration and receipt vectors now have explicit
+  4,096-row consensus limits enforced both before append and during ledger
+  validation. Each new row adds a 10-PFT state-expansion fee; an already-present
+  row receives no positive expansion charge. The regression admits the exact
+  registration boundary, rejects the next row, rejects an over-limit restored
+  ledger, and checks both fee classes through signed execution.
+
+## Post-repair verification
+
+- Consensus v2 library selection: **20 passed**.
+- Consensus v2 node binary selection: **3 passed**.
+- YOLO execution selection: **7 passed**.
+- YOLO node finality/replay selection: **4 passed, 1 opt-in case ignored**.
+- Strict Clippy for `postfiat-ordering-fast`, `postfiat-node`, and
+  `postfiat-execution`, including all targets: pass.

@@ -130,6 +130,28 @@ pub fn persist_consensus_v2_prepare_authorization(
     timeout_certificate: Option<&ConsensusV2TimeoutCertificate>,
     qc_graph: &ConsensusV2QcGraph,
 ) -> io::Result<ConsensusV2SafetyState> {
+    persist_consensus_v2_prepare_authorization_with(
+        data_dir,
+        proposal,
+        timeout_certificate,
+        qc_graph,
+        |_, _, next| Ok(next.clone()),
+    )
+}
+
+/// Keep the per-height safety guard held through the caller's signature
+/// construction so another phase cannot advance the round floor first.
+pub(crate) fn persist_consensus_v2_prepare_authorization_with<T>(
+    data_dir: &Path,
+    proposal: &ConsensusV2Proposal,
+    timeout_certificate: Option<&ConsensusV2TimeoutCertificate>,
+    qc_graph: &ConsensusV2QcGraph,
+    after_persist: impl FnOnce(
+        &ConsensusV2Domain,
+        &ConsensusV2ValidatorSet,
+        &ConsensusV2SafetyState,
+    ) -> io::Result<T>,
+) -> io::Result<T> {
     let (domain, validators) = live_consensus_v2_context(data_dir)?;
     if proposal.domain != domain {
         return Err(invalid_data(
@@ -148,7 +170,7 @@ pub fn persist_consensus_v2_prepare_authorization(
         )
         .map_err(|error| invalid_data(format!("consensus v2 prepare authorization: {error}")))?;
         write_consensus_v2_safety_state(data_dir, &next)?;
-        Ok(next)
+        after_persist(&domain, &validators, &next)
     })
 }
 
@@ -158,6 +180,22 @@ pub fn persist_consensus_v2_precommit_authorization(
     data_dir: &Path,
     prepare_qc: &ConsensusV2QuorumCertificate,
 ) -> io::Result<ConsensusV2SafetyState> {
+    persist_consensus_v2_precommit_authorization_with(data_dir, prepare_qc, |_, _, next| {
+        Ok(next.clone())
+    })
+}
+
+/// Keep the per-height safety guard held through the caller's signature
+/// construction so another phase cannot advance the round floor first.
+pub(crate) fn persist_consensus_v2_precommit_authorization_with<T>(
+    data_dir: &Path,
+    prepare_qc: &ConsensusV2QuorumCertificate,
+    after_persist: impl FnOnce(
+        &ConsensusV2Domain,
+        &ConsensusV2ValidatorSet,
+        &ConsensusV2SafetyState,
+    ) -> io::Result<T>,
+) -> io::Result<T> {
     let (domain, validators) = live_consensus_v2_context(data_dir)?;
     if prepare_qc.domain != domain {
         return Err(invalid_data(
@@ -172,7 +210,7 @@ pub fn persist_consensus_v2_precommit_authorization(
                     invalid_data(format!("consensus v2 precommit authorization: {error}"))
                 })?;
         write_consensus_v2_safety_state(data_dir, &next)?;
-        Ok(next)
+        after_persist(&domain, &validators, &next)
     })
 }
 
@@ -294,21 +332,64 @@ pub fn persist_consensus_v2_timeout_authorization(
     round: ConsensusV2Round,
     high_qc: Option<&ConsensusV2QcRef>,
 ) -> io::Result<ConsensusV2SafetyState> {
+    let high_qc = high_qc.cloned();
+    persist_consensus_v2_timeout_authorization_selected_with(
+        data_dir,
+        round,
+        move |_| high_qc,
+        |_, _, _, _, next| Ok(next.clone()),
+    )
+}
+
+/// Select the current durable high QC and keep the safety guard held through
+/// timeout signature construction.
+pub(crate) fn persist_consensus_v2_current_timeout_authorization_with<T>(
+    data_dir: &Path,
+    round: ConsensusV2Round,
+    after_persist: impl FnOnce(
+        &ConsensusV2Domain,
+        &ConsensusV2ValidatorSet,
+        &ConsensusV2QcGraph,
+        Option<&ConsensusV2QcRef>,
+        &ConsensusV2SafetyState,
+    ) -> io::Result<T>,
+) -> io::Result<T> {
+    persist_consensus_v2_timeout_authorization_selected_with(
+        data_dir,
+        round,
+        |current| current.high_qc.clone(),
+        after_persist,
+    )
+}
+
+fn persist_consensus_v2_timeout_authorization_selected_with<T>(
+    data_dir: &Path,
+    round: ConsensusV2Round,
+    select_high_qc: impl FnOnce(&ConsensusV2SafetyState) -> Option<ConsensusV2QcRef>,
+    after_persist: impl FnOnce(
+        &ConsensusV2Domain,
+        &ConsensusV2ValidatorSet,
+        &ConsensusV2QcGraph,
+        Option<&ConsensusV2QcRef>,
+        &ConsensusV2SafetyState,
+    ) -> io::Result<T>,
+) -> io::Result<T> {
     let (domain, validators) = live_consensus_v2_context(data_dir)?;
     with_safety_guard(data_dir, round.height, || {
         let graph = read_consensus_v2_qc_graph(data_dir, &domain, &validators)?;
         let current = read_consensus_v2_safety_state(data_dir, &domain, round.height)?;
+        let high_qc = select_high_qc(&current);
         let next = authorize_consensus_v2_timeout_vote(
             &current,
             &domain,
             &validators,
             round,
-            high_qc,
+            high_qc.as_ref(),
             &graph,
         )
         .map_err(|error| invalid_data(format!("consensus v2 timeout authorization: {error}")))?;
         write_consensus_v2_safety_state(data_dir, &next)?;
-        Ok(next)
+        after_persist(&domain, &validators, &graph, high_qc.as_ref(), &next)
     })
 }
 
@@ -414,7 +495,9 @@ mod tests {
         ConsensusV2Phase, ConsensusV2Proposal, ConsensusV2Round, ConsensusV2Signature,
         ConsensusV2Vote, CONSENSUS_V2_PROPOSAL_SCHEMA, CONSENSUS_V2_VOTE_SCHEMA,
     };
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     use crate::{
         init, init_consensus_v2, write_consensus_v2_topology, InitConsensusV2Options, InitOptions,
@@ -525,13 +608,52 @@ mod tests {
             .expect("proposal signature"),
         );
 
-        let persisted = persist_consensus_v2_prepare_authorization(
+        let (callback_started_tx, callback_started_rx) = mpsc::channel();
+        let (contender_attempting_tx, contender_attempting_rx) = mpsc::channel();
+        let (contender_entered_tx, contender_entered_rx) = mpsc::channel();
+        let contender_data_dir = data_dir.clone();
+        let contender = thread::spawn(move || {
+            callback_started_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("signing callback starts");
+            contender_attempting_tx
+                .send(())
+                .expect("announce competing authorization");
+            with_safety_guard(&contender_data_dir, 1, || {
+                contender_entered_tx
+                    .send(())
+                    .expect("announce acquired safety guard");
+                Ok(())
+            })
+        });
+        let persisted = persist_consensus_v2_prepare_authorization_with(
             &data_dir,
             &proposal,
             None,
             &ConsensusV2QcGraph::default(),
+            |_, _, next| {
+                callback_started_tx
+                    .send(())
+                    .expect("announce signing callback");
+                contender_attempting_rx
+                    .recv_timeout(Duration::from_secs(1))
+                    .expect("competing authorization attempts safety guard");
+                assert_eq!(
+                    contender_entered_rx.recv_timeout(Duration::from_millis(100)),
+                    Err(mpsc::RecvTimeoutError::Timeout),
+                    "another authorization entered while signature construction held the guard"
+                );
+                Ok(next.clone())
+            },
         )
         .expect("persist prepare authorization");
+        contender
+            .join()
+            .expect("competing authorization thread")
+            .expect("competing authorization acquires released guard");
+        contender_entered_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("competing authorization enters after signature construction");
         assert_eq!(persisted.highest_prepare_round, Some(round));
         let restarted =
             read_consensus_v2_safety_state(&data_dir, &domain, 1).expect("restart read");

@@ -16,7 +16,9 @@ The implementation is
 `crates/ordering_fast/src/consensus_v2.rs`. All three authorization functions
 call it. Node authorization serializes the read, predicate, and durable write
 under the existing safety guard in `crates/node/src/consensus_v2_store.rs`;
-`crates/node/src/consensus_v2_finality.rs` emits signatures after authorization.
+the guard remains held through signature construction in
+`crates/node/src/consensus_v2_finality.rs`, so a concurrent phase cannot advance
+the floor between authorization and signing.
 
 ## Fixed-height safety argument
 
@@ -74,6 +76,9 @@ authorization behavior only through an operator-controlled release.
   phase pairings, same-view progression, certificate verification, and 332
   bounded delayed-certificate cases over four- and six-member committees with
   all quorum memberships and zero or one Byzantine identity.
+- `crates/node/src/consensus_v2_store.rs` pauses signature construction under
+  the per-height guard and proves a competing authorization cannot enter until
+  that callback returns.
 - Existing Consensus v2 tests cover signed domains, locks, malformed ancestry,
   failed-proposer recovery, and snapshot compatibility.
 - `crates/node/src/main_parts/tests/transport_batch_payload_tests.rs` contains
