@@ -177,7 +177,7 @@ campaign.
 | --- | --- | --- | --- |
 | 1 | Review Burn 1 repairs and sibling defect classes | done | [Findings](burn2-fix-review-20260910.md): three P1 repair gaps; focused baselines green |
 | 1R | Repair Unit 1 P1/P2 findings | done | Host and WASM intent boundaries closed; bounded RPC clean exits now restart; focused gates pass |
-| 2 | Ground all 19 open inventory rows | pending | Per-row bounded outcomes required |
+| 2 | Ground all 19 open inventory rows | done | 3 fixed, 5 reproduced/retained, 5 need live environment, 6 need operator decision; 0 bare open |
 | 3 | Fuzz and property expansion | pending | Four named surfaces; ten-minute per-target bounds |
 | 4 | Reconcile inventory and close | pending | TIH rerun required if materially changed |
 
@@ -198,6 +198,23 @@ Focused wallet, proxy, package, deployment-unit, and artifact-policy gates pass.
 The WASM binary bytes were retained because the required local build tools are
 absent and fetching them is outside this campaign's network boundary. No
 running service or fleet configuration changed.
+
+### Burn 2 unit 2 result
+
+The [bounded reproduction record](burn2-open-row-reproduction-20260910.md)
+grounds every row that entered burn 2 as open. Three in-repository defects were
+fixed: the RPC service's clean-exit rotation in `15af691d`, plus immutable
+Cobalt publication verification and the storage plan correction in
+`acdbb1f2`. Five findings remain directly reproduced (two P3s and three
+read-only StakeHub findings), five state the exact live environment needed,
+and six state the operator decision required. No inventory row remains bare
+`Open`.
+
+The local A666 readiness checker still reports 0/6, the deployed release is
+still not an ancestor of main, the local release ELF still carries a randomized
+Rust temporary RUNPATH, and a fresh search found no exact deployed rollback
+binary among 50 local node binaries. These are retained blockers, not new
+authority. No fleet, chain, Task Node, or StakeHub action occurred.
 
 ### Burn 2 boundaries
 

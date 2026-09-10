@@ -16,8 +16,8 @@ must not be described as shipped or authoritative.
 | --- | --- | --- | --- | --- |
 | ARC-01 | Reproduced defect | P1 | Fixed — `dbc73fea`; deployed controller still open | [Arc review](arc-facing-review-20260910.md#1-p1--v2-source-debited-exports-have-no-realizable-refund-path): a valid V2 source export could expire without a controller cancellation event matching the refund verifier. |
 | ARC-02 | Reproduced defect | P1 | Fixed — `dbc73fea` | [Arc review](arc-facing-review-20260910.md#2-p1--the-top-level-mainnet-round-trip-command-mutates-live-systems-without-an-execution-interlock): invoking the shell entrypoint entered live setup without an explicit execution ceremony. |
-| ARC-03 | Reproduced defect | P3 | Open | [Arc review](arc-facing-review-20260910.md#3-p3--the-dedicated-ethereum-mainnet-ingress-guest-carries-a-stale-fulu-epoch-pin): the dedicated ingress pin is 411648 while the shared path and retained program identity use 411392. Frozen guest artifacts were not regenerated. |
-| RPC-01 | Reproduced defect | P1 | Open; diagnosed, not repaired | [Read-only validator-0 diagnosis](../status/chain-state-current.md#validator-0-rpc-diagnosis-20260910): the deployed RPC reached its 10,000-connection ceiling with a keep-alive connection still active, stopped accepting, and remained systemd-active while new health reads timed out. |
+| ARC-03 | Reproduced defect | P3 | Reproduced — P3 recorded only | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): the dedicated ingress pin remains 411648 while the shared path uses 411392. Frozen guest artifacts were not regenerated. |
+| RPC-01 | Reproduced defect | P1 | Reproduced — fixed in source `15af691d`; fleet unchanged | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md) and [read-only validator-0 diagnosis](../status/chain-state-current.md#validator-0-rpc-diagnosis-20260910): generated and example RPC units now rotate after clean finite-budget exits. |
 | CS-01 | Reproduced defect | P1 | Fixed — `f9f13ead` | [Consensus and storage review](consensus-storage-review-20260910.md#1-p1--consensus-authorization-and-signature-emission-are-separated-by-an-unlocked-race-window): a lower-view call could persist authorization, lose the safety guard to a higher-view call, and emit its signature only after the durable round floor advanced. Signing now completes under the guard. |
 | CS-02 | Reproduced defect | P2 | Fixed — `f9f13ead` | [Consensus and storage review](consensus-storage-review-20260910.md#2-p2--activated-yolo-registrations-can-grow-consensus-state-without-a-bound-or-state-expansion-charge): distinct YOLO registrations appended to committed validator state without a count bound or state-expansion fee. Both row classes are now capped and charged. |
 | WRS-01 | Reproduced defect | P1 | Fixed — `83488d91` | [Wallet/proxy/RPC SDK review](wallet-proxy-rpc-sdk-review-20260910.md#1-p1--transfer-quote-signing-trusts-an-rpc-selected-recipient-and-amount): the transfer signer sourced recipient and amount from an untrusted quote without binding the reviewed request. |
@@ -28,7 +28,7 @@ must not be described as shipped or authoritative.
 | UNL-01 | Reproduced defect | P1 | Fixed — `1c10f828` | [Task Node UNL review](tasknode-unl-review-20260910.md#1-p1--a-complete-score-window-passes-without-a-renewed-vouch-or-post-epoch-co-work): accounts with no bilateral records return `READY` after score-only continuity. |
 | UNL-02 | Reproduced defect | P2 | Fixed — `1c10f828` | [Task Node UNL review](tasknode-unl-review-20260910.md#2-p2--a-stale-score-replay-can-suppress-fresh-score-evidence-by-input-order): stale-first and fresh-first orderings of the same digest produce different continuity decisions. |
 | UNL-03 | Reproduced defect | P2 | Fixed — `1c10f828` | [Task Node UNL review](tasknode-unl-review-20260910.md#3-p2--valid-identifiers-can-inject-markdown-structure-into-the-operator-report): an accepted newline/backtick identifier creates an attacker-chosen heading in the root-valid human report. |
-| UNL-04 | Reproduced defect | P3 | Open; recorded, not fixed | [Task Node UNL review](tasknode-unl-review-20260910.md#4-p3--the-hypothetical-round-helper-accepts-a-report-that-is-not-bound-to-its-frozen-window): an in-memory report candidate replacement bypasses a saturated-group hold in caller-owned hypothetical state. |
+| UNL-04 | Reproduced defect | P3 | Reproduced — P3 recorded only | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): an in-memory report candidate replacement still bypasses a saturated-group hold in caller-owned hypothetical state. |
 
 ## Storage, Cobalt, and Task Node review
 
@@ -39,13 +39,13 @@ The source is the historical [2026-09-06 review](https://github.com/postfiatorg/
 | SCT-01 | Reproduced defect | P1 | Fixed and deployed — 2026-09-06 RPC cache release | Transactional finality advanced every RPC to block 992 while cached status returned six different older heights. |
 | SCT-02 | Reproduced defect | P2 | Fixed — `1267df6a` | Removing the candidate wallet mapping hid a known funding relation and changed the shadow result from reject to admit. |
 | SCT-03 | Reproduced defect | P2 | Fixed — `1267df6a` | Replacing the candidate key hash preserved an admitted shadow result because the registry key was not joined to the authenticated binding key. |
-| SCT-04 | Reproduced defect | P2 | Open | The committed consolidated Cobalt verifier still exits with `adversarial packet semantic verifier is missing, failed, or inconsistent` after routine publication-file changes. The independent E5 result is a separate pass. |
-| SCT-05 | Reproduced defect | P2 | Open | The locked single-writer plan still says cross-process readers coexist with a writer and RPC never takes the write lock, while the deployed operation-scoped writable handle excludes sibling-process opens. |
-| SCT-06 | Economic assumption | P2 | Open | The bounded lease qualification assumes serialized, operator-driven blocks; sustained overlapping public-network operations and writer fairness have not been qualified. |
-| SCT-07 | Evidence gap | P3 | Open | The review measured the local build filesystem at 96% used but did not inventory validator-fleet disk capacity. |
-| SCT-08 | Evidence gap | P2 | Open | The real-data Task Node replay lacks complete signed bindings, publisher-attested work digests, exclusions, remaining admission facts, and a native L1 registry-root binding. |
+| SCT-04 | Reproduced defect | P2 | Reproduced — fixed `acdbb1f2` | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): publication hashes now resolve against immutable source revision `41202067`; consolidated and independent verifiers pass. |
+| SCT-05 | Reproduced defect | P2 | Reproduced — fixed `acdbb1f2` | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): a post-lock correction preserves the scored text while naming exclusive cross-process access and operation-scoped leases as the implemented mechanism. |
+| SCT-06 | Economic assumption | P2 | Needs live environment | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): sustained overlapping public traffic and observable writer-fairness measurements are required. |
+| SCT-07 | Evidence gap | P3 | Needs live environment | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): fleet disk-capacity and growth telemetry is not exposed by the permitted ledger/status endpoints. |
+| SCT-08 | Evidence gap | P2 | Needs operator decision | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): a separately authorized evidence campaign is required; burn 2 permits no Task Node action. |
 | SCT-09 | Proposed capability | P2 | Dispositioned by the locked V2 shadow successor; not promoted | The September 3 model-flag direction and Admission Policy V1 had different eligibility semantics and no selected versioned successor policy. The [V2 milestone](../plans/completed/tasknode-unl-amendment-v2-milestone.md) now implements that successor as `SHADOW_ONLY`; this is not live adoption. |
-| SCT-10 | Proposed capability | P2 | Open | An independently operated end-to-end Task Node proposal and Cobalt ratification rehearsal remains unperformed; Foundation-controlled nodes do not establish independent operation. |
+| SCT-10 | Proposed capability | P2 | Needs operator decision | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): independent operators and a separately authorized end-to-end rehearsal are prerequisites. |
 
 ## StakeHub PR #8 review
 
@@ -64,9 +64,9 @@ review verifies the local fix branch.
 | SH-07 | Evidence gap | P2 | Dispositioned as cross-repository evidence; publication remains open | The root evidence manifest depended on sixteen A666 lineage files absent from both reviewed target branches. |
 | SH-08 | Reproduced defect | P2 | Fixed in the local, uncommitted documentation repair; not published | One handoff said the recovery archive was outside Git while PR #8 committed the archive, ELFs, witnesses, and historical scripts. |
 | SH-09 | Reproduced defect | P3 | Fixed conservatively in the local, uncommitted repair set; not published | Exact integer withdrawal amounts crossed binary floating point before venue signing; tests covered only exactly representable small amounts. |
-| SH-10 | Reproduced defect | P1 | Open in the StakeHub lane | [Read-only branch review](stakehub-fix-branch-review-20260910.md#1-p1--release-reuse-can-overwrite-an-active-release-before-promotion): release reuse can copy configuration directly into an active release directory before aggregate verification or promotion. |
-| SH-11 | Reproduced defect | P2 | Open in the StakeHub lane | [Read-only branch review](stakehub-fix-branch-review-20260910.md#2-p2--shielding-records-success-from-an-unbound-runner-flag): shielding persists success from `round_ok` without the exact certified-batch contract used by private egress. |
-| SH-12 | Reproduced defect | P2 | Open in the StakeHub lane | [Read-only branch review](stakehub-fix-branch-review-20260910.md#3-p2--route-activation-can-confuse-fleet-height-with-exact-batch-success): route activation combines an unbound runner flag with fleet height, neither of which proves application of the intended amendment. |
+| SH-10 | Reproduced defect | P1 | Reproduced — external read-only lane | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): Git object `8f6f27cf` still permits release-ID reuse before aggregate verification. |
+| SH-11 | Reproduced defect | P2 | Reproduced — external read-only lane | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): Git object `8f6f27cf` still persists unbound `round_ok` as shielding success. |
+| SH-12 | Reproduced defect | P2 | Reproduced — external read-only lane | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): Git object `8f6f27cf` still substitutes unbound `round_ok` plus height for exact batch application. |
 
 ## Proof-input review
 
@@ -91,9 +91,9 @@ inventory was committed in `80f2232b`.
 | PI-13 | Evidence gap | P2 | Fixed — `80f2232b` | The new `yolo_broker.rs` dependency lacked a source pin and malformed-input regressions. |
 | PI-14 | Reproduced defect | P2 | Fixed — `80f2232b` | The readiness checker referenced a deleted plan and could not establish the unchanged open gates. |
 | PI-15 | Reproduced defect | P2 | Fixed — `80f2232b` | The source-qualification checker referenced a retired evidence tree; immutable full-packet fallback now rejects partial or corrupt working packets. |
-| PI-16 | Evidence gap | P2 | Open | The review was not an independent cryptography audit or a full review of the separate YOLO target-proof system. |
+| PI-16 | Evidence gap | P2 | Needs operator decision | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): an operator must assign an independent cryptography audit and define its YOLO scope. |
 | PI-17 | Evidence gap | P2 | Dispositioned | Archive integrity checks establish retained bytes and bindings, not fresh cryptographic re-verification of the historical proofs. |
-| PI-18 | Proposed capability | P1 | Open | The reviewed A666 reserve path remained 0/6 production-qualified; repinning source evidence did not qualify or activate it. |
+| PI-18 | Proposed capability | P1 | Needs live environment | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): the local readiness checker still reports `qualified=0/6 stakehub_deprecated=false`. |
 
 ## Consensus signing-fix qualification
 
@@ -102,12 +102,12 @@ and its frozen [qualification receipt](https://github.com/postfiatorg/postfiatl1
 
 | ID | Classification | Severity | Status | Source and reproduction |
 | --- | --- | --- | --- | --- |
-| SQ-01 | Reproduced defect | P1 | Open | Two locked builds from the same source differed in six ELF `RUNPATH` bytes, so exact release hash reproducibility failed. |
-| SQ-02 | Evidence gap | P1 | Open | Current `main` is not a descendant of deployed source `707e006f` and omits live A666 source-route runtime behavior; a main-built candidate is not a signing-only successor. |
-| SQ-03 | Evidence gap | P1 | Open | The newest authorized local all-six snapshot was height 931 while the fleet observation was height 1020, so no current-height deployment-exact rehearsal was possible. |
-| SQ-04 | Evidence gap | P1 | Open | The exact deployed rollback binary was absent from the qualification server. |
+| SQ-01 | Reproduced defect | P1 | Needs operator decision | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): a fresh local release link still embeds a randomized Rust temporary `RUNPATH`; a governed release-normalization or toolchain contract is required. |
+| SQ-02 | Evidence gap | P1 | Needs operator decision | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): deployed source remains outside main's ancestry and `pftl_source_settlement.rs` remains absent. |
+| SQ-03 | Evidence gap | P1 | Needs live environment | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): a current simultaneous all-six snapshot is still required. |
+| SQ-04 | Evidence gap | P1 | Needs live environment | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): a fresh local search found 0/50 matching node binaries; retrieval requires a separately authorized operational path. |
 | SQ-05 | Evidence gap | P1 | Dispositioned for current state; see RPC-01 | Validator-0 now answers at the same height and root previously observed on validators 1–5 after an out-of-campaign restart. This does not repair the diagnosed recurrence condition or replace a current simultaneous all-six rehearsal. |
-| SQ-06 | Proposed capability | P1 | Open | Fix `bbb291ce` passes focused source tests but is absent from the fleet; a lineage-preserving, reproducible, current-state-qualified rollout remains unperformed and unauthorized. |
+| SQ-06 | Proposed capability | P1 | Needs operator decision | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): source contains `bbb291ce`, but the combined lineage, reproducibility, snapshot, rollback, and rollout decision remains unmade. |
 
 ## Final disposition
 
@@ -124,22 +124,27 @@ in that row, not a broader production claim.
 | P1 | 19 |
 | P2 | 30 |
 | P3 | 12 |
-| Fixed | 26 |
+| Fixed | 29 |
 | Dispositioned | 16 |
-| Open | 19 |
+| Reproduced and retained | 5 |
+| Needs live environment | 5 |
+| Needs operator decision | 6 |
+| Bare open | 0 |
 
-The nineteen open rows comprise eight P1s, eight P2s, and three P3s. The open
-P1 set is `RPC-01`, `SH-10`, `PI-18`, and `SQ-01` through `SQ-04` plus
-`SQ-06`. It keeps validator-0's connection exhaustion, the unpublished
-StakeHub release-reuse defect, A666 production qualification, and every named
-signing-fix deployment blocker explicit. No row authorizes a deployment,
-live-chain action, Task Node action, or StakeHub write.
+Burn 2 grounded all nineteen rows that entered it as open. Three received
+in-repository source or documentation repairs; five remain directly
+reproduced, comprising the two P3s and three findings in the read-only
+StakeHub lane; five name the exact missing live environment; and six name the
+operator decision required before more work is authorized. The bounded
+commands and conditions are in the [burn 2 reproduction record](burn2-open-row-reproduction-20260910.md).
 
-“Fixed” remains scoped by the row. In particular, StakeHub fixes are local and
-unpublished, the Arc controller migration remains operational work, V2 remains
-`SHADOW_ONLY`, and the fleet still does not run the signing fix. “Dispositioned”
-means the cited concern was classified or bounded; it does not imply that a
-proposed capability was promoted.
+“Fixed” remains scoped by the row. In particular, the RPC supervisor repair is
+not deployed, StakeHub fixes are local and unpublished, the Arc controller
+migration remains operational work, V2 remains `SHADOW_ONLY`, and the fleet
+still does not run the signing fix. “Dispositioned” means the cited concern
+was classified or bounded; it does not imply that a proposed capability was
+promoted. No row authorizes a deployment, live-chain action, Task Node action,
+or StakeHub write.
 
 ## Completeness audit
 
