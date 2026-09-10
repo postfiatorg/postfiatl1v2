@@ -6,7 +6,7 @@ This is the canonical progress record for the [2026-09-10 QA campaign](qa-campai
 
 | Order | Surface | Status | P1 | P2 | P3 | Evidence or fix commits |
 | --- | --- | --- | ---: | ---: | ---: | --- |
-| A1 | Arc-facing code | reviewing | 0 | 0 | 0 | Pending |
+| A1 | Arc-facing code | fixing | 2 | 0 | 1 | [Findings](arc-facing-review-20260910.md); fixes pending |
 | D | Bounded whitepaper corrections | pending | — | — | — | Pending |
 | B1 | Initial defect inventory | pending | — | — | — | Pending |
 | C | Validator-0 RPC diagnosis | pending | — | — | — | Pending |
@@ -16,11 +16,13 @@ This is the canonical progress record for the [2026-09-10 QA campaign](qa-campai
 | A5 | Task Node UNL V1 and V2 modules | pending | 0 | 0 | 0 | Pending |
 | B2 | Final defect inventory and TIH gate | pending | — | — | — | Pending |
 
-No finding has yet been dispositioned. No score has yet been recorded.
+Three Arc-facing findings are recorded. Both P1 findings are being repaired;
+the P3 fork-schedule inconsistency is recorded without fixture or golden
+regeneration. No score has yet been recorded.
 
 ## Completed units
 
-None.
+- Arc-facing review completed at `b8560de9`: two P1 findings and one P3 finding.
 
 ## Skips and boundary decisions
 
@@ -29,6 +31,9 @@ None.
 - The validator-0 investigation remains pending and will use only the documented read-only status, log, and socket procedure.
 - Frozen simulations, V2 gate outputs, deployment evidence, `docs/whitepaper_legacy.md`, the locked amendment, and lock records will not be modified.
 - `docs/whitepaper.md` will remain unchanged unless the bounded candidate strictly exceeds the recorded 87.13 score under the specified gate.
+- The dedicated mainnet ingress Fulu-epoch inconsistency is P3, so this campaign
+  records but does not alter its guest source, ELF, program key, or frozen
+  deployment evidence.
 
 ## Verification
 
