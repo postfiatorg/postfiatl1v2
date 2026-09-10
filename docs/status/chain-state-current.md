@@ -1,8 +1,31 @@
 # PostFiat L1 Current State
 
-Updated: `2026-09-09T09:27:00Z`
+Updated: `2026-09-10T10:40:22Z`
 
 Status: **canonical operational-state reference**
+
+!!! warning "2026-09-10: validator-0 RPC diagnosis, not repair"
+
+    Read-only diagnosis identified why validator-0 timed out on September 9.
+    Its deployed RPC accepts at most 10,000 connections. The event log for the
+    affected process ends at request index 10,000, while one long-lived
+    keep-alive connection had not returned an event. The deployed
+    [serve loop](https://github.com/postfiatorg/postfiatl1v2/blob/634e3625b48aa75cb6b9fc2225aa5ce83584bb3c/crates/node/src/rpc_cli.rs#L690-L820)
+    then stops accepting and waits for every active connection,
+    leaving systemd `active` while new clients wait in the unserviced socket
+    backlog. Validator-0 alone receives repeated wallet bridge-readiness
+    traffic through a long-lived authenticated SSH tunnel; the other five RPC
+    processes had accepted only 121–124 connections when validator-0's current
+    process had accepted 3,404.
+
+    A separate session restarted the RPC at `2026-09-09T20:19:37Z`, after the
+    failed observation and before this diagnosis. This campaign did not
+    restart or change anything. The replacement answered `status`,
+    `server_info`, and `mempool_status` from `2026-09-10T10:24:20Z` through
+    `10:24:31Z`: height 1020, tip `9d02b8ee…b1768feb`, state root
+    `587c6526…d39bead6`, empty mempool, and the same pre-fix binary. Current
+    service availability is restored but the finite-request/keep-alive defect
+    remains and can recur; no repair or fleet mutation was performed.
 
 !!! warning "2026-09-09: fresh read-only observation has five-of-six RPC agreement"
 
@@ -55,16 +78,18 @@ binary to the running services.
 
 !!! warning "Point-in-time evidence"
 
-    The latest read-only observation is the partial six-validator capture from
-    `2026-09-09T09:24:54Z` through `09:27:00Z`: five RPC endpoints agreed and
-    validator-0's RPC timed out. The prior authenticated all-six observation
-    from `2026-08-30T23:00:24Z` through `23:00:39Z` remains historical below.
-    Every observation is point-in-time evidence, not a real-time query now.
+    The latest read-only diagnosis queried validator-0 from
+    `2026-09-10T10:24:20Z` through `10:40:22Z`; it is not a fresh simultaneous
+    six-validator observation. The partial fleet capture from
+    `2026-09-09T09:24:54Z` through `09:27:00Z` remains historical evidence of
+    the failure. Every observation is point-in-time evidence, not a real-time
+    query now.
 
 ## Operational summary
 
 | Plane | Recorded state | Exact identifier | Observed or updated at | Evidence and freshness |
 | --- | --- | --- | --- | --- |
+| Validator-0 RPC diagnosis | The September 9 timeouts were an exhausted 10,000-connection accept budget combined with a still-active keep-alive connection. An out-of-campaign restart restored responses but did not repair the recurrence condition. | Affected event sequence ended at request index 10,000; current process had accepted 3,404 connections versus 121–124 on each peer. | `2026-09-10T10:24:20Z`–`10:40:22Z` | Read-only RPC, event-log, journal, socket, process, and sysstat inspection. Diagnosis only; no restart or write. |
 | Running devnet, latest read-only observation | Validators 1–5 answered all three health reads and agreed at height 1020 with empty mempools. Validator-0's RPC timed out; its host and both services were reachable/active, but full-six ledger agreement is not established by this capture. | Chain `postfiat-wan-devnet-2`; genesis `ce22ca8c…e90a9`; tip `9d02b8ee…b1768feb`; state `587c6526…d39bead6` on validators 1–5. | `2026-09-09T09:24:54Z`–`09:27:00Z` | Authenticated SSH forwarding to loopback RPC plus read-only process identity; point in time. |
 | Deployed runtime, latest identity | All 12 validator and RPC service processes were active/running from one release and one executable hash. No process runs a build containing repository signing fix `bbb291ce`. | Release `a666-source-route-20260907`; node SHA-256 `57b0f4d1d42d66878d7dbb8c33919c7fa0f87c6cc1a4b9cc1a85d75b634eec83`. | `2026-09-09T09:26:45Z`–`09:27:00Z` | Direct read-only systemd, `/proc`, release-path, and SHA-256 identity checks on all six hosts. |
 | Running devnet, historical 2026-08-30 observation | Six validators converged at height 924 with empty mempools after validator-1 was rolled back from the failed storage canary; all validator, RPC, and advisory shadow services were active. | Chain `postfiat-wan-devnet-2`; genesis `ce22ca8c…e90a9`; tip `ebeb0e1e…a7649fbef`; state `0854bc47…1ee6f413e`. | `2026-08-30T23:00:24Z`–`23:00:39Z` | Authenticated post-rollback fleet observation; point in time, not a current network query. |
@@ -124,6 +149,34 @@ Nothing in this section proves deployment. See the
 [development evidence](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling).
 
 ## Last observed devnet values
+
+### Validator-0 read-only diagnosis — 2026-09-10 { #validator-0-rpc-diagnosis-20260910 }
+
+This was a diagnosis of the failed September 9 endpoint, not a new all-fleet
+observation. The replacement RPC process answered all three documented reads:
+height 1020, tip `9d02b8ee…b1768feb`, state root
+`587c6526…d39bead6`, and zero pending transactions. Its release remains
+`a666-source-route-20260907`, binary SHA-256
+`57b0f4d1d42d66878d7dbb8c33919c7fa0f87c6cc1a4b9cc1a85d75b634eec83`.
+That agrees with the September 9 values from validators 1–5, but the captures
+were not simultaneous and do not establish a new all-six observation.
+
+The affected process ran from `2026-09-07T01:10:26Z` until a separate session
+restarted it at `2026-09-09T20:19:37Z`. Its event sequence reached the unit's
+`--max-requests 10000` ceiling. One connection remained active, so the process
+stayed alive in its post-accept drain instead of exiting; new requests were no
+longer accepted. Host telemetry around the failed `09:24`–`09:27` capture
+showed 94.56% CPU idle, no blocked tasks, 0.14% I/O wait, and ample available
+memory, so host resource exhaustion does not explain the timeouts.
+
+The replacement process still has a persistent keep-alive client and the same
+10,000-connection budget. At the diagnostic capture it reported 3,404 accepted
+connections and a peak of three active connections; the five peers reported
+121–124 accepted connections and peaks of two or three. This is a reproduced
+service-lifecycle defect and a recurrence risk, not evidence of a live repair.
+No service, host, configuration, or chain state was changed by this diagnosis.
+
+### Historical partial fleet observation — 2026-09-09
 
 | Field | Value |
 | --- | --- |

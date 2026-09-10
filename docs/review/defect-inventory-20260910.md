@@ -17,6 +17,7 @@ must not be described as shipped or authoritative.
 | ARC-01 | Reproduced defect | P1 | Fixed — `dbc73fea`; deployed controller still open | [Arc review](arc-facing-review-20260910.md#1-p1--v2-source-debited-exports-have-no-realizable-refund-path): a valid V2 source export could expire without a controller cancellation event matching the refund verifier. |
 | ARC-02 | Reproduced defect | P1 | Fixed — `dbc73fea` | [Arc review](arc-facing-review-20260910.md#2-p1--the-top-level-mainnet-round-trip-command-mutates-live-systems-without-an-execution-interlock): invoking the shell entrypoint entered live setup without an explicit execution ceremony. |
 | ARC-03 | Reproduced defect | P3 | Open | [Arc review](arc-facing-review-20260910.md#3-p3--the-dedicated-ethereum-mainnet-ingress-guest-carries-a-stale-fulu-epoch-pin): the dedicated ingress pin is 411648 while the shared path and retained program identity use 411392. Frozen guest artifacts were not regenerated. |
+| RPC-01 | Reproduced defect | P1 | Open; diagnosed, not repaired | [Read-only validator-0 diagnosis](../status/chain-state-current.md#validator-0-rpc-diagnosis-20260910): the deployed RPC reached its 10,000-connection ceiling with a keep-alive connection still active, stopped accepting, and remained systemd-active while new health reads timed out. |
 
 ## Storage, Cobalt, and Task Node review
 
@@ -91,12 +92,12 @@ and its frozen [qualification receipt](https://github.com/postfiatorg/postfiatl1
 | SQ-02 | Evidence gap | P1 | Open | Current `main` is not a descendant of deployed source `707e006f` and omits live A666 source-route runtime behavior; a main-built candidate is not a signing-only successor. |
 | SQ-03 | Evidence gap | P1 | Open | The newest authorized local all-six snapshot was height 931 while the fleet observation was height 1020, so no current-height deployment-exact rehearsal was possible. |
 | SQ-04 | Evidence gap | P1 | Open | The exact deployed rollback binary was absent from the qualification server. |
-| SQ-05 | Evidence gap | P1 | Open | Validator-0's RPC state was unknown after three read timeouts; its contemporaneous height, root, registry, and mempool view remain a deploy precondition. |
+| SQ-05 | Evidence gap | P1 | Dispositioned for current state; see RPC-01 | Validator-0 now answers at the same height and root previously observed on validators 1–5 after an out-of-campaign restart. This does not repair the diagnosed recurrence condition or replace a current simultaneous all-six rehearsal. |
 | SQ-06 | Proposed capability | P1 | Open | Fix `bbb291ce` passes focused source tests but is absent from the fleet; a lineage-preserving, reproducible, current-state-qualified rollout remains unperformed and unauthorized. |
 
 ## Initial disposition
 
-The inventory currently contains 46 rows: 20 reproduced defects, 21 evidence
+The inventory currently contains 47 rows: 21 reproduced defects, 21 evidence
 gaps, one economic assumption, and four proposed capabilities.
 These counts will be recalculated after the remaining campaign surfaces.
 No open item in this document authorizes a deployment, chain action, or

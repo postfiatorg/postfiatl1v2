@@ -8,8 +8,8 @@ This is the canonical progress record for the [2026-09-10 QA campaign](qa-campai
 | --- | --- | --- | ---: | ---: | ---: | --- |
 | A1 | Arc-facing code | done | 2 | 0 | 1 | [Findings](arc-facing-review-20260910.md) `1c67ec07`; repair `dbc73fea` |
 | D | Bounded whitepaper corrections | done | — | — | — | Candidate `6fbcee8e…`; 85.47; not promoted |
-| B1 | Initial defect inventory | done | — | — | — | [Inventory](defect-inventory-20260910.md); 46 classified rows |
-| C | Validator-0 RPC diagnosis | pending | — | — | — | Pending |
+| B1 | Initial defect inventory | done | — | — | — | [Inventory](defect-inventory-20260910.md); 46 initial, 47 current rows |
+| C | Validator-0 RPC diagnosis | done | 1 | 0 | 0 | Root cause recorded in [chain state](../status/chain-state-current.md#validator-0-rpc-diagnosis-20260910) |
 | A2 | Consensus and storage | pending | 0 | 0 | 0 | Pending |
 | A3 | Wallet, proxy, and RPC SDK | pending | 0 | 0 | 0 | Pending |
 | A4 | StakeHub `fix/pr8-safety-20260907` | pending | 0 | 0 | 0 | Read-only review only |
@@ -46,12 +46,23 @@ whitepaper candidate scored 85.47 and was not promoted.
   20 reproduced defects, 21 evidence gaps, one economic assumption, and four
   proposed capabilities. The final campaign pass will append later findings,
   reconcile statuses, recalculate counts, and run the required TIH gate.
+- Validator-0 diagnosis completed read-only. The affected RPC exhausted its
+  configured 10,000 accepted connections while a keep-alive connection
+  remained active; the serve loop stopped accepting and waited for the active
+  connection, so systemd stayed `active` while all three health requests timed
+  out. Repeated wallet bridge-readiness traffic makes validator-0's connection
+  rate materially different from its peers. A separate session restarted the
+  service at `2026-09-09T20:19:37Z`; this campaign made no repair. The current
+  process answered at height 1020 with root `587c6526…d39bead6` and an empty
+  mempool, but it retains the same recurrence condition.
 
 ## Skips and boundary decisions
 
 - No Task Node action is permitted or planned.
 - No fleet mutation, deployment, restart, configuration change, host write, or live-chain write is permitted.
-- The validator-0 investigation remains pending and will use only the documented read-only status, log, and socket procedure.
+- The validator-0 diagnosis used only documented read-only RPC, service status,
+  logs, sockets, process metadata, and host telemetry. The prior process had
+  already been restarted outside this campaign, and no repair was attempted.
 - Frozen simulations, V2 gate outputs, deployment evidence, `docs/whitepaper_legacy.md`, the locked amendment, and lock records will not be modified.
 - `docs/whitepaper.md` will remain unchanged unless the bounded candidate strictly exceeds the recorded 87.13 score under the specified gate.
 - The dedicated mainnet ingress Fulu-epoch inconsistency is P3, so this campaign
