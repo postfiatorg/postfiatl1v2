@@ -335,7 +335,11 @@ document.getElementById('confirmSendBtn').addEventListener('click', async () => 
 
     // Bind the untrusted RPC quote to the reviewed transfer before signing.
     assertTransferQuoteMatchesIntent(quote.result, walletAddress, to, amount);
-    const signed = wasmMod.wallet_sign_transfer(currentBackup, JSON.stringify(quote.result));
+    const signed = wasmMod.wallet_sign_transfer(
+      currentBackup,
+      JSON.stringify(quote.result),
+      JSON.stringify({ from: walletAddress, to, amount }),
+    );
     const signedJson = JSON.stringify(signed);
 
     // Submit

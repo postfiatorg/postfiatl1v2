@@ -31,7 +31,11 @@ export class TxBuilder {
     }
 
     // 3. Sign with WASM
-    const signed = this.wasm.wallet_sign_transfer(backupJson, JSON.stringify(quote));
+    const signed = this.wasm.wallet_sign_transfer(
+      backupJson,
+      JSON.stringify(quote),
+      JSON.stringify({ from: fromAddress, to: toAddress, amount }),
+    );
 
     // 4. Submit to mempool
     const signedJson = JSON.stringify(signed);

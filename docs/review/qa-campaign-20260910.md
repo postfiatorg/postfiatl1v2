@@ -176,10 +176,28 @@ campaign.
 | Unit | Scope | Status | Evidence or result |
 | --- | --- | --- | --- |
 | 1 | Review Burn 1 repairs and sibling defect classes | done | [Findings](burn2-fix-review-20260910.md): three P1 repair gaps; focused baselines green |
-| 1R | Repair Unit 1 P1/P2 findings | pending | Three P1s queued for minimal repair and regression coverage |
+| 1R | Repair Unit 1 P1/P2 findings | done | Host and WASM intent boundaries closed; bounded RPC clean exits now restart; focused gates pass |
 | 2 | Ground all 19 open inventory rows | pending | Per-row bounded outcomes required |
 | 3 | Fuzz and property expansion | pending | Four named surfaces; ten-minute per-target bounds |
 | 4 | Reconcile inventory and close | pending | TIH rerun required if materially changed |
+
+### Burn 2 unit 1 result
+
+The [repair review](burn2-fix-review-20260910.md) verified the Arc refund and
+interlock repairs, all three guarded Consensus v2 vote-signing paths, and the
+UNL V2 evidence/report repairs. It found three P1 gaps: a forged forwarded Host
+could bypass the loopback token check, the maintained WASM signing API still
+lacked an intent argument, and finite RPC exhaustion returned successfully
+under an on-failure-only service policy.
+
+All three received bounded source repairs and regressions. The proxy now checks
+the actual and forwarded authorities independently; the Rust and maintained
+JavaScript WASM interfaces require an exact reviewed-intent object; generated
+RPC units and the maintained example rotate on every clean or failed exit.
+Focused wallet, proxy, package, deployment-unit, and artifact-policy gates pass.
+The WASM binary bytes were retained because the required local build tools are
+absent and fetching them is outside this campaign's network boundary. No
+running service or fleet configuration changed.
 
 ### Burn 2 boundaries
 

@@ -297,7 +297,7 @@ encode to the empty string.
 empty:
 
 1. Quote with `transfer_fee_quote(from, to, amount)`.
-2. Sign with `wallet_sign_transfer(backup_json, quote_json)`.
+2. Sign with `wallet_sign_transfer(backup_json, quote_json, intent_json)`.
 3. Submit with `mempool_submit_signed_transfer_finality`.
 4. Fall back to `mempool_submit_signed_transfer` if finality submit is
    unavailable.

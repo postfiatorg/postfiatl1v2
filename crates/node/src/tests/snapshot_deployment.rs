@@ -2747,6 +2747,8 @@ fn deployment_validator_unit_stage_is_canonical_and_non_overwriting() {
         assert!(rpc_unit.contains("--ready-file"));
         assert!(rpc_unit.contains("--bind-host 127.0.0.1"));
         assert!(rpc_unit.contains("--max-requests 10000"));
+        assert!(rpc_unit.contains("Restart=always"));
+        assert!(!rpc_unit.contains("Restart=on-failure"));
         assert!(rpc_unit.contains("--unsafe-devnet-json-storage"));
         assert!(rpc_unit.contains("--allow-mempool-submit-finality"));
         assert!(!rpc_unit.contains("--allow-mempool-submit --"));

@@ -60,8 +60,13 @@ test('sendTransfer without memos uses the existing v1 transfer path', async () =
   const calls = [];
   const signedTransfer = { signed: 'v1' };
   const wasm = {
-    wallet_sign_transfer(backupJson, quoteJson) {
-      calls.push(['wallet_sign_transfer', backupJson, JSON.parse(quoteJson)]);
+    wallet_sign_transfer(backupJson, quoteJson, intentJson) {
+      calls.push([
+        'wallet_sign_transfer',
+        backupJson,
+        JSON.parse(quoteJson),
+        JSON.parse(intentJson),
+      ]);
       return signedTransfer;
     },
     wallet_sign_payment_v2() {
@@ -93,7 +98,11 @@ test('sendTransfer without memos uses the existing v1 transfer path', async () =
   assert.equal(result.txId, 'tx-v1');
   assert.deepEqual(calls, [
     ['transferFeeQuote', 'pf-from', 'pf-to', 1000],
-    ['wallet_sign_transfer', 'backup-json', quote],
+    ['wallet_sign_transfer', 'backup-json', quote, {
+      from: 'pf-from',
+      to: 'pf-to',
+      amount: 1000,
+    }],
     ['submitSignedTransferFinality', signedTransfer],
     ['pollReceipt', 'tx-v1', 30000],
   ]);
@@ -250,8 +259,13 @@ test('sendTransfer can reuse reviewed quote without a second quote RPC', async (
   const calls = [];
   const signedTransfer = { signed: 'v1' };
   const wasm = {
-    wallet_sign_transfer(backupJson, quoteJson) {
-      calls.push(['wallet_sign_transfer', backupJson, JSON.parse(quoteJson)]);
+    wallet_sign_transfer(backupJson, quoteJson, intentJson) {
+      calls.push([
+        'wallet_sign_transfer',
+        backupJson,
+        JSON.parse(quoteJson),
+        JSON.parse(intentJson),
+      ]);
       return signedTransfer;
     },
   };
@@ -285,7 +299,11 @@ test('sendTransfer can reuse reviewed quote without a second quote RPC', async (
 
   assert.equal(result.txId, 'tx-v1');
   assert.deepEqual(calls, [
-    ['wallet_sign_transfer', 'backup-json', quote],
+    ['wallet_sign_transfer', 'backup-json', quote, {
+      from: 'pf-from',
+      to: 'pf-to',
+      amount: 1000,
+    }],
     ['submitSignedTransferFinality', signedTransfer],
   ]);
 });
@@ -1801,8 +1819,13 @@ test('publishPublicKey signs a 1-atom self-transfer through the Account-lane fin
   const calls = [];
   const signedTransfer = { signed: 'v1', public_key_hex: 'wallet-pk-hex' };
   const wasm = {
-    wallet_sign_transfer(backupJson, quoteJson) {
-      calls.push(['wallet_sign_transfer', backupJson, JSON.parse(quoteJson)]);
+    wallet_sign_transfer(backupJson, quoteJson, intentJson) {
+      calls.push([
+        'wallet_sign_transfer',
+        backupJson,
+        JSON.parse(quoteJson),
+        JSON.parse(intentJson),
+      ]);
       return signedTransfer;
     },
     wallet_sign_payment_v2() {
@@ -1842,7 +1865,11 @@ test('publishPublicKey signs a 1-atom self-transfer through the Account-lane fin
   // Verify the self-transfer shape: from === to === address, amount === 1 atom.
   assert.deepEqual(calls, [
     ['transferFeeQuote', 'pf-self', 'pf-self', 1],
-    ['wallet_sign_transfer', 'backup-json', quote],
+    ['wallet_sign_transfer', 'backup-json', quote, {
+      from: 'pf-self',
+      to: 'pf-self',
+      amount: 1,
+    }],
     ['submitSignedTransferFinality', signedTransfer],
   ]);
 });

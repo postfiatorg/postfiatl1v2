@@ -1,4 +1,5 @@
 // Gate 5 test: Send transfer full flow — signing, validation, and (if funded) submission
+const assert = require('assert');
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
@@ -156,8 +157,25 @@ async function main() {
         const q = quoteResp.result;
         ok('fee quote: fee=' + q.minimum_fee + ' total=' + (100 + q.minimum_fee) + ' seq=' + q.sequence);
 
-        // Step 4: Sign with quote
-        const signedFromQuote = wasmMod.wallet_sign_transfer(wallet1.backup_json, JSON.stringify(q));
+        // Step 4: The WASM boundary itself binds the reviewed intent.
+        const reviewedIntent = {
+          from: wallet1.address,
+          to: wallet2.address,
+          amount: 100,
+        };
+        assert.throws(
+          () => wasmMod.wallet_sign_transfer(
+            wallet1.backup_json,
+            JSON.stringify({ ...q, to: wallet1.address, amount: 10_000 }),
+            JSON.stringify(reviewedIntent),
+          ),
+          /does not match the reviewed sender, recipient, and amount/,
+        );
+        const signedFromQuote = wasmMod.wallet_sign_transfer(
+          wallet1.backup_json,
+          JSON.stringify(q),
+          JSON.stringify(reviewedIntent),
+        );
         const sigQ = signedFromQuote.signature_hex || signedFromQuote.signature;
         if (sigQ && sigQ.length === 6618) ok('quote sign: 6618 hex chars');
         else fail('quote sign', 'len=' + (sigQ?.length || 0));

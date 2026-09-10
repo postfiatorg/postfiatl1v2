@@ -275,6 +275,14 @@ async function main() {
     assert.strictEqual(reboundLocalSession.statusCode, 403);
     assert.strictEqual(reboundLocalSession.body.code, 'local_session_forbidden');
 
+    const forgedForwardedLocalSession = await getLocalSession(port, {
+      host: 'attacker.example',
+      'x-forwarded-host': 'localhost',
+      'sec-fetch-site': 'same-origin',
+    });
+    assert.strictEqual(forgedForwardedLocalSession.statusCode, 403);
+    assert.strictEqual(forgedForwardedLocalSession.body.code, 'local_session_forbidden');
+
     const sameOriginJobDiscovery = await getJson(
       port,
       `/api/bridge/jobs?recipient=pf${'ab'.repeat(20)}&limit=20`,

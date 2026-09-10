@@ -1,6 +1,6 @@
 # Burn 2 repair review — 2026-09-10
 
-Status: findings recorded; P1/P2 repair pending
+Status: source repairs verified; no deployment or live mutation authorized
 
 Reviewed checkout: `b34adf20a809b991754fdc09111827e7577b6b2e`
 
@@ -104,5 +104,38 @@ read-only diagnosis.
 - Rust RPC SDK and wallet WASM: **69 passed** across their test targets.
 - Combined Task Node UNL V1/V2: **171 passed, 46 subtests passed**.
 
-These green baselines do not exercise the three adversarial cases above. Burn 2
-will repair all three with minimal source changes and focused regressions.
+These green baselines did not exercise the three adversarial cases above.
+
+## Repair disposition
+
+- **Finding 1 — fixed.** Local-session issuance now requires the actual
+  `Host` authority to be allowed and, when present, independently requires the
+  first forwarded authority to be allowed. An attacker Host can no longer be
+  replaced by a forged loopback `X-Forwarded-Host`; the exact case is in the
+  proxy authentication regression.
+- **Finding 2 — fixed on the maintained source and package interface.** The
+  Rust WASM entrypoint now requires a closed reviewed-intent object and compares
+  its sender, recipient, and amount with both the wallet and quote. The checked
+  JavaScript bindings expose the same three-argument contract and reject absent,
+  malformed, extra-field, or mismatched intent before calling the retained WASM
+  artifact. Both browser callers pass their local reviewed values. The compiled
+  WASM bytes were not regenerated because this checkout has neither
+  `wasm-pack` nor the WASM Rust target and the campaign forbids fetching
+  build tools; the maintained package binding and future source build are both
+  fail closed at their public entrypoints.
+- **Finding 3 — fixed in source, undeployed.** Generated validator RPC units and
+  the maintained service example now use `Restart=always`, so the documented
+  finite lifecycle rotates after a clean bounded exit as well as a failure.
+  Transport retains its separate `Restart=on-failure` policy. This source
+  repair does not alter the running fleet or prove a deployment.
+
+## Post-repair verification
+
+- Wallet proxy: **36/36 passed**, including forged-forwarded-host and maintained
+  WASM package-boundary regressions.
+- Web wallet: **260/260 passed**; extension: **2/2 passed**.
+- Rust RPC SDK and wallet WASM: **69 passed** across their test targets.
+- Deployment RPC unit regression: **1 passed**.
+- Public artifact policy: **pass**, 26 classified artifacts; the two retained
+  WASM binaries remain byte-identical at SHA-256
+  `affd340817788d45a313e60ec512493c6c56c3acbf81a4d4159636279ea0c882`.

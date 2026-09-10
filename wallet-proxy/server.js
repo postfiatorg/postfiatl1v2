@@ -200,12 +200,8 @@ function isLoopbackRemoteAddress(address) {
         || normalized === '::ffff:127.0.0.1';
 }
 
-function localSessionAuthorityAllowed(req) {
-    const forwardedHost = String(req?.headers?.['x-forwarded-host'] || '')
-        .split(',')[0]
-        .trim()
-        .toLowerCase();
-    const authority = forwardedHost || String(req?.headers?.host || '').trim().toLowerCase();
+function localSessionAuthorityValueAllowed(authorityValue) {
+    const authority = String(authorityValue || '').trim().toLowerCase();
     if (!authority) return false;
     try {
         const hostname = new URL(`http://${authority}`).hostname.toLowerCase();
@@ -222,6 +218,15 @@ function localSessionAuthorityAllowed(req) {
             return false;
         }
     });
+}
+
+function localSessionAuthorityAllowed(req) {
+    const host = String(req?.headers?.host || '').trim();
+    if (!localSessionAuthorityValueAllowed(host)) return false;
+    const forwardedHost = String(req?.headers?.['x-forwarded-host'] || '')
+        .split(',')[0]
+        .trim();
+    return !forwardedHost || localSessionAuthorityValueAllowed(forwardedHost);
 }
 
 function localSessionRequestAllowed(req) {

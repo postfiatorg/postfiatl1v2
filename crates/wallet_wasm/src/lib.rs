@@ -32,6 +32,23 @@ const PFTL_SWAP_INTENT_SCHEMA_V1: &str = "postfiat.pftl_swap.intent.v1";
 const PFTL_SWAP_SIGNED_INTENT_SCHEMA_V1: &str = "postfiat.pftl_swap.signed_intent.v1";
 const PFTL_SWAP_INTENT_SIGNATURE_CONTEXT_V1: &[u8] = b"postfiat.pftl_swap.intent.v1";
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BrowserTransferIntent {
+    from: String,
+    to: String,
+    amount: u64,
+}
+
+impl BrowserTransferIntent {
+    fn matches_quote(&self, wallet_address: &str, quote: &TransferFeeQuoteSummary) -> bool {
+        self.from == wallet_address
+            && quote.from == self.from
+            && quote.to == self.to
+            && quote.amount == self.amount
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 struct BrowserPftlSwapIntentV1 {
     schema: String,
@@ -248,26 +265,32 @@ pub fn wallet_sign_pftl_swap_intent(
     }))
 }
 
-/// Sign transfer fields from an RPC quote after the browser application has
-/// bound `from`, `to`, and `amount` to its reviewed intent.
+/// Sign transfer fields from an RPC quote only when they match the exact
+/// locally reviewed sender, recipient, and amount.
 ///
 /// backup_json: WalletBackupFile as JSON string
 /// quote_json: TransferFeeQuoteSummary as JSON string
+/// intent_json: closed object with the reviewed `from`, `to`, and `amount`
 /// Returns: SignedTransfer as JS object
 #[wasm_bindgen]
-pub fn wallet_sign_transfer(backup_json: &str, quote_json: &str) -> Result<JsValue, JsValue> {
+pub fn wallet_sign_transfer(
+    backup_json: &str,
+    quote_json: &str,
+    intent_json: &str,
+) -> Result<JsValue, JsValue> {
     let backup: WalletBackupFile = serde_json::from_str(backup_json)
         .map_err(|e| JsValue::from_str(&format!("backup parse: {e}")))?;
     let quote: TransferFeeQuoteSummary = serde_json::from_str(quote_json)
         .map_err(|e| JsValue::from_str(&format!("quote parse: {e}")))?;
+    let intent: BrowserTransferIntent = serde_json::from_str(intent_json)
+        .map_err(|e| JsValue::from_str(&format!("transfer intent parse: {e}")))?;
 
     let identity =
         wallet_identity_from_backup(&backup).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    if quote.from != identity.address {
-        return Err(JsValue::from_str(&format!(
-            "transfer quote sender `{}` does not match wallet address `{}`",
-            quote.from, identity.address
-        )));
+    if !intent.matches_quote(&identity.address, &quote) {
+        return Err(JsValue::from_str(
+            "transfer quote does not match the reviewed sender, recipient, and amount",
+        ));
     }
     let signed = wallet_sign_transfer_from_fields(
         &backup,

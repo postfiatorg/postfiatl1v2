@@ -177,7 +177,7 @@ Constraint: `id` must be a string. `params` must be a flat JSON object. Max requ
 The existing `crates/wallet_wasm/` module already exports:
 - `wallet_keygen(chain_id, master_seed_hex, account_index)` → `{ address, public_key_hex, backup_json }`
 - `wallet_address_from_seed(chain_id, master_seed_hex, account_index)` → address string
-- `wallet_sign_transfer(backup_json, quote_json)` → SignedTransfer
+- `wallet_sign_transfer(backup_json, quote_json, intent_json)` → SignedTransfer
 - `wallet_sign_transfer_fields(backup_json, fields_json)` → SignedTransfer
 - `wallet_sign_payment_v2(backup_json, fields_json)` → SignedPaymentV2
 - `make_rpc_request(method, params_json)` → JSON string
@@ -309,7 +309,7 @@ Orchestrates the full send flow:
 
 **Native PFT memo payments:**
 - `sendTransfer(backupJson, fromAddress, toAddress, amount, memos?)` accepts optional `{ memo_type, memo_format, memo_data }` strings from the form.
-- If all three memo fields are empty or omitted, the native v1 flow is unchanged: quote with `transfer_fee_quote(from, to, amount)`, sign with `wallet_sign_transfer(backup_json, quote_json)`, submit with `mempool_submit_signed_transfer_finality` and fall back to `mempool_submit_signed_transfer` if finality submit is unavailable.
+- If all three memo fields are empty or omitted, the native v1 flow is unchanged: quote with `transfer_fee_quote(from, to, amount)`, sign with `wallet_sign_transfer(backup_json, quote_json, intent_json)`, submit with `mempool_submit_signed_transfer_finality` and fall back to `mempool_submit_signed_transfer` if finality submit is unavailable.
 - If any memo field is non-empty, the builder uses the payment v2 flow: UTF-8 encode each memo string to lower hex, quote with `transfer_fee_quote` including `memo_type`, `memo_format`, and `memo_data`, sign with `wallet_sign_payment_v2(backup_json, fields_json)`, submit with `mempool_submit_signed_payment_v2`, then poll receipts.
 - The WASM `WalletSignPaymentV2Fields` JSON uses `memos: [{ memo_type, memo_format, memo_data }]`, not top-level memo fields. The RPC quote still receives the flat memo params.
 - Memo byte limits are enforced before quote/sign: `memo_type` <= 64 bytes, `memo_format` <= 64 bytes, `memo_data` <= 256 bytes, total memo bytes <= 512. The chain currently accepts one memo entry from the web form.
@@ -685,7 +685,7 @@ This separation is what keeps the operator out of money transmitter territory: t
 - [ ] G6.4c: Memo validation enforces 64-byte type, 64-byte format, 256-byte data, and 512-byte total limits before RPC
 - [ ] G6.5: Quote with insufficient balance shows warning, blocks send
 - [ ] G6.6: Quote shows whether recipient account exists (will_create_recipient_account)
-- [ ] G6.7: "Confirm & Sign" button: calls WASM `wallet_sign_transfer(backup_json, quote_json)`
+- [ ] G6.7: "Confirm & Sign" button: calls WASM `wallet_sign_transfer(backup_json, quote_json, intent_json)`
 - [ ] G6.7a: With any memo field set, "Confirm & Sign" calls WASM `wallet_sign_payment_v2(backup_json, fields_json)` with `memos: [{ memo_type, memo_format, memo_data }]`
 - [ ] G6.8: Signed output verified: `signature_hex` is 6618 chars, `public_key_hex` is 3904 chars
 - [ ] G6.9: Signed transfer submitted via `mempool_submit_signed_transfer`

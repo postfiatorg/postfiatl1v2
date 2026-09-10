@@ -162,13 +162,14 @@ export function wallet_sign_payment_v2(backup_json: string, fields_json: string)
 export function wallet_sign_pftl_swap_intent(backup_json: string, intent_json: string): any;
 
 /**
- * Sign a transfer using a fee quote from the RPC server.
+ * Sign a transfer only when an RPC quote matches the exact reviewed intent.
  *
  * backup_json: WalletBackupFile as JSON string
  * quote_json: TransferFeeQuoteSummary as JSON string
+ * intent_json: closed object with the reviewed from, to, and amount
  * Returns: SignedTransfer as JS object
  */
-export function wallet_sign_transfer(backup_json: string, quote_json: string): any;
+export function wallet_sign_transfer(backup_json: string, quote_json: string, intent_json: string): any;
 
 /**
  * Sign a transfer from explicit fields (no quote needed).

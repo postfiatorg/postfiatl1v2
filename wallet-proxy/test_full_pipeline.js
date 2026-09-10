@@ -1,3 +1,4 @@
+const assert = require('assert');
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
@@ -103,7 +104,23 @@ async function main() {
     recipient_balance_after_amount: null,
     recipient_meets_reserve_after_transfer: false
   };
-  const signed = wasmMod.wallet_sign_transfer(result.backup_json, JSON.stringify(quote));
+  assert.throws(
+    () => wasmMod.wallet_sign_transfer(result.backup_json, JSON.stringify(quote)),
+    /transfer quote and intent must be valid JSON/,
+  );
+  assert.throws(
+    () => wasmMod.wallet_sign_transfer(
+      result.backup_json,
+      JSON.stringify(quote),
+      JSON.stringify({ from: result.address, to: 'pf' + '2'.repeat(40), amount: 1 }),
+    ),
+    /does not match the reviewed sender, recipient, and amount/,
+  );
+  const signed = wasmMod.wallet_sign_transfer(
+    result.backup_json,
+    JSON.stringify(quote),
+    JSON.stringify({ from: result.address, to: quote.to, amount: quote.amount }),
+  );
   if (!signed) { fail('wallet_sign_transfer', 'returned null'); }
   else {
     const sigHex = signed.signature_hex || signed.signature;

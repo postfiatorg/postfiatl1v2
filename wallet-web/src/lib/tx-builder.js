@@ -462,7 +462,11 @@ export class TxBuilder {
 
     // 3. Sign with WASM
     const wasm = await this.getWasm();
-    const signed = wasm.wallet_sign_transfer(backupJson, JSON.stringify(quote));
+    const signed = wasm.wallet_sign_transfer(
+      backupJson,
+      JSON.stringify(quote),
+      JSON.stringify({ from: fromAddress, to: toAddress, amount }),
+    );
 
     // 4. Submit through the peer-certified finality RPC. The demo wallet must
     // not silently downgrade to a mempool-only submit.

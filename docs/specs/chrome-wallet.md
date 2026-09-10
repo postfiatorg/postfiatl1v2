@@ -273,7 +273,7 @@ pub fn wallet_address_from_seed(chain_id: &str, master_seed_hex: &str, account_i
 // Returns just the address string
 
 #[wasm_bindgen]
-pub fn wallet_sign_transfer(backup_json: &str, quote_json: &str) -> Result<JsValue, JsValue>
+pub fn wallet_sign_transfer(backup_json: &str, quote_json: &str, intent_json: &str) -> Result<JsValue, JsValue>
 // Low-level quote-field signer; the application first binds from/to/amount to reviewed intent
 // backup_json: WalletBackupFile as JSON string
 // quote_json: TransferFeeQuoteSummary as JSON string
@@ -372,7 +372,7 @@ postfiat-wallet/
    - Input: recipient address (paste/scan), amount
    - Call RPC `transfer_fee_quote` → display fee, total, sequence, balance-after
    - Confirmation screen: show from, to, amount, fee, sequence
-   - User confirms → WASM `wallet_sign_transfer(backup_json, quote_json)`
+   - User confirms → WASM `wallet_sign_transfer(backup_json, quote_json, intent_json)`
    - Call RPC `mempool_submit_signed_transfer` with signed JSON
    - Poll RPC `receipts` until accepted/rejected (timeout 30s)
    - Display result with block height and finality status
@@ -549,7 +549,7 @@ Orchestrates the full send flow:
 - [x] Display quote: fee, total cost (amount + fee), sequence, balance after, recipient exists
 - [x] Implement confirmation screen: show from, to, amount, fee, sequence, balance-after
 - [x] Require explicit "Confirm Send" button click
-- [x] On confirm: call WASM `wallet_sign_transfer(backup_json, quote_json)`
+- [x] On confirm: call WASM `wallet_sign_transfer(backup_json, quote_json, intent_json)`
 - [x] Verify signed output: `signature_hex` is 6618 chars, `public_key_hex` is 3904 chars
 - [x] Call RPC `mempool_submit_signed_transfer` with `signed_transfer_json`
 - [x] On submit success: display tx_id, begin polling
