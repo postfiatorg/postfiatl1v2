@@ -72,7 +72,7 @@ fn build_signed_flow(
     let _quote_request_json = quote_request.to_pretty_json()?;
 
     let quote = decode_transfer_fee_quote_summary(quote_response)?;
-    let signed = wallet_sign_transfer_from_quote(&backup, &quote)?;
+    let signed = wallet_sign_transfer_from_quote(&backup, &quote_request, &quote)?;
     let signed_json = serde_json::to_string(&signed)?;
 
     let submit_request =
@@ -110,6 +110,7 @@ postfiat-rpc-sdk wallet-identity \
 
 postfiat-rpc-sdk wallet-sign-quote \
   --backup-file wallet.backup.json \
+  --quote-request transfer-fee-quote.request.json \
   --quote-response transfer-fee-quote.response.json \
   --output wallet.signed-transfer.json
 

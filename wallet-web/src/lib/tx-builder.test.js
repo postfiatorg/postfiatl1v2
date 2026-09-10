@@ -7,6 +7,9 @@ const quote = {
   chain_id: 'postfiat-wan-devnet',
   genesis_hash: 'a'.repeat(96),
   protocol_version: 1,
+  from: 'pf-from',
+  to: 'pf-to',
+  amount: 1000,
   minimum_fee: 1,
   sequence: 7,
   sender_meets_reserve_after_transfer: true,
@@ -94,6 +97,26 @@ test('sendTransfer without memos uses the existing v1 transfer path', async () =
     ['submitSignedTransferFinality', signedTransfer],
     ['pollReceipt', 'tx-v1', 30000],
   ]);
+});
+
+test('sendTransfer rejects an RPC quote that substitutes the reviewed intent', async () => {
+  const builder = new TxBuilder({
+    async transferFeeQuote() {
+      return {
+        ok: true,
+        result: { ...quote, to: 'pf-attacker', amount: 10_000 },
+      };
+    },
+  }, () => ({
+    wallet_sign_transfer() {
+      throw new Error('substituted quote reached signing');
+    },
+  }));
+
+  await assert.rejects(
+    () => builder.sendTransfer('backup-json', 'pf-from', 'pf-to', 1000),
+    /does not match the reviewed sender, recipient, and amount/,
+  );
 });
 
 test('depositToFastPay signs locally and requires the exact accepted receipt code', async () => {
@@ -1790,6 +1813,9 @@ test('publishPublicKey signs a 1-atom self-transfer through the Account-lane fin
     chain_id: 'postfiat-wan-devnet',
     genesis_hash: 'a'.repeat(96),
     protocol_version: 1,
+    from: 'pf-self',
+    to: 'pf-self',
+    amount: 1,
     minimum_fee: 1,
     sequence: 0,
     sender_meets_reserve_after_transfer: true,
@@ -1837,7 +1863,15 @@ test('publishPublicKey fails closed unless the final receipt has the explicit ac
   const wasm = { wallet_sign_transfer() { return { signed: 'v1' }; } };
   const rpc = {
     async transferFeeQuote() {
-      return { ok: true, result: { sender_meets_reserve_after_transfer: true } };
+      return {
+        ok: true,
+        result: {
+          from: 'pf-self',
+          to: 'pf-self',
+          amount: 1,
+          sender_meets_reserve_after_transfer: true,
+        },
+      };
     },
     async submitSignedTransferFinality() {
       return {
@@ -1887,6 +1921,7 @@ test('ensurePublicKeyPublished publishes (1-atom self-transfer) when not yet pub
   };
   const quote = {
     chain_id: 'postfiat-wan-devnet', genesis_hash: 'a'.repeat(96), protocol_version: 1,
+    from: 'pf-self', to: 'pf-self', amount: 1,
     minimum_fee: 1, sequence: 0, sender_meets_reserve_after_transfer: true,
   };
   const rpc = {
@@ -1915,7 +1950,16 @@ test('ensurePublicKeyPublished publishes (1-atom self-transfer) when not yet pub
 test('ensurePublicKeyPublished throws if the publish self-transfer is rejected', async () => {
   const wasm = { wallet_sign_transfer() { return {}; } };
   const rpc = {
-    async transferFeeQuote() { return { ok: true, result: { sender_meets_reserve_after_transfer: true, minimum_fee: 1, sequence: 0, chain_id: 'c', genesis_hash: 'g', protocol_version: 1 } }; },
+    async transferFeeQuote() {
+      return {
+        ok: true,
+        result: {
+          from: 'pf-self', to: 'pf-self', amount: 1,
+          sender_meets_reserve_after_transfer: true, minimum_fee: 1,
+          sequence: 0, chain_id: 'c', genesis_hash: 'g', protocol_version: 1,
+        },
+      };
+    },
     async submitSignedTransferFinality() {
       return { ok: true, result: { tx_id: 'tx', finality: { local_hot_finality: [{ receipt: { accepted: false, code: 'x', message: 'nope', tx_id: 'tx' } }] } } };
     },

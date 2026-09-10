@@ -461,6 +461,7 @@ def send_pft(
     if not to_address:
         raise ValueError("to_address is required")
     work_dir = _work_dir(work_dir)
+    quote_request_id = f"py-wallet-quote-{secrets.token_hex(4)}"
     quote_response = client.transfer_fee_quote_response(
         wallet.address,
         to_address,
@@ -469,9 +470,10 @@ def send_pft(
         memo_type=memo_type,
         memo_format=memo_format,
         memo_data=memo_data,
-        request_id=f"py-wallet-quote-{secrets.token_hex(4)}",
+        request_id=quote_request_id,
     )
     quote_file = work_dir / f"quote-{secrets.token_hex(8)}.response.json"
+    quote_request_file = work_dir / f"quote-{secrets.token_hex(8)}.request.json"
     uses_payment_v2 = any(value for value in (memo_type, memo_format, memo_data))
     signed_file = work_dir / (
         f"signed-{secrets.token_hex(8)}.payment-v2.json"
@@ -479,6 +481,23 @@ def send_pft(
         else f"signed-{secrets.token_hex(8)}.transfer.json"
     )
     _write_json(quote_file, quote_response)
+    if not uses_payment_v2:
+        quote_params: dict[str, object] = {
+            "from": wallet.address,
+            "to": to_address,
+            "amount": amount,
+        }
+        if sequence is not None:
+            quote_params["sequence"] = sequence
+        _write_json(
+            quote_request_file,
+            {
+                "version": "postfiat-local-rpc-v1",
+                "id": quote_request_id,
+                "method": "transfer_fee_quote",
+                "params": quote_params,
+            },
+        )
     if uses_payment_v2:
         quote_result = quote_response.get("result")
         if not isinstance(quote_result, dict):
@@ -519,6 +538,8 @@ def send_pft(
                 "wallet-sign-quote",
                 "--backup-file",
                 str(wallet.backup_file),
+                "--quote-request",
+                str(quote_request_file),
                 "--quote-response",
                 str(quote_file),
                 "--output",

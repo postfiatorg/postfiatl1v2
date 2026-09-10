@@ -1336,6 +1336,13 @@
         let restored_identity = wallet_identity_from_backup(&backup).expect("restored identity");
         assert_eq!(restored_identity, identity);
 
+        let quote_request = transfer_fee_quote_request(
+            "fee-quote-1",
+            identity.address.clone(),
+            "pf1-recipient",
+            25,
+            Some(7),
+        );
         let fee_quote = success_response(
             "fee-quote-1",
             &json!({
@@ -1371,8 +1378,8 @@
         .expect("transfer fee quote response");
         let quote_summary =
             decode_transfer_fee_quote_summary(&fee_quote).expect("fee quote summary");
-        let signed = wallet_sign_transfer_from_quote(&backup, &quote_summary)
-            .expect("signed quoted transfer");
+        let signed = wallet_sign_transfer_from_quote(&backup, &quote_request, &quote_summary)
+            .expect("signed request-bound quoted transfer");
         assert_eq!(signed.unsigned.chain_id, quote_summary.chain_id);
         assert_eq!(signed.unsigned.genesis_hash, quote_summary.genesis_hash);
         assert_eq!(
@@ -1701,9 +1708,18 @@
 
         let mut mismatched_quote = quote_summary.clone();
         mismatched_quote.from = "pf1-other-sender".to_string();
-        let mismatch = wallet_sign_transfer_from_quote(&backup, &mismatched_quote)
-            .expect_err("quote sender mismatch");
-        assert!(mismatch.message().contains("does not match wallet address"));
+        let mismatch =
+            wallet_sign_transfer_from_quote(&backup, &quote_request, &mismatched_quote)
+                .expect_err("quote sender mismatch");
+        assert!(mismatch.message().contains("does not match request"));
+
+        let mut substituted_quote = quote_summary.clone();
+        substituted_quote.to = "pf1-attacker".to_string();
+        substituted_quote.amount = 10_000;
+        let substitution =
+            wallet_sign_transfer_from_quote(&backup, &quote_request, &substituted_quote)
+                .expect_err("RPC-selected transfer intent reached signing");
+        assert!(substitution.message().contains("transfer quote to"));
 
         let wrong_chain = wallet_sign_transfer_from_fields(
             &backup,

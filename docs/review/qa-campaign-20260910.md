@@ -11,7 +11,7 @@ This is the canonical progress record for the [2026-09-10 QA campaign](qa-campai
 | B1 | Initial defect inventory | done | — | — | — | [Inventory](defect-inventory-20260910.md); 46 initial, 49 current rows |
 | C | Validator-0 RPC diagnosis | done | 1 | 0 | 0 | Root cause recorded in [chain state](../status/chain-state-current.md#validator-0-rpc-diagnosis-20260910) |
 | A2 | Consensus and storage | done | 1 | 1 | 0 | [Findings and repair evidence](consensus-storage-review-20260910.md) |
-| A3 | Wallet, proxy, and RPC SDK | fixing | 2 | 2 | 0 | [Findings](wallet-proxy-rpc-sdk-review-20260910.md); repair pending |
+| A3 | Wallet, proxy, and RPC SDK | done | 2 | 3 | 0 | [Findings and repair evidence](wallet-proxy-rpc-sdk-review-20260910.md) |
 | A4 | StakeHub `fix/pr8-safety-20260907` | pending | 0 | 0 | 0 | Read-only review only |
 | A5 | Task Node UNL V1 and V2 modules | pending | 0 | 0 | 0 | Pending |
 | B2 | Final defect inventory and TIH gate | pending | — | — | — | Pending |
@@ -69,11 +69,17 @@ whitepaper candidate scored 85.47 and was not promoted.
 - Wallet, proxy, and RPC SDK review completed. It found two P1 failures: an
   RPC-selected transfer recipient/amount could replace reviewed intent before
   signing, and the loopback local-session endpoint accepted a DNS-rebinding
-  Host. It also found two P2 failures: WebSocket mutations released the shared
-  concurrency slot before work began, and the maintained extension permitted
-  four-character passphrases under its older 100,000-iteration vault format.
-  Pre-repair baselines pass at wallet proxy 35/35, web wallet 259/259, and Rust
-  RPC SDK/WASM 69/69; focused adversarial regressions accompany the repairs.
+  Host. It also found three P2 failures: WebSocket mutations released the
+  shared concurrency slot before work began, the maintained extension permitted
+  four-character passphrases under its older 100,000-iteration vault format,
+  and an unmatched brace made the extension popup invalid as a browser module.
+  Pre-repair baselines passed at wallet proxy 35/35, web wallet 259/259, and
+  Rust RPC SDK/WASM 69/69. The repair binds signing to reviewed intent, binds
+  session issuance to request authority, holds shared admission through work,
+  strengthens new extension vaults, and repairs plus correctly gates the popup
+  module. Post-repair results: proxy 36/36, web wallet 260/260, extension 2/2,
+  Python wallet/latency 79/79, Rust RPC SDK/WASM 69/69, node integration compile
+  pass, and strict focused Clippy pass.
 
 ## Skips and boundary decisions
 

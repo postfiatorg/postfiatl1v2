@@ -40,10 +40,69 @@ pub fn wallet_identity_from_backup(
     })
 }
 
+pub fn validate_transfer_quote_for_request(
+    request: &RpcRequest,
+    quote: &TransferFeeQuoteSummary,
+) -> Result<(), WalletSdkError> {
+    validate_request(request, None, Some(RpcRequestKind::TransferFeeQuote))
+        .map_err(|error| WalletSdkError::new(format!("transfer quote request invalid: {error}")))?;
+    let params = request
+        .params
+        .as_object()
+        .ok_or_else(|| WalletSdkError::new("transfer quote request params must be an object"))?;
+    if ["memo_type", "memo_format", "memo_data"]
+        .iter()
+        .any(|field_name| params.contains_key(*field_name))
+    {
+        return Err(WalletSdkError::new(
+            "transparent transfer quote request must not contain payment memo fields",
+        ));
+    }
+    let expected_from = params
+        .get("from")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| WalletSdkError::new("transfer quote request from is missing"))?;
+    let expected_to = params
+        .get("to")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| WalletSdkError::new("transfer quote request to is missing"))?;
+    let expected_amount = params
+        .get("amount")
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| WalletSdkError::new("transfer quote request amount is missing"))?;
+    for (field_name, expected, observed) in [
+        ("from", expected_from, quote.from.as_str()),
+        ("to", expected_to, quote.to.as_str()),
+    ] {
+        if expected != observed {
+            return Err(WalletSdkError::new(format!(
+                "transfer quote {field_name} `{observed}` does not match request `{expected}`"
+            )));
+        }
+    }
+    if expected_amount != quote.amount {
+        return Err(WalletSdkError::new(format!(
+            "transfer quote amount `{}` does not match request `{expected_amount}`",
+            quote.amount
+        )));
+    }
+    if let Some(expected_sequence) = params.get("sequence").and_then(serde_json::Value::as_u64) {
+        if expected_sequence != quote.sequence {
+            return Err(WalletSdkError::new(format!(
+                "transfer quote sequence `{}` does not match request `{expected_sequence}`",
+                quote.sequence
+            )));
+        }
+    }
+    Ok(())
+}
+
 pub fn wallet_sign_transfer_from_quote(
     backup: &WalletBackupFile,
+    request: &RpcRequest,
     quote: &TransferFeeQuoteSummary,
 ) -> Result<SignedTransfer, WalletSdkError> {
+    validate_transfer_quote_for_request(request, quote)?;
     let identity = wallet_identity_from_backup(backup)?;
     if quote.from != identity.address {
         return Err(WalletSdkError::new(format!(

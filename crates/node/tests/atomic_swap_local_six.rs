@@ -4971,20 +4971,19 @@ fn atomic_swap_local_six_validator_tcp_finality_and_catch_up() {
         .expect("validator proposer index");
     let proposer_port = rpc_ports[proposer_index];
 
-    let unrelated_quote = rpc_call(
-        proposer_port,
-        &transfer_fee_quote_request(
-            "unrelated-quote",
-            unrelated_id.address.clone(),
-            pfusdc_issuer_id.address.clone(),
-            1,
-            None,
-        ),
+    let unrelated_quote_request = transfer_fee_quote_request(
+        "unrelated-quote",
+        unrelated_id.address.clone(),
+        pfusdc_issuer_id.address.clone(),
+        1,
+        None,
     );
+    let unrelated_quote = rpc_call(proposer_port, &unrelated_quote_request);
     let unrelated_quote =
         decode_transfer_fee_quote_summary(&unrelated_quote).expect("decode unrelated quote");
     let unrelated_signed =
-        wallet_sign_transfer_from_quote(&unrelated, &unrelated_quote).expect("sign unrelated");
+        wallet_sign_transfer_from_quote(&unrelated, &unrelated_quote_request, &unrelated_quote)
+            .expect("sign unrelated");
     rpc_call(
         proposer_port,
         &mempool_submit_signed_transfer_json_request(

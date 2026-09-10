@@ -1,5 +1,17 @@
 // Transaction builder - orchestrates quote -> sign -> submit -> poll.
 
+export function assertTransferQuoteMatchesIntent(quote, fromAddress, toAddress, amount) {
+  if (
+    !quote
+    || typeof quote !== 'object'
+    || quote.from !== fromAddress
+    || quote.to !== toAddress
+    || quote.amount !== amount
+  ) {
+    throw new Error('Transfer fee quote does not match the reviewed sender, recipient, and amount');
+  }
+}
+
 export class TxBuilder {
   constructor(rpcClient, wasmModule) {
     this.rpc = rpcClient;
@@ -12,7 +24,8 @@ export class TxBuilder {
     if (!quoteResp.ok) throw new Error('Fee quote failed: ' + quoteResp.error?.message);
     const quote = quoteResp.result;
 
-    // 2. Validate
+    // 2. Bind the untrusted RPC quote to the reviewed transfer intent.
+    assertTransferQuoteMatchesIntent(quote, fromAddress, toAddress, amount);
     if (quote.sender_meets_reserve_after_transfer === false) {
       throw new Error('Insufficient balance after transfer. Balance after: ' + quote.sender_balance_after_amount_and_fee);
     }

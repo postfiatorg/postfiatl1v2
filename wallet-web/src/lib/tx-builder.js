@@ -16,6 +16,19 @@ const MEMO_LABELS = {
   memo_data: 'Memo Data',
 };
 
+export function assertTransferQuoteMatchesIntent(quote, fromAddress, toAddress, amount) {
+  if (!quote || typeof quote !== 'object') {
+    throw new Error('Transfer fee quote is missing');
+  }
+  if (
+    quote.from !== fromAddress
+    || quote.to !== toAddress
+    || quote.amount !== amount
+  ) {
+    throw new Error('Transfer fee quote does not match the reviewed sender, recipient, and amount');
+  }
+}
+
 async function getDefaultWasm() {
   const { getWasm } = await import('./wasm-loader.js');
   return getWasm();
@@ -441,7 +454,8 @@ export class TxBuilder {
     // 1. Get fee quote
     const quote = reviewedQuote || await this.quoteTransfer(fromAddress, toAddress, amount);
 
-    // 2. Validate
+    // 2. Bind the untrusted RPC quote to the reviewed transfer intent.
+    assertTransferQuoteMatchesIntent(quote, fromAddress, toAddress, amount);
     if (quote.sender_meets_reserve_after_transfer === false) {
       throw new Error('Insufficient balance after transfer. Balance after: ' + quote.sender_balance_after_amount_and_fee);
     }
@@ -603,6 +617,7 @@ export class TxBuilder {
   async sendPaymentV2(backupJson, fromAddress, toAddress, amount, memoFields, reviewedQuote = null) {
     const quote = reviewedQuote || await this.quoteTransfer(fromAddress, toAddress, amount, memoFields);
 
+    assertTransferQuoteMatchesIntent(quote, fromAddress, toAddress, amount);
     if (quote.sender_meets_reserve_after_transfer === false) {
       throw new Error('Insufficient balance after transfer. Balance after: ' + quote.sender_balance_after_amount_and_fee);
     }

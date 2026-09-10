@@ -200,13 +200,37 @@ function isLoopbackRemoteAddress(address) {
         || normalized === '::ffff:127.0.0.1';
 }
 
+function localSessionAuthorityAllowed(req) {
+    const forwardedHost = String(req?.headers?.['x-forwarded-host'] || '')
+        .split(',')[0]
+        .trim()
+        .toLowerCase();
+    const authority = forwardedHost || String(req?.headers?.host || '').trim().toLowerCase();
+    if (!authority) return false;
+    try {
+        const hostname = new URL(`http://${authority}`).hostname.toLowerCase();
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]') {
+            return true;
+        }
+    } catch (_) {
+        return false;
+    }
+    return ALLOWED_ORIGINS.some((origin) => {
+        try {
+            return new URL(origin).host.toLowerCase() === authority;
+        } catch (_) {
+            return false;
+        }
+    });
+}
+
 function localSessionRequestAllowed(req) {
     if (!WALLET_PROXY_LOCAL_SESSION_PRINCIPAL || !isLoopbackHost(LISTEN_HOST)) return false;
     if (!isLoopbackRemoteAddress(req?.socket?.remoteAddress)) return false;
+    if (!localSessionAuthorityAllowed(req)) return false;
     // Fetch Metadata is supplied by browsers and survives the local TLS reverse
-    // proxy. Requiring same-origin prevents a hostile web page from obtaining
-    // the credential through a cross-origin request. Local shell processes
-    // already have equivalent access to the root-owned token file.
+    // proxy. It complements the exact authority binding above; neither signal
+    // alone is sufficient against cross-origin or DNS-rebinding requests.
     return String(req?.headers?.['sec-fetch-site'] || '').toLowerCase() === 'same-origin';
 }
 
@@ -1379,29 +1403,6 @@ wss.on('connection', (ws, req) => {
             )));
             return;
         }
-        if (requiresAuth) {
-            const admission = acquireMutationAdmission(principalId);
-            if (!admission.ok) {
-                ws.send(JSON.stringify(responseEnvelope(
-                    parsed.id,
-                    false,
-                    null,
-                    {
-                        code: admission.code,
-                        message: admission.code === 'proxy_mutation_rate_limited'
-                            ? 'authenticated mutation rate limit exceeded'
-                            : 'authenticated mutation concurrency limit exceeded',
-                        retry_after_ms: admission.retry_after_ms,
-                    },
-                    [],
-                )));
-                return;
-            }
-            // The existing per-WebSocket active-TCP counter holds the routed
-            // work slot. Shared admission records this principal's rate and
-            // observes process-wide HTTP mutation pressure at admission time.
-            admission.release();
-        }
         // The proxy credential is a local dispatch capability and must never be
         // forwarded to validators, logged in route evidence, or persisted.
         delete parsed.proxy_auth_token;
@@ -1486,6 +1487,28 @@ wss.on('connection', (ws, req) => {
             return;
         }
 
+        let mutationAdmission = null;
+        if (requiresAuth) {
+            const admission = acquireMutationAdmission(principalId);
+            if (!admission.ok) {
+                ws.send(JSON.stringify(responseEnvelope(
+                    parsed.id,
+                    false,
+                    null,
+                    {
+                        code: admission.code,
+                        message: admission.code === 'proxy_mutation_rate_limited'
+                            ? 'authenticated mutation rate limit exceeded'
+                            : 'authenticated mutation concurrency limit exceeded',
+                        retry_after_ms: admission.retry_after_ms,
+                    },
+                    [],
+                )));
+                return;
+            }
+            mutationAdmission = admission;
+        }
+
         // S3.4: Limit concurrent connections. Use the request id so browser
         // clients resolve the pending RPC immediately instead of waiting for
         // their own timeout and retrying.
@@ -1498,6 +1521,7 @@ wss.on('connection', (ws, req) => {
                 error: { code: 'proxy_rate_limited', message: 'too many concurrent requests' },
                 events: []
             }));
+            mutationAdmission?.release();
             return;
         }
 
@@ -1516,6 +1540,8 @@ wss.on('connection', (ws, req) => {
                     },
                     [],
                 )));
+            } finally {
+                mutationAdmission?.release();
             }
             return;
         }
@@ -1542,6 +1568,7 @@ wss.on('connection', (ws, req) => {
                 },
                 events: []
             }));
+            mutationAdmission?.release();
             return;
         }
 
@@ -1628,6 +1655,7 @@ wss.on('connection', (ws, req) => {
             }));
         } finally {
             activeTcpConnections = Math.max(0, activeTcpConnections - 1);
+            mutationAdmission?.release();
         }
     });
 });

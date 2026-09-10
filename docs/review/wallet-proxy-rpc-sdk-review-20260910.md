@@ -78,6 +78,23 @@ passphrase. Salt and ciphertext are available offline, and authenticated
 AES-GCM gives an oracle for exhaustive passphrase recovery. The recovered
 plaintext is the wallet master seed.
 
+### 5. P2 — The extension popup is invalid as a browser module
+
+**Location:** `wallet-extension/popup/popup.js:90` and
+`wallet-proxy/test_full_pipeline.js:194`.
+
+The popup contained an unmatched closing brace. Its HTML loads the script with
+`type="module"`, so Chrome rejects the file before wallet initialization.
+The regression gate used `node --check FILE`, whose package-based source
+detection parsed these un-packaged files differently and missed the module
+failure.
+
+**Concrete failure scenario:** loading the maintained unpacked extension opens
+a popup whose module fails at parse time with `Unexpected token '}'`; no
+wallet action is available. Piping the same file through
+`node --input-type=module --check` reproduces the failure. The repair removes
+the unmatched brace and makes the gate force browser-module parsing.
+
 ## Areas reviewed without P1/P2 findings
 
 - RPC response envelopes enforce typed shapes, IDs, chain-domain fields, bounds,
@@ -97,5 +114,45 @@ plaintext is the wallet master seed.
 - `cargo test --locked -p postfiat-rpc-sdk -p postfiat-wallet-wasm`:
   **69 passed, 0 failed** across library, binary, and WASM tests.
 
-These green baselines did not exercise the four adversarial cases above. The
+These green baselines did not exercise the five adversarial cases above. The
 repair unit adds focused regressions and leaves deployed services untouched.
+
+## Repair
+
+The repair closes all five findings without changing a live service or wallet:
+
+- The Rust quote signer now requires the original typed
+  `transfer_fee_quote` request and compares sender, recipient, amount, and an
+  explicit sequence before signing. The CLI requires both request and response
+  files and rejects an ID mismatch. Python and TCP example callers retain the
+  exact request.
+- Both browser applications reject a transfer quote unless its sender,
+  recipient, and amount equal the locally reviewed intent before invoking the
+  low-level WASM quote-field signer.
+- Local-session issuance accepts only loopback authorities or an authority
+  named by the exact origin allowlist, in addition to its loopback-peer and
+  Fetch-Metadata checks.
+- WebSocket mutation admission is held until broadcast or upstream TCP work
+  completes, including error paths. A two-connection regression holds one
+  upstream request and proves the second is rejected at a process-wide limit of
+  one.
+- New extension vaults require at least ten passphrase characters, use 310,000
+  PBKDF2-SHA256 iterations, and record the KDF work factor. Existing unversioned
+  100,000-iteration vaults remain readable; this compatibility does not claim
+  that an old weak passphrase has been strengthened.
+- The unmatched popup brace is removed, and the extension skeleton gate now
+  parses every JavaScript file explicitly as a browser module.
+
+## Post-repair verification
+
+- `npm test --prefix wallet-proxy`: **36/36 passed**, including the new
+  WebSocket lifecycle regression and the 18/18 browser-extension pipeline.
+- `npm test --prefix wallet-web`: **260 passed, 0 failed**.
+- `npm test --prefix wallet-extension`: **2 passed, 0 failed**.
+- `PYTHONPATH=python python3 -m pytest -q python/tests/test_wallet.py
+  python/tests/test_latency.py`: **79 passed**.
+- `cargo test --locked -p postfiat-rpc-sdk -p postfiat-wallet-wasm`:
+  **69 passed, 0 failed**.
+- `cargo test --locked -p postfiat-node --test atomic_swap_local_six --no-run`:
+  compile pass for the request-bound SDK call site.
+- Strict Clippy for the RPC SDK and wallet WASM, including all targets: pass.

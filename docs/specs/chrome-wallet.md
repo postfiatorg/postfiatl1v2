@@ -274,7 +274,7 @@ pub fn wallet_address_from_seed(chain_id: &str, master_seed_hex: &str, account_i
 
 #[wasm_bindgen]
 pub fn wallet_sign_transfer(backup_json: &str, quote_json: &str) -> Result<JsValue, JsValue>
-// Wraps wallet_sign_transfer_from_quote
+// Low-level quote-field signer; the application first binds from/to/amount to reviewed intent
 // backup_json: WalletBackupFile as JSON string
 // quote_json: TransferFeeQuoteSummary as JSON string
 // Returns: SignedTransfer as JS object

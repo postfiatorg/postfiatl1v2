@@ -1,5 +1,6 @@
 import { RpcClient } from '../lib/rpc-client.js';
-import { keystore } from '../lib/keystore.js';
+import { MIN_PASSPHRASE_LENGTH, keystore } from '../lib/keystore.js';
+import { assertTransferQuoteMatchesIntent } from '../lib/tx-builder.js';
 import * as wasmMod from '../wasm/postfiat_wallet_wasm.js';
 
 let rpc = null;
@@ -86,7 +87,6 @@ async function init() {
     // Either way, popup shows locked view — user must re-unlock to get backup back
   });
 }
-}
 
 function showView(name) {
   ['noWalletView', 'lockedView', 'walletView'].forEach(id => {
@@ -124,8 +124,8 @@ document.getElementById('createBtn').addEventListener('click', async () => {
     return;
   }
   const pass = document.getElementById('createPassphrase').value;
-  if (!pass || pass.length < 4) {
-    alert('Passphrase must be at least 4 characters');
+  if (!pass || pass.length < MIN_PASSPHRASE_LENGTH) {
+    alert(`Passphrase must be at least ${MIN_PASSPHRASE_LENGTH} characters`);
     return;
   }
   const savedCheck = document.getElementById('seedSavedCheck');
@@ -188,8 +188,8 @@ document.getElementById('importBtn').addEventListener('click', async () => {
     alert('Seed must be 64 hex characters');
     return;
   }
-  if (!pass || pass.length < 4) {
-    alert('Passphrase must be at least 4 characters');
+  if (!pass || pass.length < MIN_PASSPHRASE_LENGTH) {
+    alert(`Passphrase must be at least ${MIN_PASSPHRASE_LENGTH} characters`);
     return;
   }
   const result = wasmMod.wallet_keygen(chainId, seed, 0);
@@ -333,7 +333,8 @@ document.getElementById('confirmSendBtn').addEventListener('click', async () => 
       return;
     }
 
-    // Sign with WASM
+    // Bind the untrusted RPC quote to the reviewed transfer before signing.
+    assertTransferQuoteMatchesIntent(quote.result, walletAddress, to, amount);
     const signed = wasmMod.wallet_sign_transfer(currentBackup, JSON.stringify(quote.result));
     const signedJson = JSON.stringify(signed);
 

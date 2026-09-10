@@ -2,11 +2,27 @@
 
 const SALT_BYTES = 16;
 const IV_BYTES = 12;
-const PBKDF2_ITERATIONS = 100000;
-const KEY_BYTES = 32;
+const LEGACY_PBKDF2_ITERATIONS = 100000;
+export const PBKDF2_ITERATIONS = 310000;
+export const MIN_PASSPHRASE_LENGTH = 10;
+
+export function validateNewPassphrase(passphrase) {
+  if (typeof passphrase !== 'string' || passphrase.length < MIN_PASSPHRASE_LENGTH) {
+    throw new Error(`Passphrase must be at least ${MIN_PASSPHRASE_LENGTH} characters`);
+  }
+}
+
+function vaultIterations(blob) {
+  const iterations = blob?.iterations ?? LEGACY_PBKDF2_ITERATIONS;
+  if (![LEGACY_PBKDF2_ITERATIONS, PBKDF2_ITERATIONS].includes(iterations)) {
+    throw new Error('Unsupported encrypted vault KDF parameters');
+  }
+  return iterations;
+}
 
 export class KeyStore {
   async encrypt(masterSeedHex, passphrase) {
+    validateNewPassphrase(passphrase);
     const enc = new TextEncoder();
     const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
     const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
@@ -31,7 +47,8 @@ export class KeyStore {
     return {
       salt: btoa(String.fromCharCode(...salt)),
       iv: btoa(String.fromCharCode(...iv)),
-      ciphertext: btoa(String.fromCharCode(...new Uint8Array(ciphertext)))
+      ciphertext: btoa(String.fromCharCode(...new Uint8Array(ciphertext))),
+      iterations: PBKDF2_ITERATIONS
     };
   }
 
@@ -40,6 +57,7 @@ export class KeyStore {
       throw new Error('Invalid encrypted blob');
     }
     const enc = new TextEncoder();
+    const iterations = vaultIterations(blob);
     const salt = Uint8Array.from(atob(blob.salt), c => c.charCodeAt(0));
     const iv = Uint8Array.from(atob(blob.iv), c => c.charCodeAt(0));
     const ciphertext = Uint8Array.from(atob(blob.ciphertext), c => c.charCodeAt(0));
@@ -48,7 +66,7 @@ export class KeyStore {
       'raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']
     );
     const key = await crypto.subtle.deriveKey(
-      { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+      { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
       keyMaterial,
       { name: 'AES-GCM', length: 256 },
       false,

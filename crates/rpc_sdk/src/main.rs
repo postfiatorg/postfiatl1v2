@@ -1107,15 +1107,25 @@ fn write_wallet_identity(flags: &[String]) -> Result<(), String> {
 
 fn write_wallet_signed_quote(flags: &[String]) -> Result<(), String> {
     let backup_file = flag_value(flags, "--backup-file").ok_or("missing --backup-file")?;
+    let quote_request_file =
+        flag_value(flags, "--quote-request").ok_or("missing --quote-request")?;
     let quote_response_file =
         flag_value(flags, "--quote-response").ok_or("missing --quote-response")?;
     let output = flag_value(flags, "--output").ok_or("missing --output")?;
     let backup = read_wallet_backup_file(backup_file)?;
+    let quote_request = read_request_file(quote_request_file)
+        .map_err(|error| format!("quote request read failed at {quote_request_file}: {error}"))?;
     let quote_response = read_response_file(quote_response_file)
         .map_err(|error| format!("quote response read failed at {quote_response_file}: {error}"))?;
+    if quote_response.id != quote_request.id {
+        return Err(format!(
+            "quote response id `{}` does not match request id `{}`",
+            quote_response.id, quote_request.id
+        ));
+    }
     let quote = decode_transfer_fee_quote_summary(&quote_response)
         .map_err(|error| format!("quote response validation failed: {error}"))?;
-    let signed = wallet_sign_transfer_from_quote(&backup, &quote)
+    let signed = wallet_sign_transfer_from_quote(&backup, &quote_request, &quote)
         .map_err(|error| format!("wallet quote signing failed: {error}"))?;
     write_json_output(output, &signed)
 }
@@ -2298,7 +2308,7 @@ fn print_usage() {
   postfiat-rpc-sdk validate-response --input PATH [--expect-id ID] [--require-ok] [--expect-kind KIND] [--request-file PATH] [--validators N] [--chain-id ID --genesis-hash HEX --protocol-version N]
   postfiat-rpc-sdk wallet-backup --chain-id ID (--master-seed-hex HEX | --master-seed-hex-file PATH) [--account-index N] --output PATH
   postfiat-rpc-sdk wallet-identity --backup-file PATH --output PATH
-  postfiat-rpc-sdk wallet-sign-quote --backup-file PATH --quote-response PATH --output PATH
+  postfiat-rpc-sdk wallet-sign-quote --backup-file PATH --quote-request PATH --quote-response PATH --output PATH
   postfiat-rpc-sdk wallet-sign-payment-v2 --backup-file PATH --chain-id ID --genesis-hash HASH --protocol-version N --to ADDRESS --amount AMOUNT --fee FEE --sequence N --output PATH [--memo-type TEXT] [--memo-format TEXT] [--memo-data TEXT]
   postfiat-rpc-sdk wallet-sign-asset-transaction --backup-file PATH --quote-response PATH --output PATH
   postfiat-rpc-sdk wallet-sign-escrow-transaction --backup-file PATH --quote-response PATH --output PATH

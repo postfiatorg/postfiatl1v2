@@ -191,19 +191,23 @@ async function main() {
   else
     fail('web_accessible_resources', 'missing wasm entries');
 
-  // JS syntax checks
-  const { execSync } = require('child_process');
+  // JS syntax checks. Popup and library scripts execute as browser modules,
+  // so force module parsing instead of Node's package-based source detection.
+  const { execFileSync } = require('child_process');
   const jsFiles = ['background.js', 'popup/popup.js', 'lib/rpc-client.js', 'lib/keystore.js', 'lib/tx-builder.js'];
   let allSyntaxOk = true;
   for (const f of jsFiles) {
     try {
-      execSync('node --check ' + path.join(extDir, f), { stdio: 'pipe' });
+      execFileSync(process.execPath, ['--input-type=module', '--check'], {
+        input: fs.readFileSync(path.join(extDir, f)),
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
     } catch (e) {
       fail('syntax: ' + f, (e.stderr?.toString() || e.message));
       allSyntaxOk = false;
     }
   }
-  if (allSyntaxOk) ok('all 5 JS files pass syntax check');
+  if (allSyntaxOk) ok('all 5 JS files pass browser-module syntax check');
 
   console.log('\n=== Summary ===');
   console.log('Passed: ' + passed + '/' + (passed + failed));

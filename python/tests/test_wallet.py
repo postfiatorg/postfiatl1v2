@@ -2409,6 +2409,7 @@ class WalletHelperTests(unittest.TestCase):
             del cwd
             command = list(args)
             self.assertIn("wallet-sign-quote", command)
+            self.assertIn("--quote-request", command)
             output_path = Path(command[command.index("--output") + 1])
             output_path.write_text(json.dumps({"unsigned": {}}), encoding="utf-8")
 
@@ -2464,6 +2465,7 @@ class WalletHelperTests(unittest.TestCase):
             del cwd
             command = list(args)
             if "wallet-sign-quote" in command:
+                self.assertIn("--quote-request", command)
                 output_path = Path(command[command.index("--output") + 1])
                 output_path.write_text(json.dumps({"unsigned": {}}), encoding="utf-8")
 
@@ -2525,6 +2527,7 @@ class WalletHelperTests(unittest.TestCase):
             del cwd
             command = list(args)
             self.assertIn("wallet-sign-quote", command)
+            self.assertIn("--quote-request", command)
             output_path = Path(command[command.index("--output") + 1])
             output_path.write_text(json.dumps({"unsigned": {}}), encoding="utf-8")
 
@@ -2601,6 +2604,7 @@ class WalletHelperTests(unittest.TestCase):
             del cwd
             command = list(args)
             self.assertIn("wallet-sign-quote", command)
+            self.assertIn("--quote-request", command)
             output_path = Path(command[command.index("--output") + 1])
             output_path.write_text(json.dumps({"unsigned": {}}), encoding="utf-8")
 

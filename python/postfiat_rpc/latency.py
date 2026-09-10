@@ -302,6 +302,7 @@ def run_native_or_payment(
 
         try:
             started = time.monotonic()
+            quote_request_id = f"latency-quote-{secrets.token_hex(4)}"
             quote_response = client.transfer_fee_quote_response(
                 wallet_a.address,
                 wallet_b.address,
@@ -309,17 +310,32 @@ def run_native_or_payment(
                 memo_type=memo_type,
                 memo_format=memo_format,
                 memo_data=memo_data,
-                request_id=f"latency-quote-{secrets.token_hex(4)}",
+                request_id=quote_request_id,
             )
             timings["quote_ms"] = monotonic_ms_since(started)
 
             quote_file = work_dir / f"quote-{secrets.token_hex(8)}.response.json"
+            quote_request_file = work_dir / f"quote-{secrets.token_hex(8)}.request.json"
             signed_file = work_dir / (
                 f"signed-{secrets.token_hex(8)}.payment-v2.json"
                 if memo
                 else f"signed-{secrets.token_hex(8)}.transfer.json"
             )
             _write_json(quote_file, quote_response)
+            if not memo:
+                _write_json(
+                    quote_request_file,
+                    {
+                        "version": "postfiat-local-rpc-v1",
+                        "id": quote_request_id,
+                        "method": "transfer_fee_quote",
+                        "params": {
+                            "from": wallet_a.address,
+                            "to": wallet_b.address,
+                            "amount": amount,
+                        },
+                    },
+                )
             if review_delay_ms > 0:
                 started = time.monotonic()
                 time.sleep(review_delay_ms / 1000.0)
@@ -365,6 +381,8 @@ def run_native_or_payment(
                         "wallet-sign-quote",
                         "--backup-file",
                         str(wallet_a.backup_file),
+                        "--quote-request",
+                        str(quote_request_file),
                         "--quote-response",
                         str(quote_file),
                         "--output",

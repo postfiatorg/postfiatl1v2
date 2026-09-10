@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let quote_response = send_rpc_request(&config.quote_addr, &quote_request, timeout)?;
     let quote = decode_transfer_fee_quote_summary(&quote_response)?;
 
-    let signed = wallet_sign_transfer_from_quote(&backup, &quote)?;
+    let signed = wallet_sign_transfer_from_quote(&backup, &quote_request, &quote)?;
     let signed_json = serde_json::to_string(&signed)?;
     let submit_request =
         mempool_submit_signed_transfer_json_request("sdk-tcp-wallet-submit", signed_json);

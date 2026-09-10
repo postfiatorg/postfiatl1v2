@@ -268,6 +268,13 @@ async function main() {
     assert.strictEqual(localSession.body.principal, 'default');
     assert.strictEqual(localSession.body.token, process.env.WALLET_PROXY_API_TOKEN);
 
+    const reboundLocalSession = await getLocalSession(port, {
+      host: 'attacker.example',
+      'sec-fetch-site': 'same-origin',
+    });
+    assert.strictEqual(reboundLocalSession.statusCode, 403);
+    assert.strictEqual(reboundLocalSession.body.code, 'local_session_forbidden');
+
     const sameOriginJobDiscovery = await getJson(
       port,
       `/api/bridge/jobs?recipient=pf${'ab'.repeat(20)}&limit=20`,

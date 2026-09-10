@@ -16,10 +16,9 @@ use postfiat_rpc_sdk::{
     wallet_sign_owned_deposit as sdk_wallet_sign_owned_deposit,
     wallet_sign_owned_transfer_order_v3, wallet_sign_owned_unwrap_order_v3,
     wallet_sign_payment_v2_from_fields, wallet_sign_transfer_from_fields,
-    wallet_sign_transfer_from_quote, wallet_verify_fastpay_apply_ack_v1, RpcRequest, RpcResponse,
-    TransferFeeQuoteSummary, WalletBackupFile, WalletSignAssetTransactionFields,
-    WalletSignEscrowTransactionFields, WalletSignOfferTransactionFields, WalletSignPaymentV2Fields,
-    WalletSignTransferFields,
+    wallet_verify_fastpay_apply_ack_v1, RpcRequest, RpcResponse, TransferFeeQuoteSummary,
+    WalletBackupFile, WalletSignAssetTransactionFields, WalletSignEscrowTransactionFields,
+    WalletSignOfferTransactionFields, WalletSignPaymentV2Fields, WalletSignTransferFields,
 };
 use postfiat_types::{
     FastPayApplyAckV1, FastPayRecoveryCapabilitiesV1, OwnedCertificateDomain, OwnedDepositV1,
@@ -249,7 +248,8 @@ pub fn wallet_sign_pftl_swap_intent(
     }))
 }
 
-/// Sign a transfer using a fee quote from the RPC server.
+/// Sign transfer fields from an RPC quote after the browser application has
+/// bound `from`, `to`, and `amount` to its reviewed intent.
 ///
 /// backup_json: WalletBackupFile as JSON string
 /// quote_json: TransferFeeQuoteSummary as JSON string
@@ -261,8 +261,27 @@ pub fn wallet_sign_transfer(backup_json: &str, quote_json: &str) -> Result<JsVal
     let quote: TransferFeeQuoteSummary = serde_json::from_str(quote_json)
         .map_err(|e| JsValue::from_str(&format!("quote parse: {e}")))?;
 
-    let signed = wallet_sign_transfer_from_quote(&backup, &quote)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let identity =
+        wallet_identity_from_backup(&backup).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    if quote.from != identity.address {
+        return Err(JsValue::from_str(&format!(
+            "transfer quote sender `{}` does not match wallet address `{}`",
+            quote.from, identity.address
+        )));
+    }
+    let signed = wallet_sign_transfer_from_fields(
+        &backup,
+        WalletSignTransferFields {
+            chain_id: quote.chain_id,
+            genesis_hash: quote.genesis_hash,
+            protocol_version: quote.protocol_version,
+            to: quote.to,
+            amount: quote.amount,
+            fee: quote.minimum_fee,
+            sequence: quote.sequence,
+        },
+    )
+    .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     to_json_js_value(&signed)
 }

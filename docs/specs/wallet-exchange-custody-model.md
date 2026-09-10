@@ -97,15 +97,15 @@ Withdrawals are signed from the custody address using the SDK quote-bound flow:
 
 1. Restore public identity from the wallet backup.
 2. Request a fee quote with `from` set to that identity address.
-3. Decode and validate the quote response.
-4. Sign with `wallet_sign_transfer_from_quote`.
+3. Decode the quote response and bind it to the exact original request.
+4. Sign with `wallet_sign_transfer_from_quote(backup, request, quote)`.
 5. Submit the signed transfer through an RPC endpoint that permits writes.
 6. Decode submit response and poll `tx` finality by submitted tx id.
 7. Persist the finality proof id, block hash, certificate id, registry root,
    receipt code, and receipt message.
 
-The SDK rejects quote-sender mismatches and chain-id mismatches with the wallet
-backup.
+The SDK rejects quote sender, recipient, amount, and explicit-sequence mismatches
+against the request, plus chain-id mismatches with the wallet backup.
 
 ## Watch-Only Constraints
 

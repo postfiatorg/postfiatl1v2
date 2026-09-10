@@ -41,7 +41,7 @@ Browser Extension (Chrome MV3)
 
 3. **Create a wallet:**
    - Click the extension icon
-   - Enter an encryption passphrase
+   - Enter an encryption passphrase of at least 10 characters
    - Click "Create Wallet"
    - **SAVE YOUR SEED** — it's your only recovery method
    - Check "I have saved my seed" and click Create again
@@ -55,7 +55,7 @@ Browser Extension (Chrome MV3)
 | Signature | 3309 bytes (6618 hex chars) |
 | Address | 42 chars (`pf` + 40 hex chars) |
 | Key derivation | SHA3-384 domain-separated, truncate to 32 bytes |
-| Encryption at rest | AES-256-GCM via PBKDF2 (100k iterations) |
+| Encryption at rest | AES-256-GCM via PBKDF2-SHA256 (310k iterations for new vaults; legacy vaults remain readable) |
 
 ## RPC Methods Used
 
@@ -74,7 +74,7 @@ Browser Extension (Chrome MV3)
 
 - **CSP:** `script-src 'self' 'wasm-unsafe-eval'; object-src 'none'` — no inline scripts, no remote scripts
 - **Permissions:** Only `storage` — no tabs, cookies, or webRequest
-- **Seed encryption:** AES-256-GCM with PBKDF2 key derivation (100k iterations, SHA-256)
+- **Seed encryption:** AES-256-GCM with PBKDF2-SHA256 (310k iterations for new vaults; legacy 100k vaults remain readable)
 - **Auto-lock:** Configurable 5/15/30/60 minute timeout, clears decrypted seed from memory
 - **No plaintext seed** stored in chrome.storage at any point
 - **No eval()** in any JavaScript file
