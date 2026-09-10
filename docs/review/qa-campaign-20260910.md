@@ -178,7 +178,7 @@ campaign.
 | 1 | Review Burn 1 repairs and sibling defect classes | done | [Findings](burn2-fix-review-20260910.md): three P1 repair gaps; focused baselines green |
 | 1R | Repair Unit 1 P1/P2 findings | done | Host and WASM intent boundaries closed; bounded RPC clean exits now restart; focused gates pass |
 | 2 | Ground all 19 open inventory rows | done | 3 fixed, 5 reproduced/retained, 5 need live environment, 6 need operator decision; 0 bare open |
-| 3 | Fuzz and property expansion | pending | Four named surfaces; ten-minute per-target bounds |
+| 3 | Fuzz and property expansion | done | [Results](burn2-fuzz-property-results-20260910.md): four surfaces expanded; zero crashes or violations |
 | 4 | Reconcile inventory and close | pending | TIH rerun required if materially changed |
 
 ### Burn 2 unit 1 result
@@ -215,6 +215,21 @@ still not an ancestor of main, the local release ELF still carries a randomized
 Rust temporary RUNPATH, and a fresh search found no exact deployed rollback
 binary among 50 local node binaries. These are retained blockers, not new
 authority. No fleet, chain, Task Node, or StakeHub action occurred.
+
+### Burn 2 unit 3 result
+
+The [bounded fuzz and property record](burn2-fuzz-property-results-20260910.md)
+adds deterministic coverage for bridge receipt-proof parsing, cross-phase
+consensus round monotonicity, the finite RPC accept loop, and UNL V2 evidence
+parsing. The Rust targets each completed two byte-identical 4,096-iteration
+runs under their ten-minute ceiling. The RPC predicate was checked at every
+small boundary through 1,024, and the UNL property covered 513 deterministic
+raw inputs while requiring named fail-closed fields.
+
+No target crashed or violated a property. Focused regressions pass at 38 bridge
+tests, 9 Consensus v2 node-library tests, 25 RPC serve-request tests, and 20 UNL
+V2 evidence tests with 10 subtests. This unit made no live, network, Task Node,
+StakeHub, frozen-artifact, or whitepaper change.
 
 ### Burn 2 boundaries
 

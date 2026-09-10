@@ -599,6 +599,10 @@ fn rpc_owned_json_response(
     }
 }
 
+fn rpc_serve_accept_budget_allows(accepted_count: usize, max_requests: usize) -> bool {
+    accepted_count < max_requests
+}
+
 fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
     clear_transport_ready_file(&options.ready_file, "rpc serve")?;
     let mut local_status = status(NodeOptions {
@@ -687,7 +691,7 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
     let (event_sender, event_receiver) = mpsc::channel::<RpcServeEventRecord>();
     let mut accepted_count = 0_usize;
     let mut active_connections = 0_usize;
-    while accepted_count < options.max_requests {
+    while rpc_serve_accept_budget_allows(accepted_count, options.max_requests) {
         while active_connections >= MAX_RPC_SERVE_ACTIVE_CONNECTIONS {
             receive_rpc_serve_event(
                 &event_receiver,

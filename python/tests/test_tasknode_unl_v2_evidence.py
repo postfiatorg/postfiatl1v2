@@ -311,6 +311,27 @@ def _fixture() -> dict:
     return json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
 
 
+def _mutated_json_inputs(seed: bytes, count: int):
+    yield seed
+    for index in range(count):
+        candidate = bytearray(seed)
+        offset = (index * 37 + 13) % len(candidate)
+        operation = index % 6
+        if operation == 0:
+            candidate[offset] ^= 1
+        elif operation == 1:
+            candidate[offset] = (candidate[offset] + index + 17) % 256
+        elif operation == 2:
+            candidate.insert(offset, ord("X"))
+        elif operation == 3:
+            del candidate[offset]
+        elif operation == 4:
+            del candidate[max(1, offset) :]
+        else:
+            candidate.extend(f'"fuzz{index}"'.encode())
+        yield bytes(candidate)
+
+
 def _verify_vector(vector: dict):
     return verify_evidence_snapshot(
         vector["snapshot"],
@@ -331,6 +352,42 @@ class GoldenVectorTests(unittest.TestCase):
         self.assertEqual(first.canonical_bytes(), second.canonical_bytes())
         self.assertEqual(first.to_dict(), fixture["expected_result"])
         self.assertEqual(_build_vector(), fixture)
+
+    def test_evidence_parser_mutation_property_is_deterministic_and_fail_closed(self) -> None:
+        fixture = _fixture()
+        seed = canonical_json_bytes(fixture["evidence"])
+        parsed_cases = 0
+        rejected_json = 0
+        for payload in _mutated_json_inputs(seed, 512):
+            try:
+                evidence = json.loads(payload)
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                rejected_json += 1
+                continue
+            if not isinstance(evidence, dict):
+                rejected_json += 1
+                continue
+            parsed_cases += 1
+            snapshot = seal_evidence_snapshot(
+                evidence, fixture["control_registry"]
+            )
+            first = verify_evidence_snapshot(
+                snapshot, fixture["control_registry"]
+            )
+            second = verify_evidence_snapshot(
+                copy.deepcopy(snapshot), fixture["control_registry"]
+            )
+            self.assertIn(
+                first.status, ("hold", "verified", "verified_with_holds")
+            )
+            self.assertEqual(first.canonical_bytes(), second.canonical_bytes())
+            for failure in first.failures:
+                self.assertTrue(failure.field)
+            for rejection in first.record_rejections:
+                self.assertTrue(rejection.field)
+
+        self.assertGreater(parsed_cases, 100)
+        self.assertGreater(rejected_json, 100)
 
     def test_unknown_top_level_version_holds_with_named_field(self) -> None:
         fixture = _fixture()

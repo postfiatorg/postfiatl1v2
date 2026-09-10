@@ -29,6 +29,25 @@ mod rpc_serve_request_tests {
     }
 
     #[test]
+    fn rpc_serve_accept_budget_is_exact_at_every_small_boundary() {
+        for max_requests in 0..=1_024 {
+            let mut accepted = 0;
+            while rpc_serve_accept_budget_allows(accepted, max_requests) {
+                accepted = accepted.saturating_add(1);
+                assert!(accepted <= max_requests);
+            }
+            assert_eq!(accepted, max_requests);
+            for probe in 0..=max_requests.saturating_add(1) {
+                assert_eq!(
+                    rpc_serve_accept_budget_allows(probe, max_requests),
+                    probe < max_requests,
+                    "accept-budget mismatch at accepted={probe}, max={max_requests}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn consensus_v2_timeout_vote_rpc_is_finality_gated_and_durably_signed() {
         let root = env::temp_dir().join(format!(
             "postfiat-timeout-vote-loopback-rpc-{}-{}",

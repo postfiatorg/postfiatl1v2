@@ -10,7 +10,7 @@ use orchard::{
 };
 use postfiat_bridge::{
     apply_simulated_transfer, bridge_witness_attestation_id, bridge_witness_attestation_message,
-    upsert_domain, BridgeTransferRequest, BridgeWitnessChainDomain,
+    upsert_domain, verify_ethereum_receipt_log, BridgeTransferRequest, BridgeWitnessChainDomain,
 };
 use postfiat_consensus_cobalt::{
     ratify_governance_amendment, verify_governance_amendment, CobaltDomain, EssentialSubsetConfig,
@@ -32,7 +32,11 @@ use postfiat_network::{
     NetworkDomain,
 };
 use postfiat_node::{global_issued_asset_supply, native_pft_live_total};
-use postfiat_ordering_fast::{next_reference, order_references};
+use postfiat_ordering_fast::{
+    authorize_consensus_v2_timeout_vote, consensus_v2_domain, initial_consensus_v2_safety_state,
+    next_reference, order_references, ConsensusV2QcGraph, ConsensusV2Validator,
+    ConsensusV2ValidatorSet,
+};
 use postfiat_privacy::{
     debug_nullifier, mint_debug_note, scan_owner, spend_debug_note, turnstile_summary,
 };
@@ -49,10 +53,10 @@ use postfiat_proofs::{
 };
 use postfiat_types::{
     Account, AssetDefinition, AssetOrchardAssetBalance, AtomicSwapAuthorization, AtomicSwapLeg,
-    BridgeState, BridgeWitnessAttestation, Escrow, FastAssetControlActionV1,
-    FastAssetControlCommandV1, FastAssetIdV1, FastAssetRuleHashV1, FastHolderPermitIdV1,
-    FastHolderPermitV1, FastLaneCheckpointV1, FastLaneControlActionV1, FastLaneDepositV1,
-    FastLaneExitClaimV1, FastLaneExitIntentV1, FastObjectIdV1, FastObjectKeyV1,
+    BridgeState, BridgeWitnessAttestation, ConsensusV2Round, Escrow, EthereumReceiptProofV1,
+    FastAssetControlActionV1, FastAssetControlCommandV1, FastAssetIdV1, FastAssetRuleHashV1,
+    FastHolderPermitIdV1, FastHolderPermitV1, FastLaneCheckpointV1, FastLaneControlActionV1,
+    FastLaneDepositV1, FastLaneExitClaimV1, FastLaneExitIntentV1, FastObjectIdV1, FastObjectKeyV1,
     FastSwapAuthorizationV1, FastSwapCertificateV1, FastSwapChainDomainV1,
     FastSwapCommitteeDomainV1, FastSwapCommitteeRootV1, FastSwapDecisionV1,
     FastSwapEffectsDigestV1, FastSwapEffectsV1, FastSwapIntentV1, FastSwapOpaqueHashV1,
@@ -69,6 +73,7 @@ use postfiat_types::{
 };
 use rand::{rngs::StdRng, SeedableRng};
 use serde::Serialize;
+use sha3::{Digest, Keccak256};
 
 const DEFAULT_ITERATIONS: usize = 64;
 const MAX_SIGNED_ATOMIC_SWAP_JSON_BYTES: usize = 64 * 1024;
@@ -148,6 +153,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             fuzz_network_frame(iterations)?,
             fuzz_network_faults(iterations)?,
             fuzz_bridge_attestation(iterations)?,
+            fuzz_bridge_proof_parser(iterations)?,
             fuzz_bridge_supply_invariants(iterations)?,
             fuzz_shielded_nullifier_invariants(iterations)?,
             fuzz_orchard_parser(iterations)?,
@@ -155,6 +161,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             fuzz_proof_adapter(iterations)?,
             fuzz_nav_reserve_public_values(iterations)?,
             fuzz_nav_reserve_submit_operation(iterations)?,
+            fuzz_consensus_round_monotonicity(iterations)?,
         ],
         "transaction-codec" => vec![fuzz_transaction_codec(iterations)?],
         "atomic-swap-codec" => vec![fuzz_atomic_swap_codec(iterations)?],
@@ -171,6 +178,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         "network-frame" => vec![fuzz_network_frame(iterations)?],
         "network-faults" => vec![fuzz_network_faults(iterations)?],
         "bridge-attestation" => vec![fuzz_bridge_attestation(iterations)?],
+        "bridge-proof-parser" => vec![fuzz_bridge_proof_parser(iterations)?],
         "bridge-supply-invariants" => vec![fuzz_bridge_supply_invariants(iterations)?],
         "shielded-nullifier-invariants" => {
             vec![fuzz_shielded_nullifier_invariants(iterations)?]
@@ -183,6 +191,9 @@ fn run() -> Result<(), Box<dyn Error>> {
         "nav-reserve-public-values" => vec![fuzz_nav_reserve_public_values(iterations)?],
         "nav-reserve-submit-operation" => {
             vec![fuzz_nav_reserve_submit_operation(iterations)?]
+        }
+        "consensus-round-monotonicity" => {
+            vec![fuzz_consensus_round_monotonicity(iterations)?]
         }
         other => return Err(format!("unknown fuzz target `{other}`").into()),
     };
@@ -2987,6 +2998,185 @@ fn fuzz_nav_reserve_submit_operation(
                 }
             }
             Err(_) => report.record_parse(false),
+        }
+    }
+    Ok(report)
+}
+
+fn fuzz_bridge_proof_parser(iterations: usize) -> Result<FuzzTargetReport, Box<dyn Error>> {
+    let emitter = [0x11; 20];
+    let topic = [0x22; 32];
+    let data = [0x33; 96];
+    let log = fuzz_rlp_list(&[
+        fuzz_rlp_bytes(&emitter),
+        fuzz_rlp_list(&[fuzz_rlp_bytes(&topic)]),
+        fuzz_rlp_bytes(&data),
+    ]);
+    let receipt = fuzz_rlp_list(&[
+        fuzz_rlp_bytes(&[1]),
+        fuzz_rlp_bytes(&[1]),
+        fuzz_rlp_bytes(&[0; 256]),
+        fuzz_rlp_list(&[log]),
+    ]);
+    let mut report = FuzzTargetReport::new(
+        "bridge-proof-parser",
+        iterations,
+        iterations.saturating_add(3),
+    );
+
+    for candidate in mutated_inputs(&receipt, iterations) {
+        let leaf = fuzz_rlp_list(&[fuzz_rlp_bytes(&[0x20, 0x80]), fuzz_rlp_bytes(&candidate)]);
+        let root: [u8; 32] = Keccak256::digest(&leaf).into();
+        let proof = EthereumReceiptProofV1 {
+            transaction_index: 0,
+            receipt_rlp: candidate.clone(),
+            proof_nodes_rlp: vec![leaf],
+        };
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            verify_ethereum_receipt_log(root, &proof, 0)
+        }));
+        report.assert_invariant(outcome.is_ok());
+        if let Ok(parsed) = outcome {
+            report.record_parse(parsed.is_ok());
+            if candidate == receipt {
+                let verified = parsed.expect("valid receipt proof seed");
+                report.assert_invariant(verified.emitter == emitter);
+                report.assert_invariant(verified.topics == vec![topic]);
+                report.assert_invariant(verified.data == data);
+            }
+        }
+    }
+
+    let oversized_receipt = EthereumReceiptProofV1 {
+        transaction_index: 0,
+        receipt_rlp: vec![0; 1024 * 1024 + 1],
+        proof_nodes_rlp: vec![vec![0xc0]],
+    };
+    let oversized_result = verify_ethereum_receipt_log([0; 32], &oversized_receipt, 0);
+    report.record_parse(oversized_result.is_ok());
+    report.assert_invariant(oversized_result.is_err());
+
+    let too_many_nodes = EthereumReceiptProofV1 {
+        transaction_index: 0,
+        receipt_rlp: vec![0xc0],
+        proof_nodes_rlp: vec![vec![0xc0]; 65],
+    };
+    let node_result = verify_ethereum_receipt_log([0; 32], &too_many_nodes, 0);
+    report.record_parse(node_result.is_ok());
+    report.assert_invariant(node_result.is_err());
+    Ok(report)
+}
+
+fn fuzz_rlp_bytes(bytes: &[u8]) -> Vec<u8> {
+    if bytes.len() == 1 && bytes[0] <= 0x7f {
+        return bytes.to_vec();
+    }
+    if bytes.len() < 56 {
+        let mut encoded = vec![0x80 + bytes.len() as u8];
+        encoded.extend_from_slice(bytes);
+        return encoded;
+    }
+    let length = fuzz_rlp_length(bytes.len());
+    let mut encoded = vec![0xb7 + length.len() as u8];
+    encoded.extend_from_slice(&length);
+    encoded.extend_from_slice(bytes);
+    encoded
+}
+
+fn fuzz_rlp_list(items: &[Vec<u8>]) -> Vec<u8> {
+    let payload = items.concat();
+    if payload.len() < 56 {
+        let mut encoded = vec![0xc0 + payload.len() as u8];
+        encoded.extend_from_slice(&payload);
+        return encoded;
+    }
+    let length = fuzz_rlp_length(payload.len());
+    let mut encoded = vec![0xf7 + length.len() as u8];
+    encoded.extend_from_slice(&length);
+    encoded.extend_from_slice(&payload);
+    encoded
+}
+
+fn fuzz_rlp_length(length: usize) -> Vec<u8> {
+    let bytes = length.to_be_bytes();
+    bytes[bytes
+        .iter()
+        .position(|byte| *byte != 0)
+        .unwrap_or(bytes.len() - 1)..]
+        .to_vec()
+}
+
+fn fuzz_consensus_round_monotonicity(
+    iterations: usize,
+) -> Result<FuzzTargetReport, Box<dyn Error>> {
+    let key_pair = ml_dsa_65_keygen()?;
+    let validators = ConsensusV2ValidatorSet::try_new(vec![ConsensusV2Validator {
+        validator_id: "validator-fuzz".to_string(),
+        public_key_hex: bytes_to_hex(&key_pair.public_key),
+    }])?;
+    let domain = consensus_v2_domain(
+        "postfiat-fuzz-consensus",
+        "11".repeat(48),
+        1,
+        1,
+        &validators,
+    );
+    let mut report = FuzzTargetReport::new("consensus-round-monotonicity", iterations, iterations);
+
+    for index in 0..iterations {
+        let mut state = initial_consensus_v2_safety_state(&domain, 1)?;
+        let prepare_view = (index.wrapping_mul(17).wrapping_add(3) % 32) as u64;
+        let precommit_view = (index.wrapping_mul(29).wrapping_add(5) % 32) as u64;
+        let timeout_view = (index.wrapping_mul(43).wrapping_add(7) % 32) as u64;
+        if index & 1 != 0 {
+            state.highest_prepare_round = Some(ConsensusV2Round {
+                height: 1,
+                view: prepare_view,
+            });
+        }
+        if index & 2 != 0 {
+            state.highest_precommit_round = Some(ConsensusV2Round {
+                height: 1,
+                view: precommit_view,
+            });
+        }
+        if index & 4 != 0 {
+            state.highest_timeout_round = Some(ConsensusV2Round {
+                height: 1,
+                view: timeout_view,
+            });
+        }
+        let attempted = ConsensusV2Round {
+            height: 1,
+            view: (index.wrapping_mul(61).wrapping_add(11) % 32) as u64,
+        };
+        let prior_rounds = [
+            state.highest_prepare_round,
+            state.highest_precommit_round,
+            state.highest_timeout_round,
+        ];
+        let cross_phase_ok = prior_rounds
+            .into_iter()
+            .flatten()
+            .all(|prior| prior <= attempted);
+        let same_phase_ok = state
+            .highest_timeout_round
+            .is_none_or(|prior| prior < attempted);
+        let expected_accept = cross_phase_ok && same_phase_ok;
+        let result = authorize_consensus_v2_timeout_vote(
+            &state,
+            &domain,
+            &validators,
+            attempted,
+            None,
+            &ConsensusV2QcGraph::default(),
+        );
+        report.record_parse(result.is_ok());
+        report.assert_invariant(result.is_ok() == expected_accept);
+        if let Ok(next) = result {
+            report.assert_invariant(next.highest_timeout_round == Some(attempted));
+            report.assert_invariant(next.highest_prepare_round == state.highest_prepare_round);
+            report.assert_invariant(next.highest_precommit_round == state.highest_precommit_round);
         }
     }
     Ok(report)
