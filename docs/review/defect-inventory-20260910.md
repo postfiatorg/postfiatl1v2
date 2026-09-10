@@ -1,7 +1,7 @@
 # QA defect inventory — 2026-09-10
 
-Status: initial inventory; campaign findings will be appended before the final
-Text Improvement Harness gate.
+Status: final reconciled inventory. Its exact-byte Text Improvement Harness
+result is recorded in the [campaign log](qa-campaign-20260910.md).
 
 This inventory separates demonstrated failures from missing evidence, operating
 assumptions, and capabilities that have not been built or activated. A
@@ -18,16 +18,16 @@ must not be described as shipped or authoritative.
 | ARC-02 | Reproduced defect | P1 | Fixed — `dbc73fea` | [Arc review](arc-facing-review-20260910.md#2-p1--the-top-level-mainnet-round-trip-command-mutates-live-systems-without-an-execution-interlock): invoking the shell entrypoint entered live setup without an explicit execution ceremony. |
 | ARC-03 | Reproduced defect | P3 | Open | [Arc review](arc-facing-review-20260910.md#3-p3--the-dedicated-ethereum-mainnet-ingress-guest-carries-a-stale-fulu-epoch-pin): the dedicated ingress pin is 411648 while the shared path and retained program identity use 411392. Frozen guest artifacts were not regenerated. |
 | RPC-01 | Reproduced defect | P1 | Open; diagnosed, not repaired | [Read-only validator-0 diagnosis](../status/chain-state-current.md#validator-0-rpc-diagnosis-20260910): the deployed RPC reached its 10,000-connection ceiling with a keep-alive connection still active, stopped accepting, and remained systemd-active while new health reads timed out. |
-| CS-01 | Reproduced defect | P1 | Fixed in the A2 repair | [Consensus and storage review](consensus-storage-review-20260910.md#1-p1--consensus-authorization-and-signature-emission-are-separated-by-an-unlocked-race-window): a lower-view call could persist authorization, lose the safety guard to a higher-view call, and emit its signature only after the durable round floor advanced. Signing now completes under the guard. |
-| CS-02 | Reproduced defect | P2 | Fixed in the A2 repair | [Consensus and storage review](consensus-storage-review-20260910.md#2-p2--activated-yolo-registrations-can-grow-consensus-state-without-a-bound-or-state-expansion-charge): distinct YOLO registrations appended to committed validator state without a count bound or state-expansion fee. Both row classes are now capped and charged. |
-| WRS-01 | Reproduced defect | P1 | Fixed in the A3 repair | [Wallet/proxy/RPC SDK review](wallet-proxy-rpc-sdk-review-20260910.md#1-p1--transfer-quote-signing-trusts-an-rpc-selected-recipient-and-amount): the transfer signer sourced recipient and amount from an untrusted quote without binding the reviewed request. |
-| WRS-02 | Reproduced defect | P1 | Fixed in the A3 repair | [Wallet/proxy/RPC SDK review](wallet-proxy-rpc-sdk-review-20260910.md#2-p1--the-loopback-session-token-endpoint-accepts-a-dns-rebinding-host): a same-origin rebinding Host could satisfy the loopback token endpoint and receive its bearer credential. |
-| WRS-03 | Reproduced defect | P2 | Fixed in the A3 repair | [Wallet/proxy/RPC SDK review](wallet-proxy-rpc-sdk-review-20260910.md#3-p2--websocket-mutation-admission-releases-the-process-wide-slot-before-work-starts): WebSocket mutations released shared concurrency admission before routing or upstream I/O. |
-| WRS-04 | Reproduced defect | P2 | Fixed for new vaults in the A3 repair; legacy vaults remain readable | [Wallet/proxy/RPC SDK review](wallet-proxy-rpc-sdk-review-20260910.md#4-p2--the-maintained-extension-permits-cheaply-brute-forced-new-vaults): four-character extension passphrases under the 100,000-iteration vault format permit cheap offline recovery after profile theft. |
-| WRS-05 | Reproduced defect | P2 | Fixed in the A3 repair | [Wallet/proxy/RPC SDK review](wallet-proxy-rpc-sdk-review-20260910.md#5-p2--the-extension-popup-is-invalid-as-a-browser-module): an unmatched brace caused Chrome's module parser to reject the maintained extension popup while the Node syntax gate missed it. |
-| UNL-01 | Reproduced defect | P1 | Fixed in the A5 repair | [Task Node UNL review](tasknode-unl-review-20260910.md#1-p1--a-complete-score-window-passes-without-a-renewed-vouch-or-post-epoch-co-work): accounts with no bilateral records return `READY` after score-only continuity. |
-| UNL-02 | Reproduced defect | P2 | Fixed in the A5 repair | [Task Node UNL review](tasknode-unl-review-20260910.md#2-p2--a-stale-score-replay-can-suppress-fresh-score-evidence-by-input-order): stale-first and fresh-first orderings of the same digest produce different continuity decisions. |
-| UNL-03 | Reproduced defect | P2 | Fixed in the A5 repair | [Task Node UNL review](tasknode-unl-review-20260910.md#3-p2--valid-identifiers-can-inject-markdown-structure-into-the-operator-report): an accepted newline/backtick identifier creates an attacker-chosen heading in the root-valid human report. |
+| CS-01 | Reproduced defect | P1 | Fixed — `f9f13ead` | [Consensus and storage review](consensus-storage-review-20260910.md#1-p1--consensus-authorization-and-signature-emission-are-separated-by-an-unlocked-race-window): a lower-view call could persist authorization, lose the safety guard to a higher-view call, and emit its signature only after the durable round floor advanced. Signing now completes under the guard. |
+| CS-02 | Reproduced defect | P2 | Fixed — `f9f13ead` | [Consensus and storage review](consensus-storage-review-20260910.md#2-p2--activated-yolo-registrations-can-grow-consensus-state-without-a-bound-or-state-expansion-charge): distinct YOLO registrations appended to committed validator state without a count bound or state-expansion fee. Both row classes are now capped and charged. |
+| WRS-01 | Reproduced defect | P1 | Fixed — `83488d91` | [Wallet/proxy/RPC SDK review](wallet-proxy-rpc-sdk-review-20260910.md#1-p1--transfer-quote-signing-trusts-an-rpc-selected-recipient-and-amount): the transfer signer sourced recipient and amount from an untrusted quote without binding the reviewed request. |
+| WRS-02 | Reproduced defect | P1 | Fixed — `83488d91` | [Wallet/proxy/RPC SDK review](wallet-proxy-rpc-sdk-review-20260910.md#2-p1--the-loopback-session-token-endpoint-accepts-a-dns-rebinding-host): a same-origin rebinding Host could satisfy the loopback token endpoint and receive its bearer credential. |
+| WRS-03 | Reproduced defect | P2 | Fixed — `83488d91` | [Wallet/proxy/RPC SDK review](wallet-proxy-rpc-sdk-review-20260910.md#3-p2--websocket-mutation-admission-releases-the-process-wide-slot-before-work-starts): WebSocket mutations released shared concurrency admission before routing or upstream I/O. |
+| WRS-04 | Reproduced defect | P2 | Fixed for new vaults — `83488d91`; legacy vaults remain readable | [Wallet/proxy/RPC SDK review](wallet-proxy-rpc-sdk-review-20260910.md#4-p2--the-maintained-extension-permits-cheaply-brute-forced-new-vaults): four-character extension passphrases under the 100,000-iteration vault format permit cheap offline recovery after profile theft. |
+| WRS-05 | Reproduced defect | P2 | Fixed — `83488d91` | [Wallet/proxy/RPC SDK review](wallet-proxy-rpc-sdk-review-20260910.md#5-p2--the-extension-popup-is-invalid-as-a-browser-module): an unmatched brace caused Chrome's module parser to reject the maintained extension popup while the Node syntax gate missed it. |
+| UNL-01 | Reproduced defect | P1 | Fixed — `1c10f828` | [Task Node UNL review](tasknode-unl-review-20260910.md#1-p1--a-complete-score-window-passes-without-a-renewed-vouch-or-post-epoch-co-work): accounts with no bilateral records return `READY` after score-only continuity. |
+| UNL-02 | Reproduced defect | P2 | Fixed — `1c10f828` | [Task Node UNL review](tasknode-unl-review-20260910.md#2-p2--a-stale-score-replay-can-suppress-fresh-score-evidence-by-input-order): stale-first and fresh-first orderings of the same digest produce different continuity decisions. |
+| UNL-03 | Reproduced defect | P2 | Fixed — `1c10f828` | [Task Node UNL review](tasknode-unl-review-20260910.md#3-p2--valid-identifiers-can-inject-markdown-structure-into-the-operator-report): an accepted newline/backtick identifier creates an attacker-chosen heading in the root-valid human report. |
 | UNL-04 | Reproduced defect | P3 | Open; recorded, not fixed | [Task Node UNL review](tasknode-unl-review-20260910.md#4-p3--the-hypothetical-round-helper-accepts-a-report-that-is-not-bound-to-its-frozen-window): an in-memory report candidate replacement bypasses a saturated-group hold in caller-owned hypothetical state. |
 
 ## Storage, Cobalt, and Task Node review
@@ -44,7 +44,7 @@ The source is the historical [2026-09-06 review](https://github.com/postfiatorg/
 | SCT-06 | Economic assumption | P2 | Open | The bounded lease qualification assumes serialized, operator-driven blocks; sustained overlapping public-network operations and writer fairness have not been qualified. |
 | SCT-07 | Evidence gap | P3 | Open | The review measured the local build filesystem at 96% used but did not inventory validator-fleet disk capacity. |
 | SCT-08 | Evidence gap | P2 | Open | The real-data Task Node replay lacks complete signed bindings, publisher-attested work digests, exclusions, remaining admission facts, and a native L1 registry-root binding. |
-| SCT-09 | Proposed capability | P2 | Open | The September 3 model-flag direction and Admission Policy V1 have different eligibility semantics and no selected versioned successor policy. |
+| SCT-09 | Proposed capability | P2 | Dispositioned by the locked V2 shadow successor; not promoted | The September 3 model-flag direction and Admission Policy V1 had different eligibility semantics and no selected versioned successor policy. The [V2 milestone](../plans/completed/tasknode-unl-amendment-v2-milestone.md) now implements that successor as `SHADOW_ONLY`; this is not live adoption. |
 | SCT-10 | Proposed capability | P2 | Open | An independently operated end-to-end Task Node proposal and Cobalt ratification rehearsal remains unperformed; Foundation-controlled nodes do not establish independent operation. |
 
 ## StakeHub PR #8 review
@@ -109,10 +109,50 @@ and its frozen [qualification receipt](https://github.com/postfiatorg/postfiatl1
 | SQ-05 | Evidence gap | P1 | Dispositioned for current state; see RPC-01 | Validator-0 now answers at the same height and root previously observed on validators 1–5 after an out-of-campaign restart. This does not repair the diagnosed recurrence condition or replace a current simultaneous all-six rehearsal. |
 | SQ-06 | Proposed capability | P1 | Open | Fix `bbb291ce` passes focused source tests but is absent from the fleet; a lineage-preserving, reproducible, current-state-qualified rollout remains unperformed and unauthorized. |
 
-## Initial disposition
+## Final disposition
 
-The working inventory currently contains 61 rows: 35 reproduced defects, 21
-evidence gaps, one economic assumption, and four proposed capabilities.
-These counts will be recalculated after the remaining campaign surfaces.
-No open item in this document authorizes a deployment, chain action, or
-StakeHub change.
+The inventory contains 61 unique rows. Classification and severity describe
+what the cited evidence establishes; status describes the bounded disposition
+in that row, not a broader production claim.
+
+| Measure | Count |
+| --- | ---: |
+| Reproduced defects | 35 |
+| Evidence gaps | 21 |
+| Economic assumptions | 1 |
+| Proposed capabilities | 4 |
+| P1 | 19 |
+| P2 | 30 |
+| P3 | 12 |
+| Fixed | 26 |
+| Dispositioned | 16 |
+| Open | 19 |
+
+The nineteen open rows comprise eight P1s, eight P2s, and three P3s. The open
+P1 set is `RPC-01`, `SH-10`, `PI-18`, and `SQ-01` through `SQ-04` plus
+`SQ-06`. It keeps validator-0's connection exhaustion, the unpublished
+StakeHub release-reuse defect, A666 production qualification, and every named
+signing-fix deployment blocker explicit. No row authorizes a deployment,
+live-chain action, Task Node action, or StakeHub write.
+
+“Fixed” remains scoped by the row. In particular, StakeHub fixes are local and
+unpublished, the Arc controller migration remains operational work, V2 remains
+`SHADOW_ONLY`, and the fleet still does not run the signing fix. “Dispositioned”
+means the cited concern was classified or bounded; it does not imply that a
+proposed capability was promoted.
+
+## Completeness audit
+
+| Source set | Rows |
+| --- | ---: |
+| 2026-09-10 campaign findings | 15 |
+| 2026-09-06 storage, Cobalt, and Task Node review | 10 |
+| StakeHub PR #8 and current fix-branch reviews | 12 |
+| Proof-input review | 18 |
+| Signing-fix qualification blockers | 6 |
+| **Total** | **61** |
+
+Campaign review and repair commits are recorded in the
+[campaign log](qa-campaign-20260910.md). The inventory preserves open design,
+evidence, and operational limits rather than converting them into code defects
+or claims of authority.
