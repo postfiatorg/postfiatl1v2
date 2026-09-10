@@ -6,8 +6,8 @@ This is the canonical progress record for the [2026-09-10 QA campaign](qa-campai
 
 | Order | Surface | Status | P1 | P2 | P3 | Evidence or fix commits |
 | --- | --- | --- | ---: | ---: | ---: | --- |
-| A1 | Arc-facing code | done | 2 | 0 | 1 | [Findings](arc-facing-review-20260910.md) `1c67ec07`; repair in this commit |
-| D | Bounded whitepaper corrections | pending | — | — | — | Pending |
+| A1 | Arc-facing code | done | 2 | 0 | 1 | [Findings](arc-facing-review-20260910.md) `1c67ec07`; repair `dbc73fea` |
+| D | Bounded whitepaper corrections | done | — | — | — | Candidate `6fbcee8e…`; 85.47; not promoted |
 | B1 | Initial defect inventory | pending | — | — | — | Pending |
 | C | Validator-0 RPC diagnosis | pending | — | — | — | Pending |
 | A2 | Consensus and storage | pending | 0 | 0 | 0 | Pending |
@@ -19,8 +19,8 @@ This is the canonical progress record for the [2026-09-10 QA campaign](qa-campai
 Three Arc-facing findings are recorded. Both P1 source defects are repaired and
 their focused gates pass; the deployed immutable V2 controller was not changed,
 so route migration remains an open operational requirement. The P3 fork-schedule
-inconsistency is recorded without fixture or golden regeneration. No score has
-yet been recorded.
+inconsistency is recorded without fixture or golden regeneration. The bounded
+whitepaper candidate scored 85.47 and was not promoted.
 
 ## Completed units
 
@@ -29,6 +29,18 @@ yet been recorded.
   the consume fence, and the live round-trip entrypoint requires two explicit
   execution acknowledgements. Verification: contracts 9/9 focused and 148/148
   local non-fork, Rust 38/38 + 195/195 + 5/5, interlock 2/2, strict Clippy pass.
+- Bounded whitepaper correction completed. Candidate
+  `/home/postfiatchad/pastedocs/.qa-campaign-whitepaper-20260910/candidate.md`
+  changes only the abstract's question count and the source-backed consensus
+  signing status. SHA-256: `6fbcee8ebeed6eb255247fecd23836fd4bb564d4ea560d9d5c561b3da14aef8f`.
+  Full TIH run group `qa-bounded-whitepaper-6fbcee8e-20260910` used five reviews
+  each from `openai/gpt-6-astra-pro`, `anthropic/claude-fable-5.1`, and
+  `z-ai/glm-5.3`, temperature 0, 8,000 maximum response tokens, and the prompt
+  `Rate this document on a scale of 1-100. Output the score and your reasoning.`
+  GPT averaged 87.20 (87–88), Fable 85.60 (84–87), and GLM 83.60 (81–88), for
+  85.47 across 15 fresh reviews. Because 85.47 does not strictly exceed 87.13,
+  neither the published paper nor its Markdown download was changed; both
+  remain SHA-256 `28f004a6a0e08a87561e62d14ace6a87659718c4845feba21eb468b3fe314202`.
 
 ## Skips and boundary decisions
 
