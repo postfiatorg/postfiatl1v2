@@ -51,15 +51,18 @@ review verifies the local fix branch.
 
 | ID | Classification | Severity | Status | Source and reproduction |
 | --- | --- | --- | --- | --- |
-| SH-01 | Reproduced defect | P1 | Open | A daemon `policy_denied` response fell through to direct passphrase signing that did not apply the denied destination or cap policy. |
-| SH-02 | Reproduced defect | P1 | Open | New deploy, probe, funding, governance, finality, and fleet scripts entered live paths merely by invocation, without a live flag and intent-bound confirmation. |
-| SH-03 | Reproduced defect | P1 | Open | Ordinary exceptions and proposer changes could skip cleanup after wallet keys or private note openings were copied to validators. |
-| SH-04 | Reproduced defect | P2 | Open | The private-egress runner accepted an unrelated height advance and any matching numeric asset balance as success. |
-| SH-05 | Reproduced defect | P2 | Open | The NAVCoin deposit path hardcoded one public Ethereum RPC for preflight and submission, with no policy-pinned override. |
-| SH-06 | Reproduced defect | P2 | Open | An untested agent operation could irreversibly register a Hyperliquid referral with the master EVM key and no dedicated authorization ceremony. |
-| SH-07 | Evidence gap | P2 | Open | The root evidence manifest depended on sixteen A666 lineage files absent from both reviewed target branches. |
-| SH-08 | Reproduced defect | P2 | Open | One handoff said the recovery archive was outside Git while PR #8 committed the archive, ELFs, witnesses, and historical scripts. |
-| SH-09 | Reproduced defect | P3 | Open | Exact integer withdrawal amounts crossed binary floating point before venue signing; tests covered only exactly representable small amounts. |
+| SH-01 | Reproduced defect | P1 | Fixed in the local, uncommitted StakeHub repair set; not published | A daemon `policy_denied` response fell through to direct passphrase signing that did not apply the denied destination or cap policy. The [read-only branch review](stakehub-fix-branch-review-20260910.md) verified the fallback removal. |
+| SH-02 | Reproduced defect | P1 | Fixed for the reviewed scripts in the local, uncommitted repair set; not published | New deploy, probe, funding, governance, finality, and fleet scripts entered live paths merely by invocation, without a live flag and intent-bound confirmation. |
+| SH-03 | Reproduced defect | P1 | Dispositioned in the local, uncommitted repair set; retained custody limits; not published | Ordinary exceptions and proposer changes could skip cleanup after wallet keys or private note openings were copied to validators. Cleanup is now failure-visible, while SIGKILL, partitions, snapshots, and compromised hosts remain unresolved by design. |
+| SH-04 | Reproduced defect | P2 | Fixed for private egress in the local, uncommitted repair set; not published | The private-egress runner accepted an unrelated height advance and any matching numeric asset balance as success. |
+| SH-05 | Reproduced defect | P2 | Fixed in the local, uncommitted repair set; operator-selected RPC remains a trust boundary; not published | The NAVCoin deposit path hardcoded one public Ethereum RPC for preflight and submission, with no policy-pinned override. |
+| SH-06 | Reproduced defect | P2 | Dispositioned by disabling the operation in the local, uncommitted repair set; not published | An untested agent operation could irreversibly register a Hyperliquid referral with the master EVM key and no dedicated authorization ceremony. |
+| SH-07 | Evidence gap | P2 | Dispositioned as cross-repository evidence; publication remains open | The root evidence manifest depended on sixteen A666 lineage files absent from both reviewed target branches. |
+| SH-08 | Reproduced defect | P2 | Fixed in the local, uncommitted documentation repair; not published | One handoff said the recovery archive was outside Git while PR #8 committed the archive, ELFs, witnesses, and historical scripts. |
+| SH-09 | Reproduced defect | P3 | Fixed conservatively in the local, uncommitted repair set; not published | Exact integer withdrawal amounts crossed binary floating point before venue signing; tests covered only exactly representable small amounts. |
+| SH-10 | Reproduced defect | P1 | Open in the StakeHub lane | [Read-only branch review](stakehub-fix-branch-review-20260910.md#1-p1--release-reuse-can-overwrite-an-active-release-before-promotion): release reuse can copy configuration directly into an active release directory before aggregate verification or promotion. |
+| SH-11 | Reproduced defect | P2 | Open in the StakeHub lane | [Read-only branch review](stakehub-fix-branch-review-20260910.md#2-p2--shielding-records-success-from-an-unbound-runner-flag): shielding persists success from `round_ok` without the exact certified-batch contract used by private egress. |
+| SH-12 | Reproduced defect | P2 | Open in the StakeHub lane | [Read-only branch review](stakehub-fix-branch-review-20260910.md#3-p2--route-activation-can-confuse-fleet-height-with-exact-batch-success): route activation combines an unbound runner flag with fleet height, neither of which proves application of the intended amendment. |
 
 ## Proof-input review
 
@@ -104,7 +107,7 @@ and its frozen [qualification receipt](https://github.com/postfiatorg/postfiatl1
 
 ## Initial disposition
 
-The working inventory currently contains 54 rows: 28 reproduced defects, 21
+The working inventory currently contains 57 rows: 31 reproduced defects, 21
 evidence gaps, one economic assumption, and four proposed capabilities.
 These counts will be recalculated after the remaining campaign surfaces.
 No open item in this document authorizes a deployment, chain action, or

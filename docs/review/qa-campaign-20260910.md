@@ -8,11 +8,11 @@ This is the canonical progress record for the [2026-09-10 QA campaign](qa-campai
 | --- | --- | --- | ---: | ---: | ---: | --- |
 | A1 | Arc-facing code | done | 2 | 0 | 1 | [Findings](arc-facing-review-20260910.md) `1c67ec07`; repair `dbc73fea` |
 | D | Bounded whitepaper corrections | done | — | — | — | Candidate `6fbcee8e…`; 85.47; not promoted |
-| B1 | Initial defect inventory | done | — | — | — | [Inventory](defect-inventory-20260910.md); 46 initial, 49 current rows |
+| B1 | Initial defect inventory | done | — | — | — | [Inventory](defect-inventory-20260910.md); 46 initial, 57 current rows |
 | C | Validator-0 RPC diagnosis | done | 1 | 0 | 0 | Root cause recorded in [chain state](../status/chain-state-current.md#validator-0-rpc-diagnosis-20260910) |
 | A2 | Consensus and storage | done | 1 | 1 | 0 | [Findings and repair evidence](consensus-storage-review-20260910.md) |
 | A3 | Wallet, proxy, and RPC SDK | done | 2 | 3 | 0 | [Findings and repair evidence](wallet-proxy-rpc-sdk-review-20260910.md) |
-| A4 | StakeHub `fix/pr8-safety-20260907` | pending | 0 | 0 | 0 | Read-only review only |
+| A4 | StakeHub `fix/pr8-safety-20260907` | done | 1 | 2 | 0 | [Read-only findings](stakehub-fix-branch-review-20260910.md) |
 | A5 | Task Node UNL V1 and V2 modules | pending | 0 | 0 | 0 | Pending |
 | B2 | Final defect inventory and TIH gate | pending | — | — | — | Pending |
 
@@ -80,6 +80,13 @@ whitepaper candidate scored 85.47 and was not promoted.
   module. Post-repair results: proxy 36/36, web wallet 260/260, extension 2/2,
   Python wallet/latency 79/79, Rust RPC SDK/WASM 69/69, node integration compile
   pass, and strict focused Clippy pass.
+- StakeHub `fix/pr8-safety-20260907` review completed without changing,
+  committing, fetching, or pushing its pre-existing dirty checkout. The 105
+  focused local safety tests pass and leave its status unchanged. The repair set
+  closes or explicitly dispositions the original nine PR findings, but this
+  fresh pass found one P1 release-reuse hazard and two P2 non-causal batch
+  success checks. All three remain open for the StakeHub lane; this campaign
+  made no fix there.
 
 ## Skips and boundary decisions
 
@@ -93,6 +100,10 @@ whitepaper candidate scored 85.47 and was not promoted.
 - The dedicated mainnet ingress Fulu-epoch inconsistency is P3, so this campaign
   records but does not alter its guest source, ELF, program key, or frozen
   deployment evidence.
+- StakeHub review was read-only. Its branch, uncommitted repair set, archive,
+  working files, remotes, and original checkout were not changed. Focused tests
+  disabled bytecode and pytest cache writes and produced identical pre/post
+  porcelain status.
 
 ## Verification
 
