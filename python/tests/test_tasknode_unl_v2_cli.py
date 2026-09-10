@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import subprocess
@@ -61,9 +62,9 @@ class TestV2CliDerivation(unittest.TestCase):
             report["overall_status"],
             "SHADOW_ONLY_WITH_UNRESOLVED_IDENTITY_LIMITS",
         )
-        self.assertEqual(report["evidence_status"], "verified")
+        self.assertEqual(report["evidence_status"], "verified_with_holds")
         self.assertEqual(report["frozen_status"], "FROZEN")
-        self.assertEqual(len(report["continuity_holds"]), 1)
+        self.assertEqual(len(report["continuity_holds"]), 2)
         self.assertEqual(len(report["admission_denials"]), 2)
         self.assertEqual(len(report["existing_breaches"]), 1)
         self.assertEqual(
@@ -92,7 +93,7 @@ class TestV2CliDerivation(unittest.TestCase):
         report = json.loads(first)
         self.assertEqual(
             report["report_root"],
-            "b7742613b99021988205e3b8a3f2d127b90d33f1b0ed1b495cdd0d790ea198fc",
+            "12cef76c1bb3456bca10de84fc0f140e298a95e7454417b1980c0f1c1dedd7c6",
         )
 
     def test_bad_snapshot_commitment_fails_closed_to_no_proposal(self) -> None:
@@ -124,6 +125,28 @@ class TestV2CliDerivation(unittest.TestCase):
         admission["nodes"] = [f"account-{index}" for index in range(MAX_RECORDS + 1)]
         with self.assertRaisesRegex(TaskNodeUnlError, "array_too_large"):
             derive_v2_cli_report(self.evidence, admission)
+
+    def test_markdown_escapes_valid_identifier_structure(self) -> None:
+        admission = copy.deepcopy(self.admission)
+        injected = "validator-carol`\n# FORGED AUTHORITY"
+        admission["candidates"][1]["validator_id"] = injected
+        admission["v1_reference"]["candidates"][1]["validator_id"] = injected
+        reference = admission["v1_reference"]
+        payload = {
+            key: reference[key]
+            for key in ("schema", "policy_id", "candidates")
+        }
+        reference["reference_root"] = hashlib.sha256(
+            b"postfiat/tasknode-unl-v2/v1-reference-root/v2\x00"
+            + canonical_json_bytes(payload)
+        ).hexdigest()
+
+        markdown = render_v2_markdown(
+            derive_v2_cli_report(self.evidence, admission)
+        )
+
+        self.assertNotIn("\n# FORGED AUTHORITY", markdown)
+        self.assertIn("\\n# FORGED AUTHORITY", markdown)
 
 
 class TestV2ActualCli(unittest.TestCase):

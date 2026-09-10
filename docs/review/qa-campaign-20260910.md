@@ -8,12 +8,12 @@ This is the canonical progress record for the [2026-09-10 QA campaign](qa-campai
 | --- | --- | --- | ---: | ---: | ---: | --- |
 | A1 | Arc-facing code | done | 2 | 0 | 1 | [Findings](arc-facing-review-20260910.md) `1c67ec07`; repair `dbc73fea` |
 | D | Bounded whitepaper corrections | done | — | — | — | Candidate `6fbcee8e…`; 85.47; not promoted |
-| B1 | Initial defect inventory | done | — | — | — | [Inventory](defect-inventory-20260910.md); 46 initial, 57 current rows |
+| B1 | Initial defect inventory | done | — | — | — | [Inventory](defect-inventory-20260910.md); 46 initial, 61 current rows |
 | C | Validator-0 RPC diagnosis | done | 1 | 0 | 0 | Root cause recorded in [chain state](../status/chain-state-current.md#validator-0-rpc-diagnosis-20260910) |
 | A2 | Consensus and storage | done | 1 | 1 | 0 | [Findings and repair evidence](consensus-storage-review-20260910.md) |
 | A3 | Wallet, proxy, and RPC SDK | done | 2 | 3 | 0 | [Findings and repair evidence](wallet-proxy-rpc-sdk-review-20260910.md) |
 | A4 | StakeHub `fix/pr8-safety-20260907` | done | 1 | 2 | 0 | [Read-only findings](stakehub-fix-branch-review-20260910.md) |
-| A5 | Task Node UNL V1 and V2 modules | fixing | 1 | 2 | 1 | [Findings](tasknode-unl-review-20260910.md) |
+| A5 | Task Node UNL V1 and V2 modules | done | 1 | 2 | 1 | [Findings and repair evidence](tasknode-unl-review-20260910.md) |
 | B2 | Final defect inventory and TIH gate | pending | — | — | — | Pending |
 
 Three Arc-facing findings are recorded. Both P1 source defects are repaired and
@@ -93,6 +93,14 @@ whitepaper candidate scored 85.47 and was not promoted.
   binding gap. Findings 1–3 proceed to a separate repair; the P3 remains
   recorded under the campaign rule. The 167-test plus 43-subtest pre-repair
   selection passed.
+- Task Node UNL repair completed. Fresh continuity now requires an incoming
+  renewed vouch and post-epoch co-work; historical score rows cannot suppress
+  fresh credit by ordering; and the human renderer makes untrusted fields
+  structurally inert. The evidence golden's signed input and snapshot remain
+  unchanged while its corrected expected result records two holds. The V1,
+  V2, and combined selections pass at 107 plus 36 subtests, 64 plus 10
+  subtests, and 171 plus 46 subtests, respectively. The shadow-helper P3 stays
+  open and all frozen experiment outputs remain untouched.
 
 ## Skips and boundary decisions
 

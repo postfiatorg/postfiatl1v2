@@ -1292,7 +1292,7 @@ def assess_fresh_window(
         item
         for item in active_relations
         if item.relation_kind == "vouch"
-        and epoch.account_id in (item.source_account, item.target_account)
+        and item.target_account == epoch.account_id
     )
     cowork = tuple(
         item
@@ -1309,6 +1309,10 @@ def assess_fresh_window(
         for kind in SCORE_EVIDENCE_KINDS
         if kind not in score_kinds
     )
+    if not vouches:
+        reasons.append("post_epoch_renewed_vouch_missing")
+    if not cowork:
+        reasons.append("post_epoch_cowork_missing")
     status = "HOLD_CONTINUITY" if reasons else "READY"
     return ContinuityAssessment(
         account_id=epoch.account_id,
@@ -1440,7 +1444,8 @@ def verify_evidence_snapshot(
 
     scores: list[_ScoreContext] = []
     historical_scores: list[Mapping[str, Any]] = []
-    seen_score_digests: set[tuple[str, str, str]] = set()
+    seen_historical_scores: set[bytes] = set()
+    seen_fresh_score_digests: set[tuple[str, str, str]] = set()
     for index, value in enumerate(evidence["score_evidence"]):
         try:
             score = _parse_score(value, index)
@@ -1450,20 +1455,23 @@ def verify_evidence_snapshot(
                     "score_account_unbound",
                     f"evidence.score_evidence[{index}].account_id",
                 )
-            duplicate_key = (
-                score.account_id,
-                score.evidence_kind,
-                score.evidence_digest,
-            )
-            if duplicate_key in seen_score_digests:
-                continue
-            seen_score_digests.add(duplicate_key)
             if (
                 score.control_epoch != binding.epoch
                 or score.evidence_at < binding.event_at
             ):
-                historical_scores.append(score.row)
+                historical_key = canonical_json_bytes(score.row)
+                if historical_key not in seen_historical_scores:
+                    seen_historical_scores.add(historical_key)
+                    historical_scores.append(score.row)
             else:
+                duplicate_key = (
+                    score.account_id,
+                    score.evidence_kind,
+                    score.evidence_digest,
+                )
+                if duplicate_key in seen_fresh_score_digests:
+                    continue
+                seen_fresh_score_digests.add(duplicate_key)
                 scores.append(score)
         except TaskNodeUnlError as error:
             rejection = _rejection("score_evidence", index, error, value)

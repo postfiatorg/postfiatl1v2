@@ -371,6 +371,36 @@ def _reason_text(reasons: Sequence[str]) -> str:
     return ",".join(reasons) if reasons else "no reasons"
 
 
+def _markdown_code(value: object) -> str:
+    """Render untrusted scalar text as one inert CommonMark code span."""
+
+    visible = "".join(
+        (
+            "\\n"
+            if character == "\n"
+            else "\\r"
+            if character == "\r"
+            else "\\t"
+            if character == "\t"
+            else f"\\u{ord(character):04x}"
+            if ord(character) < 32 or ord(character) == 127
+            else character
+        )
+        for character in str(value)
+    )
+    longest_run = 0
+    current_run = 0
+    for character in visible:
+        if character == "`":
+            current_run += 1
+            longest_run = max(longest_run, current_run)
+        else:
+            current_run = 0
+    fence = "`" * max(1, longest_run + 1)
+    padding = " " if visible.startswith("`") or visible.endswith("`") else ""
+    return f"{fence}{padding}{visible}{padding}{fence}"
+
+
 def derive_v2_cli_report(evidence_bundle: object, admission_input: object) -> dict[str, Any]:
     """Derive one canonical V1-reference/V2 comparison with no side effects."""
 
@@ -519,22 +549,33 @@ def render_v2_markdown(value: object) -> str:
         "",
         "**SHADOW_ONLY — decision support only; no submission, live mutation, or promotion is available.**",
         "",
-        f"Overall: `{report['overall_status']}`. This is not an all-green status.",
+        (
+            f"Overall: {_markdown_code(report['overall_status'])}. "
+            "This is not an all-green status."
+        ),
         "",
-        f"Version: `{report['version']}` · Policy: `{report['policy_id']}` · Report root: `{report['report_root']}`",
+        (
+            f"Version: {_markdown_code(report['version'])} · "
+            f"Policy: {_markdown_code(report['policy_id'])} · "
+            f"Report root: {_markdown_code(report['report_root'])}"
+        ),
         "",
         "## Side-by-side verdicts",
         "",
     ]
     comparisons = require_array(report["side_by_side"], "report.side_by_side", maximum=_MAX_CANDIDATES)
-    lines.extend(f"- `{item['verdict_line']}`" for item in comparisons)
+    lines.extend(
+        f"- {_markdown_code(item['verdict_line'])}" for item in comparisons
+    )
 
     lines.extend(("", "## HOLD_CONTINUITY", ""))
     holds = require_array(report["continuity_holds"], "report.continuity_holds", maximum=_MAX_CANDIDATES)
     if holds:
         lines.extend(
-            f"- `{item['validator_id']}` / `{item['account_id']}` — "
-            f"{_reason_text(item['reason_codes'])}; report `{item['report_root']}`"
+            f"- {_markdown_code(item['validator_id'])} / "
+            f"{_markdown_code(item['account_id'])} — "
+            f"{_markdown_code(_reason_text(item['reason_codes']))}; "
+            f"report {_markdown_code(item['report_root'])}"
             for item in holds
         )
     else:
@@ -544,8 +585,10 @@ def render_v2_markdown(value: object) -> str:
     denials = require_array(report["admission_denials"], "report.admission_denials", maximum=_MAX_CANDIDATES)
     if denials:
         lines.extend(
-            f"- `{item['validator_id']}` — `{item['action']}`: "
-            f"{_reason_text(item['reason_codes'])}; report `{item['report_root']}`"
+            f"- {_markdown_code(item['validator_id'])} — "
+            f"{_markdown_code(item['action'])}: "
+            f"{_markdown_code(_reason_text(item['reason_codes']))}; "
+            f"report {_markdown_code(item['report_root'])}"
             for item in denials
         )
     else:
@@ -555,9 +598,10 @@ def render_v2_markdown(value: object) -> str:
     breaches = require_array(report["existing_breaches"], "report.existing_breaches")
     if breaches:
         lines.extend(
-            f"- `{item['limit_kind']}` `{item['limit_id']}`: {item['excess_seats']} excess "
-            f"seat(s), review `{item['review_state']}`, evidence "
-            f"{_reason_text(item['causative_evidence'])}"
+            f"- {_markdown_code(item['limit_kind'])} {_markdown_code(item['limit_id'])}: "
+            f"{_markdown_code(item['excess_seats'])} excess seat(s), review "
+            f"{_markdown_code(item['review_state'])}, evidence "
+            f"{_markdown_code(_reason_text(item['causative_evidence']))}"
             for item in breaches
         )
     else:
@@ -576,7 +620,10 @@ def render_v2_markdown(value: object) -> str:
     roots = report["roots"]
     if not isinstance(roots, Mapping):
         raise TaskNodeUnlError("invalid_object", "report.roots")
-    lines.extend(f"- `{name}`: `{roots[name]}`" for name in sorted(roots))
+    lines.extend(
+        f"- {_markdown_code(name)}: {_markdown_code(roots[name])}"
+        for name in sorted(roots)
+    )
     lines.extend((
         "",
         "## Activation boundary",

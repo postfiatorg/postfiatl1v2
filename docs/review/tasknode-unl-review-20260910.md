@@ -99,3 +99,36 @@ fixed.
 That green baseline does not exercise the four adversarial cases above. The
 repair unit will add focused regressions for findings 1–3. Frozen V1 attack
 simulation and V2 gate outputs will remain byte-unchanged.
+
+## Repair
+
+The repair closes findings 1–3 without changing V1 or any live authority:
+
+- Continuity now requires at least one incoming post-epoch vouch and one
+  post-epoch co-work relation. An outgoing directed vouch does not endorse its
+  source. Missing relation classes produce named `HOLD_CONTINUITY` reasons,
+  and incumbent seats remain retained.
+- Historical rows are deduplicated only against identical historical rows.
+  Current-epoch score credit has its own duplicate set, so an old-epoch or
+  pre-event row cannot consume a fresh digest's credit.
+- The Markdown renderer replaces embedded control characters with visible
+  escapes and selects a backtick fence longer than any run in the untrusted
+  value. Dynamic verdicts, identifiers, reasons, roots, and limit fields are
+  rendered through that helper.
+
+The evidence golden was regenerated because the code defect changed the
+correct derived result: the unchanged signed snapshot now reports Alice and
+Carol as continuity holds because its only vouch is directed Alice-to-Bob and
+Carol has no co-work. The input root and snapshot hash remain unchanged. The
+CLI golden was regenerated to carry those holds and the hardened presentation.
+The frozen V1 simulation and V2 gate outputs were not regenerated or edited.
+
+Finding 4 remains open as a P3 confined to caller-owned hypothetical state.
+
+## Post-repair verification
+
+- V1 selection: **107 passed, 36 subtests passed**.
+- V2 evidence, policy, gate, and CLI selection: **64 passed, 10 subtests
+  passed**.
+- Combined Task Node UNL selection: **171 passed, 46 subtests passed**.
+- Strict documentation build: pass.

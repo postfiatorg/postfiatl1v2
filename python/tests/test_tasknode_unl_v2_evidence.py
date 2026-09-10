@@ -327,7 +327,7 @@ class GoldenVectorTests(unittest.TestCase):
         first = _verify_vector(copy.deepcopy(fixture))
         second = _verify_vector(json.loads(json.dumps(fixture)))
 
-        self.assertEqual(first.status, "verified")
+        self.assertEqual(first.status, "verified_with_holds")
         self.assertEqual(first.canonical_bytes(), second.canonical_bytes())
         self.assertEqual(first.to_dict(), fixture["expected_result"])
         self.assertEqual(_build_vector(), fixture)
@@ -475,26 +475,104 @@ class ControlEpochTests(unittest.TestCase):
 
         exact = _verify_vector(fixture)
 
-        alice = next(
-            item for item in exact.continuity if item.account_id == "account-alice"
+        bob = next(
+            item for item in exact.continuity if item.account_id == "account-bob"
         )
-        self.assertEqual(alice.status, "READY")
-        self.assertEqual(alice.fresh_score_evidence, 4)
-        self.assertGreaterEqual(alice.renewed_vouches, 1)
-        self.assertGreaterEqual(alice.post_epoch_cowork, 1)
+        self.assertEqual(bob.status, "READY")
+        self.assertEqual(bob.fresh_score_evidence, 4)
+        self.assertGreaterEqual(bob.renewed_vouches, 1)
+        self.assertGreaterEqual(bob.post_epoch_cowork, 1)
 
         registry = copy.deepcopy(fixture["control_registry"])
-        registry["entries"][0]["event_at"] = "2026-01-01T00:00:01Z"
+        registry["entries"][1]["event_at"] = "2026-01-01T00:00:01Z"
         snapshot = seal_evidence_snapshot(fixture["evidence"], registry)
         before_boundary = verify_evidence_snapshot(snapshot, registry)
-        alice_before = next(
+        bob_before = next(
             item
             for item in before_boundary.continuity
+            if item.account_id == "account-bob"
+        )
+        self.assertEqual(bob_before.status, "HOLD_CONTINUITY")
+        self.assertIn("fresh_window_incomplete", bob_before.reasons)
+
+    def test_fresh_window_requires_incoming_vouch_and_cowork(self) -> None:
+        fixture = _fixture()
+        evidence = copy.deepcopy(fixture["evidence"])
+        evidence["bilateral_records"] = []
+        snapshot = seal_evidence_snapshot(
+            evidence, fixture["control_registry"]
+        )
+
+        result = verify_evidence_snapshot(
+            snapshot, fixture["control_registry"]
+        )
+
+        for item in result.continuity:
+            with self.subTest(account_id=item.account_id):
+                self.assertEqual(item.status, "HOLD_CONTINUITY")
+                self.assertIn(
+                    "post_epoch_renewed_vouch_missing", item.reasons
+                )
+                self.assertIn("post_epoch_cowork_missing", item.reasons)
+
+    def test_outgoing_vouch_does_not_endorse_its_source(self) -> None:
+        result = _verify_vector(_fixture())
+        alice = next(
+            item for item in result.continuity
             if item.account_id == "account-alice"
         )
-        self.assertEqual(alice_before.status, "HOLD_CONTINUITY")
-        self.assertIn("fresh_window_incomplete", alice_before.reasons)
-        self.assertTrue(alice_before.retain_incumbent)
+        bob = next(
+            item for item in result.continuity
+            if item.account_id == "account-bob"
+        )
+
+        self.assertEqual(alice.renewed_vouches, 0)
+        self.assertIn("post_epoch_renewed_vouch_missing", alice.reasons)
+        self.assertEqual(bob.renewed_vouches, 1)
+        self.assertNotIn("post_epoch_renewed_vouch_missing", bob.reasons)
+
+    def test_stale_score_cannot_suppress_fresh_score_by_input_order(self) -> None:
+        fixture = _fixture()
+        fresh = next(
+            item
+            for item in fixture["evidence"]["score_evidence"]
+            if item["account_id"] == "account-bob"
+            and item["evidence_kind"] == "work"
+        )
+        stale = copy.deepcopy(fresh)
+        stale["control_epoch"] = "00" * 32
+
+        results = []
+        for stale_first in (True, False):
+            evidence = copy.deepcopy(fixture["evidence"])
+            evidence["score_evidence"] = [
+                item
+                for item in evidence["score_evidence"]
+                if not (
+                    item["account_id"] == "account-bob"
+                    and item["evidence_kind"] == "work"
+                )
+            ]
+            pair = [stale, fresh] if stale_first else [fresh, stale]
+            evidence["score_evidence"][0:0] = copy.deepcopy(pair)
+            result = verify_evidence_snapshot(
+                seal_evidence_snapshot(
+                    evidence, fixture["control_registry"]
+                ),
+                fixture["control_registry"],
+            )
+            bob = next(
+                item for item in result.continuity
+                if item.account_id == "account-bob"
+            )
+            results.append(bob)
+
+        self.assertEqual(results[0], results[1])
+        self.assertEqual(results[0].status, "READY")
+        self.assertEqual(results[0].fresh_score_evidence, 4)
+        self.assertNotIn(
+            "post_epoch_score_evidence_missing:work", results[0].reasons
+        )
 
     def test_incumbent_key_rotation_holds_continuity_without_eviction(self) -> None:
         fixture = _fixture()

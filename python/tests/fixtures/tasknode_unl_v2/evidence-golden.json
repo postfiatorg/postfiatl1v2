@@ -417,10 +417,12 @@
         "fresh_score_evidence": 4,
         "incumbent": true,
         "post_epoch_cowork": 1,
-        "reasons": [],
-        "renewed_vouches": 1,
+        "reasons": [
+          "post_epoch_renewed_vouch_missing"
+        ],
+        "renewed_vouches": 0,
         "retain_incumbent": true,
-        "status": "READY"
+        "status": "HOLD_CONTINUITY"
       },
       {
         "account_id": "account-bob",
@@ -439,10 +441,13 @@
         "fresh_score_evidence": 4,
         "incumbent": false,
         "post_epoch_cowork": 0,
-        "reasons": [],
+        "reasons": [
+          "post_epoch_renewed_vouch_missing",
+          "post_epoch_cowork_missing"
+        ],
         "renewed_vouches": 0,
         "retain_incumbent": false,
-        "status": "READY"
+        "status": "HOLD_CONTINUITY"
       }
     ],
     "evidence_limitations": [
@@ -452,12 +457,15 @@
     ],
     "failures": [],
     "historical_score_evidence": [],
-    "hold_accounts": [],
+    "hold_accounts": [
+      "account-alice",
+      "account-carol"
+    ],
     "mode": "SHADOW_ONLY",
     "policy_id": "tasknode-unl-evidence-v2",
     "record_rejections": [],
     "schema": "tasknode-unl-v2-evidence-result-v2",
-    "status": "verified",
+    "status": "verified_with_holds",
     "version": 2,
     "window": {
       "days": 180,
@@ -784,7 +792,7 @@
     "input_root": "411a5f1937aafed44ca3bfe1f60ce7da60ca27d90f05b8ce3c556652b8305b3a",
     "policy_root": "1b697d1302a1a21bb576cdeac59c2a20fba8aa4ac4f3b311ebbe5ea56f3cda76",
     "registry_root": "28d80fb8c1017f34eb5d3e1082a7e0e5ee89ec0eea890496b676b3107f8afd2a",
-    "result_sha256": "775a48404a3ff55f7807c83d003e8a967b8d28f5cec2e70a14405da2b040104a",
+    "result_sha256": "2f6615264e4b2933fd26cebce356e414d173b88dc8013c8a8f191f687edc3062",
     "snapshot_sha256": "32035b53b81dcb55a5c728a81f9bb09cf9163ac22013ec85bdd6f2e8b8ff04b1",
     "vouch_signed_digest": "9591d8390113a99d2fada17a6aba022efb8164e9ea306d6e337df1920a77c899"
   }
