@@ -59,6 +59,7 @@ contract PFTLUniswapPrimaryMarketV2 {
     error InvalidPftlBytes(bytes32 field);
     error PacketBindingMismatch(bytes32 field);
     error DeadlineExpired(uint64 nowTimestamp, uint64 deadline);
+    error CancellationBeforeDeadline(uint64 nowTimestamp, uint64 deadline);
     error PacketReplay(bytes32 packetDigest);
     error SourcePacketReplay(bytes32 sourcePacketCommitment);
     error SourceReceiptReplay(bytes32 sourceReceiptCommitment);
@@ -83,6 +84,13 @@ contract PFTLUniswapPrimaryMarketV2 {
         bytes32 indexed returnNonce,
         string pftlRecipient,
         uint256 amountAtoms
+    );
+    event PacketCancelled(
+        bytes32 indexed packetDigest,
+        bytes32 indexed sourcePacketCommitment,
+        bytes32 indexed sourceReceiptCommitment,
+        uint64 deadline,
+        uint64 cancelledAt
     );
     event MintPauseSet(bool paused);
 
@@ -169,27 +177,9 @@ contract PFTLUniswapPrimaryMarketV2 {
         if (mintPaused) revert MintingPaused();
         consumedDigest = _packetDigest(packet);
         _validatePacket(packet, consumedDigest);
-        bytes32 sourcePacketCommitment =
-            keccak256(abi.encode("postfiat.pftl_uniswap.source_packet.v1", packet.sourcePacketHash));
-        bytes32 sourceReceiptCommitment = keccak256(
-            abi.encode(
-                "postfiat.pftl_uniswap.source_receipt.v1",
-                packet.sourceReceiptRoot,
-                packet.sourceReceiptHash
-            )
-        );
-        if (consumedPacket[consumedDigest]) revert PacketReplay(consumedDigest);
-        if (consumedSourcePacket[sourcePacketCommitment]) revert SourcePacketReplay(sourcePacketCommitment);
-        if (consumedSourceReceipt[sourceReceiptCommitment]) revert SourceReceiptReplay(sourceReceiptCommitment);
-        if (
-            !receiptVerifier.isReceiptAccepted(
-                packet.sourceReceiptRoot,
-                packet.sourceReceiptHash,
-                packet.routeConfigDigest,
-                TRUST_CLASS_TRUSTLESS_FINALITY,
-                consumedDigest
-            )
-        ) revert ReceiptNotAccepted(consumedDigest);
+        bytes32 sourcePacketCommitment = _sourcePacketCommitment(packet.sourcePacketHash);
+        bytes32 sourceReceiptCommitment =
+            _sourceReceiptCommitment(packet.sourceReceiptRoot, packet.sourceReceiptHash);
 
         uint256 outstandingAfter = outstandingMintedAtoms() + packet.mintAmountAtoms;
         if (outstandingAfter > routeSupplyCapAtoms) {
@@ -213,6 +203,37 @@ contract PFTLUniswapPrimaryMarketV2 {
         if (msg.sender != governance) revert NotGovernance(msg.sender);
         mintPaused = paused;
         emit MintPauseSet(paused);
+    }
+
+    /// @notice Irreversibly cancel a finalized source export after its deadline.
+    /// @dev Cancellation uses the same packet, source-packet, and source-receipt
+    ///      replay keys as consumption. The finalized source receipt must first
+    ///      be accepted by the immutable proof verifier. Anyone may relay it,
+    ///      including while new minting is paused.
+    function cancelExpiredPacket(MintPacket calldata packet)
+        external
+        nonReentrant
+        returns (bytes32 cancelledDigest)
+    {
+        cancelledDigest = _packetDigest(packet);
+        _validatePacketBindings(packet, cancelledDigest);
+        uint64 nowTimestamp = uint64(block.timestamp);
+        if (nowTimestamp <= packet.deadline) {
+            revert CancellationBeforeDeadline(nowTimestamp, packet.deadline);
+        }
+        bytes32 sourcePacketCommitment = _sourcePacketCommitment(packet.sourcePacketHash);
+        bytes32 sourceReceiptCommitment =
+            _sourceReceiptCommitment(packet.sourceReceiptRoot, packet.sourceReceiptHash);
+        consumedPacket[cancelledDigest] = true;
+        consumedSourcePacket[sourcePacketCommitment] = true;
+        consumedSourceReceipt[sourceReceiptCommitment] = true;
+        emit PacketCancelled(
+            cancelledDigest,
+            sourcePacketCommitment,
+            sourceReceiptCommitment,
+            packet.deadline,
+            nowTimestamp
+        );
     }
 
     function burnForPftlReturn(
@@ -256,6 +277,10 @@ contract PFTLUniswapPrimaryMarketV2 {
     function _validatePacket(MintPacket calldata packet, bytes32 computedPacketDigest) private view {
         uint64 nowTimestamp = uint64(block.timestamp);
         if (packet.deadline < nowTimestamp) revert DeadlineExpired(nowTimestamp, packet.deadline);
+        _validatePacketBindings(packet, computedPacketDigest);
+    }
+
+    function _validatePacketBindings(MintPacket calldata packet, bytes32 computedPacketDigest) private view {
         if (packet.mintAmountAtoms == 0) revert ZeroValue("mint_amount_atoms");
         if (packet.mintAmountAtoms > packetNotionalCapAtoms) {
             revert PacketNotionalCapExceeded(packet.mintAmountAtoms, packetNotionalCapAtoms);
@@ -279,6 +304,21 @@ contract PFTLUniswapPrimaryMarketV2 {
                 || packet.destinationController != address(this) || packet.wrappedToken != address(wrappedToken)
                 || packet.ethereumRecipient == address(0)
         ) revert PacketBindingMismatch("packet");
+        bytes32 sourcePacketCommitment = _sourcePacketCommitment(packet.sourcePacketHash);
+        bytes32 sourceReceiptCommitment =
+            _sourceReceiptCommitment(packet.sourceReceiptRoot, packet.sourceReceiptHash);
+        if (consumedPacket[computedPacketDigest]) revert PacketReplay(computedPacketDigest);
+        if (consumedSourcePacket[sourcePacketCommitment]) revert SourcePacketReplay(sourcePacketCommitment);
+        if (consumedSourceReceipt[sourceReceiptCommitment]) revert SourceReceiptReplay(sourceReceiptCommitment);
+        if (
+            !receiptVerifier.isReceiptAccepted(
+                packet.sourceReceiptRoot,
+                packet.sourceReceiptHash,
+                packet.routeConfigDigest,
+                TRUST_CLASS_TRUSTLESS_FINALITY,
+                computedPacketDigest
+            )
+        ) revert ReceiptNotAccepted(computedPacketDigest);
     }
 
     function _packetDigest(MintPacket calldata packet) private pure returns (bytes32) {
@@ -305,6 +345,22 @@ contract PFTLUniswapPrimaryMarketV2 {
             packet.settlementValueAtoms
         );
         return keccak256(bytes.concat(identifiers, destination));
+    }
+
+    function _sourcePacketCommitment(bytes calldata sourcePacketHash) private pure returns (bytes32) {
+        return keccak256(abi.encode("postfiat.pftl_uniswap.source_packet.v1", sourcePacketHash));
+    }
+
+    function _sourceReceiptCommitment(bytes calldata sourceReceiptRoot, bytes calldata sourceReceiptHash)
+        private
+        pure
+        returns (bytes32)
+    {
+        return keccak256(
+            abi.encode(
+                "postfiat.pftl_uniswap.source_receipt.v1", sourceReceiptRoot, sourceReceiptHash
+            )
+        );
     }
 
     function _requirePftlBytes(bytes memory value, bytes32 field) private pure {

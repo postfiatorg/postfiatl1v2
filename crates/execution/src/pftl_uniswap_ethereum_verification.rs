@@ -253,16 +253,15 @@ pub(crate) fn verify_source_refund(
     )?;
     let controller = evm_address("handoff controller", &route.handoff_controller)?;
     let event = decode_packet_cancelled_event(&log, controller).map_err(external_proof_error)?;
-    let source_packet_commitment = ethereum_keccak256(&hex_exact::<48>(
-        "source packet hash",
-        &operation.packet_hash,
-    )?);
+    require_packet_schema(route, packet)?;
+    let source_packet_hash = hex_exact::<48>("source packet hash", &operation.packet_hash)?;
+    let source_packet_commitment =
+        source_packet_commitment(route.v2.is_some(), &source_packet_hash);
     let packet_digest = packet
         .ethereum_packet_digest
         .as_ref()
         .ok_or_else(missing_external_verification)
         .and_then(|digest| hex_exact::<32>("Ethereum packet digest", digest))?;
-    require_packet_schema(route, packet)?;
     if event.packet_digest != packet_digest
         || event.source_packet_commitment != source_packet_commitment
         || event.deadline != packet.destination_deadline_seconds
@@ -520,6 +519,17 @@ fn expected_packet_schema(route_is_v2: bool) -> u32 {
     }
 }
 
+fn source_packet_commitment(route_is_v2: bool, source_packet_hash: &[u8]) -> [u8; 32] {
+    if route_is_v2 {
+        solidity_abi_two_dynamic_keccak(
+            b"postfiat.pftl_uniswap.source_packet.v1",
+            source_packet_hash,
+        )
+    } else {
+        ethereum_keccak256(source_packet_hash)
+    }
+}
+
 fn solidity_abi_two_dynamic_keccak(first: &[u8], second: &[u8]) -> [u8; 32] {
     fn push_word(output: &mut Vec<u8>, value: usize) {
         let mut word = [0_u8; 32];
@@ -556,7 +566,7 @@ fn external_proof_error(error: postfiat_bridge::EthereumProofError) -> Execution
 
 #[cfg(test)]
 mod tests {
-    use super::{expected_packet_schema, solidity_abi_two_dynamic_keccak};
+    use super::{expected_packet_schema, source_packet_commitment};
 
     #[test]
     fn packet_schema_tracks_route_generation() {
@@ -581,11 +591,12 @@ mod tests {
         )
         .expect("event commitment");
         assert_eq!(
-            solidity_abi_two_dynamic_keccak(
-                b"postfiat.pftl_uniswap.source_packet.v1",
-                &packet_hash,
-            ),
+            source_packet_commitment(true, &packet_hash),
             expected.as_slice()
+        );
+        assert_eq!(
+            source_packet_commitment(false, &packet_hash),
+            postfiat_bridge::ethereum_keccak256(&packet_hash)
         );
     }
 }

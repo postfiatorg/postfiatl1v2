@@ -1,6 +1,6 @@
 # Arc-facing code review — 2026-09-10
 
-Status: fresh-eyes source review; fixes pending
+Status: source repairs verified; immutable deployed controller unchanged
 
 Reviewed checkout: `b8560de9906d60495d746939fc7704bea7e9c984`
 
@@ -99,3 +99,38 @@ Findings 1 and 2 require minimal code repairs and focused regressions. Repairing
 finding 1 in source does not retrofit the immutable deployed controller or
 authorize a route migration; that operational gap remains explicit. Finding 3
 is P3 and remains recorded without a golden or guest regeneration.
+
+## Repair disposition
+
+- **Finding 1 — fixed in source; deployed route remains open.**
+  [`PFTLUniswapPrimaryMarketV2.sol`](../../crates/ethereum-contracts/src/PFTLUniswapPrimaryMarketV2.sol)
+  now provides permissionless post-deadline cancellation only for a packet whose
+  finalized receipt the immutable verifier accepted. Cancellation and
+  consumption write the same domain-separated packet and receipt replay keys.
+  [`pftl_uniswap_ethereum_verification.rs`](../../crates/execution/src/pftl_uniswap_ethereum_verification.rs)
+  now verifies the V2 domain-separated source-packet commitment while retaining
+  the legacy calculation for schema V1. The exact deadline, missing-proof,
+  cancel-before-consume, and consume-before-cancel cases have regressions. The
+  controller at the recorded mainnet route is immutable and was not touched;
+  using the repaired source requires a separately governed deployment and route
+  migration that this campaign does not authorize.
+- **Finding 2 — fixed.**
+  [`a666-mainnet-run-one-full-round.sh`](../../scripts/a666-mainnet-run-one-full-round.sh)
+  exits before checking credentials, endpoints, or hosts unless the caller
+  supplies both `--execute` and the exact confirmation
+  `--confirm 'RUN A666 MAINNET ROUND'`. A local subprocess regression proves
+  both fail-closed boundaries without network access.
+- **Finding 3 — open P3.** No guest source, ELF, program key, fixture, or
+  historical deployment evidence changed.
+
+## Post-repair verification
+
+- `forge test --root crates/ethereum-contracts --match-contract
+  PFTLUniswapPrimaryMarketV2Test -vv`: **9 passed**.
+- Local contract suite excluding the four explicit RPC-dependent fork tests:
+  **148 passed**. The excluded tests require Ethereum or Arbitrum RPC endpoints;
+  the campaign network boundary does not permit those calls.
+- `cargo test --locked -p postfiat-pfusdc-proofs -p postfiat-bridge -p
+  postfiat-execution --lib`: **38 + 195 + 5 passed**.
+- Focused strict Clippy for the same three crates: pass.
+- `python3 scripts/test-a666-mainnet-run-one-full-round.py`: **2 passed**.

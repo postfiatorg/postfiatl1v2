@@ -11,6 +11,7 @@ interface VmV2 {
     function expectRevert(bytes4 selector) external;
     function expectRevert(bytes calldata revertData) external;
     function prank(address sender) external;
+    function warp(uint256 timestamp) external;
 }
 
 contract MockA666Token is IA666WrappedToken {
@@ -181,6 +182,69 @@ contract PFTLUniswapPrimaryMarketV2Test {
             bytes32(uint256(33))
         );
         require(controller.outstandingMintedAtoms() == 249_900e6, "return burn blocked");
+    }
+
+    function testExpiredPacketCancellationSharesTheMintReplayFence() public {
+        PFTLUniswapPrimaryMarketV2.MintPacket memory packet = _packet(bytes32(uint256(34)));
+        bytes32 digest = controller.packetDigest(packet);
+        verifier.setAccepted(digest, true);
+
+        vm.warp(packet.deadline);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PFTLUniswapPrimaryMarketV2.CancellationBeforeDeadline.selector,
+                packet.deadline,
+                packet.deadline
+            )
+        );
+        controller.cancelExpiredPacket(packet);
+
+        controller.setMintPaused(true);
+        vm.warp(uint256(packet.deadline) + 1);
+        require(controller.cancelExpiredPacket(packet) == digest, "cancel digest");
+        bytes32 sourcePacketCommitment =
+            keccak256(abi.encode("postfiat.pftl_uniswap.source_packet.v1", packet.sourcePacketHash));
+        bytes32 sourceReceiptCommitment = keccak256(
+            abi.encode(
+                "postfiat.pftl_uniswap.source_receipt.v1",
+                packet.sourceReceiptRoot,
+                packet.sourceReceiptHash
+            )
+        );
+        require(controller.consumedPacket(digest), "packet fence");
+        require(controller.consumedSourcePacket(sourcePacketCommitment), "source packet fence");
+        require(controller.consumedSourceReceipt(sourceReceiptCommitment), "source receipt fence");
+        vm.expectRevert(
+            abi.encodeWithSelector(PFTLUniswapPrimaryMarketV2.PacketReplay.selector, digest)
+        );
+        controller.cancelExpiredPacket(packet);
+
+        PFTLUniswapPrimaryMarketV2.MintPacket memory consumed = _packet(bytes32(uint256(36)));
+        consumed.sourcePacketHash = _filled(0x37);
+        consumed.sourceReceiptHash = _filled(0x38);
+        consumed.sourceReceiptRoot = _filled(0x39);
+        bytes32 consumedDigest = controller.packetDigest(consumed);
+        verifier.setAccepted(consumedDigest, true);
+        controller.setMintPaused(false);
+        controller.consumeMintOnly(consumed);
+        vm.warp(uint256(consumed.deadline) + 1);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PFTLUniswapPrimaryMarketV2.PacketReplay.selector,
+                consumedDigest
+            )
+        );
+        controller.cancelExpiredPacket(consumed);
+    }
+
+    function testExpiredPacketCancellationRequiresFinalizedSourceReceipt() public {
+        PFTLUniswapPrimaryMarketV2.MintPacket memory packet = _packet(bytes32(uint256(35)));
+        bytes32 digest = controller.packetDigest(packet);
+        vm.warp(uint256(packet.deadline) + 1);
+        vm.expectRevert(
+            abi.encodeWithSelector(PFTLUniswapPrimaryMarketV2.ReceiptNotAccepted.selector, digest)
+        );
+        controller.cancelExpiredPacket(packet);
     }
 
     function testPacketDigestMatchesRustVectorAndExcludesReceiptFields() public view {

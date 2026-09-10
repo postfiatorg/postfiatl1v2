@@ -7,6 +7,8 @@ campaign_dir=
 amount_atoms=10000000
 run_label=
 workflow_id=
+execute=false
+confirmation=
 
 while (($#)); do
   case "$1" in
@@ -15,9 +17,19 @@ while (($#)); do
     --amount-atoms) amount_atoms=$2; shift 2 ;;
     --run-label) run_label=$2; shift 2 ;;
     --workflow-id) workflow_id=$2; shift 2 ;;
+    --execute) execute=true; shift ;;
+    --confirm) confirmation=$2; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+if ! "$execute"; then
+  echo "refusing live A666 mainnet round without --execute" >&2
+  exit 2
+fi
+if test "$confirmation" != "RUN A666 MAINNET ROUND"; then
+  echo "refusing live A666 mainnet round without --confirm 'RUN A666 MAINNET ROUND'" >&2
+  exit 2
+fi
 [[ "$amount_atoms" =~ ^[1-9][0-9]*$ ]]
 test -n "$campaign_dir"
 test "$amount_atoms" -eq 10000000

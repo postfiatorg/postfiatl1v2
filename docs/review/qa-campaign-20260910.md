@@ -6,7 +6,7 @@ This is the canonical progress record for the [2026-09-10 QA campaign](qa-campai
 
 | Order | Surface | Status | P1 | P2 | P3 | Evidence or fix commits |
 | --- | --- | --- | ---: | ---: | ---: | --- |
-| A1 | Arc-facing code | fixing | 2 | 0 | 1 | [Findings](arc-facing-review-20260910.md); fixes pending |
+| A1 | Arc-facing code | done | 2 | 0 | 1 | [Findings](arc-facing-review-20260910.md) `1c67ec07`; repair in this commit |
 | D | Bounded whitepaper corrections | pending | — | — | — | Pending |
 | B1 | Initial defect inventory | pending | — | — | — | Pending |
 | C | Validator-0 RPC diagnosis | pending | — | — | — | Pending |
@@ -16,13 +16,19 @@ This is the canonical progress record for the [2026-09-10 QA campaign](qa-campai
 | A5 | Task Node UNL V1 and V2 modules | pending | 0 | 0 | 0 | Pending |
 | B2 | Final defect inventory and TIH gate | pending | — | — | — | Pending |
 
-Three Arc-facing findings are recorded. Both P1 findings are being repaired;
-the P3 fork-schedule inconsistency is recorded without fixture or golden
-regeneration. No score has yet been recorded.
+Three Arc-facing findings are recorded. Both P1 source defects are repaired and
+their focused gates pass; the deployed immutable V2 controller was not changed,
+so route migration remains an open operational requirement. The P3 fork-schedule
+inconsistency is recorded without fixture or golden regeneration. No score has
+yet been recorded.
 
 ## Completed units
 
 - Arc-facing review completed at `b8560de9`: two P1 findings and one P3 finding.
+- Arc-facing repair completed: V2 cancellation and refund commitments now share
+  the consume fence, and the live round-trip entrypoint requires two explicit
+  execution acknowledgements. Verification: contracts 9/9 focused and 148/148
+  local non-fork, Rust 38/38 + 195/195 + 5/5, interlock 2/2, strict Clippy pass.
 
 ## Skips and boundary decisions
 
