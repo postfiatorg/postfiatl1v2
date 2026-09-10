@@ -161,3 +161,37 @@ audit found no campaign diff in deployment evidence, either frozen simulation,
 the locked amendment or lock records, `docs/whitepaper.md`,
 `docs/whitepaper_legacy.md`, or a live-fleet configuration. No Task Node action,
 deployment, restart, chain write, rental, signup, or StakeHub write occurred.
+
+## Burn 2
+
+Burn 2 follows the [second campaign brief](qa-campaign-20260910-burn2-brief.md).
+It began at `2026-09-10T12:50:04Z` from clean `main` commit
+`e689aa43c69348d75c831f9ef2cc34f29c5ed9c9`. It adversarially verifies Burn
+1's repairs, grounds every open inventory row, and adds bounded fuzz/property
+coverage. It is not a release, deployment, promotion, or live-authority
+campaign.
+
+### Burn 2 state
+
+| Unit | Scope | Status | Evidence or result |
+| --- | --- | --- | --- |
+| 1 | Review Burn 1 repairs and sibling defect classes | pending | Baseline mapping in progress |
+| 1R | Repair Unit 1 P1/P2 findings | pending | Depends on findings |
+| 2 | Ground all 19 open inventory rows | pending | Per-row bounded outcomes required |
+| 3 | Fuzz and property expansion | pending | Four named surfaces; ten-minute per-target bounds |
+| 4 | Reconcile inventory and close | pending | TIH rerun required if materially changed |
+
+### Burn 2 boundaries
+
+- No Task Node action, fleet mutation, live-chain write, deployment, restart,
+  configuration change, spend, rental, signup, or StakeHub write is permitted.
+- Network use is limited to repository Git operations, documented read-only
+  status/ledger endpoints when a unit requires them, and OpenRouter only if the
+  final inventory requires rescoring.
+- The V1 simulation, V2 gate outputs, deployment evidence, locked amendment and
+  lock records, `docs/whitepaper.md`, and `docs/whitepaper_legacy.md` remain
+  frozen.
+- Findings and fixes are separate commits. In-scope P1/P2 findings receive
+  minimal owner repairs and regressions; P3 findings are recorded only.
+- The strict documentation build precedes every Burn 2 commit, and every
+  completed unit is pulled with rebase and pushed before the next unit begins.
