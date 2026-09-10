@@ -13,7 +13,7 @@ This is the canonical progress record for the [2026-09-10 QA campaign](qa-campai
 | A2 | Consensus and storage | done | 1 | 1 | 0 | [Findings and repair evidence](consensus-storage-review-20260910.md) |
 | A3 | Wallet, proxy, and RPC SDK | done | 2 | 3 | 0 | [Findings and repair evidence](wallet-proxy-rpc-sdk-review-20260910.md) |
 | A4 | StakeHub `fix/pr8-safety-20260907` | done | 1 | 2 | 0 | [Read-only findings](stakehub-fix-branch-review-20260910.md) |
-| A5 | Task Node UNL V1 and V2 modules | pending | 0 | 0 | 0 | Pending |
+| A5 | Task Node UNL V1 and V2 modules | fixing | 1 | 2 | 1 | [Findings](tasknode-unl-review-20260910.md) |
 | B2 | Final defect inventory and TIH gate | pending | — | — | — | Pending |
 
 Three Arc-facing findings are recorded. Both P1 source defects are repaired and
@@ -87,6 +87,12 @@ whitepaper candidate scored 85.47 and was not promoted.
   fresh pass found one P1 release-reuse hazard and two P2 non-causal batch
   success checks. All three remain open for the StakeHub lane; this campaign
   made no fix there.
+- Task Node UNL V1/V2 review completed. The V1 paths retain their binding,
+  evidence, graph, and hold controls. The V2 review found one P1 fresh-window
+  bypass, two P2 input/report integrity failures, and one shadow-only P3 helper
+  binding gap. Findings 1–3 proceed to a separate repair; the P3 remains
+  recorded under the campaign rule. The 167-test plus 43-subtest pre-repair
+  selection passed.
 
 ## Skips and boundary decisions
 
