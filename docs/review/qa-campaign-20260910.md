@@ -175,8 +175,8 @@ campaign.
 
 | Unit | Scope | Status | Evidence or result |
 | --- | --- | --- | --- |
-| 1 | Review Burn 1 repairs and sibling defect classes | pending | Baseline mapping in progress |
-| 1R | Repair Unit 1 P1/P2 findings | pending | Depends on findings |
+| 1 | Review Burn 1 repairs and sibling defect classes | done | [Findings](burn2-fix-review-20260910.md): three P1 repair gaps; focused baselines green |
+| 1R | Repair Unit 1 P1/P2 findings | pending | Three P1s queued for minimal repair and regression coverage |
 | 2 | Ground all 19 open inventory rows | pending | Per-row bounded outcomes required |
 | 3 | Fuzz and property expansion | pending | Four named surfaces; ten-minute per-target bounds |
 | 4 | Reconcile inventory and close | pending | TIH rerun required if materially changed |
