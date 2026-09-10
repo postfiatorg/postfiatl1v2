@@ -20,6 +20,10 @@ must not be described as shipped or authoritative.
 | RPC-01 | Reproduced defect | P1 | Open; diagnosed, not repaired | [Read-only validator-0 diagnosis](../status/chain-state-current.md#validator-0-rpc-diagnosis-20260910): the deployed RPC reached its 10,000-connection ceiling with a keep-alive connection still active, stopped accepting, and remained systemd-active while new health reads timed out. |
 | CS-01 | Reproduced defect | P1 | Fixed in the A2 repair | [Consensus and storage review](consensus-storage-review-20260910.md#1-p1--consensus-authorization-and-signature-emission-are-separated-by-an-unlocked-race-window): a lower-view call could persist authorization, lose the safety guard to a higher-view call, and emit its signature only after the durable round floor advanced. Signing now completes under the guard. |
 | CS-02 | Reproduced defect | P2 | Fixed in the A2 repair | [Consensus and storage review](consensus-storage-review-20260910.md#2-p2--activated-yolo-registrations-can-grow-consensus-state-without-a-bound-or-state-expansion-charge): distinct YOLO registrations appended to committed validator state without a count bound or state-expansion fee. Both row classes are now capped and charged. |
+| WRS-01 | Reproduced defect | P1 | Open; repair pending | [Wallet/proxy/RPC SDK review](wallet-proxy-rpc-sdk-review-20260910.md#1-p1--transfer-quote-signing-trusts-an-rpc-selected-recipient-and-amount): the transfer signer sourced recipient and amount from an untrusted quote without binding the reviewed request. |
+| WRS-02 | Reproduced defect | P1 | Open; repair pending | [Wallet/proxy/RPC SDK review](wallet-proxy-rpc-sdk-review-20260910.md#2-p1--the-loopback-session-token-endpoint-accepts-a-dns-rebinding-host): a same-origin rebinding Host could satisfy the loopback token endpoint and receive its bearer credential. |
+| WRS-03 | Reproduced defect | P2 | Open; repair pending | [Wallet/proxy/RPC SDK review](wallet-proxy-rpc-sdk-review-20260910.md#3-p2--websocket-mutation-admission-releases-the-process-wide-slot-before-work-starts): WebSocket mutations released shared concurrency admission before routing or upstream I/O. |
+| WRS-04 | Reproduced defect | P2 | Open; repair pending | [Wallet/proxy/RPC SDK review](wallet-proxy-rpc-sdk-review-20260910.md#4-p2--the-maintained-extension-permits-cheaply-brute-forced-new-vaults): four-character extension passphrases under the 100,000-iteration vault format permit cheap offline recovery after profile theft. |
 
 ## Storage, Cobalt, and Task Node review
 
@@ -99,8 +103,8 @@ and its frozen [qualification receipt](https://github.com/postfiatorg/postfiatl1
 
 ## Initial disposition
 
-The inventory currently contains 49 rows: 23 reproduced defects, 21 evidence
-gaps, one economic assumption, and four proposed capabilities.
+The working inventory currently contains 53 rows: 27 reproduced defects, 21
+evidence gaps, one economic assumption, and four proposed capabilities.
 These counts will be recalculated after the remaining campaign surfaces.
 No open item in this document authorizes a deployment, chain action, or
 StakeHub change.

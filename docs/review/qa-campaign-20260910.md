@@ -11,7 +11,7 @@ This is the canonical progress record for the [2026-09-10 QA campaign](qa-campai
 | B1 | Initial defect inventory | done | — | — | — | [Inventory](defect-inventory-20260910.md); 46 initial, 49 current rows |
 | C | Validator-0 RPC diagnosis | done | 1 | 0 | 0 | Root cause recorded in [chain state](../status/chain-state-current.md#validator-0-rpc-diagnosis-20260910) |
 | A2 | Consensus and storage | done | 1 | 1 | 0 | [Findings and repair evidence](consensus-storage-review-20260910.md) |
-| A3 | Wallet, proxy, and RPC SDK | pending | 0 | 0 | 0 | Pending |
+| A3 | Wallet, proxy, and RPC SDK | fixing | 2 | 2 | 0 | [Findings](wallet-proxy-rpc-sdk-review-20260910.md); repair pending |
 | A4 | StakeHub `fix/pr8-safety-20260907` | pending | 0 | 0 | 0 | Read-only review only |
 | A5 | Task Node UNL V1 and V2 modules | pending | 0 | 0 | 0 | Pending |
 | B2 | Final defect inventory and TIH gate | pending | — | — | — | Pending |
@@ -66,6 +66,14 @@ whitepaper candidate scored 85.47 and was not promoted.
   state-expansion fee. Post-repair gates pass at 20 Consensus v2 library, 3
   Consensus v2 binary, 7 YOLO execution, and 4 YOLO node tests, with the one
   documented external-proof opt-in case ignored; strict focused Clippy passes.
+- Wallet, proxy, and RPC SDK review completed. It found two P1 failures: an
+  RPC-selected transfer recipient/amount could replace reviewed intent before
+  signing, and the loopback local-session endpoint accepted a DNS-rebinding
+  Host. It also found two P2 failures: WebSocket mutations released the shared
+  concurrency slot before work began, and the maintained extension permitted
+  four-character passphrases under its older 100,000-iteration vault format.
+  Pre-repair baselines pass at wallet proxy 35/35, web wallet 259/259, and Rust
+  RPC SDK/WASM 69/69; focused adversarial regressions accompany the repairs.
 
 ## Skips and boundary decisions
 
