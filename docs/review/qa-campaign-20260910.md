@@ -8,9 +8,9 @@ This is the canonical progress record for the [2026-09-10 QA campaign](qa-campai
 | --- | --- | --- | ---: | ---: | ---: | --- |
 | A1 | Arc-facing code | done | 2 | 0 | 1 | [Findings](arc-facing-review-20260910.md) `1c67ec07`; repair `dbc73fea` |
 | D | Bounded whitepaper corrections | done | — | — | — | Candidate `6fbcee8e…`; 85.47; not promoted |
-| B1 | Initial defect inventory | done | — | — | — | [Inventory](defect-inventory-20260910.md); 46 initial, 47 current rows |
+| B1 | Initial defect inventory | done | — | — | — | [Inventory](defect-inventory-20260910.md); 46 initial, 49 current rows |
 | C | Validator-0 RPC diagnosis | done | 1 | 0 | 0 | Root cause recorded in [chain state](../status/chain-state-current.md#validator-0-rpc-diagnosis-20260910) |
-| A2 | Consensus and storage | pending | 0 | 0 | 0 | Pending |
+| A2 | Consensus and storage | fixing | 1 | 1 | 0 | [Findings](consensus-storage-review-20260910.md); repairs pending |
 | A3 | Wallet, proxy, and RPC SDK | pending | 0 | 0 | 0 | Pending |
 | A4 | StakeHub `fix/pr8-safety-20260907` | pending | 0 | 0 | 0 | Read-only review only |
 | A5 | Task Node UNL V1 and V2 modules | pending | 0 | 0 | 0 | Pending |
@@ -55,6 +55,12 @@ whitepaper candidate scored 85.47 and was not promoted.
   service at `2026-09-09T20:19:37Z`; this campaign made no repair. The current
   process answered at height 1020 with root `587c6526…d39bead6` and an empty
   mempool, but it retains the same recurrence condition.
+- Consensus and storage review completed against validator-runtime changes
+  since 2026-09-05. It found one P1 race between durable Consensus v2
+  authorization and signature emission, plus one P2 unbounded, uncharged YOLO
+  consensus-state growth path. Pre-repair focused baselines remain green at
+  20 Consensus v2 library, 3 Consensus v2 binary, and 6 YOLO execution tests;
+  the missing adversarial cases will accompany the repairs.
 
 ## Skips and boundary decisions
 

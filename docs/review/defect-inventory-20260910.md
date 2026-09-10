@@ -18,6 +18,8 @@ must not be described as shipped or authoritative.
 | ARC-02 | Reproduced defect | P1 | Fixed — `dbc73fea` | [Arc review](arc-facing-review-20260910.md#2-p1--the-top-level-mainnet-round-trip-command-mutates-live-systems-without-an-execution-interlock): invoking the shell entrypoint entered live setup without an explicit execution ceremony. |
 | ARC-03 | Reproduced defect | P3 | Open | [Arc review](arc-facing-review-20260910.md#3-p3--the-dedicated-ethereum-mainnet-ingress-guest-carries-a-stale-fulu-epoch-pin): the dedicated ingress pin is 411648 while the shared path and retained program identity use 411392. Frozen guest artifacts were not regenerated. |
 | RPC-01 | Reproduced defect | P1 | Open; diagnosed, not repaired | [Read-only validator-0 diagnosis](../status/chain-state-current.md#validator-0-rpc-diagnosis-20260910): the deployed RPC reached its 10,000-connection ceiling with a keep-alive connection still active, stopped accepting, and remained systemd-active while new health reads timed out. |
+| CS-01 | Reproduced defect | P1 | Open | [Consensus and storage review](consensus-storage-review-20260910.md#1-p1--consensus-authorization-and-signature-emission-are-separated-by-an-unlocked-race-window): a lower-view call can persist authorization, lose the safety guard to a higher-view call, and emit its signature only after the durable round floor advances. |
+| CS-02 | Reproduced defect | P2 | Open | [Consensus and storage review](consensus-storage-review-20260910.md#2-p2--activated-yolo-registrations-can-grow-consensus-state-without-a-bound-or-state-expansion-charge): distinct YOLO registrations append to committed validator state without a count bound or state-expansion fee. |
 
 ## Storage, Cobalt, and Task Node review
 
@@ -97,7 +99,7 @@ and its frozen [qualification receipt](https://github.com/postfiatorg/postfiatl1
 
 ## Initial disposition
 
-The inventory currently contains 47 rows: 21 reproduced defects, 21 evidence
+The inventory currently contains 49 rows: 23 reproduced defects, 21 evidence
 gaps, one economic assumption, and four proposed capabilities.
 These counts will be recalculated after the remaining campaign surfaces.
 No open item in this document authorizes a deployment, chain action, or
