@@ -2,10 +2,11 @@
 
 This is the canonical progress record for the [2026-09-10 QA campaign](qa-campaign-20260910-brief.md). The campaign began at 2026-09-10T09:31:59Z from `main` commit `3ec59c0bea6383445d1465d9a006317a33973003`. It is a review-and-repair campaign, not a release or deployment authorization.
 
-**Status:** Completed 2026-09-10. All ordered surfaces were reviewed, every
-in-scope P1/P2 repair was pushed, and the final inventory passed its first
-compliant full Text Improvement Harness gate at 89.00/100. Open and skipped
-items remain explicit below.
+**Status:** Burn 1 and Burn 2 completed 2026-09-10. Burn 1 reviewed every
+ordered surface and passed its final inventory gate at 89.00/100. Burn 2 closed
+three P1 repair gaps, grounded every formerly open inventory row, expanded four
+property surfaces, and passed the updated inventory gate at 88.13/100. Retained
+risks and skipped items remain explicit below.
 
 ## Current state
 
@@ -179,7 +180,7 @@ campaign.
 | 1R | Repair Unit 1 P1/P2 findings | done | Host and WASM intent boundaries closed; bounded RPC clean exits now restart; focused gates pass |
 | 2 | Ground all 19 open inventory rows | done | 3 fixed, 5 reproduced/retained, 5 need live environment, 6 need operator decision; 0 bare open |
 | 3 | Fuzz and property expansion | done | [Results](burn2-fuzz-property-results-20260910.md): four surfaces expanded; zero crashes or violations |
-| 4 | Reconcile inventory and close | pending | TIH rerun required if materially changed |
+| 4 | Reconcile inventory and close | done | 61 rows, 0 bare open; first full TIH rerun 88.13/100 |
 
 ### Burn 2 unit 1 result
 
@@ -230,6 +231,61 @@ No target crashed or violated a property. Focused regressions pass at 38 bridge
 tests, 9 Consensus v2 node-library tests, 25 RPC serve-request tests, and 20 UNL
 V2 evidence tests with 10 subtests. This unit made no live, network, Task Node,
 StakeHub, frozen-artifact, or whitepaper change.
+
+### Burn 2 final Text Improvement Harness gate
+
+The materially reconciled inventory bytes, SHA-256
+`0dd3b75341d3f50ec7cedeca67535285ae752bdb9ef35ff7d86f1a0ce429df8c`,
+received fifteen fresh OpenRouter reviews at temperature 0 and an 8,000-token
+response limit. The prompt was
+`Rate this document on a scale of 1-100. Output the score and your reasoning.`
+
+| Judge | Scores | Average |
+| --- | --- | ---: |
+| `openai/gpt-6-astra-pro` | 90, 90, 90, 90, 89 | 89.80 |
+| `anthropic/claude-fable-5.1` | 84, 84, 82, 87, 87 | 84.80 |
+| `z-ai/glm-5.3` | 90, 88, 90, 90, 91 | 89.80 |
+| **All fifteen** | — | **88.13** |
+
+Run group: `qa-defect-inventory-burn2-20260910`. This first compliant full
+rerun exceeded the 86/100 gate, so no rewrite or rescore was performed. The
+external score log and SQLite record are under
+`/home/postfiatchad/pastedocs/.qa-campaign-defect-inventory-burn2-20260910/`;
+their SHA-256 values are respectively
+`9639fff4f88b18be8030171ad4683412b6d9f7012f716a52ac01bd0712439e1d` and
+`d4cc27942db409da77240e272099e2aa7ce27650c0ff1d0c6a4383639aace11d`.
+
+### Burn 2 final summary
+
+- Findings: the fresh repair review found three P1 gaps and no P2 or P3;
+  bounded fuzz and property work found no crash or violation.
+- Fixes: actual and forwarded proxy authorities are checked independently;
+  maintained source and JavaScript signing interfaces bind reviewed intent;
+  finite RPC services rotate after clean exits; Cobalt publication checks bind
+  immutable source bytes; and the locked storage plan now carries a scoped
+  post-lock implementation correction. The pushed repair commits are
+  `15af691d` and `acdbb1f2`.
+- Reclassifications: all nineteen rows that entered Burn 2 as bare `Open` now
+  resolve to three fixed, five reproduced and retained, five needing a named
+  live environment, and six needing a named operator decision. The final
+  inventory has 61 rows: 29 fixed, 16 dispositioned, five retained, five
+  needing live environment, six needing operator decision, and zero bare open.
+- New coverage: deterministic properties now cover receipt-proof parsing,
+  cross-phase consensus round floors, RPC accept-budget boundaries, and UNL V2
+  fail-closed evidence parsing. The two Rust fuzz targets each completed two
+  byte-identical 4,096-iteration runs beneath their ten-minute ceiling.
+- Remaining risks: the RPC supervisor repair is not deployed; retained WASM
+  bytes still expose the old raw ABI because the local rebuild toolchain is
+  absent; three StakeHub findings remain in a read-only external lane; the Arc
+  controller migration remains operational work; V2 remains `SHADOW_ONLY`;
+  and the signing-fix rollout remains blocked on lineage, reproducibility,
+  current snapshot, rollback-binary, and operator decisions.
+
+Final proportional verification passed at 38 bridge tests, 9 Consensus v2
+node-library tests, 25 RPC serve-request tests, and 172 combined UNL V1/V2
+tests with 46 subtests. Strict focused Clippy, formatting, public-artifact
+policy, frozen-boundary, and documentation gates passed. Burn 2 completed at
+`2026-09-10T13:58:48Z` with every unit pushed and a clean tree.
 
 ### Burn 2 boundaries
 
