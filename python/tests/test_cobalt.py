@@ -555,6 +555,26 @@ class CobaltCliTests(unittest.TestCase):
             with self.assertRaisesRegex(cobalt.CobaltCliError, "checksum mismatch"):
                 cobalt.scenario_result(packet)
 
+    def test_committed_adversarial_packet_uses_immutable_publication_bytes(self) -> None:
+        root = cobalt.repository_root(Path(__file__))
+        packet = root / "benchmarks/cobalt-adversarial-verification/packet"
+        publication = json.loads((packet / "publication.json").read_text())
+        expected_mkdocs = next(
+            row["sha256"]
+            for row in publication["documents"]
+            if row["path"] == "mkdocs.yml"
+        )
+        self.assertNotEqual(
+            hashlib.sha256((root / "mkdocs.yml").read_bytes()).hexdigest(),
+            expected_mkdocs,
+        )
+
+        result = cobalt.adversarial_result(packet)
+
+        self.assertTrue(result["ok"])
+        checks = {row["key"]: row["ok"] for row in result["checks"]}
+        self.assertTrue(checks["publication_documents_bound"])
+
     def test_adversarial_command_authenticates_and_renders_complete_campaign(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "source"

@@ -107,6 +107,11 @@ ADVERSARIAL_PUBLICATION_PATHS = {
     "docs/status/chain-state-current.md",
     "mkdocs.yml",
 }
+# Immutable repository tree whose publication bytes are pinned by the completed
+# adversarial packet. Current-document freshness is intentionally separate.
+ADVERSARIAL_PUBLICATION_SOURCE_REVISION = (
+    "4120206726d01f34278639a1d315883f58669dfa"
+)
 BENCHMARK_REQUIRED_FILES = {
     "cobalt-report.json",
     "kpi-report.json",
@@ -239,6 +244,39 @@ def read_packet_bytes(path: Path, limit: int = MAX_REPORT_BYTES) -> bytes:
         raise CobaltCliError(f"cannot read packet file {path.name}: {error}") from error
     finally:
         os.close(descriptor)
+
+
+def read_git_revision_bytes(
+    root: Path, revision: str, relative: str, limit: int = MAX_REPORT_BYTES
+) -> bytes:
+    """Read a bounded path from one immutable Git tree without a checkout."""
+
+    if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+        raise CobaltCliError("publication source revision is malformed")
+    path = PurePosixPath(relative)
+    if path.is_absolute() or ".." in path.parts or path.as_posix() != relative:
+        raise CobaltCliError("publication source path is malformed")
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(root), "show", f"{revision}:{relative}"],
+            capture_output=True,
+            check=False,
+            text=False,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise CobaltCliError(
+            "cannot read the immutable publication source revision"
+        ) from error
+    if completed.returncode != 0:
+        raise CobaltCliError(
+            "immutable publication source revision is unavailable"
+        )
+    if len(completed.stdout) > limit:
+        raise CobaltCliError(
+            f"publication source {relative} exceeds the {limit}-byte read limit"
+        )
+    return completed.stdout
 
 
 def read_packet_json(path: Path) -> dict[str, Any]:
@@ -942,7 +980,15 @@ def adversarial_result(
                 break
             seen_publication_paths.add(path)
             try:
-                actual = sha256_bytes(read_packet_bytes(root / path))
+                payload = (
+                    read_git_revision_bytes(
+                        root, ADVERSARIAL_PUBLICATION_SOURCE_REVISION, path
+                    )
+                    if expected_manifest_sha256
+                    == DEFAULT_ADVERSARIAL_PACKET_SHA256
+                    else read_packet_bytes(root / path)
+                )
+                actual = sha256_bytes(payload)
             except CobaltCliError:
                 publication_documents_bound = False
                 break

@@ -13,6 +13,15 @@ Supersedes the stopped
 validators, ending the linear consensus-latency growth measured by E4
 (1.66 s at round 50 to 14.9 s at round 500).
 
+> **Post-lock implementation correction — 2026-09-10:** The locked design text
+> below predicted cross-process read-only coexistence. The deployed
+> implementation instead uses exclusive cross-process database access with
+> short operation-scoped writable-handle leases; even a read-only sibling open
+> conflicts while another process holds the database. The deployment-exact
+> two-service gate, not the superseded prediction below, is the authority for
+> the live mechanism. This annotation preserves the scored text and corrects
+> its operational interpretation.
+
 ## Why this is not deployed yet, in one paragraph
 
 The storage engine itself is done and heavily tested: bounded ordered-history
