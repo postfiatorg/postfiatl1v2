@@ -13,19 +13,21 @@ progress. Later surfaces remain pending in the mandated order.
 
 | Order | Surface | Status | P1 | P2 | P3 | Evidence or fixes |
 | --- | --- | --- | ---: | ---: | ---: | --- |
-| A1 | Storage and snapshots | fixing | 0 | 3 | 2 | [Findings](storage-snapshots-review-20260911.md); repair pending |
+| A1 | Storage and snapshots | fixing | 1 | 3 | 2 | [Findings](storage-snapshots-review-20260911.md); repair pending |
 | A2 | Execution | pending | 0 | 0 | 0 | — |
 | A3 | Cobalt ratification | pending | 0 | 0 | 0 | — |
 | A4 | Network and mempool admission | pending | 0 | 0 | 0 | — |
 | A5 | Operational Python CLIs | pending | 0 | 0 | 0 | — |
 | B | Defect inventory and TIH gate | pending | — | — | — | — |
 
-Current finding totals: **0 P1, 3 P2, 2 P3**.
+Current finding totals: **1 P1, 3 P2, 2 P3**.
 
 ## Storage review result
 
 The full `crates/storage` surface and the node snapshot, restore, checkpoint,
 migration, commit-recovery, and writer-lease paths were reviewed. The pass found
+one P1 source defect: a torn FastSwap WAL suffix remains in place, so a later
+synced record can be appended behind it and become unreplayable. It also found
 two P2 source defects: failed snapshot imports can publish partial destination
 state, and FastSwap WAL reads can allocate an unbounded whole file while total
 WAL growth has no fence. Two comparison-only P3 defects are recorded without

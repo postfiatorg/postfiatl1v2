@@ -1,6 +1,6 @@
 # Storage and snapshots review — 2026-09-11
 
-Status: findings recorded; P2 repairs pending; no release or deployment authorized
+Status: findings recorded; P1/P2 repairs pending; no release or deployment authorized
 
 Reviewed checkout: `c25b3389d5c221ff1c23e700d53460003cc50b2a`
 
@@ -110,6 +110,23 @@ The pre-repair focused baselines were green:
    would write files and is prohibited by this campaign, so the remaining
    operational proof must stay explicit.
 
+6. **P1 / reproduced defect — a torn FastSwap WAL suffix is ignored but not
+   truncated before later durable appends.**
+
+   [`fastswap_store.rs`](../../crates/storage/src/fastswap_store.rs) lines
+   1642–1671 treats an incomplete final length, payload, or MAC as a safe torn
+   append and returns the verified prefix. The store retains that suffix, and
+   `append_synced_record` at lines 1470–1486 always appends at the physical end
+   of the file.
+
+   Concrete failure scenario: a process dies midway through a WAL record. On
+   restart, replay ignores the incomplete tail and the validator accepts a new
+   vote, appends and syncs that complete record behind the tail, and emits its
+   signature. On the next restart, the old length prefix consumes bytes from
+   the later record and fails its MAC, or the scanner again stops before the
+   later record. The signature escaped but its safety record is not replayable,
+   violating the durable-before-signing invariant.
+
 ## Areas with no findings
 
 - Transactional finalized-block updates use immediate durable redb
@@ -130,10 +147,11 @@ The pre-repair focused baselines were green:
 
 ## Repair boundary
 
-Findings 1 and 2 require owner-level availability repairs and regressions:
-restore into a private sibling staging directory and publish only after all
-verification succeeds; apply pre-allocation file limits and a total FastSwap WAL
-fence. Finding 5 requires a documentation correction that separates deployed
+Findings 1, 2, and 6 require owner-level repairs and regressions: restore into
+a private sibling staging directory and publish only after all verification
+succeeds; apply pre-allocation file limits and a total FastSwap WAL fence; and
+durably truncate every unauthenticated torn WAL suffix before allowing another
+append. Finding 5 requires a documentation correction that separates deployed
 source ancestry from missing live export evidence. Findings 3 and 4 remain
 recorded under the campaign's P3 rule.
 
