@@ -19,9 +19,36 @@ pub(super) struct BlockProposalPlan<'a, T> {
     pub(super) fastpay_pre_state_effects: Vec<postfiat_types::FastPayVersionFenceV1>,
 }
 
+pub(super) fn validate_unique_receipt_ids(receipt_ids: &[String], context: &str) -> io::Result<()> {
+    let mut seen = BTreeSet::new();
+    for receipt_id in receipt_ids {
+        if !seen.insert(receipt_id.as_str()) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("{context} contains duplicate receipt id `{receipt_id}`"),
+            ));
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn build_block_proposal_from_state<T: Serialize>(
     plan: BlockProposalPlan<'_, T>,
 ) -> io::Result<BlockProposalFile> {
+    let receipt_ids = plan
+        .receipts
+        .iter()
+        .map(|receipt| receipt.tx_id.clone())
+        .collect::<Vec<_>>();
+    validate_unique_receipt_ids(&receipt_ids, "block proposal")?;
+    postfiat_storage::validate_state_file_value_size("replicated ledger state", plan.ledger)?;
+    postfiat_storage::validate_state_file_value_size(
+        "replicated governance state",
+        plan.governance,
+    )?;
+    postfiat_storage::validate_state_file_value_size("replicated shielded state", plan.shielded)?;
+    postfiat_storage::validate_state_file_value_size("replicated bridge state", plan.bridge)?;
+
     let state_root = match plan.ordered_history {
         Some(ordered_history) => replicated_state_root_v2(
             plan.genesis,
@@ -43,11 +70,6 @@ pub(super) fn build_block_proposal_from_state<T: Serialize>(
     let payload_json = serde_json::to_string(plan.payload).map_err(invalid_data)?;
     let payload_hash =
         batch_archive_payload_hash(plan.genesis, plan.batch_kind, plan.batch_id, &payload_json)?;
-    let receipt_ids = plan
-        .receipts
-        .iter()
-        .map(|receipt| receipt.tx_id.clone())
-        .collect::<Vec<_>>();
     let block_height = plan.block_height;
     let view = plan.view;
     let validators = active_validator_ids(plan.governance)?;
@@ -3602,6 +3624,48 @@ pub fn import_snapshot_from_finalized_checkpoint(
     options: SnapshotImportOptions,
 ) -> io::Result<StatusReport> {
     import_snapshot_with_basis(options, SnapshotVerificationBasis::FinalizedCheckpoint)
+}
+
+#[cfg(test)]
+mod proposal_admission_tests {
+    use super::*;
+
+    #[test]
+    fn proposal_builder_rejects_duplicate_execution_receipt_ids() {
+        let genesis = Genesis::new("postfiat-proposal-receipt-test");
+        let governance = GovernanceState::new(1);
+        let ledger = LedgerState::empty();
+        let shielded = ShieldedState::empty();
+        let bridge = BridgeState::empty();
+        let receipt = Receipt::accepted("duplicate-transaction", "first execution");
+        let receipts = vec![
+            receipt.clone(),
+            Receipt::rejected(receipt.tx_id, "bad_sequence", "duplicate execution"),
+        ];
+
+        let error = build_block_proposal_from_state(BlockProposalPlan {
+            genesis: &genesis,
+            governance: &governance,
+            ledger: &ledger,
+            ordered_batches: &[],
+            ordered_history: None,
+            shielded: &shielded,
+            bridge: &bridge,
+            block_height: 1,
+            parent_hash: "genesis".to_string(),
+            view: 0,
+            batch_kind: BATCH_KIND_TRANSPARENT,
+            batch_id: "duplicate-receipt-batch",
+            payload: &(),
+            receipts: &receipts,
+            fastpay_pre_state_effects: Vec::new(),
+        })
+        .expect_err("a proposal must not contain duplicate receipt ids");
+        assert!(
+            error.to_string().contains("duplicate receipt id"),
+            "{error}"
+        );
+    }
 }
 
 #[cfg(test)]

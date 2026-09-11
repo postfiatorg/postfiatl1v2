@@ -70,6 +70,36 @@ pub const MAX_JSONL_RECORD_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_JSONL_RECORDS: usize = 1_000_000;
 static ATOMIC_WRITE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+#[derive(Default)]
+struct SerializedSizeCounter {
+    bytes: u64,
+}
+
+impl Write for SerializedSizeCounter {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        self.bytes = self.bytes.checked_add(buffer.len() as u64).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "serialized size overflow")
+        })?;
+        Ok(buffer.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Verify that a value fits the exact whole-file JSON representation used by
+/// legacy state files, including the keyed integrity trailer, without writing
+/// the value or allocating its serialized form.
+pub fn validate_state_file_value_size<T: Serialize + ?Sized>(
+    label: &str,
+    value: &T,
+) -> io::Result<()> {
+    let mut counter = SerializedSizeCounter::default();
+    serde_json::to_writer_pretty(&mut counter, value).map_err(invalid_data)?;
+    validate_state_file_lengths(label, counter.bytes, counter.bytes, MAX_STATE_FILE_BYTES)
+}
+
 #[derive(Debug, Clone)]
 pub struct NodeStore {
     data_dir: PathBuf,
@@ -759,19 +789,24 @@ impl NodeStore {
     /// Serialize `value` and append the keyed integrity trailer; see the
     /// format note in [`integrity`].
     fn write_json_with_mac(&self, label: &str, body: &[u8]) -> io::Result<Vec<u8>> {
-        enforce_serialized_size("state JSON", body.len() as u64, MAX_STATE_FILE_BYTES)?;
         // Canonical form: exactly one newline between body and trailer, and
         // the MAC always covers the body *without* that trailing newline so
         // the verify side can be unambiguous.
-        let body = strip_trailing_newlines(body);
-        let mac = self.file_mac(label, body);
-        let mut bytes = Vec::with_capacity(body.len() + 1 + FILE_MAC_MARKER.len() + 96 + 1);
-        bytes.extend_from_slice(body);
+        let stripped_body = strip_trailing_newlines(body);
+        validate_state_file_lengths(
+            "state",
+            body.len() as u64,
+            stripped_body.len() as u64,
+            MAX_STATE_FILE_BYTES,
+        )?;
+        let mac = self.file_mac(label, stripped_body);
+        let mut bytes =
+            Vec::with_capacity(stripped_body.len() + 1 + FILE_MAC_MARKER.len() + MAC_BYTES * 2 + 1);
+        bytes.extend_from_slice(stripped_body);
         bytes.push(b'\n');
         bytes.extend_from_slice(FILE_MAC_MARKER.as_bytes());
         bytes.extend_from_slice(to_hex(&mac).as_bytes());
         bytes.push(b'\n');
-        enforce_serialized_size("state file", bytes.len() as u64, MAX_STATE_FILE_BYTES)?;
         Ok(bytes)
     }
 
@@ -2289,6 +2324,24 @@ fn read_text(path: &Path, label: &str) -> io::Result<String> {
     Ok(raw)
 }
 
+fn validate_state_file_lengths(
+    label: &str,
+    json_bytes: u64,
+    body_bytes: u64,
+    limit: u64,
+) -> io::Result<()> {
+    enforce_serialized_size(&format!("{label} JSON"), json_bytes, limit)?;
+    let trailer_bytes = 1_u64
+        .checked_add(FILE_MAC_MARKER.len() as u64)
+        .and_then(|bytes| bytes.checked_add((MAC_BYTES * 2) as u64))
+        .and_then(|bytes| bytes.checked_add(1))
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "state trailer size overflow"))?;
+    let file_bytes = body_bytes
+        .checked_add(trailer_bytes)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "state file size overflow"))?;
+    enforce_serialized_size(&format!("{label} file"), file_bytes, limit)
+}
+
 fn enforce_serialized_size(label: &str, actual: u64, limit: u64) -> io::Result<()> {
     if actual <= limit {
         return Ok(());
@@ -2409,6 +2462,31 @@ mod tests {
         TRANSFER_TRANSACTION_KIND,
     };
     use std::sync::{Arc, Barrier};
+
+    #[test]
+    fn state_value_size_check_includes_the_integrity_trailer() {
+        let value = serde_json::json!({"state": "bounded"});
+        validate_state_file_value_size("test state", &value).expect("small state fits");
+
+        let json = serde_json::to_string_pretty(&value).expect("serialize fixture");
+        let trailer_bytes = 1 + FILE_MAC_MARKER.len() + MAC_BYTES * 2 + 1;
+        let exact_limit = (json.len() + trailer_bytes) as u64;
+        validate_state_file_lengths(
+            "test state",
+            json.len() as u64,
+            json.len() as u64,
+            exact_limit,
+        )
+        .expect("exact state-file limit fits");
+        let error = validate_state_file_lengths(
+            "test state",
+            json.len() as u64,
+            json.len() as u64,
+            exact_limit - 1,
+        )
+        .expect_err("integrity trailer must count toward the state-file limit");
+        assert!(error.to_string().contains("test state file"), "{error}");
+    }
 
     #[test]
     fn init_and_read_back() {

@@ -340,7 +340,7 @@ pub use batch_snapshot::*;
 use batch_snapshot::{
     apply_batch_elapsed_ms, build_block_proposal_from_state, legacy_work_delta,
     read_deployment_validator_bindings_file, sha256_file_hex, storage_work_report,
-    validate_deployment_identifier, BlockProposalPlan,
+    validate_deployment_identifier, validate_unique_receipt_ids, BlockProposalPlan,
 };
 pub use market_bridge::*;
 pub use pfusdc_tier4::*;

@@ -3897,6 +3897,7 @@ fn validate_block_proposal_file(proposal: &BlockProposalFile, genesis: &Genesis)
             "block proposal receipt count mismatch",
         ));
     }
+    validate_unique_receipt_ids(&proposal.receipt_ids, "block proposal")?;
     if let Some(root) = &proposal.pftl_uniswap_receipt_root {
         validate_lower_hex_len("block_proposal.pftl_uniswap_receipt_root", root, 96)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
@@ -4004,6 +4005,18 @@ mod bridge_exit_root_activation_tests {
             signed_authorizations: Vec::new(),
         });
         governance
+    }
+
+    #[test]
+    fn supplied_proposal_rejects_duplicate_receipt_ids() {
+        let genesis = Genesis::new("postfiat-tier4-test");
+        let mut duplicate = proposal(1, None);
+        duplicate.receipt_ids = vec!["same-transaction".to_string(); 2];
+        duplicate.receipt_count = 2;
+
+        let error = validate_block_proposal_file(&duplicate, &genesis)
+            .expect_err("duplicate receipt ids must not be eligible for votes");
+        assert!(error.to_string().contains("duplicate receipt id"), "{error}");
     }
 
     #[test]

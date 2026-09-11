@@ -603,6 +603,71 @@ mod tests {
     }
 
     #[test]
+    fn signed_owned_deposit_rejects_the_declared_object_cap_without_mutation() {
+        let owner = ml_dsa_65_keygen_from_seed(&[54; 32]);
+        let address = address_from_public_key(&owner.public_key);
+        let mut ledger = LedgerState::new(vec![Account {
+            address: address.clone(),
+            balance: 100,
+            sequence: 0,
+            public_key_hex: None,
+        }]);
+        ledger.owned_objects = vec![
+            OwnedObject {
+                id: "occupied-object".to_string(),
+                version: 1,
+                owner_pubkey_hex: "occupied-owner".to_string(),
+                value: 1,
+                asset: "PFT".to_string(),
+            };
+            postfiat_types::MAX_OWNED_OBJECTS
+        ];
+        let account_before = ledger.accounts[0].clone();
+        let deposit = OwnedDepositV1 {
+            domain: FastSwapChainDomainV1 {
+                chain_id: "owned-deposit-test".to_owned(),
+                genesis_hash: FastSwapOpaqueHashV1([55; 48]),
+                protocol_version: 1,
+            },
+            source_address: address,
+            source_pubkey: owner.public_key.clone(),
+            sequence: 1,
+            fee_pft: 1,
+            destination_owner_pubkey: owner.public_key.clone(),
+            asset: "PFT".to_owned(),
+            amount_atoms: 40,
+            valid_through_height: 20,
+            nonce: [56; 32],
+        };
+        let signed = SignedOwnedDepositV1 {
+            signature: ml_dsa_65_sign_with_context(
+                &owner.private_key,
+                &deposit.signing_bytes().expect("deposit bytes"),
+                OWNED_DEPOSIT_CONTEXT_V1,
+            )
+            .expect("sign"),
+            algorithm_id: FASTSWAP_ML_DSA_65.to_owned(),
+            deposit,
+        };
+        let receipt = execute_fastlane_primary_transaction(
+            &mut ledger,
+            &FastLanePrimaryTransactionV1 {
+                operation: FastLanePrimaryOperationV1::OwnedDeposit { signed },
+            },
+            10,
+        );
+
+        assert!(!receipt.accepted);
+        assert_eq!(receipt.code, "owned_deposit_rejected");
+        assert!(receipt.message.contains("ResourceLimitExceeded"));
+        assert_eq!(ledger.accounts[0], account_before);
+        assert_eq!(
+            ledger.owned_objects.len(),
+            postfiat_types::MAX_OWNED_OBJECTS
+        );
+    }
+
+    #[test]
     fn signed_owned_deposit_failure_matrix_never_mutates() {
         let owner = ml_dsa_65_keygen_from_seed(&[61; 32]);
         let address = address_from_public_key(&owner.public_key);

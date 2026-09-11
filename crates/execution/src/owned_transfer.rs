@@ -47,6 +47,24 @@ pub enum OwnedTransferError {
     VersionFenced,
 }
 
+fn ensure_owned_object_capacity(
+    current: usize,
+    consumed: usize,
+    created: usize,
+) -> Result<(), OwnedTransferError> {
+    if created <= consumed {
+        return Ok(());
+    }
+    let additional = created - consumed;
+    let next = current
+        .checked_add(additional)
+        .ok_or(OwnedTransferError::ResourceLimitExceeded)?;
+    if next > postfiat_types::MAX_OWNED_OBJECTS {
+        return Err(OwnedTransferError::ResourceLimitExceeded);
+    }
+    Ok(())
+}
+
 fn append_owned_certificate_domain(
     out: &mut Vec<u8>,
     domain: &postfiat_types::OwnedCertificateDomain,
@@ -404,10 +422,11 @@ fn prepare_owned_transfer(
         return Err(OwnedTransferError::ResourceLimitExceeded);
     }
     validate_owned_memos(&order.memos)?;
-    let net_new = order.outputs.len() as isize - order.inputs.len() as isize;
-    if (ledger.owned_objects.len() as isize + net_new) > postfiat_types::MAX_OWNED_OBJECTS as isize {
-        return Err(OwnedTransferError::ResourceLimitExceeded);
-    }
+    ensure_owned_object_capacity(
+        ledger.owned_objects.len(),
+        order.inputs.len(),
+        order.outputs.len(),
+    )?;
 
     let mut input_value = 0u64;
     let mut asset: Option<&str> = None;
@@ -483,10 +502,11 @@ pub fn apply_owned_unwrap(
         .checked_add(order.fee)
         .ok_or(OwnedTransferError::Overflow)?;
     let change = input_value - required;
-    let net_new = (if change > 0 { 1isize } else { 0isize }) - order.inputs.len() as isize;
-    if (ledger.owned_objects.len() as isize + net_new) > postfiat_types::MAX_OWNED_OBJECTS as isize {
-        return Err(OwnedTransferError::ResourceLimitExceeded);
-    }
+    ensure_owned_object_capacity(
+        ledger.owned_objects.len(),
+        order.inputs.len(),
+        usize::from(change > 0),
+    )?;
 
     let credited_balance = ledger
         .account(&order.to_address)
@@ -591,10 +611,11 @@ fn prepare_owned_unwrap(
         return Err(OwnedTransferError::NotConserved);
     }
     let change = input_value - required;
-    let net_new = (if change > 0 { 1isize } else { 0isize }) - order.inputs.len() as isize;
-    if (ledger.owned_objects.len() as isize + net_new) > postfiat_types::MAX_OWNED_OBJECTS as isize {
-        return Err(OwnedTransferError::ResourceLimitExceeded);
-    }
+    ensure_owned_object_capacity(
+        ledger.owned_objects.len(),
+        order.inputs.len(),
+        usize::from(change > 0),
+    )?;
     Ok((consume_indices, input_value))
 }
 
@@ -655,6 +676,7 @@ pub fn wrap_to_owned(
     {
         return Err(OwnedTransferError::DuplicateOutput);
     }
+    ensure_owned_object_capacity(ledger.owned_objects.len(), 0, 1)?;
     {
         let account = ledger
             .account_mut(from_address)
@@ -727,6 +749,7 @@ pub fn apply_owned_deposit(
     {
         return Err(OwnedTransferError::DuplicateOutput);
     }
+    ensure_owned_object_capacity(ledger.owned_objects.len(), 0, 1)?;
     let mut next = ledger.clone();
     let account = next
         .account_mut(&deposit.source_address)
@@ -825,6 +848,16 @@ mod owned_transfer_tests {
             value,
             asset: asset.into(),
         }
+    }
+
+    #[test]
+    fn owned_object_capacity_allows_retirement_but_rejects_growth_at_the_cap() {
+        ensure_owned_object_capacity(postfiat_types::MAX_OWNED_OBJECTS, 1, 1)
+            .expect("non-growing transition remains valid at the cap");
+        assert_eq!(
+            ensure_owned_object_capacity(postfiat_types::MAX_OWNED_OBJECTS, 0, 1),
+            Err(OwnedTransferError::ResourceLimitExceeded)
+        );
     }
 
     #[test]
