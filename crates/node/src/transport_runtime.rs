@@ -59,6 +59,43 @@ fn accept_transport_validator_connection(
     }
 }
 
+struct TransportValidatorInFlightPermit {
+    slots: Arc<(Mutex<usize>, Condvar)>,
+}
+
+impl Drop for TransportValidatorInFlightPermit {
+    fn drop(&mut self) {
+        let (slots, available) = &*self.slots;
+        if let Ok(mut slots) = slots.lock() {
+            *slots = slots.saturating_add(1);
+            available.notify_one();
+        }
+    }
+}
+
+fn acquire_transport_validator_in_flight_permit(
+    slots: &Arc<(Mutex<usize>, Condvar)>,
+    shutdown_signal: &std::sync::atomic::AtomicBool,
+) -> Result<Option<TransportValidatorInFlightPermit>, String> {
+    let (available_slots, available) = &**slots;
+    let mut available_slots = available_slots
+        .lock()
+        .map_err(|_| "transport validator in-flight lock poisoned".to_string())?;
+    while *available_slots == 0 {
+        if shutdown_signal.load(Ordering::Acquire) {
+            return Ok(None);
+        }
+        let waited = available
+            .wait_timeout(available_slots, Duration::from_millis(10))
+            .map_err(|_| "transport validator in-flight lock poisoned".to_string())?;
+        available_slots = waited.0;
+    }
+    *available_slots = available_slots.saturating_sub(1);
+    Ok(Some(TransportValidatorInFlightPermit {
+        slots: Arc::clone(slots),
+    }))
+}
+
 pub(super) struct TransportBatchInboxFiles {
     pub(super) batch_file: PathBuf,
     pub(super) certificate_file: Option<PathBuf>,
@@ -235,6 +272,12 @@ pub(super) fn transport_batch_listen(
     })
 }
 
+fn transport_batch_serve_rejection_budget(max_batches: usize) -> usize {
+    max_batches
+        .saturating_mul(4)
+        .clamp(16, TRANSPORT_BATCH_SERVE_MAX_REJECTIONS)
+}
+
 pub(super) fn transport_batch_serve(
     data_dir: PathBuf,
     topology_file: PathBuf,
@@ -268,7 +311,8 @@ pub(super) fn transport_batch_serve(
         .transpose()?;
 
     let mut accepted = Vec::with_capacity(max_batches);
-    let mut rejected = Vec::new();
+    let rejection_budget = transport_batch_serve_rejection_budget(max_batches);
+    let mut rejected = Vec::with_capacity(rejection_budget);
     let mut batch_index = 0_u64;
     while accepted.len() < max_batches {
         batch_index = batch_index.saturating_add(1);
@@ -311,6 +355,11 @@ pub(super) fn transport_batch_serve(
                     write_event_log_line(writer, &event)?;
                 }
                 rejected.push(rejection);
+                if rejected.len() >= rejection_budget {
+                    return Err(format!(
+                        "transport batch service exhausted bounded rejection budget {rejection_budget} before accepting {max_batches} batches"
+                    ));
+                }
                 continue;
             }
         };
@@ -892,6 +941,10 @@ pub(super) fn transport_validator_serve_inner(
     let event_writer = Arc::new(Mutex::new(event_writer));
     let shared_state = Arc::new(Mutex::new(TransportValidatorServeSharedState::default()));
     let active_streams = Arc::new(Mutex::new(BTreeMap::<u64, TcpStream>::new()));
+    let in_flight_slots = Arc::new((
+        Mutex::new(TRANSPORT_VALIDATOR_MAX_IN_FLIGHT.min(max_connections)),
+        Condvar::new(),
+    ));
     let mut handles = Vec::with_capacity(max_connections);
     let (listener, shielded_verifier_prewarm) = transport_startup_after_prewarm(
         || match prewarmed_for_test {
@@ -912,6 +965,10 @@ pub(super) fn transport_validator_serve_inner(
                     bind_address: &bind_address,
                     vote_dir: vote_dir.display().to_string(),
                     max_connections,
+                    max_in_flight: TRANSPORT_VALIDATOR_MAX_IN_FLIGHT.min(max_connections),
+                    max_requests_per_connection:
+                        TRANSPORT_VALIDATOR_MAX_REQUESTS_PER_CONNECTION,
+                    retained_summary_limit: TRANSPORT_VALIDATOR_RETAINED_SUMMARY_LIMIT,
                     timeout_ms,
                     require_signed_proposal,
                     remote_proposal_routing: true,
@@ -939,6 +996,14 @@ pub(super) fn transport_validator_serve_inner(
             break 'accept_connections;
         };
         set_stream_timeout(&stream, timeout_ms)?;
+        let Some(in_flight_permit) = acquire_transport_validator_in_flight_permit(
+            &in_flight_slots,
+            shutdown_signal,
+        )? else {
+            was_shutdown = true;
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+            break 'accept_connections;
+        };
         let shutdown_stream = stream.try_clone().map_err(|error| {
             format!("transport validator shutdown stream clone failed: {error}")
         })?;
@@ -954,6 +1019,7 @@ pub(super) fn transport_validator_serve_inner(
         let shared_state_for_thread = Arc::clone(&shared_state);
         let active_streams_for_thread = Arc::clone(&active_streams);
         handles.push(thread::spawn(move || {
+            let _in_flight_permit = in_flight_permit;
             let result = handle_transport_validator_connection(
                 stream,
                 data_dir_for_thread,
@@ -1012,6 +1078,13 @@ pub(super) fn transport_validator_serve_inner(
     let mut shared_state = shared_state
         .lock()
         .map_err(|_| "transport validator service summary lock poisoned".to_string())?;
+    let accepted_batch_count = shared_state.accepted_batch_count;
+    let accepted_block_vote_count = shared_state.accepted_block_vote_count;
+    let accepted_block_proposal_count = shared_state.accepted_block_proposal_count;
+    let accepted_health_count = shared_state.accepted_health_count;
+    let rejected_count = shared_state.rejected_count;
+    let retained_summary_count = shared_state.retained_summary_count;
+    let summaries_truncated = shared_state.summaries_truncated;
     let batch_acks = std::mem::take(&mut shared_state.batch_acks);
     let block_vote_responses = std::mem::take(&mut shared_state.block_vote_responses);
     let block_proposal_responses =
@@ -1028,11 +1101,16 @@ pub(super) fn transport_validator_serve_inner(
         require_signed_proposal,
         shielded_verifier_prewarm,
         connection_count,
-        accepted_batch_count: batch_acks.len() as u64,
-        accepted_block_vote_count: block_vote_responses.len() as u64,
-        accepted_block_proposal_count: block_proposal_responses.len() as u64,
-        accepted_health_count: health_responses.len() as u64,
-        rejected_count: rejected.len() as u64,
+        max_in_flight: TRANSPORT_VALIDATOR_MAX_IN_FLIGHT.min(max_connections),
+        max_requests_per_connection: TRANSPORT_VALIDATOR_MAX_REQUESTS_PER_CONNECTION,
+        retained_summary_limit: TRANSPORT_VALIDATOR_RETAINED_SUMMARY_LIMIT,
+        retained_summary_count,
+        summaries_truncated,
+        accepted_batch_count,
+        accepted_block_vote_count,
+        accepted_block_proposal_count,
+        accepted_health_count,
+        rejected_count,
         batch_acks,
         block_vote_responses,
         block_proposal_responses,
@@ -1065,6 +1143,9 @@ fn handle_transport_validator_connection(
 ) -> Result<(), String> {
     let mut handled_request_count = 0u64;
     loop {
+        if handled_request_count >= TRANSPORT_VALIDATOR_MAX_REQUESTS_PER_CONNECTION {
+            break;
+        }
         let local_status = status(NodeOptions {
             data_dir: data_dir.clone(),
         })
@@ -1107,8 +1188,7 @@ fn handle_transport_validator_connection(
                 shared_state
                     .lock()
                     .map_err(|_| "transport validator service state lock poisoned".to_string())?
-                    .rejected
-                    .push(rejection);
+                    .record_rejection(rejection);
                 break;
             }
         };
@@ -1144,8 +1224,7 @@ fn handle_transport_validator_connection(
                     shared_state
                         .lock()
                         .map_err(|_| "transport validator service state lock poisoned".to_string())?
-                        .batch_acks
-                        .push(ack);
+                        .record_batch_ack(ack);
                 }
                 Err(error) => {
                     record_transport_validator_rejection(
@@ -1159,6 +1238,7 @@ fn handle_transport_validator_connection(
                         &event_writer,
                         &shared_state,
                     )?;
+                    break;
                 }
             },
             TRANSPORT_BLOCK_VOTE_REQUEST_SCHEMA => match handle_transport_block_vote_line(
@@ -1193,8 +1273,7 @@ fn handle_transport_validator_connection(
                     shared_state
                         .lock()
                         .map_err(|_| "transport validator service state lock poisoned".to_string())?
-                        .block_vote_responses
-                        .push(response);
+                        .record_block_vote_response(response);
                 }
                 Err(error) => {
                     record_transport_validator_rejection(
@@ -1208,6 +1287,7 @@ fn handle_transport_validator_connection(
                         &event_writer,
                         &shared_state,
                     )?;
+                    break;
                 }
             },
             TRANSPORT_BLOCK_PROPOSAL_REQUEST_SCHEMA => {
@@ -1243,8 +1323,7 @@ fn handle_transport_validator_connection(
                             .map_err(|_| {
                                 "transport validator service state lock poisoned".to_string()
                             })?
-                            .block_proposal_responses
-                            .push(response);
+                            .record_block_proposal_response(response);
                     }
                     Err(error) => {
                         record_transport_validator_rejection(
@@ -1258,6 +1337,7 @@ fn handle_transport_validator_connection(
                             &event_writer,
                             &shared_state,
                         )?;
+                        break;
                     }
                 }
             },
@@ -1289,8 +1369,7 @@ fn handle_transport_validator_connection(
                     shared_state
                         .lock()
                         .map_err(|_| "transport validator service state lock poisoned".to_string())?
-                        .health_responses
-                        .push(response);
+                        .record_health_response(response);
                 }
                 Err(error) => {
                     record_transport_validator_rejection(
@@ -1304,6 +1383,7 @@ fn handle_transport_validator_connection(
                         &event_writer,
                         &shared_state,
                     )?;
+                    break;
                 }
             },
             other => {
@@ -1318,6 +1398,7 @@ fn handle_transport_validator_connection(
                     &event_writer,
                     &shared_state,
                 )?;
+                break;
             }
         }
     }
@@ -1367,8 +1448,7 @@ fn record_transport_validator_rejection(
     shared_state
         .lock()
         .map_err(|_| "transport validator service state lock poisoned".to_string())?
-        .rejected
-        .push(rejection);
+        .record_rejection(rejection);
     Ok(())
 }
 
@@ -5233,5 +5313,60 @@ mod bounded_accept_tests {
             .expect("server thread panicked")
             .expect_err("worker failure must propagate");
         assert_eq!(error, "intentional worker failure");
+    }
+
+    #[test]
+    fn validator_serving_resource_bounds_are_enforced() {
+        let slots = Arc::new((Mutex::new(1_usize), Condvar::new()));
+        let shutdown = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let first = acquire_transport_validator_in_flight_permit(&slots, &shutdown)
+            .expect("acquire first permit")
+            .expect("first permit available");
+        let slots_for_waiter = Arc::clone(&slots);
+        let shutdown_for_waiter = Arc::clone(&shutdown);
+        let (acquired_tx, acquired_rx) = mpsc::channel();
+        let waiter = thread::spawn(move || {
+            let permit = acquire_transport_validator_in_flight_permit(
+                &slots_for_waiter,
+                &shutdown_for_waiter,
+            )
+            .expect("acquire second permit");
+            acquired_tx
+                .send(permit.is_some())
+                .expect("report second permit");
+        });
+        assert!(
+            acquired_rx.recv_timeout(Duration::from_millis(50)).is_err(),
+            "second worker must wait while the only slot is held"
+        );
+        drop(first);
+        assert!(
+            acquired_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("second permit released"),
+            "second worker must acquire the released slot"
+        );
+        waiter.join().expect("permit waiter panicked");
+
+        let mut retained = Vec::new();
+        let mut retained_count = 0;
+        let mut truncated = false;
+        for value in 0..=TRANSPORT_VALIDATOR_RETAINED_SUMMARY_LIMIT {
+            retain_transport_validator_summary(
+                &mut retained_count,
+                &mut truncated,
+                &mut retained,
+                value,
+            );
+        }
+        assert_eq!(retained.len(), TRANSPORT_VALIDATOR_RETAINED_SUMMARY_LIMIT);
+        assert_eq!(retained_count, TRANSPORT_VALIDATOR_RETAINED_SUMMARY_LIMIT);
+        assert!(truncated);
+
+        assert_eq!(transport_batch_serve_rejection_budget(1), 16);
+        assert_eq!(
+            transport_batch_serve_rejection_budget(usize::MAX),
+            TRANSPORT_BATCH_SERVE_MAX_REJECTIONS
+        );
     }
 }

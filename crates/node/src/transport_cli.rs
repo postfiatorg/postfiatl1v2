@@ -100,6 +100,9 @@ struct TransportValidatorServeReadyReport<'a> {
     bind_address: &'a str,
     vote_dir: String,
     max_connections: usize,
+    max_in_flight: usize,
+    max_requests_per_connection: u64,
+    retained_summary_limit: usize,
     timeout_ms: u64,
     require_signed_proposal: bool,
     remote_proposal_routing: bool,
@@ -560,6 +563,11 @@ struct TransportValidatorServeReport {
     require_signed_proposal: bool,
     shielded_verifier_prewarm: TransportShieldedVerifierPrewarmReport,
     connection_count: u64,
+    max_in_flight: usize,
+    max_requests_per_connection: u64,
+    retained_summary_limit: usize,
+    retained_summary_count: usize,
+    summaries_truncated: bool,
     accepted_batch_count: u64,
     accepted_block_vote_count: u64,
     accepted_block_proposal_count: u64,
@@ -575,11 +583,85 @@ struct TransportValidatorServeReport {
 
 #[derive(Debug, Default)]
 struct TransportValidatorServeSharedState {
+    accepted_batch_count: u64,
+    accepted_block_vote_count: u64,
+    accepted_block_proposal_count: u64,
+    accepted_health_count: u64,
+    rejected_count: u64,
+    retained_summary_count: usize,
+    summaries_truncated: bool,
     batch_acks: Vec<TransportBatchAck>,
     block_vote_responses: Vec<TransportBlockVoteResponse>,
     block_proposal_responses: Vec<TransportBlockProposalResponseEnvelope>,
     health_responses: Vec<TransportHealthResponseEnvelope>,
     rejected: Vec<TransportValidatorServeRejection>,
+}
+
+impl TransportValidatorServeSharedState {
+    fn record_batch_ack(&mut self, value: TransportBatchAck) {
+        self.accepted_batch_count = self.accepted_batch_count.saturating_add(1);
+        retain_transport_validator_summary(
+            &mut self.retained_summary_count,
+            &mut self.summaries_truncated,
+            &mut self.batch_acks,
+            value,
+        );
+    }
+
+    fn record_block_vote_response(&mut self, value: TransportBlockVoteResponse) {
+        self.accepted_block_vote_count = self.accepted_block_vote_count.saturating_add(1);
+        retain_transport_validator_summary(
+            &mut self.retained_summary_count,
+            &mut self.summaries_truncated,
+            &mut self.block_vote_responses,
+            value,
+        );
+    }
+
+    fn record_block_proposal_response(&mut self, value: TransportBlockProposalResponseEnvelope) {
+        self.accepted_block_proposal_count =
+            self.accepted_block_proposal_count.saturating_add(1);
+        retain_transport_validator_summary(
+            &mut self.retained_summary_count,
+            &mut self.summaries_truncated,
+            &mut self.block_proposal_responses,
+            value,
+        );
+    }
+
+    fn record_health_response(&mut self, value: TransportHealthResponseEnvelope) {
+        self.accepted_health_count = self.accepted_health_count.saturating_add(1);
+        retain_transport_validator_summary(
+            &mut self.retained_summary_count,
+            &mut self.summaries_truncated,
+            &mut self.health_responses,
+            value,
+        );
+    }
+
+    fn record_rejection(&mut self, value: TransportValidatorServeRejection) {
+        self.rejected_count = self.rejected_count.saturating_add(1);
+        retain_transport_validator_summary(
+            &mut self.retained_summary_count,
+            &mut self.summaries_truncated,
+            &mut self.rejected,
+            value,
+        );
+    }
+}
+
+fn retain_transport_validator_summary<T>(
+    retained_summary_count: &mut usize,
+    summaries_truncated: &mut bool,
+    target: &mut Vec<T>,
+    value: T,
+) {
+    if *retained_summary_count >= TRANSPORT_VALIDATOR_RETAINED_SUMMARY_LIMIT {
+        *summaries_truncated = true;
+        return;
+    }
+    target.push(value);
+    *retained_summary_count = (*retained_summary_count).saturating_add(1);
 }
 
 fn prewarm_shielded_verifier_cache(

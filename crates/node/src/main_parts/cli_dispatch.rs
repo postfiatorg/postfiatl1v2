@@ -310,6 +310,10 @@ const TRANSPORT_AUTH_SCHEMA: &str = "postfiat-transport-auth-v1";
 const TRANSPORT_AUTH_CONTEXT: &[u8] = b"postfiat-l1-v2/transport-auth/v1";
 const MAX_RPC_SERVE_ACTIVE_CONNECTIONS: usize = 64;
 const TRANSPORT_BLOCK_VOTE_LISTEN_MAX_IN_FLIGHT: usize = 16;
+const TRANSPORT_VALIDATOR_MAX_IN_FLIGHT: usize = 16;
+const TRANSPORT_VALIDATOR_MAX_REQUESTS_PER_CONNECTION: u64 = 4_096;
+const TRANSPORT_VALIDATOR_RETAINED_SUMMARY_LIMIT: usize = 1_024;
+const TRANSPORT_BATCH_SERVE_MAX_REJECTIONS: usize = 4_096;
 const RPC_ORCHARD_ACTION_SPOOL_DIR: &str = "rpc-orchard-actions";
 const RPC_ORCHARD_BATCH_SPOOL_DIR: &str = "rpc-orchard-batches";
 
