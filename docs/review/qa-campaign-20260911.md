@@ -6,21 +6,38 @@ This is the canonical progress record for the
 `c25b3389d5c221ff1c23e700d53460003cc50b2a`. It is a review-and-repair
 campaign, not a release, deployment, or live-authority action.
 
-**Status:** in progress. Storage and snapshots are done; execution is the next
-surface in the mandated order.
+**Status:** in progress. Storage and snapshots are done; execution findings are
+recorded and await repair.
 
 ## Campaign state
 
 | Order | Surface | Status | P1 | P2 | P3 | Evidence or fixes |
 | --- | --- | --- | ---: | ---: | ---: | --- |
 | A1 | Storage and snapshots | done | 1 | 3 | 2 | [Review](storage-snapshots-review-20260911.md); findings `8533f5d7`, `0d015227`; repairs `69e1f1ce` |
-| A2 | Execution | pending | 0 | 0 | 0 | — |
+| A2 | Execution | reviewing | 1 | 2 | 0 | [Review](execution-review-20260911.md); findings pending commit |
 | A3 | Cobalt ratification | pending | 0 | 0 | 0 | — |
 | A4 | Network and mempool admission | pending | 0 | 0 | 0 | — |
 | A5 | Operational Python CLIs | pending | 0 | 0 | 0 | — |
 | B | Defect inventory and TIH gate | pending | — | — | — | — |
 
-Current finding totals: **1 P1, 3 P2, 2 P3**.
+Current finding totals: **2 P1, 5 P2, 2 P3**.
+
+## Execution review result
+
+The full execution crate and its node-side state-transition, archive-replay,
+proposal, commit, and validator-registry entry points were reviewed. The pass
+found one P1: a repeated transaction produces duplicate receipt IDs that
+proposal construction and validation accept, although ordered commit rejects
+them after certification. Two P2s are recorded: the ordered OwnedDeposit path
+bypasses the declared 100,000-object cap, and proposal construction can certify
+a replicated state value above the storage layer's 256 MiB serialization
+limit. All three repairs affect consensus admission or state-transition results
+and will be labeled consensus-affecting. The findings are detailed in the
+[execution review](execution-review-20260911.md).
+
+Pre-repair verification:
+
+- `cargo test -p postfiat-execution --locked`: 196 passed.
 
 ## Storage review result
 
