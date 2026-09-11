@@ -7,7 +7,7 @@
 //! start in seconds instead of regenerating hundreds of blocks. The importer
 //! fails closed: publisher signature, schema, content hashes, chain identity,
 //! terminal tuple, entry allowlist, and symlink containment are all verified
-//! before any validator state is loaded, and each per-validator import
+//! before any validator state is published, and each per-validator import
 //! re-verifies the underlying signed snapshot and replays its history via the
 //! full-history snapshot basis. An import report is written even on failure.
 
@@ -443,91 +443,127 @@ fn import_lifecycle_checkpoint_inner(context: &mut ImportContext<'_>) -> io::Res
         }
     }
 
-    for validator in &manifest.validators {
-        let snapshot_dir = checkpoint_dir.join(&validator.snapshot_dir);
-        let signed_manifest_path =
-            snapshot_dir.join(crate::lifecycle_queries::SIGNED_SNAPSHOT_MANIFEST_FILE);
-        let observed_sha = crate::batch_snapshot::sha256_file_hex(
-            &signed_manifest_path,
-            "signed snapshot manifest",
-        )?;
-        context.check(
-            &format!("{}.signed_manifest_sha256", validator.node_id),
-            &validator.signed_manifest_sha256,
-            &observed_sha,
-        )?;
-        let signed: SignedSnapshotManifest = crate::consensus_artifacts::read_json_file(
-            &signed_manifest_path,
-            "signed snapshot manifest",
-        )?;
-        context.check(
-            &format!("{}.chain_id", validator.node_id),
-            &manifest.chain_id,
-            &signed.manifest.chain_id,
-        )?;
-        context.check(
-            &format!("{}.genesis_hash", validator.node_id),
-            &manifest.genesis_hash,
-            &signed.manifest.genesis_hash,
-        )?;
-        context.check(
-            &format!("{}.block_height", validator.node_id),
-            manifest.block_height,
-            signed.manifest.block_height,
-        )?;
-        context.check(
-            &format!("{}.block_tip_hash", validator.node_id),
-            &manifest.block_tip_hash,
-            &signed.manifest.block_tip_hash,
-        )?;
-        context.check(
-            &format!("{}.state_root", validator.node_id),
-            &manifest.state_root,
-            &signed.manifest.state_root,
-        )?;
+    if context.options.target_root.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!(
+                "lifecycle checkpoint import destination must not already exist: `{}`",
+                context.options.target_root.display()
+            ),
+        ));
+    }
+    let staging_root = crate::batch_snapshot::create_private_import_staging_dir(
+        &context.options.target_root,
+        "lifecycle-import",
+    )?;
+    let import_outcome = (|| {
+        let mut imported_validators = Vec::new();
+        for validator in &manifest.validators {
+            let snapshot_dir = checkpoint_dir.join(&validator.snapshot_dir);
+            let signed_manifest_path =
+                snapshot_dir.join(crate::lifecycle_queries::SIGNED_SNAPSHOT_MANIFEST_FILE);
+            let observed_sha = crate::batch_snapshot::sha256_file_hex(
+                &signed_manifest_path,
+                "signed snapshot manifest",
+            )?;
+            context.check(
+                &format!("{}.signed_manifest_sha256", validator.node_id),
+                &validator.signed_manifest_sha256,
+                &observed_sha,
+            )?;
+            let signed: SignedSnapshotManifest = crate::consensus_artifacts::read_json_file(
+                &signed_manifest_path,
+                "signed snapshot manifest",
+            )?;
+            context.check(
+                &format!("{}.chain_id", validator.node_id),
+                &manifest.chain_id,
+                &signed.manifest.chain_id,
+            )?;
+            context.check(
+                &format!("{}.genesis_hash", validator.node_id),
+                &manifest.genesis_hash,
+                &signed.manifest.genesis_hash,
+            )?;
+            context.check(
+                &format!("{}.block_height", validator.node_id),
+                manifest.block_height,
+                signed.manifest.block_height,
+            )?;
+            context.check(
+                &format!("{}.block_tip_hash", validator.node_id),
+                &manifest.block_tip_hash,
+                &signed.manifest.block_tip_hash,
+            )?;
+            context.check(
+                &format!("{}.state_root", validator.node_id),
+                &manifest.state_root,
+                &signed.manifest.state_root,
+            )?;
 
-        let data_dir = context.options.target_root.join(&validator.node_id);
-        let import_options = SignedSnapshotImportOptions {
-            data_dir: data_dir.clone(),
-            snapshot_dir,
-            trusted_publisher_key_file: context.options.trusted_publisher_key_file.clone(),
-            node_id: Some(validator.node_id.clone()),
-        };
-        let restored = match snapshot_basis {
-            LifecycleCheckpointSnapshotBasis::FullHistory => {
-                import_signed_snapshot(import_options)?
-            }
-            LifecycleCheckpointSnapshotBasis::FinalizedCheckpoint => {
-                import_signed_snapshot_from_finalized_checkpoint(import_options)?
-            }
-        };
-        context.check(
-            &format!("{}.restored_height", validator.node_id),
-            manifest.block_height,
-            restored.block_height,
-        )?;
-        context.check(
-            &format!("{}.restored_tip", validator.node_id),
-            &manifest.block_tip_hash,
-            &restored.block_tip_hash,
-        )?;
-        context.check(
-            &format!("{}.restored_state_root", validator.node_id),
-            &manifest.state_root,
-            &restored.state_root,
-        )?;
-        context
-            .report
-            .validators
-            .push(LifecycleCheckpointImportedValidator {
+            let staged_data_dir = staging_root.join(&validator.node_id);
+            let import_options = SignedSnapshotImportOptions {
+                data_dir: staged_data_dir,
+                snapshot_dir,
+                trusted_publisher_key_file: context.options.trusted_publisher_key_file.clone(),
+                node_id: Some(validator.node_id.clone()),
+            };
+            let restored = match snapshot_basis {
+                LifecycleCheckpointSnapshotBasis::FullHistory => {
+                    import_signed_snapshot(import_options)?
+                }
+                LifecycleCheckpointSnapshotBasis::FinalizedCheckpoint => {
+                    import_signed_snapshot_from_finalized_checkpoint(import_options)?
+                }
+            };
+            context.check(
+                &format!("{}.restored_height", validator.node_id),
+                manifest.block_height,
+                restored.block_height,
+            )?;
+            context.check(
+                &format!("{}.restored_tip", validator.node_id),
+                &manifest.block_tip_hash,
+                &restored.block_tip_hash,
+            )?;
+            context.check(
+                &format!("{}.restored_state_root", validator.node_id),
+                &manifest.state_root,
+                &restored.state_root,
+            )?;
+            imported_validators.push(LifecycleCheckpointImportedValidator {
                 node_id: validator.node_id.clone(),
-                data_dir: data_dir.display().to_string(),
+                data_dir: context
+                    .options
+                    .target_root
+                    .join(&validator.node_id)
+                    .display()
+                    .to_string(),
                 block_height: restored.block_height,
                 block_tip_hash: restored.block_tip_hash,
                 state_root: restored.state_root,
             });
+        }
+        let future_target_root = crate::batch_snapshot::prospective_absolute_import_target(
+            &context.options.target_root,
+        )?;
+        for validator in &manifest.validators {
+            NodeStore::new(staging_root.join(&validator.node_id))
+                .prepare_transactional_generation_for_data_dir_move(
+                    future_target_root.join(&validator.node_id),
+                )?;
+        }
+        crate::batch_snapshot::publish_private_import_staging_dir(
+            &staging_root,
+            &context.options.target_root,
+        )?;
+        context.report.validators = imported_validators;
+        Ok(())
+    })();
+    if import_outcome.is_err() {
+        let _ = std::fs::remove_dir_all(&staging_root);
     }
-    Ok(())
+    import_outcome
 }
 
 /// Imports a signed lifecycle checkpoint, restoring every validator into

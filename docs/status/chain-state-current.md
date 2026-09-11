@@ -87,9 +87,11 @@ Status: **canonical operational-state reference**
     all six validators converged at tip `9e738e87…c2098b`, state root
     `687b45d5…ac4ad5`. Three operational faults were also repaired
     (validator-0 RPC accept-queue wedge, validator-1's unrestored
-    `ordered_batches` JSONL head, root-owned certified-send outbox jobs). The
-    fleet-wide snapshot finalized-checkpoint export defect at block 924
-    remains open. See the
+    `ordered_batches` JSONL head, root-owned certified-send outbox jobs).
+    Source repair `353156c3` for the block-924 finalized-checkpoint snapshot
+    export defect is an ancestor of deployed base `707e006f`. No post-repair
+    fleet-wide signed export receipt is committed, so live snapshot usability
+    remains unverified even though the source defect is no longer open. See the
     [registry-continuation wedge postmortem](../postmortems/devnet-registry-continuation-wedge-2026-08-31.md)
     and `deployments/registry-fix-20260831/deploy-receipt.json`. Sections
     below describing the height-924 state are historical.

@@ -23,6 +23,7 @@ const FASTSWAP_SNAPSHOT_FILE: &str = "fastswap-v1.snapshot.json";
 const FASTSWAP_LOCK_FILE: &str = "fastswap-v1.lock";
 const FASTSWAP_VOTE_ARTIFACT_DIRECTORY: &str = "vote-artifacts";
 const FASTSWAP_WAL_MAX_RECORD_BYTES: usize = 1024 * 1024;
+const FASTSWAP_WAL_MAX_BYTES: usize = 256 * 1024 * 1024;
 const FASTSWAP_SNAPSHOT_MAX_BYTES: usize = 64 * 1024 * 1024;
 const FASTSWAP_WAL_CHECKSUM_BYTES: usize = MAC_BYTES;
 const FASTSWAP_SNAPSHOT_SCHEMA: &str = "postfiat-fastswap-snapshot-v1";
@@ -1016,17 +1017,32 @@ fn write_synced_json<T: Serialize>(path: &Path, value: &T) -> Result<(), FastSwa
 fn read_optional_bounded_json<T: serde::de::DeserializeOwned>(
     path: &Path,
 ) -> Result<Option<T>, FastSwapStoreError> {
-    let bytes = match fs::read(path) {
+    let bytes = match read_bounded_file(path, FASTSWAP_WAL_MAX_RECORD_BYTES) {
         Ok(bytes) => bytes,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error.into()),
+        Err(FastSwapStoreError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok(None)
+        }
+        Err(error) => return Err(error),
     };
-    if bytes.len() > FASTSWAP_WAL_MAX_RECORD_BYTES {
-        return Err(FastSwapStoreError::RecordTooLarge(bytes.len()));
-    }
     serde_json::from_slice(&bytes)
         .map(Some)
         .map_err(|error| FastSwapStoreError::Serialization(error.to_string()))
+}
+
+fn read_bounded_file(path: &Path, max_bytes: usize) -> Result<Vec<u8>, FastSwapStoreError> {
+    let file = File::open(path)?;
+    let file_len = file.metadata()?.len();
+    if file_len > max_bytes as u64 {
+        return Err(FastSwapStoreError::RecordTooLarge(
+            file_len.try_into().unwrap_or(usize::MAX),
+        ));
+    }
+    let mut bytes = Vec::with_capacity(file_len as usize);
+    file.take(max_bytes as u64 + 1).read_to_end(&mut bytes)?;
+    if bytes.len() > max_bytes {
+        return Err(FastSwapStoreError::RecordTooLarge(bytes.len()));
+    }
+    Ok(bytes)
 }
 
 fn apply_record(
@@ -1480,6 +1496,20 @@ fn append_synced_record(
         .map_err(|_| FastSwapStoreError::RecordTooLarge(payload.len()))?;
     let tag = integrity_key.mac(FASTSWAP_WAL_MAC_DOMAIN, &payload);
     let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+    let appended_bytes = 4_usize
+        .checked_add(payload.len())
+        .and_then(|value| value.checked_add(tag.len()))
+        .ok_or(FastSwapStoreError::RecordTooLarge(usize::MAX))?;
+    let new_len = file
+        .metadata()?
+        .len()
+        .checked_add(appended_bytes as u64)
+        .ok_or(FastSwapStoreError::RecordTooLarge(usize::MAX))?;
+    if new_len > FASTSWAP_WAL_MAX_BYTES as u64 {
+        return Err(FastSwapStoreError::RecordTooLarge(
+            new_len.try_into().unwrap_or(usize::MAX),
+        ));
+    }
     file.write_all(&length.to_be_bytes())?;
     file.write_all(&payload)?;
     file.write_all(&tag)?;
@@ -1528,16 +1558,13 @@ fn read_snapshot(
     integrity_key: &IntegrityKey,
     allow_legacy_migration: bool,
 ) -> Result<Option<FastSwapSnapshotV1>, FastSwapStoreError> {
-    let bytes = match fs::read(path) {
+    let bytes = match read_bounded_file(path, FASTSWAP_SNAPSHOT_MAX_BYTES) {
         Ok(bytes) => bytes,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error.into()),
+        Err(FastSwapStoreError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok(None)
+        }
+        Err(error) => return Err(error),
     };
-    if bytes.len() > FASTSWAP_SNAPSHOT_MAX_BYTES {
-        return Err(FastSwapStoreError::CorruptSnapshot(
-            "snapshot exceeds size bound",
-        ));
-    }
     let snapshot: FastSwapSnapshotV1 = serde_json::from_slice(&bytes)
         .map_err(|_| FastSwapStoreError::CorruptSnapshot("snapshot decode failure"))?;
     if snapshot.schema != FASTSWAP_SNAPSHOT_SCHEMA {
@@ -1628,15 +1655,15 @@ fn read_records(
     integrity_key: &IntegrityKey,
     allow_legacy_migration: bool,
 ) -> Result<Vec<FastSwapWalRecordV1>, FastSwapStoreError> {
-    let mut bytes = Vec::new();
-    match File::open(path) {
-        Ok(mut file) => {
-            file.read_to_end(&mut bytes)?;
+    let bytes = match read_bounded_file(path, FASTSWAP_WAL_MAX_BYTES) {
+        Ok(bytes) => bytes,
+        Err(FastSwapStoreError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok(Vec::new())
         }
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(FastSwapStoreError::Io(error)),
-    }
+        Err(error) => return Err(error),
+    };
     let mut offset = 0_usize;
+    let mut verified_len = 0_usize;
     let mut records = Vec::new();
     let mut legacy_tags: Vec<u64> = Vec::new();
     while offset < bytes.len() {
@@ -1703,6 +1730,7 @@ fn read_records(
                 reason: "record decode failure",
             })?;
         records.push(record);
+        verified_len = record_end;
     }
     if !legacy_tags.is_empty() {
         eprintln!(
@@ -1712,15 +1740,28 @@ fn read_records(
             legacy_tags.len(),
             legacy_tags
         );
-        upgrade_wal_tags(path, &bytes, integrity_key)?;
+        upgrade_wal_tags(path, &bytes[..verified_len], integrity_key)?;
+    } else if verified_len < bytes.len() {
+        truncate_wal_to_verified_prefix(path, verified_len)?;
     }
     Ok(records)
+}
+
+fn truncate_wal_to_verified_prefix(
+    path: &Path,
+    verified_len: usize,
+) -> Result<(), FastSwapStoreError> {
+    let file = OpenOptions::new().write(true).open(path)?;
+    file.set_len(verified_len as u64)?;
+    file.sync_all()?;
+    Ok(())
 }
 
 /// Re-write the WAL in place, replacing every legacy unkeyed tag with the
 /// keyed MAC. Only records that already parsed and verified (keyed or
 /// legacy) are re-emitted, so the byte stream is identical apart from the
-/// tag bytes; a torn tail is preserved verbatim.
+/// tag bytes. The caller supplies only the fully authenticated prefix, so an
+/// unauthenticated torn suffix is discarded before another append is allowed.
 fn upgrade_wal_tags(
     path: &Path,
     bytes: &[u8],
@@ -1756,8 +1797,6 @@ fn upgrade_wal_tags(
         output.extend_from_slice(&integrity_key.mac(FASTSWAP_WAL_MAC_DOMAIN, payload));
         offset = record_end;
     }
-    // Preserve any torn tail byte-for-byte.
-    output.extend_from_slice(&bytes[offset..]);
     if output == bytes {
         return Ok(());
     }
@@ -2141,12 +2180,13 @@ mod tests {
         let base = state();
         let mut live = base.clone();
         let key = *live.objects.keys().next().expect("object");
+        let swap_id = FastSwapIdV1([8; 48]);
         {
             let mut store = FastSwapStore::open(&directory).expect("open");
             store
                 .reserve_all(
                     &mut live,
-                    FastSwapIdV1([8; 48]),
+                    swap_id,
                     FastSwapIntentIdV1([9; 48]),
                     FastSwapEffectsDigestV1([10; 48]),
                     100,
@@ -2155,6 +2195,7 @@ mod tests {
                 .expect("reserve");
         }
         let wal = directory.join(FASTSWAP_WAL_FILE);
+        let verified_len = fs::metadata(&wal).expect("wal metadata").len();
         OpenOptions::new()
             .append(true)
             .open(&wal)
@@ -2163,6 +2204,25 @@ mod tests {
             .expect("torn tail");
         let store = FastSwapStore::open(&directory).expect("torn tail opens");
         assert_eq!(store.replay(&base).expect("replay"), live);
+        assert_eq!(
+            fs::metadata(&wal).expect("recovered wal metadata").len(),
+            verified_len,
+            "recovery must durably discard the unauthenticated suffix"
+        );
+        drop(store);
+
+        {
+            let mut store = FastSwapStore::open(&directory).expect("reopen after truncation");
+            store
+                .persist_new_round_vote(&mut live, swap_id, 1)
+                .expect("append after recovered torn record");
+        }
+        let store = FastSwapStore::open(&directory).expect("reopen after later durable append");
+        assert_eq!(
+            store.replay(&base).expect("replay later durable append"),
+            live,
+            "a record appended after torn-tail recovery must remain replayable"
+        );
         drop(store);
 
         let mut bytes = fs::read(&wal).expect("read wal");
@@ -2173,6 +2233,32 @@ mod tests {
             Err(FastSwapStoreError::CorruptWal { .. })
         ));
         fs::remove_file(directory.join(FASTSWAP_LOCK_FILE)).ok();
+        fs::remove_dir_all(directory).expect("cleanup");
+    }
+
+    #[test]
+    fn oversized_sparse_wal_is_rejected_before_allocation() {
+        let directory = test_dir("oversized-sparse-wal");
+        {
+            let store = FastSwapStore::open(&directory).expect("initialize store");
+            drop(store);
+        }
+        let wal = directory.join(FASTSWAP_WAL_FILE);
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&wal)
+            .expect("create sparse WAL");
+        file.set_len(FASTSWAP_WAL_MAX_BYTES as u64 + 1)
+            .expect("extend sparse WAL");
+        drop(file);
+
+        assert!(matches!(
+            FastSwapStore::open(&directory),
+            Err(FastSwapStoreError::RecordTooLarge(size))
+                if size == FASTSWAP_WAL_MAX_BYTES + 1
+        ));
         fs::remove_dir_all(directory).expect("cleanup");
     }
 

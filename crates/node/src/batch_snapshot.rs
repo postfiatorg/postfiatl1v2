@@ -1,4 +1,5 @@
 use super::*;
+use std::io::Read as _;
 
 pub(super) struct BlockProposalPlan<'a, T> {
     pub(super) genesis: &'a Genesis,
@@ -2968,7 +2969,8 @@ pub(crate) struct ConsensusV2ArtifactSnapshotFile {
 pub(crate) fn read_consensus_v2_artifact_snapshot(
     path: &Path,
 ) -> io::Result<ConsensusV2ArtifactSnapshot> {
-    let metadata = std::fs::metadata(path)?;
+    let file = std::fs::File::open(path)?;
+    let metadata = file.metadata()?;
     if metadata.len() > MAX_CONSENSUS_V2_ARTIFACT_SNAPSHOT_BYTES {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -2979,7 +2981,9 @@ pub(crate) fn read_consensus_v2_artifact_snapshot(
             ),
         ));
     }
-    let bytes = std::fs::read(path)?;
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    file.take(MAX_CONSENSUS_V2_ARTIFACT_SNAPSHOT_BYTES + 1)
+        .read_to_end(&mut bytes)?;
     if bytes.len() as u64 > MAX_CONSENSUS_V2_ARTIFACT_SNAPSHOT_BYTES {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -3205,12 +3209,184 @@ fn key_imported_snapshot_state(data_dir: &Path) -> io::Result<NodeStore> {
     Ok(store)
 }
 
+fn snapshot_import_file_max_bytes(file_name: &str) -> u64 {
+    match file_name {
+        CONSENSUS_V2_SAFETY_SNAPSHOT_FILE | CONSENSUS_V2_QC_SNAPSHOT_FILE => {
+            MAX_CONSENSUS_V2_ARTIFACT_SNAPSHOT_BYTES
+        }
+        _ => postfiat_storage::MAX_STATE_FILE_BYTES,
+    }
+}
+
+fn read_bounded_snapshot_source_file(
+    snapshot_dir: &Path,
+    declared: &SnapshotFile,
+) -> io::Result<Vec<u8>> {
+    let source = snapshot_dir.join(&declared.name);
+    let max_bytes = snapshot_import_file_max_bytes(&declared.name);
+    if declared.bytes > max_bytes {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "snapshot file `{}` declares {} bytes, exceeding the {} byte import bound",
+                declared.name, declared.bytes, max_bytes
+            ),
+        ));
+    }
+    let file = std::fs::File::open(&source)?;
+    let actual_bytes = file.metadata()?.len();
+    if actual_bytes > max_bytes {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "snapshot file `{}` is {} bytes, exceeding the {} byte import bound",
+                declared.name, actual_bytes, max_bytes
+            ),
+        ));
+    }
+    if actual_bytes != declared.bytes {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("snapshot file `{}` byte length mismatch", declared.name),
+        ));
+    }
+    let mut bytes = Vec::with_capacity(actual_bytes as usize);
+    file.take(max_bytes + 1).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "snapshot file `{}` grew beyond its import bound",
+                declared.name
+            ),
+        ));
+    }
+    Ok(bytes)
+}
+
+static SNAPSHOT_IMPORT_STAGING_ID: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+pub(super) fn create_private_import_staging_dir(
+    target: &Path,
+    operation: &str,
+) -> io::Result<PathBuf> {
+    let target_name = target
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "snapshot import destination must have a valid final path component",
+            )
+        })?;
+    let parent = target
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(parent)?;
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?
+        .as_nanos();
+    for _ in 0..128 {
+        let id = SNAPSHOT_IMPORT_STAGING_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let staging = parent.join(format!(
+            ".{target_name}.{operation}-{}-{timestamp}-{id}",
+            std::process::id()
+        ));
+        match std::fs::create_dir(&staging) {
+            Ok(()) => return Ok(staging),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::AlreadyExists,
+        "could not allocate a unique snapshot import staging directory",
+    ))
+}
+
+pub(super) fn publish_private_import_staging_dir(staging: &Path, target: &Path) -> io::Result<()> {
+    if target.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!(
+                "snapshot import destination appeared before publication: `{}`",
+                target.display()
+            ),
+        ));
+    }
+    rename_import_directory_without_replacement(staging, target)?;
+    let parent = target
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    std::fs::File::open(parent)?.sync_all()?;
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn rename_import_directory_without_replacement(staging: &Path, target: &Path) -> io::Result<()> {
+    use std::os::unix::ffi::OsStrExt as _;
+
+    let staging = std::ffi::CString::new(staging.as_os_str().as_bytes()).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "snapshot staging path contains an interior NUL",
+        )
+    })?;
+    let target = std::ffi::CString::new(target.as_os_str().as_bytes()).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "snapshot target path contains an interior NUL",
+        )
+    })?;
+    let result = unsafe {
+        libc::renameat2(
+            libc::AT_FDCWD,
+            staging.as_ptr(),
+            libc::AT_FDCWD,
+            target.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn rename_import_directory_without_replacement(staging: &Path, target: &Path) -> io::Result<()> {
+    std::fs::rename(staging, target)
+}
+
+pub(super) fn prospective_absolute_import_target(target: &Path) -> io::Result<PathBuf> {
+    let target_name = target.file_name().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "snapshot import destination must have a final path component",
+        )
+    })?;
+    let parent = target
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    Ok(std::fs::canonicalize(parent)?.join(target_name))
+}
+
 fn import_snapshot_with_basis(
     options: SnapshotImportOptions,
     basis: SnapshotVerificationBasis,
 ) -> io::Result<StatusReport> {
-    let manifest = read_snapshot_manifest(&options.snapshot_dir.join(SNAPSHOT_MANIFEST_FILE))?;
-    let data_dir = options.data_dir;
+    let SnapshotImportOptions {
+        data_dir,
+        snapshot_dir,
+        node_id,
+    } = options;
+    let manifest = read_snapshot_manifest(&snapshot_dir.join(SNAPSHOT_MANIFEST_FILE))?;
     if manifest.snapshot_version != SNAPSHOT_VERSION
         && manifest.snapshot_version != PRE_STORAGE_SNAPSHOT_VERSION
         && manifest.snapshot_version != LEGACY_SNAPSHOT_VERSION
@@ -3234,28 +3410,46 @@ fn import_snapshot_with_basis(
             ),
         ));
     }
-    if let Some(parent) = data_dir
-        .parent()
-        .filter(|parent| !parent.as_os_str().is_empty())
-    {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::create_dir(&data_dir).map_err(|error| {
-        if error.kind() == io::ErrorKind::AlreadyExists {
-            io::Error::new(
-                io::ErrorKind::AlreadyExists,
-                format!(
-                    "snapshot import destination must not already exist: `{}`; import into a fresh path to prevent state overlay",
-                    data_dir.display()
-                ),
-            )
-        } else {
-            error
+    let staging_dir = create_private_import_staging_dir(&data_dir, "snapshot-import")?;
+    let outcome =
+        import_snapshot_into_staging(&snapshot_dir, &staging_dir, node_id, &manifest, basis);
+    match outcome {
+        Ok(restored) => {
+            let future_data_dir = match prospective_absolute_import_target(&data_dir) {
+                Ok(path) => path,
+                Err(error) => {
+                    let _ = std::fs::remove_dir_all(&staging_dir);
+                    return Err(error);
+                }
+            };
+            if let Err(error) = NodeStore::new(&staging_dir)
+                .prepare_transactional_generation_for_data_dir_move(&future_data_dir)
+            {
+                let _ = std::fs::remove_dir_all(&staging_dir);
+                return Err(error);
+            }
+            if let Err(error) = publish_private_import_staging_dir(&staging_dir, &data_dir) {
+                let _ = std::fs::remove_dir_all(&staging_dir);
+                return Err(error);
+            }
+            Ok(restored)
         }
-    })?;
+        Err(error) => {
+            let _ = std::fs::remove_dir_all(&staging_dir);
+            Err(error)
+        }
+    }
+}
+
+fn import_snapshot_into_staging(
+    snapshot_dir: &Path,
+    data_dir: &Path,
+    node_id: Option<String>,
+    manifest: &SnapshotManifest,
+    basis: SnapshotVerificationBasis,
+) -> io::Result<StatusReport> {
     for file in &manifest.files {
-        let source = options.snapshot_dir.join(&file.name);
-        let bytes = std::fs::read(&source)?;
+        let bytes = read_bounded_snapshot_source_file(snapshot_dir, file)?;
         let actual_hash = hash_hex("postfiat.snapshot.file.v1", &bytes);
         if actual_hash != file.hash_hex {
             return Err(io::Error::new(
@@ -3314,14 +3508,14 @@ fn import_snapshot_with_basis(
         }
     }
 
-    if let Some(node_id) = options.node_id {
-        let store = NodeStore::new(&data_dir);
+    if let Some(node_id) = node_id {
+        let store = NodeStore::new(data_dir);
         let mut state = store.read_node_state()?;
         state.node_id = node_id;
         store.write_node_state(&state)?;
     }
 
-    let imported_store = NodeStore::new(&data_dir);
+    let imported_store = NodeStore::new(data_dir);
     let imported_genesis = imported_store.read_genesis()?;
     let imported_governance = imported_store.read_governance()?;
     let imported_tip =
@@ -3331,7 +3525,7 @@ fn import_snapshot_with_basis(
     {
         let transactional_generation = data_dir.join("transactional-snapshot-generation-v1");
         rebuild_transactional_storage(StorageMigrationOptions {
-            data_dir: data_dir.clone(),
+            data_dir: data_dir.to_path_buf(),
             output_dir: transactional_generation,
             expected_tip: imported_tip.block_hash,
             expected_state_root: imported_tip.state_root,
@@ -3340,7 +3534,7 @@ fn import_snapshot_with_basis(
     }
 
     let restored = status(NodeOptions {
-        data_dir: data_dir.clone(),
+        data_dir: data_dir.to_path_buf(),
     })?;
     if restored.chain_id != manifest.chain_id {
         return Err(io::Error::new(
@@ -3408,4 +3602,40 @@ pub fn import_snapshot_from_finalized_checkpoint(
     options: SnapshotImportOptions,
 ) -> io::Result<StatusReport> {
     import_snapshot_with_basis(options, SnapshotVerificationBasis::FinalizedCheckpoint)
+}
+
+#[cfg(test)]
+mod snapshot_import_bounds_tests {
+    use super::*;
+
+    #[test]
+    fn oversized_sparse_snapshot_file_is_rejected_before_allocation() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let snapshot_dir = std::env::temp_dir().join(format!(
+            "postfiat-snapshot-import-bound-{}-{unique}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&snapshot_dir).expect("create snapshot fixture");
+        let source = snapshot_dir.join(LEDGER_FILE);
+        let file = std::fs::File::create(&source).expect("create sparse source");
+        file.set_len(postfiat_storage::MAX_STATE_FILE_BYTES + 1)
+            .expect("extend sparse source");
+        drop(file);
+
+        let error = read_bounded_snapshot_source_file(
+            &snapshot_dir,
+            &SnapshotFile {
+                name: LEDGER_FILE.to_string(),
+                bytes: postfiat_storage::MAX_STATE_FILE_BYTES,
+                hash_hex: String::new(),
+            },
+        )
+        .expect_err("oversized snapshot source must fail before allocation");
+        assert!(error.to_string().contains("exceeding"), "{error}");
+
+        std::fs::remove_dir_all(snapshot_dir).expect("cleanup snapshot fixture");
+    }
 }

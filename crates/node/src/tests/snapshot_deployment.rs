@@ -1391,6 +1391,10 @@ fn init_then_run_once() {
             .contains("restored genesis hash"),
         "{domain_mismatch_error}"
     );
+    assert!(
+        !domain_mismatch_restored_dir.exists(),
+        "a rejected snapshot must not publish partial destination state"
+    );
     write_snapshot_manifest(&snapshot_manifest_path, &manifest).expect("restore manifest");
 
     let restored = import_snapshot(SnapshotImportOptions {
@@ -1423,10 +1427,6 @@ fn init_then_run_once() {
     std::fs::remove_dir_all(data_dir).expect("cleanup");
     std::fs::remove_dir_all(snapshot_dir).expect("cleanup snapshot");
     std::fs::remove_dir_all(restored_dir).expect("cleanup restored");
-    if domain_mismatch_restored_dir.exists() {
-        std::fs::remove_dir_all(domain_mismatch_restored_dir)
-            .expect("cleanup domain mismatch restored");
-    }
 }
 
 #[test]
@@ -1515,6 +1515,54 @@ fn signed_snapshot_roundtrip_rejects_tampering_and_preserves_signer_isolation() 
         if path.exists() {
             std::fs::remove_dir_all(path).expect("cleanup signed snapshot test");
         }
+    }
+}
+
+#[test]
+fn snapshot_import_failure_does_not_publish_destination() {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let source_dir =
+        std::env::temp_dir().join(format!("postfiat-atomic-snapshot-source-{unique}"));
+    let snapshot_dir =
+        std::env::temp_dir().join(format!("postfiat-atomic-snapshot-artifact-{unique}"));
+    let rejected_dir =
+        std::env::temp_dir().join(format!("postfiat-atomic-snapshot-rejected-{unique}"));
+    init(InitOptions {
+        data_dir: source_dir.clone(),
+        chain_id: "postfiat-local".to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: 3,
+    })
+    .expect("init snapshot source");
+    let mut manifest = export_snapshot(SnapshotExportOptions {
+        data_dir: source_dir.clone(),
+        snapshot_dir: snapshot_dir.clone(),
+    })
+    .expect("export snapshot");
+    manifest.genesis_hash = "tampered-genesis-hash".to_string();
+    write_snapshot_manifest(&snapshot_dir.join(SNAPSHOT_MANIFEST_FILE), &manifest)
+        .expect("write semantic mismatch manifest");
+
+    let error = import_snapshot(SnapshotImportOptions {
+        data_dir: rejected_dir.clone(),
+        snapshot_dir: snapshot_dir.clone(),
+        node_id: None,
+    })
+    .expect_err("semantic mismatch must reject snapshot");
+    assert!(
+        error.to_string().contains("restored genesis hash"),
+        "{error}"
+    );
+    assert!(
+        !rejected_dir.exists(),
+        "rejected snapshot must not publish partial destination state"
+    );
+
+    for path in [source_dir, snapshot_dir] {
+        std::fs::remove_dir_all(path).expect("cleanup atomic snapshot test");
     }
 }
 

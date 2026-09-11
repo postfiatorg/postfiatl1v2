@@ -233,7 +233,9 @@ fn lifecycle_checkpoint_import_rejects_tampered_validator_snapshot() {
     bytes[last] = bytes[last].wrapping_add(1);
     std::fs::write(&ledger_path, bytes).expect("write tampered snapshot ledger");
 
-    let error = import_lifecycle_checkpoint(fixture.import_options("snapshot"))
+    let options = fixture.import_options("snapshot");
+    let target_root = options.target_root.clone();
+    let error = import_lifecycle_checkpoint(options)
         .expect_err("tampered validator snapshot must fail");
     let message = error.to_string();
     assert!(
@@ -243,6 +245,14 @@ fn lifecycle_checkpoint_import_rejects_tampered_validator_snapshot() {
     let report = fixture.read_report("snapshot");
     assert!(!report.ok);
     assert!(report.first_failure.is_some());
+    assert!(
+        report.validators.is_empty(),
+        "failed fleet import must not report staged validators as published"
+    );
+    assert!(
+        !target_root.exists(),
+        "failed fleet import must not publish a partial validator root"
+    );
     fixture.cleanup();
 }
 
