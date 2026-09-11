@@ -7,7 +7,7 @@ This is the canonical progress record for the
 campaign, not a release, deployment, or live-authority action.
 
 **Status:** in progress. Storage, execution, and Cobalt ratification are done;
-network and mempool admission is the next surface in the mandated order.
+network and mempool admission findings are recorded and repairs are in progress.
 
 ## Campaign state
 
@@ -16,11 +16,29 @@ network and mempool admission is the next surface in the mandated order.
 | A1 | Storage and snapshots | done | 1 | 3 | 2 | [Review](storage-snapshots-review-20260911.md); findings `8533f5d7`, `0d015227`; repairs `69e1f1ce` |
 | A2 | Execution | done | 1 | 2 | 0 | [Review](execution-review-20260911.md); findings `0449de41`; repairs `e95efbdf` |
 | A3 | Cobalt ratification | done | 1 | 1 | 2 | [Review](cobalt-ratification-review-20260911.md); findings `b5c16c2c`; repairs `c9a61fcd` |
-| A4 | Network and mempool admission | pending | 0 | 0 | 0 | — |
+| A4 | Network and mempool admission | fixing | 2 | 1 | 1 | [Review](network-mempool-review-20260911.md); findings pending commit |
 | A5 | Operational Python CLIs | pending | 0 | 0 | 0 | — |
 | B | Defect inventory and TIH gate | pending | — | — | — | — |
 
-Current finding totals: **3 P1, 6 P2, 4 P3**.
+Current finding totals: **5 P1, 7 P2, 5 P3**.
+
+## Network and mempool admission review result
+
+The crate review and node reachability trace found two P1 defects in the
+long-running validator transport. The service can spawn one operating-system
+thread for every pre-authentication TCP connection up to its lifetime budget,
+and one unauthenticated persistent connection can submit unlimited rejected
+frames while every status-bearing rejection is retained in memory and appended
+to the optional event log. One P2 affects the standalone batch service: only
+successful batches consume its termination budget, so unauthenticated
+rejections grow its report without bound. The [network and mempool review](network-mempool-review-20260911.md)
+also records one unfixed P3: the unreachable legacy ordering API can
+deserialize a validator set with a caller-selected false quorum.
+
+Pre-repair verification:
+
+- \`cargo test -p postfiat-network -p postfiat-mempool-dag -p postfiat-ordering-fast --locked\`:
+  9 network, 15 mempool DAG, and 32 ordering tests passed.
 
 ## Cobalt ratification review result
 
