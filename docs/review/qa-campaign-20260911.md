@@ -6,8 +6,8 @@ This is the canonical progress record for the
 `c25b3389d5c221ff1c23e700d53460003cc50b2a`. It is a review-and-repair
 campaign, not a release, deployment, or live-authority action.
 
-**Status:** in progress. Storage, snapshots, and execution are done; Cobalt
-ratification findings are recorded and repairs are in progress.
+**Status:** in progress. Storage, execution, and Cobalt ratification are done;
+network and mempool admission is the next surface in the mandated order.
 
 ## Campaign state
 
@@ -15,7 +15,7 @@ ratification findings are recorded and repairs are in progress.
 | --- | --- | --- | ---: | ---: | ---: | --- |
 | A1 | Storage and snapshots | done | 1 | 3 | 2 | [Review](storage-snapshots-review-20260911.md); findings `8533f5d7`, `0d015227`; repairs `69e1f1ce` |
 | A2 | Execution | done | 1 | 2 | 0 | [Review](execution-review-20260911.md); findings `0449de41`; repairs `e95efbdf` |
-| A3 | Cobalt ratification | fixing | 1 | 1 | 2 | [Review](cobalt-ratification-review-20260911.md) |
+| A3 | Cobalt ratification | done | 1 | 1 | 2 | [Review](cobalt-ratification-review-20260911.md); findings `b5c16c2c`; repairs `c9a61fcd` |
 | A4 | Network and mempool admission | pending | 0 | 0 | 0 | — |
 | A5 | Operational Python CLIs | pending | 0 | 0 | 0 | — |
 | B | Defect inventory and TIH gate | pending | — | — | — | — |
@@ -40,6 +40,20 @@ Pre-repair verification:
 - `cargo test -p postfiat-consensus-cobalt -p postfiat-cobalt-decision-oracle -p postfiat-cobalt-adversarial-oracle --locked`:
   72 Cobalt tests, 9 genesis registry checker tests, and 3 tests in each oracle
   passed.
+
+Repair `c9a61fcd` now evaluates the minimum possible old/new quorum
+intersection and binds every signed DABC pending candidate ID to the ratified
+candidate at that slot. Both changes are consensus-affecting and remain
+source-only.
+
+Post-repair verification:
+
+- Cobalt: 73 tests; genesis registry checker: 9 tests; both oracles: 3 tests
+  each.
+- The focused safety-witness example passed all six checks.
+- Node Cobalt authority: 1 test; Cobalt shadow/runtime: 15 tests.
+- Strict clippy for the Cobalt crate and both oracles, plus workspace
+  formatting, passed.
 
 ## Execution review result
 

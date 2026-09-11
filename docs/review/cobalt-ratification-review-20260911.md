@@ -116,9 +116,40 @@ is recorded without rewriting or regenerating a frozen oracle artifact.
   regenerated input bytes, oracle contract and source bytes, and both adapter
   hashes.
 
+## Repair result
+
+Repair `c9a61fcd` closes findings 1 and 2:
+
+- old/new cover rows now derive the smallest possible intersection of their
+  valid quorums from both quorum sizes and the union size, and require that
+  lower bound—not raw membership overlap—to exceed the Byzantine budget;
+- DABC activation now resolves every pending slot to its ratified candidate and
+  rejects a signed pending pair that names a different candidate ID.
+
+The safety regression proves that the prior five-of-seven single-rotation case
+with budget two is rejected even though the subsets share six validators. The
+positive witness fixture now uses six-of-seven quorums and budget one, whose
+minimum cross-quorum intersection is four. The DABC regression builds a
+structurally valid, quorum-signed checkpoint with the wrong candidate ID and
+proves activation rejects it.
+
+Both repairs tighten a consensus ratification or transition-admission rule and
+are consensus-affecting. They are source-only and were not activated, deployed,
+or presented as live behavior.
+
+Post-repair verification:
+
+- `postfiat-consensus-cobalt`: 73 tests passed.
+- `postfiat-consensus-cobalt` genesis registry checker: 9 tests passed.
+- Both oracle crates: 3 tests passed each.
+- The Cobalt safety-witness example completed with all six checks passing.
+- Node Cobalt authority: 1 focused test passed.
+- Node Cobalt shadow and runtime: 15 focused tests passed.
+- Strict clippy for the Cobalt crate and both oracles, plus the workspace
+  formatting check, passed.
+
 ## Repair scope
 
-Findings 1 and 2 require minimal source repairs and focused regressions.
-Findings 3 and 4 remain recorded under the P3 rule. No frozen oracle output,
-benchmark receipt, deployment evidence, authority state, or live system will
-be changed.
+Findings 1 and 2 were repaired in `c9a61fcd`. Findings 3 and 4 remain
+recorded under the P3 rule. No frozen oracle output, benchmark receipt,
+deployment evidence, authority state, or live system changed.
