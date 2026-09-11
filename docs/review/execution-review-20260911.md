@@ -79,8 +79,39 @@ by exact archived chain identities in the node, rejected transitions publish
 no partial ledger mutation, and the fixed transaction-family order is included
 in the batch commitment.
 
+## Repair result
+
+Repair `e95efbdf` closes all three findings in source:
+
+- proposal construction and supplied-proposal validation now share one
+  duplicate receipt-ID rejection, before any validator vote can be emitted;
+- every owned-object transition uses one checked net-growth calculation, and
+  ordered deposit and retired direct wrap reject growth at the declared cap;
+- proposal construction counts the exact pretty-JSON state-file representation
+  and keyed integrity trailer for ledger, governance, shielded, and bridge
+  state before exposing a state root. Validator reconstruction uses the same
+  check. The counter writes nothing and does not allocate the serialized form.
+
+These repairs change proposal admissibility or an ordered state-transition
+result and are consensus-affecting. They are source-only: no activation,
+deployment, live-chain mutation, or on-disk format change occurred.
+
+Post-repair verification:
+
+- `cargo test -p postfiat-execution --locked`: 198 passed.
+- `cargo test -p postfiat-storage --locked`: 90 passed, 2 ignored; process-crash
+  integration: 1 passed.
+- Both duplicate-receipt proposal regressions and the state-file-size regression
+  passed.
+- Node block-proposal tests: 3 passed; validator-registry continuation tests: 6
+  passed.
+- Five focused transparent asset, replay, NFT, offer, and atomic-swap ordering
+  tests passed.
+- Strict clippy for `postfiat-execution`, `postfiat-storage`, and
+  `postfiat-node`, plus the workspace formatting check, passed.
+
 ## Repair scope
 
-Only the three findings above are authorized for A2 repair. No Orchard,
-privacy, bridge, proof-program, deployment, live-chain, or frozen-artifact
-change is part of this review.
+Only the three findings above were repaired. No Orchard, privacy, bridge,
+proof-program, deployment, live-chain, or frozen-artifact change is part of
+this review.

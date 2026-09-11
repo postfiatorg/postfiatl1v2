@@ -6,15 +6,15 @@ This is the canonical progress record for the
 `c25b3389d5c221ff1c23e700d53460003cc50b2a`. It is a review-and-repair
 campaign, not a release, deployment, or live-authority action.
 
-**Status:** in progress. Storage and snapshots are done; execution findings are
-recorded and await repair.
+**Status:** in progress. Storage, snapshots, and execution are done; Cobalt
+ratification is the next surface in the mandated order.
 
 ## Campaign state
 
 | Order | Surface | Status | P1 | P2 | P3 | Evidence or fixes |
 | --- | --- | --- | ---: | ---: | ---: | --- |
 | A1 | Storage and snapshots | done | 1 | 3 | 2 | [Review](storage-snapshots-review-20260911.md); findings `8533f5d7`, `0d015227`; repairs `69e1f1ce` |
-| A2 | Execution | reviewing | 1 | 2 | 0 | [Review](execution-review-20260911.md); findings pending commit |
+| A2 | Execution | done | 1 | 2 | 0 | [Review](execution-review-20260911.md); findings `0449de41`; repairs `e95efbdf` |
 | A3 | Cobalt ratification | pending | 0 | 0 | 0 | — |
 | A4 | Network and mempool admission | pending | 0 | 0 | 0 | — |
 | A5 | Operational Python CLIs | pending | 0 | 0 | 0 | — |
@@ -38,6 +38,30 @@ and will be labeled consensus-affecting. The findings are detailed in the
 Pre-repair verification:
 
 - `cargo test -p postfiat-execution --locked`: 196 passed.
+
+Repair `e95efbdf` rejects duplicate receipt IDs at proposal construction and
+supplied-proposal validation, applies the declared object cap to every owned
+value path, and performs a write-free exact state-file-size check before a
+proposal can expose an unpersistable state root. The duplicate and size checks
+cover validator reconstruction as well as local proposal creation. No on-disk
+format changed.
+
+Post-repair verification:
+
+- `cargo test -p postfiat-execution --locked`: 198 passed.
+- `cargo test -p postfiat-storage --locked`: 90 passed, 2 ignored; process-crash
+  integration: 1 passed.
+- Duplicate-receipt proposal regressions: 2 passed; serialized state-size
+  regression: 1 passed.
+- Node block-proposal tests: 3 passed; validator-registry continuation tests: 6
+  passed.
+- Focused transparent asset, replay, NFT, offer, and atomic-swap ordering tests:
+  5 passed.
+- Strict clippy for `postfiat-execution`, `postfiat-storage`, and
+  `postfiat-node`, and the workspace formatting check, passed.
+
+All three A2 repairs are consensus-affecting. They are source-only and were not
+activated or deployed.
 
 ## Storage review result
 
