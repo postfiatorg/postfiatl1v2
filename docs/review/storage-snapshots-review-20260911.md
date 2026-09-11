@@ -1,6 +1,7 @@
 # Storage and snapshots review — 2026-09-11
 
-Status: findings recorded; P1/P2 repairs pending; no release or deployment authorized
+Status: source repairs verified; live fleet export evidence remains unavailable;
+no release or deployment authorized
 
 Reviewed checkout: `c25b3389d5c221ff1c23e700d53460003cc50b2a`
 
@@ -145,15 +146,44 @@ The pre-repair focused baselines were green:
   only, rejects pending recovery, and validates logical source/candidate
   manifests plus the canonical export before reporting success.
 
-## Repair boundary
+## Repair disposition
 
-Findings 1, 2, and 6 require owner-level repairs and regressions: restore into
-a private sibling staging directory and publish only after all verification
-succeeds; apply pre-allocation file limits and a total FastSwap WAL fence; and
-durably truncate every unauthenticated torn WAL suffix before allowing another
-append. Finding 5 requires a documentation correction that separates deployed
-source ancestry from missing live export evidence. Findings 3 and 4 remain
-recorded under the campaign's P3 rule.
+Repair commit `69e1f1ce` closes the source defects:
+
+- Finding 1: each snapshot restore now completes in a private sibling
+  directory and publishes with a no-replacement rename only after hash,
+  length, semantic, history, and transactional-generation verification pass.
+  Lifecycle restore applies the same rule to the complete validator root and
+  reports no validator as imported before publication.
+- Finding 2: FastSwap WALs have a 256 MiB total fence, and WAL, snapshot, vote,
+  certificate, and imported snapshot-file reads enforce metadata and streaming
+  limits before their buffers can grow past the bound.
+- Finding 5: the mutable chain-state page now distinguishes deployed source
+  repair ancestry from the missing post-repair fleet export receipt. The live
+  evidence gap remains explicit because closing it would require a prohibited
+  validator-host write.
+- Finding 6: recovery durably truncates an unauthenticated torn WAL suffix to
+  the fully verified prefix before allowing another append.
+- Findings 3 and 4 remain recorded and unfixed under the P3 rule.
+
+The transactional generation pointer keeps its existing schema and is rebound
+to the prospective absolute destination while the verified restore is still
+private. The directory rename makes the pointer and generation valid together,
+including when a complete lifecycle root is moved a second time.
 
 None of these repairs changes a consensus rule, state-transition result, signed
 bytes, or on-disk format, and none authorizes deployment or live activation.
+
+## Post-repair verification
+
+- `cargo test -p postfiat-storage --locked`: **89 passed, 2 ignored** plus
+  **1 process-crash integration test passed**.
+- `cargo test -p postfiat-node snapshot --lib --locked`: **24 passed**.
+- `cargo test -p postfiat-node lifecycle_checkpoint --lib --locked`:
+  **7 passed**.
+- `cargo test -p postfiat-node validator_registry_continuation --lib --locked`:
+  **6 passed**.
+- The two focused transactional migration regressions passed.
+- `cargo clippy -p postfiat-storage -p postfiat-node --all-targets --locked --
+  -D warnings` passed.
+- `cargo fmt --all -- --check` passed.
