@@ -7,7 +7,7 @@ This is the canonical progress record for the
 campaign, not a release, deployment, or live-authority action.
 
 **Status:** in progress. Storage, snapshots, and execution are done; Cobalt
-ratification is the next surface in the mandated order.
+ratification findings are recorded and repairs are in progress.
 
 ## Campaign state
 
@@ -15,12 +15,31 @@ ratification is the next surface in the mandated order.
 | --- | --- | --- | ---: | ---: | ---: | --- |
 | A1 | Storage and snapshots | done | 1 | 3 | 2 | [Review](storage-snapshots-review-20260911.md); findings `8533f5d7`, `0d015227`; repairs `69e1f1ce` |
 | A2 | Execution | done | 1 | 2 | 0 | [Review](execution-review-20260911.md); findings `0449de41`; repairs `e95efbdf` |
-| A3 | Cobalt ratification | pending | 0 | 0 | 0 | — |
+| A3 | Cobalt ratification | fixing | 1 | 1 | 2 | [Review](cobalt-ratification-review-20260911.md) |
 | A4 | Network and mempool admission | pending | 0 | 0 | 0 | — |
 | A5 | Operational Python CLIs | pending | 0 | 0 | 0 | — |
 | B | Defect inventory and TIH gate | pending | — | — | — | — |
 
-Current finding totals: **2 P1, 5 P2, 2 P3**.
+Current finding totals: **3 P1, 6 P2, 4 P3**.
+
+## Cobalt ratification review result
+
+The Cobalt pass found one P1: old/new safety witnesses compare raw subset
+membership overlap rather than the minimum possible overlap of valid quorums.
+A five-of-seven single rotation can therefore pass with an old/new quorum
+intersection no larger than the Byzantine budget. One P2 is recorded: signed
+DABC pending pairs bind a candidate ID, but activation checks only that their
+slot is ratified. Both repairs tighten ratification or transition admission and
+will be labeled consensus-affecting. The [Cobalt review](cobalt-ratification-review-20260911.md)
+also records two unfixed P3s: the unused live-mode beacon abstraction has no
+authentication material, and the frozen first-oracle input validator permits
+incomplete validator classifications.
+
+Pre-repair verification:
+
+- `cargo test -p postfiat-consensus-cobalt -p postfiat-cobalt-decision-oracle -p postfiat-cobalt-adversarial-oracle --locked`:
+  72 Cobalt tests, 9 genesis registry checker tests, and 3 tests in each oracle
+  passed.
 
 ## Execution review result
 
