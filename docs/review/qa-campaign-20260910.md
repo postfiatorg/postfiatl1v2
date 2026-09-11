@@ -255,6 +255,10 @@ their SHA-256 values are respectively
 `9639fff4f88b18be8030171ad4683412b6d9f7012f716a52ac01bd0712439e1d` and
 `d4cc27942db409da77240e272099e2aa7ce27650c0ff1d0c6a4383639aace11d`.
 
+A post-gate link repair changed `defect-inventory-20260910.md` to SHA-256
+`0274160a6df00a0fbbc8eb655641182ff55b64e08bfba52a65b11f4ffa02d1a9`.
+No rescoring was performed.
+
 ### Burn 2 final summary
 
 - Findings: the fresh repair review found three P1 gaps and no P2 or P3;

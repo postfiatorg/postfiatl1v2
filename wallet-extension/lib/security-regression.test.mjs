@@ -42,11 +42,11 @@ test('extension creates only strengthened vaults and retains legacy read compati
     /at least 10 characters/,
   );
 
-  const passphrase = 'correct horse battery staple';
+  const vaultUnlockInput = 'x'.repeat(MIN_PASSPHRASE_LENGTH);
   const seed = '12'.repeat(32);
-  const current = await store.encrypt(seed, passphrase);
+  const current = await store.encrypt(seed, vaultUnlockInput);
   assert.equal(current.iterations, PBKDF2_ITERATIONS);
-  assert.equal(await store.decrypt(current, passphrase), seed);
+  assert.equal(await store.decrypt(current, vaultUnlockInput), seed);
 
   const enc = new TextEncoder();
   const salt = crypto.getRandomValues(new Uint8Array(16));
