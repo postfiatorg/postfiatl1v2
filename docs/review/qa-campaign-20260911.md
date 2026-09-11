@@ -6,8 +6,8 @@ This is the canonical progress record for the
 `c25b3389d5c221ff1c23e700d53460003cc50b2a`. It is a review-and-repair
 campaign, not a release, deployment, or live-authority action.
 
-**Status:** in progress. Storage, execution, and Cobalt ratification are done;
-network and mempool admission findings are recorded and repairs are in progress.
+**Status:** campaign closed with A5 and B outstanding. A1 through A4 are done;
+A5 and B were not started.
 
 ## Campaign state
 
@@ -16,29 +16,40 @@ network and mempool admission findings are recorded and repairs are in progress.
 | A1 | Storage and snapshots | done | 1 | 3 | 2 | [Review](storage-snapshots-review-20260911.md); findings `8533f5d7`, `0d015227`; repairs `69e1f1ce` |
 | A2 | Execution | done | 1 | 2 | 0 | [Review](execution-review-20260911.md); findings `0449de41`; repairs `e95efbdf` |
 | A3 | Cobalt ratification | done | 1 | 1 | 2 | [Review](cobalt-ratification-review-20260911.md); findings `b5c16c2c`; repairs `c9a61fcd` |
-| A4 | Network and mempool admission | fixing | 2 | 1 | 1 | [Review](network-mempool-review-20260911.md); findings pending commit |
-| A5 | Operational Python CLIs | pending | 0 | 0 | 0 | — |
-| B | Defect inventory and TIH gate | pending | — | — | — | — |
+| A4 | Network and mempool admission | done (repaired) | 2 | 1 | 1 | [Review](network-mempool-review-20260911.md); findings `13a23d91`; repairs `f2dea308` |
+| A5 | Operational Python CLIs | not started | — | — | — | — |
+| B | Defect inventory and TIH gate | not started | — | — | — | — |
 
 Current finding totals: **5 P1, 7 P2, 5 P3**.
 
 ## Network and mempool admission review result
 
 The crate review and node reachability trace found two P1 defects in the
-long-running validator transport. The service can spawn one operating-system
+long-running validator transport. The service could spawn one operating-system
 thread for every pre-authentication TCP connection up to its lifetime budget,
-and one unauthenticated persistent connection can submit unlimited rejected
-frames while every status-bearing rejection is retained in memory and appended
-to the optional event log. One P2 affects the standalone batch service: only
-successful batches consume its termination budget, so unauthenticated
-rejections grow its report without bound. The [network and mempool review](network-mempool-review-20260911.md)
+and one unauthenticated persistent connection could submit unlimited rejected
+frames while every status-bearing rejection was retained in memory and appended
+to the optional event log. One P2 affected the standalone batch service: only
+successful batches consumed its termination budget, so unauthenticated
+rejections could grow its report without bound. The [network and mempool review](network-mempool-review-20260911.md)
 also records one unfixed P3: the unreachable legacy ordering API can
 deserialize a validator set with a caller-selected false quorum.
 
-Pre-repair verification:
+Repair `f2dea308` limits the validator service to 16 simultaneous connection
+workers independently of its lifetime connection budget, caps each connection
+at 4,096 requests, closes a connection after a rejection, and retains at most
+1,024 response or rejection summaries while maintaining exact saturating
+counters. The standalone batch service now derives a bounded rejection budget
+from `max_batches` and fails closed when it is exhausted. No A4 repair is
+consensus-affecting.
 
-- \`cargo test -p postfiat-network -p postfiat-mempool-dag -p postfiat-ordering-fast --locked\`:
-  9 network, 15 mempool DAG, and 32 ordering tests passed.
+Verification:
+
+- `cargo check -p postfiat-node --locked`: passed.
+- Focused validator accept-loop and resource-bound tests: 5 passed, including
+  the new bounded-resource regression.
+- Pre-repair crate baseline: 9 network, 15 mempool DAG, and 32 ordering tests
+  passed.
 
 ## Cobalt ratification review result
 
@@ -166,16 +177,57 @@ Post-repair verification:
 - Ordered-history index publication and the duplicate legacy receipt write are
   P3 findings, so they are recorded but not repaired.
 - No frozen artifact or out-of-scope bridge, proof, program, or Orchard/privacy
-  source has been modified.
-- No broad workspace or Orchard/Halo2 suite has been started; the storage unit
-  does not change an Orchard boundary.
+  source was modified.
+- No broad workspace or Orchard/Halo2 suite was started; no burn 3 repair
+  crossed an Orchard boundary.
+- A5 and B were not started during the time-limited closeout.
 
 ## Verification
 
-The mandatory strict documentation, public-link, and public-secret gates run
+The mandatory strict documentation, public-link, and public-secret gates passed
 before every campaign commit. Focused source results and pushed commit IDs are
-added as each unit completes.
+recorded with each completed surface.
 
 ## Scores
 
-The final inventory Text Improvement Harness gate is pending.
+The final inventory Text Improvement Harness gate was not run because B was not
+started.
+
+## Final summary
+
+| Surface | P1 | P2 | P3 | Repair commits |
+| --- | ---: | ---: | ---: | --- |
+| A1 — Storage and snapshots | 1 | 3 | 2 | `69e1f1ce` |
+| A2 — Execution | 1 | 2 | 0 | `e95efbdf` |
+| A3 — Cobalt ratification | 1 | 1 | 2 | `c9a61fcd` |
+| A4 — Network and mempool admission | 2 | 1 | 1 | `f2dea308` |
+| A5 — Operational Python CLIs | not started | not started | not started | — |
+| **Completed-surface total** | **5** | **7** | **5** | — |
+
+Consensus-affecting repairs, all source-only and not activated or deployed:
+
+- Duplicate receipt-ID rejection during local proposal construction and
+  supplied-proposal validation — `e95efbdf`.
+- The declared owned-object cap applied to every owned value path, including
+  `OwnedDeposit` — `e95efbdf`.
+- Exact serialized state-size admission before an unpersistable state root can
+  be proposed or accepted — `e95efbdf`.
+- Minimum possible old/new quorum intersection required by Cobalt transition
+  safety witnesses — `c9a61fcd`.
+- Signed DABC pending candidate IDs bound to the ratified candidate at each
+  slot — `c9a61fcd`.
+
+Remaining risks:
+
+- A1 still lacks a post-repair fleet snapshot export receipt, and retains the
+  P3 destructive ordered-index replacement and duplicate legacy receipt write.
+- A3 retains the P3 unauthenticated live-mode beacon abstraction and incomplete
+  first-oracle validator classifications.
+- A4 retains the P3 deserializable legacy validator set with a false quorum;
+  no unauthenticated production reachability was found.
+- A5 remains unreviewed. B has not added burn 3 findings to the consolidated
+  defect inventory or run its Text Improvement Harness gate.
+- All burn 3 repairs remain source-only; no deployment or live activation was
+  performed.
+
+The campaign closed early with A5 and B as the resume point.

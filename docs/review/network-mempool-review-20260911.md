@@ -124,8 +124,16 @@ under the P3-only rule and is not repaired in this campaign.
   binding, ML-DSA signatures, distinct validators, canonical order, and the
   conservative maximum bucket.
 
-## Repair status
+## Repair result
 
-Findings 1 through 3 require source repairs and focused regressions. Finding 4
-remains recorded under the P3 rule. None of these repairs changes a consensus
-rule, state-transition result, or on-disk storage format.
+Repair `f2dea308` closes findings 1 through 3. The validator service now limits
+simultaneous connection workers independently of its lifetime connection
+budget, caps requests per connection, evicts a connection after a rejection,
+and bounds retained summaries while keeping exact saturating counters. The
+standalone batch service now fails closed after a bounded number of rejected
+attempts derived from its successful-batch budget. `cargo check -p
+postfiat-node --locked` passed, as did all five focused validator accept-loop
+and resource-bound tests, including the new regression.
+
+Finding 4 remains recorded under the P3 rule. None of the A4 repairs changes a
+consensus rule, state-transition result, or on-disk storage format.
