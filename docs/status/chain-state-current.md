@@ -1,8 +1,31 @@
 # PostFiat L1 Current State
 
-Updated: `2026-09-10T10:40:22Z`
+Updated: `2026-09-11T10:34:57Z`
 
 Status: **canonical operational-state reference**
+
+!!! warning "2026-09-11: fresh read-only fleet observation, not repair"
+
+    The capture ran from `2026-09-11T10:33:54Z` through `10:34:57Z`. All six
+    validators answered `status`, `server_info`, and `mempool_status` and
+    agreed at height 1020, tip `9d02b8ee…b1768feb`, state root
+    `587c6526…d39bead6`, with empty mempools. The chain has not advanced past
+    the September 10 height; the delta is zero blocks.
+
+    Validator-0's RPC answered. Its current process started at
+    `2026-09-11T06:16:08Z`, not `2026-09-09T20:19:37Z`, and its latest
+    completed accepted-connection request index was 1,025 of 10,000 (10.25%).
+    Across its actual 4 hours 18 minutes 49 seconds of runtime, that is roughly
+    238 accepted connections per hour. A straight-line estimate leaves about
+    37 hours 46 minutes to the limit, around `2026-09-13T00:21Z`, if the rate
+    and process lifetime remain unchanged. The observation does not establish
+    why the September 9 process was replaced.
+
+    Read-only process identity checks found all 12 validator/RPC processes
+    active and running release `a666-source-route-20260907`, binary
+    `57b0f4d1…634eec83`. Source repairs `83488d91` and `15af691d` remain
+    undeployed. No restart, deployment, configuration change, host write, or
+    chain write was performed.
 
 !!! warning "2026-09-10: validator-0 RPC diagnosis, not repair"
 
@@ -78,20 +101,19 @@ binary to the running services.
 
 !!! warning "Point-in-time evidence"
 
-    The latest read-only diagnosis queried validator-0 from
-    `2026-09-10T10:24:20Z` through `10:40:22Z`; it is not a fresh simultaneous
-    six-validator observation. The partial fleet capture from
-    `2026-09-09T09:24:54Z` through `09:27:00Z` remains historical evidence of
-    the failure. Every observation is point-in-time evidence, not a real-time
-    query now.
+    The latest all-six read-only observation ran from
+    `2026-09-11T10:33:54Z` through `10:34:57Z`. The September 10 validator-0
+    diagnosis and September 9 partial fleet capture remain historical evidence
+    of the earlier failure. Every observation is point-in-time evidence, not a
+    real-time query now.
 
 ## Operational summary
 
 | Plane | Recorded state | Exact identifier | Observed or updated at | Evidence and freshness |
 | --- | --- | --- | --- | --- |
 | Validator-0 RPC diagnosis | The September 9 timeouts were an exhausted 10,000-connection accept budget combined with a still-active keep-alive connection. An out-of-campaign restart restored responses but did not repair the recurrence condition. | Affected event sequence ended at request index 10,000; current process had accepted 3,404 connections versus 121–124 on each peer. | `2026-09-10T10:24:20Z`–`10:40:22Z` | Read-only RPC, event-log, journal, socket, process, and sysstat inspection. Diagnosis only; no restart or write. |
-| Running devnet, latest read-only observation | Validators 1–5 answered all three health reads and agreed at height 1020 with empty mempools. Validator-0's RPC timed out; its host and both services were reachable/active, but full-six ledger agreement is not established by this capture. | Chain `postfiat-wan-devnet-2`; genesis `ce22ca8c…e90a9`; tip `9d02b8ee…b1768feb`; state `587c6526…d39bead6` on validators 1–5. | `2026-09-09T09:24:54Z`–`09:27:00Z` | Authenticated SSH forwarding to loopback RPC plus read-only process identity; point in time. |
-| Deployed runtime, latest identity | All 12 validator and RPC service processes were active/running from one release and one executable hash. No process runs a build containing repository signing fix `bbb291ce`. | Release `a666-source-route-20260907`; node SHA-256 `57b0f4d1d42d66878d7dbb8c33919c7fa0f87c6cc1a4b9cc1a85d75b634eec83`. | `2026-09-09T09:26:45Z`–`09:27:00Z` | Direct read-only systemd, `/proc`, release-path, and SHA-256 identity checks on all six hosts. |
+| Running devnet, latest read-only observation | All six validators answered all three health reads and agreed at height 1020 with empty mempools. This is zero blocks beyond the September 10 observation. | Chain `postfiat-wan-devnet-2`; genesis `ce22ca8c…e90a9`; tip `9d02b8ee…b1768feb`; state `587c6526…d39bead6` on all six. | `2026-09-11T10:33:54Z`–`10:34:57Z` | Authenticated SSH forwarding to loopback RPC plus read-only process identity; point in time. |
+| Deployed runtime, latest identity | All 12 validator and RPC service processes were active/running from one release and one executable hash. Validator-0's current RPC process started September 11 and was at request index 1,025 of 10,000. No process runs source repairs `83488d91` or `15af691d`. | Release `a666-source-route-20260907`; node SHA-256 `57b0f4d1d42d66878d7dbb8c33919c7fa0f87c6cc1a4b9cc1a85d75b634eec83`. | `2026-09-11T10:34:42Z`–`10:34:57Z` | Direct read-only systemd, `/proc`, release-path, SHA-256, process-start, and event-index checks on all six hosts. |
 | Running devnet, historical 2026-08-30 observation | Six validators converged at height 924 with empty mempools after validator-1 was rolled back from the failed storage canary; all validator, RPC, and advisory shadow services were active. | Chain `postfiat-wan-devnet-2`; genesis `ce22ca8c…e90a9`; tip `ebeb0e1e…a7649fbef`; state `0854bc47…1ee6f413e`. | `2026-08-30T23:00:24Z`–`23:00:39Z` | Authenticated post-rollback fleet observation; point in time, not a current network query. |
 | Validator-trust authority | Cobalt remains active for validator-registry and trust-graph ratification. The final signed drill rollback committed at 922, return to Cobalt at 923, and legitimate validator-5 rotation at 924. Consensus v2 remains block finality. | Registry root `08a451e0…2b9b1d`; trust root `89f18aef…08f0307`; ratification anchor sequence 2, ID `5eada38d…c21153c8`. | Accepted history through height 924; fleet-audited through `2026-08-30T23:00:39Z`. | The recovery probe found authority mode 1 and identical registry/trust roots on all six. |
 | Deployed runtime | Every validator uses the pre-storage node binary again; every validator, RPC, and shadow service is active. Validator-1 briefly ran successor transport while its RPC failed, then returned to the signed `8cc7d15e` deployment. | Node SHA-256 `d5e5ef630155e61b001b84edb404a4def7d29a9205f23d33d2ad9c37c2696caf`; stopped candidate `0cc664a3…ad4183` is inactive. | `2026-08-30T23:00:24Z`–`23:00:39Z` | Direct process, binary, status, service, signed-unit, and post-rollback storage comparisons. |
@@ -149,6 +171,46 @@ Nothing in this section proves deployment. See the
 [development evidence](https://github.com/postfiatorg/postfiatl1v2/tree/main/benchmarks/storage-scaling).
 
 ## Last observed devnet values
+
+### Fresh all-six fleet observation — 2026-09-11
+
+| Field | Value |
+| --- | --- |
+| Chain | `postfiat-wan-devnet-2` |
+| Genesis hash | `ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9` |
+| Observation window | `2026-09-11T10:33:54Z`–`2026-09-11T10:34:57Z` |
+| Agreement | All six agree on chain, genesis, height, tip, and state root; every mempool is empty. |
+| Height | 1020 on all six; no advance past the September 10 height (`+0`) |
+| Mempool | 0 pending on every validator |
+| Tip hash | `9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb` |
+| State root | `587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6` |
+| Running release | `a666-source-route-20260907` on all 12 validator/RPC processes |
+| Running binary | SHA-256 `57b0f4d1d42d66878d7dbb8c33919c7fa0f87c6cc1a4b9cc1a85d75b634eec83` on all 12 processes |
+| Validator-0 RPC budget | Answering; current process PID 3611291 started `2026-09-11T06:16:08Z`; latest completed accepted-connection request index 1,025 of 10,000 (10.25%) |
+| Repository/fleet boundary | Source repairs `83488d91` and `15af691d` are not deployed on any observed process. |
+
+| Validator | RPC status, server info, mempool | Observed ledger | Running identity | RPC captured |
+| --- | --- | --- | --- | --- |
+| validator-0 | Running; mempool 0 | Height 1020; `9d02b8ee…b1768feb`; `587c6526…d39bead6` | `a666-source-route-20260907`; `57b0f4d1…634eec83` | `2026-09-11T10:33:54Z`–`10:34:01Z` |
+| validator-1 | Running; mempool 0 | Height 1020; `9d02b8ee…b1768feb`; `587c6526…d39bead6` | `a666-source-route-20260907`; `57b0f4d1…634eec83` | `2026-09-11T10:34:01Z`–`10:34:08Z` |
+| validator-2 | Running; mempool 0 | Height 1020; `9d02b8ee…b1768feb`; `587c6526…d39bead6` | `a666-source-route-20260907`; `57b0f4d1…634eec83` | `2026-09-11T10:34:08Z`–`10:34:18Z` |
+| validator-3 | Running; mempool 0 | Height 1020; `9d02b8ee…b1768feb`; `587c6526…d39bead6` | `a666-source-route-20260907`; `57b0f4d1…634eec83` | `2026-09-11T10:34:18Z`–`10:34:26Z` |
+| validator-4 | Running; mempool 0 | Height 1020; `9d02b8ee…b1768feb`; `587c6526…d39bead6` | `a666-source-route-20260907`; `57b0f4d1…634eec83` | `2026-09-11T10:34:26Z`–`10:34:32Z` |
+| validator-5 | Running; mempool 0 | Height 1020; `9d02b8ee…b1768feb`; `587c6526…d39bead6` | `a666-source-route-20260907`; `57b0f4d1…634eec83` | `2026-09-11T10:34:32Z`–`10:34:42Z` |
+
+The requested rate from the September 9 process start cannot describe the
+current process because its accept counter reset with the later September 11
+start. From the current start through the accept-count check, 1,025 connections
+in 4 hours 18 minutes 49 seconds is approximately 238 per hour. At that rate,
+the remaining 8,975 connections represent roughly 37 hours 46 minutes, with a
+straight-line limit time around `2026-09-13T00:21Z`. This is a rough utilization
+projection, not a prediction that the process will remain active or exhaust.
+
+The observation used authenticated SSH forwarding to each loopback-bound RPC,
+exactly one `status`, `server_info`, and `mempool_status` call per validator,
+and read-only service/process identity and validator-0 event-index checks. No
+restart, deployment, configuration change, host write, or chain write was
+performed.
 
 ### Validator-0 read-only diagnosis — 2026-09-10 { #validator-0-rpc-diagnosis-20260910 }
 
