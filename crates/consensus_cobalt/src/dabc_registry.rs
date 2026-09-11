@@ -547,15 +547,23 @@ fn validate_dabc_activation_with_full_knowledge_internal(
         return Err("DABC activation target does not match ratified chain entry".to_string());
     }
 
-    let ratified_slots: BTreeSet<u64> = ratified_chain
+    let ratified_candidates: BTreeMap<u64, &str> = ratified_chain
         .iter()
-        .map(|entry| entry.amendment_slot)
+        .map(|entry| (entry.amendment_slot, entry.output_candidate_id.as_str()))
         .collect();
     for check in &checkpoint.checks {
         for pair in &check.pending_pairs {
-            if !ratified_slots.contains(&pair.amendment_slot) {
+            let expected_candidate_id = ratified_candidates
+                .get(&pair.amendment_slot)
+                .ok_or_else(|| {
+                    format!(
+                        "DABC full-knowledge pending slot {} is not ratified",
+                        pair.amendment_slot
+                    )
+                })?;
+            if pair.output_candidate_id != *expected_candidate_id {
                 return Err(format!(
-                    "DABC full-knowledge pending slot {} is not ratified",
+                    "DABC full-knowledge pending candidate mismatch at slot {}",
                     pair.amendment_slot
                 ));
             }

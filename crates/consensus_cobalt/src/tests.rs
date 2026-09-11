@@ -108,7 +108,7 @@
 
     fn safety_witness_profile() -> CobaltSafetyWitnessProfile {
         CobaltSafetyWitnessProfile {
-            byzantine_budget: 2,
+            byzantine_budget: 1,
             max_cover_subsets: 16,
             require_cleared_challenge_state: true,
         }
@@ -134,6 +134,14 @@
         old_validators: Vec<String>,
         new_validators: Vec<String>,
     ) -> (CobaltDomain, TrustGraph, TrustGraph) {
+        canonical_transition_fixture_with_quorum(old_validators, new_validators, 6)
+    }
+
+    fn canonical_transition_fixture_with_quorum(
+        old_validators: Vec<String>,
+        new_validators: Vec<String>,
+        quorum: usize,
+    ) -> (CobaltDomain, TrustGraph, TrustGraph) {
         let domain = test_domain();
         let old_graph = build_canonical_unl_trust_graph(
             &domain,
@@ -142,7 +150,7 @@
             10,
             None,
             old_validators,
-            5,
+            quorum,
         )
         .expect("old trust graph");
         let new_graph = build_canonical_unl_trust_graph(
@@ -152,7 +160,7 @@
             11,
             Some(old_graph.trust_graph_root.clone()),
             new_validators,
-            5,
+            quorum,
         )
         .expect("new trust graph");
         (domain, old_graph, new_graph)
@@ -183,6 +191,29 @@
             report.report_hash,
             cobalt_safety_witness_report_hash(&report).expect("report hash")
         );
+    }
+
+    #[test]
+    fn cobalt_safety_witness_rejects_rotation_without_honest_quorum_overlap() {
+        let (domain, old_graph, new_graph) = canonical_transition_fixture_with_quorum(
+            ids(&["A", "B", "C", "D", "E", "F", "G"]),
+            ids(&["A", "B", "C", "D", "E", "F", "H"]),
+            5,
+        );
+        let mut profile = safety_witness_profile();
+        profile.byzantine_budget = 2;
+        let report = verify_cobalt_safety_witness(
+            &domain,
+            &old_graph,
+            &new_graph,
+            safety_witness_input(&old_graph, &new_graph, profile),
+        )
+        .expect("safety witness report");
+
+        assert_eq!(report.intersections[0].intersection_size, 6);
+        assert!(!report.accepted);
+        assert_eq!(report.reason, "old-new intersection bound failed");
+        assert_eq!(report.rejected_counterexamples.len(), 1);
     }
 
     #[test]
@@ -2676,6 +2707,45 @@
         assert_eq!(activation.checkpoint_id, checkpoint.checkpoint_id);
         assert_eq!(activation.activation_height, second.activation_height);
         assert!(is_lower_hex_len(&activation.activation_id, 96));
+
+        let mismatched_checks = support
+            .iter()
+            .map(|sender| {
+                signed_dabc_check(
+                    &domain,
+                    graph.trust_graph_root.clone(),
+                    sender,
+                    20,
+                    vec![DabcPendingPair {
+                        amendment_slot: second.amendment_slot,
+                        output_candidate_id: root('f'),
+                    }],
+                )
+            })
+            .collect::<Vec<_>>();
+        let mismatched_checkpoint = build_dabc_full_knowledge_checkpoint_signed(
+            &domain,
+            &committee,
+            &graph,
+            "validator-1",
+            20,
+            second.activation_height,
+            mismatched_checks,
+        )
+        .expect("candidate-mismatched checkpoint is structurally valid");
+        let mismatch_error = validate_dabc_activation_with_full_knowledge_signed(
+            &domain,
+            &committee,
+            &graph,
+            &ratified_chain,
+            &second,
+            &mismatched_checkpoint,
+        )
+        .expect_err("pending candidate must match ratified slot");
+        assert!(
+            mismatch_error.contains("pending candidate mismatch"),
+            "{mismatch_error}"
+        );
 
         let mut incomplete_checks = Vec::new();
         for height in [10_u64, 20_u64] {

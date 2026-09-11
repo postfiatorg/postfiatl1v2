@@ -37,7 +37,7 @@ fn domain() -> CobaltDomain {
 
 fn profile(max_cover_subsets: usize) -> CobaltSafetyWitnessProfile {
     CobaltSafetyWitnessProfile {
-        byzantine_budget: 2,
+        byzantine_budget: 1,
         max_cover_subsets,
         require_cleared_challenge_state: true,
     }
@@ -49,7 +49,7 @@ fn transition(
     new_validators: Vec<String>,
 ) -> Result<(TrustGraph, TrustGraph), String> {
     let old_graph =
-        build_canonical_unl_trust_graph(domain, 1, root('a'), 10, None, old_validators, 5)?;
+        build_canonical_unl_trust_graph(domain, 1, root('a'), 10, None, old_validators, 6)?;
     let new_graph = build_canonical_unl_trust_graph(
         domain,
         2,
@@ -57,7 +57,7 @@ fn transition(
         11,
         Some(old_graph.trust_graph_root.clone()),
         new_validators,
-        5,
+        6,
     )?;
     Ok((old_graph, new_graph))
 }
@@ -158,14 +158,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let scenarios = vec![
         scenario(
             "one_validator_rotation_accepted",
-            "one-validator rotation keeps six shared validators and passes B=2",
+            "one-validator rotation keeps a four-validator minimum quorum intersection and passes B=1",
             true,
             "accepted",
             accepted_report,
         ),
         scenario(
             "ab_to_hijkl_rejected",
-            "large simultaneous delta has only A,B in common and fails B=2",
+            "large simultaneous delta has disjoint possible quorums and fails B=1",
             false,
             "old-new intersection bound failed",
             unsafe_report,
@@ -214,7 +214,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "scope": "local-consensus-crate",
         "checker": "verify_cobalt_safety_witness",
         "profile": {
-            "byzantine_budget": 2,
+            "byzantine_budget": 1,
             "max_cover_subsets": 16,
             "require_cleared_challenge_state": true
         },

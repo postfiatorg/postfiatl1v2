@@ -1623,13 +1623,21 @@ fn safety_witness_intersections(
         for new_subset in new_cover {
             let intersection = sorted_intersection(&old_subset.validators, &new_subset.validators);
             let intersection_size = intersection.len();
+            let union_size = old_subset
+                .validator_count
+                .saturating_add(new_subset.validator_count)
+                .saturating_sub(intersection_size);
+            let minimum_quorum_intersection = old_subset
+                .quorum
+                .saturating_add(new_subset.quorum)
+                .saturating_sub(union_size);
             rows.push(CobaltSafetyWitnessIntersectionRow {
                 old_subset_id: old_subset.subset_id.clone(),
                 new_subset_id: new_subset.subset_id.clone(),
                 intersection,
                 intersection_size,
                 byzantine_budget,
-                safe: intersection_size > byzantine_budget,
+                safe: minimum_quorum_intersection > byzantine_budget,
             });
         }
     }
