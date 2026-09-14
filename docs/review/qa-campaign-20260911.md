@@ -6,8 +6,8 @@ This is the canonical progress record for the
 `c25b3389d5c221ff1c23e700d53460003cc50b2a`. It is a review-and-repair
 campaign, not a release, deployment, or live-authority action.
 
-**Status:** campaign closed with A5 and B outstanding. A1 through A4 are done;
-A5 and B were not started.
+**Status:** A1 through A5 are done. B remains not started as a separate
+task; this run stops after A5.
 
 ## Campaign state
 
@@ -17,10 +17,44 @@ A5 and B were not started.
 | A2 | Execution | done | 1 | 2 | 0 | [Review](execution-review-20260911.md); findings `0449de41`; repairs `e95efbdf` |
 | A3 | Cobalt ratification | done | 1 | 1 | 2 | [Review](cobalt-ratification-review-20260911.md); findings `b5c16c2c`; repairs `c9a61fcd` |
 | A4 | Network and mempool admission | done (repaired) | 2 | 1 | 1 | [Review](network-mempool-review-20260911.md); findings `13a23d91`; repairs `f2dea308` |
-| A5 | Operational Python CLIs | not started | — | — | — | — |
+| A5 | Operational Python CLIs | done (repaired) | 1 | 7 | 3 | [Review](operational-clis-review-20260911.md); findings `b25e3bec`; repairs `c2724977` |
 | B | Defect inventory and TIH gate | not started | — | — | — | — |
 
-Current finding totals: **5 P1, 7 P2, 5 P3**.
+Current finding totals: **6 P1, 14 P2, 8 P3**.
+
+## Operational Python CLIs review result
+
+All nine A5 files were reviewed in the required order: `wallet.py`,
+`client.py`, `persistent_client.py`, `pftl_transfer.py`, `navcoin.py`,
+`hyperliquid.py`, `cobalt.py`, `genesis_registry.py`, and
+`storage_scaling.py`. No A5 file was left unreviewed. The prior
+`tasknode_unl` modules were outside A5. The
+[operational CLI review](operational-clis-review-20260911.md) records one P1:
+the wallet could mark an unsuccessful transfer finalized from a block height
+without a matching accepted receipt. Seven P2s concern incomplete account
+history being presented as complete, implicit faucet state application,
+incorrect NAV asset identity, missing venue fields and unbounded venue response
+bodies, remote shadow catch-up without a separate interlock, and inconsistent
+genesis receipt deadlines. Three P3s remain recorded: nonintegral example
+NAV valuations, rounded PFTL report amounts, and unbounded packet-tree
+enumeration.
+
+Repair `c2724977` requires a matching accepted certified receipt for transfer
+success, validates account-history metadata, adds explicit faucet and shadow
+catch-up interlocks, derives the NAV asset ID from the chain-bound canonical
+algorithm, rejects missing or oversized venue responses, and checks receipt
+deadlines together. It adds focused regressions for every P1/P2 finding and
+updates the NAV example to require an explicit chain ID. No A5 repair is
+consensus-affecting, deployed, or activated.
+
+Verification:
+
+- `PYTHONPATH=python python3 -m pytest -q python/tests/test_wallet.py python/tests/test_persistent_client.py python/tests/test_pftl_transfer.py python/tests/test_navcoin.py python/tests/test_cobalt.py python/tests/test_genesis_registry.py python/tests/test_storage_scaling.py python/tests/test_constrained_signer.py`:
+  183 passed, 3 skipped, 44 subtests passed.
+- `PYTHONPATH=python python3 docs/examples/navcoin_mint_and_nav.py --chain-id postfiat-navcoin-devnet`:
+  completed without error.
+- `python3 -m compileall -q python/postfiat_rpc/{wallet,client,pftl_transfer,navcoin,hyperliquid,cobalt,genesis_registry}.py`
+  and `git diff --check`: passed.
 
 ## Network and mempool admission review result
 
@@ -180,13 +214,20 @@ Post-repair verification:
   source was modified.
 - No broad workspace or Orchard/Halo2 suite was started; no burn 3 repair
   crossed an Orchard boundary.
-- A5 and B were not started during the time-limited closeout.
+- Three genesis-registry tests requiring the out-of-tree archived round
+  fixture were skipped; the local golden vectors and synthetic receipt
+  deadline regression passed.
+- A5 reviewed all nine listed files; no A5 file was skipped.
+- B remains not started and its inventory extension and scoring gate are a
+  separate task.
 
 ## Verification
 
 The mandatory strict documentation, public-link, and public-secret gates passed
-before every campaign commit. Focused source results and pushed commit IDs are
-recorded with each completed surface.
+before every A5 commit and each earlier campaign commit. A5 ran
+`PYTHONPATH=python python3 -m pytest -q python/tests/test_wallet.py python/tests/test_persistent_client.py python/tests/test_pftl_transfer.py python/tests/test_navcoin.py python/tests/test_cobalt.py python/tests/test_genesis_registry.py python/tests/test_storage_scaling.py python/tests/test_constrained_signer.py`:
+183 passed, 3 skipped, and 44 subtests passed. Pushed commit IDs are recorded
+in the campaign state table.
 
 ## Scores
 
@@ -201,8 +242,8 @@ started.
 | A2 — Execution | 1 | 2 | 0 | `e95efbdf` |
 | A3 — Cobalt ratification | 1 | 1 | 2 | `c9a61fcd` |
 | A4 — Network and mempool admission | 2 | 1 | 1 | `f2dea308` |
-| A5 — Operational Python CLIs | not started | not started | not started | — |
-| **Completed-surface total** | **5** | **7** | **5** | — |
+| A5 — Operational Python CLIs | 1 | 7 | 3 | `c2724977` |
+| **Completed-surface total** | **6** | **14** | **8** | — |
 
 Consensus-affecting repairs, all source-only and not activated or deployed:
 
@@ -225,9 +266,11 @@ Remaining risks:
   first-oracle validator classifications.
 - A4 retains the P3 deserializable legacy validator set with a false quorum;
   no unauthenticated production reachability was found.
-- A5 remains unreviewed. B has not added burn 3 findings to the consolidated
-  defect inventory or run its Text Improvement Harness gate.
+- A5 retains three P3 observations: the nonintegral NAV example operation,
+  rounded PFTL display amounts, and unbounded packet-tree enumeration.
+- B has not added burn 3 findings to the consolidated defect inventory or
+  run its Text Improvement Harness gate.
 - All burn 3 repairs remain source-only; no deployment or live activation was
   performed.
 
-The campaign closed early with A5 and B as the resume point.
+A5 is closed; B remains not started for a separate task.
