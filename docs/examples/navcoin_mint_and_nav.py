@@ -11,6 +11,7 @@ from postfiat_rpc.navcoin import DEFAULT_PROOF_PROFILE, NavInputs, build_packet_
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--chain-id", required=True)
     parser.add_argument("--issuer", default="pfissuer-example")
     parser.add_argument("--ap-account", default="pfap-example")
     parser.add_argument("--asset-code", default="NAV")
@@ -29,6 +30,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     inputs = NavInputs(
+        chain_id=args.chain_id,
         issuer=args.issuer,
         ap_account=args.ap_account,
         asset_code=args.asset_code,

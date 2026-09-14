@@ -31,7 +31,7 @@ Common local runs:
 # during the open-source cleanup; see scripts/README.md.
 scripts/navcoin-current-infra-smoke
 scripts/navcoin-multifetch-smoke
-PYTHONPATH=python python3 docs/examples/navcoin_mint_and_nav.py
+PYTHONPATH=python python3 docs/examples/navcoin_mint_and_nav.py --chain-id postfiat-navcoin-devnet
 ```
 
 ## Vault-bridge and pfUSDC commands

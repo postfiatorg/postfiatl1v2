@@ -651,44 +651,36 @@ def send_pft_and_poll_finality(
     if use_finality_submit and result.submit_result:
         finality = result.submit_result.get("finality")
         if isinstance(finality, dict):
-            block = finality.get("block", {})
-            header = block.get("header", {})
-            hot_finality = finality.get("local_hot_finality", [])
+            block = finality.get("block")
+            header = block.get("header") if isinstance(block, dict) else None
+            hot_finality = finality.get("local_hot_finality")
             tx_id = result.tx_id
-            # Check if our tx_id is in the hot finality receipts
-            for report in hot_finality if isinstance(hot_finality, list) else []:
-                if isinstance(report, dict):
-                    receipt = report.get("receipt", {})
-                    if receipt.get("tx_id") == tx_id and receipt.get("accepted"):
-                        return SendPftResult(
-                            tx_id=tx_id,
-                            quote_response=result.quote_response,
-                            signed_transfer=result.signed_transfer,
-                            submit_result=result.submit_result,
-                            finalized_batch_file=None,
-                            receipts_by_validator=(),
-                            submit_mode="submit_and_poll",
-                            pending=False,
-                            finalized=True,
-                            finality_receipt=receipt,
-                            finality_timeout=False,
-                        )
-            # Even if we don't find the specific receipt, the block was certified
-            block_height = header.get("height")
-            if block_height is not None and block_height > 0:
-                return SendPftResult(
-                    tx_id=tx_id,
-                    quote_response=result.quote_response,
-                    signed_transfer=result.signed_transfer,
-                    submit_result=result.submit_result,
-                    finalized_batch_file=None,
-                    receipts_by_validator=(),
-                    submit_mode="submit_and_poll",
-                    pending=False,
-                    finalized=True,
-                    finality_receipt={"block_height": block_height, "certified": True},
-                    finality_timeout=False,
-                )
+            # A certified block alone does not establish this transaction's success.
+            reports = hot_finality if isinstance(hot_finality, list) else []
+            for report in reports:
+                receipt = report.get("receipt") if isinstance(report, dict) else None
+                if (
+                    tx_id
+                    and isinstance(header, dict)
+                    and type(header.get("height")) is int
+                    and header["height"] > 0
+                    and isinstance(receipt, dict)
+                    and receipt.get("tx_id") == tx_id
+                    and receipt.get("accepted") is True
+                ):
+                    return SendPftResult(
+                        tx_id=tx_id,
+                        quote_response=result.quote_response,
+                        signed_transfer=result.signed_transfer,
+                        submit_result=result.submit_result,
+                        finalized_batch_file=None,
+                        receipts_by_validator=(),
+                        submit_mode="submit_and_poll",
+                        pending=False,
+                        finalized=True,
+                        finality_receipt=receipt,
+                        finality_timeout=False,
+                    )
     if result.tx_id is None:
         return result
 
@@ -701,20 +693,22 @@ def send_pft_and_poll_finality(
         try:
             tx_info = client.tx(result.tx_id)
             if isinstance(tx_info, dict):
-                block_height = tx_info.get("block_height")
-                certified = tx_info.get("certified", False)
-                if block_height is not None and block_height > 0:
-                    finality_receipt = tx_info
-                    finalized = certified or bool(block_height)
+                receipt = tx_info.get("receipt")
+                block = tx_info.get("block")
+                header = block.get("header") if isinstance(block, dict) else None
+                if (
+                    tx_info.get("tx_id") == result.tx_id
+                    and tx_info.get("confirmed") is True
+                    and isinstance(receipt, dict)
+                    and receipt.get("tx_id") == result.tx_id
+                    and receipt.get("accepted") is True
+                    and isinstance(header, dict)
+                    and type(header.get("height")) is int
+                    and header["height"] > 0
+                ):
+                    finality_receipt = receipt
+                    finalized = True
                     break
-        except Exception:
-            pass
-        try:
-            tx_receipts = client.receipts(tx_id=result.tx_id)
-            if isinstance(tx_receipts, list) and len(tx_receipts) > 0:
-                finality_receipt = tx_receipts[0]
-                finalized = True
-                break
         except Exception:
             pass
 

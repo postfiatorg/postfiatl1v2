@@ -17,7 +17,7 @@ This example shows the NAVCOIN mechanics without private keys:
 Run:
 
 ```bash
-PYTHONPATH=python python3 docs/examples/navcoin_mint_and_nav.py
+PYTHONPATH=python python3 docs/examples/navcoin_mint_and_nav.py --chain-id postfiat-navcoin-devnet
 ```
 
 The default numbers are deliberately simple:
@@ -91,6 +91,7 @@ ap = create_wallet(
 
 packet = build_packet_and_operations(
     NavInputs(
+        chain_id=issuer.chain_id,
         issuer=issuer.address,
         ap_account=ap.address,
         asset_code="NAV",

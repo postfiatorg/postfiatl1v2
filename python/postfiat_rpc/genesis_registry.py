@@ -536,6 +536,25 @@ def _extract_evidence_rows(model_request: Mapping[str, Any]) -> dict[str, Any]:
     raise ValueError("model request has no user message")
 
 
+def _receipt_deadline(
+    receipts: Any, chain_id: str, round_id: str
+) -> tuple[str, int]:
+    if not isinstance(receipts, list) or not receipts:
+        raise ValueError("receipt set must be nonempty")
+    first = receipts[0]
+    deadline_hash = first["deadline_ledger_hash_hex"]
+    deadline_seq = first["deadline_ledger_seq"]
+    for receipt in receipts:
+        if receipt["chain_id"] != chain_id or receipt["genesis_round_id"] != round_id:
+            raise ValueError("receipt chain or round mismatch")
+        if (
+            receipt["deadline_ledger_hash_hex"] != deadline_hash
+            or receipt["deadline_ledger_seq"] != deadline_seq
+        ):
+            raise ValueError("receipt deadlines must agree")
+    return deadline_hash, deadline_seq
+
+
 def build_registry(
     round_dir: Path,
     receipts_path: Path,
@@ -593,14 +612,10 @@ def build_registry(
 
     receipts_doc = _load_json(receipts_path)
     receipts = receipts_doc["receipts"]
-    for receipt in receipts:
-        if receipt["chain_id"] != chain_id or receipt["genesis_round_id"] != round_id:
-            raise ValueError("receipt chain or round mismatch")
+    deadline_hash, deadline_seq = _receipt_deadline(receipts, chain_id, round_id)
     receipt_by_key = {receipt["fork_master_key_hex"]: receipt for receipt in receipts}
     if len(receipt_by_key) != len(receipts):
         raise ValueError("duplicate receipt master key")
-    deadline_hash = receipts[0]["deadline_ledger_hash_hex"]
-    deadline_seq = receipts[0]["deadline_ledger_seq"]
 
     selected = _load_json(round_dir / "outputs/selected_unl.json")["unl"]
     entries = []

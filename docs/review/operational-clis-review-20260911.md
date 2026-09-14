@@ -144,4 +144,7 @@ in a separate change.
 
 ## Repair result
 
-Pending the separate P1/P2 repair commit; P3 observations remain recorded.
+The separate repair commit closes findings 1 through 8 with focused Python
+regressions. Findings 9 through 11 remain recorded under the P3-only rule.
+No repair changes a consensus rule, state-transition result, or on-disk format;
+the changes are Python-only and were not deployed.

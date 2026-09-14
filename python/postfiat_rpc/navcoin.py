@@ -12,6 +12,8 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from .wallet import _issued_asset_id
+
 
 VALUATION_UNIT = "usd_1e6"
 DEFAULT_PROOF_PROFILE = "local-nitro-placeholder-v0"
@@ -22,6 +24,7 @@ NAV_PROFILE_VERIFIER_PLACEHOLDER = "placeholder"
 
 @dataclass(frozen=True)
 class NavInputs:
+    chain_id: str
     issuer: str
     ap_account: str
     asset_code: str
@@ -45,8 +48,9 @@ def canonical_json_bytes(value: Any) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
-def derived_asset_id(issuer: str, code: str, version: int = 1) -> str:
-    return sha384_hex(f"postfiat.example.issued_asset:{issuer}:{code}:{version}".encode())
+def derived_asset_id(chain_id: str, issuer: str, code: str, version: int = 1) -> str:
+    """Use the same chain-bound identity as the native asset-create operation."""
+    return _issued_asset_id(chain_id, issuer, code, version)
 
 
 def nav_proof_profile_id(
@@ -212,7 +216,7 @@ def build_packet_and_operations(inputs: NavInputs) -> dict[str, Any]:
         raise ValueError("redeem amount cannot exceed minted amount in this example")
 
     nav = calculate_nav(inputs)
-    asset_id = derived_asset_id(inputs.issuer, inputs.asset_code)
+    asset_id = derived_asset_id(inputs.chain_id, inputs.issuer, inputs.asset_code)
     reserve_packet = {
         "schema": "postfiat-navcoin-reserve-packet-example-v1",
         "asset_code": inputs.asset_code,

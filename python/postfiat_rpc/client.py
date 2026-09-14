@@ -1663,9 +1663,21 @@ class PostFiatRpcClient:
     ) -> AccountTxScan:
         if not isinstance(result, dict):
             raise RpcProtocolError("account_tx result must be an object")
-        rows_value = result.get("rows", [])
+        rows_value = result.get("rows")
         if not isinstance(rows_value, list):
             raise RpcProtocolError("account_tx rows must be a list")
+        if type(result.get("truncated")) is not bool:
+            raise RpcProtocolError("account_tx truncated must be a boolean")
+        if (
+            result.get("address") != fallback_address
+            or result.get("from_height") != fallback_from_height
+            or result.get("to_height") != fallback_to_height
+            or type(result.get("scan_limit")) is not int
+            or result["scan_limit"] != fallback_scan_limit
+            or type(result.get("row_count")) is not int
+            or result["row_count"] != len(rows_value)
+        ):
+            raise RpcProtocolError("account_tx query or row count mismatch")
         rows = []
         for row in rows_value:
             if not isinstance(row, dict):

@@ -18,12 +18,20 @@ class PftlTransferCliTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             cli.pft_to_atoms("1.0000001")
 
+    def test_faucet_requires_explicit_apply_acknowledgement(self) -> None:
+        args = cli.build_parser().parse_args(["faucet", "--to", "pfrecipient"])
+        with mock.patch.object(cli, "request_faucet_pft") as request:
+            with self.assertRaisesRegex(ValueError, "--allow-faucet-apply"):
+                cli.run_faucet(args)
+        request.assert_not_called()
+
     def test_faucet_action_delegates_to_wallet_helper(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             args = cli.build_parser().parse_args(
                 [
                     "faucet",
+                    "--allow-faucet-apply",
                     "--to",
                     "pfrecipient",
                     "--amount",

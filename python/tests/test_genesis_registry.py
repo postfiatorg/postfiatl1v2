@@ -42,6 +42,32 @@ def _build(round_number: int) -> dict:
 
 
 class TwoImplementationAgreementTests(unittest.TestCase):
+    def test_receipt_set_requires_one_shared_deadline(self) -> None:
+        first = {
+            "chain_id": "chain",
+            "genesis_round_id": "testnet-r12",
+            "fork_master_key_hex": "aa",
+            "deadline_ledger_hash_hex": "11" * 32,
+            "deadline_ledger_seq": 50,
+        }
+        second = {
+            **first,
+            "fork_master_key_hex": "bb",
+        }
+        check = genesis_registry._receipt_deadline
+        self.assertEqual(
+            check([first, second], "chain", "testnet-r12"),
+            ("11" * 32, 50),
+        )
+        for receipts in (
+            [],
+            [first, {**second, "deadline_ledger_seq": 51}],
+            [first, {**second, "deadline_ledger_hash_hex": "22" * 32}],
+        ):
+            with self.subTest(receipts=receipts):
+                with self.assertRaises(ValueError):
+                    check(receipts, "chain", "testnet-r12")
+
     @unittest.skipUnless(
         ROUND_ARCHIVE_AVAILABLE,
         "frozen round archive is intentionally fetched out-of-tree",

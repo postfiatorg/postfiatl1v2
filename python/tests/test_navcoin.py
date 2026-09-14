@@ -1,4 +1,6 @@
+import io
 import unittest
+from unittest import mock
 
 from postfiat_rpc.navcoin import NavInputs, build_packet_and_operations, calculate_nav
 
@@ -6,6 +8,7 @@ from postfiat_rpc.navcoin import NavInputs, build_packet_and_operations, calcula
 class NavcoinExampleTests(unittest.TestCase):
     def test_calculates_exact_nav_and_operations(self) -> None:
         inputs = NavInputs(
+            chain_id="postfiat-local",
             issuer="pfissuer-example",
             ap_account="pfap-example",
             asset_code="NAV",
@@ -38,6 +41,7 @@ class NavcoinExampleTests(unittest.TestCase):
 
     def test_floor_nav_reports_over_collateralization_remainder(self) -> None:
         inputs = NavInputs(
+            chain_id="postfiat-local",
             issuer="pfissuer-example",
             ap_account="pfap-example",
             asset_code="NAV",
@@ -67,6 +71,35 @@ class NavcoinExampleTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_nav_asset_identity_matches_rust_chain_bound_vector():
+    from postfiat_rpc.navcoin import derived_asset_id
+
+    issuer = "pfissuer000000000000000000000000000000000"
+    expected = (
+        "7eb4ab19c010edff936edcff5e4e8c04300d15e1751c102ab91fcec8ac3e0c4"
+        "9738c877dcde38c473050c2d68ecff45f"
+    )
+    assert derived_asset_id("postfiat-local", issuer, "USD") == expected
+    assert derived_asset_id("postfiat-other", issuer, "USD") != expected
+    inputs = NavInputs(
+        chain_id="postfiat-local",
+        issuer=issuer,
+        ap_account="pfap",
+        asset_code="USD",
+        epoch=1,
+        circulating_supply=1,
+        mint_amount=1,
+        redeem_amount=1,
+        cash_micro_usd=1,
+        broker_positions_micro_usd=0,
+        liabilities_micro_usd=0,
+        pending_redemptions_micro_usd=0,
+    )
+    bundle = build_packet_and_operations(inputs)
+    assert bundle["asset_id"] == expected
+    assert bundle["operations"]["nav_asset_register"]["asset_id"] == expected
 
 
 def test_nav_proof_profile_id_matches_rust_consensus_vector():
@@ -102,6 +135,7 @@ def test_reserve_accounts_flow_into_submit_operation():
     from postfiat_rpc.navcoin import NavInputs, build_packet_and_operations
 
     inputs = NavInputs(
+        chain_id="postfiat-local",
         issuer="pfissuer",
         ap_account="pfap",
         asset_code="NAV",
@@ -172,6 +206,48 @@ def test_hyperliquid_normalization_is_deterministic_and_timestamp_free():
     assert comparable_view(obs_a) == comparable_view(obs_b)
     assert observation_root(obs_a) == observation_root(obs_b)
     assert len(observation_root(obs_a)) == 96
+
+
+def test_hyperliquid_rejects_truncated_and_nonfinite_venue_state():
+    from postfiat_rpc.hyperliquid import normalize_observation
+
+    valid_perp = {
+        "marginSummary": {
+            "accountValue": "1",
+            "totalNtlPos": "0",
+            "totalMarginUsed": "0",
+        },
+        "withdrawable": "1",
+        "assetPositions": [],
+    }
+    valid_spot = {"balances": []}
+    for perp, spot in (
+        (None, valid_spot),
+        ({**valid_perp, "marginSummary": {}}, valid_spot),
+        ({**valid_perp, "withdrawable": "NaN"}, valid_spot),
+        (valid_perp, {}),
+        (valid_perp, {"balances": [{"coin": "USDC", "hold": "0"}]}),
+    ):
+        with unittest.TestCase().assertRaises(ValueError):
+            normalize_observation("0xabc", perp, spot, captured_at_unix=1)
+
+
+def test_hyperliquid_bounds_response_before_decoding():
+    from postfiat_rpc.hyperliquid import MAX_INFO_RESPONSE_BYTES, _post_info
+
+    with mock.patch(
+        "postfiat_rpc.hyperliquid.urllib.request.urlopen",
+        return_value=io.BytesIO(b"x" * (MAX_INFO_RESPONSE_BYTES + 1)),
+    ):
+        with unittest.TestCase().assertRaisesRegex(ValueError, "byte limit"):
+            _post_info({"type": "allMids"}, "https://example.invalid/info")
+    with mock.patch(
+        "postfiat_rpc.hyperliquid.urllib.request.urlopen",
+        return_value=io.BytesIO(b'{"BTC":"1"}'),
+    ):
+        assert _post_info({"type": "allMids"}, "https://example.invalid/info") == {
+            "BTC": "1"
+        }
 
 
 def test_solana_normalization_deterministic_and_stake_parsing():

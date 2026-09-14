@@ -2016,6 +2016,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--source-endpoint", help="source Cobalt shadow endpoint")
     parser.add_argument("--target-endpoint", help="target Cobalt shadow endpoint")
+    parser.add_argument(
+        "--allow-shadow-catch-up",
+        action="store_true",
+        help="Acknowledge that catch-up changes the target shadow service",
+    )
     parser.add_argument("--start-sequence", type=int, help="first history sequence")
     parser.add_argument("--limit", type=int, default=64, help="bounded history range size")
     parser.add_argument("--range", dest="range_path", type=Path, help="history range JSON file")
@@ -2211,6 +2216,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                         fields={"range": range_report},
                     )
                 else:
+                    if not args.allow_shadow_catch_up:
+                        raise CobaltCliError(
+                            "catch-up requires --allow-shadow-catch-up before remote requests"
+                        )
                     if (
                         not args.source_endpoint
                         or not args.target_endpoint

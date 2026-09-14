@@ -23,6 +23,7 @@ import hashlib
 import json
 import time
 import urllib.request
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 MAINNET_INFO_URL = "https://api.hyperliquid.xyz/info"
@@ -30,6 +31,24 @@ TESTNET_INFO_URL = "https://api.hyperliquid-testnet.xyz/info"
 OBSERVATION_DOMAIN = b"postfiat.nav_observation.hyperliquid.v1"
 SOURCE_CLASS_MAINNET = "hyperliquid"
 SOURCE_CLASS_TESTNET = "hyperliquid-testnet"
+MAX_INFO_RESPONSE_BYTES = 1_048_576
+
+
+def _object(value: Any, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return value
+
+
+def _decimal(value: Any, label: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{label} must be an exact decimal string")
+    try:
+        if not Decimal(value).is_finite():
+            raise ValueError(f"{label} must be finite")
+    except InvalidOperation as error:
+        raise ValueError(f"{label} must be an exact decimal string") from error
+    return value
 
 
 def _post_info(payload: dict[str, Any], info_url: str, timeout: float = 15.0) -> Any:
@@ -40,7 +59,10 @@ def _post_info(payload: dict[str, Any], info_url: str, timeout: float = 15.0) ->
         method="POST",
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
-        return json.load(response)
+        body = response.read(MAX_INFO_RESPONSE_BYTES + 1)
+    if len(body) > MAX_INFO_RESPONSE_BYTES:
+        raise ValueError("venue response exceeded the byte limit")
+    return json.loads(body)
 
 
 def fetch_perp_state(address: str, info_url: str = MAINNET_INFO_URL) -> Any:
@@ -65,29 +87,45 @@ def normalize_observation(
 ) -> dict[str, Any]:
     """Reduce raw API responses to the deterministic fields observers
     compare. Decimal strings are preserved verbatim; ordering is fixed."""
-    margin = (perp_state or {}).get("marginSummary", {}) or {}
+    perp = _object(perp_state, "perp state")
+    spot = _object(spot_state, "spot state")
+    margin = _object(perp.get("marginSummary"), "margin summary")
+    raw_positions = perp.get("assetPositions")
+    raw_balances = spot.get("balances")
+    if not isinstance(raw_positions, list) or not isinstance(raw_balances, list):
+        raise ValueError("venue positions and balances must be arrays")
     positions = []
-    for entry in (perp_state or {}).get("assetPositions", []) or []:
-        position = entry.get("position", {}) or {}
+    for entry in raw_positions:
+        position = _object(_object(entry, "position entry").get("position"), "position")
+        coin = position.get("coin")
+        if not isinstance(coin, str) or not coin:
+            raise ValueError("position coin is missing")
+        entry_px = position.get("entryPx")
         positions.append(
             {
-                "coin": str(position.get("coin", "")),
-                "szi": str(position.get("szi", "0")),
-                "entry_px": str(position.get("entryPx") or "0"),
-                "position_value": str(position.get("positionValue", "0")),
-                "unrealized_pnl": str(position.get("unrealizedPnl", "0")),
-                "margin_used": str(position.get("marginUsed", "0")),
+                "coin": coin,
+                "szi": _decimal(position.get("szi"), "position size"),
+                "entry_px": (
+                    "0" if entry_px is None else _decimal(entry_px, "entry price")
+                ),
+                "position_value": _decimal(position.get("positionValue"), "position value"),
+                "unrealized_pnl": _decimal(position.get("unrealizedPnl"), "unrealized PnL"),
+                "margin_used": _decimal(position.get("marginUsed"), "margin used"),
             }
         )
     positions.sort(key=lambda item: item["coin"])
 
     balances = []
-    for entry in (spot_state or {}).get("balances", []) or []:
+    for entry in raw_balances:
+        balance = _object(entry, "balance")
+        coin = balance.get("coin")
+        if not isinstance(coin, str) or not coin:
+            raise ValueError("balance coin is missing")
         balances.append(
             {
-                "coin": str(entry.get("coin", "")),
-                "total": str(entry.get("total", "0")),
-                "hold": str(entry.get("hold", "0")),
+                "coin": coin,
+                "total": _decimal(balance.get("total"), "balance total"),
+                "hold": _decimal(balance.get("hold"), "balance hold"),
             }
         )
     balances.sort(key=lambda item: item["coin"])
@@ -98,10 +136,10 @@ def normalize_observation(
         "address": address.lower(),
         "captured_at_unix": int(captured_at_unix if captured_at_unix is not None else time.time()),
         "perp": {
-            "account_value": str(margin.get("accountValue", "0")),
-            "total_ntl_pos": str(margin.get("totalNtlPos", "0")),
-            "total_margin_used": str(margin.get("totalMarginUsed", "0")),
-            "withdrawable": str((perp_state or {}).get("withdrawable", "0")),
+            "account_value": _decimal(margin.get("accountValue"), "account value"),
+            "total_ntl_pos": _decimal(margin.get("totalNtlPos"), "total notional position"),
+            "total_margin_used": _decimal(margin.get("totalMarginUsed"), "total margin used"),
+            "withdrawable": _decimal(perp.get("withdrawable"), "withdrawable"),
             "positions": positions,
         },
         "spot": {"balances": balances},

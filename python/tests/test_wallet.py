@@ -9,6 +9,7 @@ from unittest import mock
 
 import postfiat_rpc.wallet as wallet_module
 from postfiat_rpc import PostFiatRpcClient, PostFiatWebSocketRpcClient
+from postfiat_rpc.client import RpcProtocolError
 from postfiat_rpc.wallet import (
     OrchardWallet,
     TransparentWallet,
@@ -2494,6 +2495,96 @@ class WalletHelperTests(unittest.TestCase):
         self.assertFalse(result.pending)
         fake_apply.assert_called_once()
 
+    def test_send_pft_finality_requires_matching_accepted_receipt(self) -> None:
+        tx_id = "ab" * 48
+        wallet = TransparentWallet(
+            chain_id="postfiat-local",
+            account_index=0,
+            address="pf-from",
+            public_key_hex="00",
+            key_file=Path("wallet.key.json"),
+            backup_file=Path("wallet.backup.json"),
+            key_report={},
+        )
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        for finality in (
+            {"block": {"header": {"height": 10}}, "local_hot_finality": []},
+            {
+                "block": {"header": {"height": 10}},
+                "local_hot_finality": [
+                    {"receipt": {"tx_id": tx_id, "accepted": False}},
+                    {"receipt": {"tx_id": "other", "accepted": True}},
+                ],
+            },
+        ):
+            with self.subTest(finality=finality):
+                submitted = wallet_module.SendPftResult(
+                    tx_id=tx_id,
+                    quote_response={},
+                    signed_transfer={},
+                    submit_result={"tx_id": tx_id, "finality": finality},
+                    finalized_batch_file=None,
+                    receipts_by_validator=(),
+                )
+                with (
+                    mock.patch.object(wallet_module, "send_pft", return_value=submitted),
+                    mock.patch.object(
+                        client,
+                        "tx",
+                        return_value={
+                            "tx_id": tx_id,
+                            "confirmed": True,
+                            "receipt": {"tx_id": tx_id, "accepted": False},
+                            "block": {"header": {"height": 10}},
+                        },
+                    ),
+                    mock.patch.object(client, "receipts", return_value=[
+                        {"tx_id": "other", "accepted": True}
+                    ]) as receipts,
+                    mock.patch.object(wallet_module.time, "monotonic", side_effect=[0, 0, 2]),
+                    mock.patch.object(wallet_module.time, "sleep"),
+                ):
+                    result = send_pft_and_poll_finality(
+                        client,
+                        wallet=wallet,
+                        to_address="pf-to",
+                        amount=1,
+                        poll_timeout_seconds=1,
+                        poll_interval_seconds=0.1,
+                    )
+                self.assertFalse(result.finalized)
+                self.assertTrue(result.pending)
+                self.assertTrue(result.finality_timeout)
+                receipts.assert_not_called()
+
+    def test_account_history_rejects_missing_or_mismatched_scan_metadata(self) -> None:
+        client = PostFiatRpcClient("127.0.0.1:1234")
+        complete = {
+            "address": "pf-from",
+            "from_height": 1,
+            "to_height": 2,
+            "scan_limit": 100,
+            "row_count": 0,
+            "truncated": False,
+            "rows": [],
+        }
+        with mock.patch.object(client, "_call", return_value=complete):
+            self.assertFalse(client.account_tx("pf-from", from_height=1, to_height=2).truncated)
+        for mutation in (
+            {"rows": None},
+            {"truncated": None},
+            {"address": "pf-other"},
+            {"from_height": 0},
+            {"to_height": 3},
+            {"row_count": 1},
+        ):
+            with self.subTest(mutation=mutation):
+                with mock.patch.object(client, "_call", return_value={**complete, **mutation}):
+                    with self.assertRaises(RpcProtocolError):
+                        client.account_tx_history(
+                            "pf-from", from_height=1, to_height=2, window_size=2
+                        )
+
     def test_send_pft_and_poll_finality_does_not_use_apply_batch(self) -> None:
         """submit_and_poll mode must not call apply-batch at any point."""
         client = PostFiatRpcClient("127.0.0.1:1234")
@@ -2521,7 +2612,12 @@ class WalletHelperTests(unittest.TestCase):
             },
         }
         submit_result = {"tx_id": "ab" * 48}
-        tx_finalized = {"tx_id": "ab" * 48, "block_height": 10, "certified": True}
+        tx_finalized = {
+            "tx_id": "ab" * 48,
+            "confirmed": True,
+            "receipt": {"tx_id": "ab" * 48, "accepted": True},
+            "block": {"header": {"height": 10}},
+        }
 
         def fake_run(args, *, json_output, cwd=wallet_module.REPO_ROOT):
             del cwd

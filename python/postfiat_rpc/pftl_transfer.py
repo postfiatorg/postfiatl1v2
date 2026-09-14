@@ -105,6 +105,8 @@ def transfer_report(action: str, amount_atoms: int, result: Any) -> dict[str, An
 
 
 def run_faucet(args: argparse.Namespace) -> dict[str, Any]:
+    if not args.allow_faucet_apply:
+        raise ValueError("faucet requires --allow-faucet-apply before changing validator state")
     data_dir = path_arg(args.data_dir) or default_data_dir()
     amount_atoms = args.amount_atoms if args.amount_atoms is not None else pft_to_atoms(args.amount)
     if amount_atoms < 1:
@@ -240,6 +242,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     faucet = sub.add_parser("faucet", help="Fund an address from the operator faucet")
     add_common_amount_args(faucet)
+    faucet.add_argument(
+        "--allow-faucet-apply",
+        action="store_true",
+        help="Acknowledge that the faucet changes validator state",
+    )
     faucet.add_argument("--data-dir", help="Validator data dir; default PFTL_DATA_DIR or devnet/local/node0")
     faucet.add_argument("--validator-data-dirs", help="Comma-separated local validator dirs for apply mode")
     faucet.add_argument("--topology", help="Certified WAN topology; default PFTL_TOPOLOGY")

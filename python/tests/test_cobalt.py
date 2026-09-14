@@ -290,6 +290,25 @@ def report_for(spec: cobalt.ExampleSpec) -> dict:
 
 
 class CobaltCliTests(unittest.TestCase):
+    def test_shadow_catch_up_requires_explicit_interlock_before_network(self) -> None:
+        args = [
+            "--source-endpoint", "127.0.0.1:9700",
+            "--target-endpoint", "127.0.0.1:9701",
+            "--start-sequence", "1",
+            "catch-up",
+        ]
+        with mock.patch.object(cobalt, "runtime_request") as request:
+            self.assertEqual(cobalt.main(args), 2)
+            request.assert_not_called()
+        with mock.patch.object(
+            cobalt,
+            "runtime_request",
+            side_effect=[{"range_hash": "ab"}, {"catch_up_status": "current"}],
+        ) as request:
+            self.assertEqual(cobalt.main(["--json", "--allow-shadow-catch-up", *args]), 0)
+            self.assertEqual(request.call_count, 2)
+            self.assertEqual(request.call_args.args[1], "catch_up")
+
     def test_protocol_replay_is_explicitly_feature_gated(self) -> None:
         command = cobalt.cargo_command(
             cobalt.EXAMPLES["protocol-replay"],
