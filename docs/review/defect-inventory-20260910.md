@@ -1,7 +1,8 @@
 # QA defect inventory — 2026-09-10
 
-Status: final reconciled inventory. Its exact-byte Text Improvement Harness
-result is recorded in the [campaign log](qa-campaign-20260910.md).
+Status: burn 2 inventory reconciled; burn 3 findings appended. The burn 2
+Text Improvement Harness result is in the [2026-09-10 campaign log](qa-campaign-20260910.md);
+the burn 3 gate is in the [2026-09-11 campaign log](qa-campaign-20260911.md).
 
 This inventory separates demonstrated failures from missing evidence, operating
 assumptions, and capabilities that have not been built or activated. A
@@ -29,6 +30,42 @@ must not be described as shipped or authoritative.
 | UNL-02 | Reproduced defect | P2 | Fixed — `1c10f828` | [Task Node UNL review](tasknode-unl-review-20260910.md#2-p2-a-stale-score-replay-can-suppress-fresh-score-evidence-by-input-order): stale-first and fresh-first orderings of the same digest produce different continuity decisions. |
 | UNL-03 | Reproduced defect | P2 | Fixed — `1c10f828` | [Task Node UNL review](tasknode-unl-review-20260910.md#3-p2-valid-identifiers-can-inject-markdown-structure-into-the-operator-report): an accepted newline/backtick identifier creates an attacker-chosen heading in the root-valid human report. |
 | UNL-04 | Reproduced defect | P3 | Reproduced — P3 recorded only | [Burn 2 reproduction](burn2-open-row-reproduction-20260910.md): an in-memory report candidate replacement still bypasses a saturated-group hold in caller-owned hypothetical state. |
+
+## Burn 3 campaign findings
+
+These 28 findings are from the [burn 3 campaign](qa-campaign-20260911.md).
+Consensus-affecting repairs remain source-only and were not activated or deployed.
+
+| ID | Classification | Severity | Status | Source and reproduction |
+| --- | --- | --- | --- | --- |
+| STO-01 | Reproduced defect | P2 | Fixed — `69e1f1ce` | [Storage review](storage-snapshots-review-20260911.md): a truncated validator file left earlier restored validators at the final destination and prevented a corrected retry. |
+| STO-02 | Reproduced defect | P2 | Fixed — `69e1f1ce` | [Storage review](storage-snapshots-review-20260911.md): FastSwap WAL append had no total growth fence; reopen and artifact reads allocated oversized files before enforcing bounds. |
+| STO-03 | Reproduced defect | P3 | Recorded, not fixed | [Storage review](storage-snapshots-review-20260911.md): a crash after deleting the legacy ordered-history index and before renaming its replacement leaves no usable index generation. Comparison-only backend. |
+| STO-04 | Reproduced defect | P3 | Recorded, not fixed | [Storage review](storage-snapshots-review-20260911.md): legacy receipt compaction performs the same atomic state write twice, doubling I/O without improving crash safety. Comparison-only backend. |
+| STO-05 | Evidence gap | P2 | Needs live environment — source clarification `69e1f1ce`; fleet export receipt missing | [Storage review](storage-snapshots-review-20260911.md): the block-924 source repair predates the deployed base, but no post-repair signed fleet snapshot export establishes backup usability. |
+| STO-06 | Reproduced defect | P1 | Fixed — `69e1f1ce` | [Storage review](storage-snapshots-review-20260911.md): a torn FastSwap WAL suffix remained after replay, so a subsequent synced vote record appended behind it could not be replayed after restart. |
+| EXE-01 | Reproduced defect | P1 | Fixed — `e95efbdf`; consensus-affecting, source-only; not activated or deployed | [Execution review](execution-review-20260911.md): a repeated transaction generated duplicate receipt IDs eligible for certification but rejected at ordered commit, halting that height. |
+| EXE-02 | Reproduced defect | P2 | Fixed — `e95efbdf`; consensus-affecting, source-only; not activated or deployed | [Execution review](execution-review-20260911.md): ordered `OwnedDeposit` bypassed the 100,000-object cap and could commit object 100,001. |
+| EXE-03 | Reproduced defect | P2 | Fixed — `e95efbdf`; consensus-affecting, source-only; not activated or deployed | [Execution review](execution-review-20260911.md): validators could certify a state root whose serialized state file exceeded storage's 256 MiB limit and could not be persisted. |
+| COB-01 | Reproduced defect | P1 | Fixed — `c9a61fcd`; consensus-affecting, source-only; not activated or deployed | [Cobalt review](cobalt-ratification-review-20260911.md): a five-of-seven single rotation passed a raw subset-overlap witness although valid old/new quorums could intersect in only two Byzantine validators. |
+| COB-02 | Reproduced defect | P2 | Fixed — `c9a61fcd`; consensus-affecting, source-only; not activated or deployed | [Cobalt review](cobalt-ratification-review-20260911.md): signed DABC pending pairs could name a conflicting candidate at a ratified slot and still pass activation. |
+| COB-03 | Reproduced defect | P3 | Recorded, not fixed | [Cobalt review](cobalt-ratification-review-20260911.md): the unused live-mode beacon coin accepts a caller-selected output bit without signer, signature, or round authentication. |
+| COB-04 | Reproduced defect | P3 | Recorded, not fixed | [Cobalt review](cobalt-ratification-review-20260911.md): the first oracle counts unclassified available validators as responsive correct nodes; frozen scenarios classify all validators. |
+| NET-01 | Reproduced defect | P1 | Fixed — `f2dea308` | [Network review](network-mempool-review-20260911.md): thousands of pre-authentication connections could each spawn a validator transport thread before exhausting the lifetime budget. |
+| NET-02 | Reproduced defect | P1 | Fixed — `f2dea308` | [Network review](network-mempool-review-20260911.md): one unauthenticated persistent connection could send unlimited rejected frames and grow retained summaries and optional event logs. |
+| NET-03 | Reproduced defect | P2 | Fixed — `f2dea308` | [Network review](network-mempool-review-20260911.md): standalone batch service rejections did not consume its termination budget and accumulated an unbounded report. |
+| NET-04 | Reproduced defect | P3 | Recorded, not fixed | [Network review](network-mempool-review-20260911.md): a deserialized legacy validator set with a false quorum could certify one vote; no unauthenticated production path was found. |
+| OPS-01 | Reproduced defect | P1 | Fixed — `c2724977` | [Operational CLI review](operational-clis-review-20260911.md): wallet transfer polling treated a positive block height or unrelated/rejected receipt as finalized payment. |
+| OPS-02 | Reproduced defect | P2 | Fixed — `c2724977` | [Operational CLI review](operational-clis-review-20260911.md): malformed or missing `account_tx` history metadata became an empty complete scan and hid transfers. |
+| OPS-03 | Reproduced defect | P2 | Fixed — `c2724977` | [Operational CLI review](operational-clis-review-20260911.md): a default faucet data directory could trigger local validator-state application without explicit acknowledgement. |
+| OPS-04 | Reproduced defect | P2 | Fixed — `c2724977` | [Operational CLI review](operational-clis-review-20260911.md): NAV operation bundles used an unchained SHA-384 asset ID instead of the canonical chain-bound SHA3-384 identity. |
+| OPS-05 | Reproduced defect | P2 | Fixed — `c2724977` | [Operational CLI review](operational-clis-review-20260911.md): missing venue balances or positions became zero-valued observations with plausible roots. |
+| OPS-06 | Reproduced defect | P2 | Fixed — `c2724977` | [Operational CLI review](operational-clis-review-20260911.md): an unbounded venue HTTP body could exhaust observer memory during JSON decoding. |
+| OPS-07 | Reproduced defect | P2 | Fixed — `c2724977` | [Operational CLI review](operational-clis-review-20260911.md): Cobalt shadow catch-up could mutate a remote service without its own operator acknowledgement. |
+| OPS-08 | Reproduced defect | P2 | Fixed — `c2724977` | [Operational CLI review](operational-clis-review-20260911.md): a proposed genesis registry accepted receipts with incompatible deadlines but bound only the first deadline. |
+| OPS-09 | Reproduced defect | P3 | Recorded, not fixed | [Operational CLI review](operational-clis-review-20260911.md): a nonintegral NAV example floors its value and emits a native operation rejected by the exact-equality check. |
+| OPS-10 | Reproduced defect | P3 | Recorded, not fixed | [Operational CLI review](operational-clis-review-20260911.md): floating-point conversion rounds large valid PFTL amounts in CLI reports despite exact atom counts. |
+| OPS-11 | Reproduced defect | P3 | Recorded, not fixed | [Operational CLI review](operational-clis-review-20260911.md): offline packet-tree verification enumerates and allocates millions of entries before checking its 4,096-file cap. |
 
 ## Storage, Cobalt, and Task Node review
 
@@ -111,23 +148,25 @@ and its frozen [qualification receipt](https://github.com/postfiatorg/postfiatl1
 
 ## Final disposition
 
-The inventory contains 61 unique rows. Classification and severity describe
-what the cited evidence establishes; status describes the bounded disposition
-in that row, not a broader production claim.
+The inventory contains 89 unique rows, including 28 burn 3 findings (6 P1,
+14 P2, 8 P3). Classification and severity describe what the cited evidence
+establishes; status describes the bounded disposition in that row, not a
+broader production claim.
 
 | Measure | Count |
 | --- | ---: |
-| Reproduced defects | 35 |
-| Evidence gaps | 21 |
+| Reproduced defects | 62 |
+| Evidence gaps | 22 |
 | Economic assumptions | 1 |
 | Proposed capabilities | 4 |
-| P1 | 19 |
-| P2 | 30 |
-| P3 | 12 |
-| Fixed | 29 |
+| P1 | 25 |
+| P2 | 44 |
+| P3 | 20 |
+| Fixed | 48 |
 | Dispositioned | 16 |
-| Reproduced and retained | 5 |
-| Needs live environment | 5 |
+| Reproduced and retained (prior campaigns) | 5 |
+| Recorded, not fixed (burn 3 P3) | 8 |
+| Needs live environment | 6 |
 | Needs operator decision | 6 |
 | Bare open | 0 |
 
@@ -137,6 +176,12 @@ reproduced, comprising the two P3s and three findings in the read-only
 StakeHub lane; five name the exact missing live environment; and six name the
 operator decision required before more work is authorized. The bounded
 commands and conditions are in the [burn 2 reproduction record](burn2-open-row-reproduction-20260910.md).
+
+Burn 3 added 19 fixed source findings, one still-unproven fleet snapshot export,
+and eight P3 findings recorded without repair. The five consensus-affecting
+execution and Cobalt repairs are source-only, not activated or deployed. The
+fleet export receipt remains missing even though the deployed source contains
+the block-924 repair.
 
 “Fixed” remains scoped by the row. In particular, the RPC supervisor repair is
 not deployed, StakeHub fixes are local and unpublished, the Arc controller
@@ -155,7 +200,12 @@ or StakeHub write.
 | StakeHub PR #8 and current fix-branch reviews | 12 |
 | Proof-input review | 18 |
 | Signing-fix qualification blockers | 6 |
-| **Total** | **61** |
+| Burn 3 storage and snapshots (STO-) | 6 |
+| Burn 3 execution (EXE-) | 3 |
+| Burn 3 Cobalt ratification (COB-) | 4 |
+| Burn 3 network and mempool admission (NET-) | 4 |
+| Burn 3 operational Python CLIs (OPS-) | 11 |
+| **Total** | **89** |
 
 Campaign review and repair commits are recorded in the
 [campaign log](qa-campaign-20260910.md). The inventory preserves open design,
