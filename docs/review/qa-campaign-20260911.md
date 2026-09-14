@@ -6,8 +6,9 @@ This is the canonical progress record for the
 `c25b3389d5c221ff1c23e700d53460003cc50b2a`. It is a review-and-repair
 campaign, not a release, deployment, or live-authority action.
 
-**Status:** A1 through A5 are done. B remains not started as a separate
-task; this run stops after A5.
+**Status:** Closed. A1 through A5 and B are done; the inventory extension
+passed its first full Text Improvement Harness gate at 88.87/100. No release,
+deployment, or live activation occurred.
 
 ## Campaign state
 
@@ -18,7 +19,7 @@ task; this run stops after A5.
 | A3 | Cobalt ratification | done | 1 | 1 | 2 | [Review](cobalt-ratification-review-20260911.md); findings `b5c16c2c`; repairs `c9a61fcd` |
 | A4 | Network and mempool admission | done (repaired) | 2 | 1 | 1 | [Review](network-mempool-review-20260911.md); findings `13a23d91`; repairs `f2dea308` |
 | A5 | Operational Python CLIs | done (repaired) | 1 | 7 | 3 | [Review](operational-clis-review-20260911.md); findings `b25e3bec`; repairs `c2724977` |
-| B | Defect inventory and TIH gate | not started | — | — | — | — |
+| B | Defect inventory and TIH gate | done | — | — | — | [Inventory](defect-inventory-20260910.md) extended to 89 rows in `2eec1ece`; first full gate 88.87/100; run group `qa-defect-inventory-burn3-20260914`; scored SHA-256 `2e4adbc6f78686af8316291dca516827a2d7eea988848cb5705bf5ee9cf7311f` |
 
 Current finding totals: **6 P1, 14 P2, 8 P3**.
 
@@ -218,21 +219,46 @@ Post-repair verification:
   fixture were skipped; the local golden vectors and synthetic receipt
   deadline regression passed.
 - A5 reviewed all nine listed files; no A5 file was skipped.
-- B remains not started and its inventory extension and scoring gate are a
-  separate task.
+- No inventory wording rewrite or rescore was needed: the first compliant
+  15-review gate averaged 88.87/100, above the 86/100 stop condition.
 
 ## Verification
 
-The mandatory strict documentation, public-link, and public-secret gates passed
-before every A5 commit and each earlier campaign commit. A5 ran
+The mandatory strict documentation build, `scripts/public-doc-links`, and
+`scripts/public-secret-scan` passed before both B commits and each earlier
+campaign commit. A5 ran
 `PYTHONPATH=python python3 -m pytest -q python/tests/test_wallet.py python/tests/test_persistent_client.py python/tests/test_pftl_transfer.py python/tests/test_navcoin.py python/tests/test_cobalt.py python/tests/test_genesis_registry.py python/tests/test_storage_scaling.py python/tests/test_constrained_signer.py`:
-183 passed, 3 skipped, and 44 subtests passed. Pushed commit IDs are recorded
-in the campaign state table.
+183 passed, 3 skipped, and 44 subtests passed. B changed only documentation:
+all 61 earlier inventory rows were verified unchanged, the 28 new IDs and 89
+unique rows were counted, and the scored file hash was checked against the
+15 fresh SQLite score records. No Rust, Python, workspace, or Orchard suite
+was rerun for B. Pushed repair and inventory commit IDs are recorded in the
+campaign state table.
 
 ## Scores
 
-The final inventory Text Improvement Harness gate was not run because B was not
-started.
+The exact extended inventory bytes, SHA-256
+`2e4adbc6f78686af8316291dca516827a2d7eea988848cb5705bf5ee9cf7311f`,
+received fifteen fresh OpenRouter reviews at temperature 0 with an 8,000-token
+response limit. The prompt was
+`Rate this document on a scale of 1-100. Output the score and your reasoning.`
+The credential came from vault label `openroutertih` and was passed to the
+harness in memory.
+
+| Judge | Scores | Average |
+| --- | --- | ---: |
+| `openai/gpt-6-astra-pro` | 90, 90, 90, 89, 90 | 89.80 |
+| `anthropic/claude-fable-5.1` | 88, 84, 89, 86, 87 | 86.80 |
+| `z-ai/glm-5.3` | 90, 88, 90, 92, 90 | 90.00 |
+| **All fifteen** | — | **88.87** |
+
+Run group: `qa-defect-inventory-burn3-20260914`. The first compliant full
+score exceeded the 86/100 gate; the inventory was not rewritten or rescored.
+The external score log and SQLite record are under
+`/home/postfiatchad/pastedocs/.qa-campaign-defect-inventory-burn3-20260914/`;
+their SHA-256 values are respectively
+`8e0806297b1b96afd1c3f3a1e7ffd52404b3889e2a09053b057e1e06d9beaf60` and
+`2aac91acfc73b27c0052e3484aecbe98b07ad84453485e566fc3a347b96e4fe9`.
 
 ## Final summary
 
@@ -243,7 +269,17 @@ started.
 | A3 — Cobalt ratification | 1 | 1 | 2 | `c9a61fcd` |
 | A4 — Network and mempool admission | 2 | 1 | 1 | `f2dea308` |
 | A5 — Operational Python CLIs | 1 | 7 | 3 | `c2724977` |
-| **Completed-surface total** | **6** | **14** | **8** | — |
+| **A1–A5 total** | **6** | **14** | **8** | — |
+
+B added all 28 findings to the consolidated inventory: 6 STO-, 3 EXE-, 4
+COB-, 4 NET-, and 11 OPS- rows. The 89-row inventory contains 25 P1, 44 P2,
+and 20 P3 rows: 48 fixed, 16 dispositioned, five previously retained, eight
+burn 3 P3 recorded without repair, six needing a live environment, and six
+needing an operator decision. It scored **88.87/100** on the first full Text
+Improvement Harness gate, run group
+`qa-defect-inventory-burn3-20260914`, scored file SHA-256
+`2e4adbc6f78686af8316291dca516827a2d7eea988848cb5705bf5ee9cf7311f`.
+No rescore was needed.
 
 Consensus-affecting repairs, all source-only and not activated or deployed:
 
@@ -268,9 +304,8 @@ Remaining risks:
   no unauthenticated production reachability was found.
 - A5 retains three P3 observations: the nonintegral NAV example operation,
   rounded PFTL display amounts, and unbounded packet-tree enumeration.
-- B has not added burn 3 findings to the consolidated defect inventory or
-  run its Text Improvement Harness gate.
 - All burn 3 repairs remain source-only; no deployment or live activation was
   performed.
 
-A5 is closed; B remains not started for a separate task.
+A1 through A5 and B are closed. The inventory extension and closeout are
+pushed to origin `main`.
