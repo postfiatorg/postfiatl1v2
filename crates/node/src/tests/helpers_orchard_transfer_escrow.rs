@@ -1159,7 +1159,10 @@
             },
             owner_pubkey_hex: "35".repeat(32),
             owner_signature_hex: "36".repeat(32),
-            votes: Vec::new(),
+            votes: vec![postfiat_types::OwnedTransferVote {
+                validator_id: "validator-0".to_owned(),
+                signature_hex: "39".repeat(32),
+            }],
         };
         let mut ledger = LedgerState::empty();
         ledger.fastpay_recovery_reveals.push(FastPayRecoveryRevealV1 {

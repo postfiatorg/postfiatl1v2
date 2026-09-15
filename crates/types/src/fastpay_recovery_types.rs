@@ -177,6 +177,8 @@ impl FastPayRecoveryCommitteeV1 {
         fastpay_commit_text(&mut bytes, &self.genesis_hash);
         bytes.extend_from_slice(&self.protocol_version.to_be_bytes());
         bytes.extend_from_slice(&self.committee_epoch.to_be_bytes());
+        bytes.extend_from_slice(&self.valid_from_height.to_be_bytes());
+        bytes.extend_from_slice(&self.new_orders_through_height.to_be_bytes());
         bytes.extend_from_slice(&(self.validators.len() as u64).to_be_bytes());
         let mut previous = None;
         for validator in &self.validators {
@@ -727,6 +729,7 @@ impl FastPayRecoveryRevealV1 {
         fastpay_commit_text(&mut bytes, &self.order_digest);
         fastpay_commit_text(&mut bytes, &self.certificate_digest);
         bytes.extend_from_slice(&self.revealed_at_height.to_be_bytes());
+        fastpay_commit_certificate(&mut bytes, &self.certificate)?;
         Ok(bytes)
     }
 }
@@ -860,6 +863,9 @@ impl FastPayVersionFenceV1 {
             fastpay_commit_text(&mut bytes, &next.id);
             bytes.extend_from_slice(&next.version.to_be_bytes());
         }
+        if let Some(certificate) = &self.certificate {
+            fastpay_commit_certificate(&mut bytes, certificate)?;
+        }
         Ok(bytes)
     }
 }
@@ -867,6 +873,18 @@ impl FastPayVersionFenceV1 {
 fn fastpay_commit_text(bytes: &mut Vec<u8>, value: &str) {
     bytes.extend_from_slice(&(value.len() as u64).to_be_bytes());
     bytes.extend_from_slice(value.as_bytes());
+}
+
+fn fastpay_commit_certificate(
+    bytes: &mut Vec<u8>,
+    certificate: &FastPayCertificateV1,
+) -> Result<(), String> {
+    let encoded = certificate.canonical_bytes()?;
+    let length = u64::try_from(encoded.len())
+        .map_err(|_| "FastPay retained certificate length exceeds u64".to_string())?;
+    bytes.extend_from_slice(&length.to_be_bytes());
+    bytes.extend_from_slice(&encoded);
+    Ok(())
 }
 
 fn fastpay_append_text(bytes: &mut Vec<u8>, value: &str) {
@@ -1000,6 +1018,103 @@ mod fastpay_recovery_type_tests {
         };
         order.recovery.lock_id = fastpay_transfer_lock_id_v1(&order);
         order
+    }
+
+    fn retained_certificate() -> FastPayCertificateV1 {
+        FastPayCertificateV1::Transfer(OwnedTransferCertificateV3 {
+            order: transfer(),
+            owner_pubkey_hex: "aa".repeat(32),
+            owner_signature_hex: "bb".repeat(32),
+            votes: vec![OwnedTransferVote {
+                validator_id: "validator-0".to_string(),
+                signature_hex: "cc".repeat(32),
+            }],
+        })
+    }
+
+    #[test]
+    fn recovery_committee_root_binds_both_admission_heights() {
+        let committee = FastPayRecoveryCommitteeV1::from_public_keys(
+            domain().chain_id,
+            domain().genesis_hash,
+            domain().protocol_version,
+            7,
+            100,
+            120,
+            (0..4)
+                .map(|index| (format!("validator-{index}"), "aa".repeat(32)))
+                .collect(),
+        )
+        .expect("valid committee");
+        let original_root = committee.computed_root().expect("root");
+        for change in 0..2 {
+            let mut changed = committee.clone();
+            if change == 0 {
+                changed.valid_from_height += 1;
+            } else {
+                changed.new_orders_through_height += 1;
+            }
+            assert_ne!(original_root, changed.computed_root().expect("changed root"));
+            assert!(changed.validate().is_err());
+        }
+    }
+
+    #[test]
+    fn recovery_reveal_commitment_binds_retained_certificate_signatures() {
+        let certificate = retained_certificate();
+        let reveal = FastPayRecoveryRevealV1 {
+            schema: FASTPAY_RECOVERY_REVEAL_SCHEMA_V1.to_string(),
+            lock_id: certificate.recovery().lock_id.clone(),
+            order_digest: "44".repeat(48),
+            certificate_digest: "55".repeat(48),
+            revealed_at_height: 120,
+            certificate,
+        };
+        let original = reveal.state_commitment_bytes().expect("reveal commitment");
+        for change in 0..2 {
+            let mut changed = reveal.clone();
+            let FastPayCertificateV1::Transfer(certificate) = &mut changed.certificate else {
+                unreachable!("fixture is a transfer certificate")
+            };
+            if change == 0 {
+                certificate.owner_signature_hex = "dd".repeat(32);
+            } else {
+                certificate.votes[0].signature_hex = "ee".repeat(32);
+            }
+            assert_ne!(original, changed.state_commitment_bytes().expect("changed reveal"));
+        }
+    }
+
+    #[test]
+    fn confirmed_version_fence_commitment_binds_retained_certificate() {
+        let certificate = retained_certificate();
+        let input = certificate.inputs()[0].clone();
+        let fence = FastPayVersionFenceV1 {
+            schema: FASTPAY_VERSION_FENCE_SCHEMA_V1.to_string(),
+            operation: FastPayOperationKindV1::Transfer,
+            origin: FastPayFenceOriginV1::OrderedRecovery,
+            committee_epoch: 7,
+            registry_root: "22".repeat(48),
+            lock_id: certificate.recovery().lock_id.clone(),
+            inputs: vec![input.clone()],
+            decision: FastPayRecoveryDecisionV1::Confirmed {
+                order_digest: "44".repeat(48),
+                certificate_digest: "55".repeat(48),
+            },
+            certificate: Some(certificate),
+            decided_at_height: 120,
+            next_versions: vec![OwnedObjectRef {
+                id: input.id,
+                version: input.version + 1,
+            }],
+        };
+        let original = fence.state_commitment_bytes().expect("fence commitment");
+        let mut changed = fence.clone();
+        let Some(FastPayCertificateV1::Transfer(certificate)) = &mut changed.certificate else {
+            unreachable!("fixture is a confirmed transfer certificate")
+        };
+        certificate.votes[0].signature_hex = "ee".repeat(32);
+        assert_ne!(original, changed.state_commitment_bytes().expect("changed fence"));
     }
 
     #[test]

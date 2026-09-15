@@ -36,6 +36,21 @@ The minimal future repair is to reject overlong labels before narrowing, or retu
 - `crates/types/src/fx_fix_types.rs`, `crates/types/src/nav_reserve_public_values.rs`, and `crates/types/src/shielded_bridge_governance.rs`: the reviewed bounded FX quote arithmetic, fixed-width NAV public-values round trip, and storage-commitment activation record hashes and height checks had no additional findings.
 - `crates/types/src/fastpay_recovery_types.rs:30-107,365-510,735-945` and `crates/node/src/state_commitment.rs:1-105,515-1048,1180-1725,1729-1930,5590-5680`: the reviewed recovery policy/window bounds, ordered version-fence inputs, issued-supply custody checks, canonical length prefixes, inventory exhaustiveness, and sorted state-root vectors had no additional findings beyond findings 1 and 2.
 
+## Repair result
+
+Finding 1 is repaired by binding both admission heights in the committee-root preimage; the focused regression changes each bound separately and observes a distinct root and rejection of a stale retained root. Finding 2 is repaired by length-prefixing the existing canonical certificate envelope in each recovery reveal's state commitment. The same retained-certificate omission in confirmed version fences uses the same minimal certificate encoder; separate regressions change retained owner or vote signatures without changing the supplied digest fields and observe distinct commitments. Cancelled fences have no certificate to commit. The existing node root-test fixture now retains one canonically ordered vote because the certificate encoder rejects its prior empty vote list; this fixture was used for regression verification, not reviewed as an A2 surface. The P3 domain-label observation remains unfixed.
+
+These changes alter hashed committee identities and recovery state-root bytes and are **consensus-affecting**. They are source-only; no live activation or deployment occurred. Archived replay and activation qualification are separate release gates. The full Rust suite verdict is pending CI.
+
+Post-repair verification:
+
+- `cargo check -p postfiat-types -p postfiat-node --locked`: passed.
+- `cargo test -p postfiat-types fastpay_recovery_type_tests --lib --locked`: 5 passed.
+- `cargo test -p postfiat-node replicated_state_root_commits_every_fastlane_ledger_field --lib --locked`: initial run failed on the old empty-vote fixture; after adding one ordered fixture vote, rerun 1 passed.
+- `cargo test -p postfiat-node fastpay_recovery_bootstrap_is_signed_future_activated_and_tamper_atomic --lib --locked`: 1 passed.
+- `cargo test -p postfiat-node ordered_fastpay_recovery_cancels_partial_and_withheld_certificates_and_replays --lib --locked`: 1 passed.
+- `cargo fmt --all -- --check` and `git diff --check`: passed.
+
 ## Review limits and skips
 
 Large account-owned, market/NAV, FastSwap, governance/shielded, and state-commitment modules were sampled around the A2 focus rather than audited line by line. Account/owned asset bridge, pfUSDC/Arc, Orchard proof, and Ethereum routing implementations were not reviewed. In `crates/node/src/state_commitment.rs`, bridge-specific and excluded pfUSDC/Arc commitment bodies and historical exception machinery were not audited. `crates/types/src/pfusdc_tier4_types.rs`, `pfusdc_bonded_ingress_types.rs`, and `ethereum_bridge_types.rs` supplied read-only schema context only. No excluded or already-reviewed crate, other A surface, or B inventory was reviewed; no Task Node, fleet, chain, deployment, spend, signup, or frozen-artifact action occurred.
