@@ -141,8 +141,14 @@ Parallel, non-blocking:
       (`superseded_unapplied_rotation_history_replays_for_checkpoint_export`,
       `recorded_offchain_rollback_history_replays_for_checkpoint_export`);
       restores signed snapshot backups.
-- [ ] P2. RPC serve-loop read timeout and an RPC-round-trip health probe
-      (the validator-0 wedge class).
+- [x] P2. RPC serve-loop read timeout and an RPC-round-trip health probe
+      (the validator-0 wedge class) — done 2026-09-15: `b1b782d8`
+      proves the bounded first-frame and keep-alive idle read deadlines in
+      `crates/node/src/rpc_cli.rs` with a regression in
+      `crates/node/src/main_parts/tests/rpc_serve_request_tests.rs`;
+      `5ac323f9` adds one-connection read-only status probes in
+      `crates/node/src/rpc_probe.rs` and `python/postfiat_rpc/rpc_probe.py`,
+      documented in `docs/runbooks/public-rpc-operator-policy.md`.
 - [x] P3. Finality-submit idempotent response (no error after successful
       commit) — done 2026-08-31: `committed_signed_transfer_finality_replay`
       in `crates/node/src/rpc_cli.rs` replays the committed finality result
