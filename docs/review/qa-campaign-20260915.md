@@ -2,7 +2,7 @@
 
 This is the progress record for the [burn 4 campaign](qa-campaign-20260915-burn4-brief.md). Work began on clean `main` at `d4037d14`. This campaign reviews source and makes no deployment or live activation.
 
-**Status:** A1, A2, A3, and A4 done with the review limits below; A5 and B pending. No live activation or fleet action.
+**Status:** A1, A2, A3, A4, and A5 done with the review limits below; B pending. No live activation or fleet action.
 
 ## Campaign state
 
@@ -12,10 +12,10 @@ This is the progress record for the [burn 4 campaign](qa-campaign-20260915-burn4
 | A2 | Canonical types and state commitment | done | 0 | 2 | 1 | [Review](types-state-commitment-review-20260915.md); findings `f5c8e88a`; repairs `0a1216c3` (consensus-affecting; full Rust suite verdict pending) |
 | A3 | Node startup, release verification, and RPC serving | done | 0 | 2 | 1 | [Review](node-serving-review-20260915.md); findings `910030ce`; repairs `bccd5b5f` (not consensus-affecting; full Rust suite verdict pending) |
 | A4 | Live shadow and swap services | done | 0 | 2 | 1 | [Review](shadow-swap-services-review-20260915.md); findings `b2df0ae1`; repairs `33c8ce34` (consensus-affecting; full Rust suite verdict pending) |
-| A5 | Node command tools and governance agent | pending | — | — | — | — |
+| A5 | Node command tools and governance agent | done | 0 | 2 | 1 | [Review](node-cli-governance-review-20260915.md); findings `face08c2`; repairs `eb4c2afd` (not consensus-affecting; full Rust suite verdict pending) |
 | B | Defect inventory and TIH gate | pending | — | — | — | — |
 
-Current finding totals: **0 P1, 8 P2, 4 P3** (A1, A2, A3, and A4).
+Current finding totals: **0 P1, 10 P2, 5 P3** (A1, A2, A3, A4, and A5).
 
 ## Block finality, consensus artifacts, and signing review result
 
@@ -47,6 +47,14 @@ The shadow fix changes the hashed advisory shadow state-transition result, and t
 
 Focused authority, peer transport, queued-message, history/restart, signature, and bound paths in `crates/node/src/cobalt_shadow.rs` were reviewed; focused canonical controls, vote/interlock, FastSwap asset-control, certificate, and restart paths in `crates/node/src/fastswap_service.rs` were reviewed. The service files' drill and extensive test/latency fixture bodies were not audited as shipped service paths. `crates/node/src/batch_snapshot.rs` was not reviewed for A4 because neither named service directly uses it. `cobalt_shadow_tests.rs` was changed only for a focused regression, not reviewed as a separate surface. No A1–A3 implementation, A5 command path, B inventory, excluded or already-reviewed crates, or frozen artifact was reviewed or edited.
 
+## Node command tools and governance agent review result
+
+The [A5 review](node-cli-governance-review-20260915.md) records **0 P1, 2 P2, 1 P3**. P2 findings cover duplicated shadow command flags choosing an earlier remote target and the FastSwap bootstrap helper silently replacing an existing governance payload. Repair `eb4c2afd` rejects repeated or unpaired shadow flags before dispatch and exclusively creates bootstrap output, leaving existing bytes unchanged. Both regressions pass (1 each). The P3 records that a governance implementation work item can allow every touched path with an unrestricted wildcard; it remains recorded without repair.
+
+Both fixes change operator command input validation or file creation only. **No A5 repair is consensus-affecting**; they are source-only, with no live activation or deployment; **full Rust suite verdict pending** CI. The full workspace and long Orchard/Halo2 suites were not run locally: neither change crosses an Orchard boundary.
+
+Focused command parsing, key-file and private-record handling, listener/dry-run status, output and error paths in the twelve binaries under `crates/node/src/bin/` were sampled, including two three-line wrappers whose called modules were not followed. Focused dry-run/no-live-mutation gates, report validation and work-item scope paths in four production files under `crates/node/src/governance_agent_parts/` were sampled; `tests.rs` was not reviewed as shipped behavior. The top-level router and failure exit in `crates/node/src/main_parts/cli_dispatch.rs` were read: the brief's `crates/node/src/cli_dispatch.rs` path does not exist. `crates/node/src/execution_actions.rs` was not reviewed because its state-transition bodies were burn 3 A2 and no distinct A5 command-dispatch path was found there. Included CLI dispatch groups, called service/protocol modules, pfUSDC/Arc-specific node code, excluded and previously reviewed crates and files, frozen artifacts, A1–A4 implementation and B inventory were not reviewed or edited for A5.
+
 ## Skips and boundary decisions
 
 - No Task Node, fleet, host, chain, deployment, spend, or signup action occurred; pushes were only to this repository's `origin main`.
@@ -57,6 +65,8 @@ Focused authority, peer transport, queued-message, history/restart, signature, a
 - For A3, unrelated command, wallet, bridge, pfUSDC/Arc, Orchard, governance, archive/replay, and transaction paths in its large node files and snapshot verifier's surrounding snapshot operations were not audited. Deployment-manifest dispatch and its called verifier, generated prestart invocation, and manifest option/schema context alone were traced outside the four named files. No A1/A2 or burn 3 surface was re-reviewed; excluded files, frozen artifacts, A4/A5, and B were untouched. The A3 P3 remains unfixed. An initial `cargo test -p postfiat-node transport_listener_mode_failure_prevents_ready_report --lib --locked` ran zero selected tests because the regression belongs to the node binary; its exact binary-filtered rerun passed. No full workspace or Orchard/Halo2 suite ran for this RPC/startup-only change; the full Rust suite is CI's verdict. No Task Node, fleet, live chain, spend, or signup action occurred.
 
 - For A4, `batch_snapshot.rs` was skipped because these services do not directly call it. The extensive drill/fixture and performance-test bodies in A4's two large service files were not reviewed as shipped service paths; A5 and B were not started. The A4 P3 is recorded without repair under the P3 rule. No release-lineage replay or live confirmation was run: the repairs are source-only; no fleet action was authorized. No full workspace or Orchard/Halo2 suite was run locally because no Orchard boundary changed; the full Rust suite verdict remains CI's. No Task Node, fleet, host, chain, spend, signup, or frozen-artifact action occurred.
+
+- For A5, the named `crates/node/src/cli_dispatch.rs` was absent; the actual `main_parts/cli_dispatch.rs` router was reviewed at the A5 focus. Its included dispatch groups and the two three-line binaries' called modules were skipped because they are outside the A5 file list. `execution_actions.rs` was skipped because no distinct command-dispatch path was found outside the previously reviewed state transitions. Governance-agent `tests.rs`, large bin service internals, governance fixture/performance bodies and unaffected modules were not audited as shipped command paths. The A5 P3 is recorded without repair. Excluded, already-reviewed and frozen sources, plus B, were untouched; no full workspace or Orchard/Halo2 suite ran locally because neither A5 repair crosses those boundaries. No Task Node, fleet, host, chain, spend or signup action occurred; the three A5 pushes were only to this repository's `origin main`.
 
 ## Verification
 
@@ -97,6 +107,12 @@ Focused authority, peer transport, queued-message, history/restart, signature, a
 - `cargo test -p postfiat-node issuer_freeze_unfreeze_and_clawback_use_the_swap_lock_domain --bin postfiat-node --locked`: 1 passed (A4). Fifteen distinct focused node tests passed.
 - `cargo fmt --all -- --check` and `git diff --check`: passed (A4).
 - `.venv-docs/bin/mkdocs build --strict`, `scripts/public-doc-links`, and `scripts/public-secret-scan`: passed before A4 findings and repairs commits; A4 closeout gates passed before its commit. **Full Rust suite verdict pending** CI.
+
+- `cargo check -p postfiat-node --locked`: passed (A5).
+- `cargo test -p postfiat-node repeated_remote_target_is_rejected_before_shadow_request --bin postfiat-cobalt-shadow --locked`: 1 passed (A5).
+- `cargo test -p postfiat-node bootstrap_output_refuses_existing_governance_payload_without_changing_it --bin fastswap_bootstrap_payload --locked`: 1 passed (A5). Two distinct focused node-binary tests passed.
+- `cargo fmt --all -- --check` and `git diff --check`: passed (A5).
+- `.venv-docs/bin/mkdocs build --strict`, `scripts/public-doc-links`, and `scripts/public-secret-scan`: passed before A5 findings and repairs commits; A5 closeout gates passed before its commit. **Full Rust suite verdict pending** CI.
 
 ## Scores
 
