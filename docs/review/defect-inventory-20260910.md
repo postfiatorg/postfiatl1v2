@@ -1,8 +1,9 @@
 # QA defect inventory — 2026-09-10
 
-Status: burn 2 inventory reconciled; burn 3 findings appended. The burn 2
+Status: burn 2 inventory reconciled; burn 3 and burn 4 findings appended. The burn 2
 Text Improvement Harness result is in the [2026-09-10 campaign log](qa-campaign-20260910.md);
-the burn 3 gate is in the [2026-09-11 campaign log](qa-campaign-20260911.md).
+the burn 3 gate is in the [2026-09-11 campaign log](qa-campaign-20260911.md);
+the burn 4 gate is in the [2026-09-15 campaign log](qa-campaign-20260915.md).
 
 This inventory separates demonstrated failures from missing evidence, operating
 assumptions, and capabilities that have not been built or activated. A
@@ -66,6 +67,29 @@ Consensus-affecting repairs remain source-only and were not activated or deploye
 | OPS-09 | Reproduced defect | P3 | Recorded, not fixed | [Operational CLI review](operational-clis-review-20260911.md): a nonintegral NAV example floors its value and emits a native operation rejected by the exact-equality check. |
 | OPS-10 | Reproduced defect | P3 | Recorded, not fixed | [Operational CLI review](operational-clis-review-20260911.md): floating-point conversion rounds large valid PFTL amounts in CLI reports despite exact atom counts. |
 | OPS-11 | Reproduced defect | P3 | Recorded, not fixed | [Operational CLI review](operational-clis-review-20260911.md): offline packet-tree verification enumerates and allocates millions of entries before checking its 4,096-file cap. |
+
+## Burn 4 campaign findings
+
+These 15 findings are from the [burn 4 campaign](qa-campaign-20260915.md).
+Consensus-affecting repairs remain source-only and were not activated or deployed.
+
+| ID | Classification | Severity | Status | Source and reproduction |
+| --- | --- | --- | --- | --- |
+| FIN-01 | Reproduced defect | P2 | Fixed — `6ec35092`; consensus-affecting, source-only; not activated or deployed | [Finality review](finality-consensus-review-20260915.md#findings): a signed timeout certificate at maximum view reached unchecked proposal-view addition, panicking in checked builds or wrapping in release builds instead of rejecting the artifact. |
+| FIN-02 | Reproduced defect | P2 | Fixed — `6ec35092`; consensus-affecting, source-only; not activated or deployed | [Finality review](finality-consensus-review-20260915.md#findings): the proposer returned two valid signatures for conflicting block proposals at one height and view without reserving the durable proposal-hash lock, including across restart. |
+| FIN-03 | Reproduced defect | P3 | Recorded, not fixed | [Finality review](finality-consensus-review-20260915.md#findings): the unaudited selected-block finality query independently chose duplicate receipt and block-link records, potentially reporting an ambiguous confirmed pair from a corrupted local log. |
+| TYP-01 | Reproduced defect | P2 | Fixed — `0a1216c3`; consensus-affecting, source-only; not activated or deployed | [Types review](types-state-commitment-review-20260915.md#findings): FastPay recovery committees with different new-order admission heights shared a registry root, leaving authorization identities unable to distinguish their windows. |
+| TYP-02 | Reproduced defect | P2 | Fixed — `0a1216c3`; consensus-affecting, source-only; not activated or deployed | [Types review](types-state-commitment-review-20260915.md#findings): different retained FastPay recovery certificate signatures or votes shared a reveal state commitment when their supplied digest strings were unchanged; confirmed version fences had the same omission. |
+| TYP-03 | Reproduced defect | P3 | Recorded, not fixed | [Types review](types-state-commitment-review-20260915.md#findings): the public genesis digest helper narrowed an overlong domain label to a `u16` length, allowing an external long-label caller to construct the same preimage as a differently framed short-label call; existing registry callers use short constants. |
+| SRV-01 | Reproduced defect | P2 | Fixed — `bccd5b5f` | [Serving review](node-serving-review-20260915.md#findings): an RPC keep-alive worker returned responses for earlier requests but retained only its final request event, omitting earlier event-log rows and summary counts. |
+| SRV-02 | Reproduced defect | P2 | Fixed — `bccd5b5f` | [Serving review](node-serving-review-20260915.md#findings): RPC and validator transport published positive ready files before their health-cache and nonblocking-listener preflights could fail, leaving a marker for a service that had not reached its accept loop. |
+| SRV-03 | Reproduced defect | P3 | Recorded, not fixed | [Serving review](node-serving-review-20260915.md#findings): a running service hashed a replaced deployment manifest for runtime status without rechecking its publisher signature or time window after the separate systemd prestart check. |
+| SHD-01 | Reproduced defect | P2 | Fixed — `33c8ce34`; consensus-affecting, source-only; not activated or deployed | [Shadow and swap review](shadow-swap-services-review-20260915.md#findings): draining signed shadow messages by round instead of peer sequence lowered a sender's replay watermark, admitting an already processed sequence after its seen ID aged out. |
+| SHD-02 | Reproduced defect | P2 | Fixed — `33c8ce34`; consensus-affecting, source-only; not activated or deployed | [Shadow and swap review](shadow-swap-services-review-20260915.md#findings): issuer asset-control prepare signed another round-zero FastSwap vote after an operation had advanced to a later recovery round, without the ordinary swap's existing status and round guard. |
+| SHD-03 | Reproduced defect | P3 | Recorded, not fixed | [Shadow and swap review](shadow-swap-services-review-20260915.md#findings): a changed canonical tip could make FastSwap refresh return an error after persisting local prepare fences, deposits, or checkpoints to state and WAL. |
+| CLI-01 | Reproduced defect | P2 | Fixed — `eb4c2afd` | [Node CLI review](node-cli-governance-review-20260915.md#findings): duplicate shadow command flags selected the earlier remote endpoint, allowing a signed request to reach a different target from the operator's corrected argument. |
+| CLI-02 | Reproduced defect | P2 | Fixed — `eb4c2afd` | [Node CLI review](node-cli-governance-review-20260915.md#findings): rerunning the FastSwap bootstrap helper truncated an already reviewed governance payload at the same output path and printed a successful write. |
+| CLI-03 | Reproduced defect | P3 | Recorded, not fixed | [Node CLI review](node-cli-governance-review-20260915.md#findings): a governance implementation work item allowing `"*"` marked unexpected touched paths authorized and verified in a scope report, although the report does not authorize live mutation. |
 
 ## Storage, Cobalt, and Task Node review
 
@@ -148,24 +172,24 @@ and its frozen [qualification receipt](https://github.com/postfiatorg/postfiatl1
 
 ## Final disposition
 
-The inventory contains 89 unique rows, including 28 burn 3 findings (6 P1,
-14 P2, 8 P3). Classification and severity describe what the cited evidence
+The inventory contains 104 unique rows, including 28 burn 3 findings (6 P1,
+14 P2, 8 P3) and 15 burn 4 findings (0 P1, 10 P2, 5 P3). Classification and severity describe what the cited evidence
 establishes; status describes the bounded disposition in that row, not a
 broader production claim.
 
 | Measure | Count |
 | --- | ---: |
-| Reproduced defects | 62 |
+| Reproduced defects | 77 |
 | Evidence gaps | 22 |
 | Economic assumptions | 1 |
 | Proposed capabilities | 4 |
 | P1 | 25 |
-| P2 | 44 |
-| P3 | 20 |
-| Fixed | 48 |
+| P2 | 54 |
+| P3 | 25 |
+| Fixed | 58 |
 | Dispositioned | 16 |
 | Reproduced and retained (prior campaigns) | 5 |
-| Recorded, not fixed (burn 3 P3) | 8 |
+| Recorded, not fixed (burn 3 and burn 4 P3) | 13 |
 | Needs live environment | 6 |
 | Needs operator decision | 6 |
 | Bare open | 0 |
@@ -182,6 +206,13 @@ and eight P3 findings recorded without repair. The five consensus-affecting
 execution and Cobalt repairs are source-only, not activated or deployed. The
 fleet export receipt remains missing even though the deployed source contains
 the block-924 repair.
+
+Burn 4 added ten repaired P2 findings and five P3 findings recorded without
+repair. The finality, canonical types and recovery commitments, and shadow/swap
+repairs are consensus-affecting, source-only, not activated or deployed. Their
+full Rust suite verdict remains pending; the FastPay identity and commitment
+changes also require archived replay and activation qualification before
+release-lineage use.
 
 “Fixed” remains scoped by the row. In particular, the RPC supervisor repair is
 not deployed, StakeHub fixes are local and unpublished, the Arc controller
@@ -205,7 +236,12 @@ or StakeHub write.
 | Burn 3 Cobalt ratification (COB-) | 4 |
 | Burn 3 network and mempool admission (NET-) | 4 |
 | Burn 3 operational Python CLIs (OPS-) | 11 |
-| **Total** | **89** |
+| Burn 4 finality and signing (FIN-) | 3 |
+| Burn 4 canonical types and state commitment (TYP-) | 3 |
+| Burn 4 node startup and RPC serving (SRV-) | 3 |
+| Burn 4 shadow and swap services (SHD-) | 3 |
+| Burn 4 node command tools and governance agent (CLI-) | 3 |
+| **Total** | **104** |
 
 Campaign review and repair commits are recorded in the
 [campaign log](qa-campaign-20260910.md). The inventory preserves open design,
