@@ -549,6 +549,33 @@ mod tests {
     use super::*;
 
     #[test]
+    fn shadow_flag_property_rejects_repetition_and_truncated_values() {
+        for first in [
+            "--endpoint",
+            "--source-endpoint",
+            "--target-endpoint",
+            "--limit",
+        ] {
+            for second in ["--transcript", "--start-sequence", "--endpoint"] {
+                let valid = [first, "one", second, "two"].map(str::to_string);
+                assert_eq!(validate_flag_arguments(&valid).is_ok(), first != second);
+                for cut in 0..valid.len() {
+                    let truncated = &valid[..cut];
+                    assert_eq!(
+                        validate_flag_arguments(truncated).is_ok(),
+                        cut == 0 || cut == 2,
+                        "first={first} second={second} cut={cut}"
+                    );
+                }
+                let repeated = [first, "one", second, "two", first, "three"].map(str::to_string);
+                assert!(validate_flag_arguments(&repeated).is_err());
+                let positional = [first, "one", "unexpected"].map(str::to_string);
+                assert!(validate_flag_arguments(&positional).is_err());
+            }
+        }
+    }
+
+    #[test]
     fn repeated_remote_target_is_rejected_before_shadow_request() {
         let flags = [
             "--endpoint",

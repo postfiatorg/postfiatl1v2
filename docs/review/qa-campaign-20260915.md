@@ -192,3 +192,23 @@ activation, Task Node, or frozen-artifact action occurred.
 
 A1 through A5 and B are closed. The inventory and closeout commits are pushed
 to origin `main`.
+
+## Burn 3 and 4 fuzz and property coverage
+
+Bounded deterministic Rust cases added over the repaired source; no protocol
+behavior changed. Each named test also runs with its owning module regressions.
+
+| Repair | Property test (generated cases) |
+| --- | --- |
+| Burn 3 `69e1f1ce` | `torn_wal_suffix_property_truncates_before_the_next_durable_append` (3 torn lengths); `snapshot_import_mutated_manifest_property_does_not_publish_destination` (8 invalid genesis values, 1 truncated manifest) |
+| Burn 3 `e95efbdf` | `owned_object_capacity_property_rejects_growth_across_the_limit` (5,265 cap/consume/create combinations, 1 arithmetic overflow); `supplied_proposal_receipt_id_property_rejects_every_duplicate_position` (17 lengths, 120 duplicate positions, 17 reorderings); `state_file_size_property_rejects_overflow_and_counts_the_trailer` (387 limit edges, 1 overflow, 4 small values) |
+| Burn 3 `c9a61fcd` | `cobalt_quorum_overlap_property_matches_minimum_possible_quorum_intersection` (128 combinations); `full_knowledge_checkpoint_candidate_binding_property_gates_dabc_activation` (4 signed wrong-candidate checkpoints) |
+| Burn 3 `f2dea308` | `validator_serving_summary_property_caps_retention_on_replayed_rejections` (7 rejection-series sizes, 5,137 attempted summaries); `validator_worker_permit_property_limits_in_flight_connections` (5 slot capacities, 31 permits); `batch_serve_rejection_budget_property_stays_bounded_at_zero_and_overflow` (1,028 batch sizes) |
+| Burn 4 `6ec35092` | `consensus_v2_max_view_timeout_property_rejects_all_successor_proposals` (4 candidate views); `proposer_durable_lock_property_rejects_conflicting_payloads_after_signing` (8 conflicting hashes) |
+| Burn 4 `0a1216c3` | `recovery_committee_admission_window_property_changes_root_and_rejects_stale_root` (64 height mutations, 2 invalid windows); `recovery_reveal_certificate_mutation_property_changes_committed_bytes` (128 owner/vote signature mutations); `fastpay-recovery-committee-window` harness target (256 JSON mutations, 1 valid seed, 3 invalid/max windows); adjacent confirmed-version-fence regression remains in the same module |
+| Burn 4 `bccd5b5f` | `rpc_serve_health_stamp_property_requires_each_preflight_file` (4 missing files, 4 restores); existing keep-alive regression expanded to 8 ordered requests and 8 event-log records |
+| Burn 4 `33c8ce34` | `queued_shadow_reordered_sequences_property_preserves_maximum_after_restart` (4 out-of-order queued rounds, 3 stale signed replays); issuer round-zero regression expanded to 8 later recovery rounds and terminal cancellation |
+| Burn 4 `eb4c2afd` | `shadow_flag_property_rejects_repetition_and_truncated_values` (12 flag pairs with 4 truncation points and invalid variants); `bootstrap_payload_existing_file_property_preserves_all_bytes` (6 existing sizes, 1 new-file retry) |
+
+Skip: burn 3 `c2724977` changes Python operational CLIs only; this unit is
+Rust-only. No bridge, Orchard, proof, or program crate was edited or tested.

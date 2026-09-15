@@ -861,6 +861,29 @@ mod owned_transfer_tests {
     }
 
     #[test]
+    fn owned_object_capacity_property_rejects_growth_across_the_limit() {
+        let cap = postfiat_types::MAX_OWNED_OBJECTS;
+        for offset in 0..=64 {
+            for consumed in 0..=8 {
+                for created in 0..=8 {
+                    let current = cap.saturating_sub(offset);
+                    let expected = created <= consumed
+                        || current.saturating_add(created - consumed) <= cap;
+                    assert_eq!(
+                        ensure_owned_object_capacity(current, consumed, created).is_ok(),
+                        expected,
+                        "current={current} consumed={consumed} created={created}"
+                    );
+                }
+            }
+        }
+        assert_eq!(
+            ensure_owned_object_capacity(usize::MAX, 0, 1),
+            Err(OwnedTransferError::ResourceLimitExceeded)
+        );
+    }
+
+    #[test]
     fn applies_conserving_transfer() {
         let mut ledger = LedgerState::empty();
         ledger.owned_objects.push(object("aa", "ownerA", 100, "PFT"));

@@ -2237,6 +2237,56 @@ mod tests {
     }
 
     #[test]
+    fn torn_wal_suffix_property_truncates_before_the_next_durable_append() {
+        for suffix_len in 1..=3 {
+            let directory = test_dir(&format!("torn-property-{suffix_len}"));
+            let base = state();
+            let mut live = base.clone();
+            let key = *live.objects.keys().next().expect("object");
+            let swap_id = FastSwapIdV1([8; 48]);
+            {
+                let mut store = FastSwapStore::open(&directory).expect("open");
+                store
+                    .reserve_all(
+                        &mut live,
+                        swap_id,
+                        FastSwapIntentIdV1([9; 48]),
+                        FastSwapEffectsDigestV1([10; 48]),
+                        100,
+                        &[key],
+                    )
+                    .expect("reserve");
+            }
+            let wal = directory.join(FASTSWAP_WAL_FILE);
+            let verified_len = fs::metadata(&wal).expect("verified WAL").len();
+            OpenOptions::new()
+                .append(true)
+                .open(&wal)
+                .expect("WAL")
+                .write_all(&vec![0; suffix_len])
+                .expect("inject truncated suffix");
+            {
+                let store = FastSwapStore::open(&directory).expect("recover torn suffix");
+                assert_eq!(store.replay(&base).expect("replay prefix"), live);
+                assert_eq!(
+                    fs::metadata(&wal).expect("recovered WAL").len(),
+                    verified_len
+                );
+            }
+            {
+                let mut store = FastSwapStore::open(&directory).expect("reopen recovered WAL");
+                store
+                    .persist_new_round_vote(&mut live, swap_id, 1)
+                    .expect("append after recovery");
+            }
+            let store = FastSwapStore::open(&directory).expect("reopen appended WAL");
+            assert_eq!(store.replay(&base).expect("replay appended vote"), live);
+            drop(store);
+            fs::remove_dir_all(directory).expect("cleanup");
+        }
+    }
+
+    #[test]
     fn oversized_sparse_wal_is_rejected_before_allocation() {
         let directory = test_dir("oversized-sparse-wal");
         {

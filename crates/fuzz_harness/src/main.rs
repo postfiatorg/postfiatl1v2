@@ -57,8 +57,8 @@ use postfiat_types::{
     FastAssetControlActionV1, FastAssetControlCommandV1, FastAssetIdV1, FastAssetRuleHashV1,
     FastHolderPermitIdV1, FastHolderPermitV1, FastLaneCheckpointV1, FastLaneControlActionV1,
     FastLaneDepositV1, FastLaneExitClaimV1, FastLaneExitIntentV1, FastObjectIdV1, FastObjectKeyV1,
-    FastSwapAuthorizationV1, FastSwapCertificateV1, FastSwapChainDomainV1,
-    FastSwapCommitteeDomainV1, FastSwapCommitteeRootV1, FastSwapDecisionV1,
+    FastPayRecoveryCommitteeV1, FastSwapAuthorizationV1, FastSwapCertificateV1,
+    FastSwapChainDomainV1, FastSwapCommitteeDomainV1, FastSwapCommitteeRootV1, FastSwapDecisionV1,
     FastSwapEffectsDigestV1, FastSwapEffectsV1, FastSwapIntentV1, FastSwapOpaqueHashV1,
     FastSwapPartyV1, FastSwapPhaseV1, FastSwapPolicyHashV1, FastSwapPolicySnapshotV1,
     FastSwapQuoteRoundingV1, FastSwapReceiptV1, FastSwapStatusResponseV1, FastSwapVoteV1, Genesis,
@@ -162,6 +162,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             fuzz_nav_reserve_public_values(iterations)?,
             fuzz_nav_reserve_submit_operation(iterations)?,
             fuzz_consensus_round_monotonicity(iterations)?,
+            fuzz_fastpay_recovery_committee_window(iterations)?,
         ],
         "transaction-codec" => vec![fuzz_transaction_codec(iterations)?],
         "atomic-swap-codec" => vec![fuzz_atomic_swap_codec(iterations)?],
@@ -194,6 +195,9 @@ fn run() -> Result<(), Box<dyn Error>> {
         }
         "consensus-round-monotonicity" => {
             vec![fuzz_consensus_round_monotonicity(iterations)?]
+        }
+        "fastpay-recovery-committee-window" => {
+            vec![fuzz_fastpay_recovery_committee_window(iterations)?]
         }
         other => return Err(format!("unknown fuzz target `{other}`").into()),
     };
@@ -3104,6 +3108,63 @@ fn fuzz_rlp_length(length: usize) -> Vec<u8> {
         .position(|byte| *byte != 0)
         .unwrap_or(bytes.len() - 1)..]
         .to_vec()
+}
+
+fn fuzz_fastpay_recovery_committee_window(
+    iterations: usize,
+) -> Result<FuzzTargetReport, Box<dyn Error>> {
+    let committee = FastPayRecoveryCommitteeV1::from_public_keys(
+        "postfiat-fuzz-fastpay".to_string(),
+        "aa".repeat(48),
+        1,
+        7,
+        100,
+        120,
+        (0..4)
+            .map(|index| (format!("validator-{index}"), "bb".repeat(32)))
+            .collect(),
+    )?;
+    let seed = serde_json::to_vec(&committee)?;
+    let mut report = FuzzTargetReport::new(
+        "fastpay-recovery-committee-window",
+        iterations,
+        iterations.saturating_add(4),
+    );
+    for candidate in mutated_inputs(&seed, iterations) {
+        let parsed = std::panic::catch_unwind(|| {
+            serde_json::from_slice::<FastPayRecoveryCommitteeV1>(&candidate).map(|value| {
+                let accepted = value.validate().is_ok();
+                if accepted {
+                    assert_eq!(value.registry_root, value.computed_root().expect("root"));
+                }
+                (accepted, value)
+            })
+        });
+        report.assert_invariant(parsed.is_ok());
+        if let Ok(Ok((accepted, value))) = parsed {
+            report.record_parse(accepted);
+            if candidate == seed {
+                report.assert_invariant(accepted);
+                report.assert_invariant(value.registry_root == committee.registry_root);
+            }
+            if value.registry_root == committee.registry_root
+                && (value.valid_from_height != committee.valid_from_height
+                    || value.new_orders_through_height != committee.new_orders_through_height)
+            {
+                report.assert_invariant(!accepted);
+            }
+        } else {
+            report.record_parse(false);
+        }
+    }
+    for (from, through) in [(0, 120), (121, 120), (u64::MAX, u64::MAX)] {
+        let mut changed = committee.clone();
+        changed.valid_from_height = from;
+        changed.new_orders_through_height = through;
+        report.record_parse(changed.validate().is_ok());
+        report.assert_invariant(changed.validate().is_err());
+    }
+    Ok(report)
 }
 
 fn fuzz_consensus_round_monotonicity(

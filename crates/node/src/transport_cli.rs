@@ -3950,6 +3950,59 @@ use transport_protocol::*;
 use transport_runtime::*;
 
 #[cfg(test)]
+mod validator_serving_summary_property_tests {
+    use super::*;
+
+    #[test]
+    fn validator_serving_summary_property_caps_retention_on_replayed_rejections() {
+        for requested in [0, 1, 16, 1_023, 1_024, 1_025, 2_048] {
+            let mut count = 0;
+            let mut truncated = false;
+            let mut retained = Vec::new();
+            for index in 0..requested {
+                retain_transport_validator_summary(
+                    &mut count, &mut truncated, &mut retained, index);
+            }
+            let expected = requested.min(TRANSPORT_VALIDATOR_RETAINED_SUMMARY_LIMIT);
+            assert_eq!(count, expected);
+            assert_eq!(retained.len(), expected);
+            assert_eq!(truncated, requested > TRANSPORT_VALIDATOR_RETAINED_SUMMARY_LIMIT);
+            assert_eq!(retained, (0..expected).collect::<Vec<_>>(),
+                "the first summaries must remain ordered");
+        }
+    }
+
+    #[test]
+    fn validator_worker_permit_property_limits_in_flight_connections() {
+        for capacity in [1, 2, 4, 8, TRANSPORT_VALIDATOR_MAX_IN_FLIGHT] {
+            let slots = Arc::new((Mutex::new(capacity), Condvar::new()));
+            let shutdown = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let mut permits = Vec::new();
+            for _ in 0..capacity {
+                permits.push(acquire_transport_validator_in_flight_permit(&slots, &shutdown)
+                    .expect("acquire permit").expect("capacity available"));
+            }
+            assert_eq!(*slots.0.lock().expect("slots"), 0);
+            drop(permits);
+            assert_eq!(*slots.0.lock().expect("released slots"), capacity);
+        }
+    }
+
+    #[test]
+    fn batch_serve_rejection_budget_property_stays_bounded_at_zero_and_overflow() {
+        for max_batches in 0_usize..=1_024 {
+            let expected = max_batches.saturating_mul(4)
+                .clamp(16, TRANSPORT_BATCH_SERVE_MAX_REJECTIONS);
+            assert_eq!(transport_batch_serve_rejection_budget(max_batches), expected);
+        }
+        for max_batches in [usize::MAX / 4, usize::MAX - 1, usize::MAX] {
+            assert_eq!(transport_batch_serve_rejection_budget(max_batches),
+                TRANSPORT_BATCH_SERVE_MAX_REJECTIONS);
+        }
+    }
+}
+
+#[cfg(test)]
 mod certified_send_durability_tests {
     use super::*;
 

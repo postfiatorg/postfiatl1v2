@@ -217,6 +217,42 @@
     }
 
     #[test]
+    fn cobalt_quorum_overlap_property_matches_minimum_possible_quorum_intersection() {
+        for quorum in 4..=7 {
+            for overlap in 0..=7 {
+                for budget in 0..=3 {
+                    let old = (0..7).map(|id| format!("validator-{id}")).collect::<Vec<_>>();
+                    let new = (0..overlap)
+                        .map(|id| format!("validator-{id}"))
+                        .chain((7..14 - overlap).map(|id| format!("validator-{id}")))
+                        .collect::<Vec<_>>();
+                    let old_row = CobaltSafetyWitnessSubsetRow {
+                        graph_root: root('a'),
+                        subset_id: root('b'),
+                        validators: old,
+                        validator_count: 7,
+                        max_active_byzantine: budget,
+                        quorum,
+                    };
+                    let new_row = CobaltSafetyWitnessSubsetRow {
+                        graph_root: root('c'),
+                        subset_id: root('d'),
+                        validators: new,
+                        validator_count: 7,
+                        max_active_byzantine: budget,
+                        quorum,
+                    };
+                    let rows = safety_witness_intersections(&[old_row], &[new_row], budget);
+                    assert_eq!(rows.len(), 1);
+                    assert_eq!(rows[0].intersection_size, overlap);
+                    assert_eq!(rows[0].safe, (2 * quorum).saturating_sub(14 - overlap) > budget,
+                        "quorum={quorum} overlap={overlap} budget={budget}");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn cobalt_safety_witness_rejects_ab_to_hijkl_unsafe_transition() {
         let (domain, old_graph, new_graph) = canonical_transition_fixture(
             ids(&["A", "B", "C", "D", "E", "F", "G"]),
@@ -2642,7 +2678,7 @@
     }
 
     #[test]
-    fn full_knowledge_checkpoint_gates_dabc_activation() {
+    fn full_knowledge_checkpoint_candidate_binding_property_gates_dabc_activation() {
         let (domain, graph, first, second) = dabc_two_amendment_chain_fixture();
         let committee = test_committee_for_graph(&graph);
         let ratified_chain = vec![first.clone(), second.clone()];
@@ -2708,44 +2744,25 @@
         assert_eq!(activation.activation_height, second.activation_height);
         assert!(is_lower_hex_len(&activation.activation_id, 96));
 
-        let mismatched_checks = support
-            .iter()
-            .map(|sender| {
-                signed_dabc_check(
-                    &domain,
-                    graph.trust_graph_root.clone(),
-                    sender,
-                    20,
+        for candidate_byte in ['0', '1', '2', '3'] {
+            let mismatched_checks = support.iter().map(|sender| {
+                signed_dabc_check(&domain, graph.trust_graph_root.clone(), sender, 20,
                     vec![DabcPendingPair {
                         amendment_slot: second.amendment_slot,
-                        output_candidate_id: root('f'),
-                    }],
-                )
-            })
-            .collect::<Vec<_>>();
-        let mismatched_checkpoint = build_dabc_full_knowledge_checkpoint_signed(
-            &domain,
-            &committee,
-            &graph,
-            "validator-1",
-            20,
-            second.activation_height,
-            mismatched_checks,
-        )
-        .expect("candidate-mismatched checkpoint is structurally valid");
-        let mismatch_error = validate_dabc_activation_with_full_knowledge_signed(
-            &domain,
-            &committee,
-            &graph,
-            &ratified_chain,
-            &second,
-            &mismatched_checkpoint,
-        )
-        .expect_err("pending candidate must match ratified slot");
-        assert!(
-            mismatch_error.contains("pending candidate mismatch"),
-            "{mismatch_error}"
-        );
+                        output_candidate_id: root(candidate_byte),
+                    }])
+            }).collect::<Vec<_>>();
+            let mismatched_checkpoint = build_dabc_full_knowledge_checkpoint_signed(
+                &domain, &committee, &graph, "validator-1", 20,
+                second.activation_height, mismatched_checks,
+            ).expect("mismatched signed checkpoint is structurally valid");
+            let mismatch_error = validate_dabc_activation_with_full_knowledge_signed(
+                &domain, &committee, &graph, &ratified_chain, &second,
+                &mismatched_checkpoint,
+            ).expect_err("ratified slot must bind the exact candidate");
+            assert!(mismatch_error.contains("pending candidate mismatch"),
+                "candidate={candidate_byte}: {mismatch_error}");
+        }
 
         let mut incomplete_checks = Vec::new();
         for height in [10_u64, 20_u64] {

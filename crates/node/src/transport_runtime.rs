@@ -59,7 +59,7 @@ fn accept_transport_validator_connection(
     }
 }
 
-struct TransportValidatorInFlightPermit {
+pub(super) struct TransportValidatorInFlightPermit {
     slots: Arc<(Mutex<usize>, Condvar)>,
 }
 
@@ -73,7 +73,7 @@ impl Drop for TransportValidatorInFlightPermit {
     }
 }
 
-fn acquire_transport_validator_in_flight_permit(
+pub(super) fn acquire_transport_validator_in_flight_permit(
     slots: &Arc<(Mutex<usize>, Condvar)>,
     shutdown_signal: &std::sync::atomic::AtomicBool,
 ) -> Result<Option<TransportValidatorInFlightPermit>, String> {
@@ -272,7 +272,7 @@ pub(super) fn transport_batch_listen(
     })
 }
 
-fn transport_batch_serve_rejection_budget(max_batches: usize) -> usize {
+pub(super) fn transport_batch_serve_rejection_budget(max_batches: usize) -> usize {
     max_batches
         .saturating_mul(4)
         .clamp(16, TRANSPORT_BATCH_SERVE_MAX_REJECTIONS)

@@ -1118,6 +1118,67 @@ mod fastpay_recovery_type_tests {
     }
 
     #[test]
+    fn recovery_committee_admission_window_property_changes_root_and_rejects_stale_root() {
+        let committee = FastPayRecoveryCommitteeV1::from_public_keys(
+            domain().chain_id, domain().genesis_hash, domain().protocol_version,
+            7, 100, 120,
+            (0..4).map(|index| (format!("validator-{index}"), "aa".repeat(32))).collect(),
+        ).expect("committee");
+        let original = committee.registry_root.clone();
+        for delta in 1..=32 {
+            for field in 0..2 {
+                let mut changed = committee.clone();
+                if field == 0 {
+                    changed.valid_from_height += delta;
+                    changed.new_orders_through_height = changed.new_orders_through_height.max(changed.valid_from_height);
+                } else {
+                    changed.new_orders_through_height += delta;
+                }
+                assert_ne!(changed.computed_root().expect("new root"), original);
+                assert!(changed.validate().is_err(), "stale root must reject");
+                changed.registry_root = changed.computed_root().expect("new root");
+                changed.validate().expect("matching root accepts");
+            }
+        }
+        for (from, through) in [(0, 120), (121, 120)] {
+            let mut changed = committee.clone();
+            changed.valid_from_height = from;
+            changed.new_orders_through_height = through;
+            assert!(changed.computed_root().is_err(), "invalid window must reject");
+        }
+    }
+
+    #[test]
+    fn recovery_reveal_certificate_mutation_property_changes_committed_bytes() {
+        let certificate = retained_certificate();
+        let reveal = FastPayRecoveryRevealV1 {
+            schema: FASTPAY_RECOVERY_REVEAL_SCHEMA_V1.to_string(),
+            lock_id: certificate.recovery().lock_id.clone(),
+            order_digest: "44".repeat(48),
+            certificate_digest: "55".repeat(48),
+            revealed_at_height: 120,
+            certificate,
+        };
+        let original = reveal.state_commitment_bytes().expect("original commitment");
+        for mutation in 0..=63_u8 {
+            for field in 0..2 {
+                let mut changed = reveal.clone();
+                let FastPayCertificateV1::Transfer(certificate) = &mut changed.certificate else {
+                    unreachable!("transfer fixture")
+                };
+                let signature = format!("{:02x}", mutation);
+                if field == 0 {
+                    certificate.owner_signature_hex = signature.repeat(32);
+                } else {
+                    certificate.votes[0].signature_hex = signature.repeat(32);
+                }
+                assert_ne!(changed.state_commitment_bytes().expect("changed commitment"), original,
+                    "mutation={mutation} field={field}");
+            }
+        }
+    }
+
+    #[test]
     fn lock_id_commits_every_recovery_and_value_field() {
         let order = transfer();
         order.recovery.validate(&policy()).expect("valid recovery");

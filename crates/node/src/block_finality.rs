@@ -4046,6 +4046,34 @@ mod bridge_exit_root_activation_tests {
     }
 
     #[test]
+    fn proposer_durable_lock_property_rejects_conflicting_payloads_after_signing() {
+        let data_dir = std::env::temp_dir().join(format!("postfiat-proposer-lock-property-{}",
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()));
+        init(InitOptions { data_dir: data_dir.clone(),
+            chain_id: "postfiat-tier4-test".to_string(),
+            node_id: "validator-0".to_string(), validator_count: 1,
+        }).expect("initialize signer fixture");
+        let store = NodeStore::new(&data_dir);
+        let genesis = store.read_genesis().expect("genesis");
+        let key_file = data_dir.join(VALIDATOR_KEYS_FILE);
+        let mut first = proposal(1, None);
+        first.genesis_hash = genesis_hash(&genesis);
+        first.protocol_version = genesis.protocol_version;
+        let signed = sign_verified_block_proposal(&data_dir, first.clone(),
+            &key_file, "validator-0").expect("sign and reserve lock");
+        verify_signed_block_proposal(&data_dir, &signed).expect("signature verifies");
+        for byte in 0..8 {
+            let mut conflict = first.clone();
+            conflict.payload_hash = format!("{byte:02x}").repeat(48);
+            let error = sign_verified_block_proposal(&data_dir, conflict,
+                &key_file, "validator-0").expect_err("durable lock forbids new payload");
+            assert_eq!(error.kind(), io::ErrorKind::AlreadyExists, "byte={byte}: {error}");
+        }
+        std::fs::remove_dir_all(data_dir).expect("cleanup");
+    }
+
+    #[test]
     fn supplied_proposal_rejects_duplicate_receipt_ids() {
         let genesis = Genesis::new("postfiat-tier4-test");
         let mut duplicate = proposal(1, None);
@@ -4055,6 +4083,30 @@ mod bridge_exit_root_activation_tests {
         let error = validate_block_proposal_file(&duplicate, &genesis)
             .expect_err("duplicate receipt ids must not be eligible for votes");
         assert!(error.to_string().contains("duplicate receipt id"), "{error}");
+    }
+
+    #[test]
+    fn supplied_proposal_receipt_id_property_rejects_every_duplicate_position() {
+        let genesis = Genesis::new("postfiat-tier4-test");
+        for length in 0..=16 {
+            let unique = (0..length).map(|index| format!("receipt-{index}"))
+                .collect::<Vec<_>>();
+            let mut candidate = proposal(1, None);
+            candidate.receipt_count = length;
+            candidate.receipt_ids = unique.clone();
+            validate_block_proposal_file(&candidate, &genesis)
+                .expect("distinct receipts must be admissible");
+            for duplicate_at in 1..length {
+                candidate.receipt_ids[duplicate_at as usize] = unique[0].clone();
+                let error = validate_block_proposal_file(&candidate, &genesis)
+                    .expect_err("repeated receipt must reject before signing");
+                assert!(error.to_string().contains("duplicate receipt id"), "{error}");
+                candidate.receipt_ids[duplicate_at as usize] = unique[duplicate_at as usize].clone();
+            }
+            candidate.receipt_ids.reverse();
+            validate_block_proposal_file(&candidate, &genesis)
+                .expect("reordered unique receipts must remain admissible");
+        }
     }
 
     #[test]

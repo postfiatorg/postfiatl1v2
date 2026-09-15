@@ -2489,6 +2489,39 @@ mod tests {
     }
 
     #[test]
+    fn state_file_size_property_rejects_overflow_and_counts_the_trailer() {
+        let trailer = 1 + FILE_MAC_MARKER.len() + MAC_BYTES * 2 + 1;
+        for distance in 0..=128_u64 {
+            for spare in 0..=2_u64 {
+                let json_len = MAX_STATE_FILE_BYTES - trailer as u64 - distance + spare;
+                let expected = json_len + trailer as u64 <= MAX_STATE_FILE_BYTES;
+                assert_eq!(
+                    validate_state_file_lengths(
+                        "adversarial state",
+                        json_len,
+                        json_len,
+                        MAX_STATE_FILE_BYTES
+                    )
+                    .is_ok(),
+                    expected,
+                    "json_len={json_len}"
+                );
+            }
+        }
+        assert!(validate_state_file_lengths(
+            "overflow state",
+            u64::MAX,
+            u64::MAX,
+            MAX_STATE_FILE_BYTES
+        )
+        .is_err());
+        for size in [0, 1, 16, 1_024] {
+            validate_state_file_value_size("small state", &vec![0_u8; size])
+                .expect("small state must fit without writing");
+        }
+    }
+
+    #[test]
     fn init_and_read_back() {
         let dir = std::env::temp_dir().join(format!(
             "postfiat-storage-test-{}",

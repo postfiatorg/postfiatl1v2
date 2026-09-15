@@ -2814,16 +2814,18 @@ mod tests {
             .expect("initial prepare");
         assert_eq!(initial.round, 0);
         assert_eq!(initial.phase, FastSwapPhaseV1::Precommit);
-        validator
-            .state
-            .swaps
-            .get_mut(&operation_id)
-            .expect("reserved operation")
-            .highest_precommit_round = 1;
-        let error = validator
-            .asset_control_prepare(&signed)
-            .expect_err("later recovery round forbids round-zero vote");
-        assert!(error.to_string().contains("round-zero prepare"), "{error}");
+        for round in 1..=8 {
+            validator
+                .state
+                .swaps
+                .get_mut(&operation_id)
+                .expect("reserved operation")
+                .highest_precommit_round = round;
+            let error = validator
+                .asset_control_prepare(&signed)
+                .expect_err("later recovery round forbids round-zero vote");
+            assert!(error.to_string().contains("round-zero prepare"), "{error}");
+        }
         validator
             .state
             .swaps

@@ -292,6 +292,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn bootstrap_payload_existing_file_property_preserves_all_bytes() {
+        let root = std::env::temp_dir().join(format!(
+            "postfiat-bootstrap-property-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        fs::create_dir_all(&root).expect("create test root");
+        for length in [0, 1, 2, 16, 256, 1_024] {
+            let existing = (0..length).map(|index| index as u8).collect::<Vec<_>>();
+            let path = root.join(format!("existing-{length}.json"));
+            fs::write(&path, &existing).expect("create existing payload");
+            assert!(write_new_payload(&path, b"replacement").is_err());
+            assert_eq!(fs::read(&path).expect("existing file"), existing);
+        }
+        let path = root.join("fresh.json");
+        write_new_payload(&path, b"first").expect("fresh output");
+        assert!(write_new_payload(&path, b"second").is_err());
+        assert_eq!(fs::read(&path).expect("read fresh output"), b"first");
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
     fn exhausted_tip_height_is_rejected_without_panicking() {
         assert!(validate_height_window(u64::MAX, u64::MAX, u64::MAX).is_err());
     }

@@ -1519,7 +1519,7 @@ fn signed_snapshot_roundtrip_rejects_tampering_and_preserves_signer_isolation() 
 }
 
 #[test]
-fn snapshot_import_failure_does_not_publish_destination() {
+fn snapshot_import_mutated_manifest_property_does_not_publish_destination() {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("clock")
@@ -1542,24 +1542,24 @@ fn snapshot_import_failure_does_not_publish_destination() {
         snapshot_dir: snapshot_dir.clone(),
     })
     .expect("export snapshot");
-    manifest.genesis_hash = "tampered-genesis-hash".to_string();
-    write_snapshot_manifest(&snapshot_dir.join(SNAPSHOT_MANIFEST_FILE), &manifest)
-        .expect("write semantic mismatch manifest");
-
-    let error = import_snapshot(SnapshotImportOptions {
-        data_dir: rejected_dir.clone(),
-        snapshot_dir: snapshot_dir.clone(),
-        node_id: None,
-    })
-    .expect_err("semantic mismatch must reject snapshot");
-    assert!(
-        error.to_string().contains("restored genesis hash"),
-        "{error}"
-    );
-    assert!(
-        !rejected_dir.exists(),
-        "rejected snapshot must not publish partial destination state"
-    );
+    for variant in 0..8 {
+        manifest.genesis_hash = format!("tampered-genesis-{variant}");
+        write_snapshot_manifest(&snapshot_dir.join(SNAPSHOT_MANIFEST_FILE), &manifest)
+            .expect("write mutated manifest");
+        let destination = rejected_dir.with_extension(format!("variant-{variant}"));
+        let error = import_snapshot(SnapshotImportOptions {
+            data_dir: destination.clone(), snapshot_dir: snapshot_dir.clone(), node_id: None,
+        }).expect_err("semantic mismatch must reject snapshot");
+        assert!(error.to_string().contains("restored genesis hash"), "{error}");
+        assert!(!destination.exists(), "invalid manifest {variant} published partial state");
+    }
+    std::fs::write(snapshot_dir.join(SNAPSHOT_MANIFEST_FILE), b"{")
+        .expect("truncate snapshot manifest");
+    let destination = rejected_dir.with_extension("truncated");
+    import_snapshot(SnapshotImportOptions {
+        data_dir: destination.clone(), snapshot_dir: snapshot_dir.clone(), node_id: None,
+    }).expect_err("truncated manifest must reject");
+    assert!(!destination.exists(), "truncated manifest published partial state");
 
     for path in [source_dir, snapshot_dir] {
         std::fs::remove_dir_all(path).expect("cleanup atomic snapshot test");

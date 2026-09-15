@@ -81,6 +81,22 @@ mod rpc_serve_request_tests {
     }
 
     #[test]
+    fn rpc_serve_health_stamp_property_requires_each_preflight_file() {
+        let root = node_serving_read_only_root("health-stamp-property");
+        rpc_serve_health_stamp(&root, true).expect("complete preflight stamp");
+        for name in [postfiat_storage::MEMPOOL_FILE, postfiat_storage::CHAIN_TIP_FILE,
+            postfiat_storage::NODE_STATE_FILE, postfiat_storage::GOVERNANCE_FILE] {
+            let source = root.join(name);
+            let backup = root.join(format!("{name}.saved"));
+            fs::rename(&source, &backup).expect("remove stamp input");
+            assert!(rpc_serve_health_stamp(&root, true).is_err(), "missing {name} must reject");
+            fs::rename(&backup, &source).expect("restore stamp input");
+            rpc_serve_health_stamp(&root, true).expect("restored preflight stamp");
+        }
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
     fn rpc_serve_keep_alive_records_each_request_and_closes_one_connection() {
         let root = node_serving_read_only_root("keep-alive-events");
         let port = TcpListener::bind(("127.0.0.1", 0))
@@ -97,7 +113,7 @@ mod rpc_serve_request_tests {
         let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect RPC");
         writer.set_read_timeout(Some(Duration::from_secs(5))).expect("read timeout");
         let mut reader = BufReader::new(writer.try_clone().expect("clone RPC stream"));
-        for id in ["first", "second"] {
+        for id in ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth"] {
             let mut line = serde_json::to_vec(&RpcRequest::empty(id, "status"))
                 .expect("serialize status request");
             line.push(b'\n');
@@ -108,12 +124,13 @@ mod rpc_serve_request_tests {
             assert!(response.ok, "{id}: {:?}", response.error);
         }
         writer.shutdown(std::net::Shutdown::Write).expect("close request stream");
-        let report = server.join().expect("join RPC server").expect("serve two requests");
-        assert_eq!(report.request_count, 2);
-        assert_eq!(report.ok_count, 2);
-        assert_eq!(report.requests.iter().map(|event| event.id.as_str()).collect::<Vec<_>>(), vec!["first", "second"]);
+        let report = server.join().expect("join RPC server").expect("serve eight requests");
+        assert_eq!(report.request_count, 8);
+        assert_eq!(report.ok_count, 8);
+        assert_eq!(report.requests.iter().map(|event| event.id.as_str()).collect::<Vec<_>>(),
+            vec!["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth"]);
         let events = fs::read_to_string(root.join("rpc-events.jsonl")).expect("read RPC events");
-        assert_eq!(events.lines().count(), 2, "each served request must be logged");
+        assert_eq!(events.lines().count(), 8, "each served request must be logged");
         fs::remove_dir_all(root).expect("cleanup keep-alive fixture");
     }
 
