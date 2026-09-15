@@ -1,0 +1,224 @@
+{
+  "observed_at": "2026-09-06T20:04:03.087166+00:00",
+  "status": "DEPLOYED_AND_VERIFIED",
+  "release": "rpc-status-cache-20260906",
+  "binary_sha256": "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46",
+  "validators": [
+    {
+      "validator": 0,
+      "services": "active",
+      "process_sha256": [
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46",
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46"
+      ],
+      "checkpoint": {
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "block_height": 992,
+        "block_tip_hash": "066ae1e8ebc99d53b41b15bcb45ba33f623e0de807c19547d01a95fe15429f693ee211d2de8e275e287877da7dac111d",
+        "state_root": "beb33019f81dd0be0b529debcd75fc14efc66b4e96bf0222521fd964cdf9b0af52cfbe16d75c9a6c027d044b6f52a8e8"
+      },
+      "rpc_samples": [
+        {
+          "height": 992,
+          "request_ms": 1002.23,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        },
+        {
+          "height": 992,
+          "request_ms": 950.95,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        },
+        {
+          "height": 992,
+          "request_ms": 517.62,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        }
+      ],
+      "backup_permissions_verified": true
+    },
+    {
+      "validator": 1,
+      "services": "active",
+      "process_sha256": [
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46",
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46"
+      ],
+      "checkpoint": {
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "block_height": 992,
+        "block_tip_hash": "066ae1e8ebc99d53b41b15bcb45ba33f623e0de807c19547d01a95fe15429f693ee211d2de8e275e287877da7dac111d",
+        "state_root": "beb33019f81dd0be0b529debcd75fc14efc66b4e96bf0222521fd964cdf9b0af52cfbe16d75c9a6c027d044b6f52a8e8"
+      },
+      "rpc_samples": [
+        {
+          "height": 992,
+          "request_ms": 909.96,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        },
+        {
+          "height": 992,
+          "request_ms": 903.88,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        },
+        {
+          "height": 992,
+          "request_ms": 860.64,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        }
+      ],
+      "backup_permissions_verified": true
+    },
+    {
+      "validator": 2,
+      "services": "active",
+      "process_sha256": [
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46",
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46"
+      ],
+      "checkpoint": {
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "block_height": 992,
+        "block_tip_hash": "066ae1e8ebc99d53b41b15bcb45ba33f623e0de807c19547d01a95fe15429f693ee211d2de8e275e287877da7dac111d",
+        "state_root": "beb33019f81dd0be0b529debcd75fc14efc66b4e96bf0222521fd964cdf9b0af52cfbe16d75c9a6c027d044b6f52a8e8"
+      },
+      "rpc_samples": [
+        {
+          "height": 992,
+          "request_ms": 7.21,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        },
+        {
+          "height": 992,
+          "request_ms": 591.95,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        },
+        {
+          "height": 992,
+          "request_ms": 594.87,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        }
+      ],
+      "backup_permissions_verified": true
+    },
+    {
+      "validator": 3,
+      "services": "active",
+      "process_sha256": [
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46",
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46"
+      ],
+      "checkpoint": {
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "block_height": 992,
+        "block_tip_hash": "066ae1e8ebc99d53b41b15bcb45ba33f623e0de807c19547d01a95fe15429f693ee211d2de8e275e287877da7dac111d",
+        "state_root": "beb33019f81dd0be0b529debcd75fc14efc66b4e96bf0222521fd964cdf9b0af52cfbe16d75c9a6c027d044b6f52a8e8"
+      },
+      "rpc_samples": [
+        {
+          "height": 992,
+          "request_ms": 1004.33,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        },
+        {
+          "height": 992,
+          "request_ms": 976.22,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        },
+        {
+          "height": 992,
+          "request_ms": 506.42,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        }
+      ],
+      "backup_permissions_verified": true
+    },
+    {
+      "validator": 4,
+      "services": "active",
+      "process_sha256": [
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46",
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46"
+      ],
+      "checkpoint": {
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "block_height": 992,
+        "block_tip_hash": "066ae1e8ebc99d53b41b15bcb45ba33f623e0de807c19547d01a95fe15429f693ee211d2de8e275e287877da7dac111d",
+        "state_root": "beb33019f81dd0be0b529debcd75fc14efc66b4e96bf0222521fd964cdf9b0af52cfbe16d75c9a6c027d044b6f52a8e8"
+      },
+      "rpc_samples": [
+        {
+          "height": 992,
+          "request_ms": 852.47,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        },
+        {
+          "height": 992,
+          "request_ms": 837.59,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        },
+        {
+          "height": 992,
+          "request_ms": 857.3,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        }
+      ],
+      "backup_permissions_verified": true
+    },
+    {
+      "validator": 5,
+      "services": "active",
+      "process_sha256": [
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46",
+        "740d2610f312a54fd2d1b9bec18a52c6d4390dc5994e6e6f7497a98b36e44b46"
+      ],
+      "checkpoint": {
+        "chain_id": "postfiat-wan-devnet-2",
+        "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+        "block_height": 992,
+        "block_tip_hash": "066ae1e8ebc99d53b41b15bcb45ba33f623e0de807c19547d01a95fe15429f693ee211d2de8e275e287877da7dac111d",
+        "state_root": "beb33019f81dd0be0b529debcd75fc14efc66b4e96bf0222521fd964cdf9b0af52cfbe16d75c9a6c027d044b6f52a8e8"
+      },
+      "rpc_samples": [
+        {
+          "height": 992,
+          "request_ms": 6.11,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        },
+        {
+          "height": 992,
+          "request_ms": 474.74,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        },
+        {
+          "height": 992,
+          "request_ms": 492.38,
+          "full_history_scans": 0,
+          "manifest_sha256": "4d2c6d66f10055416685f153d729884f5dfb25f79997fdf34e9fb6d8275ebf35"
+        }
+      ],
+      "backup_permissions_verified": true
+    }
+  ]
+}

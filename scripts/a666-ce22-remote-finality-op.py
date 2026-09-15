@@ -253,7 +253,6 @@ def main() -> None:
     remote_label = f"a666-{next_height}-{label}"
     remote_signed = f"{data_dir}/{remote_label}.signed.json"
     remote_artifacts = f"{data_dir}/a666-finality-artifacts/{remote_label}"
-    isolated_outbox = f"{data_dir}/a666-isolated-outboxes/{remote_label}"
     remote_runner = "/usr/local/sbin/a666-remote-sync-round.py"
 
     if args.resident_manifest is not None:
@@ -405,8 +404,6 @@ def main() -> None:
     prepare = "set -euo pipefail; " + "; ".join(
         [
             f"test ! -e {shlex.quote(remote_artifacts)}",
-            f"test ! -e {shlex.quote(isolated_outbox)}",
-            f"install -d -o postfiat -g postfiat -m 700 {shlex.quote(isolated_outbox)}",
             (
                 "install -d -o postfiat -g postfiat -m 700 "
                 f"{shlex.quote(data_dir + '/a666-finality-artifacts')}"
@@ -446,16 +443,13 @@ def main() -> None:
         "--view",
         "0",
     ]
-    namespace_command = (
-        "set -euo pipefail; "
-        f"mount --bind {shlex.quote(isolated_outbox)} "
-        f"{shlex.quote(data_dir + '/certified-send-outbox')}; "
+    # The completed-job index lives beside the outbox in the data directory
+    # and commits the completed directory's inode/timestamps. Mounting only
+    # an empty outbox breaks that identity and can report failure after the
+    # transaction has already been admitted. Use the normal indexed queue.
+    remote_command = (
         "exec runuser -u postfiat -- "
         + " ".join(shlex.quote(value) for value in runner_args)
-    )
-    remote_namespace_command = (
-        "unshare --mount --propagation private -- /bin/bash -c "
-        + shlex.quote(namespace_command)
     )
     run(
         [
@@ -463,7 +457,7 @@ def main() -> None:
             "-o",
             "BatchMode=yes",
             f"root@{host}",
-            remote_namespace_command,
+            remote_command,
         ],
     )
 

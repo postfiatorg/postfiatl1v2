@@ -1,0 +1,92 @@
+[
+  {
+    "validator": 0,
+    "checkpoint": {
+      "chain_id": "postfiat-wan-devnet-2",
+      "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+      "block_height": 972,
+      "block_tip_hash": "1ecacd536cba2ae2bc98eea11ab5e46293e094318900c19c5aff5de9aace8386ece25b52afbf281cce67415edb149ca5",
+      "state_root": "3debf11e7ba94ee95cb68e8fdad181ec7b50c56a658addf8fcddcee2e86dca1803c96b79c82949805b98bd1ecb144455"
+    },
+    "process_sha256": [
+      "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2",
+      "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2"
+    ],
+    "services": "active"
+  },
+  {
+    "validator": 1,
+    "checkpoint": {
+      "chain_id": "postfiat-wan-devnet-2",
+      "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+      "block_height": 972,
+      "block_tip_hash": "1ecacd536cba2ae2bc98eea11ab5e46293e094318900c19c5aff5de9aace8386ece25b52afbf281cce67415edb149ca5",
+      "state_root": "3debf11e7ba94ee95cb68e8fdad181ec7b50c56a658addf8fcddcee2e86dca1803c96b79c82949805b98bd1ecb144455"
+    },
+    "process_sha256": [
+      "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2",
+      "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2"
+    ],
+    "services": "active"
+  },
+  {
+    "validator": 2,
+    "checkpoint": {
+      "chain_id": "postfiat-wan-devnet-2",
+      "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+      "block_height": 972,
+      "block_tip_hash": "1ecacd536cba2ae2bc98eea11ab5e46293e094318900c19c5aff5de9aace8386ece25b52afbf281cce67415edb149ca5",
+      "state_root": "3debf11e7ba94ee95cb68e8fdad181ec7b50c56a658addf8fcddcee2e86dca1803c96b79c82949805b98bd1ecb144455"
+    },
+    "process_sha256": [
+      "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2",
+      "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2"
+    ],
+    "services": "active"
+  },
+  {
+    "validator": 3,
+    "checkpoint": {
+      "chain_id": "postfiat-wan-devnet-2",
+      "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+      "block_height": 972,
+      "block_tip_hash": "1ecacd536cba2ae2bc98eea11ab5e46293e094318900c19c5aff5de9aace8386ece25b52afbf281cce67415edb149ca5",
+      "state_root": "3debf11e7ba94ee95cb68e8fdad181ec7b50c56a658addf8fcddcee2e86dca1803c96b79c82949805b98bd1ecb144455"
+    },
+    "process_sha256": [
+      "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2",
+      "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2"
+    ],
+    "services": "active"
+  },
+  {
+    "validator": 4,
+    "checkpoint": {
+      "chain_id": "postfiat-wan-devnet-2",
+      "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+      "block_height": 972,
+      "block_tip_hash": "1ecacd536cba2ae2bc98eea11ab5e46293e094318900c19c5aff5de9aace8386ece25b52afbf281cce67415edb149ca5",
+      "state_root": "3debf11e7ba94ee95cb68e8fdad181ec7b50c56a658addf8fcddcee2e86dca1803c96b79c82949805b98bd1ecb144455"
+    },
+    "process_sha256": [
+      "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2",
+      "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2"
+    ],
+    "services": "active"
+  },
+  {
+    "validator": 5,
+    "checkpoint": {
+      "chain_id": "postfiat-wan-devnet-2",
+      "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+      "block_height": 972,
+      "block_tip_hash": "1ecacd536cba2ae2bc98eea11ab5e46293e094318900c19c5aff5de9aace8386ece25b52afbf281cce67415edb149ca5",
+      "state_root": "3debf11e7ba94ee95cb68e8fdad181ec7b50c56a658addf8fcddcee2e86dca1803c96b79c82949805b98bd1ecb144455"
+    },
+    "process_sha256": [
+      "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2",
+      "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2"
+    ],
+    "services": "active"
+  }
+]

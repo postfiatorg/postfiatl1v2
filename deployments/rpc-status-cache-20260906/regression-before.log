@@ -1,0 +1,19 @@
+   Compiling postfiat-node v0.1.0 (/home/postfiat/repos/postfiatl1v2/crates/node)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.24s
+     Running unittests src/main.rs (target/debug/deps/postfiat_node-8451ae729848bf6f)
+
+running 1 test
+
+thread 'rpc_serve_request_tests::rpc_serve_status_cache_expires_after_transactional_commit' (4060260) panicked at crates/node/src/main_parts/tests/rpc_serve_request_tests.rs:969:9:
+unchanged legacy files must not extend an expired report
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test rpc_serve_request_tests::rpc_serve_status_cache_expires_after_transactional_commit ... FAILED
+
+failures:
+
+failures:
+    rpc_serve_request_tests::rpc_serve_status_cache_expires_after_transactional_commit
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 154 filtered out; finished in 0.72s
+
+error: test failed, to rerun pass `-p postfiat-node --bin postfiat-node`

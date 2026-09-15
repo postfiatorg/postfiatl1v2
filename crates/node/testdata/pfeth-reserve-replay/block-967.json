@@ -1,0 +1,33 @@
+{
+  "header": {
+    "height": 967,
+    "view": 0,
+    "parent_hash": "a9d2e14fa3cca4386cd4e86307d567b4a6f39cd19790f2415c4dc253dd2340115eab91143bde5562b630f9b06a986b09",
+    "proposer": "validator-1",
+    "batch_kind": "transparent",
+    "batch_id": "1d14ea10cd5b4c50d327011a181cd7e40be823faa9cbfdc325065bf205aa8a292791881c4151673e09f1011ca2fc16ed",
+    "state_root": "8bc78375cebc3dbc082f7ff65017ad8cfe6a240cb50df304e9faca365956d37bcd82167b348bf06fae33082239b1f4e6",
+    "bridge_exit_root": "b8e0f151a40d5d0d6fdc429d75c9daf57e9c193bd1880fa3ddcced6d138b1d81eb9ac3a65bbb699c5a78d05681e521ae",
+    "pftl_uniswap_receipt_root": "e7d0aa768bf28f5cc825a075d871831e36c55656a534d3d8288cb82f8da6a2cb840ffbfa3d2d07b3007239e29c2a0d7c",
+    "receipt_count": 1,
+    "certificate_id": "bfae22d2ed6de76acc5a9f749c8dc363d6879a554ebe356050d6af1a58c4af4eedd6fdf366d1bd043f8a7b4771d61240",
+    "certificate": {
+      "validators": [
+        "validator-0",
+        "validator-1",
+        "validator-2",
+        "validator-3",
+        "validator-4",
+        "validator-5"
+      ],
+      "quorum": 5,
+      "registry_root": "08a451e07aeaf9ada41a69e7c26dfd3fd86fce11c02f5567127c598b3cf775ac054b2add85295cc8c0d429bb6d2b9b1d",
+      "votes": []
+    },
+    "consensus_v2_commit": null,
+    "block_hash": "d49e6becb1f1d0a3e304d6d1f20371fcfe7a42eb212f11672d16b43d6636bff941c1fcabb7c70c7c019520233bae9adf"
+  },
+  "receipt_ids": [
+    "8fb66f6863220a89338b03bef9750a8b8eb93e2c50374bd632dabc3e3ae3598bffb748e0547fde19f85144bb453398e0"
+  ]
+}

@@ -91,11 +91,18 @@ def main() -> None:
     parser.add_argument("mode", choices=["prepare", "revoke"])
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--ttl-seconds", type=int, default=86_400)
+    parser.add_argument("--token", choices=["usdc", "wa666", "both"], default="both")
+    parser.add_argument("--amount-atoms", type=int, help="Exact allowance for the selected trade input; omission retains the legacy unlimited allowance")
     args = parser.parse_args()
     if args.output.exists():
         raise RuntimeError(f"refusing to overwrite {args.output}")
-    if args.mode == "prepare" and args.ttl_seconds < 3_600:
-        raise RuntimeError("allowance TTL must be at least one hour")
+    if args.mode == "prepare" and args.ttl_seconds <= 0:
+        raise RuntimeError("allowance TTL must be positive")
+    if args.amount_atoms is not None and not 0 < args.amount_atoms <= MAX_UINT160:
+        raise RuntimeError("allowance amount must fit the positive Permit2 uint160 range")
+    journal = args.output.with_suffix(args.output.suffix + ".journal.json")
+    if journal.exists():
+        raise RuntimeError(f"reconcile the existing allowance transaction journal: {journal}")
 
     web3 = Web3(Web3.HTTPProvider(RPC, request_kwargs={"timeout": 120}))
     if not web3.is_connected() or int(web3.eth.chain_id) != 1:
@@ -105,6 +112,9 @@ def main() -> None:
         "usdc": web3.eth.contract(address=USDC, abi=ERC20_ABI),
         "wa666": web3.eth.contract(address=WA666, abi=ERC20_ABI),
     }
+
+    if args.token != "both":
+        tokens = {args.token: tokens[args.token]}
 
     def state() -> dict[str, object]:
         result: dict[str, object] = {}
@@ -125,8 +135,22 @@ def main() -> None:
         return result
 
     transactions: list[dict[str, object]] = []
+    intent = {"schema": "postfiat.a666.uniswap_allowance_intent.v1", "mode": args.mode,
+              "token": args.token, "amount_atoms": args.amount_atoms, "transactions": transactions}
+    def save_intent():
+        import tempfile
+        fd, path = tempfile.mkstemp(dir=journal.parent, prefix=".allowance-")
+        with os.fdopen(fd, "w") as f:
+            json.dump(intent, f, indent=2); f.flush(); os.fsync(f.fileno())
+        os.replace(path, journal)
+    journal.parent.mkdir(parents=True, exist_ok=True)
+    with journal.open("x") as f:
+        journal.chmod(0o600)
+        json.dump(intent, f, indent=2)
 
     def send(target: str, calldata: str, label: str) -> None:
+        intent["pending"] = {"target": target, "calldata": calldata, "label": label}
+        save_intent()
         response = agentd_call(
             {
                 "op": "evm_contract_tx",
@@ -140,6 +164,8 @@ def main() -> None:
             },
             timeout=1200,
         )
+        intent["pending"]["agent_response"] = response
+        save_intent()
         if not response or response.get("ok") is not True:
             raise RuntimeError(f"agent rejected {label}: {response}")
         transaction_hash = tx_hash(response)
@@ -152,13 +178,19 @@ def main() -> None:
                 "tx": transaction_hash,
                 "block_number": int(receipt.blockNumber),
                 "gas_used": int(receipt.gasUsed),
+                "effective_gas_price_wei": int(receipt.effectiveGasPrice),
             }
         )
 
+        intent.pop("pending", None)
+        save_intent()
+
     pre = state()
-    erc_amount = MAX_UINT256 if args.mode == "prepare" else 0
-    permit_amount = MAX_UINT160 if args.mode == "prepare" else 0
+    erc_amount = (args.amount_atoms if args.amount_atoms is not None else MAX_UINT256) if args.mode == "prepare" else 0
+    permit_amount = (args.amount_atoms if args.amount_atoms is not None else MAX_UINT160) if args.mode == "prepare" else 0
     expiration = int(time.time()) + args.ttl_seconds if args.mode == "prepare" else 0
+    if not 0 <= expiration < (1 << 48):
+        raise RuntimeError("allowance expiration must fit Permit2 uint48")
     for name, token in tokens.items():
         current = state()[name]
         if current["erc20_to_permit2"] != erc_amount:
@@ -170,7 +202,7 @@ def main() -> None:
         current = state()[name]["permit2_to_router"]
         permit_satisfied = current["amount"] == permit_amount
         if args.mode == "prepare":
-            permit_satisfied = permit_satisfied and current["expiration"] > int(time.time()) + 3_600
+            permit_satisfied = permit_satisfied and current["expiration"] == expiration
         if not permit_satisfied:
             send(
                 PERMIT2,
@@ -186,7 +218,7 @@ def main() -> None:
         permit_state = post[name]["permit2_to_router"]
         if permit_state["amount"] != permit_amount:
             raise RuntimeError(f"{name} Permit2 amount postcondition failed")
-        if args.mode == "prepare" and permit_state["expiration"] <= int(time.time()) + 3_600:
+        if args.mode == "prepare" and (permit_state["expiration"] != expiration or permit_state["expiration"] <= int(time.time())):
             raise RuntimeError(f"{name} Permit2 expiration postcondition failed")
 
     report = {
@@ -202,6 +234,8 @@ def main() -> None:
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+    intent["verdict"] = "PASS"
+    save_intent()
     print(json.dumps(report, indent=2, sort_keys=True))
 
 

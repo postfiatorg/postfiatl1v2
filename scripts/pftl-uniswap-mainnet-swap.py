@@ -14,7 +14,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import re
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -139,6 +142,18 @@ def main() -> int:
     args = parser.parse_args()
     if args.output is not None and args.output.exists():
         raise RuntimeError(f"refusing to overwrite {args.output}")
+    if not 0 < args.amount_in_atoms < 2**128 or not 0 < args.min_out_atoms < 2**128:
+        raise ValueError("swap input and minimum output must fit positive uint128 amounts")
+    if not int(time.time()) < args.deadline_epoch < 2**256:
+        raise ValueError("swap deadline must be a future uint256 timestamp")
+    journal = args.output.with_suffix(args.output.suffix + ".journal.json") if args.output else None
+    if args.execute:
+        if journal is None:
+            raise ValueError("--execute requires --output for durable transaction recovery")
+        if journal.exists():
+            raise RuntimeError(f"reconcile the existing swap transaction journal: {journal}")
+        if not args.packet_sha256 or not re.fullmatch(r"[0-9a-fA-F]{64}", args.packet_sha256):
+            raise ValueError("--execute requires a 32-byte --packet-sha256")
 
     calldata = build_swap_calldata(args.direction, args.amount_in_atoms, args.min_out_atoms, args.deadline_epoch)
     calldata_hash = hashlib.sha256(bytes.fromhex(calldata[2:])).hexdigest()
@@ -147,6 +162,8 @@ def main() -> int:
     if not web3.is_connected():
         print(json.dumps({"error": "RPC unavailable"}))
         return 1
+    if int(web3.eth.chain_id) != 1:
+        raise ValueError("swap RPC is not Ethereum mainnet")
 
     block_number = web3.eth.block_number
 
@@ -195,7 +212,7 @@ def main() -> int:
             print(json.dumps({"error": "--execute refused: simulation did not succeed", "simulation": sim_result}))
             return 1
         # Sign via agentd evm_contract_tx (same as a666-mainnet-seed-pool.py send())
-        sys.path.insert(0, "/home/postfiat/repos/StakeHub-master-e6")
+        sys.path.insert(0, os.environ.get("A666_STAKEHUB_REPO", "/home/postfiat/repos/StakeHub-master-e6"))
         from stakehub.agentd import call as agentd_call
         token_in_address = WA666 if args.direction == "wa666-to-usdc" else USDC
         token_out_address = USDC if args.direction == "wa666-to-usdc" else WA666
@@ -205,6 +222,23 @@ def main() -> int:
             "token_in_atoms": int(token_in.functions.balanceOf(WALLET).call()),
             "token_out_atoms": int(token_out.functions.balanceOf(WALLET).call()),
         }
+        output["pre_balances"] = pre_balances
+        output["phase"] = "submitting"
+        journal.parent.mkdir(parents=True, exist_ok=True)
+        with journal.open("x") as f:
+            journal.chmod(0o600)
+            json.dump(output, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+
+        def save_journal():
+            fd, path = tempfile.mkstemp(dir=journal.parent, prefix=".swap-")
+            with os.fdopen(fd, "w") as f:
+                json.dump(output, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(path, journal)
+
         resp = agentd_call({
             "op": "evm_contract_tx",
             "to": UNIVERSAL_ROUTER,
@@ -215,11 +249,17 @@ def main() -> int:
             "value_wei": 0,
             "gas_usd": 0,
         }, timeout=1200)
+        output["agent_response"] = resp
+        save_journal()
         if not resp or not resp.get("ok"):
             print(json.dumps({"error": "agentd rejected tx", "response": resp}))
             return 1
         tx_hash = resp["tx"] if resp["tx"].startswith("0x") else f"0x{resp['tx']}"
+        output.update(phase="broadcast", tx_hash=tx_hash)
+        save_journal()
         receipt = web3.eth.get_transaction_receipt(tx_hash)
+        output["receipt"] = json.loads(Web3.to_json(receipt))
+        save_journal()
         post_balances = {
             "token_in_atoms": int(token_in.functions.balanceOf(WALLET).call()),
             "token_out_atoms": int(token_out.functions.balanceOf(WALLET).call()),
@@ -239,10 +279,13 @@ def main() -> int:
         output["tx_hash"] = tx_hash
         output["tx_status"] = int(receipt.status)
         output["gas_used"] = int(receipt.gasUsed)
+        output["effective_gas_price_wei"] = int(receipt.effectiveGasPrice)
         output["pre_balances"] = pre_balances
         output["post_balances"] = post_balances
         output["input_spent_atoms"] = input_spent
         output["output_received_atoms"] = output_received
+        output["phase"] = "swap-verified"
+        save_journal()
 
     serialized = json.dumps(output, indent=2, sort_keys=True) + "\n"
     if args.output is not None:

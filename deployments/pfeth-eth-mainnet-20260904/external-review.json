@@ -1,0 +1,14 @@
+{
+  "schema": "postfiat.pfeth.external_review_gate.v1",
+  "status": "WAIVED",
+  "manifest_sha256": "a36cdf91023b15fe3055f683d8f847cee236bf4eee3c67d8f4fd2c48d723164c",
+  "reviewer": null,
+  "reviewed_at": null,
+  "reviewed_contracts": [],
+  "reviewed_programs": [],
+  "signature_or_report": null,
+  "waived_by": "Post Fiat founder (manager), via Codex session 2026-09-04",
+  "waived_at": "2026-09-04T18:27:32.488139Z",
+  "waiver_statement": "UNREVIEWED v1 release deployed under manager authority. ExitExecutorV1, WETHBridgeVaultL1, PFTLFinalityVerifierV1 and both SP1 guests have had no independent review. Caps and the pausable owner bound exposure; a reviewed release is a redeploy.",
+  "instruction": "Set to PASS only after an independent review of the exact manifest."
+}

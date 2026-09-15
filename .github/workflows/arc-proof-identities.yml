@@ -1,0 +1,140 @@
+name: arc-proof-identities
+
+on:
+  pull_request:
+    paths:
+      - programs/pfusdc-arc-ingress/**
+      - programs/pfusdc-egress/**
+      - tools/pfusdc-tier4-prover/**
+      - docs/evidence/arc-mvp-20260828/program-info.current-v2-docker-20260902.json
+      - .github/workflows/arc-proof-identities.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reproduce-current-v2-identities:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+      - name: Install pinned Rust and SP1 toolchains
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.95.0 --profile minimal
+          sudo apt-get update
+          sudo apt-get install --yes protobuf-compiler
+          curl --fail --location --proto '=https' --tlsv1.2 https://sp1up.succinct.xyz | bash
+          "$HOME/.sp1/bin/sp1up" --version 6.3.1
+          export PATH="$HOME/.sp1/bin:$PATH"
+          cargo prove --version | grep -F 'cargo-prove sp1'
+      - name: Build both guests twice from clean source trees
+        env:
+          EXPECTED: docs/evidence/arc-mvp-20260828/program-info.current-v2-docker-20260902.json
+          SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.sp1/bin:$PATH"
+          root="$RUNNER_TEMP/arc-proof-identities"
+          mkdir -p "$root/src-a" "$root/src-b" \
+            "$root/out-a/ingress" "$root/out-a/egress" \
+            "$root/out-b/ingress" "$root/out-b/egress" \
+            "$root/report"
+          git archive "$SOURCE_COMMIT" | tar -x -C "$root/src-a"
+          git archive "$SOURCE_COMMIT" | tar -x -C "$root/src-b"
+
+          build_pair() {
+            local source="$1"
+            local output="$2"
+            (
+              cd "$source/programs/pfusdc-arc-ingress"
+              cargo prove build --docker --tag v6.3.1 --locked \
+                --workspace-directory "$source" \
+                --output-directory "$output/ingress"
+            )
+            (
+              cd "$source/programs/pfusdc-egress"
+              cargo prove build --docker --tag v6.3.1 --locked \
+                --workspace-directory "$source" \
+                --output-directory "$output/egress"
+            )
+          }
+          build_pair "$root/src-a" "$root/out-a"
+          build_pair "$root/src-b" "$root/out-b"
+
+          ingress_a="$root/out-a/ingress/pfusdc-arc-ingress-program"
+          ingress_b="$root/out-b/ingress/pfusdc-arc-ingress-program"
+          egress_a="$root/out-a/egress/pfusdc-egress-program"
+          egress_b="$root/out-b/egress/pfusdc-egress-program"
+          test -s "$ingress_a" && test -s "$ingress_b"
+          test -s "$egress_a" && test -s "$egress_b"
+          ingress_sha="$(sha256sum "$ingress_a" | cut -d' ' -f1)"
+          ingress_b_sha="$(sha256sum "$ingress_b" | cut -d' ' -f1)"
+          egress_sha="$(sha256sum "$egress_a" | cut -d' ' -f1)"
+          egress_b_sha="$(sha256sum "$egress_b" | cut -d' ' -f1)"
+          printf 'arc-ingress build-a=%s build-b=%s\n' "$ingress_sha" "$ingress_b_sha"
+          printf 'egress build-a=%s build-b=%s\n' "$egress_sha" "$egress_b_sha"
+          test "$ingress_sha" = "$ingress_b_sha"
+          test "$egress_sha" = "$egress_b_sha"
+          cmp "$ingress_a" "$ingress_b"
+          cmp "$egress_a" "$egress_b"
+
+          expected_ingress_sha="$(jq -r .arc_ingress.elf_sha256 "$EXPECTED")"
+          expected_egress_sha="$(jq -r .egress.elf_sha256 "$EXPECTED")"
+          printf 'arc-ingress rebuilt=%s expected=%s\n' "$ingress_sha" "$expected_ingress_sha"
+          printf 'egress rebuilt=%s expected=%s\n' "$egress_sha" "$expected_egress_sha"
+
+          cp "$ingress_a" "$root/report/pfusdc-arc-ingress-program"
+          cp "$egress_a" "$root/report/pfusdc-egress-program"
+          cp "$ingress_a" "$root/src-a/programs/pfusdc-arc-ingress/elf/pfusdc-arc-ingress-program"
+          cp "$egress_a" "$root/src-a/programs/pfusdc-egress/elf/pfusdc-egress-program"
+          cargo run --locked --release --no-default-features \
+            --manifest-path "$root/src-a/tools/pfusdc-tier4-prover/Cargo.toml" -- \
+            program-info --output "$root/report/program-info.json"
+          jq -e --slurpfile expected "$EXPECTED" '
+            .arc_ingress == $expected[0].arc_ingress and
+            .egress == $expected[0].egress and
+            .sp1_sdk_version == "6.3.1"
+          ' "$root/report/program-info.json"
+
+          docker_image="$(docker image inspect ghcr.io/succinctlabs/sp1:v6.3.1 \
+            --format '{{index .RepoDigests 0}}')"
+          rust_version="$(rustc +1.95.0 --version)"
+          cargo_prove_version="$(cargo prove --version)"
+          jq -n \
+            --arg source_commit "$SOURCE_COMMIT" \
+            --arg ingress_sha256 "$ingress_sha" \
+            --arg egress_sha256 "$egress_sha" \
+            --arg ingress_lock_sha256 "$(sha256sum "$root/src-a/programs/pfusdc-arc-ingress/Cargo.lock" | cut -d' ' -f1)" \
+            --arg egress_lock_sha256 "$(sha256sum "$root/src-a/programs/pfusdc-egress/Cargo.lock" | cut -d' ' -f1)" \
+            --arg docker_image "$docker_image" \
+            --arg rust_version "$rust_version" \
+            --arg cargo_prove_version "$cargo_prove_version" \
+            '{
+              schema:"postfiat.pfusdc.arc_proof_identity_reproduction.v1",
+              source_commit:$source_commit,
+              build_count_per_guest:2,
+              clean_source_trees:2,
+              byte_exact_replay:true,
+              arc_ingress_elf_sha256:$ingress_sha256,
+              egress_elf_sha256:$egress_sha256,
+              arc_ingress_lock_sha256:$ingress_lock_sha256,
+              egress_lock_sha256:$egress_lock_sha256,
+              docker_image:$docker_image,
+              rust_version:$rust_version,
+              cargo_prove_version:$cargo_prove_version
+            }' > "$root/report/reproduction.json"
+          sha256sum "$root/report/program-info.json" "$root/report/reproduction.json" \
+            > "$root/report/SHA256SUMS"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: arc-current-v2-proof-identities
+          path: ${{ runner.temp }}/arc-proof-identities/report
+          if-no-files-found: error
+          retention-days: 30

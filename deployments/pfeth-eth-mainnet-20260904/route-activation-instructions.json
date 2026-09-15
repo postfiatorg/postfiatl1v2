@@ -1,0 +1,39 @@
+{
+  "important": "Use vault-bridge-route-profile-governance, not bridge_batch_domain. The latter creates a generic BridgeDomain and does not activate the governed proof route.",
+  "profile_file": "governance-route-profile.json",
+  "schema": "postfiat.pfeth.vault_bridge_route_activation_instructions.v1",
+  "signed_assembly_command": [
+    "postfiat-node",
+    "vault-bridge-route-profile-governance-assemble",
+    "--data-dir",
+    "REPLACE_PROPOSER_DATA_DIR",
+    "--profile-file",
+    "governance-route-profile.json",
+    "--signed-amendment-file",
+    "REPLACE_SIGNED_AMENDMENT.json",
+    "--proposal-slot",
+    "REPLACE_PROPOSAL_SLOT",
+    "--batch-file",
+    "route-governance-batch.json"
+  ],
+  "status": "PENDING_VALIDATOR_GOVERNANCE",
+  "submission_gate": "Submit only after contract deployment readback, fresh PFTL tip/committee verification, and validator authorization. Require an accepted governance receipt and active vault_bridge_route readback before issuing pfETH.",
+  "unsigned_controlled_testnet_command": [
+    "postfiat-node",
+    "vault-bridge-route-profile-governance",
+    "--data-dir",
+    "REPLACE_PROPOSER_DATA_DIR",
+    "--validators",
+    "REPLACE_VALIDATOR_CSV",
+    "--support",
+    "REPLACE_SUPPORT_CSV",
+    "--veto-until-height",
+    "0",
+    "--profile-file",
+    "governance-route-profile.json",
+    "--amendment-file",
+    "route-amendment.json",
+    "--batch-file",
+    "route-governance-batch.json"
+  ]
+}

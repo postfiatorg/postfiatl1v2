@@ -1305,6 +1305,7 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
             fast_ingress_verifier,
         })?;
     let mut advanced_finality = None;
+    let mut advanced_arc_finality = None;
     let mut advanced_campaign = None;
     let mut source_nullifier = String::new();
     if let Some(public_values) = proof_public_values {
@@ -1400,6 +1401,23 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
                 advanced_campaign = Some(campaign);
                 advanced_finality = Some(state);
             }
+            VerifiedIngressPublicValues::Arc(values) => {
+                let mut state = ledger
+                    .arc_finality_states
+                    .iter()
+                    .find(|state| state.route_profile_hash == operation.policy_hash)
+                    .ok_or_else(|| {
+                        (
+                            "pfusdc_arc_finality_state_missing",
+                            "proof-native pfUSDC Arc ingress requires a governance-pinned Arc finality state".to_string(),
+                        )
+                    })?
+                    .clone();
+                state
+                    .verify_and_advance(&values)
+                    .map_err(|error| ("pfusdc_arc_finality_state_rejected", error))?;
+                advanced_arc_finality = Some(state);
+            }
             VerifiedIngressPublicValues::Ethereum { nullifier } => {
                 source_nullifier = nullifier;
             }
@@ -1437,6 +1455,17 @@ fn apply_vault_bridge_deposit_propose_with_genesis(
                 (
                     "pfusdc_finality_state_missing",
                     "proof-native finality state disappeared during commit".to_string(),
+                )
+            })?;
+        *current = state;
+    }
+    if let Some(state) = advanced_arc_finality {
+        let current = ledger
+            .arc_finality_state_mut(&state.route_profile_hash, state.route_epoch)
+            .ok_or_else(|| {
+                (
+                    "pfusdc_arc_finality_state_missing",
+                    "proof-native Arc finality state disappeared during commit".to_string(),
                 )
             })?;
         *current = state;
@@ -2126,7 +2155,8 @@ fn apply_vault_bridge_deposit_finalize_with_compatibility(
         }
         NAV_PROFILE_VERIFIER_SP1_GROTH16
         | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
-        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 => {}
+        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+        | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1 => {}
         _ => {
             return Err((
                 "unsupported_vault_bridge_deposit_verifier",
@@ -2490,16 +2520,17 @@ pub(crate) fn apply_vault_bridge_deposit_claim_with_orchard(
         == SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1
         && supply_after_claim > nav_asset.circulating_supply
     {
-        let route_id = match record.evidence.source_chain_id {
-            ETHEREUM_MAINNET_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1,
-            ETHEREUM_SEPOLIA_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1,
-            _ => {
-                return Err((
-                    "ethereum_ingress_source_chain_unsupported",
-                    "Ethereum cap growth uses an unregistered source chain".to_string(),
-                ));
-            }
-        };
+        let route_id = vault_bridge_route_id_for_source(
+            &record.source_proof_kind,
+            record.evidence.source_chain_id,
+            &record.evidence.token_address,
+        )
+        .ok_or_else(|| {
+            (
+                "ethereum_ingress_source_route_unsupported",
+                "Ethereum cap growth uses an unregistered source chain/token route".to_string(),
+            )
+        })?;
         let ethereum_backing = ledger
             .vault_bridge_route_backing(&operation.asset_id)
             .map_err(|error| ("bad_route_backing", error))?
@@ -4528,10 +4559,12 @@ fn apply_pftl_uniswap_order_reserve(
     // The signed maximum is held immediately. This makes reservations
     // sybil-resistant and guarantees the later subscription can settle
     // without an operator or a second value authorization.
+    let source_route = ledger.pftl_uniswap_routes[route_index].clone();
+    let funding_asset = pftl_source_reserve(ledger, &source_route, operation)?;
     debit_issued_asset_balance(
         ledger,
         &operation.subscriber,
-        &next_route.settlement_asset_id,
+        &funding_asset,
         operation.max_settlement_value_atoms,
         "PFTL-Uniswap order reservation escrow",
     )?;
@@ -4632,10 +4665,12 @@ fn apply_pftl_uniswap_order_release(
             ));
         };
     if let Some(refund_atoms) = escrow_refund {
+        let source_route = ledger.pftl_uniswap_routes[route_index].clone();
+        let funding_asset = pftl_source_release(ledger, &source_route, &operation.reservation_id, refund_atoms)?;
         credit_issued_asset_balance_from_custody(
             ledger,
             &owner,
-            &next_route.settlement_asset_id,
+            &funding_asset,
             refund_atoms,
             "PFTL-Uniswap released reservation refund",
         )?;
@@ -4778,11 +4813,12 @@ fn apply_pftl_uniswap_primary_subscribe_v2(
                 "reservation escrow is below settlement due".to_string(),
             )
         })?;
+    let funding_asset = pftl_source_subscription(ledger, &route, &operation.reservation_id, base_value, spread)?;
     if reservation_refund != 0 {
         credit_issued_asset_balance_from_custody(
             ledger,
             &operation.subscriber,
-            &operation.settlement_asset_id,
+            &funding_asset,
             reservation_refund,
             "PFTL-Uniswap subscription reservation refund",
         )?;
@@ -5191,7 +5227,7 @@ pub fn apply_asset_orchard_private_primary_redeem_route_transition(
         postfiat_types::PFTL_UNISWAP_BPS_DENOMINATOR,
     )?;
     if operation.settlement_value_atoms != settlement_output
-        || route.settlement_reserve_atoms < base_value
+        || pftl_legacy_principal(ledger, &route)? < base_value
     {
         return Err((
             "pftl_uniswap_private_redemption_unavailable",
@@ -5385,6 +5421,7 @@ fn apply_pftl_uniswap_primary_redeem(
             "redemption output exceeds base NAV".to_string(),
         )
     })?;
+    let payout_asset = pftl_source_redeem(ledger, &route, operation.settlement_source_asset_id.as_deref(), base_value, spread)?;
     debit_issued_asset_balance(
         ledger,
         &operation.owner,
@@ -5395,7 +5432,7 @@ fn apply_pftl_uniswap_primary_redeem(
     credit_issued_asset_balance_from_custody(
         ledger,
         &operation.settlement_recipient,
-        &route.settlement_asset_id,
+        &payout_asset,
         settlement_output,
         "PFTL-Uniswap primary redemption settlement credit",
     )?;
@@ -5567,6 +5604,7 @@ fn apply_pftl_uniswap_route_epoch_advance(
     next_route
         .validate()
         .map_err(|error| ("bad_pftl_uniswap_route", error))?;
+    pftl_source_govern(ledger, &next_route, operation.settlement_source_asset_ids.as_ref())?;
     let state_after_hash = pftl_uniswap_route_state_hash(&next_route);
     ledger.pftl_uniswap_routes[route_index] = next_route;
     append_pftl_uniswap_consensus_receipt(
@@ -7387,6 +7425,7 @@ fn vault_bridge_source_proof_is_consensus_verified(source_proof_kind: &str) -> b
     matches!(
         source_proof_kind,
         SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
+            | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
     )
 }
 
@@ -7409,6 +7448,7 @@ enum VerifiedIngressPublicValues {
     Confirmed(postfiat_types::PfUsdcIngressPublicValuesV3),
     Bonded(postfiat_types::PfUsdcBondedIngressPublicValuesV1),
     Ethereum { nullifier: String },
+    Arc(postfiat_types::PfUsdcArcIngressPublicValuesV1),
 }
 
 fn ensure_vault_bridge_deposit_source_proof(
@@ -7660,12 +7700,81 @@ fn ensure_vault_bridge_deposit_source_proof(
             )?;
             Ok(Some(VerifiedIngressPublicValues::Confirmed(public_values)))
         }
+        NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1 => {
+            if source_proof_kind != NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
+                || source_proof_hash.is_empty()
+                || source_public_values_hash.is_empty()
+            {
+                return Err((
+                    "missing_vault_bridge_deposit_source_proof",
+                    "proof-native Arc vault deposit requires its dedicated proof kind and proof commitments"
+                        .to_string(),
+                ));
+            }
+            let Some(_genesis) = genesis else {
+                return Ok(None);
+            };
+            if postfiat_types::pfusdc_ingress_proof_hash_v1(source_proof_bytes)
+                != source_proof_hash
+            {
+                return Err((
+                    "vault_bridge_deposit_source_proof_hash_mismatch",
+                    "source_proof_hash does not commit the supplied Arc proof bytes".to_string(),
+                ));
+            }
+            if postfiat_types::pfusdc_ingress_public_values_hash_v1(source_public_values)
+                != source_public_values_hash
+            {
+                return Err((
+                    "vault_bridge_deposit_source_public_values_hash_mismatch",
+                    "source_public_values_hash does not commit the supplied Arc public values"
+                        .to_string(),
+                ));
+            }
+            verify_bounded_sp1_groth16(
+                profile,
+                NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1,
+                source_proof_bytes,
+                source_public_values,
+            )
+            .map_err(|error| (error.code(), error.message()))?;
+            let public_values =
+                postfiat_types::PfUsdcArcIngressPublicValuesV1::from_canonical_bytes(
+                    source_public_values,
+                )
+                .map_err(|error| ("pfusdc_arc_ingress_public_values_invalid", error))?;
+            ensure_pfusdc_arc_ingress_public_values_match(evidence, &public_values)?;
+            Ok(Some(VerifiedIngressPublicValues::Arc(public_values)))
+        }
         _ => Err((
             "unsupported_vault_bridge_deposit_verifier",
             "vault bridge asset bridge deposits require a multi-fetch-quorum or sp1-groth16 profile"
                 .to_string(),
         )),
     }
+}
+
+fn ensure_pfusdc_arc_ingress_public_values_match(
+    evidence: &VaultBridgeDepositEvidence,
+    values: &postfiat_types::PfUsdcArcIngressPublicValuesV1,
+) -> Result<(), (&'static str, String)> {
+    let mismatch = values.arc_chain_id != evidence.source_chain_id
+        || values.vault_address != evidence.vault_address
+        || values.token_address != evidence.token_address
+        || values.route_id != evidence.route_binding
+        || values.deposit_id != evidence.deposit_id
+        || values.amount_atoms != evidence.amount_atoms
+        || values.pftl_recipient_hash != evidence.pftl_recipient_hash
+        || values.deposit_nonce != evidence.nonce
+        || values.arc_block_hash != evidence.block_hash;
+    if mismatch {
+        return Err((
+            "pfusdc_arc_ingress_public_values_mismatch",
+            "proof-verified Arc ingress public values do not exactly match the governed route and deposit evidence"
+                .to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn ensure_ethereum_ingress_public_values_match(
@@ -7679,16 +7788,17 @@ fn ensure_ethereum_ingress_public_values_match(
         "{VAULT_BRIDGE_PROFILE_SOURCE_CLASS_PREFIX}erc20_bridge_vault:{}:{}:{}",
         evidence.source_chain_id, evidence.vault_address, evidence.token_address
     );
-    let expected_route_id = match evidence.source_chain_id {
-        ETHEREUM_MAINNET_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1,
-        ETHEREUM_SEPOLIA_CHAIN_ID => VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1,
-        _ => {
-            return Err((
-                "ethereum_ingress_source_chain_unsupported",
-                "Ethereum ingress proof uses an unregistered source chain".to_string(),
-            ));
-        }
-    };
+    let expected_route_id = vault_bridge_route_id_for_source(
+        SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1,
+        evidence.source_chain_id,
+        &evidence.token_address,
+    )
+    .ok_or_else(|| {
+        (
+            "ethereum_ingress_source_route_unsupported",
+            "Ethereum ingress proof uses an unregistered source chain/token route".to_string(),
+        )
+    })?;
     let mismatch = profile.source_class != expected_source_class
         || values.route_id != expected_route_id
         || profile.valuation_policy_hash != values.manifest_hash
@@ -7871,6 +7981,7 @@ fn validate_vault_bridge_reserve_packet_fields(
     nav_asset: &NavTrackedAsset,
     profile: &NavProofProfile,
     operation: &NavReserveSubmitOperation,
+    compatibility: AssetExecutionCompatibility,
 ) -> Result<(), (&'static str, String)> {
     ensure_vault_bridge_asset_policy(ledger, nav_asset, &operation.submitter)?;
     if operation.nav_per_unit != VAULT_BRIDGE_UNIT {
@@ -7911,7 +8022,13 @@ fn validate_vault_bridge_reserve_packet_fields(
                 .to_string(),
         ));
     }
-    let current_supply = issued_asset_supply(ledger, &operation.asset_id)?;
+    // New packets count the base asset plus its source-specific series.
+    // Archive replay can select the old calculation only for pinned packets.
+    let current_supply = if compatibility.allow_legacy_base_only_vault_reserve_supply {
+        issued_asset_supply(ledger, &operation.asset_id)?
+    } else {
+        issued_asset_family_supply(ledger, &operation.asset_id)?
+    };
     let maximum_proof_backed_supply = current_supply
         .checked_add(finalized_unclaimed_sp1_backing)
         .ok_or_else(|| {

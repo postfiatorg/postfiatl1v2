@@ -1,0 +1,23 @@
+{
+  "old_release": "ef2dec31",
+  "old_binary_sha256": "ee2198c534e2cbb1ecd0877c50479d8394fffee0ffcfcec82e2a3b9b1a25ff17",
+  "old_replay_passes_through_height": 962,
+  "next_failure": "error: snapshot-import failed: block 963 native supply conservation failed: live before 999976784, receipt fee burn 22, expected live after 999976762, observed 999976761",
+  "root_causes": [
+    "Fleet commit 1bcd0f0d changed reserve supply from base asset to whole source-series family without preserving historical execution for packets 962 and 967.",
+    "native_pft_live_total omitted locked NAV attestor bonds; block 963 locks 1 native atom. The same inventory also omitted outstanding NAV and vault deposit challenge bonds."
+  ],
+  "repair_scope": "Exact archived packet compatibility; account outstanding bonded custody; preserve all certificates, receipts, state roots and supply enforcement.",
+  "worktree": "/home/postfiat/repos/postfiatl1v2-pfeth-replay-fix-20260905",
+  "base_commit": "707e006fe2460048b1c7df0d4dc0a04d487f8542",
+  "verification": "Passed: full local native snapshot replay, full deployed validator-0 audit of 972 blocks, six identical checkpoints, twelve exact running binary hashes, all six served RPC checkpoints, wallet-configured six-node status, four Rust regressions, two Python native conformance tests.",
+  "deployment": "Complete: six validators, twelve services active; each validator has a full same-host root-only backup.",
+  "binary_sha256": "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2",
+  "historical_receipts_modified": false,
+  "historical_state_modified": false,
+  "funds_moved": false,
+  "incident_resolved": true,
+  "wallet_runtime_paths_updated": true,
+  "source_series_index_corrected": true,
+  "locked_spec_unchanged": true
+}

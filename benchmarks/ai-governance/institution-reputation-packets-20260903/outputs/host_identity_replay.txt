@@ -1,0 +1,2 @@
+NVIDIA H200, 580.159.03, GPU-a3c98cc1-1abf-d156-04a1-6d93aca5c64a
+Python 3.12.3

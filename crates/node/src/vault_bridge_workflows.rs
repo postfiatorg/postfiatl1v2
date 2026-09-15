@@ -733,6 +733,52 @@ pub fn vault_bridge_deposit_plan(
             ));
         }
         (computed_proof_hash, computed_public_values_hash)
+    } else if source_proof_kind == NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1 {
+        if source_proof_bytes.is_empty() || source_public_values.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "proof-native Arc route requires --source-proof-file and --source-public-values-file",
+            ));
+        }
+        let computed_proof_hash = postfiat_types::pfusdc_ingress_proof_hash_v1(&source_proof_bytes);
+        let computed_public_values_hash =
+            postfiat_types::pfusdc_ingress_public_values_hash_v1(&source_public_values);
+        if !provided_source_proof_hash.is_empty()
+            && provided_source_proof_hash != computed_proof_hash
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "--source-proof-hash does not match --source-proof-file",
+            ));
+        }
+        if !provided_source_public_values_hash.is_empty()
+            && provided_source_public_values_hash != computed_public_values_hash
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "--source-public-values-hash does not match --source-public-values-file",
+            ));
+        }
+        let public_values = postfiat_types::PfUsdcArcIngressPublicValuesV1::from_canonical_bytes(
+            &source_public_values,
+        )
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
+        if public_values.arc_chain_id != evidence.source_chain_id
+            || public_values.vault_address != evidence.vault_address
+            || public_values.token_address != evidence.token_address
+            || public_values.route_id != evidence.route_binding
+            || public_values.deposit_id != evidence.deposit_id
+            || public_values.amount_atoms != evidence.amount_atoms
+            || public_values.pftl_recipient_hash != evidence.pftl_recipient_hash
+            || public_values.deposit_nonce != evidence.nonce
+            || public_values.arc_block_hash != evidence.block_hash
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "proof-native Arc public values do not match the canonical vault deposit receipt",
+            ));
+        }
+        (computed_proof_hash, computed_public_values_hash)
     } else {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -1460,14 +1506,51 @@ pub fn vault_bridge_burn_to_redeem_bundle(
         ));
     }
 
+    let bucket = vault_bridge_select_burn_bucket(
+        &ledger,
+        &options.asset_id,
+        options.bucket_id.as_deref(),
+        options.amount_atoms,
+    )?;
+    let genesis = store.read_genesis()?;
+    let governance = store.read_governance()?;
+    let next_height = store
+        .read_chain_tip()?
+        .height
+        .checked_add(1)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "chain height overflow"))?;
+    let compatibility =
+        asset_execution_compatibility_for_genesis_and_governance(&genesis, &governance);
+    let movement_asset = if compatibility.pfusdc_source_series_active(next_height) {
+        let mut series = ledger.asset_definitions.iter().filter(|asset| {
+            asset.asset_family_id == options.asset_id
+                && asset.source_bucket_id == bucket.bucket_id
+                && asset.asset_id == asset.source_series_id
+        });
+        let selected = series.next().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "source-series asset missing for burn bucket",
+            )
+        })?;
+        if series.next().is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "duplicate source-series assets for burn bucket",
+            ));
+        }
+        &selected.asset_id
+    } else {
+        &options.asset_id
+    };
     let owner_line = ledger
-        .trustline_for_account_asset(&options.owner, &options.asset_id)
+        .trustline_for_account_asset(&options.owner, movement_asset)
         .ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
                 format!(
-                    "owner `{}` has no trustline for vault bridge asset `{}`",
-                    options.owner, options.asset_id
+                    "owner `{}` has no trustline for burn movement asset `{movement_asset}`",
+                    options.owner
                 ),
             )
         })?;
@@ -1475,18 +1558,12 @@ pub fn vault_bridge_burn_to_redeem_bundle(
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             format!(
-                "owner balance {} is below burn amount {}",
+                "owner source balance {} is below burn amount {}",
                 owner_line.balance, options.amount_atoms
             ),
         ));
     }
 
-    let bucket = vault_bridge_select_burn_bucket(
-        &ledger,
-        &options.asset_id,
-        options.bucket_id.as_deref(),
-        options.amount_atoms,
-    )?;
     let issuer = options
         .issuer
         .clone()

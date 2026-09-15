@@ -552,6 +552,7 @@ impl NavProofProfile {
                 | NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
                 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
                 | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+                | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
         )
             && self.valuation_policy_hash.is_empty()
         {
@@ -571,6 +572,7 @@ impl NavProofProfile {
                     | NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
                     | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
                     | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+                    | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
             ) {
                 NAV_SP1_POLICY_HASH_HEX_LEN
             } else {
@@ -872,6 +874,7 @@ fn nav_proof_profile_id_with_route_policy(
             | NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+            | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
     ) && valuation_policy_hash.is_empty()
     {
         return Err("nav_profile.valuation_policy_hash is required for sp1-groth16".to_string());
@@ -904,6 +907,7 @@ fn validate_nav_profile_sp1_fields(
             | NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+            | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
     ) {
         if sp1_program_vkey.is_empty() {
             return Err("nav_profile.sp1_program_vkey is required for sp1-groth16".to_string());
@@ -939,7 +943,8 @@ fn validate_nav_profile_verifier_kind(verifier_kind: &str) -> Result<(), String>
         | NAV_PROFILE_VERIFIER_SP1_GROTH16
         | NAV_PROFILE_VERIFIER_SP1_NAV_RESERVE_V1
         | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
-        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 => Ok(()),
+        | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+        | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1 => Ok(()),
         _ => Err(format!(
             "nav_profile.verifier_kind is unsupported: {verifier_kind}"
         )),
@@ -1368,6 +1373,7 @@ pub fn validate_vault_bridge_deposit_source_proof_fields(
         NAV_PROFILE_VERIFIER_SP1_GROTH16
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+            | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
             | SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1
     ) {
         return Err(format!(
@@ -2416,6 +2422,20 @@ impl PftlUniswapPrimaryMarketPolicyV2 {
         }
         Ok(())
     }
+}
+
+/// Source-specific settlement custody. Kept outside the route witness so the
+/// existing receipt proof format remains stable; this state is committed by
+/// the full replicated ledger root and authorized by route-epoch governance.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PftlUniswapSourceCustody {
+    pub route_id: String,
+    pub asset_id: String,
+    pub enabled_for_issue: bool,
+    pub principal_atoms: u64,
+    pub spread_atoms: u64,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub reservation_escrows: BTreeMap<String, u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -3669,6 +3689,8 @@ pub struct LedgerState {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pftl_uniswap_routes: Vec<PftlUniswapConsensusRouteState>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pftl_uniswap_source_custody: Vec<PftlUniswapSourceCustody>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pftl_uniswap_receipts: Vec<PftlUniswapConsensusReceipt>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub owned_objects: Vec<OwnedObject>,
@@ -3703,6 +3725,8 @@ pub struct LedgerState {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ethereum_arbitrum_finality_states: Vec<EthereumArbitrumFinalityStateV2>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub arc_finality_states: Vec<PfUsdcArcFinalityStateV1>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fast_ingress_campaigns: Vec<FastIngressCampaignStateV1>,
 }
 
@@ -3718,6 +3742,7 @@ impl LedgerState {
             let Some(route_id) = vault_bridge_route_id_for_source(
                 &deposit.source_proof_kind,
                 deposit.evidence.source_chain_id,
+                &deposit.evidence.token_address,
             ) else {
                 continue;
             };
@@ -3754,6 +3779,7 @@ impl LedgerState {
                 vault_bridge_route_id_for_source(
                     &deposit.source_proof_kind,
                     deposit.evidence.source_chain_id,
+                    &deposit.evidence.token_address,
                 )
             });
             if let Some(route_id) = route_id {
@@ -3795,6 +3821,7 @@ impl LedgerState {
             vault_bridge_redemptions: Vec::new(),
             vault_bridge_deposits: Vec::new(),
             pftl_uniswap_routes: Vec::new(),
+            pftl_uniswap_source_custody: Vec::new(),
             pftl_uniswap_receipts: Vec::new(),
             owned_objects: Vec::new(),
             fastpay_recovery_policy: None,
@@ -3812,6 +3839,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -3845,6 +3873,7 @@ impl LedgerState {
             vault_bridge_redemptions: Vec::new(),
             vault_bridge_deposits: Vec::new(),
             pftl_uniswap_routes: Vec::new(),
+            pftl_uniswap_source_custody: Vec::new(),
             pftl_uniswap_receipts: Vec::new(),
             owned_objects: Vec::new(),
             fastpay_recovery_policy: None,
@@ -3862,6 +3891,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -3896,6 +3926,7 @@ impl LedgerState {
             vault_bridge_redemptions: Vec::new(),
             vault_bridge_deposits: Vec::new(),
             pftl_uniswap_routes: Vec::new(),
+            pftl_uniswap_source_custody: Vec::new(),
             pftl_uniswap_receipts: Vec::new(),
             owned_objects: Vec::new(),
             fastpay_recovery_policy: None,
@@ -3913,6 +3944,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -3942,6 +3974,7 @@ impl LedgerState {
             vault_bridge_redemptions: Vec::new(),
             vault_bridge_deposits: Vec::new(),
             pftl_uniswap_routes: Vec::new(),
+            pftl_uniswap_source_custody: Vec::new(),
             pftl_uniswap_receipts: Vec::new(),
             owned_objects: Vec::new(),
             fastpay_recovery_policy: None,
@@ -3959,6 +3992,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -3993,6 +4027,7 @@ impl LedgerState {
             vault_bridge_redemptions: Vec::new(),
             vault_bridge_deposits: Vec::new(),
             pftl_uniswap_routes: Vec::new(),
+            pftl_uniswap_source_custody: Vec::new(),
             pftl_uniswap_receipts: Vec::new(),
             owned_objects: Vec::new(),
             fastpay_recovery_policy: None,
@@ -4010,6 +4045,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -4039,6 +4075,7 @@ impl LedgerState {
             vault_bridge_redemptions: Vec::new(),
             vault_bridge_deposits: Vec::new(),
             pftl_uniswap_routes: Vec::new(),
+            pftl_uniswap_source_custody: Vec::new(),
             pftl_uniswap_receipts: Vec::new(),
             owned_objects: Vec::new(),
             fastpay_recovery_policy: None,
@@ -4056,6 +4093,7 @@ impl LedgerState {
             fast_lane_checkpoint_anchors: Vec::new(),
             fastswap_activation_height: None,
             ethereum_arbitrum_finality_states: Vec::new(),
+            arc_finality_states: Vec::new(),
             fast_ingress_campaigns: Vec::new(),
         }
     }
@@ -4181,6 +4219,26 @@ impl LedgerState {
             .find(|state| {
                 state.route_profile_hash == route_profile_hash && state.route_epoch == route_epoch
             })
+    }
+
+    pub fn arc_finality_state(
+        &self,
+        route_profile_hash: &str,
+        route_epoch: u64,
+    ) -> Option<&PfUsdcArcFinalityStateV1> {
+        self.arc_finality_states.iter().find(|state| {
+            state.route_profile_hash == route_profile_hash && state.route_epoch == route_epoch
+        })
+    }
+
+    pub fn arc_finality_state_mut(
+        &mut self,
+        route_profile_hash: &str,
+        route_epoch: u64,
+    ) -> Option<&mut PfUsdcArcFinalityStateV1> {
+        self.arc_finality_states.iter_mut().find(|state| {
+            state.route_profile_hash == route_profile_hash && state.route_epoch == route_epoch
+        })
     }
 
     pub fn fast_ingress_campaign(
@@ -4559,6 +4617,7 @@ impl LedgerState {
             .map(|nav_asset| (nav_asset.asset_id.clone(), nav_asset))
             .collect::<BTreeMap<_, _>>();
         let mut pftl_uniswap_route_count_by_native_issuer = BTreeMap::new();
+        self.validate_pftl_source_custody()?;
         let mut pftl_uniswap_route_ids = BTreeSet::new();
         for route in &self.pftl_uniswap_routes {
             route.validate()?;
@@ -4698,6 +4757,12 @@ impl LedgerState {
             if !finality_route_epochs.insert((state.route_profile_hash.clone(), state.route_epoch)) {
                 return Err("duplicate pfUSDC Ethereum/Arbitrum finality-state route epoch"
                     .to_string());
+            }
+        }
+        for state in &self.arc_finality_states {
+            state.validate()?;
+            if !finality_route_epochs.insert((state.route_profile_hash.clone(), state.route_epoch)) {
+                return Err("duplicate pfUSDC Arc finality-state route epoch".to_string());
             }
         }
         let mut fast_campaign_route_epochs = BTreeSet::new();
@@ -4840,24 +4905,72 @@ impl LedgerState {
     }
 }
 
-fn vault_bridge_route_id_for_source(
+pub fn vault_bridge_route_id_for_source(
     source_proof_kind: &str,
     source_chain_id: u64,
+    source_token_address: &str,
 ) -> Option<&'static str> {
-    match (source_proof_kind, source_chain_id) {
-        (SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1, ETHEREUM_MAINNET_CHAIN_ID) => {
-            Some(VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1)
-        }
-        (SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1, ETHEREUM_SEPOLIA_CHAIN_ID) => {
-            Some(VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1)
-        }
+    match (source_proof_kind, source_chain_id, source_token_address) {
+        (
+            SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1,
+            ETHEREUM_MAINNET_CHAIN_ID,
+            ETHEREUM_MAINNET_USDC_ADDRESS,
+        ) => Some(VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_USDC_V1),
+        (
+            SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1,
+            ETHEREUM_MAINNET_CHAIN_ID,
+            ETHEREUM_MAINNET_WETH9_ADDRESS,
+        ) => Some(VAULT_BRIDGE_ROUTE_ETHEREUM_MAINNET_WETH_V1),
+        (
+            SOURCE_PROOF_KIND_SP1_ETHEREUM_FINALITY_V1,
+            ETHEREUM_SEPOLIA_CHAIN_ID,
+            ETHEREUM_SEPOLIA_USDC_ADDRESS,
+        ) => Some(VAULT_BRIDGE_ROUTE_ETHEREUM_SEPOLIA_USDC_V1),
         (
             NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1,
             ARBITRUM_ONE_CHAIN_ID,
-        ) => {
-            Some(VAULT_BRIDGE_ROUTE_ARBITRUM_ONE_USDC_V1)
-        }
+            ARBITRUM_ONE_USDC_ADDRESS,
+        ) => Some(VAULT_BRIDGE_ROUTE_ARBITRUM_ONE_USDC_V1),
         _ => None,
+    }
+}
+
+impl LedgerState {
+    pub fn validate_pftl_source_custody(&self) -> Result<(), String> {
+        if self.pftl_uniswap_source_custody.len() > MAX_PFTL_UNISWAP_ROUTE_ENTRIES {
+            return Err("source settlement custody exceeds the bounded entry limit".to_string());
+        }
+        let mut keys = BTreeSet::new();
+        let mut reservations = BTreeSet::new();
+        let mut totals = BTreeMap::<&str,(u64,u64)>::new();
+        for row in &self.pftl_uniswap_source_custody {
+            if !keys.insert((&row.route_id,&row.asset_id)) { return Err("duplicate source custody".to_string()); }
+            let route = self.pftl_uniswap_route(&row.route_id).ok_or("source custody route missing")?;
+            let v2 = route.v2.as_ref().ok_or("source custody requires v2 route")?;
+            let asset = self.asset_definition(&row.asset_id).ok_or("source custody asset missing")?;
+            if asset.asset_family_id != route.settlement_asset_id || asset.source_series_id != row.asset_id || asset.asset_id == route.settlement_asset_id || asset.precision != 6 {
+                return Err("source custody immutable family binding mismatch".to_string());
+            }
+            let bucket = self.vault_bridge_bucket_states.iter().find(|b| b.bucket_id == asset.source_bucket_id).ok_or("source custody bucket missing")?;
+            if bucket.asset_id != route.settlement_asset_id { return Err("source custody bucket family mismatch".to_string()); }
+            let sum = totals.entry(&row.route_id).or_default();
+            sum.0 = sum.0.checked_add(row.principal_atoms).ok_or("source principal overflow")?;
+            sum.1 = sum.1.checked_add(row.spread_atoms).ok_or("source spread overflow")?;
+            if row.reservation_escrows.len() > MAX_PFTL_UNISWAP_ROUTE_ENTRIES { return Err("too many source escrows".to_string()); }
+            for (id, amount) in &row.reservation_escrows {
+                let r = v2.active_reservations.get(id).ok_or("orphan source reservation")?;
+                if !reservations.insert((&row.route_id,id)) || *amount == 0 || *amount != r.max_settlement_value_atoms {
+                    return Err("source reservation amount or uniqueness mismatch".to_string());
+                }
+            }
+        }
+        for (route_id,(principal,spread)) in totals {
+            let r = self.pftl_uniswap_route(route_id).ok_or("source route missing")?;
+            if principal > r.settlement_reserve_atoms || spread > r.v2.as_ref().ok_or("source route must be v2")?.non_nav_spread_atoms {
+                return Err("source custody exceeds aggregate route principal or spread".to_string());
+            }
+        }
+        Ok(())
     }
 }

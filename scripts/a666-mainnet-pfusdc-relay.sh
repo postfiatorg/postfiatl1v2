@@ -15,6 +15,10 @@ resident_manifest=${A666_RESIDENT_ROUNDS_MANIFEST:-}
 relay_phase=${PFTL_RELAY_PHASE:-all}
 skip_finalize=${PFTL_SKIP_FINALIZE:-false}
 asset=02c46a36eb0da3516b4d8affea8f4028ad3f36825a3e8f0e009ea9dbbbcfb3c233f6830bd5221fe2717fb6a1a7005d7b
+route_epoch=${PFTL_ROUTE_EPOCH:-0}
+claim_asset=${PFTL_CLAIM_ASSET_ID:-$asset}
+[[ "$route_epoch" =~ ^[0-9]+$ ]]
+[[ "$claim_asset" =~ ^[0-9a-f]{96}$ ]]
 policy=${PFTL_POLICY_HASH:-5025bdfe92669e3d8f81ce7e739fd132063261b92ef7e7ee7db19b2762e88b736bd40cd4826375e041584533f4137158}
 vault=${PFTL_VAULT_ADDRESS:-0xaaa78fda7062efce769e95cd72fc55e507bc8183}
 issuer=pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8
@@ -214,6 +218,7 @@ if test "$relay_phase" != claim; then
     --token-address 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 \
     --asset-id '$asset' \
     --policy-hash '$policy' \
+    --route-epoch '$route_epoch' \
     --proposer '$issuer' \
     --finalizer '$issuer' \
     --claimer '$issuer' \
@@ -304,7 +309,7 @@ if test "$relay_phase" != propose; then
   '$node' account-assets \
     --data-dir /var/lib/postfiat/validator-2 \
     --account '$holder' \
-    --asset-id '$asset' > '$run/holder-after-claim.json'
+    --asset-id '$claim_asset' > '$run/holder-after-claim.json'
   jq -e --argjson expected '$expected_holder_atoms' \
     '.assets|any(.balance == \$expected)' '$run/holder-after-claim.json' >/dev/null"
 fi

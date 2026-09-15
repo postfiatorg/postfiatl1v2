@@ -84,6 +84,7 @@ contract ERC20BridgeVaultV2 {
     IERC20BridgeTokenV2 public immutable token;
     IArbSysPfUsdcV1 public immutable arbSys;
     address public immutable ingressAnchor;
+    bool public immutable directIngress;
     IPFTLFinalityVerifierV1 public finalityVerifier;
     bytes32 public immutable tokenRuntimeCodeHash;
     address public owner;
@@ -116,7 +117,6 @@ contract ERC20BridgeVaultV2 {
     ) {
         if (address(token_) == address(0)) revert ZeroAddress("token");
         if (address(finalityVerifier_) == address(0)) revert ZeroAddress("finality_verifier");
-        if (address(arbSys_) == address(0)) revert ZeroAddress("arb_sys");
         if (ingressAnchor_ == address(0)) revert ZeroAddress("ingress_anchor");
         if (initialOwner == address(0)) revert ZeroAddress("owner");
         if (tokenRuntimeCodeHash_ == bytes32(0) || address(token_).codehash != tokenRuntimeCodeHash_) {
@@ -125,6 +125,7 @@ contract ERC20BridgeVaultV2 {
         token = token_;
         arbSys = arbSys_;
         ingressAnchor = ingressAnchor_;
+        directIngress = address(arbSys_) == address(0);
         finalityVerifier = finalityVerifier_;
         tokenRuntimeCodeHash = tokenRuntimeCodeHash_;
         owner = initialOwner;
@@ -200,11 +201,16 @@ contract ERC20BridgeVaultV2 {
                 address(token)
             )
         );
-        uint256 outputIndex;
-        try arbSys.sendTxToL1(ingressAnchor, commitment) returns (uint256 index) {
-            outputIndex = index;
-        } catch {
-            revert IngressCommitmentFailed();
+        uint256 outputIndex = 0;
+        if (directIngress) {
+            (bool accepted,) = ingressAnchor.call(commitment);
+            if (!accepted) revert IngressCommitmentFailed();
+        } else {
+            try arbSys.sendTxToL1(ingressAnchor, commitment) returns (uint256 index) {
+                outputIndex = index;
+            } catch {
+                revert IngressCommitmentFailed();
+            }
         }
         emit Tier4IngressCommitment(depositId, outputIndex, ingressAnchor);
     }

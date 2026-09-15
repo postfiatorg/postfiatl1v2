@@ -1,0 +1,10 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (/home/postfiat/repos/postfiatl1v2-rpc-status-fix-20260906/target/debug/deps/postfiat_execution-8272e39e1fe1c085)
+
+running 3 tests
+test tests::pfeth_ethereum_ingress_selects_only_the_weth_route ... ok
+test tests::ethereum_ingress_consensus_binding_rejects_route_manifest_and_domain_mutations ... ok
+test tests::arc_ingress_real_groth16_fixture_verifies_and_rejects_mutations ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 189 filtered out; finished in 12.64s
+
