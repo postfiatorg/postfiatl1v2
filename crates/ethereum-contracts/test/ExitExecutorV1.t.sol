@@ -238,8 +238,8 @@ contract ExitExecutorV1Test {
 
     event DigestFixture(uint256 chainId, address impl, address eoa, bytes32 digest);
 
-    /// Emits a fixture the Python signer test (StakeHub
-    /// tests/test_shielded_exit.py) must reproduce byte-for-byte.
+    /// Emits a fixture the external Python signer regression
+    /// tests/test_shielded_exit.py must reproduce byte-for-byte.
     function test_digest_fixture() public {
         ExitExecutorV1.Call[] memory calls = new ExitExecutorV1.Call[](2);
         calls[0] = ExitExecutorV1.Call({to: address(0x1111), value: 1, data: hex"1234"});
