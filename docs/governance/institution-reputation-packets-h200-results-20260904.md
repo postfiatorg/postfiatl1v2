@@ -41,7 +41,7 @@ community operators as institutions.
 | Aggregate response SHA-256, all four runs | `9d6935e2c194441f7a09dc33324d276001ef7548dd6a371d7fd524a80ed4328f` |
 | Comparison SHA-256 | `95a97ade7965d793d9731952c4b02afeebcf05e32fa2643c064258bcb627a4ef` |
 | Identity corpus packet-set SHA-256 | `8051f392e60d84a687076dc241ddf722859db7c06718dd12139c3109548523df` |
-| Package | [`benchmarks/ai-governance/institution-reputation-packets-20260904/`](../../benchmarks/ai-governance/institution-reputation-packets-20260904/README.md) |
+| Package | [`benchmarks/ai-governance/institution-reputation-packets-20260904/`](https://github.com/postfiatorg/postfiatl1v2/blob/f2e749a16b07be446cb11da1e1f523eb9cdabca7/benchmarks/ai-governance/institution-reputation-packets-20260904/README.md) |
 
 ## Per-validator scores
 

@@ -13,4 +13,4 @@ Execute the already-qualified [September 9 release decision](../governance/signi
 - [ ] Verify the exact deployed binary and rehearse data-plus-binary rollback locally.
 - [ ] Publish the candidate and concise qualification results for deployment approval.
 
-Use the existing node CLI, [local service runner](../../deployments/signing-fix-qualification-20260909/run_local_service_gate.py), [safe rollout interface](../../scripts/postfiat-safe-rollout), and release decision page. Fleet access during qualification is read-only. No live deployment, restart, configuration change or chain transaction belongs to this task.
+Use the existing node CLI, [local service runner](https://github.com/postfiatorg/postfiatl1v2/blob/faff0e53533888bb229add117fcda3ed4094aed4/deployments/signing-fix-qualification-20260909/run_local_service_gate.py), [safe rollout interface](../../scripts/postfiat-safe-rollout), and release decision page. Fleet access during qualification is read-only. No live deployment, restart, configuration change or chain transaction belongs to this task.

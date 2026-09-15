@@ -22,4 +22,4 @@ The rollout uses the existing bounded devnet repair procedure from the V4 deploy
 
 The review's P2 findings remain open. This repair does not change Cobalt authority, Task Node admission policy, or storage retention.
 
-Deployment and final read-only checks: [receipt](../../deployments/rpc-status-cache-20260906/deploy-receipt.json) and [fleet observations](../../deployments/rpc-status-cache-20260906/fleet-after.json). All six checkpoints remained unchanged; all 18 status samples reported height 992 across cache expiration.
+Deployment and final read-only checks: [receipt](https://github.com/postfiatorg/postfiatl1v2/blob/f2e749a16b07be446cb11da1e1f523eb9cdabca7/deployments/rpc-status-cache-20260906/deploy-receipt.json) and [fleet observations](https://github.com/postfiatorg/postfiatl1v2/blob/f2e749a16b07be446cb11da1e1f523eb9cdabca7/deployments/rpc-status-cache-20260906/fleet-after.json). All six checkpoints remained unchanged; all 18 status samples reported height 992 across cache expiration.

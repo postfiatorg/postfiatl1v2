@@ -53,7 +53,7 @@ unrecognized entity. The foundation-run validators' packets say so themselves
 | Aggregate response SHA-256, all four runs | `3458f72dd4614e5e8e02c47f85f68d39ffeae1ff798e8d1c4eb0fceb6c9e4d20` |
 | Comparison SHA-256 | `4800d68dbe849969c98a7a4e22d0c6ff97b027c93d1b30f104ce4bf0a8f83c3d` |
 | Identity corpus packet-set SHA-256 | `b198e232baa644731b38e2f6db3989c798156700ebc67856a193b32bb941d4bd` |
-| Package | [`benchmarks/ai-governance/institution-reputation-packets-20260903/`](../../benchmarks/ai-governance/institution-reputation-packets-20260903/README.md) |
+| Package | [`benchmarks/ai-governance/institution-reputation-packets-20260903/`](https://github.com/postfiatorg/postfiatl1v2/blob/f2e749a16b07be446cb11da1e1f523eb9cdabca7/benchmarks/ai-governance/institution-reputation-packets-20260903/README.md) |
 
 Verify without paid calls or network access:
 

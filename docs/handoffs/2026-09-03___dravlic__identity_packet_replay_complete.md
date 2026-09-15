@@ -14,7 +14,7 @@ deterministic validator correlation was derived from the same packet bytes with 
 call. Everything is `SHADOW_ONLY`; nothing touches consensus.
 
 Package: `benchmarks/ai-governance/institution-reputation-packets-20260903/`
-([README](../../benchmarks/ai-governance/institution-reputation-packets-20260903/README.md)).
+([README](https://github.com/postfiatorg/postfiatl1v2/blob/f2e749a16b07be446cb11da1e1f523eb9cdabca7/benchmarks/ai-governance/institution-reputation-packets-20260903/README.md)).
 Results: [identity-packet H200 results](../governance/institution-reputation-packets-h200-results-20260903.md).
 
 ## What changed versus the name-only run

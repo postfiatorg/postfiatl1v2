@@ -404,7 +404,7 @@ The sections above are the overnight agent session; this section is the day sess
 - **P0-4 — Zellic review packet:**
   [`ebfcbdbb`](https://github.com/postfiatorg/postfiatl1v2/commit/ebfcbdbb41bda9b85e944bc603c84e0911428c23)
   classified all 101 grant-proposal-v3 claims in the
-  [packet](../business/zellic-review-packet-20260902.md), then
+  [packet](../business/arc-audit-scope-20260902.md), then
   [`9008e749`](https://github.com/postfiatorg/postfiatl1v2/commit/9008e7490bfca06c4961862dedde99cbaf0c6a27)
   upgraded it with execution: 24 VERIFIED IN REPO / 15 devnet-demonstrated /
   12 implemented-unverified / 31 planned / 19 aspirational. One verification
@@ -446,7 +446,7 @@ this branch only, and `main` was untouched today.
 ### References
 
 - [Registry proof-source options](../specs/arc-registry-proof-source-options-20260902.md)
-- [Zellic review packet](../business/zellic-review-packet-20260902.md)
+- [Zellic review packet](../business/arc-audit-scope-20260902.md)
 - [PR #37](https://github.com/postfiatorg/postfiatl1v2/pull/37)
 - [Current-devnet/Zellic qualification specification](../specs/pfusdc-arc-current-devnet-zellic-readiness-spec-20260902.md)
 - [Pending operator decisions on `main`](https://github.com/postfiatorg/postfiatl1v2/blob/main/docs/governance/pending-operator-decisions.md)
