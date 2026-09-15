@@ -2,7 +2,7 @@
 
 This is the progress record for the [burn 4 campaign](qa-campaign-20260915-burn4-brief.md). Work began on clean `main` at `d4037d14`. This campaign reviews source and makes no deployment or live activation.
 
-**Status:** A1, A2, A3, A4, and A5 done with the review limits below; B pending. No live activation or fleet action.
+**Status:** Closed. A1, A2, A3, A4, A5, and B are done with the review limits below; the first compliant full inventory gate passed at 88.00/100. No live activation or fleet action.
 
 ## Campaign state
 
@@ -13,7 +13,7 @@ This is the progress record for the [burn 4 campaign](qa-campaign-20260915-burn4
 | A3 | Node startup, release verification, and RPC serving | done | 0 | 2 | 1 | [Review](node-serving-review-20260915.md); findings `910030ce`; repairs `bccd5b5f` (not consensus-affecting; full Rust suite verdict pending) |
 | A4 | Live shadow and swap services | done | 0 | 2 | 1 | [Review](shadow-swap-services-review-20260915.md); findings `b2df0ae1`; repairs `33c8ce34` (consensus-affecting; full Rust suite verdict pending) |
 | A5 | Node command tools and governance agent | done | 0 | 2 | 1 | [Review](node-cli-governance-review-20260915.md); findings `face08c2`; repairs `eb4c2afd` (not consensus-affecting; full Rust suite verdict pending) |
-| B | Defect inventory and TIH gate | pending | — | — | — | — |
+| B | Defect inventory and TIH gate | done | — | — | — | [Inventory](defect-inventory-20260910.md) extended to 104 rows in `ec9cc1a0`; first compliant full gate 88.00/100; run group `qa-defect-inventory-burn4-20260915`; scored SHA-256 `795542e3964aef09681bd69dc8f31317726a66997105f0156e5781f8496d9298` |
 
 Current finding totals: **0 P1, 10 P2, 5 P3** (A1, A2, A3, A4, and A5).
 
@@ -29,7 +29,7 @@ The [A2 review](types-state-commitment-review-20260915.md) records **0 P1, 2 P2,
 
 Both P2 repairs change hashed committee identities or state-root bytes and are **consensus-affecting**, source-only, and not live or deployed; **full Rust suite verdict pending**. Archived replay and activation qualification are still required before any release-lineage use.
 
-The A2 review read focused serialization, hashing, arithmetic, ordering, and version paths in `crates/types/src/consensus_v2_types.rs`, `core_chain.rs`, `ledger_assets.rs`, `genesis_registry.rs`, `fastswap_types.rs`, `account_owned_asset_types.rs`, `market_nav_asset_types.rs`, `fx_fix_types.rs`, `nav_reserve_public_values.rs`, `shielded_bridge_governance.rs`, `fastpay_recovery_types.rs`, and `crates/node/src/state_commitment.rs`. Large modules were sampled around the A2 focus, not audited in full. The pfUSDC and Ethereum bridge type files provided read-only schema context. The node root-test fixture was adjusted only to exercise a canonical retained certificate; it was not reviewed as a separate surface. No A3–A5 file or B inventory was reviewed. A1 and A2 are done; A3–A5 and B remain pending.
+The A2 review read focused serialization, hashing, arithmetic, ordering, and version paths in `crates/types/src/consensus_v2_types.rs`, `core_chain.rs`, `ledger_assets.rs`, `genesis_registry.rs`, `fastswap_types.rs`, `account_owned_asset_types.rs`, `market_nav_asset_types.rs`, `fx_fix_types.rs`, `nav_reserve_public_values.rs`, `shielded_bridge_governance.rs`, `fastpay_recovery_types.rs`, and `crates/node/src/state_commitment.rs`. Large modules were sampled around the A2 focus, not audited in full. The pfUSDC and Ethereum bridge type files provided read-only schema context. The node root-test fixture was adjusted only to exercise a canonical retained certificate; it was not reviewed as a separate surface. No A3–A5 file or B inventory was reviewed during A2. Those units remained pending at A2 closeout.
 
 ## Node startup, release verification, and RPC serving review result
 
@@ -67,6 +67,8 @@ Focused command parsing, key-file and private-record handling, listener/dry-run 
 - For A4, `batch_snapshot.rs` was skipped because these services do not directly call it. The extensive drill/fixture and performance-test bodies in A4's two large service files were not reviewed as shipped service paths; A5 and B were not started. The A4 P3 is recorded without repair under the P3 rule. No release-lineage replay or live confirmation was run: the repairs are source-only; no fleet action was authorized. No full workspace or Orchard/Halo2 suite was run locally because no Orchard boundary changed; the full Rust suite verdict remains CI's. No Task Node, fleet, host, chain, spend, signup, or frozen-artifact action occurred.
 
 - For A5, the named `crates/node/src/cli_dispatch.rs` was absent; the actual `main_parts/cli_dispatch.rs` router was reviewed at the A5 focus. Its included dispatch groups and the two three-line binaries' called modules were skipped because they are outside the A5 file list. `execution_actions.rs` was skipped because no distinct command-dispatch path was found outside the previously reviewed state transitions. Governance-agent `tests.rs`, large bin service internals, governance fixture/performance bodies and unaffected modules were not audited as shipped command paths. The A5 P3 is recorded without repair. Excluded, already-reviewed and frozen sources, plus B, were untouched; no full workspace or Orchard/Halo2 suite ran locally because neither A5 repair crosses those boundaries. No Task Node, fleet, host, chain, spend or signup action occurred; the three A5 pushes were only to this repository's `origin main`.
+
+- For B, an initial harness dispatch accidentally used the shorter `--simple-prompt` setting. It was terminated and excluded from the gate; its external log is retained separately. A fresh full run used the recorded exact prompt, three judges, five reviews per judge, temperature 0 and an 8,000-token response limit. The first compliant average passed, so no wording rewrite or rescore was performed.
 
 ## Verification
 
@@ -114,10 +116,79 @@ Focused command parsing, key-file and private-record handling, listener/dry-run 
 - `cargo fmt --all -- --check` and `git diff --check`: passed (A5).
 - `.venv-docs/bin/mkdocs build --strict`, `scripts/public-doc-links`, and `scripts/public-secret-scan`: passed before A5 findings and repairs commits; A5 closeout gates passed before its commit. **Full Rust suite verdict pending** CI.
 
+- B changed only documentation. All 89 earlier inventory rows were verified unchanged; 15 new IDs and 104 unique rows were counted. Severity counts (25 P1, 54 P2, 25 P3), classification counts (77 reproduced defects, 22 evidence gaps, one economic assumption, four proposed capabilities), and disposition totals were reconciled. The inventory file SHA-256 and exact prompt were checked against all 15 fresh SQLite score records in the compliant run group.
+- `.venv-docs/bin/mkdocs build --strict`, `scripts/public-doc-links`, and `scripts/public-secret-scan`: passed before the B inventory commit and closeout commit. `git diff --check` passed. No Rust, Python, workspace, or Orchard suite was rerun for B: the B changes are documentation only. The full Rust CI verdict for A1–A5 repairs remains pending.
+
 ## Scores
 
-The B inventory scoring gate has not started.
+The exact 104-row inventory bytes, SHA-256
+`795542e3964aef09681bd69dc8f31317726a66997105f0156e5781f8496d9298`,
+received fifteen fresh OpenRouter reviews at temperature 0 with an 8,000-token
+response limit. The prompt was
+`Rate this document on a scale of 1-100. Output the score and your reasoning.`
+The credential came from vault label `openroutertih` and was passed to the
+harness in memory.
+
+| Judge | Scores | Average |
+| --- | --- | ---: |
+| `openai/gpt-6-astra-pro` | 89, 88, 88, 89, 88 | 88.40 |
+| `anthropic/claude-fable-5.1` | 87, 86, 82, 89, 89 | 86.60 |
+| `z-ai/glm-5.3` | 90, 88, 88, 91, 88 | 89.00 |
+| **All fifteen** | — | **88.00** |
+
+Run group: `qa-defect-inventory-burn4-20260915`. The first compliant full
+score exceeded the 86/100 stop condition; no inventory rewrite or rescore was
+performed. All fifteen SQLite records match the prompt, group and scored file
+SHA-256. The external score log and SQLite record are under
+`/home/postfiatchad/pastedocs/.qa-campaign-defect-inventory-burn4-20260915/`.
+An interrupted wrong-prompt attempt is isolated there and was not counted.
 
 ## Final summary
 
-A1 is done with **0 P1, 2 P2, 1 P3**. Findings `abb42827`; repairs `6ec35092`. The checked maximum-view successor and durable proposer-signature interlock are both **consensus-affecting**, source-only, and await the full Rust CI verdict. The P3 unaudited finality-query duplicate pairing remains unfixed. Focused A1 paths within five files were reviewed; unrelated sections and cross-module full artifact reload were not audited. A2–A5 and B remain pending and were not started. No activation, deployment, fleet, Task Node, or frozen-artifact action occurred.
+| Surface | P1 | P2 | P3 | Findings commit | Repair commit |
+| --- | ---: | ---: | ---: | --- | --- |
+| A1 — Finality, consensus artifacts, signing | 0 | 2 | 1 | `abb42827` | `6ec35092` |
+| A2 — Canonical types, state commitment | 0 | 2 | 1 | `f5c8e88a` | `0a1216c3` |
+| A3 — Startup, release verification, RPC | 0 | 2 | 1 | `910030ce` | `bccd5b5f` |
+| A4 — Shadow and swap services | 0 | 2 | 1 | `b2df0ae1` | `33c8ce34` |
+| A5 — Node tools, governance agent | 0 | 2 | 1 | `face08c2` | `eb4c2afd` |
+| **A1–A5 total** | **0** | **10** | **5** | — | — |
+
+B added three rows per surface: FIN-, TYP-, SRV-, SHD-, and CLI-. The consolidated
+inventory has **104 rows**: 25 P1, 54 P2, and 25 P3; 58 fixed, 16
+dispositioned, five reproduced and retained from prior campaigns, thirteen
+burn 3/4 P3 recorded without repair, six needing a live environment, six
+needing an operator decision, and zero bare open. The first compliant full
+Text Improvement Harness gate scored **88.00/100**, run group
+`qa-defect-inventory-burn4-20260915`, scored file SHA-256
+`795542e3964aef09681bd69dc8f31317726a66997105f0156e5781f8496d9298`.
+No rewrite or rescore was needed; the inventory extension is `ec9cc1a0`.
+
+Consensus-affecting repairs, all source-only and not activated or deployed:
+
+- Checked maximum-view timeout successor in proposal verification — `6ec35092`.
+- Durable proposal-hash lock before the proposer returns a block signature — `6ec35092`.
+- FastPay recovery committee root binding both admission heights — `0a1216c3`.
+- Canonical retained-certificate bytes bound to recovery reveal and confirmed
+  version-fence state commitments — `0a1216c3`.
+- Highest sender sequence retained across round-ordered shadow queue draining,
+  changing hashed advisory shadow state — `33c8ce34`.
+- Issuer asset-control prepare refusing a stale round-zero FastSwap vote after
+  later recovery progress or terminal status — `33c8ce34`.
+
+The **full Rust suite verdict is pending** CI for every repair commit:
+`6ec35092`, `0a1216c3`, `bccd5b5f`, `33c8ce34`, and `eb4c2afd`.
+Archived-chain replay and activation qualification remain necessary before
+release-lineage use of the FastPay committee and state-root changes.
+
+The five burn 4 P3 risks remain recorded without repair: unaudited finality
+queries can pair duplicate receipt and block records; an external long-label
+caller can collide genesis-digest framing; runtime status does not reverify a
+replaced deployment manifest; a changed FastSwap canonical tip can leave local
+WAL/state writes before refresh fails; and an unrestricted governance
+work-item wildcard can overstate report scope. Review limits and other
+campaign skips are recorded above. No fleet, live-chain, deployment,
+activation, Task Node, or frozen-artifact action occurred.
+
+A1 through A5 and B are closed. The inventory and closeout commits are pushed
+to origin `main`.
