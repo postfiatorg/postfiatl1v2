@@ -434,7 +434,7 @@ pub fn verify_consensus_v2_proposal(
     })?;
     verify_consensus_v2_timeout_certificate(domain, validators, timeout_certificate, qc_graph)?;
     if timeout_certificate.round.height != proposal.round.height
-        || timeout_certificate.round.view + 1 != proposal.round.view
+        || timeout_certificate.round.view.checked_add(1) != Some(proposal.round.view)
         || timeout_certificate.phase != ConsensusV2Phase::Precommit
         || proposal.timeout_certificate_id.as_deref()
             != Some(timeout_certificate.certificate_id.as_str())

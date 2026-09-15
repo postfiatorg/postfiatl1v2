@@ -4008,6 +4008,44 @@ mod bridge_exit_root_activation_tests {
     }
 
     #[test]
+    fn proposer_signature_reserves_durable_proposal_lock_before_returning() {
+        let data_dir = std::env::temp_dir().join(format!(
+            "postfiat-proposer-signing-lock-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        init(InitOptions {
+            data_dir: data_dir.clone(),
+            chain_id: "postfiat-tier4-test".to_string(),
+            node_id: "validator-0".to_string(),
+            validator_count: 1,
+        })
+        .expect("init proposer signing test");
+        let store = NodeStore::new(&data_dir);
+        let genesis = store.read_genesis().expect("genesis");
+        let key_file = data_dir.join(VALIDATOR_KEYS_FILE);
+        let mut first = proposal(1, None);
+        first.genesis_hash = genesis_hash(&genesis);
+        first.protocol_version = genesis.protocol_version;
+        let signed = sign_verified_block_proposal(&data_dir, first.clone(), &key_file, "validator-0")
+            .expect("first proposer signature");
+        verify_signed_block_proposal(&data_dir, &signed).expect("signature verifies");
+        let same = sign_verified_block_proposal(&data_dir, first.clone(), &key_file, "validator-0")
+            .expect("retry of exactly the same proposal");
+        assert_eq!(signed, same);
+
+        let mut conflicting = first;
+        conflicting.payload_hash = "55".repeat(48);
+        let error = sign_verified_block_proposal(&data_dir, conflicting, &key_file, "validator-0")
+            .expect_err("new store instance must reject a conflicting proposal");
+        assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+        assert!(error.to_string().contains("conflicting block proposal vote"), "{error}");
+        std::fs::remove_dir_all(data_dir).expect("cleanup proposer signing test");
+    }
+
+    #[test]
     fn supplied_proposal_rejects_duplicate_receipt_ids() {
         let genesis = Genesis::new("postfiat-tier4-test");
         let mut duplicate = proposal(1, None);
@@ -4108,6 +4146,14 @@ fn sign_block_proposal_file(
             ),
         ));
     }
+
+    let target = BlockVoteTarget {
+        evidence: OwnedBlockEvidence::from_proposal(proposal),
+        validators,
+        block_hash: None,
+        proposal_hash: Some(block_proposal_hash(proposal)?),
+    };
+    reserve_block_proposal_vote_lock(store, &genesis, &target, &key_record.node_id)?;
 
     let message = block_proposal_signature_message(proposal)?;
     let private_key = Zeroizing::new(hex_to_bytes(&key_record.private_key_hex).map_err(invalid_data)?);

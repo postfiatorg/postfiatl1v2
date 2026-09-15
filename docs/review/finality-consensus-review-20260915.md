@@ -39,6 +39,25 @@ The minimal future repair is to fail closed on duplicate matching receipts and d
 
 Within `crates/node/src/block_finality.rs`, account-transaction index construction and query presentation (lines 163–2216) and remaining batch simulation and archive tools were not reviewed. Within `crates/node/src/consensus_artifacts.rs`, unrelated shielded, bridge, pfUSDC/Arc, owned-object, batch-action construction, operator-manifest, and snapshot helper paths were not reviewed. Within `crates/ordering_fast/src/lib.rs`, the previously reviewed simulation and legacy ordering model, admission receipt, and omission-evidence paths were not re-reviewed. No Orchard, bridge, proof, privacy, program, Python, storage, execution, Cobalt, mempool, network, or RPC SDK code was reviewed. No fleet action, Task Node action, external spend, or frozen artifact write occurred.
 
+## Repair result
+
+Findings 1 and 2 are repaired in source. Proposal verification now uses `checked_add(1)` to reject a timeout certificate whose view has no successor, without a panic or wrap. The proposer signs only after reserving the existing durable proposal-hash lock; an identical proposal can be retried, but a conflicting proposal at the same height and view is rejected when a new store instance reads the retained lock. The regression verifies the first signature, repeats it, and checks a conflicting retry fails. The timeout regression supplies a real quorum-signed maximal-view certificate and signed proposal to the verifier.
+
+The signed-conflict evidence test now builds its second valid signature explicitly from a test key. That preserves coverage of externally supplied equivocation evidence while exercising the public signer's new interlock independently. The P3 duplicate-pairing observation remains recorded without repair.
+
+Both changes tighten consensus artifact or validator signing admissibility and are **consensus-affecting**. They are source-only; no release, live activation, fleet change, or deployment occurred. The full Rust suite verdict is pending CI.
+
+Post-repair verification:
+
+- `cargo check -p postfiat-node -p postfiat-ordering-fast --locked`: passed.
+- `cargo test -p postfiat-ordering-fast consensus_v2_proposal_rejects_exhausted_timeout_view_without_overflow --locked`: 1 passed.
+- `cargo test -p postfiat-ordering-fast consensus_v2::tests --locked`: 12 passed.
+- `cargo test -p postfiat-node proposer_signature_reserves_durable_proposal_lock_before_returning --lib --locked`: 1 passed.
+- `cargo test -p postfiat-node bridge_exit_root_activation_tests --lib --locked`: 3 passed.
+- `cargo test -p postfiat-node block_vote --lib --locked`: 3 passed.
+- `cargo test -p postfiat-node block_proposal --lib --locked`: 3 passed after adjusting the signed-equivocation fixture.
+- `cargo fmt --all -- --check` and `git diff --check`: passed.
+
 ## Repair scope
 
-Findings 1 and 2 require focused regressions and source-only repair. Finding 3 remains recorded as P3. Full Rust suite verdict will be pending CI on any repair.
+Only the numeric successor comparison, existing durable proposal-lock call, two focused regressions, and the directly affected signed-equivocation test fixture changed. Finding 3 remains unfixed under the P3 rule. No frozen artifact or excluded crate or file was modified.

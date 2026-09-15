@@ -2612,7 +2612,7 @@ fn block_proposal_equivocation_evidence_requires_signed_conflicts() {
     })
     .expect("create first signed proposal");
     let second_proposal_file = data_dir.join("second-signed.block_proposal.json");
-    let second_proposal = propose_batch(BatchProposalOptions {
+    let mut second_proposal = propose_batch(BatchProposalOptions {
         data_dir: data_dir.clone(),
         verify_block_log: true,
         batch_kind: Some(BATCH_KIND_TRANSPARENT.to_string()),
@@ -2620,10 +2620,32 @@ fn block_proposal_equivocation_evidence_requires_signed_conflicts() {
         proposal_file: second_proposal_file.clone(),
         view: None,
         timeout_certificate_file: None,
-        key_file: Some(data_dir.join(VALIDATOR_KEYS_FILE)),
-        validator_id: Some("validator-1".to_string()),
+        key_file: None,
+        validator_id: None,
     })
-    .expect("create second signed proposal");
+    .expect("create second unsigned proposal");
+    // An equivocation fixture must carry a valid externally produced signature;
+    // the public signer now durably rejects a second proposal at the same round.
+    let keys = read_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE)).expect("keys");
+    let key = validator_key_record(&keys, "validator-1").expect("proposer key");
+    let message = block_proposal_signature_message(&second_proposal).expect("signing bytes");
+    let seed = block_proposal_signature_seed(&message).expect("signature seed");
+    let private_key = Zeroizing::new(hex_to_bytes(&key.private_key_hex).expect("private key"));
+    let signature = ml_dsa_65_sign_with_context_seed(
+        &private_key,
+        &message,
+        BLOCK_PROPOSAL_SIGNATURE_CONTEXT,
+        &seed,
+    )
+    .expect("external equivocation signature");
+    second_proposal.signature = Some(BlockProposalSignature {
+        signer: key.node_id.clone(),
+        algorithm_id: key.algorithm_id.clone(),
+        public_key_hex: key.public_key_hex.clone(),
+        signature_hex: bytes_to_hex(&signature),
+    });
+    write_block_proposal_file(&second_proposal_file, &second_proposal)
+        .expect("write externally signed equivocation fixture");
     assert_eq!(first_proposal.block_height, second_proposal.block_height);
     assert_eq!(first_proposal.view, second_proposal.view);
     assert_eq!(first_proposal.proposer, second_proposal.proposer);

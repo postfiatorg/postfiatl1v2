@@ -35,6 +35,51 @@ fn domain(validators: &ConsensusV2ValidatorSet) -> ConsensusV2Domain {
 }
 
 #[test]
+fn consensus_v2_proposal_rejects_exhausted_timeout_view_without_overflow() {
+    let (validators, keys) = committee(4);
+    let domain = domain(&validators);
+    let timeout_round = ConsensusV2Round {
+        height: 9,
+        view: u64::MAX,
+    };
+    let timeout = certify_consensus_v2_timeouts(
+        &domain,
+        &validators,
+        timeout_round,
+        ConsensusV2Phase::Precommit,
+        signed_timeout_votes(&domain, &validators, &keys, timeout_round, &[]),
+        &ConsensusV2QcGraph::default(),
+    )
+    .expect("quorum-signed maximal-view timeout certificate");
+    let block = consensus_v2_block_ref(
+        &domain,
+        9,
+        "11".repeat(48),
+        "22".repeat(48),
+        "33".repeat(48),
+    )
+    .expect("block reference");
+    let proposal = signed_proposal(
+        &domain,
+        &validators,
+        &keys,
+        ConsensusV2Round { height: 9, view: 1 },
+        block,
+        None,
+        Some(timeout.certificate_id.clone()),
+    );
+    let error = verify_consensus_v2_proposal(
+        &domain,
+        &validators,
+        &proposal,
+        Some(&timeout),
+        &ConsensusV2QcGraph::default(),
+    )
+    .expect_err("an exhausted timeout view has no successor");
+    assert!(error.to_string().contains("target mismatch"), "{error}");
+}
+
+#[test]
 fn consensus_v2_commit_must_bind_the_exact_bridge_exit_root() {
     let (validators, _) = committee(6);
     let domain = domain(&validators);
