@@ -144,7 +144,7 @@ handoff with its capture time.
   independent ratifier signs. TIH 86.2 → 88.8 over three passes; remaining judge asks are
   clustering pseudocode, weight sensitivity and adversarial simulation.
 - **MVP already built on `main`** (09-04 session, [handoff](2026-09-04___dravlic__tasknode_unl_mvp_built_and_hardened.md),
-  [plan](../plans/active/tasknode-unl-mvp-plan.md)): `python/postfiat_rpc/tasknode_unl*.py`
+  [plan](../plans/completed/tasknode-unl-mvp-plan.md)): `python/postfiat_rpc/tasknode_unl*.py`
   implements the schema, accountability formula, exact-rational trust walk, offline binding
   CLI (prepare/finalize/verify/replay only, no submit), signed work-digest verification,
   vouch/co-work/funding edge extraction, the churn/overlap guard, and a shadow-derive CLI
@@ -250,7 +250,7 @@ handoff with its capture time.
 - Options tracker explainer: https://postfiat.org/research/single-stock-options-trackers/ (moving to `/blog/trustless-single-stock-option-indices/`); site PR https://github.com/postfiatorg/postfiatorg.github.io/pull/13; demo record `static/research/options-tee-indices/demo-record.json`; article plan `docs/research/options-tee-trackers-article-plan.md` (site repo)
 - PR #39: https://github.com/postfiatorg/postfiatl1v2/pull/39 · head `55330121` · StakeHub #8: https://github.com/postfiatorg/StakeHub/pull/8
 - Machine handoff: `docs/handoffs/2026-09-07___codex__navcoin_cobalt_machine_handoff.md`; validation `docs/status/NAVCOIN-HANDOFF-VALIDATION-20260907.md`; deployment evidence `deployments/a666-source-route-20260907/`
-- Task Node UNL MVP: `docs/handoffs/2026-09-04___dravlic__tasknode_unl_mvp_built_and_hardened.md`, `docs/plans/active/tasknode-unl-mvp-plan.md`, `python/postfiat_rpc/tasknode_unl*.py`, `docs/governance/tasknode-unl-shadow-run-20260904.md`
+- Task Node UNL MVP: `docs/handoffs/2026-09-04___dravlic__tasknode_unl_mvp_built_and_hardened.md`, `docs/plans/completed/tasknode-unl-mvp-plan.md`, `python/postfiat_rpc/tasknode_unl*.py`, `docs/governance/tasknode-unl-shadow-run-20260904.md`
 - `docs/yolo/target-receipt-v1.md`, `docs/navcoins/yolo-options-reserve-profile.md`, `docs/yolo/evidence/`
 - PR #37: https://github.com/postfiatorg/postfiatl1v2/pull/37
 - Arc packet: `docs/business/pfusdc-on-arc-round-trip-20260902.html`, `docs/business/arc-grant-claim-classification-20260902.md`, `docs/business/arc-audit-scope-20260902.md`, `docs/business/pfusdc-arc-grant-proposal-20260828-v3.md`
