@@ -273,6 +273,17 @@ fn run_cli_group_03(command: &str, flags: &[String]) -> Result<(), String> {
             println!("{json}");
             Ok(())
         }
+        "rpc-probe" => {
+            let host = flag_value(flags, "--host").unwrap_or("127.0.0.1");
+            let port = parse_u16_flag(flags, "--port")?;
+            let timeout_ms = flag_value(flags, "--timeout-ms")
+                .unwrap_or("5000")
+                .parse::<u64>()
+                .map_err(|_| "--timeout-ms must be a u64".to_string())?;
+            let probe = rpc_probe(host, port, timeout_ms)?;
+            println!("height={} tip={} round_trip_ms={}", probe.height, probe.tip_prefix, probe.round_trip_ms);
+            Ok(())
+        }
         "rpc-serve" => {
             require_transactional_or_unsafe_devnet_json_storage(flags, "rpc service")?;
             let data_dir =

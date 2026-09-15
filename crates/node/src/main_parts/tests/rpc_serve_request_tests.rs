@@ -274,6 +274,54 @@ mod rpc_serve_request_tests {
     }
 
     #[test]
+    fn rpc_probe_succeeds_with_one_status_exchange() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind probe fixture");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().expect("accept one probe");
+            stream.set_read_timeout(Some(Duration::from_secs(2))).expect("timeout");
+            let mut reader = BufReader::new(stream);
+            let mut line = String::new();
+            reader.read_line(&mut line).expect("read status request");
+            let request: RpcRequest = serde_json::from_str(&line).expect("parse request");
+            assert_eq!(request.method, "status");
+            assert_eq!(request.params, serde_json::json!({}));
+            line.clear();
+            assert_eq!(reader.read_line(&mut line).expect("read write-side EOF"), 0);
+            let response = serde_json::json!({
+                "version": request.version, "id": request.id, "ok": true,
+                "result": {"block_height": 42, "block_tip_hash": "abcdef0123456789"},
+                "error": null, "events": []
+            });
+            let mut response_line = serde_json::to_vec(&response).expect("serialize response");
+            response_line.push(b'\n');
+            reader.get_mut().write_all(&response_line).expect("reply to probe");
+        });
+        let probe = rpc_probe("127.0.0.1", port, 2_000).expect("probe success");
+        assert_eq!(probe.height, 42);
+        assert_eq!(probe.tip_prefix, "abcdef012345");
+        assert!(probe.round_trip_ms < 2_000);
+        server.join().expect("join probe fixture");
+    }
+
+    #[test]
+    fn rpc_probe_times_out_when_accepted_peer_sends_no_response() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind probe fixture");
+        let port = listener.local_addr().expect("listener address").port();
+        let server = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().expect("accept one probe");
+            let mut reader = BufReader::new(stream);
+            let mut line = String::new();
+            reader.read_line(&mut line).expect("read status request");
+            assert_eq!(serde_json::from_str::<RpcRequest>(&line).expect("parse request").method, "status");
+            std::thread::sleep(Duration::from_millis(250));
+        });
+        let error = rpc_probe("127.0.0.1", port, 80).err().expect("probe must time out");
+        assert_eq!(error, "no response within timeout");
+        server.join().expect("join probe fixture");
+    }
+
+    #[test]
     fn rpc_serve_accept_budget_is_exact_at_every_small_boundary() {
         for max_requests in 0..=1_024 {
             let mut accepted = 0;

@@ -349,6 +349,7 @@ struct AssetOrchardSwapLiveRoundReport {
 fn main() {
     let args = env::args().skip(1).collect::<Vec<_>>();
     let is_rpc = args.first().is_some_and(|command| command == "rpc");
+    let is_rpc_probe = args.first().is_some_and(|command| command == "rpc-probe");
     let result = run_cli(args.clone());
     let close_result =
         postfiat_storage::transactional::release_inactive_shared_transactional_stores()
@@ -361,6 +362,8 @@ fn main() {
                 eprintln!("error: {error}");
                 eprintln!("rpc error serialization failed: {print_error}");
             }
+        } else if is_rpc_probe {
+            eprintln!("{}", error.replace(['\r', '\n'], " "));
         } else {
             eprintln!("error: {error}");
             print_usage();
@@ -410,6 +413,7 @@ fn run_cli(args: Vec<String>) -> Result<(), String> {
         | "transport-certified-send-outbox-resume"
         | "transport-certified-send-outbox-verify"
         | "rpc-serve"
+        | "rpc-probe"
         | "validator-keys"
         | "validator-key-stage"
         | "validate-local-keys"
