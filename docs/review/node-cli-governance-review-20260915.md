@@ -40,3 +40,18 @@ A future minimal repair would reject unrestricted or ambiguous wildcard patterns
 ## Review limits and skips
 
 The large bin and governance-agent modules were sampled at the named focus paths, not audited end to end. `crates/node/src/execution_actions.rs` was not reviewed: its state-transition bodies were burn 3 surface A2, and no distinct A5 command-dispatch path was found there. The `cli_dispatch_parts/group_*.rs` files and binaries' called service/protocol modules were not reviewed beyond the allowed A5 command sites. pfUSDC/Arc-specific code in node, excluded crates and files, previously reviewed crates, frozen artifacts, A1–A4, and B were not reviewed or edited. No Task Node or fleet action occurred. The P3 remains recorded without repair.
+
+## Repair result
+
+The shadow command parser now rejects repeated flags, missing flag values and unexpected positional arguments before it can issue a local mutation or remote request. The regression supplies two different `--endpoint` targets to a commit-style command and confirms rejection, with valid flags still admitted. This is command input validation only.
+
+The FastSwap bootstrap helper now creates its output exclusively, so an existing governance payload is left byte-for-byte unchanged and the command reports an error instead of printing `wrote`. The regression starts with an inspected payload file, attempts replacement and verifies the original bytes remain. This is an operator-file interlock only.
+
+Neither repair changes a consensus rule, a state-transition result, an on-disk format or signed or hashed bytes. **No repair is consensus-affecting**; the fixes are source-only and not live or deployed. **Full Rust suite verdict pending** CI. The P3 remains recorded without repair.
+
+Post-repair verification:
+
+- `cargo check -p postfiat-node --locked`: passed.
+- `cargo test -p postfiat-node repeated_remote_target_is_rejected_before_shadow_request --bin postfiat-cobalt-shadow --locked`: 1 passed.
+- `cargo test -p postfiat-node bootstrap_output_refuses_existing_governance_payload_without_changing_it --bin fastswap_bootstrap_payload --locked`: 1 passed.
+- `cargo fmt --all -- --check` and `git diff --check`: passed.

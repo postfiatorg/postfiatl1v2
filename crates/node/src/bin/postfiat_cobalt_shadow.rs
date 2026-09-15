@@ -32,6 +32,7 @@ fn run() -> io::Result<()> {
     let Some(command) = args.first().map(String::as_str) else {
         return Err(usage());
     };
+    validate_flag_arguments(&args[1..])?;
     let output = match command {
         "init" => {
             let data_dir = required_path(&args, "--data-dir")?;
@@ -459,6 +460,25 @@ fn run() -> io::Result<()> {
     Ok(())
 }
 
+fn validate_flag_arguments(args: &[String]) -> io::Result<()> {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut index = 0;
+    while index < args.len() {
+        let flag = &args[index];
+        if !flag.starts_with("--") || !seen.insert(flag.as_str()) {
+            return Err(invalid("unexpected positional or repeated command flag"));
+        }
+        index += 1;
+        if flag != "--allow-private-network" {
+            if index == args.len() || args[index].starts_with("--") {
+                return Err(invalid(format!("{flag} requires one value")));
+            }
+            index += 1;
+        }
+    }
+    Ok(())
+}
+
 fn optional_flag<'a>(args: &'a [String], name: &str) -> Option<&'a str> {
     args.windows(2)
         .find(|pair| pair[0] == name)
@@ -522,4 +542,36 @@ fn json_error(error: serde_json::Error) -> io::Error {
 
 fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, message.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn repeated_remote_target_is_rejected_before_shadow_request() {
+        let flags = [
+            "--endpoint",
+            "127.0.0.1:9700",
+            "--endpoint",
+            "127.0.0.1:9701",
+            "--transcript",
+            "transcript.json",
+        ]
+        .map(str::to_string);
+        assert!(validate_flag_arguments(&flags).is_err());
+        assert!(validate_flag_arguments(&[
+            "--endpoint".into(),
+            "127.0.0.1:9700".into(),
+            "extra".into()
+        ])
+        .is_err());
+        assert!(validate_flag_arguments(&[
+            "--endpoint".into(),
+            "127.0.0.1:9700".into(),
+            "--transcript".into(),
+            "transcript.json".into()
+        ])
+        .is_ok());
+    }
 }

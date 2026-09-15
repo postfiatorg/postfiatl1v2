@@ -9,7 +9,8 @@ use postfiat_types::{
 };
 use serde::Deserialize;
 use std::env;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 #[derive(Deserialize)]
@@ -95,6 +96,17 @@ fn fixed48(value: &str, label: &str) -> Result<[u8; 48], String> {
         .map_err(|error| format!("invalid {label}: {error}"))?
         .try_into()
         .map_err(|_| format!("{label} must be 48 bytes"))
+}
+
+fn write_new_payload(path: &Path, encoded: &[u8]) -> Result<(), String> {
+    let mut output = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|error| format!("{}: {error}", path.display()))?;
+    output
+        .write_all(encoded)
+        .map_err(|error| format!("{}: {error}", path.display()))
 }
 
 fn validate_height_window(
@@ -264,8 +276,7 @@ fn main() -> Result<(), String> {
         .map_err(|error| format!("bootstrap payload: {error:?}"))?;
     let encoded = serde_json::to_vec_pretty(&payload)
         .map_err(|error| format!("serialize bootstrap payload: {error}"))?;
-    fs::write(&options.output, encoded)
-        .map_err(|error| format!("{}: {error}", options.output.display()))?;
+    write_new_payload(&options.output, &encoded)?;
     println!(
         "wrote {}: tip={} activation={} expiry={} committee=6 quorum=5 rules=2 policies=1",
         options.output.display(),
@@ -283,5 +294,21 @@ mod tests {
     #[test]
     fn exhausted_tip_height_is_rejected_without_panicking() {
         assert!(validate_height_window(u64::MAX, u64::MAX, u64::MAX).is_err());
+    }
+
+    #[test]
+    fn bootstrap_output_refuses_existing_governance_payload_without_changing_it() {
+        let path = std::env::temp_dir().join(format!(
+            "postfiat-bootstrap-output-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::write(&path, b"inspected governance payload").unwrap();
+        assert!(write_new_payload(&path, b"replacement payload").is_err());
+        assert_eq!(fs::read(&path).unwrap(), b"inspected governance payload");
+        fs::remove_file(&path).unwrap();
     }
 }
