@@ -205,6 +205,57 @@ mod rpc_serve_request_tests {
     }
 
     #[test]
+    fn rpc_serve_closes_idle_keep_alive_and_continues_accepting() {
+        let root = node_serving_read_only_root("idle-keep-alive");
+        let port = TcpListener::bind(("127.0.0.1", 0))
+            .expect("reserve test port")
+            .local_addr().expect("test address").port();
+        let mut options = node_serving_read_only_options(&root, port, true);
+        options.max_requests = 3;
+        options.timeout_ms = 200;
+        let ready_file = options.ready_file.clone();
+        let server = std::thread::spawn(move || rpc_serve(options));
+        for _ in 0..100 {
+            if ready_file.is_file() { break; }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(ready_file.is_file(), "RPC server must be ready");
+
+        // A socket that sends no first byte must release its worker slot.
+        let idle = TcpStream::connect(("127.0.0.1", port)).expect("connect idle socket");
+        idle.set_read_timeout(Some(Duration::from_secs(2))).expect("set client timeout");
+        let started = Instant::now();
+        let mut reader = BufReader::new(idle);
+        let mut line = String::new();
+        reader.read_line(&mut line).expect("read idle timeout response");
+        line.clear();
+        assert_eq!(reader.read_line(&mut line).expect("read idle EOF"), 0);
+        assert!(started.elapsed() < Duration::from_secs(1), "idle socket must close promptly");
+
+        // A completed keep-alive request must also expire when no next frame arrives.
+        let mut keep_alive = TcpStream::connect(("127.0.0.1", port)).expect("connect keep-alive");
+        keep_alive.set_read_timeout(Some(Duration::from_secs(2))).expect("set client timeout");
+        let mut reader = BufReader::new(keep_alive.try_clone().expect("clone socket"));
+        let mut request = serde_json::to_vec(&RpcRequest::empty("first", "status"))
+            .expect("serialize status");
+        request.push(b'\n');
+        keep_alive.write_all(&request).expect("send status");
+        line.clear();
+        reader.read_line(&mut line).expect("read status response");
+        assert!(serde_json::from_str::<RpcResponse>(&line).expect("parse status").ok);
+        let healthy = send_loopback_rpc(port, &RpcRequest::empty("third", "status"));
+        assert!(healthy.ok, "{:?}", healthy.error);
+        line.clear();
+        reader.read_line(&mut line).expect("read keep-alive idle timeout");
+        line.clear();
+        assert_eq!(reader.read_line(&mut line).expect("read keep-alive EOF"), 0);
+        let report = server.join().expect("join server").expect("serve connections");
+        assert_eq!(report.request_count, 3);
+        assert!(report.requests.iter().any(|event| event.id == "third" && event.ok));
+        fs::remove_dir_all(root).expect("cleanup fixture");
+    }
+
+    #[test]
     fn rpc_serve_health_preflight_failure_keeps_ready_file_absent() {
         let root = node_serving_read_only_root("health-preflight");
         let mempool = root.join(postfiat_storage::MEMPOOL_FILE);
