@@ -2657,9 +2657,12 @@ impl CobaltShadowService {
         let queued = std::mem::take(&mut self.state.queued_messages);
         let processed = queued.len();
         for message in queued {
-            self.state
+            let watermark = self
+                .state
                 .inbound_high_watermarks
-                .insert(message.sender.clone(), message.sequence);
+                .entry(message.sender.clone())
+                .or_default();
+            *watermark = (*watermark).max(message.sequence);
             self.state.seen_message_ids.push(message.message_id);
             self.state.accepted_messages = self.state.accepted_messages.saturating_add(1);
         }

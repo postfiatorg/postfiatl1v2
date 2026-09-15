@@ -37,3 +37,20 @@ A future minimal repair would verify a matching tip before durable refresh steps
 ## Review limits and skips
 
 The sections named above were sampled around A4's focus, not audited line by line. The drill generator and extensive fixture/performance tests in the two service files were not reviewed as production paths. `batch_snapshot.rs` has no directly used path in these two services and was skipped. No A1–A3 file, A5 command path, B inventory, excluded crate or file, already-reviewed crate, frozen artifact, fleet, or Task Node was reviewed or acted upon. The P3 remains recorded without repair.
+
+## Repair result
+
+The shadow queue now keeps each sender's maximum processed sequence when round ordering drains messages in a different order. The two-round regression queues valid signed messages with increasing peer sequence but decreasing round, confirms the watermark remains at the highest sequence through restart, and rejects a separately signed stale-sequence artifact. The focused shadow test group, including signed-history catch-up and local advisory drill regressions, passes.
+
+Issuer asset-control prepare now applies the same recorded terminal-status and later-precommit-round guard as ordinary swap prepare before it can reuse a reservation and issue another round-zero signature. The regression signs a real issuer Freeze command, prepares once, sets a later recorded recovery round and a decided-cancel status, and verifies each round-zero retry is rejected. The existing issuer freeze/unfreeze/clawback regression still passes.
+
+Both changes alter the hashed advisory shadow state-transition result or validator FastSwap vote admissibility and are **consensus-affecting** under the brief's definition. They are source-only, with no deployment, activation or claim about live behavior. **Full Rust suite verdict pending** CI. The P3 remains recorded without repair.
+
+Post-repair verification:
+
+- `cargo check -p postfiat-node --locked`: passed.
+- `cargo test -p postfiat-node queued_shadow_round_order_cannot_lower_peer_sequence_after_restart --lib --locked`: 1 passed.
+- `cargo test -p postfiat-node cobalt_shadow::tests --lib --locked`: 13 passed, including the shadow regression.
+- `cargo test -p postfiat-node issuer_asset_control_round_zero_rejects_later_recovery_vote --bin postfiat-node --locked`: 1 passed.
+- `cargo test -p postfiat-node issuer_freeze_unfreeze_and_clawback_use_the_swap_lock_domain --bin postfiat-node --locked`: 1 passed.
+- `cargo fmt --all -- --check` and `git diff --check`: passed.

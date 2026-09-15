@@ -440,6 +440,20 @@ impl FastSwapValidatorServiceV1 {
     ) -> io::Result<FastSwapVoteV1> {
         self.ensure_active()?;
         let operation_id = signed.operation_id().map_err(codec_error)?;
+        if let Some(record) = self.state.swaps.get(&operation_id) {
+            if matches!(
+                record.status,
+                FastSwapLocalStatusV1::Cancelled
+                    | FastSwapLocalStatusV1::DecidedCancel
+                    | FastSwapLocalStatusV1::Superseded
+                    | FastSwapLocalStatusV1::Checkpointed
+            ) || record.highest_precommit_round > 0
+            {
+                return Err(invalid_input(
+                    "asset control round-zero prepare is forbidden after recovery or terminal state",
+                ));
+            }
+        }
         if self
             .state
             .terminal_tombstones
@@ -2741,6 +2755,87 @@ mod tests {
         if fixture.root.exists() {
             fs::remove_dir_all(&fixture.root).expect("cleanup");
         }
+    }
+
+    #[test]
+    fn issuer_asset_control_round_zero_rejects_later_recovery_vote() {
+        let mut fixture = fixture();
+        let issuer = ml_dsa_65_keygen_from_seed(&[93; 32]);
+        let input = fixture.signed.intent.party_0.asset_inputs[0];
+        let old_hash = fixture.base.objects[&input].asset_rule_hash;
+        let mut rule = fixture
+            .base
+            .asset_rules
+            .remove(&old_hash)
+            .expect("old rule");
+        rule.issuer_address = address_from_public_key(&issuer.public_key);
+        rule.issuer_control_pubkey = issuer.public_key.clone();
+        rule.freeze_enabled = true;
+        let new_hash = rule.rule_hash().expect("issuer rule hash");
+        fixture.base.asset_rules.insert(new_hash, rule);
+        fixture
+            .base
+            .objects
+            .get_mut(&input)
+            .expect("issuer input")
+            .asset_rule_hash = new_hash;
+
+        let command = FastAssetControlCommandV1 {
+            domain: fixture.committee.domain.clone(),
+            action: FastAssetControlActionV1::Freeze,
+            input,
+            issuer_address: address_from_public_key(&issuer.public_key),
+            issuer_control_pubkey: issuer.public_key.clone(),
+            expires_at_height: 120,
+            nonce: [93; 32],
+        };
+        let signed = SignedFastAssetControlCommandV1 {
+            signature: ml_dsa_65_sign_with_context(
+                &issuer.private_key,
+                &command.canonical_bytes().expect("command bytes"),
+                FASTLANE_ASSET_CONTROL_CONTEXT_V1,
+            )
+            .expect("issuer signs"),
+            command,
+            algorithm_id: FASTSWAP_ML_DSA_65.to_owned(),
+        };
+        let operation_id = signed.operation_id().expect("operation id");
+        let mut validator = FastSwapValidatorServiceV1::from_parts(
+            &fixture.root.join("issuer-recovery-validator"),
+            fixture.base,
+            fixture.committee,
+            "validator-0".to_owned(),
+            fixture.validator_keys[0].clone(),
+            110,
+        )
+        .expect("validator");
+        let initial = validator
+            .asset_control_prepare(&signed)
+            .expect("initial prepare");
+        assert_eq!(initial.round, 0);
+        assert_eq!(initial.phase, FastSwapPhaseV1::Precommit);
+        validator
+            .state
+            .swaps
+            .get_mut(&operation_id)
+            .expect("reserved operation")
+            .highest_precommit_round = 1;
+        let error = validator
+            .asset_control_prepare(&signed)
+            .expect_err("later recovery round forbids round-zero vote");
+        assert!(error.to_string().contains("round-zero prepare"), "{error}");
+        validator
+            .state
+            .swaps
+            .get_mut(&operation_id)
+            .expect("reserved operation")
+            .status = FastSwapLocalStatusV1::DecidedCancel;
+        assert!(
+            validator.asset_control_prepare(&signed).is_err(),
+            "decided cancel must also reject round-zero vote"
+        );
+        drop(validator);
+        fs::remove_dir_all(&fixture.root).expect("cleanup");
     }
 
     #[test]

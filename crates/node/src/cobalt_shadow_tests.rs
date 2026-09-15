@@ -113,6 +113,83 @@ fn queue_bound_is_enforced_before_durable_acceptance() {
 }
 
 #[test]
+fn queued_shadow_round_order_cannot_lower_peer_sequence_after_restart() {
+    let root = test_dir("round-order-watermark");
+    let mut fleet = two_node_fleet(&root, CobaltShadowLimits::default());
+    let participants = fleet
+        .iter()
+        .map(|service| service.state.identity.node_id.clone())
+        .collect::<Vec<_>>();
+    let commitments = fleet
+        .iter_mut()
+        .map(|service| {
+            service
+                .create_beacon_commitment(2)
+                .expect("round two commit")
+        })
+        .collect::<Vec<_>>();
+    let reveals = fleet
+        .iter_mut()
+        .map(|service| service.create_beacon_reveal(2).expect("round two reveal"))
+        .collect::<Vec<_>>();
+    for service in &mut fleet {
+        service
+            .install_common_randomness(
+                2,
+                participants.clone(),
+                2,
+                commitments.clone(),
+                reveals.clone(),
+            )
+            .expect("install round two");
+    }
+
+    let first = fleet[0]
+        .sign_message(
+            2,
+            CobaltShadowMessageKind::Rbc,
+            hash_hex("test.payload", b"earlier sequence later round"),
+        )
+        .expect("sequence one in round two");
+    let second = fleet[0]
+        .sign_message(
+            1,
+            CobaltShadowMessageKind::Abba,
+            hash_hex("test.payload", b"later sequence earlier round"),
+        )
+        .expect("sequence two in round one");
+    fleet[1].receive(first).expect("queue sequence one");
+    fleet[1]
+        .receive(second.clone())
+        .expect("queue sequence two");
+    assert_eq!(fleet[1].process_all().expect("drain both"), 2);
+    assert_eq!(fleet[1].state.inbound_high_watermarks["validator-0"], 2);
+    drop(fleet.remove(1));
+    let mut receiver =
+        CobaltShadowService::open(root.join("validator-1")).expect("restart receiver");
+    assert_eq!(receiver.state.inbound_high_watermarks["validator-0"], 2);
+
+    let mut stale = second;
+    stale.payload_hash = hash_hex("test.payload", b"equivocated stale sequence");
+    stale.message_id = shadow_message_id(&stale).expect("distinct message id");
+    stale.signature_hex = fleet[0]
+        .sign_bytes(
+            &shadow_message_signing_bytes(&stale).expect("stale signing bytes"),
+            MESSAGE_SIGNATURE_CONTEXT,
+        )
+        .expect("peer signs stale sequence");
+    assert!(
+        receiver.receive(stale).is_err(),
+        "stale peer sequence must fail closed"
+    );
+    assert!(receiver.state.queued_messages.is_empty());
+    assert_eq!(receiver.state.inbound_high_watermarks["validator-0"], 2);
+    drop(receiver);
+    drop(fleet);
+    fs::remove_dir_all(root).expect("cleanup");
+}
+
+#[test]
 fn restart_verifies_state_signature_and_private_permissions() {
     let root = test_dir("restart");
     let fleet = two_node_fleet(&root, CobaltShadowLimits::default());
