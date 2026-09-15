@@ -210,5 +210,9 @@ behavior changed. Each named test also runs with its owning module regressions.
 | Burn 4 `33c8ce34` | `queued_shadow_reordered_sequences_property_preserves_maximum_after_restart` (4 out-of-order queued rounds, 3 stale signed replays); issuer round-zero regression expanded to 8 later recovery rounds and terminal cancellation |
 | Burn 4 `eb4c2afd` | `shadow_flag_property_rejects_repetition_and_truncated_values` (12 flag pairs with 4 truncation points and invalid variants); `bootstrap_payload_existing_file_property_preserves_all_bytes` (6 existing sizes, 1 new-file retry) |
 
+The `fastpay-recovery-committee-window` 260-case corpus parsed one case and
+rejected 259 at parse; only the parsed case reached the invariant check, with
+zero invariant failures. This is the limit of the fuzz-harness evidence.
+
 Skip: burn 3 `c2724977` changes Python operational CLIs only; this unit is
 Rust-only. No bridge, Orchard, proof, or program crate was edited or tested.
