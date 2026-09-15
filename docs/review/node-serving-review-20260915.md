@@ -10,7 +10,7 @@ This is A3 of the [burn 4 campaign](qa-campaign-20260915-burn4-brief.md). The re
 
 A keep-alive connection can submit two valid newline-delimited requests, including a finality submission followed by `status`. The worker emits only `last_event` when the connection closes; the earlier submission receives a response but has no event-log row, no entry in the returned request report, and no contribution to the report's method and error counts. An operator interpreting the event stream or summary cannot account for all requests the service actually handled. The `--keep-alive` setting is present in the generated RPC systemd unit.
 
-The minimal repair is to send every completed request event to the receiver, while counting a connection as closed only on its final event. Add a regression that checks two events on one connection are retained and only its final event releases the active-connection slot. This changes RPC presentation and telemetry, not consensus rules or signed/hashed bytes.
+The minimal repair is to send every completed request event to the receiver as it completes, poll for these events while awaiting the next connection, count closure separately, and bound the number of events one keep-alive connection can retain. Add regressions for two events on one connection, logging before an open socket closes, and closing at the event limit. This changes RPC presentation and telemetry, not consensus rules or signed/hashed bytes.
 
 ### 2. P2 — startup publishes ready files before all serving preflights finish
 
@@ -38,3 +38,26 @@ A future minimal repair would bind runtime reporting to a separately trusted pub
 ## Review limits and skips
 
 This was a focused review, not a whole-file audit. In the four named large node modules, unrelated asset, wallet, bridge, Orchard, FastPay/FastSwap state-transition, governance, archive/replay, catch-up, and transaction construction paths were not audited. Only the deployment-manifest verifier's dispatch, verification, and generated prestart invocation were traced in the additional call-path files; other snapshot and command operations were not reviewed. The systemd template files outside that generated path supplied no separate A3 review. Previously reviewed A1/A2 and burn 3 crates, excluded crates and files, frozen artifacts, A4/A5, and B were not reviewed. No Task Node or fleet action occurred.
+
+## Repair result
+
+P2 finding 1 is repaired by forwarding each completed request event from a keep-alive worker and draining events during nonblocking accept polling. A separate closure marker decrements the count of active connections. A 64-request limit per connection bounds retained events even if a peer keeps one socket open. Loopback regressions check two `status` requests on one socket, one event logged before its socket closes or another connection arrives, and prompt closure with all 64 events retained at the request limit. Existing accept-budget and stalled-client regressions remain green. The P3 report observation remains recorded without repair.
+
+P2 finding 2 is repaired by moving RPC readiness after both health-cache stamps are built and configuring the validator transport listener as nonblocking inside its bind preflight, before the ready report. The RPC regression initializes a node, removes the optional mempool file so its metadata stamp fails *after* its initial state can be read, and checks startup has no ready marker. The transport regression forces listener-mode configuration failure after bind and checks its prewarm/bind/ready gate never writes a positive marker. The adjacent prewarm-ordering regression passes.
+
+These changes affect RPC telemetry and local serving startup only. **No repair is consensus-affecting**; no live behavior, activation, or deployment is claimed. **Full Rust suite verdict pending** CI.
+
+Post-repair verification:
+
+- `cargo check -p postfiat-node --locked`: passed.
+- `cargo test -p postfiat-node rpc_serve_keep_alive_records_each_request_and_closes_one_connection --bin postfiat-node --locked`: 1 passed, including after the per-connection bound.
+- `cargo test -p postfiat-node rpc_serve_keep_alive_closes_at_retained_request_limit --bin postfiat-node --locked`: 1 passed.
+- `cargo test -p postfiat-node rpc_serve_logs_completed_request_while_keep_alive_socket_is_open --bin postfiat-node --locked`: 1 passed.
+- `cargo test -p postfiat-node rpc_serve_health_preflight_failure_keeps_ready_file_absent --bin postfiat-node --locked`: 1 passed.
+- `cargo test -p postfiat-node transport_listener_mode_failure_prevents_ready_report --bin postfiat-node --locked`: 1 passed. An initial `--lib` filter selected zero tests because this test belongs to the node binary, so the binary filter was run and passed.
+- `cargo test -p postfiat-node rpc_serve_accept_budget_is_exact_at_every_small_boundary --bin postfiat-node --locked`: 1 passed.
+- `cargo test -p postfiat-node transport_startup_after_prewarm_blocks_bind_until_prewarm_ready --bin postfiat-node --locked`: 1 passed.
+- `cargo test -p postfiat-node rpc_serve_drops_stalled_client_reads_without_blocking_other_connections --bin postfiat-node --locked`: 1 passed.
+- `cargo fmt --all -- --check` and `git diff --check`: passed.
+
+The affected sources are `rpc_cli.rs`, `transport_runtime.rs`, and their focused binary regression modules; no deployment-manifest verification, signed bytes, protocol state, frozen artifacts, excluded crates, or previously reviewed implementations were changed.

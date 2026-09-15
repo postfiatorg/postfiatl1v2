@@ -2184,6 +2184,24 @@ mod transport_cli_tests {
     }
 
     #[test]
+    fn transport_listener_mode_failure_prevents_ready_report() {
+        let ready_file = unique_transport_test_ready_file("listener-mode-failure");
+        let error = transport_startup_after_prewarm(
+            || Ok(test_prewarm_report()),
+            || {
+                let listener = TcpListener::bind(("127.0.0.1", 0))
+                    .map_err(|error| format!("test listener bind failed: {error}"))?;
+                drop(listener);
+                Err::<TcpListener, String>("test listener nonblocking configuration failed".to_string())
+            },
+            |_| write_transport_ready_file(&ready_file, &serde_json::json!({ "ready": true }), "test transport"),
+        )
+        .expect_err("listener mode failure must precede ready report");
+        assert!(error.contains("nonblocking configuration"), "{error}");
+        assert!(!ready_file.exists(), "listener mode failure must leave no ready file");
+    }
+
+    #[test]
     fn transport_startup_clears_stale_ready_file_until_new_ready_after_bind() {
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::{mpsc, Arc};

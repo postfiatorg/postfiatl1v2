@@ -201,6 +201,12 @@ impl Drop for RpcServeActiveConnectionGuard {
 // validator-0 RPC accept-queue wedge class
 // (docs/postmortems/devnet-registry-continuation-wedge-2026-08-31.md).
 const RPC_SERVE_CONNECTION_READ_TIMEOUT_MS: u64 = 30_000;
+// Limit retained events and child dispatches even when a client reuses one socket.
+const RPC_SERVE_MAX_REQUESTS_PER_CONNECTION: u64 = 64;
+
+fn rpc_serve_connection_request_budget_allows(handled: u64) -> bool {
+    handled < RPC_SERVE_MAX_REQUESTS_PER_CONNECTION
+}
 
 /// Bounds every read on one RPC connection by a per-request deadline in
 /// addition to the per-syscall socket timeout, so a stalled or trickling
@@ -625,6 +631,9 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
     let bind_address = socket_address(&options.bind_host, options.port);
     let listener = TcpListener::bind(&bind_address)
         .map_err(|error| format!("rpc serve bind `{bind_address}` failed: {error}"))?;
+    listener
+        .set_nonblocking(true)
+        .map_err(|error| format!("rpc serve nonblocking accept failed: {error}"))?;
     let mut event_writer = options
         .event_log
         .as_ref()
@@ -661,13 +670,6 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
         telemetry_failure_count: 0,
         last_telemetry_error: None,
     }));
-    {
-        let readiness = readiness
-            .lock()
-            .map_err(|_| "rpc serve readiness lock poisoned".to_string())?;
-        write_rpc_serve_readiness(&options.ready_file, &readiness)?;
-    }
-
     let mut requests = Vec::with_capacity(options.max_requests);
     let mempool_submit_state = Arc::new(Mutex::new(RpcServeMempoolSubmitState::default()));
     let orchard_batch_create_state = Arc::new(Mutex::new(RpcServeMempoolSubmitState::default()));
@@ -686,9 +688,15 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
         status_checked_at: Some(Instant::now()),
         mempool_checked_at: Some(Instant::now()),
     }));
+    {
+        let readiness = readiness
+            .lock()
+            .map_err(|_| "rpc serve readiness lock poisoned".to_string())?;
+        write_rpc_serve_readiness(&options.ready_file, &readiness)?;
+    }
     let fastswap_service = Arc::new(Mutex::new(None));
     let runtime_metrics = Arc::new(RpcServeRuntimeMetrics::default());
-    let (event_sender, event_receiver) = mpsc::channel::<RpcServeEventRecord>();
+    let (event_sender, event_receiver) = mpsc::channel::<(Option<RpcServeEventRecord>, bool)>();
     let mut accepted_count = 0_usize;
     let mut active_connections = 0_usize;
     while rpc_serve_accept_budget_allows(accepted_count, options.max_requests) {
@@ -711,9 +719,15 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
             &readiness,
         )?;
 
-        let (stream, peer_addr) = listener
-            .accept()
-            .map_err(|error| format!("rpc serve accept failed: {error}"))?;
+        let (stream, peer_addr) = match listener.accept() {
+            Ok(connection) => connection,
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(10));
+                continue;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(format!("rpc serve accept failed: {error}")),
+        };
         set_stream_timeout(&stream, options.timeout_ms)?;
         accepted_count = accepted_count.saturating_add(1);
         active_connections = active_connections.saturating_add(1);
@@ -765,10 +779,11 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
             let fallback_peer_addr = context.peer_addr.clone();
             let mut context = context;
             let mut idx = request_index;
+            let mut handled = 0_u64;
             // Keep one reader for the connection lifetime so pipelined bytes
             // read ahead after a newline are not discarded between requests.
             let mut reader = BufReader::new(RpcServeDeadlineStream::new(stream, timeout_ms));
-            let last_event = loop {
+            loop {
                 // Each request frame gets a fresh bounded read budget; a
                 // stalled or trickling client only drops this connection.
                 reader.get_mut().reset_read_deadline();
@@ -790,25 +805,24 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
                         &response,
                     )
                 });
-                idx = idx.saturating_add(1);
-                if !keep_alive {
-                    break event;
+                let read_failed = event.error_code.as_deref() == Some("rpc_read_error");
+                if event_sender.send((Some(event), false)).is_err() {
+                    return;
                 }
-                // A failed request read means the client stalled or vanished;
-                // close instead of granting it another idle budget.
-                if event.error_code.as_deref() == Some("rpc_read_error") {
-                    break event;
+                idx = idx.saturating_add(1);
+                handled = handled.saturating_add(1);
+                if !keep_alive || !rpc_serve_connection_request_budget_allows(handled) || read_failed {
+                    break;
                 }
                 // Observe both read-ahead and new socket bytes without
                 // consuming the next frame before the handler sees it.
                 reader.get_mut().reset_read_deadline();
                 match reader.fill_buf() {
-                    Ok([]) => break event,
+                    Ok([]) | Err(_) => break,
                     Ok(_) => continue,
-                    Err(_) => break event,
                 }
-            };
-            let _ = event_sender.send(last_event);
+            }
+            let _ = event_sender.send((None, true));
         });
     }
     drop(event_sender);
@@ -904,34 +918,42 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
 }
 
 fn receive_rpc_serve_event(
-    event_receiver: &mpsc::Receiver<RpcServeEventRecord>,
+    event_receiver: &mpsc::Receiver<(Option<RpcServeEventRecord>, bool)>,
     active_connections: &mut usize,
     requests: &mut Vec<RpcServeEventRecord>,
     event_writer: &mut Option<std::fs::File>,
     ready_file: &Path,
     readiness: &Arc<Mutex<RpcServeReadinessReport>>,
 ) -> Result<(), String> {
-    let event = event_receiver
+    let (event, connection_closed) = event_receiver
         .recv()
         .map_err(|error| format!("rpc serve worker channel receive failed: {error}"))?;
-    *active_connections = active_connections.saturating_sub(1);
-    write_rpc_serve_event_or_degrade(event_writer, &event, ready_file, readiness);
-    requests.push(event);
+    if connection_closed {
+        *active_connections = active_connections.saturating_sub(1);
+    }
+    if let Some(event) = event {
+        write_rpc_serve_event_or_degrade(event_writer, &event, ready_file, readiness);
+        requests.push(event);
+    }
     Ok(())
 }
 
 fn drain_rpc_serve_events(
-    event_receiver: &mpsc::Receiver<RpcServeEventRecord>,
+    event_receiver: &mpsc::Receiver<(Option<RpcServeEventRecord>, bool)>,
     active_connections: &mut usize,
     requests: &mut Vec<RpcServeEventRecord>,
     event_writer: &mut Option<std::fs::File>,
     ready_file: &Path,
     readiness: &Arc<Mutex<RpcServeReadinessReport>>,
 ) -> Result<(), String> {
-    while let Ok(event) = event_receiver.try_recv() {
-        *active_connections = active_connections.saturating_sub(1);
-        write_rpc_serve_event_or_degrade(event_writer, &event, ready_file, readiness);
-        requests.push(event);
+    while let Ok((event, connection_closed)) = event_receiver.try_recv() {
+        if connection_closed {
+            *active_connections = active_connections.saturating_sub(1);
+        }
+        if let Some(event) = event {
+            write_rpc_serve_event_or_degrade(event_writer, &event, ready_file, readiness);
+            requests.push(event);
+        }
     }
     Ok(())
 }

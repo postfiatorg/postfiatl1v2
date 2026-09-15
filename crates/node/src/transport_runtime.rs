@@ -952,9 +952,13 @@ pub(super) fn transport_validator_serve_inner(
             None => prewarm_shielded_verifier_cache("transport validator service"),
         },
         || {
-            TcpListener::bind(&bind_address).map_err(|error| {
+            let listener = TcpListener::bind(&bind_address).map_err(|error| {
                 format!("transport validator service bind `{bind_address}` failed: {error}")
-            })
+            })?;
+            listener.set_nonblocking(true).map_err(|error| {
+                format!("transport validator nonblocking accept failed: {error}")
+            })?;
+            Ok(listener)
         },
         |shielded_verifier_prewarm| {
             if let Some(ready_file) = ready_file.as_ref() {
@@ -983,9 +987,6 @@ pub(super) fn transport_validator_serve_inner(
             Ok(())
         },
     )?;
-    listener
-        .set_nonblocking(true)
-        .map_err(|error| format!("transport validator nonblocking accept failed: {error}"))?;
     let mut was_shutdown = false;
     'accept_connections: for connection_index in 1..=max_connections {
         let connection_index = connection_index as u64;

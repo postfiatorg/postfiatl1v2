@@ -28,6 +28,200 @@ mod rpc_serve_request_tests {
         serde_json::from_str(&response_line).expect("parse RPC response")
     }
 
+    fn node_serving_read_only_options(root: &Path, port: u16, keep_alive: bool) -> RpcServeOptions {
+        RpcServeOptions {
+            data_dir: root.to_path_buf(),
+            spool_dir: root.join("runtime/rpc-spool"),
+            ready_file: root.join("readiness/rpc.json"),
+            bind_host: "127.0.0.1".to_string(),
+            port,
+            max_requests: 1,
+            timeout_ms: 2_000,
+            child_timeout_ms: 2_000,
+            event_log: Some(root.join("rpc-events.jsonl")),
+            allow_mempool_submit: false,
+            allow_mempool_submit_finality: false,
+            allow_orchard_batch_create: false,
+            owned_lane_enabled: true,
+            finality_topology_file: root.join("topology.json"),
+            finality_key_file: root.join(VALIDATOR_KEYS_FILE),
+            finality_proposal_key_file: None,
+            finality_artifact_root: root.join("finality-artifacts"),
+            finality_timeout_ms: 2_000,
+            finality_send_retries: 0,
+            finality_retry_backoff_ms: 0,
+            finality_quorum_early_full_propagation: false,
+            max_mempool_submit_per_peer: 8,
+            max_mempool_submit_total: 32,
+            max_orchard_batch_create_per_peer: 2,
+            max_orchard_batch_create_total: 8,
+            max_orchard_batch_create_concurrent: 1,
+            max_child_dispatch_concurrent: 8,
+            max_child_dispatch_per_peer: 4,
+            keep_alive,
+        }
+    }
+
+    fn node_serving_read_only_root(suffix: &str) -> PathBuf {
+        let root = env::temp_dir().join(format!(
+            "postfiat-node-serving-{suffix}-{}-{}",
+            process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).expect("clock").as_nanos()
+        ));
+        init_consensus_v2(InitConsensusV2Options {
+            data_dir: root.clone(),
+            chain_id: "node-serving-test".to_string(),
+            node_id: "validator-0".to_string(),
+            validator_count: 4,
+            activation_height: 1,
+            storage_activation_height: None,
+        })
+        .expect("initialize node serving fixture");
+        root
+    }
+
+    #[test]
+    fn rpc_serve_keep_alive_records_each_request_and_closes_one_connection() {
+        let root = node_serving_read_only_root("keep-alive-events");
+        let port = TcpListener::bind(("127.0.0.1", 0))
+            .expect("reserve test port")
+            .local_addr().expect("test port address").port();
+        let options = node_serving_read_only_options(&root, port, true);
+        let ready_file = options.ready_file.clone();
+        let server = std::thread::spawn(move || rpc_serve(options));
+        for _ in 0..100 {
+            if ready_file.is_file() { break; }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(ready_file.is_file(), "RPC server must be ready");
+        let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect RPC");
+        writer.set_read_timeout(Some(Duration::from_secs(5))).expect("read timeout");
+        let mut reader = BufReader::new(writer.try_clone().expect("clone RPC stream"));
+        for id in ["first", "second"] {
+            let mut line = serde_json::to_vec(&RpcRequest::empty(id, "status"))
+                .expect("serialize status request");
+            line.push(b'\n');
+            writer.write_all(&line).expect("send status request");
+            let mut reply = String::new();
+            reader.read_line(&mut reply).expect("read status response");
+            let response: RpcResponse = serde_json::from_str(&reply).expect("parse status response");
+            assert!(response.ok, "{id}: {:?}", response.error);
+        }
+        writer.shutdown(std::net::Shutdown::Write).expect("close request stream");
+        let report = server.join().expect("join RPC server").expect("serve two requests");
+        assert_eq!(report.request_count, 2);
+        assert_eq!(report.ok_count, 2);
+        assert_eq!(report.requests.iter().map(|event| event.id.as_str()).collect::<Vec<_>>(), vec!["first", "second"]);
+        let events = fs::read_to_string(root.join("rpc-events.jsonl")).expect("read RPC events");
+        assert_eq!(events.lines().count(), 2, "each served request must be logged");
+        fs::remove_dir_all(root).expect("cleanup keep-alive fixture");
+    }
+
+    #[test]
+    fn rpc_serve_logs_completed_request_while_keep_alive_socket_is_open() {
+        let root = node_serving_read_only_root("open-keep-alive-event");
+        let port = TcpListener::bind(("127.0.0.1", 0))
+            .expect("reserve test port")
+            .local_addr().expect("test port address").port();
+        let mut options = node_serving_read_only_options(&root, port, true);
+        options.max_requests = 2;
+        let ready_file = options.ready_file.clone();
+        let server = std::thread::spawn(move || rpc_serve(options));
+        for _ in 0..100 {
+            if ready_file.is_file() { break; }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(ready_file.is_file(), "RPC server must be ready");
+        let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect RPC");
+        writer.set_read_timeout(Some(Duration::from_secs(5))).expect("read timeout");
+        let mut reader = BufReader::new(writer.try_clone().expect("clone RPC stream"));
+        let mut line = serde_json::to_vec(&RpcRequest::empty("first", "status"))
+            .expect("serialize status request");
+        line.push(b'\n');
+        writer.write_all(&line).expect("send first request");
+        let mut reply = String::new();
+        reader.read_line(&mut reply).expect("read first response");
+        assert!(serde_json::from_str::<RpcResponse>(&reply).expect("parse response").ok);
+        let event_path = root.join("rpc-events.jsonl");
+        let mut first_event_logged = false;
+        for _ in 0..100 {
+            if fs::read_to_string(&event_path).is_ok_and(|events| events.lines().count() == 1) {
+                first_event_logged = true;
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(first_event_logged, "completed request must log before socket closes or another connection arrives");
+        let second = send_loopback_rpc(port, &RpcRequest::empty("second", "status"));
+        assert!(second.ok, "{:?}", second.error);
+        writer.shutdown(std::net::Shutdown::Write).expect("close first write side");
+        let report = server.join().expect("join RPC server").expect("serve both clients");
+        assert_eq!(report.request_count, 2);
+        assert_eq!(fs::read_to_string(&event_path).expect("read events").lines().count(), 2);
+        fs::remove_dir_all(root).expect("cleanup open keep-alive fixture");
+    }
+
+    #[test]
+    fn rpc_serve_keep_alive_closes_at_retained_request_limit() {
+        let root = node_serving_read_only_root("keep-alive-limit");
+        let port = TcpListener::bind(("127.0.0.1", 0))
+            .expect("reserve test port")
+            .local_addr()
+            .expect("test port address")
+            .port();
+        let mut options = node_serving_read_only_options(&root, port, true);
+        options.timeout_ms = 10_000;
+        let ready_file = options.ready_file.clone();
+        let server = std::thread::spawn(move || rpc_serve(options));
+        for _ in 0..100 {
+            if ready_file.is_file() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(ready_file.is_file(), "RPC server must be ready");
+        let mut writer = TcpStream::connect(("127.0.0.1", port)).expect("connect RPC");
+        writer
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .expect("read timeout");
+        let mut reader = BufReader::new(writer.try_clone().expect("clone RPC stream"));
+        let started = Instant::now();
+        for index in 0..RPC_SERVE_MAX_REQUESTS_PER_CONNECTION {
+            let mut line = serde_json::to_vec(&RpcRequest::empty(format!("status-{index}"), "status"))
+                .expect("serialize request");
+            line.push(b'\n');
+            writer.write_all(&line).expect("send status request");
+            let mut reply = String::new();
+            reader.read_line(&mut reply).expect("read status reply");
+            let response: RpcResponse = serde_json::from_str(&reply).expect("parse reply");
+            assert!(response.ok, "{:?}", response.error);
+        }
+        let report = server.join().expect("join RPC server").expect("bounded serve");
+        assert!(started.elapsed() < Duration::from_secs(5), "limit must close before the ten-second idle timeout");
+        assert_eq!(report.request_count, RPC_SERVE_MAX_REQUESTS_PER_CONNECTION);
+        assert_eq!(report.requests.len() as u64, RPC_SERVE_MAX_REQUESTS_PER_CONNECTION);
+        assert_eq!(fs::read_to_string(root.join("rpc-events.jsonl")).expect("read events").lines().count() as u64, RPC_SERVE_MAX_REQUESTS_PER_CONNECTION);
+        fs::remove_dir_all(root).expect("cleanup keep-alive-limit fixture");
+    }
+
+    #[test]
+    fn rpc_serve_health_preflight_failure_keeps_ready_file_absent() {
+        let root = node_serving_read_only_root("health-preflight");
+        let mempool = root.join(postfiat_storage::MEMPOOL_FILE);
+        if mempool.exists() {
+            fs::remove_file(&mempool).expect("remove mempool stamp fixture");
+        }
+        let port = TcpListener::bind(("127.0.0.1", 0))
+            .expect("reserve test port")
+            .local_addr().expect("test port address").port();
+        let options = node_serving_read_only_options(&root, port, false);
+        let ready_file = options.ready_file.clone();
+        let error = rpc_serve(options).expect_err("missing health stamp must fail startup");
+        assert!(error.contains("health stamp"), "{error}");
+        assert!(!ready_file.exists(), "startup failure must not publish readiness");
+        fs::remove_dir_all(root).expect("cleanup health-preflight fixture");
+    }
+
     #[test]
     fn rpc_serve_accept_budget_is_exact_at_every_small_boundary() {
         for max_requests in 0..=1_024 {
