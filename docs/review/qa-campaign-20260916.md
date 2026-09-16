@@ -2,7 +2,7 @@
 
 This is the progress record for the [burn 5 campaign](qa-campaign-20260916-burn5-brief.md). Work began on clean `main` at `c4303717` after `git pull --rebase origin main`. This task covers A1 only, with a 30-minute time box; no deployment or live activation.
 
-**Status:** A1, A2, A3 and A4 closed. Work stops after A4 as requested; A5 and B remain pending and not started. A4 leaves SMG-07 unfixed because its repair depends on a file outside A4. No live activation, Task Node or fleet action. The opening paragraph, earlier surface results and Final summary retain historical closeouts; this status, the table and the A4 result record current progress.
+**Status:** A1, A2, A3, A4 and A5 closed. Work stops after A5 as requested; B remains pending and not started. A5 repaired all three P2 findings and recorded two unfixed P3 findings; A4 still leaves SMG-07 blocked by its out-of-scope dependency. No live activation, Task Node or fleet action. The opening paragraph, earlier surface results, earlier skips and Final summary retain historical closeouts; this status, the table and the A5 result record current progress.
 
 ## Campaign state
 
@@ -12,10 +12,10 @@ This is the progress record for the [burn 5 campaign](qa-campaign-20260916-burn5
 | A2 | Vote locks and view recovery | done | 1 | 1 | 0 | [Review](vote-locks-review-20260916.md); findings `1511ea09`; repair `090bd17e` (VLK-01 and VLK-02 both consensus-affecting; full Rust suite verdict pending); all P1/P2 repaired |
 | A3 | Cobalt handoff and authority | done | 0 | 4 | 2 | [Review](cobalt-handoff-review-20260916.md); findings `34611d66`; repair `21cf30f8` (CHO-01/02 consensus-affecting, CHO-03/04 not consensus-affecting; full Rust suite verdict pending); CHO-05/06 recorded without repair |
 | A4 | Storage migration and activation, certified-send index | done; one repair blocked by scope | 0 | 5 | 2 | [Review](storage-migration-review-20260916.md); findings `307214ef`, correction/dependency `514f7e15`; repair `401fa055` (SMG-01–04 not consensus-affecting; full Rust suite verdict pending); SMG-07 depends on out-of-scope `transport_cli.rs`; SMG-05/06 recorded without repair |
-| A5 | Swap and recovery services | pending | — | — | — | Not started |
+| A5 | Swap and recovery services | done | 0 | 3 | 2 | [Review](swap-recovery-services-review-20260916.md); findings `696eeffa`; repair `d679f8e8` (SWP-01 consensus-affecting, SWP-02/03 not consensus-affecting; full Rust suite verdict pending); all P2 repaired, SWP-04/05 recorded without repair |
 | B | Defect inventory and TIH gate | pending | — | — | — | Not started |
 
-Current finding totals: **1 P1, 11 P2, 5 P3** (A1, A2, A3 and A4).
+Current finding totals: **1 P1, 14 P2, 7 P3** (A1, A2, A3, A4 and A5).
 
 ## Mempool proposals review result
 
@@ -65,7 +65,17 @@ The findings document gives the full review limits. Delegated storage/atomic-wri
 
 ## Swap and recovery services review result
 
-Pending; not reviewed.
+A5 began on clean `main` at `3bfcbfed` after `git pull --rebase origin main`, at approximately 12:38 UTC within a 30-minute time box. The [A5 review](swap-recovery-services-review-20260916.md) read all **4,171 lines** of the five allowed files under `crates/node/src/`: `pftl_swap_service.rs` (2,028), `atomic_swap_rpc.rs` (453), `atomic_swap_rpc_server.rs` (320), `fastpay_recovery_node.rs` (986), and `operator_attestations.rs` (384), including in-file tests. Focus: amount arithmetic/rounding, swap/recovery replay, attestation verification, state-change interlocks and malformed input. No other source implementation was reviewed as A5.
+
+- **SWP-01 (P2):** FastPay rollback zipped ledger-position-sorted inverse records with certificate-ordered inputs, rejecting valid differing orders. Repair `d679f8e8` compares exact identity/version sets and requires unique ascending inverse positions. The regression applies the real transfer model in two ledger orders with untouched objects, restores the complete original ledger, and rejects four malformed inverse cases without mutation. **Consensus-affecting: yes**, because recovery reconciliation results change; no schema or signed/hashed encoding change.
+- **SWP-02 (P2):** forward PFTL journal transitions could substitute the prepared/published batch hash. The repair rejects substitution at publication and resolution; its regression preserves durable bytes on conflicting publish/commit/reject requests, permits prepublication reproof and completes/reloads the correct batch. **Consensus-affecting: no.**
+- **SWP-03 (P2):** the journal writer could publish more than the reader's 32 MiB limit. The repair bounds actual serialized bytes before replacement. Its regression uses 1,536 valid entries with 64 bounded transitions each and verifies refusal preserves the existing readable journal. **Consensus-affecting: no.**
+- **SWP-04 (P3):** timing retries double-count already recorded stages against capacity. Recorded without repair.
+- **SWP-05 (P3):** attestation timestamps accept impossible calendar/time values. Recorded without repair.
+
+Findings were pushed as `696eeffa` before repair. All three P2 regressions reproduced the original defects. Repair `d679f8e8` changes only `fastpay_recovery_node.rs`, `pftl_swap_service.rs` and the findings document. All **11 focused tests passed**; no P1/P2 repair was skipped or required an excluded-file change. **Full Rust suite verdict pending** CI for `d679f8e8`; no deployment, live activation or CI verdict is claimed.
+
+The findings document records the full limits. Delegated execution/types, certificate/cryptographic verification, storage durability, historical replay, RPC dispatch/limits, caller serialization, quote snapshot coherence, proof construction and external attestation trust/freshness were not reviewed. The recovery regression uses a synthetic certificate/fence around the real transfer model; it is not quorum-certificate admission or archived-chain replay evidence. Release-candidate source files, prior burns' source surfaces, excluded crates and frozen artifacts were not reviewed or edited. No work stopped for time or usage. A5 is closed; B remains pending and is not started.
 
 ## Skips and boundary decisions
 
@@ -86,6 +96,11 @@ Pending; not reviewed.
 - A4: SMG-07 is recorded without repair because its shared retention-path resolver is in `crates/node/src/transport_cli.rs`, outside the allowed four files. The exploratory prune test hit this refusal before the intended sync assertion; it was removed after the failure and dependency were recorded. No shared resolver or excluded test file was reviewed or edited.
 - A4: SMG-05/06 remain unfixed P3 findings. The two existing ignored index release-mode performance spot checks were not enabled. No physical power-loss experiment, historical/Orchard replay, broad Rust suite, network/socket exercise or CI status query ran. The changed operator-output, configuration-rollback and completed-index boundaries do not change shielded execution or historical replay; the full Rust suite remains CI's verdict.
 - A4: no Task Node, fleet action, release-branch/checkout mutation, deployment, activation or other surface work occurred. Remote-ref comparisons and the one delegated-symbol lookup returned filenames only. No work stopped for time or usage.
+
+- A5: SWP-04/05 remain unfixed P3 findings as required. All three P2 findings were repaired within the two allowed source files; no excluded-file repair dependency arose.
+- A5: no source outside the five listed files was reviewed; delegated implementations and excluded test/type files were not opened for review or edited. Fixture field names came from compiler diagnostics. Remote-ref comparisons returned filenames only.
+- A5: no full Rust/Orchard suite, historical replay, physical crash experiment, network/socket exercise or CI status query ran. The changed FastPay owned-object inverse and local PFTL journal boundaries do not change Orchard execution, proofs or historical Orchard replay. The full Rust suite remains CI's verdict.
+- A5: no Task Node, fleet action, release-branch/checkout mutation, deployment, activation, other surface, inventory or scoring work occurred. B remains pending. No time or usage limit curtailed A5.
 
 ## Verification
 
@@ -145,6 +160,19 @@ Pending; not reviewed.
 - Before findings `307214ef`, evidence correction `514f7e15`, repair `401fa055`, and this closeout commit: `.venv-docs/bin/mkdocs build --strict`, `scripts/public-doc-links` (**403 files**), and `scripts/public-secret-scan` passed. The new findings file and all subsequent unit changes were staged before their scans.
 - Each A4 commit was followed by `git pull --rebase origin main && git push origin main`; pushes go only to this repository's `origin main`. Findings, their correction and repairs were pushed with clean trees before the next unit. This closeout changes only the campaign log and reruns no Rust tests.
 - A4 post-repair total: **23 passed, 0 failed, 2 ignored**. **Full Rust suite verdict pending** CI for `401fa055`; no CI verdict is claimed.
+
+**A5 verification:**
+
+- Initial `git pull --rebase origin main`: passed, already up to date at `3bfcbfed`; tree clean. All Cargo build/test commands below used `CARGO_NET_OFFLINE=true`.
+- Findings exploration: `cargo test -p postfiat-node fastpay_recovery_node::burn5_recovery_tests --lib --locked -- --nocapture`: **0 passed, 1 failed**, 0 ignored, 369 filtered out, at the original rollback input-order check after the real transfer model succeeded. Before this reproduction, six fixture-compilation attempts executed no tests (the first omitted `-- --nocapture`), and two earlier runs each failed one test during fixture deserialization; those were fixture failures, not defect evidence. The exploratory source edit was removed before the findings-only commit.
+- Before PFTL repair, `cargo test -p postfiat-node pftl_swap_service::tests::burn5_ --lib --locked`: **0 passed, 2 failed**, 0 ignored, 370 filtered out. Publication accepted the conflicting batch, and oversized persistence returned success.
+- `cargo check -p postfiat-node --locked`: passed.
+- `cargo test -p postfiat-node fastpay_recovery_node::burn5_recovery_tests --lib --locked`: **1 passed**, 0 failed, 0 ignored, 371 filtered out. This command passed first for the initial two-input case and again after adding both ledger orders, untouched objects and four invalid inverse cases; the final unique test count is one.
+- `cargo test -p postfiat-node pftl_swap_service::tests --lib --locked`: **10 passed**, 0 failed, 0 ignored, 362 filtered out; includes both new PFTL regressions.
+- `cargo fmt --all -- --check` and `git diff --check`: passed. Rustfmt emitted existing stable-toolchain warnings for nightly-only configuration options.
+- Before findings `696eeffa`, repair `d679f8e8`, and this closeout commit: `.venv-docs/bin/mkdocs build --strict`, `scripts/public-doc-links` (**404 files**) and `scripts/public-secret-scan` passed. Every unit's changes were staged before its secret scan.
+- Each A5 unit uses the required separate commit followed by `git pull --rebase origin main && git push origin main`; pushes go only to this repository's `origin main`. Findings and repairs were pushed with clean trees before the next unit. This closeout changes only the campaign log and reruns no Rust tests.
+- A5 post-repair total: **11 unique tests passed, 0 failed, 0 ignored**. **Full Rust suite verdict pending** CI for `d679f8e8`; no CI verdict is claimed.
 
 ## Scores
 
