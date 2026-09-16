@@ -61,7 +61,7 @@ jobs:
           ingress_source_lock_sha="$(sha256sum "$root/src-a/programs/pfusdc-arc-ingress/Cargo.lock" | cut -d' ' -f1)"
           egress_source_lock_sha="$(sha256sum "$root/src-a/programs/pfusdc-egress/Cargo.lock" | cut -d' ' -f1)"
           while read -r revision; do
-            git diff "$revision^" "$revision" -- crates/types > "$root/revert-$revision.patch"
+            git diff --no-ext-diff --unified=0 "$revision^" "$revision" -- crates/types > "$root/revert-$revision.patch"
           done < <(jq -r '.egress_source_reversions[]?' <<< "$release")
 
           build_pair() {
@@ -82,7 +82,7 @@ jobs:
               sudo chown -R "$(id -u):$(id -g)" /home/postfiat
               cp -a "$source" "$historical_root"
               while read -r revision; do
-                (cd "$historical_root" && git apply --reverse "$root/revert-$revision.patch")
+                (cd "$historical_root" && git apply --reverse --unidiff-zero "$root/revert-$revision.patch")
               done < <(jq -r '.egress_source_reversions[]?' <<< "$release")
               (
                 cd "$historical_root/programs/pfusdc-egress"
