@@ -1,0 +1,21 @@
+{
+  "schema": "postfiat.egress.release-builds.v1",
+  "sp1_version": "6.3.1",
+  "docker_image": "ghcr.io/succinctlabs/sp1@sha256:0942a27dbe8e38f4b14f3732e779df4027b17bde93e9fbc9e8c773c15eb63400",
+  "releases": [
+    {
+      "id": "arc-v2-20260902",
+      "source_commit": "b945bbb321eb4fdc5a57998fadcf0b353f1acb86",
+      "retained_commit": "65df4263746566c90d0e46db8c90a46c23576265",
+      "egress_lock_sha256": "084ce9bd8eb22e4bedf41fb514a2f605a5c4d6b5314e04bf42f23d20b7c159f4",
+      "expected": "docs/evidence/arc-mvp-20260828/program-info.current-v2-docker-20260902.json"
+    },
+    {
+      "id": "pfeth-v1-20260904",
+      "source_commit": "c9407b1c2176cf7f812ba886f8053ae7bb5cdeb0",
+      "retained_commit": "c9407b1c2176cf7f812ba886f8053ae7bb5cdeb0",
+      "egress_lock_sha256": "71225bed4ec4d8cecbeb05cf16071d8dd60ab09bf70cef57c2b7012d97a32a63",
+      "expected": "programs/pfusdc-egress/program-info.pfeth-v1.json"
+    }
+  ]
+}
