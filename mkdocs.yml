@@ -118,6 +118,7 @@ nav:
       - Completed P0 Remediation: plans/completed/P0-COMPLETE-REMEDIATION-PLAN-20260716.md
       - Completed Capability Restoration: plans/completed/OPEN-SOURCE-CAPABILITY-RESTORATION-PLAN-20260716.md
   - Handoffs:
+      - Flaky Tests, P3 Sweep, Candidate Review, And Burn Five: handoffs/2026-09-16___dravlic__flaky_tests_p3_sweep_candidate_review_and_burn_five.md
       - Burn Four Closed And RPC Health Probe: handoffs/2026-09-15___dravlic__burn_four_closed_and_rpc_health_probe.md
       - Fleet Restart Record And Burn Three Closed: handoffs/2026-09-14___dravlic__fleet_restart_record_and_burn_three_closed.md
       - CI Green, Fleet Check, And Burn Three Closed Early: handoffs/2026-09-11___dravlic__ci_green_fleet_check_and_burn_three.md
