@@ -10,6 +10,20 @@ from postfiat_rpc.wallet import FaucetPftResult, SendPftResult, TransparentWalle
 
 
 class PftlTransferCliTests(unittest.TestCase):
+    def test_transfer_report_preserves_large_atom_amount_as_decimal_string(self) -> None:
+        import json
+
+        for atoms, expected in [
+            (1, "0.000001"),
+            (1_250_000, "1.250000"),
+            (2**64 - 1, "18446744073709.551615"),
+        ]:
+            with self.subTest(atoms=atoms):
+                report = json.loads(json.dumps(cli.transfer_report("send", atoms, {"tx_id": "tx"})))
+                self.assertEqual(report["amount_atoms"], atoms)
+                self.assertEqual(report["amount_pft"], expected)
+                self.assertEqual(cli.pft_to_atoms(report["amount_pft"]), atoms)
+
     def test_pft_to_atoms_is_exact_at_six_decimals(self) -> None:
         self.assertEqual(cli.pft_to_atoms("20"), 20_000_000)
         self.assertEqual(cli.pft_to_atoms("0.000001"), 1)
