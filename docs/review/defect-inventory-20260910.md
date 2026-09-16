@@ -1,13 +1,17 @@
 # QA defect inventory — 2026-09-10
 
-Status: burn 2 inventory reconciled; burn 3 and burn 4 findings appended; P3 sweep recorded. The burn 2
+Status: burn 2 inventory reconciled; burn 3–5 findings appended; P3 sweep recorded.
+The inventory has 126 rows: 26 P1, 68 P2 and 32 P3. The burn 2
 Text Improvement Harness result is in the [2026-09-10 campaign log](qa-campaign-20260910.md);
 the burn 3 gate is in the [2026-09-11 campaign log](qa-campaign-20260911.md);
-the burn 4 gate is in the [2026-09-15 campaign log](qa-campaign-20260915.md).
+the burn 4 gate is in the [2026-09-15 campaign log](qa-campaign-20260915.md);
+the burn 5 gate is recorded in the [2026-09-16 campaign log](qa-campaign-20260916.md).
 
 This inventory separates demonstrated failures from missing evidence, operating
 assumptions, and capabilities that have not been built or activated. A
-**reproduced defect** has an observed failing case. An **evidence gap** means the
+**reproduced defect** has an observed failing case. A **code-observed defect**
+has a concrete failure scenario established by source review without an executed
+reproduction; this distinguishes burn 5's seven recorded P3 findings. An **evidence gap** means the
 available record cannot establish the claim. An **economic assumption** is a
 load or incentive premise rather than a code result. A **proposed capability**
 must not be described as shipped or authoritative.
@@ -91,6 +95,39 @@ Consensus-affecting repairs remain source-only and were not activated or deploye
 | CLI-02 | Reproduced defect | P2 | Fixed — `eb4c2afd` | [Node CLI review](node-cli-governance-review-20260915.md#findings): rerunning the FastSwap bootstrap helper truncated an already reviewed governance payload at the same output path and printed a successful write. |
 | CLI-03 | Reproduced defect | P3 | Fixed — `7095b393` | [Node CLI review](node-cli-governance-review-20260915.md#findings): a governance implementation work item allowing `"*"` marked unexpected touched paths authorized and verified in a scope report, although the report does not authorize live mutation. |
 
+## Burn 5 campaign findings
+
+These 22 findings are from the [burn 5 campaign](qa-campaign-20260916.md):
+1 P1, 14 P2 and 7 P3. Fourteen findings have source repairs, seven P3s remain
+recorded without repair, and SMG-07 is blocked by an out-of-scope dependency.
+All five repair commits still have a full Rust suite verdict pending.
+Consensus-affecting repairs remain source-only and were not activated or deployed.
+
+| ID | Classification | Severity | Status | Source and reproduction |
+| --- | --- | --- | --- | --- |
+| MPL-01 | Reproduced defect | P2 | Fixed — `1c9f44f1`; not consensus-affecting | [Mempool proposals review](mempool-proposals-review-20260916.md#findings): sender admission omitted pending offers from its quota, admitting a pool that later state-limit verification rejected. |
+| MPL-02 | Code-observed defect | P3 | Recorded, not fixed | [Mempool proposals review](mempool-proposals-review-20260916.md#findings): latest-ID reporting preferred an atomic swap although verification and batch selection process FastLane later; no common arrival order establishes wall-clock recency. |
+| VLK-01 | Reproduced defect | P1 | Fixed — `090bd17e`; consensus-affecting, conservatively, because this tightens signer-safety persistence; source-only; not activated or deployed | [Vote locks review](vote-locks-review-20260916.md#findings): lock reservation could succeed without syncing the published canonical directory entry, including identical retries. Injected sync failures and store reopen reproduced the missing interlock; physical power loss was not tested. |
+| VLK-02 | Reproduced defect | P2 | Fixed — `090bd17e`; consensus-affecting, conservatively, because this tightens signer admission on ambiguous restored state; source-only; not activated or deployed | [Vote locks review](vote-locks-review-20260916.md#findings): migration silently skipped non-regular JSON lock entries before marking completion, allowing a new reservation despite unresolved restored lock evidence. |
+| CHO-01 | Reproduced defect | P2 | Fixed — `21cf30f8`; consensus-affecting, because authority-certificate admission is tightened; source-only; not activated or deployed | [Cobalt handoff review](cobalt-handoff-review-20260916.md#findings): a newer authority decision accepted valid older full-knowledge checkpoints without binding their interval, coverage or signed pending pair to the current ratification. |
+| CHO-02 | Reproduced defect | P2 | Fixed — `21cf30f8`; consensus-affecting, because the authority verifier rejects over-bound expansion; source-only; not activated or deployed | [Cobalt handoff review](cobalt-handoff-review-20260916.md#findings): compact certificate expansion cloned shared checks into every checkpoint without bounding their product; the repair bounds serialized expansion to 16 MiB before cloning. |
+| CHO-03 | Reproduced defect | P2 | Fixed — `21cf30f8`; not consensus-affecting | [Cobalt handoff review](cobalt-handoff-review-20260916.md#findings): malformed-request or ordinary-response write failures escaped the connection and terminated the shadow listener; in-memory regressions verify later probes remain serviceable. |
+| CHO-04 | Reproduced defect | P2 | Fixed — `21cf30f8`; not consensus-affecting | [Cobalt handoff review](cobalt-handoff-review-20260916.md#findings): valid update rehearsal finalization panicked when unrelated governance correctly selected Foundation authority; the rehearsal now checks mixed-batch rejection and returns ordinary errors. |
+| CHO-05 | Code-observed defect | P3 | Recorded, not fixed | [Cobalt handoff review](cobalt-handoff-review-20260916.md#findings): negative rehearsal probes discarded signed approvals, so a missing-quorum rejection could be reported as independent stale-height or replay evidence. |
+| CHO-06 | Code-observed defect | P3 | Recorded, not fixed | [Cobalt handoff review](cobalt-handoff-review-20260916.md#findings): rehearsal manifest digest checks accepted lowercase letters outside hexadecimal, carrying malformed anchors into prepared evidence without establishing a live admission bypass. |
+| SMG-01 | Reproduced defect | P2 | Fixed — `401fa055`; not consensus-affecting | [Storage migration review](storage-migration-review-20260916.md#findings): check-then-replace output could overwrite a competing activation/cancellation artifact or dangling symlink; publication now uses an atomic no-replace hard link and directory sync. |
+| SMG-02 | Reproduced defect | P2 | Fixed — `401fa055`; not consensus-affecting; append recovery only | [Storage migration review](storage-migration-review-20260916.md#findings): append recovery skipped move-directory sync when an earlier rename was already visible, then published its index and cleared the intent. Both append barriers now retry; prune durability remains unqualified behind SMG-07. |
+| SMG-03 | Reproduced defect | P2 | Fixed — `401fa055`; not consensus-affecting | [Storage migration review](storage-migration-review-20260916.md#findings): pending-intent recovery could stamp unrelated completed-directory additions or omissions as consistent; bounded membership checks now preserve the old index and intent on refusal. |
+| SMG-04 | Reproduced defect | P2 | Fixed — `401fa055`; not consensus-affecting | [Storage migration review](storage-migration-review-20260916.md#findings): backend selection left the candidate mode published after post-validation failed; returned errors now restore the previous mode and report restoration failure. |
+| SMG-05 | Code-observed defect | P3 | Recorded, not fixed | [Storage migration review](storage-migration-review-20260916.md#findings): migration manifest/checksum reads were unbounded, and index metadata checks preceded a separate unbounded read vulnerable to non-cooperating local replacement or growth. |
+| SMG-06 | Code-observed defect | P3 | Recorded, not fixed | [Storage migration review](storage-migration-review-20260916.md#findings): a bare relative output could fail disk-space preflight on its empty parent path; an existing output mount could also differ from the parent filesystem used for estimation. |
+| SMG-07 | Reproduced defect | P2 | Recorded, repair blocked by A4 scope | [Storage migration review](storage-migration-review-20260916.md#findings): interrupted prune recovery rejected an already moved retention payload as non-canonical. Repair requires the shared resolver in `crates/node/src/transport_cli.rs`, outside A4's four-file list; the record does not establish a release-candidate exclusion. |
+| SWP-01 | Reproduced defect | P2 | Fixed — `d679f8e8`; consensus-affecting, because recovery reconciliation results change; source-only; not activated or deployed | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): FastPay rollback zipped ledger-position inverse records with certificate-ordered inputs and rejected valid differing orders. Exact identity/version sets and unique ascending positions now restore the original ledger; the fixture does not establish quorum admission or historical replay. |
+| SWP-02 | Reproduced defect | P2 | Fixed — `d679f8e8`; not consensus-affecting | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): forward PFTL journal transitions could substitute the prepared or published batch hash, making recovery identity ambiguous; publication and resolution now reject substitution while permitting prepublication reproof. |
+| SWP-03 | Reproduced defect | P2 | Fixed — `d679f8e8`; not consensus-affecting | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): the journal writer could persist valid histories exceeding the reader's 32 MiB limit; serialized bytes including the newline are now bounded before replacing the readable file. |
+| SWP-04 | Code-observed defect | P3 | Recorded, not fixed | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): timing retries counted already recorded stages against capacity again, rejecting an identical-stage replay at the 64-stage bound. |
+| SWP-05 | Code-observed defect | P3 | Recorded, not fixed | [Swap and recovery review](swap-recovery-services-review-20260916.md#findings): attestation timestamp validation checked shape and digits but accepted impossible calendar and time values; external trust and freshness remain consumer responsibilities. |
+
 ## Storage, Cobalt, and Task Node review
 
 The source is the historical [2026-09-06 review](https://github.com/postfiatorg/postfiatl1v2/blob/cfdeccd6897bfc8a80bfa2a95a6fb04f603c1cee/docs/review/storage-cobalt-tasknode-handoff-review-20260906.md).
@@ -172,24 +209,27 @@ and its frozen [qualification receipt](https://github.com/postfiatorg/postfiatl1
 
 ## Final disposition
 
-The inventory contains 104 unique rows, including 28 burn 3 findings (6 P1,
-14 P2, 8 P3) and 15 burn 4 findings (0 P1, 10 P2, 5 P3). Classification and severity describe what the cited evidence
+The inventory contains 126 unique rows, including 28 burn 3 findings (6 P1,
+14 P2, 8 P3), 15 burn 4 findings (0 P1, 10 P2, 5 P3), and 22 burn 5 findings
+(1 P1, 14 P2, 7 P3). Classification and severity describe what the cited evidence
 establishes; status describes the bounded disposition in that row, not a
 broader production claim.
 
 | Measure | Count |
 | --- | ---: |
-| Reproduced defects | 77 |
+| Reproduced defects | 92 |
+| Code-observed defects (burn 5 P3) | 7 |
 | Evidence gaps | 22 |
 | Economic assumptions | 1 |
 | Proposed capabilities | 4 |
-| P1 | 25 |
-| P2 | 54 |
-| P3 | 25 |
-| Fixed | 70 |
+| P1 | 26 |
+| P2 | 68 |
+| P3 | 32 |
+| Fixed | 84 |
 | Dispositioned | 16 |
 | Reproduced and retained (prior campaigns) | 5 |
-| Recorded, not fixed (burn 3 and burn 4 P3) | 1 |
+| Recorded, not fixed (burn 3–5 P3) | 8 |
+| Recorded, repair blocked by A4 scope (SMG-07) | 1 |
 | Needs live environment | 6 |
 | Needs operator decision | 6 |
 | Bare open | 0 |
@@ -221,6 +261,14 @@ row is retained unchanged. COB-03, NET-04, TYP-03 and SHD-03 are conservatively
 classified as consensus-affecting, source-only repairs, with no activation or
 claim about live behavior.
 
+Burn 5 added fourteen repaired findings (1 P1, 13 P2), seven code-observed P3s
+recorded without repair, and one reproduced P2 blocked by A4 scope (SMG-07).
+The five consensus-affecting repairs are VLK-01/02, CHO-01/02 and SWP-01;
+they remain source-only, not activated or deployed. All five repair commits
+have a full Rust suite verdict pending. SMG-07 requires the shared retention-path
+resolver outside A4; the append fix does not qualify the blocked prune path.
+No burn 5 finding is documented as blocked specifically by the release candidate.
+
 “Fixed” remains scoped by the row. In particular, the RPC supervisor repair is
 not deployed, StakeHub fixes are local and unpublished, the Arc controller
 migration remains operational work, V2 remains `SHADOW_ONLY`, and the fleet
@@ -248,7 +296,12 @@ or StakeHub write.
 | Burn 4 node startup and RPC serving (SRV-) | 3 |
 | Burn 4 shadow and swap services (SHD-) | 3 |
 | Burn 4 node command tools and governance agent (CLI-) | 3 |
-| **Total** | **104** |
+| Burn 5 mempool proposals (MPL-) | 2 |
+| Burn 5 vote locks and view recovery (VLK-) | 2 |
+| Burn 5 Cobalt handoff and authority (CHO-) | 6 |
+| Burn 5 storage migration, activation and certified-send index (SMG-) | 7 |
+| Burn 5 swap and recovery services (SWP-) | 5 |
+| **Total** | **126** |
 
 Campaign review and repair commits are recorded in the
 [campaign log](qa-campaign-20260910.md). The inventory preserves open design,
