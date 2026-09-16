@@ -2,7 +2,7 @@
 
 This is the progress record for the [burn 5 campaign](qa-campaign-20260916-burn5-brief.md). Work began on clean `main` at `c4303717` after `git pull --rebase origin main`. This task covers A1 only, with a 30-minute time box; no deployment or live activation.
 
-**Status:** A1, A2 and A3 closed. Work stops after A3 as requested; A4, A5 and B remain pending and not started. No live activation, Task Node or fleet action. The opening paragraph, earlier surface results and Final summary retain historical closeouts; this status, the table and the A3 result record current progress.
+**Status:** A1, A2, A3 and A4 closed. Work stops after A4 as requested; A5 and B remain pending and not started. A4 leaves SMG-07 unfixed because its repair depends on a file outside A4. No live activation, Task Node or fleet action. The opening paragraph, earlier surface results and Final summary retain historical closeouts; this status, the table and the A4 result record current progress.
 
 ## Campaign state
 
@@ -11,11 +11,11 @@ This is the progress record for the [burn 5 campaign](qa-campaign-20260916-burn5
 | A1 | Mempool proposals | done | 0 | 1 | 1 | [Review](mempool-proposals-review-20260916.md); findings `6f2332cf`; repair `1c9f44f1` (not consensus-affecting; full Rust suite verdict pending); MPL-02 recorded without repair |
 | A2 | Vote locks and view recovery | done | 1 | 1 | 0 | [Review](vote-locks-review-20260916.md); findings `1511ea09`; repair `090bd17e` (VLK-01 and VLK-02 both consensus-affecting; full Rust suite verdict pending); all P1/P2 repaired |
 | A3 | Cobalt handoff and authority | done | 0 | 4 | 2 | [Review](cobalt-handoff-review-20260916.md); findings `34611d66`; repair `21cf30f8` (CHO-01/02 consensus-affecting, CHO-03/04 not consensus-affecting; full Rust suite verdict pending); CHO-05/06 recorded without repair |
-| A4 | Storage migration and activation, certified-send index | pending | — | — | — | Not started |
+| A4 | Storage migration and activation, certified-send index | done; one repair blocked by scope | 0 | 5 | 2 | [Review](storage-migration-review-20260916.md); findings `307214ef`, correction/dependency `514f7e15`; repair `401fa055` (SMG-01–04 not consensus-affecting; full Rust suite verdict pending); SMG-07 depends on out-of-scope `transport_cli.rs`; SMG-05/06 recorded without repair |
 | A5 | Swap and recovery services | pending | — | — | — | Not started |
 | B | Defect inventory and TIH gate | pending | — | — | — | Not started |
 
-Current finding totals: **1 P1, 6 P2, 3 P3** (A1, A2 and A3).
+Current finding totals: **1 P1, 11 P2, 5 P3** (A1, A2, A3 and A4).
 
 ## Mempool proposals review result
 
@@ -49,7 +49,19 @@ The complete review limits are in the findings document. Delegated shadow-servic
 
 ## Storage migration and activation, certified-send index review result
 
-Pending; not reviewed.
+A4 began on clean `main` at `41bd85ff` after `git pull --rebase origin main`, at approximately 12:16 UTC with a 30-minute time box. The [A4 review](storage-migration-review-20260916.md) read all 3,860 lines of the four allowed files: `crates/node/src/storage_migration.rs` (1,005), `storage_activation_cli.rs` (378), `storage_backend_config.rs` (143), and `certified_send_completed_index.rs` (2,334), including its in-file tests. Focus: interrupted migration, activation preconditions, backend selection, index crash consistency and growth bounds. No other source implementation was reviewed as A4.
+
+- **SMG-01 (P2):** activation/cancellation output used a check-then-replace sequence. Repair `401fa055` publishes synced JSON with an atomic no-replace hard link and directory sync. Its regression preserves a competing artifact and dangling symlink, verifies exact successful JSON output and temporary-file cleanup. **Consensus-affecting: no.**
+- **SMG-02 (P2):** append recovery skipped move-directory sync when a previous rename was already visible. The repair retries both directory barriers before index publication. Its regression injects repeated failures at each directory, checks retained intent and unchanged index, then successfully recovers. **Consensus-affecting: no.**
+- **SMG-03 (P2):** pending-intent recovery could adopt unrelated directory additions/deletions into its fresh stamp. The repair checks bounded directory membership before index publication; its regression covers both discrepancies and preserves recovery evidence. **Consensus-affecting: no.**
+- **SMG-04 (P2):** backend post-validation failure left the candidate mode selected. The repair restores the previous mode after selection/post-check errors and explicitly reports restoration failure. Its regression checks the failed candidate selection, restored mode on reopen and a later successful selection. **Consensus-affecting: no.**
+- **SMG-05 (P3):** manifest/checksum reads are unbounded, and index metadata checks precede a separate unbounded read. Recorded without repair.
+- **SMG-06 (P3):** bare relative migration output can fail disk-space preflight; the parent can also represent a different filesystem from an existing mounted output. Recorded without repair.
+- **SMG-07 (P2):** interrupted prune recovery rejects the already moved retention payload as non-canonical. **Unfixed dependency:** `crates/node/src/transport_cli.rs` owns `read_validated_durable_certified_send_payloads` and is outside A4. Its implementation was not reviewed or edited; only a filename-only symbol lookup located it. The conditional prune sync path also remains unqualified behind this dependency.
+
+Findings were pushed as `307214ef`. Regression exploration exposed SMG-07 and corrected the initial SMG-02 prune claim; that evidence was pushed separately as `514f7e15` before fixes. Partial regression work was stashed during the correction, then restored with the stash removed. Repair `401fa055` fixes four P2 findings in three source files: `storage_activation_cli.rs`, `storage_backend_config.rs` and `certified_send_completed_index.rs`, with four in-file regressions. `storage_migration.rs` was reviewed but not edited. All four repaired defects reproduced before repair. **23 focused tests passed**, with two existing manual checks ignored. **Full Rust suite verdict pending** CI for `401fa055`; no deployment or live activation is claimed.
+
+The findings document gives the full review limits. Delegated storage/atomic-write internals, journal recovery, receipt exceptions, replay, state commitments, governance authorization/readiness, certified-send payload/quarantine helpers, RPC and command dispatch were not reviewed. Release-candidate source files, prior burns' source surfaces, excluded crates and frozen artifacts were not reviewed or edited. No time or usage limit curtailed the four-file review. A4 closes with one P2 dependency and two P3 findings explicitly unfixed; A5 and B remain pending.
 
 ## Swap and recovery services review result
 
@@ -57,7 +69,7 @@ Pending; not reviewed.
 
 ## Skips and boundary decisions
 
-- A4, A5 and B are outside the A3 task and remain pending. No inventory edit or scoring.
+- A5 and B are outside the A4 task and remain pending. No inventory edit or scoring.
 - Release-candidate files listed in the brief, excluded crates, previously reviewed surfaces and frozen artifacts are not reviewed or edited. Only remote-ref path metadata is compared to establish exclusions.
 - No Task Node or fleet action, release-branch or release-checkout mutation, spend, signup or deployment.
 - MPL-02 (P3) remains recorded without repair as required. No P1/P2 repair required an excluded file.
@@ -70,6 +82,10 @@ Pending; not reviewed.
 - A3: the existing local socket drill was explicitly skipped because network use is limited to git and permitted scoring. No sockets or validator hosts were contacted by the A3 tests; the listener regression uses in-memory streams. No broad Rust/Orchard run, physical fault test or CI status query was performed.
 - A3: a broad instruction-filename search returned the release checkout's `AGENTS.md` path despite the intended exclusion; its contents were not opened and the checkout was not mutated. All source review and edits stayed in the four allowed files. Remote-ref comparisons read filenames only.
 - A3: an initial `burn5_` test filter also reran four existing A1/A2 regressions. They passed; no A1/A2 source was re-reviewed or edited and no additional surface was started. Later filters were restricted to the A3 modules.
+
+- A4: SMG-07 is recorded without repair because its shared retention-path resolver is in `crates/node/src/transport_cli.rs`, outside the allowed four files. The exploratory prune test hit this refusal before the intended sync assertion; it was removed after the failure and dependency were recorded. No shared resolver or excluded test file was reviewed or edited.
+- A4: SMG-05/06 remain unfixed P3 findings. The two existing ignored index release-mode performance spot checks were not enabled. No physical power-loss experiment, historical/Orchard replay, broad Rust suite, network/socket exercise or CI status query ran. The changed operator-output, configuration-rollback and completed-index boundaries do not change shielded execution or historical replay; the full Rust suite remains CI's verdict.
+- A4: no Task Node, fleet action, release-branch/checkout mutation, deployment, activation or other surface work occurred. Remote-ref comparisons and the one delegated-symbol lookup returned filenames only. No work stopped for time or usage.
 
 ## Verification
 
@@ -113,6 +129,22 @@ Pending; not reviewed.
 - Before findings `34611d66`, repairs `21cf30f8`, and this closeout commit: `.venv-docs/bin/mkdocs build --strict`, `scripts/public-doc-links` (402 files), and `scripts/public-secret-scan` passed. The new findings document was staged before its scan.
 - Each A3 unit uses its required separate commit followed by `git pull --rebase origin main && git push origin main`; pushes go only to this repository's `origin main`. Findings and repairs were pushed with clean trees before the next unit. This closeout changes only the campaign log and reruns no Rust tests.
 - A3 post-repair total: **17 passed, 0 failed**, with the local socket drill intentionally skipped. **Full Rust suite verdict pending** CI for `21cf30f8`; no CI verdict is claimed.
+
+**A4 verification:**
+
+- Initial `git pull --rebase origin main`: passed, already up to date at `41bd85ff`; tree clean. All Cargo build/test commands below used `CARGO_NET_OFFLINE=true`.
+- Before repair, `cargo test -p postfiat-node storage_activation_cli::tests::burn5_ --lib --locked`: **0 passed, 1 failed**, 0 ignored, 367 filtered out; the competing artifact was replaced.
+- Before repair, `cargo test -p postfiat-node storage_backend_config::tests::burn5_ --lib --locked`: **0 passed, 1 failed**, 0 ignored, 368 filtered out; reopening still selected `BoundedJsonl` after the injected error instead of restoring `Transactional`. Only a behavior-preserving selection helper had been extracted at that point.
+- Before repair, `cargo test -p postfiat-node certified_send_completed_index::completed_index_tests::burn5_ --bin postfiat-node --locked`: **0 passed, 3 failed**, 0 ignored, 170 filtered out. Append durability and unrelated-directory membership reproduced their intended defects. The prune fixture failed on the earlier retention-path refusal, not on the intended sync failure.
+- `cargo test -p postfiat-node certified_send_completed_index::completed_index_tests::burn5_prune_ --bin postfiat-node --locked`: **0 passed, 1 failed**, 0 ignored, 172 filtered out. Added error reporting identified `certified send durable payload path is not canonical`, yielding SMG-07. That exploratory test and prune-only injection changes were removed; this is recorded failure evidence, not a passing prune-recovery claim.
+- `cargo check -p postfiat-node --locked`: passed.
+- `cargo test -p postfiat-node storage_activation_cli::tests --lib --locked`: **1 passed**, 0 failed, 0 ignored, 368 filtered out.
+- `cargo test -p postfiat-node storage_backend_config::tests --lib --locked`: **1 passed**, 0 failed, 0 ignored, 368 filtered out.
+- `cargo test -p postfiat-node certified_send_completed_index::completed_index_tests --bin postfiat-node --locked`: **21 passed**, 0 failed, 2 existing manual checks ignored, 149 filtered out. Includes both new index regressions and existing migration, interruption, retention, duplicate and bounded-work checks.
+- `cargo fmt --all -- --check` and `git diff --check`: passed. Rustfmt emitted existing stable-toolchain warnings about nightly-only options; incidental whole-file index formatting was removed to keep the repair minimal.
+- Before findings `307214ef`, evidence correction `514f7e15`, repair `401fa055`, and this closeout commit: `.venv-docs/bin/mkdocs build --strict`, `scripts/public-doc-links` (**403 files**), and `scripts/public-secret-scan` passed. The new findings file and all subsequent unit changes were staged before their scans.
+- Each A4 commit was followed by `git pull --rebase origin main && git push origin main`; pushes go only to this repository's `origin main`. Findings, their correction and repairs were pushed with clean trees before the next unit. This closeout changes only the campaign log and reruns no Rust tests.
+- A4 post-repair total: **23 passed, 0 failed, 2 ignored**. **Full Rust suite verdict pending** CI for `401fa055`; no CI verdict is claimed.
 
 ## Scores
 
