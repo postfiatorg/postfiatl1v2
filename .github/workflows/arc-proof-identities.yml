@@ -117,11 +117,11 @@ jobs:
           printf 'egress rebuilt=%s expected=%s\n' "$egress_sha" "$expected_egress_sha"
 
           git show "$RETAINED_COMMIT:programs/pfusdc-egress/elf/pfusdc-egress-program" > "$root/report/retained-egress-program"
+          cp "$ingress_a" "$root/report/pfusdc-arc-ingress-program"
+          cp "$egress_a" "$root/report/pfusdc-egress-program"
           test "$ingress_sha" = "$expected_ingress_sha"
           test "$egress_sha" = "$expected_egress_sha"
           cmp "$egress_a" "$root/report/retained-egress-program"
-          cp "$ingress_a" "$root/report/pfusdc-arc-ingress-program"
-          cp "$egress_a" "$root/report/pfusdc-egress-program"
           cp "$ingress_a" "$root/src-a/programs/pfusdc-arc-ingress/elf/pfusdc-arc-ingress-program"
           cp "$egress_a" "$root/src-a/programs/pfusdc-egress/elf/pfusdc-egress-program"
           cargo run --locked --release --no-default-features \
