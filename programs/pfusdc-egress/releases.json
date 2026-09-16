@@ -5,6 +5,9 @@
   "releases": [
     {
       "id": "arc-v2-20260902",
+      "build_mode": "docker",
+      "source_root": "/root/program",
+      "cargo_home": "/root/.cargo",
       "source_commit": "b945bbb321eb4fdc5a57998fadcf0b353f1acb86",
       "retained_commit": "65df4263746566c90d0e46db8c90a46c23576265",
       "egress_lock_sha256": "084ce9bd8eb22e4bedf41fb514a2f605a5c4d6b5314e04bf42f23d20b7c159f4",
@@ -12,6 +15,9 @@
     },
     {
       "id": "pfeth-v1-20260904",
+      "build_mode": "native-retained-path",
+      "source_root": "/home/postfiat/repos/postfiatl1v2",
+      "cargo_home": "/home/postfiat/.cargo",
       "source_commit": "c9407b1c2176cf7f812ba886f8053ae7bb5cdeb0",
       "retained_commit": "c9407b1c2176cf7f812ba886f8053ae7bb5cdeb0",
       "egress_lock_sha256": "71225bed4ec4d8cecbeb05cf16071d8dd60ab09bf70cef57c2b7012d97a32a63",

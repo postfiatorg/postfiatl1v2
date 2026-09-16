@@ -68,12 +68,28 @@ jobs:
                 --workspace-directory "$source" \
                 --output-directory "$output/ingress"
             )
-            (
-              cd "$source/programs/pfusdc-egress"
-              cargo prove build --docker --tag v6.3.1 --locked \
-                --workspace-directory "$source" \
-                --output-directory "$output/egress"
-            )
+            if [ "$RELEASE_ID" = pfeth-v1-20260904 ]; then
+              # This retained ELF was built natively and embeds these paths.
+              # Reproduce its inputs; never rewrite the output ELF.
+              historical_root=/home/postfiat/repos/postfiatl1v2
+              test ! -e "$historical_root"
+              sudo mkdir -p /home/postfiat/repos /home/postfiat/.cargo
+              sudo chown -R "$(id -u):$(id -g)" /home/postfiat
+              cp -a "$source" "$historical_root"
+              (
+                cd "$historical_root/programs/pfusdc-egress"
+                CARGO_HOME=/home/postfiat/.cargo cargo prove build --locked \
+                  --output-directory "$output/egress"
+              )
+              rm -rf "$historical_root"
+            else
+              (
+                cd "$source/programs/pfusdc-egress"
+                cargo prove build --docker --tag v6.3.1 --locked \
+                  --workspace-directory "$source" \
+                  --output-directory "$output/egress"
+              )
+            fi
           }
           build_pair "$root/src-a" "$root/out-a"
           build_pair "$root/src-b" "$root/out-b"
@@ -123,6 +139,10 @@ jobs:
           cargo_prove_version="$(cargo prove --version)"
           jq -n \
             --arg source_commit "$SOURCE_COMMIT" \
+            --arg release_id "$RELEASE_ID" \
+            --arg build_mode "$(jq -er .build_mode <<< "$release")" \
+            --arg source_root "$(jq -er .source_root <<< "$release")" \
+            --arg cargo_home "$(jq -er .cargo_home <<< "$release")" \
             --arg ingress_sha256 "$ingress_sha" \
             --arg egress_sha256 "$egress_sha" \
             --arg ingress_lock_sha256 "$(sha256sum "$root/src-a/programs/pfusdc-arc-ingress/Cargo.lock" | cut -d' ' -f1)" \
@@ -133,6 +153,10 @@ jobs:
             '{
               schema:"postfiat.pfusdc.arc_proof_identity_reproduction.v1",
               source_commit:$source_commit,
+              release_id:$release_id,
+              build_mode:$build_mode,
+              source_root:$source_root,
+              cargo_home:$cargo_home,
               build_count_per_guest:2,
               clean_source_trees:2,
               byte_exact_replay:true,
