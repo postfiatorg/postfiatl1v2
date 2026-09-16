@@ -1,6 +1,6 @@
 # QA defect inventory — 2026-09-10
 
-Status: burn 2 inventory reconciled; burn 3 and burn 4 findings appended. The burn 2
+Status: burn 2 inventory reconciled; burn 3 and burn 4 findings appended; P3 sweep recorded. The burn 2
 Text Improvement Harness result is in the [2026-09-10 campaign log](qa-campaign-20260910.md);
 the burn 3 gate is in the [2026-09-11 campaign log](qa-campaign-20260911.md);
 the burn 4 gate is in the [2026-09-15 campaign log](qa-campaign-20260915.md).
@@ -41,7 +41,7 @@ Consensus-affecting repairs remain source-only and were not activated or deploye
 | --- | --- | --- | --- | --- |
 | STO-01 | Reproduced defect | P2 | Fixed — `69e1f1ce` | [Storage review](storage-snapshots-review-20260911.md): a truncated validator file left earlier restored validators at the final destination and prevented a corrected retry. |
 | STO-02 | Reproduced defect | P2 | Fixed — `69e1f1ce` | [Storage review](storage-snapshots-review-20260911.md): FastSwap WAL append had no total growth fence; reopen and artifact reads allocated oversized files before enforcing bounds. |
-| STO-03 | Reproduced defect | P3 | Recorded, not fixed | [Storage review](storage-snapshots-review-20260911.md): a crash after deleting the legacy ordered-history index and before renaming its replacement leaves no usable index generation. Comparison-only backend. |
+| STO-03 | Reproduced defect | P3 | Fixed — `7095b393` | [Storage review](storage-snapshots-review-20260911.md): a crash after deleting the legacy ordered-history index and before renaming its replacement leaves no usable index generation. Comparison-only backend. |
 | STO-04 | Reproduced defect | P3 | Recorded, not fixed | [Storage review](storage-snapshots-review-20260911.md): legacy receipt compaction performs the same atomic state write twice, doubling I/O without improving crash safety. Comparison-only backend. |
 | STO-05 | Evidence gap | P2 | Needs live environment — source clarification `69e1f1ce`; fleet export receipt missing | [Storage review](storage-snapshots-review-20260911.md): the block-924 source repair predates the deployed base, but no post-repair signed fleet snapshot export establishes backup usability. |
 | STO-06 | Reproduced defect | P1 | Fixed — `69e1f1ce` | [Storage review](storage-snapshots-review-20260911.md): a torn FastSwap WAL suffix remained after replay, so a subsequent synced vote record appended behind it could not be replayed after restart. |
@@ -50,12 +50,12 @@ Consensus-affecting repairs remain source-only and were not activated or deploye
 | EXE-03 | Reproduced defect | P2 | Fixed — `e95efbdf`; consensus-affecting, source-only; not activated or deployed | [Execution review](execution-review-20260911.md): validators could certify a state root whose serialized state file exceeded storage's 256 MiB limit and could not be persisted. |
 | COB-01 | Reproduced defect | P1 | Fixed — `c9a61fcd`; consensus-affecting, source-only; not activated or deployed | [Cobalt review](cobalt-ratification-review-20260911.md): a five-of-seven single rotation passed a raw subset-overlap witness although valid old/new quorums could intersect in only two Byzantine validators. |
 | COB-02 | Reproduced defect | P2 | Fixed — `c9a61fcd`; consensus-affecting, source-only; not activated or deployed | [Cobalt review](cobalt-ratification-review-20260911.md): signed DABC pending pairs could name a conflicting candidate at a ratified slot and still pass activation. |
-| COB-03 | Reproduced defect | P3 | Recorded, not fixed | [Cobalt review](cobalt-ratification-review-20260911.md): the unused live-mode beacon coin accepts a caller-selected output bit without signer, signature, or round authentication. |
-| COB-04 | Reproduced defect | P3 | Recorded, not fixed | [Cobalt review](cobalt-ratification-review-20260911.md): the first oracle counts unclassified available validators as responsive correct nodes; frozen scenarios classify all validators. |
+| COB-03 | Reproduced defect | P3 | Fixed — `7095b393` | [Cobalt review](cobalt-ratification-review-20260911.md): the unused live-mode beacon coin accepts a caller-selected output bit without signer, signature, or round authentication. |
+| COB-04 | Reproduced defect | P3 | Fixed — `7095b393` | [Cobalt review](cobalt-ratification-review-20260911.md): the first oracle counts unclassified available validators as responsive correct nodes; frozen scenarios classify all validators. |
 | NET-01 | Reproduced defect | P1 | Fixed — `f2dea308` | [Network review](network-mempool-review-20260911.md): thousands of pre-authentication connections could each spawn a validator transport thread before exhausting the lifetime budget. |
 | NET-02 | Reproduced defect | P1 | Fixed — `f2dea308` | [Network review](network-mempool-review-20260911.md): one unauthenticated persistent connection could send unlimited rejected frames and grow retained summaries and optional event logs. |
 | NET-03 | Reproduced defect | P2 | Fixed — `f2dea308` | [Network review](network-mempool-review-20260911.md): standalone batch service rejections did not consume its termination budget and accumulated an unbounded report. |
-| NET-04 | Reproduced defect | P3 | Recorded, not fixed | [Network review](network-mempool-review-20260911.md): a deserialized legacy validator set with a false quorum could certify one vote; no unauthenticated production path was found. |
+| NET-04 | Reproduced defect | P3 | Fixed — `7095b393` | [Network review](network-mempool-review-20260911.md): a deserialized legacy validator set with a false quorum could certify one vote; no unauthenticated production path was found. |
 | OPS-01 | Reproduced defect | P1 | Fixed — `c2724977` | [Operational CLI review](operational-clis-review-20260911.md): wallet transfer polling treated a positive block height or unrelated/rejected receipt as finalized payment. |
 | OPS-02 | Reproduced defect | P2 | Fixed — `c2724977` | [Operational CLI review](operational-clis-review-20260911.md): malformed or missing `account_tx` history metadata became an empty complete scan and hid transfers. |
 | OPS-03 | Reproduced defect | P2 | Fixed — `c2724977` | [Operational CLI review](operational-clis-review-20260911.md): a default faucet data directory could trigger local validator-state application without explicit acknowledgement. |
@@ -64,9 +64,9 @@ Consensus-affecting repairs remain source-only and were not activated or deploye
 | OPS-06 | Reproduced defect | P2 | Fixed — `c2724977` | [Operational CLI review](operational-clis-review-20260911.md): an unbounded venue HTTP body could exhaust observer memory during JSON decoding. |
 | OPS-07 | Reproduced defect | P2 | Fixed — `c2724977` | [Operational CLI review](operational-clis-review-20260911.md): Cobalt shadow catch-up could mutate a remote service without its own operator acknowledgement. |
 | OPS-08 | Reproduced defect | P2 | Fixed — `c2724977` | [Operational CLI review](operational-clis-review-20260911.md): a proposed genesis registry accepted receipts with incompatible deadlines but bound only the first deadline. |
-| OPS-09 | Reproduced defect | P3 | Recorded, not fixed | [Operational CLI review](operational-clis-review-20260911.md): a nonintegral NAV example floors its value and emits a native operation rejected by the exact-equality check. |
-| OPS-10 | Reproduced defect | P3 | Recorded, not fixed | [Operational CLI review](operational-clis-review-20260911.md): floating-point conversion rounds large valid PFTL amounts in CLI reports despite exact atom counts. |
-| OPS-11 | Reproduced defect | P3 | Recorded, not fixed | [Operational CLI review](operational-clis-review-20260911.md): offline packet-tree verification enumerates and allocates millions of entries before checking its 4,096-file cap. |
+| OPS-09 | Reproduced defect | P3 | Fixed — `d8932b57` | [Operational CLI review](operational-clis-review-20260911.md): a nonintegral NAV example floors its value and emits a native operation rejected by the exact-equality check. |
+| OPS-10 | Reproduced defect | P3 | Fixed — `d8932b57` | [Operational CLI review](operational-clis-review-20260911.md): floating-point conversion rounds large valid PFTL amounts in CLI reports despite exact atom counts. |
+| OPS-11 | Reproduced defect | P3 | Fixed — `d8932b57` | [Operational CLI review](operational-clis-review-20260911.md): offline packet-tree verification enumerates and allocates millions of entries before checking its 4,096-file cap. |
 
 ## Burn 4 campaign findings
 
@@ -77,19 +77,19 @@ Consensus-affecting repairs remain source-only and were not activated or deploye
 | --- | --- | --- | --- | --- |
 | FIN-01 | Reproduced defect | P2 | Fixed — `6ec35092`; consensus-affecting, source-only; not activated or deployed | [Finality review](finality-consensus-review-20260915.md#findings): a signed timeout certificate at maximum view reached unchecked proposal-view addition, panicking in checked builds or wrapping in release builds instead of rejecting the artifact. |
 | FIN-02 | Reproduced defect | P2 | Fixed — `6ec35092`; consensus-affecting, source-only; not activated or deployed | [Finality review](finality-consensus-review-20260915.md#findings): the proposer returned two valid signatures for conflicting block proposals at one height and view without reserving the durable proposal-hash lock, including across restart. |
-| FIN-03 | Reproduced defect | P3 | Recorded, not fixed | [Finality review](finality-consensus-review-20260915.md#findings): the unaudited selected-block finality query independently chose duplicate receipt and block-link records, potentially reporting an ambiguous confirmed pair from a corrupted local log. |
+| FIN-03 | Reproduced defect | P3 | Fixed — `7095b393` | [Finality review](finality-consensus-review-20260915.md#findings): the unaudited selected-block finality query independently chose duplicate receipt and block-link records, potentially reporting an ambiguous confirmed pair from a corrupted local log. |
 | TYP-01 | Reproduced defect | P2 | Fixed — `0a1216c3`; consensus-affecting, source-only; not activated or deployed | [Types review](types-state-commitment-review-20260915.md#findings): FastPay recovery committees with different new-order admission heights shared a registry root, leaving authorization identities unable to distinguish their windows. |
 | TYP-02 | Reproduced defect | P2 | Fixed — `0a1216c3`; consensus-affecting, source-only; not activated or deployed | [Types review](types-state-commitment-review-20260915.md#findings): different retained FastPay recovery certificate signatures or votes shared a reveal state commitment when their supplied digest strings were unchanged; confirmed version fences had the same omission. |
-| TYP-03 | Reproduced defect | P3 | Recorded, not fixed | [Types review](types-state-commitment-review-20260915.md#findings): the public genesis digest helper narrowed an overlong domain label to a `u16` length, allowing an external long-label caller to construct the same preimage as a differently framed short-label call; existing registry callers use short constants. |
+| TYP-03 | Reproduced defect | P3 | Fixed — `7095b393` | [Types review](types-state-commitment-review-20260915.md#findings): the public genesis digest helper narrowed an overlong domain label to a `u16` length, allowing an external long-label caller to construct the same preimage as a differently framed short-label call; existing registry callers use short constants. |
 | SRV-01 | Reproduced defect | P2 | Fixed — `bccd5b5f` | [Serving review](node-serving-review-20260915.md#findings): an RPC keep-alive worker returned responses for earlier requests but retained only its final request event, omitting earlier event-log rows and summary counts. |
 | SRV-02 | Reproduced defect | P2 | Fixed — `bccd5b5f` | [Serving review](node-serving-review-20260915.md#findings): RPC and validator transport published positive ready files before their health-cache and nonblocking-listener preflights could fail, leaving a marker for a service that had not reached its accept loop. |
-| SRV-03 | Reproduced defect | P3 | Recorded, not fixed | [Serving review](node-serving-review-20260915.md#findings): a running service hashed a replaced deployment manifest for runtime status without rechecking its publisher signature or time window after the separate systemd prestart check. |
+| SRV-03 | Reproduced defect | P3 | Fixed — `7095b393` | [Serving review](node-serving-review-20260915.md#findings): a running service hashed a replaced deployment manifest for runtime status without rechecking its publisher signature or time window after the separate systemd prestart check. |
 | SHD-01 | Reproduced defect | P2 | Fixed — `33c8ce34`; consensus-affecting, source-only; not activated or deployed | [Shadow and swap review](shadow-swap-services-review-20260915.md#findings): draining signed shadow messages by round instead of peer sequence lowered a sender's replay watermark, admitting an already processed sequence after its seen ID aged out. |
 | SHD-02 | Reproduced defect | P2 | Fixed — `33c8ce34`; consensus-affecting, source-only; not activated or deployed | [Shadow and swap review](shadow-swap-services-review-20260915.md#findings): issuer asset-control prepare signed another round-zero FastSwap vote after an operation had advanced to a later recovery round, without the ordinary swap's existing status and round guard. |
-| SHD-03 | Reproduced defect | P3 | Recorded, not fixed | [Shadow and swap review](shadow-swap-services-review-20260915.md#findings): a changed canonical tip could make FastSwap refresh return an error after persisting local prepare fences, deposits, or checkpoints to state and WAL. |
+| SHD-03 | Reproduced defect | P3 | Fixed — `7095b393` | [Shadow and swap review](shadow-swap-services-review-20260915.md#findings): a changed canonical tip could make FastSwap refresh return an error after persisting local prepare fences, deposits, or checkpoints to state and WAL. |
 | CLI-01 | Reproduced defect | P2 | Fixed — `eb4c2afd` | [Node CLI review](node-cli-governance-review-20260915.md#findings): duplicate shadow command flags selected the earlier remote endpoint, allowing a signed request to reach a different target from the operator's corrected argument. |
 | CLI-02 | Reproduced defect | P2 | Fixed — `eb4c2afd` | [Node CLI review](node-cli-governance-review-20260915.md#findings): rerunning the FastSwap bootstrap helper truncated an already reviewed governance payload at the same output path and printed a successful write. |
-| CLI-03 | Reproduced defect | P3 | Recorded, not fixed | [Node CLI review](node-cli-governance-review-20260915.md#findings): a governance implementation work item allowing `"*"` marked unexpected touched paths authorized and verified in a scope report, although the report does not authorize live mutation. |
+| CLI-03 | Reproduced defect | P3 | Fixed — `7095b393` | [Node CLI review](node-cli-governance-review-20260915.md#findings): a governance implementation work item allowing `"*"` marked unexpected touched paths authorized and verified in a scope report, although the report does not authorize live mutation. |
 
 ## Storage, Cobalt, and Task Node review
 
@@ -186,10 +186,10 @@ broader production claim.
 | P1 | 25 |
 | P2 | 54 |
 | P3 | 25 |
-| Fixed | 58 |
+| Fixed | 70 |
 | Dispositioned | 16 |
 | Reproduced and retained (prior campaigns) | 5 |
-| Recorded, not fixed (burn 3 and burn 4 P3) | 13 |
+| Recorded, not fixed (burn 3 and burn 4 P3) | 1 |
 | Needs live environment | 6 |
 | Needs operator decision | 6 |
 | Bare open | 0 |
@@ -213,6 +213,13 @@ repairs are consensus-affecting, source-only, not activated or deployed. Their
 full Rust suite verdict remains pending; the FastPay identity and commitment
 changes also require archived replay and activation qualification before
 release-lineage use.
+
+The [2026-09-16 P3 sweep](qa-campaign-20260915.md#p3-sweep) repaired twelve of
+those thirteen P3 rows. STO-04 was skipped because both the current source and
+the reviewed revision already perform one receipt state write; its recorded
+row is retained unchanged. COB-03, NET-04, TYP-03 and SHD-03 are conservatively
+classified as consensus-affecting, source-only repairs, with no activation or
+claim about live behavior.
 
 “Fixed” remains scoped by the row. In particular, the RPC supervisor repair is
 not deployed, StakeHub fixes are local and unpublished, the Arc controller
