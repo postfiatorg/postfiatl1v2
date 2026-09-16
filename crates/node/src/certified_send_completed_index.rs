@@ -897,12 +897,26 @@ fn require_validated_matches_entry(
     Ok(())
 }
 
+#[cfg(test)]
+thread_local! {
+    static RECOVERY_SYNC_FAILURE: std::cell::RefCell<Option<PathBuf>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+fn sync_recovery_directory(path: &Path, label: &str) -> Result<(), String> {
+    #[cfg(test)]
+    if RECOVERY_SYNC_FAILURE.with(|failure| failure.borrow().as_deref() == Some(path)) {
+        return Err("injected completed-index recovery sync failure".to_string());
+    }
+    sync_certified_send_directory(path, label)
+}
+
 fn sync_append_move(data_dir: &Path) -> Result<(), String> {
-    sync_certified_send_directory(
+    sync_recovery_directory(
         &certified_send_outbox_dir(data_dir),
         "outbox directory after completed move",
     )?;
-    sync_certified_send_directory(
+    sync_recovery_directory(
         &certified_send_completed_dir(data_dir),
         "completed directory after completed move",
     )
@@ -982,8 +996,10 @@ fn reconcile_append_op(
                 entry.job_id
             )
         })?;
-        sync_append_move(data_dir)?;
     }
+    // A previous rename can be visible after an interrupted or failed sync.
+    // Retry both directory barriers before the index and intent acknowledge it.
+    sync_append_move(data_dir)?;
     index.entries.push(entry.clone());
     Ok(())
 }
@@ -1075,6 +1091,22 @@ fn reconcile_intent(
                 return Err("certified send completed intent operation is invalid".to_string());
             }
         }
+    }
+    // Intent moves legitimately change the directory stamp. Before adopting
+    // that stamp, reject unrelated additions/deletions from an incomplete
+    // restore. Enumeration is bounded and runs only during intent recovery.
+    let observed = completed_directory_names(data_dir, work)?;
+    let mut expected = index
+        .entries
+        .iter()
+        .map(|entry| entry.job_id.as_str())
+        .collect::<Vec<_>>();
+    expected.sort_unstable();
+    if observed.iter().map(String::as_str).ne(expected) {
+        return Err(
+            "certified send recovered index/directory membership mismatch requires explicit verify repair"
+                .to_string(),
+        );
     }
     write_index(data_dir, &mut index.entries)?;
     index.entry_count = index.entries.len() as u64;
@@ -2161,6 +2193,80 @@ mod completed_index_tests {
         let repaired = verify_and_rebuild_completed_index(&root).expect("verify recovered index");
         assert_eq!(repaired.entry_count, 9);
         std::fs::remove_dir_all(root).expect("cleanup append crash test");
+    }
+
+    #[test]
+    fn burn5_append_recovery_retries_directory_sync_before_index_publication() {
+        for fail_completed in [false, true] {
+            let root = test_root("burn5-append-sync");
+            let topology = test_topology();
+            seed_completed(&root, &topology, 1);
+            verify_and_rebuild_completed_index(&root).unwrap();
+            let (_, source) = tombstone_job(&root, &topology, 99, false);
+            let entry = write_append_intent_for_test(&root, &source).unwrap();
+            let destination = certified_send_completed_dir(&root).join(&entry.job_id);
+            std::fs::rename(&source, &destination).unwrap();
+            let prior_index = std::fs::read(completed_index_path(&root)).unwrap();
+            let fail_path = if fail_completed {
+                certified_send_completed_dir(&root)
+            } else {
+                certified_send_outbox_dir(&root)
+            };
+            for _ in 0..2 {
+                RECOVERY_SYNC_FAILURE
+                    .with(|failure| *failure.borrow_mut() = Some(fail_path.clone()));
+                let result = compact_completed_with_index(&root);
+                RECOVERY_SYNC_FAILURE.with(|failure| *failure.borrow_mut() = None);
+                let error = result.unwrap_err();
+                assert!(
+                    error.contains("injected completed-index recovery sync failure"),
+                    "{error}"
+                );
+                assert_eq!(
+                    std::fs::read(completed_index_path(&root)).unwrap(),
+                    prior_index
+                );
+                assert!(completed_index_intent_path(&root).is_file());
+                assert!(destination.is_dir());
+            }
+            compact_completed_with_index(&root).unwrap();
+            let index = read_index(&root, &mut DurableCertifiedSendWorkReport::default())
+                .unwrap()
+                .unwrap();
+            assert_eq!(index.entries.len(), 2);
+            assert!(index_entry_position(&index, &entry.job_id).is_some());
+            assert!(!completed_index_intent_path(&root).exists());
+            std::fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn burn5_intent_recovery_rejects_unrelated_directory_divergence() {
+        for add_unrelated in [false, true] {
+            let root = test_root("burn5-recovery-membership");
+            let topology = test_topology();
+            let seeded = seed_completed(&root, &topology, 2);
+            verify_and_rebuild_completed_index(&root).unwrap();
+            let (_, source) = tombstone_job(&root, &topology, 99, false);
+            let entry = write_append_intent_for_test(&root, &source).unwrap();
+            let destination = certified_send_completed_dir(&root).join(&entry.job_id);
+            std::fs::rename(&source, &destination).unwrap();
+            if add_unrelated {
+                tombstone_job(&root, &topology, 100, true);
+            } else {
+                std::fs::rename(&seeded[0].1, root.join("held-job")).unwrap();
+            }
+            let prior_index = std::fs::read(completed_index_path(&root)).unwrap();
+            let error = compact_completed_with_index(&root).unwrap_err();
+            assert!(error.contains("membership"), "{error}");
+            assert_eq!(
+                std::fs::read(completed_index_path(&root)).unwrap(),
+                prior_index
+            );
+            assert!(completed_index_intent_path(&root).is_file());
+            assert!(destination.is_dir());
+            std::fs::remove_dir_all(root).unwrap();
+        }
     }
 
     #[test]

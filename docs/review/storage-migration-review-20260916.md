@@ -74,4 +74,25 @@ Only the four A4 source files were reviewed. Cargo target/dependency metadata an
 
 The delegated `NodeStore`/transactional backend, shared atomic writer, journal recovery, block/receipt replay, state commitments, cryptographic verification, governance authorization/readiness, certified-send payload/quarantine helpers, RPC and command dispatch implementations were not reviewed. These include excluded `crates/node/src/lib.rs`, `block_finality.rs`, `block_replay_wallet.rs`, `governance.rs`, `state_commitment.rs`, `transport_runtime.rs`, `transport_runtime_tests.rs`, `tests/`, and the already reviewed `crates/storage` implementation. No conclusion about those implementations is implied by their callers passing tests.
 
-No physical power-loss experiment, historical/Orchard replay, broad Rust suite, network/socket exercise, CI query, Task Node, fleet action, deployment or live activation is part of A4. Local deterministic regressions will cover repaired boundaries; the full Rust suite is CI's verdict. P3 findings remain unfixed. A5 and B, including inventory edits and scoring, are not started.
+No physical power-loss experiment, historical/Orchard replay, broad Rust suite, network/socket exercise, CI query, Task Node, fleet action, deployment or live activation is part of A4. Local deterministic regressions cover repaired boundaries; the full Rust suite is CI's verdict. P3 findings remain unfixed. A5 and B, including inventory edits and scoring, are not started.
+
+## Repair result
+
+A4 records **0 P1, 5 P2 and 2 P3**. Findings were pushed as `307214ef`; the SMG-02 evidence correction and newly observed SMG-07 dependency were pushed in a second findings-only commit, `514f7e15`, before repairs. Source regression work was temporarily stashed for that correction, then restored; the stash was removed.
+
+- **SMG-01:** synced temporary JSON is published with an atomic no-replace hard link, then the temporary name is removed and the output directory synced. The regression preserves a competing artifact created during serialization, rejects a dangling destination symlink, verifies unchanged JSON encoding on success and checks temporary-file cleanup. **Consensus-affecting: no.**
+- **SMG-02:** append recovery retries both move-directory syncs even when the destination is already present. The regression injects two consecutive failures for each directory, requires unchanged persisted index and retained intent, then verifies successful recovery after the failure is removed. **Consensus-affecting: no.** No claim is made for the separate blocked prune path.
+- **SMG-03:** recovery compares bounded completed-directory membership with the resulting index before publishing a fresh stamp or clearing the intent. The regression rejects unrelated addition and omission while preserving the prior index and intent. Ordinary maintenance retains its existing bounded work. **Consensus-affecting: no.**
+- **SMG-04:** selection captures the previous backend mode and restores it after a selection/post-validation error; restoration errors include both causes. The regression verifies the failed candidate really was selected, then confirms the previous mode on reopen, followed by a successful selection. **Consensus-affecting: no.**
+- **SMG-07:** unfixed because its shared retention-path resolver is in `crates/node/src/transport_cli.rs`, outside A4. The exploratory prune regression was removed after its observed canonical-path refusal was recorded. Fixing or bypassing that resolver, or claiming a successful prune retry through it, would exceed this review.
+- **SMG-05/06:** P3 findings remain recorded without repair.
+
+Only `storage_activation_cli.rs`, `storage_backend_config.rs` and `certified_send_completed_index.rs` changed as source, with four in-file regressions. Each repaired defect reproduced against the prior behavior before its repair. The full module checks then passed:
+
+- `CARGO_NET_OFFLINE=true cargo check -p postfiat-node --locked`: passed.
+- `CARGO_NET_OFFLINE=true cargo test -p postfiat-node storage_activation_cli::tests --lib --locked`: **1 passed**, 0 failed, 0 ignored, 368 filtered out.
+- `CARGO_NET_OFFLINE=true cargo test -p postfiat-node storage_backend_config::tests --lib --locked`: **1 passed**, 0 failed, 0 ignored, 368 filtered out.
+- `CARGO_NET_OFFLINE=true cargo test -p postfiat-node certified_send_completed_index::completed_index_tests --bin postfiat-node --locked`: **21 passed**, 0 failed, 2 existing manual release checks ignored, 149 filtered out.
+- `cargo fmt --all -- --check` and `git diff --check`: passed.
+
+Post-repair total: **23 passed, 0 failed, 2 ignored**. **Full Rust suite verdict pending** CI. No repair changes a consensus rule, state-transition result, storage format or signed/hashed encoding, and none is deployed or activated.
