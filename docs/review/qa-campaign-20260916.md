@@ -1,8 +1,8 @@
 # QA campaign log — 2026-09-16
 
-This is the progress record for the [burn 5 campaign](qa-campaign-20260916-burn5-brief.md). Work began on clean `main` at `c4303717` after `git pull --rebase origin main`. This task covers A1 only, with a 30-minute time box; no deployment or live activation.
+This is the progress record for the [burn 5 campaign](qa-campaign-20260916-burn5-brief.md). Work began on clean `main` at `c4303717` after `git pull --rebase origin main`. A1–A5 were completed in separate bounded units. B and this final closeout began on clean `main` at `330d38be` after `git pull --rebase origin main`, within a 40-minute time box. The surface-result and verification sections preserve their historical unit-time scope and pending statements; the Status, campaign-state table and Final summary give the final disposition.
 
-**Status:** A1, A2, A3, A4 and A5 closed. Work stops after A5 as requested; B remains pending and not started. A5 repaired all three P2 findings and recorded two unfixed P3 findings; A4 still leaves SMG-07 blocked by its out-of-scope dependency. No live activation, Task Node or fleet action. The opening paragraph, earlier surface results, earlier skips and Final summary retain historical closeouts; this status, the table and the A5 result record current progress.
+**Status:** closed. A1–A5 and B are complete within their recorded limits. Burn 5 recorded 22 findings: 14 repaired, seven P3s recorded without repair, and SMG-07 blocked by its out-of-scope dependency. B added all 22 inventory rows and passed the first full Text Improvement Harness gate at **86.33/100**; no rewrite or rescore. All five repair commits retain a full Rust suite verdict pending. No live activation, Task Node or fleet action. Work stops after this closeout.
 
 ## Campaign state
 
@@ -13,7 +13,7 @@ This is the progress record for the [burn 5 campaign](qa-campaign-20260916-burn5
 | A3 | Cobalt handoff and authority | done | 0 | 4 | 2 | [Review](cobalt-handoff-review-20260916.md); findings `34611d66`; repair `21cf30f8` (CHO-01/02 consensus-affecting, CHO-03/04 not consensus-affecting; full Rust suite verdict pending); CHO-05/06 recorded without repair |
 | A4 | Storage migration and activation, certified-send index | done; one repair blocked by scope | 0 | 5 | 2 | [Review](storage-migration-review-20260916.md); findings `307214ef`, correction/dependency `514f7e15`; repair `401fa055` (SMG-01–04 not consensus-affecting; full Rust suite verdict pending); SMG-07 depends on out-of-scope `transport_cli.rs`; SMG-05/06 recorded without repair |
 | A5 | Swap and recovery services | done | 0 | 3 | 2 | [Review](swap-recovery-services-review-20260916.md); findings `696eeffa`; repair `d679f8e8` (SWP-01 consensus-affecting, SWP-02/03 not consensus-affecting; full Rust suite verdict pending); all P2 repaired, SWP-04/05 recorded without repair |
-| B | Defect inventory and TIH gate | pending | — | — | — | Not started |
+| B | Defect inventory and TIH gate | done | — | — | — | [Inventory](defect-inventory-20260910.md) extended to 126 rows in `17640b29`; first full gate **86.33/100**; run group `qa-defect-inventory-burn5-20260916`; scored SHA-256 `f81ff48dd6f1cd9afe49f57ffe0b8548cc2af14a13ed2b964641ca2970a24c35` |
 
 Current finding totals: **1 P1, 14 P2, 7 P3** (A1, A2, A3, A4 and A5).
 
@@ -79,10 +79,10 @@ The findings document records the full limits. Delegated execution/types, certif
 
 ## Skips and boundary decisions
 
-- A5 and B are outside the A4 task and remain pending. No inventory edit or scoring.
+- Historical A4 closeout: A5 and B were outside that unit and remained pending; no inventory edit or scoring occurred during A4.
 - Release-candidate files listed in the brief, excluded crates, previously reviewed surfaces and frozen artifacts are not reviewed or edited. Only remote-ref path metadata is compared to establish exclusions.
 - No Task Node or fleet action, release-branch or release-checkout mutation, spend, signup or deployment.
-- MPL-02 (P3) remains recorded without repair as required. No P1/P2 repair required an excluded file.
+- A1: MPL-02 (P3) remains recorded without repair as required. No A1 P1/P2 repair required an excluded file.
 - A1: called implementations outside `mempool_proposals.rs` were not reviewed: storage/concurrency/crash behavior, cryptographic verification, cross-family execution semantics and archived replay remain unverified. Excluded test/type files were not opened for review or edited; compiler diagnostics supplied fixture field names and focused tests compiled dependencies normally.
 - A1: no full workspace or long Orchard/Halo2 suite was run; local admission accounting does not change those boundaries, and the full Rust suite is CI's verdict.
 - A2: no physical power-loss test or additional storage-guard runtime test was run. Deterministic injected-sync-failure and store-reopen regressions cover the repaired durability boundary; the storage guard was unchanged and its delegated implementations were excluded from review.
@@ -101,6 +101,11 @@ The findings document records the full limits. Delegated execution/types, certif
 - A5: no source outside the five listed files was reviewed; delegated implementations and excluded test/type files were not opened for review or edited. Fixture field names came from compiler diagnostics. Remote-ref comparisons returned filenames only.
 - A5: no full Rust/Orchard suite, historical replay, physical crash experiment, network/socket exercise or CI status query ran. The changed FastPay owned-object inverse and local PFTL journal boundaries do not change Orchard execution, proofs or historical Orchard replay. The full Rust suite remains CI's verdict.
 - A5: no Task Node, fleet action, release-branch/checkout mutation, deployment, activation, other surface, inventory or scoring work occurred. B remains pending. No time or usage limit curtailed A5.
+
+- B: no source review or repair was reopened. All 22 findings were copied from the five existing review records; the original 104 inventory finding rows remain byte-for-byte unchanged. The seven new P3s are labelled code-observed because their records do not claim executed reproductions.
+- B: SMG-07 is blocked by A4's four-file scope through `crates/node/src/transport_cli.rs`. No review record identifies a repair blocked specifically by the release candidate; the inventory preserves the documented scope dependency rather than assigning an unsupported release-candidate blocker.
+- B: a broad harness-location filename search inadvertently returned paths inside the excluded release checkout because its exclusion glob did not match absolute paths. No returned release file was opened, no contents were searched, and no release checkout or branch was mutated. Subsequent harness reads used its exact external directory.
+- B: no Task Node or fleet action, source edit, deployment, live activation, release branch operation, spend outside permitted scoring, signup or toolchain install occurred. Network use was limited to git and OpenRouter scoring. Frozen artifacts were unchanged. Rust/Orchard tests, physical fault tests, archived replay and CI status queries were skipped because B is documentation-only and preserves the existing verification limits.
 
 ## Verification
 
@@ -174,12 +179,117 @@ The findings document records the full limits. Delegated execution/types, certif
 - Each A5 unit uses the required separate commit followed by `git pull --rebase origin main && git push origin main`; pushes go only to this repository's `origin main`. Findings and repairs were pushed with clean trees before the next unit. This closeout changes only the campaign log and reruns no Rust tests.
 - A5 post-repair total: **11 unique tests passed, 0 failed, 0 ignored**. **Full Rust suite verdict pending** CI for `d679f8e8`; no CI verdict is claimed.
 
+**B verification:**
+
+- Initial `git pull --rebase origin main`: passed; already up to date at `330d38be`, with a clean tree.
+- Inventory commit `17640b29`: all 104 prior finding rows compared byte-for-byte equal to the starting revision. An ID audit matched all 22 new rows to the five review documents, with no duplicate or missing finding: MPL- 2, VLK- 2, CHO- 6, SMG- 7, SWP- 5. Classification, severity, disposition and completeness counts independently sum to 126; new links and findings anchors resolve locally.
+- Before inventory commit `17640b29`: `.venv-docs/bin/mkdocs build --strict`, `scripts/public-doc-links` (**404 files**) and `scripts/public-secret-scan` passed. The inventory was staged before the scan; `git diff --check` passed. The commit was followed by `git pull --rebase origin main && git push origin main`, with a clean tree before scoring.
+- The gate completed with fifteen valid scores; the stored models, prompt, indices, group, inventory hash and raw-response scores were verified. The score table and retained record paths are in Scores below. The scored inventory has not changed since `17640b29`.
+- Before this closeout commit: `.venv-docs/bin/mkdocs build --strict`, `scripts/public-doc-links` (**404 files**) and `scripts/public-secret-scan` passed again, with the final log staged before the scan; `git diff --check` passed. This documentation-only closeout is followed by `git pull --rebase origin main && git push origin main`; only this repository's `origin main` receives pushes, and the tree is clean at completion.
+- No Rust suite or CI status query ran during B. The five repair commits remain **full Rust suite verdict pending**: `1c9f44f1`, `090bd17e`, `21cf30f8`, `401fa055` and `d679f8e8`. A1–A5's recorded post-repair focused counts are respectively 16, 20, 17, 23 and 11 passes (87 in total), with three existing manual tests ignored and A3's socket drill excluded. These are retained results, not new runs or a full-suite verdict.
+
 ## Scores
 
-Not run. The inventory scoring gate belongs to B, which is not started.
+The exact 126-row inventory bytes from `17640b29`, SHA-256
+`f81ff48dd6f1cd9afe49f57ffe0b8548cc2af14a13ed2b964641ca2970a24c35`,
+received fifteen fresh OpenRouter reviews at temperature 0 with an 8,000-token
+response limit: the same three judges, five reviews each, and procedure as the
+[burn 2 gate](qa-campaign-20260910.md#burn-2-final-text-improvement-harness-gate)
+and [burn 4 example](qa-campaign-20260915.md#scores). The prompt was
+`Rate this document on a scale of 1-100. Output the score and your reasoning.`
+The harness's strict-JSON wrapper matches the retained burn 4 prompts verbatim.
+The credential came from vault label `openroutertih` and was passed in memory;
+no credential was written to the log or database.
+
+| Judge | Scores (run order) | Average |
+| --- | --- | ---: |
+| `openai/gpt-6-astra-pro` | 86, 86, 86, 84, 86 | 85.60 |
+| `anthropic/claude-fable-5.1` | 84, 80, 86, 84, 85 | 83.80 |
+| `z-ai/glm-5.3` | 88, 90, 90, 90, 90 | 89.60 |
+| **All fifteen** | — | **86.33** |
+
+Run group: `qa-defect-inventory-burn5-20260916`. The first compliant full
+score exceeded the 86/100 stop condition; **no rewrite or rescore** occurred,
+and the scored inventory bytes remain unchanged. The harness ran `score` with
+`--gate full --runs 5 --force --temperature 0 --max-tokens 8000 --concurrency 15`,
+the explicit prompt above, and the named run group. Fable run 5 and GLM run 4
+each used the harness's built-in second-attempt retry; this was one full gate
+with fifteen valid scored responses, without a model or prompt substitution.
+
+All fifteen SQLite records were checked against the exact prompt, prompt hash,
+document SHA-256, run group, three model identities, run indices 1–5 and parsed
+raw-response scores. The external score log and SQLite record are
+`/home/postfiatchad/pastedocs/.qa-campaign-defect-inventory-burn5-20260916/score.log`
+and `scores.sqlite3` in the same directory.
 
 ## Final summary
 
-A1 is closed with **0 P1, 1 P2, 1 P3**: one repaired P2 and one recorded, unfixed P3. Findings commit: `6f2332cf`; repair commit: `1c9f44f1`. **Consensus-affecting repairs: none.** Sixteen focused tests passed; the full Rust suite verdict remains pending CI. Remaining risks are the latest-ID reporting discrepancy and the unreviewed delegated boundaries named above.
+| Surface | P1 | P2 | P3 | Findings commit | Repair commit |
+| --- | ---: | ---: | ---: | --- | --- |
+| A1 — Mempool proposals | 0 | 1 | 1 | `6f2332cf` | `1c9f44f1` |
+| A2 — Vote locks and view recovery | 1 | 1 | 0 | `1511ea09` | `090bd17e` |
+| A3 — Cobalt handoff and authority | 0 | 4 | 2 | `34611d66` | `21cf30f8` |
+| A4 — Storage migration, activation and certified-send index | 0 | 5 | 2 | `307214ef`, correction `514f7e15` | `401fa055` |
+| A5 — Swap and recovery services | 0 | 3 | 2 | `696eeffa` | `d679f8e8` |
+| **A1–A5 total** | **1** | **14** | **7** | — | — |
 
-Only `crates/node/src/mempool_proposals.rs` was reviewed as source, in full at the A1 focus; no other source file was reviewed. The release branch and its checkout were not mutated. The A1 findings, repair and closeout units are committed and pushed separately to `origin main`, within the 30-minute time box. Work stops here with A2–A5 and B pending; no other surface, inventory, scoring or Task Node work started.
+Fourteen findings are repaired in source: the P1 and thirteen P2s. Seven P3s
+remain recorded without repair; one P2, SMG-07, remains blocked by A4 scope.
+**Full Rust suite verdict pending** for every repair commit in the table:
+`1c9f44f1`, `090bd17e`, `21cf30f8`, `401fa055` and `d679f8e8`.
+No CI success, deployment or live activation is claimed.
+
+**Consensus-affecting repairs, explicitly:**
+
+- `090bd17e`: VLK-01 tightens signer-safety persistence by requiring the
+  canonical lock directory durability barrier; VLK-02 tightens signer admission
+  on ambiguous restored state by rejecting non-regular JSON migration entries.
+  Both are conservatively consensus-affecting.
+- `21cf30f8`: CHO-01 tightens authority-certificate admission by binding
+  full-knowledge evidence to the current ratification; CHO-02 rejects over-bound
+  transcript expansion before cloning shared checks.
+- `d679f8e8`: SWP-01 changes recovery reconciliation results by matching exact
+  input identity/version sets while preserving unique ascending inverse positions.
+
+These five repairs are source-only, not activated or deployed. CHO-03/04,
+SMG-01–04, SWP-02/03 and MPL-01 are not consensus-affecting. The repaired lock,
+certificate and recovery paths retain their schemas and signed/hashed encodings;
+admission, persistence and recovery results are still material changes.
+
+**Blocked repair and remaining risks:**
+
+- SMG-07 requires the shared retention-path resolver in
+  `crates/node/src/transport_cli.rs`, outside A4's four-file scope. Interrupted
+  prune recovery still rejects the relocated payload, and prune directory-sync
+  behavior remains unqualified. The SMG-02 append repair does not resolve this
+  dependency. **No finding is documented as repair-blocked specifically by the
+  release candidate**; that exclusion is distinct from the recorded A4 limit.
+- Unfixed P3s: MPL-02 latest-ID ordering; CHO-05 approval-free negative rehearsal
+  probes; CHO-06 non-hex manifest digests; SMG-05 unbounded/racy local artifact
+  reads; SMG-06 output-filesystem preflight; SWP-04 timing replay at capacity;
+  SWP-05 impossible attestation timestamps.
+- Delegated cryptography, execution/storage, historical replay, caller
+  serialization, RPC limits, registry reconstruction and external attestation
+  trust/freshness remain outside the reviewed surfaces as detailed above.
+  Deterministic error injection is not physical power-loss evidence; the
+  FastPay inverse fixture is not quorum admission or archived-chain replay.
+  Rehearsal report consumers outside A3 were not tested. Existing inventory
+  operational and evidence limits remain unchanged.
+
+B added **22 rows**: MPL- **2**, VLK- **2**, CHO- **6**, SMG- **7**, SWP- **5**.
+All **104 existing finding rows remain byte-for-byte unchanged**. The inventory
+now has **126 rows: 26 P1, 68 P2 and 32 P3**. Classifications total 92 reproduced
+defects, seven code-observed defects, 22 evidence gaps, one economic assumption
+and four proposed capabilities. Dispositions total 84 fixed, 16 dispositioned,
+five reproduced and retained, eight recorded P3s without repair, one repair
+blocked by scope, six needing a live environment and six needing an operator
+decision; zero bare open.
+
+The inventory gate passed on its first full score at **86.33/100**, run group
+`qa-defect-inventory-burn5-20260916`, inventory SHA-256
+`f81ff48dd6f1cd9afe49f57ffe0b8548cc2af14a13ed2b964641ca2970a24c35`.
+No wording rewrite or rescore occurred. Inventory commit `17640b29` and this
+closeout are the final B units, each gated and pushed separately to `origin main`.
+The release branch and checkout were not mutated; the filename-search boundary
+slip is recorded under Skips. No Task Node or fleet action occurred. The campaign
+is closed within the requested 40-minute B time box; work stops here.
