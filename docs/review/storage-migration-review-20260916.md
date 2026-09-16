@@ -16,9 +16,9 @@ The minimal repair is atomic no-replace publication of a fully written, synced t
 
 **Source:** `crates/node/src/certified_send_completed_index.rs:975-988`, `:1026-1044`, and `:1070-1087`.
 
-An append or prune rename succeeds, then its directory sync fails or the process exits before sync. A retry sees the destination already present and skips the sync inside the `source_exists` branch. Recovery can then publish the index and durably clear the intent. A subsequent power loss may roll back the unsynced move while retaining the new index, leaving a completed job back in the active outbox or an indexed/pruned directory inconsistent with the index. The same barrier must be retried even when no new rename is needed.
+An append rename succeeds, then its directory sync fails or the process exits before sync. A retry sees the destination already present and skips the sync inside the `source_exists` branch. Recovery can then publish the index and durably clear the intent. A subsequent power loss may roll back the unsynced move while retaining the new index, leaving a completed job back in the active outbox. The same barrier must be retried even when no new rename is needed. The prune branch has the same conditional placement, but the normal retained-job fixture is rejected earlier by the separate path-validation dependency in SMG-07; no successful prune recovery through that dependency is claimed.
 
-The minimal repair is to sync the move's source and destination directories before recovered index publication, including destination-only recovery and identical retries. Add deterministic sync-failure regressions covering append and prune; retain the old index and intent on failure. **Consensus-affecting: no**; this changes local delivery-maintenance durability, without changing a storage format, ledger transition or signed/hashed encoding.
+The minimal repair is to sync the append move's source and destination directories before recovered index publication, including destination-only recovery and identical retries. Add deterministic sync-failure regressions covering both append directories; retain the old index and intent on failure. Leave the blocked prune path to a repair that can also address SMG-07. **Consensus-affecting: no**; this changes local delivery-maintenance durability, without changing a storage format, ledger transition or signed/hashed encoding.
 
 ### 3. SMG-03 — P2 — intent recovery can bless unrelated completed-directory divergence
 
@@ -51,6 +51,14 @@ A future minimal repair would cap manifest/checksum reads and read each index th
 With a bare relative output such as `generation`, `Path::parent()` produces the empty path. The disk-space helper searches its ancestors without normalizing it to `.` and can return `no existing output ancestor`, preventing an otherwise valid offline rebuild or verification before reaching the target. Existing output mount points can also differ from the parent filesystem used for this estimate.
 
 A future minimal repair would resolve the output's nearest existing filesystem location, treating an empty relative ancestor as `.`, with relative-path and mounted-output coverage. This P3 is recorded without repair.
+
+### 7. SMG-07 — P2 — recovery rejects the payload path of a job already moved into retention
+
+**Source:** `crates/node/src/certified_send_completed_index.rs:1015-1024`, delegating through `:773-795` to `read_validated_durable_certified_send_payloads` in `crates/node/src/transport_cli.rs`.
+
+A prune intent is durable and its completed job has moved to the retention directory, but the index has not yet been rewritten. The recovery caller validates that retained directory using the ordinary durable-payload resolver. A local fixture using the existing tombstone builder reproduces `certified send durable payload path is not canonical`; recovery cannot finish this normal interrupted-prune state. This finding was discovered while testing SMG-02, before implementing repairs. The initial three-test run had two confirmed recovery defects and this earlier path refusal, rather than three successful reproductions of the intended assertions.
+
+The minimal repair needs the shared resolver to support authenticated, constrained retention relocation, then retry the prune directory durability barriers before index publication. **Dependency:** `crates/node/src/transport_cli.rs`, outside the four-file A4 scope. A filename-only symbol lookup located the owner; its implementation was not reviewed. Do not duplicate or bypass its path validation in A4. **Repair skipped at this boundary.** Consensus impact of a future resolver repair requires review in its owning surface; no such repair is made or activated here.
 
 ## Areas with no findings
 
