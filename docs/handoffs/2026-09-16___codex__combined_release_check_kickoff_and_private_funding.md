@@ -5,7 +5,7 @@
 
 ## BLUF
 
-**The existing fixes are already combined in [L1 PR #41](https://github.com/postfiatorg/postfiatl1v2/pull/41). The resumed software suite passed: 1,433 tests, zero failures, 39 ignored. All six saved nodes passed full-history verification.** The final independent rollback replay also passed. All three technical repairs now have passing local qualification evidence. Follow the [repair milestone](../plans/release-blocker-repairs-20260916.md) and the qualification packet at `deployments/release-repair-20260916/`.
+**The existing fixes are already combined in [L1 PR #41](https://github.com/postfiatorg/postfiatl1v2/pull/41). The resumed software suite passed: 1,433 tests, zero failures, 39 ignored. All six saved nodes passed full-history verification.** The final independent rollback replay also passed. All three technical repairs now have passing local qualification evidence. The evidence is pushed in commit `67aa3ce6`, PR #41 is updated, and the existing task completed verification with status **Rewarded**. See the [completed repair milestone](../plans/completed/release-blocker-repairs-20260916.md) and qualification packet at `deployments/release-repair-20260916/`.
 
 The newer private Hyperliquid funding work is saved on separate private branches. It still needs integration and completion.
 
@@ -69,8 +69,8 @@ Recorded partial return/accounting tests cover 27 native scenarios and 91 regres
 
 ## Next decision or action
 
-1. Publish the passing repair evidence and update PR #41. Complete verification of existing Task Node task `task_0747d04c6cffb93874ae122c17faeae6`; no competing task or specification is needed.
-2. Review the combined candidate. The original packet's seven reachable-history scan findings, unavailable pinned testnet archive state, and live activation/rollback decision remain separate release obligations.
+1. Review the published PR #41 repair packet and fresh GitHub checks. Existing Task Node task `task_0747d04c6cffb93874ae122c17faeae6` is complete and Rewarded; do not restart its qualification.
+2. Resolve the remaining release decisions for the combined candidate. The original packet's seven reachable-history scan findings, unavailable pinned testnet archive state, and live activation/rollback decision remain separate release obligations.
 3. Reconcile the newer recovery branches privately with the qualified L1 candidate. Preserve the 23 local StakeHub safety changes in `/home/postfiatchad/repos/StakeHub-safety-20260907`. The preliminary merge preview found seven conflicting L1 files and 25 conflicting StakeHub files.
 4. Continue the private-funding [existing completion contract](https://github.com/postfiatorg/postfiatl1v2-private-archive-20260717/blob/fcf9820a63b90de6cd351fb7f16e1d449813b251/docs/plans/active/eth-private-funding-completion-contract-20260913.md), starting with **A4: inventory the original worker and offline exports**. Remaining work includes full ETH-entry/return composition, whole-job accounting, exclusive restore, installed CLI/browser qualification and approved real funding/private-funding/return/recovery demonstrations.
 
