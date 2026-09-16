@@ -71,3 +71,24 @@ Release-candidate source files, previously reviewed surfaces, excluded crates an
 The checkpoint reproduction ran entirely on local temporary fixture state, without sockets or validator hosts. One initial fixture compilation failed on a missing `std::fs` qualification and executed no tests; two subsequent runs each reproduced the same failed assertion (0 passed, 1 failed). The exploratory test is removed before the findings-only commit and will be retained with the repair.
 
 Socket/network drills, live-chain/fleet operations, physical fault testing, full Rust/Orchard suites and CI status queries are skipped under the brief's network and scope limits. Focused regression tests will use local files or in-memory streams. The full Rust suite is CI's verdict. A4, A5 and B, including inventory/scoring, remain unstarted. No Task Node or fleet action occurred.
+
+## Repair result
+
+CHO-01 through CHO-04 are repaired; CHO-05 and CHO-06 remain recorded without repair. Only the four A3 source files changed.
+
+- **CHO-01 — consensus-affecting:** checkpoint interval/coverage and every signed check's height and pending pair must bind the current ratification's activation height, amendment slot and candidate. The regression first verifies current evidence, then rejects valid older checkpoints substituted into the newer transcript.
+- **CHO-02 — consensus-affecting:** checked size arithmetic bounds the serialized expanded transcript to 16 MiB before shared-check cloning. The same guard prevents the compressor from producing an over-bound transcript. A correctly encoded compact fixture below 16 MiB that previously expanded beyond 32 MiB now fails at the expansion guard; ordinary and 20-validator certificates still pass. This is a serialized-data bound, not an exact process-memory limit.
+- **CHO-03 — not consensus-affecting:** response-write failures stay within their connection. The serving loop has a generic stream seam used by both the TCP listener and in-memory regression. The regression covers malformed-request and normal-probe write failures, disabled shutdown, a subsequent successful probe, unchanged shadow state and disabled authority flags. No sockets were opened.
+- **CHO-04 — not consensus-affecting:** finalization checks rejection of a mixed Cobalt-update/unrelated-amendment batch and returns an ordinary error if that interlock unexpectedly fails. Its report now names `mixed_authority_batch_rejected`. The regression calls the finalization function with valid signed input, reads its successful output and verifies the restored governance history. The existing pure-unrelated-governance Foundation-routing test remains green.
+
+The certificate format and signed/hashed encodings are unchanged; the two new authority admission rules are source changes only. **Full Rust suite verdict pending** CI. No live activation or deployed behavior is claimed. Rehearsal report consumers outside A3 were not tested.
+
+All Cargo build/test commands used `CARGO_NET_OFFLINE=true`:
+
+- Before repair, `cargo test -p postfiat-node burn5_ --lib --locked`: 4 passed, 4 failed, 359 filtered out. Three A3 failures reproduced CHO-01, CHO-03 and CHO-04; the expansion fixture initially failed canonical decoding before reaching CHO-02. The broad filter also reran four existing A1/A2 regressions, all passing; no other surface was reviewed or edited.
+- After correcting that fixture to preserve typed canonical field order, `cargo test -p postfiat-node burn5_cobalt_authority_bounds_shared_check_expansion --lib --locked`: 0 passed, 1 failed, 366 filtered out, because the original decoder returned the over-bound expanded transcript. The failure assertion was then changed to avoid printing that large public fixture.
+- `cargo check -p postfiat-node --locked`: passed.
+- `cargo test -p postfiat-node cobalt_handoff::tests --lib --locked`: 13 passed, 0 failed, 0 ignored, 354 filtered out. This includes both authority-certificate regressions, the finalization regression, quorum/replay/scope checks and the existing 20-validator certificate.
+- `cargo test -p postfiat-node cobalt_shadow_runtime::tests --lib --locked -- --skip local_network_drill_runs_real_signed_protocol_over_three_sockets`: 3 passed, 0 failed, 0 ignored, 364 filtered out. The socket drill was explicitly excluded by the network boundary.
+- `cargo test -p postfiat-node cobalt_handoff_rehearsal::tests --lib --locked`: 1 passed, 0 failed, 0 ignored, 366 filtered out.
+- Post-repair total: **17 passed, 0 failed**. No broad Rust/Orchard suite or CI status query ran.
