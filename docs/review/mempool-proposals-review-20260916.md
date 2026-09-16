@@ -32,3 +32,18 @@ A minimal future repair for execution-order reporting is to check the FastLane t
 Only `crates/node/src/mempool_proposals.rs` was reviewed as source. Package target metadata and transaction documentation supplied context, not additional review surfaces. No called storage, types, execution, finality/signing, governance, privacy, proof, bridge or state-commitment implementation was reviewed. In particular, the brief's excluded release-candidate files (including node `lib.rs`, `lib_tests.rs`, `tests/`, `execution_actions.rs`, `block_finality.rs` and the listed type files) were neither read for review nor edited. Remote-ref path metadata alone established exclusions; the release branch and checkout were not mutated.
 
 This is a single-file adversarial review, not an end-to-end safety claim. Concurrent writers, crash/restart behavior of delegated persistence, cryptographic verification, cross-family execution semantics and archived replay remain unverified. Shielded/governance/bridge proposal orchestration was read only in this file; its called domain implementations were not followed. No full Rust, Orchard/Halo2, live-chain or fleet test was run for the findings unit. A2–A5 and B were not started; inventory rows and scoring are deferred to B. MPL-02 remains unfixed. No Task Node, fleet, spend, signup, deployment or activation action occurred.
+
+## Repair result
+
+MPL-01 is repaired by using the existing complete sender-count helper in `enforce_mempool_admission_limits`. The global pending limit and atomic-swap-owner interlock are unchanged. Two tests in this same source file exercise every offer-only count through the quota, rejection exactly at the quota, state-verifier rejection above it, a mixed offer/transfer quota and independent sender capacity. The quota fixtures intentionally use inert unsigned payloads; they test admission accounting, not cryptographic execution. Both regressions failed against the original guard, then passed with the repair.
+
+**Not consensus-affecting:** only local mempool admission policy changes. No consensus validity rule, execution result, storage format or signed/hashed bytes change. No activation or deployment occurred. MPL-02 remains unfixed. **Full Rust suite verdict pending** CI.
+
+Verification (Cargo ran with `CARGO_NET_OFFLINE=true`):
+
+- `cargo test -p postfiat-node mempool_proposals::burn5_tests --lib --locked`: pre-repair regression run, 0 passed and 2 failed as expected at the missing offer quota. Earlier fixture-construction attempts had compile errors and executed no tests.
+- `cargo check -p postfiat-node --locked`: passed.
+- `cargo test -p postfiat-node mempool --lib --locked`: 16 passed, 0 failed, 0 ignored; includes both new regressions and existing sender/global limits, invalid-signature, atomic-swap and transaction-family mempool flows.
+- `cargo fmt --all -- --check` and `git diff --check`: passed.
+
+Only `crates/node/src/mempool_proposals.rs` changed as source; the focused tests compiled dependencies and executed existing tests without reviewing or editing their excluded source files. No full workspace or long Orchard/Halo2 suite was run because this admission-accounting repair crosses neither boundary. No inventory edit or scoring was performed.
