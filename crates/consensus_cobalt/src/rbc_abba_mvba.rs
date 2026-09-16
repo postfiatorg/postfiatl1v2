@@ -1727,12 +1727,15 @@ pub fn abba_common_coin(
             );
             Ok(hex_low_bit(&coin_hash)?)
         }
+        (AbbaCommonRandomSource::SignedBeacon { .. }, CobaltRuntimeMode::Live) => {
+            Err("ABBA signed beacon authentication is unavailable in live mode".to_string())
+        }
         (
             AbbaCommonRandomSource::SignedBeacon {
                 beacon_id,
                 output_hash,
             },
-            _,
+            CobaltRuntimeMode::Simulation,
         ) => {
             validate_hash_hex("ABBA signed beacon id", beacon_id)?;
             validate_hash_hex("ABBA signed beacon output hash", output_hash)?;

@@ -516,6 +516,9 @@ pub struct StatusReport {
     pub active_nav_profiles: Vec<ActiveNavProfileStatus>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deployment_manifest_sha256: Option<String>,
+    /// Current manifest bytes are an identity observation, not prestart signature evidence.
+    #[serde(default)]
+    pub deployment_manifest_verified: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deployment_validator_id: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

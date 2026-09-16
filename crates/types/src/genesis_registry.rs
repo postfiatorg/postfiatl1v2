@@ -103,6 +103,7 @@ pub enum GenesisRegistryError {
     InvalidGenesisRoundId,
     InvalidExpiry,
     InvalidDomainFlag,
+    InvalidDomainLabelLength,
 }
 
 impl GenesisRegistryError {
@@ -140,6 +141,7 @@ impl GenesisRegistryError {
             Self::InvalidGenesisRoundId => "invalid_genesis_round_id",
             Self::InvalidExpiry => "invalid_expiry",
             Self::InvalidDomainFlag => "invalid_domain_flag",
+            Self::InvalidDomainLabelLength => "invalid_domain_label_length",
         }
     }
 }
@@ -160,14 +162,16 @@ fn genesis_sha256(data: &[u8]) -> [u8; 32] {
 }
 
 /// `SHA-256(uint16_be(len(label)) || ASCII(label) || canonical_cbor)`.
-pub fn genesis_domain_digest(label: &str, canonical_cbor: &[u8]) -> [u8; 32] {
+/// Returns an error if the domain label exceeds 65,535 bytes.
+pub fn genesis_domain_digest(label: &str, canonical_cbor: &[u8]) -> Result<[u8; 32], GenesisRegistryError> {
     let label_bytes = label.as_bytes();
-    debug_assert!(label_bytes.len() <= u16::MAX as usize);
+    let label_len = u16::try_from(label_bytes.len())
+        .map_err(|_| GenesisRegistryError::InvalidDomainLabelLength)?;
     let mut preimage = Vec::with_capacity(2 + label_bytes.len() + canonical_cbor.len());
-    preimage.extend_from_slice(&(label_bytes.len() as u16).to_be_bytes());
+    preimage.extend_from_slice(&label_len.to_be_bytes());
     preimage.extend_from_slice(label_bytes);
     preimage.extend_from_slice(canonical_cbor);
-    genesis_sha256(&preimage)
+    Ok(genesis_sha256(&preimage))
 }
 
 // ---------------------------------------------------------------------------
@@ -874,10 +878,10 @@ impl ProposedGenesisRegistryV1 {
 
     /// `digest("L1V2_PROPOSED_GENESIS_REGISTRY_V1", registry)`.
     pub fn proposed_registry_hash(&self) -> Result<[u8; 32], GenesisRegistryError> {
-        Ok(genesis_domain_digest(
+        genesis_domain_digest(
             PROPOSED_GENESIS_REGISTRY_DOMAIN_V1,
             &self.canonical_bytes()?,
-        ))
+        )
     }
 }
 
@@ -1005,10 +1009,10 @@ impl GenesisIdentityReceiptBodyV1 {
 
     /// `digest("L1V2_IDENTITY_RECEIPT_V1", body)`.
     pub fn receipt_hash(&self) -> Result<[u8; 32], GenesisRegistryError> {
-        Ok(genesis_domain_digest(
+        genesis_domain_digest(
             GENESIS_IDENTITY_RECEIPT_DOMAIN_V1,
             &self.canonical_bytes()?,
-        ))
+        )
     }
 }
 
@@ -1064,9 +1068,9 @@ impl GenesisEvidenceRecordV1 {
 
     /// `digest("L1V2_GENESIS_EVIDENCE_RECORD_V1", record)`.
     pub fn evidence_digest(&self) -> Result<[u8; 32], GenesisRegistryError> {
-        Ok(genesis_domain_digest(
+        genesis_domain_digest(
             GENESIS_EVIDENCE_RECORD_DOMAIN_V1,
             &self.canonical_bytes()?,
-        ))
+        )
     }
 }

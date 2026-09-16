@@ -267,10 +267,7 @@ impl NodeStore {
             return Err(error);
         }
 
-        if target_dir.exists() {
-            fs::remove_dir_all(&target_dir)?;
-        }
-        fs::rename(&build_dir, &target_dir)?;
+        publish_index_directory(&build_dir, &target_dir)?;
         sync_parent_dir(&target_dir)?;
         let summary = Summary {
             schema: SUMMARY_SCHEMA.to_owned(),
@@ -285,6 +282,10 @@ impl NodeStore {
             last_slot,
         };
         self.write_json(self.data_dir.join(ORDERED_HISTORY_SUMMARY_FILE), &summary)?;
+        // An exchanged previous generation remains recoverable until the summary is durable.
+        if build_dir.exists() {
+            fs::remove_dir_all(&build_dir)?;
+        }
         Ok(report(&summary))
     }
 
@@ -868,6 +869,39 @@ fn context_is_previous(
     height.saturating_add(1) == context.finalized_height && block_hash == previous_block_hash
 }
 
+fn publish_index_directory(build_dir: &Path, target_dir: &Path) -> io::Result<()> {
+    if !target_dir.exists() {
+        return fs::rename(build_dir, target_dir);
+    }
+    #[cfg(target_os = "linux")]
+    {
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt;
+        let build = CString::new(build_dir.as_os_str().as_bytes()).map_err(invalid_data)?;
+        let target = CString::new(target_dir.as_os_str().as_bytes()).map_err(invalid_data)?;
+        // Exchange keeps the published name present, and retains the previous
+        // generation at build_dir until its replacement summary is durable.
+        let result = unsafe {
+            libc::renameat2(
+                libc::AT_FDCWD,
+                build.as_ptr(),
+                libc::AT_FDCWD,
+                target.as_ptr(),
+                libc::RENAME_EXCHANGE,
+            )
+        };
+        if result != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "linux"))]
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "ordered-history replacement requires atomic directory exchange",
+    ))
+}
+
 fn report(summary: &Summary) -> OrderedHistoryIndexReport {
     OrderedHistoryIndexReport {
         schema: "postfiat-ordered-history-index-report-v1".to_owned(),
@@ -928,6 +962,34 @@ mod tests {
         };
         store.write_chain_tip(&tip).expect("write chain tip");
         (dir, store)
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn index_publication_retains_previous_generation_until_summary_is_durable() {
+        let (dir, store) = initialized_store("postfiat-index-publication", &["batch-0".to_owned()]);
+        store
+            .rebuild_ordered_history_index()
+            .expect("initial index");
+        let summary = store.read_summary().expect("summary");
+        let target = dir.join(&summary.generation);
+        let build = dir.join("replacement");
+        fs::create_dir(&build).expect("build directory");
+        fs::write(build.join("replacement-marker"), b"new generation").expect("marker");
+        publish_index_directory(&dir.join("missing-build"), &target)
+            .expect_err("failed publication");
+        assert!(store
+            .ordered_batch_contains_indexed("batch-0")
+            .expect("old index remains usable"));
+        publish_index_directory(&build, &target).expect("exchange");
+        // A crash before the summary write leaves both directories recoverable.
+        assert!(target.join("replacement-marker").exists());
+        assert!(build.join(ORDERED_HISTORY_BITMAP_FILE).exists());
+        publish_index_directory(&build, &target).expect("restore previous generation");
+        assert!(store
+            .ordered_batch_contains_indexed("batch-0")
+            .expect("retained index is usable"));
+        fs::remove_dir_all(dir).expect("cleanup");
     }
 
     #[test]

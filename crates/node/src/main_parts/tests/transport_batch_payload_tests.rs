@@ -1487,6 +1487,7 @@ mod transport_batch_payload_tests {
             build_profile: "test".to_string(),
             active_nav_profiles: Vec::new(),
             deployment_manifest_sha256: None,
+            deployment_manifest_verified: false,
             deployment_validator_id: None,
             deployment_service_artifacts: Vec::new(),
             deployment_runtime_artifacts: None,

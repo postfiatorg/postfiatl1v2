@@ -1,6 +1,36 @@
 use super::*;
 
 #[test]
+fn runtime_manifest_identity_marks_replaced_unsigned_bytes_unverified() {
+    let root = unique_test_dir("postfiat-runtime-manifest-unverified");
+    fs::create_dir_all(&root).expect("test directory");
+    let path = root.join("manifest.json");
+    let mut manifest = serde_json::json!({
+        "schema": DEPLOYMENT_MANIFEST_SCHEMA,
+        "deployment_id": "unverified-test", "created_unix": 1,
+        "valid_from_unix": 1, "valid_until_unix": 2,
+        "chain_id": "test", "genesis_hash": "", "git_revision": "",
+        "binary_sha256": "", "build_profile": "test", "build_features": [],
+        "protocol_version": 1, "rpc_schema": "", "service_unit_sha256": "",
+        "environment_sha256": "", "validator_bindings": [], "topology_sha256": "",
+        "swap_circuit_metadata_sha256": "", "private_egress_circuit_metadata_sha256": "",
+        "publisher": "untrusted", "algorithm_id": "", "public_key_hex": "", "signature_hex": ""
+    });
+    let read_identity = || deployment_runtime_identity_from_config(
+        Some(path.clone().into_os_string()), None, None, None, None, None, None
+    ).expect("current-file identity");
+    fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    let original = read_identity();
+    manifest["git_revision"] = serde_json::json!("replaced");
+    fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    let replaced = read_identity();
+    assert_ne!(original.manifest_sha256, replaced.manifest_sha256);
+    assert!(!original.manifest_verified);
+    assert!(!replaced.manifest_verified);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn consensus_v2_snapshot_reader_accepts_bounded_legacy_outer_snapshot() {
     let root = unique_test_dir("postfiat-large-consensus-v2-snapshot-reader");
     fs::create_dir_all(&root).expect("create test root");

@@ -193,6 +193,9 @@ impl FastSwapValidatorServiceV1 {
             ));
         }
         let node_store = NodeStore::new(data_dir);
+        // Canonical commit writers hold this lock through ledger and tip publication.
+        // Keep the same snapshot authoritative until all local durable steps finish.
+        let _canonical_read_lock = node_store.lock_ordered_commit()?;
         let tip_before = node_store.read_chain_tip()?;
         if self.canonical_tip.as_ref() == Some(&tip_before) {
             return Ok(());
@@ -2556,6 +2559,112 @@ mod tests {
         if fixture.root.exists() {
             fs::remove_dir_all(&fixture.root).expect("cleanup");
         }
+    }
+
+    #[test]
+    fn canonical_refresh_waits_for_commit_before_persisting_controls() {
+        let fixture = fixture();
+        let policy_epoch = fixture
+            .base
+            .policy_snapshots
+            .values()
+            .next()
+            .expect("policy")
+            .policy_epoch;
+        let data_dir = fixture.root.join("refresh-commit-lock");
+        let fastswap_dir = data_dir.join(FASTSWAP_DIRECTORY);
+        fs::create_dir_all(&fastswap_dir).expect("directory");
+        fs::write(
+            fastswap_dir.join(FASTSWAP_COMMITTEE),
+            serde_json::to_vec(&fixture.committee).unwrap(),
+        )
+        .unwrap();
+        let mut validator = FastSwapValidatorServiceV1::from_parts(
+            &fastswap_dir,
+            fixture.base.clone(),
+            fixture.committee.clone(),
+            "validator-0".to_owned(),
+            fixture.validator_keys[0].clone(),
+            110,
+        )
+        .expect("service");
+        let mut ledger = LedgerState::empty();
+        ledger.fastswap_committees.push(fixture.committee.clone());
+        ledger.fastswap_policy_snapshots =
+            fixture.base.policy_snapshots.values().cloned().collect();
+        ledger
+            .fast_lane_prepare_fences
+            .push(postfiat_types::FastLanePrepareFenceV1 {
+                committee_epoch: fixture.committee.domain.committee_epoch,
+                policy_epoch,
+                finalized_primary_height: 111,
+            });
+        let store = NodeStore::new(&data_dir);
+        store.write_ledger(&ledger).expect("ledger");
+        let mut tip = ChainTipState {
+            schema: "postfiat-chain-tip-v1".to_owned(),
+            chain_id: "test".to_owned(),
+            genesis_hash: "genesis".to_owned(),
+            protocol_version: 1,
+            height: 111,
+            block_hash: "block-111".to_owned(),
+            state_root: "root-111".to_owned(),
+            ordered_batch_count: 0,
+            receipt_count: 0,
+            history_base_height: 0,
+        };
+        store.write_chain_tip(&tip).expect("initial tip");
+        let commit_lock = store
+            .lock_ordered_commit()
+            .expect("in-progress canonical commit");
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let refresh_dir = data_dir.clone();
+        let thread = std::thread::spawn(move || {
+            started_tx.send(()).unwrap();
+            let result = validator.refresh_canonical(&refresh_dir);
+            done_tx.send((validator, result)).unwrap();
+        });
+        started_rx.recv().unwrap();
+        assert!(
+            done_rx
+                .recv_timeout(std::time::Duration::from_millis(100))
+                .is_err(),
+            "refresh must not consume or persist an in-progress canonical snapshot"
+        );
+        ledger.fast_lane_prepare_fences[0].finalized_primary_height = 112;
+        store.write_ledger(&ledger).expect("committed ledger");
+        tip.height = 112;
+        tip.block_hash = "block-112".to_owned();
+        tip.state_root = "root-112".to_owned();
+        store.write_chain_tip(&tip).expect("committed tip");
+        drop(commit_lock);
+        let (validator, result) = done_rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+        result.expect("refresh after commit");
+        thread.join().unwrap();
+        assert_eq!(validator.canonical_tip, Some(tip));
+        assert_eq!(
+            validator.state.prepare_fences[&policy_epoch].finalized_primary_height,
+            112
+        );
+        drop(validator);
+        let replayed = FastSwapValidatorServiceV1::from_parts(
+            &fastswap_dir,
+            fixture.base.clone(),
+            fixture.committee.clone(),
+            "validator-0".to_owned(),
+            fixture.validator_keys[0].clone(),
+            112,
+        )
+        .expect("restart");
+        assert_eq!(
+            replayed.state.prepare_fences[&policy_epoch].finalized_primary_height,
+            112
+        );
+        drop(replayed);
+        fs::remove_dir_all(fixture.root).expect("cleanup");
     }
 
     #[test]
