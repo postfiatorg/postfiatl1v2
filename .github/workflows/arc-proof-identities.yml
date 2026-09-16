@@ -58,6 +58,11 @@ jobs:
           git archive "$SOURCE_COMMIT" | tar -x -C "$root/src-a"
           git archive "$SOURCE_COMMIT" | tar -x -C "$root/src-b"
           test "$(sha256sum "$root/src-a/programs/pfusdc-egress/Cargo.lock" | cut -d' ' -f1)" = "$(jq -er .egress_lock_sha256 <<< "$release")"
+          ingress_source_lock_sha="$(sha256sum "$root/src-a/programs/pfusdc-arc-ingress/Cargo.lock" | cut -d' ' -f1)"
+          egress_source_lock_sha="$(sha256sum "$root/src-a/programs/pfusdc-egress/Cargo.lock" | cut -d' ' -f1)"
+          while read -r revision; do
+            git diff "$revision^" "$revision" -- crates/types > "$root/revert-$revision.patch"
+          done < <(jq -r '.egress_source_reversions[]?' <<< "$release")
 
           build_pair() {
             local source="$1"
@@ -76,6 +81,9 @@ jobs:
               sudo mkdir -p /home/postfiat/repos /home/postfiat/.cargo
               sudo chown -R "$(id -u):$(id -g)" /home/postfiat
               cp -a "$source" "$historical_root"
+              while read -r revision; do
+                (cd "$historical_root" && git apply --reverse "$root/revert-$revision.patch")
+              done < <(jq -r '.egress_source_reversions[]?' <<< "$release")
               (
                 cd "$historical_root/programs/pfusdc-egress"
                 CARGO_HOME=/home/postfiat/.cargo cargo prove build --locked \
@@ -145,8 +153,9 @@ jobs:
             --arg cargo_home "$(jq -er .cargo_home <<< "$release")" \
             --arg ingress_sha256 "$ingress_sha" \
             --arg egress_sha256 "$egress_sha" \
-            --arg ingress_lock_sha256 "$(sha256sum "$root/src-a/programs/pfusdc-arc-ingress/Cargo.lock" | cut -d' ' -f1)" \
-            --arg egress_lock_sha256 "$(sha256sum "$root/src-a/programs/pfusdc-egress/Cargo.lock" | cut -d' ' -f1)" \
+            --arg ingress_lock_sha256 "$ingress_source_lock_sha" \
+            --arg egress_lock_sha256 "$egress_source_lock_sha" \
+            --argjson egress_source_reversions "$(jq -c '.egress_source_reversions // []' <<< "$release")" \
             --arg docker_image "$docker_image" \
             --arg rust_version "$rust_version" \
             --arg cargo_prove_version "$cargo_prove_version" \
@@ -164,6 +173,7 @@ jobs:
               egress_elf_sha256:$egress_sha256,
               arc_ingress_lock_sha256:$ingress_lock_sha256,
               egress_lock_sha256:$egress_lock_sha256,
+              egress_source_reversions:$egress_source_reversions,
               docker_image:$docker_image,
               rust_version:$rust_version,
               cargo_prove_version:$cargo_prove_version

@@ -19,6 +19,7 @@
       "source_root": "/home/postfiat/repos/postfiatl1v2",
       "cargo_home": "/home/postfiat/.cargo",
       "source_commit": "c9407b1c2176cf7f812ba886f8053ae7bb5cdeb0",
+      "egress_source_reversions": ["47787146325dc553d518695e72025cb3720fe46d"],
       "retained_commit": "c9407b1c2176cf7f812ba886f8053ae7bb5cdeb0",
       "egress_lock_sha256": "71225bed4ec4d8cecbeb05cf16071d8dd60ab09bf70cef57c2b7012d97a32a63",
       "expected": "programs/pfusdc-egress/program-info.pfeth-v1.json"
