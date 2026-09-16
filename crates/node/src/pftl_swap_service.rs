@@ -874,6 +874,12 @@ pub fn persist_pftl_swap_journal(path: &Path, journal: &PftlSwapJournalV1) -> io
     }
     let mut text = serde_json::to_string_pretty(journal).map_err(invalid_data)?;
     text.push('\n');
+    if text.len() > PFTL_SWAP_MAX_DURABLE_FILE_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::StorageFull,
+            "PFTL swap journal exceeds its durable byte capacity",
+        ));
+    }
     atomic_write(path, text)?;
     set_private_file_permissions(path)
 }
@@ -1112,6 +1118,18 @@ pub fn transition_pftl_swap_journal_entry(
         return Err(io::Error::new(
             io::ErrorKind::StorageFull,
             "PFTL swap journal reserves its final transition for consensus resolution",
+        ));
+    }
+    if (entry.state == PftlSwapJournalState::Published
+        || (entry.state == PftlSwapJournalState::Prepared
+            && next == PftlSwapJournalState::Published))
+        && batch_hash
+            .as_ref()
+            .is_some_and(|value| entry.batch_hash.as_ref() != Some(value))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "journal transition conflicts with the prepared or published batch",
         ));
     }
     entry.state = next;
@@ -1995,6 +2013,141 @@ mod tests {
         assert_eq!(terminal.state, PftlSwapJournalState::FailedPrepublish);
         assert!(terminal.transitions.len() <= PFTL_SWAP_MAX_JOURNAL_TRANSITIONS);
         let _ = fs::remove_dir_all(root);
+    }
+
+    fn burn5_signed_quote(key: &str) -> (PftlSwapQuoteV1, SignedPftlSwapIntentV1) {
+        let quote = quote_fixture();
+        let mut signed = signed_fixture(key);
+        signed.intent.quote_id = quote.quote_id.clone();
+        let keypair = ml_dsa_65_keygen_from_seed(&[7_u8; 32]);
+        signed.signature_hex = bytes_to_hex(
+            &ml_dsa_65_sign_with_context(
+                &keypair.private_key,
+                &signed.intent.signing_bytes().unwrap(),
+                PFTL_SWAP_INTENT_SIGNATURE_CONTEXT_V1,
+            )
+            .unwrap(),
+        );
+        (quote, signed)
+    }
+
+    #[test]
+    fn burn5_published_journal_keeps_prepared_batch_identity() {
+        use PftlSwapJournalState::*;
+        let root = swap_test_dir("burn5-pftl-batch-identity");
+        let path = root.join("journal.json");
+        let (quote, signed) = burn5_signed_quote("batch-identity");
+        journal_pftl_swap_intent(&path, &quote, &signed).unwrap();
+        let batch_a = "aa".repeat(48);
+        let batch_b = "bb".repeat(48);
+        let transition = |next, batch, height, certificate, reason| {
+            transition_pftl_swap_journal_entry(
+                &path,
+                "batch-identity",
+                next,
+                batch,
+                height,
+                certificate,
+                reason,
+            )
+        };
+        transition(Proving, None, None, None, None).unwrap();
+        transition(Prepared, Some(batch_a.clone()), None, None, None).unwrap();
+        let prepared = fs::read(&path).unwrap();
+        assert!(transition(Published, Some(batch_b.clone()), None, None, None).is_err());
+        assert_eq!(fs::read(&path).unwrap(), prepared);
+
+        // A fresh prepublication proof may still replace the prepared batch.
+        transition(
+            InterruptedPrepublish,
+            None,
+            None,
+            None,
+            Some("retry".to_string()),
+        )
+        .unwrap();
+        transition(Proving, None, None, None, None).unwrap();
+        transition(Prepared, Some(batch_b.clone()), None, None, None).unwrap();
+        transition(Published, Some(batch_b.clone()), None, None, None).unwrap();
+        let published = fs::read(&path).unwrap();
+        assert!(transition(
+            Committed,
+            Some(batch_a.clone()),
+            Some(7),
+            Some("certificate-a".to_string()),
+            None,
+        )
+        .is_err());
+        assert!(transition(
+            Rejected,
+            Some(batch_a),
+            None,
+            None,
+            Some("wrong batch".to_string()),
+        )
+        .is_err());
+        assert_eq!(fs::read(&path).unwrap(), published);
+        let committed = transition(
+            Committed,
+            Some(batch_b.clone()),
+            Some(7),
+            Some("certificate-b".to_string()),
+            None,
+        )
+        .unwrap();
+        assert_eq!(committed.batch_hash, Some(batch_b));
+        assert_eq!(
+            load_pftl_swap_journal(&path).unwrap().entries["batch-identity"],
+            committed
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn burn5_oversized_journal_preserves_readable_durable_state() {
+        use PftlSwapJournalState::*;
+        let root = swap_test_dir("burn5-pftl-journal-size");
+        let path = root.join("journal.json");
+        let (quote, signed) = burn5_signed_quote("durable-entry");
+        journal_pftl_swap_intent(&path, &quote, &signed).unwrap();
+        let original = fs::read(&path).unwrap();
+        let original_journal = load_pftl_swap_journal(&path).unwrap();
+        let mut entry = original_journal.entries["durable-entry"].clone();
+        let mut states = vec![Journaled];
+        for _ in 0..30 {
+            states.extend([Proving, InterruptedPrepublish]);
+        }
+        states.extend([Proving, FailedPrepublish, Rejected]);
+        entry.state = Rejected;
+        entry.transitions = states
+            .into_iter()
+            .map(|state| PftlSwapJournalTransition {
+                state,
+                at_unix_ms: 1,
+                at_monotonic_ns: 1,
+                reason: Some("r".repeat(PFTL_SWAP_MAX_REASON_BYTES)),
+            })
+            .collect();
+        let mut oversized = PftlSwapJournalV1::default();
+        for index in 0..1536 {
+            let mut item = entry.clone();
+            item.idempotency_key = format!("oversized-{index}");
+            item.swap_id = hash_hex("burn5.test.swap", item.idempotency_key.as_bytes());
+            oversized.entries.insert(item.idempotency_key.clone(), item);
+        }
+        validate_pftl_swap_journal(&oversized).unwrap();
+        assert!(
+            serde_json::to_vec_pretty(&oversized).unwrap().len() > PFTL_SWAP_MAX_DURABLE_FILE_BYTES
+        );
+        assert_eq!(
+            persist_pftl_swap_journal(&path, &oversized)
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::StorageFull,
+        );
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert_eq!(load_pftl_swap_journal(&path).unwrap(), original_journal);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

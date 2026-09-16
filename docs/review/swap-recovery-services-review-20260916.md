@@ -54,4 +54,21 @@ The timestamp validator checks length, punctuation and decimal digits only. A si
 
 Only the five named source files were reviewed. Remote-ref comparisons read filenames only to establish exclusions; none of the five overlaps the release candidate. No excluded release-candidate source was opened for review or edited. In particular, `crates/execution/src/owned_transfer_recovery.rs`, `crates/types/src/fastpay_recovery_types.rs`, node `lib.rs`, `lib_tests.rs`, `tests/`, `main_parts/tests/`, `fastswap_service.rs`, `block_finality.rs`, `block_replay_wallet.rs`, transport/RPC dispatch and the other release files were excluded. Prior burns' source surfaces and the other A surfaces were not re-reviewed. Frozen artifacts and excluded crates were not reviewed or edited.
 
-Delegated execution/types, cryptographic verification, storage and atomic-write internals, historical replay, RPC limits/routing, caller serialization, quote snapshot coherence, proof construction and verification, and external attestation trust/freshness were not audited. Compiler diagnostics supplied fixture fields without reading excluded type/test files. The FastPay regression models local inverse recovery, not a full ordered-block or quorum-certificate test. No network/socket exercise, physical crash, fleet action, Task Node, release branch/checkout action, deployment, inventory edit or scoring is part of A5. P3 findings remain unfixed. The full Rust suite is CI's verdict; repair verification will be recorded separately.
+Delegated execution/types, cryptographic verification, storage and atomic-write internals, historical replay, RPC limits/routing, caller serialization, quote snapshot coherence, proof construction and verification, and external attestation trust/freshness were not audited. Compiler diagnostics supplied fixture fields without reading excluded type/test files. The FastPay regression models local inverse recovery, not a full ordered-block or quorum-certificate test. No network/socket exercise, physical crash, fleet action, Task Node, release branch/checkout action, deployment, inventory edit or scoring is part of A5. P3 findings remain unfixed. The full Rust suite is CI's verdict; repair verification follows.
+
+## Repair result
+
+SWP-01 now compares exact identity/version sets, rejects duplicate references and non-increasing inverse positions, and retains the original position ordering for restoration. Its regression applies the real transfer model with two consumed objects and two untouched objects, in both matching and differing ledger/certificate order, then restores the entire original ledger. Wrong versions, duplicate prior identities, reordered inverse records and duplicate positions are rejected without mutation. The certificate/fence is synthetic: quorum admission, durable block replay and historical recovery are not claimed. **Consensus-affecting: yes**; no journal schema or signed/hashed encoding changed.
+
+SWP-02 now rejects batch substitution during prepared-to-published and published-to-terminal transitions. The regression covers conflicting publication, commit and rejection, byte-identical durable state on refusal, permitted prepublication reproof and successful completion/reload with the correct batch. **Consensus-affecting: no.**
+
+SWP-03 checks serialized journal bytes, including the newline, before atomic replacement. Its regression constructs 1,536 entries with 64 bounded transitions each, confirms the payload exceeds 32 MiB, and checks `StorageFull` with the existing file unchanged and readable. **Consensus-affecting: no.**
+
+All three P2 findings have a regression that failed on the original behavior. Only `fastpay_recovery_node.rs` and `pftl_swap_service.rs` were edited as source; no repair needed an excluded-file change. SWP-04/05 remain recorded without repair. **Full Rust suite verdict pending** CI; no live behavior, deployment or activation is claimed.
+
+Post-repair verification, with `CARGO_NET_OFFLINE=true` for Cargo build/test commands:
+
+- `cargo check -p postfiat-node --locked`: passed.
+- `cargo test -p postfiat-node fastpay_recovery_node::burn5_recovery_tests --lib --locked`: **1 passed**, 0 failed, 0 ignored, 371 filtered out.
+- `cargo test -p postfiat-node pftl_swap_service::tests --lib --locked`: **10 passed**, 0 failed, 0 ignored, 362 filtered out.
+- `cargo fmt --all -- --check` and `git diff --check`: passed.
