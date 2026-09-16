@@ -949,7 +949,30 @@ fn fastpay_commit_certificate(
     bytes: &mut Vec<u8>,
     certificate: &FastPayCertificateV1,
 ) -> Result<(), String> {
-    let encoded = certificate.canonical_bytes()?;
+    // Historical storage preserves arrival order; certificate identity already
+    // orders votes by validator. Normalize the commitment without rewriting state.
+    let vote_count = match certificate {
+        FastPayCertificateV1::Transfer(value) => value.votes.len(),
+        FastPayCertificateV1::Unwrap(value) => value.votes.len(),
+    };
+    if vote_count > MAX_FASTPAY_RECOVERY_VALIDATORS {
+        return Err("FastPay retained certificate exceeds the validator bound".to_string());
+    }
+    let mut canonical = certificate.clone();
+    match &mut canonical {
+        FastPayCertificateV1::Transfer(value) => {
+            value
+                .votes
+                .sort_by(|a, b| a.validator_id.cmp(&b.validator_id));
+        }
+        FastPayCertificateV1::Unwrap(value) => {
+            value
+                .votes
+                .sort_by(|a, b| a.validator_id.cmp(&b.validator_id));
+        }
+    }
+    // The strict encoder still rejects duplicate validators after sorting.
+    let encoded = canonical.canonical_bytes()?;
     let length = u64::try_from(encoded.len())
         .map_err(|_| "FastPay retained certificate length exceeds u64".to_string())?;
     bytes.extend_from_slice(&length.to_be_bytes());
@@ -1100,6 +1123,38 @@ mod fastpay_recovery_type_tests {
                 signature_hex: "cc".repeat(32),
             }],
         })
+    }
+
+    #[test]
+    fn v2_retained_votes_accept_historical_order_and_reject_duplicates() {
+        let mut certificate = retained_certificate();
+        let FastPayCertificateV1::Transfer(value) = &mut certificate else {
+            unreachable!()
+        };
+        value.votes.push(OwnedTransferVote {
+            validator_id: "validator-1".into(),
+            signature_hex: "dd".repeat(32),
+        });
+        let mut expected = Vec::new();
+        fastpay_commit_certificate(&mut expected, &certificate).unwrap();
+        let FastPayCertificateV1::Transfer(value) = &mut certificate else {
+            unreachable!()
+        };
+        value.votes.reverse();
+        let stored = certificate.clone();
+        assert!(
+            certificate.canonical_bytes().is_err(),
+            "wire encoder stays strict"
+        );
+        let mut actual = Vec::new();
+        fastpay_commit_certificate(&mut actual, &certificate).unwrap();
+        assert_eq!(actual, expected);
+        assert_eq!(certificate, stored, "historical state is unchanged");
+        let FastPayCertificateV1::Transfer(value) = &mut certificate else {
+            unreachable!()
+        };
+        value.votes.push(value.votes[0].clone());
+        assert!(fastpay_commit_certificate(&mut Vec::new(), &certificate).is_err());
     }
 
     #[test]
