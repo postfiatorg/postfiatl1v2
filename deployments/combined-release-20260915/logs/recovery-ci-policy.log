@@ -1,0 +1,14 @@
+excluded[docs]=1195
+excluded[evidence]=126
+excluded[site]=0
+excluded[test]=131
+excluded[tests]=82
+excluded[*_tests.rs]=22
+excluded[*.test.*]=29
+excluded[fixtures]=107
+excluded[generated]=0
+excluded[vendor]=0
+excluded[target]=0
+excluded[node_modules]=0
+excluded[dist]=0
+a666_recovery_ci_policy=ok enumerated=4422 scanned=634

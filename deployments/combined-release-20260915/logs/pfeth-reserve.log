@@ -1,0 +1,30 @@
+   Compiling fips204 v0.4.6 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/third_party/fips204)
+   Compiling postfiat-types v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/types)
+   Compiling postfiat-crypto-provider v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/crypto_provider)
+   Compiling halo2_proofs v0.3.2 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/third_party/halo2_proofs)
+   Compiling halo2_gadgets v0.5.0
+   Compiling orchard v0.14.0
+   Compiling postfiat-mempool-dag v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/mempool_dag)
+   Compiling postfiat-ordering-fast v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/ordering_fast)
+   Compiling postfiat-consensus-cobalt v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/consensus_cobalt)
+   Compiling postfiat-nav-reserve-protocol v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/nav_reserve_protocol)
+   Compiling postfiat-bridge v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/bridge)
+   Compiling postfiat-execution v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/execution)
+   Compiling postfiat-pfusdc-proofs v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/pfusdc_proofs)
+   Compiling postfiat-proofs v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/proofs)
+   Compiling postfiat-node v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/node)
+   Compiling postfiat-rpc-sdk v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/rpc_sdk)
+   Compiling postfiat-privacy v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/privacy)
+   Compiling postfiat-storage v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/storage)
+   Compiling postfiat-pftl-uniswap-proofs v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/pftl_uniswap_proofs)
+   Compiling postfiat-privacy-orchard v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/privacy_orchard)
+   Compiling postfiat-network v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/network)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 32s
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/postfiat_node-d8915e1a3b6c8f91)
+
+running 2 tests
+test execution_actions::pfeth_reserve_replay_tests::pfeth_reserve_new_execution_rejects_understatement_but_archive_recomputes_old_rule ... ok
+test execution_actions::pfeth_reserve_replay_tests::pfeth_reserve_replay_is_pinned_to_exact_historical_packets ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 359 filtered out; finished in 0.07s
+

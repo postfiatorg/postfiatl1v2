@@ -1,0 +1,41 @@
+
+> postfiat-wallet-proxy@1.0.0 test
+> node run_tests.js
+
+PASS test_a666_roundtrip.js
+PASS test_authenticated_edge_profile.js
+PASS test_bridge_destination_config.js
+PASS test_eth_fast_lane_driver.js
+PASS test_fastpay_certificate_finality.js
+PASS test_fastpay_certificate_outbox.js
+PASS test_fastpay_channel_isolation.js
+PASS test_fastpay_quorum.js
+PASS test_fastpay_route_warmup.js
+PASS test_fastpay_v3_certificate_finality.js
+PASS test_full_pipeline.js
+PASS test_gate3.js
+PASS test_gate4.js
+PASS test_gate5.js
+PASS test_gate6_7.js
+PASS test_gate8.js
+PASS test_http_route_auth_inventory.js
+PASS test_live_bridge_wrapper_regression.js
+PASS test_navcoin_export_jobs.js
+PASS test_navcoin_market_data.js
+PASS test_navcoin_return_jobs.js
+PASS test_navswap_adapter.js
+PASS test_navswap_atomic.js
+PASS test_navswap_env.js
+PASS test_navswap_policy_persistence.js
+PASS test_pftl_private_swap.js
+PASS test_pfusdc_withdrawal_jobs.js
+PASS test_pnok_fix_jobs.js
+PASS test_proposer_routing.js
+PASS test_public_auth_boundary_regression.js
+PASS test_security.js
+PASS test_shielded_round_prewarm.js
+PASS test_trustless_bridge_http_v2.js
+PASS test_trustless_bridge_jobs_v2.js
+PASS test_wallet_static_security.js
+PASS test_websocket_mutation_concurrency.js
+wallet-proxy regression suite passed (36/36)

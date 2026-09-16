@@ -1,0 +1,8 @@
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.0.3, pluggy-1.6.0
+rootdir: /home/postfiatchad/repos/postfiatl1v2-release-20260915
+collected 14 items
+
+python/tests/test_a666_public_source_qualification.py ..............     [100%]
+
+============================== 14 passed in 1.21s ==============================

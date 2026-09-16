@@ -1,0 +1,1 @@
+publication_candidate_gate=ok clean=pass unexpected_ref=reject tree_drift=reject dirty_history=reject

@@ -1,0 +1,28 @@
+Compiling 1 files with Solc 0.8.24
+Solc 0.8.24 finished in 493.38ms
+Compiler run successful!
+2026-09-15T23:16:57.400526Z ERROR sharedbackend: Failed to send/recv `basic` err=failed to get account for 0x38f918D0E9F1b721EDaA41302E399fa1B79333a9: server returned an error response: error code -32603: state at block #11298883 is pruned address=0x38f918D0E9F1b721EDaA41302E399fa1B79333a9
+2026-09-15T23:16:57.443099Z ERROR sharedbackend: Failed to send/recv `basic` err=failed to get account for 0x670B24610DF99b1685aEAC0dfD5307B92e0cF4d7: server returned an error response: error code -32603: state at block #11298883 is pruned address=0x670B24610DF99b1685aEAC0dfD5307B92e0cF4d7
+
+Ran 2 tests for test/PFTLUniswapOfficialFork.t.sol:PFTLUniswapOfficialForkTest
+[PASS] testOfficialUniswapV4DeploymentsHaveCodeOnMainnetFork() (gas: 17879)
+[PASS] testThresholdMintSettlementCertificateOnPinnedMainnetFork() (gas: 527410)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 860.75ms (1.58s CPU time)
+2026-09-15T23:16:57.976568Z ERROR sharedbackend: Failed to send/recv `basic` err=failed to get account for 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d: server returned an error response: error code -32000: historical state c676ff68d54b6b4bf1f340d9c4be0e9e2834017eef1520474bbf2378081c097a is not available address=0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d
+
+Ran 2 tests for test/PFUSDCTier4PinnedFork.t.sol:PFUSDCTier4PinnedForkTest
+[FAIL: EVM error; database error: failed to get account for 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d: server returned an error response: error code -32000: historical state c676ff68d54b6b4bf1f340d9c4be0e9e2834017eef1520474bbf2378081c097a is not available] testPinnedArbitrumSepoliaDependenciesAndFrozenRuntime() (gas: 0)
+[FAIL: EVM error; database error: failed to get account for 0x670B24610DF99b1685aEAC0dfD5307B92e0cF4d7: server returned an error response: error code -32603: state at block #11298883 is pruned] testPinnedEthereumSepoliaDependencyAndFrozenAnchorRuntime() (gas: 0)
+Suite result: FAILED. 0 passed; 2 failed; 0 skipped; finished in 1.11s (1.53s CPU time)
+
+Ran 2 test suites in 1.12s (1.97s CPU time): 2 tests passed, 2 failed, 0 skipped (4 total tests)
+
+Failing tests:
+Encountered 2 failing tests in test/PFUSDCTier4PinnedFork.t.sol:PFUSDCTier4PinnedForkTest
+[FAIL: EVM error; database error: failed to get account for 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d: server returned an error response: error code -32000: historical state c676ff68d54b6b4bf1f340d9c4be0e9e2834017eef1520474bbf2378081c097a is not available] testPinnedArbitrumSepoliaDependenciesAndFrozenRuntime() (gas: 0)
+[FAIL: EVM error; database error: failed to get account for 0x670B24610DF99b1685aEAC0dfD5307B92e0cF4d7: server returned an error response: error code -32603: state at block #11298883 is pruned] testPinnedEthereumSepoliaDependencyAndFrozenAnchorRuntime() (gas: 0)
+
+Encountered a total of 2 failing tests, 2 tests succeeded
+
+Tip: Run `forge test --rerun` to retry only the 2 failed tests
+Tip: Run `forge test --debug --match-test <TEST_NAME>` to inspect one failing test in the debugger

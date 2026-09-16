@@ -1,0 +1,1 @@
+a666_recovery_ci_policy_selftest=ok clean=1 allowlist_vectors=2 allowlist_drift_rejected=2 failure_path_clean=2 rejected=6
