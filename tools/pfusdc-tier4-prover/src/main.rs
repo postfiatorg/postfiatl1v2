@@ -33,6 +33,8 @@ const ARC_INGRESS_ELF: Elf = Elf::Static(include_bytes!(
 
 mod arc_ingress_capture;
 mod egress_audit;
+mod egress_identity;
+use egress_identity::EgressRelease;
 mod ingress_capture;
 mod manifest;
 
@@ -184,9 +186,12 @@ enum Command {
     },
     /// Execute or Groth16-prove a canonical PFTL egress witness.
     Egress {
-        /// Optional frozen egress ELF. Defaults to the repository-embedded release.
+        /// Frozen ELF for the selected verifier release. Default: embedded pfETH ELF.
         #[arg(long)]
         elf: Option<PathBuf>,
+        /// Immutable program identity pinned by the destination verifier.
+        #[arg(long, value_enum, default_value_t)]
+        egress_release: EgressRelease,
         #[arg(long)]
         witness: PathBuf,
         #[arg(long)]
@@ -196,6 +201,10 @@ enum Command {
     },
     /// Execute or Groth16-prove a bounded PFTL checkpoint-only segment.
     Checkpoint {
+        #[arg(long)]
+        elf: Option<PathBuf>,
+        #[arg(long, value_enum, default_value_t)]
+        egress_release: EgressRelease,
         #[arg(long)]
         witness: PathBuf,
         #[arg(long)]
@@ -282,15 +291,18 @@ async fn main() -> Result<()> {
         } => prove_arc_ingress(witness, output_dir, prove).await,
         Command::Egress {
             elf,
+            egress_release,
             witness,
             output_dir,
             prove,
-        } => prove_egress(elf, witness, output_dir, prove).await,
+        } => prove_egress(elf, egress_release, witness, output_dir, prove).await,
         Command::Checkpoint {
+            elf,
+            egress_release,
             witness,
             output_dir,
             prove,
-        } => prove_checkpoint(witness, output_dir, prove).await,
+        } => prove_checkpoint(elf, egress_release, witness, output_dir, prove).await,
     }
 }
 
@@ -1121,6 +1133,7 @@ async fn prove_bonded_reversion(
 
 async fn prove_egress(
     elf_path: Option<PathBuf>,
+    release: EgressRelease,
     witness_path: PathBuf,
     output_dir: PathBuf,
     prove: bool,
@@ -1136,6 +1149,8 @@ async fn prove_egress(
     let elf = elf_bytes
         .map(Elf::from)
         .unwrap_or_else(|| EGRESS_ELF.clone());
+    let identity = release.identity()?;
+    identity.verify_elf(&elf)?;
     let witness_bytes = fs::read(&witness_path)
         .with_context(|| format!("read egress witness {}", witness_path.display()))?;
     let witness: PfUsdcEgressProofWitnessV1 = serde_json::from_slice(&witness_bytes)
@@ -1212,6 +1227,7 @@ async fn prove_egress(
     if prove {
         let setup_started = Instant::now();
         let pk = client.setup(elf).await?;
+        identity.verify_key(&pk.verifying_key().bytes32())?;
         let proof = client.prove(&pk, stdin).groth16().await?;
         client.verify(&proof, pk.verifying_key(), None)?;
         anyhow::ensure!(
@@ -1239,7 +1255,21 @@ async fn prove_egress(
     Ok(())
 }
 
-async fn prove_checkpoint(witness_path: PathBuf, output_dir: PathBuf, prove: bool) -> Result<()> {
+async fn prove_checkpoint(
+    elf_path: Option<PathBuf>,
+    release: EgressRelease,
+    witness_path: PathBuf,
+    output_dir: PathBuf,
+    prove: bool,
+) -> Result<()> {
+    let elf = match elf_path {
+        Some(path) => Elf::from(
+            fs::read(&path).with_context(|| format!("read egress ELF {}", path.display()))?,
+        ),
+        None => EGRESS_ELF.clone(),
+    };
+    let identity = release.identity()?;
+    identity.verify_elf(&elf)?;
     #[cfg(debug_assertions)]
     if prove {
         anyhow::bail!("Groth16 proving requires a --release build");
@@ -1260,7 +1290,7 @@ async fn prove_checkpoint(witness_path: PathBuf, output_dir: PathBuf, prove: boo
     );
     let client = ProverClient::from_env().await;
     let started = Instant::now();
-    let (executed_public_values, report) = client.execute(EGRESS_ELF, stdin.clone()).await?;
+    let (executed_public_values, report) = client.execute(elf.clone(), stdin.clone()).await?;
     let executed = executed_public_values.to_vec();
     anyhow::ensure!(
         executed == expected_public_values,
@@ -1283,7 +1313,8 @@ async fn prove_checkpoint(witness_path: PathBuf, output_dir: PathBuf, prove: boo
         }))?,
     )?;
     if prove {
-        let pk = client.setup(EGRESS_ELF).await?;
+        let pk = client.setup(elf).await?;
+        identity.verify_key(&pk.verifying_key().bytes32())?;
         let proof = client.prove(&pk, stdin).groth16().await?;
         client.verify(&proof, pk.verifying_key(), None)?;
         anyhow::ensure!(
