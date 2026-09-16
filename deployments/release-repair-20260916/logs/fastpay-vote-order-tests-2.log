@@ -1,0 +1,16 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/postfiat_types-e924850907d1ce5e)
+
+running 9 tests
+test fastpay_recovery_type_tests::confirmed_version_fence_commitment_binds_retained_certificate ... ok
+test fastpay_recovery_type_tests::policy_and_fence_fail_closed_on_unbounded_or_nonmonotonic_state ... ok
+test fastpay_recovery_type_tests::recovery_reveal_commitment_binds_retained_certificate_signatures ... ok
+test fastpay_recovery_type_tests::v2_retained_votes_accept_historical_order_and_reject_duplicates ... ok
+test fastpay_recovery_type_tests::recovery_reveal_certificate_mutation_property_changes_committed_bytes ... ok
+test fastpay_recovery_type_tests::lock_id_commits_every_recovery_and_value_field ... ok
+test fastpay_recovery_type_tests::historical_v1_committee_root_and_state_bytes_remain_stable ... ok
+test fastpay_recovery_type_tests::recovery_committee_root_binds_both_admission_heights ... ok
+test fastpay_recovery_type_tests::recovery_committee_admission_window_property_changes_root_and_rejects_stale_root ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 137 filtered out; finished in 0.06s
+

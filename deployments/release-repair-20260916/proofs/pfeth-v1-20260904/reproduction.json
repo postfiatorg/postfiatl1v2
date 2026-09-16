@@ -1,0 +1,21 @@
+{
+  "schema": "postfiat.pfusdc.arc_proof_identity_reproduction.v1",
+  "source_commit": "c9407b1c2176cf7f812ba886f8053ae7bb5cdeb0",
+  "release_id": "pfeth-v1-20260904",
+  "build_mode": "native-retained-path",
+  "source_root": "/home/postfiat/repos/postfiatl1v2",
+  "cargo_home": "/home/postfiat/.cargo",
+  "build_count_per_guest": 2,
+  "clean_source_trees": 2,
+  "byte_exact_replay": true,
+  "arc_ingress_elf_sha256": "7660fcc58677cfec433a5f2337b9fe46fa96374a1e3c4bd6fba625b982d881bc",
+  "egress_elf_sha256": "0ea4dbabc8a36b44824c861cf2e1ae90454df2a6e4bb8a357f9d3a8672696d83",
+  "arc_ingress_lock_sha256": "ee0ae425b0680e5c787c89d7b8cbfa259b73363617d63547deabff4c5c133123",
+  "egress_lock_sha256": "71225bed4ec4d8cecbeb05cf16071d8dd60ab09bf70cef57c2b7012d97a32a63",
+  "egress_source_reversions": [
+    "47787146325dc553d518695e72025cb3720fe46d"
+  ],
+  "docker_image": "ghcr.io/succinctlabs/sp1@sha256:0942a27dbe8e38f4b14f3732e779df4027b17bde93e9fbc9e8c773c15eb63400",
+  "rust_version": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "cargo_prove_version": "cargo-prove sp1 (8252c29 2026-06-25T11:50:01.543258355Z)"
+}

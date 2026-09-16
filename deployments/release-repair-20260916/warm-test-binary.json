@@ -1,0 +1,5 @@
+{
+  "path": "/home/postfiatchad/.cache/combined-release-20260915/optimized-test-target/debug/deps/postfiat_node-042d4d648d739c00",
+  "reason": "Use the exact test executable from the passing workspace suite; avoid feature-graph recompilation",
+  "sha256": "0480d2c31dca786fbcec17b87921f35ae572fdc2a5b5590fb47cb5899bd1b55f"
+}

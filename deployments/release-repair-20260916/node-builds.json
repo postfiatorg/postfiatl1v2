@@ -1,0 +1,26 @@
+{
+  "result": "PASS",
+  "builds": [
+    {
+      "source_commit": "1c435f4fb482ea7830bee5c7018d370a10a34bfd",
+      "source_tree": "e6e388dff9aefcf9c88e0a39fdd32a92b1cd8acf",
+      "source_directory": "/home/postfiatchad/.cache/combined-release-20260915/build-source-1",
+      "source_clean_at_collection": true,
+      "binary_sha256": "86f62a5a3e0105f839c8491047a648696e6295cd4f80956a6fb774b7ddbefbe2",
+      "binary_bytes": 62036808,
+      "cargo_lock_sha256": "8a4b5e43056f021d07c6bf150c8cfd8c470d20ca9a076a31418fa34c14697d55",
+      "log": "logs/node-build-1.log"
+    },
+    {
+      "source_commit": "1c435f4fb482ea7830bee5c7018d370a10a34bfd",
+      "source_tree": "e6e388dff9aefcf9c88e0a39fdd32a92b1cd8acf",
+      "source_directory": "/home/postfiatchad/.cache/combined-release-20260915/build-source-2",
+      "source_clean_at_collection": true,
+      "binary_sha256": "86f62a5a3e0105f839c8491047a648696e6295cd4f80956a6fb774b7ddbefbe2",
+      "binary_bytes": 62036808,
+      "cargo_lock_sha256": "8a4b5e43056f021d07c6bf150c8cfd8c470d20ca9a076a31418fa34c14697d55",
+      "log": "logs/node-build-2.log"
+    }
+  ],
+  "scope": "Two clean detached source trees, separate existing target caches; identical unmodified executables"
+}

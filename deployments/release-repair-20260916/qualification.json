@@ -1,0 +1,59 @@
+{
+  "schema": "postfiat.release-repair-qualification.v1",
+  "source_commit": "1c435f4fb482ea7830bee5c7018d370a10a34bfd",
+  "technical_repair_gates": "PASS",
+  "scope": "Three PR41 repairs; disposable local state only; not deployment authorization",
+  "live_mutations": false,
+  "candidate_binary_sha256": "86f62a5a3e0105f839c8491047a648696e6295cd4f80956a6fb774b7ddbefbe2",
+  "workspace_tests": {
+    "passed": 1433,
+    "failed": 0,
+    "ignored": 39,
+    "result": "PASS",
+    "groups": 84,
+    "profile": "test opt-level=2; debug assertions and overflow checks enabled; two test threads"
+  },
+  "isolated_warm_latency": "PASS",
+  "format": "PASS",
+  "proof_public_input_inventory": "PASS",
+  "workspace_check": "PASS",
+  "workspace_clippy": "PASS",
+  "post_v2_full_history": {
+    "result": "PASS",
+    "copies": 6,
+    "blocks": 1021,
+    "tip_hash": "5323a2a5243f7be4a1c47ec5e308361898d1662ef20df0dc8fa4349843ffeba45908f4d8050a9dca334133bf0b68804e",
+    "state_root": "d19264ca4419df8826c7b1746b5042639b0d0dd493a0f34f8902b75811ede397ee1b241d59dacba42e69192a6aecca92",
+    "verification_elapsed_seconds": [
+      196.1,
+      192.1,
+      194.1,
+      194.1,
+      192.1,
+      196.1
+    ]
+  },
+  "governed_v2_continuation_and_restart": "PASS, six nodes, both startup orders",
+  "node_reproducibility": "PASS, two clean source trees, separate existing target caches",
+  "proof_reproduction": "PASS, both historical releases; CI source 5b1093fa; inputs unchanged",
+  "pre_activation_rollback": {
+    "result": "PASS",
+    "binary_sha256": "57b0f4d1d42d66878d7dbb8c33919c7fa0f87c6cc1a4b9cc1a85d75b634eec83",
+    "exact_old_binary_checkpoint_and_restart_copies": 6,
+    "final_candidate_full_replay_of_same_pre_upgrade_state_copies": 1,
+    "old_binary_full_replay": "Known historical block-1011 failure, unchanged",
+    "compatible_raw_state_required": true,
+    "valid_after_live_v2_installation": false
+  },
+  "other_release_obligations": [
+    "Review the consensus activation and rollback boundary before deployment.",
+    "Resolve or disposition the seven pre-existing reachable-history scan findings.",
+    "Pinned testnet fork providers lacked historical state in the earlier packet.",
+    "Fresh PR CI and release/operator decisions remain separate from these local gates.",
+    "Newer private-funding recovery branches are not integrated or demonstrated here."
+  ],
+  "strict_docs_build": "PASS",
+  "current_tree_secret_scan": "PASS",
+  "artifact_policy": "PASS",
+  "source_portability": "PASS"
+}

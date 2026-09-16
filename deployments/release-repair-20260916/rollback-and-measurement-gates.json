@@ -1,0 +1,54 @@
+{
+  "status": "passed",
+  "source_commit": "1c435f4fb482ea7830bee5c7018d370a10a34bfd",
+  "live_mutations": false,
+  "stages": [
+    {
+      "name": "candidate-on-rollback-history",
+      "command": [
+        "/home/postfiatchad/.cache/release-repair-20260916/binaries/candidate-final-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/combined-release-20260915/rollback-drill/validator-0"
+      ],
+      "started_at": "2026-09-16T03:26:45.690476+00:00",
+      "status": "passed",
+      "exit_code": 0,
+      "elapsed_seconds": 198.05
+    },
+    {
+      "name": "compile-commitment-probe",
+      "command": [
+        "rustc",
+        "--edition=2021",
+        "-O",
+        "/home/postfiatchad/repos/postfiatl1v2-release-20260915/deployments/release-repair-20260916/measure_retained_commitments.rs",
+        "-L",
+        "dependency=/home/postfiatchad/.cache/combined-release-20260915/final-target-1/release/deps",
+        "-o",
+        "/home/postfiatchad/.cache/release-repair-20260916/resumed-qualification/measure-retained-commitments",
+        "--extern",
+        "postfiat_types=/home/postfiatchad/.cache/combined-release-20260915/final-target-1/release/deps/libpostfiat_types-accf8181a0613fe6.rlib",
+        "--extern",
+        "serde_json=/home/postfiatchad/.cache/combined-release-20260915/final-target-1/release/deps/libserde_json-f4926c6400b85635.rlib"
+      ],
+      "started_at": "2026-09-16T03:30:03.746727+00:00",
+      "status": "passed",
+      "exit_code": 0,
+      "elapsed_seconds": 16.01
+    },
+    {
+      "name": "retained-commitment-measurement",
+      "command": [
+        "/home/postfiatchad/.cache/release-repair-20260916/resumed-qualification/measure-retained-commitments",
+        "/home/postfiatchad/.cache/release-repair-20260916/old-binary-checkpoint-restore/ledger.json"
+      ],
+      "started_at": "2026-09-16T03:30:19.755281+00:00",
+      "status": "passed",
+      "exit_code": 0,
+      "elapsed_seconds": 2.0
+    }
+  ],
+  "updated_at": "2026-09-16T03:30:21.846912+00:00",
+  "completed_at": "2026-09-16T03:30:21.846887+00:00"
+}

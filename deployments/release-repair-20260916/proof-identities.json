@@ -1,0 +1,42 @@
+{
+  "workflow_run": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35044347138",
+  "workflow_source_commit": "5b1093faad8c78fa7a394b51863e454970815a36",
+  "candidate_source_commit": "1c435f4fb482ea7830bee5c7018d370a10a34bfd",
+  "workflow_and_release_inputs_unchanged_since_ci": [
+    ".github/workflows/arc-proof-identities.yml",
+    "programs/pfusdc-egress",
+    "programs/pfusdc-arc-ingress",
+    "tools/pfusdc-tier4-prover"
+  ],
+  "scope": "CI historical release builds, downloaded artifacts independently checked locally",
+  "releases": [
+    {
+      "release_id": "arc-v2-20260902",
+      "result": "PASS",
+      "egress": {
+        "elf_sha256": "8b0f266a035a432ef3c0e4233672d8a15b913cefd4c85ff07f91f008601bb744",
+        "program_vkey": "0x0036cbe7d36bbfe1118a3c544eeba74f3791d2a19bf5ec59b972f72d36416852"
+      },
+      "arc_ingress": {
+        "elf_sha256": "7660fcc58677cfec433a5f2337b9fe46fa96374a1e3c4bd6fba625b982d881bc",
+        "program_vkey": "0x0050a8b0daed2fa75f44d4102b42204c34668a03d311cb727cc6ca3f8df5cf16"
+      },
+      "artifact_checksums_verified": true,
+      "retained_elf_byte_match": true
+    },
+    {
+      "release_id": "pfeth-v1-20260904",
+      "result": "PASS",
+      "egress": {
+        "elf_sha256": "0ea4dbabc8a36b44824c861cf2e1ae90454df2a6e4bb8a357f9d3a8672696d83",
+        "program_vkey": "0x00140f09ca6f1b917e3999a806df5ef4ac4468bd65b85e8580cbc16f832dfe47"
+      },
+      "arc_ingress": {
+        "elf_sha256": "7660fcc58677cfec433a5f2337b9fe46fa96374a1e3c4bd6fba625b982d881bc",
+        "program_vkey": "0x0050a8b0daed2fa75f44d4102b42204c34668a03d311cb727cc6ca3f8df5cf16"
+      },
+      "artifact_checksums_verified": true,
+      "retained_elf_byte_match": true
+    }
+  ]
+}
