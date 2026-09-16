@@ -34,3 +34,21 @@ This review covers the four named files in full, including their in-file tests. 
 Release-candidate files and directories enumerated in the brief, previously reviewed surfaces, all excluded crates, and frozen artifacts were not reviewed or edited. `git diff` read only remote-ref path metadata to identify the additional release exclusions. No branch checkout or release-checkout access occurred. Build manifests and the repository guidance supplied context, not additional reviewed surfaces. No finding requires an excluded-file repair.
 
 The regressions proposed above exercise deterministic filesystem error handling and restart interlocks; they do not constitute a physical power-loss test. The manual ignored release-mode spot check, full Rust/Orchard suites, and live-chain or fleet tests are outside this focused unit. The full Rust suite is CI's verdict. A3–A5 and B, including the defect inventory and scoring, are not started. No Task Node or fleet action is authorized or performed.
+
+## Repair result
+
+VLK-01 and VLK-02 are repaired in `crates/node/src/vote_locks.rs`, with no other source file changed. Reservation now syncs the canonical lock directory before returning success on either first publication or an identical retry, while retaining the mutation guard. A sync error leaves the lock in place and propagates to the caller. The error-injection regression checks failure on first reservation and retry, canonical evidence before the barrier, conflict rejection after reopening, and successful same-proposal recovery when the barrier succeeds.
+
+Migration now rejects non-regular `.json` entries in its read-only scan. The regression covers directories and symlinks, each with and without an ordinary legacy lock alongside them, and checks that evidence remains intact, no completion marker appears, and no canonical lock is created. Both new regressions failed against the original behavior before the repairs (0 passed, 2 failed).
+
+Each repair is conservatively **consensus-affecting** because it tightens signer-safety admission/persistence. Neither changes the on-disk schema, signature bytes, or hashes. These are source repairs only; **full Rust suite verdict pending** CI. No physical power-loss, deployment, or activation result is claimed.
+
+Post-repair verification (all Cargo build/test commands used `CARGO_NET_OFFLINE=true`):
+
+- `cargo check -p postfiat-node --locked`: passed.
+- `cargo test -p postfiat-node vote_locks::tests --lib --locked`: 18 passed, 0 failed, 1 ignored, 344 filtered out; includes both new regressions. The ignored test is the existing manual release-mode 5,000-lock spot check.
+- `cargo test -p postfiat-node finality_view_recovery_tests --bin postfiat-node --locked`: 1 passed, 0 failed, 0 ignored, 169 filtered out.
+- `cargo test -p postfiat-node block_vote_timing_tests --lib --locked`: 1 passed, 0 failed, 0 ignored, 362 filtered out.
+- `cargo fmt --all -- --check` and `git diff --check`: passed.
+
+No additional storage-guard runtime test, broad workspace suite, or ignored manual spot check was run. The reviewed storage guard was unchanged; its delegated storage/root implementations remain outside A2.
