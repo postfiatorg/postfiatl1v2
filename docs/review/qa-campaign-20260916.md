@@ -2,13 +2,13 @@
 
 This is the progress record for the [burn 5 campaign](qa-campaign-20260916-burn5-brief.md). Work began on clean `main` at `c4303717` after `git pull --rebase origin main`. This task covers A1 only, with a 30-minute time box; no deployment or live activation.
 
-**Status:** A1 findings and repair units complete; closeout pending. A2–A5 and B pending and not started.
+**Status:** A1 closed. Work stops after this surface as requested; A2–A5 and B remain pending and not started. No live activation, Task Node or fleet action.
 
 ## Campaign state
 
 | Order | Surface | Status | P1 | P2 | P3 | Evidence or fixes |
 | --- | --- | --- | ---: | ---: | ---: | --- |
-| A1 | Mempool proposals | repaired; closeout pending | 0 | 1 | 1 | [Review](mempool-proposals-review-20260916.md); findings `6f2332cf`; MPL-01 repaired in this unit (not consensus-affecting; full Rust suite verdict pending); MPL-02 unfixed |
+| A1 | Mempool proposals | done | 0 | 1 | 1 | [Review](mempool-proposals-review-20260916.md); findings `6f2332cf`; repair `1c9f44f1` (not consensus-affecting; full Rust suite verdict pending); MPL-02 recorded without repair |
 | A2 | Vote locks and view recovery | pending | — | — | — | Not started |
 | A3 | Cobalt handoff and authority | pending | — | — | — | Not started |
 | A4 | Storage migration and activation, certified-send index | pending | — | — | — | Not started |
@@ -19,7 +19,7 @@ Current finding totals: **0 P1, 1 P2, 1 P3** (A1 only).
 
 ## Mempool proposals review result
 
-The [A1 review](mempool-proposals-review-20260916.md) read all 3,337 lines of `crates/node/src/mempool_proposals.rs` at `c4303717` at the admission, ordering, duplicate/conflict, size/count, fee/nonce, malformed-input and replay boundaries. MPL-01 (P2) is the omitted offer family in sender admission quotas. It is repaired by reusing the complete sender-count helper, with two regressions that failed on the old guard and pass after repair. The repair is **not consensus-affecting**: it changes local admission policy only. **Full Rust suite verdict pending** CI. MPL-02 (P3) is reversed atomic-swap/FastLane priority in latest-ID reporting and remains unfixed. Called implementations outside this file were not reviewed; review limits are in the findings document.
+The [A1 review](mempool-proposals-review-20260916.md) read all 3,337 lines of `crates/node/src/mempool_proposals.rs` at `c4303717` at the admission, ordering, duplicate/conflict, size/count, fee/nonce, malformed-input and replay boundaries. MPL-01 (P2) is the omitted offer family in sender admission quotas. Repair `1c9f44f1` reuses the complete sender-count helper, with two regressions that failed on the old guard and pass after repair. All 16 selected mempool library tests passed. The only source file edited was `crates/node/src/mempool_proposals.rs`, including its new in-file regressions. The repair is **not consensus-affecting**: it changes local admission policy only. **Full Rust suite verdict pending** CI. MPL-02 (P3) is reversed atomic-swap/FastLane priority in latest-ID reporting and remains unfixed. Called implementations outside this file were not reviewed; review limits are in the findings document.
 
 ## Vote locks and view recovery review result
 
@@ -55,7 +55,9 @@ Pending; not reviewed.
 - `cargo check -p postfiat-node --locked`: passed.
 - `cargo test -p postfiat-node mempool --lib --locked`: 16 passed, 0 failed, 0 ignored, 345 filtered out, including both new regressions.
 - `cargo fmt --all -- --check` and `git diff --check`: passed.
-- The same three gates are run before the repair unit commit; closeout verification remains pending. No full Rust suite ran locally; **full Rust suite verdict pending** CI.
+- Before repair commit `1c9f44f1` and this closeout commit: `.venv-docs/bin/mkdocs build --strict`, `scripts/public-doc-links` (400 files), and `scripts/public-secret-scan` passed. All three gates passed before each of the three A1 unit commits.
+- After each unit commit: `git pull --rebase origin main && git push origin main`; pushes only to this repository's `origin main`, with a clean tree between units. The closeout changes only this campaign log; no Rust tests were rerun for it.
+- No full Rust suite ran locally; **full Rust suite verdict pending** CI for `1c9f44f1`. No CI verdict is claimed.
 
 ## Scores
 
@@ -63,4 +65,6 @@ Not run. The inventory scoring gate belongs to B, which is not started.
 
 ## Final summary
 
-A1 findings: 0 P1, 1 P2, 1 P3. MPL-01 is repaired and not consensus-affecting; MPL-02 remains recorded without repair. Findings commit: `6f2332cf`; repair is in this unit. A1 closeout remains pending. A2–A5 and B remain pending; no other surface or inventory work started.
+A1 is closed with **0 P1, 1 P2, 1 P3**: one repaired P2 and one recorded, unfixed P3. Findings commit: `6f2332cf`; repair commit: `1c9f44f1`. **Consensus-affecting repairs: none.** Sixteen focused tests passed; the full Rust suite verdict remains pending CI. Remaining risks are the latest-ID reporting discrepancy and the unreviewed delegated boundaries named above.
+
+Only `crates/node/src/mempool_proposals.rs` was reviewed as source, in full at the A1 focus; no other source file was reviewed. The release branch and its checkout were not mutated. The A1 findings, repair and closeout units are committed and pushed separately to `origin main`, within the 30-minute time box. Work stops here with A2–A5 and B pending; no other surface, inventory, scoring or Task Node work started.
