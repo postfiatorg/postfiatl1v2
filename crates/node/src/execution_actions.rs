@@ -718,12 +718,15 @@ pub(super) fn execute_asset_transaction_for_archive_replay(
         asset_execution_compatibility_for_genesis_and_governance(genesis, governance);
     compatibility.allow_legacy_base_only_vault_reserve_supply =
         archived_pfeth_base_only_reserve_allowed(genesis, block, transaction);
-    Ok(execute_asset_transaction_with_compatibility(
+    // Replay must receive the same shielded supply as live execution. The
+    // governed activation inside the executor retains pre-activation semantics.
+    Ok(execute_asset_transaction_with_compatibility_and_orchard(
         genesis,
         ledger,
         transaction,
         block.header.height,
         compatibility,
+        orchard_balances,
     ))
 }
 

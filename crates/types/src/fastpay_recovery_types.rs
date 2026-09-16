@@ -8,10 +8,40 @@ pub const FASTPAY_VERSION_FENCE_SCHEMA_V1: &str = "postfiat-fastpay-version-fenc
 pub const FASTPAY_APPLY_ACK_SCHEMA_V1: &str = "postfiat-fastpay-apply-ack-v1";
 pub const FASTPAY_RECOVERY_CAPABILITIES_SCHEMA_V1: &str =
     "postfiat-fastpay-recovery-capabilities-v1";
-pub const FASTPAY_RECOVERY_COMMITTEE_SCHEMA_V1: &str =
-    "postfiat-fastpay-recovery-committee-v1";
-pub const FASTPAY_RECOVERY_GOVERNANCE_KIND_PREFIX_V1: &str =
-    "fastpay_recovery_bootstrap_v1:";
+pub const FASTPAY_RECOVERY_COMMITTEE_SCHEMA_V1: &str = "postfiat-fastpay-recovery-committee-v1";
+pub const FASTPAY_RECOVERY_COMMITTEE_SCHEMA_V2: &str = "postfiat-fastpay-recovery-committee-v2";
+
+/// Selected by ordered committee installation, never by trying alternative hashes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FastPayRecoveryCommitmentVersion {
+    V1,
+    V2,
+}
+
+impl FastPayRecoveryCommitmentVersion {
+    pub fn for_committees(committees: &[FastPayRecoveryCommitteeV1]) -> Result<Self, String> {
+        if committees.len() > MAX_FASTPAY_RECOVERY_COMMITTEES {
+            return Err("too many FastPay recovery committees".to_string());
+        }
+        let mut version = Self::V1;
+        let mut previous_epoch = 0;
+        for committee in committees {
+            committee.validate()?;
+            let next = committee.commitment_version()?;
+            if committee.committee_epoch <= previous_epoch
+                || (version == Self::V2 && next == Self::V1)
+            {
+                return Err(
+                    "FastPay committee order or commitment downgrade is invalid".to_string()
+                );
+            }
+            previous_epoch = committee.committee_epoch;
+            version = next;
+        }
+        Ok(version)
+    }
+}
+pub const FASTPAY_RECOVERY_GOVERNANCE_KIND_PREFIX_V1: &str = "fastpay_recovery_bootstrap_v1:";
 pub const FASTPAY_RECOVERY_GOVERNANCE_VERSION_V1: u32 = 1;
 pub const FASTPAY_LOCK_ID_DOMAIN_V1: &str = "postfiat.fastpay.lock-id.v1";
 pub const FASTPAY_CERTIFICATE_DIGEST_DOMAIN_V1: &str = "postfiat.fastpay.certificate.v1";
@@ -129,14 +159,16 @@ impl FastPayRecoveryCommitteeV1 {
         }
         let validators = validator_public_keys
             .into_iter()
-            .map(|(validator_id, public_key_hex)| FastPayRecoveryValidatorV1 {
-                validator_id,
-                algorithm_id: FASTSWAP_ML_DSA_65.to_string(),
-                public_key_hex,
-            })
+            .map(
+                |(validator_id, public_key_hex)| FastPayRecoveryValidatorV1 {
+                    validator_id,
+                    algorithm_id: FASTSWAP_ML_DSA_65.to_string(),
+                    public_key_hex,
+                },
+            )
             .collect::<Vec<_>>();
         let mut committee = Self {
-            schema: FASTPAY_RECOVERY_COMMITTEE_SCHEMA_V1.to_string(),
+            schema: FASTPAY_RECOVERY_COMMITTEE_SCHEMA_V2.to_string(),
             chain_id,
             genesis_hash,
             protocol_version,
@@ -156,29 +188,44 @@ impl FastPayRecoveryCommitteeV1 {
         (validator_count > 0).then(|| validator_count - (validator_count - 1) / 3)
     }
 
+    pub fn commitment_version(&self) -> Result<FastPayRecoveryCommitmentVersion, String> {
+        match self.schema.as_str() {
+            FASTPAY_RECOVERY_COMMITTEE_SCHEMA_V1 => Ok(FastPayRecoveryCommitmentVersion::V1),
+            FASTPAY_RECOVERY_COMMITTEE_SCHEMA_V2 => Ok(FastPayRecoveryCommitmentVersion::V2),
+            _ => Err("FastPay recovery committee schema mismatch".to_string()),
+        }
+    }
+
+    fn root_domain(&self) -> Result<&'static str, String> {
+        Ok(match self.commitment_version()? {
+            FastPayRecoveryCommitmentVersion::V1 => "postfiat.fastpay.recovery-committee.root.v1",
+            FastPayRecoveryCommitmentVersion::V2 => "postfiat.fastpay.recovery-committee.root.v2",
+        })
+    }
+
     pub fn root_preimage(&self) -> Result<Vec<u8>, String> {
+        let version = self.commitment_version()?;
         if self.validators.is_empty()
             || self.validators.len() > MAX_FASTPAY_RECOVERY_VALIDATORS
             || self.chain_id.is_empty()
-            || validate_lower_hex_len(
-                "fastpay_committee.genesis_hash",
-                &self.genesis_hash,
-                96,
-            )
-            .is_err()
+            || validate_lower_hex_len("fastpay_committee.genesis_hash", &self.genesis_hash, 96)
+                .is_err()
             || self.committee_epoch == 0
             || self.valid_from_height == 0
             || self.new_orders_through_height < self.valid_from_height
         {
             return Err("FastPay recovery committee size or epoch is invalid".to_string());
         }
-        let mut bytes = b"postfiat.fastpay.recovery-committee.root.v1\0".to_vec();
+        let mut bytes = self.root_domain()?.as_bytes().to_vec();
+        bytes.push(0);
         fastpay_commit_text(&mut bytes, &self.chain_id);
         fastpay_commit_text(&mut bytes, &self.genesis_hash);
         bytes.extend_from_slice(&self.protocol_version.to_be_bytes());
         bytes.extend_from_slice(&self.committee_epoch.to_be_bytes());
-        bytes.extend_from_slice(&self.valid_from_height.to_be_bytes());
-        bytes.extend_from_slice(&self.new_orders_through_height.to_be_bytes());
+        if version == FastPayRecoveryCommitmentVersion::V2 {
+            bytes.extend_from_slice(&self.valid_from_height.to_be_bytes());
+            bytes.extend_from_slice(&self.new_orders_through_height.to_be_bytes());
+        }
         bytes.extend_from_slice(&(self.validators.len() as u64).to_be_bytes());
         let mut previous = None;
         for validator in &self.validators {
@@ -202,15 +249,12 @@ impl FastPayRecoveryCommitteeV1 {
     }
 
     pub fn computed_root(&self) -> Result<String, String> {
-        Ok(hash_hex_domain(
-            "postfiat.fastpay.recovery-committee.root.v1",
-            &self.root_preimage()?,
-        ))
+        Ok(hash_hex_domain(self.root_domain()?, &self.root_preimage()?))
     }
 
     pub fn validate(&self) -> Result<(), String> {
-        if self.schema != FASTPAY_RECOVERY_COMMITTEE_SCHEMA_V1
-            || self.quorum != Self::expected_quorum(self.validators.len()).unwrap_or(0)
+        self.commitment_version()?;
+        if self.quorum != Self::expected_quorum(self.validators.len()).unwrap_or(0)
             || self.registry_root != self.computed_root()?
         {
             return Err("FastPay recovery committee is invalid".to_string());
@@ -242,7 +286,15 @@ impl FastPayRecoveryCommitteeV1 {
 
     pub fn state_commitment_bytes(&self) -> Result<Vec<u8>, String> {
         self.validate()?;
-        let mut bytes = b"postfiat.fastpay.recovery-committee.state.v1\0".to_vec();
+        let mut bytes = match self.commitment_version()? {
+            FastPayRecoveryCommitmentVersion::V1 => {
+                b"postfiat.fastpay.recovery-committee.state.v1\0"
+            }
+            FastPayRecoveryCommitmentVersion::V2 => {
+                b"postfiat.fastpay.recovery-committee.state.v2\0"
+            }
+        }
+        .to_vec();
         fastpay_commit_text(&mut bytes, &self.schema);
         bytes.extend_from_slice(&self.root_preimage()?);
         bytes.extend_from_slice(&self.valid_from_height.to_be_bytes());
@@ -265,9 +317,7 @@ impl FastPayRecoveryGovernancePayloadV1 {
         self.policy.validate()?;
         self.committee.validate()?;
         if self.policy.activation_height > self.committee.valid_from_height {
-            return Err(
-                "FastPay committee cannot activate before the recovery policy".to_string(),
-            );
+            return Err("FastPay committee cannot activate before the recovery policy".to_string());
         }
         let mut bytes = b"postfiat.fastpay.recovery-governance-bootstrap.v1\0".to_vec();
         let policy = self.policy.state_commitment_bytes()?;
@@ -285,7 +335,6 @@ impl FastPayRecoveryGovernancePayloadV1 {
             &self.payload_bytes()?,
         ))
     }
-
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -613,11 +662,7 @@ impl FastPayCertificateV1 {
                     .collect::<Vec<_>>(),
             ),
         };
-        if votes.is_empty()
-            || !votes
-                .windows(2)
-                .all(|pair| pair[0].0 < pair[1].0)
-        {
+        if votes.is_empty() || !votes.windows(2).all(|pair| pair[0].0 < pair[1].0) {
             return Err("FastPay certificate votes are not canonical".to_string());
         }
         let signed = signed_order.canonical_bytes()?;
@@ -717,9 +762,21 @@ impl FastPayRecoveryRevealV1 {
         Ok(())
     }
 
+    /// Historical v1 bytes, also retained by the v1 application acknowledgement.
     pub fn state_commitment_bytes(&self) -> Result<Vec<u8>, String> {
+        self.state_commitment_bytes_for_version(FastPayRecoveryCommitmentVersion::V1)
+    }
+
+    pub fn state_commitment_bytes_for_version(
+        &self,
+        version: FastPayRecoveryCommitmentVersion,
+    ) -> Result<Vec<u8>, String> {
         self.validate_shape()?;
-        let mut bytes = b"postfiat.fastpay.recovery-reveal.state.v1\0".to_vec();
+        let mut bytes = match version {
+            FastPayRecoveryCommitmentVersion::V1 => b"postfiat.fastpay.recovery-reveal.state.v1\0",
+            FastPayRecoveryCommitmentVersion::V2 => b"postfiat.fastpay.recovery-reveal.state.v2\0",
+        }
+        .to_vec();
         fastpay_commit_text(&mut bytes, &self.schema);
         bytes.push(match self.certificate.operation() {
             FastPayOperationKindV1::Transfer => 1,
@@ -729,7 +786,9 @@ impl FastPayRecoveryRevealV1 {
         fastpay_commit_text(&mut bytes, &self.order_digest);
         fastpay_commit_text(&mut bytes, &self.certificate_digest);
         bytes.extend_from_slice(&self.revealed_at_height.to_be_bytes());
-        fastpay_commit_certificate(&mut bytes, &self.certificate)?;
+        if version == FastPayRecoveryCommitmentVersion::V2 {
+            fastpay_commit_certificate(&mut bytes, &self.certificate)?;
+        }
         Ok(bytes)
     }
 }
@@ -783,13 +842,16 @@ impl FastPayVersionFenceV1 {
         let mut seen = BTreeSet::new();
         for (input, next) in self.inputs.iter().zip(&self.next_versions) {
             if input.id != next.id
-                || next.version != input.version.checked_add(1).ok_or_else(|| {
-                    "FastPay version fence input version overflow".to_string()
-                })?
+                || next.version
+                    != input
+                        .version
+                        .checked_add(1)
+                        .ok_or_else(|| "FastPay version fence input version overflow".to_string())?
                 || !seen.insert((input.id.as_str(), input.version))
             {
-                return Err("FastPay version fence does not advance each unique input once"
-                    .to_string());
+                return Err(
+                    "FastPay version fence does not advance each unique input once".to_string(),
+                );
             }
         }
         match &self.decision {
@@ -798,11 +860,7 @@ impl FastPayVersionFenceV1 {
                 certificate_digest,
             } => {
                 validate_lower_hex_len("fastpay_fence.order_digest", order_digest, 96)?;
-                validate_lower_hex_len(
-                    "fastpay_fence.certificate_digest",
-                    certificate_digest,
-                    96,
-                )?;
+                validate_lower_hex_len("fastpay_fence.certificate_digest", certificate_digest, 96)?;
                 let certificate = self.certificate.as_ref().ok_or_else(|| {
                     "confirmed FastPay fence must retain its complete certificate".to_string()
                 })?;
@@ -811,24 +869,34 @@ impl FastPayVersionFenceV1 {
                     || certificate.inputs() != self.inputs
                 {
                     return Err(
-                        "confirmed FastPay fence certificate does not match its lock".to_string()
+                        "confirmed FastPay fence certificate does not match its lock".to_string(),
                     );
                 }
             }
             FastPayRecoveryDecisionV1::Cancelled => {
                 if self.certificate.is_some() {
-                    return Err(
-                        "cancelled FastPay fence must not retain a certificate".to_string()
-                    );
+                    return Err("cancelled FastPay fence must not retain a certificate".to_string());
                 }
             }
         }
         Ok(())
     }
 
+    /// Historical v1 bytes, also retained by the v1 application acknowledgement.
     pub fn state_commitment_bytes(&self) -> Result<Vec<u8>, String> {
+        self.state_commitment_bytes_for_version(FastPayRecoveryCommitmentVersion::V1)
+    }
+
+    pub fn state_commitment_bytes_for_version(
+        &self,
+        version: FastPayRecoveryCommitmentVersion,
+    ) -> Result<Vec<u8>, String> {
         self.validate_shape()?;
-        let mut bytes = b"postfiat.fastpay.version-fence.state.v1\0".to_vec();
+        let mut bytes = match version {
+            FastPayRecoveryCommitmentVersion::V1 => b"postfiat.fastpay.version-fence.state.v1\0",
+            FastPayRecoveryCommitmentVersion::V2 => b"postfiat.fastpay.version-fence.state.v2\0",
+        }
+        .to_vec();
         fastpay_commit_text(&mut bytes, &self.schema);
         bytes.push(match self.operation {
             FastPayOperationKindV1::Transfer => 1,
@@ -863,8 +931,10 @@ impl FastPayVersionFenceV1 {
             fastpay_commit_text(&mut bytes, &next.id);
             bytes.extend_from_slice(&next.version.to_be_bytes());
         }
-        if let Some(certificate) = &self.certificate {
-            fastpay_commit_certificate(&mut bytes, certificate)?;
+        if version == FastPayRecoveryCommitmentVersion::V2 {
+            if let Some(certificate) = &self.certificate {
+                fastpay_commit_certificate(&mut bytes, certificate)?;
+            }
         }
         Ok(bytes)
     }
@@ -1033,6 +1103,39 @@ mod fastpay_recovery_type_tests {
     }
 
     #[test]
+    fn historical_v1_committee_root_and_state_bytes_remain_stable() {
+        let mut committee = FastPayRecoveryCommitteeV1::from_public_keys(
+            domain().chain_id,
+            domain().genesis_hash,
+            domain().protocol_version,
+            7,
+            100,
+            120,
+            (0..4)
+                .map(|index| (format!("validator-{index}"), "aa".repeat(32)))
+                .collect(),
+        )
+        .unwrap();
+        committee.schema = FASTPAY_RECOVERY_COMMITTEE_SCHEMA_V1.to_string();
+        // Independently reconstructed from the pre-0a1216c3 canonical encoder.
+        committee.registry_root = "7994495faefce27215cfae8bbb4fb34fee43c5219da4fab2e693551f4b28fa6bcc9a197982b5f9cfdd1aa2da20399a3d".to_string();
+        committee.validate().expect("historical v1 root verifies");
+        let before = committee.state_commitment_bytes().unwrap();
+        committee.valid_from_height += 1;
+        assert_eq!(committee.computed_root().unwrap(), committee.registry_root);
+        assert_ne!(
+            committee.state_commitment_bytes().unwrap(),
+            before,
+            "v1 governance/state already committed the admission heights"
+        );
+        committee.schema = "postfiat-fastpay-recovery-committee-v999".into();
+        assert!(
+            committee.computed_root().is_err(),
+            "unknown encodings fail closed"
+        );
+    }
+
+    #[test]
     fn recovery_committee_root_binds_both_admission_heights() {
         let committee = FastPayRecoveryCommitteeV1::from_public_keys(
             domain().chain_id,
@@ -1054,7 +1157,10 @@ mod fastpay_recovery_type_tests {
             } else {
                 changed.new_orders_through_height += 1;
             }
-            assert_ne!(original_root, changed.computed_root().expect("changed root"));
+            assert_ne!(
+                original_root,
+                changed.computed_root().expect("changed root")
+            );
             assert!(changed.validate().is_err());
         }
     }
@@ -1070,7 +1176,9 @@ mod fastpay_recovery_type_tests {
             revealed_at_height: 120,
             certificate,
         };
-        let original = reveal.state_commitment_bytes().expect("reveal commitment");
+        let original = reveal
+            .state_commitment_bytes_for_version(FastPayRecoveryCommitmentVersion::V2)
+            .expect("reveal commitment");
         for change in 0..2 {
             let mut changed = reveal.clone();
             let FastPayCertificateV1::Transfer(certificate) = &mut changed.certificate else {
@@ -1081,7 +1189,12 @@ mod fastpay_recovery_type_tests {
             } else {
                 certificate.votes[0].signature_hex = "ee".repeat(32);
             }
-            assert_ne!(original, changed.state_commitment_bytes().expect("changed reveal"));
+            assert_ne!(
+                original,
+                changed
+                    .state_commitment_bytes_for_version(FastPayRecoveryCommitmentVersion::V2)
+                    .expect("changed reveal")
+            );
         }
     }
 
@@ -1108,29 +1221,45 @@ mod fastpay_recovery_type_tests {
                 version: input.version + 1,
             }],
         };
-        let original = fence.state_commitment_bytes().expect("fence commitment");
+        let original = fence
+            .state_commitment_bytes_for_version(FastPayRecoveryCommitmentVersion::V2)
+            .expect("fence commitment");
         let mut changed = fence.clone();
         let Some(FastPayCertificateV1::Transfer(certificate)) = &mut changed.certificate else {
             unreachable!("fixture is a confirmed transfer certificate")
         };
         certificate.votes[0].signature_hex = "ee".repeat(32);
-        assert_ne!(original, changed.state_commitment_bytes().expect("changed fence"));
+        assert_ne!(
+            original,
+            changed
+                .state_commitment_bytes_for_version(FastPayRecoveryCommitmentVersion::V2)
+                .expect("changed fence")
+        );
     }
 
     #[test]
     fn recovery_committee_admission_window_property_changes_root_and_rejects_stale_root() {
         let committee = FastPayRecoveryCommitteeV1::from_public_keys(
-            domain().chain_id, domain().genesis_hash, domain().protocol_version,
-            7, 100, 120,
-            (0..4).map(|index| (format!("validator-{index}"), "aa".repeat(32))).collect(),
-        ).expect("committee");
+            domain().chain_id,
+            domain().genesis_hash,
+            domain().protocol_version,
+            7,
+            100,
+            120,
+            (0..4)
+                .map(|index| (format!("validator-{index}"), "aa".repeat(32)))
+                .collect(),
+        )
+        .expect("committee");
         let original = committee.registry_root.clone();
         for delta in 1..=32 {
             for field in 0..2 {
                 let mut changed = committee.clone();
                 if field == 0 {
                     changed.valid_from_height += delta;
-                    changed.new_orders_through_height = changed.new_orders_through_height.max(changed.valid_from_height);
+                    changed.new_orders_through_height = changed
+                        .new_orders_through_height
+                        .max(changed.valid_from_height);
                 } else {
                     changed.new_orders_through_height += delta;
                 }
@@ -1144,7 +1273,10 @@ mod fastpay_recovery_type_tests {
             let mut changed = committee.clone();
             changed.valid_from_height = from;
             changed.new_orders_through_height = through;
-            assert!(changed.computed_root().is_err(), "invalid window must reject");
+            assert!(
+                changed.computed_root().is_err(),
+                "invalid window must reject"
+            );
         }
     }
 
@@ -1159,7 +1291,9 @@ mod fastpay_recovery_type_tests {
             revealed_at_height: 120,
             certificate,
         };
-        let original = reveal.state_commitment_bytes().expect("original commitment");
+        let original = reveal
+            .state_commitment_bytes_for_version(FastPayRecoveryCommitmentVersion::V2)
+            .expect("original commitment");
         for mutation in 0..=63_u8 {
             for field in 0..2 {
                 let mut changed = reveal.clone();
@@ -1172,8 +1306,13 @@ mod fastpay_recovery_type_tests {
                 } else {
                     certificate.votes[0].signature_hex = signature.repeat(32);
                 }
-                assert_ne!(changed.state_commitment_bytes().expect("changed commitment"), original,
-                    "mutation={mutation} field={field}");
+                assert_ne!(
+                    changed
+                        .state_commitment_bytes_for_version(FastPayRecoveryCommitmentVersion::V2)
+                        .expect("changed commitment"),
+                    original,
+                    "mutation={mutation} field={field}"
+                );
             }
         }
     }

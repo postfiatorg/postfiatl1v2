@@ -34,9 +34,7 @@ pub fn owned_unwrap_v3_signing_bytes(order: &postfiat_types::OwnedUnwrapOrderV3)
     bytes
 }
 
-pub fn fastpay_transfer_order_digest_v3(
-    order: &postfiat_types::OwnedTransferOrderV3,
-) -> String {
+pub fn fastpay_transfer_order_digest_v3(order: &postfiat_types::OwnedTransferOrderV3) -> String {
     postfiat_crypto_provider::bytes_to_hex(&postfiat_crypto_provider::hash_bytes(
         "postfiat.fastpay.transfer-order.v3",
         &owned_transfer_v3_signing_bytes(order),
@@ -873,16 +871,25 @@ pub fn execute_fastpay_recovery_governance_update_v1(
                 .checked_add(1)
                 .ok_or_else(|| "FastPay committee admission height overflow".to_string())?;
             let next = &bootstrap.payload.committee;
-            if next.committee_epoch != next_epoch
+            if (previous.commitment_version()?
+                == postfiat_types::FastPayRecoveryCommitmentVersion::V2
+                && next.commitment_version()?
+                    == postfiat_types::FastPayRecoveryCommitmentVersion::V1)
+                || prospective.fastpay_recovery_committees.len()
+                    >= postfiat_types::MAX_FASTPAY_RECOVERY_COMMITTEES
+                || next.committee_epoch != next_epoch
                 || next.valid_from_height != next_height
                 || next.valid_from_height <= finalized_height
                 || next.chain_id != previous.chain_id
                 || next.genesis_hash != previous.genesis_hash
                 || next.protocol_version != previous.protocol_version
-                || prospective.fastpay_recovery_committees.iter().any(|existing| {
-                    existing.committee_epoch == next.committee_epoch
-                        || existing.registry_root == next.registry_root
-                })
+                || prospective
+                    .fastpay_recovery_committees
+                    .iter()
+                    .any(|existing| {
+                        existing.committee_epoch == next.committee_epoch
+                            || existing.registry_root == next.registry_root
+                    })
             {
                 return Err(
                     "FastPay committee rotation is not the next future non-overlapping epoch"
@@ -905,16 +912,12 @@ mod owned_transfer_recovery_tests {
     use super::*;
     use crate::fastlane_primary::execute_fastlane_primary_transaction;
 
-    fn recovery_validator_keys(
-    ) -> Vec<(String, postfiat_crypto_provider::MlDsa65KeyPair)> {
+    fn recovery_validator_keys() -> Vec<(String, postfiat_crypto_provider::MlDsa65KeyPair)> {
         (0..4)
             .map(|index| {
                 (
                     format!("validator-{index}"),
-                    postfiat_crypto_provider::ml_dsa_65_keygen_from_seed(&[
-                        50 + index as u8;
-                        32
-                    ]),
+                    postfiat_crypto_provider::ml_dsa_65_keygen_from_seed(&[50 + index as u8; 32]),
                 )
             })
             .collect()
@@ -957,10 +960,20 @@ mod owned_transfer_recovery_tests {
         postfiat_types::OwnedTransferCertificateV3,
         Vec<(String, String)>,
     ) {
+        signed_certificate_for_domain(input_id, domain())
+    }
+
+    fn signed_certificate_for_domain(
+        input_id: &str,
+        certificate_domain: postfiat_types::OwnedCertificateDomain,
+    ) -> (
+        postfiat_types::OwnedTransferCertificateV3,
+        Vec<(String, String)>,
+    ) {
         let owner = postfiat_crypto_provider::ml_dsa_65_keygen().expect("owner keygen");
         let owner_pubkey_hex = postfiat_crypto_provider::bytes_to_hex(&owner.public_key);
         let mut order = postfiat_types::OwnedTransferOrderV3 {
-            domain: domain(),
+            domain: certificate_domain,
             recovery: postfiat_types::FastPayOrderRecoveryV1 {
                 schema: postfiat_types::FASTPAY_ORDER_RECOVERY_SCHEMA_V1.to_string(),
                 committee_epoch: 7,
@@ -1048,25 +1061,22 @@ mod owned_transfer_recovery_tests {
         });
         let before = ledger.clone();
         assert_eq!(
-            apply_owned_transfer_certificate_v3(
-                &mut ledger,
-                &certificate,
-                context,
-                111,
-            ),
+            apply_owned_transfer_certificate_v3(&mut ledger, &certificate, context, 111,),
             Err(OwnedTransferError::Expired)
         );
         assert_eq!(ledger, before);
 
-        let outcome = apply_owned_transfer_certificate_v3(
-            &mut ledger,
-            &certificate,
-            context,
-            110,
-        )
-        .expect("v3 certificate apply");
+        let outcome = apply_owned_transfer_certificate_v3(&mut ledger, &certificate, context, 110)
+            .expect("v3 certificate apply");
         assert_eq!(outcome.consumed, 1);
-        assert_eq!(outcome.created.iter().map(|object| object.value).sum::<u64>(), 99);
+        assert_eq!(
+            outcome
+                .created
+                .iter()
+                .map(|object| object.value)
+                .sum::<u64>(),
+            99
+        );
     }
 
     #[test]
@@ -1096,7 +1106,10 @@ mod owned_transfer_recovery_tests {
         apply_owned_transfer_certificate_v3(&mut late, &certificate, context, 110)
             .expect("apply at last valid height");
 
-        assert_eq!(early, late, "local arrival height must not enter replicated state");
+        assert_eq!(
+            early, late,
+            "local arrival height must not enter replicated state"
+        );
         assert_eq!(
             early.fastpay_version_fences[0].decided_at_height,
             certificate.order.recovery.valid_from_height,
@@ -1172,9 +1185,7 @@ mod owned_transfer_recovery_tests {
         );
     }
 
-    fn ledger_with_input(
-        certificate: &postfiat_types::OwnedTransferCertificateV3,
-    ) -> LedgerState {
+    fn ledger_with_input(certificate: &postfiat_types::OwnedTransferCertificateV3) -> LedgerState {
         let mut ledger = LedgerState::empty();
         ledger.fastpay_recovery_policy = Some(policy());
         ledger.owned_objects.push(postfiat_types::OwnedObject {
@@ -1218,13 +1229,8 @@ mod owned_transfer_recovery_tests {
         };
         let mut ledger = ledger_with_input(&certificate);
         let request = recovery_request(&certificate, 120);
-        let fence = execute_fastpay_recovery_decision_v1(
-            &mut ledger,
-            &request,
-            context,
-            120,
-        )
-        .expect("cancel abandoned lock");
+        let fence = execute_fastpay_recovery_decision_v1(&mut ledger, &request, context, 120)
+            .expect("cancel abandoned lock");
         assert_eq!(
             fence.decision,
             postfiat_types::FastPayRecoveryDecisionV1::Cancelled
@@ -1236,12 +1242,7 @@ mod owned_transfer_recovery_tests {
             .expect("advanced object");
         assert_eq!((advanced.version, advanced.value), (2, 100));
         assert_eq!(
-            apply_owned_transfer_certificate_v3(
-                &mut ledger,
-                &certificate,
-                context,
-                110,
-            ),
+            apply_owned_transfer_certificate_v3(&mut ledger, &certificate, context, 110,),
             Err(OwnedTransferError::VersionFenced)
         );
         assert_eq!(ledger.owned_objects[0].value, 100);
@@ -1271,13 +1272,8 @@ mod owned_transfer_recovery_tests {
         assert_eq!(ledger.owned_objects[0].value, 100);
 
         let request = recovery_request(&certificate, 120);
-        let fence = execute_fastpay_recovery_decision_v1(
-            &mut ledger,
-            &request,
-            context,
-            120,
-        )
-        .expect("confirm revealed certificate");
+        let fence = execute_fastpay_recovery_decision_v1(&mut ledger, &request, context, 120)
+            .expect("confirm revealed certificate");
         assert!(matches!(
             fence.decision,
             postfiat_types::FastPayRecoveryDecisionV1::Confirmed { .. }
@@ -1287,7 +1283,11 @@ mod owned_transfer_recovery_tests {
             .iter()
             .all(|object| object.id != "input-v3-recover-confirm"));
         assert_eq!(
-            ledger.owned_objects.iter().map(|object| object.value).sum::<u64>(),
+            ledger
+                .owned_objects
+                .iter()
+                .map(|object| object.value)
+                .sum::<u64>(),
             99
         );
         assert_eq!(ledger.fastpay_version_fences.len(), 1);
@@ -1340,7 +1340,9 @@ mod owned_transfer_recovery_tests {
             .iter()
             .map(|validator| validator.validator_id.clone())
             .collect::<Vec<_>>();
-        let payload_id = payload.payload_id().expect("recovery governance payload ID");
+        let payload_id = payload
+            .payload_id()
+            .expect("recovery governance payload ID");
         postfiat_types::FastPayRecoveryGovernanceBootstrapV1 {
             amendment: postfiat_types::GovernanceAmendment {
                 amendment_id: format!("fastpay-recovery-{payload_id}"),
@@ -1382,7 +1384,7 @@ mod owned_transfer_recovery_tests {
                 )
             })
             .collect::<Vec<_>>();
-        let first = postfiat_types::FastPayRecoveryCommitteeV1::from_public_keys(
+        let mut first = postfiat_types::FastPayRecoveryCommitteeV1::from_public_keys(
             domain().chain_id,
             domain().genesis_hash,
             domain().protocol_version,
@@ -1392,6 +1394,8 @@ mod owned_transfer_recovery_tests {
             validators.clone(),
         )
         .expect("first recovery committee");
+        first.schema = postfiat_types::FASTPAY_RECOVERY_COMMITTEE_SCHEMA_V1.to_string();
+        first.registry_root = first.computed_root().unwrap();
         let second = postfiat_types::FastPayRecoveryCommitteeV1::from_public_keys(
             first.chain_id.clone(),
             first.genesis_hash.clone(),
@@ -1420,9 +1424,29 @@ mod owned_transfer_recovery_tests {
             Ok(FastPayRecoveryGovernanceOutcomeV1::CommitteeRotated)
         );
         assert_eq!(ledger.fastpay_recovery_policy, Some(policy.clone()));
-        assert_eq!(ledger.fastpay_recovery_committees, vec![first.clone(), second]);
+        assert_eq!(
+            ledger.fastpay_recovery_committees,
+            vec![first.clone(), second]
+        );
 
-        let (old_certificate, _) = signed_certificate("old-committee-recovery-input");
+        let (old_certificate, _) = signed_certificate_for_domain(
+            "old-committee-recovery-input",
+            first.certificate_domain(),
+        );
+        let mut downgraded = ledger.fastpay_recovery_committees.last().unwrap().clone();
+        downgraded.committee_epoch += 1;
+        downgraded.valid_from_height = 141;
+        downgraded.new_orders_through_height = 160;
+        downgraded.schema = postfiat_types::FASTPAY_RECOVERY_COMMITTEE_SCHEMA_V1.to_string();
+        downgraded.registry_root = downgraded.computed_root().unwrap();
+        let before_downgrade = ledger.clone();
+        assert!(execute_fastpay_recovery_governance_update_v1(
+            &mut ledger,
+            &recovery_governance_update(policy.clone(), downgraded),
+            100,
+        )
+        .is_err());
+        assert_eq!(ledger, before_downgrade, "downgrade must reject atomically");
         ledger.owned_objects.push(postfiat_types::OwnedObject {
             id: old_certificate.order.inputs[0].id.clone(),
             version: old_certificate.order.inputs[0].version,
