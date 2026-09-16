@@ -1688,6 +1688,7 @@ fn pftl_uniswap_consensus_supply_status(
             .min(reserve_backed_nav_atoms.unwrap_or_default())
     });
     Ok(PftlUniswapSupplyStatusReport {
+        source_settlement_custody: ledger.pftl_uniswap_source_custody.iter().filter(|row| row.route_id == route.route_id).cloned().collect(),
         schema: if v2.is_some() {
             "postfiat-pftl-uniswap-supply-status-v2".to_string()
         } else {

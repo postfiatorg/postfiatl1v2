@@ -277,7 +277,7 @@ struct RpcServeMempoolSubmitState {
 
 #[derive(Debug, Default)]
 struct RpcServeHealthCache {
-    status: Option<(RpcServeHealthStamp, StatusReport)>,
+    status: Option<StatusReport>,
     mempool: Option<(RpcServeHealthStamp, postfiat_types::MempoolState)>,
     status_checked_at: Option<Instant>,
     mempool_checked_at: Option<Instant>,
@@ -671,10 +671,7 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
     let mempool_mutation_lock = Arc::new(Mutex::new(()));
     let finality_submit_lock = Arc::new(Mutex::new(()));
     let health_cache = Arc::new(Mutex::new(RpcServeHealthCache {
-        status: Some((
-            rpc_serve_health_stamp(&options.data_dir, true)?,
-            local_status.clone(),
-        )),
+        status: Some(local_status.clone()),
         mempool: Some((
             rpc_serve_health_stamp(&options.data_dir, false)?,
             initial_mempool,
@@ -1136,7 +1133,7 @@ fn handle_rpc_serve_connection(
             &format!("rpc method `{method}` is not enabled on the read-only remote server"),
         )
     } else if method == "status" {
-        match rpc_serve_cached_status(context) {
+        match rpc_serve_cached_status(&context.data_dir, &context.health_cache) {
             Ok((report, cache_hit)) => {
                 health_cache_hit = cache_hit;
                 success_response(
@@ -2083,32 +2080,30 @@ fn merge_rpc_serve_server_info_capabilities(
 }
 
 fn rpc_serve_cached_status(
-    context: &RpcServeConnectionContext,
+    data_dir: &Path,
+    health_cache: &Mutex<RpcServeHealthCache>,
 ) -> Result<(StatusReport, bool), String> {
-    if let Ok(cache) = context.health_cache.lock() {
+    if let Ok(cache) = health_cache.lock() {
         if cache.status_checked_at.is_some_and(|checked_at| {
             checked_at.elapsed() <= RPC_SERVE_HEALTH_STAMP_MAX_AGE
         }) {
-            if let Some((_, report)) = cache.status.as_ref() {
+            if let Some(report) = cache.status.as_ref() {
                 return Ok((report.clone(), true));
             }
         }
     }
-    let current_stamp = rpc_serve_health_stamp(&context.data_dir, true)?;
-    if let Ok(mut cache) = context.health_cache.lock() {
-        cache.status_checked_at = Some(Instant::now());
-        if let Some((stamp, report)) = cache.status.as_ref() {
-            if *stamp == current_stamp {
-                return Ok((report.clone(), true));
-            }
-        }
-    }
+    // Transactional commits do not update the legacy JSON files. The age
+    // limit must bound the report itself, not just checks of those files.
+    // Start the age before the read, and publish it only on success: a slow
+    // or failed refresh must not extend the lifetime of an old report.
+    let checked_at = Instant::now();
     let report = status(NodeOptions {
-        data_dir: context.data_dir.clone(),
+        data_dir: data_dir.to_path_buf(),
     })
     .map_err(|error| format!("rpc status read failed: {error}"))?;
-    if let Ok(mut cache) = context.health_cache.lock() {
-        cache.status = Some((current_stamp, report.clone()));
+    if let Ok(mut cache) = health_cache.lock() {
+        cache.status = Some(report.clone());
+        cache.status_checked_at = Some(checked_at);
     }
     Ok((report, false))
 }

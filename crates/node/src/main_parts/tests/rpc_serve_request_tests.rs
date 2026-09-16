@@ -917,6 +917,106 @@ mod rpc_serve_request_tests {
         std::fs::remove_dir_all(root).expect("cleanup health stamp root");
     }
 
+    #[test]
+    fn rpc_serve_status_cache_expires_after_transactional_commit() {
+        let root = env::temp_dir().join(format!(
+            "postfiat-rpc-status-transactional-{}-{}",
+            process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+        ));
+        init_consensus_v2(InitConsensusV2Options {
+            data_dir: root.clone(),
+            chain_id: "rpc-status-transactional".to_string(),
+            node_id: "validator-0".to_string(),
+            validator_count: 1,
+            activation_height: 1000,
+            storage_activation_height: Some(1),
+        })
+        .expect("initialize transactional RPC fixture");
+        let recipient_backup = postfiat_rpc_sdk::wallet_backup_from_master_seed(
+            "rpc-status-transactional",
+            "ab".repeat(32),
+            0,
+        )
+        .unwrap();
+        let recipient_key = postfiat_rpc_sdk::derive_wallet_key_pair(&recipient_backup).unwrap();
+        let recipient =
+            postfiat_crypto_provider::address_from_public_key(&recipient_key.public_key);
+        let commit = || {
+            let batch_file = root.join("transfer.batch.json");
+            create_transfer_batch(BatchTransferOptions {
+                data_dir: root.clone(),
+                key_file: None,
+                to: recipient.clone(),
+                amount: 250_000,
+                batch_file: batch_file.clone(),
+            })
+            .expect("build transfer");
+            let receipts = apply_batch(ApplyBatchOptions {
+                data_dir: root.clone(),
+                batch_file,
+                certificate_file: None,
+            })
+            .expect("commit transfer");
+            assert!(
+                receipts.iter().all(|receipt| receipt.accepted),
+                "{receipts:?}"
+            );
+        };
+        commit();
+        let cache = Mutex::new(RpcServeHealthCache::default());
+        let (first, hit) = rpc_serve_cached_status(&root, &cache).expect("prime cache");
+        assert!(!hit);
+        assert_eq!(first.block_height, 1);
+        assert!(postfiat_storage::NodeStore::new(&root)
+            .transactional_storage_active()
+            .unwrap());
+        let stamp = rpc_serve_health_stamp(&root, true).expect("legacy stamp");
+        commit();
+        assert_eq!(
+            rpc_serve_health_stamp(&root, true).unwrap(),
+            stamp,
+            "transactional commits must exercise unchanged legacy metadata"
+        );
+        assert_eq!(
+            status(NodeOptions {
+                data_dir: root.clone()
+            })
+            .unwrap()
+            .block_height,
+            2
+        );
+        let expired = Instant::now() - RPC_SERVE_HEALTH_STAMP_MAX_AGE - Duration::from_secs(1);
+        cache.lock().unwrap().status_checked_at = Some(expired);
+        let (fresh, hit) = rpc_serve_cached_status(&root, &cache).expect("refresh expired cache");
+        assert!(
+            !hit,
+            "unchanged legacy files must not extend an expired report"
+        );
+        assert_eq!(fresh.block_height, 2);
+        let (cached, hit) = rpc_serve_cached_status(&root, &cache).expect("reuse fresh cache");
+        assert!(hit);
+        assert_eq!(cached.block_tip_hash, fresh.block_tip_hash);
+
+        cache.lock().unwrap().status_checked_at = Some(expired);
+        let genesis_path = root.join(postfiat_storage::GENESIS_FILE);
+        let genesis = fs::read(&genesis_path).unwrap();
+        fs::write(&genesis_path, b"invalid genesis").unwrap();
+        for _ in 0..2 {
+            assert!(
+                rpc_serve_cached_status(&root, &cache).is_err(),
+                "failed refresh must not make an expired report fresh again"
+            );
+            assert_eq!(cache.lock().unwrap().status_checked_at, Some(expired));
+        }
+        fs::write(&genesis_path, genesis).unwrap();
+        assert!(!rpc_serve_cached_status(&root, &cache).unwrap().1);
+        fs::remove_dir_all(root).expect("cleanup transactional RPC fixture");
+    }
+
     #[cfg(target_os = "linux")]
     #[test]
     fn rpc_serve_event_log_failure_degrades_without_failing_listener_path() {

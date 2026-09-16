@@ -719,9 +719,12 @@ fn issued_asset_supply_with_non_nav_spread(
                 } else {
                     0
                 };
+                let (source_principal, source_spread) = pftl_source_totals(ledger, &route.route_id)?;
                 route
                     .settlement_reserve_atoms
-                    .checked_add(spread)
+                    .checked_sub(source_principal)
+                    .and_then(|principal| principal.checked_add(spread))
+                    .and_then(|custody| custody.checked_sub(if include_non_nav_spread { source_spread } else { 0 }))
                     .ok_or_else(|| {
                         (
                             "issued_supply_overflow",
@@ -753,8 +756,18 @@ fn issued_asset_supply_with_non_nav_spread(
                 )
             })
         })?;
+    let source_custody = ledger.pftl_uniswap_source_custody.iter().filter(|row| row.asset_id == asset_id)
+        .try_fold(0u64, |total,row| {
+            let reserved = row.reservation_escrows.values().try_fold(0u64, |sum,v| sum.checked_add(*v))
+                .ok_or_else(|| ("issued_supply_overflow", "source reservation custody overflow".to_string()))?;
+            total.checked_add(row.principal_atoms)
+                .and_then(|n| n.checked_add(if include_non_nav_spread { row.spread_atoms } else { 0 }))
+                .and_then(|n| n.checked_add(reserved))
+                .ok_or_else(|| ("issued_supply_overflow", "source custody overflow".to_string()))
+        })?;
     trustline_supply
-        .checked_add(open_escrow_supply)
+        .checked_add(source_custody)
+        .and_then(|supply| supply.checked_add(open_escrow_supply))
         .and_then(|supply| supply.checked_add(open_offer_supply))
         .and_then(|supply| supply.checked_add(fast_lane_reserve_supply))
         .and_then(|supply| supply.checked_add(pftl_uniswap_route_custody_supply))
@@ -844,6 +857,7 @@ fn assert_issued_supply_ledger_inventory_complete(ledger: &LedgerState) {
         vault_bridge_allocations: _,
         vault_bridge_redemptions: _,
         vault_bridge_deposits: _,
+        pftl_uniswap_source_custody: _, // counted by the source-specific custody sum
         pftl_uniswap_routes: _,
         pftl_uniswap_receipts: _,
         owned_objects: _,

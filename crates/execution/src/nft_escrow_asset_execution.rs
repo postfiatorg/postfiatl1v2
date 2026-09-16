@@ -619,6 +619,8 @@ pub struct AssetExecutionCompatibility {
     pub allow_incremental_age_release_replay: bool,
     pub allow_legacy_pftl_uniswap_disabled_live_value_replay: bool,
     pub allow_legacy_non_nav_spread_supply_omission: bool,
+    /// Archive-only: pre-family reserve accounting. Never selected for new execution.
+    pub allow_legacy_base_only_vault_reserve_supply: bool,
     pub bridge_verification_activation_height: Option<u64>,
     pub orchard_aware_bridge_claim_activation_height: Option<u64>,
     pub pfusdc_source_series_activation_height: Option<u64>,
@@ -637,6 +639,7 @@ impl AssetExecutionCompatibility {
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             allow_legacy_non_nav_spread_supply_omission: false,
+            allow_legacy_base_only_vault_reserve_supply: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
             pfusdc_source_series_activation_height: None,
@@ -655,6 +658,7 @@ impl AssetExecutionCompatibility {
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             allow_legacy_non_nav_spread_supply_omission: false,
+            allow_legacy_base_only_vault_reserve_supply: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
             pfusdc_source_series_activation_height: None,
@@ -673,6 +677,7 @@ impl AssetExecutionCompatibility {
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             allow_legacy_non_nav_spread_supply_omission: false,
+            allow_legacy_base_only_vault_reserve_supply: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
             pfusdc_source_series_activation_height: None,
@@ -691,6 +696,7 @@ impl AssetExecutionCompatibility {
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             allow_legacy_non_nav_spread_supply_omission: false,
+            allow_legacy_base_only_vault_reserve_supply: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
             pfusdc_source_series_activation_height: None,
@@ -709,6 +715,7 @@ impl AssetExecutionCompatibility {
             allow_incremental_age_release_replay: false,
             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
             allow_legacy_non_nav_spread_supply_omission: false,
+            allow_legacy_base_only_vault_reserve_supply: false,
             bridge_verification_activation_height: Some(0),
             orchard_aware_bridge_claim_activation_height: Some(0),
             pfusdc_source_series_activation_height: None,
@@ -1379,7 +1386,7 @@ fn apply_asset_operation(
                     decoded_reserve_public_values = Some(decoded);
                 }
                 if profile.source_class.starts_with(VAULT_BRIDGE_PROFILE_SOURCE_CLASS_PREFIX) {
-                    validate_vault_bridge_reserve_packet_fields(ledger, &nav_asset, profile, operation)?;
+                    validate_vault_bridge_reserve_packet_fields(ledger, &nav_asset, profile, operation, compatibility)?;
                 }
             }
             let mut packet = NavReservePacket::new(

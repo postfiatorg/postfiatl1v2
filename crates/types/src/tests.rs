@@ -3472,3 +3472,67 @@ fn fastswap_hash48_newtypes_round_trip_json_and_cbor() {
         root
     );
 }
+
+#[test]
+fn pftl_source_selections_are_signed() {
+    let reserve: PftlUniswapOrderReserveOperation = serde_json::from_value(serde_json::json!({
+        "subscriber":"pfholder", "route_id":"route", "reservation_id":"11".repeat(48),
+        "ethereum_recipient":"0x1111111111111111111111111111111111111111",
+        "route_epoch":1,"policy_epoch":1,"policy_hash":"22".repeat(48),
+        "mint_amount_atoms":1000000,"max_settlement_value_atoms":1005000,"expires_at_height":100
+    })).unwrap();
+    let legacy=reserve.signing_bytes();
+    let mut source=reserve.clone();
+    source.settlement_source_asset_id=Some("33".repeat(48));
+    source.validate().unwrap();
+    assert!(source.signing_bytes().starts_with(&legacy));
+    assert_ne!(source.signing_bytes(),legacy);
+    source.settlement_source_asset_id=Some("44".repeat(48));
+    assert_ne!(source.signing_bytes(),{ let mut r=reserve.clone();r.settlement_source_asset_id=Some("33".repeat(48));r.signing_bytes() });
+    assert!(!serde_json::to_value(&reserve).unwrap().as_object().unwrap().contains_key("settlement_source_asset_id"));
+    source.settlement_source_asset_id=Some("bad\nsource=other".to_string());
+    assert!(source.validate().is_err());
+
+    let mut redeem: PftlUniswapPrimaryRedeemOperation=serde_json::from_value(serde_json::json!({
+        "owner":"pfholder","settlement_recipient":"pfholder","route_id":"route","redemption_nonce":"55".repeat(32),
+        "nav_amount_atoms":1000000,"min_settlement_value_atoms":999500,"route_epoch":1,"policy_epoch":1,
+        "policy_hash":"22".repeat(48),"pricing_nav_epoch":1,"pricing_reserve_packet_hash":"66".repeat(48),"expires_at_height":100
+    })).unwrap();
+    let legacy=redeem.signing_bytes();
+    redeem.settlement_source_asset_id=Some("33".repeat(48));
+    redeem.validate().unwrap();
+    assert!(redeem.signing_bytes().starts_with(&legacy));
+    assert_ne!(redeem.signing_bytes(),legacy);
+}
+
+#[test]
+fn pftl_source_governance_signs_unchanged_disabled_and_selected_states() {
+    let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
+        policy_hash: String::new(), policy_epoch: 2, issue_multiplier_bps: 10050,
+        redeem_multiplier_bps: 9995, issue_capacity_atoms: 100000000,
+        redeem_capacity_atoms: 100000000, max_order_atoms: 10000000, min_order_atoms: 1,
+        valid_from_height: 1, expires_at_height: 100, max_nav_age_blocks: 100,
+        pricing_nav_epoch: 1, pricing_reserve_packet_hash: "11".repeat(48),
+    };
+    policy.policy_hash = policy.computed_hash();
+    let mut op = PftlUniswapRouteEpochAdvanceOperation {
+        settlement_source_asset_ids: None, operator: "pfissuer".to_string(),
+        route_id: "route".to_string(), prior_route_epoch: 1, next_route_epoch: 2,
+        next_route_config_digest: "22".repeat(48), live_value_enabled: true,
+        next_primary_market_policy: policy,
+    };
+    op.validate().unwrap();
+    let unchanged = op.signing_bytes();
+    op.settlement_source_asset_ids = Some(Vec::new());
+    op.validate().unwrap();
+    let disabled = op.signing_bytes();
+    assert_ne!(unchanged, disabled);
+    op.settlement_source_asset_ids = Some(vec!["33".repeat(48)]);
+    op.validate().unwrap();
+    assert_ne!(disabled, op.signing_bytes());
+    let selected = op.signing_bytes();
+    op.settlement_source_asset_ids = Some(vec!["44".repeat(48)]);
+    assert_ne!(selected, op.signing_bytes());
+    op.settlement_source_asset_ids = Some(vec!["33".repeat(48), "33".repeat(48)]);
+    assert!(op.validate().is_err());
+}

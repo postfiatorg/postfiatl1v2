@@ -33,3 +33,5 @@ mod pftl_uniswap_ethereum_verification;
 mod tests {
     include!("tests.rs");
 }
+
+include!("pftl_source_settlement.rs");
