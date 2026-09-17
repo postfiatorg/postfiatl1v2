@@ -142,11 +142,13 @@ Nothing after G0 begins without it.
 
 ### Gate G2 — prove route compatibility offline
 
-- [ ] Pin the integrated source commit and verify that the selected qualified lineage contains the required Arc code or an operator-approved equivalent.
+- [x] Pin the integrated source commit and verify that the selected qualified lineage contains the required Arc code or an operator-approved equivalent. Candidate `15126ac3` and recorded qualified node source `1c435f4f` verified 2026-09-17; G1 lineage selection remains open ([source verdict](../../review/z3-g2-route-compatibility-20260917.md#g21-pass-candidate-source-pinned-and-required-code-present)).
 - [ ] Read back or replay the selected route, asset, proof-profile, policy, NAV, and source-domain identities from frozen fixtures.
-- [ ] Prove that Arc source-labeled pfUSDC can fund the existing primary subscription and redemption operations without a new transaction kind or facility.
-- [ ] Prove that the route counts the same-cycle reserve exactly once and that its settlement asset ID cannot be substituted.
-- [ ] Stop for the operator if compatibility requires consensus code, a generic NRRS facility, a new bridge contract, or a new settlement-price format.
+- [x] Prove that Arc source-labeled pfUSDC can fund the existing primary subscription and redemption operations without a new transaction kind or facility. Existing source selection and route maintenance supported 2026-09-17; the driver still needs G3 changes ([compatibility trace](../../review/z3-g2-route-compatibility-20260917.md#g23-pass-existing-operations-can-settle-the-governed-arc-source)).
+- [x] Prove that the route counts the same-cycle reserve exactly once and that its settlement asset ID cannot be substituted. Code trace and focused offline tests passed 2026-09-17; exact Arc cycle composition remains G3 work ([accounting and binding](../../review/z3-g2-route-compatibility-20260917.md#g24-pass-reserve-counted-once-settlement-identities-cannot-be-substituted)).
+- [x] Stop for the operator if compatibility requires consensus code, a generic NRRS facility, a new bridge contract, or a new settlement-price format. No prohibited expansion required by the candidate path, 2026-09-17; pair and lineage decisions remain with the operator ([stop verdict](../../review/z3-g2-route-compatibility-20260917.md#stop-verdict)).
+
+The 2026-09-17 [identity comparison](../../review/z3-g2-route-compatibility-20260917.md#identities-read-back) records both Arc pairs without selecting one. G2's selected-state readback remains open; no G1 authorization or integrated live cycle is claimed.
 
 ### Gate G3 — complete focused tooling and local tests
 
