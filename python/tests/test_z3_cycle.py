@@ -145,6 +145,14 @@ def packet_fixture(root: Path) -> dict:
                                "nav_per_unit_usd_1e8": 10**8, "redeem_multiplier_bps": 9995}
             record["quote"] = ref("quote")
         if section == "egress":
+            released = copy.deepcopy(state)
+            released["pending_egress"] = 899
+            released["released_unsettled"] = 899
+            burned = copy.deepcopy(released)
+            burned["source_vault"] += 899
+            burned["released_unsettled"] = 0
+            burned["arc_wallet_wei"] -= 899 * 10**12 - 23
+            values["after_burn"], values["after_release"] = burned, released
             record.update(withdrawal_id=digest("withdrawal"), nullifier=digest("nullifier"),
                           replay=ref("replay"))
             values["replay"] = {"rejected": True, "nullifier": digest("nullifier"),
@@ -178,7 +186,7 @@ def test_success_complete_synthetic_packet(tmp_path):
     assert verdict["verdict"] == "PASS", verdict
     assert verdict["retained_native_atoms"] == 100
     assert verdict["retained_reserve_atoms"] == 100
-    assert verdict["receipt_count"] == 12
+    assert verdict["receipt_count"] == 16
 
 
 def test_missing_artifact(tmp_path):

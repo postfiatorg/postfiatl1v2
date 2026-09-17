@@ -36,9 +36,11 @@ REQUIRED = {
     "subscription": ("record", "quote", "reserve_receipt", "subscribe_receipt", "finality"),
     "entitlement_release": ("record", "release_receipt", "finality"),
     "nav_route_epoch": ("record", "reserve_packet", "proof", "public_values",
-                        "proof_report", "nav_receipt", "route_receipt", "finality"),
+                        "proof_report", "nav_submit_receipt", "nav_receipt",
+                        "pause_receipt", "route_receipt", "resume_receipt", "finality"),
     "redemption": ("record", "quote", "redeem_receipt", "finality"),
-    "egress": ("record", "burn_receipt", "finality", "withdrawal_packet",
+    "egress": ("record", "after_burn", "after_release", "burn_receipt", "settle_receipt",
+               "finality", "withdrawal_packet",
                "witness", "proof", "public_values", "proof_report", "receipt", "replay"),
     "final_convergence": ("record", "validators", "conservation"),
 }
@@ -49,10 +51,14 @@ PFTL_RECEIPTS = {
     "subscription": {"reserve_receipt": "pftl_uniswap_order_reserve",
                      "subscribe_receipt": "pftl_uniswap_primary_subscribe_v2"},
     "entitlement_release": {"release_receipt": "pftl_uniswap_order_release"},
-    "nav_route_epoch": {"nav_receipt": "nav_epoch_finalize",
-                        "route_receipt": "pftl_uniswap_route_epoch_advance"},
+    "nav_route_epoch": {"nav_submit_receipt": "nav_reserve_submit",
+                        "nav_receipt": "nav_epoch_finalize",
+                        "pause_receipt": "pftl_uniswap_route_pause",
+                        "route_receipt": "pftl_uniswap_route_epoch_advance",
+                        "resume_receipt": "pftl_uniswap_route_pause"},
     "redemption": {"redeem_receipt": "pftl_uniswap_primary_redeem"},
-    "egress": {"burn_receipt": "vault_bridge_burn_to_redeem"},
+    "egress": {"burn_receipt": "vault_bridge_burn_to_redeem",
+               "settle_receipt": "vault_bridge_redeem_settle"},
 }
 STATE_FIELDS = (
     "native_supply", "native_wallet", "external_native_supply",
@@ -60,7 +66,7 @@ STATE_FIELDS = (
     "settlement_reserve", "source_principal", "source_spread", "source_escrow",
     "non_nav_spread", "entitlement_atoms", "entitlement_count", "reservations",
     "pending_orders", "pending_egress", "source_vault", "arc_wallet_wei",
-    "issued_total", "counted_total", "redeemed_total", "uncredited_deposits",
+    "issued_total", "counted_total", "redeemed_total", "uncredited_deposits", "released_unsettled",
 )
 HASH = re.compile(r"^(?:0x)?[0-9a-fA-F]{64}(?:[0-9a-fA-F]{32})?$")
 ADDRESS = re.compile(r"^0x[0-9a-fA-F]{40}$")
@@ -128,6 +134,8 @@ def public_path(root: Path, name: str) -> Path:
 
 
 def read_json(path: Path) -> Any:
+    require(not SECRET.search(str(path)) and not path.is_symlink(),
+            "signer paths and symlinks are not public JSON inputs")
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -195,7 +203,9 @@ def validate_metadata(meta: dict, *, skeleton: bool = False) -> None:
     for field in ("source_profile_hash", "source_bucket_id", "native_nav_asset_id",
                   "settlement_asset_id", "settlement_source_asset_id",
                   "vault_code_hash", "anchor_code_hash"):
-        require(HASH.fullmatch(ids[field]) is not None, f"full hash required: {field}")
+        width = 64 if field in ("vault_code_hash", "anchor_code_hash") else 96
+        require(re.fullmatch(r"(?:0x)?[0-9a-fA-F]{" + str(width) + "}", ids[field]) is not None,
+                f"full hash required: {field}")
     for field in ("primary_route", "source_profile", "verifier_policy", "nav_valuation"):
         require(HASH.fullmatch(meta["policy_hashes"][field]) is not None,
                 f"missing policy hash: {field}")
@@ -285,7 +295,8 @@ def validate_state(state: dict) -> None:
          "source issued/count/redeemed identity")
     require(state["family_supply"] >= state["series_supply"], "series exceeds family supply")
     same(state["source_vault"], state["series_supply"] + state["uncredited_deposits"]
-         + state["pending_egress"], "source vault = live supply + uncredited + pending")
+         + state["pending_egress"] - state["released_unsettled"],
+         "source vault = live supply + uncredited + burned unsettled - released unsettled")
     require(state["native_supply"] >= state["native_wallet"] + state["external_native_supply"],
             "native wallet/external supply exceeds global supply")
 
@@ -295,7 +306,7 @@ def transition(before: dict, after: dict, changes: dict, label: str) -> None:
         same(after[field] - before[field], changes.get(field, 0), f"{label}/{field}")
 
 
-def convergence(rows: list, record: dict) -> None:
+def convergence(rows: list, record: dict, expected_queues: dict | None = None) -> None:
     require(isinstance(rows, list) and len(rows) == 6, "six validators required")
     require(len({row["validator_id"] for row in rows}) == 6, "duplicate validator")
     required = ("height", "block_id", "state_root", "route_state_hash",
@@ -304,7 +315,7 @@ def convergence(rows: list, record: dict) -> None:
         for field in required:
             require(row[field] not in ("", None), f"missing validator {field}")
             same(row[field], rows[0][field], f"validator convergence/{field}")
-        same(row["queues"], {"mempool": 0, "reservations": 0, "egress": 0},
+        same(row["queues"], expected_queues or {"mempool": 0, "reservations": 0, "egress": 0},
              "validator queues")
     for field in required[:3]:
         same(record["finalized"][field], rows[0][field], f"snapshot finalized/{field}")
@@ -391,7 +402,8 @@ def _verify(packet: dict, root: Path) -> dict:
     states = {name: record["state"] for name, record in records.items()}
     p, d, i, s, e, n, r, b, f = [states[name] for name in SECTIONS[1:]]
     for field in ("entitlement_atoms", "entitlement_count", "reservations",
-                  "pending_orders", "pending_egress", "uncredited_deposits", "source_escrow"):
+                  "pending_orders", "pending_egress", "uncredited_deposits", "source_escrow",
+                  "released_unsettled"):
         same(p[field], 0, f"preflight empty/{field}")
         same(f[field], 0, f"final empty/{field}")
     amount = meta["amount_atoms"]
@@ -467,6 +479,17 @@ def _verify(packet: dict, root: Path) -> dict:
     same(egress["replay"]["nullifier"], egress["nullifier"], "replay nullifier")
     same(egress["replay"]["state_unchanged"], True, "replay changed state")
     release_gas = uint(egress["gas_fee_wei"], "release gas")
+    burned = artifacts["egress"]["after_burn"]
+    released = artifacts["egress"]["after_release"]
+    validate_state(burned)
+    validate_state(released)
+    transition(r, burned, {"family_supply": -output, "series_supply": -output,
+                           "pfusdc_wallet": -output, "redeemed_total": output,
+                           "pending_egress": output}, "burn")
+    transition(burned, released, {"source_vault": -output, "released_unsettled": output,
+                                  "arc_wallet_wei": output * 10**12 - release_gas}, "Arc release")
+    transition(released, b, {"pending_egress": -output, "released_unsettled": -output},
+               "egress settlement")
     transition(r, b, {"family_supply": -output, "series_supply": -output,
                       "pfusdc_wallet": -output, "redeemed_total": output,
                       "source_vault": -output,
