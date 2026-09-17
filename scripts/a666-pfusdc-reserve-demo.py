@@ -523,6 +523,8 @@ def ensure_key(path: Path) -> None:
 
 
 def cmd_build_issue(args: argparse.Namespace) -> dict[str, Any]:
+    if args.output_dir.exists():
+        raise DemoError(f"refusing to overwrite {args.output_dir}")
     identities = validate_identities(load_json(args.identities))
     ensure_key(args.holder_key_file)
     validate_account(args.subscriber, "subscriber")
@@ -964,6 +966,8 @@ def maximum_nav_for_base_reserve(reserve_atoms: int, nav_usd_e8: int) -> int:
 
 
 def cmd_build_redeem(args: argparse.Namespace) -> dict[str, Any]:
+    if args.output_dir.exists():
+        raise DemoError(f"refusing to overwrite {args.output_dir}")
     identities = validate_identities(load_json(args.identities))
     ensure_key(args.holder_key_file)
     validate_account(args.owner, "redemption owner")

@@ -298,6 +298,22 @@ def verify_attempt(packet: dict, root: Path) -> dict:
     observation = read_json(public_path(root, observation_ref["path"]))
     for field in ("step", "reason", "submission_started"):
         same(observation[field], attempt[field], f"attempt observation/{field}")
+    if outcome["status"] == "not_a_cycle":
+        # The ordered wrapper starts preflight, then deposit. A later
+        # checkpoint or any value-step marker makes publication possible;
+        # a caller cannot obtain the exception by changing only a boolean.
+        require("checkpoint" in packet["artifacts"], "pre-submission checkpoint required")
+        ref = packet["artifacts"]["checkpoint"]
+        checkpoint = read_json(public_path(root, ref["path"]))
+        require(checkpoint["ready_for"] in ("preflight", "arc-deposit")
+                and all(row["step"] == "preflight" for row in checkpoint["completed"])
+                and len(checkpoint["completed"]) <= 1,
+                "submission evidence prevents environmental exemption")
+        if "marker" in packet["artifacts"]:
+            ref = packet["artifacts"]["marker"]
+            marker = read_json(public_path(root, ref["path"]))
+            require(marker["kind"] == "prepare",
+                    "uncertain publication prevents environmental exemption")
     return {"schema": VERDICT_SCHEMA,
             "verdict": "NOT_A_CYCLE" if outcome["status"] == "not_a_cycle" else "FAIL",
             "reason": attempt["reason"], **outcome,

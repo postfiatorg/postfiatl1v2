@@ -345,12 +345,15 @@ def confirm_one(config: dict, checkpoint: dict, steps: list[Step], name: str,
         for index, filename in ((4, "public-values.bin"), (5, "proof-calldata.bin")):
             raw = z3.artifact_bytes(work, "egress-proof/" + filename)
             z3.same(step.argv[index].lower(), "0x" + raw.hex(), "release proof bytes")
+    request_sha256 = None
     if step.request:
         # This is a signer-local operation request containing paths, never a
         # signer file. Do not use the evidence loader, which rejects key_file.
         request_path = Path(step.request)
         z3.require(request_path.name.endswith(".ops.json"), "single operation request required")
-        request = json.loads(request_path.read_text(encoding="utf-8"))
+        request_bytes = request_path.read_bytes()
+        request_sha256 = hashlib.sha256(request_bytes).hexdigest()
+        request = json.loads(request_bytes)
         z3.same(len(request["operations"]), 1, "one submission per confirmation")
         operation = request["operations"][0]["operation"]
         z3.same(operation["operation"], step.operation, "confirmed operation kind")
@@ -371,7 +374,10 @@ def confirm_one(config: dict, checkpoint: dict, steps: list[Step], name: str,
     attempts = work / "attempts"
     attempts.mkdir(exist_ok=True, mode=0o700)
     marker = attempts / (name + ".json")
-    z3.write_new(marker, {"step": name, "command_sha256": step.command_sha256,
+    z3.require(not marker.exists(), "replay refused; refusing to overwrite prior attempt")
+    z3.write_new(marker, {"step": name, "kind": step.kind,
+                          "command_sha256": step.command_sha256,
+                          "request_sha256": request_sha256,
                           "inputs_sha256": metadata_hash(config), "state": "attempted"})
     identities_path = work / "reserve-identities.json"
     if not identities_path.exists():
