@@ -4,6 +4,8 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -12,11 +14,31 @@ import pytest
 from postfiat_rpc import z3_composition as compose
 from postfiat_rpc import z3_cycle as z3
 from test_z3_failure_rehearsal import (
-    configured, demo, driver_inputs, offline_only, retain_attempt, stage_checkpoint,
+    assert_ledger_invariants, assert_ledger_unchanged, configured, demo, driver_inputs,
+    offline_only, retain_attempt, stage_checkpoint, synthetic_ledger,
 )
 from test_z3_cycle import save
 
 CONFIRMED_STEPS = ("arc-deposit", "subscribe", "burn", "arc-release")
+RECOVERY_STATES = {
+    "arc-deposit": ("preflight", "deposit"),
+    "subscribe": ("reserved", "subscription"),
+    "burn": ("redemption", "after_burn"),
+    "arc-release": ("after_burn", "after_release"),
+}
+CONFIRMED_DELTAS = {
+    "arc-deposit": {"source_vault": 1005, "uncredited_deposits": 1005,
+                    "arc_wallet_wei": -1005 * 10**12 - 17},
+    "subscribe": {"native_supply": 1000, "native_wallet": 1000,
+                  "settlement_reserve": 1000, "source_principal": 1000,
+                  "source_spread": 5, "non_nav_spread": 5, "source_escrow": -1005,
+                  "reservations": -1, "pending_orders": -1,
+                  "entitlement_atoms": 1000, "entitlement_count": 1},
+    "burn": {"family_supply": -899, "series_supply": -899, "pfusdc_wallet": -899,
+             "redeemed_total": 899, "pending_egress": 899},
+    "arc-release": {"source_vault": -899, "released_unsettled": 899,
+                    "arc_wallet_wei": 899 * 10**12 - 23},
+}
 
 
 def prepare_request(root, config, steps, name, monkeypatch):
@@ -25,7 +47,8 @@ def prepare_request(root, config, steps, name, monkeypatch):
     work = Path(config["paths"]["work_dir"])
     work.mkdir(exist_ok=True)
     if name == "subscribe":
-        args, _, _, _ = driver_inputs(root / "driver")
+        issue_state = synthetic_ledger(root / "issue-driver-state", "ingress")
+        args, _, _, _ = driver_inputs(root / "driver", issue_state)
         args.output_dir = work / "issue"
         monkeypatch.setattr(demo.secrets, "token_hex", lambda width: "12" * width)
         issue = demo.cmd_build_issue(args)
@@ -60,6 +83,10 @@ def prepare_request(root, config, steps, name, monkeypatch):
 def test_confirmed_interruption_exact_identity_rejected_as_replay(tmp_path, monkeypatch, name):
     config, steps = configured(tmp_path)
     step, gate = prepare_request(tmp_path, config, steps, name, monkeypatch)
+    prior_stage, confirmed_stage = RECOVERY_STATES[name]
+    ledger = synthetic_ledger(tmp_path / "prior-state", prior_stage)
+    before = copy.deepcopy(ledger)
+    confirmed = synthetic_ledger(tmp_path / "confirmed-state", confirmed_stage)
     work = Path(config["paths"]["work_dir"])
     calls = []
     terminal = {
@@ -76,12 +103,18 @@ def test_confirmed_interruption_exact_identity_rejected_as_replay(tmp_path, monk
         assert argv == step.argv
         # The test environment confirms once, then the wrapper process loses
         # control before returning. Exit status is never confirmation evidence.
+        ledger.clear()
+        ledger.update(copy.deepcopy(confirmed))
         z3.write_new(retained_terminal, terminal)
         json.dump(terminal, kwargs["stdout"])
         raise KeyboardInterrupt("synthetic process loss after confirmed response")
 
     with pytest.raises(KeyboardInterrupt):
         compose.confirm_one(config, gate, steps, name, tmp_path, interrupt_after_confirmation)
+    assert_ledger_invariants(ledger)
+    z3.transition(before["accounting"], ledger["accounting"], CONFIRMED_DELTAS[name],
+                  "one confirmed transition")
+    after_confirmation = copy.deepcopy(ledger)
     marker_path = work / "attempts" / (name + ".json")
     marker_bytes = marker_path.read_bytes()
     stdout_bytes = (work / (name + ".stdout.json")).read_bytes()
@@ -105,6 +138,7 @@ def test_confirmed_interruption_exact_identity_rejected_as_replay(tmp_path, monk
     assert marker_path.read_bytes() == marker_bytes
     assert (work / (name + ".stdout.json")).read_bytes() == stdout_bytes
     assert z3.read_json(retained_terminal) == terminal
+    assert_ledger_unchanged(after_confirmation, ledger)
     if step.request:
         assert Path(step.request).read_bytes() == request_bytes
 
@@ -112,10 +146,14 @@ def test_confirmed_interruption_exact_identity_rejected_as_replay(tmp_path, monk
     root.mkdir()
     save(root, "marker.json", marker)
     save(root, "terminal.json", terminal)
+    save(root, "before.json", before)
+    save(root, "confirmed.json", after_confirmation)
+    save(root, "after-replay.json", ledger)
     manifest = retain_attempt(
         root, config, gate, name, "environmental_interruption", submission_started=True,
         diagnostic="process interrupted after synthetic confirmation; exact replay refused",
-        evidence={"marker": "marker.json", "terminal": "terminal.json"})
+        evidence={"marker": "marker.json", "terminal": "terminal.json",
+                  "before": "before.json", "confirmed": "confirmed.json", "after": "after-replay.json"})
     verdict = z3.verify_manifest(manifest)
     assert verdict["verdict"] == "FAIL"
     assert verdict["status"] == "unclean"
@@ -127,6 +165,8 @@ def test_confirmed_interruption_exact_identity_rejected_as_replay(tmp_path, monk
 def test_environmental_interruption_depends_on_prior_submission(tmp_path, name, submitted):
     config, steps = configured(tmp_path)
     gate = stage_checkpoint(config, steps, name)
+    ledger = synthetic_ledger(tmp_path / "state-fixture", "deposit" if submitted else "preflight")
+    before = copy.deepcopy(ledger)
     calls = []
 
     def interruption(argv, **kwargs):
@@ -139,13 +179,17 @@ def test_environmental_interruption_depends_on_prior_submission(tmp_path, name, 
     marker = z3.read_json(marker_path)
     assert marker["kind"] == "prepare"
     assert len(calls) == 1
+    assert_ledger_unchanged(before, ledger)
     assert any(item["step"] == "arc-deposit" for item in gate["completed"]) == submitted
     root = tmp_path / "environment"
     root.mkdir()
     save(root, "marker.json", marker)
+    save(root, "before.json", before)
+    save(root, "after.json", ledger)
     manifest = retain_attempt(
         root, config, gate, name, "environmental_interruption", submission_started=submitted,
-        diagnostic="interrupted during preparation", evidence={"marker": "marker.json"},
+        diagnostic="interrupted during preparation",
+        evidence={"marker": "marker.json", "before": "before.json", "after": "after.json"},
         prior_consecutive=4)
     verdict = z3.verify_manifest(manifest)
     assert verdict["verdict"] == ("FAIL" if submitted else "NOT_A_CYCLE")
@@ -153,15 +197,30 @@ def test_environmental_interruption_depends_on_prior_submission(tmp_path, name, 
     assert verdict["reset_required_after_correction"] == submitted
     assert verdict["consecutive_after_correction"] == (0 if submitted else 4)
     assert verdict["pause_campaign"] == submitted
+    assert_ledger_unchanged(before, ledger)
     retry = Mock(side_effect=AssertionError("preparation retried without reconciliation"))
     with pytest.raises(z3.CycleError, match="replay refused"):
         compose.confirm_one(config, gate, steps, name, tmp_path, retry)
     retry.assert_not_called()
 
 
+@pytest.mark.parametrize("reason", ["unsafe_preflight", "environmental_interruption"])
+def test_incomplete_attempt_cli_never_exits_as_clean(tmp_path, monkeypatch, capsys, reason):
+    config, steps = configured(tmp_path)
+    manifest = retain_attempt(
+        tmp_path / "attempt", config, stage_checkpoint(config, steps, "preflight"),
+        "preflight", reason, submission_started=False, diagnostic="synthetic pre-submission stop")
+    monkeypatch.setattr(sys, "argv", ["z3-cycle", "verify", str(manifest)])
+    assert z3.main() == 1
+    verdict = json.loads(capsys.readouterr().out)
+    assert verdict["verdict"] == ("FAIL" if reason == "unsafe_preflight" else "NOT_A_CYCLE")
+
+
 @pytest.mark.parametrize("command", ["issue", "redeem"])
 def test_driver_restart_never_replaces_request_identity(tmp_path, monkeypatch, command):
-    args, _, _, _ = driver_inputs(tmp_path / "driver")
+    ledger = synthetic_ledger(tmp_path / "driver-state", "ingress" if command == "issue" else "nav_route_epoch")
+    before_state = copy.deepcopy(ledger)
+    args, _, _, _ = driver_inputs(tmp_path / "driver", ledger)
     monkeypatch.setattr(demo.secrets, "token_hex", lambda width: "12" * width)
     builder = demo.cmd_build_issue if command == "issue" else demo.cmd_build_redeem
     original = builder(args)
@@ -178,6 +237,7 @@ def test_driver_restart_never_replaces_request_identity(tmp_path, monkeypatch, c
     nonce_field = "subscription_nonce" if command == "issue" else "redemption_nonce"
     manifest_name = "issue-manifest.json" if command == "issue" else "redeem-manifest.json"
     assert json.loads(before[manifest_name])[nonce_field] == original[nonce_field]
+    assert_ledger_unchanged(before_state, ledger)
 
 
 @pytest.mark.parametrize("name", ["arc-deposit", "subscribe"])
@@ -197,12 +257,53 @@ def test_publication_evidence_blocks_false_environmental_exception(tmp_path, nam
     assert "prevents environmental exemption" in verdict["error"]
 
 
+@pytest.mark.parametrize("name", ["arc-deposit", "ingress-proof"])
+def test_declared_command_timeout_pauses_without_retry(tmp_path, name):
+    config, steps = configured(tmp_path)
+    gate = stage_checkpoint(config, steps, name)
+    ledger = synthetic_ledger(tmp_path / "state-fixture", "preflight" if name == "arc-deposit" else "deposit")
+    before = copy.deepcopy(ledger)
+    calls = []
+    def timeout(argv, **kwargs):
+        calls.append(argv)
+        assert kwargs["timeout"] == config["parameters"]["latency_bound_seconds"]
+        raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+    with pytest.raises(subprocess.TimeoutExpired):
+        compose.confirm_one(config, gate, steps, name, tmp_path, timeout)
+    marker_path = Path(config["paths"]["work_dir"]) / "attempts" / (name + ".json")
+    root = tmp_path / "timeout"
+    root.mkdir()
+    save(root, "marker.json", z3.read_json(marker_path))
+    save(root, "before.json", before)
+    save(root, "after.json", ledger)
+    # Even without a terminal response, publication is possible after a value
+    # step starts, or when the preceding deposit is already confirmed.
+    manifest = retain_attempt(
+        root, config, gate, name, "timeout", submission_started=True,
+        diagnostic="declared command bound exceeded; publication requires reconciliation",
+        evidence={"marker": "marker.json", "before": "before.json", "after": "after.json"})
+    verdict = z3.verify_manifest(manifest)
+    assert verdict["verdict"] == "FAIL" and verdict["pause_campaign"]
+    assert verdict["reset_required_after_correction"]
+    retry = Mock(side_effect=AssertionError("timeout retried"))
+    with pytest.raises(z3.CycleError, match="replay refused"):
+        compose.confirm_one(config, gate, steps, name, tmp_path, retry)
+    retry.assert_not_called()
+    assert len(calls) == 1
+    assert_ledger_unchanged(before, ledger)
+
+
 def test_changed_request_cannot_bypass_retained_attempt(tmp_path, monkeypatch):
     config, steps = configured(tmp_path)
     step, gate = prepare_request(tmp_path, config, steps, "subscribe", monkeypatch)
+    ledger = synthetic_ledger(tmp_path / "prior-state", "reserved")
+    confirmed = synthetic_ledger(tmp_path / "confirmed-state", "subscription")
+    before = copy.deepcopy(ledger)
     calls = []
     def interrupt(argv, **kwargs):
         calls.append(argv)
+        ledger.clear()
+        ledger.update(copy.deepcopy(confirmed))
         raise KeyboardInterrupt("uncertain publication")
     with pytest.raises(KeyboardInterrupt):
         compose.confirm_one(config, gate, steps, step.name, tmp_path, interrupt)
@@ -220,3 +321,6 @@ def test_changed_request_cannot_bypass_retained_attempt(tmp_path, monkeypatch):
     retry.assert_not_called()
     assert len(calls) == 1
     assert marker_path.read_bytes() == marker
+    z3.transition(before["accounting"], ledger["accounting"], CONFIRMED_DELTAS["subscribe"],
+                  "original uncertain submission only")
+    assert_ledger_unchanged(confirmed, ledger)

@@ -256,7 +256,35 @@ confirmation. No confirmation can execute a second row.
 The wrapper records WORK/attempts/STEP.json exclusively before executing.
 Failure or interruption leaves the marker and stops the campaign. Do not
 delete it to retry. Record the failed attempt, reconcile its exact request
-identity, and follow the plan's recovery/authorization boundary.
+identity, and follow the plan's recovery/authorization boundary. Markers now
+also retain step kind and the SHA-256 of an unsigned PFTL request envelope
+(`null` for Arc commands, whose exact arguments are command-hashed).
+A repeated confirmation explicitly refuses replay; retained receipts and
+readbacks establish the original terminal result, not the marker alone.
+The reserve driver's issue/redeem builders refuse existing output before
+generating another nonce.
+
+For an incomplete attempt, the offline Python API
+`z3_cycle.build_attempt_manifest(meta, root, output, attempt, evidence)`
+seals a separate `postfiat.z3.attempt.v1` packet. Supply the public cycle
+metadata with end time; step, reason, submission_started and prior_consecutive;
+and packet-relative observed-failure/checkpoint artifacts, plus retained marker,
+terminal response and state readbacks where available. The wrapper does not
+automatically assemble this projection. Never copy signer-local request
+envelopes into public evidence; retain their digests and public operations.
+
+`z3_cycle verify` audits the artifact hashes and outcome consistency. An
+unclean attempt reports FAIL, pause/reset required, and zero consecutive count
+after correction. An environmental interruption before any submission reports
+NOT_A_CYCLE and preserves the prior count. Both exit nonzero because neither
+is a clean-cycle PASS. Contradictory predecessor or submission-marker evidence
+blocks the environmental exception. Record uncertain publication as started;
+never remove a marker to claim otherwise.
+
+The [G5 rehearsal record](../review/z3-g5-failure-rehearsal-20260917.md) contains
+the failure/recovery tables, invariant scope and proposed stage thresholds.
+Those aggregate thresholds need operator confirmation and monitoring; the
+wrapper's single timeout setting still applies per command.
 
 ## Packet and verifier contract
 

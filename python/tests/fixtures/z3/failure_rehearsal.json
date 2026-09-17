@@ -77,7 +77,7 @@
       "packet_section": "subscription",
       "packet_role": "subscribe_receipt",
       "packet_error": "accepted receipt/subscribe_receipt",
-      "state_section": "subscription"
+      "state_section": "reserved"
     },
     {
       "id": "active_entitlement",
@@ -97,7 +97,7 @@
       "step": "prepare-burn",
       "field": "nonce_unused",
       "value": false,
-      "guard": "preflight/nonce_unused",
+      "guard": "validator queues",
       "reason": "unsafe_preflight",
       "driver": "wrapper_only",
       "packet_section": "egress",

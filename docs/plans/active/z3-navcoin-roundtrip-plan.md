@@ -175,11 +175,11 @@ One clean G4 cycle proves integration, not repeatability and not Z3 completion.
 
 ### Gate G5 — qualify failure and recovery before repetition
 
-- [ ] Rehearse stale NAV, stale Arc proof, wrong route, wrong asset, duplicate deposit, duplicate subscription nonce, active entitlement, duplicate burn, and duplicate Arc release cases with fixtures or no-value tests.
-- [ ] Rehearse recovery after process interruption using exact request identity.
-- [ ] Prove failures leave balances, supply, reserves, reservations, entitlements, and withdrawals unchanged or in their specified recoverable state.
-- [ ] Record declared latency bounds and a pause threshold for each cycle stage.
-- [ ] Resolve every failure without a consensus change before asking to start the sustained window.
+- [x] Rehearse stale NAV, stale Arc proof, wrong route, wrong asset, duplicate deposit, duplicate subscription nonce, active entitlement, duplicate burn, and duplicate Arc release cases with fixtures or no-value tests. 2026-09-17, `b150b14e`; nine wrapper/driver boundary cases and independent verifier negatives ([G5 scenarios](../../review/z3-g5-failure-rehearsal-20260917.md#failure-scenarios)).
+- [x] Rehearse recovery after process interruption using exact request identity. 2026-09-17, `9269278b`; four confirmed-step interruptions reject exact replay without resubmission; pre-submission environmental interruption preserves the count ([recovery](../../review/z3-g5-failure-rehearsal-20260917.md#recovery-scenarios)).
+- [x] Prove failures leave balances, supply, reserves, reservations, entitlements, and withdrawals unchanged or in their specified recoverable state. 2026-09-17; `b150b14e`/`9269278b` rehearsals extended with 23-field and itemized-state assertions in the [G5 record commit](../../review/z3-g5-failure-rehearsal-20260917.md#invariants-and-retained-evidence). Synthetic tooling/no-value scope only.
+- [ ] Record declared latency bounds and a pause threshold for each cycle stage. 2026-09-17: [nine proposed stage limits](../../review/z3-g5-failure-rehearsal-20260917.md#latency-bounds-and-pause-thresholds) recorded; no elapsed September 2 stage measurements in plan/G2. Remains open pending operator confirmation.
+- [x] Resolve every failure without a consensus change before asking to start the sustained window. 2026-09-17, `b150b14e`, `9269278b` and this record's focused assertions: [no scenario required a consensus change](../../review/z3-g5-failure-rehearsal-20260917.md#resolution-and-validation). Python tooling only; no sustained-window request or live recovery is authorized.
 
 ### Gate G6 — operator authorizes the sustained testnet window
 

@@ -305,6 +305,7 @@ def verify_attempt(packet: dict, root: Path) -> dict:
         require("checkpoint" in packet["artifacts"], "pre-submission checkpoint required")
         ref = packet["artifacts"]["checkpoint"]
         checkpoint = read_json(public_path(root, ref["path"]))
+        same(checkpoint["ready_for"], attempt["step"], "interrupted checkpoint step")
         require(checkpoint["ready_for"] in ("preflight", "arc-deposit")
                 and all(row["step"] == "preflight" for row in checkpoint["completed"])
                 and len(checkpoint["completed"]) <= 1,
@@ -312,6 +313,7 @@ def verify_attempt(packet: dict, root: Path) -> dict:
         if "marker" in packet["artifacts"]:
             ref = packet["artifacts"]["marker"]
             marker = read_json(public_path(root, ref["path"]))
+            same(marker["step"], attempt["step"], "interrupted marker step")
             require(marker["kind"] == "prepare",
                     "uncertain publication prevents environmental exemption")
     return {"schema": VERDICT_SCHEMA,
@@ -634,7 +636,10 @@ def main() -> int:
     except (CycleError, KeyError, TypeError, ValueError):
         result = {"verdict": "FAIL", "error": "invalid layout or output; build refused"}
     print(json.dumps(result, sort_keys=True))
-    return 1 if result["verdict"] == "FAIL" else 0
+    # A retained interruption is a successful audit record, never a successful
+    # cycle verification. Shell consumers must not count NOT_A_CYCLE as PASS.
+    return 1 if result["verdict"] == "FAIL" or (
+        args.command == "verify" and result["verdict"] != "PASS") else 0
 
 
 if __name__ == "__main__":
