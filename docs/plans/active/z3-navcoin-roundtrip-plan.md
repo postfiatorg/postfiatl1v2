@@ -153,11 +153,11 @@ The 2026-09-17 [identity comparison](../../review/z3-g2-route-compatibility-2026
 ### Gate G3 — complete focused tooling and local tests
 
 - [x] Parameterize or wrap scripts/a666-pfusdc-reserve-demo.py for explicit route, asset, and account inputs while preserving fail-on-overwrite behavior. 2026-09-17, `90fbc5da` (explicit-identity checkpoint); current NAV schema and source-custody bounds verified by the focused offline driver tests.
-- [ ] Compose the existing Arc deposit/mint and burn/release commands around the primary-route driver.
-- [ ] Add one machine-readable cycle manifest and verifier covering all receipts and conservation identities.
-- [ ] Add focused success, stale-proof, wrong-route, wrong-asset, duplicate, replay, active-entitlement, insufficient-capacity, and partial-artifact tests.
-- [ ] Run the focused Python and affected Rust tests only; no Orchard suite is required because this route is transparent.
-- [ ] Produce a dry-run command sheet with hard stops before every future Arc or PFTL submission.
+- [x] Compose the existing Arc deposit/mint and burn/release commands around the primary-route driver. 2026-09-17, `f23f77b9`; scripts/z3-cycle-dry-run.py composes 39 individually stopped commands and refuses Arc execution without the qualified lineage.
+- [x] Add one machine-readable cycle manifest and verifier covering all receipts and conservation identities. 2026-09-17, `f680d78a`, `f23f77b9`; python/postfiat_rpc/z3_cycle.py audits ten sections, artifact hashes, finality/receipts, exact deltas, reserve counting and terminal state.
+- [x] Add focused success, stale-proof, wrong-route, wrong-asset, duplicate, replay, active-entitlement, insufficient-capacity, and partial-artifact tests. 2026-09-17, `f23f77b9`; python/tests/test_z3_cycle.py and python/tests/test_z3_composition.py, 32 passed.
+- [x] Run the focused Python and affected Rust tests only; no Orchard suite is required because this route is transparent. 2026-09-17, `f23f77b9`; python/tests: 567 passed, 3 skipped, 103 subtests; driver: 25 passed. Final Z3 rerun: 32 passed. No Rust code affected; prior focused Rust evidence is in G2.
+- [x] Produce a dry-run command sheet with hard stops before every future Arc or PFTL submission. 2026-09-17; [command sheet](../../runbooks/z3-cycle-dry-run.md) documents `f23f77b9` commands, explicit operator inputs and all stops. Offline tooling only; G1/G2 selected-state work and G4 authorization remain open.
 
 G3 is offline and creates no live transaction.
 
