@@ -163,6 +163,8 @@ G3 is offline and creates no live transaction.
 
 ### Gate G4 — operator authorizes one integrated testnet cycle
 
+Read-only preflight reference: [2026-09-17 fleet, Arc pairs, wallet, and missing operator inputs](../../status/z3-preflight-20260917.md).
+
 - [ ] The operator reviews the G2 compatibility result, G3 tests, dry-run amounts, stop conditions, and exact wallet cap.
 - [ ] The operator explicitly authorizes one Arc-testnet/PFTL-devnet integrated cycle.
 - [ ] Run one cycle only after fresh six-validator, route, NAV, balance, capacity, proof-key, and contract read-backs all agree.
