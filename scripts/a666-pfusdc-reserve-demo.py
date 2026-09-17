@@ -10,6 +10,27 @@ state machine is:
 Consensus submission remains delegated to ``a666-ce22-remote-finality-op.py``.
 This file makes the operation packets and verifies the economic deltas between
 authoritative readbacks.
+
+Required inputs
+---------------
+Every build command requires --identities with schema
+postfiat.reserve_demo_identities.v1 and these public fields:
+route_id, native_nav_asset_id, settlement_asset_id (family),
+settlement_source_asset_id, source_bucket_id, source_profile_hash,
+pftl_chain_id, source_chain_id, source_vault_address, source_token_address,
+source_route_epoch, ethereum_chain_id (export route), outbound_verification_class,
+and return_verification_class. The source profile hash is the bridge route-profile
+hash, not its verifier policy or the NAV proof profile. Source-series and bucket
+IDs must match the canonical chain/family/source tuple.
+
+build-issue also requires --subscriber and --ethereum-recipient (reservation
+binding); build-redeem requires --owner; cleanup requires --releaser. Existing
+--route-status, --nav-manifest, amount/height, and output arguments still apply.
+Verification consumes identities embedded in the corresponding build manifest.
+Missing or mismatched identities and existing outputs fail closed. No production
+identity is supplied implicitly. --holder-key-file is a signer-local file path:
+this driver checks its existence but never reads or copies its contents, signs,
+or submits. There is no private-key command-line argument.
 """
 
 from __future__ import annotations
@@ -24,13 +45,7 @@ from pathlib import Path
 from typing import Any
 
 
-ROUTE_ID = "pftl-a666-ethereum-wA666-usdc-v1"
-A666_ASSET_ID = (
-    "521c6c630bb48d4a37ab4a7bd4900dd2caa2d9e99499e452da3c7ce75b3d74b6"
-    "2d20e18555642bec32174498cbee5e2c"
-)
-DEFAULT_SUBSCRIBER = "pfab9b9228942e5c529633a13aa271d5297bec6353"
-DEFAULT_ETHEREUM_RECIPIENT = "0x1455bd7fbfbf92a171ef36025e13959e3b0ad8c0"
+IDENTITY_SCHEMA = "postfiat.reserve_demo_identities.v1"
 NAV_USD_E8_SCALE = 100_000_000
 BPS_SCALE = 10_000
 MAX_U64 = (1 << 64) - 1
@@ -58,10 +73,11 @@ def parse_args() -> argparse.Namespace:
     issue.add_argument("--mint-amount-atoms", type=int, required=True)
     issue.add_argument("--current-height", type=int, required=True)
     issue.add_argument("--reservation-ttl-blocks", type=int, default=128)
-    issue.add_argument("--subscriber", default=DEFAULT_SUBSCRIBER)
+    issue.add_argument("--identities", type=Path, required=True)
+    issue.add_argument("--subscriber", required=True)
     issue.add_argument(
         "--ethereum-recipient",
-        default=DEFAULT_ETHEREUM_RECIPIENT,
+        required=True,
         help="reservation binding only; this demo does not export",
     )
 
@@ -73,7 +89,8 @@ def parse_args() -> argparse.Namespace:
     cleanup.add_argument("--holder-key-file", type=Path, required=True)
     cleanup.add_argument("--output-dir", type=Path, required=True)
     cleanup.add_argument("--current-height", type=int, required=True)
-    cleanup.add_argument("--releaser", default=DEFAULT_SUBSCRIBER)
+    cleanup.add_argument("--identities", type=Path, required=True)
+    cleanup.add_argument("--releaser", required=True)
 
     verify_cleanup = subparsers.add_parser(
         "verify-expired-releases",
@@ -112,7 +129,8 @@ def parse_args() -> argparse.Namespace:
     redeem.add_argument("--current-height", type=int, required=True)
     redeem.add_argument("--expiry-ttl-blocks", type=int, default=128)
     redeem.add_argument("--nav-amount-atoms", type=int)
-    redeem.add_argument("--owner", default=DEFAULT_SUBSCRIBER)
+    redeem.add_argument("--identities", type=Path, required=True)
+    redeem.add_argument("--owner", required=True)
 
     verify_redeem = subparsers.add_parser(
         "verify-redeem",
@@ -138,10 +156,12 @@ def load_json(path: Path) -> Any:
 
 
 def write_json(path: Path, value: object, mode: int = 0o600) -> None:
-    if path.exists():
-        raise DemoError(f"refusing to overwrite {path}")
-    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
-    os.chmod(path, mode)
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+    except FileExistsError as error:
+        raise DemoError(f"refusing to overwrite {path}") from error
+    with os.fdopen(fd, "w") as output:
+        output.write(json.dumps(value, indent=2, sort_keys=True) + "\n")
 
 
 def make_output_dir(path: Path) -> None:
@@ -228,22 +248,92 @@ def derive_redeem_amounts(
 
 
 def validate_account(account: str, label: str) -> None:
-    if not PFTL_ACCOUNT_RE.fullmatch(account):
+    if not isinstance(account, str) or not PFTL_ACCOUNT_RE.fullmatch(account):
         raise DemoError(f"{label} is not a canonical PFTL account")
 
 
-def validate_route(route: dict[str, Any]) -> None:
+def validate_identities(value: Any) -> dict[str, Any]:
+    """Validate only public identities; never copy arbitrary input into evidence."""
+    if not isinstance(value, dict) or value.get("schema") != IDENTITY_SCHEMA:
+        raise DemoError(f"identities must use schema {IDENTITY_SCHEMA}")
+    text_fields = (
+        "route_id", "pftl_chain_id", "outbound_verification_class",
+        "return_verification_class",
+    )
+    hash_fields = (
+        "native_nav_asset_id", "settlement_asset_id", "settlement_source_asset_id",
+        "source_bucket_id", "source_profile_hash",
+    )
+    address_fields = ("source_vault_address", "source_token_address")
+    int_fields = ("ethereum_chain_id", "source_chain_id", "source_route_epoch")
+    fields = ("schema",) + text_fields + hash_fields + address_fields + int_fields
+    missing = [field for field in fields if field not in value]
+    if missing:
+        raise DemoError("missing explicit identities: " + ", ".join(missing))
+    if set(value) - set(fields):
+        raise DemoError("unknown identity fields; only public identity fields are allowed")
+    for field in text_fields:
+        item = value[field]
+        if (
+            not isinstance(item, str) or not item or item != item.strip()
+            or len(item.encode()) > 256 or any(ord(c) < 32 or ord(c) == 127 for c in item)
+        ):
+            raise DemoError(f"identity {field} must be nonempty canonical text")
+    for field in hash_fields:
+        if not isinstance(value[field], str) or not HASH48_RE.fullmatch(value[field]):
+            raise DemoError(f"identity {field} must be 96 lowercase hex characters")
+    for field in address_fields:
+        if (
+            not isinstance(value[field], str)
+            or not EVM_ADDRESS_RE.fullmatch(value[field])
+            or value[field] != value[field].lower()
+        ):
+            raise DemoError(f"identity {field} must be a lowercase EVM address")
+    for field in int_fields:
+        require_positive_int(value[field], f"identity {field}")
+    if value["source_route_epoch"] > (1 << 32) - 1:
+        raise DemoError("source route epoch exceeds u32")
+    family = value["settlement_asset_id"]
+    chain = value["pftl_chain_id"]
+    source_chain = value["source_chain_id"]
+    vault = value["source_vault_address"]
+    token = value["source_token_address"]
+    profile = value["source_profile_hash"]
+    # Canonical preimages in crates/types/src/market_nav_asset_types.rs.
+    source_preimage = (
+        f"pftl_chain_id_bytes={len(chain.encode())}\npftl_chain_id={chain}\n"
+        f"asset_family_id={family}\nsource_chain_id={source_chain}\n"
+        f"vault_address={vault}\ntoken_address={token}\n"
+        f"route_epoch={value['source_route_epoch']}\npolicy_hash={profile}\n"
+    )
+    source_domain = f"erc20_bridge_vault:{source_chain}:{vault}:{token}"
+    bucket_preimage = (
+        f"asset_id={family}\nsource_domain_bytes={len(source_domain.encode())}\n"
+        f"source_domain={source_domain}\npolicy_hash={profile}\n"
+    )
+    for field, domain, preimage in (
+        ("settlement_source_asset_id", "postfiat.pfusdc.source_series.v1", source_preimage),
+        ("source_bucket_id", "postfiat.vault_bridge_bucket_id.v1", bucket_preimage),
+    ):
+        expected = hashlib.sha3_384(domain.encode() + b"\0" + preimage.encode()).hexdigest()
+        if value[field] != expected:
+            raise DemoError(f"identity {field} does not match the selected chain/family/source profile")
+    return dict(value)
+
+
+def validate_route(route: dict[str, Any], identities: dict[str, Any]) -> None:
     required = {
         "schema": "postfiat-pftl-uniswap-supply-status-v2",
-        "route_id": ROUTE_ID,
-        "native_nav_asset_id": A666_ASSET_ID,
+        "route_id": identities["route_id"],
+        "native_nav_asset_id": identities["native_nav_asset_id"],
+        "settlement_asset_id": identities["settlement_asset_id"],
         "live_value_enabled": True,
         "paused": False,
         "invariant_holds": True,
         "route_schema_version": 2,
-        "outbound_verification_class": "TRUSTLESS_FINALITY",
-        "return_verification_class": "BFT_CHECKPOINT",
-        "ethereum_chain_id": 1,
+        "outbound_verification_class": identities["outbound_verification_class"],
+        "return_verification_class": identities["return_verification_class"],
+        "ethereum_chain_id": identities["ethereum_chain_id"],
     }
     for field, expected in required.items():
         if route.get(field) != expected:
@@ -255,7 +345,7 @@ def validate_nav_binding(
 ) -> tuple[int, int, int]:
     required = {
         "schema": "postfiat.a666.live_nav_mark.v1",
-        "asset_id": A666_ASSET_ID,
+        "asset_id": route["native_nav_asset_id"],
         "epoch": route["pricing_nav_epoch"],
         "reserve_packet_hash": route["pricing_reserve_packet_hash"],
         "opening_constants_used": False,
@@ -304,13 +394,14 @@ def ensure_key(path: Path) -> None:
 
 
 def cmd_build_issue(args: argparse.Namespace) -> dict[str, Any]:
+    identities = validate_identities(load_json(args.identities))
     ensure_key(args.holder_key_file)
     validate_account(args.subscriber, "subscriber")
     if not EVM_ADDRESS_RE.fullmatch(args.ethereum_recipient):
         raise DemoError("Ethereum recipient is not a canonical address")
     route = load_json(args.route_status)
     nav = load_json(args.nav_manifest)
-    validate_route(route)
+    validate_route(route, identities)
     nav_per_unit, circulating_supply, verified_assets = validate_nav_binding(
         route, nav
     )
@@ -338,7 +429,7 @@ def cmd_build_issue(args: argparse.Namespace) -> dict[str, Any]:
     reserve = {
         "operation": "pftl_uniswap_order_reserve",
         "subscriber": args.subscriber,
-        "route_id": ROUTE_ID,
+        "route_id": identities["route_id"],
         "reservation_id": reservation_id,
         "ethereum_recipient": args.ethereum_recipient.lower(),
         "route_epoch": route["route_epoch"],
@@ -346,12 +437,13 @@ def cmd_build_issue(args: argparse.Namespace) -> dict[str, Any]:
         "policy_hash": route["policy_hash"],
         "mint_amount_atoms": amount,
         "max_settlement_value_atoms": settlement,
+        "settlement_source_asset_id": identities["settlement_source_asset_id"],
         "expires_at_height": expires_at_height,
     }
     subscribe = {
         "operation": "pftl_uniswap_primary_subscribe_v2",
         "subscriber": args.subscriber,
-        "route_id": ROUTE_ID,
+        "route_id": identities["route_id"],
         "reservation_id": reservation_id,
         "subscription_nonce": subscription_nonce,
         "settlement_asset_id": route["settlement_asset_id"],
@@ -362,12 +454,13 @@ def cmd_build_issue(args: argparse.Namespace) -> dict[str, Any]:
     release = {
         "operation": "pftl_uniswap_order_release",
         "releaser": args.subscriber,
-        "route_id": ROUTE_ID,
+        "route_id": identities["route_id"],
         "reservation_id": reservation_id,
     }
     manifest = {
         "schema": "postfiat.a666.pfusdc_reserve_demo_issue.v1",
-        "route_id": ROUTE_ID,
+        "identities": identities,
+        "route_id": identities["route_id"],
         "subscriber": args.subscriber,
         "ethereum_recipient_binding": args.ethereum_recipient.lower(),
         "current_height": current_height,
@@ -468,6 +561,7 @@ def normalize_entitlements(value: Any) -> list[dict[str, Any]]:
 
 
 def cmd_build_expired_releases(args: argparse.Namespace) -> dict[str, Any]:
+    identities = validate_identities(load_json(args.identities))
     ensure_key(args.holder_key_file)
     validate_account(args.releaser, "releaser")
     current_height = require_positive_int(args.current_height, "current height")
@@ -480,7 +574,8 @@ def cmd_build_expired_releases(args: argparse.Namespace) -> dict[str, Any]:
             )
     manifest = {
         "schema": "postfiat.a666.expired_export_entitlement_cleanup.v1",
-        "route_id": ROUTE_ID,
+        "identities": identities,
+        "route_id": identities["route_id"],
         "releaser": args.releaser,
         "current_height": current_height,
         "entitlement_count": len(entitlements),
@@ -501,7 +596,7 @@ def cmd_build_expired_releases(args: argparse.Namespace) -> dict[str, Any]:
             {
                 "operation": "pftl_uniswap_order_release",
                 "releaser": args.releaser,
-                "route_id": ROUTE_ID,
+                "route_id": identities["route_id"],
                 "reservation_id": row["reservation_id"],
             },
         )
@@ -541,8 +636,9 @@ def cmd_verify_expired_releases(args: argparse.Namespace) -> dict[str, Any]:
     before = load_json(args.before_route)
     after = load_json(args.after_route)
     manifest = load_json(args.cleanup_manifest)
-    validate_route(before)
-    validate_route(after)
+    identities = validate_identities(manifest.get("identities"))
+    validate_route(before, identities)
+    validate_route(after, identities)
     if (
         manifest.get("schema")
         != "postfiat.a666.expired_export_entitlement_cleanup.v1"
@@ -589,11 +685,17 @@ def cmd_verify_expired_releases(args: argparse.Namespace) -> dict[str, Any]:
     return report
 
 
-def account_balance(report: dict[str, Any], expected_asset_id: str) -> int:
+def account_balance(
+    report: dict[str, Any], expected_asset_id: str, account: str, chain_id: str
+) -> int:
     if report.get("schema") != "postfiat-account-assets-v1":
         raise DemoError("account balance report schema mismatch")
     if report.get("asset_id") != expected_asset_id:
         raise DemoError("account balance report describes the wrong asset")
+    if report.get("account") != account or report.get("chain_id") != chain_id:
+        raise DemoError("account balance report describes the wrong account or PFTL chain")
+    if report.get("truncated") is not False:
+        raise DemoError("account balance report is incomplete")
     assets = report.get("assets")
     if not isinstance(assets, list):
         raise DemoError("account balance report assets must be an array")
@@ -610,8 +712,9 @@ def cmd_verify_issue(args: argparse.Namespace) -> dict[str, Any]:
     subscribed = load_json(args.after_subscribe_route)
     released = load_json(args.after_release_route)
     manifest = load_json(args.issue_manifest)
+    identities = validate_identities(manifest.get("identities"))
     for route in (before, subscribed, released):
-        validate_route(route)
+        validate_route(route, identities)
     if manifest.get("schema") != "postfiat.a666.pfusdc_reserve_demo_issue.v1":
         raise DemoError("issue manifest schema mismatch")
     amount = require_positive_int(manifest["mint_amount_atoms"], "mint amount")
@@ -657,21 +760,26 @@ def cmd_verify_issue(args: argparse.Namespace) -> dict[str, Any]:
             else subscribed_state[field]
         )
         assert_equal(released_state[field], expected, f"post-release {field}")
-    settlement_asset = before["settlement_asset_id"]
+    def read_balance(path: Path, asset_id: str) -> int:
+        account = manifest.get("subscriber", manifest.get("owner"))
+        validate_account(account, "balance owner")
+        return account_balance(load_json(path), asset_id, account, identities["pftl_chain_id"])
+
+    settlement_asset = identities["settlement_source_asset_id"]
     balances = {
-        "pfusdc_before": account_balance(load_json(args.before_pfusdc), settlement_asset),
-        "pfusdc_after_subscribe": account_balance(
-            load_json(args.after_subscribe_pfusdc), settlement_asset
+        "pfusdc_before": read_balance(args.before_pfusdc, settlement_asset),
+        "pfusdc_after_subscribe": read_balance(
+            args.after_subscribe_pfusdc, settlement_asset
         ),
-        "pfusdc_after_release": account_balance(
-            load_json(args.after_release_pfusdc), settlement_asset
+        "pfusdc_after_release": read_balance(
+            args.after_release_pfusdc, settlement_asset
         ),
-        "a666_before": account_balance(load_json(args.before_a666), A666_ASSET_ID),
-        "a666_after_subscribe": account_balance(
-            load_json(args.after_subscribe_a666), A666_ASSET_ID
+        "a666_before": read_balance(args.before_a666, identities["native_nav_asset_id"]),
+        "a666_after_subscribe": read_balance(
+            args.after_subscribe_a666, identities["native_nav_asset_id"]
         ),
-        "a666_after_release": account_balance(
-            load_json(args.after_release_a666), A666_ASSET_ID
+        "a666_after_release": read_balance(
+            args.after_release_a666, identities["native_nav_asset_id"]
         ),
     }
     assert_equal(
@@ -721,15 +829,20 @@ def maximum_nav_for_base_reserve(reserve_atoms: int, nav_usd_e8: int) -> int:
 
 
 def cmd_build_redeem(args: argparse.Namespace) -> dict[str, Any]:
+    identities = validate_identities(load_json(args.identities))
     ensure_key(args.holder_key_file)
     validate_account(args.owner, "redemption owner")
     route = load_json(args.route_status)
     nav = load_json(args.nav_manifest)
     issue = load_json(args.issue_manifest)
-    validate_route(route)
+    validate_route(route, identities)
     nav_per_unit, _, _ = validate_nav_binding(route, nav)
     if issue.get("schema") != "postfiat.a666.pfusdc_reserve_demo_issue.v1":
         raise DemoError("issue manifest schema mismatch")
+    if validate_identities(issue.get("identities")) != identities:
+        raise DemoError("issue identities differ from the selected redemption identities")
+    if issue.get("route_id") != identities["route_id"]:
+        raise DemoError("issue manifest describes the wrong route")
     if issue.get("subscriber") != args.owner:
         raise DemoError("redemption owner differs from the issue subscriber")
     if route["active_reservation_count"] or route["export_entitlement_count"]:
@@ -777,10 +890,11 @@ def cmd_build_redeem(args: argparse.Namespace) -> dict[str, Any]:
         "operation": "pftl_uniswap_primary_redeem",
         "owner": args.owner,
         "settlement_recipient": args.owner,
-        "route_id": ROUTE_ID,
+        "route_id": identities["route_id"],
         "redemption_nonce": nonce,
         "nav_amount_atoms": amount,
         "min_settlement_value_atoms": settlement_output,
+        "settlement_source_asset_id": identities["settlement_source_asset_id"],
         "route_epoch": route["route_epoch"],
         "policy_epoch": route["policy_epoch"],
         "policy_hash": route["policy_hash"],
@@ -790,7 +904,8 @@ def cmd_build_redeem(args: argparse.Namespace) -> dict[str, Any]:
     }
     manifest = {
         "schema": "postfiat.a666.pfusdc_reserve_demo_redeem.v1",
-        "route_id": ROUTE_ID,
+        "identities": identities,
+        "route_id": identities["route_id"],
         "owner": args.owner,
         "route_epoch": route["route_epoch"],
         "policy_epoch": route["policy_epoch"],
@@ -833,8 +948,9 @@ def cmd_verify_redeem(args: argparse.Namespace) -> dict[str, Any]:
     before = load_json(args.before_route)
     after = load_json(args.after_route)
     manifest = load_json(args.redeem_manifest)
-    validate_route(before)
-    validate_route(after)
+    identities = validate_identities(manifest.get("identities"))
+    validate_route(before, identities)
+    validate_route(after, identities)
     if manifest.get("schema") != "postfiat.a666.pfusdc_reserve_demo_redeem.v1":
         raise DemoError("redeem manifest schema mismatch")
     amount = require_positive_int(manifest["nav_amount_atoms"], "redeemed amount")
@@ -872,12 +988,17 @@ def cmd_verify_redeem(args: argparse.Namespace) -> dict[str, Any]:
         assert_equal(after_state[field], before_state[field], f"post-redeem {field}")
     if after_state["active_reservation_count"] or after_state["export_entitlement_count"]:
         raise DemoError("route retained active order state after redemption")
-    settlement_asset = before["settlement_asset_id"]
+    def read_balance(path: Path, asset_id: str) -> int:
+        account = manifest.get("subscriber", manifest.get("owner"))
+        validate_account(account, "balance owner")
+        return account_balance(load_json(path), asset_id, account, identities["pftl_chain_id"])
+
+    settlement_asset = identities["settlement_source_asset_id"]
     balances = {
-        "pfusdc_before": account_balance(load_json(args.before_pfusdc), settlement_asset),
-        "pfusdc_after": account_balance(load_json(args.after_pfusdc), settlement_asset),
-        "a666_before": account_balance(load_json(args.before_a666), A666_ASSET_ID),
-        "a666_after": account_balance(load_json(args.after_a666), A666_ASSET_ID),
+        "pfusdc_before": read_balance(args.before_pfusdc, settlement_asset),
+        "pfusdc_after": read_balance(args.after_pfusdc, settlement_asset),
+        "a666_before": read_balance(args.before_a666, identities["native_nav_asset_id"]),
+        "a666_after": read_balance(args.after_a666, identities["native_nav_asset_id"]),
     }
     assert_equal(
         balances["pfusdc_after"],
@@ -922,4 +1043,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (DemoError, KeyError, TypeError) as error:
+        raise SystemExit(f"reserve demo: {error}") from None
