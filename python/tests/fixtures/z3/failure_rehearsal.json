@@ -1,0 +1,122 @@
+{
+  "scope": "Synthetic no-value readbacks; not cryptographic or live execution evidence",
+  "scenarios": [
+    {
+      "id": "stale_nav",
+      "step": "prepare-redemption",
+      "field": "quote_current",
+      "value": false,
+      "guard": "preflight/quote_current",
+      "reason": "proof_mismatch",
+      "driver": "stale_nav",
+      "packet_section": "nav_route_epoch",
+      "packet_role": "proof_report",
+      "packet_error": "stale proof",
+      "state_section": "nav_route_epoch"
+    },
+    {
+      "id": "stale_arc_proof",
+      "step": "ingress-bundle",
+      "field": "proof_valid_until",
+      "value": 100,
+      "guard": "stale proof",
+      "reason": "proof_mismatch",
+      "driver": "wrapper_only",
+      "packet_section": "ingress",
+      "packet_role": "proof_report",
+      "packet_error": "stale proof",
+      "state_section": "deposit"
+    },
+    {
+      "id": "wrong_route",
+      "step": "prepare-subscription",
+      "field": "route_id",
+      "value": "wrong-route",
+      "guard": "checkpoint route/asset",
+      "reason": "reconciliation_mismatch",
+      "driver": "wrong_route",
+      "packet_section": "subscription",
+      "packet_role": "record",
+      "packet_error": "identity binding/subscription",
+      "state_section": "ingress"
+    },
+    {
+      "id": "wrong_asset",
+      "step": "prepare-subscription",
+      "field": "settlement_source_asset_id",
+      "value": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "guard": "checkpoint route/asset",
+      "reason": "reconciliation_mismatch",
+      "driver": "wrong_asset",
+      "packet_section": "subscription",
+      "packet_role": "record",
+      "packet_error": "identity binding/subscription",
+      "state_section": "ingress"
+    },
+    {
+      "id": "duplicate_deposit",
+      "step": "arc-deposit",
+      "field": "nonce_unused",
+      "value": false,
+      "guard": "preflight/nonce_unused",
+      "reason": "unsafe_preflight",
+      "driver": "wrapper_only",
+      "packet_section": "deposit",
+      "packet_role": "receipt",
+      "packet_error": "Arc status-1 receipt",
+      "state_section": "deposit"
+    },
+    {
+      "id": "duplicate_subscription_nonce",
+      "step": "subscribe",
+      "field": "nonce_unused",
+      "value": false,
+      "guard": "preflight/nonce_unused",
+      "reason": "unsafe_preflight",
+      "driver": "wrapper_only",
+      "packet_section": "subscription",
+      "packet_role": "subscribe_receipt",
+      "packet_error": "accepted receipt/subscribe_receipt",
+      "state_section": "subscription"
+    },
+    {
+      "id": "active_entitlement",
+      "step": "prepare-redemption",
+      "field": "entitlement_atoms",
+      "value": 1000,
+      "guard": "active entitlement",
+      "reason": "unsafe_preflight",
+      "driver": "active_entitlement",
+      "packet_section": "entitlement_release",
+      "packet_role": "record",
+      "packet_error": "entitlement release/entitlement_atoms",
+      "state_section": "subscription"
+    },
+    {
+      "id": "duplicate_burn",
+      "step": "prepare-burn",
+      "field": "nonce_unused",
+      "value": false,
+      "guard": "preflight/nonce_unused",
+      "reason": "unsafe_preflight",
+      "driver": "wrapper_only",
+      "packet_section": "egress",
+      "packet_role": "burn_receipt",
+      "packet_error": "accepted receipt/burn_receipt",
+      "state_section": "after_burn"
+    },
+    {
+      "id": "duplicate_arc_release",
+      "step": "arc-release",
+      "field": "nonce_unused",
+      "value": false,
+      "guard": "preflight/nonce_unused",
+      "reason": "unsafe_preflight",
+      "driver": "wrapper_only",
+      "packet_section": "egress",
+      "packet_role": "receipt",
+      "packet_error": "Arc status-1 receipt",
+      "state_section": "after_release"
+    }
+  ]
+}

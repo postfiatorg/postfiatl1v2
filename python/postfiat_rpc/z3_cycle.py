@@ -23,6 +23,12 @@ from typing import Any
 
 SCHEMA = "postfiat.z3.cycle.v1"
 VERDICT_SCHEMA = "postfiat.z3.cycle_verdict.v1"
+ATTEMPT_SCHEMA = "postfiat.z3.attempt.v1"
+ATTEMPT_REASONS = {
+    "unsafe_preflight", "rejected_transaction", "proof_mismatch",
+    "reconciliation_mismatch", "validator_disagreement", "missing_artifact",
+    "timeout", "manual_intervention_after_submission", "environmental_interruption",
+}
 SECTIONS = (
     "manifest", "preflight", "deposit", "ingress", "subscription",
     "entitlement_release", "nav_route_epoch", "redemption", "egress",
@@ -238,6 +244,66 @@ def build_manifest(layout: dict, root: Path, output: Path, *, skeleton: bool = F
     return packet
 
 
+def attempt_outcome(attempt: dict) -> dict:
+    """Classify a retained interruption/rejection; never qualify a clean cycle."""
+    require(attempt["reason"] in ATTEMPT_REASONS, "unknown attempt reason")
+    require(type(attempt["submission_started"]) is bool, "submission flag must be boolean")
+    prior = uint(attempt["prior_consecutive"], "prior consecutive count")
+    require(isinstance(attempt["step"], str) and bool(attempt["step"]), "missing attempt step")
+    excluded = (attempt["reason"] == "environmental_interruption"
+                and not attempt["submission_started"])
+    return {
+        "status": "not_a_cycle" if excluded else "unclean",
+        "counts_as_cycle": not excluded,
+        "pause_campaign": not excluded,
+        "reset_required_after_correction": not excluded,
+        "consecutive_after_correction": prior if excluded else 0,
+    }
+
+
+def build_attempt_manifest(meta: dict, root: Path, output: Path, attempt: dict,
+                           evidence: dict[str, str]) -> dict:
+    """Seal an operator projection of an incomplete attempt and its originals.
+
+    This does not infer submission from process exit status. The caller must
+    retain the checkpoint, request identity/marker and observed failure, and
+    conservatively mark uncertain publication as submission_started.
+    """
+    validate_metadata(meta)
+    require("observation" in evidence, "attempt observation required")
+    packet = {"schema": ATTEMPT_SCHEMA, "manifest": meta,
+              "attempt": {**attempt, **attempt_outcome(attempt)}, "artifacts": {}}
+    for role, name in evidence.items():
+        packet["artifacts"][role] = {
+            "path": name, "sha256": hashlib.sha256(artifact_bytes(root, name)).hexdigest(),
+        }
+    same(output.parent.resolve(), root.resolve(), "manifest packet directory")
+    write_new(output, packet)
+    return packet
+
+
+def verify_attempt(packet: dict, root: Path) -> dict:
+    same(set(packet), {"schema", "manifest", "attempt", "artifacts"}, "attempt sections")
+    validate_metadata(packet["manifest"])
+    attempt = packet["attempt"]
+    outcome = attempt_outcome(attempt)
+    for field, expected in outcome.items():
+        same(attempt[field], expected, f"attempt outcome/{field}")
+    require("observation" in packet["artifacts"], "attempt observation required")
+    for role, ref in packet["artifacts"].items():
+        same(hashlib.sha256(artifact_bytes(root, ref["path"])).hexdigest(),
+             ref["sha256"], f"attempt artifact hash/{role}")
+    observation_ref = packet["artifacts"]["observation"]
+    require(observation_ref["path"].endswith(".json"), "attempt observation must be JSON")
+    observation = read_json(public_path(root, observation_ref["path"]))
+    for field in ("step", "reason", "submission_started"):
+        same(observation[field], attempt[field], f"attempt observation/{field}")
+    return {"schema": VERDICT_SCHEMA,
+            "verdict": "NOT_A_CYCLE" if outcome["status"] == "not_a_cycle" else "FAIL",
+            "reason": attempt["reason"], **outcome,
+            "scope": "offline retained attempt; no clean cycle or recovery authorization"}
+
+
 def project(value: Any, artifacts: dict, depth: int = 0) -> Any:
     require(depth < 64, "projection nesting limit")
     if isinstance(value, dict):
@@ -375,6 +441,8 @@ def arc_receipt(record: dict, meta: dict, *, release: bool, seen: set[str]) -> N
 
 
 def _verify(packet: dict, root: Path) -> dict:
+    if packet.get("schema") == ATTEMPT_SCHEMA:
+        return verify_attempt(packet, root)
     same(packet["schema"], SCHEMA, "manifest schema")
     same(packet["complete"], True, "complete packet (skeletons cannot pass)")
     same(set(packet), {"schema", "complete", *SECTIONS}, "packet sections")
