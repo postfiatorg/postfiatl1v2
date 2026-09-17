@@ -152,7 +152,7 @@ The 2026-09-17 [identity comparison](../../review/z3-g2-route-compatibility-2026
 
 ### Gate G3 — complete focused tooling and local tests
 
-- [ ] Parameterize or wrap scripts/a666-pfusdc-reserve-demo.py for explicit route, asset, and account inputs while preserving fail-on-overwrite behavior.
+- [x] Parameterize or wrap scripts/a666-pfusdc-reserve-demo.py for explicit route, asset, and account inputs while preserving fail-on-overwrite behavior. 2026-09-17, `90fbc5da` (explicit-identity checkpoint); current NAV schema and source-custody bounds verified by the focused offline driver tests.
 - [ ] Compose the existing Arc deposit/mint and burn/release commands around the primary-route driver.
 - [ ] Add one machine-readable cycle manifest and verifier covering all receipts and conservation identities.
 - [ ] Add focused success, stale-proof, wrong-route, wrong-asset, duplicate, replay, active-entitlement, insufficient-capacity, and partial-artifact tests.

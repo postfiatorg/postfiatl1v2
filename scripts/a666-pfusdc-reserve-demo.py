@@ -19,7 +19,10 @@ route_id, native_nav_asset_id, settlement_asset_id (family),
 settlement_source_asset_id, source_bucket_id, source_profile_hash,
 pftl_chain_id, source_chain_id, source_vault_address, source_token_address,
 source_route_epoch, ethereum_chain_id (export route), outbound_verification_class,
-and return_verification_class. The source profile hash is the bridge route-profile
+and return_verification_class. Also pin nav_profile_id, nav_source_manifest_hash,
+nav_valuation_policy_hash, nav_program_vkey, nav_public_values_schema
+(postfiat.nav_reserve_public_values.v1), and nav_valuation_unit (USD_1E8).
+The source profile hash is the bridge route-profile
 hash, not its verifier policy or the NAV proof profile. Source-series and bucket
 IDs must match the canonical chain/family/source tuple.
 
@@ -31,6 +34,26 @@ Missing or mismatched identities and existing outputs fail closed. No production
 identity is supplied implicitly. --holder-key-file is a signer-local file path:
 this driver checks its existence but never reads or copies its contents, signs,
 or submits. There is no private-key command-line argument.
+
+The current NAV builder's postfiat.a666.provider_neutral_nav_mark.v1 schema uses
+nav_per_unit and verified_net_assets; its values are USD_1E8. The legacy
+postfiat.a666.live_nav_mark.v1 fields remain supported with their original false
+opening_constants_used/uniswap_price_used flags and explicit proof identities.
+Unknown schemas, mismatched asset/epoch/packet/profile/source/valuation/key, and
+contradictory units fail before output. A fresh NAV packet and advanced route
+epoch are required for redemption.
+
+Route readbacks must include source_settlement_custody: issue requires the exact
+source's enabled row; redemption consumes that row's principal, excluding spread,
+reservation escrow, and other sources. Redemption base is bounded by both the
+same-cycle issue base reserve and remaining source principal, plus aggregate
+reserve, native wallet balance, and policy/order limits. Default redemption is
+clamped; an explicit excess fails before operation construction. Verification
+checks exact source balances and principal/spread/escrow deltas; output plus
+redemption spread equals reserve reduction. Whole route-readback SHA-256 hashes
+include the custody rows; ledger_hash alone does not bind them. Finalized-state,
+receipt, family-supply, and composite-overlay evidence belongs to the G3 cycle
+manifest/verifier still to be built; these local checks do not establish it.
 """
 
 from __future__ import annotations
@@ -258,15 +281,16 @@ def validate_identities(value: Any) -> dict[str, Any]:
         raise DemoError(f"identities must use schema {IDENTITY_SCHEMA}")
     text_fields = (
         "route_id", "pftl_chain_id", "outbound_verification_class",
-        "return_verification_class",
+        "return_verification_class", "nav_public_values_schema", "nav_valuation_unit",
     )
     hash_fields = (
         "native_nav_asset_id", "settlement_asset_id", "settlement_source_asset_id",
-        "source_bucket_id", "source_profile_hash",
+        "source_bucket_id", "source_profile_hash", "nav_profile_id",
+        "nav_source_manifest_hash",
     )
     address_fields = ("source_vault_address", "source_token_address")
     int_fields = ("ethereum_chain_id", "source_chain_id", "source_route_epoch")
-    fields = ("schema",) + text_fields + hash_fields + address_fields + int_fields
+    fields = ("schema", "nav_valuation_policy_hash", "nav_program_vkey") + text_fields + hash_fields + address_fields + int_fields
     missing = [field for field in fields if field not in value]
     if missing:
         raise DemoError("missing explicit identities: " + ", ".join(missing))
@@ -282,6 +306,18 @@ def validate_identities(value: Any) -> dict[str, Any]:
     for field in hash_fields:
         if not isinstance(value[field], str) or not HASH48_RE.fullmatch(value[field]):
             raise DemoError(f"identity {field} must be 96 lowercase hex characters")
+    if not isinstance(value["nav_valuation_policy_hash"], str) or not re.fullmatch(
+        r"[0-9a-f]{64}", value["nav_valuation_policy_hash"]
+    ):
+        raise DemoError("identity nav_valuation_policy_hash must be 64 lowercase hex characters")
+    if not isinstance(value["nav_program_vkey"], str) or not re.fullmatch(
+        r"0x[0-9a-f]{64}", value["nav_program_vkey"]
+    ):
+        raise DemoError("identity nav_program_vkey must be a 0x-prefixed 32-byte key")
+    if value["nav_valuation_unit"] != "USD_1E8":
+        raise DemoError("reserve demo requires explicit NAV valuation unit USD_1E8")
+    if value["nav_public_values_schema"] != "postfiat.nav_reserve_public_values.v1":
+        raise DemoError("unsupported NAV public-values schema")
     for field in address_fields:
         if (
             not isinstance(value[field], str)
@@ -341,32 +377,125 @@ def validate_route(route: dict[str, Any], identities: dict[str, Any]) -> None:
 
 
 def validate_nav_binding(
-    route: dict[str, Any], nav: dict[str, Any]
+    route: dict[str, Any], nav: dict[str, Any], identities: dict[str, Any]
 ) -> tuple[int, int, int]:
+    schema = nav.get("schema")
+    if schema == "postfiat.a666.provider_neutral_nav_mark.v1":
+        nav_field, assets_field = "nav_per_unit", "verified_net_assets"
+    elif schema == "postfiat.a666.live_nav_mark.v1":
+        nav_field, assets_field = "nav_per_unit_usd_1e8", "verified_net_assets_usd_1e8"
+        for flag in ("opening_constants_used", "uniswap_price_used"):
+            if nav.get(flag) is not False:
+                raise DemoError(f"legacy NAV manifest requires {flag}=false")
+    else:
+        raise DemoError(f"unknown NAV manifest schema: {schema!r}")
     required = {
-        "schema": "postfiat.a666.live_nav_mark.v1",
-        "asset_id": route["native_nav_asset_id"],
+        "asset_id": identities["native_nav_asset_id"],
         "epoch": route["pricing_nav_epoch"],
         "reserve_packet_hash": route["pricing_reserve_packet_hash"],
-        "opening_constants_used": False,
-        "uniswap_price_used": False,
+        "profile_id": identities["nav_profile_id"],
+        "source_manifest_hash": identities["nav_source_manifest_hash"],
+        "valuation_policy_hash": identities["nav_valuation_policy_hash"],
+        "program_vkey": identities["nav_program_vkey"],
+        "public_values_schema": identities["nav_public_values_schema"],
     }
     for field, expected in required.items():
         if nav.get(field) != expected:
             raise DemoError(f"NAV manifest {field} differs from {expected!r}")
-    nav_per_unit = require_positive_int(
-        nav.get("nav_per_unit_usd_1e8"),
-        "NAV manifest nav_per_unit_usd_1e8",
-    )
+    # The current builder fixes USD_1E8 and omits valuation_unit from its manifest.
+    # An explicitly supplied contradictory unit must never be silently renamed.
+    if nav.get("valuation_unit", "USD_1E8") != identities["nav_valuation_unit"]:
+        raise DemoError("NAV manifest valuation unit differs from the selected unit")
+    require_positive_int(nav["epoch"], "NAV epoch")
+    if not isinstance(nav["reserve_packet_hash"], str) or not HASH48_RE.fullmatch(
+        nav["reserve_packet_hash"]
+    ):
+        raise DemoError("NAV reserve packet hash is malformed")
+    nav_per_unit = require_positive_int(nav.get(nav_field), f"NAV manifest {nav_field}")
     circulating_supply = require_positive_int(
-        nav.get("circulating_supply_atoms"),
-        "NAV manifest circulating_supply_atoms",
+        nav.get("circulating_supply_atoms"), "NAV manifest circulating_supply_atoms"
     )
     verified_assets = require_positive_int(
-        nav.get("verified_net_assets_usd_1e8"),
-        "NAV manifest verified_net_assets_usd_1e8",
+        nav.get(assets_field), f"NAV manifest {assets_field}"
     )
     return nav_per_unit, circulating_supply, verified_assets
+
+
+def selected_source_custody(
+    route: dict[str, Any], identities: dict[str, Any], *, for_issue: bool = False
+) -> dict[str, Any]:
+    """Consume the node's existing rows, which live outside the route ledger hash."""
+    rows = route.get("source_settlement_custody")
+    if not isinstance(rows, list):
+        raise DemoError("route status is missing source_settlement_custody rows")
+    seen: set[str] = set()
+    selected = None
+    principal_total = spread_total = 0
+    for row in rows:
+        if not isinstance(row, dict) or row.get("route_id") != identities["route_id"]:
+            raise DemoError("source custody row describes the wrong route")
+        asset = row.get("asset_id")
+        if not isinstance(asset, str) or not HASH48_RE.fullmatch(asset) or asset in seen:
+            raise DemoError("source custody asset is invalid or duplicated")
+        if asset == identities["settlement_asset_id"]:
+            raise DemoError("source custody row cannot select the pooled family")
+        seen.add(asset)
+        principal = require_nonnegative_int(row.get("principal_atoms"), "source principal")
+        spread = require_nonnegative_int(row.get("spread_atoms"), "source spread")
+        principal_total += principal
+        spread_total += spread
+        if not isinstance(row.get("enabled_for_issue"), bool):
+            raise DemoError("source custody enabled_for_issue must be boolean")
+        escrows = row.get("reservation_escrows")
+        if not isinstance(escrows, dict):
+            raise DemoError("source custody reservation_escrows must be an object")
+        for reservation, amount in escrows.items():
+            if not HASH48_RE.fullmatch(reservation):
+                raise DemoError("source custody reservation ID is malformed")
+            require_nonnegative_int(amount, "source reservation escrow")
+        if asset == identities["settlement_source_asset_id"]:
+            selected = row
+    if principal_total > route_counter(route, "settlement_reserve_atoms"):
+        raise DemoError("source custody principal exceeds the aggregate reserve")
+    if spread_total > route_counter(route, "non_nav_spread_atoms"):
+        raise DemoError("source custody spread exceeds the aggregate spread")
+    if selected is None:
+        raise DemoError("selected source series has no custody row on this route")
+    if for_issue and selected["enabled_for_issue"] is not True:
+        raise DemoError("selected source series is not enabled for issue")
+    return selected
+
+
+def verify_source_custody_delta(
+    before: dict[str, Any], after: dict[str, Any], identities: dict[str, Any],
+    principal_delta: int, spread_delta: int,
+) -> None:
+    selected_source_custody(before, identities)
+    selected_source_custody(after, identities)
+    prior = {row["asset_id"]: row for row in before["source_settlement_custody"]}
+    following = {row["asset_id"]: row for row in after["source_settlement_custody"]}
+    if set(prior) != set(following):
+        raise DemoError("source custody membership changed during the operation")
+    for asset, row in prior.items():
+        expected = dict(row)
+        if asset == identities["settlement_source_asset_id"]:
+            expected["principal_atoms"] += principal_delta
+            expected["spread_atoms"] += spread_delta
+        assert_equal(following[asset], expected, "source principal/spread/escrow delta")
+
+
+def wallet_nav_balance(route: dict[str, Any], owner: str) -> int:
+    rows = route.get("native_spendable_balances")
+    if not isinstance(rows, list) or route.get("native_spendable_balances_truncated") is not False:
+        raise DemoError("route native wallet balances are missing or truncated")
+    balances: dict[str, int] = {}
+    for row in rows:
+        wallet = row.get("wallet")
+        validate_account(wallet, "native balance wallet")
+        if wallet in balances:
+            raise DemoError("native wallet balance is duplicated")
+        balances[wallet] = require_nonnegative_int(row.get("amount_atoms"), "native wallet balance")
+    return balances.get(owner, 0)
 
 
 def operation_request(
@@ -403,8 +532,11 @@ def cmd_build_issue(args: argparse.Namespace) -> dict[str, Any]:
     nav = load_json(args.nav_manifest)
     validate_route(route, identities)
     nav_per_unit, circulating_supply, verified_assets = validate_nav_binding(
-        route, nav
+        route, nav, identities
     )
+    custody = selected_source_custody(route, identities, for_issue=True)
+    if custody["reservation_escrows"]:
+        raise DemoError("selected source has reservation escrow before issue")
     current_height = require_positive_int(args.current_height, "current height")
     ttl = require_positive_int(args.reservation_ttl_blocks, "reservation TTL")
     expires_at_height = current_height + ttl
@@ -644,6 +776,7 @@ def cmd_verify_expired_releases(args: argparse.Namespace) -> dict[str, Any]:
         != "postfiat.a666.expired_export_entitlement_cleanup.v1"
     ):
         raise DemoError("cleanup manifest schema mismatch")
+    verify_source_custody_delta(before, after, identities, 0, 0)
     before_economic = economic_route_snapshot(before)
     after_economic = economic_route_snapshot(after)
     count = require_positive_int(
@@ -697,8 +830,8 @@ def account_balance(
     if report.get("truncated") is not False:
         raise DemoError("account balance report is incomplete")
     assets = report.get("assets")
-    if not isinstance(assets, list):
-        raise DemoError("account balance report assets must be an array")
+    if not isinstance(assets, list) or len(assets) > 1:
+        raise DemoError("account balance report must contain at most one exact asset row")
     total = 0
     for row in assets:
         if row.get("asset_id") != expected_asset_id:
@@ -724,6 +857,8 @@ def cmd_verify_issue(args: argparse.Namespace) -> dict[str, Any]:
     )
     spread = require_nonnegative_int(manifest["issue_spread_atoms"], "issue spread")
     assert_equal(settlement, base + spread, "issue settlement decomposition")
+    verify_source_custody_delta(before, subscribed, identities, base, spread)
+    verify_source_custody_delta(subscribed, released, identities, 0, 0)
     before_state = economic_route_snapshot(before)
     subscribed_state = economic_route_snapshot(subscribed)
     released_state = economic_route_snapshot(released)
@@ -836,7 +971,7 @@ def cmd_build_redeem(args: argparse.Namespace) -> dict[str, Any]:
     nav = load_json(args.nav_manifest)
     issue = load_json(args.issue_manifest)
     validate_route(route, identities)
-    nav_per_unit, _, _ = validate_nav_binding(route, nav)
+    nav_per_unit, _, _ = validate_nav_binding(route, nav, identities)
     if issue.get("schema") != "postfiat.a666.pfusdc_reserve_demo_issue.v1":
         raise DemoError("issue manifest schema mismatch")
     if validate_identities(issue.get("identities")) != identities:
@@ -845,6 +980,15 @@ def cmd_build_redeem(args: argparse.Namespace) -> dict[str, Any]:
         raise DemoError("issue manifest describes the wrong route")
     if issue.get("subscriber") != args.owner:
         raise DemoError("redemption owner differs from the issue subscriber")
+    if (
+        nav["epoch"] <= issue["pricing_nav_epoch"]
+        or nav["reserve_packet_hash"] == issue["pricing_reserve_packet_hash"]
+        or route["route_epoch"] <= issue["route_epoch"]
+    ):
+        raise DemoError("redemption requires a fresh NAV packet and advanced route epoch")
+    custody = selected_source_custody(route, identities)
+    if custody["reservation_escrows"]:
+        raise DemoError("selected source has reservation escrow before redemption")
     if route["active_reservation_count"] or route["export_entitlement_count"]:
         raise DemoError("route has active order state before redemption")
     current_height = require_positive_int(args.current_height, "current height")
@@ -858,12 +1002,17 @@ def cmd_build_redeem(args: argparse.Namespace) -> dict[str, Any]:
     incremental_reserve = require_positive_int(
         issue["base_value_atoms"], "same-run incremental base reserve"
     )
-    max_from_incremental = maximum_nav_for_base_reserve(
-        incremental_reserve, nav_per_unit
+    source_principal = custody["principal_atoms"]
+    bounded_reserve = min(
+        incremental_reserve, source_principal, route_counter(route, "settlement_reserve_atoms")
     )
+    if bounded_reserve == 0:
+        raise DemoError("selected source custody / same-run reserve cannot fund redemption")
+    max_from_reserve = maximum_nav_for_base_reserve(bounded_reserve, nav_per_unit)
     maximum = min(
         issued,
-        max_from_incremental,
+        max_from_reserve,
+        wallet_nav_balance(route, args.owner),
         require_nonnegative_int(route["available_redeem_atoms"], "available redeem"),
         require_nonnegative_int(
             route["redeem_capacity_remaining_atoms"], "redeem capacity"
@@ -874,7 +1023,7 @@ def cmd_build_redeem(args: argparse.Namespace) -> dict[str, Any]:
     amount = require_positive_int(requested, "requested redemption amount")
     if amount > maximum:
         raise DemoError(
-            f"requested redemption {amount} exceeds same-run safe maximum {maximum}"
+            f"requested redemption {amount} exceeds same-run/source-custody and policy/wallet safe maximum {maximum}"
         )
     if amount < require_positive_int(route["min_order_atoms"], "minimum order"):
         raise DemoError("redemption amount is below the governed minimum")
@@ -883,8 +1032,8 @@ def cmd_build_redeem(args: argparse.Namespace) -> dict[str, Any]:
         nav_per_unit,
         route["redeem_multiplier_bps"],
     )
-    if base_value > incremental_reserve:
-        raise DemoError("redemption consumes more than the same-run incremental reserve")
+    if base_value > bounded_reserve:
+        raise DemoError("redemption exceeds the same-run reserve or selected source custody")
     nonce = secrets.token_hex(32)
     body = {
         "operation": "pftl_uniswap_primary_redeem",
@@ -915,6 +1064,8 @@ def cmd_build_redeem(args: argparse.Namespace) -> dict[str, Any]:
         "nav_per_unit_usd_1e8": nav_per_unit,
         "issued_amount_atoms": issued,
         "incremental_base_reserve_atoms": incremental_reserve,
+        "selected_source_principal_atoms": source_principal,
+        "bounded_base_reserve_atoms": bounded_reserve,
         "maximum_same_run_redeem_atoms": maximum,
         "nav_amount_atoms": amount,
         "base_value_atoms": base_value,
@@ -962,6 +1113,7 @@ def cmd_verify_redeem(args: argparse.Namespace) -> dict[str, Any]:
         manifest["redemption_spread_atoms"], "redemption spread"
     )
     assert_equal(base, output + spread, "redemption value decomposition")
+    verify_source_custody_delta(before, after, identities, -base, spread)
     before_state = economic_route_snapshot(before)
     after_state = economic_route_snapshot(after)
     deltas = {
