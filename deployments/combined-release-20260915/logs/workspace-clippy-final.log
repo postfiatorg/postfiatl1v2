@@ -1,0 +1,11 @@
+   Compiling postfiat-node v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/node)
+    Checking rustls v0.23.45
+    Checking tokio-rustls v0.26.4
+    Checking hyper-rustls v0.27.9
+    Checking reqwest v0.12.28
+   Compiling postfiat-bench v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/bench_harness)
+    Checking arc-conformance v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/arc-conformance)
+    Checking postfiat-cobalt-e2-harness v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/cobalt_e2_harness)
+    Checking postfiat-cobalt-e3-harness v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/cobalt_e3_harness)
+    Checking postfiat-fuzz v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/fuzz_harness)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 28.60s

@@ -49,6 +49,14 @@ Versioned recovery resolves an expired lock through the ordered ledger:
 Local timeout deletion is forbidden because a late certificate could otherwise
 double-spend the unlocked object.
 
+Recovery committee V1 preserves historical roots and certificate commitments.
+A signed, ordered governance update installs committee V2, whose root also binds
+the admission heights. Installation switches state commitments for every retained
+reveal and fence to the complete-certificate V2 encoding. The committee's future
+admission height separately controls when validators accept new orders. Earlier
+committees remain available for recovery; a V2-to-V1 downgrade is rejected.
+See [release compatibility](../specs/release-history-compatibility-20260916.md).
+
 ## FastSwap DvP lane
 
 FastSwap is a separate dual-owner object protocol. Both owners sign the same

@@ -1,0 +1,81 @@
+{
+  "complete": false,
+  "funds_moved": false,
+  "task_node_status": "accepted",
+  "python_combined": {
+    "passed": 220,
+    "command": "pytest existing seven shielded suites + hardening + PFTL transport + venue settlement + dashboard_server -q"
+  },
+  "python_final_focused": {
+    "passed": 46,
+    "command": "pytest hardening + PFTL transport + venue settlement -q"
+  },
+  "browser": {
+    "desktop": true,
+    "mobile_390px": true,
+    "operator_choice_preserved": true,
+    "no_script_errors": true
+  },
+  "native": {
+    "debug": "interrupted after 12 minutes in unoptimized proof generation",
+    "shared_release": "Compile failed: 16 Arc field initializer/pattern errors in the shared checkout; unrelated Arc edits left unchanged.",
+    "isolated_release": {
+      "passed": 1,
+      "failed": 0,
+      "filtered": 339,
+      "worktree": "postfiatl1v2-shielded-cover-conformance-20260905",
+      "revision": "3d0e5c012950399cad0ab4af967cfc1291077e40",
+      "test": "wan_devnet_invalid_asset_orchard_swap_proof_is_rejected_and_valid_swap_still_applies",
+      "elapsed_seconds": 341.77
+    },
+    "python_native_conformance": {
+      "passed": 2,
+      "tests": "public snapshot replay/key exclusion/tamper rejection; native local signing and mempool transaction identity",
+      "scope": "disposable local chains; no live funds"
+    },
+    "live_public_state_replay": {
+      "prior_failure": {
+        "local_binary": "failed at block 962: vault_bridge_circulating_supply_mismatch",
+        "deployed_binary": "same failure at block 962",
+        "evidence": [
+          "live-public-state-replay.json",
+          "live-deployed-state-replay.json"
+        ]
+      },
+      "repaired_local_snapshot_import": "passed through 972; identical block hash and state root",
+      "evidence": "pfeth-replay-fix/full-snapshot-import.json",
+      "fleet_rollout": "complete: all six validators, twelve services at the repaired binary hash",
+      "deployed_full_history_audit": "passed: validator 0, 972 blocks, exact original tip/root",
+      "deployed_evidence": "pfeth-replay-fix/live-replay-0.json",
+      "served_rpc_checkpoint": "all six at 972; previous stale cache cleared",
+      "wallet_runtime_status": "updated runtime paths; configured exact-six status passed"
+    },
+    "replay_fix_regressions": {
+      "rust_passed": 4,
+      "python_native_passed": 2,
+      "worktree": "postfiatl1v2-pfeth-replay-fix-20260905",
+      "binary_sha256": "51f0895ca304298f5faef2af3a87f14336ebf7d8acdbf1fba80e62ea6a9991d2"
+    }
+  },
+  "mkdocs_strict": true,
+  "retained_pftl_index_tests": {
+    "passed": 7,
+    "command": "pytest tests/test_shielded_exit_pftl_index.py -q"
+  },
+  "transport_after_live_cache_fix": {
+    "passed": 10,
+    "command": "pytest tests/test_shielded_exit_pftl_transport.py -q"
+  },
+  "live_history_index": {
+    "coverage": "incomplete",
+    "from_height": 1,
+    "to_height": 972,
+    "commitment_producers": 173,
+    "evidence": "live-pftl-index.json",
+    "pfeth_base_id_ingresses": 0,
+    "pfeth_base_id_exits": 0,
+    "pfeth_source_series_ingresses": 1,
+    "pfeth_source_series_exits": 1,
+    "source_series_evidence": "pfeth-replay-fix/source-series-index.json"
+  }
+}

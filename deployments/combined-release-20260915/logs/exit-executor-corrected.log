@@ -1,0 +1,21 @@
+Compiling 1 files with Solc 0.8.24
+Solc 0.8.24 finished in 388.93ms
+Compiler run successful!
+
+Ran 13 tests for test/ExitExecutorV1.t.sol:ExitExecutorV1Test
+[PASS] test_delegation_attached() (gas: 20391)
+[PASS] test_digest_fixture() (gas: 20176)
+[PASS] test_execute_self_from_eoa() (gas: 100879)
+[PASS] test_execute_self_requires_self() (gas: 44453)
+[PASS] test_expired_rejected() (gas: 62247)
+[PASS] test_failed_call_reverts_whole_batch_with_reason() (gas: 238984)
+[PASS] test_high_s_rejected() (gas: 87423)
+[PASS] test_nonce_storage_is_namespaced() (gas: 141665)
+[PASS] test_replay_rejected() (gas: 173340)
+[PASS] test_signature_bound_to_chain_and_account() (gas: 107288)
+[PASS] test_sponsored_unwrap_and_deposit_from_zero_gas_eoa() (gas: 155901)
+[PASS] test_tampered_batch_rejected() (gas: 90938)
+[PASS] test_wrong_signer_rejected() (gas: 91767)
+Suite result: ok. 13 passed; 0 failed; 0 skipped; finished in 28.30ms (38.32ms CPU time)
+
+Ran 1 test suite in 44.47ms (28.30ms CPU time): 13 tests passed, 0 failed, 0 skipped (13 total tests)

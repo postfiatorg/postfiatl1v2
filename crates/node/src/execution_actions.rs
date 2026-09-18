@@ -714,13 +714,64 @@ pub(super) fn execute_asset_transaction_for_archive_replay(
         return Ok(receipt);
     }
 
-    Ok(execute_asset_transaction_with_compatibility(
+    let mut compatibility =
+        asset_execution_compatibility_for_genesis_and_governance(genesis, governance);
+    compatibility.allow_legacy_base_only_vault_reserve_supply =
+        archived_pfeth_base_only_reserve_allowed(genesis, block, transaction);
+    // Replay must receive the same shielded supply as live execution. The
+    // governed activation inside the executor retains pre-activation semantics.
+    Ok(execute_asset_transaction_with_compatibility_and_orchard(
         genesis,
         ledger,
         transaction,
         block.header.height,
-        asset_execution_compatibility_for_genesis_and_governance(genesis, governance),
+        compatibility,
+        orchard_balances,
     ))
+}
+
+// Release ef2dec31 checked base-only supply; 1bcd0f0d changed new execution
+// to family supply. These two exact, certified, unfinalized reserve packets
+// predate that change. Replay re-executes the old calculation, still checking
+// signatures, receipts, backing, every state root and the complete block chain.
+// No height range, new transaction or other genesis can select this rule.
+fn archived_pfeth_base_only_reserve_allowed(
+    genesis: &Genesis,
+    block: &BlockRecord,
+    transaction: &SignedAssetTransaction,
+) -> bool {
+    if genesis.chain_id != "postfiat-wan-devnet-2"
+        || genesis_hash(genesis) != "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9"
+        || block.header.batch_kind != BATCH_KIND_TRANSPARENT
+        || block.header.receipt_count != 1
+        || block.receipt_ids.len() != 1
+        || !matches!(&transaction.unsigned.operation, AssetTransactionOperation::NavReserveSubmit(_))
+    {
+        return false;
+    }
+    let tx_id = postfiat_execution::asset_transaction_tx_id(transaction);
+    const PACKETS: &[(u64, &str, &str, &str, &str)] = &[
+        (962,
+            "c6b83fb578782d83fab3af54707b5ff5941a5082505e7da09a1fe5f5a0d9cf215f2b1767a9e47d35e452a027938ed7ef",
+            "8beeb255c8b49383400eeb6a8ff3ff599ab735a9d0e29cbfd7f123ad25cc7196296fa62ac18e9098cf582227ef4bf3e9",
+            "a45f22378bc912e45730184151515605a35bc5dfc2deb3f3aa9adbb2340da9e2a173d166e791174841ae19e693c1eaf9",
+            "8acd66d1ac46597b20045928462bdf5e5ab581bc7a5d7480e68e93b6b384421d37be9ea334022b141c419a087cdcf814"),
+        (967,
+            "1d14ea10cd5b4c50d327011a181cd7e40be823faa9cbfdc325065bf205aa8a292791881c4151673e09f1011ca2fc16ed",
+            "d49e6becb1f1d0a3e304d6d1f20371fcfe7a42eb212f11672d16b43d6636bff941c1fcabb7c70c7c019520233bae9adf",
+            "8bc78375cebc3dbc082f7ff65017ad8cfe6a240cb50df304e9faca365956d37bcd82167b348bf06fae33082239b1f4e6",
+            "8fb66f6863220a89338b03bef9750a8b8eb93e2c50374bd632dabc3e3ae3598bffb748e0547fde19f85144bb453398e0"),
+    ];
+    PACKETS
+        .iter()
+        .any(|(height, batch_id, block_hash, state_root, receipt_id)| {
+            block.header.height == *height
+                && block.header.batch_id == *batch_id
+                && block.header.block_hash == *block_hash
+                && block.header.state_root == *state_root
+                && block.receipt_ids[0] == *receipt_id
+                && tx_id == *receipt_id
+        })
 }
 
 fn archived_wan_devnet2_disabled_live_value_route_allowed(
@@ -927,9 +978,28 @@ pub(super) fn archived_wan_devnet2_orchard_aware_bridge_claim_identity_allowed(
 
 pub(super) fn execute_governance_batch(
     governance: &mut GovernanceState,
+    ledger: Option<&mut LedgerState>,
+    batch: &GovernanceActionBatch,
+    block_height: u64,
+) -> Vec<Receipt> {
+    execute_governance_batch_with_replay(governance, ledger, batch, block_height, false)
+}
+
+pub(super) fn execute_archived_governance_batch(
+    governance: &mut GovernanceState,
+    ledger: Option<&mut LedgerState>,
+    batch: &GovernanceActionBatch,
+    block_height: u64,
+) -> Vec<Receipt> {
+    execute_governance_batch_with_replay(governance, ledger, batch, block_height, true)
+}
+
+fn execute_governance_batch_with_replay(
+    governance: &mut GovernanceState,
     mut ledger: Option<&mut LedgerState>,
     batch: &GovernanceActionBatch,
     block_height: u64,
+    historical_replay: bool,
 ) -> Vec<Receipt> {
     let mut receipts = Vec::with_capacity(
         batch.amendments.len()
@@ -1337,7 +1407,11 @@ pub(super) fn execute_governance_batch(
             });
         if let Some(existing_profile) = existing_profile {
             let updated = (|| -> Result<(), String> {
-                activation.validate()?;
+                if historical_replay {
+                    activation.validate_for_replay()?;
+                } else {
+                    activation.validate()?;
+                }
                 if existing_profile.profile != activation.profile {
                     return Err(
                         "fast-ingress verifier update must preserve the exact route profile"
@@ -1472,7 +1546,11 @@ pub(super) fn execute_governance_batch(
             continue;
         }
         let validated = (|| -> Result<postfiat_types::VaultBridgeRouteProfileRecordV1, String> {
-            activation.validate()?;
+            if historical_replay {
+                activation.validate_for_replay()?;
+            } else {
+                activation.validate()?;
+            }
             if governance
                 .vault_bridge_route_authority_activation_height()
                 .is_none_or(|height| block_height < height)
@@ -1545,7 +1623,25 @@ pub(super) fn execute_governance_batch(
                     );
                 }
             }
-            postfiat_types::VaultBridgeRouteProfileRecordV1::new(activation, block_height)
+            if let Some(state) = activation.arc_finality_bootstrap.as_ref() {
+                if ledger
+                    .arc_finality_state(&state.route_profile_hash, state.route_epoch)
+                    .is_some()
+                {
+                    return Err(
+                        "Arc Tier-4 route finality bootstrap already exists for route epoch"
+                            .to_string(),
+                    );
+                }
+            }
+            if historical_replay {
+                postfiat_types::VaultBridgeRouteProfileRecordV1::new_for_replay(
+                    activation,
+                    block_height,
+                )
+            } else {
+                postfiat_types::VaultBridgeRouteProfileRecordV1::new(activation, block_height)
+            }
         })();
         match validated {
             Ok(record) => {
@@ -1554,6 +1650,11 @@ pub(super) fn execute_governance_batch(
                     // therefore an accepted Tier-4 activation must have it.
                     if let Some(ledger) = ledger.as_deref_mut() {
                         ledger.ethereum_arbitrum_finality_states.push(state);
+                    }
+                }
+                if let Some(state) = activation.arc_finality_bootstrap.clone() {
+                    if let Some(ledger) = ledger.as_deref_mut() {
+                        ledger.arc_finality_states.push(state);
                     }
                 }
                 apply_governance_amendment_with_lifecycle_records(
@@ -1604,6 +1705,7 @@ pub(super) fn validate_vault_bridge_route_profile_against_ledger(
         postfiat_types::NAV_PROFILE_VERIFIER_SP1_GROTH16
             | postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
             | postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+            | postfiat_types::NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1
     ) {
         profile.valuation_policy_hash == route.verifier_policy_hash
             && profile.sp1_program_vkey == route.verifier_program_vkey
@@ -4330,4 +4432,129 @@ pub(super) fn bridge_witness_registry_error(
         ));
     }
     None
+}
+
+#[cfg(test)]
+mod pfeth_reserve_replay_tests {
+    use super::*;
+
+    #[test]
+    fn pfeth_reserve_new_execution_rejects_understatement_but_archive_recomputes_old_rule() {
+        let genesis: Genesis = serde_json::from_str(include_str!(
+            "../testdata/pfeth-reserve-replay/genesis.json"
+        ))
+        .unwrap();
+        let ledger: LedgerState = serde_json::from_str(include_str!(
+            "../testdata/pfeth-reserve-replay/synthetic-series-ledger.json"
+        ))
+        .unwrap();
+        let tx: SignedAssetTransaction =
+            serde_json::from_str(include_str!("../testdata/pfeth-reserve-replay/tx-962.json"))
+                .unwrap();
+        let block: BlockRecord = serde_json::from_str(include_str!(
+            "../testdata/pfeth-reserve-replay/block-962.json"
+        ))
+        .unwrap();
+        let mut strict_ledger = ledger.clone();
+        let strict = execute_asset_transaction_with_compatibility(
+            &genesis,
+            &mut strict_ledger,
+            &tx,
+            962,
+            AssetExecutionCompatibility::strict(),
+        );
+        assert!(!strict.accepted, "{strict:?}");
+        assert_eq!(
+            strict.code, "vault_bridge_circulating_supply_mismatch",
+            "{strict:?}"
+        );
+        assert_eq!(strict_ledger, ledger);
+        let mut historical_ledger = ledger.clone();
+        let receipt = execute_asset_transaction_for_archive_replay(
+            &genesis,
+            &mut historical_ledger,
+            &tx,
+            &block,
+            0,
+            &GovernanceState::new(6),
+            &[],
+        )
+        .unwrap();
+        assert!(receipt.accepted, "{receipt:?}");
+        assert_eq!(receipt.fee_charged, 34);
+        assert_eq!(historical_ledger.nav_reserve_packets.len(), 1);
+    }
+
+    #[test]
+    fn pfeth_reserve_replay_is_pinned_to_exact_historical_packets() {
+        let genesis: Genesis = serde_json::from_str(include_str!(
+            "../testdata/pfeth-reserve-replay/genesis.json"
+        ))
+        .unwrap();
+        for (block_json, tx_json) in [
+            (
+                include_str!("../testdata/pfeth-reserve-replay/block-962.json"),
+                include_str!("../testdata/pfeth-reserve-replay/tx-962.json"),
+            ),
+            (
+                include_str!("../testdata/pfeth-reserve-replay/block-967.json"),
+                include_str!("../testdata/pfeth-reserve-replay/tx-967.json"),
+            ),
+        ] {
+            let block: BlockRecord = serde_json::from_str(block_json).unwrap();
+            let tx: SignedAssetTransaction = serde_json::from_str(tx_json).unwrap();
+            assert!(archived_pfeth_base_only_reserve_allowed(
+                &genesis, &block, &tx
+            ));
+            for field in [
+                "height", "batch", "hash", "root", "receipt", "count", "kind",
+            ] {
+                let mut bad = block.clone();
+                match field {
+                    "height" => bad.header.height += 1,
+                    "batch" => bad.header.batch_id.push('0'),
+                    "hash" => bad.header.block_hash.push('0'),
+                    "root" => bad.header.state_root.push('0'),
+                    "receipt" => bad.receipt_ids[0].push('0'),
+                    "count" => bad.header.receipt_count += 1,
+                    "kind" => bad.header.batch_kind = BATCH_KIND_SHIELDED.to_string(),
+                    _ => unreachable!(),
+                }
+                assert!(
+                    !archived_pfeth_base_only_reserve_allowed(&genesis, &bad, &tx),
+                    "{field}"
+                );
+            }
+            let mut altered_tx = tx.clone();
+            altered_tx.unsigned.sequence += 1;
+            assert!(!archived_pfeth_base_only_reserve_allowed(
+                &genesis,
+                &block,
+                &altered_tx
+            ));
+            let mut other_genesis = genesis.clone();
+            other_genesis.chain_id = "postfiat-local".to_string();
+            assert!(!archived_pfeth_base_only_reserve_allowed(
+                &other_genesis,
+                &block,
+                &tx
+            ));
+            let same_name_genesis =
+                Genesis::try_new_with_validator_count("postfiat-wan-devnet-2".to_string(), 1)
+                    .unwrap();
+            assert!(!archived_pfeth_base_only_reserve_allowed(
+                &same_name_genesis,
+                &block,
+                &tx
+            ));
+        }
+        assert!(!AssetExecutionCompatibility::strict().allow_legacy_base_only_vault_reserve_supply);
+        assert!(
+            !asset_execution_compatibility_for_genesis_and_governance(
+                &genesis,
+                &GovernanceState::new(6)
+            )
+            .allow_legacy_base_only_vault_reserve_supply
+        );
+    }
 }

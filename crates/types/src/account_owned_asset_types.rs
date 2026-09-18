@@ -212,7 +212,8 @@ impl VaultBridgeRouteProfileV1 {
             }
             NAV_PROFILE_VERIFIER_SP1_GROTH16
             | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_FINALITY_V1
-            | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1 => {
+            | NAV_PROFILE_VERIFIER_SP1_ARBITRUM_BONDED_V1
+            | NAV_PROFILE_VERIFIER_SP1_ARC_FINALITY_V1 => {
                 if self.min_attestations != 0 || self.minimum_confirmations != 0 {
                     return Err(
                         "receipt-proven route profile must not require observer attestations or confirmations"
@@ -655,6 +656,13 @@ pub fn issued_asset_id(
         code.len()
     );
     Ok(hash_hex_domain(ISSUED_ASSET_ID_DOMAIN, preimage.as_bytes()))
+}
+
+/// Derive the canonical nine-decimal pfETH issued-asset identifier for a
+/// specific PFTL chain and issuer. The chain and issuer stay explicit because
+/// issued-asset identities are domain-bound and must never cross deployments.
+pub fn pfeth_asset_id(chain_id: &str, issuer: &str) -> Result<String, String> {
+    issued_asset_id(chain_id, issuer, PFETH_ASSET_CODE, PFETH_ASSET_VERSION)
 }
 
 pub fn trustline_id(account: &str, issuer: &str, asset_id: &str) -> Result<String, String> {

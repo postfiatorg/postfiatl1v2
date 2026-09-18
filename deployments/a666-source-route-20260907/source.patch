@@ -1,0 +1,1415 @@
+diff --git a/crates/bridge/src/lib.rs b/crates/bridge/src/lib.rs
+index 1c5cd71d..e292b487 100644
+--- a/crates/bridge/src/lib.rs
++++ b/crates/bridge/src/lib.rs
+@@ -428,6 +428,8 @@ pub struct PftlUniswapRouteStatusRow {
+ 
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+ pub struct PftlUniswapSupplyStatusReport {
++    #[serde(default, skip_serializing_if = "Vec::is_empty")]
++    pub source_settlement_custody: Vec<postfiat_types::PftlUniswapSourceCustody>,
+     pub schema: String,
+     pub route_id: String,
+     pub route_config_digest: String,
+@@ -1881,6 +1883,7 @@ pub fn pftl_uniswap_bridge_supply_status(
+         ledger.ethereum_spendable_supply_atoms
+     };
+     Ok(PftlUniswapSupplyStatusReport {
++        source_settlement_custody: Vec::new(),
+         schema: "postfiat-pftl-uniswap-supply-status-v1".to_string(),
+         route_id: ledger.route_id.clone(),
+         route_config_digest: ledger.route_config_digest.clone(),
+diff --git a/crates/execution/src/issued_asset_ledger_helpers.rs b/crates/execution/src/issued_asset_ledger_helpers.rs
+index 1ee0db6e..8b98fe10 100644
+--- a/crates/execution/src/issued_asset_ledger_helpers.rs
++++ b/crates/execution/src/issued_asset_ledger_helpers.rs
+@@ -719,9 +719,12 @@ fn issued_asset_supply_with_non_nav_spread(
+                 } else {
+                     0
+                 };
++                let (source_principal, source_spread) = pftl_source_totals(ledger, &route.route_id)?;
+                 route
+                     .settlement_reserve_atoms
+-                    .checked_add(spread)
++                    .checked_sub(source_principal)
++                    .and_then(|principal| principal.checked_add(spread))
++                    .and_then(|custody| custody.checked_sub(if include_non_nav_spread { source_spread } else { 0 }))
+                     .ok_or_else(|| {
+                         (
+                             "issued_supply_overflow",
+@@ -753,8 +756,18 @@ fn issued_asset_supply_with_non_nav_spread(
+                 )
+             })
+         })?;
++    let source_custody = ledger.pftl_uniswap_source_custody.iter().filter(|row| row.asset_id == asset_id)
++        .try_fold(0u64, |total,row| {
++            let reserved = row.reservation_escrows.values().try_fold(0u64, |sum,v| sum.checked_add(*v))
++                .ok_or_else(|| ("issued_supply_overflow", "source reservation custody overflow".to_string()))?;
++            total.checked_add(row.principal_atoms)
++                .and_then(|n| n.checked_add(if include_non_nav_spread { row.spread_atoms } else { 0 }))
++                .and_then(|n| n.checked_add(reserved))
++                .ok_or_else(|| ("issued_supply_overflow", "source custody overflow".to_string()))
++        })?;
+     trustline_supply
+-        .checked_add(open_escrow_supply)
++        .checked_add(source_custody)
++        .and_then(|supply| supply.checked_add(open_escrow_supply))
+         .and_then(|supply| supply.checked_add(open_offer_supply))
+         .and_then(|supply| supply.checked_add(fast_lane_reserve_supply))
+         .and_then(|supply| supply.checked_add(pftl_uniswap_route_custody_supply))
+@@ -844,6 +857,7 @@ fn assert_issued_supply_ledger_inventory_complete(ledger: &LedgerState) {
+         vault_bridge_allocations: _,
+         vault_bridge_redemptions: _,
+         vault_bridge_deposits: _,
++        pftl_uniswap_source_custody: _, // counted by the source-specific custody sum
+         pftl_uniswap_routes: _,
+         pftl_uniswap_receipts: _,
+         owned_objects: _,
+diff --git a/crates/execution/src/lib.rs b/crates/execution/src/lib.rs
+index 3dd2cf23..0ad78e88 100644
+--- a/crates/execution/src/lib.rs
++++ b/crates/execution/src/lib.rs
+@@ -33,3 +33,5 @@ mod pftl_uniswap_ethereum_verification;
+ mod tests {
+     include!("tests.rs");
+ }
++
++include!("pftl_source_settlement.rs");
+diff --git a/crates/execution/src/market_nav_execution_tests.rs b/crates/execution/src/market_nav_execution_tests.rs
+index d7e191df..c49d69df 100644
+--- a/crates/execution/src/market_nav_execution_tests.rs
++++ b/crates/execution/src/market_nav_execution_tests.rs
+@@ -5808,6 +5808,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
+         ledger.account(&subscriber).expect("subscriber").sequence + 1,
+         AssetTransactionOperation::PftlUniswapOrderReserve(
+             PftlUniswapOrderReserveOperation {
++                settlement_source_asset_id: None,
+                 subscriber: subscriber.clone(),
+                 route_id: v2_route_id.clone(),
+                 reservation_id: "b0".repeat(48),
+@@ -5869,7 +5870,8 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
+         ledger.account(&operator).expect("operator").sequence + 1,
+         AssetTransactionOperation::PftlUniswapRouteEpochAdvance(
+             PftlUniswapRouteEpochAdvanceOperation {
+-                operator: operator.clone(),
++                                settlement_source_asset_ids: None,
++operator: operator.clone(),
+                 route_id: v2_route_id.clone(),
+                 prior_route_epoch: 1,
+                 next_route_epoch: 2,
+@@ -5896,6 +5898,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
+         ledger.account(&subscriber).expect("subscriber").sequence + 1,
+         AssetTransactionOperation::PftlUniswapOrderReserve(
+             PftlUniswapOrderReserveOperation {
++                settlement_source_asset_id: None,
+                 subscriber: subscriber.clone(),
+                 route_id: v2_route_id.clone(),
+                 reservation_id: reservation_id.clone(),
+@@ -6216,6 +6219,7 @@ fn pftl_uniswap_consensus_subscribe_export_and_refund_moves_real_balances() {
+         ledger.account(&subscriber).expect("subscriber").sequence + 1,
+         AssetTransactionOperation::PftlUniswapPrimaryRedeem(
+             PftlUniswapPrimaryRedeemOperation {
++                settlement_source_asset_id: None,
+                 owner: subscriber.clone(),
+                 settlement_recipient: subscriber.clone(),
+                 route_id: v2_route_id.clone(),
+@@ -6685,8 +6689,7 @@ fn ar11_issued_asset_supply_counts_non_nav_spread_custody() {
+ /// untouched. Reproduces the controlled-qualification retry-6 failure of
+ /// 2026-08-03, where a 500_000-atom redemption was submitted against the
+ /// production minimum order of 1_000_000 atoms.
+-#[test]
+-fn pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09() {
++fn primary_redeem_source_fixture(source_mode: bool) {
+     let mut genesis = Genesis::new_with_validator_count("postfiat-wan-devnet-2", 6);
+     genesis.consensus_v2_activation_height = Some(1);
+     // The qualified reserve-proof fixture binds the deterministic qNAV asset
+@@ -7031,21 +7034,98 @@ fn pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09
+         .expect("AR-09 route")
+         .live_value_enabled = true;
+ 
++    let mut source_id = None;
++    if source_mode {
++        let family = ledger.asset_definition(&settlement_asset_id).unwrap().clone();
++        let domain = "erc20_bridge_vault:1:0x1111111111111111111111111111111111111111:0x2222222222222222222222222222222222222222";
++        let mut bucket = VaultBridgeBucketState::new(settlement_asset_id.clone(), domain, "11".repeat(48), 24).unwrap();
++        bucket.gross_receipt_atoms = 100_000_000;
++        bucket.counted_value_atoms = 100_000_000;
++        bucket.outstanding_vault_bridge_atoms = 100_000_000;
++        let id = postfiat_types::pfusdc_source_series_id(&genesis.chain_id, &settlement_asset_id, 1,
++            "0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222", 6, &bucket.policy_hash).unwrap();
++        let asset = AssetDefinition::new_source_series(&family, &id, &bucket.bucket_id, "Ethereum pfUSDC").unwrap();
++        ledger.asset_definitions.push(asset);
++        let mut source_line = TrustLine::new(subscriber.clone(), family.issuer.clone(), id.clone(),100_000_000,0).unwrap();
++        source_line.balance=100_000_000;
++        ledger.trustlines.push(source_line);
++        ledger.vault_bridge_bucket_states.push(bucket);
++        policy.policy_epoch = 2;
++        policy.policy_hash = policy.computed_hash();
++        let receipt = submit(&mut ledger,&operator_key,&operator,
++            postfiat_types::PFTL_UNISWAP_ROUTE_EPOCH_ADVANCE_TRANSACTION_KIND,
++            AssetTransactionOperation::PftlUniswapRouteEpochAdvance(postfiat_types::PftlUniswapRouteEpochAdvanceOperation {
++                settlement_source_asset_ids: Some(vec![id.clone()]), operator:operator.clone(),route_id:route_id.clone(),prior_route_epoch:1,next_route_epoch:2,
++                next_route_config_digest:"c1".repeat(48),live_value_enabled:true,next_primary_market_policy:policy.clone(),
++            }),24);
++        assert!(receipt.accepted,"govern source: {receipt:?}");
++        source_id = Some(id);
++    }
++    let family_balance_before = ledger.trustline_for_account_asset(&subscriber,&settlement_asset_id).unwrap().balance;
++    let family_supply_before = issued_asset_family_supply(&ledger,&settlement_asset_id).unwrap();
+     // Fund the route reserve and the holder's NAV balance through a real
+     // subscription: 2_000_000 atoms at 7 settlement atoms per NAV atom.
+     let reservation_id = "c2".repeat(48);
++    if let Some(id) = &source_id {
++        let reserve = |tag: &str| PftlUniswapOrderReserveOperation {
++            settlement_source_asset_id: Some(id.clone()), subscriber: subscriber.clone(),
++            route_id: route_id.clone(), reservation_id: tag.repeat(48),
++            ethereum_recipient: "0x4444444444444444444444444444444444444444".to_string(),
++            route_epoch: policy.policy_epoch, policy_epoch: policy.policy_epoch,
++            policy_hash: policy.policy_hash.clone(), mint_amount_atoms: 2_000_000,
++            max_settlement_value_atoms: 14_070_000, expires_at_height: 30,
++        };
++        // A failed debit must roll back the source escrow inserted before it.
++        let line = ledger.trustlines.iter().position(|l| l.account == subscriber && l.asset_id == *id).unwrap();
++        let balance = ledger.trustlines[line].balance;
++        ledger.trustlines[line].balance = 0;
++        let before = ledger.clone();
++        let receipt = submit(&mut ledger, &subscriber_key, &subscriber,
++            PFTL_UNISWAP_ORDER_RESERVE_TRANSACTION_KIND,
++            AssetTransactionOperation::PftlUniswapOrderReserve(reserve("a1")), 24);
++        assert!(!receipt.accepted, "insufficient source balance: {receipt:?}");
++        assert_eq!(ledger, before);
++        ledger.trustlines[line].balance = balance;
++        // Disabling issuance cannot leave a new reservation behind.
++        ledger.pftl_uniswap_source_custody[0].enabled_for_issue = false;
++        let before = ledger.clone();
++        let receipt = submit(&mut ledger, &subscriber_key, &subscriber,
++            PFTL_UNISWAP_ORDER_RESERVE_TRANSACTION_KIND,
++            AssetTransactionOperation::PftlUniswapOrderReserve(reserve("a2")), 24);
++        assert_eq!(receipt.code, "pftl_source_not_governed");
++        assert_eq!(ledger, before);
++        ledger.pftl_uniswap_source_custody[0].enabled_for_issue = true;
++        // Cancelled reservations return exactly the asset placed in custody.
++        let receipt = submit(&mut ledger, &subscriber_key, &subscriber,
++            PFTL_UNISWAP_ORDER_RESERVE_TRANSACTION_KIND,
++            AssetTransactionOperation::PftlUniswapOrderReserve(reserve("a3")), 24);
++        assert!(receipt.accepted, "source reserve: {receipt:?}");
++        assert_eq!(issued_asset_family_supply(&ledger, &settlement_asset_id).unwrap(), family_supply_before);
++        ledger.validate_pftl_source_custody().unwrap();
++        let receipt = submit(&mut ledger, &subscriber_key, &subscriber,
++            postfiat_types::PFTL_UNISWAP_ORDER_RELEASE_TRANSACTION_KIND,
++            AssetTransactionOperation::PftlUniswapOrderRelease(postfiat_types::PftlUniswapOrderReleaseOperation {
++                releaser: subscriber.clone(), route_id: route_id.clone(), reservation_id: "a3".repeat(48),
++            }), 24);
++        assert!(receipt.accepted, "source refund: {receipt:?}");
++        assert_eq!(ledger.trustlines[line].balance, balance);
++        assert_eq!(issued_asset_family_supply(&ledger, &settlement_asset_id).unwrap(), family_supply_before);
++        assert_eq!(ledger.trustline_for_account_asset(&subscriber, &settlement_asset_id).unwrap().balance, family_balance_before);
++        assert!(ledger.pftl_uniswap_source_custody[0].reservation_escrows.is_empty());
++    }
+     let receipt = submit(
+         &mut ledger,
+         &subscriber_key,
+         &subscriber,
+         PFTL_UNISWAP_ORDER_RESERVE_TRANSACTION_KIND,
+         AssetTransactionOperation::PftlUniswapOrderReserve(PftlUniswapOrderReserveOperation {
++            settlement_source_asset_id: source_id.clone(),
+             subscriber: subscriber.clone(),
+             route_id: route_id.clone(),
+             reservation_id: reservation_id.clone(),
+             ethereum_recipient: "0x4444444444444444444444444444444444444444".to_string(),
+-            route_epoch: 1,
+-            policy_epoch: 1,
++            route_epoch: policy.policy_epoch,
++            policy_epoch: policy.policy_epoch,
+             policy_hash: policy.policy_hash.clone(),
+             mint_amount_atoms: 2_000_000,
+             max_settlement_value_atoms: 14_070_000,
+@@ -7076,14 +7156,15 @@ fn pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09
+     assert!(receipt.accepted, "{receipt:?}");
+ 
+     let valid_redeem = |nonce: String| PftlUniswapPrimaryRedeemOperation {
++        settlement_source_asset_id: source_id.clone(),
+         owner: subscriber.clone(),
+         settlement_recipient: subscriber.clone(),
+         route_id: route_id.clone(),
+         redemption_nonce: nonce,
+         nav_amount_atoms: 1_000_000,
+         min_settlement_value_atoms: 6_996_500,
+-        route_epoch: 1,
+-        policy_epoch: 1,
++        route_epoch: policy.policy_epoch,
++        policy_epoch: policy.policy_epoch,
+         policy_hash: policy.policy_hash.clone(),
+         pricing_nav_epoch: 7,
+         pricing_reserve_packet_hash: pricing_reserve_packet_hash.clone(),
+@@ -7128,11 +7209,11 @@ fn pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09
+     expect_policy_mismatch(&mut ledger, "above maximum order", above_maximum);
+ 
+     let mut wrong_route_epoch = valid_redeem("d3".repeat(32));
+-    wrong_route_epoch.route_epoch = 2;
++    wrong_route_epoch.route_epoch = policy.policy_epoch + 1;
+     expect_policy_mismatch(&mut ledger, "wrong route epoch", wrong_route_epoch);
+ 
+     let mut wrong_policy_epoch = valid_redeem("d4".repeat(32));
+-    wrong_policy_epoch.policy_epoch = 2;
++    wrong_policy_epoch.policy_epoch = policy.policy_epoch + 1;
+     expect_policy_mismatch(&mut ledger, "wrong policy epoch", wrong_policy_epoch);
+ 
+     let mut wrong_policy_hash = valid_redeem("d5".repeat(32));
+@@ -7143,6 +7224,28 @@ fn pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09
+     expired.expires_at_height = 25;
+     expect_policy_mismatch(&mut ledger, "expired redemption", expired);
+ 
++    if let Some(id) = &source_id {
++        assert_eq!(issued_asset_family_supply(&ledger,&settlement_asset_id).unwrap(),family_supply_before);
++        assert_eq!(ledger.trustline_for_account_asset(&subscriber,&settlement_asset_id).unwrap().balance,family_balance_before);
++        ledger.validate_pftl_source_custody().unwrap();
++        let source = &ledger.pftl_uniswap_source_custody[0];
++        assert_eq!(source.principal_atoms,14_000_000);
++        assert_eq!(source.spread_atoms,70_000);
++        assert!(source.reservation_escrows.is_empty());
++        assert_eq!(source.asset_id,*id);
++        let before = ledger.clone();
++        let mut pooled = valid_redeem("ee".repeat(32));
++        pooled.settlement_source_asset_id = None;
++        let receipt = submit(&mut ledger,&subscriber_key,&subscriber,PFTL_UNISWAP_PRIMARY_REDEEM_TRANSACTION_KIND,
++            AssetTransactionOperation::PftlUniswapPrimaryRedeem(pooled),26);
++        assert!(!receipt.accepted,"pooled redemption must not drain source reserves");
++        assert_eq!(receipt.code,"pftl_legacy_reserve_unavailable");
++        assert_eq!(ledger,before);
++    }
++    if source_mode {
++        ledger.pftl_uniswap_source_custody[0].enabled_for_issue = false;
++    }
++    // Existing source custody remains redeemable after issuance is disabled.
+     // The exact valid tuple is admitted.
+     let accepted_nonce = "d8".repeat(32);
+     let transaction = signed_asset_transaction_with_minimum_fee(
+@@ -7167,10 +7270,28 @@ fn pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09
+         assert!(v2.redemption_nonces.contains_key(&accepted_nonce));
+     }
+ 
++    if source_mode {
++        assert_eq!(issued_asset_family_supply(&ledger,&settlement_asset_id).unwrap(),family_supply_before);
++        assert_eq!(ledger.trustline_for_account_asset(&subscriber,&settlement_asset_id).unwrap().balance,family_balance_before);
++        ledger.validate_pftl_source_custody().unwrap();
++        let row=&ledger.pftl_uniswap_source_custody[0];
++        assert_eq!(row.principal_atoms,7_000_000);
++        assert_eq!(row.spread_atoms,73_500);
++    }
+     // Nonce replay of the accepted redemption must fail closed.
+     expect_policy_mismatch(&mut ledger, "nonce replay", valid_redeem(accepted_nonce));
+ }
+ 
++#[test]
++fn pftl_uniswap_v2_primary_redeem_enforces_production_shaped_policy_binding_ar09() {
++    primary_redeem_source_fixture(false);
++}
++
++#[test]
++fn pftl_source_settlement_roundtrip_preserves_source_and_pooled_custody() {
++    primary_redeem_source_fixture(true);
++}
++
+ #[test]
+ fn ar01_pfusdc_reserve_account_identity_and_balance_matches_production_fixture() {
+     let genesis = Genesis::new("postfiat-local");
+@@ -7717,7 +7838,8 @@ fn ar05_active_export_entitlement_blocks_route_epoch_advance_until_closed() {
+     next_policy.policy_epoch = 2;
+     next_policy.policy_hash = next_policy.computed_hash();
+     let epoch_advance = PftlUniswapRouteEpochAdvanceOperation {
+-        operator: operator.clone(),
++                settlement_source_asset_ids: None,
++operator: operator.clone(),
+         route_id: route_id.clone(),
+         prior_route_epoch: 1,
+         next_route_epoch: 2,
+diff --git a/crates/execution/src/nav_vault_asset_execution.rs b/crates/execution/src/nav_vault_asset_execution.rs
+index 94bf32fd..ff594855 100644
+--- a/crates/execution/src/nav_vault_asset_execution.rs
++++ b/crates/execution/src/nav_vault_asset_execution.rs
+@@ -4559,10 +4559,12 @@ fn apply_pftl_uniswap_order_reserve(
+     // The signed maximum is held immediately. This makes reservations
+     // sybil-resistant and guarantees the later subscription can settle
+     // without an operator or a second value authorization.
++    let source_route = ledger.pftl_uniswap_routes[route_index].clone();
++    let funding_asset = pftl_source_reserve(ledger, &source_route, operation)?;
+     debit_issued_asset_balance(
+         ledger,
+         &operation.subscriber,
+-        &next_route.settlement_asset_id,
++        &funding_asset,
+         operation.max_settlement_value_atoms,
+         "PFTL-Uniswap order reservation escrow",
+     )?;
+@@ -4663,10 +4665,12 @@ fn apply_pftl_uniswap_order_release(
+             ));
+         };
+     if let Some(refund_atoms) = escrow_refund {
++        let source_route = ledger.pftl_uniswap_routes[route_index].clone();
++        let funding_asset = pftl_source_release(ledger, &source_route, &operation.reservation_id, refund_atoms)?;
+         credit_issued_asset_balance_from_custody(
+             ledger,
+             &owner,
+-            &next_route.settlement_asset_id,
++            &funding_asset,
+             refund_atoms,
+             "PFTL-Uniswap released reservation refund",
+         )?;
+@@ -4809,11 +4813,12 @@ fn apply_pftl_uniswap_primary_subscribe_v2(
+                 "reservation escrow is below settlement due".to_string(),
+             )
+         })?;
++    let funding_asset = pftl_source_subscription(ledger, &route, &operation.reservation_id, base_value, spread)?;
+     if reservation_refund != 0 {
+         credit_issued_asset_balance_from_custody(
+             ledger,
+             &operation.subscriber,
+-            &operation.settlement_asset_id,
++            &funding_asset,
+             reservation_refund,
+             "PFTL-Uniswap subscription reservation refund",
+         )?;
+@@ -5222,7 +5227,7 @@ pub fn apply_asset_orchard_private_primary_redeem_route_transition(
+         postfiat_types::PFTL_UNISWAP_BPS_DENOMINATOR,
+     )?;
+     if operation.settlement_value_atoms != settlement_output
+-        || route.settlement_reserve_atoms < base_value
++        || pftl_legacy_principal(ledger, &route)? < base_value
+     {
+         return Err((
+             "pftl_uniswap_private_redemption_unavailable",
+@@ -5416,6 +5421,7 @@ fn apply_pftl_uniswap_primary_redeem(
+             "redemption output exceeds base NAV".to_string(),
+         )
+     })?;
++    let payout_asset = pftl_source_redeem(ledger, &route, operation.settlement_source_asset_id.as_deref(), base_value, spread)?;
+     debit_issued_asset_balance(
+         ledger,
+         &operation.owner,
+@@ -5426,7 +5432,7 @@ fn apply_pftl_uniswap_primary_redeem(
+     credit_issued_asset_balance_from_custody(
+         ledger,
+         &operation.settlement_recipient,
+-        &route.settlement_asset_id,
++        &payout_asset,
+         settlement_output,
+         "PFTL-Uniswap primary redemption settlement credit",
+     )?;
+@@ -5598,6 +5604,7 @@ fn apply_pftl_uniswap_route_epoch_advance(
+     next_route
+         .validate()
+         .map_err(|error| ("bad_pftl_uniswap_route", error))?;
++    pftl_source_govern(ledger, &next_route, operation.settlement_source_asset_ids.as_ref())?;
+     let state_after_hash = pftl_uniswap_route_state_hash(&next_route);
+     ledger.pftl_uniswap_routes[route_index] = next_route;
+     append_pftl_uniswap_consensus_receipt(
+@@ -7974,6 +7981,7 @@ fn validate_vault_bridge_reserve_packet_fields(
+     nav_asset: &NavTrackedAsset,
+     profile: &NavProofProfile,
+     operation: &NavReserveSubmitOperation,
++    compatibility: AssetExecutionCompatibility,
+ ) -> Result<(), (&'static str, String)> {
+     ensure_vault_bridge_asset_policy(ledger, nav_asset, &operation.submitter)?;
+     if operation.nav_per_unit != VAULT_BRIDGE_UNIT {
+@@ -8020,7 +8028,11 @@ fn validate_vault_bridge_reserve_packet_fields(
+     // series-only vault bridge asset (every claim credited a source series and
+     // nobody holds the base id) has a base-only supply of zero, which would
+     // reject every honest packet and leave NAV unfinalizable.
+-    let current_supply = issued_asset_family_supply(ledger, &operation.asset_id)?;
++    let current_supply = if compatibility.allow_legacy_base_only_vault_reserve_supply {
++        issued_asset_supply(ledger, &operation.asset_id)?
++    } else {
++        issued_asset_family_supply(ledger, &operation.asset_id)?
++    };
+     let maximum_proof_backed_supply = current_supply
+         .checked_add(finalized_unclaimed_sp1_backing)
+         .ok_or_else(|| {
+diff --git a/crates/execution/src/nft_escrow_asset_execution.rs b/crates/execution/src/nft_escrow_asset_execution.rs
+index f87b0348..adff673a 100644
+--- a/crates/execution/src/nft_escrow_asset_execution.rs
++++ b/crates/execution/src/nft_escrow_asset_execution.rs
+@@ -619,6 +619,8 @@ pub struct AssetExecutionCompatibility {
+     pub allow_incremental_age_release_replay: bool,
+     pub allow_legacy_pftl_uniswap_disabled_live_value_replay: bool,
+     pub allow_legacy_non_nav_spread_supply_omission: bool,
++    /// Archive-only: pre-family reserve accounting. Never selected for new execution.
++    pub allow_legacy_base_only_vault_reserve_supply: bool,
+     pub bridge_verification_activation_height: Option<u64>,
+     pub orchard_aware_bridge_claim_activation_height: Option<u64>,
+     pub pfusdc_source_series_activation_height: Option<u64>,
+@@ -637,6 +639,7 @@ impl AssetExecutionCompatibility {
+             allow_incremental_age_release_replay: false,
+             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
+             allow_legacy_non_nav_spread_supply_omission: false,
++            allow_legacy_base_only_vault_reserve_supply: false,
+             bridge_verification_activation_height: Some(0),
+             orchard_aware_bridge_claim_activation_height: Some(0),
+             pfusdc_source_series_activation_height: None,
+@@ -655,6 +658,7 @@ impl AssetExecutionCompatibility {
+             allow_incremental_age_release_replay: false,
+             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
+             allow_legacy_non_nav_spread_supply_omission: false,
++            allow_legacy_base_only_vault_reserve_supply: false,
+             bridge_verification_activation_height: Some(0),
+             orchard_aware_bridge_claim_activation_height: Some(0),
+             pfusdc_source_series_activation_height: None,
+@@ -673,6 +677,7 @@ impl AssetExecutionCompatibility {
+             allow_incremental_age_release_replay: false,
+             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
+             allow_legacy_non_nav_spread_supply_omission: false,
++            allow_legacy_base_only_vault_reserve_supply: false,
+             bridge_verification_activation_height: Some(0),
+             orchard_aware_bridge_claim_activation_height: Some(0),
+             pfusdc_source_series_activation_height: None,
+@@ -691,6 +696,7 @@ impl AssetExecutionCompatibility {
+             allow_incremental_age_release_replay: false,
+             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
+             allow_legacy_non_nav_spread_supply_omission: false,
++            allow_legacy_base_only_vault_reserve_supply: false,
+             bridge_verification_activation_height: Some(0),
+             orchard_aware_bridge_claim_activation_height: Some(0),
+             pfusdc_source_series_activation_height: None,
+@@ -709,6 +715,7 @@ impl AssetExecutionCompatibility {
+             allow_incremental_age_release_replay: false,
+             allow_legacy_pftl_uniswap_disabled_live_value_replay: false,
+             allow_legacy_non_nav_spread_supply_omission: false,
++            allow_legacy_base_only_vault_reserve_supply: false,
+             bridge_verification_activation_height: Some(0),
+             orchard_aware_bridge_claim_activation_height: Some(0),
+             pfusdc_source_series_activation_height: None,
+@@ -1379,7 +1386,7 @@ fn apply_asset_operation(
+                     decoded_reserve_public_values = Some(decoded);
+                 }
+                 if profile.source_class.starts_with(VAULT_BRIDGE_PROFILE_SOURCE_CLASS_PREFIX) {
+-                    validate_vault_bridge_reserve_packet_fields(ledger, &nav_asset, profile, operation)?;
++                    validate_vault_bridge_reserve_packet_fields(ledger, &nav_asset, profile, operation, compatibility)?;
+                 }
+             }
+             let mut packet = NavReservePacket::new(
+diff --git a/crates/node/src/block_replay_wallet.rs b/crates/node/src/block_replay_wallet.rs
+index 3d9c762c..a9761efd 100644
+--- a/crates/node/src/block_replay_wallet.rs
++++ b/crates/node/src/block_replay_wallet.rs
+@@ -2677,10 +2677,10 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) ->
+         nfts: _,
+         offers,
+         nav_assets: _,
+-        nav_reserve_packets: _,
++        nav_reserve_packets,
+         nav_redemptions: _,
+         nav_proof_profiles: _,
+-        nav_attestors: _,
++        nav_attestors,
+         market_ops_policies: _,
+         market_ops_envelopes: _,
+         fx_fix_states: _,
+@@ -2689,7 +2689,8 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) ->
+         vault_bridge_bucket_states: _,
+         vault_bridge_allocations: _,
+         vault_bridge_redemptions: _,
+-        vault_bridge_deposits: _,
++        vault_bridge_deposits,
++        pftl_uniswap_source_custody: _, // issued pfUSDC custody, never native PFT
+         pftl_uniswap_routes: _,
+         pftl_uniswap_receipts: _,
+         owned_objects,
+@@ -2733,6 +2734,27 @@ pub fn native_pft_live_total(ledger: &LedgerState, shielded: &ShieldedState) ->
+         }
+         add(&mut total, u128::from(account.balance), "account balances")?;
+     }
++    let mut attestor_ids = std::collections::BTreeSet::new();
++    for attestor in nav_attestors {
++        if !attestor_ids.insert(attestor.address.as_str()) {
++            return Err(duplicate("NAV attestor", &attestor.address));
++        }
++        add(&mut total, u128::from(attestor.bond), "NAV attestor bonds")?;
++    }
++    let mut packet_ids = std::collections::BTreeSet::new();
++    for packet in nav_reserve_packets {
++        if !packet_ids.insert(packet.packet_id.as_str()) {
++            return Err(duplicate("NAV reserve packet", &packet.packet_id));
++        }
++        add(&mut total, u128::from(packet.challenge_bond), "NAV challenge bonds")?;
++    }
++    let mut deposit_ids = std::collections::BTreeSet::new();
++    for deposit in vault_bridge_deposits {
++        if !deposit_ids.insert((deposit.asset_id.as_str(), deposit.evidence_root.as_str())) {
++            return Err(duplicate("vault deposit", &deposit.evidence_root));
++        }
++        add(&mut total, u128::from(deposit.challenge_bond), "vault deposit challenge bonds")?;
++    }
+     let mut escrow_ids = std::collections::BTreeSet::new();
+     for escrow in escrows {
+         if !escrow_ids.insert(escrow.escrow_id.as_str()) {
+@@ -3478,3 +3500,54 @@ pub fn wallet_test_vector(options: WalletTestVectorOptions) -> io::Result<Wallet
+         private_key_material_redacted: true,
+     })
+ }
++
++#[cfg(test)]
++mod native_bond_custody_tests {
++    use super::*;
++
++    #[test]
++    fn native_bond_custody_is_conserved_and_duplicate_custody_rejected() {
++        let shielded = ShieldedState::empty();
++        let mut ledger = LedgerState::new(vec![Account::new("pfbondowner", 100, None)]);
++        let before = native_pft_live_total(&ledger, &shielded).unwrap();
++        ledger.accounts[0].balance -= 7;
++        ledger.nav_attestors.push(postfiat_types::NavAttestor {
++            address: "pfbondowner".to_string(), domain: "test".to_string(),
++            bond: 7, registered_at_height: 1,
++        });
++        assert_eq!(native_pft_live_total(&ledger, &shielded).unwrap(), before);
++        let mut packet: postfiat_types::NavReservePacket = serde_json::from_str(include_str!(
++            "../testdata/pfeth-reserve-replay/reserve-packet.json"
++        )).unwrap();
++        packet.challenge_bond = 11;
++        ledger.accounts[0].balance -= 11;
++        ledger.nav_reserve_packets.push(packet);
++        assert_eq!(native_pft_live_total(&ledger, &shielded).unwrap(), before);
++        let mut deposit: postfiat_types::VaultBridgeDepositRecord = serde_json::from_str(include_str!(
++            "../testdata/pfeth-reserve-replay/deposit.json"
++        )).unwrap();
++        deposit.challenge_bond = 13;
++        ledger.accounts[0].balance -= 13;
++        ledger.vault_bridge_deposits.push(deposit);
++        assert_eq!(native_pft_live_total(&ledger, &shielded).unwrap(), before);
++        for lane in ["attestor", "packet", "deposit"] {
++            let mut duplicate = ledger.clone();
++            match lane {
++                "attestor" => duplicate.nav_attestors.push(ledger.nav_attestors[0].clone()),
++                "packet" => duplicate.nav_reserve_packets.push(ledger.nav_reserve_packets[0].clone()),
++                "deposit" => duplicate.vault_bridge_deposits.push(ledger.vault_bridge_deposits[0].clone()),
++                _ => unreachable!(),
++            }
++            assert!(native_pft_live_total(&duplicate, &shielded).unwrap_err().to_string()
++                .contains("duplicate native custody"));
++        }
++        // Payouts clear the outstanding bond. Counting it after payout would inflate supply.
++        ledger.accounts[0].balance += 24;
++        ledger.nav_reserve_packets[0].challenge_bond = 0;
++        ledger.vault_bridge_deposits[0].challenge_bond = 0;
++        assert_eq!(native_pft_live_total(&ledger, &shielded).unwrap(), before);
++        ledger.accounts[0].balance -= 1;
++        assert!(verify_native_pft_transition(963, before,
++            native_pft_live_total(&ledger, &shielded).unwrap(), &[]).is_err());
++    }
++}
+diff --git a/crates/node/src/execution_actions.rs b/crates/node/src/execution_actions.rs
+index 68a303c0..912c1208 100644
+--- a/crates/node/src/execution_actions.rs
++++ b/crates/node/src/execution_actions.rs
+@@ -712,15 +712,61 @@ pub(super) fn execute_asset_transaction_for_archive_replay(
+         return Ok(receipt);
+     }
+ 
++    let mut compatibility =
++        asset_execution_compatibility_for_genesis_and_governance(genesis, governance);
++    compatibility.allow_legacy_base_only_vault_reserve_supply =
++        archived_pfeth_base_only_reserve_allowed(genesis, block, transaction);
+     Ok(execute_asset_transaction_with_compatibility(
+         genesis,
+         ledger,
+         transaction,
+         block.header.height,
+-        asset_execution_compatibility_for_genesis_and_governance(genesis, governance),
++        compatibility,
+     ))
+ }
+ 
++// Release ef2dec31 checked base-only supply; 1bcd0f0d changed new execution
++// to family supply. These two exact, certified, unfinalized reserve packets
++// predate that change. Replay re-executes the old calculation, still checking
++// signatures, receipts, backing, every state root and the complete block chain.
++// No height range, new transaction or other genesis can select this rule.
++fn archived_pfeth_base_only_reserve_allowed(
++    genesis: &Genesis,
++    block: &BlockRecord,
++    transaction: &SignedAssetTransaction,
++) -> bool {
++    if genesis.chain_id != "postfiat-wan-devnet-2"
++        || genesis_hash(genesis) != "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9"
++        || block.header.batch_kind != BATCH_KIND_TRANSPARENT
++        || block.header.receipt_count != 1
++        || block.receipt_ids.len() != 1
++        || !matches!(&transaction.unsigned.operation, AssetTransactionOperation::NavReserveSubmit(_))
++    {
++        return false;
++    }
++    let tx_id = postfiat_execution::asset_transaction_tx_id(transaction);
++    const PACKETS: &[(u64, &str, &str, &str, &str)] = &[
++        (962,
++            "c6b83fb578782d83fab3af54707b5ff5941a5082505e7da09a1fe5f5a0d9cf215f2b1767a9e47d35e452a027938ed7ef",
++            "8beeb255c8b49383400eeb6a8ff3ff599ab735a9d0e29cbfd7f123ad25cc7196296fa62ac18e9098cf582227ef4bf3e9",
++            "a45f22378bc912e45730184151515605a35bc5dfc2deb3f3aa9adbb2340da9e2a173d166e791174841ae19e693c1eaf9",
++            "8acd66d1ac46597b20045928462bdf5e5ab581bc7a5d7480e68e93b6b384421d37be9ea334022b141c419a087cdcf814"),
++        (967,
++            "1d14ea10cd5b4c50d327011a181cd7e40be823faa9cbfdc325065bf205aa8a292791881c4151673e09f1011ca2fc16ed",
++            "d49e6becb1f1d0a3e304d6d1f20371fcfe7a42eb212f11672d16b43d6636bff941c1fcabb7c70c7c019520233bae9adf",
++            "8bc78375cebc3dbc082f7ff65017ad8cfe6a240cb50df304e9faca365956d37bcd82167b348bf06fae33082239b1f4e6",
++            "8fb66f6863220a89338b03bef9750a8b8eb93e2c50374bd632dabc3e3ae3598bffb748e0547fde19f85144bb453398e0"),
++    ];
++    PACKETS.iter().any(|(height, batch_id, block_hash, state_root, receipt_id)| {
++        block.header.height == *height
++            && block.header.batch_id == *batch_id
++            && block.header.block_hash == *block_hash
++            && block.header.state_root == *state_root
++            && block.receipt_ids[0] == *receipt_id
++            && tx_id == *receipt_id
++    })
++}
++
+ fn archived_wan_devnet2_disabled_live_value_route_allowed(
+     genesis: &Genesis,
+     block: &BlockRecord,
+@@ -4332,3 +4378,72 @@ pub(super) fn bridge_witness_registry_error(
+     }
+     None
+ }
++
++#[cfg(test)]
++mod pfeth_reserve_replay_tests {
++    use super::*;
++
++    #[test]
++    fn pfeth_reserve_new_execution_rejects_understatement_but_archive_recomputes_old_rule() {
++        let genesis: Genesis = serde_json::from_str(include_str!("../testdata/pfeth-reserve-replay/genesis.json")).unwrap();
++        let ledger: LedgerState = serde_json::from_str(include_str!("../testdata/pfeth-reserve-replay/synthetic-series-ledger.json")).unwrap();
++        let tx: SignedAssetTransaction = serde_json::from_str(include_str!("../testdata/pfeth-reserve-replay/tx-962.json")).unwrap();
++        let block: BlockRecord = serde_json::from_str(include_str!("../testdata/pfeth-reserve-replay/block-962.json")).unwrap();
++        let mut strict_ledger = ledger.clone();
++        let strict = execute_asset_transaction_with_compatibility(&genesis, &mut strict_ledger,
++            &tx, 962, AssetExecutionCompatibility::strict());
++        assert!(!strict.accepted, "{strict:?}");
++        assert_eq!(strict.code, "vault_bridge_circulating_supply_mismatch", "{strict:?}");
++        assert_eq!(strict_ledger, ledger);
++        let mut historical_ledger = ledger.clone();
++        let receipt = execute_asset_transaction_for_archive_replay(&genesis, &mut historical_ledger,
++            &tx, &block, 0, &GovernanceState::new(6), &[]).unwrap();
++        assert!(receipt.accepted, "{receipt:?}");
++        assert_eq!(receipt.fee_charged, 34);
++        assert_eq!(historical_ledger.nav_reserve_packets.len(), 1);
++    }
++
++    #[test]
++    fn pfeth_reserve_replay_is_pinned_to_exact_historical_packets() {
++        let genesis: Genesis = serde_json::from_str(include_str!(
++            "../testdata/pfeth-reserve-replay/genesis.json"
++        )).unwrap();
++        for (block_json, tx_json) in [
++            (include_str!("../testdata/pfeth-reserve-replay/block-962.json"),
++             include_str!("../testdata/pfeth-reserve-replay/tx-962.json")),
++            (include_str!("../testdata/pfeth-reserve-replay/block-967.json"),
++             include_str!("../testdata/pfeth-reserve-replay/tx-967.json")),
++        ] {
++            let block: BlockRecord = serde_json::from_str(block_json).unwrap();
++            let tx: SignedAssetTransaction = serde_json::from_str(tx_json).unwrap();
++            assert!(archived_pfeth_base_only_reserve_allowed(&genesis, &block, &tx));
++            for field in ["height", "batch", "hash", "root", "receipt", "count", "kind"] {
++                let mut bad = block.clone();
++                match field {
++                    "height" => bad.header.height += 1,
++                    "batch" => bad.header.batch_id.push('0'),
++                    "hash" => bad.header.block_hash.push('0'),
++                    "root" => bad.header.state_root.push('0'),
++                    "receipt" => bad.receipt_ids[0].push('0'),
++                    "count" => bad.header.receipt_count += 1,
++                    "kind" => bad.header.batch_kind = BATCH_KIND_SHIELDED.to_string(),
++                    _ => unreachable!(),
++                }
++                assert!(!archived_pfeth_base_only_reserve_allowed(&genesis, &bad, &tx), "{field}");
++            }
++            let mut altered_tx = tx.clone();
++            altered_tx.unsigned.sequence += 1;
++            assert!(!archived_pfeth_base_only_reserve_allowed(&genesis, &block, &altered_tx));
++            let mut other_genesis = genesis.clone();
++            other_genesis.chain_id = "postfiat-local".to_string();
++            assert!(!archived_pfeth_base_only_reserve_allowed(&other_genesis, &block, &tx));
++            let same_name_genesis = Genesis::try_new_with_validator_count(
++                "postfiat-wan-devnet-2".to_string(), 1).unwrap();
++            assert!(!archived_pfeth_base_only_reserve_allowed(&same_name_genesis, &block, &tx));
++        }
++        assert!(!AssetExecutionCompatibility::strict().allow_legacy_base_only_vault_reserve_supply);
++        assert!(!asset_execution_compatibility_for_genesis_and_governance(
++            &genesis, &GovernanceState::new(6)
++        ).allow_legacy_base_only_vault_reserve_supply);
++    }
++}
+diff --git a/crates/node/src/main_parts/tests/rpc_serve_request_tests.rs b/crates/node/src/main_parts/tests/rpc_serve_request_tests.rs
+index 9d5b6e16..2977207b 100644
+--- a/crates/node/src/main_parts/tests/rpc_serve_request_tests.rs
++++ b/crates/node/src/main_parts/tests/rpc_serve_request_tests.rs
+@@ -917,6 +917,106 @@ mod rpc_serve_request_tests {
+         std::fs::remove_dir_all(root).expect("cleanup health stamp root");
+     }
+ 
++    #[test]
++    fn rpc_serve_status_cache_expires_after_transactional_commit() {
++        let root = env::temp_dir().join(format!(
++            "postfiat-rpc-status-transactional-{}-{}",
++            process::id(),
++            SystemTime::now()
++                .duration_since(UNIX_EPOCH)
++                .unwrap()
++                .as_nanos(),
++        ));
++        init_consensus_v2(InitConsensusV2Options {
++            data_dir: root.clone(),
++            chain_id: "rpc-status-transactional".to_string(),
++            node_id: "validator-0".to_string(),
++            validator_count: 1,
++            activation_height: 1000,
++            storage_activation_height: Some(1),
++        })
++        .expect("initialize transactional RPC fixture");
++        let recipient_backup = postfiat_rpc_sdk::wallet_backup_from_master_seed(
++            "rpc-status-transactional",
++            "ab".repeat(32),
++            0,
++        )
++        .unwrap();
++        let recipient_key = postfiat_rpc_sdk::derive_wallet_key_pair(&recipient_backup).unwrap();
++        let recipient =
++            postfiat_crypto_provider::address_from_public_key(&recipient_key.public_key);
++        let commit = || {
++            let batch_file = root.join("transfer.batch.json");
++            create_transfer_batch(BatchTransferOptions {
++                data_dir: root.clone(),
++                key_file: None,
++                to: recipient.clone(),
++                amount: 250_000,
++                batch_file: batch_file.clone(),
++            })
++            .expect("build transfer");
++            let receipts = apply_batch(ApplyBatchOptions {
++                data_dir: root.clone(),
++                batch_file,
++                certificate_file: None,
++            })
++            .expect("commit transfer");
++            assert!(
++                receipts.iter().all(|receipt| receipt.accepted),
++                "{receipts:?}"
++            );
++        };
++        commit();
++        let cache = Mutex::new(RpcServeHealthCache::default());
++        let (first, hit) = rpc_serve_cached_status(&root, &cache).expect("prime cache");
++        assert!(!hit);
++        assert_eq!(first.block_height, 1);
++        assert!(postfiat_storage::NodeStore::new(&root)
++            .transactional_storage_active()
++            .unwrap());
++        let stamp = rpc_serve_health_stamp(&root, true).expect("legacy stamp");
++        commit();
++        assert_eq!(
++            rpc_serve_health_stamp(&root, true).unwrap(),
++            stamp,
++            "transactional commits must exercise unchanged legacy metadata"
++        );
++        assert_eq!(
++            status(NodeOptions {
++                data_dir: root.clone()
++            })
++            .unwrap()
++            .block_height,
++            2
++        );
++        let expired = Instant::now() - RPC_SERVE_HEALTH_STAMP_MAX_AGE - Duration::from_secs(1);
++        cache.lock().unwrap().status_checked_at = Some(expired);
++        let (fresh, hit) = rpc_serve_cached_status(&root, &cache).expect("refresh expired cache");
++        assert!(
++            !hit,
++            "unchanged legacy files must not extend an expired report"
++        );
++        assert_eq!(fresh.block_height, 2);
++        let (cached, hit) = rpc_serve_cached_status(&root, &cache).expect("reuse fresh cache");
++        assert!(hit);
++        assert_eq!(cached.block_tip_hash, fresh.block_tip_hash);
++
++        cache.lock().unwrap().status_checked_at = Some(expired);
++        let genesis_path = root.join(postfiat_storage::GENESIS_FILE);
++        let genesis = fs::read(&genesis_path).unwrap();
++        fs::write(&genesis_path, b"invalid genesis").unwrap();
++        for _ in 0..2 {
++            assert!(
++                rpc_serve_cached_status(&root, &cache).is_err(),
++                "failed refresh must not make an expired report fresh again"
++            );
++            assert_eq!(cache.lock().unwrap().status_checked_at, Some(expired));
++        }
++        fs::write(&genesis_path, genesis).unwrap();
++        assert!(!rpc_serve_cached_status(&root, &cache).unwrap().1);
++        fs::remove_dir_all(root).expect("cleanup transactional RPC fixture");
++    }
++
+     #[cfg(target_os = "linux")]
+     #[test]
+     fn rpc_serve_event_log_failure_degrades_without_failing_listener_path() {
+diff --git a/crates/node/src/market_bridge.rs b/crates/node/src/market_bridge.rs
+index 920e879b..4c5bbfc7 100644
+--- a/crates/node/src/market_bridge.rs
++++ b/crates/node/src/market_bridge.rs
+@@ -1688,6 +1688,7 @@ fn pftl_uniswap_consensus_supply_status(
+             .min(reserve_backed_nav_atoms.unwrap_or_default())
+     });
+     Ok(PftlUniswapSupplyStatusReport {
++        source_settlement_custody: ledger.pftl_uniswap_source_custody.iter().filter(|row| row.route_id == route.route_id).cloned().collect(),
+         schema: if v2.is_some() {
+             "postfiat-pftl-uniswap-supply-status-v2".to_string()
+         } else {
+diff --git a/crates/node/src/rpc_cli.rs b/crates/node/src/rpc_cli.rs
+index b5488cdd..80301eb5 100644
+--- a/crates/node/src/rpc_cli.rs
++++ b/crates/node/src/rpc_cli.rs
+@@ -277,7 +277,7 @@ struct RpcServeMempoolSubmitState {
+ 
+ #[derive(Debug, Default)]
+ struct RpcServeHealthCache {
+-    status: Option<(RpcServeHealthStamp, StatusReport)>,
++    status: Option<StatusReport>,
+     mempool: Option<(RpcServeHealthStamp, postfiat_types::MempoolState)>,
+     status_checked_at: Option<Instant>,
+     mempool_checked_at: Option<Instant>,
+@@ -671,10 +671,7 @@ fn rpc_serve(options: RpcServeOptions) -> Result<RpcServeReport, String> {
+     let mempool_mutation_lock = Arc::new(Mutex::new(()));
+     let finality_submit_lock = Arc::new(Mutex::new(()));
+     let health_cache = Arc::new(Mutex::new(RpcServeHealthCache {
+-        status: Some((
+-            rpc_serve_health_stamp(&options.data_dir, true)?,
+-            local_status.clone(),
+-        )),
++        status: Some(local_status.clone()),
+         mempool: Some((
+             rpc_serve_health_stamp(&options.data_dir, false)?,
+             initial_mempool,
+@@ -1136,7 +1133,7 @@ fn handle_rpc_serve_connection(
+             &format!("rpc method `{method}` is not enabled on the read-only remote server"),
+         )
+     } else if method == "status" {
+-        match rpc_serve_cached_status(context) {
++        match rpc_serve_cached_status(&context.data_dir, &context.health_cache) {
+             Ok((report, cache_hit)) => {
+                 health_cache_hit = cache_hit;
+                 success_response(
+@@ -2083,32 +2080,30 @@ fn merge_rpc_serve_server_info_capabilities(
+ }
+ 
+ fn rpc_serve_cached_status(
+-    context: &RpcServeConnectionContext,
++    data_dir: &Path,
++    health_cache: &Mutex<RpcServeHealthCache>,
+ ) -> Result<(StatusReport, bool), String> {
+-    if let Ok(cache) = context.health_cache.lock() {
++    if let Ok(cache) = health_cache.lock() {
+         if cache.status_checked_at.is_some_and(|checked_at| {
+             checked_at.elapsed() <= RPC_SERVE_HEALTH_STAMP_MAX_AGE
+         }) {
+-            if let Some((_, report)) = cache.status.as_ref() {
+-                return Ok((report.clone(), true));
+-            }
+-        }
+-    }
+-    let current_stamp = rpc_serve_health_stamp(&context.data_dir, true)?;
+-    if let Ok(mut cache) = context.health_cache.lock() {
+-        cache.status_checked_at = Some(Instant::now());
+-        if let Some((stamp, report)) = cache.status.as_ref() {
+-            if *stamp == current_stamp {
++            if let Some(report) = cache.status.as_ref() {
+                 return Ok((report.clone(), true));
+             }
+         }
+     }
++    // Transactional commits do not update the legacy JSON files. The age
++    // limit must bound the report itself, not just checks of those files.
++    // Start the age before the read, and publish it only on success: a slow
++    // or failed refresh must not extend the lifetime of an old report.
++    let checked_at = Instant::now();
+     let report = status(NodeOptions {
+-        data_dir: context.data_dir.clone(),
++        data_dir: data_dir.to_path_buf(),
+     })
+     .map_err(|error| format!("rpc status read failed: {error}"))?;
+-    if let Ok(mut cache) = context.health_cache.lock() {
+-        cache.status = Some((current_stamp, report.clone()));
++    if let Ok(mut cache) = health_cache.lock() {
++        cache.status = Some(report.clone());
++        cache.status_checked_at = Some(checked_at);
+     }
+     Ok((report, false))
+ }
+diff --git a/crates/node/src/state_commitment.rs b/crates/node/src/state_commitment.rs
+index 36d01528..10fb8546 100644
+--- a/crates/node/src/state_commitment.rs
++++ b/crates/node/src/state_commitment.rs
+@@ -805,6 +805,7 @@ fn validate_issued_supply_custody_inventory(
+         vault_bridge_allocations: _,
+         vault_bridge_redemptions: _,
+         vault_bridge_deposits: _,
++        pftl_uniswap_source_custody,
+         pftl_uniswap_routes,
+         pftl_uniswap_receipts: _,
+         owned_objects,
+@@ -959,6 +960,11 @@ fn validate_issued_supply_custody_inventory(
+         }
+     }
+ 
++    for row in pftl_uniswap_source_custody {
++        if !known(&row.asset_id) {
++            return Err(io::Error::new(io::ErrorKind::InvalidData, "source custody references an unknown issued asset"));
++        }
++    }
+     let mut route_ids = BTreeSet::new();
+     for route in pftl_uniswap_routes {
+         if !route_ids.insert(route.route_id.as_str()) {
+@@ -1494,6 +1500,14 @@ pub(super) fn append_ledger_state(
+         }
+     }
+ 
++    if !ledger.pftl_uniswap_source_custody.is_empty() {
++        let mut rows = ledger.pftl_uniswap_source_custody.iter().collect::<Vec<_>>();
++        rows.sort_by(|a,b| (&a.route_id,&a.asset_id).cmp(&(&b.route_id,&b.asset_id)));
++        append_canonical_usize(bytes, "ledger.pftl_source_custody_count", rows.len());
++        for row in rows {
++            append_canonical_bytes_commitment(bytes, "ledger.pftl_source_custody", &serde_json::to_vec(row).expect("source custody is serializable"));
++        }
++    }
+     if commit_complete_nav_state && !ledger.pftl_uniswap_routes.is_empty() {
+         let mut pftl_uniswap_routes = ledger.pftl_uniswap_routes.iter().collect::<Vec<_>>();
+         pftl_uniswap_routes.sort_by(|left, right| left.route_id.cmp(&right.route_id));
+@@ -1736,6 +1750,7 @@ fn assert_ledger_state_commitment_inventory_complete(ledger: &LedgerState) {
+         vault_bridge_allocations: _,
+         vault_bridge_redemptions: _,
+         vault_bridge_deposits: _,
++        pftl_uniswap_source_custody: _,
+         pftl_uniswap_routes: _,
+         pftl_uniswap_receipts: _,
+         owned_objects: _,
+@@ -5666,3 +5681,39 @@ pub(super) fn append_canonical_i64(bytes: &mut Vec<u8>, label: &str, value: i64)
+     bytes.extend_from_slice(value.to_string().as_bytes());
+     bytes.push(b'\n');
+ }
++
++#[cfg(test)]
++mod source_settlement_commitment_tests {
++    use super::*;
++    #[test]
++    fn source_custody_is_committed_and_empty_state_preserves_legacy_bytes() {
++        fn encoded(ledger: &LedgerState) -> Vec<u8> {
++            let mut bytes=Vec::new();
++            append_ledger_state(&mut bytes,ledger,true,true,false,false,true,false,false).unwrap();
++            bytes
++        }
++        let mut ledger=LedgerState::new(Vec::new());
++        let legacy=encoded(&ledger);
++        assert!(!serde_json::to_value(&ledger).unwrap().as_object().unwrap().contains_key("pftl_uniswap_source_custody"));
++        let row=postfiat_types::PftlUniswapSourceCustody {
++            route_id:"route".to_string(),asset_id:"11".repeat(48),enabled_for_issue:true,
++            principal_atoms:100,spread_atoms:2,reservation_escrows:Default::default(),
++        };
++        ledger.pftl_uniswap_source_custody.push(row.clone());
++        let approved=encoded(&ledger);
++        assert_ne!(approved,legacy);
++        ledger.pftl_uniswap_source_custody[0].enabled_for_issue=false;
++        assert_ne!(encoded(&ledger),approved);
++        ledger.pftl_uniswap_source_custody[0]=row.clone();
++        ledger.pftl_uniswap_source_custody[0].principal_atoms+=1;
++        assert_ne!(encoded(&ledger),approved);
++        ledger.pftl_uniswap_source_custody[0]=row.clone();
++        ledger.pftl_uniswap_source_custody[0].spread_atoms+=1;
++        assert_ne!(encoded(&ledger),approved);
++        ledger.pftl_uniswap_source_custody[0]=row.clone();
++        ledger.pftl_uniswap_source_custody[0].reservation_escrows.insert("aa".repeat(48),10);
++        assert_ne!(encoded(&ledger),approved);
++        ledger.pftl_uniswap_source_custody.clear();
++        assert_eq!(encoded(&ledger),legacy);
++    }
++}
+diff --git a/crates/node/tests/atomic_swap_local_six.rs b/crates/node/tests/atomic_swap_local_six.rs
+index 02edb481..ed58f551 100644
+--- a/crates/node/tests/atomic_swap_local_six.rs
++++ b/crates/node/tests/atomic_swap_local_six.rs
+@@ -3757,7 +3757,8 @@ fn a666_successor_lifecycle_from_network(
+         &reserve_operator,
+         AssetTransactionOperation::PftlUniswapRouteEpochAdvance(
+             PftlUniswapRouteEpochAdvanceOperation {
+-                operator: A666_RESERVE_OPERATOR.to_string(),
++                                settlement_source_asset_ids: None,
++operator: A666_RESERVE_OPERATOR.to_string(),
+                 route_id: ROUTE_ID.to_string(),
+                 prior_route_epoch: 1,
+                 next_route_epoch: 2,
+@@ -3819,6 +3820,7 @@ fn a666_successor_lifecycle_from_network(
+         &online_ports,
+         &holder,
+         AssetTransactionOperation::PftlUniswapOrderReserve(PftlUniswapOrderReserveOperation {
++            settlement_source_asset_id: None,
+             subscriber: holder.address.clone(),
+             route_id: ROUTE_ID.to_string(),
+             reservation_id: transparent_reservation_id.clone(),
+@@ -4287,7 +4289,8 @@ fn a666_successor_lifecycle_from_network(
+         &reserve_operator,
+         AssetTransactionOperation::PftlUniswapRouteEpochAdvance(
+             PftlUniswapRouteEpochAdvanceOperation {
+-                operator: A666_RESERVE_OPERATOR.to_string(),
++                                settlement_source_asset_ids: None,
++operator: A666_RESERVE_OPERATOR.to_string(),
+                 route_id: ROUTE_ID.to_string(),
+                 prior_route_epoch: 2,
+                 next_route_epoch: 3,
+@@ -4320,6 +4323,7 @@ fn a666_successor_lifecycle_from_network(
+     );
+     let transparent_redeem_operation =
+         AssetTransactionOperation::PftlUniswapPrimaryRedeem(PftlUniswapPrimaryRedeemOperation {
++            settlement_source_asset_id: None,
+             owner: holder.address.clone(),
+             settlement_recipient: holder.address.clone(),
+             route_id: ROUTE_ID.to_string(),
+@@ -4482,7 +4486,8 @@ fn a666_successor_lifecycle_from_network(
+         &reserve_operator,
+         AssetTransactionOperation::PftlUniswapRouteEpochAdvance(
+             PftlUniswapRouteEpochAdvanceOperation {
+-                operator: A666_RESERVE_OPERATOR.to_string(),
++                                settlement_source_asset_ids: None,
++operator: A666_RESERVE_OPERATOR.to_string(),
+                 route_id: ROUTE_ID.to_string(),
+                 prior_route_epoch: 3,
+                 next_route_epoch: 4,
+diff --git a/crates/types/src/market_nav_asset_types.rs b/crates/types/src/market_nav_asset_types.rs
+index df5a3fc8..bc257404 100644
+--- a/crates/types/src/market_nav_asset_types.rs
++++ b/crates/types/src/market_nav_asset_types.rs
+@@ -2424,6 +2424,20 @@ impl PftlUniswapPrimaryMarketPolicyV2 {
+     }
+ }
+ 
++/// Source-specific settlement custody. Kept outside the route witness so the
++/// existing receipt proof format remains stable; this state is committed by
++/// the full replicated ledger root and authorized by route-epoch governance.
++#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
++pub struct PftlUniswapSourceCustody {
++    pub route_id: String,
++    pub asset_id: String,
++    pub enabled_for_issue: bool,
++    pub principal_atoms: u64,
++    pub spread_atoms: u64,
++    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
++    pub reservation_escrows: BTreeMap<String, u64>,
++}
++
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+ pub struct PftlUniswapOrderReservationV2 {
+     pub reservation_id: String,
+@@ -3671,6 +3685,8 @@ pub struct LedgerState {
+     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+     pub pftl_uniswap_routes: Vec<PftlUniswapConsensusRouteState>,
+     #[serde(default, skip_serializing_if = "Vec::is_empty")]
++    pub pftl_uniswap_source_custody: Vec<PftlUniswapSourceCustody>,
++    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+     pub pftl_uniswap_receipts: Vec<PftlUniswapConsensusReceipt>,
+     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+     pub owned_objects: Vec<OwnedObject>,
+@@ -3799,6 +3815,7 @@ impl LedgerState {
+             vault_bridge_redemptions: Vec::new(),
+             vault_bridge_deposits: Vec::new(),
+             pftl_uniswap_routes: Vec::new(),
++            pftl_uniswap_source_custody: Vec::new(),
+             pftl_uniswap_receipts: Vec::new(),
+             owned_objects: Vec::new(),
+             fastpay_recovery_policy: None,
+@@ -3848,6 +3865,7 @@ impl LedgerState {
+             vault_bridge_redemptions: Vec::new(),
+             vault_bridge_deposits: Vec::new(),
+             pftl_uniswap_routes: Vec::new(),
++            pftl_uniswap_source_custody: Vec::new(),
+             pftl_uniswap_receipts: Vec::new(),
+             owned_objects: Vec::new(),
+             fastpay_recovery_policy: None,
+@@ -3898,6 +3916,7 @@ impl LedgerState {
+             vault_bridge_redemptions: Vec::new(),
+             vault_bridge_deposits: Vec::new(),
+             pftl_uniswap_routes: Vec::new(),
++            pftl_uniswap_source_custody: Vec::new(),
+             pftl_uniswap_receipts: Vec::new(),
+             owned_objects: Vec::new(),
+             fastpay_recovery_policy: None,
+@@ -3943,6 +3962,7 @@ impl LedgerState {
+             vault_bridge_redemptions: Vec::new(),
+             vault_bridge_deposits: Vec::new(),
+             pftl_uniswap_routes: Vec::new(),
++            pftl_uniswap_source_custody: Vec::new(),
+             pftl_uniswap_receipts: Vec::new(),
+             owned_objects: Vec::new(),
+             fastpay_recovery_policy: None,
+@@ -3993,6 +4013,7 @@ impl LedgerState {
+             vault_bridge_redemptions: Vec::new(),
+             vault_bridge_deposits: Vec::new(),
+             pftl_uniswap_routes: Vec::new(),
++            pftl_uniswap_source_custody: Vec::new(),
+             pftl_uniswap_receipts: Vec::new(),
+             owned_objects: Vec::new(),
+             fastpay_recovery_policy: None,
+@@ -4038,6 +4059,7 @@ impl LedgerState {
+             vault_bridge_redemptions: Vec::new(),
+             vault_bridge_deposits: Vec::new(),
+             pftl_uniswap_routes: Vec::new(),
++            pftl_uniswap_source_custody: Vec::new(),
+             pftl_uniswap_receipts: Vec::new(),
+             owned_objects: Vec::new(),
+             fastpay_recovery_policy: None,
+@@ -4571,6 +4593,7 @@ impl LedgerState {
+             .map(|nav_asset| (nav_asset.asset_id.clone(), nav_asset))
+             .collect::<BTreeMap<_, _>>();
+         let mut pftl_uniswap_route_count_by_native_issuer = BTreeMap::new();
++        self.validate_pftl_source_custody()?;
+         let mut pftl_uniswap_route_ids = BTreeSet::new();
+         for route in &self.pftl_uniswap_routes {
+             route.validate()?;
+@@ -4888,3 +4911,42 @@ pub fn vault_bridge_route_id_for_source(
+         _ => None,
+     }
+ }
++
++impl LedgerState {
++    pub fn validate_pftl_source_custody(&self) -> Result<(), String> {
++        if self.pftl_uniswap_source_custody.len() > MAX_PFTL_UNISWAP_ROUTE_ENTRIES {
++            return Err("source settlement custody exceeds the bounded entry limit".to_string());
++        }
++        let mut keys = BTreeSet::new();
++        let mut reservations = BTreeSet::new();
++        let mut totals = BTreeMap::<&str,(u64,u64)>::new();
++        for row in &self.pftl_uniswap_source_custody {
++            if !keys.insert((&row.route_id,&row.asset_id)) { return Err("duplicate source custody".to_string()); }
++            let route = self.pftl_uniswap_route(&row.route_id).ok_or("source custody route missing")?;
++            let v2 = route.v2.as_ref().ok_or("source custody requires v2 route")?;
++            let asset = self.asset_definition(&row.asset_id).ok_or("source custody asset missing")?;
++            if asset.asset_family_id != route.settlement_asset_id || asset.source_series_id != row.asset_id || asset.asset_id == route.settlement_asset_id || asset.precision != 6 {
++                return Err("source custody immutable family binding mismatch".to_string());
++            }
++            let bucket = self.vault_bridge_bucket_states.iter().find(|b| b.bucket_id == asset.source_bucket_id).ok_or("source custody bucket missing")?;
++            if bucket.asset_id != route.settlement_asset_id { return Err("source custody bucket family mismatch".to_string()); }
++            let sum = totals.entry(&row.route_id).or_default();
++            sum.0 = sum.0.checked_add(row.principal_atoms).ok_or("source principal overflow")?;
++            sum.1 = sum.1.checked_add(row.spread_atoms).ok_or("source spread overflow")?;
++            if row.reservation_escrows.len() > MAX_PFTL_UNISWAP_ROUTE_ENTRIES { return Err("too many source escrows".to_string()); }
++            for (id, amount) in &row.reservation_escrows {
++                let r = v2.active_reservations.get(id).ok_or("orphan source reservation")?;
++                if !reservations.insert((&row.route_id,id)) || *amount == 0 || *amount != r.max_settlement_value_atoms {
++                    return Err("source reservation amount or uniqueness mismatch".to_string());
++                }
++            }
++        }
++        for (route_id,(principal,spread)) in totals {
++            let r = self.pftl_uniswap_route(route_id).ok_or("source route missing")?;
++            if principal > r.settlement_reserve_atoms || spread > r.v2.as_ref().ok_or("source route must be v2")?.non_nav_spread_atoms {
++                return Err("source custody exceeds aggregate route principal or spread".to_string());
++            }
++        }
++        Ok(())
++    }
++}
+diff --git a/crates/types/src/tests.rs b/crates/types/src/tests.rs
+index d1085853..efef2e83 100644
+--- a/crates/types/src/tests.rs
++++ b/crates/types/src/tests.rs
+@@ -3472,3 +3472,67 @@ fn fastswap_hash48_newtypes_round_trip_json_and_cbor() {
+         root
+     );
+ }
++
++#[test]
++fn pftl_source_selections_are_signed() {
++    let reserve: PftlUniswapOrderReserveOperation = serde_json::from_value(serde_json::json!({
++        "subscriber":"pfholder", "route_id":"route", "reservation_id":"11".repeat(48),
++        "ethereum_recipient":"0x1111111111111111111111111111111111111111",
++        "route_epoch":1,"policy_epoch":1,"policy_hash":"22".repeat(48),
++        "mint_amount_atoms":1000000,"max_settlement_value_atoms":1005000,"expires_at_height":100
++    })).unwrap();
++    let legacy=reserve.signing_bytes();
++    let mut source=reserve.clone();
++    source.settlement_source_asset_id=Some("33".repeat(48));
++    source.validate().unwrap();
++    assert!(source.signing_bytes().starts_with(&legacy));
++    assert_ne!(source.signing_bytes(),legacy);
++    source.settlement_source_asset_id=Some("44".repeat(48));
++    assert_ne!(source.signing_bytes(),{ let mut r=reserve.clone();r.settlement_source_asset_id=Some("33".repeat(48));r.signing_bytes() });
++    assert!(!serde_json::to_value(&reserve).unwrap().as_object().unwrap().contains_key("settlement_source_asset_id"));
++    source.settlement_source_asset_id=Some("bad\nsource=other".to_string());
++    assert!(source.validate().is_err());
++
++    let mut redeem: PftlUniswapPrimaryRedeemOperation=serde_json::from_value(serde_json::json!({
++        "owner":"pfholder","settlement_recipient":"pfholder","route_id":"route","redemption_nonce":"55".repeat(32),
++        "nav_amount_atoms":1000000,"min_settlement_value_atoms":999500,"route_epoch":1,"policy_epoch":1,
++        "policy_hash":"22".repeat(48),"pricing_nav_epoch":1,"pricing_reserve_packet_hash":"66".repeat(48),"expires_at_height":100
++    })).unwrap();
++    let legacy=redeem.signing_bytes();
++    redeem.settlement_source_asset_id=Some("33".repeat(48));
++    redeem.validate().unwrap();
++    assert!(redeem.signing_bytes().starts_with(&legacy));
++    assert_ne!(redeem.signing_bytes(),legacy);
++}
++
++#[test]
++fn pftl_source_governance_signs_unchanged_disabled_and_selected_states() {
++    let mut policy = PftlUniswapPrimaryMarketPolicyV2 {
++        policy_hash: String::new(), policy_epoch: 2, issue_multiplier_bps: 10050,
++        redeem_multiplier_bps: 9995, issue_capacity_atoms: 100000000,
++        redeem_capacity_atoms: 100000000, max_order_atoms: 10000000, min_order_atoms: 1,
++        valid_from_height: 1, expires_at_height: 100, max_nav_age_blocks: 100,
++        pricing_nav_epoch: 1, pricing_reserve_packet_hash: "11".repeat(48),
++    };
++    policy.policy_hash = policy.computed_hash();
++    let mut op = PftlUniswapRouteEpochAdvanceOperation {
++        settlement_source_asset_ids: None, operator: "pfissuer".to_string(),
++        route_id: "route".to_string(), prior_route_epoch: 1, next_route_epoch: 2,
++        next_route_config_digest: "22".repeat(48), live_value_enabled: true,
++        next_primary_market_policy: policy,
++    };
++    op.validate().unwrap();
++    let unchanged = op.signing_bytes();
++    op.settlement_source_asset_ids = Some(Vec::new());
++    op.validate().unwrap();
++    let disabled = op.signing_bytes();
++    assert_ne!(unchanged, disabled);
++    op.settlement_source_asset_ids = Some(vec!["33".repeat(48)]);
++    op.validate().unwrap();
++    assert_ne!(disabled, op.signing_bytes());
++    let selected = op.signing_bytes();
++    op.settlement_source_asset_ids = Some(vec!["44".repeat(48)]);
++    assert_ne!(selected, op.signing_bytes());
++    op.settlement_source_asset_ids = Some(vec!["33".repeat(48), "33".repeat(48)]);
++    assert!(op.validate().is_err());
++}
+diff --git a/crates/types/src/transactions_mempool_receipts.rs b/crates/types/src/transactions_mempool_receipts.rs
+index 8dcc56cf..c1f718d1 100644
+--- a/crates/types/src/transactions_mempool_receipts.rs
++++ b/crates/types/src/transactions_mempool_receipts.rs
+@@ -2743,6 +2743,8 @@ impl PftlUniswapRouteInitV2Operation {
+ 
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+ pub struct PftlUniswapOrderReserveOperation {
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub settlement_source_asset_id: Option<String>,
+     pub subscriber: String,
+     pub route_id: String,
+     pub reservation_id: String,
+@@ -2757,6 +2759,9 @@ pub struct PftlUniswapOrderReserveOperation {
+ 
+ impl PftlUniswapOrderReserveOperation {
+     pub fn validate(&self) -> Result<(), String> {
++        if let Some(asset) = &self.settlement_source_asset_id {
++            validate_lower_hex_len("settlement_source_asset_id", asset, VAULT_BRIDGE_HEX_HASH_LEN)?;
++        }
+         validate_text_field("pftl_uniswap_order_reserve.subscriber", &self.subscriber)?;
+         validate_text_field("pftl_uniswap_order_reserve.route_id", &self.route_id)?;
+         validate_lower_hex_len(
+@@ -2788,7 +2793,7 @@ impl PftlUniswapOrderReserveOperation {
+     }
+ 
+     fn signing_bytes(&self) -> Vec<u8> {
+-        format!(
++        let mut bytes = format!(
+             "subscriber={}\nroute_id={}\nreservation_id={}\nethereum_recipient={}\nroute_epoch={}\npolicy_epoch={}\npolicy_hash={}\nmint_amount_atoms={}\nmax_settlement_value_atoms={}\nexpires_at_height={}\n",
+             self.subscriber,
+             self.route_id,
+@@ -2801,7 +2806,11 @@ impl PftlUniswapOrderReserveOperation {
+             self.max_settlement_value_atoms,
+             self.expires_at_height,
+         )
+-        .into_bytes()
++        .into_bytes();
++        if let Some(asset) = &self.settlement_source_asset_id {
++            bytes.extend_from_slice(format!("settlement_source_asset_id={asset}\n").as_bytes());
++        }
++        bytes
+     }
+ }
+ 
+@@ -2943,6 +2952,8 @@ impl PftlUniswapRedemptionFundOperation {
+ 
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+ pub struct PftlUniswapPrimaryRedeemOperation {
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub settlement_source_asset_id: Option<String>,
+     pub owner: String,
+     pub settlement_recipient: String,
+     pub route_id: String,
+@@ -2959,6 +2970,9 @@ pub struct PftlUniswapPrimaryRedeemOperation {
+ 
+ impl PftlUniswapPrimaryRedeemOperation {
+     pub fn validate(&self) -> Result<(), String> {
++        if let Some(asset) = &self.settlement_source_asset_id {
++            validate_lower_hex_len("settlement_source_asset_id", asset, VAULT_BRIDGE_HEX_HASH_LEN)?;
++        }
+         validate_text_field("pftl_uniswap_primary_redeem.owner", &self.owner)?;
+         validate_text_field(
+             "pftl_uniswap_primary_redeem.settlement_recipient",
+@@ -2996,7 +3010,7 @@ impl PftlUniswapPrimaryRedeemOperation {
+     }
+ 
+     fn signing_bytes(&self) -> Vec<u8> {
+-        format!(
++        let mut bytes = format!(
+             "owner={}\nsettlement_recipient={}\nroute_id={}\nredemption_nonce={}\nnav_amount_atoms={}\nmin_settlement_value_atoms={}\nroute_epoch={}\npolicy_epoch={}\npolicy_hash={}\npricing_nav_epoch={}\npricing_reserve_packet_hash={}\nexpires_at_height={}\n",
+             self.owner,
+             self.settlement_recipient,
+@@ -3011,12 +3025,18 @@ impl PftlUniswapPrimaryRedeemOperation {
+             self.pricing_reserve_packet_hash,
+             self.expires_at_height,
+         )
+-        .into_bytes()
++        .into_bytes();
++        if let Some(asset) = &self.settlement_source_asset_id {
++            bytes.extend_from_slice(format!("settlement_source_asset_id={asset}\n").as_bytes());
++        }
++        bytes
+     }
+ }
+ 
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+ pub struct PftlUniswapRouteEpochAdvanceOperation {
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub settlement_source_asset_ids: Option<Vec<String>>,
+     pub operator: String,
+     pub route_id: String,
+     pub prior_route_epoch: u64,
+@@ -3028,6 +3048,14 @@ pub struct PftlUniswapRouteEpochAdvanceOperation {
+ 
+ impl PftlUniswapRouteEpochAdvanceOperation {
+     pub fn validate(&self) -> Result<(), String> {
++        if let Some(assets) = &self.settlement_source_asset_ids {
++            if assets.len() > MAX_PFTL_UNISWAP_ROUTE_ENTRIES { return Err("too many settlement sources".to_string()); }
++            let mut unique = std::collections::BTreeSet::new();
++            for asset in assets {
++                validate_lower_hex_len("settlement_source_asset_id", asset, VAULT_BRIDGE_HEX_HASH_LEN)?;
++                if !unique.insert(asset) { return Err("duplicate settlement source".to_string()); }
++            }
++        }
+         validate_text_field(
+             "pftl_uniswap_route_epoch_advance.operator",
+             &self.operator,
+@@ -3054,7 +3082,7 @@ impl PftlUniswapRouteEpochAdvanceOperation {
+     }
+ 
+     fn signing_bytes(&self) -> Vec<u8> {
+-        format!(
++        let mut bytes = format!(
+             "operator={}\nroute_id={}\nprior_route_epoch={}\nnext_route_epoch={}\nnext_route_config_digest={}\nlive_value_enabled={}\nnext_primary_market_policy_hash={}\n",
+             self.operator,
+             self.route_id,
+@@ -3064,7 +3092,12 @@ impl PftlUniswapRouteEpochAdvanceOperation {
+             self.live_value_enabled,
+             self.next_primary_market_policy.policy_hash,
+         )
+-        .into_bytes()
++        .into_bytes();
++        if let Some(assets) = &self.settlement_source_asset_ids {
++            bytes.extend_from_slice(format!("settlement_source_asset_count={}\n", assets.len()).as_bytes());
++            for asset in assets { bytes.extend_from_slice(format!("settlement_source_asset_id={asset}\n").as_bytes()); }
++        }
++        bytes
+     }
+ }
+ 

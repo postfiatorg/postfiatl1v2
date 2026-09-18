@@ -1,0 +1,16 @@
+
+> postfiat-web-wallet@0.1.2 build
+> vite build
+
+vite v8.1.4 building client environment for production...
+[2Ktransforming...✓ 1804 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                        0.73 kB │ gzip:   0.43 kB
+dist/assets/postfiat_wallet_wasm_bg-BCMxG3_Q.wasm  2,329.34 kB │ gzip: 671.46 kB
+dist/assets/index-PWz9Zecu.css                        63.89 kB │ gzip:  10.64 kB
+dist/assets/index-CWmwI4rO.js                        425.54 kB │ gzip: 121.72 kB
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0msrc/lib/wasm-loader.js is dynamically imported by src/lib/tx-builder.js but also statically imported by src/App.jsx, src/components/Onboard.jsx, dynamic import will not move module into another chunk.
+
+✓ built in 648ms

@@ -1,0 +1,17 @@
+Execute or Groth16-prove a canonical PFTL egress witness
+
+Usage: pfusdc-tier4-prover egress [OPTIONS] --witness <WITNESS> --output-dir <OUTPUT_DIR>
+
+Options:
+      --elf <ELF>
+          Frozen ELF for the selected verifier release. Default: embedded pfETH ELF
+      --egress-release <EGRESS_RELEASE>
+          Immutable program identity pinned by the destination verifier [default: pfeth-v1] [possible values: arc-v2, pfeth-v1]
+      --witness <WITNESS>
+          
+      --output-dir <OUTPUT_DIR>
+          
+      --prove
+          
+  -h, --help
+          Print help

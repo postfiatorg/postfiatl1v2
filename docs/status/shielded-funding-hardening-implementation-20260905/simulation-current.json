@@ -1,0 +1,87 @@
+{
+  "schema": "funding-simulation-v1",
+  "simulation": true,
+  "funded_production": false,
+  "proofs_executed": false,
+  "chain_receipts_verified": false,
+  "status": "complete",
+  "transcript": [
+    {
+      "status": "pending",
+      "stage": "deposited"
+    },
+    {
+      "status": "deposited"
+    },
+    {
+      "status": "pending",
+      "stage": "shielded_waiting"
+    },
+    {
+      "status": "shielded_waiting"
+    },
+    {
+      "status": "waiting",
+      "reason": "holding window"
+    },
+    {
+      "status": "exit_authorized"
+    },
+    {
+      "status": "pending",
+      "stage": "egress_submitted"
+    },
+    {
+      "status": "egress_submitted"
+    },
+    {
+      "status": "pending",
+      "stage": "egress_finalized"
+    },
+    {
+      "status": "egress_finalized"
+    },
+    {
+      "status": "pending",
+      "stage": "burn_finalized"
+    },
+    {
+      "status": "burn_finalized"
+    },
+    {
+      "status": "pending",
+      "stage": "weth_released"
+    },
+    {
+      "status": "weth_released"
+    },
+    {
+      "status": "pending",
+      "stage": "arbitrum_funded"
+    },
+    {
+      "status": "arbitrum_funded"
+    },
+    {
+      "status": "pending",
+      "stage": "venue_deposit_pending"
+    },
+    {
+      "status": "venue_deposit_pending"
+    },
+    {
+      "status": "pending",
+      "stage": "complete"
+    },
+    {
+      "status": "complete"
+    }
+  ],
+  "recovery_reused_operation_ids": true,
+  "duplicate_deposits": 0,
+  "l1_transaction_type": 2,
+  "l2_transaction_type": 4,
+  "public_observer": "passed",
+  "operator_aware": "insufficient funding privacy",
+  "limitation": "Synthetic settlement receipts exercise orchestration; real node proofs, funded chain history and live venue credit remain unverified."
+}

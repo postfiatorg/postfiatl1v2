@@ -1,0 +1,189 @@
+   Compiling postfiat-types v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/types)
+   Compiling postfiat-node v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/node)
+   Compiling postfiat-mempool-dag v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/mempool_dag)
+   Compiling postfiat-ordering-fast v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/ordering_fast)
+   Compiling postfiat-consensus-cobalt v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/consensus_cobalt)
+   Compiling postfiat-nav-reserve-protocol v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/nav_reserve_protocol)
+   Compiling postfiat-bridge v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/bridge)
+   Compiling postfiat-execution v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/execution)
+   Compiling postfiat-pfusdc-proofs v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/pfusdc_proofs)
+   Compiling postfiat-rpc-sdk v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/rpc_sdk)
+   Compiling postfiat-pftl-uniswap-proofs v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/pftl_uniswap_proofs)
+   Compiling postfiat-privacy v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/privacy)
+   Compiling postfiat-storage v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/storage)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 58s
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/postfiat_node-7d7aa541669ee8e5)
+
+running 18 tests
+test tests::fastpay_payment_safety::fastpay_replay_schedules_same_block_object_dependencies_before_lock_id_order ... ok
+test tests::fastpay_payment_safety::owned_safe_unlock_is_structurally_disabled_and_preserves_old_locks ... ok
+test tests::fastpay_payment_safety::unsigned_wrap_owned_rejects_every_asset_without_mutation ... ok
+test tests::fastpay_payment_safety::concurrent_unsigned_wrap_requests_all_reject_without_mutation ... ok
+test tests::fastpay_commitment_versions::v2_installation_binds_certificates_retained_under_v1 ... ok
+test tests::fastpay_payment_safety::owned_lock_wal_ignores_only_an_uncommitted_torn_tail ... ok
+test tests::fastpay_payment_safety::owned_sign_rejects_unauthorized_and_invalid_admission_without_locking ... ok
+test tests::fastpay_payment_safety::concurrent_conflicting_owned_sign_calls_emit_at_most_one_vote ... ok
+test tests::fastpay_payment_safety::certified_owned_unwrap_cannot_convert_issued_asset_to_native_balance ... ok
+test tests::fastpay_payment_safety::persisted_lock_survives_signer_restart_window_and_refuses_conflict ... ok
+test tests::fastpay_payment_safety::signed_account_deposit_wrong_chain_domain_rejects_without_mempool_or_ledger_mutation ... ok
+test tests::fastpay_recovery_batch_field_preserves_legacy_governance_identity_and_json ... ok
+test tests::fastpay_payment_safety::owned_apply_uses_public_registry_with_isolated_local_signer ... ok
+test tests::fastpay_payment_safety::fastpay_v3_real_store_persists_certificate_effect_fence_before_signed_ack ... ok
+test tests::fastpay_payment_safety::signed_account_deposit_enters_fastpay_through_ordered_batch_and_replays ... ok
+warning: genesis `/tmp/.postfiat-fastpay-recovery-governance-bootstrap-2443317-1789521549948524206-restored.snapshot-import-2443317-1789521555117939679-0/genesis.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: node state `/tmp/.postfiat-fastpay-recovery-governance-bootstrap-2443317-1789521549948524206-restored.snapshot-import-2443317-1789521555117939679-0/node_state.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-recovery-governance-bootstrap-2443317-1789521549948524206-restored.snapshot-import-2443317-1789521555117939679-0/governance.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-recovery-governance-bootstrap-2443317-1789521549948524206-restored.snapshot-import-2443317-1789521555117939679-0/ledger.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-recovery-governance-bootstrap-2443317-1789521549948524206-restored.snapshot-import-2443317-1789521555117939679-0/receipts.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-recovery-governance-bootstrap-2443317-1789521549948524206-restored.snapshot-import-2443317-1789521555117939679-0/blocks.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-recovery-governance-bootstrap-2443317-1789521549948524206-restored.snapshot-import-2443317-1789521555117939679-0/batch_archive.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-recovery-governance-bootstrap-2443317-1789521549948524206-restored.snapshot-import-2443317-1789521555117939679-0/ordered_batches.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-recovery-governance-bootstrap-2443317-1789521549948524206-restored.snapshot-import-2443317-1789521555117939679-0/mempool.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-recovery-governance-bootstrap-2443317-1789521549948524206-restored.snapshot-import-2443317-1789521555117939679-0/shielded.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-recovery-governance-bootstrap-2443317-1789521549948524206-restored.snapshot-import-2443317-1789521555117939679-0/bridge.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: genesis `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-lagging.snapshot-import-2443317-1789521555173795230-1/genesis.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: node state `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-lagging.snapshot-import-2443317-1789521555173795230-1/node_state.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-lagging.snapshot-import-2443317-1789521555173795230-1/governance.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-lagging.snapshot-import-2443317-1789521555173795230-1/ledger.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-lagging.snapshot-import-2443317-1789521555173795230-1/receipts.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-lagging.snapshot-import-2443317-1789521555173795230-1/blocks.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-lagging.snapshot-import-2443317-1789521555173795230-1/batch_archive.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-lagging.snapshot-import-2443317-1789521555173795230-1/ordered_batches.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-lagging.snapshot-import-2443317-1789521555173795230-1/mempool.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-lagging.snapshot-import-2443317-1789521555173795230-1/shielded.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-lagging.snapshot-import-2443317-1789521555173795230-1/bridge.json` has no integrity tag (legacy format); upgrading it to the keyed format
+test tests::fastpay_recovery_bootstrap_is_signed_future_activated_and_tamper_atomic ... ok
+warning: genesis `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-restored.snapshot-import-2443317-1789521563699037896-2/genesis.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: node state `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-restored.snapshot-import-2443317-1789521563699037896-2/node_state.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-restored.snapshot-import-2443317-1789521563699037896-2/governance.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-restored.snapshot-import-2443317-1789521563699037896-2/ledger.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-restored.snapshot-import-2443317-1789521563699037896-2/receipts.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-restored.snapshot-import-2443317-1789521563699037896-2/blocks.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-restored.snapshot-import-2443317-1789521563699037896-2/batch_archive.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-restored.snapshot-import-2443317-1789521563699037896-2/ordered_batches.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-restored.snapshot-import-2443317-1789521563699037896-2/mempool.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-restored.snapshot-import-2443317-1789521563699037896-2/shielded.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/.postfiat-fastpay-v3-ordered-recovery-2443317-1789521549943560052-restored.snapshot-import-2443317-1789521563699037896-2/bridge.json` has no integrity tag (legacy format); upgrading it to the keyed format
+test tests::fastpay_payment_safety::ordered_fastpay_recovery_cancels_partial_and_withheld_certificates_and_replays ... ok
+warning: genesis `/tmp/postfiat-fastpay-v3-six-validator-anchor-2443317-1789521549947950230/.minority-recovery-restored.snapshot-import-2443317-1789521607545763710-3/genesis.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: node state `/tmp/postfiat-fastpay-v3-six-validator-anchor-2443317-1789521549947950230/.minority-recovery-restored.snapshot-import-2443317-1789521607545763710-3/node_state.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/postfiat-fastpay-v3-six-validator-anchor-2443317-1789521549947950230/.minority-recovery-restored.snapshot-import-2443317-1789521607545763710-3/governance.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/postfiat-fastpay-v3-six-validator-anchor-2443317-1789521549947950230/.minority-recovery-restored.snapshot-import-2443317-1789521607545763710-3/ledger.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/postfiat-fastpay-v3-six-validator-anchor-2443317-1789521549947950230/.minority-recovery-restored.snapshot-import-2443317-1789521607545763710-3/receipts.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/postfiat-fastpay-v3-six-validator-anchor-2443317-1789521549947950230/.minority-recovery-restored.snapshot-import-2443317-1789521607545763710-3/blocks.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/postfiat-fastpay-v3-six-validator-anchor-2443317-1789521549947950230/.minority-recovery-restored.snapshot-import-2443317-1789521607545763710-3/batch_archive.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/postfiat-fastpay-v3-six-validator-anchor-2443317-1789521549947950230/.minority-recovery-restored.snapshot-import-2443317-1789521607545763710-3/ordered_batches.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/postfiat-fastpay-v3-six-validator-anchor-2443317-1789521549947950230/.minority-recovery-restored.snapshot-import-2443317-1789521607545763710-3/mempool.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/postfiat-fastpay-v3-six-validator-anchor-2443317-1789521549947950230/.minority-recovery-restored.snapshot-import-2443317-1789521607545763710-3/shielded.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/tmp/postfiat-fastpay-v3-six-validator-anchor-2443317-1789521549947950230/.minority-recovery-restored.snapshot-import-2443317-1789521607545763710-3/bridge.json` has no integrity tag (legacy format); upgrading it to the keyed format
+test tests::fastpay_payment_safety::six_validators_certify_anchor_and_catch_up_one_missing_fastpay_effect has been running for over 60 seconds
+test tests::fastpay_payment_safety::six_validators_certify_anchor_and_catch_up_one_missing_fastpay_effect ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 345 filtered out; finished in 60.40s
+
+     Running unittests src/bin/asset_orchard_local_service.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/asset_orchard_local_service-8767715b83ef1a1c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 32 filtered out; finished in 0.00s
+
+     Running unittests src/bin/fastswap_bootstrap_payload.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/fastswap_bootstrap_payload-23eb356925c96053)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running unittests src/bin/fastswap_wallet_payload.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/fastswap_wallet_payload-afd82128a3bf0f70)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running unittests src/bin/orchard_frontier_cache_benchmark.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/orchard_frontier_cache_benchmark-eb81d9f64fd462c8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/pftl_swapctl.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/pftl_swapctl-733906ee6b750f7c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/pftl_swapd.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/pftl_swapd-6aa1684ed01575ec)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+     Running unittests src/bin/postfiat_cobalt_benchmark.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/postfiat_cobalt_benchmark-e46e5273838b8006)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/postfiat_cobalt_decisive_benchmark.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/postfiat_cobalt_decisive_benchmark-395fc91908bef3d7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/postfiat_cobalt_e5_live_drill.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/postfiat_cobalt_e5_live_drill-8e8ad2edefc044cc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/postfiat_cobalt_handoff_rehearsal.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/postfiat_cobalt_handoff_rehearsal-a04a70e4c1bee0b7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/postfiat_cobalt_liveness_simulation.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/postfiat_cobalt_liveness_simulation-2f4dd66dd39db398)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/postfiat_cobalt_shadow.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/postfiat_cobalt_shadow-ee03aaa98cd7e13b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/postfiat_node-65ca94946234f701)
+
+running 3 tests
+test transport_batch_payload_tests::rpc_fastpay_is_enabled_by_default_and_only_exactly_disabled ... ok
+test fastpay_recovery_governance_commands_reach_their_cli_handler ... ok
+test rpc_serve_request_tests::fastpay_v3_loopback_rpc_exposes_live_capabilities_and_bounded_reads ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 167 filtered out; finished in 0.89s
+
+     Running tests/atomic_swap_local_six.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/atomic_swap_local_six-dc775119d4367464)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+     Running tests/fastpay_default_rpc.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/fastpay_default_rpc-ae6e01564174b1e8)
+
+running 1 test
+test signed_fastpay_rpc_is_enabled_by_default_and_explicitly_disableable ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+     Running tests/fastswap_local_six.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/fastswap_local_six-6f2d76eb59badd1a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/wallet_test_vector_redaction.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/wallet_test_vector_redaction-c10f8442caa5f9cb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+

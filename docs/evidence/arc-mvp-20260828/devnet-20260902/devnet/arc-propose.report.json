@@ -1,0 +1,59 @@
+{
+ "schema": "postfiat-certified-asset-ops-report-v1",
+ "request_schema": "postfiat-certified-asset-ops-request-v1",
+ "data_dir": "/var/lib/postfiat/validator-4",
+ "topology_file": "/etc/postfiat/releases/arc-current-v2-a699d560/topology.json",
+ "artifact_dir": "/var/lib/postfiat/ops/arc-mint/arc-propose",
+ "operation_count": 1,
+ "max_transactions": 1,
+ "allow_existing_mempool": false,
+ "prepare_only": false,
+ "batch_only": false,
+ "start_height": 945,
+ "start_state_root": "c2b3840b0e163d485e28cddb72e2b5ff472754c7634bd026fe5812e716deee517a4ecf48444009142ae348e70b173fce",
+ "start_mempool_pending": 0,
+ "end_height": 946,
+ "end_state_root": "dc5f40160399bc3016ba72e465f9578cd59419cc1f23a8c0514d61fdda9ebf9b845d6b8d8fa5bad48816b7e72148944e",
+ "end_mempool_pending": 0,
+ "operations": [
+  {
+   "label": "propose",
+   "source": "pf23d8831301aa1cce6fdd7bf4a2db2aead1619ba8",
+   "transaction_kind": "vault_bridge_deposit_propose",
+   "operation_file": "/var/lib/postfiat/ops/arc-mint/arc-propose/propose/operation.json",
+   "quote_file": "/var/lib/postfiat/ops/arc-mint/arc-propose/propose/quote.json",
+   "signed_file": "/var/lib/postfiat/ops/arc-mint/arc-propose/propose/signed.json",
+   "submit_file": "/var/lib/postfiat/ops/arc-mint/arc-propose/propose/submit.json",
+   "tx_id": "b587480055f9893fe6bd630a92114aa2603fda8e4f3ef62f12b9ae742eb83d0bc7deb2f00cb37bc675325b80a00a14a3",
+   "sequence": 273,
+   "fee": 28,
+   "timings_ms": {
+    "prepare_ms": 0.132054,
+    "quote_ms": 68.828793,
+    "sign_ms": 4.077161,
+    "submit_ms": 507.547078
+   }
+  }
+ ],
+ "dependency_report": {
+  "declared_dependency_count": 0,
+  "same_round_dependency_count": 0,
+  "prior_round_dependency_count": 0,
+  "same_round_batch_eligible": true,
+  "candidate_batch_classes": [],
+  "replay_equivalence_required": false,
+  "live_round_compression_ready": true,
+  "live_round_compression_blockers": [],
+  "declarations": []
+ },
+ "batch_file": "/var/lib/postfiat/ops/arc-mint/arc-propose/peer-certified-mempool-round/mempool-batch.json",
+ "round_artifact_dir": "/var/lib/postfiat/ops/arc-mint/arc-propose/peer-certified-mempool-round",
+ "round_ok": true,
+ "timings_ms": {
+  "total_ms": 10164.337187,
+  "preflight_ms": 77.363048,
+  "operations_ms": 581.441686,
+  "certify_ms": 9445.152527999999,
+  "final_status_ms": 59.848974999999996
+ }
+}

@@ -1,0 +1,19 @@
+{
+  "method": "Independent SHA3-384 reconstruction of both root preimages from the captured finalized-checkpoint ledger; no ledger edits",
+  "source_change": "0a1216c3",
+  "committees": [
+    {
+      "schema": "postfiat-fastpay-recovery-committee-v1",
+      "epoch": 1,
+      "valid_from_height": 11,
+      "new_orders_through_height": 10000,
+      "validator_count": 6,
+      "recorded_root": "b1ef4b05277587af46dc231391c1216f47e3f13acae7553791b4a15f95da99ea382b9d0e2ef36eb06566d9172f739517",
+      "legacy_computed_root": "b1ef4b05277587af46dc231391c1216f47e3f13acae7553791b4a15f95da99ea382b9d0e2ef36eb06566d9172f739517",
+      "candidate_computed_root": "f1daebabfb14699b460042bd804c38b8d01ee8b417df37ddbcbbb2fcb5982f28a190d26dc29a388fc03ac2e964ae5c5c",
+      "legacy_matches_record": true,
+      "candidate_matches_record": false
+    }
+  ],
+  "retained_version_fence_count": 39
+}

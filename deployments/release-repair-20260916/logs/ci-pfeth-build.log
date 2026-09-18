@@ -1,0 +1,2410 @@
+﻿2026-09-16T01:30:23.9776344Z Current runner version: '2.337.0'
+2026-09-16T01:30:23.9801366Z ##[group]Runner Image Provisioner
+2026-09-16T01:30:23.9802222Z Hosted Compute Agent
+2026-09-16T01:30:23.9803001Z Version: 20260828.587
+2026-09-16T01:30:23.9803669Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+2026-09-16T01:30:23.9804707Z Build Date: 2026-08-28T16:44:25Z
+2026-09-16T01:30:23.9805445Z Worker ID: {3d49f25b-6cd1-448e-ace6-06fe32b6f092}
+2026-09-16T01:30:23.9806200Z Azure Region: northcentralus
+2026-09-16T01:30:23.9806919Z ##[endgroup]
+2026-09-16T01:30:23.9808272Z ##[group]Operating System
+2026-09-16T01:30:23.9809004Z Ubuntu
+2026-09-16T01:30:23.9809566Z 24.04.5
+2026-09-16T01:30:23.9810105Z LTS
+2026-09-16T01:30:23.9810729Z ##[endgroup]
+2026-09-16T01:30:23.9811313Z ##[group]Runner Image
+2026-09-16T01:30:23.9811974Z Image: ubuntu-24.04
+2026-09-16T01:30:23.9812724Z Version: 20260907.300.1
+2026-09-16T01:30:23.9814054Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260907.300/images/ubuntu/Ubuntu2404-Readme.md
+2026-09-16T01:30:23.9816039Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300
+2026-09-16T01:30:23.9817080Z ##[endgroup]
+2026-09-16T01:30:23.9818351Z ##[group]GITHUB_TOKEN Permissions
+2026-09-16T01:30:23.9820321Z Contents: read
+2026-09-16T01:30:23.9821046Z Metadata: read
+2026-09-16T01:30:23.9821633Z ##[endgroup]
+2026-09-16T01:30:23.9824506Z Secret source: Actions
+2026-09-16T01:30:23.9825591Z Cache mode: write
+2026-09-16T01:30:23.9826344Z Prepare workflow directory
+2026-09-16T01:30:24.0165784Z Prepare all required actions
+2026-09-16T01:30:24.0212948Z Getting action download info
+2026-09-16T01:30:24.2591224Z Download action repository 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' (SHA:11bd71901bbe5b1630ceea73d27597364c9af683)
+2026-09-16T01:30:24.3440635Z Download action repository 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-09-16T01:30:24.5571703Z Complete job name: reproduce-current-v2-identities (pfeth-v1-20260904)
+2026-09-16T01:30:24.6303192Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-16T01:30:24.6312124Z ##[group]Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+2026-09-16T01:30:24.6313010Z with:
+2026-09-16T01:30:24.6313436Z   fetch-depth: 0
+2026-09-16T01:30:24.6313911Z   repository: postfiatorg/postfiatl1v2
+2026-09-16T01:30:24.6318176Z   token: ***
+2026-09-16T01:30:24.6318730Z   ssh-strict: true
+2026-09-16T01:30:24.6319176Z   ssh-user: git
+2026-09-16T01:30:24.6319627Z   persist-credentials: true
+2026-09-16T01:30:24.6320114Z   clean: true
+2026-09-16T01:30:24.6320564Z   sparse-checkout-cone-mode: true
+2026-09-16T01:30:24.6321084Z   fetch-tags: false
+2026-09-16T01:30:24.6321534Z   show-progress: true
+2026-09-16T01:30:24.6322047Z   lfs: false
+2026-09-16T01:30:24.6322465Z   submodules: false
+2026-09-16T01:30:24.6322921Z   set-safe-directory: true
+2026-09-16T01:30:24.6323601Z ##[endgroup]
+2026-09-16T01:30:24.7369836Z Syncing repository: postfiatorg/postfiatl1v2
+2026-09-16T01:30:24.7371898Z ##[group]Getting Git version info
+2026-09-16T01:30:24.7372761Z Working directory is '/home/runner/work/postfiatl1v2/postfiatl1v2'
+2026-09-16T01:30:24.7373937Z [command]/usr/bin/git version
+2026-09-16T01:30:24.7392134Z git version 2.55.0
+2026-09-16T01:30:24.7411315Z ##[endgroup]
+2026-09-16T01:30:24.7425350Z Temporarily overriding HOME='/home/runner/work/_temp/dbb1311a-6b70-4cca-b4bd-72ac7f0379c0' before making global git config changes
+2026-09-16T01:30:24.7426785Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-16T01:30:24.7429687Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/postfiatl1v2/postfiatl1v2
+2026-09-16T01:30:24.7470364Z Deleting the contents of '/home/runner/work/postfiatl1v2/postfiatl1v2'
+2026-09-16T01:30:24.7473852Z ##[group]Initializing the repository
+2026-09-16T01:30:24.7478461Z [command]/usr/bin/git init /home/runner/work/postfiatl1v2/postfiatl1v2
+2026-09-16T01:30:24.7548452Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-09-16T01:30:24.7550071Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-09-16T01:30:24.7551407Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-09-16T01:30:24.7552179Z hint: call:
+2026-09-16T01:30:24.7552612Z hint:
+2026-09-16T01:30:24.7553145Z hint: 	git config --global init.defaultBranch <name>
+2026-09-16T01:30:24.7553777Z hint:
+2026-09-16T01:30:24.7554628Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-09-16T01:30:24.7555733Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-09-16T01:30:24.7556495Z hint:
+2026-09-16T01:30:24.7556929Z hint: 	git branch -m <name>
+2026-09-16T01:30:24.7557468Z hint:
+2026-09-16T01:30:24.7558105Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-09-16T01:30:24.7559352Z Initialized empty Git repository in /home/runner/work/postfiatl1v2/postfiatl1v2/.git/
+2026-09-16T01:30:24.7561714Z [command]/usr/bin/git remote add origin https://github.com/postfiatorg/postfiatl1v2
+2026-09-16T01:30:24.7599863Z ##[endgroup]
+2026-09-16T01:30:24.7600641Z ##[group]Disabling automatic garbage collection
+2026-09-16T01:30:24.7603410Z [command]/usr/bin/git config --local gc.auto 0
+2026-09-16T01:30:24.7631712Z ##[endgroup]
+2026-09-16T01:30:24.7632456Z ##[group]Setting up auth
+2026-09-16T01:30:24.7638012Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-16T01:30:24.7668257Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-16T01:30:24.7968681Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-16T01:30:24.8000861Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-16T01:30:24.8231706Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-09-16T01:30:24.8266705Z ##[endgroup]
+2026-09-16T01:30:24.8267495Z ##[group]Fetching the repository
+2026-09-16T01:30:24.8275941Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +f110087dbb9755388cf13d1edc92e8c9d322e1f2:refs/remotes/pull/41/merge
+2026-09-16T01:30:30.9956985Z From https://github.com/postfiatorg/postfiatl1v2
+2026-09-16T01:30:30.9959102Z  * [new branch]        a666-eth-fast-lane-combined-20260724     -> origin/a666-eth-fast-lane-combined-20260724
+2026-09-16T01:30:30.9960966Z  * [new branch]        arc-tier4-mvp-livebase-20260828          -> origin/arc-tier4-mvp-livebase-20260828
+2026-09-16T01:30:30.9963049Z  * [new branch]        archive/pftl-anvil-usdc-navcoin-htlc-20260725 -> origin/archive/pftl-anvil-usdc-navcoin-htlc-20260725
+2026-09-16T01:30:30.9965735Z  * [new branch]        archive/pftl-btc-navcoin-htlc-20260725   -> origin/archive/pftl-btc-navcoin-htlc-20260725
+2026-09-16T01:30:30.9968236Z  * [new branch]        archive/pftl-escrow-htlc-spike-20260724  -> origin/archive/pftl-escrow-htlc-spike-20260724
+2026-09-16T01:30:30.9971306Z  * [new branch]        archive/pftl-lightning-navcoin-demo-20260724 -> origin/archive/pftl-lightning-navcoin-demo-20260724
+2026-09-16T01:30:30.9974326Z  * [new branch]        campaign-evidence/native-v1-fire-20260806 -> origin/campaign-evidence/native-v1-fire-20260806
+2026-09-16T01:30:30.9977299Z  * [new branch]        client-depositv2-2246d25                 -> origin/client-depositv2-2246d25
+2026-09-16T01:30:30.9980375Z  * [new branch]        cobalt/archive-replay-release-lineage    -> origin/cobalt/archive-replay-release-lineage
+2026-09-16T01:30:30.9983318Z  * [new branch]        codex/yolo-indices-foundation            -> origin/codex/yolo-indices-foundation
+2026-09-16T01:30:30.9986618Z  * [new branch]        docs/a666-round-trip-definition-20260811 -> origin/docs/a666-round-trip-definition-20260811
+2026-09-16T01:30:30.9989865Z  * [new branch]        docs/whitepaper-audit-20260907           -> origin/docs/whitepaper-audit-20260907
+2026-09-16T01:30:30.9992869Z  * [new branch]        dravlic/prepared-input-manifest          -> origin/dravlic/prepared-input-manifest
+2026-09-16T01:30:30.9995966Z  * [new branch]        feature/pnok-private-fix                 -> origin/feature/pnok-private-fix
+2026-09-16T01:30:30.9998790Z  * [new branch]        fix-pfusdc-latency-portability           -> origin/fix-pfusdc-latency-portability
+2026-09-16T01:30:31.0002009Z  * [new branch]        fix/consensus-whitepaper-20260909        -> origin/fix/consensus-whitepaper-20260909
+2026-09-16T01:30:31.0005492Z  * [new branch]        handoff/navcoin-cobalt-local-20260907    -> origin/handoff/navcoin-cobalt-local-20260907
+2026-09-16T01:30:31.0008706Z  * [new branch]        handoff/navcoin-deployed-base-20260907   -> origin/handoff/navcoin-deployed-base-20260907
+2026-09-16T01:30:31.0012046Z  * [new branch]        integrate/a666-c2-ci-baseline-20260808   -> origin/integrate/a666-c2-ci-baseline-20260808
+2026-09-16T01:30:31.0015612Z  * [new branch]        integrate/a666-c2-pr1-cobalt-20260808    -> origin/integrate/a666-c2-pr1-cobalt-20260808
+2026-09-16T01:30:31.0019033Z  * [new branch]        integrate/a666-c2-pr10a-dead-script-refs-20260808 -> origin/integrate/a666-c2-pr10a-dead-script-refs-20260808
+2026-09-16T01:30:31.0022846Z  * [new branch]        integrate/a666-c2-pr10b-rpc-docs-20260808 -> origin/integrate/a666-c2-pr10b-rpc-docs-20260808
+2026-09-16T01:30:31.0026453Z  * [new branch]        integrate/a666-c2-pr4-dos-20260808       -> origin/integrate/a666-c2-pr4-dos-20260808
+2026-09-16T01:30:31.0029821Z  * [new branch]        integrate/a666-c2-pr5-storage-integrity-20260808 -> origin/integrate/a666-c2-pr5-storage-integrity-20260808
+2026-09-16T01:30:31.0033303Z  * [new branch]        integrate/arc-tier4-current-v2-20260901  -> origin/integrate/arc-tier4-current-v2-20260901
+2026-09-16T01:30:31.0036662Z  * [new branch]        integration/a666-unified-20260811        -> origin/integration/a666-unified-20260811
+2026-09-16T01:30:31.0039224Z  * [new branch]        main                                     -> origin/main
+2026-09-16T01:30:31.0041687Z  * [new branch]        main-integration-20260807                -> origin/main-integration-20260807
+2026-09-16T01:30:31.0044486Z  * [new branch]        orchard-fix-2246d25                      -> origin/orchard-fix-2246d25
+2026-09-16T01:30:31.0047317Z  * [new branch]        pfusdc-mainnet-ci-followup               -> origin/pfusdc-mainnet-ci-followup
+2026-09-16T01:30:31.0050163Z  * [new branch]        pfusdc-mainnet-latency-25m               -> origin/pfusdc-mainnet-latency-25m
+2026-09-16T01:30:31.0053026Z  * [new branch]        pfusdc-tier4-v3-accel                    -> origin/pfusdc-tier4-v3-accel
+2026-09-16T01:30:31.0055905Z  * [new branch]        port/depositv2-route-binding             -> origin/port/depositv2-route-binding
+2026-09-16T01:30:31.0059049Z  * [new branch]        postfiatchad/corrected-g4-vote-lock-gate -> origin/postfiatchad/corrected-g4-vote-lock-gate
+2026-09-16T01:30:31.0062189Z  * [new branch]        release/a666-nav-overlay-20260812        -> origin/release/a666-nav-overlay-20260812
+2026-09-16T01:30:31.0065448Z  * [new branch]        release/combined-devnet-20260915         -> origin/release/combined-devnet-20260915
+2026-09-16T01:30:31.0068247Z  * [new branch]        validation-20260807                      -> origin/validation-20260807
+2026-09-16T01:30:31.0070777Z  * [new tag]           cobalt-operator-v2-20260824              -> cobalt-operator-v2-20260824
+2026-09-16T01:30:31.0073359Z  * [new ref]           f110087dbb9755388cf13d1edc92e8c9d322e1f2 -> pull/41/merge
+2026-09-16T01:30:31.0077783Z ##[endgroup]
+2026-09-16T01:30:31.0079437Z ##[group]Determining the checkout info
+2026-09-16T01:30:31.0081262Z ##[endgroup]
+2026-09-16T01:30:31.0082296Z [command]/usr/bin/git sparse-checkout disable
+2026-09-16T01:30:31.0085465Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-09-16T01:30:31.0089025Z ##[group]Checking out the ref
+2026-09-16T01:30:31.0090618Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/41/merge
+2026-09-16T01:30:31.8685793Z Note: switching to 'refs/remotes/pull/41/merge'.
+2026-09-16T01:30:31.8687207Z 
+2026-09-16T01:30:31.8687591Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-09-16T01:30:31.8688428Z changes and commit them, and you can discard any commits you make in this
+2026-09-16T01:30:31.8689233Z state without impacting any branches by switching back to a branch.
+2026-09-16T01:30:31.8689803Z 
+2026-09-16T01:30:31.8690198Z If you want to create a new branch to retain commits you create, you may
+2026-09-16T01:30:31.8690945Z do so (now or later) by using -c with the switch command. Example:
+2026-09-16T01:30:31.8691355Z 
+2026-09-16T01:30:31.8691559Z   git switch -c <new-branch-name>
+2026-09-16T01:30:31.8691923Z 
+2026-09-16T01:30:31.8692127Z Or undo this operation with:
+2026-09-16T01:30:31.8692320Z 
+2026-09-16T01:30:31.8692461Z   git switch -
+2026-09-16T01:30:31.8692632Z 
+2026-09-16T01:30:31.8692954Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-09-16T01:30:31.8693284Z 
+2026-09-16T01:30:31.8693683Z HEAD is now at f110087d Merge 5b1093faad8c78fa7a394b51863e454970815a36 into faff0e53533888bb229add117fcda3ed4094aed4
+2026-09-16T01:30:31.8745562Z ##[endgroup]
+2026-09-16T01:30:31.8797256Z [command]/usr/bin/git log -1 --format=%H
+2026-09-16T01:30:31.8822209Z f110087dbb9755388cf13d1edc92e8c9d322e1f2
+2026-09-16T01:30:31.9046799Z ##[group]Run set -euo pipefail
+2026-09-16T01:30:31.9047291Z [36;1mset -euo pipefail[0m
+2026-09-16T01:30:31.9047695Z [36;1mrustup toolchain install 1.95.0 --profile minimal[0m
+2026-09-16T01:30:31.9048128Z [36;1msudo apt-get update[0m
+2026-09-16T01:30:31.9048506Z [36;1msudo apt-get install --yes protobuf-compiler[0m
+2026-09-16T01:30:31.9049225Z [36;1mcurl --fail --location --proto '=https' --tlsv1.2 https://sp1up.succinct.xyz | bash[0m
+2026-09-16T01:30:31.9049803Z [36;1m"$HOME/.sp1/bin/sp1up" --version 6.3.1[0m
+2026-09-16T01:30:31.9050201Z [36;1mexport PATH="$HOME/.sp1/bin:$PATH"[0m
+2026-09-16T01:30:31.9050678Z [36;1mcargo prove --version | grep -F 'cargo-prove sp1'[0m
+2026-09-16T01:30:31.9094066Z shell: /usr/bin/bash -e {0}
+2026-09-16T01:30:31.9094573Z env:
+2026-09-16T01:30:31.9097408Z   GITHUB_TOKEN: ***
+2026-09-16T01:30:31.9097725Z ##[endgroup]
+2026-09-16T01:30:31.9532982Z info: syncing channel updates for 1.95.0-x86_64-unknown-linux-gnu
+2026-09-16T01:30:32.0543768Z info: latest update on 2026-04-16 for version 1.95.0 (59807616e 2026-04-14)
+2026-09-16T01:30:32.0544857Z info: downloading 3 components
+2026-09-16T01:30:39.7457775Z 
+2026-09-16T01:30:39.7531267Z   1.95.0-x86_64-unknown-linux-gnu installed - rustc 1.95.0 (59807616e 2026-04-14)
+2026-09-16T01:30:39.7531867Z 
+2026-09-16T01:30:39.8389945Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-09-16T01:30:39.8631410Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+2026-09-16T01:30:39.8723623Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+2026-09-16T01:30:39.8745154Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+2026-09-16T01:30:39.8785948Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+2026-09-16T01:30:39.8857490Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+2026-09-16T01:30:39.9440752Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [424 kB]
+2026-09-16T01:30:39.9626912Z Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [473 kB]
+2026-09-16T01:30:39.9743485Z Get:9 https://dl.google.com/linux/chrome-stable/deb stable InRelease [2548 B]
+2026-09-16T01:30:40.0584440Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1263 kB]
+2026-09-16T01:30:40.0669854Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [292 kB]
+2026-09-16T01:30:40.0706697Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Components [180 kB]
+2026-09-16T01:30:40.0730474Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1687 kB]
+2026-09-16T01:30:40.0810831Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [338 kB]
+2026-09-16T01:30:40.0856083Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Components [388 kB]
+2026-09-16T01:30:40.0872412Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1550 kB]
+2026-09-16T01:30:40.0958456Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [355 kB]
+2026-09-16T01:30:40.0986821Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [45.7 kB]
+2026-09-16T01:30:40.1003698Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [12.8 kB]
+2026-09-16T01:30:40.1464763Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Components [940 B]
+2026-09-16T01:30:40.1479809Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-backports/main amd64 Components [5776 B]
+2026-09-16T01:30:40.1491043Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-backports/universe amd64 Components [12.6 kB]
+2026-09-16T01:30:40.1695383Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1009 kB]
+2026-09-16T01:30:40.1815628Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [213 kB]
+2026-09-16T01:30:40.1866567Z Get:25 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Components [46.4 kB]
+2026-09-16T01:30:40.1881300Z Get:26 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1207 kB]
+2026-09-16T01:30:40.1990259Z Get:27 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [242 kB]
+2026-09-16T01:30:40.1991464Z Get:28 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Components [76.3 kB]
+2026-09-16T01:30:40.2002816Z Get:29 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1449 kB]
+2026-09-16T01:30:40.2097866Z Get:30 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [336 kB]
+2026-09-16T01:30:40.2672886Z Get:31 https://dl.google.com/linux/chrome-stable/deb stable/main amd64 Packages [1410 B]
+2026-09-16T01:30:44.7091935Z Fetched 12.0 MB in 1s (8507 kB/s)
+2026-09-16T01:30:45.4815496Z Reading package lists...
+2026-09-16T01:30:45.5139530Z Reading package lists...
+2026-09-16T01:30:45.6849587Z Building dependency tree...
+2026-09-16T01:30:45.6856901Z Reading state information...
+2026-09-16T01:30:45.8347845Z The following additional packages will be installed:
+2026-09-16T01:30:45.8355117Z   libprotobuf-dev libprotobuf32t64 libprotoc32t64
+2026-09-16T01:30:45.8357625Z Suggested packages:
+2026-09-16T01:30:45.8357866Z   protobuf-mode-el
+2026-09-16T01:30:45.8532689Z The following NEW packages will be installed:
+2026-09-16T01:30:45.8536813Z   libprotobuf-dev libprotobuf32t64 libprotoc32t64 protobuf-compiler
+2026-09-16T01:30:45.8712043Z 0 upgraded, 4 newly installed, 0 to remove and 64 not upgraded.
+2026-09-16T01:30:45.8712653Z Need to get 3048 kB of archives.
+2026-09-16T01:30:45.8713216Z After this operation, 17.8 MB of additional disk space will be used.
+2026-09-16T01:30:45.8713925Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+2026-09-16T01:30:45.9093989Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libprotobuf32t64 amd64 3.21.12-8.2ubuntu0.3 [923 kB]
+2026-09-16T01:30:45.9386369Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libprotoc32t64 amd64 3.21.12-8.2ubuntu0.3 [683 kB]
+2026-09-16T01:30:45.9649739Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libprotobuf-dev amd64 3.21.12-8.2ubuntu0.3 [1413 kB]
+2026-09-16T01:30:45.9998982Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 protobuf-compiler amd64 3.21.12-8.2ubuntu0.3 [29.0 kB]
+2026-09-16T01:30:46.2506394Z Fetched 3048 kB in 0s (21.9 MB/s)
+2026-09-16T01:30:46.2730669Z Selecting previously unselected package libprotobuf32t64:amd64.
+2026-09-16T01:30:46.2938912Z (Reading database ... 
+2026-09-16T01:30:46.2939581Z (Reading database ... 5%
+2026-09-16T01:30:46.2939882Z (Reading database ... 10%
+2026-09-16T01:30:46.2940136Z (Reading database ... 15%
+2026-09-16T01:30:46.2940384Z (Reading database ... 20%
+2026-09-16T01:30:46.2940607Z (Reading database ... 25%
+2026-09-16T01:30:46.2940864Z (Reading database ... 30%
+2026-09-16T01:30:46.2941204Z (Reading database ... 35%
+2026-09-16T01:30:46.2941681Z (Reading database ... 40%
+2026-09-16T01:30:46.2942183Z (Reading database ... 45%
+2026-09-16T01:30:46.2942696Z (Reading database ... 50%
+2026-09-16T01:30:46.2983680Z (Reading database ... 55%
+2026-09-16T01:30:46.3930252Z (Reading database ... 60%
+2026-09-16T01:30:46.5329164Z (Reading database ... 65%
+2026-09-16T01:30:46.7385359Z (Reading database ... 70%
+2026-09-16T01:30:46.8322119Z (Reading database ... 75%
+2026-09-16T01:30:47.0070463Z (Reading database ... 80%
+2026-09-16T01:30:47.1351978Z (Reading database ... 85%
+2026-09-16T01:30:47.2912422Z (Reading database ... 90%
+2026-09-16T01:30:47.3938431Z (Reading database ... 95%
+2026-09-16T01:30:47.3939023Z (Reading database ... 100%
+2026-09-16T01:30:47.3939634Z (Reading database ... 201818 files and directories currently installed.)
+2026-09-16T01:30:47.3982966Z Preparing to unpack .../libprotobuf32t64_3.21.12-8.2ubuntu0.3_amd64.deb ...
+2026-09-16T01:30:47.4020367Z Unpacking libprotobuf32t64:amd64 (3.21.12-8.2ubuntu0.3) ...
+2026-09-16T01:30:47.4370886Z Selecting previously unselected package libprotoc32t64:amd64.
+2026-09-16T01:30:47.4498873Z Preparing to unpack .../libprotoc32t64_3.21.12-8.2ubuntu0.3_amd64.deb ...
+2026-09-16T01:30:47.4509301Z Unpacking libprotoc32t64:amd64 (3.21.12-8.2ubuntu0.3) ...
+2026-09-16T01:30:47.4794398Z Selecting previously unselected package libprotobuf-dev:amd64.
+2026-09-16T01:30:47.4955591Z Preparing to unpack .../libprotobuf-dev_3.21.12-8.2ubuntu0.3_amd64.deb ...
+2026-09-16T01:30:47.6385759Z Unpacking libprotobuf-dev:amd64 (3.21.12-8.2ubuntu0.3) ...
+2026-09-16T01:30:47.7510039Z Selecting previously unselected package protobuf-compiler.
+2026-09-16T01:30:47.7641572Z Preparing to unpack .../protobuf-compiler_3.21.12-8.2ubuntu0.3_amd64.deb ...
+2026-09-16T01:30:47.7650166Z Unpacking protobuf-compiler (3.21.12-8.2ubuntu0.3) ...
+2026-09-16T01:30:47.8070871Z Setting up libprotobuf32t64:amd64 (3.21.12-8.2ubuntu0.3) ...
+2026-09-16T01:30:47.8095763Z Setting up libprotobuf-dev:amd64 (3.21.12-8.2ubuntu0.3) ...
+2026-09-16T01:30:47.8115616Z Setting up libprotoc32t64:amd64 (3.21.12-8.2ubuntu0.3) ...
+2026-09-16T01:30:47.8135282Z Setting up protobuf-compiler (3.21.12-8.2ubuntu0.3) ...
+2026-09-16T01:30:47.8156872Z Processing triggers for man-db (2.12.0-4build2) ...
+2026-09-16T01:30:47.8176927Z Not building database; man-db/auto-update is not 'true'.
+2026-09-16T01:30:47.8188618Z Processing triggers for libc-bin (2.39-0ubuntu8.8) ...
+2026-09-16T01:30:49.1023672Z 
+2026-09-16T01:30:49.1024333Z Running kernel seems to be up-to-date.
+2026-09-16T01:30:49.1024697Z 
+2026-09-16T01:30:49.1024862Z No services need to be restarted.
+2026-09-16T01:30:49.1025049Z 
+2026-09-16T01:30:49.1035324Z No containers need to be restarted.
+2026-09-16T01:30:49.1035648Z 
+2026-09-16T01:30:49.1035835Z No user sessions are running outdated binaries.
+2026-09-16T01:30:49.1036171Z 
+2026-09-16T01:30:49.1036610Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+2026-09-16T01:30:50.0105364Z   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+2026-09-16T01:30:50.0106475Z                                  Dload  Upload   Total   Spent    Left  Speed
+2026-09-16T01:30:50.0106858Z 
+2026-09-16T01:30:50.1237038Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-09-16T01:30:50.1237741Z 100    15    0    15    0     0    132      0 --:--:-- --:--:-- --:--:--   133
+2026-09-16T01:30:50.1505727Z 
+2026-09-16T01:30:50.1506120Z 100  2234  100  2234    0     0  15924      0 --:--:-- --:--:-- --:--:-- 15924
+2026-09-16T01:30:50.1508707Z 🚀 Installing sp1up...
+2026-09-16T01:30:50.1509005Z 
+2026-09-16T01:30:50.2443784Z 
+2026-09-16T01:30:50.2444580Z ######################################################################## 100.0%
+2026-09-16T01:30:50.2490581Z 
+2026-09-16T01:30:50.2491283Z ✅ Installation complete!
+2026-09-16T01:30:50.2491561Z 
+2026-09-16T01:30:50.2491909Z 🔍 Detected shell: bash
+2026-09-16T01:30:50.2492236Z 🔗 Added sp1up to PATH
+2026-09-16T01:30:50.2492380Z 
+2026-09-16T01:30:50.2492506Z To start using sp1up, please run:
+2026-09-16T01:30:50.2492700Z 
+2026-09-16T01:30:50.2492847Z ▶ source /home/runner/.bashrc
+2026-09-16T01:30:50.2495245Z ▶ sp1up
+2026-09-16T01:30:50.2495377Z 
+2026-09-16T01:30:50.2495592Z 🎉 Enjoy using sp1up! For help, type 'sp1up --help'
+2026-09-16T01:30:50.2550477Z 
+2026-09-16T01:30:50.2550908Z .______  ._______ ._______ ._______ ._______ ._______ ._______ ._______ ._______
+2026-09-16T01:30:50.2551366Z 
+2026-09-16T01:30:50.2551482Z    _____  ____  ___
+2026-09-16T01:30:50.2551786Z   / ___/ / __ \<  /
+2026-09-16T01:30:50.2552177Z   \__ \ / /_/ // /                        A performant, 100% open-source,
+2026-09-16T01:30:50.2552585Z  ___/ // ____// /                              general-purpose zkVM.  
+2026-09-16T01:30:50.2552904Z /____//_/    /_/   
+2026-09-16T01:30:50.2553027Z 
+2026-09-16T01:30:50.2553192Z ._______ ._______ ._______ ._______ ._______ ._______ ._______ ._______ ._______ 
+2026-09-16T01:30:50.2553739Z 
+2026-09-16T01:30:50.2553892Z Repo       : https://github.com/succinctlabs/sp1
+2026-09-16T01:30:50.2554416Z Book       : https://docs.succinct.xyz/
+2026-09-16T01:30:50.2554731Z Telegram   : https://t.me/+AzG4ws-kD24yMGYx
+2026-09-16T01:30:50.2554938Z 
+2026-09-16T01:30:50.2555090Z ._______ ._______ ._______ ._______ ._______ ._______ ._______ ._______ ._______ 
+2026-09-16T01:30:50.2555440Z 
+2026-09-16T01:30:50.2555641Z sp1up: installing SP1 (version v6.3.1, tag v6.3.1)
+2026-09-16T01:30:50.3841592Z sp1up: downloading cargo_prove_v6.3.1_linux_amd64.tar.gz
+2026-09-16T01:30:50.7102654Z 
+2026-09-16T01:30:50.8424952Z #################################                                         47.0%
+2026-09-16T01:30:50.8899586Z #################################################################         91.2%
+2026-09-16T01:30:50.8900498Z ######################################################################## 100.0%
+2026-09-16T01:30:50.9020940Z sp1up: installed - cargo-prove sp1 (8252c29 2026-06-25T11:50:01.543258355Z)
+2026-09-16T01:30:50.9027228Z sp1up: installing rust toolchain
+2026-09-16T01:30:51.7208702Z Successfully cleaned up ~/.sp1 directory.
+2026-09-16T01:30:51.7209178Z Successfully created ~/.sp1 directory.
+2026-09-16T01:30:54.9371968Z info: no toolchain installed for 'succinct'
+2026-09-16T01:30:54.9379125Z Successfully removed existing toolchain.
+2026-09-16T01:31:03.1891187Z Successfully linked toolchain to rustup.
+2026-09-16T01:31:03.1903721Z sp1up: installed rust toolchain
+2026-09-16T01:31:03.1904024Z sp1up: done!
+2026-09-16T01:31:03.2245613Z cargo-prove sp1 (8252c29 2026-06-25T11:50:01.543258355Z)
+2026-09-16T01:31:03.2295366Z ##[group]Run set -euo pipefail
+2026-09-16T01:31:03.2296127Z [36;1mset -euo pipefail[0m
+2026-09-16T01:31:03.2296406Z [36;1mexport PATH="$HOME/.sp1/bin:$PATH"[0m
+2026-09-16T01:31:03.2296765Z [36;1mmanifest=programs/pfusdc-egress/releases.json[0m
+2026-09-16T01:31:03.2297244Z [36;1mrelease="$(jq -ce --arg id "$RELEASE_ID" '.releases[] | select(.id == $id)' "$manifest")"[0m
+2026-09-16T01:31:03.2297747Z [36;1mSOURCE_COMMIT="$(jq -er .source_commit <<< "$release")"[0m
+2026-09-16T01:31:03.2298392Z [36;1mRETAINED_COMMIT="$(jq -er .retained_commit <<< "$release")"[0m
+2026-09-16T01:31:03.2298785Z [36;1mEXPECTED="$(jq -er .expected <<< "$release")"[0m
+2026-09-16T01:31:03.2299136Z [36;1mdocker pull ghcr.io/succinctlabs/sp1:v6.3.1[0m
+2026-09-16T01:31:03.2299770Z [36;1mtest "$(docker image inspect ghcr.io/succinctlabs/sp1:v6.3.1 --format '{{index .RepoDigests 0}}')" = "$(jq -er .docker_image "$manifest")"[0m
+2026-09-16T01:31:03.2300417Z [36;1mroot="$RUNNER_TEMP/arc-proof-identities"[0m
+2026-09-16T01:31:03.2300752Z [36;1mmkdir -p "$root/src-a" "$root/src-b" \[0m
+2026-09-16T01:31:03.2301090Z [36;1m  "$root/out-a/ingress" "$root/out-a/egress" \[0m
+2026-09-16T01:31:03.2301429Z [36;1m  "$root/out-b/ingress" "$root/out-b/egress" \[0m
+2026-09-16T01:31:03.2301725Z [36;1m  "$root/report"[0m
+2026-09-16T01:31:03.2302039Z [36;1mgit archive "$SOURCE_COMMIT" | tar -x -C "$root/src-a"[0m
+2026-09-16T01:31:03.2302426Z [36;1mgit archive "$SOURCE_COMMIT" | tar -x -C "$root/src-b"[0m
+2026-09-16T01:31:03.2303059Z [36;1mtest "$(sha256sum "$root/src-a/programs/pfusdc-egress/Cargo.lock" | cut -d' ' -f1)" = "$(jq -er .egress_lock_sha256 <<< "$release")"[0m
+2026-09-16T01:31:03.2303860Z [36;1mingress_source_lock_sha="$(sha256sum "$root/src-a/programs/pfusdc-arc-ingress/Cargo.lock" | cut -d' ' -f1)"[0m
+2026-09-16T01:31:03.2304920Z [36;1megress_source_lock_sha="$(sha256sum "$root/src-a/programs/pfusdc-egress/Cargo.lock" | cut -d' ' -f1)"[0m
+2026-09-16T01:31:03.2305417Z [36;1mwhile read -r revision; do[0m
+2026-09-16T01:31:03.2305917Z [36;1m  git diff --no-ext-diff --unified=0 "$revision^" "$revision" -- crates/types > "$root/revert-$revision.patch"[0m
+2026-09-16T01:31:03.2306483Z [36;1mdone < <(jq -r '.egress_source_reversions[]?' <<< "$release")[0m
+2026-09-16T01:31:03.2306826Z [36;1m[0m
+2026-09-16T01:31:03.2307027Z [36;1mbuild_pair() {[0m
+2026-09-16T01:31:03.2307263Z [36;1m  local source="$1"[0m
+2026-09-16T01:31:03.2307505Z [36;1m  local output="$2"[0m
+2026-09-16T01:31:03.2307739Z [36;1m  ([0m
+2026-09-16T01:31:03.2307986Z [36;1m    cd "$source/programs/pfusdc-arc-ingress"[0m
+2026-09-16T01:31:03.2308373Z [36;1m    cargo prove build --docker --tag v6.3.1 --locked \[0m
+2026-09-16T01:31:03.2308731Z [36;1m      --workspace-directory "$source" \[0m
+2026-09-16T01:31:03.2309053Z [36;1m      --output-directory "$output/ingress"[0m
+2026-09-16T01:31:03.2309344Z [36;1m  )[0m
+2026-09-16T01:31:03.2309583Z [36;1m  if [ "$RELEASE_ID" = pfeth-v1-20260904 ]; then[0m
+2026-09-16T01:31:03.2309995Z [36;1m    # This retained ELF was built natively and embeds these paths.[0m
+2026-09-16T01:31:03.2310433Z [36;1m    # Reproduce its inputs; never rewrite the output ELF.[0m
+2026-09-16T01:31:03.2310837Z [36;1m    historical_root=/home/postfiat/repos/postfiatl1v2[0m
+2026-09-16T01:31:03.2311183Z [36;1m    test ! -e "$historical_root"[0m
+2026-09-16T01:31:03.2311541Z [36;1m    sudo mkdir -p /home/postfiat/repos /home/postfiat/.cargo[0m
+2026-09-16T01:31:03.2311942Z [36;1m    sudo chown -R "$(id -u):$(id -g)" /home/postfiat[0m
+2026-09-16T01:31:03.2312284Z [36;1m    cp -a "$source" "$historical_root"[0m
+2026-09-16T01:31:03.2312591Z [36;1m    while read -r revision; do[0m
+2026-09-16T01:31:03.2313049Z [36;1m      (cd "$historical_root" && git apply --reverse --unidiff-zero "$root/revert-$revision.patch")[0m
+2026-09-16T01:31:03.2313576Z [36;1m    done < <(jq -r '.egress_source_reversions[]?' <<< "$release")[0m
+2026-09-16T01:31:03.2313908Z [36;1m    ([0m
+2026-09-16T01:31:03.2314524Z [36;1m      cd "$historical_root/programs/pfusdc-egress"[0m
+2026-09-16T01:31:03.2314950Z [36;1m      CARGO_HOME=/home/postfiat/.cargo cargo prove build --locked \[0m
+2026-09-16T01:31:03.2315349Z [36;1m        --output-directory "$output/egress"[0m
+2026-09-16T01:31:03.2315645Z [36;1m    )[0m
+2026-09-16T01:31:03.2315858Z [36;1m    rm -rf "$historical_root"[0m
+2026-09-16T01:31:03.2316116Z [36;1m  else[0m
+2026-09-16T01:31:03.2316312Z [36;1m    ([0m
+2026-09-16T01:31:03.2316670Z [36;1m      cd "$source/programs/pfusdc-egress"[0m
+2026-09-16T01:31:03.2317026Z [36;1m      cargo prove build --docker --tag v6.3.1 --locked \[0m
+2026-09-16T01:31:03.2317372Z [36;1m        --workspace-directory "$source" \[0m
+2026-09-16T01:31:03.2317686Z [36;1m        --output-directory "$output/egress"[0m
+2026-09-16T01:31:03.2317965Z [36;1m    )[0m
+2026-09-16T01:31:03.2318166Z [36;1m  fi[0m
+2026-09-16T01:31:03.2318364Z [36;1m}[0m
+2026-09-16T01:31:03.2318589Z [36;1mbuild_pair "$root/src-a" "$root/out-a"[0m
+2026-09-16T01:31:03.2318901Z [36;1mbuild_pair "$root/src-b" "$root/out-b"[0m
+2026-09-16T01:31:03.2319195Z [36;1m[0m
+2026-09-16T01:31:03.2319534Z [36;1mingress_a="$root/out-a/ingress/pfusdc-arc-ingress-program"[0m
+2026-09-16T01:31:03.2319963Z [36;1mingress_b="$root/out-b/ingress/pfusdc-arc-ingress-program"[0m
+2026-09-16T01:31:03.2320370Z [36;1megress_a="$root/out-a/egress/pfusdc-egress-program"[0m
+2026-09-16T01:31:03.2320750Z [36;1megress_b="$root/out-b/egress/pfusdc-egress-program"[0m
+2026-09-16T01:31:03.2321106Z [36;1mtest -s "$ingress_a" && test -s "$ingress_b"[0m
+2026-09-16T01:31:03.2321438Z [36;1mtest -s "$egress_a" && test -s "$egress_b"[0m
+2026-09-16T01:31:03.2321794Z [36;1mingress_sha="$(sha256sum "$ingress_a" | cut -d' ' -f1)"[0m
+2026-09-16T01:31:03.2322189Z [36;1mingress_b_sha="$(sha256sum "$ingress_b" | cut -d' ' -f1)"[0m
+2026-09-16T01:31:03.2322575Z [36;1megress_sha="$(sha256sum "$egress_a" | cut -d' ' -f1)"[0m
+2026-09-16T01:31:03.2322957Z [36;1megress_b_sha="$(sha256sum "$egress_b" | cut -d' ' -f1)"[0m
+2026-09-16T01:31:03.2323405Z [36;1mprintf 'arc-ingress build-a=%s build-b=%s\n' "$ingress_sha" "$ingress_b_sha"[0m
+2026-09-16T01:31:03.2323907Z [36;1mprintf 'egress build-a=%s build-b=%s\n' "$egress_sha" "$egress_b_sha"[0m
+2026-09-16T01:31:03.2324537Z [36;1mtest "$ingress_sha" = "$ingress_b_sha"[0m
+2026-09-16T01:31:03.2324989Z [36;1mtest "$egress_sha" = "$egress_b_sha"[0m
+2026-09-16T01:31:03.2325360Z [36;1mcmp "$ingress_a" "$ingress_b"[0m
+2026-09-16T01:31:03.2325662Z [36;1mcmp "$egress_a" "$egress_b"[0m
+2026-09-16T01:31:03.2325916Z [36;1m[0m
+2026-09-16T01:31:03.2326228Z [36;1mexpected_ingress_sha="$(jq -r .arc_ingress.elf_sha256 "$EXPECTED")"[0m
+2026-09-16T01:31:03.2326691Z [36;1mexpected_egress_sha="$(jq -r .egress.elf_sha256 "$EXPECTED")"[0m
+2026-09-16T01:31:03.2327202Z [36;1mprintf 'arc-ingress rebuilt=%s expected=%s\n' "$ingress_sha" "$expected_ingress_sha"[0m
+2026-09-16T01:31:03.2327758Z [36;1mprintf 'egress rebuilt=%s expected=%s\n' "$egress_sha" "$expected_egress_sha"[0m
+2026-09-16T01:31:03.2328143Z [36;1m[0m
+2026-09-16T01:31:03.2328628Z [36;1mgit show "$RETAINED_COMMIT:programs/pfusdc-egress/elf/pfusdc-egress-program" > "$root/report/retained-egress-program"[0m
+2026-09-16T01:31:03.2329258Z [36;1mcp "$ingress_a" "$root/report/pfusdc-arc-ingress-program"[0m
+2026-09-16T01:31:03.2329655Z [36;1mcp "$egress_a" "$root/report/pfusdc-egress-program"[0m
+2026-09-16T01:31:03.2330019Z [36;1mtest "$ingress_sha" = "$expected_ingress_sha"[0m
+2026-09-16T01:31:03.2330350Z [36;1mtest "$egress_sha" = "$expected_egress_sha"[0m
+2026-09-16T01:31:03.2330710Z [36;1mcmp "$egress_a" "$root/report/retained-egress-program"[0m
+2026-09-16T01:31:03.2331213Z [36;1mcp "$ingress_a" "$root/src-a/programs/pfusdc-arc-ingress/elf/pfusdc-arc-ingress-program"[0m
+2026-09-16T01:31:03.2331772Z [36;1mcp "$egress_a" "$root/src-a/programs/pfusdc-egress/elf/pfusdc-egress-program"[0m
+2026-09-16T01:31:03.2332235Z [36;1mcargo run --locked --release --no-default-features \[0m
+2026-09-16T01:31:03.2332856Z [36;1m  --manifest-path "$root/src-a/tools/pfusdc-tier4-prover/Cargo.toml" -- \[0m
+2026-09-16T01:31:03.2333342Z [36;1m  program-info --output "$root/report/program-info.json"[0m
+2026-09-16T01:31:03.2333715Z [36;1mjq -e --slurpfile expected "$EXPECTED" '[0m
+2026-09-16T01:31:03.2334054Z [36;1m  .arc_ingress == $expected[0].arc_ingress and[0m
+2026-09-16T01:31:03.2334609Z [36;1m  .egress == $expected[0].egress and[0m
+2026-09-16T01:31:03.2334902Z [36;1m  .sp1_sdk_version == "6.3.1"[0m
+2026-09-16T01:31:03.2335318Z [36;1m' "$root/report/program-info.json"[0m
+2026-09-16T01:31:03.2335590Z [36;1m[0m
+2026-09-16T01:31:03.2335906Z [36;1mdocker_image="$(docker image inspect ghcr.io/succinctlabs/sp1:v6.3.1 \[0m
+2026-09-16T01:31:03.2336325Z [36;1m  --format '{{index .RepoDigests 0}}')"[0m
+2026-09-16T01:31:03.2336645Z [36;1mrust_version="$(rustc +1.95.0 --version)"[0m
+2026-09-16T01:31:03.2336979Z [36;1mcargo_prove_version="$(cargo prove --version)"[0m
+2026-09-16T01:31:03.2337285Z [36;1mjq -n \[0m
+2026-09-16T01:31:03.2337523Z [36;1m  --arg source_commit "$SOURCE_COMMIT" \[0m
+2026-09-16T01:31:03.2337832Z [36;1m  --arg release_id "$RELEASE_ID" \[0m
+2026-09-16T01:31:03.2338175Z [36;1m  --arg build_mode "$(jq -er .build_mode <<< "$release")" \[0m
+2026-09-16T01:31:03.2338579Z [36;1m  --arg source_root "$(jq -er .source_root <<< "$release")" \[0m
+2026-09-16T01:31:03.2338978Z [36;1m  --arg cargo_home "$(jq -er .cargo_home <<< "$release")" \[0m
+2026-09-16T01:31:03.2339332Z [36;1m  --arg ingress_sha256 "$ingress_sha" \[0m
+2026-09-16T01:31:03.2339635Z [36;1m  --arg egress_sha256 "$egress_sha" \[0m
+2026-09-16T01:31:03.2339981Z [36;1m  --arg ingress_lock_sha256 "$ingress_source_lock_sha" \[0m
+2026-09-16T01:31:03.2340362Z [36;1m  --arg egress_lock_sha256 "$egress_source_lock_sha" \[0m
+2026-09-16T01:31:03.2340870Z [36;1m  --argjson egress_source_reversions "$(jq -c '.egress_source_reversions // []' <<< "$release")" \[0m
+2026-09-16T01:31:03.2341351Z [36;1m  --arg docker_image "$docker_image" \[0m
+2026-09-16T01:31:03.2341656Z [36;1m  --arg rust_version "$rust_version" \[0m
+2026-09-16T01:31:03.2341991Z [36;1m  --arg cargo_prove_version "$cargo_prove_version" \[0m
+2026-09-16T01:31:03.2342299Z [36;1m  '{[0m
+2026-09-16T01:31:03.2342604Z [36;1m    schema:"postfiat.pfusdc.arc_proof_identity_reproduction.v1",[0m
+2026-09-16T01:31:03.2342991Z [36;1m    source_commit:$source_commit,[0m
+2026-09-16T01:31:03.2343279Z [36;1m    release_id:$release_id,[0m
+2026-09-16T01:31:03.2343545Z [36;1m    build_mode:$build_mode,[0m
+2026-09-16T01:31:03.2343806Z [36;1m    source_root:$source_root,[0m
+2026-09-16T01:31:03.2344068Z [36;1m    cargo_home:$cargo_home,[0m
+2026-09-16T01:31:03.2344539Z [36;1m    build_count_per_guest:2,[0m
+2026-09-16T01:31:03.2344814Z [36;1m    clean_source_trees:2,[0m
+2026-09-16T01:31:03.2345068Z [36;1m    byte_exact_replay:true,[0m
+2026-09-16T01:31:03.2345350Z [36;1m    arc_ingress_elf_sha256:$ingress_sha256,[0m
+2026-09-16T01:31:03.2345666Z [36;1m    egress_elf_sha256:$egress_sha256,[0m
+2026-09-16T01:31:03.2345992Z [36;1m    arc_ingress_lock_sha256:$ingress_lock_sha256,[0m
+2026-09-16T01:31:03.2346325Z [36;1m    egress_lock_sha256:$egress_lock_sha256,[0m
+2026-09-16T01:31:03.2346668Z [36;1m    egress_source_reversions:$egress_source_reversions,[0m
+2026-09-16T01:31:03.2347009Z [36;1m    docker_image:$docker_image,[0m
+2026-09-16T01:31:03.2347283Z [36;1m    rust_version:$rust_version,[0m
+2026-09-16T01:31:03.2347592Z [36;1m    cargo_prove_version:$cargo_prove_version[0m
+2026-09-16T01:31:03.2347916Z [36;1m  }' > "$root/report/reproduction.json"[0m
+2026-09-16T01:31:03.2348342Z [36;1msha256sum "$root/report/program-info.json" "$root/report/reproduction.json" \[0m
+2026-09-16T01:31:03.2348769Z [36;1m  > "$root/report/SHA256SUMS"[0m
+2026-09-16T01:31:03.2388828Z shell: /usr/bin/bash -e {0}
+2026-09-16T01:31:03.2389096Z env:
+2026-09-16T01:31:03.2389318Z   RELEASE_ID: pfeth-v1-20260904
+2026-09-16T01:31:03.2389580Z ##[endgroup]
+2026-09-16T01:31:03.7956195Z v6.3.1: Pulling from succinctlabs/sp1
+2026-09-16T01:31:03.8877829Z 00d679a470c4: Pulling fs layer
+2026-09-16T01:31:03.8878318Z 2ff0b6b99140: Pulling fs layer
+2026-09-16T01:31:03.8878717Z aaaa7fac7319: Pulling fs layer
+2026-09-16T01:31:03.8879109Z b0246b238f4b: Pulling fs layer
+2026-09-16T01:31:03.8879483Z 47ddb8416854: Pulling fs layer
+2026-09-16T01:31:03.8879846Z b0246b238f4b: Waiting
+2026-09-16T01:31:04.3112576Z 00d679a470c4: Verifying Checksum
+2026-09-16T01:31:04.3113340Z 00d679a470c4: Download complete
+2026-09-16T01:31:05.4248468Z 00d679a470c4: Pull complete
+2026-09-16T01:31:06.6020702Z 2ff0b6b99140: Verifying Checksum
+2026-09-16T01:31:06.6021200Z 2ff0b6b99140: Download complete
+2026-09-16T01:31:08.9325896Z aaaa7fac7319: Verifying Checksum
+2026-09-16T01:31:08.9326479Z aaaa7fac7319: Download complete
+2026-09-16T01:31:13.0936589Z 47ddb8416854: Verifying Checksum
+2026-09-16T01:31:13.0937097Z 47ddb8416854: Download complete
+2026-09-16T01:31:14.0809163Z b0246b238f4b: Verifying Checksum
+2026-09-16T01:31:14.0809645Z b0246b238f4b: Download complete
+2026-09-16T01:31:14.5911621Z 2ff0b6b99140: Pull complete
+2026-09-16T01:31:33.3512893Z aaaa7fac7319: Pull complete
+2026-09-16T01:31:56.7897412Z b0246b238f4b: Pull complete
+2026-09-16T01:32:04.8426126Z 47ddb8416854: Pull complete
+2026-09-16T01:32:04.8459484Z Digest: sha256:0942a27dbe8e38f4b14f3732e779df4027b17bde93e9fbc9e8c773c15eb63400
+2026-09-16T01:32:04.8467977Z Status: Downloaded newer image for ghcr.io/succinctlabs/sp1:v6.3.1
+2026-09-16T01:32:04.8475064Z ghcr.io/succinctlabs/sp1:v6.3.1
+2026-09-16T01:32:12.2146392Z cargo:warning=docker: rustc +succinct --version: "rustc 1.94.0-dev\n"
+2026-09-16T01:32:14.4138737Z cargo:warning=docker: rustc_bin: "/root/.sp1/toolchains/g7wv95WZT7/bin/rustc"
+2026-09-16T01:32:22.9508669Z [sp1] [docker]  info: `cargo` is unavailable for the active toolchain
+2026-09-16T01:32:22.9509330Z [sp1] [docker]  info: falling back to "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo"
+2026-09-16T01:32:23.0187076Z [sp1] [docker]  [1m[92m    Updating[0m git repository `https://github.com/sp1-patches/curve25519-dalek`
+2026-09-16T01:32:23.8463284Z [sp1] [docker]  [1m[92m    Updating[0m git repository `https://github.com/sp1-patches/RustCrypto-hashes`
+2026-09-16T01:32:24.4657821Z [sp1] [docker]  [1m[92m    Updating[0m crates.io index
+2026-09-16T01:32:24.9206135Z [sp1] [docker]  [1m[33mwarning[0m: patch `tiny-keccak v2.0.2 (https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-6.0.0#957430a4)` was not used in the crate graph
+2026-09-16T01:32:24.9207482Z [sp1] [docker]  [1m[96mhelp[0m: Check that the patched package version and available features are compatible
+2026-09-16T01:32:24.9208520Z [sp1] [docker]        with the dependency requirements. If the patch has a different version from
+2026-09-16T01:32:24.9209420Z [sp1] [docker]        what is locked in the Cargo.lock file, run `cargo update` to use the new
+2026-09-16T01:32:24.9210295Z [sp1] [docker]        version. This may also occur with an optional dependency that is not enabled.
+2026-09-16T01:32:24.9619984Z [sp1] [docker]  [1m[92m Downloading[0m crates ...
+2026-09-16T01:32:25.0704118Z [sp1] [docker]  [1m[92m  Downloaded[0m alloy-rlp v0.3.12
+2026-09-16T01:32:25.0724391Z [sp1] [docker]  [1m[92m  Downloaded[0m ark-ff-asm v0.6.0
+2026-09-16T01:32:25.0742946Z [sp1] [docker]  [1m[92m  Downloaded[0m alloy-rlp-derive v0.3.16
+2026-09-16T01:32:25.0761151Z [sp1] [docker]  [1m[92m  Downloaded[0m alloy-eip7928 v0.3.7
+2026-09-16T01:32:25.0783417Z [sp1] [docker]  [1m[92m  Downloaded[0m num-bigint v0.4.8
+2026-09-16T01:32:25.0841811Z [sp1] [docker]  [1m[92m  Downloaded[0m defmt v1.1.1
+2026-09-16T01:32:25.0902971Z [sp1] [docker]  [1m[92m  Downloaded[0m toml_edit v0.25.13+spec-1.1.0
+2026-09-16T01:32:25.0955202Z [sp1] [docker]  [1m[92m  Downloaded[0m serde_cbor v0.11.2
+2026-09-16T01:32:25.0997121Z [sp1] [docker]  [1m[92m  Downloaded[0m zeroize_derive v1.5.0
+2026-09-16T01:32:25.1016465Z [sp1] [docker]  [1m[92m  Downloaded[0m unicode-segmentation v1.13.3
+2026-09-16T01:32:25.1057156Z [sp1] [docker]  [1m[92m  Downloaded[0m rand v0.8.8
+2026-09-16T01:32:25.1102192Z [sp1] [docker]  [1m[92m  Downloaded[0m zmij v1.0.23
+2026-09-16T01:32:25.1132367Z [sp1] [docker]  [1m[92m  Downloaded[0m slop-algebra v6.5.0
+2026-09-16T01:32:25.1152778Z [sp1] [docker]  [1m[92m  Downloaded[0m toml_parser v1.1.3+spec-1.1.0
+2026-09-16T01:32:25.1186613Z [sp1] [docker]  [1m[92m  Downloaded[0m slop-koala-bear v6.5.0
+2026-09-16T01:32:25.1199023Z [sp1] [docker]  [1m[92m  Downloaded[0m tinyvec v1.12.0
+2026-09-16T01:32:25.1239942Z [sp1] [docker]  [1m[92m  Downloaded[0m futures-core v0.3.34
+2026-09-16T01:32:25.1266129Z [sp1] [docker]  [1m[92m  Downloaded[0m typenum v1.20.1
+2026-09-16T01:32:25.1312669Z [sp1] [docker]  [1m[92m  Downloaded[0m bitcoin-io v0.1.101
+2026-09-16T01:32:25.1330979Z [sp1] [docker]  [1m[92m  Downloaded[0m slop-primitives v6.5.0
+2026-09-16T01:32:25.1344526Z [sp1] [docker]  [1m[92m  Downloaded[0m slop-symmetric v6.5.0
+2026-09-16T01:32:25.1360376Z [sp1] [docker]  [1m[92m  Downloaded[0m autocfg v1.5.1
+2026-09-16T01:32:25.1390981Z [sp1] [docker]  [1m[92m  Downloaded[0m slop-challenger v6.5.0
+2026-09-16T01:32:25.1408034Z [sp1] [docker]  [1m[92m  Downloaded[0m winnow v1.0.4
+2026-09-16T01:32:25.1532236Z [sp1] [docker]  [1m[92m  Downloaded[0m sp1-lib v6.3.1
+2026-09-16T01:32:25.1569211Z [sp1] [docker]  [1m[92m  Downloaded[0m sp1-zkvm v6.3.1
+2026-09-16T01:32:25.1616069Z [sp1] [docker]  [1m[92m  Downloaded[0m thiserror v2.0.20
+2026-09-16T01:32:25.1708422Z [sp1] [docker]  [1m[92m  Downloaded[0m serde_derive v1.0.229
+2026-09-16T01:32:25.1758334Z [sp1] [docker]  [1m[92m  Downloaded[0m zerocopy v0.8.56
+2026-09-16T01:32:25.2012694Z [sp1] [docker]  [1m[92m  Downloaded[0m time v0.3.55
+2026-09-16T01:32:25.2184645Z [sp1] [docker]  [1m[92m  Downloaded[0m memchr v2.8.3
+2026-09-16T01:32:25.2255958Z [sp1] [docker]  [1m[92m  Downloaded[0m indexmap v2.14.1
+2026-09-16T01:32:25.2313239Z [sp1] [docker]  [1m[92m  Downloaded[0m jiff-core v0.1.0
+2026-09-16T01:32:25.2361142Z [sp1] [docker]  [1m[92m  Downloaded[0m ed25519-dalek v2.2.0
+2026-09-16T01:32:25.2401866Z [sp1] [docker]  [1m[92m  Downloaded[0m hashbrown v0.17.1
+2026-09-16T01:32:25.2466782Z [sp1] [docker]  [1m[92m  Downloaded[0m futures-util v0.3.34
+2026-09-16T01:32:25.2623231Z [sp1] [docker]  [1m[92m  Downloaded[0m serde_with v3.22.0
+2026-09-16T01:32:25.2776886Z [sp1] [docker]  [1m[92m  Downloaded[0m blake3 v1.8.7
+2026-09-16T01:32:25.2869353Z [sp1] [docker]  [1m[92m  Downloaded[0m bitvec v1.1.1
+2026-09-16T01:32:25.3065744Z [sp1] [docker]  [1m[92m  Downloaded[0m chrono v0.4.45
+2026-09-16T01:32:25.3142688Z [sp1] [docker]  [1m[92m  Downloaded[0m borsh v1.8.1
+2026-09-16T01:32:25.3228897Z [sp1] [docker]  [1m[92m  Downloaded[0m syn v2.0.119
+2026-09-16T01:32:25.3348719Z [sp1] [docker]  [1m[92m  Downloaded[0m syn v3.0.4
+2026-09-16T01:32:25.3468164Z [sp1] [docker]  [1m[92m  Downloaded[0m serde_json v1.0.151
+2026-09-16T01:32:25.3555322Z [sp1] [docker]  [1m[92m  Downloaded[0m regex-syntax v0.8.11
+2026-09-16T01:32:25.3630126Z [sp1] [docker]  [1m[92m  Downloaded[0m sha3-asm v0.1.8
+2026-09-16T01:32:25.3739950Z [sp1] [docker]  [1m[92m  Downloaded[0m blst v0.3.17
+2026-09-16T01:32:25.3898280Z [sp1] [docker]  [1m[92m  Downloaded[0m serde v1.0.229
+2026-09-16T01:32:25.3937989Z [sp1] [docker]  [1m[92m  Downloaded[0m schemars v1.2.2
+2026-09-16T01:32:25.4136719Z [sp1] [docker]  [1m[92m  Downloaded[0m rand v0.9.5
+2026-09-16T01:32:25.4180871Z [sp1] [docker]  [1m[92m  Downloaded[0m hex-conservative v1.2.0
+2026-09-16T01:32:25.4206227Z [sp1] [docker]  [1m[92m  Downloaded[0m bitflags v2.13.1
+2026-09-16T01:32:25.4257994Z [sp1] [docker]  [1m[92m  Downloaded[0m syn-solidity v1.7.1
+2026-09-16T01:32:25.4328507Z [sp1] [docker]  [1m[92m  Downloaded[0m rapidhash v4.5.1
+2026-09-16T01:32:25.4375819Z [sp1] [docker]  [1m[92m  Downloaded[0m pest v2.9.0
+2026-09-16T01:32:25.4428147Z [sp1] [docker]  [1m[92m  Downloaded[0m log v0.4.34
+2026-09-16T01:32:25.4458021Z [sp1] [docker]  [1m[92m  Downloaded[0m futures v0.3.34
+2026-09-16T01:32:25.4514165Z [sp1] [docker]  [1m[92m  Downloaded[0m find-msvc-tools v0.1.11
+2026-09-16T01:32:25.4534619Z [sp1] [docker]  [1m[92m  Downloaded[0m bytes v1.12.1
+2026-09-16T01:32:25.4577652Z [sp1] [docker]  [1m[92m  Downloaded[0m bitcoin_hashes v0.14.101
+2026-09-16T01:32:25.4602238Z [sp1] [docker]  [1m[92m  Downloaded[0m serde_core v1.0.229
+2026-09-16T01:32:25.4636025Z [sp1] [docker]  [1m[92m  Downloaded[0m proc-macro2 v1.0.107
+2026-09-16T01:32:25.4670944Z [sp1] [docker]  [1m[92m  Downloaded[0m jiff v0.2.35
+2026-09-16T01:32:25.4838129Z [sp1] [docker]  [1m[92m  Downloaded[0m half v1.8.3
+2026-09-16T01:32:25.4863592Z [sp1] [docker]  [1m[92m  Downloaded[0m futures-channel v0.3.34
+2026-09-16T01:32:25.4885760Z [sp1] [docker]  [1m[92m  Downloaded[0m borsh-derive v1.8.1
+2026-09-16T01:32:25.4923447Z [sp1] [docker]  [1m[92m  Downloaded[0m ark-serialize v0.6.0
+2026-09-16T01:32:25.4944474Z [sp1] [docker]  [1m[92m  Downloaded[0m ark-ff-macros v0.6.0
+2026-09-16T01:32:25.4966387Z [sp1] [docker]  [1m[92m  Downloaded[0m shlex v2.0.1
+2026-09-16T01:32:25.4982664Z [sp1] [docker]  [1m[92m  Downloaded[0m either v1.18.0
+2026-09-16T01:32:25.5000961Z [sp1] [docker]  [1m[92m  Downloaded[0m libc v0.2.189
+2026-09-16T01:32:25.5486373Z [sp1] [docker]  [1m[92m  Downloaded[0m ed25519 v2.2.3
+2026-09-16T01:32:25.5506791Z [sp1] [docker]  [1m[92m  Downloaded[0m defmt-macros v1.1.1
+2026-09-16T01:32:25.5549666Z [sp1] [docker]  [1m[92m  Downloaded[0m const-hex v1.19.1
+2026-09-16T01:32:25.5573405Z [sp1] [docker]  [1m[92m  Downloaded[0m bitcoin-internals v0.6.0
+2026-09-16T01:32:25.5591587Z [sp1] [docker]  [1m[92m  Downloaded[0m arrayvec v0.7.8
+2026-09-16T01:32:25.5615799Z [sp1] [docker]  [1m[92m  Downloaded[0m rustversion v1.0.23
+2026-09-16T01:32:25.5649769Z [sp1] [docker]  [1m[92m  Downloaded[0m quote v1.0.47
+2026-09-16T01:32:25.5680502Z [sp1] [docker]  [1m[92m  Downloaded[0m num-integer v0.1.47
+2026-09-16T01:32:25.5700833Z [sp1] [docker]  [1m[92m  Downloaded[0m futures-executor v0.3.34
+2026-09-16T01:32:25.5716894Z [sp1] [docker]  [1m[92m  Downloaded[0m enum-ordinalize v4.4.2
+2026-09-16T01:32:25.5727023Z [sp1] [docker]  [1m[92m  Downloaded[0m ark-std v0.6.0
+2026-09-16T01:32:25.5746104Z [sp1] [docker]  [1m[92m  Downloaded[0m smallvec v1.15.2
+2026-09-16T01:32:25.5762460Z [sp1] [docker]  [1m[92m  Downloaded[0m serde_with_macros v3.22.0
+2026-09-16T01:32:25.5783646Z [sp1] [docker]  [1m[92m  Downloaded[0m rustc-hash v2.1.3
+2026-09-16T01:32:25.5798834Z [sp1] [docker]  [1m[92m  Downloaded[0m rlsf v0.2.3
+2026-09-16T01:32:25.5823294Z [sp1] [docker]  [1m[92m  Downloaded[0m futures-task v0.3.34
+2026-09-16T01:32:25.5838126Z [sp1] [docker]  [1m[92m  Downloaded[0m futures-sink v0.3.34
+2026-09-16T01:32:25.5848602Z [sp1] [docker]  [1m[92m  Downloaded[0m fastrand v2.5.0
+2026-09-16T01:32:25.5864831Z [sp1] [docker]  [1m[92m  Downloaded[0m enum-ordinalize-derive v4.4.2
+2026-09-16T01:32:25.5876242Z [sp1] [docker]  [1m[92m  Downloaded[0m ref-cast v1.0.27
+2026-09-16T01:32:25.5910633Z [sp1] [docker]  [1m[92m  Downloaded[0m ark-serialize-derive v0.6.0
+2026-09-16T01:32:25.5922130Z [sp1] [docker]  [1m[92m  Downloaded[0m num-conv v0.2.2
+2026-09-16T01:32:25.5932474Z [sp1] [docker]  [1m[92m  Downloaded[0m keccak-asm v0.1.8
+2026-09-16T01:32:25.5948691Z [sp1] [docker]  [1m[92m  Downloaded[0m futures-io v0.3.34
+2026-09-16T01:32:25.5958157Z [sp1] [docker]  [1m[92m  Downloaded[0m defmt-parser v1.0.0
+2026-09-16T01:32:25.5969123Z [sp1] [docker]  [1m[92m  Downloaded[0m bitcoin-consensus-encoding v1.2.0
+2026-09-16T01:32:25.5990700Z [sp1] [docker]  [1m[92m  Downloaded[0m futures-macro v0.3.34
+2026-09-16T01:32:25.6003112Z [sp1] [docker]  [1m[92m  Downloaded[0m slop-bn254 v6.5.0
+2026-09-16T01:32:25.6014036Z [sp1] [docker]  [1m[92m  Downloaded[0m cpufeatures v0.3.1
+2026-09-16T01:32:25.6031418Z [sp1] [docker]  [1m[92m  Downloaded[0m cfg_aliases v0.2.2
+2026-09-16T01:32:25.6043518Z [sp1] [docker]  [1m[92m  Downloaded[0m ref-cast-impl v1.0.27
+2026-09-16T01:32:25.6053127Z [sp1] [docker]  [1m[92m  Downloaded[0m zeroize v1.9.0
+2026-09-16T01:32:25.6070666Z [sp1] [docker]  [1m[92m  Downloaded[0m time-core v0.1.9
+2026-09-16T01:32:25.6083419Z [sp1] [docker]  [1m[92m  Downloaded[0m ruint v1.20.0
+2026-09-16T01:32:25.6156013Z [sp1] [docker]  [1m[92m  Downloaded[0m getrandom v0.4.3
+2026-09-16T01:32:25.6198567Z [sp1] [docker]  [1m[92m  Downloaded[0m bs58 v0.5.1
+2026-09-16T01:32:25.6223993Z [sp1] [docker]  [1m[92m  Downloaded[0m time-macros v0.2.32
+2026-09-16T01:32:25.6250915Z [sp1] [docker]  [1m[92m  Downloaded[0m sp1-primitives v6.3.1
+2026-09-16T01:32:25.6266003Z [sp1] [docker]  [1m[92m  Downloaded[0m slop-poseidon2 v6.5.0
+2026-09-16T01:32:25.6273929Z [sp1] [docker]  [1m[92m  Downloaded[0m cc v1.4.4
+2026-09-16T01:32:25.6308022Z [sp1] [docker]  [1m[92m  Downloaded[0m thiserror-impl v2.0.20
+2026-09-16T01:32:25.6323980Z [sp1] [docker]  [1m[92m  Downloaded[0m ark-ff v0.6.0
+2026-09-16T01:32:25.6378129Z [sp1] [docker]  [1m[92m  Downloaded[0m c-kzg v2.1.8
+2026-09-16T01:32:27.5305600Z [sp1] [docker]  [1m[92m   Compiling[0m proc-macro2 v1.0.107
+2026-09-16T01:32:27.5306335Z [sp1] [docker]  [1m[92m   Compiling[0m quote v1.0.47
+2026-09-16T01:32:27.5306922Z [sp1] [docker]  [1m[92m   Compiling[0m unicode-ident v1.0.24
+2026-09-16T01:32:27.5307373Z [sp1] [docker]  [1m[92m   Compiling[0m cfg-if v1.0.4
+2026-09-16T01:32:27.5836895Z [sp1] [docker]  [1m[92m   Compiling[0m serde_core v1.0.229
+2026-09-16T01:32:27.6273628Z [sp1] [docker]  [1m[92m   Compiling[0m serde v1.0.229
+2026-09-16T01:32:27.7513866Z [sp1] [docker]  [1m[92m   Compiling[0m autocfg v1.5.1
+2026-09-16T01:32:27.8828317Z [sp1] [docker]  [1m[92m   Compiling[0m version_check v0.9.5
+2026-09-16T01:32:28.2680455Z [sp1] [docker]  [1m[92m   Compiling[0m getrandom v0.2.17
+2026-09-16T01:32:28.2683262Z [sp1] [docker]  [1m[92m   Compiling[0m generic-array v0.14.9
+2026-09-16T01:32:28.3896641Z [sp1] [docker]  [1m[92m   Compiling[0m rand_core v0.6.4
+2026-09-16T01:32:28.4243128Z [sp1] [docker]  [1m[92m   Compiling[0m zeroize v1.9.0
+2026-09-16T01:32:28.6760877Z [sp1] [docker]  [1m[92m   Compiling[0m subtle v2.6.1
+2026-09-16T01:32:28.8542328Z [sp1] [docker]  [1m[92m   Compiling[0m zerocopy v0.8.56
+2026-09-16T01:32:28.8617318Z [sp1] [docker]  [1m[92m   Compiling[0m syn v3.0.4
+2026-09-16T01:32:28.9696376Z [sp1] [docker]  [1m[92m   Compiling[0m syn v2.0.119
+2026-09-16T01:32:29.2967046Z [sp1] [docker]  [1m[92m   Compiling[0m num-traits v0.2.19
+2026-09-16T01:32:29.4066938Z [sp1] [docker]  [1m[92m   Compiling[0m typenum v1.20.1
+2026-09-16T01:32:30.6219445Z [sp1] [docker]  [1m[92m   Compiling[0m either v1.18.0
+2026-09-16T01:32:33.5641581Z [sp1] [docker]  [1m[92m   Compiling[0m num-integer v0.1.47
+2026-09-16T01:32:34.4454627Z [sp1] [docker]  [1m[92m   Compiling[0m once_cell v1.21.4
+2026-09-16T01:32:34.7226683Z [sp1] [docker]  [1m[92m   Compiling[0m pin-project-lite v0.2.17
+2026-09-16T01:32:34.7892590Z [sp1] [docker]  [1m[92m   Compiling[0m num-bigint v0.4.8
+2026-09-16T01:32:35.2815336Z [sp1] [docker]  [1m[92m   Compiling[0m serde_derive v1.0.229
+2026-09-16T01:32:37.5071633Z [sp1] [docker]  [1m[92m   Compiling[0m itertools v0.12.1
+2026-09-16T01:32:38.9469264Z [sp1] [docker]  [1m[92m   Compiling[0m ppv-lite86 v0.2.21
+2026-09-16T01:32:39.3459051Z [sp1] [docker]  [1m[92m   Compiling[0m rand_chacha v0.3.1
+2026-09-16T01:32:40.3203493Z [sp1] [docker]  [1m[92m   Compiling[0m rand v0.8.8
+2026-09-16T01:32:41.1883733Z [sp1] [docker]  [1m[92m   Compiling[0m p3-util v0.4.3-succinct
+2026-09-16T01:32:41.3216777Z [sp1] [docker]  [1m[92m   Compiling[0m p3-field v0.4.3-succinct
+2026-09-16T01:32:41.7649558Z [sp1] [docker]  [1m[92m   Compiling[0m crypto-common v0.1.6
+2026-09-16T01:32:41.8598886Z [sp1] [docker]  [1m[92m   Compiling[0m block-buffer v0.10.4
+2026-09-16T01:32:41.8668559Z [sp1] [docker]  [1m[92m   Compiling[0m tracing-attributes v0.1.31
+2026-09-16T01:32:41.8673488Z [sp1] [docker]  [1m[92m   Compiling[0m tracing-core v0.1.36
+2026-09-16T01:32:41.8780058Z [sp1] [docker]  [1m[92m   Compiling[0m arrayvec v0.7.8
+2026-09-16T01:32:41.9983268Z [sp1] [docker]  [1m[92m   Compiling[0m digest v0.10.7
+2026-09-16T01:32:42.2873388Z [sp1] [docker]  [1m[92m   Compiling[0m p3-maybe-rayon v0.4.3-succinct
+2026-09-16T01:32:42.3679369Z [sp1] [docker]  [1m[92m   Compiling[0m p3-symmetric v0.4.3-succinct
+2026-09-16T01:32:42.4129739Z [sp1] [docker]  [1m[92m   Compiling[0m paste v1.0.15
+2026-09-16T01:32:42.6328411Z [sp1] [docker]  [1m[92m   Compiling[0m num-bigint v0.3.3
+2026-09-16T01:32:43.4253556Z [sp1] [docker]  [1m[92m   Compiling[0m radium v0.7.0
+2026-09-16T01:32:43.5517817Z [sp1] [docker]  [1m[92m   Compiling[0m syn v1.0.109
+2026-09-16T01:32:43.6124767Z [sp1] [docker]  [1m[92m   Compiling[0m bytes v1.12.1
+2026-09-16T01:32:43.7406468Z [sp1] [docker]  [1m[92m   Compiling[0m tracing v0.1.44
+2026-09-16T01:32:43.8534674Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-rlp-derive v0.3.16
+2026-09-16T01:32:44.1738448Z [sp1] [docker]  [1m[92m   Compiling[0m p3-matrix v0.4.3-succinct
+2026-09-16T01:32:44.5876523Z [sp1] [docker]  [1m[92m   Compiling[0m p3-dft v0.4.3-succinct
+2026-09-16T01:32:44.6062747Z [sp1] [docker]  [1m[92m   Compiling[0m unicode-segmentation v1.13.3
+2026-09-16T01:32:44.8839164Z [sp1] [docker]  [1m[92m   Compiling[0m futures-sink v0.3.34
+2026-09-16T01:32:44.9679421Z [sp1] [docker]  [1m[92m   Compiling[0m futures-core v0.3.34
+2026-09-16T01:32:45.1017916Z [sp1] [docker]  [1m[92m   Compiling[0m tap v1.0.1
+2026-09-16T01:32:45.2047232Z [sp1] [docker]  [1m[92m   Compiling[0m semver v1.0.28
+2026-09-16T01:32:45.2218465Z [sp1] [docker]  [1m[92m   Compiling[0m wyz v0.5.1
+2026-09-16T01:32:45.2474710Z [sp1] [docker]  [1m[92m   Compiling[0m convert_case v0.10.0
+2026-09-16T01:32:45.5065813Z [sp1] [docker]  [1m[92m   Compiling[0m rustc_version v0.4.1
+2026-09-16T01:32:45.6112124Z [sp1] [docker]  [1m[92m   Compiling[0m futures-channel v0.3.34
+2026-09-16T01:32:45.6170442Z [sp1] [docker]  [1m[92m   Compiling[0m p3-mds v0.4.3-succinct
+2026-09-16T01:32:45.8528539Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-rlp v0.3.12
+2026-09-16T01:32:46.1900306Z [sp1] [docker]  [1m[92m   Compiling[0m addchain v0.2.1
+2026-09-16T01:32:46.2698566Z [sp1] [docker]  [1m[92m   Compiling[0m futures-macro v0.3.34
+2026-09-16T01:32:46.3684390Z [sp1] [docker]  [1m[92m   Compiling[0m memchr v2.8.3
+2026-09-16T01:32:46.5867521Z [sp1] [docker]  [1m[92m   Compiling[0m gcd v2.3.0
+2026-09-16T01:32:46.7607789Z [sp1] [docker]  [1m[92m   Compiling[0m slab v0.4.12
+2026-09-16T01:32:46.9836112Z [sp1] [docker]  [1m[92m   Compiling[0m futures-io v0.3.34
+2026-09-16T01:32:47.1778073Z [sp1] [docker]  [1m[92m   Compiling[0m funty v2.0.0
+2026-09-16T01:32:47.2924482Z [sp1] [docker]  [1m[92m   Compiling[0m ruint-macro v1.2.1
+2026-09-16T01:32:47.3280950Z [sp1] [docker]  [1m[92m   Compiling[0m unicode-xid v0.2.6
+2026-09-16T01:32:47.4175159Z [sp1] [docker]  [1m[92m   Compiling[0m futures-task v0.3.34
+2026-09-16T01:32:47.5929688Z [sp1] [docker]  [1m[92m   Compiling[0m futures-util v0.3.34
+2026-09-16T01:32:47.6223949Z [sp1] [docker]  [1m[92m   Compiling[0m ruint v1.20.0
+2026-09-16T01:32:48.8287117Z [sp1] [docker]  [1m[92m   Compiling[0m bitvec v1.1.1
+2026-09-16T01:32:48.9832728Z [sp1] [docker]  [1m[92m   Compiling[0m derive_more-impl v2.1.1
+2026-09-16T01:32:52.1860262Z [sp1] [docker]  [1m[92m   Compiling[0m ff_derive v0.13.1
+2026-09-16T01:32:52.5826939Z [sp1] [docker]  [1m[92m   Compiling[0m p3-poseidon2 v0.4.3-succinct
+2026-09-16T01:32:52.6190650Z [sp1] [docker]  [1m[92m   Compiling[0m itertools v0.14.0
+2026-09-16T01:32:52.8285535Z [sp1] [docker]  [1m[92m   Compiling[0m byteorder v1.5.0
+2026-09-16T01:32:53.0740052Z [sp1] [docker]  [1m[92m   Compiling[0m keccak v0.1.6
+2026-09-16T01:32:53.5135888Z [sp1] [docker]  [1m[92m   Compiling[0m foldhash v0.2.0
+2026-09-16T01:32:53.6546078Z [sp1] [docker]  [1m[92m   Compiling[0m ff v0.13.1
+2026-09-16T01:32:53.8106082Z [sp1] [docker]  [1m[92m   Compiling[0m hashbrown v0.16.1
+2026-09-16T01:32:53.8151180Z [sp1] [docker]  [1m[92m   Compiling[0m sha3 v0.10.8 (https://github.com/sp1-patches/RustCrypto-hashes?tag=patch-sha3-0.10.8-sp1-6.0.0#0a16ae7a)
+2026-09-16T01:32:54.4524913Z [sp1] [docker]  [1m[92m   Compiling[0m futures-executor v0.3.34
+2026-09-16T01:32:55.0025880Z [sp1] [docker]  [1m[92m   Compiling[0m const-hex v1.19.1
+2026-09-16T01:32:55.1401123Z [sp1] [docker]  [1m[92m   Compiling[0m shlex v2.0.1
+2026-09-16T01:32:55.1700031Z [sp1] [docker]  [1m[92m   Compiling[0m derive_more v2.1.1
+2026-09-16T01:32:55.2880365Z [sp1] [docker]  [1m[92m   Compiling[0m itoa v1.0.18
+2026-09-16T01:32:55.3357486Z [sp1] [docker]  [1m[92m   Compiling[0m find-msvc-tools v0.1.11
+2026-09-16T01:32:55.3592290Z [sp1] [docker]  [1m[92m   Compiling[0m slop-algebra v6.5.0
+2026-09-16T01:32:55.5064835Z [sp1] [docker]  [1m[92m   Compiling[0m rustc-hash v2.1.3
+2026-09-16T01:32:55.6001576Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-primitives v1.5.7
+2026-09-16T01:32:55.6035446Z [sp1] [docker]  [1m[92m   Compiling[0m cc v1.4.4
+2026-09-16T01:32:55.6267407Z [sp1] [docker]  [1m[92m   Compiling[0m futures v0.3.34
+2026-09-16T01:32:55.6749913Z [sp1] [docker]  [1m[92m   Compiling[0m p3-koala-bear v0.4.3-succinct
+2026-09-16T01:32:55.6832803Z [sp1] [docker]  [1m[92m   Compiling[0m p3-challenger v0.4.3-succinct
+2026-09-16T01:32:55.8059626Z [sp1] [docker]  [1m[92m   Compiling[0m slop-symmetric v6.5.0
+2026-09-16T01:32:55.8604040Z [sp1] [docker]  [1m[92m   Compiling[0m thiserror v2.0.20
+2026-09-16T01:32:56.2269917Z [sp1] [docker]  [1m[92m   Compiling[0m slop-challenger v6.5.0
+2026-09-16T01:32:56.3629497Z [sp1] [docker]  [1m[92m   Compiling[0m slop-poseidon2 v6.5.0
+2026-09-16T01:32:56.4171656Z [sp1] [docker]  [1m[92m   Compiling[0m sha2 v0.10.9 (https://github.com/sp1-patches/RustCrypto-hashes?tag=patch-sha2-0.10.9-sp1-6.0.0#e48b656e)
+2026-09-16T01:32:57.6356103Z [sp1] [docker]  [1m[92m   Compiling[0m thiserror-impl v2.0.20
+2026-09-16T01:32:57.9005720Z [sp1] [docker]  [1m[92m   Compiling[0m blake3 v1.8.7
+2026-09-16T01:32:58.1903424Z [sp1] [docker]  [1m[92m   Compiling[0m const-oid v0.9.6
+2026-09-16T01:32:58.5546346Z [sp1] [docker]  [1m[92m   Compiling[0m der v0.7.10
+2026-09-16T01:32:58.5586614Z [sp1] [docker]  [1m[92m   Compiling[0m p3-bn254-fr v0.4.3-succinct
+2026-09-16T01:32:59.3846136Z [sp1] [docker]  [1m[92m   Compiling[0m hmac v0.12.1
+2026-09-16T01:32:59.5168015Z [sp1] [docker]  [1m[92m   Compiling[0m constant_time_eq v0.4.2
+2026-09-16T01:32:59.6369771Z [sp1] [docker]  [1m[92m   Compiling[0m base16ct v0.2.0
+2026-09-16T01:32:59.8158035Z [sp1] [docker]  [1m[92m   Compiling[0m lazy_static v1.5.0
+2026-09-16T01:32:59.8215098Z [sp1] [docker]  [1m[92m   Compiling[0m sec1 v0.7.3
+2026-09-16T01:32:59.8792903Z [sp1] [docker]  [1m[92m   Compiling[0m slop-koala-bear v6.5.0
+2026-09-16T01:33:00.9352948Z [sp1] [docker]  [1m[92m   Compiling[0m slop-bn254 v6.5.0
+2026-09-16T01:33:01.5228645Z [sp1] [docker]  [1m[92m   Compiling[0m hkdf v0.12.4
+2026-09-16T01:33:01.7006402Z [sp1] [docker]  [1m[92m   Compiling[0m slop-primitives v6.5.0
+2026-09-16T01:33:01.7763814Z [sp1] [docker]  [1m[92m   Compiling[0m group v0.13.0
+2026-09-16T01:33:01.7812145Z [sp1] [docker]  [1m[92m   Compiling[0m bincode v1.3.3
+2026-09-16T01:33:01.8704515Z [sp1] [docker]  [1m[92m   Compiling[0m crypto-bigint v0.5.5
+2026-09-16T01:33:01.8806156Z [sp1] [docker]  [1m[92m   Compiling[0m strsim v0.11.1
+2026-09-16T01:33:02.3363477Z [sp1] [docker]  [1m[92m   Compiling[0m ident_case v1.0.1
+2026-09-16T01:33:02.4292545Z [sp1] [docker]  [1m[92m   Compiling[0m cpufeatures v0.2.17
+2026-09-16T01:33:02.4749296Z [sp1] [docker]  [1m[92m   Compiling[0m hex v0.4.3
+2026-09-16T01:33:02.4874166Z [sp1] [docker]  [1m[92m   Compiling[0m rustversion v1.0.23
+2026-09-16T01:33:02.5831711Z [sp1] [docker]  [1m[92m   Compiling[0m elf v0.7.4
+2026-09-16T01:33:02.8946068Z [sp1] [docker]  [1m[92m   Compiling[0m darling_core v0.23.0
+2026-09-16T01:33:03.4114058Z [sp1] [docker]  [1m[92m   Compiling[0m syn-solidity v1.7.1
+2026-09-16T01:33:03.7324827Z [sp1] [docker]  [1m[92m   Compiling[0m sp1-primitives v6.3.1
+2026-09-16T01:33:05.6078946Z [sp1] [docker]  [1m[92m   Compiling[0m elliptic-curve v0.13.8
+2026-09-16T01:33:06.1195659Z [sp1] [docker]  [1m[92m   Compiling[0m macro-string v0.1.4
+2026-09-16T01:33:06.2774389Z [sp1] [docker]  [1m[92m   Compiling[0m proc-macro-error-attr2 v2.0.0
+2026-09-16T01:33:06.5277688Z [sp1] [docker]  [1m[92m   Compiling[0m heck v0.5.0
+2026-09-16T01:33:06.6099913Z [sp1] [docker]  [1m[92m   Compiling[0m crc-catalog v2.5.0
+2026-09-16T01:33:06.7152947Z [sp1] [docker]  [1m[92m   Compiling[0m dunce v1.0.5
+2026-09-16T01:33:06.7829032Z [sp1] [docker]  [1m[92m   Compiling[0m equivalent v1.0.2
+2026-09-16T01:33:06.8027539Z [sp1] [docker]  [1m[92m   Compiling[0m hashbrown v0.17.1
+2026-09-16T01:33:07.4625527Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-sol-macro-input v1.5.7
+2026-09-16T01:33:07.4829861Z [sp1] [docker]  [1m[92m   Compiling[0m darling_macro v0.23.0
+2026-09-16T01:33:07.7636769Z [sp1] [docker]  [1m[92m   Compiling[0m indexmap v2.14.1
+2026-09-16T01:33:07.7974685Z [sp1] [docker]  [1m[92m   Compiling[0m crc v3.4.0
+2026-09-16T01:33:07.8911511Z [sp1] [docker]  [1m[92m   Compiling[0m proc-macro-error2 v2.0.1
+2026-09-16T01:33:08.0444429Z [sp1] [docker]  [1m[92m   Compiling[0m sp1-lib v6.3.1
+2026-09-16T01:33:08.8240773Z [sp1] [docker]  [1m[92m   Compiling[0m curve25519-dalek v4.1.3 (https://github.com/sp1-patches/curve25519-dalek?tag=patch-4.1.3-sp1-6.2.0#b251b2a1)
+2026-09-16T01:33:08.8931684Z [sp1] [docker]  [1m[92m   Compiling[0m libm v0.2.16
+2026-09-16T01:33:08.8989275Z [sp1] [docker]  [1m[92m   Compiling[0m const-default v1.0.0
+2026-09-16T01:33:08.9816050Z [sp1] [docker]  [1m[92m   Compiling[0m smallvec v1.15.2
+2026-09-16T01:33:08.9858205Z [sp1] [docker]  [1m[92m   Compiling[0m getrandom v0.3.4
+2026-09-16T01:33:09.2024476Z [sp1] [docker]  [1m[92m   Compiling[0m rlsf v0.2.3
+2026-09-16T01:33:09.2701539Z [sp1] [docker]  [1m[92m   Compiling[0m nybbles v0.4.8
+2026-09-16T01:33:09.3037474Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-sol-macro-expander v1.5.7
+2026-09-16T01:33:09.4532603Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-eip2124 v0.2.0
+2026-09-16T01:33:09.6027517Z [sp1] [docker]  [1m[92m   Compiling[0m darling v0.23.0
+2026-09-16T01:33:09.6559922Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-eip7702 v0.6.3
+2026-09-16T01:33:09.6874133Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-eip7928 v0.3.7
+2026-09-16T01:33:10.1254741Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-eip2930 v0.2.3
+2026-09-16T01:33:10.1719373Z [sp1] [docker]  [1m[92m   Compiling[0m auto_impl v1.3.0
+2026-09-16T01:33:10.5710412Z [sp1] [docker]  [1m[92m   Compiling[0m linked_list_allocator v0.10.6
+2026-09-16T01:33:10.7958099Z [sp1] [docker]  [1m[92m   Compiling[0m sp1-zkvm v6.3.1
+2026-09-16T01:33:10.9570446Z [sp1] [docker]  [1m[92m   Compiling[0m critical-section v1.2.0
+2026-09-16T01:33:11.0430607Z [sp1] [docker]  [1m[92m   Compiling[0m signature v2.2.0
+2026-09-16T01:33:11.1273720Z [sp1] [docker]  [1m[92m   Compiling[0m ed25519 v2.2.3
+2026-09-16T01:33:11.2801638Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-eips v1.8.3
+2026-09-16T01:33:11.3766910Z [sp1] [docker]  [1m[92m   Compiling[0m embedded-alloc v0.6.0
+2026-09-16T01:33:11.6057642Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-tx-macros v1.8.3
+2026-09-16T01:33:12.4774000Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-trie v0.9.5
+2026-09-16T01:33:13.6856148Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-sol-macro v1.5.7
+2026-09-16T01:33:14.4530255Z [sp1] [docker]  [1m[92m   Compiling[0m half v1.8.3
+2026-09-16T01:33:15.1146808Z [sp1] [docker]  [1m[92m   Compiling[0m winnow v0.7.15
+2026-09-16T01:33:17.6480711Z [sp1] [docker]  [1m[92m   Compiling[0m ed25519-dalek v2.2.0
+2026-09-16T01:33:18.1530508Z [sp1] [docker]  [1m[92m   Compiling[0m serde_cbor v0.11.2
+2026-09-16T01:33:18.2312952Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-sol-type-parser v1.5.7
+2026-09-16T01:33:18.7331418Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-sol-types v1.5.7
+2026-09-16T01:33:18.9753543Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-consensus v1.8.3
+2026-09-16T01:33:21.9766344Z [sp1] [docker]  [1m[92m   Compiling[0m pfusdc-arc-ingress-program v0.1.0 (/root/program/programs/pfusdc-arc-ingress)
+2026-09-16T01:33:30.2035329Z [sp1] [docker]  [1m[92m    Finished[0m `release` profile [optimized] target(s) in 1m 07s
+2026-09-16T01:33:30.3505685Z cargo:rustc-env=SP1_ELF_pfusdc-arc-ingress-program=/home/runner/work/_temp/arc-proof-identities/src-a/programs/pfusdc-arc-ingress/target/elf-compilation/docker/riscv64im-succinct-zkvm-elf/release/pfusdc-arc-ingress-program
+2026-09-16T01:33:34.4770112Z cargo:warning=rustc +succinct --version: "rustc 1.94.0-dev\n"
+2026-09-16T01:33:34.5955868Z [sp1]  warning: patch `sha2 v0.9.9 (https://github.com/sp1-patches/RustCrypto-hashes?tag=patch-sha2-0.9.9-sp1-6.0.0#1b29839d)` was not used in the crate graph
+2026-09-16T01:33:34.5956936Z [sp1]    |
+2026-09-16T01:33:34.5957328Z [sp1]    = help: perhaps you meant one of the following:
+2026-09-16T01:33:34.5957919Z [sp1]            	https://github.com/sp1-patches/RustCrypto-hashes
+2026-09-16T01:33:34.5959057Z [sp1]  warning: patch `bls12_381 v0.8.0 (https://github.com/sp1-patches/bls12_381?tag=patch-0.8.0-sp1-6.0.0-v2#7726731d)` was not used in the crate graph
+2026-09-16T01:33:34.5960664Z [sp1]  warning: patch `tiny-keccak v2.0.2 (https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-6.0.0#957430a4)` was not used in the crate graph
+2026-09-16T01:33:34.5961966Z [sp1]  help: Check that the patched package version and available features are compatible
+2026-09-16T01:33:34.5962892Z [sp1]        with the dependency requirements. If the patch has a different version from
+2026-09-16T01:33:34.5963748Z [sp1]        what is locked in the Cargo.lock file, run `cargo update` to use the new
+2026-09-16T01:33:34.5964820Z [sp1]        version. This may also occur with an optional dependency that is not enabled.
+2026-09-16T01:33:34.6629381Z [sp1]     Compiling proc-macro2 v1.0.106
+2026-09-16T01:33:34.6629763Z [sp1]     Compiling unicode-ident v1.0.24
+2026-09-16T01:33:34.6632562Z [sp1]     Compiling quote v1.0.46
+2026-09-16T01:33:34.6633018Z [sp1]     Compiling cfg-if v1.0.4
+2026-09-16T01:33:34.7015585Z [sp1]     Compiling autocfg v1.5.1
+2026-09-16T01:33:34.7515298Z [sp1]     Compiling serde_core v1.0.228
+2026-09-16T01:33:34.8867485Z [sp1]     Compiling getrandom v0.2.17
+2026-09-16T01:33:35.0318840Z [sp1]     Compiling serde v1.0.228
+2026-09-16T01:33:35.2166390Z [sp1]     Compiling rand_core v0.6.4
+2026-09-16T01:33:35.2948732Z [sp1]     Compiling zerocopy v0.8.54
+2026-09-16T01:33:35.4945775Z [sp1]     Compiling num-traits v0.2.19
+2026-09-16T01:33:35.9515610Z [sp1]     Compiling syn v2.0.119
+2026-09-16T01:33:37.4475509Z [sp1]     Compiling typenum v1.20.1
+2026-09-16T01:33:39.1045451Z [sp1]     Compiling either v1.16.0
+2026-09-16T01:33:39.1547970Z [sp1]     Compiling num-integer v0.1.46
+2026-09-16T01:33:39.3962485Z [sp1]     Compiling itertools v0.12.1
+2026-09-16T01:33:39.9575941Z [sp1]     Compiling num-bigint v0.4.8
+2026-09-16T01:33:42.2055438Z [sp1]     Compiling pin-project-lite v0.2.17
+2026-09-16T01:33:42.2655811Z [sp1]     Compiling version_check v0.9.5
+2026-09-16T01:33:42.6418160Z [sp1]     Compiling ppv-lite86 v0.2.21
+2026-09-16T01:33:42.7195754Z [sp1]     Compiling generic-array v0.14.7
+2026-09-16T01:33:42.8496601Z [sp1]     Compiling once_cell v1.21.4
+2026-09-16T01:33:43.0195453Z [sp1]     Compiling rand_chacha v0.3.1
+2026-09-16T01:33:43.1305978Z [sp1]     Compiling tracing-core v0.1.36
+2026-09-16T01:33:44.4555381Z [sp1]     Compiling serde_derive v1.0.228
+2026-09-16T01:33:44.7155126Z [sp1]     Compiling rand v0.8.7
+2026-09-16T01:33:45.5611879Z [sp1]     Compiling tracing-attributes v0.1.31
+2026-09-16T01:33:47.1289917Z [sp1]     Compiling memchr v2.8.3
+2026-09-16T01:33:47.2875895Z [sp1]     Compiling p3-maybe-rayon v0.4.3-succinct
+2026-09-16T01:33:47.3536130Z [sp1]     Compiling tracing v0.1.44
+2026-09-16T01:33:47.3717487Z [sp1]     Compiling block-buffer v0.10.4
+2026-09-16T01:33:47.5085420Z [sp1]     Compiling crypto-common v0.1.7
+2026-09-16T01:33:47.6075404Z [sp1]     Compiling digest v0.10.7
+2026-09-16T01:33:47.8534008Z [sp1]     Compiling syn v1.0.109
+2026-09-16T01:33:48.0776401Z [sp1]     Compiling sha2 v0.10.9 (https://github.com/sp1-patches/RustCrypto-hashes?tag=patch-sha2-0.10.9-sp1-6.0.0#e48b656e)
+2026-09-16T01:33:49.2689941Z [sp1]     Compiling hybrid-array v0.4.13
+2026-09-16T01:33:49.2828464Z [sp1]     Compiling num-bigint v0.3.3
+2026-09-16T01:33:49.4614129Z [sp1]     Compiling futures-sink v0.3.32
+2026-09-16T01:33:49.5465454Z [sp1]     Compiling futures-core v0.3.32
+2026-09-16T01:33:49.6738204Z [sp1]     Compiling futures-channel v0.3.32
+2026-09-16T01:33:50.2545366Z [sp1]     Compiling futures-macro v0.3.32
+2026-09-16T01:33:50.3986431Z [sp1]     Compiling p3-util v0.4.3-succinct
+2026-09-16T01:33:50.5325587Z [sp1]     Compiling p3-field v0.4.3-succinct
+2026-09-16T01:33:50.6235704Z [sp1]     Compiling futures-task v0.3.32
+2026-09-16T01:33:50.7865379Z [sp1]     Compiling gcd v2.3.0
+2026-09-16T01:33:50.9615456Z [sp1]     Compiling slab v0.4.12
+2026-09-16T01:33:51.0786462Z [sp1]     Compiling p3-symmetric v0.4.3-succinct
+2026-09-16T01:33:51.1785213Z [sp1]     Compiling p3-matrix v0.4.3-succinct
+2026-09-16T01:33:51.2555429Z [sp1]     Compiling radium v0.7.0
+2026-09-16T01:33:51.3255456Z [sp1]     Compiling futures-io v0.3.32
+2026-09-16T01:33:51.5207877Z [sp1]     Compiling futures-util v0.3.32
+2026-09-16T01:33:51.6256331Z [sp1]     Compiling p3-dft v0.4.3-succinct
+2026-09-16T01:33:51.9135146Z [sp1]     Compiling p3-mds v0.4.3-succinct
+2026-09-16T01:33:52.1745197Z [sp1]     Compiling p3-poseidon2 v0.4.3-succinct
+2026-09-16T01:33:52.4373560Z [sp1]     Compiling block-buffer v0.12.1
+2026-09-16T01:33:52.6295511Z [sp1]     Compiling crypto-common v0.2.2
+2026-09-16T01:33:53.6596562Z [sp1]     Compiling itertools v0.14.0
+2026-09-16T01:33:54.2559637Z [sp1]     Compiling zmij v1.0.23
+2026-09-16T01:33:54.4655560Z [sp1]     Compiling semver v1.0.28
+2026-09-16T01:33:54.8895491Z [sp1]     Compiling const-oid v0.10.2
+2026-09-16T01:33:55.1125372Z [sp1]     Compiling tap v1.0.1
+2026-09-16T01:33:55.2100016Z [sp1]     Compiling wyz v0.5.1
+2026-09-16T01:33:55.2666520Z [sp1]     Compiling digest v0.11.3
+2026-09-16T01:33:55.4695640Z [sp1]     Compiling rustc_version v0.4.1
+2026-09-16T01:33:55.5221750Z [sp1]     Compiling addchain v0.2.1
+2026-09-16T01:33:55.8265797Z [sp1]     Compiling zeroize_derive v1.5.0
+2026-09-16T01:33:56.0333870Z [sp1]     Compiling keccak v0.2.0
+2026-09-16T01:33:56.2112906Z [sp1]     Compiling funty v2.0.0
+2026-09-16T01:33:56.4875244Z [sp1]     Compiling slop-algebra v6.3.1
+2026-09-16T01:33:56.5889266Z [sp1]     Compiling futures-executor v0.3.32
+2026-09-16T01:33:56.6105647Z [sp1]     Compiling keccak v0.1.6
+2026-09-16T01:33:56.7306323Z [sp1]     Compiling serde_json v1.0.150
+2026-09-16T01:33:56.8501611Z [sp1]     Compiling find-msvc-tools v0.1.9
+2026-09-16T01:33:57.0174840Z [sp1]     Compiling shlex v2.0.1
+2026-09-16T01:33:57.1215613Z [sp1]     Compiling bitvec v1.1.1
+2026-09-16T01:33:57.1662891Z [sp1]     Compiling sha3 v0.10.8 (https://github.com/sp1-patches/RustCrypto-hashes?tag=patch-sha3-0.10.8-sp1-6.0.0#0a16ae7a)
+2026-09-16T01:33:57.2119099Z [sp1]     Compiling cc v1.2.67
+2026-09-16T01:33:57.7855534Z [sp1]     Compiling futures v0.3.32
+2026-09-16T01:33:57.8355359Z [sp1]     Compiling zeroize v1.9.0
+2026-09-16T01:33:58.0158643Z [sp1]     Compiling sha3 v0.11.0
+2026-09-16T01:33:58.0362233Z [sp1]     Compiling p3-koala-bear v0.4.3-succinct
+2026-09-16T01:33:58.1630581Z [sp1]     Compiling ff_derive v0.13.1
+2026-09-16T01:33:59.1665346Z [sp1]     Compiling p3-challenger v0.4.3-succinct
+2026-09-16T01:33:59.4175396Z [sp1]     Compiling slop-symmetric v6.3.1
+2026-09-16T01:33:59.4647633Z [sp1]     Compiling half v1.8.3
+2026-09-16T01:33:59.5845428Z [sp1]     Compiling byteorder v1.5.0
+2026-09-16T01:33:59.6680951Z [sp1]     Compiling itoa v1.0.18
+2026-09-16T01:33:59.8386010Z [sp1]     Compiling subtle v2.6.1
+2026-09-16T01:34:00.0115325Z [sp1]     Compiling serde_cbor v0.11.2
+2026-09-16T01:34:00.1055453Z [sp1]     Compiling slop-challenger v6.3.1
+2026-09-16T01:34:00.1945823Z [sp1]     Compiling blake3 v1.8.5
+2026-09-16T01:34:00.4935673Z [sp1]     Compiling fips204 v0.4.6 (/home/postfiat/repos/postfiatl1v2/third_party/fips204)
+2026-09-16T01:34:00.8125433Z [sp1]     Compiling ff v0.13.1
+2026-09-16T01:34:00.9625400Z [sp1]     Compiling slop-poseidon2 v6.3.1
+2026-09-16T01:34:01.0155399Z [sp1]     Compiling rustversion v1.0.23
+2026-09-16T01:34:01.3255457Z [sp1]     Compiling p3-bn254-fr v0.4.3-succinct
+2026-09-16T01:34:01.6275720Z [sp1]     Compiling postfiat-types v0.1.0 (/home/postfiat/repos/postfiatl1v2/crates/types)
+2026-09-16T01:34:04.1306279Z [sp1]     Compiling postfiat-crypto-provider v0.1.0 (/home/postfiat/repos/postfiatl1v2/crates/crypto_provider)
+2026-09-16T01:34:04.9610437Z [sp1]     Compiling lazy_static v1.5.0
+2026-09-16T01:34:05.0196044Z [sp1]     Compiling unicode-width v0.1.14
+2026-09-16T01:34:05.3065347Z [sp1]     Compiling arrayref v0.3.9
+2026-09-16T01:34:05.3515397Z [sp1]     Compiling arrayvec v0.7.8
+2026-09-16T01:34:05.6549916Z [sp1]     Compiling constant_time_eq v0.4.2
+2026-09-16T01:34:05.7705384Z [sp1]     Compiling base64 v0.13.1
+2026-09-16T01:34:06.0775232Z [sp1]     Compiling svgbobdoc v0.3.0
+2026-09-16T01:34:07.2385400Z [sp1]     Compiling slop-koala-bear v6.3.1
+2026-09-16T01:34:07.7605458Z [sp1]     Compiling slop-bn254 v6.3.1
+2026-09-16T01:34:08.8005417Z [sp1]     Compiling slop-primitives v6.3.1
+2026-09-16T01:34:08.8765505Z [sp1]     Compiling bincode v1.3.3
+2026-09-16T01:34:08.9325355Z [sp1]     Compiling hex v0.4.3
+2026-09-16T01:34:09.3641927Z [sp1]     Compiling getrandom v0.3.4
+2026-09-16T01:34:09.6010079Z [sp1]     Compiling const-default v1.0.0
+2026-09-16T01:34:09.6203252Z [sp1]     Compiling elf v0.7.4
+2026-09-16T01:34:09.6862465Z [sp1]     Compiling libm v0.2.16
+2026-09-16T01:34:09.9562228Z [sp1]     Compiling rlsf v0.2.2
+2026-09-16T01:34:10.3915642Z [sp1]     Compiling sp1-zkvm v6.3.1
+2026-09-16T01:34:10.5447924Z [sp1]     Compiling linked_list_allocator v0.10.6
+2026-09-16T01:34:10.7825866Z [sp1]     Compiling sp1-primitives v6.3.1
+2026-09-16T01:34:10.8435337Z [sp1]     Compiling critical-section v1.2.0
+2026-09-16T01:34:10.9148599Z [sp1]     Compiling embedded-alloc v0.6.0
+2026-09-16T01:34:11.2656296Z [sp1]     Compiling sp1-lib v6.3.1
+2026-09-16T01:34:26.5718635Z [sp1]     Compiling postfiat-mempool-dag v0.1.0 (/home/postfiat/repos/postfiatl1v2/crates/mempool_dag)
+2026-09-16T01:34:26.5720134Z [sp1]     Compiling postfiat-consensus-cobalt v0.1.0 (/home/postfiat/repos/postfiatl1v2/crates/consensus_cobalt)
+2026-09-16T01:34:31.7267764Z [sp1]     Compiling postfiat-ordering-fast v0.1.0 (/home/postfiat/repos/postfiatl1v2/crates/ordering_fast)
+2026-09-16T01:34:39.5315849Z [sp1]     Compiling postfiat-pfusdc-proofs v0.1.0 (/home/postfiat/repos/postfiatl1v2/crates/pfusdc_proofs)
+2026-09-16T01:34:50.0709149Z [sp1]     Compiling pfusdc-egress-program v0.1.0 (/home/postfiat/repos/postfiatl1v2/programs/pfusdc-egress)
+2026-09-16T01:35:19.2503456Z [sp1]      Finished `release` profile [optimized] target(s) in 1m 44s
+2026-09-16T01:35:19.2642363Z cargo:rustc-env=SP1_ELF_pfusdc-egress-program=/home/postfiat/repos/postfiatl1v2/programs/pfusdc-egress/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/pfusdc-egress-program
+2026-09-16T01:35:20.0115453Z cargo:warning=docker: rustc +succinct --version: "rustc 1.94.0-dev\n"
+2026-09-16T01:35:22.2121596Z cargo:warning=docker: rustc_bin: "/root/.sp1/toolchains/g7wv95WZT7/bin/rustc"
+2026-09-16T01:35:22.3306802Z [sp1] [docker]  info: `cargo` is unavailable for the active toolchain
+2026-09-16T01:35:22.3307843Z [sp1] [docker]  info: falling back to "/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo"
+2026-09-16T01:35:22.4066519Z [sp1] [docker]  [1m[92m    Updating[0m git repository `https://github.com/sp1-patches/RustCrypto-hashes`
+2026-09-16T01:35:22.9079502Z [sp1] [docker]  [1m[92m    Updating[0m git repository `https://github.com/sp1-patches/RustCrypto-hashes`
+2026-09-16T01:35:23.4629013Z [sp1] [docker]  [1m[33mwarning[0m: patch `tiny-keccak v2.0.2 (https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-6.0.0#957430a4)` was not used in the crate graph
+2026-09-16T01:35:23.4630393Z [sp1] [docker]  [1m[96mhelp[0m: Check that the patched package version and available features are compatible
+2026-09-16T01:35:23.4631057Z [sp1] [docker]        with the dependency requirements. If the patch has a different version from
+2026-09-16T01:35:23.4634839Z [sp1] [docker]        what is locked in the Cargo.lock file, run `cargo update` to use the new
+2026-09-16T01:35:23.4635438Z [sp1] [docker]        version. This may also occur with an optional dependency that is not enabled.
+2026-09-16T01:35:23.6497297Z [sp1] [docker]  [1m[92m   Compiling[0m proc-macro2 v1.0.107
+2026-09-16T01:35:23.6498060Z [sp1] [docker]  [1m[92m   Compiling[0m unicode-ident v1.0.24
+2026-09-16T01:35:23.6498683Z [sp1] [docker]  [1m[92m   Compiling[0m quote v1.0.47
+2026-09-16T01:35:23.6499218Z [sp1] [docker]  [1m[92m   Compiling[0m cfg-if v1.0.4
+2026-09-16T01:35:23.6896600Z [sp1] [docker]  [1m[92m   Compiling[0m serde_core v1.0.229
+2026-09-16T01:35:23.7441906Z [sp1] [docker]  [1m[92m   Compiling[0m serde v1.0.229
+2026-09-16T01:35:23.8795933Z [sp1] [docker]  [1m[92m   Compiling[0m autocfg v1.5.1
+2026-09-16T01:35:24.0086638Z [sp1] [docker]  [1m[92m   Compiling[0m version_check v0.9.5
+2026-09-16T01:35:24.3638560Z [sp1] [docker]  [1m[92m   Compiling[0m getrandom v0.2.17
+2026-09-16T01:35:24.4170594Z [sp1] [docker]  [1m[92m   Compiling[0m generic-array v0.14.9
+2026-09-16T01:35:24.5141103Z [sp1] [docker]  [1m[92m   Compiling[0m rand_core v0.6.4
+2026-09-16T01:35:24.5331092Z [sp1] [docker]  [1m[92m   Compiling[0m zeroize v1.9.0
+2026-09-16T01:35:24.8090604Z [sp1] [docker]  [1m[92m   Compiling[0m zerocopy v0.8.56
+2026-09-16T01:35:24.9886439Z [sp1] [docker]  [1m[92m   Compiling[0m syn v3.0.4
+2026-09-16T01:35:25.0715878Z [sp1] [docker]  [1m[92m   Compiling[0m syn v2.0.119
+2026-09-16T01:35:25.1753711Z [sp1] [docker]  [1m[92m   Compiling[0m subtle v2.6.1
+2026-09-16T01:35:25.4338001Z [sp1] [docker]  [1m[92m   Compiling[0m num-traits v0.2.19
+2026-09-16T01:35:25.5433711Z [sp1] [docker]  [1m[92m   Compiling[0m either v1.18.0
+2026-09-16T01:35:25.8372682Z [sp1] [docker]  [1m[92m   Compiling[0m typenum v1.20.1
+2026-09-16T01:35:29.7297818Z [sp1] [docker]  [1m[92m   Compiling[0m num-integer v0.1.47
+2026-09-16T01:35:30.5661409Z [sp1] [docker]  [1m[92m   Compiling[0m pin-project-lite v0.2.17
+2026-09-16T01:35:30.6310855Z [sp1] [docker]  [1m[92m   Compiling[0m once_cell v1.21.4
+2026-09-16T01:35:30.9141727Z [sp1] [docker]  [1m[92m   Compiling[0m num-bigint v0.4.8
+2026-09-16T01:35:31.4290969Z [sp1] [docker]  [1m[92m   Compiling[0m serde_derive v1.0.229
+2026-09-16T01:35:33.5772316Z [sp1] [docker]  [1m[92m   Compiling[0m itertools v0.12.1
+2026-09-16T01:35:34.9823560Z [sp1] [docker]  [1m[92m   Compiling[0m ppv-lite86 v0.2.21
+2026-09-16T01:35:35.3790213Z [sp1] [docker]  [1m[92m   Compiling[0m rand_chacha v0.3.1
+2026-09-16T01:35:36.4293934Z [sp1] [docker]  [1m[92m   Compiling[0m rand v0.8.8
+2026-09-16T01:35:37.2279946Z [sp1] [docker]  [1m[92m   Compiling[0m p3-util v0.4.3-succinct
+2026-09-16T01:35:37.3685722Z [sp1] [docker]  [1m[92m   Compiling[0m p3-field v0.4.3-succinct
+2026-09-16T01:35:37.8713163Z [sp1] [docker]  [1m[92m   Compiling[0m block-buffer v0.10.4
+2026-09-16T01:35:37.9017091Z [sp1] [docker]  [1m[92m   Compiling[0m crypto-common v0.1.6
+2026-09-16T01:35:37.9071674Z [sp1] [docker]  [1m[92m   Compiling[0m tracing-attributes v0.1.31
+2026-09-16T01:35:38.0044829Z [sp1] [docker]  [1m[92m   Compiling[0m digest v0.10.7
+2026-09-16T01:35:38.0199087Z [sp1] [docker]  [1m[92m   Compiling[0m tracing-core v0.1.36
+2026-09-16T01:35:38.0444510Z [sp1] [docker]  [1m[92m   Compiling[0m arrayvec v0.7.8
+2026-09-16T01:35:38.3658783Z [sp1] [docker]  [1m[92m   Compiling[0m p3-maybe-rayon v0.4.3-succinct
+2026-09-16T01:35:38.4529192Z [sp1] [docker]  [1m[92m   Compiling[0m p3-symmetric v0.4.3-succinct
+2026-09-16T01:35:38.5200398Z [sp1] [docker]  [1m[92m   Compiling[0m paste v1.0.15
+2026-09-16T01:35:38.7374652Z [sp1] [docker]  [1m[92m   Compiling[0m num-bigint v0.3.3
+2026-09-16T01:35:39.6400221Z [sp1] [docker]  [1m[92m   Compiling[0m tracing v0.1.44
+2026-09-16T01:35:39.6444423Z [sp1] [docker]  [1m[92m   Compiling[0m radium v0.7.0
+2026-09-16T01:35:39.6794543Z [sp1] [docker]  [1m[92m   Compiling[0m syn v1.0.109
+2026-09-16T01:35:39.8330872Z [sp1] [docker]  [1m[92m   Compiling[0m bytes v1.12.1
+2026-09-16T01:35:39.9944912Z [sp1] [docker]  [1m[92m   Compiling[0m p3-matrix v0.4.3-succinct
+2026-09-16T01:35:40.0970194Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-rlp-derive v0.3.16
+2026-09-16T01:35:40.4219167Z [sp1] [docker]  [1m[92m   Compiling[0m p3-dft v0.4.3-succinct
+2026-09-16T01:35:40.7130313Z [sp1] [docker]  [1m[92m   Compiling[0m unicode-segmentation v1.13.3
+2026-09-16T01:35:40.8256276Z [sp1] [docker]  [1m[92m   Compiling[0m tap v1.0.1
+2026-09-16T01:35:40.9263569Z [sp1] [docker]  [1m[92m   Compiling[0m futures-core v0.3.34
+2026-09-16T01:35:41.0723500Z [sp1] [docker]  [1m[92m   Compiling[0m semver v1.0.28
+2026-09-16T01:35:41.3336771Z [sp1] [docker]  [1m[92m   Compiling[0m futures-sink v0.3.34
+2026-09-16T01:35:41.4180050Z [sp1] [docker]  [1m[92m   Compiling[0m futures-channel v0.3.34
+2026-09-16T01:35:41.4275940Z [sp1] [docker]  [1m[92m   Compiling[0m rustc_version v0.4.1
+2026-09-16T01:35:41.4837627Z [sp1] [docker]  [1m[92m   Compiling[0m convert_case v0.10.0
+2026-09-16T01:35:41.7503393Z [sp1] [docker]  [1m[92m   Compiling[0m wyz v0.5.1
+2026-09-16T01:35:41.7933586Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-rlp v0.3.12
+2026-09-16T01:35:41.8472521Z [sp1] [docker]  [1m[92m   Compiling[0m p3-mds v0.4.3-succinct
+2026-09-16T01:35:42.1276299Z [sp1] [docker]  [1m[92m   Compiling[0m futures-macro v0.3.34
+2026-09-16T01:35:42.4327141Z [sp1] [docker]  [1m[92m   Compiling[0m addchain v0.2.1
+2026-09-16T01:35:42.5652320Z [sp1] [docker]  [1m[92m   Compiling[0m memchr v2.8.3
+2026-09-16T01:35:42.6009565Z [sp1] [docker]  [1m[92m   Compiling[0m futures-io v0.3.34
+2026-09-16T01:35:42.7983071Z [sp1] [docker]  [1m[92m   Compiling[0m funty v2.0.0
+2026-09-16T01:35:43.1202307Z [sp1] [docker]  [1m[92m   Compiling[0m gcd v2.3.0
+2026-09-16T01:35:43.3047026Z [sp1] [docker]  [1m[92m   Compiling[0m ruint-macro v1.2.1
+2026-09-16T01:35:43.5493304Z [sp1] [docker]  [1m[92m   Compiling[0m unicode-xid v0.2.6
+2026-09-16T01:35:43.6423648Z [sp1] [docker]  [1m[92m   Compiling[0m futures-task v0.3.34
+2026-09-16T01:35:43.6640457Z [sp1] [docker]  [1m[92m   Compiling[0m slab v0.4.12
+2026-09-16T01:35:43.8147383Z [sp1] [docker]  [1m[92m   Compiling[0m ruint v1.20.0
+2026-09-16T01:35:43.8845682Z [sp1] [docker]  [1m[92m   Compiling[0m futures-util v0.3.34
+2026-09-16T01:35:44.5796323Z [sp1] [docker]  [1m[92m   Compiling[0m derive_more-impl v2.1.1
+2026-09-16T01:35:45.0309294Z [sp1] [docker]  [1m[92m   Compiling[0m bitvec v1.1.1
+2026-09-16T01:35:48.4047329Z [sp1] [docker]  [1m[92m   Compiling[0m ff_derive v0.13.1
+2026-09-16T01:35:48.8014915Z [sp1] [docker]  [1m[92m   Compiling[0m p3-poseidon2 v0.4.3-succinct
+2026-09-16T01:35:49.0521322Z [sp1] [docker]  [1m[92m   Compiling[0m itertools v0.14.0
+2026-09-16T01:35:49.0723041Z [sp1] [docker]  [1m[92m   Compiling[0m keccak v0.1.6
+2026-09-16T01:35:49.4861418Z [sp1] [docker]  [1m[92m   Compiling[0m byteorder v1.5.0
+2026-09-16T01:35:49.7648216Z [sp1] [docker]  [1m[92m   Compiling[0m foldhash v0.2.0
+2026-09-16T01:35:49.7698947Z [sp1] [docker]  [1m[92m   Compiling[0m ff v0.13.1
+2026-09-16T01:35:49.9242857Z [sp1] [docker]  [1m[92m   Compiling[0m sha3 v0.10.8 (https://github.com/sp1-patches/RustCrypto-hashes?tag=patch-sha3-0.10.8-sp1-6.0.0#0a16ae7a)
+2026-09-16T01:35:50.0655004Z [sp1] [docker]  [1m[92m   Compiling[0m hashbrown v0.16.1
+2026-09-16T01:35:50.5555702Z [sp1] [docker]  [1m[92m   Compiling[0m futures-executor v0.3.34
+2026-09-16T01:35:50.7599803Z [sp1] [docker]  [1m[92m   Compiling[0m derive_more v2.1.1
+2026-09-16T01:35:50.8857330Z [sp1] [docker]  [1m[92m   Compiling[0m const-hex v1.19.1
+2026-09-16T01:35:51.2374767Z [sp1] [docker]  [1m[92m   Compiling[0m shlex v2.0.1
+2026-09-16T01:35:51.2469080Z [sp1] [docker]  [1m[92m   Compiling[0m rustc-hash v2.1.3
+2026-09-16T01:35:51.2886757Z [sp1] [docker]  [1m[92m   Compiling[0m find-msvc-tools v0.1.11
+2026-09-16T01:35:51.3452716Z [sp1] [docker]  [1m[92m   Compiling[0m itoa v1.0.18
+2026-09-16T01:35:51.4979437Z [sp1] [docker]  [1m[92m   Compiling[0m cc v1.4.4
+2026-09-16T01:35:51.5613159Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-primitives v1.5.7
+2026-09-16T01:35:51.6492186Z [sp1] [docker]  [1m[92m   Compiling[0m futures v0.3.34
+2026-09-16T01:35:51.7008982Z [sp1] [docker]  [1m[92m   Compiling[0m p3-koala-bear v0.4.3-succinct
+2026-09-16T01:35:51.8332952Z [sp1] [docker]  [1m[92m   Compiling[0m slop-algebra v6.5.0
+2026-09-16T01:35:51.9372993Z [sp1] [docker]  [1m[92m   Compiling[0m p3-challenger v0.4.3-succinct
+2026-09-16T01:35:52.0968274Z [sp1] [docker]  [1m[92m   Compiling[0m slop-symmetric v6.5.0
+2026-09-16T01:35:52.1480578Z [sp1] [docker]  [1m[92m   Compiling[0m thiserror v2.0.20
+2026-09-16T01:35:52.5156639Z [sp1] [docker]  [1m[92m   Compiling[0m slop-challenger v6.5.0
+2026-09-16T01:35:52.6284138Z [sp1] [docker]  [1m[92m   Compiling[0m slop-poseidon2 v6.5.0
+2026-09-16T01:35:52.6855535Z [sp1] [docker]  [1m[92m   Compiling[0m sha2 v0.10.9 (https://github.com/sp1-patches/RustCrypto-hashes?tag=patch-sha2-0.10.9-sp1-6.0.0#e48b656e)
+2026-09-16T01:35:53.7750203Z [sp1] [docker]  [1m[92m   Compiling[0m blake3 v1.8.7
+2026-09-16T01:35:53.8699008Z [sp1] [docker]  [1m[92m   Compiling[0m thiserror-impl v2.0.20
+2026-09-16T01:35:54.0697416Z [sp1] [docker]  [1m[92m   Compiling[0m const-oid v0.9.6
+2026-09-16T01:35:54.4432152Z [sp1] [docker]  [1m[92m   Compiling[0m der v0.7.10
+2026-09-16T01:35:54.8199658Z [sp1] [docker]  [1m[92m   Compiling[0m p3-bn254-fr v0.4.3-succinct
+2026-09-16T01:35:55.6302394Z [sp1] [docker]  [1m[92m   Compiling[0m hmac v0.12.1
+2026-09-16T01:35:55.7607820Z [sp1] [docker]  [1m[92m   Compiling[0m base16ct v0.2.0
+2026-09-16T01:35:55.8580651Z [sp1] [docker]  [1m[92m   Compiling[0m constant_time_eq v0.4.2
+2026-09-16T01:35:55.9348256Z [sp1] [docker]  [1m[92m   Compiling[0m lazy_static v1.5.0
+2026-09-16T01:35:55.9958954Z [sp1] [docker]  [1m[92m   Compiling[0m slop-koala-bear v6.5.0
+2026-09-16T01:35:57.1969878Z [sp1] [docker]  [1m[92m   Compiling[0m slop-bn254 v6.5.0
+2026-09-16T01:35:57.5499038Z [sp1] [docker]  [1m[92m   Compiling[0m sec1 v0.7.3
+2026-09-16T01:35:57.5769719Z [sp1] [docker]  [1m[92m   Compiling[0m hkdf v0.12.4
+2026-09-16T01:35:57.7645755Z [sp1] [docker]  [1m[92m   Compiling[0m slop-primitives v6.5.0
+2026-09-16T01:35:57.7945633Z [sp1] [docker]  [1m[92m   Compiling[0m group v0.13.0
+2026-09-16T01:35:57.8395760Z [sp1] [docker]  [1m[92m   Compiling[0m bincode v1.3.3
+2026-09-16T01:35:57.8883502Z [sp1] [docker]  [1m[92m   Compiling[0m crypto-bigint v0.5.5
+2026-09-16T01:35:58.1506149Z [sp1] [docker]  [1m[92m   Compiling[0m strsim v0.11.1
+2026-09-16T01:35:58.5460232Z [sp1] [docker]  [1m[92m   Compiling[0m ident_case v1.0.1
+2026-09-16T01:35:58.5523297Z [sp1] [docker]  [1m[92m   Compiling[0m cpufeatures v0.2.17
+2026-09-16T01:35:58.5965981Z [sp1] [docker]  [1m[92m   Compiling[0m elf v0.7.4
+2026-09-16T01:35:58.6807533Z [sp1] [docker]  [1m[92m   Compiling[0m rustversion v1.0.23
+2026-09-16T01:35:58.7076472Z [sp1] [docker]  [1m[92m   Compiling[0m hex v0.4.3
+2026-09-16T01:35:59.1455125Z [sp1] [docker]  [1m[92m   Compiling[0m darling_core v0.23.0
+2026-09-16T01:35:59.6054367Z [sp1] [docker]  [1m[92m   Compiling[0m sp1-primitives v6.3.1
+2026-09-16T01:35:59.7709350Z [sp1] [docker]  [1m[92m   Compiling[0m syn-solidity v1.7.1
+2026-09-16T01:36:01.4330960Z [sp1] [docker]  [1m[92m   Compiling[0m elliptic-curve v0.13.8
+2026-09-16T01:36:01.9368632Z [sp1] [docker]  [1m[92m   Compiling[0m macro-string v0.1.4
+2026-09-16T01:36:02.3301686Z [sp1] [docker]  [1m[92m   Compiling[0m proc-macro-error-attr2 v2.0.0
+2026-09-16T01:36:02.6102293Z [sp1] [docker]  [1m[92m   Compiling[0m hashbrown v0.17.1
+2026-09-16T01:36:02.6576244Z [sp1] [docker]  [1m[92m   Compiling[0m crc-catalog v2.5.0
+2026-09-16T01:36:02.7625226Z [sp1] [docker]  [1m[92m   Compiling[0m dunce v1.0.5
+2026-09-16T01:36:02.8238971Z [sp1] [docker]  [1m[92m   Compiling[0m equivalent v1.0.2
+2026-09-16T01:36:02.8817876Z [sp1] [docker]  [1m[92m   Compiling[0m heck v0.5.0
+2026-09-16T01:36:03.1449852Z [sp1] [docker]  [1m[92m   Compiling[0m crc v3.4.0
+2026-09-16T01:36:03.3972165Z [sp1] [docker]  [1m[92m   Compiling[0m proc-macro-error2 v2.0.1
+2026-09-16T01:36:03.5735122Z [sp1] [docker]  [1m[92m   Compiling[0m indexmap v2.14.1
+2026-09-16T01:36:03.7145843Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-sol-macro-input v1.5.7
+2026-09-16T01:36:03.7766441Z [sp1] [docker]  [1m[92m   Compiling[0m darling_macro v0.23.0
+2026-09-16T01:36:04.1467298Z [sp1] [docker]  [1m[92m   Compiling[0m sp1-lib v6.3.1
+2026-09-16T01:36:04.6847618Z [sp1] [docker]  [1m[92m   Compiling[0m curve25519-dalek v4.1.3 (https://github.com/sp1-patches/curve25519-dalek?tag=patch-4.1.3-sp1-6.2.0#b251b2a1)
+2026-09-16T01:36:04.8563593Z [sp1] [docker]  [1m[92m   Compiling[0m smallvec v1.15.2
+2026-09-16T01:36:04.9088789Z [sp1] [docker]  [1m[92m   Compiling[0m getrandom v0.3.4
+2026-09-16T01:36:05.1317512Z [sp1] [docker]  [1m[92m   Compiling[0m const-default v1.0.0
+2026-09-16T01:36:05.1735445Z [sp1] [docker]  [1m[92m   Compiling[0m libm v0.2.16
+2026-09-16T01:36:05.1820089Z [sp1] [docker]  [1m[92m   Compiling[0m nybbles v0.4.8
+2026-09-16T01:36:05.2098602Z [sp1] [docker]  [1m[92m   Compiling[0m rlsf v0.2.3
+2026-09-16T01:36:05.4771764Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-sol-macro-expander v1.5.7
+2026-09-16T01:36:05.6179701Z [sp1] [docker]  [1m[92m   Compiling[0m darling v0.23.0
+2026-09-16T01:36:05.6258543Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-eip2124 v0.2.0
+2026-09-16T01:36:05.6686549Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-eip7928 v0.3.7
+2026-09-16T01:36:05.7700897Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-eip7702 v0.6.3
+2026-09-16T01:36:06.2763531Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-eip2930 v0.2.3
+2026-09-16T01:36:06.2823325Z [sp1] [docker]  [1m[92m   Compiling[0m auto_impl v1.3.0
+2026-09-16T01:36:06.7278334Z [sp1] [docker]  [1m[92m   Compiling[0m signature v2.2.0
+2026-09-16T01:36:06.8142464Z [sp1] [docker]  [1m[92m   Compiling[0m sp1-zkvm v6.3.1
+2026-09-16T01:36:06.9798452Z [sp1] [docker]  [1m[92m   Compiling[0m critical-section v1.2.0
+2026-09-16T01:36:07.0604892Z [sp1] [docker]  [1m[92m   Compiling[0m linked_list_allocator v0.10.6
+2026-09-16T01:36:07.3294860Z [sp1] [docker]  [1m[92m   Compiling[0m embedded-alloc v0.6.0
+2026-09-16T01:36:07.4027488Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-eips v1.8.3
+2026-09-16T01:36:07.5546246Z [sp1] [docker]  [1m[92m   Compiling[0m ed25519 v2.2.3
+2026-09-16T01:36:07.7939086Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-tx-macros v1.8.3
+2026-09-16T01:36:09.8790301Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-sol-macro v1.5.7
+2026-09-16T01:36:10.2299916Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-trie v0.9.5
+2026-09-16T01:36:10.8257562Z [sp1] [docker]  [1m[92m   Compiling[0m half v1.8.3
+2026-09-16T01:36:11.4611535Z [sp1] [docker]  [1m[92m   Compiling[0m winnow v0.7.15
+2026-09-16T01:36:12.4692448Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-consensus v1.8.3
+2026-09-16T01:36:14.5555664Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-sol-type-parser v1.5.7
+2026-09-16T01:36:15.1281166Z [sp1] [docker]  [1m[92m   Compiling[0m serde_cbor v0.11.2
+2026-09-16T01:36:15.8593154Z [sp1] [docker]  [1m[92m   Compiling[0m alloy-sol-types v1.5.7
+2026-09-16T01:36:16.2068761Z [sp1] [docker]  [1m[92m   Compiling[0m ed25519-dalek v2.2.0
+2026-09-16T01:36:18.7860256Z [sp1] [docker]  [1m[92m   Compiling[0m pfusdc-arc-ingress-program v0.1.0 (/root/program/programs/pfusdc-arc-ingress)
+2026-09-16T01:36:27.0199930Z [sp1] [docker]  [1m[92m    Finished[0m `release` profile [optimized] target(s) in 1m 04s
+2026-09-16T01:36:27.1443558Z cargo:rustc-env=SP1_ELF_pfusdc-arc-ingress-program=/home/runner/work/_temp/arc-proof-identities/src-b/programs/pfusdc-arc-ingress/target/elf-compilation/docker/riscv64im-succinct-zkvm-elf/release/pfusdc-arc-ingress-program
+2026-09-16T01:36:27.8892574Z cargo:warning=rustc +succinct --version: "rustc 1.94.0-dev\n"
+2026-09-16T01:36:28.0079157Z [sp1]  warning: patch `sha2 v0.9.9 (https://github.com/sp1-patches/RustCrypto-hashes?tag=patch-sha2-0.9.9-sp1-6.0.0#1b29839d)` was not used in the crate graph
+2026-09-16T01:36:28.0080257Z [sp1]    |
+2026-09-16T01:36:28.0080647Z [sp1]    = help: perhaps you meant one of the following:
+2026-09-16T01:36:28.0081269Z [sp1]            	https://github.com/sp1-patches/RustCrypto-hashes
+2026-09-16T01:36:28.0082419Z [sp1]  warning: patch `bls12_381 v0.8.0 (https://github.com/sp1-patches/bls12_381?tag=patch-0.8.0-sp1-6.0.0-v2#7726731d)` was not used in the crate graph
+2026-09-16T01:36:28.0083467Z [sp1]  warning: patch `tiny-keccak v2.0.2 (https://github.com/sp1-patches/tiny-keccak?tag=patch-2.0.2-sp1-6.0.0#957430a4)` was not used in the crate graph
+2026-09-16T01:36:28.0084463Z [sp1]  help: Check that the patched package version and available features are compatible
+2026-09-16T01:36:28.0085023Z [sp1]        with the dependency requirements. If the patch has a different version from
+2026-09-16T01:36:28.0085561Z [sp1]        what is locked in the Cargo.lock file, run `cargo update` to use the new
+2026-09-16T01:36:28.0086085Z [sp1]        version. This may also occur with an optional dependency that is not enabled.
+2026-09-16T01:36:28.0744436Z [sp1]     Compiling proc-macro2 v1.0.106
+2026-09-16T01:36:28.0744991Z [sp1]     Compiling quote v1.0.46
+2026-09-16T01:36:28.0746209Z [sp1]     Compiling unicode-ident v1.0.24
+2026-09-16T01:36:28.0746948Z [sp1]     Compiling cfg-if v1.0.4
+2026-09-16T01:36:28.1143464Z [sp1]     Compiling autocfg v1.5.1
+2026-09-16T01:36:28.1655718Z [sp1]     Compiling serde_core v1.0.228
+2026-09-16T01:36:28.2815382Z [sp1]     Compiling getrandom v0.2.17
+2026-09-16T01:36:28.4286218Z [sp1]     Compiling serde v1.0.228
+2026-09-16T01:36:28.6560349Z [sp1]     Compiling rand_core v0.6.4
+2026-09-16T01:36:28.6793049Z [sp1]     Compiling zerocopy v0.8.54
+2026-09-16T01:36:28.9445338Z [sp1]     Compiling num-traits v0.2.19
+2026-09-16T01:36:29.3769925Z [sp1]     Compiling syn v2.0.119
+2026-09-16T01:36:30.8159170Z [sp1]     Compiling typenum v1.20.1
+2026-09-16T01:36:32.4535402Z [sp1]     Compiling either v1.16.0
+2026-09-16T01:36:32.6167683Z [sp1]     Compiling num-integer v0.1.46
+2026-09-16T01:36:32.7819063Z [sp1]     Compiling itertools v0.12.1
+2026-09-16T01:36:33.4415869Z [sp1]     Compiling num-bigint v0.4.8
+2026-09-16T01:36:35.5807462Z [sp1]     Compiling pin-project-lite v0.2.17
+2026-09-16T01:36:35.6465191Z [sp1]     Compiling version_check v0.9.5
+2026-09-16T01:36:36.0060704Z [sp1]     Compiling generic-array v0.14.7
+2026-09-16T01:36:36.1065373Z [sp1]     Compiling ppv-lite86 v0.2.21
+2026-09-16T01:36:36.1373951Z [sp1]     Compiling once_cell v1.21.4
+2026-09-16T01:36:36.4175481Z [sp1]     Compiling tracing-core v0.1.36
+2026-09-16T01:36:36.4985217Z [sp1]     Compiling rand_chacha v0.3.1
+2026-09-16T01:36:37.9735374Z [sp1]     Compiling serde_derive v1.0.228
+2026-09-16T01:36:38.0171055Z [sp1]     Compiling rand v0.8.7
+2026-09-16T01:36:39.0525247Z [sp1]     Compiling tracing-attributes v0.1.31
+2026-09-16T01:36:40.5245415Z [sp1]     Compiling memchr v2.8.3
+2026-09-16T01:36:40.6425461Z [sp1]     Compiling p3-maybe-rayon v0.4.3-succinct
+2026-09-16T01:36:40.7225452Z [sp1]     Compiling crypto-common v0.1.7
+2026-09-16T01:36:40.8055438Z [sp1]     Compiling block-buffer v0.10.4
+2026-09-16T01:36:40.8805200Z [sp1]     Compiling tracing v0.1.44
+2026-09-16T01:36:40.9395795Z [sp1]     Compiling digest v0.10.7
+2026-09-16T01:36:41.2952097Z [sp1]     Compiling syn v1.0.109
+2026-09-16T01:36:41.4570394Z [sp1]     Compiling sha2 v0.10.9 (https://github.com/sp1-patches/RustCrypto-hashes?tag=patch-sha2-0.10.9-sp1-6.0.0#e48b656e)
+2026-09-16T01:36:42.6652577Z [sp1]     Compiling hybrid-array v0.4.13
+2026-09-16T01:36:42.7245354Z [sp1]     Compiling num-bigint v0.3.3
+2026-09-16T01:36:42.9145265Z [sp1]     Compiling futures-core v0.3.32
+2026-09-16T01:36:43.0428564Z [sp1]     Compiling futures-sink v0.3.32
+2026-09-16T01:36:43.1305473Z [sp1]     Compiling futures-channel v0.3.32
+2026-09-16T01:36:43.6292862Z [sp1]     Compiling futures-macro v0.3.32
+2026-09-16T01:36:43.9440751Z [sp1]     Compiling p3-util v0.4.3-succinct
+2026-09-16T01:36:44.0505262Z [sp1]     Compiling radium v0.7.0
+2026-09-16T01:36:44.0855247Z [sp1]     Compiling p3-field v0.4.3-succinct
+2026-09-16T01:36:44.2335377Z [sp1]     Compiling futures-task v0.3.32
+2026-09-16T01:36:44.4055331Z [sp1]     Compiling gcd v2.3.0
+2026-09-16T01:36:44.5817646Z [sp1]     Compiling slab v0.4.12
+2026-09-16T01:36:44.6346681Z [sp1]     Compiling p3-symmetric v0.4.3-succinct
+2026-09-16T01:36:44.6515231Z [sp1]     Compiling p3-matrix v0.4.3-succinct
+2026-09-16T01:36:44.8035653Z [sp1]     Compiling futures-io v0.3.32
+2026-09-16T01:36:45.0035316Z [sp1]     Compiling futures-util v0.3.32
+2026-09-16T01:36:45.0855439Z [sp1]     Compiling p3-dft v0.4.3-succinct
+2026-09-16T01:36:45.3705403Z [sp1]     Compiling p3-mds v0.4.3-succinct
+2026-09-16T01:36:45.6225315Z [sp1]     Compiling p3-poseidon2 v0.4.3-succinct
+2026-09-16T01:36:45.8855508Z [sp1]     Compiling block-buffer v0.12.1
+2026-09-16T01:36:46.0745463Z [sp1]     Compiling crypto-common v0.2.2
+2026-09-16T01:36:47.1028177Z [sp1]     Compiling itertools v0.14.0
+2026-09-16T01:36:47.7797941Z [sp1]     Compiling tap v1.0.1
+2026-09-16T01:36:47.8805382Z [sp1]     Compiling zmij v1.0.23
+2026-09-16T01:36:48.0875314Z [sp1]     Compiling semver v1.0.28
+2026-09-16T01:36:48.5056063Z [sp1]     Compiling const-oid v0.10.2
+2026-09-16T01:36:48.5205180Z [sp1]     Compiling rustc_version v0.4.1
+2026-09-16T01:36:48.8885469Z [sp1]     Compiling digest v0.11.3
+2026-09-16T01:36:48.9295516Z [sp1]     Compiling wyz v0.5.1
+2026-09-16T01:36:49.0726175Z [sp1]     Compiling addchain v0.2.1
+2026-09-16T01:36:49.2466443Z [sp1]     Compiling zeroize_derive v1.5.0
+2026-09-16T01:36:49.5575451Z [sp1]     Compiling keccak v0.2.0
+2026-09-16T01:36:49.7424662Z [sp1]     Compiling shlex v2.0.1
+2026-09-16T01:36:49.8813702Z [sp1]     Compiling slop-algebra v6.3.1
+2026-09-16T01:36:49.9535902Z [sp1]     Compiling futures-executor v0.3.32
+2026-09-16T01:36:50.0195195Z [sp1]     Compiling funty v2.0.0
+2026-09-16T01:36:50.0777685Z [sp1]     Compiling serde_json v1.0.150
+2026-09-16T01:36:50.1665633Z [sp1]     Compiling keccak v0.1.6
+2026-09-16T01:36:50.1907326Z [sp1]     Compiling find-msvc-tools v0.1.9
+2026-09-16T01:36:50.4775746Z [sp1]     Compiling cc v1.2.67
+2026-09-16T01:36:50.5225806Z [sp1]     Compiling sha3 v0.10.8 (https://github.com/sp1-patches/RustCrypto-hashes?tag=patch-sha3-0.10.8-sp1-6.0.0#0a16ae7a)
+2026-09-16T01:36:50.5886107Z [sp1]     Compiling futures v0.3.32
+2026-09-16T01:36:50.6405715Z [sp1]     Compiling zeroize v1.9.0
+2026-09-16T01:36:50.8222761Z [sp1]     Compiling bitvec v1.1.1
+2026-09-16T01:36:51.1425832Z [sp1]     Compiling sha3 v0.11.0
+2026-09-16T01:36:51.7552256Z [sp1]     Compiling ff_derive v0.13.1
+2026-09-16T01:36:52.2934990Z [sp1]     Compiling p3-koala-bear v0.4.3-succinct
+2026-09-16T01:36:52.4391135Z [sp1]     Compiling slop-symmetric v6.3.1
+2026-09-16T01:36:52.4852552Z [sp1]     Compiling p3-challenger v0.4.3-succinct
+2026-09-16T01:36:52.7485450Z [sp1]     Compiling subtle v2.6.1
+2026-09-16T01:36:52.9237779Z [sp1]     Compiling byteorder v1.5.0
+2026-09-16T01:36:53.0053589Z [sp1]     Compiling itoa v1.0.18
+2026-09-16T01:36:53.1579951Z [sp1]     Compiling half v1.8.3
+2026-09-16T01:36:53.2975495Z [sp1]     Compiling slop-challenger v6.3.1
+2026-09-16T01:36:53.3825301Z [sp1]     Compiling blake3 v1.8.5
+2026-09-16T01:36:53.6595556Z [sp1]     Compiling serde_cbor v0.11.2
+2026-09-16T01:36:53.8446064Z [sp1]     Compiling fips204 v0.4.6 (/home/postfiat/repos/postfiatl1v2/third_party/fips204)
+2026-09-16T01:36:54.5538300Z [sp1]     Compiling ff v0.13.1
+2026-09-16T01:36:54.7135540Z [sp1]     Compiling slop-poseidon2 v6.3.1
+2026-09-16T01:36:54.7655490Z [sp1]     Compiling rustversion v1.0.23
+2026-09-16T01:36:55.0880183Z [sp1]     Compiling postfiat-crypto-provider v0.1.0 (/home/postfiat/repos/postfiatl1v2/crates/crypto_provider)
+2026-09-16T01:36:55.2629063Z [sp1]     Compiling postfiat-types v0.1.0 (/home/postfiat/repos/postfiatl1v2/crates/types)
+2026-09-16T01:36:57.4785425Z [sp1]     Compiling p3-bn254-fr v0.4.3-succinct
+2026-09-16T01:36:58.3885313Z [sp1]     Compiling arrayvec v0.7.8
+2026-09-16T01:36:58.6571571Z [sp1]     Compiling unicode-width v0.1.14
+2026-09-16T01:36:58.9385127Z [sp1]     Compiling arrayref v0.3.9
+2026-09-16T01:36:58.9775393Z [sp1]     Compiling lazy_static v1.5.0
+2026-09-16T01:36:59.0333259Z [sp1]     Compiling constant_time_eq v0.4.2
+2026-09-16T01:36:59.1485307Z [sp1]     Compiling base64 v0.13.1
+2026-09-16T01:36:59.4733147Z [sp1]     Compiling svgbobdoc v0.3.0
+2026-09-16T01:36:59.9165946Z [sp1]     Compiling slop-bn254 v6.3.1
+2026-09-16T01:37:00.8629003Z [sp1]     Compiling slop-koala-bear v6.3.1
+2026-09-16T01:37:02.1133572Z [sp1]     Compiling slop-primitives v6.3.1
+2026-09-16T01:37:02.1875442Z [sp1]     Compiling bincode v1.3.3
+2026-09-16T01:37:02.5096170Z [sp1]     Compiling const-default v1.0.0
+2026-09-16T01:37:02.5915457Z [sp1]     Compiling hex v0.4.3
+2026-09-16T01:37:02.9107092Z [sp1]     Compiling libm v0.2.16
+2026-09-16T01:37:03.0207357Z [sp1]     Compiling elf v0.7.4
+2026-09-16T01:37:03.1625448Z [sp1]     Compiling getrandom v0.3.4
+2026-09-16T01:37:03.4445233Z [sp1]     Compiling rlsf v0.2.2
+2026-09-16T01:37:03.8635600Z [sp1]     Compiling sp1-zkvm v6.3.1
+2026-09-16T01:37:04.0215473Z [sp1]     Compiling sp1-primitives v6.3.1
+2026-09-16T01:37:04.2206317Z [sp1]     Compiling critical-section v1.2.0
+2026-09-16T01:37:04.2965417Z [sp1]     Compiling linked_list_allocator v0.10.6
+2026-09-16T01:37:04.5356181Z [sp1]     Compiling sp1-lib v6.3.1
+2026-09-16T01:37:05.0979170Z [sp1]     Compiling embedded-alloc v0.6.0
+2026-09-16T01:37:20.1452636Z [sp1]     Compiling postfiat-mempool-dag v0.1.0 (/home/postfiat/repos/postfiatl1v2/crates/mempool_dag)
+2026-09-16T01:37:20.1457684Z [sp1]     Compiling postfiat-consensus-cobalt v0.1.0 (/home/postfiat/repos/postfiatl1v2/crates/consensus_cobalt)
+2026-09-16T01:37:25.4936253Z [sp1]     Compiling postfiat-ordering-fast v0.1.0 (/home/postfiat/repos/postfiatl1v2/crates/ordering_fast)
+2026-09-16T01:37:29.3285761Z [sp1]     Compiling postfiat-pfusdc-proofs v0.1.0 (/home/postfiat/repos/postfiatl1v2/crates/pfusdc_proofs)
+2026-09-16T01:37:41.8310433Z [sp1]     Compiling pfusdc-egress-program v0.1.0 (/home/postfiat/repos/postfiatl1v2/programs/pfusdc-egress)
+2026-09-16T01:38:10.8437896Z [sp1]      Finished `release` profile [optimized] target(s) in 1m 42s
+2026-09-16T01:38:10.8585901Z cargo:rustc-env=SP1_ELF_pfusdc-egress-program=/home/postfiat/repos/postfiatl1v2/programs/pfusdc-egress/target/elf-compilation/riscv64im-succinct-zkvm-elf/release/pfusdc-egress-program
+2026-09-16T01:38:11.1453185Z arc-ingress build-a=7660fcc58677cfec433a5f2337b9fe46fa96374a1e3c4bd6fba625b982d881bc build-b=7660fcc58677cfec433a5f2337b9fe46fa96374a1e3c4bd6fba625b982d881bc
+2026-09-16T01:38:11.1455514Z egress build-a=0ea4dbabc8a36b44824c861cf2e1ae90454df2a6e4bb8a357f9d3a8672696d83 build-b=0ea4dbabc8a36b44824c861cf2e1ae90454df2a6e4bb8a357f9d3a8672696d83
+2026-09-16T01:38:11.1574173Z arc-ingress rebuilt=7660fcc58677cfec433a5f2337b9fe46fa96374a1e3c4bd6fba625b982d881bc expected=7660fcc58677cfec433a5f2337b9fe46fa96374a1e3c4bd6fba625b982d881bc
+2026-09-16T01:38:11.1576296Z egress rebuilt=0ea4dbabc8a36b44824c861cf2e1ae90454df2a6e4bb8a357f9d3a8672696d83 expected=0ea4dbabc8a36b44824c861cf2e1ae90454df2a6e4bb8a357f9d3a8672696d83
+2026-09-16T01:38:11.2675604Z     Updating crates.io index
+2026-09-16T01:38:11.2680812Z     Updating git repository `https://github.com/a16z/helios`
+2026-09-16T01:38:12.4151525Z     Updating git repository `https://github.com/succinctlabs/sp1-helios`
+2026-09-16T01:38:15.2142609Z     Updating git submodule `https://github.com/succinctlabs/sp1-contracts`
+2026-09-16T01:38:15.5960211Z     Updating git submodule `https://github.com/foundry-rs/forge-std`
+2026-09-16T01:38:15.9882867Z     Updating git submodule `https://github.com/openzeppelin/openzeppelin-contracts`
+2026-09-16T01:38:19.9198477Z     Updating git submodule `https://github.com/a16z/erc4626-tests.git`
+2026-09-16T01:38:20.1605513Z     Updating git submodule `https://github.com/dapphub/ds-test`
+2026-09-16T01:38:23.6010025Z  Downloading crates ...
+2026-09-16T01:38:23.6970373Z   Downloaded alloy-chains v0.2.34
+2026-09-16T01:38:23.7014845Z   Downloaded block-buffer v0.9.0
+2026-09-16T01:38:23.7042082Z   Downloaded alloy v1.8.3
+2026-09-16T01:38:23.7081597Z   Downloaded crypto-common v0.2.2
+2026-09-16T01:38:23.7115038Z   Downloaded darling_core v0.13.4
+2026-09-16T01:38:23.7181023Z   Downloaded crossbeam-epoch v0.9.20
+2026-09-16T01:38:23.7227912Z   Downloaded gen_ops v0.4.0
+2026-09-16T01:38:23.7266600Z   Downloaded crossbeam-queue v0.3.13
+2026-09-16T01:38:23.7302874Z   Downloaded matchers v0.2.0
+2026-09-16T01:38:23.7333558Z   Downloaded foldhash v0.1.5
+2026-09-16T01:38:23.7364054Z   Downloaded find-msvc-tools v0.1.9
+2026-09-16T01:38:23.7405069Z   Downloaded fs_extra v1.3.0
+2026-09-16T01:38:23.7446455Z   Downloaded eventsource-stream v0.2.3
+2026-09-16T01:38:23.7488223Z   Downloaded futures-utils-wasm v0.1.0
+2026-09-16T01:38:23.7518592Z   Downloaded aws-credential-types v1.3.0
+2026-09-16T01:38:23.7554862Z   Downloaded indenter v0.3.4
+2026-09-16T01:38:23.7585180Z   Downloaded futures-macro v0.3.32
+2026-09-16T01:38:23.7615129Z   Downloaded idna_adapter v1.2.2
+2026-09-16T01:38:23.7642988Z   Downloaded lru v0.12.5
+2026-09-16T01:38:23.7673120Z   Downloaded mime v0.3.17
+2026-09-16T01:38:23.7704362Z   Downloaded futures-io v0.3.32
+2026-09-16T01:38:23.7731323Z   Downloaded lru-slab v0.1.2
+2026-09-16T01:38:23.7757442Z   Downloaded is_terminal_polyfill v1.70.2
+2026-09-16T01:38:23.7783137Z   Downloaded instant v0.1.13
+2026-09-16T01:38:23.7813616Z   Downloaded deepsize_derive2 v0.1.0
+2026-09-16T01:38:23.7837655Z   Downloaded num v0.4.3
+2026-09-16T01:38:23.7863083Z   Downloaded openssl-probe v0.2.1
+2026-09-16T01:38:23.7892116Z   Downloaded form_urlencoded v1.2.2
+2026-09-16T01:38:23.7916781Z   Downloaded md-5 v0.10.6
+2026-09-16T01:38:23.7947602Z   Downloaded multimap v0.10.1
+2026-09-16T01:38:23.7975925Z   Downloaded p3-fri v0.4.3-succinct
+2026-09-16T01:38:23.8004894Z   Downloaded p3-interpolation v0.4.3-succinct
+2026-09-16T01:38:23.8027390Z   Downloaded pairing v0.23.0
+2026-09-16T01:38:23.8056210Z   Downloaded percent-encoding v2.3.2
+2026-09-16T01:38:23.8079569Z   Downloaded http-body-util v0.1.4
+2026-09-16T01:38:23.8114814Z   Downloaded mti v1.1.1
+2026-09-16T01:38:23.8147254Z   Downloaded hyper-rustls v0.27.9
+2026-09-16T01:38:23.8176476Z   Downloaded num_enum v0.7.6
+2026-09-16T01:38:23.8248827Z   Downloaded potential_utf v0.1.5
+2026-09-16T01:38:23.8276384Z   Downloaded hybrid-array v0.4.13
+2026-09-16T01:38:23.8312264Z   Downloaded proc-macro-crate v1.3.1
+2026-09-16T01:38:23.8336897Z   Downloaded ref-cast v1.0.25
+2026-09-16T01:38:23.8381232Z   Downloaded ref-cast-impl v1.0.25
+2026-09-16T01:38:23.8404061Z   Downloaded rayon-scan v0.1.1
+2026-09-16T01:38:23.8431619Z   Downloaded rrs-succinct v0.2.0
+2026-09-16T01:38:23.8452353Z   Downloaded borsh-derive v1.8.0
+2026-09-16T01:38:23.8498598Z   Downloaded crc32fast v1.5.0
+2026-09-16T01:38:23.8530384Z   Downloaded pin-project-internal v1.1.13
+2026-09-16T01:38:23.8559406Z   Downloaded litemap v0.8.2
+2026-09-16T01:38:23.8594796Z   Downloaded num_enum v0.5.11
+2026-09-16T01:38:23.8664415Z   Downloaded serde_urlencoded v0.7.1
+2026-09-16T01:38:23.8693290Z   Downloaded serde_arrays v0.2.0
+2026-09-16T01:38:23.8719486Z   Downloaded serial_test v3.5.0
+2026-09-16T01:38:23.8745689Z   Downloaded serdect v0.2.0
+2026-09-16T01:38:23.8772369Z   Downloaded slop-algebra v6.3.1
+2026-09-16T01:38:23.8796216Z   Downloaded sha1 v0.10.7
+2026-09-16T01:38:23.8832727Z   Downloaded slop-challenger v6.3.1
+2026-09-16T01:38:23.8861193Z   Downloaded slop-symmetric v6.3.1
+2026-09-16T01:38:23.8881113Z   Downloaded slop-keccak-air v6.3.1
+2026-09-16T01:38:23.8898916Z   Downloaded rustls-pemfile v2.2.0
+2026-09-16T01:38:23.8935521Z   Downloaded slop-utils v6.3.1
+2026-09-16T01:38:23.8954698Z   Downloaded slop-uni-stark v6.3.1
+2026-09-16T01:38:23.8971119Z   Downloaded const-oid v0.10.2
+2026-09-16T01:38:23.9009258Z   Downloaded sp1-derive v6.3.1
+2026-09-16T01:38:23.9034430Z   Downloaded simd-adler32 v0.3.10
+2026-09-16T01:38:23.9067108Z   Downloaded icu_normalizer v2.2.0
+2026-09-16T01:38:23.9117590Z   Downloaded strum v0.27.2
+2026-09-16T01:38:23.9141211Z   Downloaded sync_wrapper v1.0.2
+2026-09-16T01:38:23.9158280Z   Downloaded stable_deref_trait v1.2.1
+2026-09-16T01:38:23.9173075Z   Downloaded thousands v0.2.0
+2026-09-16T01:38:23.9197999Z   Downloaded toml_datetime v0.6.11
+2026-09-16T01:38:23.9220792Z   Downloaded prost-types v0.13.5
+2026-09-16T01:38:23.9247079Z   Downloaded sha2 v0.11.0
+2026-09-16T01:38:23.9296479Z   Downloaded sp1-core-executor-runner-binary v6.3.1
+2026-09-16T01:38:23.9314836Z   Downloaded svgbobdoc v0.3.0
+2026-09-16T01:38:23.9337424Z   Downloaded synstructure v0.13.2
+2026-09-16T01:38:23.9354775Z   Downloaded thread_local v1.1.10
+2026-09-16T01:38:23.9382318Z   Downloaded utf8parse v0.2.2
+2026-09-16T01:38:23.9403131Z   Downloaded typeid_suffix v1.3.0
+2026-09-16T01:38:23.9432455Z   Downloaded zerofrom v0.1.8
+2026-09-16T01:38:23.9454741Z   Downloaded writeable v0.6.3
+2026-09-16T01:38:23.9485544Z   Downloaded zstd v0.13.3
+2026-09-16T01:38:23.9528821Z   Downloaded tinystr v0.8.3
+2026-09-16T01:38:23.9563499Z   Downloaded zstd-safe v7.2.4
+2026-09-16T01:38:23.9592945Z   Downloaded yoke-derive v0.8.2
+2026-09-16T01:38:23.9613575Z   Downloaded url v2.5.8
+2026-09-16T01:38:23.9654839Z   Downloaded zerotrie v0.2.4
+2026-09-16T01:38:23.9710249Z   Downloaded tiny-keccak v2.0.2
+2026-09-16T01:38:23.9749643Z   Downloaded tokio-util v0.7.18
+2026-09-16T01:38:23.9837689Z   Downloaded zerovec v0.11.6
+2026-09-16T01:38:23.9908281Z   Downloaded tower-http v0.6.11
+2026-09-16T01:38:24.0017878Z   Downloaded sp1-sdk v6.3.1
+2026-09-16T01:38:24.0112464Z   Downloaded yoke v0.8.3
+2026-09-16T01:38:24.0141687Z   Downloaded sp1-verifier v6.3.1
+2026-09-16T01:38:24.0182679Z   Downloaded sp1-recursion-circuit v6.3.1
+2026-09-16T01:38:24.0232297Z   Downloaded time v0.3.53
+2026-09-16T01:38:24.0384845Z   Downloaded unicode-width v0.1.14
+2026-09-16T01:38:24.0448692Z   Downloaded tower v0.4.13
+2026-09-16T01:38:24.0558403Z   Downloaded rustls v0.23.42
+2026-09-16T01:38:24.0684413Z   Downloaded serde_json v1.0.150
+2026-09-16T01:38:24.0764781Z   Downloaded dashu-int v0.4.3
+2026-09-16T01:38:24.0885078Z   Downloaded tower v0.5.3
+2026-09-16T01:38:24.0993458Z   Downloaded rayon v1.12.0
+2026-09-16T01:38:24.1096043Z   Downloaded portable-atomic v1.14.0
+2026-09-16T01:38:24.1181469Z   Downloaded ruint v1.19.0
+2026-09-16T01:38:24.1257684Z   Downloaded quinn-proto v0.11.16
+2026-09-16T01:38:24.1332492Z   Downloaded bls12_381 v0.8.0
+2026-09-16T01:38:24.1392509Z   Downloaded gimli v0.32.3
+2026-09-16T01:38:24.1472787Z   Downloaded futures-util v0.3.32
+2026-09-16T01:38:24.1613489Z   Downloaded unicode-width v0.2.2
+2026-09-16T01:38:24.1676888Z   Downloaded zerocopy v0.8.54
+2026-09-16T01:38:24.1895694Z   Downloaded icu_properties_data v2.2.0
+2026-09-16T01:38:24.2007509Z   Downloaded blst v0.3.16
+2026-09-16T01:38:24.2156058Z   Downloaded tonic v0.12.3
+2026-09-16T01:38:24.2227172Z   Downloaded aws-sdk-kms v1.112.0
+2026-09-16T01:38:24.2695892Z   Downloaded alloy-rpc-types-beacon v1.8.3
+2026-09-16T01:38:24.2791864Z   Downloaded object v0.37.3
+2026-09-16T01:38:24.2905869Z   Downloaded h2 v0.4.15
+2026-09-16T01:38:24.2977511Z   Downloaded toml_edit v0.19.15
+2026-09-16T01:38:24.3187740Z   Downloaded alloy-genesis v1.8.3
+2026-09-16T01:38:24.3236350Z   Downloaded hyper v1.10.1
+2026-09-16T01:38:24.3311868Z   Downloaded hashbrown v0.15.5
+2026-09-16T01:38:24.3363994Z   Downloaded sp1-core-machine v6.3.1
+2026-09-16T01:38:24.3529805Z   Downloaded sha3 v0.11.0
+2026-09-16T01:38:24.3570675Z   Downloaded zstd-sys v2.0.16+zstd.1.5.7
+2026-09-16T01:38:24.3741363Z   Downloaded range-set-blaze v0.1.16
+2026-09-16T01:38:24.3800654Z   Downloaded regex-automata v0.4.16
+2026-09-16T01:38:24.3946427Z   Downloaded idna v1.1.0
+2026-09-16T01:38:24.3985790Z   Downloaded rand v0.10.2
+2026-09-16T01:38:24.4028883Z   Downloaded hashbrown v0.14.5
+2026-09-16T01:38:24.4079721Z   Downloaded webpki-roots v1.0.8
+2026-09-16T01:38:24.4114014Z   Downloaded tokio v1.53.0
+2026-09-16T01:38:24.4574516Z   Downloaded petgraph v0.7.1
+2026-09-16T01:38:24.4758332Z   Downloaded tracing-subscriber v0.3.23
+2026-09-16T01:38:24.4850238Z   Downloaded schemars v1.2.1
+2026-09-16T01:38:24.5028204Z   Downloaded ruzstd v0.8.3
+2026-09-16T01:38:24.5084869Z   Downloaded serde_with v3.21.0
+2026-09-16T01:38:24.5218021Z   Downloaded libc v0.2.186
+2026-09-16T01:38:24.5616319Z   Downloaded http v0.2.12
+2026-09-16T01:38:24.5654553Z   Downloaded sha3 v0.10.9
+2026-09-16T01:38:24.5699911Z   Downloaded sysinfo v0.30.13
+2026-09-16T01:38:24.5797235Z   Downloaded rustls-webpki v0.103.13
+2026-09-16T01:38:24.5831375Z   Downloaded blake3 v1.8.5
+2026-09-16T01:38:24.5911886Z   Downloaded winnow v0.5.40
+2026-09-16T01:38:24.5999273Z   Downloaded twox-hash v2.1.2
+2026-09-16T01:38:24.6023795Z   Downloaded substrate-bn-succinct-rs v0.6.0
+2026-09-16T01:38:24.6052886Z   Downloaded sp1-core-executor v6.3.1
+2026-09-16T01:38:24.6160491Z   Downloaded socket2 v0.5.10
+2026-09-16T01:38:24.6181428Z   Downloaded snowbridge-amcl v1.0.2
+2026-09-16T01:38:24.6281769Z   Downloaded regex-lite v0.1.9
+2026-09-16T01:38:24.6309426Z   Downloaded aws-lc-rs v1.17.3
+2026-09-16T01:38:24.6419041Z   Downloaded reqwest v0.12.28
+2026-09-16T01:38:24.6474864Z   Downloaded rand v0.8.7
+2026-09-16T01:38:24.6509930Z   Downloaded dashu-float v0.4.5
+2026-09-16T01:38:24.6568810Z   Downloaded time-macros v0.2.31
+2026-09-16T01:38:24.6594765Z   Downloaded sp1-jit v6.3.1
+2026-09-16T01:38:24.6619093Z   Downloaded serde_core v1.0.228
+2026-09-16T01:38:24.6647934Z   Downloaded regex v1.13.1
+2026-09-16T01:38:24.6703364Z   Downloaded indexmap v2.14.0
+2026-09-16T01:38:24.6747154Z   Downloaded clap_builder v4.6.2
+2026-09-16T01:38:24.6812311Z   Downloaded aws-sdk-sts v1.108.0
+2026-09-16T01:38:24.6938557Z   Downloaded aws-config v1.9.0
+2026-09-16T01:38:24.7008672Z   Downloaded alloy-provider v1.8.3
+2026-09-16T01:38:24.7072805Z   Downloaded xmlparser v0.13.6
+2026-09-16T01:38:24.7097128Z   Downloaded vsimd v0.8.0
+2026-09-16T01:38:24.7119555Z   Downloaded tree_hash v0.10.0
+2026-09-16T01:38:24.7133014Z   Downloaded thiserror v1.0.69
+2026-09-16T01:38:24.7191334Z   Downloaded minimal-lexical v0.2.1
+2026-09-16T01:38:24.7238593Z   Downloaded icu_collections v2.2.0
+2026-09-16T01:38:24.7302030Z   Downloaded untrusted v0.9.0
+2026-09-16T01:38:24.7320131Z   Downloaded subenum v1.2.0
+2026-09-16T01:38:24.7347400Z   Downloaded spin v0.9.9
+2026-09-16T01:38:24.7371923Z   Downloaded sp1-hypercube v6.3.1
+2026-09-16T01:38:24.7433298Z   Downloaded dynasm v3.2.1
+2026-09-16T01:38:24.7481874Z   Downloaded axum v0.7.9
+2026-09-16T01:38:24.7560409Z   Downloaded ring v0.17.14
+2026-09-16T01:38:24.7987955Z   Downloaded uuid v1.24.0
+2026-09-16T01:38:24.8019245Z   Downloaded tonic-build v0.12.3
+2026-09-16T01:38:24.8032700Z   Downloaded sharded-slab v0.1.7
+2026-09-16T01:38:24.8067053Z   Downloaded rayon-core v1.13.0
+2026-09-16T01:38:24.8105310Z   Downloaded pest v2.8.7
+2026-09-16T01:38:24.8152092Z   Downloaded hyper-util v0.1.20
+2026-09-16T01:38:24.8215291Z   Downloaded http v1.4.2
+2026-09-16T01:38:24.8253323Z   Downloaded aws-smithy-runtime v1.12.0
+2026-09-16T01:38:24.8315766Z   Downloaded nom v7.1.3
+2026-09-16T01:38:24.8368634Z   Downloaded thiserror-impl v2.0.18
+2026-09-16T01:38:24.8384615Z   Downloaded mio v1.2.2
+2026-09-16T01:38:24.8446599Z   Downloaded aws-smithy-types v1.6.1
+2026-09-16T01:38:24.8497518Z   Downloaded zerovec-derive v0.11.3
+2026-09-16T01:38:24.8513198Z   Downloaded zerofrom-derive v0.1.7
+2026-09-16T01:38:24.8524561Z   Downloaded tracing-forest v0.1.6
+2026-09-16T01:38:24.8551805Z   Downloaded thiserror-impl v1.0.69
+2026-09-16T01:38:24.8567336Z   Downloaded syn-solidity v1.6.1
+2026-09-16T01:38:24.8627700Z   Downloaded socket2 v0.6.5
+2026-09-16T01:38:24.8647287Z   Downloaded serde_derive v1.0.228
+2026-09-16T01:38:24.8678984Z   Downloaded serde v1.0.228
+2026-09-16T01:38:24.8715004Z   Downloaded scale-info v2.11.6
+2026-09-16T01:38:24.8736279Z   Downloaded vec_map v0.8.2
+2026-09-16T01:38:24.8746532Z   Downloaded tokio-rustls v0.26.4
+2026-09-16T01:38:24.8768176Z   Downloaded sp1-recursion-gnark-ffi v6.3.1
+2026-09-16T01:38:24.8803669Z   Downloaded sp1-recursion-compiler v6.3.1
+2026-09-16T01:38:24.8829990Z   Downloaded ryu v1.0.23
+2026-09-16T01:38:24.8863578Z   Downloaded quinn v0.11.11
+2026-09-16T01:38:24.8898167Z   Downloaded alloy-rpc-types-eth v1.8.3
+2026-09-16T01:38:24.8937831Z   Downloaded webpki-roots v0.26.11
+2026-09-16T01:38:24.8951718Z   Downloaded want v0.3.1
+2026-09-16T01:38:24.8961568Z   Downloaded typeid_prefix v1.2.1
+2026-09-16T01:38:24.8979461Z   Downloaded tracing-appender v0.2.5
+2026-09-16T01:38:24.8996221Z   Downloaded toml_parser v1.1.2+spec-1.1.0
+2026-09-16T01:38:24.9019748Z   Downloaded tokio-stream v0.1.18
+2026-09-16T01:38:24.9071846Z   Downloaded thiserror v2.0.18
+2026-09-16T01:38:24.9138170Z   Downloaded superstruct v0.7.0
+2026-09-16T01:38:24.9168563Z   Downloaded sp1-prover-types v6.3.1
+2026-09-16T01:38:24.9188360Z   Downloaded slop-jagged v6.3.1
+2026-09-16T01:38:24.9208659Z   Downloaded rlsf v0.2.2
+2026-09-16T01:38:24.9232003Z   Downloaded prettyplease v0.2.37
+2026-09-16T01:38:24.9269692Z   Downloaded twirp-rs v0.13.0-succinct
+2026-09-16T01:38:24.9281752Z   Downloaded try-lock v0.2.5
+2026-09-16T01:38:24.9292494Z   Downloaded tree_hash_derive v0.10.0
+2026-09-16T01:38:24.9300469Z   Downloaded transpose v0.2.3
+2026-09-16T01:38:24.9314733Z   Downloaded tracing-log v0.2.0
+2026-09-16T01:38:24.9329218Z   Downloaded strength_reduce v0.2.4
+2026-09-16T01:38:24.9344083Z   Downloaded cc v1.2.67
+2026-09-16T01:38:24.9375163Z   Downloaded utf8_iter v1.0.4
+2026-09-16T01:38:24.9386396Z   Downloaded urlencoding v2.1.3
+2026-09-16T01:38:24.9397781Z   Downloaded tower-service v0.3.3
+2026-09-16T01:38:24.9406670Z   Downloaded tower-layer v0.3.3
+2026-09-16T01:38:24.9417400Z   Downloaded sp1-recursion-machine v6.3.1
+2026-09-16T01:38:24.9444553Z   Downloaded sp1-recursion-executor v6.3.1
+2026-09-16T01:38:24.9461656Z   Downloaded sp1-core-executor-runner v6.3.1
+2026-09-16T01:38:24.9476074Z   Downloaded aws-sdk-ssooidc v1.105.0
+2026-09-16T01:38:24.9557098Z   Downloaded icu_normalizer_data v2.2.0
+2026-09-16T01:38:24.9579799Z   Downloaded symlink v0.1.0
+2026-09-16T01:38:24.9592227Z   Downloaded aws-sdk-sso v1.103.0
+2026-09-16T01:38:24.9659765Z   Downloaded strum_macros v0.27.2
+2026-09-16T01:38:24.9685234Z   Downloaded ssz_types v0.11.0
+2026-09-16T01:38:24.9705092Z   Downloaded crossbeam-channel v0.5.16
+2026-09-16T01:38:24.9746803Z   Downloaded borsh v1.8.0
+2026-09-16T01:38:24.9820812Z   Downloaded arc-swap v1.9.2
+2026-09-16T01:38:24.9861472Z   Downloaded opentelemetry v0.23.0
+2026-09-16T01:38:24.9901183Z   Downloaded miniz_oxide v0.8.9
+2026-09-16T01:38:24.9927454Z   Downloaded indicatif v0.17.11
+2026-09-16T01:38:24.9965932Z   Downloaded derive_more v1.0.0
+2026-09-16T01:38:25.0063415Z   Downloaded aws-smithy-http-client v1.2.0
+2026-09-16T01:38:25.0106694Z   Downloaded proc-macro2 v1.0.106
+2026-09-16T01:38:25.0137239Z   Downloaded icu_properties v2.2.0
+2026-09-16T01:38:25.0161705Z   Downloaded derive_more-impl v1.0.0
+2026-09-16T01:38:25.0210721Z   Downloaded aws-smithy-runtime-api v1.13.0
+2026-09-16T01:38:25.0254141Z   Downloaded aws-sigv4 v1.5.1
+2026-09-16T01:38:25.0756236Z   Downloaded tokio-macros v2.7.1
+2026-09-16T01:38:25.0767788Z   Downloaded sp1-build v6.3.1
+2026-09-16T01:38:25.0782244Z   Downloaded slop-multilinear v6.3.1
+2026-09-16T01:38:25.0798517Z   Downloaded rustls-pki-types v1.15.0
+2026-09-16T01:38:25.0824698Z   Downloaded struct-reflection v0.1.0
+2026-09-16T01:38:25.0837962Z   Downloaded strsim v0.10.0
+2026-09-16T01:38:25.0852536Z   Downloaded sp1-curves v6.3.1
+2026-09-16T01:38:25.0871717Z   Downloaded pin-project v1.1.13
+2026-09-16T01:38:25.1006505Z   Downloaded p3-baby-bear v0.4.3-succinct
+2026-09-16T01:38:25.1029768Z   Downloaded alloy-dyn-abi v1.5.7
+2026-09-16T01:38:25.1062132Z   Downloaded sha2 v0.10.9
+2026-09-16T01:38:25.1088722Z   Downloaded sha2 v0.9.9
+2026-09-16T01:38:25.1114823Z   Downloaded serde_with_macros v3.21.0
+2026-09-16T01:38:25.1135095Z   Downloaded alloy-rpc-types-engine v1.8.3
+2026-09-16T01:38:25.1159021Z   Downloaded slop-whir v6.3.1
+2026-09-16T01:38:25.1171674Z   Downloaded signal-hook-registry v1.4.8
+2026-09-16T01:38:25.1185540Z   Downloaded prost v0.13.5
+2026-09-16T01:38:25.1203068Z   Downloaded camino v1.2.4
+2026-09-16T01:38:25.1225082Z   Downloaded struct-reflection-derive v0.1.0
+2026-09-16T01:38:25.1231832Z   Downloaded slop-futures v6.3.1
+2026-09-16T01:38:25.1246087Z   Downloaded slop-alloc v6.3.1
+2026-09-16T01:38:25.1260463Z   Downloaded parking_lot v0.12.5
+2026-09-16T01:38:25.1286825Z   Downloaded p256 v0.13.2
+2026-09-16T01:38:25.1321066Z   Downloaded icu_locale_core v2.2.0
+2026-09-16T01:38:25.1391456Z   Downloaded sha1_smol v1.0.1
+2026-09-16T01:38:25.1405245Z   Downloaded serde_path_to_error v0.1.20
+2026-09-16T01:38:25.1422580Z   Downloaded prost-derive v0.13.5
+2026-09-16T01:38:25.1436478Z   Downloaded backtrace v0.3.76
+2026-09-16T01:38:25.1490773Z   Downloaded quinn-udp v0.5.15
+2026-09-16T01:38:25.1509503Z   Downloaded prost-build v0.13.5
+2026-09-16T01:38:25.1543058Z   Downloaded icu_provider v2.2.0
+2026-09-16T01:38:25.1570389Z   Downloaded dashu-ratio v0.4.4
+2026-09-16T01:38:25.1610040Z   Downloaded clap v4.6.2
+2026-09-16T01:38:25.1706203Z   Downloaded aws-smithy-schema v0.2.0
+2026-09-16T01:38:25.1732259Z   Downloaded alloy-rpc-client v1.8.3
+2026-09-16T01:38:25.1751366Z   Downloaded slop-bn254 v6.3.1
+2026-09-16T01:38:25.1760801Z   Downloaded rustls-native-certs v0.8.4
+2026-09-16T01:38:25.1775326Z   Downloaded clap_derive v4.6.1
+2026-09-16T01:38:25.1797729Z   Downloaded slop-tensor v6.3.1
+2026-09-16T01:38:25.1810450Z   Downloaded slop-sumcheck v6.3.1
+2026-09-16T01:38:25.1822850Z   Downloaded slop-stacked v6.3.1
+2026-09-16T01:38:25.1834494Z   Downloaded slop-primitives v6.3.1
+2026-09-16T01:38:25.1841762Z   Downloaded slop-merkle-tree v6.3.1
+2026-09-16T01:38:25.1853177Z   Downloaded slop-maybe-rayon v6.3.1
+2026-09-16T01:38:25.1860365Z   Downloaded slop-matrix v6.3.1
+2026-09-16T01:38:25.1868106Z   Downloaded aws-smithy-xml v0.61.1
+2026-09-16T01:38:25.1890870Z   Downloaded aws-smithy-json v0.63.0
+2026-09-16T01:38:25.1914794Z   Downloaded alloy-network v1.8.3
+2026-09-16T01:38:25.1936873Z   Downloaded rustc-demangle v0.1.28
+2026-09-16T01:38:25.1961756Z   Downloaded axum-core v0.4.5
+2026-09-16T01:38:25.1982689Z   Downloaded slop-commit v6.3.1
+2026-09-16T01:38:25.1991511Z   Downloaded slop-baby-bear v6.3.1
+2026-09-16T01:38:25.2000643Z   Downloaded parking_lot_core v0.9.12
+2026-09-16T01:38:25.2023238Z   Downloaded base64 v0.13.1
+2026-09-16T01:38:25.2069110Z   Downloaded slop-poseidon2 v6.3.1
+2026-09-16T01:38:25.2076848Z   Downloaded slop-koala-bear v6.3.1
+2026-09-16T01:38:25.2086341Z   Downloaded slop-fri v6.3.1
+2026-09-16T01:38:25.2093636Z   Downloaded slop-dft v6.3.1
+2026-09-16T01:38:25.2102709Z   Downloaded slop-basefold v6.3.1
+2026-09-16T01:38:25.2113448Z   Downloaded serial_test_derive v3.5.0
+2026-09-16T01:38:25.2123189Z   Downloaded slop-basefold-prover v6.3.1
+2026-09-16T01:38:25.2133827Z   Downloaded rand_pcg v0.10.2
+2026-09-16T01:38:25.2149956Z   Downloaded rand_core v0.10.1
+2026-09-16T01:38:25.2166159Z   Downloaded futures v0.3.32
+2026-09-16T01:38:25.2216048Z   Downloaded derive-where v1.6.1
+2026-09-16T01:38:25.2256446Z   Downloaded quote v1.0.46
+2026-09-16T01:38:25.2283984Z   Downloaded num-modular v0.6.4
+2026-09-16T01:38:25.2305527Z   Downloaded slop-air v6.3.1
+2026-09-16T01:38:25.2312825Z   Downloaded memmap2 v0.9.11
+2026-09-16T01:38:25.2330785Z   Downloaded log v0.4.33
+2026-09-16T01:38:25.2356624Z   Downloaded primeorder v0.13.6
+2026-09-16T01:38:25.2370349Z   Downloaded scopeguard v1.2.0
+2026-09-16T01:38:25.2382542Z   Downloaded scale-info-derive v2.11.6
+2026-09-16T01:38:25.2393089Z   Downloaded pkg-config v0.3.33
+2026-09-16T01:38:25.2409964Z   Downloaded alloy-json-rpc v1.8.3
+2026-09-16T01:38:25.2428242Z   Downloaded keccak v0.2.0
+2026-09-16T01:38:25.2445319Z   Downloaded ipnet v2.12.0
+2026-09-16T01:38:25.2463267Z   Downloaded bytemuck v1.25.1
+2026-09-16T01:38:25.2495796Z   Downloaded pastey v0.2.3
+2026-09-16T01:38:25.2508953Z   Downloaded console v0.15.11
+2026-09-16T01:38:25.2539083Z   Downloaded backoff v0.4.0
+2026-09-16T01:38:25.2561390Z   Downloaded aws-types v1.4.0
+2026-09-16T01:38:25.2579789Z   Downloaded reqwest-middleware v0.3.3
+2026-09-16T01:38:25.2592312Z   Downloaded pem-rfc7468 v0.7.0
+2026-09-16T01:38:25.2612431Z   Downloaded num_enum_derive v0.7.6
+2026-09-16T01:38:25.2625467Z   Downloaded num_enum_derive v0.5.11
+2026-09-16T01:38:25.2636202Z   Downloaded num-order v1.2.0
+2026-09-16T01:38:25.2648814Z   Downloaded generic-array v1.1.0
+2026-09-16T01:38:25.2666916Z   Downloaded num-rational v0.4.2
+2026-09-16T01:38:25.2679616Z   Downloaded matchit v0.7.3
+2026-09-16T01:38:25.2700207Z   Downloaded bytemuck_derive v1.11.0
+2026-09-16T01:38:25.2714476Z   Downloaded pin-utils v0.1.0
+2026-09-16T01:38:25.2727453Z   Downloaded httparse v1.10.1
+2026-09-16T01:38:25.2753109Z   Downloaded hmac v0.13.0
+2026-09-16T01:38:25.2775176Z   Downloaded futures-channel v0.3.32
+2026-09-16T01:38:25.2794546Z   Downloaded crash-handler v0.7.0
+2026-09-16T01:38:25.2824782Z   Downloaded chacha20 v0.10.1
+2026-09-16T01:38:25.2849679Z   Downloaded nu-ansi-term v0.50.3
+2026-09-16T01:38:25.2874440Z   Downloaded alloy-signer v1.8.3
+2026-09-16T01:38:25.2887352Z   Downloaded num-integer v0.1.46
+2026-09-16T01:38:25.2904132Z   Downloaded num-complex v0.4.6
+2026-09-16T01:38:25.2918875Z   Downloaded dashu-base v0.4.3
+2026-09-16T01:38:25.2938465Z   Downloaded async-trait v0.1.89
+2026-09-16T01:38:25.2977511Z   Downloaded deepsize2 v0.1.0
+2026-09-16T01:38:25.2990168Z   Downloaded aws-smithy-async v1.3.0
+2026-09-16T01:38:25.3011573Z   Downloaded aws-runtime v1.8.1
+2026-09-16T01:38:25.3052442Z   Downloaded alloy-signer-local v1.8.3
+2026-09-16T01:38:25.3069594Z   Downloaded lru v0.16.4
+2026-09-16T01:38:25.3082000Z   Downloaded dashu v0.4.4
+2026-09-16T01:38:25.3097076Z   Downloaded anyhow v1.0.103
+2026-09-16T01:38:25.3138400Z   Downloaded alloy-rpc-types v1.8.3
+2026-09-16T01:38:25.3151740Z   Downloaded crash-context v0.6.3
+2026-09-16T01:38:25.3171783Z   Downloaded cmov v0.5.4
+2026-09-16T01:38:25.3190771Z   Downloaded alloy-signer-aws v1.8.3
+2026-09-16T01:38:25.3203258Z   Downloaded alloy-network-primitives v1.8.3
+2026-09-16T01:38:25.3217470Z   Downloaded p3-keccak-air v0.4.3-succinct
+2026-09-16T01:38:25.3231269Z   Downloaded outref v0.5.2
+2026-09-16T01:38:25.3244014Z   Downloaded option-ext v0.2.0
+2026-09-16T01:38:25.3252655Z   Downloaded bytes-utils v0.1.4
+2026-09-16T01:38:25.3270400Z   Downloaded bitcoin-consensus-encoding v1.1.0
+2026-09-16T01:38:25.3289765Z   Downloaded p3-uni-stark v0.4.3-succinct
+2026-09-16T01:38:25.3305033Z   Downloaded p3-merkle-tree v0.4.3-succinct
+2026-09-16T01:38:25.3314776Z   Downloaded flate2 v1.1.9
+2026-09-16T01:38:25.3364981Z   Downloaded ethereum_serde_utils v0.8.1
+2026-09-16T01:38:25.3385947Z   Downloaded anstyle-parse v1.0.0
+2026-09-16T01:38:25.3402846Z   Downloaded cargo_metadata v0.18.1
+2026-09-16T01:38:25.3421313Z   Downloaded p3-commit v0.4.3-succinct
+2026-09-16T01:38:25.3431968Z   Downloaded p3-air v0.4.3-succinct
+2026-09-16T01:38:25.3440700Z   Downloaded number_prefix v0.4.0
+2026-09-16T01:38:25.3450238Z   Downloaded jobserver v0.1.35
+2026-09-16T01:38:25.3470489Z   Downloaded hyper-timeout v0.5.2
+2026-09-16T01:38:25.3485218Z   Downloaded dashmap v6.2.1
+2026-09-16T01:38:25.3510662Z   Downloaded lock_api v0.4.14
+2026-09-16T01:38:25.3523599Z   Downloaded fixedbitset v0.5.7
+2026-09-16T01:38:25.3543454Z   Downloaded dynasmrt v3.2.1
+2026-09-16T01:38:25.3558031Z   Downloaded dashu-macros v0.4.2
+2026-09-16T01:38:25.3581755Z   Downloaded opaque-debug v0.3.1
+2026-09-16T01:38:25.3591260Z   Downloaded num-iter v0.1.46
+2026-09-16T01:38:25.3602228Z   Downloaded cmake v0.1.58
+2026-09-16T01:38:25.3616397Z   Downloaded memfd v0.6.5
+2026-09-16T01:38:25.3632502Z   Downloaded atomic v0.6.1
+2026-09-16T01:38:25.3647509Z   Downloaded darling_macro v0.20.11
+2026-09-16T01:38:25.3654463Z   Downloaded aws-smithy-runtime-api-macros v1.1.0
+2026-09-16T01:38:25.3662507Z   Downloaded aws-smithy-query v0.61.1
+2026-09-16T01:38:25.3671293Z   Downloaded darling_macro v0.13.4
+2026-09-16T01:38:25.3678306Z   Downloaded base64-simd v0.8.0
+2026-09-16T01:38:25.3693262Z   Downloaded aws-smithy-http v0.64.0
+2026-09-16T01:38:25.3715709Z   Downloaded alloy-core v1.5.7
+2026-09-16T01:38:25.3727073Z   Downloaded httpdate v1.0.3
+2026-09-16T01:38:25.3739935Z   Downloaded enum-ordinalize-derive v4.4.1
+2026-09-16T01:38:25.3750324Z   Downloaded darling_core v0.20.11
+2026-09-16T01:38:25.3802419Z   Downloaded async-stream-impl v0.3.6
+2026-09-16T01:38:25.3809807Z   Downloaded futures-executor v0.3.32
+2026-09-16T01:38:25.3824791Z   Downloaded displaydoc v0.2.6
+2026-09-16T01:38:25.3846253Z   Downloaded http-body v1.1.0
+2026-09-16T01:38:25.3857584Z   Downloaded crossbeam v0.8.4
+2026-09-16T01:38:25.3869098Z   Downloaded aws-smithy-observability v0.3.0
+2026-09-16T01:38:25.3883189Z   Downloaded alloy-rpc-types-any v1.8.3
+2026-09-16T01:38:25.3895228Z   Downloaded futures-task v0.3.32
+2026-09-16T01:38:25.3908292Z   Downloaded futures-sink v0.3.32
+2026-09-16T01:38:25.3916917Z   Downloaded cpufeatures v0.3.0
+2026-09-16T01:38:25.3931975Z   Downloaded colorchoice v1.0.5
+2026-09-16T01:38:25.3941783Z   Downloaded async-scoped v0.9.0
+2026-09-16T01:38:25.3955364Z   Downloaded http-body v0.4.6
+2026-09-16T01:38:25.3973482Z   Downloaded futures-core v0.3.32
+2026-09-16T01:38:25.3987383Z   Downloaded clap_lex v1.1.0
+2026-09-16T01:38:25.3998885Z   Downloaded enum-ordinalize v4.4.1
+2026-09-16T01:38:25.4007450Z   Downloaded ethereum_ssz_derive v0.9.1
+2026-09-16T01:38:25.4017634Z   Downloaded either v1.16.0
+2026-09-16T01:38:25.4032934Z   Downloaded dirs v5.0.1
+2026-09-16T01:38:25.4046323Z   Downloaded ansi_term v0.12.1
+2026-09-16T01:38:25.4065247Z   Downloaded enum-map-derive v0.17.0
+2026-09-16T01:38:25.4076482Z   Downloaded downcast-rs v1.2.1
+2026-09-16T01:38:25.4089852Z   Downloaded dirs-sys v0.4.1
+2026-09-16T01:38:25.4102920Z   Downloaded cargo-platform v0.1.9
+2026-09-16T01:38:25.4115120Z   Downloaded eyre v0.6.12
+2026-09-16T01:38:25.4149611Z   Downloaded ethereum_hashing v0.7.0
+2026-09-16T01:38:25.4160546Z   Downloaded digest v0.11.3
+2026-09-16T01:38:25.4185156Z   Downloaded block-buffer v0.12.1
+2026-09-16T01:38:25.4198253Z   Downloaded alloy-transport v1.8.3
+2026-09-16T01:38:25.4219672Z   Downloaded fastrand v2.4.1
+2026-09-16T01:38:25.4234509Z   Downloaded darling v0.20.11
+2026-09-16T01:38:25.4284689Z   Downloaded atomic-waker v1.1.2
+2026-09-16T01:38:25.4297397Z   Downloaded async-stream v0.3.6
+2026-09-16T01:38:25.4319612Z   Downloaded arrayref v0.3.9
+2026-09-16T01:38:25.4333151Z   Downloaded crossbeam-deque v0.8.7
+2026-09-16T01:38:25.4348971Z   Downloaded anstyle-query v1.1.5
+2026-09-16T01:38:25.4361056Z   Downloaded alloy-contract v1.8.3
+2026-09-16T01:38:25.4381170Z   Downloaded alloy-consensus-any v1.8.3
+2026-09-16T01:38:25.4395957Z   Downloaded ethereum_ssz v0.9.1
+2026-09-16T01:38:25.4415982Z   Downloaded enum-map v2.7.3
+2026-09-16T01:38:25.4432159Z   Downloaded ctutils v0.4.2
+2026-09-16T01:38:25.4452363Z   Downloaded crossbeam-utils v0.8.22
+2026-09-16T01:38:25.4480482Z   Downloaded anstyle v1.0.14
+2026-09-16T01:38:25.4495005Z   Downloaded allocator-api2 v0.2.21
+2026-09-16T01:38:25.4521167Z   Downloaded anstream v1.0.0
+2026-09-16T01:38:25.4541679Z   Downloaded aho-corasick v1.1.4
+2026-09-16T01:38:25.4594550Z   Downloaded darling v0.13.4
+2026-09-16T01:38:25.4622059Z   Downloaded ahash v0.8.12
+2026-09-16T01:38:25.4646496Z   Downloaded addr2line v0.25.1
+2026-09-16T01:38:25.4665899Z   Downloaded adler2 v2.0.1
+2026-09-16T01:38:25.4736754Z   Downloaded sp1-prover v6.3.1
+2026-09-16T01:38:25.5285101Z   Downloaded aws-lc-sys v0.43.0
+2026-09-16T01:38:26.0221969Z    Compiling proc-macro2 v1.0.106
+2026-09-16T01:38:26.0222432Z    Compiling unicode-ident v1.0.24
+2026-09-16T01:38:26.0222725Z    Compiling quote v1.0.46
+2026-09-16T01:38:26.0223225Z    Compiling serde_core v1.0.228
+2026-09-16T01:38:26.0835420Z    Compiling libc v0.2.186
+2026-09-16T01:38:26.1738951Z    Compiling serde v1.0.228
+2026-09-16T01:38:26.1739530Z    Compiling autocfg v1.5.1
+2026-09-16T01:38:26.4745353Z    Compiling num-traits v0.2.19
+2026-09-16T01:38:26.5685445Z    Compiling cfg-if v1.0.4
+2026-09-16T01:38:26.8465122Z    Compiling syn v2.0.119
+2026-09-16T01:38:27.3407280Z    Compiling once_cell v1.21.4
+2026-09-16T01:38:28.7055321Z    Compiling getrandom v0.2.17
+2026-09-16T01:38:28.8814790Z    Compiling version_check v0.9.5
+2026-09-16T01:38:28.9755417Z    Compiling num-integer v0.1.46
+2026-09-16T01:38:29.0056606Z    Compiling zerocopy v0.8.54
+2026-09-16T01:38:29.1032434Z    Compiling crossbeam-utils v0.8.22
+2026-09-16T01:38:29.2299402Z    Compiling generic-array v0.14.9
+2026-09-16T01:38:29.2405737Z    Compiling pin-project-lite v0.2.17
+2026-09-16T01:38:29.2863014Z    Compiling rand_core v0.6.4
+2026-09-16T01:38:29.2943230Z    Compiling crossbeam-epoch v0.9.20
+2026-09-16T01:38:29.3145417Z    Compiling crossbeam-deque v0.8.7
+2026-09-16T01:38:29.4145126Z    Compiling log v0.4.33
+2026-09-16T01:38:29.4375472Z    Compiling rayon-core v1.13.0
+2026-09-16T01:38:29.4685436Z    Compiling syn v1.0.109
+2026-09-16T01:38:29.5205524Z    Compiling tracing-core v0.1.36
+2026-09-16T01:38:29.6095400Z    Compiling subtle v2.6.1
+2026-09-16T01:38:29.7305357Z    Compiling typenum v1.20.1
+2026-09-16T01:38:30.5305369Z    Compiling memchr v2.8.3
+2026-09-16T01:38:30.5645561Z    Compiling radium v0.7.0
+2026-09-16T01:38:30.6965604Z    Compiling num-bigint v0.3.3
+2026-09-16T01:38:31.5975308Z    Compiling serde_derive v1.0.228
+2026-09-16T01:38:31.7825246Z    Compiling tracing-attributes v0.1.31
+2026-09-16T01:38:32.1346026Z    Compiling zeroize_derive v1.5.0
+2026-09-16T01:38:32.5475399Z    Compiling zeroize v1.9.0
+2026-09-16T01:38:32.6875456Z    Compiling futures-macro v0.3.32
+2026-09-16T01:38:32.8535517Z    Compiling tracing v0.1.44
+2026-09-16T01:38:33.2505437Z    Compiling addchain v0.2.1
+2026-09-16T01:38:33.3675484Z    Compiling const-oid v0.9.6
+2026-09-16T01:38:33.6835361Z    Compiling itoa v1.0.18
+2026-09-16T01:38:33.9605850Z    Compiling crypto-common v0.1.6
+2026-09-16T01:38:34.0405416Z    Compiling block-buffer v0.10.4
+2026-09-16T01:38:34.1343149Z    Compiling futures-core v0.3.32
+2026-09-16T01:38:34.1495278Z    Compiling ff_derive v0.13.1
+2026-09-16T01:38:34.2305789Z    Compiling digest v0.10.7
+2026-09-16T01:38:34.4284452Z    Compiling futures-sink v0.3.32
+2026-09-16T01:38:34.9676738Z    Compiling either v1.16.0
+2026-09-16T01:38:35.0042541Z    Compiling bytes v1.12.1
+2026-09-16T01:38:35.1305476Z    Compiling slab v0.4.12
+2026-09-16T01:38:35.2080758Z    Compiling futures-channel v0.3.32
+2026-09-16T01:38:35.3175564Z    Compiling futures-task v0.3.32
+2026-09-16T01:38:35.4055495Z    Compiling futures-io v0.3.32
+2026-09-16T01:38:35.4325723Z    Compiling semver v1.0.28
+2026-09-16T01:38:35.5315360Z    Compiling futures-util v0.3.32
+2026-09-16T01:38:35.6685453Z    Compiling jobserver v0.1.35
+2026-09-16T01:38:35.9055469Z    Compiling find-msvc-tools v0.1.9
+2026-09-16T01:38:35.9351972Z    Compiling shlex v2.0.1
+2026-09-16T01:38:36.0725415Z    Compiling cc v1.2.67
+2026-09-16T01:38:36.2295412Z    Compiling byteorder v1.5.0
+2026-09-16T01:38:36.4365290Z    Compiling tap v1.0.1
+2026-09-16T01:38:36.5055236Z    Compiling wyz v0.5.1
+2026-09-16T01:38:36.8502010Z    Compiling rustc_version v0.4.1
+2026-09-16T01:38:37.0615437Z    Compiling smallvec v1.15.2
+2026-09-16T01:38:37.2895426Z    Compiling equivalent v1.0.2
+2026-09-16T01:38:37.3305512Z    Compiling funty v2.0.0
+2026-09-16T01:38:37.4815205Z    Compiling cpufeatures v0.2.17
+2026-09-16T01:38:38.1265405Z    Compiling bitvec v1.1.1
+2026-09-16T01:38:38.3119672Z    Compiling arrayvec v0.7.8
+2026-09-16T01:38:38.4205782Z    Compiling errno v0.3.14
+2026-09-16T01:38:38.5113303Z    Compiling signal-hook-registry v1.4.8
+2026-09-16T01:38:38.5235474Z    Compiling tokio-macros v2.7.1
+2026-09-16T01:38:38.9802669Z    Compiling mio v1.2.2
+2026-09-16T01:38:38.9945212Z    Compiling socket2 v0.6.5
+2026-09-16T01:38:39.2185786Z    Compiling ppv-lite86 v0.2.21
+2026-09-16T01:38:39.5438532Z    Compiling tokio v1.53.0
+2026-09-16T01:38:39.6475217Z    Compiling rand_chacha v0.3.1
+2026-09-16T01:38:39.9325164Z    Compiling sha2 v0.10.9
+2026-09-16T01:38:40.2815570Z    Compiling ff v0.13.1
+2026-09-16T01:38:40.3095642Z    Compiling rand v0.8.7
+2026-09-16T01:38:40.4095416Z    Compiling unicode-xid v0.2.6
+2026-09-16T01:38:40.8748210Z    Compiling num-bigint v0.4.8
+2026-09-16T01:38:42.0845488Z    Compiling itertools v0.12.1
+2026-09-16T01:38:43.6495387Z    Compiling p3-util v0.4.3-succinct
+2026-09-16T01:38:43.7595425Z    Compiling thiserror v1.0.69
+2026-09-16T01:38:44.5813116Z    Compiling hashbrown v0.17.1
+2026-09-16T01:38:45.0845995Z    Compiling indexmap v2.14.0
+2026-09-16T01:38:45.6206069Z    Compiling rayon v1.12.0
+2026-09-16T01:38:45.6686016Z    Compiling p3-field v0.4.3-succinct
+2026-09-16T01:38:45.7855466Z    Compiling thiserror-impl v1.0.69
+2026-09-16T01:38:46.0178413Z    Compiling paste v1.0.15
+2026-09-16T01:38:46.1575372Z    Compiling zmij v1.0.23
+2026-09-16T01:38:46.9218726Z    Compiling allocator-api2 v0.2.21
+2026-09-16T01:38:48.6305510Z    Compiling rustversion v1.0.23
+2026-09-16T01:38:48.8592520Z    Compiling p3-maybe-rayon v0.4.3-succinct
+2026-09-16T01:38:48.9095321Z    Compiling base64ct v1.8.3
+2026-09-16T01:38:49.1745337Z    Compiling pem-rfc7468 v0.7.0
+2026-09-16T01:38:50.0855487Z    Compiling der v0.7.10
+2026-09-16T01:38:50.8555898Z    Compiling heck v0.5.0
+2026-09-16T01:38:51.1505860Z    Compiling spki v0.7.3
+2026-09-16T01:38:51.3615373Z    Compiling group v0.13.0
+2026-09-16T01:38:51.4975983Z    Compiling base16ct v0.2.0
+2026-09-16T01:38:51.6405794Z    Compiling serdect v0.2.0
+2026-09-16T01:38:51.6665997Z    Compiling pkcs8 v0.10.2
+2026-09-16T01:38:51.8056247Z    Compiling p3-matrix v0.4.3-succinct
+2026-09-16T01:38:52.0885570Z    Compiling sec1 v0.7.3
+2026-09-16T01:38:52.4265816Z    Compiling signature v2.2.0
+2026-09-16T01:38:52.5285555Z    Compiling crypto-bigint v0.5.5
+2026-09-16T01:38:52.9785363Z    Compiling pin-project-internal v1.1.13
+2026-09-16T01:38:53.2345461Z    Compiling hmac v0.12.1
+2026-09-16T01:38:53.3325334Z    Compiling rfc6979 v0.4.0
+2026-09-16T01:38:53.6325755Z    Compiling elliptic-curve v0.13.8
+2026-09-16T01:38:53.6775433Z    Compiling p3-koala-bear v0.4.3-succinct
+2026-09-16T01:38:53.7845333Z    Compiling itertools v0.14.0
+2026-09-16T01:38:53.8636544Z    Compiling serde_json v1.0.150
+2026-09-16T01:38:54.0125429Z    Compiling ecdsa v0.16.9
+2026-09-16T01:38:54.6045399Z    Compiling k256 v0.13.4
+2026-09-16T01:38:54.6296012Z    Compiling p3-symmetric v0.4.3-succinct
+2026-09-16T01:38:54.7975421Z    Compiling hex v0.4.3
+2026-09-16T01:38:55.5155401Z    Compiling http v1.4.2
+2026-09-16T01:38:56.2975362Z    Compiling keccak v0.1.6
+2026-09-16T01:38:57.4630319Z    Compiling dunce v1.0.5
+2026-09-16T01:38:57.5175421Z    Compiling sha3 v0.10.9
+2026-09-16T01:38:57.6315225Z    Compiling futures-executor v0.3.32
+2026-09-16T01:38:57.7463312Z    Compiling strsim v0.11.1
+2026-09-16T01:38:57.8595375Z    Compiling fnv v1.0.7
+2026-09-16T01:38:57.9118264Z    Compiling futures v0.3.32
+2026-09-16T01:38:57.9575283Z    Compiling proc-macro-error-attr2 v2.0.0
+2026-09-16T01:38:58.0205574Z    Compiling p3-dft v0.4.3-succinct
+2026-09-16T01:38:58.0935984Z    Compiling p3-baby-bear v0.4.3-succinct
+2026-09-16T01:38:58.1757868Z    Compiling proc-macro-error2 v2.0.1
+2026-09-16T01:38:58.1945306Z    Compiling alloy-rlp-derive v0.3.16
+2026-09-16T01:38:58.2318897Z    Compiling derive-where v1.6.1
+2026-09-16T01:38:58.3725377Z    Compiling unicode-segmentation v1.13.3
+2026-09-16T01:38:58.6105933Z    Compiling alloy-rlp v0.3.12
+2026-09-16T01:38:58.7106919Z    Compiling convert_case v0.10.0
+2026-09-16T01:38:58.8194587Z    Compiling p3-challenger v0.4.3-succinct
+2026-09-16T01:38:58.9315463Z    Compiling tokio-util v0.7.18
+2026-09-16T01:38:58.9785665Z    Compiling ruint-macro v1.2.1
+2026-09-16T01:38:59.1939482Z    Compiling foldhash v0.2.0
+2026-09-16T01:38:59.3295378Z    Compiling hashbrown v0.16.1
+2026-09-16T01:38:59.3935384Z    Compiling ruint v1.19.0
+2026-09-16T01:38:59.7356326Z    Compiling derive_more-impl v2.1.1
+2026-09-16T01:39:00.0655593Z    Compiling getrandom v0.4.3
+2026-09-16T01:39:00.1905493Z    Compiling slop-algebra v6.3.1
+2026-09-16T01:39:00.2205471Z    Compiling const-hex v1.19.1
+2026-09-16T01:39:00.3495496Z    Compiling rustc-hash v2.1.3
+2026-09-16T01:39:00.6005821Z    Compiling spin v0.9.9
+2026-09-16T01:39:00.6366869Z    Compiling lazy_static v1.5.0
+2026-09-16T01:39:00.7295638Z    Compiling p3-mds v0.4.3-succinct
+2026-09-16T01:39:00.8868803Z    Compiling blake3 v1.8.5
+2026-09-16T01:39:00.9115423Z    Compiling ahash v0.8.12
+2026-09-16T01:39:01.0681240Z    Compiling gcd v2.3.0
+2026-09-16T01:39:01.1675413Z    Compiling p3-poseidon2 v0.4.3-succinct
+2026-09-16T01:39:01.3445763Z    Compiling http-body v1.1.0
+2026-09-16T01:39:03.2825639Z    Compiling slop-symmetric v6.3.1
+2026-09-16T01:39:03.3155426Z    Compiling derive_more v2.1.1
+2026-09-16T01:39:03.3855532Z    Compiling alloy-primitives v1.5.7
+2026-09-16T01:39:03.5103534Z    Compiling slop-challenger v6.3.1
+2026-09-16T01:39:03.5865249Z    Compiling pin-project v1.1.13
+2026-09-16T01:39:03.6395359Z    Compiling ident_case v1.0.1
+2026-09-16T01:39:03.7125655Z    Compiling percent-encoding v2.3.2
+2026-09-16T01:39:03.7855406Z    Compiling thiserror v2.0.18
+2026-09-16T01:39:03.7909861Z    Compiling regex-syntax v0.8.11
+2026-09-16T01:39:03.9082757Z    Compiling pkg-config v0.3.33
+2026-09-16T01:39:04.0325450Z    Compiling slop-poseidon2 v6.3.1
+2026-09-16T01:39:04.1245347Z    Compiling thiserror-impl v2.0.18
+2026-09-16T01:39:04.3285204Z    Compiling base64 v0.22.1
+2026-09-16T01:39:04.7825381Z    Compiling cpufeatures v0.3.0
+2026-09-16T01:39:04.8996497Z    Compiling p3-commit v0.4.3-succinct
+2026-09-16T01:39:05.0405471Z    Compiling regex-automata v0.4.16
+2026-09-16T01:39:05.2455768Z    Compiling synstructure v0.13.2
+2026-09-16T01:39:05.6025760Z    Compiling rustix v1.1.4
+2026-09-16T01:39:05.8025667Z    Compiling tower-service v0.3.3
+2026-09-16T01:39:05.8765470Z    Compiling http-body-util v0.1.4
+2026-09-16T01:39:05.9295593Z    Compiling ring v0.17.14
+2026-09-16T01:39:06.1247366Z    Compiling dashu-int v0.4.3
+2026-09-16T01:39:06.2255430Z    Compiling ryu v1.0.23
+2026-09-16T01:39:06.2726026Z    Compiling winnow v1.0.4
+2026-09-16T01:39:06.6760578Z    Compiling zerofrom-derive v0.1.7
+2026-09-16T01:39:07.3375457Z    Compiling toml_parser v1.1.2+spec-1.1.0
+2026-09-16T01:39:07.6955387Z    Compiling p3-bn254-fr v0.4.3-succinct
+2026-09-16T01:39:07.8925364Z    Compiling strum_macros v0.27.2
+2026-09-16T01:39:08.1425920Z    Compiling crossbeam-queue v0.3.13
+2026-09-16T01:39:08.2465151Z    Compiling crossbeam-channel v0.5.16
+2026-09-16T01:39:08.6145958Z    Compiling bitflags v2.13.1
+2026-09-16T01:39:08.7595564Z    Compiling toml_datetime v1.1.1+spec-1.1.0
+2026-09-16T01:39:08.9195380Z    Compiling crc32fast v1.5.0
+2026-09-16T01:39:09.0465458Z    Compiling toml_edit v0.25.13+spec-1.1.0
+2026-09-16T01:39:09.5975374Z    Compiling crossbeam v0.8.4
+2026-09-16T01:39:09.6415302Z    Compiling zerofrom v0.1.8
+2026-09-16T01:39:09.7275868Z    Compiling slop-koala-bear v6.3.1
+2026-09-16T01:39:09.9865700Z    Compiling slop-bn254 v6.3.1
+2026-09-16T01:39:10.1865516Z    Compiling yoke-derive v0.8.2
+2026-09-16T01:39:10.5205441Z    Compiling slop-alloc v6.3.1
+2026-09-16T01:39:10.9656760Z    Compiling untrusted v0.9.0
+2026-09-16T01:39:11.0375436Z    Compiling parking_lot_core v0.9.12
+2026-09-16T01:39:11.0692959Z    Compiling stable_deref_trait v1.2.1
+2026-09-16T01:39:11.1123766Z    Compiling tower-layer v0.3.3
+2026-09-16T01:39:11.1505577Z    Compiling strength_reduce v0.2.4
+2026-09-16T01:39:11.2755140Z    Compiling transpose v0.2.3
+2026-09-16T01:39:11.2848407Z    Compiling yoke v0.8.3
+2026-09-16T01:39:11.4315900Z    Compiling proc-macro-crate v3.5.0
+2026-09-16T01:39:11.8205629Z    Compiling slop-primitives v6.3.1
+2026-09-16T01:39:11.8785913Z    Compiling slop-matrix v6.3.1
+2026-09-16T01:39:11.9173361Z    Compiling parity-scale-codec v3.7.5
+2026-09-16T01:39:11.9971895Z    Compiling const_format_proc_macros v0.2.34
+2026-09-16T01:39:12.4793117Z    Compiling slop-futures v6.3.1
+2026-09-16T01:39:12.8390965Z    Compiling cmake v0.1.58
+2026-09-16T01:39:13.1215227Z    Compiling sync_wrapper v1.0.2
+2026-09-16T01:39:13.1783911Z    Compiling fs_extra v1.3.0
+2026-09-16T01:39:13.3703551Z    Compiling aws-lc-sys v0.43.0
+2026-09-16T01:39:13.5849401Z    Compiling slop-tensor v6.3.1
+2026-09-16T01:39:13.7989111Z    Compiling matchers v0.2.0
+2026-09-16T01:39:13.8339900Z    Compiling tracing-log v0.2.0
+2026-09-16T01:39:13.8705250Z    Compiling form_urlencoded v1.2.2
+2026-09-16T01:39:13.9771686Z    Compiling sharded-slab v0.1.7
+2026-09-16T01:39:14.2205285Z    Compiling zerovec-derive v0.11.3
+2026-09-16T01:39:14.3625312Z    Compiling thread_local v1.1.10
+2026-09-16T01:39:14.3975686Z    Compiling nu-ansi-term v0.50.3
+2026-09-16T01:39:14.5015313Z    Compiling num-modular v0.6.4
+2026-09-16T01:39:15.0825319Z    Compiling num-order v1.2.0
+2026-09-16T01:39:15.1147182Z    Compiling zerovec v0.11.6
+2026-09-16T01:39:15.2225043Z    Compiling tracing-subscriber v0.3.23
+2026-09-16T01:39:22.0309301Z    Compiling tower v0.5.3
+2026-09-16T01:39:22.4745665Z    Compiling parity-scale-codec-derive v3.7.5
+2026-09-16T01:39:22.5398613Z    Compiling slop-commit v6.3.1
+2026-09-16T01:39:22.8957843Z    Compiling derive_more-impl v1.0.0
+2026-09-16T01:39:23.5835362Z    Compiling displaydoc v0.2.6
+2026-09-16T01:39:23.6815564Z    Compiling impl-trait-for-tuples v0.2.3
+2026-09-16T01:39:24.1050092Z    Compiling bytemuck_derive v1.11.0
+2026-09-16T01:39:24.4977311Z    Compiling ansi_term v0.12.1
+2026-09-16T01:39:24.6505337Z    Compiling object v0.37.3
+2026-09-16T01:39:24.7867822Z    Compiling crunchy v0.2.4
+2026-09-16T01:39:24.8945708Z    Compiling dashu-base v0.4.3
+2026-09-16T01:39:25.0058054Z    Compiling static_assertions v1.1.0
+2026-09-16T01:39:25.0119910Z    Compiling bytemuck v1.25.1
+2026-09-16T01:39:25.1261576Z    Compiling tracing-forest v0.1.6
+2026-09-16T01:39:25.3075459Z    Compiling slop-baby-bear v6.3.1
+2026-09-16T01:39:26.1745492Z    Compiling rustls-pki-types v1.15.0
+2026-09-16T01:39:26.2075088Z    Compiling struct-reflection-derive v0.1.0
+2026-09-16T01:39:26.4870507Z    Compiling deepsize_derive2 v0.1.0
+2026-09-16T01:39:26.7474744Z    Compiling hybrid-array v0.4.13
+2026-09-16T01:39:27.1745295Z    Compiling num_cpus v1.17.0
+2026-09-16T01:39:27.3806183Z    Compiling deranged v0.5.8
+2026-09-16T01:39:27.4555523Z    Compiling toml_datetime v0.6.11
+2026-09-16T01:39:27.5204915Z    Compiling powerfmt v0.2.0
+2026-09-16T01:39:27.6125480Z    Compiling winnow v0.5.40
+2026-09-16T01:39:28.1995428Z    Compiling linux-raw-sys v0.12.1
+2026-09-16T01:39:28.3735527Z    Compiling aws-lc-rs v1.17.3
+2026-09-16T01:39:28.4994975Z    Compiling httparse v1.10.1
+2026-09-16T01:39:28.5144912Z    Compiling time-core v0.1.9
+2026-09-16T01:39:28.6355412Z    Compiling num-conv v0.2.2
+2026-09-16T01:39:28.6592888Z    Compiling eyre v0.6.12
+2026-09-16T01:39:28.7361319Z    Compiling time v0.3.53
+2026-09-16T01:39:29.0415247Z    Compiling toml_edit v0.19.15
+2026-09-16T01:39:31.3355290Z    Compiling slop-multilinear v6.3.1
+2026-09-16T01:39:31.6251805Z    Compiling dashu-float v0.4.5
+2026-09-16T01:39:32.1975310Z    Compiling slop-utils v6.3.1
+2026-09-16T01:39:32.4385484Z    Compiling scale-info-derive v2.11.6
+2026-09-16T01:39:32.5261904Z    Compiling p3-merkle-tree v0.4.3-succinct
+2026-09-16T01:39:32.7045317Z    Compiling darling_core v0.23.0
+2026-09-16T01:39:34.0565986Z    Compiling p3-interpolation v0.4.3-succinct
+2026-09-16T01:39:34.1129828Z    Compiling syn-solidity v1.6.1
+2026-09-16T01:39:34.9467396Z    Compiling macro-string v0.1.4
+2026-09-16T01:39:35.1785483Z    Compiling arrayref v0.3.9
+2026-09-16T01:39:35.3755425Z    Compiling atomic-waker v1.1.2
+2026-09-16T01:39:35.4455488Z    Compiling cmov v0.5.4
+2026-09-16T01:39:35.6314602Z    Compiling try-lock v0.2.5
+2026-09-16T01:39:35.6975589Z    Compiling constant_time_eq v0.4.2
+2026-09-16T01:39:36.0671906Z    Compiling alloy-sol-macro-input v1.5.7
+2026-09-16T01:39:36.4995393Z    Compiling want v0.3.1
+2026-09-16T01:39:36.6058682Z    Compiling ctutils v0.4.2
+2026-09-16T01:39:36.7719439Z    Compiling h2 v0.4.15
+2026-09-16T01:39:37.0856335Z    Compiling darling_macro v0.23.0
+2026-09-16T01:39:37.1771878Z    Compiling p3-fri v0.4.3-succinct
+2026-09-16T01:39:37.8027737Z    Compiling slop-merkle-tree v6.3.1
+2026-09-16T01:39:38.0406206Z    Compiling dashu-ratio v0.4.4
+2026-09-16T01:39:38.0895353Z    Compiling proc-macro-crate v1.3.1
+2026-09-16T01:39:38.7651199Z    Compiling block-buffer v0.12.1
+2026-09-16T01:39:38.8845516Z    Compiling crypto-common v0.2.2
+2026-09-16T01:39:38.9585800Z    Compiling tinystr v0.8.3
+2026-09-16T01:39:39.3195228Z    Compiling darling_core v0.20.11
+2026-09-16T01:39:40.1935830Z    Compiling http v0.2.12
+2026-09-16T01:39:42.0881093Z    Compiling bincode v1.3.3
+2026-09-16T01:39:42.5111158Z    Compiling sp1-derive v6.3.1
+2026-09-16T01:39:42.8210300Z    Compiling httpdate v1.0.3
+2026-09-16T01:39:43.1379177Z    Compiling outref v0.5.2
+2026-09-16T01:39:43.1485477Z    Compiling litemap v0.8.2
+2026-09-16T01:39:43.1895364Z    Compiling konst_macro_rules v0.2.19
+2026-09-16T01:39:43.3008271Z    Compiling anyhow v1.0.103
+2026-09-16T01:39:43.3115196Z    Compiling writeable v0.6.3
+2026-09-16T01:39:43.4665957Z    Compiling const-oid v0.10.2
+2026-09-16T01:39:43.4832027Z    Compiling pastey v0.2.3
+2026-09-16T01:39:43.7766789Z    Compiling vsimd v0.8.0
+2026-09-16T01:39:43.9816268Z    Compiling elf v0.7.4
+2026-09-16T01:39:44.1364965Z    Compiling base64-simd v0.8.0
+2026-09-16T01:39:44.6015797Z    Compiling sp1-primitives v6.3.1
+2026-09-16T01:39:45.4623923Z    Compiling dashu-macros v0.4.2
+2026-09-16T01:39:45.5705545Z    Compiling digest v0.11.3
+2026-09-16T01:39:45.7079795Z    Compiling icu_locale_core v2.2.0
+2026-09-16T01:39:45.9712543Z    Compiling konst v0.2.20
+2026-09-16T01:39:46.1395518Z    Compiling hyper v1.10.1
+2026-09-16T01:39:46.5035822Z    Compiling darling_macro v0.20.11
+2026-09-16T01:39:46.7065445Z    Compiling http-body v0.4.6
+2026-09-16T01:39:46.8976100Z    Compiling num_enum_derive v0.5.11
+2026-09-16T01:39:47.5455564Z    Compiling slop-basefold v6.3.1
+2026-09-16T01:39:47.7925672Z    Compiling hashbrown v0.14.5
+2026-09-16T01:39:48.4575686Z    Compiling slop-fri v6.3.1
+2026-09-16T01:39:48.6502805Z    Compiling darling v0.23.0
+2026-09-16T01:39:48.7039072Z    Compiling alloy-sol-macro-expander v1.5.7
+2026-09-16T01:39:48.8978565Z    Compiling atomic v0.6.1
+2026-09-16T01:39:49.0105287Z    Compiling zerotrie v0.2.4
+2026-09-16T01:39:49.3821119Z    Compiling potential_utf v0.1.5
+2026-09-16T01:39:49.4810831Z    Compiling slop-dft v6.3.1
+2026-09-16T01:39:49.5745971Z    Compiling dynasm v3.2.1
+2026-09-16T01:39:50.8714532Z    Compiling ethereum_serde_utils v0.8.1
+2026-09-16T01:39:51.2242413Z    Compiling bytes-utils v0.1.4
+2026-09-16T01:39:51.4572388Z    Compiling itertools v0.13.0
+2026-09-16T01:39:51.5595142Z    Compiling md-5 v0.10.6
+2026-09-16T01:39:51.6655835Z    Compiling auto_impl v1.3.0
+2026-09-16T01:39:52.9116212Z    Compiling rustls v0.23.42
+2026-09-16T01:39:52.9925629Z    Compiling ipnet v2.12.0
+2026-09-16T01:39:53.1175395Z    Compiling pin-utils v0.1.0
+2026-09-16T01:39:53.3015414Z    Compiling sha1_smol v1.0.1
+2026-09-16T01:39:53.6115437Z    Compiling utf8_iter v1.0.4
+2026-09-16T01:39:53.7175316Z    Compiling sp1-jit v6.3.1
+2026-09-16T01:39:53.8046047Z    Compiling icu_normalizer_data v2.2.0
+2026-09-16T01:39:53.9035413Z    Compiling icu_properties_data v2.2.0
+2026-09-16T01:39:53.9955391Z    Compiling tiny-keccak v2.0.2
+2026-09-16T01:39:54.1175228Z    Compiling icu_collections v2.2.0
+2026-09-16T01:39:54.6645558Z    Compiling uuid v1.24.0
+2026-09-16T01:39:54.8395234Z    Compiling hyper-util v0.1.20
+2026-09-16T01:39:55.4795614Z    Compiling aws-smithy-types v1.6.1
+2026-09-16T01:39:58.2345352Z    Compiling ethereum_ssz v0.9.1
+2026-09-16T01:39:58.9765843Z    Compiling alloy-sol-macro v1.5.7
+2026-09-16T01:39:59.2105304Z    Compiling slop-basefold-prover v6.3.1
+2026-09-16T01:39:59.2385468Z    Compiling icu_provider v2.2.0
+2026-09-16T01:39:59.4345502Z    Compiling darling v0.20.11
+2026-09-16T01:39:59.4851596Z    Compiling const_format v0.2.36
+2026-09-16T01:39:59.8206975Z    Compiling p3-air v0.4.3-succinct
+2026-09-16T01:40:00.0426427Z    Compiling clap_derive v4.6.1
+2026-09-16T01:40:00.4385991Z    Compiling byte-slice-cast v1.2.3
+2026-09-16T01:40:00.5925602Z    Compiling scopeguard v1.2.0
+2026-09-16T01:40:01.1795458Z    Compiling utf8parse v0.2.2
+2026-09-16T01:40:01.6115371Z    Compiling crc-catalog v2.5.0
+2026-09-16T01:40:01.6733473Z    Compiling crc v3.4.0
+2026-09-16T01:40:02.1735413Z    Compiling anstyle-parse v1.0.0
+2026-09-16T01:40:02.2225351Z    Compiling lock_api v0.4.14
+2026-09-16T01:40:03.2933512Z    Compiling slop-stacked v6.3.1
+2026-09-16T01:40:03.3456006Z    Compiling alloy-sol-types v1.5.7
+2026-09-16T01:40:03.5316174Z    Compiling serde_with_macros v3.21.0
+2026-09-16T01:40:03.7168557Z    Compiling slop-sumcheck v6.3.1
+2026-09-16T01:40:03.9215402Z    Compiling derive_more v1.0.0
+2026-09-16T01:40:04.0085230Z    Compiling strum v0.27.2
+2026-09-16T01:40:04.2065681Z    Compiling nybbles v0.4.8
+2026-09-16T01:40:04.6645312Z    Compiling aws-smithy-async v1.3.0
+2026-09-16T01:40:04.7795398Z    Compiling enum-map-derive v0.17.0
+2026-09-16T01:40:04.9515965Z    Compiling aws-smithy-runtime-api-macros v1.1.0
+2026-09-16T01:40:05.1334176Z    Compiling colorchoice v1.0.5
+2026-09-16T01:40:05.1605382Z    Compiling adler2 v2.0.1
+2026-09-16T01:40:05.1925317Z    Compiling is_terminal_polyfill v1.70.2
+2026-09-16T01:40:05.2455285Z    Compiling anstyle v1.0.14
+2026-09-16T01:40:05.4945551Z    Compiling sp1-core-executor v6.3.1
+2026-09-16T01:40:05.5815389Z    Compiling simd-adler32 v0.3.10
+2026-09-16T01:40:05.5965756Z    Compiling anstyle-query v1.1.5
+2026-09-16T01:40:05.6459628Z    Compiling openssl-probe v0.2.1
+2026-09-16T01:40:05.7135903Z    Compiling miniz_oxide v0.8.9
+2026-09-16T01:40:05.8375412Z    Compiling rustls-native-certs v0.8.4
+2026-09-16T01:40:06.2485353Z    Compiling anstream v1.0.0
+2026-09-16T01:40:06.3645443Z    Compiling aws-smithy-runtime-api v1.13.0
+2026-09-16T01:40:06.4595806Z    Compiling serde_with v3.21.0
+2026-09-16T01:40:06.8959919Z    Compiling alloy-trie v0.9.5
+2026-09-16T01:40:08.7065889Z    Compiling scale-info v2.11.6
+2026-09-16T01:40:09.4795542Z    Compiling slop-jagged v6.3.1
+2026-09-16T01:40:10.1885546Z    Compiling icu_properties v2.2.0
+2026-09-16T01:40:10.5545442Z    Compiling icu_normalizer v2.2.0
+2026-09-16T01:40:11.1806002Z    Compiling alloy-eip2124 v0.2.0
+2026-09-16T01:40:11.7584655Z    Compiling p3-uni-stark v0.4.3-succinct
+2026-09-16T01:40:11.8258544Z    Compiling ethereum_ssz_derive v0.9.1
+2026-09-16T01:40:11.8736763Z    Compiling primeorder v0.13.6
+2026-09-16T01:40:12.1062696Z    Compiling alloy-eip7928 v0.3.7
+2026-09-16T01:40:12.1353737Z    Compiling alloy-eip7702 v0.6.3
+2026-09-16T01:40:12.3576590Z    Compiling alloy-serde v1.8.3
+2026-09-16T01:40:12.7135444Z    Compiling alloy-eip2930 v0.2.3
+2026-09-16T01:40:13.0965529Z    Compiling num-rational v0.4.2
+2026-09-16T01:40:13.4765749Z    Compiling num-iter v0.1.46
+2026-09-16T01:40:13.5446079Z    Compiling num-complex v0.4.6
+2026-09-16T01:40:13.6215544Z    Compiling memmap2 v0.9.11
+2026-09-16T01:40:13.7645351Z    Compiling twox-hash v2.1.2
+2026-09-16T01:40:13.8876159Z    Compiling clap_lex v1.1.0
+2026-09-16T01:40:13.8955446Z    Compiling foldhash v0.1.5
+2026-09-16T01:40:13.9095965Z    Compiling num v0.4.3
+2026-09-16T01:40:13.9962908Z    Compiling hashbrown v0.15.5
+2026-09-16T01:40:14.0275676Z    Compiling clap_builder v4.6.2
+2026-09-16T01:40:14.4603785Z    Compiling ruzstd v0.8.3
+2026-09-16T01:40:14.8427871Z    Compiling dynasmrt v3.2.1
+2026-09-16T01:40:15.2805411Z    Compiling alloy-eips v1.8.3
+2026-09-16T01:40:15.6955368Z    Compiling p256 v0.13.2
+2026-09-16T01:40:15.9425576Z    Compiling slop-uni-stark v6.3.1
+2026-09-16T01:40:15.9805239Z    Compiling idna_adapter v1.2.2
+2026-09-16T01:40:16.0595666Z    Compiling slop-whir v6.3.1
+2026-09-16T01:40:16.4979443Z    Compiling snowbridge-amcl v1.0.2
+2026-09-16T01:40:16.6085344Z    Compiling flate2 v1.1.9
+2026-09-16T01:40:16.9469778Z    Compiling parking_lot v0.12.5
+2026-09-16T01:40:17.9436242Z    Compiling deepsize2 v0.1.0
+2026-09-16T01:40:18.0663342Z    Compiling slop-air v6.3.1
+2026-09-16T01:40:18.1425833Z    Compiling alloy-tx-macros v1.8.3
+2026-09-16T01:40:18.3913623Z    Compiling num_enum v0.5.11
+2026-09-16T01:40:18.4308524Z    Compiling dashu v0.4.4
+2026-09-16T01:40:18.5775912Z    Compiling memfd v0.6.5
+2026-09-16T01:40:18.7661725Z    Compiling struct-reflection v0.1.0
+2026-09-16T01:40:18.8476334Z    Compiling rayon-scan v0.1.1
+2026-09-16T01:40:18.8716236Z    Compiling subenum v1.2.0
+2026-09-16T01:40:18.9285760Z    Compiling generic-array v1.1.0
+2026-09-16T01:40:19.2325837Z    Compiling downcast-rs v1.2.1
+2026-09-16T01:40:19.2795821Z    Compiling thousands v0.2.0
+2026-09-16T01:40:19.2855291Z    Compiling camino v1.2.4
+2026-09-16T01:40:19.3675395Z    Compiling indenter v0.3.4
+2026-09-16T01:40:20.1986170Z    Compiling sp1-hypercube v6.3.1
+2026-09-16T01:40:20.3745507Z    Compiling rrs-succinct v0.2.0
+2026-09-16T01:40:20.4522492Z    Compiling alloy-consensus v1.8.3
+2026-09-16T01:40:21.1016067Z    Compiling sp1-curves v6.3.1
+2026-09-16T01:40:24.5875426Z    Compiling idna v1.1.0
+2026-09-16T01:40:25.7718986Z    Compiling clap v4.6.2
+2026-09-16T01:40:25.8344985Z    Compiling enum-map v2.7.3
+2026-09-16T01:40:26.0093826Z    Compiling webpki-roots v1.0.8
+2026-09-16T01:40:26.0845274Z    Compiling slop-maybe-rayon v6.3.1
+2026-09-16T01:40:26.1305407Z    Compiling vec_map v0.8.2
+2026-09-16T01:40:26.1425272Z    Compiling serde_arrays v0.2.0
+2026-09-16T01:40:26.1977152Z    Compiling async-trait v0.1.89
+2026-09-16T01:40:26.9797069Z    Compiling fastrand v2.4.1
+2026-09-16T01:40:28.9595516Z    Compiling url v2.5.8
+2026-09-16T01:40:34.7999919Z    Compiling sp1-core-executor-runner-binary v6.3.1
+2026-09-16T01:40:42.7437305Z    Compiling alloy-network-primitives v1.8.3
+2026-09-16T01:40:42.9915423Z    Compiling alloy-consensus-any v1.8.3
+2026-09-16T01:40:45.4915933Z    Compiling alloy-rpc-types-eth v1.8.3
+2026-09-16T01:40:50.9980219Z    Compiling prost-derive v0.13.5
+2026-09-16T01:40:52.0367847Z    Compiling aws-smithy-schema v0.2.0
+2026-09-16T01:40:53.7352186Z    Compiling crash-context v0.6.3
+2026-09-16T01:40:54.1683423Z    Compiling crash-handler v0.7.0
+2026-09-16T01:40:55.4549189Z    Compiling cargo-platform v0.1.9
+2026-09-16T01:40:55.6164823Z    Compiling cargo_metadata v0.18.1
+2026-09-16T01:40:58.4408145Z    Compiling aws-credential-types v1.3.0
+2026-09-16T01:40:58.4813623Z    Compiling aws-smithy-http v0.64.0
+2026-09-16T01:40:59.3203992Z    Compiling alloy-json-rpc v1.8.3
+2026-09-16T01:40:59.6158233Z    Compiling aws-types v1.4.0
+2026-09-16T01:40:59.9895568Z    Compiling keccak v0.2.0
+2026-09-16T01:41:00.0995232Z    Compiling range-set-blaze v0.1.16
+2026-09-16T01:41:00.2145466Z    Compiling gimli v0.32.3
+2026-09-16T01:41:00.9235349Z    Compiling futures-utils-wasm v0.1.0
+2026-09-16T01:41:00.9945398Z    Compiling sha3 v0.11.0
+2026-09-16T01:41:03.3125221Z    Compiling addr2line v0.25.1
+2026-09-16T01:41:03.7316021Z    Compiling sp1-core-executor-runner v6.3.1
+2026-09-16T01:41:04.1375694Z    Compiling aws-smithy-observability v0.3.0
+2026-09-16T01:41:04.4395574Z    Compiling rustls-webpki v0.103.13
+2026-09-16T01:41:07.2915292Z    Compiling hmac v0.13.0
+2026-09-16T01:41:07.4135381Z    Compiling sha2 v0.11.0
+2026-09-16T01:41:09.6795802Z    Compiling serde_urlencoded v0.7.1
+2026-09-16T01:41:09.9075870Z    Compiling tokio-stream v0.1.18
+2026-09-16T01:41:10.3805926Z    Compiling async-stream-impl v0.3.6
+2026-09-16T01:41:10.7265780Z    Compiling tokio-rustls v0.26.4
+2026-09-16T01:41:10.9635377Z    Compiling hyper-rustls v0.27.9
+2026-09-16T01:41:11.7848485Z    Compiling aws-smithy-http-client v1.2.0
+2026-09-16T01:41:12.9292925Z    Compiling prettyplease v0.2.37
+2026-09-16T01:41:13.5279867Z    Compiling gen_ops v0.4.0
+2026-09-16T01:41:13.5815432Z    Compiling half v1.8.3
+2026-09-16T01:41:13.9455340Z    Compiling rustc-demangle v0.1.28
+2026-09-16T01:41:15.0115687Z    Compiling backtrace v0.3.76
+2026-09-16T01:41:20.6935393Z    Compiling serde_cbor v0.11.2
+2026-09-16T01:41:22.1604499Z    Compiling prost v0.13.5
+2026-09-16T01:41:22.4725674Z    Compiling aws-smithy-runtime v1.12.0
+2026-09-16T01:41:30.5105396Z    Compiling async-stream v0.3.6
+2026-09-16T01:41:31.1925768Z    Compiling aws-sigv4 v1.5.1
+2026-09-16T01:41:33.2256888Z    Compiling alloy-rpc-types-any v1.8.3
+2026-09-16T01:41:33.2945184Z    Compiling alloy-signer v1.8.3
+2026-09-16T01:41:33.4744148Z    Compiling p3-keccak-air v0.4.3-succinct
+2026-09-16T01:41:33.6605579Z    Compiling sysinfo v0.30.13
+2026-09-16T01:41:34.4045329Z    Compiling winnow v0.7.15
+2026-09-16T01:41:34.4955955Z    Compiling fixedbitset v0.5.7
+2026-09-16T01:41:34.7355783Z    Compiling petgraph v0.7.1
+2026-09-16T01:41:36.0255484Z    Compiling tempfile v3.27.0
+2026-09-16T01:41:36.3438218Z    Compiling alloy-sol-type-parser v1.5.7
+2026-09-16T01:41:36.5317151Z    Compiling slop-keccak-air v6.3.1
+2026-09-16T01:41:36.5885699Z    Compiling alloy-network v1.8.3
+2026-09-16T01:41:37.5625522Z    Compiling aws-runtime v1.8.1
+2026-09-16T01:41:40.7495394Z    Compiling prost-types v0.13.5
+2026-09-16T01:41:40.8405707Z    Compiling sp1-recursion-executor v6.3.1
+2026-09-16T01:41:41.8285445Z    Compiling aws-smithy-json v0.63.0
+2026-09-16T01:41:43.5465939Z    Compiling regex v1.13.1
+2026-09-16T01:41:43.9115792Z    Compiling fips204 v0.4.6 (/home/runner/work/_temp/arc-proof-identities/src-a/third_party/fips204)
+2026-09-16T01:41:44.6595827Z    Compiling arc-swap v1.9.2
+2026-09-16T01:41:44.9045394Z    Compiling indexmap v1.9.3
+2026-09-16T01:41:45.0055850Z    Compiling regex-lite v0.1.9
+2026-09-16T01:41:45.3175634Z    Compiling multimap v0.10.1
+2026-09-16T01:41:45.4355207Z    Compiling mime v0.3.17
+2026-09-16T01:41:45.8915438Z    Compiling strsim v0.10.0
+2026-09-16T01:41:46.0915277Z    Compiling darling_core v0.13.4
+2026-09-16T01:41:47.9115139Z    Compiling axum-core v0.4.5
+2026-09-16T01:41:47.9505437Z    Compiling prost-build v0.13.5
+2026-09-16T01:41:49.0649125Z    Compiling postfiat-crypto-provider v0.1.0 (/home/runner/work/_temp/arc-proof-identities/src-a/crates/crypto_provider)
+2026-09-16T01:41:50.6446424Z    Compiling postfiat-types v0.1.0 (/home/runner/work/_temp/arc-proof-identities/src-a/crates/types)
+2026-09-16T01:41:51.5755483Z    Compiling tower-http v0.6.11
+2026-09-16T01:41:52.2005418Z    Compiling zstd-sys v2.0.16+zstd.1.5.7
+2026-09-16T01:41:52.4075477Z    Compiling serde_path_to_error v0.1.20
+2026-09-16T01:41:52.8425842Z    Compiling num_enum_derive v0.7.6
+2026-09-16T01:41:53.5496099Z    Compiling hashbrown v0.12.3
+2026-09-16T01:41:54.1135995Z    Compiling unicode-width v0.1.14
+2026-09-16T01:41:54.2905427Z    Compiling iana-time-zone v0.1.65
+2026-09-16T01:41:54.3595811Z    Compiling matchit v0.7.3
+2026-09-16T01:41:54.4365361Z    Compiling base64 v0.13.1
+2026-09-16T01:41:54.6355050Z    Compiling svgbobdoc v0.3.0
+2026-09-16T01:41:54.7955536Z    Compiling axum v0.7.9
+2026-09-16T01:41:54.9166444Z    Compiling chrono v0.4.45
+2026-09-16T01:41:56.7185998Z    Compiling num_enum v0.7.6
+2026-09-16T01:42:00.9825230Z    Compiling reqwest v0.12.28
+2026-09-16T01:42:23.4286961Z    Compiling tonic-build v0.12.3
+2026-09-16T01:42:24.2525197Z    Compiling darling_macro v0.13.4
+2026-09-16T01:42:24.4385528Z    Compiling sp1-recursion-machine v6.3.1
+2026-09-16T01:42:32.9265385Z    Compiling alloy-transport v1.8.3
+2026-09-16T01:42:35.9298870Z    Compiling ethereum_hashing v0.7.0
+2026-09-16T01:42:36.1772336Z    Compiling curve25519-dalek v4.1.3 (https://github.com/sp1-patches/curve25519-dalek?tag=patch-4.1.3-sp1-6.2.0#b251b2a1)
+2026-09-16T01:42:36.2680885Z    Compiling digest v0.9.0
+2026-09-16T01:42:36.3285565Z    Compiling rustc-hex v2.1.0
+2026-09-16T01:42:36.4005510Z    Compiling portable-atomic v1.14.0
+2026-09-16T01:42:36.6775748Z    Compiling option-ext v0.2.0
+2026-09-16T01:42:36.7270880Z    Compiling const-default v1.0.0
+2026-09-16T01:42:36.7865085Z    Compiling xmlparser v0.13.6
+2026-09-16T01:42:37.7555384Z    Compiling getrandom v0.3.4
+2026-09-16T01:42:37.9275643Z    Compiling urlencoding v2.1.3
+2026-09-16T01:42:38.0965913Z    Compiling libm v0.2.16
+2026-09-16T01:42:38.2824888Z    Compiling aws-smithy-query v0.61.1
+2026-09-16T01:42:38.4666392Z    Compiling aws-smithy-xml v0.61.1
+2026-09-16T01:42:42.4885376Z    Compiling rlsf v0.2.2
+2026-09-16T01:42:42.7595914Z    Compiling dirs-sys v0.4.1
+2026-09-16T01:42:43.2604604Z    Compiling substrate-bn-succinct-rs v0.6.0
+2026-09-16T01:42:45.6093313Z    Compiling tree_hash v0.10.0
+2026-09-16T01:42:46.0475347Z    Compiling alloy-rpc-client v1.8.3
+2026-09-16T01:42:47.0955235Z    Compiling darling v0.13.4
+2026-09-16T01:42:47.1444064Z    Compiling sp1-prover-types v6.3.1
+2026-09-16T01:42:47.6245386Z    Compiling alloy-chains v0.2.34
+2026-09-16T01:42:48.8383995Z    Compiling tower v0.4.13
+2026-09-16T01:42:49.0471866Z    Compiling alloy-json-abi v1.5.7
+2026-09-16T01:42:49.9465760Z    Compiling alloy-rpc-types v1.8.3
+2026-09-16T01:42:50.0665432Z    Compiling dashmap v6.2.1
+2026-09-16T01:42:50.5715246Z    Compiling hyper-timeout v0.5.2
+2026-09-16T01:42:50.7248564Z    Compiling typeid_suffix v1.3.0
+2026-09-16T01:42:50.9347938Z    Compiling rustls-pemfile v2.2.0
+2026-09-16T01:42:51.1054918Z    Compiling alloy-core v1.5.7
+2026-09-16T01:42:51.1557987Z    Compiling lru v0.16.4
+2026-09-16T01:42:51.3055297Z    Compiling pairing v0.23.0
+2026-09-16T01:42:51.3663880Z    Compiling itertools v0.10.5
+2026-09-16T01:42:52.4615425Z    Compiling block-buffer v0.9.0
+2026-09-16T01:42:52.5396214Z    Compiling curve25519-dalek-derive v0.1.1 (https://github.com/sp1-patches/curve25519-dalek?tag=patch-4.1.3-sp1-6.2.0#b251b2a1)
+2026-09-16T01:42:52.9385442Z    Compiling sp1-recursion-gnark-ffi v6.3.1
+2026-09-16T01:42:53.0275339Z    Compiling socket2 v0.5.10
+2026-09-16T01:42:53.6445534Z    Compiling zstd-safe v7.2.4
+2026-09-16T01:42:53.7465388Z    Compiling unicode-width v0.2.2
+2026-09-16T01:42:53.8375219Z    Compiling opaque-debug v0.3.1
+2026-09-16T01:42:53.8835436Z    Compiling linked_list_allocator v0.10.6
+2026-09-16T01:42:53.8973230Z    Compiling critical-section v1.2.0
+2026-09-16T01:42:53.9492274Z    Compiling typeid_prefix v1.2.1
+2026-09-16T01:42:53.9635177Z    Compiling sp1-zkvm v6.3.1
+2026-09-16T01:42:54.0555482Z    Compiling mti v1.1.1
+2026-09-16T01:42:54.0955904Z    Compiling embedded-alloc v0.6.0
+2026-09-16T01:42:54.2135705Z    Compiling console v0.15.11
+2026-09-16T01:42:54.2385255Z    Compiling sha2 v0.9.9
+2026-09-16T01:42:54.4045468Z    Compiling tonic v0.12.3
+2026-09-16T01:42:55.9045293Z    Compiling superstruct v0.7.0
+2026-09-16T01:42:56.7395207Z    Compiling bls12_381 v0.8.0
+2026-09-16T01:42:58.8455469Z    Compiling alloy-provider v1.8.3
+2026-09-16T01:43:03.6015448Z    Compiling alloy v1.8.3
+2026-09-16T01:43:04.2660983Z    Compiling alloy-dyn-abi v1.5.7
+2026-09-16T01:43:06.4545370Z    Compiling ssz_types v0.11.0
+2026-09-16T01:43:06.6825555Z    Compiling sp1-verifier v6.3.1
+2026-09-16T01:43:08.7511140Z    Compiling dirs v5.0.1
+2026-09-16T01:43:08.8615353Z    Compiling aws-sdk-sts v1.108.0
+2026-09-16T01:43:11.1445418Z    Compiling aws-sdk-ssooidc v1.105.0
+2026-09-16T01:43:22.3815429Z    Compiling aws-sdk-sso v1.103.0
+2026-09-16T01:43:30.1365451Z    Compiling tree_hash_derive v0.10.0
+2026-09-16T01:43:30.4595394Z    Compiling sp1-lib v6.3.1
+2026-09-16T01:43:30.7995965Z    Compiling async-scoped v0.9.0
+2026-09-16T01:43:30.9205369Z    Compiling ed25519 v2.2.3
+2026-09-16T01:43:31.0735353Z    Compiling sha1 v0.10.7
+2026-09-16T01:43:31.9565413Z    Compiling serial_test_derive v3.5.0
+2026-09-16T01:43:32.3735390Z    Compiling number_prefix v0.4.0
+2026-09-16T01:43:32.4615203Z    Compiling symlink v0.1.0
+2026-09-16T01:43:32.5101567Z    Compiling minimal-lexical v0.2.1
+2026-09-16T01:43:33.0745359Z    Compiling nom v7.1.3
+2026-09-16T01:43:35.0065892Z    Compiling tracing-appender v0.2.5
+2026-09-16T01:43:36.6155899Z    Compiling indicatif v0.17.11
+2026-09-16T01:43:38.8235443Z    Compiling serial_test v3.5.0
+2026-09-16T01:43:39.9955413Z    Compiling aws-config v1.9.0
+2026-09-16T01:43:40.1336306Z    Compiling ed25519-dalek v2.2.0
+2026-09-16T01:43:40.6425832Z    Compiling helios-consensus-core v0.11.1 (https://github.com/a16z/helios?tag=0.11.1#204c998a)
+2026-09-16T01:43:44.7646034Z    Compiling alloy-contract v1.8.3
+2026-09-16T01:43:45.9086307Z    Compiling postfiat-mempool-dag v0.1.0 (/home/runner/work/_temp/arc-proof-identities/src-a/crates/mempool_dag)
+2026-09-16T01:43:46.9995801Z    Compiling aws-sdk-kms v1.112.0
+2026-09-16T01:43:49.6095237Z    Compiling lru v0.12.5
+2026-09-16T01:43:49.7465432Z    Compiling opentelemetry v0.23.0
+2026-09-16T01:43:52.1885417Z    Compiling instant v0.1.13
+2026-09-16T01:43:52.2585452Z    Compiling backoff v0.4.0
+2026-09-16T01:43:52.3896039Z    Compiling postfiat-ordering-fast v0.1.0 (/home/runner/work/_temp/arc-proof-identities/src-a/crates/ordering_fast)
+2026-09-16T01:44:00.2474732Z    Compiling alloy-signer-aws v1.8.3
+2026-09-16T01:44:07.6475284Z    Compiling zstd v0.13.3
+2026-09-16T01:44:08.0076134Z    Compiling sp1-helios-primitives v0.1.0 (https://github.com/succinctlabs/sp1-helios?rev=b9bdddf8221e31d41075d4a97f9a14ca6df13cf0#b9bdddf8)
+2026-09-16T01:44:09.6239009Z    Compiling sp1-build v6.3.1
+2026-09-16T01:44:09.8155476Z    Compiling eventsource-stream v0.2.3
+2026-09-16T01:44:10.3745463Z    Compiling twirp-rs v0.13.0-succinct
+2026-09-16T01:44:11.7695824Z    Compiling postfiat-bridge v0.1.0 (/home/runner/work/_temp/arc-proof-identities/src-a/crates/bridge)
+2026-09-16T01:44:14.4695953Z    Compiling postfiat-consensus-cobalt v0.1.0 (/home/runner/work/_temp/arc-proof-identities/src-a/crates/consensus_cobalt)
+2026-09-16T01:44:19.5842596Z    Compiling reqwest-middleware v0.3.3
+2026-09-16T01:44:20.4445980Z    Compiling alloy-signer-local v1.8.3
+2026-09-16T01:44:20.7105991Z    Compiling postfiat-pfusdc-proofs v0.1.0 (/home/runner/work/_temp/arc-proof-identities/src-a/crates/pfusdc_proofs)
+2026-09-16T01:44:29.9995999Z    Compiling pfusdc-ingress-program v0.1.0 (/home/runner/work/_temp/arc-proof-identities/src-a/programs/pfusdc-ingress)
+2026-09-16T01:44:33.1676058Z    Compiling pfusdc-arc-ingress-program v0.1.0 (/home/runner/work/_temp/arc-proof-identities/src-a/programs/pfusdc-arc-ingress)
+2026-09-16T01:44:33.6566057Z    Compiling arc-conformance v0.1.0 (/home/runner/work/_temp/arc-proof-identities/src-a/crates/arc-conformance)
+2026-09-16T01:45:36.5769186Z    Compiling sp1-core-machine v6.3.1
+2026-09-16T01:45:43.1908682Z    Compiling sp1-recursion-compiler v6.3.1
+2026-09-16T01:45:44.2875422Z    Compiling sp1-recursion-circuit v6.3.1
+2026-09-16T01:45:56.0666309Z    Compiling sp1-prover v6.3.1
+2026-09-16T01:46:21.2886537Z    Compiling sp1-sdk v6.3.1
+2026-09-16T01:47:36.3872570Z    Compiling pfusdc-tier4-prover v0.1.0 (/home/runner/work/_temp/arc-proof-identities/src-a/tools/pfusdc-tier4-prover)
+2026-09-16T01:49:38.2821042Z     Finished `release` profile [optimized] target(s) in 11m 27s
+2026-09-16T01:49:38.4108820Z      Running `/home/runner/work/_temp/arc-proof-identities/src-a/tools/pfusdc-tier4-prover/target/release/pfusdc-tier4-prover program-info --output /home/runner/work/_temp/arc-proof-identities/report/program-info.json`
+2026-09-16T01:51:46.5690270Z {
+2026-09-16T01:51:46.5690994Z   "arc_ingress": {
+2026-09-16T01:51:46.5691888Z     "elf_sha256": "7660fcc58677cfec433a5f2337b9fe46fa96374a1e3c4bd6fba625b982d881bc",
+2026-09-16T01:51:46.5692505Z     "program_vkey": "0x0050a8b0daed2fa75f44d4102b42204c34668a03d311cb727cc6ca3f8df5cf16"
+2026-09-16T01:51:46.5692929Z   },
+2026-09-16T01:51:46.5693145Z   "egress": {
+2026-09-16T01:51:46.5693489Z     "elf_sha256": "0ea4dbabc8a36b44824c861cf2e1ae90454df2a6e4bb8a357f9d3a8672696d83",
+2026-09-16T01:51:46.5694035Z     "program_vkey": "0x00140f09ca6f1b917e3999a806df5ef4ac4468bd65b85e8580cbc16f832dfe47"
+2026-09-16T01:51:46.5694773Z   },
+2026-09-16T01:51:46.5694955Z   "ingress": {
+2026-09-16T01:51:46.5695296Z     "elf_sha256": "7c581aa42a196bd5df5a1efc2c4569663744d9b597cc1cd2253e839f9ba2f921",
+2026-09-16T01:51:46.5695857Z     "program_vkey": "0x0033bd140207b97fb2442eb279cc2ce55714be6fbcd66beb325fe7c3786d4dfc"
+2026-09-16T01:51:46.5696260Z   },
+2026-09-16T01:51:46.5696505Z   "schema": "postfiat.pfusdc.tier4_program_info.v1",
+2026-09-16T01:51:46.5696826Z   "sp1_sdk_version": "6.3.1"
+2026-09-16T01:51:46.5697056Z }
+2026-09-16T01:51:46.9982938Z true
+2026-09-16T01:51:47.0899508Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-16T01:51:47.0901384Z ##[group]Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+2026-09-16T01:51:47.0901771Z with:
+2026-09-16T01:51:47.0902029Z   name: proof-identities-pfeth-v1-20260904
+2026-09-16T01:51:47.0914617Z   path: /home/runner/work/_temp/arc-proof-identities/report
+2026-09-16T01:51:47.0915177Z   if-no-files-found: error
+2026-09-16T01:51:47.0915823Z   retention-days: 30
+2026-09-16T01:51:47.0916182Z   compression-level: 6
+2026-09-16T01:51:47.0916525Z   overwrite: false
+2026-09-16T01:51:47.0916805Z   include-hidden-files: false
+2026-09-16T01:51:47.0917076Z ##[endgroup]
+2026-09-16T01:51:47.3367953Z (node:36286) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-09-16T01:51:47.3369105Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-09-16T01:51:47.3440606Z With the provided path, there will be 6 files uploaded
+2026-09-16T01:51:47.3445724Z Artifact name is valid!
+2026-09-16T01:51:47.3446313Z Root directory input is valid!
+2026-09-16T01:51:47.5781307Z Beginning upload of artifact content to blob storage
+2026-09-16T01:51:47.8847191Z (node:36286) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-09-16T01:51:48.1297042Z Uploaded bytes 2717038
+2026-09-16T01:51:48.1583197Z Finished uploading artifact content to blob storage!
+2026-09-16T01:51:48.1584173Z SHA256 digest of uploaded artifact zip is 7bc82291f75a0ec1c2e612a34d00267c737054a72d21253aa0f56334934dab65
+2026-09-16T01:51:48.1586054Z Finalizing artifact upload
+2026-09-16T01:51:48.3501797Z Artifact proof-identities-pfeth-v1-20260904.zip successfully finalized. Artifact ID 10426776750
+2026-09-16T01:51:48.3503107Z Artifact proof-identities-pfeth-v1-20260904 has been successfully uploaded! Final size is 2717038 bytes. Artifact ID is 10426776750
+2026-09-16T01:51:48.3509662Z Artifact download URL: https://github.com/postfiatorg/postfiatl1v2/actions/runs/35044347138/artifacts/10426776750
+2026-09-16T01:51:48.3750485Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-09-16T01:51:48.3751752Z Post job cleanup.
+2026-09-16T01:51:48.4635437Z [command]/usr/bin/git version
+2026-09-16T01:51:48.4674939Z git version 2.55.0
+2026-09-16T01:51:48.4709428Z Temporarily overriding HOME='/home/runner/work/_temp/3ad8ba1f-e3f0-465e-b411-83719899ccc2' before making global git config changes
+2026-09-16T01:51:48.4710448Z Adding repository directory to the temporary git global config as a safe directory
+2026-09-16T01:51:48.4715161Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/postfiatl1v2/postfiatl1v2
+2026-09-16T01:51:48.4751547Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-09-16T01:51:48.4784947Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-09-16T01:51:48.5059339Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-09-16T01:51:48.5084897Z http.https://github.com/.extraheader
+2026-09-16T01:51:48.5094098Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-09-16T01:51:48.5125960Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-09-16T01:51:48.5506968Z Cleaning up orphan processes
+2026-09-16T01:51:48.5748146Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683, actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

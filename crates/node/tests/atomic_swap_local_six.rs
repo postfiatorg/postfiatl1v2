@@ -3757,6 +3757,7 @@ fn a666_successor_lifecycle_from_network(
         &reserve_operator,
         AssetTransactionOperation::PftlUniswapRouteEpochAdvance(
             PftlUniswapRouteEpochAdvanceOperation {
+                settlement_source_asset_ids: None,
                 operator: A666_RESERVE_OPERATOR.to_string(),
                 route_id: ROUTE_ID.to_string(),
                 prior_route_epoch: 1,
@@ -3819,6 +3820,7 @@ fn a666_successor_lifecycle_from_network(
         &online_ports,
         &holder,
         AssetTransactionOperation::PftlUniswapOrderReserve(PftlUniswapOrderReserveOperation {
+            settlement_source_asset_id: None,
             subscriber: holder.address.clone(),
             route_id: ROUTE_ID.to_string(),
             reservation_id: transparent_reservation_id.clone(),
@@ -4287,6 +4289,7 @@ fn a666_successor_lifecycle_from_network(
         &reserve_operator,
         AssetTransactionOperation::PftlUniswapRouteEpochAdvance(
             PftlUniswapRouteEpochAdvanceOperation {
+                settlement_source_asset_ids: None,
                 operator: A666_RESERVE_OPERATOR.to_string(),
                 route_id: ROUTE_ID.to_string(),
                 prior_route_epoch: 2,
@@ -4320,6 +4323,7 @@ fn a666_successor_lifecycle_from_network(
     );
     let transparent_redeem_operation =
         AssetTransactionOperation::PftlUniswapPrimaryRedeem(PftlUniswapPrimaryRedeemOperation {
+            settlement_source_asset_id: None,
             owner: holder.address.clone(),
             settlement_recipient: holder.address.clone(),
             route_id: ROUTE_ID.to_string(),
@@ -4482,6 +4486,7 @@ fn a666_successor_lifecycle_from_network(
         &reserve_operator,
         AssetTransactionOperation::PftlUniswapRouteEpochAdvance(
             PftlUniswapRouteEpochAdvanceOperation {
+                settlement_source_asset_ids: None,
                 operator: A666_RESERVE_OPERATOR.to_string(),
                 route_id: ROUTE_ID.to_string(),
                 prior_route_epoch: 3,

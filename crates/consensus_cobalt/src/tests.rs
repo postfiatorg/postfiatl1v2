@@ -39,6 +39,12 @@
         );
         assert!(validate_amendment_kind(&canonical).is_ok());
         assert!(validate_amendment_value(&canonical, 1).is_ok());
+        let bound = format!("{canonical}:arc-bootstrap-v2:{}", root('c'));
+        assert!(validate_amendment_kind(&bound).is_ok());
+        assert!(validate_amendment_value(&bound, 1).is_ok());
+        for suffix in [root('C'), "cc".to_string(), format!("{}:extra", root('c'))] {
+            assert!(validate_amendment_kind(&format!("{canonical}:arc-bootstrap-v2:{suffix}")).is_err());
+        }
 
         for malformed in [
             format!("{GOVERNANCE_VAULT_BRIDGE_ROUTE_KIND_PREFIX_V1}:{}", root('a')),

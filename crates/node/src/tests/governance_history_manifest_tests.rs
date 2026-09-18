@@ -3379,7 +3379,7 @@
             .expect("bootstrap validator keys");
         let validators = local_validator_ids(4).expect("bootstrap validators");
         let activation_height = 10;
-        let committee = postfiat_types::FastPayRecoveryCommitteeV1::from_public_keys(
+        let mut committee = postfiat_types::FastPayRecoveryCommitteeV1::from_public_keys(
             genesis.chain_id.clone(),
             genesis_hash(&genesis),
             genesis.protocol_version,
@@ -3393,6 +3393,9 @@
                 .collect(),
         )
         .expect("FastPay recovery committee");
+        // Replay the historical encoding, then rotate to V2 below through governance.
+        committee.schema = postfiat_types::FASTPAY_RECOVERY_COMMITTEE_SCHEMA_V1.to_string();
+        committee.registry_root = committee.computed_root().expect("historical committee root");
         let payload = postfiat_types::FastPayRecoveryGovernancePayloadV1 {
             policy: postfiat_types::FastPayRecoveryPolicyV1 {
                 schema: postfiat_types::FASTPAY_RECOVERY_POLICY_SCHEMA_V1.to_string(),

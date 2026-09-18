@@ -1,0 +1,55 @@
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.0.3, pluggy-1.6.0
+rootdir: /home/postfiatchad/repos/postfiatl1v2-release-20260915
+collected 536 items
+
+python/tests/test_a666_live_nav_mark.py ....                             [  0%]
+python/tests/test_a666_public_adapter_readiness.py ......                [  1%]
+python/tests/test_a666_public_source_qualification.py ..............     [  4%]
+python/tests/test_cobalt.py .....................                        [  8%]
+python/tests/test_cobalt_ui.py ........                                  [  9%]
+python/tests/test_constrained_signer.py ............                     [ 12%]
+python/tests/test_genesis_registry.py .s.......s.s.                      [ 14%]
+python/tests/test_institution_reputation.py ......                       [ 15%]
+python/tests/test_latency.py ..............                              [ 18%]
+python/tests/test_monitor_snapshot.py ....                               [ 19%]
+python/tests/test_nav_reserve_proof_cpu_bounded.py .....                 [ 19%]
+python/tests/test_navcoin.py ...........                                 [ 22%]
+python/tests/test_persistent_client.py ............                      [ 24%]
+python/tests/test_pftl_transfer.py ....                                  [ 25%]
+python/tests/test_pfusdc_conservation_identity.py ...................    [ 28%]
+python/tests/test_pfusdc_h314_residual_gate.py ....                      [ 29%]
+python/tests/test_placement_preflight.py ............                    [ 31%]
+python/tests/test_rpc_probe.py ...                                       [ 32%]
+python/tests/test_safe_rollout.py ................                       [ 35%]
+python/tests/test_storage_scaling.py ................................... [ 41%]
+...........                                                              [ 43%]
+python/tests/test_storage_scaling_packager.py ......                     [ 44%]
+python/tests/test_storage_scaling_paired_runner.py ..................... [ 48%]
+....                                                                     [ 49%]
+python/tests/test_tasknode_unl.py ...........                            [ 51%]
+python/tests/test_tasknode_unl_accountability.py ..............          [ 54%]
+python/tests/test_tasknode_unl_binding.py ..................             [ 57%]
+python/tests/test_tasknode_unl_churn.py ...............                  [ 60%]
+python/tests/test_tasknode_unl_edges.py .......................          [ 64%]
+python/tests/test_tasknode_unl_trust_graph.py ............               [ 66%]
+python/tests/test_tasknode_unl_v2_cli.py ...........                     [ 68%]
+python/tests/test_tasknode_unl_v2_evidence.py ....................       [ 72%]
+python/tests/test_tasknode_unl_v2_gate.py ..................             [ 75%]
+python/tests/test_tasknode_unl_v2_policy.py ................             [ 78%]
+python/tests/test_tasknode_unl_work_digest.py ..............             [ 81%]
+python/tests/test_testnet_path_status.py .......                         [ 82%]
+python/tests/test_transaction_matrix.py ......                           [ 83%]
+python/tests/test_transparent_swap_latency.py ..........                 [ 85%]
+python/tests/test_wallet.py ............................................ [ 94%]
+.......................                                                  [ 98%]
+python/tests/test_wan_preflight.py ....                                  [ 99%]
+python/tests/test_yolo_target.py .....                                   [100%]
+
+=============================== warnings summary ===============================
+../../.cache/combined-release-20260915/test-venv/lib/python3.14/site-packages/websockets/legacy/__init__.py:6
+  /home/postfiatchad/.cache/combined-release-20260915/test-venv/lib/python3.14/site-packages/websockets/legacy/__init__.py:6: DeprecationWarning: websockets.legacy is deprecated; see https://websockets.readthedocs.io/en/stable/howto/upgrade.html for upgrade instructions
+    warnings.warn(  # deprecated in 14.0 - 2024-11-09
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================== 533 passed, 3 skipped, 1 warning in 50.13s ==================

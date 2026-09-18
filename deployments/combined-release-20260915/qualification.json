@@ -1,0 +1,276 @@
+{
+  "schema": "postfiat-combined-release-qualification-v1",
+  "date": "2026-09-15",
+  "decision": "HOLD",
+  "deployment_authorized": false,
+  "live_mutations": false,
+  "task": "task_1925021f97adf7488e21e22ff85f08c7",
+  "pull_request": "https://github.com/postfiatorg/postfiatl1v2/pull/41",
+  "source": {
+    "main": "faff0e53533888bb229add117fcda3ed4094aed4",
+    "pr37": "c87e7dc663ef7dafc2d17284abb5838a8ef152c1",
+    "pr39": "f2e749a16b07be446cb11da1e1f523eb9cdabca7",
+    "binary_commit": "87cf9dd136e79e041b395229b9b734ac05e0d8e2",
+    "reviewed_comment_only_descendant": "dd276d70e0974fa17e7dfa3ad0b4e6cbd00349f3",
+    "consensus_fix_ancestors": [
+      "bbb291ce",
+      "f9f13ead",
+      "e95efbdf",
+      "c9a61fcd",
+      "6ec35092",
+      "0a1216c3",
+      "33c8ce34"
+    ]
+  },
+  "binary": {
+    "sha256": "203995122290895a023dde4bf1cfb8cc4f05b22628822d7a32829ffd185fb314",
+    "bytes": 62508720,
+    "independent_clean_builds": 2,
+    "byte_comparison_exit_code": 0,
+    "provenance": "build-provenance.md"
+  },
+  "observed_tip": {
+    "height": 1020,
+    "block_hash": "9d02b8eecb78408e8f1de12ae1e2607ad4987c2c8d883f1718593df7c2d9ca529f0707bd581e3e414361f202b1768feb",
+    "stored_state_root": "587c6526a2549c97458b371f42e849c49274a1f522e7dcb841b74cd74bdb3d6747c2e6ca646c08ac51733796d39bead6",
+    "root_recomputation_passed": false
+  },
+  "gates": [
+    {
+      "id": "source-integration",
+      "status": "PASS",
+      "result": "Both PR tips, all seven queued fixes and main RPC/QA repairs are ancestors of the candidate."
+    },
+    {
+      "id": "reproducible-build",
+      "status": "PASS",
+      "exit_codes": [
+        0,
+        0
+      ],
+      "evidence": [
+        "logs/final-release-build-1.log",
+        "logs/final-release-build-2.log",
+        "build-provenance.md"
+      ]
+    },
+    {
+      "id": "workspace-tests",
+      "status": "PASS",
+      "exit_code": 0,
+      "passed": 1429,
+      "failed": 0,
+      "ignored": 39,
+      "command": "cargo test --workspace --locked -- --test-threads=2",
+      "scope": "Full default-profile suite started at merge 7a41d5a4; later integration commits leave Rust source unchanged. The rustls dependency delta is separately covered by 4 passing Arc conformance tests and final all-target check/Clippy. A separately started optimized follow-up was cancelled after this full run passed; its incomplete output supplies no passing-test claim.",
+      "evidence": ["logs/workspace-test.log", "logs/arc-conformance-updated.log", "logs/optimized-followup-stop.log"]
+    },
+    {
+      "id": "isolated-warm-latency",
+      "status": "PASS",
+      "passed": 1,
+      "exit_code": 0,
+      "scope": "Required ignored test explicitly executed after the full suite completed and redundant compilation stopped.",
+      "evidence": ["logs/isolated-warm-latency.log"]
+    },
+    {
+      "id": "focused-regressions",
+      "status": "PASS",
+      "result": "pfETH 2, source-settlement commitment 1, RPC 34, updated Arc conformance 4.",
+      "evidence": [
+        "logs/pfeth-reserve.log",
+        "logs/source-settlement.log",
+        "logs/rpc-serve.log",
+        "logs/arc-conformance-updated.log"
+      ]
+    },
+    {
+      "id": "python-tests",
+      "status": "PASS",
+      "passed": 533,
+      "skipped": 3,
+      "warnings": 1,
+      "evidence": [
+        "logs/python-test-corrected.log",
+        "logs/python-qualification-corrected.log"
+      ],
+      "limitation": "Three frozen out-of-tree archive tests are skipped; retained archive qualification regression tests pass."
+    },
+    {
+      "id": "wallet-tests",
+      "status": "PASS",
+      "wallet_passed": 260,
+      "proxy_passed": 36,
+      "result": "Both dependency audits report zero vulnerabilities; wallet production build and provider-neutral boundary pass.",
+      "evidence": [
+        "logs/wallet-web-test.log",
+        "logs/wallet-web-build.log",
+        "logs/wallet-web-audit.log",
+        "logs/wallet-proxy-test.log",
+        "logs/wallet-proxy-audit.log",
+        "logs/wallet-boundary-corrected.log"
+      ]
+    },
+    {
+      "id": "offline-contracts",
+      "status": "PASS",
+      "passed": 178,
+      "evidence": [
+        "logs/contracts-offline-corrected.log",
+        "logs/exit-executor-corrected.log"
+      ]
+    },
+    {
+      "id": "guest-proof-identity-reproduction",
+      "status": "FAIL",
+      "reason": "Ingress reproduces its pinned identity; egress builds twice identically but differs from both the expected manifest and retained ELF. PR39 already failed this gate with a different rebuilt egress identity.",
+      "evidence": ["proof-identity-observation.json", "logs/ci-arc-proof-identities.log", "logs/pr39-arc-proof-identities.log"]
+    },
+    {
+      "id": "official-mainnet-contract-forks",
+      "status": "PASS",
+      "passed": 2,
+      "evidence": [
+        "logs/contracts-configured-forks.log"
+      ],
+      "limitation": "PR CI skips the official mainnet fork job; this result comes from the locally configured fork run."
+    },
+    {
+      "id": "pinned-testnet-contract-forks",
+      "status": "BLOCKED",
+      "failed": 2,
+      "reason": "Configured Ethereum Sepolia and Arbitrum Sepolia providers cannot serve pinned historical state.",
+      "evidence": [
+        "logs/contracts-configured-forks.log"
+      ]
+    },
+    {
+      "id": "rust-check-clippy-format",
+      "status": "PASS",
+      "evidence": [
+        "logs/workspace-check-final.log",
+        "logs/workspace-clippy-final.log",
+        "logs/fmt-final.log"
+      ]
+    },
+    {
+      "id": "docs-and-publication-tree",
+      "status": "PASS",
+      "result": "Strict docs, links, tracked-tree secret scan, artifact classification, proof inventory, archived proofs, deterministic/crypto/RPC inventories pass.",
+      "evidence": [
+        "logs/docs-build-final-corrected.log",
+        "logs/public-doc-links-final.log",
+        "logs/artifact-policy-final.log",
+        "logs/tracked-secret-scan-final.log",
+        "logs/test-proof-public-input-inventory.log",
+        "logs/check-a666-public-source-qualification-corrected.log"
+      ]
+    },
+    {
+      "id": "supply-chain",
+      "status": "PASS",
+      "result": "cargo-deny 0.20.2 passes after rustls 0.23.45 update; vendored Halo2 and deterministic SBOM checks pass.",
+      "evidence": [
+        "logs/cargo-deny-corrected.log",
+        "logs/verify-vendored-halo2.log",
+        "logs/test-sbom.log"
+      ]
+    },
+    {
+      "id": "reachable-history-secret-scan",
+      "status": "BLOCKED",
+      "reason": "Seven findings predate this branch; candidate and baseline main reports are byte-identical. No history rewrite or scanner exception was applied.",
+      "evidence": [
+        "logs/candidate-history-secret-scan.log",
+        "logs/main-history-secret-scan.log"
+      ]
+    },
+    {
+      "id": "fleet-readback",
+      "status": "PASS",
+      "result": "All six live nodes agree at height 1020, pending count zero, all 12 services active, deployed binary identity verified.",
+      "evidence": [
+        "fleet-and-restore-observations.json"
+      ],
+      "limitation": "RPC reports stored tip and stale full verification; no full replay claim."
+    },
+    {
+      "id": "candidate-startup-restart",
+      "status": "PASS",
+      "result": "All six disposable copies start and restart with alternating transport/RPC startup order; tip and pending count remain stable.",
+      "evidence": [
+        "current-tip-service-receipt-final.json",
+        "logs/current-tip-services-final.log"
+      ],
+      "limitation": "Stored-tip reads only; no new-block finality."
+    },
+    {
+      "id": "candidate-state-verification",
+      "status": "FAIL",
+      "exit_code": 1,
+      "reason": "FastPay recovery committee is invalid",
+      "binary_sha256": "203995122290895a023dde4bf1cfb8cc4f05b22628822d7a32829ffd185fb314",
+      "evidence": [
+        "logs/final-candidate-verify-state-1020.stderr",
+        "fastpay-root-comparison.json"
+      ]
+    },
+    {
+      "id": "candidate-block-replay",
+      "status": "FAIL",
+      "exit_code": 1,
+      "reason": "FastPay recovery committee is invalid",
+      "evidence": [
+        "logs/candidate-verify-blocks-1020.stderr"
+      ],
+      "binary_commit": "7a41d5a4e877609a4345ae028de52f3d9d78407d",
+      "limitation": "Initial integrated runtime; final runtime independently fails state verification on the same committee."
+    },
+    {
+      "id": "finalized-checkpoint-import",
+      "status": "FAIL",
+      "exit_code": 1,
+      "reason": "Old binary exports the finalized checkpoint, but candidate import rejects its FastPay committee.",
+      "evidence": [
+        "logs/candidate-checkpoint-import-1020.stderr"
+      ],
+      "binary_commit": "7a41d5a4e877609a4345ae028de52f3d9d78407d"
+    },
+    {
+      "id": "rollback-binary-and-stored-tip",
+      "status": "PASS",
+      "binary_sha256": "57b0f4d1d42d66878d7dbb8c33919c7fa0f87c6cc1a4b9cc1a85d75b634eec83",
+      "result": "Restored original copied data and exact deployed binary report the recorded height-1020 tip on all six copies.",
+      "evidence": [
+        "fleet-and-restore-observations.json"
+      ]
+    },
+    {
+      "id": "rollback-full-verification",
+      "status": "FAIL",
+      "exit_code": 1,
+      "reason": "Block 1011: issued-asset family supply 313700595 exceeds finalized NAV circulating supply 304700595.",
+      "evidence": [
+        "logs/rollback-restored-verify-state-0.stderr",
+        "logs/snapshot-export-1020.stderr"
+      ],
+      "limitation": "Full verification attempted on restored validator-0; common-chain failure blocks qualification of the six-node restore."
+    },
+    {
+      "id": "new-block-finality-and-activation-rollback-cycle",
+      "status": "BLOCKED",
+      "reason": "Historical compatibility and baseline full verification fail; no new transaction or activation cycle was attempted."
+    }
+  ],
+  "evidence_boundary": {
+    "database_copy": "Read-only live file acquisition; physical database hashes changed during copying. No atomic physical-copy claim.",
+    "local_relocation": "Original pointer MAC verified, only local database path changed and MAC recomputed inside disposable copies.",
+    "excluded_from_git": [
+      "private keys",
+      "node databases",
+      "raw RPC captures",
+      "executables"
+    ],
+    "whitepaper_sha256_unchanged": "28f004a6a0e08a87561e62d14ace6a87659718c4845feba21eb468b3fe314202"
+  }
+}

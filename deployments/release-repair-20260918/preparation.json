@@ -1,0 +1,13 @@
+{
+  "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
+  "completed_at": "2026-09-18T10:44:17.573694+00:00",
+  "scope": "new disposable disk-backed clones; authenticated local database-pointer relocation only",
+  "groups": {
+    "rollback": "/home/postfiatchad/.cache/combined-release-20260915/raw",
+    "working": "/home/postfiatchad/.cache/combined-release-20260915/raw",
+    "post-v2": "/home/postfiatchad/.cache/release-repair-20260916/working"
+  },
+  "old_binary_sha256": "57b0f4d1d42d66878d7dbb8c33919c7fa0f87c6cc1a4b9cc1a85d75b634eec83",
+  "topology_sha256": "f222915addedcc6322cb935816727b3b597807880e57df24a3e6a2d34f69e8eb",
+  "live_mutations": false
+}

@@ -1,0 +1,16 @@
+{
+  "arc_ingress": {
+    "elf_sha256": "7660fcc58677cfec433a5f2337b9fe46fa96374a1e3c4bd6fba625b982d881bc",
+    "program_vkey": "0x0050a8b0daed2fa75f44d4102b42204c34668a03d311cb727cc6ca3f8df5cf16"
+  },
+  "egress": {
+    "elf_sha256": "0ea4dbabc8a36b44824c861cf2e1ae90454df2a6e4bb8a357f9d3a8672696d83",
+    "program_vkey": "0x00140f09ca6f1b917e3999a806df5ef4ac4468bd65b85e8580cbc16f832dfe47"
+  },
+  "ingress": {
+    "elf_sha256": "7c581aa42a196bd5df5a1efc2c4569663744d9b597cc1cd2253e839f9ba2f921",
+    "program_vkey": "0x0033bd140207b97fb2442eb279cc2ce55714be6fbcd66beb325fe7c3786d4dfc"
+  },
+  "schema": "postfiat.pfusdc.tier4_program_info.v1",
+  "sp1_sdk_version": "6.3.1"
+}

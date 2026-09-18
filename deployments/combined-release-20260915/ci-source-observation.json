@@ -1,0 +1,73 @@
+{
+  "observed_at_utc": "2026-09-16T00:15:46.265Z",
+  "source_head": "dd276d70e0974fa17e7dfa3ad0b4e6cbd00349f3",
+  "scope": "CI at the source-and-comment revision; final documentation/evidence commit will trigger its own checks",
+  "checks": [
+    {
+      "name": "reproduce-current-v2-identities",
+      "status": "COMPLETED",
+      "conclusion": "FAILURE",
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35036506542/job/104606698445"
+    },
+    {
+      "name": "build",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35036506471/job/104606697755"
+    },
+    {
+      "name": "public-tree-hygiene",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35036506490/job/104606697814"
+    },
+    {
+      "name": "check",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35036506546/job/104606698131"
+    },
+    {
+      "name": "test",
+      "status": "IN_PROGRESS",
+      "conclusion": "",
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35036506546/job/104606698294"
+    },
+    {
+      "name": "rust-supply-chain",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35036506490/job/104606698110"
+    },
+    {
+      "name": "python-sdk",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35036506490/job/104606697950"
+    },
+    {
+      "name": "wallet-and-proxy",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35036506490/job/104606697947"
+    },
+    {
+      "name": "open-reserve-proof-kit",
+      "status": "IN_PROGRESS",
+      "conclusion": "",
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35036506490/job/104606697933"
+    },
+    {
+      "name": "evm-contracts",
+      "status": "COMPLETED",
+      "conclusion": "SUCCESS",
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35036506490/job/104606697930"
+    },
+    {
+      "name": "official-mainnet-fork",
+      "status": "COMPLETED",
+      "conclusion": "SKIPPED",
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35036506490/job/104606698992"
+    }
+  ]
+}

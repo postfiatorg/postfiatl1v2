@@ -1,0 +1,45 @@
+   Compiling byteorder v1.5.0
+   Compiling bitvec v1.0.1
+   Compiling subtle v2.6.1
+   Compiling constant_time_eq v0.4.2
+   Compiling blake3 v1.8.5
+   Compiling miniz_oxide v0.8.9
+   Compiling crunchy v0.2.4
+   Compiling ff v0.13.1
+   Compiling p3-bn254-fr v0.4.3-succinct
+   Compiling backtrace v0.3.76
+   Compiling slop-bn254 v6.3.1
+   Compiling sha3 v0.10.9
+   Compiling slop-merkle-tree v6.3.1
+   Compiling sp1-primitives v6.3.1
+   Compiling slop-basefold v6.3.1
+   Compiling slop-basefold-prover v6.3.1
+   Compiling fips204 v0.4.6 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/third_party/fips204)
+   Compiling slop-stacked v6.3.1
+   Compiling slop-jagged v6.3.1
+   Compiling slop-whir v6.3.1
+   Compiling postfiat-types v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/types)
+   Compiling sp1-hypercube v6.3.1
+   Compiling sp1-recursion-executor v6.3.1
+   Compiling substrate-bn-succinct-rs v0.6.0
+   Compiling sp1-recursion-machine v6.3.1
+   Compiling postfiat-crypto-provider v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/crypto_provider)
+   Compiling postfiat-nav-reserve-protocol v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/nav_reserve_protocol)
+   Compiling postfiat-bridge v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/bridge)
+   Compiling sp1-verifier v6.3.1
+   Compiling postfiat-execution v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/execution)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 30.59s
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/postfiat_execution-e5eb43e35eca6515)
+
+running 8 tests
+test owned_transfer_recovery_tests::v3_certificate_digest_is_vote_order_independent_and_duplicate_fail_closed ... ok
+test owned_transfer_recovery_tests::conflicting_recovery_certificates_halt_without_mutation ... ok
+test owned_transfer_recovery_tests::v3_certificate_applies_only_inside_window_with_exact_derived_lock ... ok
+test owned_transfer_recovery_tests::abandoned_lock_cancels_at_boundary_and_delayed_certificate_is_fenced ... ok
+test owned_transfer_recovery_tests::v3_tampered_lock_duplicate_vote_and_foreign_epoch_do_not_mutate ... ok
+test owned_transfer_recovery_tests::v3_direct_apply_is_identical_across_honest_validator_tip_heights ... ok
+test owned_transfer_recovery_tests::complete_certificate_reveal_confirms_after_expiry_and_conserves ... ok
+test owned_transfer_recovery_tests::governed_committee_rotation_preserves_old_recovery_and_fences_overlap ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 194 filtered out; finished in 0.59s
+

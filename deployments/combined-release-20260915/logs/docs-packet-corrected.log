@@ -1,0 +1,214 @@
+
+[31m │  ⚠  Warning from the Material for MkDocs team[0m
+[31m │[0m
+[31m │[0m  MkDocs 2.0, the underlying framework of Material for MkDocs,
+[31m │[0m  will introduce backward-incompatible changes, including:
+[31m │[0m
+[31m │  × [0mAll plugins will stop working – the plugin system has been removed
+[31m │  × [0mAll theme overrides will break – the theming system has been rewritten
+[31m │  × [0mNo migration path exists – existing projects cannot be upgraded
+[31m │  × [0mClosed contribution model – community members can't report bugs
+[31m │  × [0mCurrently unlicensed – unsuitable for production use
+[31m │[0m
+[31m │[0m  Our full analysis:
+[31m │[0m
+[31m │[0m  [4mhttps://squidfunk.github.io/mkdocs-material/blog/2026/02/18/mkdocs-2.0/[0m
+[0m
+INFO    -  Cleaning site directory
+INFO    -  Building documentation to directory: /home/postfiatchad/repos/postfiatl1v2-release-20260915/site
+INFO    -  The following pages exist in the docs directory, but are not included in the "nav" configuration:
+  - pfusdc-issuance-paths-inventory.md
+  - vault-bridge-deposit-evidence-spec.md
+  - business/arc-audit-scope-20260902.md
+  - business/arc-grant-claim-classification-20260902.md
+  - business/pfusdc-arc-grant-proposal-20260828-v3.md
+  - business/pfusdc-on-arc-20260902.md
+  - deferred-plans/README.md
+  - deferred-plans/A666-PRIVATE-SWAP-PRODUCTION-HARDENING-SPEC-20260730.md
+  - deferred-plans/NAVCOIN-RESERVE-REDEMPTION-SYSTEM-SPEC-20260730.md
+  - deferred-plans/PNOK-TIER4-PRIVATE-FIX-SWAP-DEMO-SPEC-20260801.md
+  - deferred-plans/STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md
+  - deferred-plans/asset-orchard-proxy-phase1a-extension-plan.md
+  - deferred-plans/dynamic-unl-proposal-source-milestone.md
+  - deferred-plans/transaction-improvement-process.md
+  - evidence/ARCHIVE-MANIFEST-20260716.md
+  - evidence/RAW-EVIDENCE-POLICY.md
+  - evidence/arc-mvp-20260828/G0-status.md
+  - evidence/arc-mvp-20260828/arc-commit-structure.md
+  - evidence/arc-mvp-20260828/arc-direct-ingress.md
+  - evidence/arc-mvp-20260828/baseline-20260829.md
+  - evidence/arc-mvp-20260828/current-main-integration-20260901.md
+  - evidence/arc-mvp-20260828/deployments.md
+  - evidence/arc-mvp-20260828/egress-vkey.md
+  - evidence/arc-mvp-20260828/ingress-benchmark.md
+  - evidence/arc-mvp-20260828/precompile-gas.md
+  - evidence/arc-mvp-20260828/receipt-conformance.md
+  - evidence/arc-mvp-20260828/transplant-report.md
+  - evidence/arc-mvp-20260828/usdc-conformance.md
+  - governance/ai-governance-validity-review.md
+  - governance/cobalt-activate-or-retire-research-spec.md
+  - governance/cobalt-live-deployment-research-spec.md
+  - governance/cobalt-research-spec.md
+  - governance/deterministic-governance-agent-plan.md
+  - governance/institution-reputation-packets-h200-results-20260903.md
+  - governance/institution-reputation-packets-h200-results-20260904.md
+  - governance/reputation-scoring-h200-results-20260901.md
+  - governance/reputation-scoring-h200-run-plan.md
+  - governance/tasknode-unl-amendment-v2-20260907.md
+  - handoffs/2026-08-28___postfiatchad__corrected_g4_campaign_failure.md
+  - handoffs/2026-08-28___postfiatchad__storage_g4_qualification_checkpoint.md
+  - handoffs/2026-08-28___postfiatchad__storage_g4_structural_vote_path_failure.md
+  - handoffs/2026-08-28___postfiatchad__storage_g4_timeout_and_persistent_remediation.md
+  - handoffs/2026-08-28___postfiatchad__storage_g4_v4_preflight.md
+  - handoffs/2026-08-28___postfiatchad__vote_lock_index_fix.md
+  - handoffs/2026-08-29___postfiatchad__certified_send_bounding_plan_ready.md
+  - handoffs/2026-08-29___postfiatchad__certified_send_tombstone_bounding_complete.md
+  - handoffs/2026-08-29___postfiatchad__final_g4_qualification_failure.md
+  - handoffs/2026-08-30___postfiatchad__devnet_storage_rollout_stopped_at_g6.md
+  - handoffs/2026-09-01___dravlic__h200_reputation_v2_published_v3_in_flight.md
+  - handoffs/2026-09-02___dravlic__identity_replay_paused_for_arc_grant.md
+  - handoffs/2026-09-03___dravlic__identity_packet_replay_complete.md
+  - handoffs/2026-09-04___dravlic__identity_only_profiles_replay.md
+  - handoffs/2026-09-06___codex__rpc_status_cache_fix.md
+  - handoffs/2026-09-07___codex__navcoin_cobalt_machine_handoff.md
+  - handoffs/2026-09-07___codex__safety_closeout.md
+  - handoffs/2026-09-07___dravlic__pr38_merged_arc_deck_unl_proposal.md
+  - navcoins/primary-market-accounting.md
+  - plans/README.md
+  - plans/STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md
+  - plans/combined-devnet-release-20260915.md
+  - plans/pft-flare-deterministic-index-demo-execution-spec.md
+  - plans/active/batched-index-g4-campaign-plan.md
+  - plans/active/certified-send-eager-index-remediation-spec.md
+  - plans/active/certified-send-tombstone-bounding-plan.md
+  - plans/active/corrected-g4-campaign-plan.md
+  - plans/active/deferred-maintenance-g4-campaign-plan.md
+  - plans/active/devnet-storage-rollout-plan.md
+  - plans/active/devnet-storage-single-writer-deployment-plan.md
+  - plans/active/final-g4-qualification-campaign-plan.md
+  - plans/active/fsync-lean-g4-campaign-plan.md
+  - plans/active/hygiene-corrected-g4-campaign-plan.md
+  - plans/active/l1v2-public-testnet-path-milestone.md
+  - plans/active/model-floor-g4-campaign-plan.md
+  - plans/active/remediated-g4-qualification-campaign-plan.md
+  - plans/active/shielded-hyperliquid-cover-implementation-20260905.md
+  - plans/active/shielded-lighter-funding-implementation-20260905.md
+  - plans/active/stall-tolerant-g4-campaign-plan.md
+  - plans/active/sweep-cap-g4-campaign-plan.md
+  - plans/active/vote-lock-index-fix-plan.md
+  - plans/completed/cobalt-live-deployment-and-liveness-milestone.md
+  - policies/ws10-issuer-freeze-and-reserve-concentration-policy.md
+  - postmortems/devnet-registry-continuation-wedge-2026-08-31.md
+  - postmortems/pfusdc-tier4-clock-critical-execution-2026-07-18.md
+  - reports/A666-EGRESS-LANE-REDEPLOY-CLOSEOUT-20260810.md
+  - reports/A666-STAKEHUB-PNL-REPORT-20260805.md
+  - runbooks/A666-ROUND-TRIP-DEFINITION.md
+  - runbooks/NAVCOIN-GENERIC-EXPORT-RETURN-RELAY-20260801.md
+  - runbooks/a666-mainnet-primary-market-deployment.md
+  - runbooks/account-tx-index.md
+  - runbooks/controlled-testnet-operator-launch.md
+  - runbooks/controlled-write-edge-policy.md
+  - runbooks/incident-response.md
+  - runbooks/navcoin-market-ops-cold-start.md
+  - runbooks/pfusdc-backing-headroom.md
+  - runbooks/private-nav-otc-shielded-swap-wan-devnet.md
+  - runbooks/public-rpc-operator-policy.md
+  - runbooks/replicated-state-v2-activation.md
+  - runbooks/safe-validator-rollout.md
+  - runbooks/sdk-wallet-flow.md
+  - runbooks/signed-deployment-manifest.md
+  - runbooks/signed-validator-snapshot-recovery.md
+  - runbooks/validator-doctor.md
+  - runbooks/validator-emergency-key-rotation.md
+  - runbooks/validator-history-retention.md
+  - runbooks/wan-devnet-full-live-end-to-end-run.md
+  - runbooks/wan-devnet-structural-fix.md
+  - security/core-feature-loc-audit-inventory.md
+  - security/mint-settlement-verifier.md
+  - security/nav-infrastructure-repository-map.md
+  - security/orchard-h-action-binding-audit-scope.md
+INFO    -  Doc file 'business/arc-grant-claim-classification-20260902.md' contains a link to 'specs/pfusdc-arc-mvp-testnet-spec-20260828.md' which is excluded from the built site.
+INFO    -  Doc file 'business/arc-grant-claim-classification-20260902.md' contains a link to 'specs/pfusdc-arc-mvp-testnet-spec-20260828.md' which is excluded from the built site.
+INFO    -  Doc file 'business/arc-grant-claim-classification-20260902.md' contains a link to 'specs/arc-registry-proof-source-options-20260902.md' which is excluded from the built site.
+INFO    -  Doc file 'business/arc-grant-claim-classification-20260902.md' contains a link to 'specs/pfusdc-arc-tier4-spec-20260828.md' which is excluded from the built site.
+INFO    -  Doc file 'business/arc-grant-claim-classification-20260902.md' contains a link to 'specs/arc-registry-proof-source-options-20260902.md' which is excluded from the built site.
+INFO    -  Doc file 'business/arc-grant-claim-classification-20260902.md' contains a link to 'specs/pfusdc-arc-current-devnet-zellic-readiness-spec-20260902.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-02___dravlic__identity_replay_paused_for_arc_grant.md' contains a link to 'specs/pfusdc-arc-current-devnet-zellic-readiness-spec-20260902.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-02___dravlic__identity_replay_paused_for_arc_grant.md' contains a link to 'specs/pfusdc-arc-tier4-spec-20260828.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-02___dravlic__identity_replay_paused_for_arc_grant.md' contains a link to 'specs/pfusdc-arc-mvp-testnet-spec-20260828.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-02___dravlic__identity_replay_paused_for_arc_grant.md' contains a link to 'specs/pfusdc-arc-current-devnet-zellic-readiness-spec-20260902.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-02___dravlic__identity_replay_paused_for_arc_grant.md' contains a link to 'specs/pfusdc-arc-current-devnet-zellic-readiness-spec-20260902.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-02___dravlic__identity_replay_paused_for_arc_grant.md' contains a link to 'specs/arc-registry-proof-source-options-20260902.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-02___dravlic__identity_replay_paused_for_arc_grant.md' contains a link to 'specs/arc-registry-proof-source-options-20260902.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-02___dravlic__identity_replay_paused_for_arc_grant.md' contains a link to 'specs/pfusdc-arc-current-devnet-zellic-readiness-spec-20260902.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-02___dravlic__identity_replay_paused_for_arc_grant.md' contains a link to 'specs/arc-registry-proof-source-options-20260902.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-02___dravlic__identity_replay_paused_for_arc_grant.md' contains a link to 'specs/arc-registry-proof-source-options-20260902.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-02___dravlic__identity_replay_paused_for_arc_grant.md' contains a link to 'specs/pfusdc-arc-current-devnet-zellic-readiness-spec-20260902.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-06___codex__rpc_status_cache_fix.md' contains a link to 'review/storage-cobalt-tasknode-handoff-review-20260906.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-07___codex__navcoin_cobalt_machine_handoff.md' contains a link to 'status/NAVCOIN-EXTERNAL-ROUTE-20260907.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-07___codex__navcoin_cobalt_machine_handoff.md' contains an unrecognized relative link '../../deployments/a666-source-route-20260907/', it was left as is.
+INFO    -  Doc file 'handoffs/2026-09-07___codex__navcoin_cobalt_machine_handoff.md' contains a link to 'review/storage-cobalt-tasknode-handoff-review-20260906.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-07___codex__navcoin_cobalt_machine_handoff.md' contains a link to 'status/NAVCOIN-HANDOFF-VALIDATION-20260907.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-07___codex__safety_closeout.md' contains a link to 'review/proof-input-review-20260907.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-07___codex__safety_closeout.md' contains a link to 'review/tasknode-unl-amendment-v2-lock-20260907.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-07___dravlic__ci_repair_unl_hardening_stakehub_review.md' contains a link to 'review/stakehub-pr8-review-20260907.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-07___dravlic__ci_repair_unl_hardening_stakehub_review.md' contains a link to 'status/OPEN-SOURCE-PROOF-PUBLIC-INPUT-INVENTORY-20260716.json' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-07___dravlic__ci_repair_unl_hardening_stakehub_review.md' contains a link to 'governance/tasknode-unl-shadow-run-20260904/round-21-shadow-diff-20260907.json' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-07___dravlic__ci_repair_unl_hardening_stakehub_review.md' contains a link to 'review/stakehub-pr8-review-20260907.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-07___dravlic__ci_repair_unl_hardening_stakehub_review.md' contains a link to 'review/stakehub-pr8-review-20260907.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-07___dravlic__ci_repair_unl_hardening_stakehub_review.md' contains a link to 'review/stakehub-pr8-review-20260907.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-07___dravlic__pr38_merged_arc_deck_unl_proposal.md' contains a link to 'status/NAVCOIN-HANDOFF-VALIDATION-20260907.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-08___dravlic__safety_landed_v2_milestone_complete.md' contains a link to 'review/proof-input-review-20260907.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-09___dravlic__signing_fix_qualification_hold.md' contains a link to 'review/stakehub-pr8-review-20260907.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-10___dravlic__qa_campaign_burn_one_done_burn_two_running.md' contains a link to 'review/defect-inventory-20260910.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-10___dravlic__qa_campaign_burn_one_done_burn_two_running.md' contains a link to 'review/qa-campaign-20260910.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-11___dravlic__ci_green_fleet_check_and_burn_three.md' contains a link to 'review/qa-campaign-20260911.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-11___dravlic__ci_green_fleet_check_and_burn_three.md' contains a link to 'review/defect-inventory-20260910.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-11___dravlic__ci_green_fleet_check_and_burn_three.md' contains a link to 'review/qa-campaign-20260910.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-11___dravlic__ci_green_fleet_check_and_burn_three.md' contains a link to 'review/qa-campaign-20260911-burn3-brief.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-11___dravlic__ci_green_fleet_check_and_burn_three.md' contains a link to 'review/qa-campaign-20260911.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-11___dravlic__ci_green_fleet_check_and_burn_three.md' contains a link to 'review/storage-snapshots-review-20260911.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-11___dravlic__ci_green_fleet_check_and_burn_three.md' contains a link to 'review/execution-review-20260911.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-11___dravlic__ci_green_fleet_check_and_burn_three.md' contains a link to 'review/cobalt-ratification-review-20260911.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-11___dravlic__ci_green_fleet_check_and_burn_three.md' contains a link to 'review/network-mempool-review-20260911.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-11___dravlic__ci_green_fleet_check_and_burn_three.md' contains a link to 'review/qa-campaign-20260911-burn3-brief.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-11___dravlic__ci_green_fleet_check_and_burn_three.md' contains a link to 'review/qa-campaign-20260911-burn3-brief.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-11___dravlic__ci_green_fleet_check_and_burn_three.md' contains a link to 'review/qa-campaign-20260911.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-11___dravlic__ci_green_fleet_check_and_burn_three.md' contains a link to 'review/storage-snapshots-review-20260911.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-11___dravlic__ci_green_fleet_check_and_burn_three.md' contains a link to 'review/execution-review-20260911.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-11___dravlic__ci_green_fleet_check_and_burn_three.md' contains a link to 'review/cobalt-ratification-review-20260911.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-11___dravlic__ci_green_fleet_check_and_burn_three.md' contains a link to 'review/network-mempool-review-20260911.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-14___dravlic__fleet_restart_record_and_burn_three_closed.md' contains a link to 'review/qa-campaign-20260911.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-14___dravlic__fleet_restart_record_and_burn_three_closed.md' contains a link to 'review/operational-clis-review-20260911.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-14___dravlic__fleet_restart_record_and_burn_three_closed.md' contains a link to 'review/defect-inventory-20260910.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-14___dravlic__fleet_restart_record_and_burn_three_closed.md' contains a link to 'review/qa-campaign-20260911.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-14___dravlic__fleet_restart_record_and_burn_three_closed.md' contains a link to 'review/qa-campaign-20260911.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-14___dravlic__fleet_restart_record_and_burn_three_closed.md' contains a link to 'review/qa-campaign-20260911-burn3-brief.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-14___dravlic__fleet_restart_record_and_burn_three_closed.md' contains a link to 'review/qa-campaign-20260911.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-14___dravlic__fleet_restart_record_and_burn_three_closed.md' contains a link to 'review/operational-clis-review-20260911.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-14___dravlic__fleet_restart_record_and_burn_three_closed.md' contains a link to 'review/defect-inventory-20260910.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-15___dravlic__burn_four_closed_and_rpc_health_probe.md' contains a link to 'review/qa-campaign-20260915.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-15___dravlic__burn_four_closed_and_rpc_health_probe.md' contains a link to 'review/defect-inventory-20260910.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-15___dravlic__burn_four_closed_and_rpc_health_probe.md' contains a link to 'review/qa-campaign-20260915-burn4-brief.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-15___dravlic__burn_four_closed_and_rpc_health_probe.md' contains a link to 'review/qa-campaign-20260915.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-15___dravlic__burn_four_closed_and_rpc_health_probe.md' contains a link to 'review/finality-consensus-review-20260915.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-15___dravlic__burn_four_closed_and_rpc_health_probe.md' contains a link to 'review/types-state-commitment-review-20260915.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-15___dravlic__burn_four_closed_and_rpc_health_probe.md' contains a link to 'review/node-serving-review-20260915.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-15___dravlic__burn_four_closed_and_rpc_health_probe.md' contains a link to 'review/shadow-swap-services-review-20260915.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-15___dravlic__burn_four_closed_and_rpc_health_probe.md' contains a link to 'review/node-cli-governance-review-20260915.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-15___dravlic__burn_four_closed_and_rpc_health_probe.md' contains a link to 'review/qa-campaign-20260915.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-15___dravlic__burn_four_closed_and_rpc_health_probe.md' contains a link to 'review/qa-campaign-20260915.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-15___dravlic__burn_four_closed_and_rpc_health_probe.md' contains a link to 'review/qa-campaign-20260915.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-15___dravlic__burn_four_closed_and_rpc_health_probe.md' contains a link to 'review/qa-campaign-20260915-burn4-brief.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-15___dravlic__burn_four_closed_and_rpc_health_probe.md' contains a link to 'review/qa-campaign-20260915.md' which is excluded from the built site.
+INFO    -  Doc file 'handoffs/2026-09-15___dravlic__burn_four_closed_and_rpc_health_probe.md' contains a link to 'review/defect-inventory-20260910.md' which is excluded from the built site.
+INFO    -  Doc file 'plans/STAKEHUB-DECOUPLING-AND-OPEN-RESERVE-PROOF-INFRASTRUCTURE-PLAN-20260801.md' contains a link to 'status/A666-PUBLIC-ADAPTER-READINESS-20260802.json' which is excluded from the built site.
+INFO    -  Doc file 'plans/combined-devnet-release-20260915.md' contains an unrecognized relative link '../../scripts/postfiat-safe-rollout', it was left as is.
+INFO    -  Doc file 'plans/active/shielded-hyperliquid-cover-implementation-20260905.md' contains a link to 'specs/shielded-perp-venue-funding-privacy-hardening-20260905.md' which is excluded from the built site.
+INFO    -  Doc file 'plans/active/shielded-hyperliquid-cover-implementation-20260905.md' contains a link to 'specs/shielded-funding-configurable-denomination-20260905.md' which is excluded from the built site.
+INFO    -  Doc file 'plans/active/shielded-hyperliquid-cover-implementation-20260905.md' contains a link to 'status/shielded-funding-hardening-implementation-20260905/pfeth-replay-fix/README.md' which is excluded from the built site.
+INFO    -  Doc file 'plans/active/shielded-lighter-funding-implementation-20260905.md' contains a link to 'specs/shielded-lighter-funding-hardening-20260905.md' which is excluded from the built site.
+INFO    -  Doc file 'plans/active/shielded-lighter-funding-implementation-20260905.md' contains a link to 'specs/shielded-funding-configurable-denomination-20260905.md' which is excluded from the built site.
+INFO    -  Doc file 'plans/active/shielded-lighter-funding-implementation-20260905.md' contains a link to 'status/shielded-lighter-hardening-20260905/lock.json' which is excluded from the built site.
+INFO    -  Doc file 'plans/completed/tasknode-unl-amendment-v2-milestone.md' contains a link to 'review/tasknode-unl-amendment-v2-lock-20260907.md' which is excluded from the built site.
+INFO    -  Documentation built in 4.37 seconds

@@ -1,0 +1,9 @@
+   Compiling postfiat-node v0.1.0 (/home/postfiatchad/repos/postfiatl1v2-release-20260915/crates/node)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 16.07s
+     Running unittests src/main.rs (/home/postfiatchad/.cache/signing-fix-qualification-20260909/test-target/debug/deps/postfiat_node-8451ae729848bf6f)
+
+running 1 test
+test fastswap_service::tests::persistent_wallet_driver_meets_isolated_warm_latency_gate ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 169 filtered out; finished in 1.88s
+

@@ -1,0 +1,20 @@
+{
+  "schema": "funding-public-snapshot-acquisition-v1",
+  "checkpoint": {
+    "chain_id": "postfiat-wan-devnet-2",
+    "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+    "block_height": 972,
+    "block_tip_hash": "1ecacd536cba2ae2bc98eea11ab5e46293e094318900c19c5aff5de9aace8386ece25b52afbf281cce67415edb149ca5",
+    "state_root": "3debf11e7ba94ee95cb68e8fdad181ec7b50c56a658addf8fcddcee2e86dca1803c96b79c82949805b98bd1ecb144455"
+  },
+  "independent_direct_validator_reads": 6,
+  "rpc_cached_status_height": 971,
+  "rpc_retained_blocks_height": 972,
+  "deployed_runtime_sha256": "5cbd992b54f7b998a155b01ab3693673b7935f3d5636b9cfdc30ea3ae7c52a41",
+  "snapshot_manifest_sha256": "7f3981878f845d5cc02b3af984d243775a712cbf1b86f1fefcbf389e37419551",
+  "public_files": 20,
+  "snapshot_bytes": 215745748,
+  "validator_keys_copied": false,
+  "funds_moved": false,
+  "native_replay_passed": false
+}

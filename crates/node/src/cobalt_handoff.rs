@@ -1462,9 +1462,7 @@ mod tests {
         );
         let result = decompress_cobalt_protocol_transcript(&certificate.protocol_transcript);
         std::fs::remove_dir_all(&fixture.cobalt_root).expect("cleanup");
-        let error = result
-            .err()
-            .expect("expanded data must be bounded before checkpoint cloning");
+        let error = result.expect_err("expanded data must be bounded before checkpoint cloning");
         assert!(error.to_string().contains("expanded transcript"), "{error}");
     }
 

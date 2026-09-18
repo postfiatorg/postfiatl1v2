@@ -1,0 +1,128 @@
+{
+  "scope": "full_history_of_six_existing_disposable_post_v2_clones",
+  "source_commit": "1c435f4fb482ea7830bee5c7018d370a10a34bfd",
+  "binary_sha256": "86f62a5a3e0105f839c8491047a648696e6295cd4f80956a6fb774b7ddbefbe2",
+  "started_at": "2026-09-16T02:39:07.534956+00:00",
+  "driver_pid": 2464633,
+  "status": "passed",
+  "checks": [
+    {
+      "validator": 0,
+      "command": [
+        "/home/postfiatchad/.cache/release-repair-20260916/binaries/candidate-final-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-repair-20260916/working/validator-0"
+      ],
+      "status": "passed",
+      "started_at": "2026-09-16T02:39:07.619562+00:00",
+      "stdout": "/home/postfiatchad/.cache/release-repair-20260916/resumed-check/validator-0.stdout.json",
+      "stderr": "/home/postfiatchad/.cache/release-repair-20260916/resumed-check/validator-0.stderr.log",
+      "elapsed_seconds": 196.1,
+      "exit_code": 0,
+      "verified": true,
+      "block_count": 1021,
+      "tip_hash": "5323a2a5243f7be4a1c47ec5e308361898d1662ef20df0dc8fa4349843ffeba45908f4d8050a9dca334133bf0b68804e",
+      "state_root": "d19264ca4419df8826c7b1746b5042639b0d0dd493a0f34f8902b75811ede397ee1b241d59dacba42e69192a6aecca92"
+    },
+    {
+      "validator": 1,
+      "command": [
+        "/home/postfiatchad/.cache/release-repair-20260916/binaries/candidate-final-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-repair-20260916/working/validator-1"
+      ],
+      "status": "passed",
+      "started_at": "2026-09-16T02:42:23.710538+00:00",
+      "stdout": "/home/postfiatchad/.cache/release-repair-20260916/resumed-check/validator-1.stdout.json",
+      "stderr": "/home/postfiatchad/.cache/release-repair-20260916/resumed-check/validator-1.stderr.log",
+      "elapsed_seconds": 192.1,
+      "exit_code": 0,
+      "verified": true,
+      "block_count": 1021,
+      "tip_hash": "5323a2a5243f7be4a1c47ec5e308361898d1662ef20df0dc8fa4349843ffeba45908f4d8050a9dca334133bf0b68804e",
+      "state_root": "d19264ca4419df8826c7b1746b5042639b0d0dd493a0f34f8902b75811ede397ee1b241d59dacba42e69192a6aecca92"
+    },
+    {
+      "validator": 2,
+      "command": [
+        "/home/postfiatchad/.cache/release-repair-20260916/binaries/candidate-final-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-repair-20260916/working/validator-2"
+      ],
+      "status": "passed",
+      "started_at": "2026-09-16T02:45:35.810911+00:00",
+      "stdout": "/home/postfiatchad/.cache/release-repair-20260916/resumed-check/validator-2.stdout.json",
+      "stderr": "/home/postfiatchad/.cache/release-repair-20260916/resumed-check/validator-2.stderr.log",
+      "elapsed_seconds": 194.1,
+      "exit_code": 0,
+      "verified": true,
+      "block_count": 1021,
+      "tip_hash": "5323a2a5243f7be4a1c47ec5e308361898d1662ef20df0dc8fa4349843ffeba45908f4d8050a9dca334133bf0b68804e",
+      "state_root": "d19264ca4419df8826c7b1746b5042639b0d0dd493a0f34f8902b75811ede397ee1b241d59dacba42e69192a6aecca92"
+    },
+    {
+      "validator": 3,
+      "command": [
+        "/home/postfiatchad/.cache/release-repair-20260916/binaries/candidate-final-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-repair-20260916/working/validator-3"
+      ],
+      "status": "passed",
+      "started_at": "2026-09-16T02:48:49.921566+00:00",
+      "stdout": "/home/postfiatchad/.cache/release-repair-20260916/resumed-check/validator-3.stdout.json",
+      "stderr": "/home/postfiatchad/.cache/release-repair-20260916/resumed-check/validator-3.stderr.log",
+      "elapsed_seconds": 194.1,
+      "exit_code": 0,
+      "verified": true,
+      "block_count": 1021,
+      "tip_hash": "5323a2a5243f7be4a1c47ec5e308361898d1662ef20df0dc8fa4349843ffeba45908f4d8050a9dca334133bf0b68804e",
+      "state_root": "d19264ca4419df8826c7b1746b5042639b0d0dd493a0f34f8902b75811ede397ee1b241d59dacba42e69192a6aecca92"
+    },
+    {
+      "validator": 4,
+      "command": [
+        "/home/postfiatchad/.cache/release-repair-20260916/binaries/candidate-final-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-repair-20260916/working/validator-4"
+      ],
+      "status": "passed",
+      "started_at": "2026-09-16T02:52:04.030960+00:00",
+      "stdout": "/home/postfiatchad/.cache/release-repair-20260916/resumed-check/validator-4.stdout.json",
+      "stderr": "/home/postfiatchad/.cache/release-repair-20260916/resumed-check/validator-4.stderr.log",
+      "elapsed_seconds": 192.1,
+      "exit_code": 0,
+      "verified": true,
+      "block_count": 1021,
+      "tip_hash": "5323a2a5243f7be4a1c47ec5e308361898d1662ef20df0dc8fa4349843ffeba45908f4d8050a9dca334133bf0b68804e",
+      "state_root": "d19264ca4419df8826c7b1746b5042639b0d0dd493a0f34f8902b75811ede397ee1b241d59dacba42e69192a6aecca92"
+    },
+    {
+      "validator": 5,
+      "command": [
+        "/home/postfiatchad/.cache/release-repair-20260916/binaries/candidate-final-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-repair-20260916/working/validator-5"
+      ],
+      "status": "passed",
+      "started_at": "2026-09-16T02:55:16.137075+00:00",
+      "stdout": "/home/postfiatchad/.cache/release-repair-20260916/resumed-check/validator-5.stdout.json",
+      "stderr": "/home/postfiatchad/.cache/release-repair-20260916/resumed-check/validator-5.stderr.log",
+      "elapsed_seconds": 196.1,
+      "exit_code": 0,
+      "verified": true,
+      "block_count": 1021,
+      "tip_hash": "5323a2a5243f7be4a1c47ec5e308361898d1662ef20df0dc8fa4349843ffeba45908f4d8050a9dca334133bf0b68804e",
+      "state_root": "d19264ca4419df8826c7b1746b5042639b0d0dd493a0f34f8902b75811ede397ee1b241d59dacba42e69192a6aecca92"
+    }
+  ],
+  "live_mutations": false,
+  "workspace_suite": "not_started_by_this_runner",
+  "updated_at": "2026-09-16T02:58:32.240674+00:00",
+  "completed_at": "2026-09-16T02:58:32.240661+00:00"
+}

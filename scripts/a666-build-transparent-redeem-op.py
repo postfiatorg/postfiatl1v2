@@ -23,6 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--nav-amount-atoms", type=int, required=True)
     parser.add_argument("--expires-at-height", type=int, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--settlement-source-asset-id", help="Exact source-series pfUSDC custody; omit for legacy pooled settlement")
     return parser.parse_args()
 
 
@@ -35,6 +36,9 @@ def write_json(path: Path, value: object) -> None:
 
 def main() -> None:
     args = parse_args()
+    source = args.settlement_source_asset_id
+    if source is not None and (len(source) != 96 or any(c not in "0123456789abcdef" for c in source)):
+        raise RuntimeError("settlement source must be a canonical 48-byte asset id")
     if args.output_dir.exists():
         raise RuntimeError(f"refusing to overwrite {args.output_dir}")
     route = json.loads(args.route_status.read_text())
@@ -75,6 +79,8 @@ def main() -> None:
         "pricing_reserve_packet_hash": route["pricing_reserve_packet_hash"],
         "expires_at_height": args.expires_at_height,
     }
+    if source is not None:
+        body["settlement_source_asset_id"] = source
     request = {
         "schema": "postfiat-certified-asset-ops-request-v1",
         "operations": [
@@ -101,6 +107,8 @@ def main() -> None:
         "policy_epoch": route["policy_epoch"],
         "policy_hash": route["policy_hash"],
     }
+    if source is not None:
+        manifest["settlement_source_asset_id"] = source
     write_json(args.output_dir / "primary-redeem-manifest.json", manifest)
     print(json.dumps(manifest, indent=2, sort_keys=True))
 

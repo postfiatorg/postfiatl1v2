@@ -83,10 +83,7 @@ fn rpc_serve_inner(
     let mempool_mutation_lock = Arc::new(Mutex::new(()));
     let finality_submit_lock = Arc::new(Mutex::new(()));
     let health_cache = Arc::new(Mutex::new(RpcServeHealthCache {
-        status: Some((
-            rpc_serve_health_stamp(&options.data_dir, true)?,
-            local_status.clone(),
-        )),
+        status: Some(local_status.clone()),
         mempool: Some((
             rpc_serve_health_stamp(&options.data_dir, false)?,
             initial_mempool,

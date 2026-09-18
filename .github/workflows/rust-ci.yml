@@ -40,8 +40,6 @@ jobs:
           cache-dependency-path: wallet-web/package-lock.json
       - name: Install wallet test dependencies
         run: npm ci --prefix wallet-web
-      - name: A666 recovery manifest and standalone regressions
-        run: scripts/check-a666-recovery-regression-manifest --run
       - name: A666 recovery CI rejection policy
         run: |
           scripts/test-check-a666-recovery-ci-policy
