@@ -1,5 +1,5 @@
 {
-  "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
+  "source_commit": "03e422a722eba5bc37e9b3ea71ecae81c02d6f45",
   "stages": [
     {
       "name": "format",
@@ -10,16 +10,16 @@
         "--",
         "--check"
       ],
-      "cwd": "/tmp/qualify-20260918",
-      "started_at": "2026-09-18T10:55:54.813634+00:00",
+      "cwd": "/tmp/qualify-fix-20260918",
+      "started_at": "2026-09-18T12:39:26.044930+00:00",
       "status": "PASS",
-      "stdout": "logs/format.stdout",
-      "stderr": "logs/format.stderr",
+      "stdout": "logs/fix-format.stdout",
+      "stderr": "logs/fix-format.stderr",
       "environment_overrides": {
         "CARGO_BUILD_JOBS": "2",
         "CARGO_INCREMENTAL": "0",
         "CARGO_TERM_COLOR": "never",
-        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260918/tmp",
+        "TMPDIR": "/home/postfiatchad/.cache/qualify-fix-20260918/tmp",
         "RUST_TEST_THREADS": "2",
         "RAYON_NUM_THREADS": "2",
         "OMP_NUM_THREADS": "2",
@@ -27,12 +27,13 @@
         "PYTHONDONTWRITEBYTECODE": "1"
       },
       "address_space_limit_bytes": 21474836480,
-      "minimum_available_memory_bytes": 4294967296,
-      "pid": 2955264,
+      "pid": 3003686,
       "exit_code": 0,
-      "completed_at": "2026-09-18T10:55:56.818468+00:00",
+      "completed_at": "2026-09-18T12:39:28.049159+00:00",
       "elapsed_seconds": 2.0,
-      "minimum_available_memory_observed_bytes": 25453416448
+      "minimum_available_memory_observed_bytes": 25384357888,
+      "source_commit": "03e422a722eba5bc37e9b3ea71ecae81c02d6f45",
+      "source_scope": "tested before commit with exactly the committed test-code delta"
     },
     {
       "name": "proof-input-inventory",
@@ -61,7 +62,8 @@
       "exit_code": 0,
       "completed_at": "2026-09-18T10:55:57.826846+00:00",
       "elapsed_seconds": 1.0,
-      "minimum_available_memory_observed_bytes": 25468108800
+      "minimum_available_memory_observed_bytes": 25468108800,
+      "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667"
     },
     {
       "name": "workspace-check",
@@ -94,7 +96,8 @@
       "exit_code": 0,
       "completed_at": "2026-09-18T10:57:05.860087+00:00",
       "elapsed_seconds": 68.0,
-      "minimum_available_memory_observed_bytes": 23681368064
+      "minimum_available_memory_observed_bytes": 23681368064,
+      "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667"
     },
     {
       "name": "fastpay-types",
@@ -136,7 +139,8 @@
       "completed_at": "2026-09-18T10:58:11.893764+00:00",
       "elapsed_seconds": 66.0,
       "minimum_available_memory_observed_bytes": 23561617408,
-      "tests_passed": 9
+      "tests_passed": 9,
+      "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667"
     },
     {
       "name": "fastpay-execution",
@@ -178,7 +182,8 @@
       "completed_at": "2026-09-18T11:00:00.947289+00:00",
       "elapsed_seconds": 109.1,
       "minimum_available_memory_observed_bytes": 23593218048,
-      "tests_passed": 11
+      "tests_passed": 11,
+      "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667"
     },
     {
       "name": "node-fastpay",
@@ -220,7 +225,8 @@
       "completed_at": "2026-09-18T11:05:01.093535+00:00",
       "elapsed_seconds": 300.1,
       "minimum_available_memory_observed_bytes": 21530279936,
-      "reason": "five-minute local budget expired; no passing result claimed"
+      "reason": "five-minute local budget expired; no passing result claimed",
+      "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667"
     },
     {
       "name": "live-replay-supply",
@@ -262,7 +268,8 @@
       "completed_at": "2026-09-18T11:08:55.196598+00:00",
       "elapsed_seconds": 234.1,
       "minimum_available_memory_observed_bytes": 20865593344,
-      "tests_passed": 1
+      "tests_passed": 1,
+      "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667"
     },
     {
       "name": "warm-latency",
@@ -308,8 +315,93 @@
       "completed_at": "2026-09-18T11:13:55.361336+00:00",
       "elapsed_seconds": 300.2,
       "minimum_available_memory_observed_bytes": 21576613888,
-      "reason": "five-minute local budget expired; no passing result claimed"
+      "reason": "five-minute local budget expired; no passing result claimed",
+      "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667"
     },
+    {
+      "name": "workspace-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--locked",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "cwd": "/tmp/qualify-fix-20260918",
+      "started_at": "2026-09-18T12:31:41.718469+00:00",
+      "status": "PASS",
+      "stdout": "logs/fix-workspace-clippy.stdout",
+      "stderr": "logs/fix-workspace-clippy.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/qualify-fix-20260918/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "CARGO_TARGET_DIR": "/home/postfiatchad/.cache/release-repair-20260918/test-target"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "pid": 2999800,
+      "exit_code": 0,
+      "completed_at": "2026-09-18T12:32:21.740591+00:00",
+      "elapsed_seconds": 40.0,
+      "minimum_available_memory_observed_bytes": 22342049792,
+      "source_commit": "03e422a722eba5bc37e9b3ea71ecae81c02d6f45",
+      "source_scope": "tested before commit with exactly the committed test-code delta"
+    },
+    {
+      "name": "fix-cobalt-handoff-tests",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "postfiat-node",
+        "--lib",
+        "--locked",
+        "cobalt_handoff::tests"
+      ],
+      "cwd": "/tmp/qualify-fix-20260918",
+      "started_at": "2026-09-18T12:32:21.793998+00:00",
+      "status": "PASS",
+      "stdout": "logs/fix-cobalt-handoff-tests.stdout",
+      "stderr": "logs/fix-cobalt-handoff-tests.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/qualify-fix-20260918/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "CARGO_TARGET_DIR": "/home/postfiatchad/.cache/release-repair-20260918/test-target",
+        "CARGO_PROFILE_TEST_OPT_LEVEL": "2",
+        "CARGO_PROFILE_TEST_DEBUG_ASSERTIONS": "true",
+        "CARGO_PROFILE_TEST_OVERFLOW_CHECKS": "true"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "pid": 3000259,
+      "exit_code": 0,
+      "completed_at": "2026-09-18T12:39:26.001203+00:00",
+      "elapsed_seconds": 424.2,
+      "minimum_available_memory_observed_bytes": 21046161408,
+      "tests_passed": 13,
+      "source_commit": "03e422a722eba5bc37e9b3ea71ecae81c02d6f45",
+      "source_scope": "tested before commit with exactly the committed test-code delta"
+    }
+  ],
+  "workspace_tests": "LEFT_TO_CI: full workspace test suite was not run locally",
+  "updated_at": "2026-09-18T12:53:38.261874+00:00",
+  "prior_source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
+  "superseded_stages": [
     {
       "name": "workspace-clippy",
       "command": [
@@ -324,7 +416,7 @@
       ],
       "cwd": "/tmp/qualify-20260918",
       "started_at": "2026-09-18T11:13:55.362566+00:00",
-      "status": "FAIL",
+      "status": "SUPERSEDED",
       "stdout": "logs/workspace-clippy.stdout",
       "stderr": "logs/workspace-clippy.stderr",
       "environment_overrides": {
@@ -345,9 +437,44 @@
       "exit_code": 101,
       "completed_at": "2026-09-18T11:14:55.390447+00:00",
       "elapsed_seconds": 60.0,
-      "minimum_available_memory_observed_bytes": 22241439744
+      "minimum_available_memory_observed_bytes": 22241439744,
+      "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
+      "status_at_supersession": "FAIL"
+    },
+    {
+      "name": "format",
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "cwd": "/tmp/qualify-20260918",
+      "started_at": "2026-09-18T10:55:54.813634+00:00",
+      "status": "SUPERSEDED",
+      "stdout": "logs/format.stdout",
+      "stderr": "logs/format.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260918/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2955264,
+      "exit_code": 0,
+      "completed_at": "2026-09-18T10:55:56.818468+00:00",
+      "elapsed_seconds": 2.0,
+      "minimum_available_memory_observed_bytes": 25453416448,
+      "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
+      "status_at_supersession": "PASS"
     }
-  ],
-  "workspace_tests": "LEFT_TO_CI: full workspace test suite was not run locally",
-  "updated_at": "2026-09-18T11:14:55.391370+00:00"
+  ]
 }

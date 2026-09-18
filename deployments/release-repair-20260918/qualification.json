@@ -1,20 +1,20 @@
 {
   "schema": "postfiat.release-repair-qualification.v1",
-  "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
-  "source_tree": "02ee2f55874daa3864f985fa83b110b6af87ab84",
+  "source_commit": "03e422a722eba5bc37e9b3ea71ecae81c02d6f45",
+  "source_tree": "d2e634cb5aa5215fc192dae40b35fd795d61b0af",
   "started_at": "2026-09-18T10:40:05+00:00",
-  "updated_at": "2026-09-18T12:20:48.117984+00:00",
+  "updated_at": "2026-09-18T12:55:12.596689+00:00",
   "timebox_minutes": 110,
   "checkpoint_minutes": 80,
   "scope": "combined release tip with main and P1 repairs; disposable local copies only",
   "live_mutations": false,
   "task_node_actions": false,
-  "source_modified": false,
-  "result": "FAIL",
-  "node_reproducibility": "FAIL",
+  "source_modified": true,
+  "result": "PASS",
+  "node_reproducibility": "PASS",
   "candidate_binary_sha256": [
-    "0ea47d5aa6f0ba558cbd341347e34097114fe8942cbfca34c161690b423608f0",
-    "da51edea2b1423f9002290a5ab531e9659f4be5a9e62fbefaab70949ac28cb55"
+    "051ad12ce22c33f2370388259d754a9c1016a8edc1b52db7d2852fe78f6fbc7d",
+    "051ad12ce22c33f2370388259d754a9c1016a8edc1b52db7d2852fe78f6fbc7d"
   ],
   "history": [
     {
@@ -65,7 +65,8 @@
     "node-fastpay": "DEFERRED_TO_CI",
     "live-replay-supply": "PASS",
     "warm-latency": "DEFERRED_TO_CI",
-    "workspace-clippy": "FAIL"
+    "workspace-clippy": "PASS",
+    "cobalt-handoff-tests": "PASS"
   },
   "publication_gates": {
     "strict-docs": "PASS",
@@ -82,20 +83,7 @@
     "stop_if_available_memory_below_bytes": 4294967296,
     "temporary_directory": "/home/postfiatchad/.cache/release-repair-20260918/tmp"
   },
-  "failures": [
-    {
-      "check": "node-reproducibility",
-      "status": "FAIL",
-      "log": "logs/node-reproducibility.stdout",
-      "stderr": "logs/node-reproducibility.stderr"
-    },
-    {
-      "check": "workspace-clippy",
-      "status": "FAIL",
-      "log": "logs/workspace-clippy.stdout",
-      "stderr": "logs/workspace-clippy.stderr"
-    }
-  ],
+  "failures": [],
   "elapsed_minutes": 100.72,
   "checkpoint_commit": "10b7b2030838adc4cec3dfefdec5a96cf3a2eeab",
   "checkpoint_push_completed_at": "2026-09-18T12:00:18.654554+00:00",
@@ -105,5 +93,40 @@
     "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35335763469",
     "observed_at": "2026-09-18T12:15:44.754114+00:00",
     "local_execution": false
+  },
+  "superseded_failures": [
+    {
+      "check": "node-reproducibility",
+      "status": "SUPERSEDED",
+      "log": "logs/node-reproducibility.stdout",
+      "stderr": "logs/node-reproducibility.stderr",
+      "original_status": "FAIL"
+    },
+    {
+      "check": "workspace-clippy",
+      "status": "SUPERSEDED",
+      "log": "logs/workspace-clippy.stdout",
+      "stderr": "logs/workspace-clippy.stderr",
+      "original_status": "FAIL"
+    }
+  ],
+  "source_change_scope": "test-only expect_err replacement; no production Rust source change",
+  "result_scope": "the two targeted local failures are closed; prior operational evidence is retained at its earlier source",
+  "history_source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
+  "history_candidate_binary_sha256": "0ea47d5aa6f0ba558cbd341347e34097114fe8942cbfca34c161690b423608f0",
+  "governed_continuation_source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
+  "rollback_candidate_source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
+  "repair": {
+    "started_at": "2026-09-18T12:27:39+00:00",
+    "timebox_minutes": 60,
+    "source_commit": "03e422a722eba5bc37e9b3ea71ecae81c02d6f45",
+    "diagnosis": "binary-diagnosis.json",
+    "fleet_actions": false,
+    "task_node_actions": false,
+    "temporary_directory": "/home/postfiatchad/.cache/qualify-fix-20260918/tmp",
+    "address_space_limit_bytes": 21474836480,
+    "max_cargo_processes": 1,
+    "build_jobs": 2,
+    "completed_at": "2026-09-18T12:55:12.596699+00:00"
   }
 }

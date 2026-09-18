@@ -1,98 +1,104 @@
 {
-  "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
+  "source_commit": "03e422a722eba5bc37e9b3ea71ecae81c02d6f45",
   "stages": [
     {
       "name": "strict-docs",
       "command": [
         ".venv-docs/bin/mkdocs",
         "build",
-        "--strict"
+        "--strict",
+        "--site-dir",
+        "/home/postfiatchad/.cache/qualify-fix-20260918/docs-site"
       ],
-      "cwd": "/tmp/qualify-20260918",
-      "started_at": "2026-09-18T12:18:58.040626+00:00",
+      "cwd": "/tmp/qualify-fix-20260918",
+      "started_at": "2026-09-18T12:54:49.543440+00:00",
       "status": "PASS",
-      "stdout": "logs/strict-docs.stdout",
-      "stderr": "logs/strict-docs.stderr",
+      "stdout": "logs/fix-strict-docs.stdout",
+      "stderr": "logs/fix-strict-docs.stderr",
       "environment_overrides": {
         "CARGO_BUILD_JOBS": "2",
         "CARGO_INCREMENTAL": "0",
         "CARGO_TERM_COLOR": "never",
-        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260918/tmp",
+        "TMPDIR": "/home/postfiatchad/.cache/qualify-fix-20260918/tmp",
         "RUST_TEST_THREADS": "2",
         "RAYON_NUM_THREADS": "2",
         "OMP_NUM_THREADS": "2",
         "MALLOC_ARENA_MAX": "2",
         "PYTHONDONTWRITEBYTECODE": "1",
-        "PATH": "/tmp/qualify-20260918/.venv-docs/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.corbanu/packages/standalone/releases/0.1.43-x86_64-unknown-linux-gnu/codex-path:/home/postfiatchad/.corbanu/tmp/arg0/codex-arg05o2euK:/home/postfiatchad/.local/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.cargo/bin:/home/postfiatchad/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
+        "PATH": "/tmp/qualify-fix-20260918/.venv-docs/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.corbanu/packages/standalone/releases/0.1.43-x86_64-unknown-linux-gnu/codex-path:/home/postfiatchad/.corbanu/tmp/arg0/codex-arg05o2euK:/home/postfiatchad/.local/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.cargo/bin:/home/postfiatchad/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
       },
       "address_space_limit_bytes": 21474836480,
-      "minimum_available_memory_bytes": 4294967296,
-      "pid": 2992335,
+      "pid": 3019293,
       "exit_code": 0,
-      "completed_at": "2026-09-18T12:19:03.046607+00:00",
+      "completed_at": "2026-09-18T12:54:54.549909+00:00",
       "elapsed_seconds": 5.0,
-      "minimum_available_memory_observed_bytes": 25428901888
+      "minimum_available_memory_observed_bytes": 25485959168,
+      "source_commit": "03e422a722eba5bc37e9b3ea71ecae81c02d6f45",
+      "scope": "updated qualification packet in worktree; newly added packet files staged"
     },
     {
       "name": "public-doc-links",
       "command": [
         "scripts/public-doc-links"
       ],
-      "cwd": "/tmp/qualify-20260918",
-      "started_at": "2026-09-18T12:19:03.047677+00:00",
+      "cwd": "/tmp/qualify-fix-20260918",
+      "started_at": "2026-09-18T12:54:54.563535+00:00",
       "status": "PASS",
-      "stdout": "logs/public-doc-links.stdout",
-      "stderr": "logs/public-doc-links.stderr",
+      "stdout": "logs/fix-public-doc-links.stdout",
+      "stderr": "logs/fix-public-doc-links.stderr",
       "environment_overrides": {
         "CARGO_BUILD_JOBS": "2",
         "CARGO_INCREMENTAL": "0",
         "CARGO_TERM_COLOR": "never",
-        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260918/tmp",
+        "TMPDIR": "/home/postfiatchad/.cache/qualify-fix-20260918/tmp",
         "RUST_TEST_THREADS": "2",
         "RAYON_NUM_THREADS": "2",
         "OMP_NUM_THREADS": "2",
         "MALLOC_ARENA_MAX": "2",
         "PYTHONDONTWRITEBYTECODE": "1",
-        "PATH": "/tmp/qualify-20260918/.venv-docs/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.corbanu/packages/standalone/releases/0.1.43-x86_64-unknown-linux-gnu/codex-path:/home/postfiatchad/.corbanu/tmp/arg0/codex-arg05o2euK:/home/postfiatchad/.local/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.cargo/bin:/home/postfiatchad/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
+        "PATH": "/tmp/qualify-fix-20260918/.venv-docs/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.corbanu/packages/standalone/releases/0.1.43-x86_64-unknown-linux-gnu/codex-path:/home/postfiatchad/.corbanu/tmp/arg0/codex-arg05o2euK:/home/postfiatchad/.local/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.cargo/bin:/home/postfiatchad/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
       },
       "address_space_limit_bytes": 21474836480,
-      "minimum_available_memory_bytes": 4294967296,
-      "pid": 2992438,
+      "pid": 3019313,
       "exit_code": 0,
-      "completed_at": "2026-09-18T12:19:08.054779+00:00",
+      "completed_at": "2026-09-18T12:54:59.570611+00:00",
       "elapsed_seconds": 5.0,
-      "minimum_available_memory_observed_bytes": 25393491968
+      "minimum_available_memory_observed_bytes": 25509908480,
+      "source_commit": "03e422a722eba5bc37e9b3ea71ecae81c02d6f45",
+      "scope": "updated qualification packet in worktree; newly added packet files staged"
     },
     {
       "name": "public-secret-scan",
       "command": [
         "scripts/public-secret-scan"
       ],
-      "cwd": "/tmp/qualify-20260918",
-      "started_at": "2026-09-18T12:19:08.055812+00:00",
+      "cwd": "/tmp/qualify-fix-20260918",
+      "started_at": "2026-09-18T12:54:59.584002+00:00",
       "status": "PASS",
-      "stdout": "logs/public-secret-scan.stdout",
-      "stderr": "logs/public-secret-scan.stderr",
+      "stdout": "logs/fix-public-secret-scan.stdout",
+      "stderr": "logs/fix-public-secret-scan.stderr",
       "environment_overrides": {
         "CARGO_BUILD_JOBS": "2",
         "CARGO_INCREMENTAL": "0",
         "CARGO_TERM_COLOR": "never",
-        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260918/tmp",
+        "TMPDIR": "/home/postfiatchad/.cache/qualify-fix-20260918/tmp",
         "RUST_TEST_THREADS": "2",
         "RAYON_NUM_THREADS": "2",
         "OMP_NUM_THREADS": "2",
         "MALLOC_ARENA_MAX": "2",
         "PYTHONDONTWRITEBYTECODE": "1",
-        "PATH": "/tmp/qualify-20260918/.venv-docs/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.corbanu/packages/standalone/releases/0.1.43-x86_64-unknown-linux-gnu/codex-path:/home/postfiatchad/.corbanu/tmp/arg0/codex-arg05o2euK:/home/postfiatchad/.local/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.cargo/bin:/home/postfiatchad/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
+        "PATH": "/tmp/qualify-fix-20260918/.venv-docs/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.corbanu/packages/standalone/releases/0.1.43-x86_64-unknown-linux-gnu/codex-path:/home/postfiatchad/.corbanu/tmp/arg0/codex-arg05o2euK:/home/postfiatchad/.local/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.cargo/bin:/home/postfiatchad/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
       },
       "address_space_limit_bytes": 21474836480,
-      "minimum_available_memory_bytes": 4294967296,
-      "pid": 2992439,
+      "pid": 3019319,
       "exit_code": 0,
-      "completed_at": "2026-09-18T12:19:21.065573+00:00",
+      "completed_at": "2026-09-18T12:55:12.594745+00:00",
       "elapsed_seconds": 13.0,
-      "minimum_available_memory_observed_bytes": 25388773376
+      "minimum_available_memory_observed_bytes": 25494147072,
+      "source_commit": "03e422a722eba5bc37e9b3ea71ecae81c02d6f45",
+      "scope": "updated qualification packet in worktree; newly added packet files staged"
     }
   ],
-  "updated_at": "2026-09-18T12:19:21.066575+00:00"
+  "updated_at": "2026-09-18T12:55:12.596207+00:00",
+  "prior_gate_source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667"
 }
