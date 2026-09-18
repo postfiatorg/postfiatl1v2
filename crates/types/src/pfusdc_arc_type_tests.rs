@@ -31,7 +31,8 @@ fn arc_route_amendment(profile: &VaultBridgeRouteProfileV1) -> GovernanceAmendme
         proposer: "operator".to_string(),
         validators: vec!["validator-0".to_string()],
         quorum: 1,
-        kind: vault_bridge_route_amendment_kind(profile).expect("route amendment kind"),
+        kind: vault_bridge_arc_route_amendment_kind_v2(profile, &corrected_arc_bootstrap())
+            .expect("bootstrap-bound route amendment kind"),
         value: profile.route_epoch,
         activation_height: profile.activation_height,
         veto_until_height: 0,
@@ -109,7 +110,7 @@ fn arc_route_activation_binds_profile_bootstrap_and_runtime_code() {
     let profile = corrected_arc_profile();
     let bootstrap = corrected_arc_bootstrap();
     let activation = VaultBridgeRouteProfileActivationV1 {
-        schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
+        schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V2.to_string(),
         amendment: arc_route_amendment(&profile),
         profile: profile.clone(),
         tier4_finality_bootstrap: None,
@@ -132,4 +133,66 @@ fn arc_route_activation_binds_profile_bootstrap_and_runtime_code() {
         .expect("bootstrap")
         .route_binding = "00".repeat(32);
     assert!(wrong_route.validate().is_err());
+}
+
+#[test]
+fn arc_route_activation_rejects_each_unsigned_bootstrap_trust_change() {
+    let profile = corrected_arc_profile();
+    let activation = VaultBridgeRouteProfileActivationV1 {
+        schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V2.to_string(),
+        amendment: arc_route_amendment(&profile),
+        profile,
+        tier4_finality_bootstrap: None,
+        arc_finality_bootstrap: Some(corrected_arc_bootstrap()),
+    };
+    activation.validate().expect("authorized bootstrap");
+    for field in ["validator_set_commitment", "latest_block_hash", "latest_block_height"] {
+        let mut changed = activation.clone();
+        let state = changed.arc_finality_bootstrap.as_mut().unwrap();
+        match field {
+            "validator_set_commitment" => state.validator_set_commitment = "ab".repeat(32),
+            "latest_block_hash" => state.latest_block_hash = "cd".repeat(32),
+            _ => state.latest_block_height += 1,
+        }
+        state.validate().expect("changed trust state is structurally valid");
+        assert_eq!(activation.profile, changed.profile);
+        assert_eq!(activation.amendment, changed.amendment);
+        assert!(changed.validate().is_err(), "{field}");
+        assert!(changed.validate_for_replay().is_err(), "v2 replay: {field}");
+        changed.amendment.kind = vault_bridge_arc_route_amendment_kind_v2(
+            &changed.profile, changed.arc_finality_bootstrap.as_ref().unwrap(),
+        ).unwrap();
+        changed.validate().expect("new trust state needs a new signed amendment kind");
+    }
+
+    let record = VaultBridgeRouteProfileRecordV1::new(&activation, activation.profile.activation_height)
+        .expect("v2 record");
+    assert_eq!(record.amendment_kind().unwrap(), activation.amendment.kind);
+    let mut governance = GovernanceState::new(1);
+    governance.amendments.push(activation.amendment.clone());
+    governance.vault_bridge_route_profiles.push(record);
+    governance.authorized_vault_bridge_route_profile(
+        &activation.profile.asset_id, &activation.profile.profile_hash().unwrap(),
+    ).expect("new route stays resolvable after installation");
+}
+
+#[test]
+fn arc_route_v1_authorization_is_replay_only_and_keeps_historical_record_bytes() {
+    let profile = corrected_arc_profile();
+    let mut amendment = arc_route_amendment(&profile);
+    amendment.kind = vault_bridge_route_amendment_kind(&profile).unwrap();
+    let activation = VaultBridgeRouteProfileActivationV1 {
+        schema: VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
+        amendment,
+        profile,
+        tier4_finality_bootstrap: None,
+        arc_finality_bootstrap: Some(corrected_arc_bootstrap()),
+    };
+    assert!(activation.validate().is_err());
+    activation.validate_for_replay().expect("historical v1 validation");
+    let record = VaultBridgeRouteProfileRecordV1::new_for_replay(
+        &activation, activation.profile.activation_height,
+    ).unwrap();
+    assert_eq!(record.amendment_kind().unwrap(), activation.amendment.kind);
+    assert!(serde_json::to_value(&record).unwrap().get("arc_bootstrap_hash").is_none());
 }

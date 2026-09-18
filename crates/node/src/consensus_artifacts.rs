@@ -2437,7 +2437,7 @@ pub(super) fn verify_archived_governance_action_batch_id(
     }
     for activation in &batch.vault_bridge_route_profile_activations {
         activation
-            .validate()
+            .validate_for_replay()
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
         verify_governance_amendment_evidence(genesis, &activation.amendment)?;
     }
@@ -3069,6 +3069,12 @@ pub(super) fn verify_live_signed_governance_batch(
     }
     for activation in &batch.vault_bridge_route_profile_activations {
         let amendment = &activation.amendment;
+        // This signature verifier is also used by archive replay. V1 live
+        // admission is rejected by verify_governance_action_batch_id; V2 must
+        // bind the bootstrap here even when called independently.
+        activation
+            .validate_for_replay()
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
         if amendment.validators != validators {
             return Err(io::Error::new(
                 io::ErrorKind::PermissionDenied,

@@ -978,9 +978,28 @@ pub(super) fn archived_wan_devnet2_orchard_aware_bridge_claim_identity_allowed(
 
 pub(super) fn execute_governance_batch(
     governance: &mut GovernanceState,
+    ledger: Option<&mut LedgerState>,
+    batch: &GovernanceActionBatch,
+    block_height: u64,
+) -> Vec<Receipt> {
+    execute_governance_batch_with_replay(governance, ledger, batch, block_height, false)
+}
+
+pub(super) fn execute_archived_governance_batch(
+    governance: &mut GovernanceState,
+    ledger: Option<&mut LedgerState>,
+    batch: &GovernanceActionBatch,
+    block_height: u64,
+) -> Vec<Receipt> {
+    execute_governance_batch_with_replay(governance, ledger, batch, block_height, true)
+}
+
+fn execute_governance_batch_with_replay(
+    governance: &mut GovernanceState,
     mut ledger: Option<&mut LedgerState>,
     batch: &GovernanceActionBatch,
     block_height: u64,
+    historical_replay: bool,
 ) -> Vec<Receipt> {
     let mut receipts = Vec::with_capacity(
         batch.amendments.len()
@@ -1388,7 +1407,11 @@ pub(super) fn execute_governance_batch(
             });
         if let Some(existing_profile) = existing_profile {
             let updated = (|| -> Result<(), String> {
-                activation.validate()?;
+                if historical_replay {
+                    activation.validate_for_replay()?;
+                } else {
+                    activation.validate()?;
+                }
                 if existing_profile.profile != activation.profile {
                     return Err(
                         "fast-ingress verifier update must preserve the exact route profile"
@@ -1523,7 +1546,11 @@ pub(super) fn execute_governance_batch(
             continue;
         }
         let validated = (|| -> Result<postfiat_types::VaultBridgeRouteProfileRecordV1, String> {
-            activation.validate()?;
+            if historical_replay {
+                activation.validate_for_replay()?;
+            } else {
+                activation.validate()?;
+            }
             if governance
                 .vault_bridge_route_authority_activation_height()
                 .is_none_or(|height| block_height < height)
@@ -1607,7 +1634,14 @@ pub(super) fn execute_governance_batch(
                     );
                 }
             }
-            postfiat_types::VaultBridgeRouteProfileRecordV1::new(activation, block_height)
+            if historical_replay {
+                postfiat_types::VaultBridgeRouteProfileRecordV1::new_for_replay(
+                    activation,
+                    block_height,
+                )
+            } else {
+                postfiat_types::VaultBridgeRouteProfileRecordV1::new(activation, block_height)
+            }
         })();
         match validated {
             Ok(record) => {

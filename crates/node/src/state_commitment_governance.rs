@@ -312,6 +312,10 @@ pub(super) fn append_vault_bridge_route_profile_record(
     prefix: &str,
     record: &postfiat_types::VaultBridgeRouteProfileRecordV1,
 ) {
+    // Absence preserves every historical V1 record byte.
+    if let Some(hash) = &record.arc_bootstrap_hash {
+        append_canonical_str(bytes, &format!("{prefix}.arc_bootstrap_hash.v2"), hash);
+    }
     append_canonical_str(bytes, &format!("{prefix}.schema"), &record.schema);
     append_canonical_str(
         bytes,

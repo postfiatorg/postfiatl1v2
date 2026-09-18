@@ -1262,7 +1262,12 @@ pub(super) fn update_governance_for_certificate_replay(
         return Ok(());
     }
     let batch: GovernanceActionBatch = parse_archived_payload(block, archive_entry)?;
-    let _ = execute_governance_batch(governance, None, &batch, block.header.height);
+    let _ = crate::execution_actions::execute_archived_governance_batch(
+        governance,
+        None,
+        &batch,
+        block.header.height,
+    );
     Ok(())
 }
 
@@ -3008,7 +3013,7 @@ pub(super) fn replay_archived_payload(
                     block.header.height,
                 )?;
             }
-            Ok(execute_governance_batch(
+            Ok(crate::execution_actions::execute_archived_governance_batch(
                 state.governance,
                 Some(state.ledger),
                 &batch,
