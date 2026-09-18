@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -48,6 +49,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--issuer-key-file", type=Path, required=True)
     parser.add_argument("--valid-from-height", type=int, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--identities", type=Path, help="explicit reserve-driver identities for Z3")
+    parser.add_argument("--operator", help="explicit route operator for Z3")
     return parser.parse_args()
 
 
@@ -91,6 +94,35 @@ def main() -> None:
 
     route = json.loads(args.route_status.read_text())
     nav = json.loads(args.nav_manifest.read_text())
+    # Preserve the historical invocation, but qualification supplies and validates
+    # every identity instead of inheriting the historical successor profile.
+    global ISSUER, ROUTE_ID, ASSET_ID, SETTLEMENT_ASSET_ID, SUCCESSOR_PROFILE_ID
+    global SOURCE_MANIFEST_HASH, VALUATION_POLICY_HASH, SP1_PROGRAM_VKEY
+    global ISSUE_CAPACITY_ATOMS, REDEEM_CAPACITY_ATOMS
+    if args.identities is not None:
+        path = Path(__file__).with_name("a666-pfusdc-reserve-demo.py")
+        spec = importlib.util.spec_from_file_location("reserve_demo_identities", path)
+        if spec is None or spec.loader is None:
+            raise RuntimeError("reserve identity validator unavailable")
+        demo = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(demo)
+        identities = demo.validate_identities(json.loads(args.identities.read_text()))
+        demo.validate_account(args.operator, "route operator")
+        # The trade validator requires an unpaused route; maintenance requires
+        # paused=True below. Reuse its remaining identity/invariant checks.
+        demo.validate_route({**route, "paused": False}, identities)
+        ISSUER, ROUTE_ID = args.operator, identities["route_id"]
+        ASSET_ID, SETTLEMENT_ASSET_ID = identities["native_nav_asset_id"], identities["settlement_asset_id"]
+        SUCCESSOR_PROFILE_ID = identities["nav_profile_id"]
+        SOURCE_MANIFEST_HASH = identities["nav_source_manifest_hash"]
+        VALUATION_POLICY_HASH = identities["nav_valuation_policy_hash"]
+        SP1_PROGRAM_VKEY = identities["nav_program_vkey"]
+        # The status exposes remaining capacities, not the original policy
+        # totals. A fresh epoch may conservatively retain those remaining limits.
+        ISSUE_CAPACITY_ATOMS = demo.require_positive_int(route["issue_capacity_remaining_atoms"], "issue capacity")
+        REDEEM_CAPACITY_ATOMS = demo.require_positive_int(route["redeem_capacity_remaining_atoms"], "redeem capacity")
+    elif args.operator is not None:
+        raise RuntimeError("--operator requires --identities")
     if route["route_id"] != ROUTE_ID:
         raise RuntimeError("route status is not the governed A666 route")
     if route.get("native_nav_asset_id") != ASSET_ID:

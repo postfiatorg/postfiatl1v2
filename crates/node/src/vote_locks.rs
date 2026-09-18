@@ -87,6 +87,16 @@ pub(super) fn reserve_block_proposal_vote_lock(
     target: &BlockVoteTarget,
     validator: &str,
 ) -> io::Result<VoteLockWorkReport> {
+    reserve_block_proposal_vote_lock_with_sync(store, genesis, target, validator, sync_directory)
+}
+
+fn reserve_block_proposal_vote_lock_with_sync(
+    store: &NodeStore,
+    genesis: &Genesis,
+    target: &BlockVoteTarget,
+    validator: &str,
+    sync_lock_directory: impl FnOnce(&Path) -> io::Result<()>,
+) -> io::Result<VoteLockWorkReport> {
     let Some(proposal_hash) = target.proposal_hash.as_deref() else {
         return Ok(VoteLockWorkReport::default());
     };
@@ -120,13 +130,16 @@ pub(super) fn reserve_block_proposal_vote_lock(
         validate_block_proposal_vote_lock(&existing, genesis, target, validator, proposal_hash)?;
     }
 
-    if write_new_block_proposal_vote_lock(&lock_path, &lock)? {
-        return Ok(work);
+    if !write_new_block_proposal_vote_lock(&lock_path, &lock)? {
+        let existing =
+            read_required_counted_json_file(&lock_path, "block proposal vote lock", &mut work)?;
+        validate_block_proposal_vote_lock(&existing, genesis, target, validator, proposal_hash)?;
     }
 
-    let existing =
-        read_required_counted_json_file(&lock_path, "block proposal vote lock", &mut work)?;
-    validate_block_proposal_vote_lock(&existing, genesis, target, validator, proposal_hash)?;
+    // The temporary-file write precedes publication of the canonical hard link.
+    // Persist that directory entry before authorizing signing, including retries
+    // after a previous sync failure. Keep the mutation guard held through sync.
+    sync_lock_directory(&lock_dir)?;
     Ok(work)
 }
 
@@ -242,9 +255,16 @@ fn migrate_block_proposal_vote_locks(
             )
         })?;
         let path = entry.path();
-        if file_type.is_file()
-            && path.extension().and_then(|extension| extension.to_str()) == Some("json")
-        {
+        if path.extension().and_then(|extension| extension.to_str()) == Some("json") {
+            if !file_type.is_file() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "block proposal vote lock `{}` is not a regular file",
+                        path.display()
+                    ),
+                ));
+            }
             json_paths.push(path);
         }
     }
@@ -771,6 +791,140 @@ mod tests {
             .map(|entry| entry.expect("lock entry").path())
             .filter(|path| path.extension().and_then(|value| value.to_str()) == Some("json"))
             .count()
+    }
+
+    #[test]
+    fn burn5_directory_sync_failure_blocks_new_and_retried_reservations() {
+        let (data_dir, store) = test_store("burn5-sync-failure");
+        let genesis = activated_genesis();
+        write_marker(&store, &genesis);
+        let proposal = target(14, 0, "durable-proposal");
+        let lock_path = block_proposal_vote_lock_path(&store, &genesis, 14, 0, "validator-0");
+
+        for _ in 0..2 {
+            let sync_seen = std::cell::Cell::new(false);
+            let error = reserve_block_proposal_vote_lock_with_sync(
+                &store,
+                &genesis,
+                &proposal,
+                "validator-0",
+                |directory| {
+                    sync_seen.set(true);
+                    assert_eq!(directory, lock_path.parent().expect("lock directory"));
+                    let retained: BlockProposalVoteLock =
+                        read_json_file(&lock_path, "published lock")
+                            .expect("canonical lock exists");
+                    assert_eq!(retained.proposal_hash, "durable-proposal");
+                    assert_eq!(json_lock_count(&data_dir), 1);
+                    Err(io::Error::other("injected lock directory sync failure"))
+                },
+            )
+            .expect_err("a failed durability barrier must not authorize signing");
+            assert!(sync_seen.get(), "both initial and retry paths must sync");
+            assert_eq!(error.kind(), io::ErrorKind::Other);
+            assert!(error
+                .to_string()
+                .contains("injected lock directory sync failure"));
+            assert!(
+                lock_path.exists(),
+                "failed sync must preserve lock evidence"
+            );
+        }
+        drop(store);
+
+        let restarted = NodeStore::new(&data_dir);
+        let conflict = reserve_block_proposal_vote_lock(
+            &restarted,
+            &genesis,
+            &target(14, 0, "conflicting-proposal"),
+            "validator-0",
+        )
+        .expect_err("retained lock must reject conflicts after reopening");
+        assert_eq!(conflict.kind(), io::ErrorKind::AlreadyExists);
+        let sync_seen = std::cell::Cell::new(false);
+        reserve_block_proposal_vote_lock_with_sync(
+            &restarted,
+            &genesis,
+            &proposal,
+            "validator-0",
+            |directory| {
+                sync_seen.set(true);
+                sync_directory(directory)
+            },
+        )
+        .expect("same proposal may resume after a successful durability barrier");
+        assert!(sync_seen.get());
+        fs::remove_dir_all(data_dir).expect("cleanup");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn burn5_migration_rejects_non_regular_json_without_discarding_evidence() {
+        for symlink in [false, true] {
+            for with_regular_lock in [false, true] {
+                let (data_dir, store) = test_store("burn5-non-regular");
+                let genesis = activated_genesis();
+                let lock_dir = data_dir.join(BLOCK_PROPOSAL_VOTE_LOCK_DIR);
+                fs::create_dir_all(&lock_dir).expect("create lock directory");
+                let ambiguous = lock_dir.join("restored-lock.json");
+                let evidence_path = data_dir.join("legacy-evidence.json");
+                let evidence = lock_for(
+                    &genesis,
+                    14,
+                    0,
+                    "previous-proposal",
+                    BLOCK_PROPOSAL_VOTE_LOCK_SCHEMA_V1,
+                );
+                write_lock(&evidence_path, &evidence);
+                if symlink {
+                    std::os::unix::fs::symlink(&evidence_path, &ambiguous)
+                        .expect("restore symlink to legacy evidence");
+                } else {
+                    fs::create_dir(&ambiguous).expect("restore malformed lock directory");
+                }
+                let regular = lock_dir.join("ordinary-lock.json");
+                if with_regular_lock {
+                    write_lock(
+                        &regular,
+                        &lock_for(
+                            &genesis,
+                            13,
+                            0,
+                            "older-proposal",
+                            BLOCK_PROPOSAL_VOTE_LOCK_SCHEMA,
+                        ),
+                    );
+                }
+
+                let error = reserve_block_proposal_vote_lock(
+                    &store,
+                    &genesis,
+                    &target(14, 0, "conflicting-proposal"),
+                    "validator-0",
+                )
+                .expect_err("ambiguous migration input must prevent reservation");
+                assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+                assert!(error.to_string().contains("not a regular file"));
+                assert!(!vote_lock_index_marker_path(&store).exists());
+                assert!(
+                    !block_proposal_vote_lock_path(&store, &genesis, 14, 0, "validator-0").exists()
+                );
+                let metadata = fs::symlink_metadata(&ambiguous).expect("preserved entry");
+                assert_eq!(metadata.file_type().is_symlink(), symlink);
+                assert_eq!(metadata.is_dir(), !symlink);
+                let retained: BlockProposalVoteLock =
+                    read_json_file(&evidence_path, "legacy evidence").expect("preserved evidence");
+                assert_eq!(retained, evidence);
+                if with_regular_lock {
+                    assert!(regular.exists(), "migration must not remove any source");
+                    assert!(
+                        !block_proposal_vote_lock_path(&store, &genesis, 13, 0, "validator-0")
+                            .exists()
+                    );
+                }
+                fs::remove_dir_all(data_dir).expect("cleanup");
+            }
+        }
     }
 
     #[test]

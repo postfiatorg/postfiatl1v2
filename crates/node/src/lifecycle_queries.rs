@@ -840,6 +840,7 @@ pub fn status(options: NodeOptions) -> io::Result<StatusReport> {
             .to_string(),
         active_nav_profiles,
         deployment_manifest_sha256: deployment_identity.manifest_sha256,
+        deployment_manifest_verified: deployment_identity.manifest_verified,
         deployment_validator_id: deployment_identity.validator_id,
         deployment_service_artifacts: deployment_identity.service_artifacts,
         deployment_runtime_artifacts: deployment_identity.runtime_artifacts,
@@ -858,6 +859,7 @@ pub fn status(options: NodeOptions) -> io::Result<StatusReport> {
 #[derive(Debug, Default)]
 pub(super) struct DeploymentRuntimeIdentity {
     pub(super) manifest_sha256: Option<String>,
+    pub(super) manifest_verified: bool,
     pub(super) validator_id: Option<String>,
     pub(super) service_artifacts: Vec<DeploymentServiceArtifact>,
     pub(super) runtime_artifacts: Option<DeploymentRuntimeArtifactHashes>,
@@ -1030,6 +1032,8 @@ pub(super) fn deployment_runtime_identity_from_config(
     };
     Ok(DeploymentRuntimeIdentity {
         manifest_sha256: Some(manifest_sha256),
+        // Runtime reads do not authenticate the publisher or the validity window.
+        manifest_verified: false,
         validator_id,
         service_artifacts,
         runtime_artifacts,

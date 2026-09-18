@@ -216,3 +216,63 @@ zero invariant failures. This is the limit of the fuzz-harness evidence.
 
 Skip: burn 3 `c2724977` changes Python operational CLIs only; this unit is
 Rust-only. No bridge, Orchard, proof, or program crate was edited or tested.
+
+## P3 sweep
+
+2026-09-16, source-only work on this checkout's `main`. Twelve findings fixed:
+
+- Rust `7095b393`: STO-03, COB-03, COB-04, NET-04, FIN-03, TYP-03,
+  SRV-03, SHD-03 and CLI-03.
+- Python `d8932b57`: OPS-09, OPS-10 and OPS-11.
+- Skipped STO-04: `NodeStore::write_receipts` already writes receipt state once,
+  in both starting HEAD `8a2b0824` and reviewed revision `c25b3389`. No
+  duplicate write was available to remove; the inventory row remains recorded.
+
+The inventory now has 70 fixed rows and one recorded burn 3/4 P3, with 104
+total rows and all other classification, severity and disposition totals
+unchanged. No Task Node, fleet, other checkout, release branch, frozen-artifact
+or Text Improvement Harness action occurred.
+
+Consensus-affecting repairs, conservatively classified and not live behavior:
+COB-03 rejects unauthenticated live-mode beacon coins; NET-04 rejects malformed
+legacy certificate quorums; TYP-03 rejects overlong digest labels while preserving
+existing short-label bytes; SHD-03 serializes canonical refresh with ordered
+commits before changing local FastSwap state. All other sweep repairs affect
+local publication, input validation or reports. STO-03 uses Linux atomic
+directory exchange and retains the previous generation until the new summary
+is durable; replacement fails closed on platforms without that operation.
+SRV-03 reports `deployment_manifest_verified: false` for current-file identity;
+it does not claim to authenticate the manifest.
+
+Focused Rust commands below passed: 72 tests in total, with one existing manual
+storage test ignored. Each fixed finding has a regression in its existing test
+module. The FastSwap regression first needed fixture corrections for its policy
+snapshot and zero-based WAL sequence; the final run passed.
+
+| Command | Passed |
+| --- | ---: |
+| `cargo test -p postfiat-storage ordered_history::tests --lib --locked` | 5; 1 ignored |
+| `cargo test -p postfiat-consensus-cobalt abba --lib --locked` | 5 |
+| `cargo test -p postfiat-consensus-cobalt unauthenticated_signed_beacon --lib --locked` | 1 |
+| `cargo test -p postfiat-cobalt-decision-oracle tests:: --lib --locked` | 4 |
+| `cargo test -p postfiat-ordering-fast tests:: --lib --locked` | 35 |
+| `cargo test -p postfiat-types genesis_registry --lib --locked` | 5 |
+| `cargo test -p postfiat-types genesis_domain --lib --locked` | 1 |
+| `cargo test -p postfiat-types status_report --lib --locked` | 1 |
+| `cargo test -p postfiat-node tx_finality_hot_path --lib --locked` | 1 |
+| `cargo test -p postfiat-node runtime_manifest_identity --lib --locked` | 1 |
+| `cargo test -p postfiat-node signed_deployment_manifest --lib --locked` | 1 |
+| `cargo test -p postfiat-node governance_agent_implementation --lib --locked` | 3 |
+| `cargo test -p postfiat-node canonical_ --bin postfiat-node --locked` | 6 |
+| `cargo test -p postfiat-node server_info_keeps_wallet_capabilities --bin postfiat-node --locked` | 1 |
+| `cargo test -p postfiat-node block_vote_request_commits_to_height_and_view --bin postfiat-node --locked` | 1 |
+| `cargo test -p postfiat-node authenticated_health_exchange --bin postfiat-node --locked` | 1 |
+
+`PYTHONPATH=python python3 -m pytest -q python/tests/test_navcoin.py python/tests/test_pftl_transfer.py python/tests/test_storage_scaling.py`:
+63 passed, 5 subtests passed.
+
+`cargo check --workspace --locked`, `cargo fmt --all -- --check` and
+`git diff --check` passed. Before each of the three unit commits,
+`.venv-docs/bin/mkdocs build --strict`, `scripts/public-doc-links` and
+`scripts/public-secret-scan` passed for all three units. The full workspace and excluded-crate test
+suites were not run.

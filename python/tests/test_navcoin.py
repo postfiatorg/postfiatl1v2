@@ -39,7 +39,7 @@ class NavcoinExampleTests(unittest.TestCase):
         self.assertEqual(operations["nav_mint_at_nav"]["operation"], "nav_mint_at_nav")
         self.assertEqual(operations["nav_redeem_at_nav"]["operation"], "nav_redeem_at_nav")
 
-    def test_floor_nav_reports_over_collateralization_remainder(self) -> None:
+    def test_nonintegral_nav_cannot_emit_native_operations(self) -> None:
         inputs = NavInputs(
             chain_id="postfiat-local",
             issuer="pfissuer-example",
@@ -60,13 +60,8 @@ class NavcoinExampleTests(unittest.TestCase):
         self.assertEqual(nav["nav_per_unit_micro_usd"], 3)
         self.assertEqual(nav["over_collateralization_remainder_micro_usd"], 1)
 
-        packet = build_packet_and_operations(inputs)
-        self.assertTrue(
-            packet["reserve_packet"]["invariant"]["verified_net_assets_gte_supply_times_nav"]
-        )
-        self.assertEqual(
-            packet["reserve_packet"]["invariant"]["over_collateralization_remainder"], 1
-        )
+        with self.assertRaisesRegex(ValueError, "exactly divisible"):
+            build_packet_and_operations(inputs)
 
 
 if __name__ == "__main__":

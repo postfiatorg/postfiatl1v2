@@ -1744,6 +1744,16 @@ fn validate_amendment_kind(kind: &str) -> Result<(), String> {
                     .bytes()
                     .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
         };
+        let manifest_hash = if let Some((profile, bootstrap)) =
+            manifest_hash.split_once(":arc-bootstrap-v2:")
+        {
+            if !canonical_hash(bootstrap) {
+                return Err("Arc route governance kind must bind a lowercase bootstrap hash".to_string());
+            }
+            profile
+        } else {
+            manifest_hash
+        };
         if canonical_hash(asset_id) && canonical_hash(manifest_hash) {
             return Ok(());
         }

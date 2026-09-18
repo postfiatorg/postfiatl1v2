@@ -192,7 +192,7 @@ where
             .iter()
             .find(|(candidate, _)| candidate == validator_id)
         else {
-            continue;
+            return Err(OwnedTransferError::InvalidRecovery);
         };
         let (Ok(public_key), Ok(signature)) = (
             postfiat_crypto_provider::hex_to_bytes(public_key_hex),
@@ -291,6 +291,9 @@ pub fn verify_owned_transfer_certificate_v3(
     current_height: u64,
     quorum: usize,
 ) -> Result<usize, OwnedTransferError> {
+    certificate
+        .validate_commitment_shape()
+        .map_err(|_| OwnedTransferError::InvalidRecovery)?;
     let expected_lock_id = postfiat_types::fastpay_transfer_lock_id_v1(&certificate.order);
     validate_fastpay_v3_recovery(
         &certificate.order.domain,
@@ -339,6 +342,9 @@ pub fn verify_owned_unwrap_certificate_v3(
     current_height: u64,
     quorum: usize,
 ) -> Result<usize, OwnedTransferError> {
+    certificate
+        .validate_commitment_shape()
+        .map_err(|_| OwnedTransferError::InvalidRecovery)?;
     let expected_lock_id = postfiat_types::fastpay_unwrap_lock_id_v1(&certificate.order);
     validate_fastpay_v3_recovery(
         &certificate.order.domain,
@@ -903,6 +909,22 @@ pub fn execute_fastpay_recovery_governance_update_v1(
             return Err("FastPay recovery policy and committee state are inconsistent".to_string())
         }
     };
+    // V1 bytes remain unchanged. A V2 installation over historically accepted
+    // unencodable certificates fails atomically; never trim or rewrite history.
+    if bootstrap.payload.committee.commitment_version()?
+        == postfiat_types::FastPayRecoveryCommitmentVersion::V2
+    {
+        for reveal in &prospective.fastpay_recovery_reveals {
+            reveal.state_commitment_bytes_for_version(
+                postfiat_types::FastPayRecoveryCommitmentVersion::V2,
+            )?;
+        }
+        for fence in &prospective.fastpay_version_fences {
+            fence.state_commitment_bytes_for_version(
+                postfiat_types::FastPayRecoveryCommitmentVersion::V2,
+            )?;
+        }
+    }
     *ledger = prospective;
     Ok(outcome)
 }
@@ -911,6 +933,8 @@ pub fn execute_fastpay_recovery_governance_update_v1(
 mod owned_transfer_recovery_tests {
     use super::*;
     use crate::fastlane_primary::execute_fastlane_primary_transaction;
+
+    include!("fastpay_certificate_bound_tests.rs");
 
     fn recovery_validator_keys() -> Vec<(String, postfiat_crypto_provider::MlDsa65KeyPair)> {
         (0..4)

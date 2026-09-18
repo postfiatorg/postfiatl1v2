@@ -142,24 +142,28 @@ Nothing after G0 begins without it.
 
 ### Gate G2 — prove route compatibility offline
 
-- [ ] Pin the integrated source commit and verify that the selected qualified lineage contains the required Arc code or an operator-approved equivalent.
+- [x] Pin the integrated source commit and verify that the selected qualified lineage contains the required Arc code or an operator-approved equivalent. Candidate `15126ac3` and recorded qualified node source `1c435f4f` verified 2026-09-17; G1 lineage selection remains open ([source verdict](../../review/z3-g2-route-compatibility-20260917.md#g21-pass-candidate-source-pinned-and-required-code-present)).
 - [ ] Read back or replay the selected route, asset, proof-profile, policy, NAV, and source-domain identities from frozen fixtures.
-- [ ] Prove that Arc source-labeled pfUSDC can fund the existing primary subscription and redemption operations without a new transaction kind or facility.
-- [ ] Prove that the route counts the same-cycle reserve exactly once and that its settlement asset ID cannot be substituted.
-- [ ] Stop for the operator if compatibility requires consensus code, a generic NRRS facility, a new bridge contract, or a new settlement-price format.
+- [x] Prove that Arc source-labeled pfUSDC can fund the existing primary subscription and redemption operations without a new transaction kind or facility. Existing source selection and route maintenance supported 2026-09-17; the driver still needs G3 changes ([compatibility trace](../../review/z3-g2-route-compatibility-20260917.md#g23-pass-existing-operations-can-settle-the-governed-arc-source)).
+- [x] Prove that the route counts the same-cycle reserve exactly once and that its settlement asset ID cannot be substituted. Code trace and focused offline tests passed 2026-09-17; exact Arc cycle composition remains G3 work ([accounting and binding](../../review/z3-g2-route-compatibility-20260917.md#g24-pass-reserve-counted-once-settlement-identities-cannot-be-substituted)).
+- [x] Stop for the operator if compatibility requires consensus code, a generic NRRS facility, a new bridge contract, or a new settlement-price format. No prohibited expansion required by the candidate path, 2026-09-17; pair and lineage decisions remain with the operator ([stop verdict](../../review/z3-g2-route-compatibility-20260917.md#stop-verdict)).
+
+The 2026-09-17 [identity comparison](../../review/z3-g2-route-compatibility-20260917.md#identities-read-back) records both Arc pairs without selecting one. G2's selected-state readback remains open; no G1 authorization or integrated live cycle is claimed.
 
 ### Gate G3 — complete focused tooling and local tests
 
-- [ ] Parameterize or wrap scripts/a666-pfusdc-reserve-demo.py for explicit route, asset, and account inputs while preserving fail-on-overwrite behavior.
-- [ ] Compose the existing Arc deposit/mint and burn/release commands around the primary-route driver.
-- [ ] Add one machine-readable cycle manifest and verifier covering all receipts and conservation identities.
-- [ ] Add focused success, stale-proof, wrong-route, wrong-asset, duplicate, replay, active-entitlement, insufficient-capacity, and partial-artifact tests.
-- [ ] Run the focused Python and affected Rust tests only; no Orchard suite is required because this route is transparent.
-- [ ] Produce a dry-run command sheet with hard stops before every future Arc or PFTL submission.
+- [x] Parameterize or wrap scripts/a666-pfusdc-reserve-demo.py for explicit route, asset, and account inputs while preserving fail-on-overwrite behavior. 2026-09-17, `90fbc5da` (explicit-identity checkpoint); current NAV schema and source-custody bounds verified by the focused offline driver tests.
+- [x] Compose the existing Arc deposit/mint and burn/release commands around the primary-route driver. 2026-09-17, `f23f77b9`; scripts/z3-cycle-dry-run.py composes 39 individually stopped commands and refuses Arc execution without the qualified lineage.
+- [x] Add one machine-readable cycle manifest and verifier covering all receipts and conservation identities. 2026-09-17, `f680d78a`, `f23f77b9`; python/postfiat_rpc/z3_cycle.py audits ten sections, artifact hashes, finality/receipts, exact deltas, reserve counting and terminal state.
+- [x] Add focused success, stale-proof, wrong-route, wrong-asset, duplicate, replay, active-entitlement, insufficient-capacity, and partial-artifact tests. 2026-09-17, `f23f77b9`; python/tests/test_z3_cycle.py and python/tests/test_z3_composition.py, 32 passed.
+- [x] Run the focused Python and affected Rust tests only; no Orchard suite is required because this route is transparent. 2026-09-17, `f23f77b9`; python/tests: 567 passed, 3 skipped, 103 subtests; driver: 25 passed. Final Z3 rerun: 32 passed. No Rust code affected; prior focused Rust evidence is in G2.
+- [x] Produce a dry-run command sheet with hard stops before every future Arc or PFTL submission. 2026-09-17; [command sheet](../../runbooks/z3-cycle-dry-run.md) documents `f23f77b9` commands, explicit operator inputs and all stops. Offline tooling only; G1/G2 selected-state work and G4 authorization remain open.
 
 G3 is offline and creates no live transaction.
 
 ### Gate G4 — operator authorizes one integrated testnet cycle
+
+Read-only preflight reference: [2026-09-17 fleet, Arc pairs, wallet, and missing operator inputs](../../status/z3-preflight-20260917.md).
 
 - [ ] The operator reviews the G2 compatibility result, G3 tests, dry-run amounts, stop conditions, and exact wallet cap.
 - [ ] The operator explicitly authorizes one Arc-testnet/PFTL-devnet integrated cycle.
@@ -171,11 +175,11 @@ One clean G4 cycle proves integration, not repeatability and not Z3 completion.
 
 ### Gate G5 — qualify failure and recovery before repetition
 
-- [ ] Rehearse stale NAV, stale Arc proof, wrong route, wrong asset, duplicate deposit, duplicate subscription nonce, active entitlement, duplicate burn, and duplicate Arc release cases with fixtures or no-value tests.
-- [ ] Rehearse recovery after process interruption using exact request identity.
-- [ ] Prove failures leave balances, supply, reserves, reservations, entitlements, and withdrawals unchanged or in their specified recoverable state.
-- [ ] Record declared latency bounds and a pause threshold for each cycle stage.
-- [ ] Resolve every failure without a consensus change before asking to start the sustained window.
+- [x] Rehearse stale NAV, stale Arc proof, wrong route, wrong asset, duplicate deposit, duplicate subscription nonce, active entitlement, duplicate burn, and duplicate Arc release cases with fixtures or no-value tests. 2026-09-17, `b150b14e`; nine wrapper/driver boundary cases and independent verifier negatives ([G5 scenarios](../../review/z3-g5-failure-rehearsal-20260917.md#failure-scenarios)).
+- [x] Rehearse recovery after process interruption using exact request identity. 2026-09-17, `9269278b`; four confirmed-step interruptions reject exact replay without resubmission; pre-submission environmental interruption preserves the count ([recovery](../../review/z3-g5-failure-rehearsal-20260917.md#recovery-scenarios)).
+- [x] Prove failures leave balances, supply, reserves, reservations, entitlements, and withdrawals unchanged or in their specified recoverable state. 2026-09-17; `b150b14e`/`9269278b` rehearsals extended with 23-field and itemized-state assertions in the [G5 record commit](../../review/z3-g5-failure-rehearsal-20260917.md#invariants-and-retained-evidence). Synthetic tooling/no-value scope only.
+- [ ] Record declared latency bounds and a pause threshold for each cycle stage. 2026-09-17: [nine proposed stage limits](../../review/z3-g5-failure-rehearsal-20260917.md#latency-bounds-and-pause-thresholds) recorded; no elapsed September 2 stage measurements in plan/G2. Remains open pending operator confirmation.
+- [x] Resolve every failure without a consensus change before asking to start the sustained window. 2026-09-17, `b150b14e`, `9269278b` and this record's focused assertions: [no scenario required a consensus change](../../review/z3-g5-failure-rehearsal-20260917.md#resolution-and-validation). Python tooling only; no sustained-window request or live recovery is authorized.
 
 ### Gate G6 — operator authorizes the sustained testnet window
 

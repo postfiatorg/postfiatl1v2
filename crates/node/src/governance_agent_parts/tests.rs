@@ -829,6 +829,20 @@
     }
 
     #[test]
+    fn governance_agent_implementation_rejects_unrestricted_wildcards() {
+        let fixture = repo_root().join(DEFAULT_GOVERNANCE_AGENT_IMPLEMENTATION_WORK_ITEM_FILE);
+        let mut work_item: GovernanceAgentImplementationWorkItem =
+            serde_json::from_str(&std::fs::read_to_string(fixture).unwrap()).unwrap();
+        work_item.touched_surfaces.push("unexpected/private.txt".to_string());
+        for pattern in ["*", "*.rs", "docs/**", "docs/../*", "docs/*?"] {
+            work_item.allowed_surfaces = vec![pattern.to_string()];
+            assert!(validate_governance_agent_implementation_work_item(&work_item).is_err(), "{pattern}");
+        }
+        work_item.allowed_surfaces = vec!["docs/governance/*".to_string()];
+        assert!(!validate_governance_agent_implementation_work_item(&work_item).unwrap().touched_surfaces_authorized);
+    }
+
+    #[test]
     fn governance_agent_implementation_execution_verifies_authorized_work_item() {
         let root = repo_root();
         let output_file = unique_governance_agent_test_dir().join("implementation-execution.json");

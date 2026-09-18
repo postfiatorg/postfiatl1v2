@@ -469,6 +469,12 @@ pub struct OwnedTransferCertificateV3 {
     pub votes: Vec<OwnedTransferVote>,
 }
 
+impl OwnedTransferCertificateV3 {
+    pub fn validate_commitment_shape(&self) -> Result<(), String> {
+        validate_fastpay_certificate_voters(self.votes.iter().map(|vote| vote.validator_id.as_str()))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OwnedUnwrapOrderV3 {
@@ -499,6 +505,31 @@ pub struct OwnedUnwrapCertificateV3 {
     pub owner_pubkey_hex: String,
     pub owner_signature_hex: String,
     pub votes: Vec<OwnedUnwrapVote>,
+}
+
+impl OwnedUnwrapCertificateV3 {
+    pub fn validate_commitment_shape(&self) -> Result<(), String> {
+        validate_fastpay_certificate_voters(self.votes.iter().map(|vote| vote.validator_id.as_str()))
+    }
+}
+
+/// Shared by admission and V2 commitments; arrival order is not a shape constraint.
+fn validate_fastpay_certificate_voters<'a>(
+    voters: impl ExactSizeIterator<Item = &'a str>,
+) -> Result<(), String> {
+    if voters.len() > MAX_FASTPAY_RECOVERY_VALIDATORS {
+        return Err("FastPay retained certificate exceeds the validator bound".to_string());
+    }
+    if voters.len() == 0 {
+        return Err("FastPay certificate votes are empty".to_string());
+    }
+    let mut seen = BTreeSet::new();
+    for voter in voters {
+        if !seen.insert(voter) {
+            return Err("FastPay certificate has duplicate validators".to_string());
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -606,6 +637,13 @@ impl FastPayRecoveryDecisionRequestV1 {
 }
 
 impl FastPayCertificateV1 {
+    pub fn validate_commitment_shape(&self) -> Result<(), String> {
+        match self {
+            Self::Transfer(value) => value.validate_commitment_shape(),
+            Self::Unwrap(value) => value.validate_commitment_shape(),
+        }
+    }
+
     pub fn operation(&self) -> FastPayOperationKindV1 {
         match self {
             Self::Transfer(_) => FastPayOperationKindV1::Transfer,
@@ -635,6 +673,7 @@ impl FastPayCertificateV1 {
     }
 
     pub fn canonical_bytes(&self) -> Result<Vec<u8>, String> {
+        self.validate_commitment_shape()?;
         let mut bytes = b"postfiat.fastpay.certificate-envelope.v1\0".to_vec();
         let (signed_order, votes) = match self {
             Self::Transfer(certificate) => (
@@ -662,7 +701,7 @@ impl FastPayCertificateV1 {
                     .collect::<Vec<_>>(),
             ),
         };
-        if votes.is_empty() || !votes.windows(2).all(|pair| pair[0].0 < pair[1].0) {
+        if !votes.windows(2).all(|pair| pair[0].0 < pair[1].0) {
             return Err("FastPay certificate votes are not canonical".to_string());
         }
         let signed = signed_order.canonical_bytes()?;
@@ -951,13 +990,7 @@ fn fastpay_commit_certificate(
 ) -> Result<(), String> {
     // Historical storage preserves arrival order; certificate identity already
     // orders votes by validator. Normalize the commitment without rewriting state.
-    let vote_count = match certificate {
-        FastPayCertificateV1::Transfer(value) => value.votes.len(),
-        FastPayCertificateV1::Unwrap(value) => value.votes.len(),
-    };
-    if vote_count > MAX_FASTPAY_RECOVERY_VALIDATORS {
-        return Err("FastPay retained certificate exceeds the validator bound".to_string());
-    }
+    certificate.validate_commitment_shape()?;
     let mut canonical = certificate.clone();
     match &mut canonical {
         FastPayCertificateV1::Transfer(value) => {

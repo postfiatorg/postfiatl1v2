@@ -158,6 +158,17 @@ fn ensure_unique_nonempty_governance_agent_text_list(
 fn governance_agent_touched_surfaces_authorized(
     work_item: &GovernanceAgentImplementationWorkItem,
 ) -> io::Result<bool> {
+    for pattern in &work_item.allowed_surfaces {
+        if let Some((prefix, suffix)) = pattern.split_once('*') {
+            if prefix.is_empty() || !prefix.contains('/') || suffix.contains('*')
+                || pattern.contains('?') || pattern.contains('[') || pattern.contains(']')
+                || pattern.split('/').any(|part| matches!(part, "" | "." | ".."))
+            {
+                return Err(io::Error::new(io::ErrorKind::InvalidData,
+                    "implementation allowed surface has an unrestricted or ambiguous wildcard"));
+            }
+        }
+    }
     let expansion_surfaces = work_item
         .authorized_surface_expansions
         .iter()

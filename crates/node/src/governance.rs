@@ -592,7 +592,17 @@ pub fn create_vault_bridge_route_profile_governance(
     profile
         .validate()
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-    let kind = postfiat_types::vault_bridge_route_amendment_kind(&profile)
+    let finality_bootstrap_raw = options
+        .tier4_finality_bootstrap_file
+        .as_ref()
+        .map(|path| read_bounded_json_text_file(path, "Tier-4 finality bootstrap"))
+        .transpose()?;
+    let (tier4_finality_bootstrap, arc_finality_bootstrap) =
+        decode_tier4_finality_bootstrap(finality_bootstrap_raw.as_deref())?;
+    let kind = match arc_finality_bootstrap.as_ref() {
+        Some(state) => postfiat_types::vault_bridge_arc_route_amendment_kind_v2(&profile, state),
+        None => postfiat_types::vault_bridge_route_amendment_kind(&profile),
+    }
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
     let domain = cobalt_domain(&genesis);
     let config = EssentialSubsetConfig::all_of(options.validators);
@@ -610,17 +620,12 @@ pub fn create_vault_bridge_route_profile_governance(
     )
     .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
     write_amendment_file(&options.amendment_file, &amendment)?;
-    let finality_bootstrap_raw = options
-        .tier4_finality_bootstrap_file
-        .as_ref()
-        .map(|path| {
-            read_bounded_json_text_file(path, "Tier-4 finality bootstrap")
-        })
-        .transpose()?;
-    let (tier4_finality_bootstrap, arc_finality_bootstrap) =
-        decode_tier4_finality_bootstrap(finality_bootstrap_raw.as_deref())?;
     let activation = postfiat_types::VaultBridgeRouteProfileActivationV1 {
-        schema: postfiat_types::VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
+        schema: if arc_finality_bootstrap.is_some() {
+            postfiat_types::VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V2
+        } else {
+            postfiat_types::VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1
+        }.to_string(),
         profile,
         amendment,
         tier4_finality_bootstrap,
@@ -656,7 +661,11 @@ pub fn assemble_signed_vault_bridge_route_profile_governance(
     let (tier4_finality_bootstrap, arc_finality_bootstrap) =
         decode_tier4_finality_bootstrap(finality_bootstrap_raw.as_deref())?;
     let activation = postfiat_types::VaultBridgeRouteProfileActivationV1 {
-        schema: postfiat_types::VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1.to_string(),
+        schema: if arc_finality_bootstrap.is_some() {
+            postfiat_types::VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V2
+        } else {
+            postfiat_types::VAULT_BRIDGE_ROUTE_PROFILE_ACTIVATION_SCHEMA_V1
+        }.to_string(),
         profile,
         amendment,
         tier4_finality_bootstrap,

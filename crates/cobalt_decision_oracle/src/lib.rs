@@ -367,6 +367,12 @@ fn validate_scenario(input: &ScenarioInput) -> Result<(), String> {
             input.id
         ));
     }
+    if input.correct_nodes.len() + input.actively_byzantine.len() != input.validators.len() {
+        return Err(format!(
+            "{} requires every validator to be classified",
+            input.id
+        ));
+    }
     if input.proposals.is_empty() {
         return Err(format!("{} requires at least one proposal", input.id));
     }
@@ -755,6 +761,14 @@ mod tests {
                 rotated: Vec::new(),
             },
         }
+    }
+
+    #[test]
+    fn incomplete_validator_classification_is_rejected() {
+        let mut scenario = base_case();
+        scenario.correct_nodes.truncate(2);
+        let error = evaluate_scenario(scenario).expect_err("unclassified validators");
+        assert!(error.contains("every validator to be classified"));
     }
 
     #[test]

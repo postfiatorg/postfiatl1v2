@@ -981,7 +981,7 @@ fn sign_update(args: &[String]) -> io::Result<()> {
     Ok(())
 }
 
-fn finalize_update(
+pub(super) fn finalize_update(
     manifest_path: &Path,
     activation_result_path: &Path,
     update_path: &Path,
@@ -1033,14 +1033,18 @@ fn finalize_update(
         GovernanceAmendmentLifecycle::immediate(),
     )
     .map_err(invalid)?;
-    let unrelated_error = verify_cobalt_scoped_governance_batch(
+    let mut mixed_batch =
+        postfiat_types::GovernanceActionBatch::new("rehearsal-mixed-authority", vec![unrelated]);
+    mixed_batch.validator_registry_updates.push(update.clone());
+    let mixed_authority_error = verify_cobalt_scoped_governance_batch(
         &manifest.genesis,
         &governance,
         &manifest.registry,
-        &postfiat_types::GovernanceActionBatch::new("rehearsal-unrelated", vec![unrelated]),
+        &mixed_batch,
         update.activation_height,
     )
-    .expect_err("unrelated governance kind must fail")
+    .err()
+    .ok_or_else(|| invalid("mixed Cobalt and unrelated governance batch was accepted"))?
     .to_string();
 
     let before = state_commitment_hex(&governance);
@@ -1056,7 +1060,7 @@ fn finalize_update(
             "governance_commitment_before": before,
             "governance_commitment_after": after,
             "update_id": update.update_id,
-            "unrelated_governance_rejected": unrelated_error,
+            "mixed_authority_batch_rejected": mixed_authority_error,
             "governance": governance,
         }),
     )

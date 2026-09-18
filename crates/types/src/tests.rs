@@ -202,6 +202,7 @@ fn status_report_to_json_uses_strict_json_escaping() {
             build_profile: "test".to_string(),
             active_nav_profiles: Vec::new(),
             deployment_manifest_sha256: None,
+            deployment_manifest_verified: false,
             deployment_validator_id: None,
             deployment_service_artifacts: Vec::new(),
             deployment_runtime_artifacts: None,

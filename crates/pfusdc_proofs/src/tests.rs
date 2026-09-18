@@ -243,6 +243,7 @@ fn route_profile() -> VaultBridgeRouteProfileRecordV1 {
         profile,
         governance_amendment_id: "tier4-route-amendment".to_string(),
         authorized_height: 1,
+        arc_bootstrap_hash: None,
     }
 }
 

@@ -6,6 +6,9 @@ import tempfile
 import unittest
 from collections.abc import Callable
 from pathlib import Path
+from unittest import mock
+
+import postfiat_rpc.storage_scaling as storage_scaling
 
 from postfiat_rpc.storage_scaling import (
     ARTIFACT_SCHEMAS,
@@ -1834,6 +1837,41 @@ def _rewrite_first_selected_normalized_report(
 class StorageScalingVerifierTests(unittest.TestCase):
     def packet_dir(self, temporary: str) -> Path:
         return Path(temporary) / "packet"
+
+    def test_packet_enumeration_stops_at_file_and_directory_bounds(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            packet = Path(temporary)
+            (packet / "SHA256SUMS.txt").write_text("0" * 64 + "  declared.json\n")
+            for is_directory, limit, message in [
+                (False, 2, "file count"),
+                (True, 5, "entry count"),
+            ]:
+                visited = []
+
+                def entries():
+                    for index in range(limit + 1):
+                        visited.append(index)
+                        entry = mock.Mock()
+                        entry.path = str(packet / f"entry-{index}")
+                        entry.is_symlink.return_value = False
+                        entry.is_dir.return_value = is_directory
+                        entry.is_file.return_value = not is_directory
+                        yield entry
+                    self.fail("enumeration continued after the bound")
+
+                scanner = mock.MagicMock()
+                scanner.__enter__.return_value = entries()
+                with (
+                    self.subTest(is_directory=is_directory),
+                    mock.patch.object(storage_scaling, "MAX_PACKET_FILES", 2),
+                    mock.patch.object(storage_scaling, "MAX_PACKET_ENTRIES", 5),
+                    mock.patch.object(storage_scaling.os, "scandir", return_value=scanner),
+                    mock.patch.object(storage_scaling, "_sha256") as hash_file,
+                ):
+                    with self.assertRaisesRegex(StorageScalingVerificationError, message):
+                        storage_scaling._verify_checksums(packet)
+                    self.assertEqual(len(visited), limit + 1)
+                    hash_file.assert_not_called()
 
     def test_storage_scaling_packet_verifies_offline(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

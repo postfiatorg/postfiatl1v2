@@ -64,6 +64,15 @@ impl ValidatorSet {
         Ok(Self { validators, quorum })
     }
 
+    fn validate(&self) -> Result<(), OrderingError> {
+        if Self::try_new(self.validators.clone())? != *self {
+            return Err(OrderingError::new(
+                "validator set is not canonical or has an invalid quorum",
+            ));
+        }
+        Ok(())
+    }
+
     pub fn contains(&self, validator: &str) -> bool {
         self.validators
             .binary_search_by(|candidate| candidate.as_str().cmp(validator))
@@ -970,6 +979,7 @@ pub fn certify_admission_receipts(
     receipts: Vec<AdmissionReceipt>,
 ) -> Result<AdmissionReceiptAggregate, OrderingError> {
     validate_domain(domain)?;
+    validator_set.validate()?;
     validate_hash_like("admission receipt aggregate tx_hash", tx_hash)?;
     if observation_window == 0 {
         return Err(OrderingError::new(
@@ -1544,6 +1554,7 @@ fn canonical_votes(
     proposal_id: &str,
     votes: Vec<HotstuffVote>,
 ) -> Result<Vec<HotstuffVote>, OrderingError> {
+    validator_set.validate()?;
     let mut by_validator = BTreeMap::<String, HotstuffVote>::new();
     for vote in votes {
         validate_vote_domain(domain, &vote)?;
@@ -1578,6 +1589,7 @@ fn canonical_timeout_votes(
     view: u64,
     votes: Vec<TimeoutVote>,
 ) -> Result<Vec<TimeoutVote>, OrderingError> {
+    validator_set.validate()?;
     let mut by_validator = BTreeMap::<String, TimeoutVote>::new();
     for vote in votes {
         if vote.chain_id != domain.chain_id
@@ -2570,6 +2582,43 @@ mod tests {
         assert!(tampered_error
             .to_string()
             .contains("admission receipt id mismatch"));
+    }
+
+    #[test]
+    fn legacy_certificates_reject_deserialized_false_quorum() {
+        let domain = domain();
+        let valid = validators();
+        let proposal = proposal(&domain, &valid, 1, 0);
+        let mut encoded = serde_json::to_value(&valid).expect("serialize set");
+        encoded["quorum"] = serde_json::json!(1);
+        let malformed: ValidatorSet = serde_json::from_value(encoded).expect("deserialize set");
+        assert!(certify_proposal(
+            &domain,
+            &malformed,
+            &proposal,
+            votes(&domain, &proposal, &valid, 1)
+        )
+        .is_err());
+        let timeout =
+            TimeoutVote::new(&domain, 1, 0, "high-qc", &valid.validators[0]).expect("timeout");
+        assert!(certify_timeout(&domain, &malformed, 1, 0, vec![timeout]).is_err());
+        let mut unsorted = valid.clone();
+        unsorted.validators.reverse();
+        assert!(certify_proposal(
+            &domain,
+            &unsorted,
+            &proposal,
+            votes(&domain, &proposal, &valid, 3)
+        )
+        .is_err());
+        let certificate = certify_proposal(
+            &domain,
+            &valid,
+            &proposal,
+            votes(&domain, &proposal, &valid, 3),
+        )
+        .expect("valid QC");
+        assert!(verify_quorum_certificate(&domain, &malformed, &certificate).is_err());
     }
 
     #[test]

@@ -1388,6 +1388,157 @@ mod tests {
     }
 
     #[test]
+    fn burn5_cobalt_authority_rejects_replayed_full_knowledge_checkpoint() {
+        use crate::cobalt_authority_certificate::{
+            compress_cobalt_protocol_transcript, decompress_cobalt_protocol_transcript,
+            verify_cobalt_validator_update_decision_certificate,
+        };
+        let fixture = fixture();
+        let governance = activate(&fixture);
+        let first = signed_rotate_update(&fixture, &governance, 11);
+        let second = signed_rotate_update(&fixture, &governance, 12);
+        let old_transcript = decompress_cobalt_protocol_transcript(
+            &first
+                .cobalt_decision_certificate
+                .as_ref()
+                .expect("first certificate")
+                .protocol_transcript,
+        )
+        .expect("first transcript");
+        let mut certificate = second
+            .cobalt_decision_certificate
+            .clone()
+            .expect("second certificate");
+        let mut transcript =
+            decompress_cobalt_protocol_transcript(&certificate.protocol_transcript)
+                .expect("second transcript");
+        let verify = |certificate: &CobaltValidatorUpdateDecisionCertificateV1| {
+            verify_cobalt_validator_update_decision_certificate(
+                certificate,
+                &cobalt_domain(&fixture.genesis),
+                &fixture.registry,
+                &fixture.validators,
+                &fixture.registry_root,
+                &fixture.cobalt_binding.trust_graph.trust_graph_root,
+                &crate::cobalt_authority_certificate::cobalt_validator_update_payload_hash(&second)
+                    .expect("payload"),
+                11,
+                12,
+                None,
+            )
+        };
+        verify(&certificate).expect("current full-knowledge evidence verifies");
+        assert_ne!(old_transcript.ratification, transcript.ratification);
+        transcript.full_knowledge_checkpoints = old_transcript.full_knowledge_checkpoints;
+        certificate.protocol_transcript = compress_cobalt_protocol_transcript(&transcript)
+            .expect("compress valid older checkpoints");
+        let result = verify(&certificate);
+        std::fs::remove_dir_all(&fixture.cobalt_root).expect("cleanup");
+        let error = result.expect_err(
+            "an older decision's full-knowledge checkpoint must not authorize this decision",
+        );
+        assert!(error.to_string().contains("ratification"), "{error}");
+    }
+
+    #[test]
+    fn burn5_cobalt_authority_bounds_shared_check_expansion() {
+        use crate::cobalt_authority_certificate::{
+            amplify_cobalt_certificate_for_test, decompress_cobalt_protocol_transcript,
+            MAX_COBALT_DECOMPRESSED_VALUE_BYTES,
+        };
+        let fixture = fixture();
+        let governance = activate(&fixture);
+        let update = signed_rotate_update(&fixture, &governance, 11);
+        let mut certificate = update.cobalt_decision_certificate.expect("certificate");
+        decompress_cobalt_protocol_transcript(&certificate.protocol_transcript)
+            .expect("normal expansion is accepted");
+        // A roughly 2 MiB shared vector would be cloned into sixteen checkpoints.
+        amplify_cobalt_certificate_for_test(&mut certificate).expect("bounded compact input");
+        assert!(
+            certificate.protocol_transcript["decompressed_bytes"]
+                .as_u64()
+                .expect("compact JSON size")
+                < MAX_COBALT_DECOMPRESSED_VALUE_BYTES as u64
+        );
+        let result = decompress_cobalt_protocol_transcript(&certificate.protocol_transcript);
+        std::fs::remove_dir_all(&fixture.cobalt_root).expect("cleanup");
+        let error = result
+            .err()
+            .expect("expanded data must be bounded before checkpoint cloning");
+        assert!(error.to_string().contains("expanded transcript"), "{error}");
+    }
+
+    #[test]
+    fn burn5_rehearsal_finalizes_valid_update_with_mixed_scope_evidence() {
+        let fixture = fixture();
+        let governance = activate(&fixture);
+        let update = signed_rotate_update(&fixture, &governance, 11);
+        let root = &fixture.cobalt_root;
+        let manifest_path = root.join("manifest.json");
+        let activation_path = root.join("activation.json");
+        let update_path = root.join("update.json");
+        let authorizations_path = root.join("authorizations.json");
+        let output_path = root.join("finalized.json");
+        let manifest = serde_json::json!({
+            "schema": "postfiat-cobalt-handoff-clone-manifest-v1",
+            "source_commit": "a".repeat(40),
+            "genesis": fixture.genesis,
+            "registry": fixture.registry,
+            "registry_root": fixture.registry_root,
+            "trust_graph_root": fixture.cobalt_binding.trust_graph.trust_graph_root,
+            "cobalt_lock_hash": "11".repeat(48),
+            "anchor_height": 9,
+            "anchor_genesis_hash": genesis_hash(&fixture.genesis),
+            "anchor_block_hash": "44".repeat(48),
+            "anchor_state_root": "55".repeat(48),
+            "activation_height": 10,
+        });
+        for (path, value) in [
+            (&manifest_path, manifest),
+            (
+                &activation_path,
+                serde_json::json!({"governance": governance}),
+            ),
+            (
+                &update_path,
+                serde_json::to_value(&update).expect("update JSON"),
+            ),
+            (
+                &authorizations_path,
+                serde_json::to_value(&update.cobalt_authorizations).expect("authorizations JSON"),
+            ),
+        ] {
+            std::fs::write(path, serde_json::to_vec(&value).expect("JSON")).expect("write fixture");
+        }
+        crate::cobalt_handoff_rehearsal::finalize_update(
+            &manifest_path,
+            &activation_path,
+            &update_path,
+            &authorizations_path,
+            &output_path,
+        )
+        .expect("valid rehearsal update finalizes");
+        let result: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&output_path).expect("finalization output"))
+                .expect("result JSON");
+        assert_eq!(result["accepted"], true);
+        assert_eq!(result["update_id"], update.update_id);
+        assert!(result["mixed_authority_batch_rejected"]
+            .as_str()
+            .expect("scope evidence")
+            .contains("exactly one validator trust update"));
+        assert_ne!(
+            result["governance_commitment_before"],
+            result["governance_commitment_after"]
+        );
+        let restored: GovernanceState =
+            serde_json::from_value(result["governance"].clone()).expect("restored governance");
+        verify_cobalt_authority_history(&fixture.genesis, &restored).expect("history");
+        assert_eq!(restored.validator_registry_updates, vec![update]);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
     fn handoff_requires_distinct_mldsa65_quorum_approvals() {
         let fixture = fixture();
         let transition = signed_transition(
