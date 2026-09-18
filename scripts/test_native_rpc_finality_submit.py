@@ -278,3 +278,23 @@ def test_wrong_proposer_exhaustion_attempts_each_validator_once(tmp_path):
     finally:
         for server in servers:
             server.__exit__(None, None, None)
+
+
+@pytest.mark.parametrize("stage", ["status", "finality"])
+@pytest.mark.parametrize("bad_id", ["other-request", None, 7, True, "", "missing"])
+def test_foreign_or_malformed_response_id_stops_before_success(tmp_path, capsys, stage, bad_id):
+    status = status_response()
+    finality = finality_response()
+    envelope = status if stage == "status" else finality
+    if bad_id == "missing":
+        envelope.pop("id")
+    else:
+        envelope["id"] = bad_id
+    with RpcServer(status, finality) as rpc:
+        code, output = invoke(tmp_path, rpc)
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "RPC response id did not match request" in captured.err
+    assert "campaign 333333333333" not in captured.out
+    assert not output.exists()
+    assert len(rpc.requests) == (1 if stage == "status" else 2)
