@@ -1,0 +1,9 @@
+{
+  "name": "copy-isolation-audit",
+  "status": "PASS",
+  "checked_at": "2026-09-18T12:09:26.231107+00:00",
+  "active_database_pointers": 18,
+  "symlinks": 0,
+  "all_active_databases_resolve_inside_disposable_root": true,
+  "disposable_root": "/home/postfiatchad/.cache/release-repair-20260918"
+}

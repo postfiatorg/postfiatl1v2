@@ -3,7 +3,7 @@
   "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
   "source_tree": "02ee2f55874daa3864f985fa83b110b6af87ab84",
   "started_at": "2026-09-18T10:40:05+00:00",
-  "updated_at": "2026-09-18T11:59:31.960189+00:00",
+  "updated_at": "2026-09-18T12:20:48.117984+00:00",
   "timebox_minutes": 110,
   "checkpoint_minutes": 80,
   "scope": "combined release tip with main and P1 repairs; disposable local copies only",
@@ -21,37 +21,37 @@
       "validator": 0,
       "original": "PASS",
       "post_v2": "PASS",
-      "fresh_v2": "RUNNING"
+      "fresh_v2": "PASS"
     },
     {
       "validator": 1,
       "original": "PASS",
       "post_v2": "PASS",
-      "fresh_v2": "PENDING"
+      "fresh_v2": "PASS"
     },
     {
       "validator": 2,
       "original": "PASS",
       "post_v2": "PASS",
-      "fresh_v2": "PENDING"
+      "fresh_v2": "PASS"
     },
     {
       "validator": 3,
       "original": "PASS",
       "post_v2": "PASS",
-      "fresh_v2": "PENDING"
+      "fresh_v2": "PASS"
     },
     {
       "validator": 4,
       "original": "PASS",
       "post_v2": "PASS",
-      "fresh_v2": "PENDING"
+      "fresh_v2": "PASS"
     },
     {
       "validator": 5,
       "original": "PASS",
       "post_v2": "PASS",
-      "fresh_v2": "PENDING"
+      "fresh_v2": "PASS"
     }
   ],
   "governed_v2_continuation_and_restart": "PASS",
@@ -95,5 +95,15 @@
       "log": "logs/workspace-clippy.stdout",
       "stderr": "logs/workspace-clippy.stderr"
     }
-  ]
+  ],
+  "elapsed_minutes": 100.72,
+  "checkpoint_commit": "10b7b2030838adc4cec3dfefdec5a96cf3a2eeab",
+  "checkpoint_push_completed_at": "2026-09-18T12:00:18.654554+00:00",
+  "ci_workspace_test_job": {
+    "result": "PASS",
+    "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
+    "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35335763469",
+    "observed_at": "2026-09-18T12:15:44.754114+00:00",
+    "local_execution": false
+  }
 }

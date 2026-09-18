@@ -1,16 +1,16 @@
 {
-  "name": "fresh-v2-validator-0",
+  "name": "fresh-v2-validator-4",
   "command": [
     "/home/postfiatchad/.cache/release-repair-20260918/binaries/candidate-1",
     "verify-state",
     "--data-dir",
-    "/home/postfiatchad/.cache/release-repair-20260918/working/validator-0"
+    "/home/postfiatchad/.cache/release-repair-20260918/working/validator-4"
   ],
   "cwd": "/tmp/qualify-20260918",
-  "started_at": "2026-09-18T11:58:22.911139+00:00",
+  "started_at": "2026-09-18T12:11:15.505459+00:00",
   "status": "PASS",
-  "stdout": "logs/fresh-v2-validator-0.stdout",
-  "stderr": "logs/fresh-v2-validator-0.stderr",
+  "stdout": "logs/fresh-v2-validator-4.stdout",
+  "stderr": "logs/fresh-v2-validator-4.stderr",
   "environment_overrides": {
     "CARGO_BUILD_JOBS": "2",
     "CARGO_INCREMENTAL": "0",
@@ -24,11 +24,11 @@
   },
   "address_space_limit_bytes": 21474836480,
   "minimum_available_memory_bytes": 4294967296,
-  "pid": 2984160,
+  "pid": 2989401,
   "exit_code": 0,
-  "completed_at": "2026-09-18T12:01:36.993431+00:00",
-  "elapsed_seconds": 194.1,
-  "minimum_available_memory_observed_bytes": 24738021376,
+  "completed_at": "2026-09-18T12:14:28.587220+00:00",
+  "elapsed_seconds": 193.1,
+  "minimum_available_memory_observed_bytes": 24759672832,
   "verified": true,
   "observed": {
     "block_height": 1021,

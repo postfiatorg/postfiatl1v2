@@ -6,7 +6,7 @@
     "--strict"
   ],
   "cwd": "/tmp/qualify-20260918",
-  "started_at": "2026-09-18T11:57:44.757614+00:00",
+  "started_at": "2026-09-18T12:18:58.040626+00:00",
   "status": "PASS",
   "stdout": "logs/strict-docs.stdout",
   "stderr": "logs/strict-docs.stderr",
@@ -24,9 +24,9 @@
   },
   "address_space_limit_bytes": 21474836480,
   "minimum_available_memory_bytes": 4294967296,
-  "pid": 2983925,
+  "pid": 2992335,
   "exit_code": 0,
-  "completed_at": "2026-09-18T11:57:49.763349+00:00",
+  "completed_at": "2026-09-18T12:19:03.046607+00:00",
   "elapsed_seconds": 5.0,
-  "minimum_available_memory_observed_bytes": 24726061056
+  "minimum_available_memory_observed_bytes": 25428901888
 }

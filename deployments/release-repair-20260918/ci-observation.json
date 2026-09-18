@@ -1,22 +1,15 @@
 {
   "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
-  "observed_at": "2026-09-18T11:53:40.444585+00:00",
-  "runs": [
-    {
-      "conclusion": "",
-      "databaseId": 35335763469,
-      "headSha": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
-      "status": "in_progress",
-      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35335763469",
-      "workflowName": "rust-ci"
-    },
+  "checkpoint_commit": "10b7b2030838adc4cec3dfefdec5a96cf3a2eeab",
+  "observed_at": "2026-09-18T12:15:46.254488+00:00",
+  "source_runs": [
     {
       "conclusion": "success",
-      "databaseId": 35335763440,
+      "databaseId": 35335763524,
       "headSha": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
       "status": "completed",
-      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35335763440",
-      "workflowName": "docs-build"
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35335763524",
+      "workflowName": "product-security-ci"
     },
     {
       "conclusion": "success",
@@ -28,11 +21,53 @@
     },
     {
       "conclusion": "success",
-      "databaseId": 35335763524,
+      "databaseId": 35335763440,
       "headSha": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
       "status": "completed",
-      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35335763524",
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35335763440",
+      "workflowName": "docs-build"
+    },
+    {
+      "conclusion": "failure",
+      "databaseId": 35335763469,
+      "headSha": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
+      "status": "completed",
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35335763469",
+      "workflowName": "rust-ci"
+    }
+  ],
+  "checkpoint_runs": [
+    {
+      "conclusion": "",
+      "databaseId": 35342413107,
+      "headSha": "10b7b2030838adc4cec3dfefdec5a96cf3a2eeab",
+      "status": "in_progress",
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35342413107",
+      "workflowName": "arc-proof-identities"
+    },
+    {
+      "conclusion": "",
+      "databaseId": 35342413222,
+      "headSha": "10b7b2030838adc4cec3dfefdec5a96cf3a2eeab",
+      "status": "in_progress",
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35342413222",
       "workflowName": "product-security-ci"
+    },
+    {
+      "conclusion": "",
+      "databaseId": 35342413109,
+      "headSha": "10b7b2030838adc4cec3dfefdec5a96cf3a2eeab",
+      "status": "in_progress",
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35342413109",
+      "workflowName": "rust-ci"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 35342413153,
+      "headSha": "10b7b2030838adc4cec3dfefdec5a96cf3a2eeab",
+      "status": "completed",
+      "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35342413153",
+      "workflowName": "docs-build"
     }
   ]
 }

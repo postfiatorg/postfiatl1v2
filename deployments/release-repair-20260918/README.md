@@ -5,6 +5,7 @@ This packet follows the [September 16 operator procedure](../release-repair-2026
 All database operations and service processes used new disposable local copies and six-peer loopback networking.
 The captured databases are logical-history copies, not an atomic fleet backup.
 No validator host, live service, live transaction, or Task Node was touched. No source repair was made.
+The 80-minute checkpoint was pushed as `10b7b2030838adc4cec3dfefdec5a96cf3a2eeab` at 2026-09-18T12:00:18.654554+00:00. [Push receipt](checkpoint-push.json).
 
 Executable SHA-256, build 1: `0ea47d5aa6f0ba558cbd341347e34097114fe8942cbfca34c161690b423608f0`.  
 Executable SHA-256, build 2: `da51edea2b1423f9002290a5ab531e9659f4be5a9e62fbefaab70949ac28cb55`.  
@@ -13,10 +14,10 @@ these are not claimed as builds from empty caches. All candidate history and ser
 
 | Check | Result | Evidence |
 |---|---|---|
-| Two clean release builds | FAIL | [Build identities and commands](node-builds.json) |
+| Two matching node executables | FAIL | [Build identities and commands](node-builds.json) |
 | Six original full-history checks, height 1020 | PASS | [History run](history-run.json) |
 | Six saved V2 full-history checks, height 1021 | PASS | [History run](history-run.json) |
-| Six freshly rotated full-history checks, height 1021 | INCOMPLETE | Pending |
+| Six freshly rotated full-history checks, height 1021 | PASS | [Fresh V2 history](fresh-v2-history-run.json) |
 | Local governed rotation, both startup orders, convergence and restart | PASS | [Gate log](logs/governance-gate.stdout) |
 | Pre-activation rollback: six old checkpoints/restarts plus new full replay | PASS | [Rollback log](logs/rollback-services.stdout) |
 | Workspace check | PASS | [Log](logs/workspace-check.stdout) |
@@ -28,19 +29,19 @@ these are not claimed as builds from empty caches. All candidate history and ser
 | live-replay-supply | PASS | [Log](logs/live-replay-supply.stdout) |
 | warm-latency | DEFERRED_TO_CI | [Log](logs/warm-latency.stdout) |
 | workspace-clippy | FAIL | [Log](logs/workspace-clippy.stdout) |
-| Full workspace test suite | LEFT TO CI | Not run locally |
+| Full workspace test suite | CI PASS | [CI receipt](ci-source-rust-run.json) |
 | strict-docs | PASS | [Log](logs/strict-docs.stdout) |
 | public-doc-links | PASS | [Log](logs/public-doc-links.stdout) |
 | public-secret-scan | PASS | [Log](logs/public-secret-scan.stdout) |
 
 | Captured validator | Original height 1020 | Saved V2 height 1021 | Fresh V2 height 1021 |
 |---|---|---|---|
-| validator-0 | PASS | PASS | RUNNING |
-| validator-1 | PASS | PASS | PENDING |
-| validator-2 | PASS | PASS | PENDING |
-| validator-3 | PASS | PASS | PENDING |
-| validator-4 | PASS | PASS | PENDING |
-| validator-5 | PASS | PASS | PENDING |
+| validator-0 | PASS | PASS | PASS |
+| validator-1 | PASS | PASS | PASS |
+| validator-2 | PASS | PASS | PASS |
+| validator-3 | PASS | PASS | PASS |
+| validator-4 | PASS | PASS | PASS |
+| validator-5 | PASS | PASS | PASS |
 
 Per-node verifier stdout and stderr are under `history/`; execution commands, timings,
 memory settings, exits and identity comparisons are under `receipts/`.
@@ -68,11 +69,15 @@ full-replay bug is not represented as repaired. This is pre-activation rollback 
 
 ## CI and incomplete work
 
-Full workspace tests remain CI’s responsibility on the pushed release branch. Additional uncompleted local gates: node-fastpay, warm-latency. No PASS is claimed for them. Exact-source [CI run](https://github.com/postfiatorg/postfiatl1v2/actions/runs/35335763469) snapshot: test in_progress, check failure. See [CI receipt](ci-source-rust-run.json).
+Full workspace tests remain CI’s responsibility on the pushed release branch. Additional uncompleted local gates: node-fastpay, warm-latency. No PASS is claimed for them. Exact-source [CI run](https://github.com/postfiatorg/postfiatl1v2/actions/runs/35335763469) snapshot: test success, check failure. See [CI receipt](ci-source-rust-run.json).
 Historical proof-reproduction, retained-commitment size measurements, and unrelated earlier release obligations
 are not requalified here. Prior evidence is not attributed to this source tip.
 
 ## Failures
+
+Both node build commands succeeded, but their unmodified executable SHA-256 hashes differ.
+Clippy rejected `.err().expect()` at `crates/node/src/cobalt_handoff.rs:1466` (`clippy::err_expect`).
+The source remains unchanged.
 
 - **FAIL node-reproducibility**: [logs/node-reproducibility.stdout](logs/node-reproducibility.stdout); [stderr](logs/node-reproducibility.stderr)
 - **FAIL workspace-clippy**: [logs/workspace-clippy.stdout](logs/workspace-clippy.stdout); [stderr](logs/workspace-clippy.stderr)
@@ -84,4 +89,4 @@ per verifier process. Replays require at least 8 GiB available at startup and st
 Temporary files and databases live on disk under `/home/postfiatchad/.cache/release-repair-20260918`; `/tmp` is used only for the source worktree.
 Private keys, signed batches, databases and executables remain outside Git.
 `SHA256SUMS` covers every packet file except the checksum manifest itself.
-Packet updated: 2026-09-18T11:59:31.960189+00:00.
+Packet updated: 2026-09-18T12:20:48.117984+00:00.

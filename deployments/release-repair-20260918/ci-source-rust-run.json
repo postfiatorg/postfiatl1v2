@@ -1,15 +1,15 @@
 {
-  "conclusion": "",
+  "conclusion": "failure",
   "databaseId": 35335763469,
   "headSha": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
   "jobs": [
     {
-      "completedAt": "0001-01-01T00:00:00Z",
-      "conclusion": "",
+      "completedAt": "2026-09-18T12:09:50Z",
+      "conclusion": "success",
       "databaseId": 105570112926,
       "name": "test",
       "startedAt": "2026-09-18T10:39:21Z",
-      "status": "in_progress",
+      "status": "completed",
       "steps": [
         {
           "conclusion": "success",
@@ -48,22 +48,28 @@
           "status": "completed"
         },
         {
-          "conclusion": "",
+          "conclusion": "success",
           "name": "cargo test",
           "number": 7,
-          "status": "in_progress"
+          "status": "completed"
         },
         {
-          "conclusion": "",
+          "conclusion": "success",
           "name": "Post Run actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
           "number": 13,
-          "status": "pending"
+          "status": "completed"
         },
         {
-          "conclusion": "",
+          "conclusion": "success",
           "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
           "number": 14,
-          "status": "pending"
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 15,
+          "status": "completed"
         }
       ],
       "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35335763469/job/105570112926"
@@ -128,7 +134,7 @@
       "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35335763469/job/105570113222"
     }
   ],
-  "status": "in_progress",
+  "status": "completed",
   "url": "https://github.com/postfiatorg/postfiatl1v2/actions/runs/35335763469",
-  "observed_at": "2026-09-18T11:53:39.720484+00:00"
+  "observed_at": "2026-09-18T12:15:44.754114+00:00"
 }

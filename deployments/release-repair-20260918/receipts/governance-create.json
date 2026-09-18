@@ -19,8 +19,8 @@
   "cwd": "/tmp/qualify-20260918",
   "started_at": "2026-09-18T11:53:31.701920+00:00",
   "status": "PASS",
-  "stdout": "logs/governance-create.stdout",
-  "stderr": "logs/governance-create.stderr",
+  "stdout": "/home/postfiatchad/.cache/release-repair-20260918/logs/governance-create.stdout",
+  "stderr": "/home/postfiatchad/.cache/release-repair-20260918/logs/governance-create.stderr",
   "environment_overrides": {
     "CARGO_BUILD_JOBS": "2",
     "CARGO_INCREMENTAL": "0",

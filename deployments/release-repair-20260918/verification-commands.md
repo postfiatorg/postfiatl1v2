@@ -25,6 +25,7 @@ ulimit -c 0
 ```
 
 Per-command execution reports under `receipts/` are authoritative for complete argument vectors.
+Signing-preparation stdout/stderr remain at their private cache paths; their commands and exit receipts are published.
 Verifier stdout is written directly to disk, never accumulated in an in-memory pipe.
 The prior raw originals were copied to `working/` and `rollback/`; the prior V2 copies were copied to
 `post-v2/`. Authenticated pointer relocation verifies the original MAC and changes only
