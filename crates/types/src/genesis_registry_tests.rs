@@ -15,6 +15,18 @@
 
 use std::path::PathBuf;
 
+#[test]
+fn genesis_domain_digest_rejects_overlong_label_without_narrowing() {
+    let label = "a".repeat(u16::MAX as usize + 1);
+    assert_eq!(genesis_domain_digest(&label, b"payload"), Err(GenesisRegistryError::InvalidDomainLabelLength));
+    let short = "domain";
+    let mut preimage = (short.len() as u16).to_be_bytes().to_vec();
+    preimage.extend_from_slice(short.as_bytes());
+    preimage.extend_from_slice(b"payload");
+    assert_eq!(genesis_domain_digest(short, b"payload"), Ok(genesis_sha256(&preimage)));
+    assert!(genesis_domain_digest(&label[..u16::MAX as usize], b"payload").is_ok());
+}
+
 const GR_FIXTURE_CHAIN_ID: &str = "postfiat-l1v2-testnet";
 const GR_FIXTURE_ROUNDS: [u64; 8] = [12, 13, 14, 15, 16, 17, 18, 19];
 const GR_FIXTURE_MLDSA_DOMAIN: &[u8] = b"L1V2_GR_FIXTURE_MLDSA_V1";

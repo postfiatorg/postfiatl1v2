@@ -108,21 +108,23 @@ pub fn configure_storage_backend(
     };
 
     drop(transactional);
-    store.write_storage_backend_mode(options.mode)?;
-    let selected = NodeStore::try_new(&options.data_dir)?;
-    let selected_commitment = selected.backend_ordered_history_commitment()?;
-    let selected_tip = selected.read_chain_tip()?;
-    if selected_commitment != legacy_commitment
-        || selected_tip.height != tip.height
-        || selected_tip.block_hash != tip.block_hash
-        || selected_tip.state_root != tip.state_root
-        || selected_tip.ordered_batch_count != tip.ordered_batch_count
-    {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "storage_backend_mode_selected_mismatch: configured backend changed the certified logical state",
-        ));
-    }
+    let selected_commitment = select_storage_backend_checked(&store, options.mode, || {
+        let selected = NodeStore::try_new(&options.data_dir)?;
+        let selected_commitment = selected.backend_ordered_history_commitment()?;
+        let selected_tip = selected.read_chain_tip()?;
+        if selected_commitment != legacy_commitment
+            || selected_tip.height != tip.height
+            || selected_tip.block_hash != tip.block_hash
+            || selected_tip.state_root != tip.state_root
+            || selected_tip.ordered_batch_count != tip.ordered_batch_count
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "storage_backend_mode_selected_mismatch: configured backend changed the certified logical state",
+            ));
+        }
+        Ok(selected_commitment)
+    })?;
 
     Ok(StorageBackendConfigureReportV1 {
         schema: "postfiat-storage-backend-configure-report-v1".to_owned(),
@@ -140,4 +142,80 @@ pub fn configure_storage_backend(
         transactional_generation_verified: true,
         bounded_index_generation,
     })
+}
+
+fn select_storage_backend_checked<T>(
+    store: &NodeStore,
+    mode: postfiat_storage::StorageBackendMode,
+    verify: impl FnOnce() -> io::Result<T>,
+) -> io::Result<T> {
+    let previous_mode = store.storage_backend_mode()?;
+    let result = store
+        .write_storage_backend_mode(mode)
+        .and_then(|_| verify());
+    match result {
+        Ok(value) => Ok(value),
+        Err(error) => {
+            store.write_storage_backend_mode(previous_mode).map_err(|restore_error| {
+                io::Error::other(format!(
+                    "storage_backend_mode_restore_failed: selection failed ({error}); previous mode could not be restored ({restore_error})"
+                ))
+            })?;
+            Err(error)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use postfiat_storage::StorageBackendMode;
+
+    #[test]
+    fn burn5_failed_backend_selection_restores_previous_mode() {
+        let root = std::env::temp_dir().join(format!(
+            "postfiat-burn5-backend-selection-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let store = NodeStore::try_new(&root).unwrap();
+        store
+            .write_storage_backend_mode(StorageBackendMode::Transactional)
+            .unwrap();
+        let error = select_storage_backend_checked(
+            &store,
+            StorageBackendMode::BoundedJsonl,
+            || -> io::Result<()> {
+                assert_eq!(
+                    NodeStore::try_new(&root)?.storage_backend_mode()?,
+                    StorageBackendMode::BoundedJsonl
+                );
+                Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "injected selected-backend mismatch",
+                ))
+            },
+        )
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("injected selected-backend mismatch"));
+        assert_eq!(
+            NodeStore::try_new(&root)
+                .unwrap()
+                .storage_backend_mode()
+                .unwrap(),
+            StorageBackendMode::Transactional
+        );
+        select_storage_backend_checked(&store, StorageBackendMode::BoundedJsonl, || Ok(()))
+            .unwrap();
+        assert_eq!(
+            NodeStore::try_new(&root)
+                .unwrap()
+                .storage_backend_mode()
+                .unwrap(),
+            StorageBackendMode::BoundedJsonl
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

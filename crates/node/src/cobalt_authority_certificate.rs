@@ -283,16 +283,42 @@ fn expand_protocol_transcript(
             "Cobalt authority transcript is not in canonical compact form",
         ));
     }
+    validate_expanded_transcript_size(&compact)?;
     for checkpoint in &mut compact.transcript.full_knowledge_checkpoints {
         checkpoint.checks = compact.full_knowledge_checks.clone();
     }
     Ok(compact.transcript)
 }
 
+fn validate_expanded_transcript_size(
+    compact: &CobaltAuthorityCompactProtocolTranscriptV1,
+) -> io::Result<()> {
+    // Each empty checks array is replaced by the shared array. Bound that
+    // product before cloning it, not just the compressed or compact input.
+    let checks_bytes = serde_json::to_vec(&compact.full_knowledge_checks)
+        .map_err(invalid_data)?
+        .len();
+    let transcript_bytes = serde_json::to_vec(&compact.transcript)
+        .map_err(invalid_data)?
+        .len();
+    let expanded_bytes = checks_bytes
+        .checked_sub(2)
+        .and_then(|bytes| bytes.checked_mul(compact.transcript.full_knowledge_checkpoints.len()))
+        .and_then(|bytes| bytes.checked_add(transcript_bytes));
+    if expanded_bytes.is_none_or(|bytes| bytes > MAX_COBALT_DECOMPRESSED_VALUE_BYTES) {
+        return Err(certificate_error(
+            "Cobalt authority expanded transcript exceeds decompressed bound",
+        ));
+    }
+    Ok(())
+}
+
 pub(super) fn compress_cobalt_protocol_transcript(
     transcript: &CobaltShadowProtocolTranscript,
 ) -> io::Result<serde_json::Value> {
-    compress_cobalt_value(&compact_protocol_transcript(transcript.clone())?)
+    let compact = compact_protocol_transcript(transcript.clone())?;
+    validate_expanded_transcript_size(&compact)?;
+    compress_cobalt_value(&compact)
 }
 
 pub(super) fn decompress_cobalt_protocol_transcript(
@@ -739,6 +765,23 @@ pub fn verify_cobalt_validator_update_decision_certificate(
     }
     let mut reference_checks = None;
     for checkpoint in &transcript.full_knowledge_checkpoints {
+        if checkpoint.interval_height != expected_activation_height
+            || !checkpoint
+                .covered_heights
+                .contains(&expected_activation_height)
+            || checkpoint.checks.iter().any(|check| {
+                check.checkpoint_height != expected_activation_height
+                    || !check.pending_pairs.iter().any(|pair| {
+                        pair.amendment_slot == transcript.ratification.amendment_slot
+                            && pair.output_candidate_id
+                                == transcript.ratification.output_candidate_id
+                    })
+            })
+        {
+            return Err(certificate_error(
+                "Cobalt DABC full-knowledge checkpoint does not bind the current ratification",
+            ));
+        }
         validate_dabc_full_knowledge_checkpoint_signed(
             &domain,
             &committee,
@@ -860,6 +903,19 @@ pub fn next_cobalt_decision_round(
             certificate_error("first Cobalt activation height has no prior decision round")
         }),
     }
+}
+
+#[cfg(test)]
+pub(super) fn amplify_cobalt_certificate_for_test(
+    certificate: &mut CobaltValidatorUpdateDecisionCertificateV1,
+) -> io::Result<()> {
+    let mut compact: CobaltAuthorityCompactProtocolTranscriptV1 =
+        decompress_cobalt_value(&certificate.protocol_transcript)?;
+    compact.full_knowledge_checks[0].signature_hex = "00".repeat(1024 * 1024);
+    compact.transcript.full_knowledge_checkpoints =
+        vec![compact.transcript.full_knowledge_checkpoints[0].clone(); 16];
+    certificate.protocol_transcript = compress_cobalt_value(&compact)?;
+    Ok(())
 }
 
 #[cfg(test)]

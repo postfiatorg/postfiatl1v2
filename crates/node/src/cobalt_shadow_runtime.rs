@@ -138,18 +138,30 @@ pub struct CobaltShadowNetworkDrillReport {
 }
 
 pub fn serve_listener(
-    mut service: CobaltShadowService,
+    service: CobaltShadowService,
     listener: TcpListener,
     allow_shutdown: bool,
 ) -> io::Result<CobaltShadowService> {
-    for incoming in listener.incoming() {
-        let mut stream = incoming?;
+    let streams = listener.incoming().map(|incoming| {
+        let stream = incoming?;
         stream.set_read_timeout(Some(Duration::from_secs(10)))?;
         stream.set_write_timeout(Some(Duration::from_secs(10)))?;
+        Ok(stream)
+    });
+    serve_streams(service, streams, allow_shutdown)
+}
+
+fn serve_streams<S: Read + Write>(
+    mut service: CobaltShadowService,
+    streams: impl IntoIterator<Item = io::Result<S>>,
+    allow_shutdown: bool,
+) -> io::Result<CobaltShadowService> {
+    for incoming in streams {
+        let mut stream = incoming?;
         let request = match read_request(&mut stream) {
             Ok(request) => request,
             Err(error) => {
-                write_response(&mut stream, error_response(&error))?;
+                let _ = write_response(&mut stream, error_response(&error));
                 continue;
             }
         };
@@ -159,7 +171,8 @@ pub fn serve_listener(
         } else {
             handle_request(&mut service, request)
         };
-        write_response(&mut stream, response)?;
+        // A peer disconnect or an oversized reply affects this connection only.
+        let _ = write_response(&mut stream, response);
         if shutdown && allow_shutdown {
             break;
         }
@@ -493,7 +506,7 @@ fn handle_request(
     }
 }
 
-fn read_request(stream: &mut TcpStream) -> io::Result<CobaltShadowRpcRequest> {
+fn read_request(stream: &mut impl Read) -> io::Result<CobaltShadowRpcRequest> {
     let mut bytes = Vec::new();
     stream
         .take((MAX_RPC_FRAME_BYTES + 1) as u64)
@@ -504,7 +517,7 @@ fn read_request(stream: &mut TcpStream) -> io::Result<CobaltShadowRpcRequest> {
     serde_json::from_slice(&bytes).map_err(json_error)
 }
 
-fn write_response(stream: &mut TcpStream, response: CobaltShadowRpcResponse) -> io::Result<()> {
+fn write_response(stream: &mut impl Write, response: CobaltShadowRpcResponse) -> io::Result<()> {
     let encoded = serde_json::to_vec(&response).map_err(json_error)?;
     if encoded.len() > MAX_RPC_FRAME_BYTES {
         return Err(invalid("RPC response exceeds frame bound"));
@@ -593,6 +606,87 @@ mod tests {
             .expect("clock")
             .as_nanos();
         std::env::temp_dir().join(format!("postfiat-cobalt-shadow-network-{nonce}"))
+    }
+
+    #[test]
+    fn burn5_response_failures_do_not_stop_shadow_service() {
+        use std::io::Cursor;
+        use std::sync::{Arc, Mutex};
+
+        struct Stream {
+            input: Cursor<Vec<u8>>,
+            output: Arc<Mutex<Vec<u8>>>,
+            fail_write: bool,
+        }
+        impl Read for Stream {
+            fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+                self.input.read(bytes)
+            }
+        }
+        impl Write for Stream {
+            fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+                if self.fail_write {
+                    return Err(io::Error::new(
+                        io::ErrorKind::BrokenPipe,
+                        "peer disconnected",
+                    ));
+                }
+                self.output.lock().expect("output").extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+        for first_request in [b"malformed".to_vec(), br#"{"operation":"probe"}"#.to_vec()] {
+            let root = test_dir();
+            let service = CobaltShadowService::initialize(
+                &root,
+                CobaltShadowIdentity {
+                    node_id: "validator-0".to_string(),
+                    chain_id: "burn5-in-memory-shadow".to_string(),
+                    genesis_hash: "02".repeat(48),
+                    protocol_version: 1,
+                },
+                CobaltShadowLimits::default(),
+            )
+            .expect("local fixture");
+            let before = service.state().clone();
+            let probe_output = Arc::new(Mutex::new(Vec::new()));
+            let streams = [
+                Stream {
+                    input: Cursor::new(first_request),
+                    output: Arc::default(),
+                    fail_write: true,
+                },
+                Stream {
+                    input: Cursor::new(br#"{"operation":"shutdown"}"#.to_vec()),
+                    output: Arc::default(),
+                    fail_write: false,
+                },
+                Stream {
+                    input: Cursor::new(br#"{"operation":"probe"}"#.to_vec()),
+                    output: probe_output.clone(),
+                    fail_write: false,
+                },
+            ];
+            let result = serve_streams(service, streams.into_iter().map(Ok), false);
+            fs::remove_dir_all(&root).expect("cleanup");
+            let service = result.expect("per-connection response failure must not stop service");
+            assert_eq!(
+                &before,
+                service.state(),
+                "failed replies and disabled shutdown leave shadow state unchanged"
+            );
+            let response: CobaltShadowRpcResponse =
+                serde_json::from_slice(&probe_output.lock().expect("probe output"))
+                    .expect("subsequent probe response");
+            assert!(response.ok);
+            let probe: CobaltShadowProbe =
+                serde_json::from_value(response.result.expect("probe")).expect("probe JSON");
+            assert!(!probe.live_authority);
+            assert!(!probe.controls_block_consensus);
+        }
     }
 
     #[test]

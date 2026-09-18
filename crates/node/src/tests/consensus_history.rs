@@ -32,6 +32,47 @@ pub(super) fn dummy_block_record(height: u64) -> BlockRecord {
 }
 
 #[test]
+fn tx_finality_hot_path_rejects_duplicate_receipts_and_block_links() {
+    let data_dir = unique_test_dir("postfiat-finality-duplicates");
+    init(InitOptions {
+        data_dir: data_dir.clone(),
+        chain_id: "postfiat-local".to_string(),
+        node_id: "validator-0".to_string(),
+        validator_count: 1,
+    }).expect("init");
+    let batch_file = data_dir.join("batch.json");
+    create_transfer_batch(BatchTransferOptions {
+        data_dir: data_dir.clone(), key_file: None,
+        to: "pfrecipient000000000000000000000000000001".to_string(),
+        amount: 25, batch_file: batch_file.clone(),
+    }).expect("batch");
+    let receipts = apply_batch(ApplyBatchOptions {
+        data_dir: data_dir.clone(), batch_file, certificate_file: None,
+    }).expect("apply");
+    let options = TxFinalityQueryOptions {
+        data_dir: data_dir.clone(), tx_id: receipts[0].tx_id.clone(), audit_block_log: false,
+    };
+    assert!(tx_finality(options.clone()).expect("unique finality").confirmed);
+    let store = NodeStore::new(&data_dir);
+    store.write_receipts(&[receipts[0].clone(), receipts[0].clone()]).expect("duplicate receipts");
+    let error = tx_finality(options.clone()).expect_err("duplicate receipts");
+    assert!(error.to_string().contains("multiple receipts"), "{error}");
+    store.write_receipts(&receipts).expect("restore receipts");
+    let original = store.read_blocks().expect("blocks");
+    let mut duplicated = original.clone();
+    duplicated.blocks.push(original.blocks[0].clone());
+    store.write_blocks(&duplicated).expect("duplicate block");
+    let error = tx_finality(options.clone()).expect_err("duplicate block links");
+    assert!(error.to_string().contains("multiple blocks"), "{error}");
+    let mut duplicated = original;
+    duplicated.blocks[0].receipt_ids.push(receipts[0].tx_id.clone());
+    store.write_blocks(&duplicated).expect("duplicate link in one block");
+    let error = tx_finality(options).expect_err("duplicate links");
+    assert!(error.to_string().contains("multiple blocks"), "{error}");
+    fs::remove_dir_all(data_dir).expect("cleanup");
+}
+
+#[test]
 fn archived_transparent_replay_accepts_wan_devnet_legacy_batch_id_only() {
     let genesis =
         Genesis::try_new_with_validator_count("postfiat-wan-devnet".to_string(), 1)

@@ -37,7 +37,7 @@ pub fn tx_finality(options: TxFinalityQueryOptions) -> io::Result<TxFinalityRepo
     let receipt_log = store.read_receipts()?;
     let blocks = store.read_blocks()?;
 
-    let (receipt, block, receipt_index) = if options.audit_block_log {
+    let (receipt, block, receipt_index) = {
         let matching_receipts = receipt_log
             .iter()
             .filter(|receipt| receipt.tx_id == tx_id)
@@ -79,31 +79,6 @@ pub fn tx_finality(options: TxFinalityQueryOptions) -> io::Result<TxFinalityRepo
                 ));
             }
         };
-        (receipt, block, receipt_index)
-    } else {
-        let receipt = receipt_log
-            .iter()
-            .rev()
-            .find(|receipt| receipt.tx_id == tx_id)
-            .cloned()
-            .ok_or_else(|| tx_finality_transaction_not_found(&tx_id))?;
-        let (block, receipt_index) = blocks
-            .blocks
-            .iter()
-            .rev()
-            .find_map(|block| {
-                block
-                    .receipt_ids
-                    .iter()
-                    .position(|receipt_id| receipt_id == &tx_id)
-                    .map(|index| (block.clone(), index as u64))
-            })
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("transaction `{tx_id}` receipt is not linked from any block"),
-                )
-            })?;
         (receipt, block, receipt_index)
     };
 

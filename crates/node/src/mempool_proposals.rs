@@ -2093,53 +2093,8 @@ pub(super) fn enforce_mempool_admission_limits(
             format!("sender `{sender}` already participates in a pending atomic swap"),
         ));
     }
-    let sender_pending = mempool
-        .pending
-        .iter()
-        .filter(|entry| entry.transfer.unsigned.from == sender)
-        .count()
-        + mempool
-            .pending_payment_v2
-            .iter()
-            .filter(|entry| entry.payment.unsigned.from == sender)
-            .count()
-        + mempool
-            .pending_asset_transactions
-            .iter()
-            .filter(|entry| entry.transaction.unsigned.source == sender)
-            .count()
-        + mempool
-            .pending_atomic_swaps
-            .iter()
-            .filter(|entry| {
-                entry.transaction.unsigned.leg_0.owner == sender
-                    || entry.transaction.unsigned.leg_1.owner == sender
-            })
-            .count()
-        + mempool
-            .pending_fastlane_primary
-            .iter()
-            .filter(|entry| match &entry.transaction.operation {
-                postfiat_types::FastLanePrimaryOperationV1::Deposit { signed } => {
-                    signed.deposit.source_address == sender
-                }
-                postfiat_types::FastLanePrimaryOperationV1::OwnedDeposit { signed } => {
-                    signed.deposit.source_address == sender
-                }
-                _ => false,
-            })
-            .count()
-        + mempool
-            .pending_escrow_transactions
-            .iter()
-            .filter(|entry| entry.transaction.unsigned.source == sender)
-            .count()
-        + mempool
-            .pending_nft_transactions
-            .iter()
-            .filter(|entry| entry.transaction.unsigned.source == sender)
-            .count();
-    if sender_pending >= MAX_MEMPOOL_PENDING_PER_SENDER {
+    let sender_pending = mempool_pending_count_for_sender(mempool, sender);
+    if sender_pending >= MAX_MEMPOOL_PENDING_PER_SENDER as u64 {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             format!(
@@ -3334,4 +3289,97 @@ fn build_bridge_batch_proposal(
         receipts: &receipts,
         fastpay_pre_state_effects,
     })
+}
+
+#[cfg(test)]
+mod burn5_tests {
+    use super::*;
+
+    // Quota guards inspect only sender identities, so these fixtures do not
+    // carry signatures and are never submitted to an execution path.
+    fn offer_entry(sender: &str, sequence: u64) -> MempoolOfferTransactionEntry {
+        let transaction = SignedOfferTransaction {
+            unsigned: postfiat_types::UnsignedOfferTransaction {
+                chain_id: "quota-test".to_string(),
+                genesis_hash: String::new(),
+                protocol_version: 1,
+                address_namespace: ADDRESS_NAMESPACE.to_string(),
+                transaction_kind: "offer".to_string(),
+                source: sender.to_string(),
+                sequence,
+                fee: 1,
+                signature_algorithm_id: String::new(),
+                operation: OfferTransactionOperation::OfferCancel(
+                    postfiat_types::OfferCancelOperation {
+                        offer_id: format!("cancel-{sequence}"),
+                        owner: sender.to_string(),
+                    },
+                ),
+            },
+            algorithm_id: String::new(),
+            public_key_hex: String::new(),
+            signature_hex: String::new(),
+        };
+        MempoolOfferTransactionEntry::new(format!("offer-{sender}-{sequence}"), transaction)
+    }
+
+    fn transfer_entry(sender: &str) -> MempoolEntry {
+        let transfer = SignedTransfer {
+            unsigned: postfiat_types::UnsignedTransfer {
+                chain_id: "quota-test".to_string(),
+                genesis_hash: String::new(),
+                protocol_version: 1,
+                address_namespace: ADDRESS_NAMESPACE.to_string(),
+                transaction_kind: "transfer".to_string(),
+                signature_algorithm_id: String::new(),
+                from: sender.to_string(),
+                to: "recipient".to_string(),
+                amount: 1,
+                sequence: MAX_MEMPOOL_PENDING_PER_SENDER as u64,
+                fee: 1,
+            },
+            algorithm_id: String::new(),
+            public_key_hex: String::new(),
+            signature_hex: String::new(),
+        };
+        MempoolEntry::new(format!("transfer-{sender}"), transfer)
+    }
+
+    #[test]
+    fn offer_sender_quota_is_enforced_at_admission() {
+        let mut mempool = MempoolState::empty();
+        for sequence in 0..MAX_MEMPOOL_PENDING_PER_SENDER {
+            assert!(enforce_mempool_admission_limits(&mempool, "sender").is_ok());
+            mempool
+                .pending_offer_transactions
+                .push(offer_entry("sender", sequence as u64));
+        }
+        assert!(enforce_mempool_state_limits(&mempool).is_ok());
+        let error = enforce_mempool_admission_limits(&mempool, "sender")
+            .expect_err("offers must occupy the sender's admission quota");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("sender pending limit"));
+        assert!(enforce_mempool_admission_limits(&mempool, "other").is_ok());
+
+        mempool
+            .pending_offer_transactions
+            .push(offer_entry("sender", MAX_MEMPOOL_PENDING_PER_SENDER as u64));
+        assert!(enforce_mempool_state_limits(&mempool).is_err());
+    }
+
+    #[test]
+    fn offers_share_the_sender_quota_with_transfers() {
+        let mut mempool = MempoolState::empty();
+        for sequence in 0..MAX_MEMPOOL_PENDING_PER_SENDER - 1 {
+            mempool
+                .pending_offer_transactions
+                .push(offer_entry("sender", sequence as u64));
+        }
+        mempool.pending.push(transfer_entry("other"));
+        assert!(enforce_mempool_admission_limits(&mempool, "sender").is_ok());
+        mempool.pending.push(transfer_entry("sender"));
+        assert!(enforce_mempool_state_limits(&mempool).is_ok());
+        assert!(enforce_mempool_admission_limits(&mempool, "sender").is_err());
+        assert!(enforce_mempool_admission_limits(&mempool, "other").is_ok());
+    }
 }

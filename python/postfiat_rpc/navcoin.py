@@ -216,6 +216,8 @@ def build_packet_and_operations(inputs: NavInputs) -> dict[str, Any]:
         raise ValueError("redeem amount cannot exceed minted amount in this example")
 
     nav = calculate_nav(inputs)
+    if nav["over_collateralization_remainder_micro_usd"] != 0:
+        raise ValueError("native reserve operations require net assets exactly divisible by supply")
     asset_id = derived_asset_id(inputs.chain_id, inputs.issuer, inputs.asset_code)
     reserve_packet = {
         "schema": "postfiat-navcoin-reserve-packet-example-v1",

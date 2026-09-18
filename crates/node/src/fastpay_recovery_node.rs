@@ -607,14 +607,25 @@ fn rollback_fastpay_speculative_effect(
             fastpay_invalid_data("FastPay speculative rollback omitted certificate")
         })?;
     let input_refs = certificate.inputs();
+    // The journal preserves ledger-position order for inverse swap-removal;
+    // certificate inputs need not have that same order.
+    let expected_inputs = input_refs
+        .iter()
+        .map(|input| (input.id.as_str(), input.version))
+        .collect::<BTreeSet<_>>();
+    let prior_inputs = record
+        .prior_objects
+        .iter()
+        .map(|prior| (prior.object.id.as_str(), prior.object.version))
+        .collect::<BTreeSet<_>>();
     if record.prior_objects.len() != input_refs.len()
+        || expected_inputs.len() != input_refs.len()
+        || prior_inputs.len() != record.prior_objects.len()
+        || prior_inputs != expected_inputs
         || record
             .prior_objects
-            .iter()
-            .zip(input_refs)
-            .any(|(prior, input)| {
-                prior.object.id != input.id || prior.object.version != input.version
-            })
+            .windows(2)
+            .any(|pair| pair[0].index >= pair[1].index)
     {
         return Err(fastpay_invalid_data(
             "FastPay speculative rollback inputs do not match certificate",
@@ -983,4 +994,135 @@ pub fn owned_recovery_status_v3(options: NodeOptions, lock_id: &str) -> io::Resu
         "fence": fence,
     }))
     .map_err(invalid_data)
+}
+
+#[cfg(test)]
+mod burn5_recovery_tests {
+    use super::*;
+
+    #[test]
+    fn burn5_multi_input_rollback_restores_ledger_order() {
+        let keypair = ml_dsa_65_keygen_from_seed(&[71_u8; 32]);
+        let owner = bytes_to_hex(&keypair.public_key);
+        let object = postfiat_types::OwnedObject {
+            id: "11".repeat(48),
+            version: 0,
+            owner_pubkey_hex: owner.clone(),
+            asset: "PFT".to_string(),
+            value: 1_000_000,
+        };
+        let mut ledger = LedgerState::empty();
+        let mut other = object.clone();
+        other.id = "22".repeat(48);
+        ledger.owned_objects = vec![other.clone(), object.clone()];
+        let inputs = vec![
+            postfiat_types::OwnedObjectRef {
+                id: object.id.clone(),
+                version: 0,
+            },
+            postfiat_types::OwnedObjectRef {
+                id: other.id.clone(),
+                version: 0,
+            },
+        ];
+        let mut spare_1 = object.clone();
+        spare_1.id = "88".repeat(48);
+        let mut spare_2 = object.clone();
+        spare_2.id = "99".repeat(48);
+        for objects in [
+            vec![
+                other.clone(),
+                spare_1.clone(),
+                object.clone(),
+                spare_2.clone(),
+            ],
+            vec![
+                object.clone(),
+                spare_1.clone(),
+                other.clone(),
+                spare_2.clone(),
+            ],
+        ] {
+            ledger.owned_objects = objects;
+            let certificate = postfiat_types::OwnedTransferCertificateV3 {
+                order: postfiat_types::OwnedTransferOrderV3 {
+                    domain: postfiat_types::OwnedCertificateDomain {
+                        schema: "postfiat-owned-certificate-domain-v1".to_string(),
+                        chain_id: "burn5".to_string(),
+                        genesis_hash: "33".repeat(48),
+                        protocol_version: 1,
+                        registry_id: "44".repeat(48),
+                    },
+                    inputs: inputs.clone(),
+                    outputs: vec![serde_json::from_value(serde_json::json!({
+                        "owner_pubkey_hex": owner, "asset": "PFT", "value": 1_999_999,
+                    }))
+                    .expect("output")],
+                    fee: 1,
+                    nonce: 1,
+                    memos: Vec::new(),
+                    recovery: postfiat_types::FastPayOrderRecoveryV1 {
+                        committee_epoch: 1,
+                        expires_at_height: 10,
+                        lock_id: "55".repeat(48),
+                        recovery_closes_at_height: 20,
+                        valid_from_height: 1,
+                        schema: "postfiat.fastpay.order-recovery.v1".to_string(),
+                    },
+                },
+                owner_pubkey_hex: owner.clone(),
+                owner_signature_hex: String::new(),
+                votes: Vec::new(),
+            };
+            let fence = postfiat_types::FastPayVersionFenceV1 {
+                certificate: Some(postfiat_types::FastPayCertificateV1::Transfer(
+                    certificate.clone(),
+                )),
+                committee_epoch: 1,
+                decided_at_height: 1,
+                decision: postfiat_types::FastPayRecoveryDecisionV1::Confirmed {
+                    order_digest: "66".repeat(48),
+                    certificate_digest: "77".repeat(48),
+                },
+                inputs: inputs.clone(),
+                lock_id: "55".repeat(48),
+                schema: "postfiat.fastpay.version-fence.v1".to_string(),
+                registry_root: "44".repeat(48),
+                next_versions: Vec::new(),
+                operation: postfiat_types::FastPayOperationKindV1::Transfer,
+                origin: postfiat_types::FastPayFenceOriginV1::Consensusless,
+            };
+            let record = FastPaySpeculativeEffectV1 {
+                fence,
+                prior_objects: prior_objects_for_fastpay_inputs(&ledger, &inputs).unwrap(),
+                prior_unwrap_account: None,
+            };
+            let original = ledger.clone();
+            let legacy = postfiat_types::OwnedTransferOrder {
+                domain: certificate.order.domain.clone(),
+                inputs: certificate.order.inputs.clone(),
+                outputs: certificate.order.outputs.clone(),
+                fee: certificate.order.fee,
+                nonce: certificate.order.nonce,
+                memos: certificate.order.memos.clone(),
+            };
+            postfiat_execution::apply_owned_transfer(&mut ledger, &legacy, &owner)
+                .expect("apply model");
+            ledger.fastpay_version_fences.push(record.fence.clone());
+            for case in 0..4 {
+                let mut invalid = record.clone();
+                match case {
+                    0 => invalid.prior_objects[0].object.version += 1,
+                    1 => invalid.prior_objects[1].object = invalid.prior_objects[0].object.clone(),
+                    2 => invalid.prior_objects.swap(0, 1),
+                    _ => invalid.prior_objects[1].index = invalid.prior_objects[0].index,
+                }
+                let mut unchanged = ledger.clone();
+                assert!(rollback_fastpay_speculative_effect(&mut unchanged, &invalid).is_err());
+                assert_eq!(unchanged, ledger);
+            }
+            rollback_fastpay_speculative_effect(&mut ledger, &record).expect("rollback");
+            assert_eq!(ledger, original);
+        }
+    }
 }

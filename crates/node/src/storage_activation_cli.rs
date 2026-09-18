@@ -83,14 +83,49 @@ fn validate_sha3_384_digest(label: &str, value: &str) -> io::Result<()> {
 }
 
 fn write_exclusive_json<T: Serialize>(path: &Path, value: &T, label: &str) -> io::Result<()> {
-    if path.exists() {
-        return Err(io::Error::new(
-            io::ErrorKind::AlreadyExists,
-            format!("{label} already exists: {}", path.display()),
-        ));
-    }
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
     let json = serde_json::to_string_pretty(value).map_err(invalid_data)?;
-    atomic_write(path, format!("{json}\n"))
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(parent)?;
+    let (temporary, mut file) = loop {
+        let temporary = parent.join(format!(
+            ".storage-activation-{}-{}.tmp",
+            std::process::id(),
+            NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+        ));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&temporary)
+        {
+            Ok(file) => break (temporary, file),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    };
+    let result = (|| {
+        writeln!(file, "{json}")?;
+        file.sync_all()?;
+        // Linking a complete file publishes atomically and refuses every
+        // existing destination entry, including a dangling symlink.
+        std::fs::hard_link(&temporary, path).map_err(|error| {
+            io::Error::new(error.kind(), format!("{label} publication failed: {error}"))
+        })?;
+        std::fs::remove_file(&temporary)?;
+        std::fs::File::open(parent)?.sync_all()
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result
 }
 
 fn fully_verified_migration_meta(
@@ -375,4 +410,58 @@ pub fn create_storage_cancellation_batch(
     verify_storage_commitment_action_readiness(&store, &genesis, &batch, &tip)?;
     write_exclusive_json(&options.batch_file, &batch, "storage cancellation batch")?;
     Ok(batch)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn burn5_activation_output_preserves_competing_artifact() {
+        struct CompetingWriter<'a>(&'a Path);
+        impl Serialize for CompetingWriter<'_> {
+            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                std::fs::write(self.0, b"inspected artifact\n")
+                    .map_err(serde::ser::Error::custom)?;
+                "replacement".serialize(serializer)
+            }
+        }
+
+        let root = std::env::temp_dir().join(format!(
+            "postfiat-burn5-activation-output-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("record.json");
+        let result = write_exclusive_json(&path, &CompetingWriter(&path), "activation record");
+        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(&path).unwrap(), b"inspected artifact\n");
+
+        let symlink = root.join("dangling.json");
+        std::os::unix::fs::symlink(root.join("absent.json"), &symlink).unwrap();
+        assert_eq!(
+            write_exclusive_json(&symlink, &"candidate", "activation record")
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        assert!(std::fs::symlink_metadata(&symlink)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+
+        let fresh = root.join("fresh.json");
+        write_exclusive_json(
+            &fresh,
+            &serde_json::json!({"height": 42}),
+            "activation record",
+        )
+        .unwrap();
+        assert_eq!(
+            std::fs::read_to_string(fresh).unwrap(),
+            "{\n  \"height\": 42\n}\n"
+        );
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 3);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

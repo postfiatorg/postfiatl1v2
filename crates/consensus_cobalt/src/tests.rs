@@ -2407,6 +2407,21 @@
     }
 
     #[test]
+    fn unauthenticated_signed_beacon_cannot_select_a_live_coin() {
+        let domain = test_domain();
+        let agreement_id = root('a');
+        for output in ['c', 'd'] {
+            let source = AbbaCommonRandomSource::SignedBeacon {
+                beacon_id: root('b'),
+                output_hash: root(output),
+            };
+            let error = abba_common_coin(&domain, &agreement_id, 1, &source, CobaltRuntimeMode::Live)
+                .expect_err("beacon has no authentication evidence");
+            assert!(error.contains("authentication is unavailable"));
+        }
+    }
+
+    #[test]
     fn deterministic_abba_test_crs_is_simulation_only() {
         let domain = test_domain();
         let agreement_id = hash_hex("postfiat.test.abba.agreement", b"agreement-4");
@@ -2444,8 +2459,8 @@
             output_hash: root('c'),
         };
         assert!(
-            !abba_common_coin(&domain, &agreement_id, 1, &beacon, CobaltRuntimeMode::Live)
-                .expect("live signed beacon coin")
+            !abba_common_coin(&domain, &agreement_id, 1, &beacon, CobaltRuntimeMode::Simulation)
+                .expect("simulation beacon coin")
         );
     }
 

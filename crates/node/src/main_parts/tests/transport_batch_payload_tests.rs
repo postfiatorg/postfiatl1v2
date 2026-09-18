@@ -31,7 +31,9 @@ mod transport_batch_payload_tests {
         serde_json::from_str(&response_line).expect("parse test RPC response")
     }
 
-    fn consensus_v2_test_base_port(validator_count: usize) -> u16 {
+    fn reserve_consensus_v2_test_ports(
+        validator_count: usize,
+    ) -> (u16, Vec<TcpListener>, Vec<TcpListener>) {
         let seed = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("clock")
@@ -39,20 +41,28 @@ mod transport_batch_payload_tests {
         for offset in 0..512u16 {
             let base = 30_000u16 + ((seed.wrapping_add(offset * 4)) % 20_000);
             let rpc_base = base.saturating_add(100);
-            if (0..validator_count).all(|index| {
-                let index = index as u16;
-                TcpListener::bind(("127.0.0.1", base.saturating_add(index * 2))).is_ok()
-                    && TcpListener::bind(("127.0.0.1", rpc_base.saturating_add(index))).is_ok()
-            }) {
-                return base;
+            let listeners = (0..validator_count)
+                .map(|index| TcpListener::bind(("127.0.0.1", base + index as u16 * 2)))
+                .collect::<io::Result<Vec<_>>>();
+            if let Ok(listeners) = listeners {
+                let rpc_listeners = (0..validator_count)
+                    .map(|index| TcpListener::bind(("127.0.0.1", rpc_base + index as u16)))
+                    .collect::<io::Result<Vec<_>>>();
+                if let Ok(rpc_listeners) = rpc_listeners {
+                    // Keep every transport and RPC port reserved for the entire scenario,
+                    // including while its validator is the local proposer. Otherwise
+                    // another test or an outbound connection can claim a later round's port.
+                    return (base, listeners, rpc_listeners);
+                }
             }
         }
-        panic!("could not find four local transport ports");
+        panic!("could not reserve {validator_count} local transport ports");
     }
 
     fn start_consensus_v2_test_servers(
         data_dirs: &[PathBuf],
         topology_file: &Path,
+        listeners: &[TcpListener],
         excluded_index: usize,
         round_label: &str,
     ) -> Vec<std::thread::JoinHandle<Result<TransportValidatorServeReport, String>>> {
@@ -65,6 +75,7 @@ mod transport_batch_payload_tests {
             let topology_file = topology_file.to_path_buf();
             let vote_dir = data_dir.join(format!("{round_label}-transport-votes"));
             let key_file = data_dir.join(VALIDATOR_KEYS_FILE);
+            let listener = listeners[index].try_clone().expect("clone reserved listener");
             handles.push(std::thread::spawn(move || {
                 let shutdown_requested = std::sync::atomic::AtomicBool::new(false);
                 crate::transport_runtime::transport_validator_serve_inner(
@@ -87,43 +98,22 @@ mod transport_batch_payload_tests {
                         asset_orchard_private_egress_verifier_ms: Some(0.0),
                         asset_orchard_private_egress_verifier_breakdown: None,
                     }),
+                    Some(listener),
                     &shutdown_requested,
                 )
             }));
         }
-        let topology_path = topology_file.to_path_buf();
-        let topology = read_topology_file(&topology_path).expect("read test topology");
-        let expected_addresses = topology
-            .peers
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| *index != excluded_index)
-            .map(|(_, peer)| (peer.host.clone(), peer.p2p_port))
-            .collect::<Vec<_>>();
-        let mut ready = false;
-        for _ in 0..500 {
-            ready = expected_addresses.iter().all(|(host, port)| {
-                TcpListener::bind((host.as_str(), *port))
-                    .is_err_and(|error| error.kind() == io::ErrorKind::AddrInUse)
-            });
-            if ready {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(10));
-        }
-        if !ready {
-            let results = handles
-                .into_iter()
-                .map(|handle| handle.join())
-                .collect::<Vec<_>>();
-            panic!("validator services did not bind before the test round: {results:?}");
-        }
+        // The sockets are already listening before any worker starts. Requests
+        // queue until the worker accepts them; authenticated health then awaits a
+        // real response. Probing readiness with bind() races the worker's bind,
+        // and AddrInUse can also mean TIME_WAIT rather than a listening server.
         handles
     }
 
     fn run_consensus_v2_transport_round(
         data_dirs: &[PathBuf],
         topology_file: &Path,
+        listeners: &[TcpListener],
         proposer_index: usize,
         batch_kind: &str,
         batch_file: PathBuf,
@@ -136,6 +126,7 @@ mod transport_batch_payload_tests {
         let handles = start_consensus_v2_test_servers(
             data_dirs,
             topology_file,
+            listeners,
             proposer_index,
             &format!("h{height}-v{view}"),
         );
@@ -290,7 +281,7 @@ mod transport_batch_payload_tests {
                 .expect("protect isolated validator key");
         }
         let topology_file = root.join("topology.json");
-        let base_port = consensus_v2_test_base_port(validator_count);
+        let (base_port, listeners, rpc_listeners) = reserve_consensus_v2_test_ports(validator_count);
         write_consensus_v2_topology(TopologyConsensusV2Options {
             chain_id: "postfiat-consensus-v2-transport-test".to_string(),
             validators: validator_count as u32,
@@ -328,6 +319,7 @@ mod transport_batch_payload_tests {
         run_consensus_v2_transport_round(
             &data_dirs,
             &topology_file,
+            &listeners,
             first_index,
             "transparent",
             first_batch,
@@ -388,6 +380,7 @@ mod transport_batch_payload_tests {
         let recovery_handles = start_consensus_v2_test_servers(
             &data_dirs,
             &topology_file,
+            &listeners,
             recovery_index,
             "h2-v1-shipping-rpc",
         );
@@ -398,8 +391,11 @@ mod transport_batch_payload_tests {
         let recovery_data_dir = data_dirs[recovery_index].clone();
         let recovery_topology = topology_file.clone();
         let recovery_ready = recovery_ready_file.clone();
+        let recovery_rpc_listener = rpc_listeners[recovery_index]
+            .try_clone()
+            .expect("clone reserved recovery RPC listener");
         let recovery_rpc = std::thread::spawn(move || {
-            rpc_serve(RpcServeOptions {
+            rpc_serve_inner(RpcServeOptions {
                 data_dir: recovery_data_dir.clone(),
                 spool_dir: recovery_data_dir.join("runtime/rpc-spool"),
                 ready_file: recovery_ready,
@@ -429,7 +425,7 @@ mod transport_batch_payload_tests {
                 max_child_dispatch_concurrent: 8,
                 max_child_dispatch_per_peer: 4,
                 keep_alive: false,
-            })
+            }, Some(recovery_rpc_listener))
             .expect("serve recovery finality RPC")
         });
         for _ in 0..500 {
@@ -582,6 +578,7 @@ mod transport_batch_payload_tests {
         run_consensus_v2_transport_round(
             &data_dirs,
             &topology_file,
+            &listeners,
             governance_index,
             "governance",
             governance_batch,
@@ -736,6 +733,7 @@ mod transport_batch_payload_tests {
         run_consensus_v2_transport_round(
             &data_dirs,
             &topology_file,
+            &listeners,
             rotation_index,
             "governance",
             rotation_batch,
@@ -775,6 +773,7 @@ mod transport_batch_payload_tests {
         run_consensus_v2_transport_round(
             &data_dirs,
             &topology_file,
+            &listeners,
             activation_index,
             "transparent",
             activation_batch,
@@ -866,6 +865,7 @@ mod transport_batch_payload_tests {
         run_consensus_v2_transport_round(
             &data_dirs,
             &topology_file,
+            &listeners,
             post_rotation_index,
             "transparent",
             post_rotation_batch,
@@ -920,6 +920,7 @@ mod transport_batch_payload_tests {
         run_consensus_v2_transport_round(
             &data_dirs,
             &topology_file,
+            &listeners,
             funding_index,
             "transparent",
             funding_batch,
@@ -1006,6 +1007,7 @@ mod transport_batch_payload_tests {
         run_consensus_v2_transport_round(
             &data_dirs,
             &topology_file,
+            &listeners,
             deposit_index,
             "transparent",
             deposit_batch,
@@ -1124,7 +1126,7 @@ mod transport_batch_payload_tests {
         }
 
         let topology_file = root.join("topology.json");
-        let base_port = consensus_v2_test_base_port(validator_count);
+        let (base_port, listeners, _rpc_listeners) = reserve_consensus_v2_test_ports(validator_count);
         write_consensus_v2_topology(TopologyConsensusV2Options {
             chain_id: "postfiat-remote-proposer-test".to_string(),
             validators: validator_count as u32,
@@ -1161,6 +1163,7 @@ mod transport_batch_payload_tests {
         let handles = start_consensus_v2_test_servers(
             &data_dirs,
             &topology_file,
+            &listeners,
             collector_index,
             "remote-proposer-h1",
         );
@@ -1511,6 +1514,7 @@ mod transport_batch_payload_tests {
             build_profile: "test".to_string(),
             active_nav_profiles: Vec::new(),
             deployment_manifest_sha256: None,
+            deployment_manifest_verified: false,
             deployment_validator_id: None,
             deployment_service_artifacts: Vec::new(),
             deployment_runtime_artifacts: None,

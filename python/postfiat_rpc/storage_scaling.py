@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import re
 import sys
 from dataclasses import dataclass
@@ -130,6 +131,8 @@ PERFORMANCE_RESOURCE_FIELDS = (
     "network_transmitted_bytes",
 )
 MAX_PACKET_FILES = 4096
+# Bound directories as well as files, including the root checksum file.
+MAX_PACKET_ENTRIES = 2 * MAX_PACKET_FILES + 1
 MAX_FILE_BYTES = 512 * 1024 * 1024
 HEX40 = re.compile(r"[0-9a-f]{40}")
 HEX64 = re.compile(r"[0-9a-f]{64}")
@@ -323,11 +326,28 @@ def _verify_checksums(packet_dir: Path) -> tuple[dict[str, str], str]:
         entries[relative] = digest
     if not entries or len(entries) > MAX_PACKET_FILES:
         _fail("checksum entry count is outside the closed bound")
-    actual_files = {
-        path.relative_to(packet_dir).as_posix()
-        for path in packet_dir.rglob("*")
-        if path.is_file() and path.name != CHECKSUM_FILE
-    }
+    actual_files: set[str] = set()
+    pending = [packet_dir]
+    entry_count = 0
+    while pending:
+        directory = pending.pop()
+        with os.scandir(directory) as children:
+            for entry in children:
+                entry_count += 1
+                if entry_count > MAX_PACKET_ENTRIES:
+                    _fail("packet tree entry count exceeds the enumeration bound")
+                if entry.is_symlink():
+                    _fail("packet tree contains a symbolic link")
+                if entry.is_dir(follow_symlinks=False):
+                    pending.append(Path(entry.path))
+                elif entry.is_file(follow_symlinks=False):
+                    relative = Path(entry.path).relative_to(packet_dir).as_posix()
+                    if relative != CHECKSUM_FILE:
+                        actual_files.add(relative)
+                        if len(actual_files) > MAX_PACKET_FILES:
+                            _fail("packet file count exceeds the closed bound")
+                else:
+                    _fail("packet entry is not a regular file or directory")
     if actual_files != set(entries):
         _fail("checksum manifest does not exactly cover packet files")
     for name, expected in entries.items():

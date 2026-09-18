@@ -98,7 +98,7 @@ def transfer_report(action: str, amount_atoms: int, result: Any) -> dict[str, An
         "ok": True,
         "action": action,
         "amount_atoms": amount_atoms,
-        "amount_pft": amount_atoms / 1_000_000,
+        "amount_pft": f"{amount_atoms // 1_000_000}.{amount_atoms % 1_000_000:06d}",
         "tx_id": body.get("tx_id") if isinstance(body, dict) else None,
         "result": body,
     }
