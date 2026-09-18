@@ -1,0 +1,93 @@
+{
+  "builds": [
+    {
+      "name": "node-build-1",
+      "command": [
+        "cargo",
+        "build",
+        "--release",
+        "--locked",
+        "-p",
+        "postfiat-node",
+        "--bin",
+        "postfiat-node"
+      ],
+      "cwd": "/tmp/qualify-20260918",
+      "started_at": "2026-09-18T10:42:06.475424+00:00",
+      "status": "PASS",
+      "stdout": "logs/node-build-1.stdout",
+      "stderr": "logs/node-build-1.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260918/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "CARGO_TARGET_DIR": "/home/postfiatchad/.cache/release-repair-20260918/build-target-1",
+        "RUSTFLAGS": "--remap-path-prefix=/tmp/qualify-20260918=/src/postfiatl1v2 --remap-path-prefix=/home/postfiatchad/.cache/release-repair-20260918/build-target-1=/target"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2937351,
+      "exit_code": 0,
+      "completed_at": "2026-09-18T10:49:02.674887+00:00",
+      "elapsed_seconds": 416.2,
+      "minimum_available_memory_observed_bytes": 22467661824,
+      "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
+      "source_tree": "02ee2f55874daa3864f985fa83b110b6af87ab84",
+      "source_clean_at_collection": true,
+      "cargo_lock_sha256": "8a4b5e43056f021d07c6bf150c8cfd8c470d20ca9a076a31418fa34c14697d55",
+      "binary_sha256": "0ea47d5aa6f0ba558cbd341347e34097114fe8942cbfca34c161690b423608f0",
+      "binary_bytes": 53652360
+    },
+    {
+      "name": "node-build-2",
+      "command": [
+        "cargo",
+        "build",
+        "--release",
+        "--locked",
+        "-p",
+        "postfiat-node",
+        "--bin",
+        "postfiat-node"
+      ],
+      "cwd": "/home/postfiatchad/.cache/release-repair-20260918/build-source-2",
+      "started_at": "2026-09-18T10:49:03.315579+00:00",
+      "status": "PASS",
+      "stdout": "logs/node-build-2.stdout",
+      "stderr": "logs/node-build-2.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260918/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "CARGO_TARGET_DIR": "/home/postfiatchad/.cache/release-repair-20260918/build-target-2",
+        "RUSTFLAGS": "--remap-path-prefix=/home/postfiatchad/.cache/release-repair-20260918/build-source-2=/src/postfiatl1v2 --remap-path-prefix=/home/postfiatchad/.cache/release-repair-20260918/build-target-2=/target"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2946225,
+      "exit_code": 0,
+      "completed_at": "2026-09-18T10:55:54.483977+00:00",
+      "elapsed_seconds": 411.2,
+      "minimum_available_memory_observed_bytes": 22400700416,
+      "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
+      "source_tree": "02ee2f55874daa3864f985fa83b110b6af87ab84",
+      "source_clean_at_collection": true,
+      "cargo_lock_sha256": "8a4b5e43056f021d07c6bf150c8cfd8c470d20ca9a076a31418fa34c14697d55",
+      "binary_sha256": "da51edea2b1423f9002290a5ab531e9659f4be5a9e62fbefaab70949ac28cb55",
+      "binary_bytes": 53652360
+    }
+  ],
+  "result": "FAIL"
+}

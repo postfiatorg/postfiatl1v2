@@ -1,0 +1,28 @@
+{
+  "name": "fresh-v2-validator-0",
+  "command": [
+    "/home/postfiatchad/.cache/release-repair-20260918/binaries/candidate-1",
+    "verify-state",
+    "--data-dir",
+    "/home/postfiatchad/.cache/release-repair-20260918/working/validator-0"
+  ],
+  "cwd": "/tmp/qualify-20260918",
+  "started_at": "2026-09-18T11:58:22.911139+00:00",
+  "status": "RUNNING",
+  "stdout": "logs/fresh-v2-validator-0.stdout",
+  "stderr": "logs/fresh-v2-validator-0.stderr",
+  "environment_overrides": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TERM_COLOR": "never",
+    "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260918/tmp",
+    "RUST_TEST_THREADS": "2",
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "address_space_limit_bytes": 21474836480,
+  "minimum_available_memory_bytes": 4294967296,
+  "pid": 2984160
+}

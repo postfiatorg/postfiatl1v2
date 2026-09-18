@@ -1,0 +1,98 @@
+{
+  "source_commit": "d224c0be402dbd7bda4fa350ad3f349f009d0667",
+  "stages": [
+    {
+      "name": "strict-docs",
+      "command": [
+        ".venv-docs/bin/mkdocs",
+        "build",
+        "--strict"
+      ],
+      "cwd": "/tmp/qualify-20260918",
+      "started_at": "2026-09-18T11:57:44.757614+00:00",
+      "status": "PASS",
+      "stdout": "logs/strict-docs.stdout",
+      "stderr": "logs/strict-docs.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260918/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PATH": "/tmp/qualify-20260918/.venv-docs/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.corbanu/packages/standalone/releases/0.1.43-x86_64-unknown-linux-gnu/codex-path:/home/postfiatchad/.corbanu/tmp/arg0/codex-arg05o2euK:/home/postfiatchad/.local/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.cargo/bin:/home/postfiatchad/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2983925,
+      "exit_code": 0,
+      "completed_at": "2026-09-18T11:57:49.763349+00:00",
+      "elapsed_seconds": 5.0,
+      "minimum_available_memory_observed_bytes": 24726061056
+    },
+    {
+      "name": "public-doc-links",
+      "command": [
+        "scripts/public-doc-links"
+      ],
+      "cwd": "/tmp/qualify-20260918",
+      "started_at": "2026-09-18T11:57:49.764407+00:00",
+      "status": "PASS",
+      "stdout": "logs/public-doc-links.stdout",
+      "stderr": "logs/public-doc-links.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260918/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PATH": "/tmp/qualify-20260918/.venv-docs/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.corbanu/packages/standalone/releases/0.1.43-x86_64-unknown-linux-gnu/codex-path:/home/postfiatchad/.corbanu/tmp/arg0/codex-arg05o2euK:/home/postfiatchad/.local/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.cargo/bin:/home/postfiatchad/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2983945,
+      "exit_code": 0,
+      "completed_at": "2026-09-18T11:57:54.770933+00:00",
+      "elapsed_seconds": 5.0,
+      "minimum_available_memory_observed_bytes": 24705871872
+    },
+    {
+      "name": "public-secret-scan",
+      "command": [
+        "scripts/public-secret-scan"
+      ],
+      "cwd": "/tmp/qualify-20260918",
+      "started_at": "2026-09-18T11:57:54.771958+00:00",
+      "status": "PASS",
+      "stdout": "logs/public-secret-scan.stdout",
+      "stderr": "logs/public-secret-scan.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260918/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PATH": "/tmp/qualify-20260918/.venv-docs/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.corbanu/packages/standalone/releases/0.1.43-x86_64-unknown-linux-gnu/codex-path:/home/postfiatchad/.corbanu/tmp/arg0/codex-arg05o2euK:/home/postfiatchad/.local/bin:/home/postfiatchad/.local/bin:/home/postfiatchad/.cargo/bin:/home/postfiatchad/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 2983948,
+      "exit_code": 0,
+      "completed_at": "2026-09-18T11:58:07.782600+00:00",
+      "elapsed_seconds": 13.0,
+      "minimum_available_memory_observed_bytes": 24681385984
+    }
+  ],
+  "updated_at": "2026-09-18T11:58:07.783449+00:00"
+}
