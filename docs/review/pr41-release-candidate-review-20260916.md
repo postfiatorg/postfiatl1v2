@@ -203,3 +203,56 @@ review; pfETH ingress, Ethereum contracts, Arc conformance and the remaining
 prover code; standalone egress-identity tests; independent proof reproduction;
 and exact saved-chain replay. No full workspace test suite, deployment,
 governance activation or fleet operation was performed.
+
+## Repair result
+
+Source repairs on `integrate/main-into-combined-20260918`, 2026-09-18:
+
+- **Finding 1 (P1): repaired in
+  [`6849d976`](https://github.com/postfiatorg/postfiatl1v2/commit/6849d97691039190b0ed646c86e79def65646eaf).**
+  New Arc activations require V2 authorization: the signed amendment kind binds
+  a domain-separated digest of the complete canonical bootstrap. Installation
+  and retained route authorization check the binding. Explicit archive paths
+  preserve historical V1 authorizations and record encodings. Regressions
+  independently change the validator set, checkpoint hash and checkpoint
+  height, require rejection without ledger/governance mutation, and show that
+  recomputing the digest invalidates the original signatures. The existing Arc
+  activation test now uses V2; the proof fixture initializes the new optional
+  record field to `None`. Historical evidence files are unchanged.
+- **Finding 2 (P1): repaired in
+  [`397b4f53`](https://github.com/postfiatorg/postfiatl1v2/commit/397b4f53ac1f668efc24ba69feda5fc02f05f252).**
+  Acceptance and encoding share certificate count/shape validation; acceptance
+  also rejects unknown voters. Transfer and unwrap regressions accept 128
+  voters and reject 129, unknown, empty and duplicate voters before direct
+  application or reveal mutation. Arrival order remains supported. Historical
+  V1 bytes remain unchanged; V2 installation over an old over-bound retained
+  reveal or fence rejects atomically, without trimming or rewriting history.
+  Existing FastPay fixtures are unchanged.
+
+Verification used Rust 1.95.0, `CARGO_TARGET_DIR=/tmp/integrate-20260918-target`,
+two build workers, incremental compilation disabled, and dev/test debug
+information disabled. All listed commands passed; counts are per invocation.
+
+| Command | Result |
+| --- | --- |
+| `cargo check --workspace --locked` | Passed |
+| `cargo fmt --all -- --check` | Passed |
+| `cargo test -p postfiat-types --lib arc_ --locked` | 5 passed |
+| `cargo test -p postfiat-node --lib vault_bridge_governed_route --locked` | 15 passed; 2 existing Foundry/Anvil tests ignored |
+| `cargo test -p postfiat-consensus-cobalt --lib governance_accepts_only_canonical_vault_bridge_route_authority_kinds --locked` | 1 passed |
+| `cargo test -p postfiat-types --lib fastpay_recovery_type_tests --locked` | 9 passed |
+| `cargo test -p postfiat-execution --lib owned_transfer_recovery_tests --locked` | 11 passed |
+| `cargo test -p postfiat-node --lib fastpay --locked` | 19 passed |
+| `cargo test -p postfiat-pfusdc-proofs --lib exact_finalized_egress_witness_accepts_and_binds_every_boundary --locked` | 1 passed |
+| `cargo test -p postfiat-types --lib --locked` | 149 passed |
+| `cargo test -p postfiat-execution --lib --locked` | 205 passed |
+| `.venv-docs/bin/mkdocs build --strict` | Passed |
+| `scripts/public-doc-links` (docs virtual environment on `PATH`) | Passed; 463 files |
+| `scripts/public-secret-scan` | Passed; tracked-tree scan |
+
+**Finding 3 (P2) remains open and unchanged.** These two repairs are
+consensus-affecting and source-only. Nothing is deployed; the new combined tip
+must be qualified before rollout. No Task Node or fleet action, full workspace
+test suite, exact saved-chain qualification, or historical proof rebuild was
+performed in this repair task. An old over-bound FastPay record requires a
+separately authorized resolution before V2 installation can proceed.
