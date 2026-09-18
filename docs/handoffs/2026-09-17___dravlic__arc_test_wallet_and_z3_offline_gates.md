@@ -3,6 +3,10 @@
 - **Operator:** Domagoj Ravlić (`dravlic`)
 - **Date:** 2026-09-17 UTC
 
+The [September 18 handoff](2026-09-18___dravlic__combined_release_merged_repaired_and_qualified.md)
+supersedes the candidate/P1 status and Z3 lineage, pair, cap, and latency decisions
+below; the dated observations remain historical.
+
 ## BLUF
 
 The [other lane's handoff](https://github.com/postfiatorg/postfiatl1v2/blob/release/combined-devnet-20260915/docs/handoffs/2026-09-16___codex__combined_release_check_kickoff_and_private_funding.md)
