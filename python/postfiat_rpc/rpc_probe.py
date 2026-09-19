@@ -27,28 +27,44 @@ class RpcProbeResult:
 
 
 def rpc_probe(endpoint: Endpoint, timeout_seconds: float = 5.0) -> RpcProbeResult:
-    """Send one status request over one TCP connection, with no retry."""
+    """Send one status request over the first connectable resolved address."""
     if timeout_seconds <= 0:
         raise ValueError("timeout_seconds must be positive")
     started = time.monotonic()
     deadline = started + timeout_seconds
     try:
-        family, socktype, proto, _, address = socket.getaddrinfo(
+        addresses = socket.getaddrinfo(
             endpoint.host, endpoint.port, type=socket.SOCK_STREAM
-        )[0]
+        )
+        if not addresses:
+            raise IndexError("no addresses returned")
     except (OSError, IndexError) as error:
         raise RpcProbeError(f"connect refused: address resolution failed: {error}") from error
-    remaining = deadline - time.monotonic()
-    if remaining <= 0:
-        raise RpcProbeError("connect timeout")
-    with socket.socket(family, socktype, proto) as stream:
-        stream.settimeout(remaining)
+    last_error: OSError | None = None
+    for family, socktype, proto, _, address in addresses:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RpcProbeError("connect timeout")
+        stream = socket.socket(family, socktype, proto)
         try:
+            stream.settimeout(remaining)
             stream.connect(address)
         except socket.timeout as error:
-            raise RpcProbeError("connect timeout") from error
+            stream.close()
+            last_error = error
         except OSError as error:
-            raise RpcProbeError(f"connect refused: {error}") from error
+            stream.close()
+            last_error = error
+        except (ValueError, OverflowError):
+            stream.close()
+            raise
+        else:
+            break
+    else:
+        if isinstance(last_error, socket.timeout):
+            raise RpcProbeError("connect timeout") from last_error
+        raise RpcProbeError(f"connect refused: {last_error}") from last_error
+    with stream:
         request = {"version": RPC_VERSION, "id": "rpc-probe", "method": "status", "params": {}}
         wire = json.dumps(request, separators=(",", ":")).encode() + b"\n"
         try:
