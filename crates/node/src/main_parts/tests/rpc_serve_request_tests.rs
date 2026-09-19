@@ -1177,6 +1177,65 @@ mod rpc_serve_request_tests {
         std::fs::remove_dir_all(spool_root).expect("cleanup spool root");
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn rpc_serve_child_resolves_relative_request_file_after_chdir() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let relative_root = PathBuf::from(format!(
+            ".rpc-relative-child-test-{}-{}",
+            process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).expect("clock").as_nanos()
+        ));
+        let absolute_root = env::current_dir().expect("cwd").join(&relative_root);
+        let relative_data_dir = relative_root.join("data");
+        let absolute_data_dir = absolute_root.join("data");
+        init_consensus_v2(InitConsensusV2Options {
+            data_dir: absolute_data_dir.clone(),
+            chain_id: "relative-rpc-child-test".to_string(),
+            node_id: "validator-0".to_string(),
+            validator_count: 4,
+            activation_height: 1,
+            storage_activation_height: None,
+        }).expect("initialize status control");
+        let relative_request_file = relative_data_dir.join("runtime/rpc-spool/request.json");
+        fs::create_dir_all(relative_request_file.parent().expect("spool parent"))
+            .expect("create spool");
+        let request = RpcRequest::empty("relative-control", "server_info");
+        fs::write(&relative_request_file, serde_json::to_vec(&request).expect("request JSON"))
+            .expect("write request");
+        let child = absolute_root.join("read-request.sh");
+        fs::write(&child, "#!/bin/sh\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"--request-file\" ]; then shift; file=\"$1\"; fi\n  shift\ndone\nif [ -r \"$file\" ]; then /bin/cat \"$file\"; else printf '%s\\n' '{\"id\":\"local-1\"}'; fi\n")
+            .expect("write child probe");
+        let mut permissions = fs::metadata(&child).expect("child metadata").permissions();
+        permissions.set_mode(0o700);
+        fs::set_permissions(&child, permissions).expect("make child executable");
+
+        let status_control = status(NodeOptions { data_dir: absolute_data_dir.clone() });
+        let absolute_control = run_rpc_child_command(
+            child.clone(), &absolute_data_dir,
+            &absolute_root.join("data/runtime/rpc-spool/request.json"), Duration::from_secs(3)
+        ).expect("absolute request-file control");
+        let relative_result = run_rpc_child_command(
+            child, &relative_data_dir, &relative_request_file, Duration::from_secs(3)
+        ).expect("relative request-file child");
+        let missing_error = run_rpc_child_command(
+            absolute_root.join("read-request.sh"), &relative_data_dir,
+            &relative_data_dir.join("runtime/rpc-spool/missing.json"), Duration::from_secs(3)
+        ).expect_err("missing request file must fail before child launch");
+        let attributed_error = rpc_serve_child_error_response("missing-control", &missing_error);
+        fs::remove_dir_all(&absolute_root).expect("cleanup fixture");
+
+        assert!(status_control.is_ok(), "in-process status control: {status_control:?}");
+        let absolute_json: serde_json::Value =
+            serde_json::from_slice(&absolute_control.stdout).expect("absolute child JSON");
+        assert_eq!(absolute_json["id"], "relative-control", "absolute path control");
+        let relative_json: serde_json::Value =
+            serde_json::from_slice(&relative_result.stdout).expect("relative child JSON");
+        assert_eq!(relative_json["id"], "relative-control", "child changed cwd before resolving relative request file");
+        assert_eq!(attributed_error.id, "missing-control");
+    }
+
     #[test]
     fn rpc_serve_spool_root_rejects_non_directory() {
         let path = env::temp_dir().join(format!("postfiat-rpc-spool-file-{}", process::id()));
