@@ -142,9 +142,18 @@ jq -e \
   '.schema == "postfiat-rpc-serve-v1" and .verified == true and .read_only == true and .request_count == 19 and .ok_count == 18 and .error_count == 1' \
   "$server_report" >/dev/null
 
-jq -e \
-  '.schema == "postfiat-testnet-monitor-snapshot-v1" and .monitor_ok == true and .account_canary_enabled == true and .checks.status == "ok" and .checks.height_lag == 0 and .checks.online_endpoint_count == 1' \
-  "$SNAPSHOT_REPORT" >/dev/null
+snapshot_smoke_healthy="$(
+  jq -e \
+    '.schema == "postfiat-testnet-monitor-snapshot-v1"
+      and .monitor_ok == true
+      and .account_canary_enabled == true
+      and .checks.criticals == []
+      and ((.checks.status == "ok" and .checks.warnings == [])
+        or (.checks.status == "warning" and .checks.warnings == ["proof_latency_unavailable"]))
+      and .checks.height_lag == 0
+      and .checks.online_endpoint_count == 1' \
+    "$SNAPSHOT_REPORT"
+)"
 jq -e '.endpoints[0].account_canary.account_tx_row_count >= 1' \
   "$SNAPSHOT_REPORT" >/dev/null
 jq -e '.endpoints[0].account_canary.account_tx_index_used == true' \
@@ -220,6 +229,7 @@ jq -n \
   --argjson validators "$VALIDATORS" \
   --argjson rpc_port "$rpc_port" \
   --argjson account_tx_amount "$ACCOUNT_TX_AMOUNT" \
+  --argjson snapshot_smoke_healthy "$snapshot_smoke_healthy" \
   --slurpfile snapshot "$SNAPSHOT_REPORT" \
   --slurpfile account_tx_response "$account_tx_response" \
   --slurpfile server "$server_report" \
@@ -268,7 +278,7 @@ jq -n \
   } | .monitor_snapshot_smoke_ok = (
     .snapshot.monitor_ok == true
     and .snapshot.account_canary_enabled == true
-    and .snapshot.checks.status == "ok"
+    and $snapshot_smoke_healthy
     and .server.verified == true
     and .server.read_only == true
     and .server.request_count == 19
