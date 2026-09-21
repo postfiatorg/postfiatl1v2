@@ -4749,21 +4749,7 @@ fn apply_pftl_uniswap_primary_subscribe_v2(
             "subscription must match the policy-pinned finalized NAV packet".to_string(),
         ));
     }
-    let policy_fresh_until = nav_asset
-        .finalized_at_height
-        .checked_add(policy.max_nav_age_blocks)
-        .ok_or_else(|| {
-            (
-                "pftl_uniswap_pricing_height_overflow",
-                "policy NAV freshness height would overflow".to_string(),
-            )
-        })?;
-    if block_height > policy_fresh_until {
-        return Err((
-            "stale_pftl_uniswap_policy_pricing",
-            "policy-pinned NAV is older than the policy freshness limit".to_string(),
-        ));
-    }
+    ensure_pftl_uniswap_policy_pricing_fresh(&nav_asset, policy.max_nav_age_blocks, block_height)?;
     let base_value =
         pftl_uniswap_v2_base_value(ledger, &route, &nav_asset, reservation.mint_amount_atoms)?;
     let settlement_due = checked_mul_div_ceil(
@@ -5004,21 +4990,7 @@ pub fn apply_asset_orchard_private_primary_issue_route_transition(
             "private primary issue must match the policy-pinned finalized NAV packet".to_string(),
         ));
     }
-    let policy_fresh_until = nav_asset
-        .finalized_at_height
-        .checked_add(policy.max_nav_age_blocks)
-        .ok_or_else(|| {
-            (
-                "pftl_uniswap_pricing_height_overflow",
-                "policy NAV freshness height would overflow".to_string(),
-            )
-        })?;
-    if block_height > policy_fresh_until {
-        return Err((
-            "stale_pftl_uniswap_policy_pricing",
-            "policy-pinned NAV is older than the policy freshness limit".to_string(),
-        ));
-    }
+    ensure_pftl_uniswap_policy_pricing_fresh(&nav_asset, policy.max_nav_age_blocks, block_height)?;
     let base_value =
         pftl_uniswap_v2_base_value(ledger, &route, &nav_asset, operation.mint_amount_atoms)?;
     let settlement_due = checked_mul_div_ceil(
@@ -5204,21 +5176,7 @@ pub fn apply_asset_orchard_private_primary_redeem_route_transition(
             "private redemption must match the policy-pinned finalized NAV packet".to_string(),
         ));
     }
-    let policy_fresh_until = nav_asset
-        .finalized_at_height
-        .checked_add(policy.max_nav_age_blocks)
-        .ok_or_else(|| {
-            (
-                "pftl_uniswap_pricing_height_overflow",
-                "policy NAV freshness height would overflow".to_string(),
-            )
-        })?;
-    if block_height > policy_fresh_until {
-        return Err((
-            "stale_pftl_uniswap_policy_pricing",
-            "policy-pinned NAV is older than the policy freshness limit".to_string(),
-        ));
-    }
+    ensure_pftl_uniswap_policy_pricing_fresh(&nav_asset, policy.max_nav_age_blocks, block_height)?;
     let base_value =
         pftl_uniswap_v2_base_value(ledger, &route, &nav_asset, operation.mint_amount_atoms)?;
     let settlement_output = checked_mul_div_floor(
@@ -5399,6 +5357,7 @@ fn apply_pftl_uniswap_primary_redeem(
             "redemption must match the policy-pinned finalized NAV packet".to_string(),
         ));
     }
+    ensure_pftl_uniswap_policy_pricing_fresh(&nav_asset, policy.max_nav_age_blocks, block_height)?;
     let base_value =
         pftl_uniswap_v2_base_value(ledger, &route, &nav_asset, operation.nav_amount_atoms)?;
     let settlement_output = checked_mul_div_floor(
@@ -6457,6 +6416,29 @@ fn ensure_pftl_uniswap_route_capacity(
             "pftl_uniswap_route_cap_exceeded",
             "PFTL-Uniswap route count for the native NAV issuer exceeds the bounded consensus limit"
                 .to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_pftl_uniswap_policy_pricing_fresh(
+    nav_asset: &NavTrackedAsset,
+    max_nav_age_blocks: u64,
+    block_height: u64,
+) -> Result<(), (&'static str, String)> {
+    let policy_fresh_until = nav_asset
+        .finalized_at_height
+        .checked_add(max_nav_age_blocks)
+        .ok_or_else(|| {
+            (
+                "pftl_uniswap_pricing_height_overflow",
+                "policy NAV freshness height would overflow".to_string(),
+            )
+        })?;
+    if block_height > policy_fresh_until {
+        return Err((
+            "stale_pftl_uniswap_policy_pricing",
+            "policy-pinned NAV is older than the policy freshness limit".to_string(),
         ));
     }
     Ok(())

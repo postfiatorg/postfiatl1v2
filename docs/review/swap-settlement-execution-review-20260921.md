@@ -14,9 +14,9 @@ ordering within a block. References below identify the pre-repair revision.
 
 ### SWX-01 — P2 — public redemption omits the policy NAV-age limit
 
-**Source:** `crates/execution/src/nav_vault_asset_execution.rs:5410-5425`,
+**Source:** `crates/execution/src/nav_vault_asset_execution.rs:5389-5425`,
 with the general freshness check at `6465-6523` and the corresponding
-subscription check at `4768-4784`.
+subscription check at `4752-4766`.
 
 **Condition:** An otherwise valid public primary redemption executes after
 `finalized_at_height + primary_market_policy.max_nav_age_blocks`, while the
@@ -96,3 +96,34 @@ No Task Node, fleet, RPC, deployment, spend, signup or installation action.
 Frozen artifacts and the excluded release checkout were untouched. Network
 use is git only. Full-suite and historical-release qualification verdicts
 remain separate from focused local verification.
+
+## Repair result
+
+SWX-01 now uses the existing checked policy NAV-age calculation before public
+redemption pricing or mutation. The identical calculation from public
+subscription and the two private route functions is shared without changing
+their behaviour. The large implementation file shrinks; no schema, signature
+encoding, proof, nullifier or private-custody rule changes.
+**Consensus-affecting: yes. Release-tip re-qualification is required before
+deployment.** No deployment or qualification was attempted.
+
+The two new tests in `swap_settlement_execution_tests.rs`, registered through
+the short `tests.rs` include list, use signed transactions against synthetic
+local ledgers. Both pooled and source-specific settlement are covered, with
+inbound routes paused and source issuance disabled to preserve valid exits.
+At the exact freshness boundary the tests check payout, native supply burn,
+reserve principal, spread custody, family-supply conservation and nonce replay.
+One block later they require the typed stale rejection and an identical
+whole ledger, including fees, nonces, custody and receipts.
+
+Before the repair, `cargo test -p postfiat-execution burn6_public_redemption
+--lib --locked` produced **1 passed, 1 failed**: the stale test observed an
+accepted pooled redemption. That assertion stopped its loop before the source
+case; no pre-repair source-case failure is claimed. After repair it produced
+**2 passed, 0 failed**, exercising both settlement modes. The fixture does
+not prove reserve authenticity or an external Ethereum event. The existing
+test admission helper bypasses external PFTL proof verification only.
+
+Focused command results and the separate commit gates are recorded in the
+[campaign log](qa-campaign-20260921.md#verification). Full-suite CI and release
+re-qualification remain pending; no other surface follows A3.
