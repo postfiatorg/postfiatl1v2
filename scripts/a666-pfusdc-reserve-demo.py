@@ -275,7 +275,7 @@ def validate_account(account: str, label: str) -> None:
         raise DemoError(f"{label} is not a canonical PFTL account")
 
 
-def validate_identities(value: Any) -> dict[str, Any]:
+def validate_identities(value: Any, *, dry_run: bool = False) -> dict[str, Any]:
     """Validate only public identities; never copy arbitrary input into evidence."""
     if not isinstance(value, dict) or value.get("schema") != IDENTITY_SCHEMA:
         raise DemoError(f"identities must use schema {IDENTITY_SCHEMA}")
@@ -304,14 +304,17 @@ def validate_identities(value: Any) -> dict[str, Any]:
         ):
             raise DemoError(f"identity {field} must be nonempty canonical text")
     for field in hash_fields:
+        if dry_run and field == "nav_source_manifest_hash" and value[field] is None:
+            continue
         if not isinstance(value[field], str) or not HASH48_RE.fullmatch(value[field]):
             raise DemoError(f"identity {field} must be 96 lowercase hex characters")
     if not isinstance(value["nav_valuation_policy_hash"], str) or not re.fullmatch(
         r"[0-9a-f]{64}", value["nav_valuation_policy_hash"]
     ):
         raise DemoError("identity nav_valuation_policy_hash must be 64 lowercase hex characters")
-    if not isinstance(value["nav_program_vkey"], str) or not re.fullmatch(
-        r"0x[0-9a-f]{64}", value["nav_program_vkey"]
+    if not (dry_run and value["nav_program_vkey"] is None) and (
+        not isinstance(value["nav_program_vkey"], str)
+        or not re.fullmatch(r"0x[0-9a-f]{64}", value["nav_program_vkey"])
     ):
         raise DemoError("identity nav_program_vkey must be a 0x-prefixed 32-byte key")
     if value["nav_valuation_unit"] != "USD_1E8":

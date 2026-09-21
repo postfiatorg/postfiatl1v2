@@ -251,6 +251,27 @@ def test_public_packet_boundaries(tmp_path, change):
         build(tmp_path, layout)
 
 
+@pytest.mark.parametrize("cycle", [0, -1, True])
+def test_nonpositive_or_boolean_cycle_requires_explicit_dry_run(tmp_path, cycle):
+    layout = packet_fixture(tmp_path)
+    layout["manifest"]["cycle_number"] = cycle
+    with pytest.raises(z3.CycleError):
+        z3.build_manifest(layout, tmp_path, tmp_path / "cycle.json")
+    with pytest.raises(z3.CycleError):
+        z3.build_manifest(layout, tmp_path, tmp_path / "cycle.json", skeleton=True)
+    if type(cycle) is int and cycle == 0:
+        with pytest.raises(z3.CycleError, match="requires a skeleton"):
+            z3.build_manifest(layout, tmp_path, tmp_path / "cycle.json", dry_run=True)
+        packet = z3.build_manifest(layout, tmp_path, tmp_path / "cycle.json",
+                                   skeleton=True, dry_run=True)
+        assert packet["dry_run"] is True and packet["counts_as_cycle"] is False
+        assert z3.verify_manifest(tmp_path / "cycle.json")["verdict"] == "FAIL"
+    else:
+        with pytest.raises(z3.CycleError):
+            z3.build_manifest(layout, tmp_path, tmp_path / "cycle.json",
+                              skeleton=True, dry_run=True)
+
+
 def test_inline_success_cannot_hide_rejected_original(tmp_path):
     layout = packet_fixture(tmp_path)
     path = layout["ingress"]["record"]
