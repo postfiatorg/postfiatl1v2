@@ -1,0 +1,11 @@
+[Unit]
+Description=PostFiat combined devnet release manifest verification (operator reference)
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/postfiat/releases/combined-devnet-20260921/operator.env
+ExecStart=/opt/postfiat/releases/combined-devnet-20260921/postfiat-node deployment-manifest-verify --manifest-file /etc/postfiat/releases/combined-devnet-20260921/deployment-manifest.json --trusted-publisher-key-file /etc/postfiat/releases/combined-devnet-20260921/deployment.public.json
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true

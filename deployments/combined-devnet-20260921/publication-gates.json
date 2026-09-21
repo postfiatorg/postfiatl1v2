@@ -1,0 +1,41 @@
+{
+  "schema": "postfiat.deployment_preparation_gates.v1",
+  "result": "PASS",
+  "observed_at": "2026-09-21T09:58:02Z",
+  "worktree": "/tmp/deploy-prep-20260921",
+  "qualified_source_tip": "a5b1e757068864fe18e5c5d3498697942293b1d5",
+  "staged_packet_included_in_secret_scan": true,
+  "commands": [
+    {
+      "command": ".venv-docs/bin/mkdocs build --strict",
+      "exit_code": 0,
+      "output": "INFO    -  Documentation built in 4.31 seconds",
+      "stdout": "~/.cache/deploy-prep-20260921/mkdocs.stdout",
+      "stderr": "~/.cache/deploy-prep-20260921/mkdocs.stderr"
+    },
+    {
+      "command": "scripts/public-doc-links",
+      "environment": "PATH prepends .venv-docs/bin",
+      "exit_code": 0,
+      "output": "public_documentation_links=ok files=463",
+      "stdout": "~/.cache/deploy-prep-20260921/public-doc-links.stdout",
+      "stderr": "~/.cache/deploy-prep-20260921/public-doc-links.stderr"
+    },
+    {
+      "command": "scripts/public-secret-scan",
+      "exit_code": 0,
+      "output": "public secret scan passed mode=tracked-tree",
+      "stdout": "~/.cache/deploy-prep-20260921/public-secret-scan.stdout",
+      "stderr": "~/.cache/deploy-prep-20260921/public-secret-scan.stderr"
+    }
+  ],
+  "additional_local_checks": {
+    "canonical_regeneration_in_second_cache_directory": "PASS: all 33 generated files byte-identical",
+    "regenerated_stage_offline_preflight": "PASS_LOCAL_INPUTS_ONLY",
+    "python_helpers_ast_parse": "PASS: four helpers",
+    "rollback_shell_syntax": "PASS: bash -n",
+    "observed_validator_0_unit_environment_hashes_match_old_manifest": "PASS: both services",
+    "git_diff_check": "PASS"
+  },
+  "scope": "No signing, network preflight, backup export, fleet mutation, full workspace tests, or qualification rerun."
+}

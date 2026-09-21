@@ -1,0 +1,7 @@
+# Historical inventory identities; MUST reconcile with Vultr during fresh preflight.
+validator-0 64.176.220.75 p2p=26650 rpc=27650 region=ewr vultr_instance=763e0633-a900-462f-b3b1-3fc14eff652c
+validator-1 95.179.184.122 p2p=26652 rpc=27651 region=ams vultr_instance=4c2b5d60-229f-4fcd-9fa7-e0c76c79998e
+validator-2 66.42.48.39 p2p=26654 rpc=27652 region=sgp vultr_instance=028f9327-bbba-4d8a-8fad-ee43b3f5d9c2
+validator-3 149.28.63.106 p2p=26656 rpc=27653 region=ewr vultr_instance=5fd6ee01-6cbd-45b6-b3b1-0650c078fff3
+validator-4 95.179.179.206 p2p=26658 rpc=27654 region=ams vultr_instance=896cd473-98aa-43a5-ac86-644497a62629
+validator-5 45.32.110.170 p2p=26660 rpc=27655 region=sgp vultr_instance=c07bf48b-3996-46fe-925c-240a1c1e07c0
