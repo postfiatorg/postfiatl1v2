@@ -5,11 +5,12 @@ A1 began at `6ae06356` on clean `burn6-work` in `/tmp/burn6-20260921`,
 after `git pull --rebase origin release/combined-devnet-20260915`, within a
 25-minute time box beginning at approximately 10:12 UTC.
 
-**Status:** A1 and A2 closed within their recorded limits. A2 found and repaired
-three P2 findings; its 49 focused tests passed. A1's one P3 remains recorded.
-NAV-03 is consensus-affecting under the brief's state-transition-result rule:
-the release tip requires re-qualification before deployment. A3–A5 and B remain
-pending and were not started. No Task Node or fleet action. Stop after A2.
+**Status:** A1, A2 and A3 closed within their recorded limits. A3 found and
+repaired one P2; its 34 focused tests passed. All four campaign P2 findings
+are repaired; A1's one P3 remains recorded. NAV-03 and SWX-01 are
+consensus-affecting: the release tip requires re-qualification before
+deployment. A4, A5 and B remain pending and were not started. No Task Node
+or fleet action. Stop after A3.
 
 ## Campaign state
 
@@ -17,12 +18,12 @@ pending and were not started. No Task Node or fleet action. Stop after A2.
 | --- | --- | --- | ---: | ---: | ---: | --- |
 | A1 | Portfolio verification | done | 0 | 0 | 1 | [Review](portfolio-verification-review-20260921.md); findings `21459c8a`; PFV-01 recorded without repair; repair unit skipped (no P1/P2); no consensus-affecting change |
 | A2 | NAV and reserve verification | done | 0 | 3 | 0 | [Review](nav-reserve-verification-review-20260921.md); findings `4bc6d98d`; all P2 repaired in `e9ccdeda`; NAV-03 consensus-affecting: release-tip re-qualification required before deployment |
-| A3 | Swap and settlement execution in depth | pending | — | — | — | Not started |
+| A3 | Swap and settlement execution in depth | done | 0 | 1 | 0 | [Review](swap-settlement-execution-review-20260921.md); findings `6d495f43`; SWX-01 repaired in `043b9d69`; consensus-affecting: release-tip re-qualification required before deployment |
 | A4 | Bridge workflows | pending | — | — | — | Not started |
 | A5 | Optional remaining node files | pending | — | — | — | Not started |
 | B | Defect inventory and TIH gate | pending | — | — | — | Not started |
 
-Current finding totals: **0 P1, 3 P2, 1 P3** (A1–A2; all three P2 repaired,
+Current finding totals: **0 P1, 4 P2, 1 P3** (A1–A3; all four P2 repaired,
 one P3 recorded without repair).
 
 ## Portfolio verification review result
@@ -89,7 +90,46 @@ top Status give the current campaign disposition.
 
 ## Swap and settlement execution review result
 
-Pending; not started.
+The [A3 review](swap-settlement-execution-review-20260921.md) read all 8,797
+lines of the three permitted implementation files at `cf12b64f`, after the
+required pull on clean `burn6-work`. Work began at 10:46 UTC with a 25-minute
+limit. Findings `6d495f43` and repair `043b9d69` were separately gated and
+pushed before this log closeout.
+
+| Finding | Result | Consensus impact |
+| --- | --- | --- |
+| SWX-01 — P2, public redemption omits policy NAV-age limit | Enforce the existing checked policy freshness calculation before pricing or mutation; signed-transaction regressions cover pooled and source-specific settlement | Yes: policy-stale redemptions previously accepted now reject; re-qualify the release tip before deployment |
+
+Reviewed in full: `crates/execution/src/nav_vault_asset_execution.rs` (8,527
+lines), `crates/execution/src/pftl_source_settlement.rs` (113), and
+`crates/execution/src/vault_bridge_profile_resolution.rs` (157). This includes
+the full subscription, entitlement release, redemption, source-custody and
+burn-accounting paths. Selected fixtures/assertions in
+`market_nav_execution_tests.rs` and selected helpers/imports in
+`core_asset_execution_tests.rs` supplied test context; neither whole test file
+received an additional correctness review. `lib.rs` and `tests.rs` were
+inspected for module placement. No other implementation was reviewed.
+
+The only production file changed is `nav_vault_asset_execution.rs`; it shrinks
+by 18 lines by sharing three identical existing freshness checks with the
+previously unchecked public redemption path. Public subscription and private
+route checks retain their previous semantics. The new 263-line
+`swap_settlement_execution_tests.rs` is registered in the short `tests.rs`
+include list. No schema, signed encoding, proof/nullifier or private-custody
+rule changed. Both source and pooled tests preserve valid redemption while
+inbound routes are paused; source issuance is disabled in the source fixture.
+
+All A3 P1/P2 work is complete: **0 P1, 1 P2 repaired, 0 P3**. Final focused
+verification: **34 passed, 0 failed, 0 ignored**. Workspace checking passed.
+These synthetic/local tests do not establish reserve authenticity, historical
+replay or deployment qualification. The full suite is CI's verdict on the
+pushed branch; no CI success is claimed. SWX-01 requires release-tip
+re-qualification before deployment, in addition to the retained NAV-03
+requirement. No qualification or deployment occurred.
+
+A3 closes here. A4, A5 and B remain pending. Earlier A1/A2 closeout wording
+and the A1-only Final summary below are retained historical records; the top
+Status, campaign table and this section give the current disposition.
 
 ## Bridge workflows review result
 
@@ -153,6 +193,30 @@ Pending; not started.
   campaign worktree and the required release ref; nothing was pushed to main.
 - No time/usage limit curtailed the six-file review or its three repairs. No
   requested repair was skipped. Stop after the separately gated log closeout.
+
+### A3 decisions
+
+- A4, A5 and B were not started; no inventory edit or TIH scoring. SWX-01's
+  consensus classification is in the A3 row pending the separate B unit.
+- No permitted implementation file or requested repair was skipped. There is
+  no P3 finding to repair. No time or usage limit curtailed the review.
+- Not reviewed: outer execution dispatch/authorization/rollback, type
+  validation, canonical route hashing/state-root implementations, issued-family
+  supply helpers, storage/replay, node/RPC workflows or delegated proof
+  implementations. No excluded crate or `programs/` correctness review or
+  repair occurred. Exact exclusions are retained in the A3 review document.
+- New regressions use signed transactions and synthetic ledger state through
+  the existing test admission helper, which bypasses external PFTL proof
+  verification. They are state-transition and conservation evidence, not
+  reserve-proof, external-event, private-proof or release qualification.
+- No local full workspace/Orchard suite, archived-chain replay or CI query.
+  The private-route edits only factor out an identical existing age check;
+  no private accounting, proof, nullifier or Orchard state rule changed.
+  Existing focused PFTL tests exercise the private route-transition helpers.
+  Release re-qualification remains required before deployment.
+- No Task Node, fleet, live RPC, spend, signup, installation or deployment
+  action. Frozen artifacts and the excluded release checkout were untouched.
+  All edits/commits used the campaign worktree; git was the only network use.
 
 ## Verification
 
@@ -239,6 +303,50 @@ up to date at `b82052ce`. Findings and repair commits each completed
 `git push origin HEAD:release/combined-devnet-20260915`, with a clean tree
 between units. This log-only closeout uses the identical pull/push sequence.
 No full-suite or CI pass is claimed; no other surface follows A2.
+
+### A3 verification
+
+Every Cargo test/check below used the exact prefix
+`env CARGO_NET_OFFLINE=true CARGO_TARGET_DIR=/tmp/integrate-20260918-target`.
+Compilation of dependencies does not expand the source review or execute
+their test suites.
+
+| Command | Final result |
+| --- | --- |
+| `cargo test -p postfiat-execution burn6_public_redemption --lib --locked` | 2 passed, 0 failed, 0 ignored, 205 filtered |
+| `cargo test -p postfiat-execution pftl_ --lib --locked` | 7 passed, 0 failed, 0 ignored, 200 filtered |
+| `cargo test -p postfiat-execution vault_bridge --lib --locked` | 21 passed, 0 failed, 0 ignored, 186 filtered |
+| `cargo test -p postfiat-execution rotated_route --lib --locked` | 2 passed, 0 failed, 0 ignored, 205 filtered |
+| `cargo test -p postfiat-execution ar05_ --lib --locked` | 1 passed, 0 failed, 0 ignored, 206 filtered |
+| `cargo test -p postfiat-execution ar11_ --lib --locked` | 1 passed, 0 failed, 0 ignored, 206 filtered |
+| `cargo check --workspace --locked` | Passed |
+| `cargo fmt --all -- --check` (no environment prefix) | Passed; existing stable-toolchain configuration warnings only |
+
+Unique focused total: **34 passed, 0 failed, 0 ignored**. The existing PFTL
+filter also passed **7/7** before adding regressions (198 filtered).
+The new two-test filter against the original implementation produced
+**1 passed, 1 failed, 0 ignored, 205 filtered**: a packet finalized at height
+10 with policy age 5 was accepted at height 16. The failure occurred on the
+pooled case before its source-mode loop iteration. Final tests cover both
+modes, successful height-15 redemption, first-stale-height rejection with
+the entire ledger unchanged, reserve/spread/family-supply conservation, and
+nonce replay. These tests use no network or deployment artifact.
+
+Before **each** A3 commit (findings `6d495f43`, repairs `043b9d69` and this
+closeout), all three gates passed on the staged changes:
+`.venv-docs/bin/mkdocs build --strict`,
+`PATH="$PWD/.venv-docs/bin:$PATH" scripts/public-doc-links` (**468 files**),
+and `scripts/public-secret-scan` (**tracked-tree**).
+`git diff --cached --check` also passed. The new findings/test files were
+staged before their secret scans. No Rust test rerun is needed for this
+documentation-only closeout.
+
+The initial `git pull --rebase origin release/combined-devnet-20260915` was
+already current at `cf12b64f`. Findings and repair commits each completed
+`git pull --rebase origin release/combined-devnet-20260915` followed by
+`git push origin HEAD:release/combined-devnet-20260915`, with clean trees
+between units. This log closeout uses the identical pull/push sequence.
+No push to main, full-suite result or CI success is claimed. Stop after A3.
 
 ## Scores
 
