@@ -109,9 +109,17 @@ This prints all 39 commands in order and creates only
 PACKET/cycle.skeleton.json. It does not run a command, inspect a signer, contact
 a node, or generate a proof. A second attempt to write that skeleton fails.
 The skeleton has null artifact hashes and cannot receive a PASS verdict.
+Cycle `0` is allowed only with `--dry-run`; the skeleton explicitly records
+`dry_run: true` and `counts_as_cycle: false`. Live cycles still begin at `1`.
+Unknown live accounts, anchor/primary-policy/NAV bindings, quote/nonce/recipient/TTL,
+and runner/host/NAV-input paths may be explicit `null` values for this diagnostic.
+They remain null in the skeleton, print as named `@FIELD@` placeholders in commands,
+and appear in the final `unresolved_inputs` list. Known values are still validated;
+these omissions block every live confirmation. A printed command resolves an
+interface, not its missing live inputs or predecessor artifacts.
 
 Future command values are explicit entries in a public VALUES JSON:
-DEPOSIT_TX, INGRESS_EXPIRES_HEIGHT, ARC_CONFIRMATION_DEPTH, ISSUE_HEIGHT,
+DEPOSIT_TX, INGRESS_EXPIRES_HEIGHT, ISSUE_HEIGHT,
 ROUTE_HEIGHT, REDEEM_HEIGHT, REDEEM_OUTPUT_ATOMS, WITHDRAWAL_ID,
 PRIOR_CHECKPOINT, EGRESS_PUBLIC_VALUES_HEX, EGRESS_PROOF_HEX and
 SETTLEMENT_OPERATION. Fill each only from that cycle's verified predecessor.

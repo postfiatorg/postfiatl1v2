@@ -185,9 +185,10 @@ def utc(value: Any) -> datetime:
         raise CycleError("invalid UTC timestamp") from None
 
 
-def validate_metadata(meta: dict, *, skeleton: bool = False) -> None:
+def validate_metadata(meta: dict, *, skeleton: bool = False, dry_run: bool = False) -> None:
+    require(not dry_run or skeleton, "dry-run metadata requires a skeleton")
     public(meta)
-    uint(meta["cycle_number"], "cycle number", positive=True)
+    uint(meta["cycle_number"], "cycle number", positive=not dry_run)
     uint(meta["amount_atoms"], "cycle amount", positive=True)
     require(bool(meta["release_id"]), "missing release ID")
     require(re.fullmatch(r"[0-9a-f]{40}", meta["source_commit"]) is not None,
@@ -199,6 +200,8 @@ def validate_metadata(meta: dict, *, skeleton: bool = False) -> None:
         require(utc(meta["utc_end"]) >= start, "cycle ends before it starts")
     ids = meta["identities"]
     for field in IDENTITY_FIELDS:
+        if dry_run and field == "anchor_code_hash" and ids[field] is None:
+            continue
         require(field in ids and ids[field] not in ("", None), f"missing identity: {field}")
     same(ids["source_chain_id"], 5042002, "Arc testnet chain")
     same(ids["source_token_address"].lower(),
@@ -209,28 +212,39 @@ def validate_metadata(meta: dict, *, skeleton: bool = False) -> None:
     for field in ("source_profile_hash", "source_bucket_id", "native_nav_asset_id",
                   "settlement_asset_id", "settlement_source_asset_id",
                   "vault_code_hash", "anchor_code_hash"):
+        if dry_run and field == "anchor_code_hash" and ids[field] is None:
+            continue
         width = 64 if field in ("vault_code_hash", "anchor_code_hash") else 96
         require(re.fullmatch(r"(?:0x)?[0-9a-fA-F]{" + str(width) + "}", ids[field]) is not None,
                 f"full hash required: {field}")
     for field in ("primary_route", "source_profile", "verifier_policy", "nav_valuation"):
+        if dry_run and field == "primary_route" and meta["policy_hashes"][field] is None:
+            continue
         require(HASH.fullmatch(meta["policy_hashes"][field]) is not None,
                 f"missing policy hash: {field}")
     same(meta["policy_hashes"]["source_profile"], ids["source_profile_hash"], "source policy")
     for field in ("ingress", "egress", "nav"):
+        if dry_run and field == "nav" and meta["proof_keys"][field] is None:
+            continue
         require(HASH.fullmatch(meta["proof_keys"][field]) is not None,
                 f"missing proof key: {field}")
     require(ADDRESS.fullmatch(meta["accounts"]["arc_wallet"]) is not None,
             "full Arc wallet address required")
     for field in ("owner", "proposer", "finalizer", "route_operator"):
+        if dry_run and field != "route_operator" and meta["accounts"][field] is None:
+            continue
         require(ACCOUNT.fullmatch(meta["accounts"][field]) is not None,
                 f"full PFTL account required: {field}")
 
 
-def build_manifest(layout: dict, root: Path, output: Path, *, skeleton: bool = False) -> dict:
+def build_manifest(layout: dict, root: Path, output: Path, *, skeleton: bool = False,
+                   dry_run: bool = False) -> dict:
     require(not output.exists(), "refusing to overwrite output")
     same(set(layout), set(SECTIONS), "ten packet sections")
-    validate_metadata(layout["manifest"], skeleton=skeleton)
+    validate_metadata(layout["manifest"], skeleton=skeleton, dry_run=dry_run)
     packet = {"schema": SCHEMA, "complete": not skeleton, "manifest": layout["manifest"]}
+    if dry_run:
+        packet.update(dry_run=True, counts_as_cycle=False)
     for section, roles in REQUIRED.items():
         paths = layout[section]
         require(set(roles) <= set(paths), f"missing artifact role in {section}")

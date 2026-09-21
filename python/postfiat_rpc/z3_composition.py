@@ -57,10 +57,10 @@ def metadata_hash(config: dict) -> str:
     return hashlib.sha256(json.dumps(config, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def validate_inputs(config: dict) -> None:
+def validate_inputs(config: dict, *, dry_run: bool = False) -> None:
     z3.public(config)
-    z3.validate_metadata(config["manifest"], skeleton=True)
-    ids = driver().validate_identities(config["reserve_identities"])
+    z3.validate_metadata(config["manifest"], skeleton=True, dry_run=dry_run)
+    ids = driver().validate_identities(config["reserve_identities"], dry_run=dry_run)
     for field in set(ids) & set(config["manifest"]["identities"]):
         z3.same(ids[field], config["manifest"]["identities"][field], f"reserve identity/{field}")
     z3.same(ids["nav_program_vkey"], config["manifest"]["proof_keys"]["nav"], "NAV proof key")
@@ -72,13 +72,17 @@ def validate_inputs(config: dict) -> None:
     z3.require(z3.utc(params["window_start"]) <= z3.utc(config["manifest"]["utc_start"])
                <= z3.utc(params["window_end"]), "cycle outside operator window")
     for field in ("mint_amount_atoms", "reservation_ttl_blocks", "latency_bound_seconds"):
+        if dry_run and field != "latency_bound_seconds" and params[field] is None:
+            continue
         z3.uint(params[field], field, positive=True)
     z3.require(re.fullmatch(r"0x[0-9a-fA-F]{64}", params["route_binding"]) is not None,
                "full EVM route binding required")
-    z3.require(re.fullmatch(r"0x[0-9a-fA-F]{64}", params["deposit_nonce"]) is not None,
-               "full deposit nonce required")
-    z3.require(z3.ADDRESS.fullmatch(params["reservation_recipient"]) is not None,
-               "full reservation recipient required")
+    if not (dry_run and params["deposit_nonce"] is None):
+        z3.require(re.fullmatch(r"0x[0-9a-fA-F]{64}", params["deposit_nonce"]) is not None,
+                   "full deposit nonce required")
+    if not (dry_run and params["reservation_recipient"] is None):
+        z3.require(z3.ADDRESS.fullmatch(params["reservation_recipient"]) is not None,
+                   "full reservation recipient required")
     # The existing NAV builder is specifically A666. Reject incompatible inputs
     # before emitting a command that would silently inherit another authority.
     z3.same(config["manifest"]["accounts"]["route_operator"],
@@ -90,6 +94,10 @@ def validate_inputs(config: dict) -> None:
                  "remote_binary", "remote_topology", "opening_nav_manifest",
                  "fresh_packet_operation"):
         value = config["paths"][name]
+        if dry_run and value is None and name in {
+            "remote_runner", "proposer_hosts_file", "opening_nav_manifest", "fresh_packet_operation"
+        }:
+            continue
         z3.require(isinstance(value, str) and bool(value), f"missing explicit path/{name}")
     work, packet = (Path(config["paths"][key]).resolve() for key in ("work_dir", "packet_dir"))
     z3.require(not work.is_relative_to(packet) and not packet.is_relative_to(work),
@@ -102,13 +110,33 @@ def validate_inputs(config: dict) -> None:
             "0x0050a8b0daed2fa75f44d4102b42204c34668a03d311cb727cc6ca3f8df5cf16",
             "candidate Arc ingress key")
     for field in ("reserve_operator", "bridge_settler"):
+        if dry_run and field == "bridge_settler" and config["manifest"]["accounts"][field] is None:
+            continue
         z3.require(z3.ACCOUNT.fullmatch(config["manifest"]["accounts"][field]) is not None,
                    "full maintenance account required")
 
 
 
-def compile_steps(config: dict, signers: dict, values: dict | None = None) -> list[Step]:
-    validate_inputs(config)
+def unresolved_inputs(value: Any, prefix: str = "") -> list[str]:
+    """Name explicit nulls without inventing live inputs or reading their paths."""
+    if isinstance(value, dict):
+        return [field for key, item in value.items()
+                for field in unresolved_inputs(item, f"{prefix}.{key}" if prefix else key)]
+    return [prefix] if value is None and prefix != "manifest.utc_end" else []
+
+
+def command_projection(value: Any, prefix: str = "") -> Any:
+    if isinstance(value, dict):
+        return {key: command_projection(item, f"{prefix}_{key}" if prefix else key)
+                for key, item in value.items()}
+    return f"@{prefix.upper()}@" if value is None else value
+
+
+def compile_steps(config: dict, signers: dict, values: dict | None = None,
+                  *, dry_run: bool = False) -> list[Step]:
+    validate_inputs(config, dry_run=dry_run)
+    if dry_run:
+        config = command_projection(config)
     values = values or {}
     m, p, paths = config["manifest"], config["parameters"], config["paths"]
     ids, accounts = m["identities"], m["accounts"]
@@ -149,13 +177,14 @@ def compile_steps(config: dict, signers: dict, values: dict | None = None) -> li
         "--vault", ids["source_vault_address"], "--token", TOKEN, "--output", w("ingress-witness.json")])
     add("ingress-proof", [prover, "arc-ingress", "--witness", w("ingress-witness.json"),
                           "--output-dir", w("ingress-proof"), "--prove"])
+    # The SP1 path uses no observer attestation. Keep this row within the node
+    # help interface; optional observer depth changes only unused observation metadata.
     add("ingress-bundle", [node, "vault-bridge-deposit-relay-bundle",
         "--receipt-file", w("arc-deposit.stdout.json"), "--vault-address", ids["source_vault_address"],
         "--token-address", TOKEN, "--asset-id", ids["settlement_asset_id"],
         "--policy-hash", ids["source_profile_hash"], "--route-epoch", ids["source_route_epoch"],
         "--proposer", accounts["proposer"], "--finalizer", accounts["finalizer"],
         "--claimer", accounts["owner"], "--expires-at-height", v("INGRESS_EXPIRES_HEIGHT"),
-        "--observer-confirmation-depth", v("ARC_CONFIRMATION_DEPTH"),
         "--source-proof-kind", "sp1-arc-finality-v1",
         "--source-proof-file", w("ingress-proof/proof-calldata.bin"),
         "--source-public-values-file", w("ingress-proof/public-values.bin"), "--bundle", w("relay")])
@@ -328,6 +357,7 @@ def ensure_available(checkout: Path, step: Step, config: dict) -> None:
 
 def confirm_one(config: dict, checkpoint: dict, steps: list[Step], name: str,
                 checkout: Path, runner: Callable = subprocess.run) -> dict:
+    validate_inputs(config)
     indexes = [i for i, step in enumerate(steps) if step.name == name]
     z3.require(len(indexes) == 1, "unknown confirmation step")
     index, = indexes
@@ -397,17 +427,18 @@ def confirm_one(config: dict, checkpoint: dict, steps: list[Step], name: str,
 
 
 def dry_run(config: dict, signers: dict, values: dict | None = None) -> dict:
-    steps = compile_steps(config, signers, values)
+    steps = compile_steps(config, signers, values, dry_run=True)
     root = Path(config["paths"]["packet_dir"])
     root.mkdir(parents=True, exist_ok=True)
     layout = {"manifest": config["manifest"],
               **{section: {role: section + "/" + role + ".json" for role in roles}
                  for section, roles in z3.REQUIRED.items()}}
-    z3.build_manifest(layout, root, root / "cycle.skeleton.json", skeleton=True)
+    z3.build_manifest(layout, root, root / "cycle.skeleton.json", skeleton=True, dry_run=True)
     for step in steps:
         print(f"STOP [{step.name}] ({step.kind})")
         print(shlex.join(step.argv))
-    return {"verdict": "DRY_RUN", "steps": len(steps),
+    return {"verdict": "DRY_RUN", "steps": len(steps), "counts_as_cycle": False,
+            "unresolved_inputs": unresolved_inputs(config),
             "skeleton": str(root / "cycle.skeleton.json"), "submissions": 0}
 
 
@@ -458,7 +489,8 @@ def main(argv: list[str] | None = None) -> int:
             result = {"verdict": "PREPARED", "submissions": 0}
         else:
             config = z3.read_json(args.inputs)
-            validate_inputs(config)
+            is_dry_run = args.action == "run" and args.dry_run
+            validate_inputs(config, dry_run=is_dry_run)
             if args.action == "check-preflight":
                 checkpoint = z3.read_json(args.checkpoint)
                 check_checkpoint(config, checkpoint, [Step("preflight", [])], 0)
@@ -468,7 +500,7 @@ def main(argv: list[str] | None = None) -> int:
                            ("keystore", "password_file", "holder", "proposer", "finalizer", "issuer", "reserve", "settler")}
                 values = z3.read_json(args.values) if args.values else {}
                 values.update(INPUTS=str(args.inputs), CHECKPOINT=str(args.checkpoint or "@CHECKPOINT@"))
-                steps = compile_steps(config, signers, values)
+                steps = compile_steps(config, signers, values, dry_run=is_dry_run)
                 z3.require(not (args.dry_run and args.confirm_step), "dry-run cannot confirm a step")
                 if args.dry_run:
                     result = dry_run(config, signers, values)

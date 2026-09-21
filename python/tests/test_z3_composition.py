@@ -1,7 +1,10 @@
 """Offline ordering, hard-stop and negative packet tests."""
 from __future__ import annotations
 
+import argparse
 import copy
+import re
+import runpy
 from datetime import datetime, timedelta, timezone
 import hashlib
 import importlib.util
@@ -199,6 +202,125 @@ def test_failed_command_retains_attempt_and_stops(tmp_path, monkeypatch):
         compose.confirm_one(config, gate, steps, "arc-deposit", tmp_path,
                             lambda *a, **k: SimpleNamespace(returncode=1))
     assert (Path(config["paths"]["work_dir"]) / "attempts/arc-deposit.json").is_file()
+
+
+@pytest.mark.parametrize("cycle", [0, 1])
+def test_dry_run_unresolved_inputs_and_live_rejection(tmp_path, capsys, monkeypatch, cycle):
+    config = inputs(tmp_path)
+    config["manifest"]["cycle_number"] = cycle
+    config["manifest"]["utc_end"] = None
+    for section, field in (
+        ("identities", "anchor_code_hash"), ("policy_hashes", "primary_route"),
+        ("proof_keys", "nav"), ("accounts", "owner"), ("accounts", "proposer"),
+        ("accounts", "finalizer"), ("accounts", "bridge_settler"),
+    ):
+        config["manifest"][section][field] = None
+    for field in ("nav_program_vkey", "nav_source_manifest_hash"):
+        config["reserve_identities"][field] = None
+    for field in ("mint_amount_atoms", "reservation_ttl_blocks", "deposit_nonce",
+                  "reservation_recipient"):
+        config["parameters"][field] = None
+    for field in ("remote_runner", "proposer_hosts_file", "opening_nav_manifest",
+                  "fresh_packet_operation"):
+        config["paths"][field] = None
+    original = copy.deepcopy(config)
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: pytest.fail("dry-run ran a command"))
+    original_open = Path.open
+    def no_signer_open(path, *args, **kwargs):
+        assert not str(path).startswith("/not-opened/")
+        return original_open(path, *args, **kwargs)
+    monkeypatch.setattr(Path, "open", no_signer_open)
+    result = compose.dry_run(config, signers())
+    output = capsys.readouterr().out
+    assert output.count("STOP [") == result["steps"] == 39
+    assert "@MANIFEST_ACCOUNTS_OWNER@" in output
+    assert "@PATHS_REMOTE_RUNNER@" in output and " None " not in output
+    assert len(result["unresolved_inputs"]) == 17
+    assert config == original
+    packet = json.loads(Path(result["skeleton"]).read_text())
+    assert packet["manifest"] == original["manifest"]
+    assert packet["dry_run"] and not packet["counts_as_cycle"] and not packet["complete"]
+    assert z3.verify_manifest(Path(result["skeleton"]))["verdict"] == "FAIL"
+    assert not Path(config["paths"]["work_dir"]).exists()
+    with pytest.raises((z3.CycleError, TypeError)):
+        compose.confirm_one(config, {}, compose.compile_steps(config, signers(), dry_run=True),
+                            "arc-deposit", tmp_path)
+    with pytest.raises((z3.CycleError, TypeError)):
+        compose.compile_steps(config, signers())
+
+
+def test_cli_cycle_zero_only_with_dry_run(tmp_path, capsys, monkeypatch):
+    config = inputs(tmp_path)
+    config["manifest"]["cycle_number"] = 0
+    save(tmp_path, "inputs.json", config)
+    argv = ["run", "--inputs", str(tmp_path / "inputs.json"), "--checkout", str(tmp_path)]
+    for name, value in signers().items():
+        argv += ["--" + name.replace("_", "-"), value]
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: pytest.fail("unexpected execution"))
+    assert compose.main(argv) == 2
+    assert "zero amount: cycle number" in capsys.readouterr().out
+    assert compose.main(argv + ["--dry-run", "--confirm-step", "arc-deposit"]) == 2
+    capsys.readouterr()
+    assert compose.main(argv + ["--dry-run"]) == 0
+    assert capsys.readouterr().out.count("STOP [") == 39
+    assert not Path(config["paths"]["work_dir"]).exists()
+
+
+def test_every_python_command_matches_argparse(tmp_path, monkeypatch):
+    """Parse all repository Python rows; skip Rust node/prover and cast binaries."""
+    steps = compose.compile_steps(inputs(tmp_path), signers(),
+                                  {"ISSUE_HEIGHT": 10, "ROUTE_HEIGHT": 11, "REDEEM_HEIGHT": 12})
+    original_parse = argparse.ArgumentParser.parse_args
+    class Parsed(Exception):
+        pass
+    current = []
+    def parse_only(parser, args=None, namespace=None):
+        # Check exact declared flags, not argparse abbreviations or another subcommand.
+        options = set(parser._option_string_actions)
+        for action in parser._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                options.update(action.choices[current[0]]._option_string_actions)
+        assert {arg for arg in current if arg.startswith("--")} <= options
+        # Stop at argparse: no main body, signer or operation execution.
+        original_parse(parser, current, namespace)
+        raise Parsed
+    monkeypatch.setattr(argparse.ArgumentParser, "parse_args", parse_only)
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: pytest.fail("command executed"))
+    checked, skipped = [], []
+    for step in steps:
+        if step.argv[0] != sys.executable:
+            skipped.append(step.name)
+            continue
+        if step.argv[1] == "-m":
+            script = compose.REPO / "python" / (step.argv[2].replace(".", "/") + ".py")
+            current = step.argv[3:]
+        else:
+            script = Path(step.argv[1])
+            current = step.argv[2:]
+        with pytest.raises(Parsed):
+            runpy.run_path(str(script), run_name="__main__")
+        checked.append(step.name)
+    assert len(checked) == 30
+    assert len(skipped) == 9  # Six Rust node/prover rows and three cast rows.
+
+
+def test_ingress_bundle_flags_match_published_node_usage(tmp_path):
+    step = next(step for step in compose.compile_steps(inputs(tmp_path), signers())
+                if step.name == "ingress-bundle")
+    usage = (compose.REPO / "crates/node/src/main_parts/runtime_helpers.rs").read_text()
+    line = next(line for line in usage.splitlines()
+                if line.startswith("  postfiat-node vault-bridge-deposit-relay-bundle "))
+    assert {arg for arg in step.argv if arg.startswith("--")} <= set(re.findall(r"--[a-z-]+", line))
+    assert "--observer-confirmation-depth" not in step.argv
+    assert step.argv[step.argv.index("--source-proof-kind") + 1] == "sp1-arc-finality-v1"
+
+
+def test_dry_run_still_rejects_known_bad_identity(tmp_path):
+    config = inputs(tmp_path)
+    config["manifest"]["cycle_number"] = 0
+    config["manifest"]["identities"]["source_vault_address"] = "0x123"
+    with pytest.raises(z3.CycleError, match="full address"):
+        compose.dry_run(config, signers())
 
 
 def test_short_pair_address_rejected(tmp_path):
