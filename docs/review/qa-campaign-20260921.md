@@ -5,14 +5,14 @@ A1 began at `6ae06356` on clean `burn6-work` in `/tmp/burn6-20260921`,
 after `git pull --rebase origin release/combined-devnet-20260915`, within a
 25-minute time box beginning at approximately 10:12 UTC.
 
-**Status:** A1 Portfolio verification, A2 NAV and reserve verification,
-A3 Swap and settlement execution, and A4 Bridge workflows are closed within
-their recorded limits. A4 repaired three P2 findings, recorded three P3 findings,
-and passed 13 focused tests. All seven campaign P2 findings are repaired;
-four P3 findings remain recorded. A4 has no consensus-affecting repair;
-NAV-03 and SWX-01 still require release-tip re-qualification before deployment.
-A5 Remaining node files and B Defect inventory/TIH remain pending and were
-not started. No Task Node or fleet action. Stop after A4.
+**Status:** closed. A1–A4 and B are complete within their recorded limits;
+optional A5 is closed without review under the B-only closeout instruction.
+Burn 6 recorded 11 findings: seven repaired P2s and four unrepaired P3s.
+B added all 11 inventory rows and passed the first complete 15-review Text
+Improvement Harness gate at **87.33/100**; no rewrite or rescore.
+All three repair commits retain a full Rust suite verdict pending.
+NAV-03 and SWX-01 require release-tip re-qualification before deployment.
+No Task Node or fleet action. Work stops after this closeout.
 
 ## Campaign state
 
@@ -22,11 +22,14 @@ not started. No Task Node or fleet action. Stop after A4.
 | A2 | NAV and reserve verification | done | 0 | 3 | 0 | [Review](nav-reserve-verification-review-20260921.md); findings `4bc6d98d`; all P2 repaired in `e9ccdeda`; NAV-03 consensus-affecting: release-tip re-qualification required before deployment |
 | A3 | Swap and settlement execution in depth | done | 0 | 1 | 0 | [Review](swap-settlement-execution-review-20260921.md); findings `6d495f43`; SWX-01 repaired in `043b9d69`; consensus-affecting: release-tip re-qualification required before deployment |
 | A4 | Bridge workflows | done | 0 | 3 | 3 | [Review](bridge-workflows-review-20260921.md); findings `66a68624`; BRW-01/02/03 repaired in `10bb5655`; BRW-04/05/06 recorded without repair; no consensus-affecting change |
-| A5 | Optional remaining node files | pending | — | — | — | Not started |
-| B | Defect inventory and TIH gate | pending | — | — | — | Not started |
+| A5 | Optional remaining node files | closed — skipped | — | — | — | Not started; outside the requested B-only closeout; no review document or inventory rows |
+| B | Defect inventory and TIH gate | done | — | — | — | [Inventory](defect-inventory-20260910.md) extended to 137 rows in `eba04faf`; first complete gate **87.33/100**; run group `qa-defect-inventory-burn6-20260921`; scored SHA-256 `e6c409eabed23c17fbacec8857d8c6a90d5ecd590a6da5e493c3847b8ba293c0` |
 
 Current finding totals: **0 P1, 7 P2, 4 P3** (A1–A4; all seven P2 repaired,
 four P3 recorded without repair).
+
+The A1–A4 sections retain each unit's scope, decisions and verification at its
+closeout. The Status, campaign table and Final summary give the cumulative result.
 
 ## Portfolio verification review result
 
@@ -86,9 +89,7 @@ deployment occurred. All three P2 findings are repaired; no P1/P3 was found in
 A2. **49 focused tests passed, none failed or ignored.** Full-suite verdict
 remains CI's responsibility on the pushed branch; no CI success is claimed.
 
-A2 closes here; A3–A5 and B are pending. The retained A1 narrative and the
-existing A1-only Final summary below are historical; this section and the
-top Status give the current campaign disposition.
+A2 closed after its review, repairs and verification; later units are recorded below.
 
 ## Swap and settlement execution review result
 
@@ -129,9 +130,7 @@ pushed branch; no CI success is claimed. SWX-01 requires release-tip
 re-qualification before deployment, in addition to the retained NAV-03
 requirement. No qualification or deployment occurred.
 
-A3 closes here. A4, A5 and B remain pending. Earlier A1/A2 closeout wording
-and the A1-only Final summary below are retained historical records; the top
-Status, campaign table and this section give the current disposition.
+A3 closed after its review, repair and verification; later units are recorded below.
 
 ## Bridge workflows review result
 
@@ -174,13 +173,13 @@ Existing NAV-03/SWX-01 release-tip re-qualification requirements remain in
 force. No qualification or deployment occurred; full-suite verdict belongs
 to CI on the pushed branch, with no CI success claimed.
 
-A4 closes here; A5 and B remain pending. Earlier closeout wording and the
-A1-only Final summary below are retained historical records; the top Status,
-campaign table and this section give the current disposition. Stop after A4.
+A4 closed after its review, repairs and verification. B completed the inventory
+and gate below; optional A5 was not started.
 
 ## Remaining node files review result
 
-Pending; not started.
+Closed without review. Optional A5 is outside the requested B-only closeout;
+no review document or NOD- inventory rows were created.
 
 ## Skips and boundary decisions
 
@@ -286,6 +285,24 @@ Pending; not started.
   or activation. Frozen artifacts and the protected release checkout were
   untouched. All edits and commits used the campaign worktree; network use
   was git only. No other surface follows A4.
+
+### B decisions
+
+- Only the inventory and this campaign log changed. All 126 prior finding
+  rows remain byte-for-byte unchanged; the 11 new rows cover every A1–A4
+  finding. New row wording was kept concise before scoring.
+- No burn 6 repair was blocked by the release candidate. PFV-01 and
+  BRW-04/05/06 remain recorded P3s under the brief, not blocked repairs.
+- Optional A5 was not started because this task explicitly ends after B and
+  campaign closeout. No source review, repair or Rust test rerun belongs to B.
+- No Task Node or fleet action of any kind, live RPC, deployment, activation,
+  signup or installation. The protected release checkout, excluded source
+  surfaces and frozen artifacts were untouched. Network use was git and
+  OpenRouter scoring only; the vault credential stayed in memory.
+- One GLM slot exhausted its initial three parse attempts. Only that missing
+  slot was resumed with the unchanged harness scorer, model and settings;
+  the 14 valid scores were retained. This completed the first full gate,
+  without selecting among valid scores or rescoring the document.
 
 ## Verification
 
@@ -463,24 +480,128 @@ followed by `git push origin HEAD:release/combined-devnet-20260915`, with clean
 trees between units. This closeout uses the identical pull/push sequence.
 No push to main, full-suite result or CI success is claimed. Stop after A4.
 
+### B verification
+
+- Initial `git pull --rebase origin release/combined-devnet-20260915` passed,
+  already current at `b322b28b`, on clean `burn6-work` in `/tmp/burn6-20260921`.
+- Inventory commit `eba04faf`: all 126 prior rows compared byte-for-byte equal
+  to the starting revision. The review-ID audit matched PFV- 1, NAV- 3, SWX- 1
+  and BRW- 6, with no missing or duplicate ID; every repair commit is an
+  ancestor of the campaign tip. Classification, severity, disposition and
+  completeness counts independently sum to **137**.
+- Before inventory commit `eba04faf`, the staged changes passed
+  `.venv-docs/bin/mkdocs build --strict`,
+  `PATH="$PWD/.venv-docs/bin:$PATH" scripts/public-doc-links` (**469 files**),
+  `scripts/public-secret-scan` (**tracked-tree**) and
+  `git diff --cached --check`. The required pull followed by
+  `git push origin HEAD:release/combined-devnet-20260915` succeeded; the tree
+  was clean before scoring.
+- All fifteen stored scores were checked against the exact prompt and its
+  hash, document SHA-256, run group, three model identities, indices 1–5 and
+  parsed raw responses. The scored inventory bytes remain unchanged from
+  `eba04faf`. Scores and retained record paths are below.
+- Before this log closeout commit, the same three gates and staged diff check
+  passed again, including the **469-file** link check. This documentation-only
+  closeout uses the same pull/push sequence; pushes go only to the release
+  branch, with a clean tree at completion.
+- No Rust suite, CI query or archived-chain replay ran during B. Retained
+  A1–A4 focused counts are **13, 49, 34 and 13 passes** (109 total, including
+  the A2 Python tests), with one existing A1 supplied-proof test ignored and
+  two A4 socket tests not invoked. These are earlier results, not new runs.
+  **Full Rust suite verdict pending** for `e9ccdeda`, `043b9d69` and `10bb5655`.
+
 ## Scores
 
-Not run; inventory scoring belongs to B, which is not started.
+The exact 137-row inventory bytes from `eba04faf`, SHA-256
+`e6c409eabed23c17fbacec8857d8c6a90d5ecd590a6da5e493c3847b8ba293c0`,
+received fifteen fresh OpenRouter reviews at temperature 0 with an 8,000-token
+response limit: the same three judges and five reviews each as the
+[original gate](qa-campaign-20260910.md#final-text-improvement-harness-gate),
+[burn 2 gate](qa-campaign-20260910.md#burn-2-final-text-improvement-harness-gate)
+and [burn 5 example](qa-campaign-20260916.md#scores). The prompt was
+`Rate this document on a scale of 1-100. Output the score and your reasoning.`
+The strict-JSON wrapper was verified verbatim against the retained burn 5
+prompt. The credential came from vault label `openroutertih` and was passed
+in memory; no credential was written to the log or database.
+
+| Judge | Scores (run order) | Average |
+| --- | --- | ---: |
+| `openai/gpt-6-astra-pro` | 86, 86, 86, 85, 86 | 85.80 |
+| `anthropic/claude-fable-5.1` | 84, 87, 87, 86, 87 | 86.20 |
+| `z-ai/glm-5.3` | 90, 90, 91, 88, 91 | 90.00 |
+| **All fifteen** | — | **87.33** |
+
+Run group: `qa-defect-inventory-burn6-20260921`. The first complete full gate
+met the **86/100** stop condition; **no wording rewrite or rescore** followed.
+The harness ran `score` with
+`--gate full --runs 5 --force --temperature 0 --max-tokens 8000 --concurrency 15`,
+the explicit prompt above and the named run group. GLM run 1 succeeded on its
+third built-in attempt. GLM run 4 exhausted three invalid-output attempts,
+ending the CLI with 14 valid records. Only run 4 was resumed through the
+unchanged `run_score_task`, with the same prompt, document, temperature,
+response limit and model; the resumed call succeeded on its first attempt.
+No valid score was replaced.
+
+All fifteen SQLite records were verified against the full prompt, prompt hash,
+document hash, group, model, index and parsed response score. The external
+records are `/home/postfiatchad/pastedocs/.qa-campaign-defect-inventory-burn6-20260921/score.log`
+and `scores.sqlite3` in that directory; they are not committed to Git.
 
 ## Final summary
 
 | Surface | P1 | P2 | P3 | Findings commit | Repair commit |
 | --- | ---: | ---: | ---: | --- | --- |
 | A1 — Portfolio verification | 0 | 0 | 1 | `21459c8a` | None; no P1/P2 |
+| A2 — NAV and reserve verification | 0 | 3 | 0 | `4bc6d98d` | `e9ccdeda` |
+| A3 — Swap and settlement execution | 0 | 1 | 0 | `6d495f43` | `043b9d69` |
+| A4 — Bridge workflows | 0 | 3 | 3 | `66a68624` | `10bb5655` |
+| **A1–A4 total** | **0** | **7** | **4** | — | — |
 
-PFV-01 remains recorded without repair. **Consensus-affecting repairs: none.**
-No release-tip re-qualification is required by an A1 repair because no repair
-was made; no deployment or qualification claim is introduced. Any future
-consensus-affecting repair on this release branch requires re-qualification
-of the release tip before deployment, as the brief requires.
+All seven P2s are repaired in source. PFV-01 and BRW-04/05/06 remain recorded
+without repair as required for P3. **No burn 6 repair is blocked by the release
+candidate.** Optional A5 was not reviewed and contributes no finding rows.
+**Full Rust suite verdict pending** for all three repair commits: `e9ccdeda`,
+`043b9d69` and `10bb5655`. No CI success or deployment qualification is claimed.
 
-Remaining limits: excluded guest holdings/weight/amount arithmetic and
-freshness policy; delegated cryptographic/type/storage/finality implementations;
-the ignored supplied-proof case; and the pending full-suite CI verdict.
-Findings and closeout are separately gated and pushed; only the two A1 review
-documents change. A2–A5 and B remain pending. Stop after the A1 closeout.
+**Consensus-affecting repairs:**
+
+- **NAV-03 — `e9ccdeda`:** rejected local bridge transitions no longer persist
+  reserve mutation when receipt history is invalid or would exceed its bounds.
+  This is consensus-affecting under the brief's state-transition-result rule;
+  consensus execution rules and the successful JSON encoding are unchanged.
+- **SWX-01 — `043b9d69`:** policy-stale public redemptions previously accepted
+  now reject before pricing or mutation, for pooled and source-specific paths.
+
+Both require **release-tip re-qualification before deployment**. NAV-01/02
+and BRW-01/02/03 are not consensus-affecting. No re-qualification, deployment
+or activation occurred.
+
+Remaining risks and limits:
+
+- PFV-01 leaves nine collection context mismatches without individual negative
+  regressions; no invalid-proof acceptance was established. Excluded guest
+  holdings/weight/amount arithmetic and freshness remain unqualified.
+- BRW-04 retains unbounded file/child reads and missing deadlines; BRW-05
+  retains ambiguous HTTP length handling; BRW-06 retains the V1/V2 recipient
+  offset discrepancy. No checkpoint-signature or receipt-proof bypass was shown.
+- Reserve completeness, proof/overlay disjointness, source freshness and price
+  trust depend on unreviewed proof/source machinery. Synthetic fixtures do not
+  authenticate reserves. Cross-file crash/I/O atomicity and concurrent writers
+  remain outside NAV-03's guarantee.
+- Bridge reports establish arithmetic consistency, not observation authenticity
+  or delegated supply semantics. Legacy supplied receipts without status remain
+  unproven; RPC honesty, historical availability and a coherent PFTL/cross-chain
+  snapshot remain limits. Withdrawal proof/replay guarantees are delegated.
+- Full-suite CI, exact archived-chain replay and release qualification remain
+  pending. The ignored supplied-proof fixture and skipped checkpoint socket
+  tests are not passes. No deployment readiness is inferred from focused tests.
+
+The inventory adds **PFV- 1, NAV- 3, SWX- 1 and BRW- 6** in `eba04faf`, for
+**137 rows: 26 P1, 75 P2 and 36 P3**, with every prior row unchanged.
+Its first complete gate passed at **87.33/100**, run group
+`qa-defect-inventory-burn6-20260921`, scored file SHA-256
+`e6c409eabed23c17fbacec8857d8c6a90d5ecd590a6da5e493c3847b8ba293c0`.
+One invalid-output slot was resumed; no document rewrite or rescore occurred.
+The inventory and this log closeout are separately gated and pushed to
+`release/combined-devnet-20260915`. No Task Node or fleet action occurred;
+the protected release checkout was untouched. Stop after this closeout.
