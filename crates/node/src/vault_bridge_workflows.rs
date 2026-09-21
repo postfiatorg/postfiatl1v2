@@ -1943,7 +1943,10 @@ fn vault_bridge_parse_u64_text(field: &str, value: &str) -> Result<u64, String> 
 
 fn vault_bridge_validate_receipt_success(receipt: &serde_json::Value) -> io::Result<()> {
     let Some(status) = receipt.get("status") else {
-        return Ok(());
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "source receipt is missing its success status",
+        ));
     };
     let success = match status {
         serde_json::Value::Bool(value) => *value,
@@ -2355,6 +2358,11 @@ fn select_vault_bridge_deposit_log_from_receipt(
     vault_address: Option<&str>,
     token_address: Option<&str>,
 ) -> Result<serde_json::Value, String> {
+    // Legacy manually supplied receipts may omit status; RPC receipts are
+    // required to pass the strict success helper before reaching this selector.
+    if receipt.get("status").is_some() {
+        vault_bridge_validate_receipt_success(receipt).map_err(|error| error.to_string())?;
+    }
     let expected_vault = vault_address
         .map(|address| vault_bridge_normalized_evm_address_text("--vault-address", address))
         .transpose()?;
@@ -2365,10 +2373,10 @@ fn select_vault_bridge_deposit_log_from_receipt(
         .get("logs")
         .and_then(serde_json::Value::as_array)
         .ok_or_else(|| "vault bridge asset receipt missing logs array".to_string())?;
-    let receipt_block_hash =
-        vault_bridge_optional_log_string(receipt, &["blockHash", "block_hash"]);
-    let receipt_tx_hash =
-        vault_bridge_optional_log_string(receipt, &["transactionHash", "txHash", "tx_hash"]);
+    let block_fields = ["blockHash", "block_hash"];
+    let tx_fields = ["transactionHash", "txHash", "tx_hash"];
+    let receipt_block_hash = vault_bridge_optional_consistent_hash(receipt, &block_fields)?;
+    let receipt_tx_hash = vault_bridge_optional_consistent_hash(receipt, &tx_fields)?;
 
     let mut selected: Option<serde_json::Value> = None;
     for log in logs {
@@ -2396,21 +2404,17 @@ fn select_vault_bridge_deposit_log_from_receipt(
         }
 
         let mut candidate = log.clone();
-        if let Some(candidate_object) = candidate.as_object_mut() {
-            if !candidate_object.contains_key("blockHash") {
-                if let Some(block_hash) = receipt_block_hash {
-                    candidate_object.insert(
-                        "blockHash".to_string(),
-                        serde_json::Value::String(block_hash.to_string()),
-                    );
+        for (fields, parent) in [
+            (block_fields.as_slice(), receipt_block_hash.as_ref()),
+            (tx_fields.as_slice(), receipt_tx_hash.as_ref()),
+        ] {
+            let child = vault_bridge_optional_consistent_hash(&candidate, fields)?;
+            if let Some(parent) = parent {
+                if child.as_ref().is_some_and(|child| child != parent) {
+                    return Err(format!("deposit log {} contradicts its receipt", fields[0]));
                 }
-            }
-            if !candidate_object.contains_key("transactionHash") {
-                if let Some(tx_hash) = receipt_tx_hash {
-                    candidate_object.insert(
-                        "transactionHash".to_string(),
-                        serde_json::Value::String(tx_hash.to_string()),
-                    );
+                if child.is_none() {
+                    candidate[fields[0]] = serde_json::Value::String(vault_bridge_0x_hex(parent));
                 }
             }
         }
@@ -2433,9 +2437,34 @@ fn select_vault_bridge_deposit_log_from_receipt(
     })
 }
 
+fn vault_bridge_optional_consistent_hash(
+    value: &serde_json::Value,
+    fields: &[&str],
+) -> Result<Option<String>, String> {
+    let mut selected = None;
+    for field in fields {
+        if let Some(value) = value.get(*field) {
+            let hash = vault_bridge_normalized_hex_json(field, value, EVM_ABI_WORD_BYTES)?;
+            if selected.as_ref().is_some_and(|previous| previous != &hash) {
+                return Err(format!("conflicting {} aliases", fields[0]));
+            }
+            selected = Some(hash);
+        }
+    }
+    Ok(selected)
+}
+
 fn parse_vault_bridge_vault_deposit_log(
     log: &serde_json::Value,
 ) -> Result<VaultBridgeDepositEvidence, String> {
+    if log
+        .get("removed")
+        .is_some_and(|value| value.as_bool() != Some(false))
+    {
+        return Err(
+            "vault bridge deposit log is removed or has an invalid removed flag".to_string(),
+        );
+    }
     let topics = vault_bridge_log_array(log, "topics")?;
     if topics.len() != 4 {
         return Err("vault bridge asset vault deposit log must have exactly 4 topics".to_string());
@@ -3829,6 +3858,90 @@ mod tests {
             expires_at_height: Some(1776),
             bundle_dir: None,
         }
+    }
+
+    fn burn6_deposit_receipt() -> serde_json::Value {
+        let intent = vault_bridge_deposit_intent(fire_intent_options()).expect("intent");
+        let mut data = abi_word_u64(7 * 32);
+        data.push_str(&abi_word_u64(intent.amount_atoms));
+        data.push_str(&abi_word_hex(&intent.nonce));
+        data.push_str(&abi_word_hex(&intent.route_binding));
+        data.push_str(&abi_word_u64(intent.source_chain_id));
+        data.push_str(&abi_word_address(&intent.vault_address));
+        data.push_str(&abi_word_address(&intent.token_address));
+        data.push_str(&abi_word_u64(FIRE_RECIPIENT.len() as u64));
+        let recipient = bytes_to_hex(FIRE_RECIPIENT.as_bytes());
+        data.push_str(&recipient);
+        data.push_str(&"0".repeat((64 - recipient.len() % 64) % 64));
+        serde_json::json!({
+            "status": "0x1",
+            "blockHash": format!("0x{}", "22".repeat(32)),
+            "transactionHash": format!("0x{}", "33".repeat(32)),
+            "logs": [{
+                "address": intent.vault_address,
+                "topics": [
+                    format!("0x{VAULT_BRIDGE_VAULT_DEPOSIT_V2_EVENT_TOPIC}"),
+                    intent.expected_deposit_id,
+                    format!("0x{}", abi_word_address(&intent.depositor)),
+                    format!("0x{}", intent.pftl_recipient_hash),
+                ],
+                "data": format!("0x{data}"),
+                "blockHash": format!("0x{}", "22".repeat(32)),
+                "transactionHash": format!("0x{}", "33".repeat(32)),
+                "logIndex": "0x0",
+                "removed": false,
+            }]
+        })
+    }
+
+    #[test]
+    fn burn6_deposit_receipt_rejects_failed_removed_and_mixed_identity() {
+        let receipt = burn6_deposit_receipt();
+        select_vault_bridge_deposit_log_from_receipt(&receipt, None, None).expect("valid receipt");
+        for (field, value) in [
+            (
+                "blockHash",
+                serde_json::json!(format!("0x{}", "44".repeat(32))),
+            ),
+            (
+                "transactionHash",
+                serde_json::json!(format!("0x{}", "55".repeat(32))),
+            ),
+            ("removed", serde_json::json!(true)),
+            ("removed", serde_json::json!("false")),
+        ] {
+            let mut altered = receipt.clone();
+            altered["logs"][0][field] = value;
+            assert!(
+                select_vault_bridge_deposit_log_from_receipt(&altered, None, None).is_err(),
+                "accepted altered {field}"
+            );
+        }
+        let mut failed = receipt.clone();
+        failed["status"] = serde_json::json!("0x0");
+        assert!(select_vault_bridge_deposit_log_from_receipt(&failed, None, None).is_err());
+        let mut missing_status = receipt.clone();
+        missing_status.as_object_mut().unwrap().remove("status");
+        assert!(vault_bridge_validate_receipt_success(&missing_status).is_err());
+        select_vault_bridge_deposit_log_from_receipt(&missing_status, None, None)
+            .expect("legacy supplied receipt without status remains supported");
+
+        let mut inherited = receipt.clone();
+        inherited["logs"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("blockHash");
+        inherited["logs"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("transactionHash");
+        let selected = select_vault_bridge_deposit_log_from_receipt(&inherited, None, None)
+            .expect("inherit receipt coordinates");
+        assert_eq!(selected["blockHash"], receipt["blockHash"]);
+        assert_eq!(selected["transactionHash"], receipt["transactionHash"]);
+        let mut raw = selected;
+        raw["removed"] = serde_json::json!(true);
+        assert!(parse_vault_bridge_vault_deposit_log(&raw).is_err());
     }
 
     #[test]

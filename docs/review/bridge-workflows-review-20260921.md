@@ -154,3 +154,49 @@ skipped. Local temporary stores and fake cast processes are permitted; no
 generated command bundle is executed against a chain. No full workspace or
 Orchard suite, archived-chain replay, physical crash experiment or CI query.
 Full-suite verdict belongs to CI on the pushed branch. P3 findings stay unfixed.
+
+## Repair result
+
+Findings were separately gated and pushed as `66a68624` before repairs.
+Only `vault_bridge_conservation.rs` and `vault_bridge_workflows.rs` change as
+source, with three added in-file regression tests.
+
+- **BRW-01:** verification recomputes checked claim/deposit sums and the vault
+  identity, rejects inconsistent cached totals and impossible released amounts,
+  and preserves valid non-wrapped allocations. This validates summary arithmetic;
+  it does not authenticate row observations or reconcile delegated family/private
+  issued-supply semantics. **Consensus-affecting: no.**
+- **BRW-02:** RPC receipts require a success status; the supplied-receipt path
+  rejects explicit failure; selected log coordinates must agree with enclosing
+  receipt coordinates and any aliases; raw and selected logs reject removed or
+  malformed removal flags. Legacy manually supplied receipts without status
+  remain accepted as unproven input. **Consensus-affecting: no.**
+- **BRW-03:** one finalized height/hash is selected per source chain, every
+  code/balance/deposit/withdrawal read uses that height, and the hash is rechecked
+  before returning a report. An unavailable finalized/history query fails closed.
+  Local cast stubs enforce pinned arguments and reject simulated hash drift;
+  no live RPC behavior or cross-chain/PFTL atomic snapshot is claimed.
+  **Consensus-affecting: no.**
+- **BRW-04/05/06:** recorded P3 findings remain unfixed.
+
+Before repair, `cargo test -p postfiat-node burn6_ --lib --locked` produced
+**3 passed, 3 failed, 0 ignored, 380 filtered**: the three new A4 tests failed
+on an accepted altered source balance, an accepted contradictory block hash,
+and an unpinned source query. That filter also matched three existing A2 tests;
+they passed and received no additional review or changes.
+
+Final focused verification, all with
+`env CARGO_NET_OFFLINE=true CARGO_TARGET_DIR=/tmp/integrate-20260918-target`:
+
+| Command | Result |
+| --- | --- |
+| `cargo test -p postfiat-node vault_bridge_workflows::tests --lib --locked` | 4 passed, 0 failed, 0 ignored, 382 filtered |
+| `cargo test -p postfiat-node vault_bridge_conservation::tests --lib --locked` | 8 passed, 0 failed, 0 ignored, 378 filtered |
+| `cargo test -p postfiat-node pfusdc_tier4::tests --lib --locked` | 1 passed, 0 failed, 0 ignored, 385 filtered |
+| `cargo check --workspace --locked` | Passed |
+
+**13 A4 tests passed, none failed or ignored.** The two checkpoint-signing
+module tests were not invoked because they bind sockets; they are skipped,
+not counted as ignored/passed. No release-tip re-qualification is triggered by
+these local repairs; existing earlier-surface requirements remain in force.
+No full-suite or CI pass is claimed.

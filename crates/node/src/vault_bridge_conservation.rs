@@ -89,7 +89,26 @@ pub struct VaultBridgeConservationReport {
 
 impl VaultBridgeConservationReport {
     pub fn verify(&self) -> io::Result<()> {
-        if !self.conserved || self.unexplained_delta_atoms != 0 {
+        let live_claims = self
+            .wrapped_supply_atoms
+            .checked_add(self.nav_subscription_claim_atoms)
+            .and_then(|value| value.checked_add(self.other_claim_atoms));
+        let deposits = self
+            .recognized_but_unallocated_atoms
+            .checked_add(self.observed_but_uncounted_atoms);
+        let expected = live_claims
+            .zip(deposits)
+            .and_then(|(claims, deposits)| claims.checked_add(deposits))
+            .and_then(|value| value.checked_add(self.burned_unsettled_atoms))
+            .and_then(|value| value.checked_sub(self.released_unsettled_atoms));
+        if !self.conserved
+            || self.unexplained_delta_atoms != 0
+            || self.released_unsettled_atoms > self.burned_unsettled_atoms
+            || live_claims != Some(self.live_claim_atoms)
+            || deposits != Some(self.uncredited_deposit_atoms)
+            || expected != Some(self.expected_source_vault_atoms)
+            || expected != Some(self.source_vault_atoms)
+        {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
@@ -425,6 +444,27 @@ fn select_vault_interface(
     Ok(entry.abi_class)
 }
 
+fn conservation_source_block_hash(
+    cast_binary: &Path,
+    rpc_url: &str,
+    height: &str,
+) -> io::Result<String> {
+    let hash = cast_output(
+        cast_binary,
+        &["block", height, "--field", "hash", "--rpc-url", rpc_url],
+        "conservation source block hash",
+    )?;
+    let bytes = vault_bridge_hex_bytes_exact("source block hash", &hash, 32)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    if bytes.iter().all(|byte| *byte == 0) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "zero source block hash",
+        ));
+    }
+    Ok(bytes_to_hex(&bytes))
+}
+
 pub fn vault_bridge_conservation_audit(
     options: VaultBridgeConservationOptions,
 ) -> io::Result<VaultBridgeConservationReport> {
@@ -473,6 +513,24 @@ pub fn vault_bridge_conservation_audit(
 
     let source_rpc_urls =
         source_rpc_urls_for_routes(&options.cast_binary, &options.source_rpc_url, &records)?;
+    let mut source_snapshots = BTreeMap::new();
+    for (chain_id, rpc_url) in &source_rpc_urls {
+        let height = cast_u64(
+            &options.cast_binary,
+            &[
+                "block",
+                "finalized",
+                "--field",
+                "number",
+                "--rpc-url",
+                rpc_url,
+            ],
+            "conservation finalized source height",
+        )?
+        .to_string();
+        let hash = conservation_source_block_hash(&options.cast_binary, rpc_url, &height)?;
+        source_snapshots.insert(*chain_id, (height, hash));
+    }
 
     let mut route_rows = Vec::with_capacity(records.len());
     let mut route_interfaces = BTreeMap::new();
@@ -481,11 +539,14 @@ pub fn vault_bridge_conservation_audit(
         let source_rpc_url = source_rpc_urls
             .get(&record.profile.source_chain_id)
             .expect("required source RPC URLs validated");
+        let (source_height, _) = &source_snapshots[&record.profile.source_chain_id];
         let vault_code = cast_hex_bytes(
             &options.cast_binary,
             &[
                 "code",
                 &record.profile.vault_address,
+                "--block",
+                source_height,
                 "--rpc-url",
                 source_rpc_url,
             ],
@@ -496,6 +557,8 @@ pub fn vault_bridge_conservation_audit(
             &[
                 "code",
                 &record.profile.token_address,
+                "--block",
+                source_height,
                 "--rpc-url",
                 source_rpc_url,
             ],
@@ -544,6 +607,8 @@ pub fn vault_bridge_conservation_audit(
                     &record.profile.token_address,
                     "balanceOf(address)(uint256)",
                     &record.profile.vault_address,
+                    "--block",
+                    source_height,
                     "--rpc-url",
                     source_rpc_url,
                 ],
@@ -604,6 +669,7 @@ pub fn vault_bridge_conservation_audit(
         let source_rpc_url = source_rpc_urls
             .get(&record.profile.source_chain_id)
             .expect("required source RPC URLs validated");
+        let (source_height, _) = &source_snapshots[&record.profile.source_chain_id];
         let seen = cast_bool(
             &options.cast_binary,
             &[
@@ -611,6 +677,8 @@ pub fn vault_bridge_conservation_audit(
                 &record.profile.vault_address,
                 interface.deposit_seen_selector(),
                 &format!("0x{}", deposit.evidence.deposit_id),
+                "--block",
+                source_height,
                 "--rpc-url",
                 source_rpc_url,
             ],
@@ -660,6 +728,7 @@ pub fn vault_bridge_conservation_audit(
         let source_rpc_url = source_rpc_urls
             .get(&record.profile.source_chain_id)
             .expect("required source RPC URLs validated");
+        let (source_height, _) = &source_snapshots[&record.profile.source_chain_id];
         let withdrawal_id = vault_bridge_hex_bytes_exact(
             "vault bridge redemption id",
             &redemption.redemption_id,
@@ -677,6 +746,8 @@ pub fn vault_bridge_conservation_audit(
                 &record.profile.vault_address,
                 interface.withdrawal_claimed_selector(),
                 &commitment,
+                "--block",
+                source_height,
                 "--rpc-url",
                 source_rpc_url,
             ],
@@ -695,6 +766,20 @@ pub fn vault_bridge_conservation_audit(
                     "PFTL redemption `{}` records {} settled atom(s), but the governed source vault has not claimed it",
                     redemption.redemption_id, redemption.settled_atoms
                 ),
+            ));
+        }
+    }
+
+    for (chain_id, (height, expected_hash)) in &source_snapshots {
+        let observed_hash = conservation_source_block_hash(
+            &options.cast_binary,
+            &source_rpc_urls[chain_id],
+            height,
+        )?;
+        if &observed_hash != expected_hash {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("conservation source snapshot changed for chain {chain_id} at {height}"),
             ));
         }
     }
@@ -1304,9 +1389,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
     }
 
-    #[test]
-    fn conservation_report_fails_closed_on_any_unexplained_atom() {
-        let mut report = VaultBridgeConservationReport {
+    fn balanced_report() -> VaultBridgeConservationReport {
+        VaultBridgeConservationReport {
             schema: VAULT_BRIDGE_CONSERVATION_REPORT_SCHEMA.to_string(),
             asset_id: "11".repeat(48),
             current_height: 1,
@@ -1331,7 +1415,51 @@ mod tests {
             deposits: Vec::new(),
             redemptions: Vec::new(),
             disclosure: String::new(),
-        };
+        }
+    }
+
+    #[test]
+    fn burn6_conservation_rejects_inconsistent_summaries() {
+        let report = balanced_report();
+        let encoded = serde_json::to_value(&report).expect("report JSON");
+        for (field, value) in [
+            ("source_vault_atoms", 101),
+            ("live_claim_atoms", 81),
+            ("wrapped_supply_atoms", 81),
+            ("nav_subscription_claim_atoms", 1),
+            ("other_claim_atoms", 1),
+            ("uncredited_deposit_atoms", 11),
+            ("recognized_but_unallocated_atoms", 11),
+            ("observed_but_uncounted_atoms", 1),
+            ("burned_unsettled_atoms", 21),
+            ("released_unsettled_atoms", 11),
+            ("expected_source_vault_atoms", 101),
+            ("wrapped_supply_atoms", u64::MAX),
+            ("uncredited_deposit_atoms", u64::MAX),
+        ] {
+            let mut altered = encoded.clone();
+            altered[field] = serde_json::json!(value);
+            let altered: VaultBridgeConservationReport =
+                serde_json::from_value(altered).expect("altered report");
+            assert!(altered.verify().is_err(), "accepted altered {field}");
+        }
+        let mut impossible_release = report.clone();
+        impossible_release.burned_unsettled_atoms = 0;
+        impossible_release.released_unsettled_atoms = 1;
+        impossible_release.expected_source_vault_atoms = 89;
+        impossible_release.source_vault_atoms = 89;
+        assert!(impossible_release.verify().is_err());
+
+        let mut allocated = report;
+        allocated.wrapped_supply_atoms = 60;
+        allocated.nav_subscription_claim_atoms = 10;
+        allocated.other_claim_atoms = 10;
+        allocated.verify().expect("valid non-wrapped claims");
+    }
+
+    #[test]
+    fn conservation_report_fails_closed_on_any_unexplained_atom() {
+        let mut report = balanced_report();
         report.verify().expect("exact identity");
         report.source_vault_atoms = 101;
         report.unexplained_delta_atoms = 1;
@@ -1371,6 +1499,15 @@ mod tests {
 
     #[test]
     fn source_rpc_audit_tracks_deposit_burn_release_and_fails_on_balance_drift() {
+        run_source_rpc_audit(false);
+    }
+
+    #[test]
+    fn burn6_conservation_pins_source_reads_and_rejects_hash_drift() {
+        run_source_rpc_audit(true);
+    }
+
+    fn run_source_rpc_audit(require_snapshot: bool) {
         use postfiat_types::{
             vault_bridge_deposit_id, AssetDefinition, NavProofProfile, NavTrackedAsset, TrustLine,
             VaultBridgeBucketState, VaultBridgeDepositEvidence, VaultBridgeDepositRecord,
@@ -1382,7 +1519,7 @@ mod tests {
         };
 
         let root = std::env::temp_dir().join(format!(
-            "postfiat-vault-bridge-conservation-boundary-{}",
+            "postfiat-vault-bridge-conservation-boundary-{}-{require_snapshot}",
             std::process::id()
         ));
         let data_dir = root.join("node");
@@ -1643,15 +1780,24 @@ mod tests {
         store.write_ledger(&ledger).expect("write fixture ledger");
 
         let cast = root.join("cast");
+        let block_hash = format!("0x{}", "22".repeat(32));
+        let snapshot_guard = if require_snapshot {
+            "case \" $* \" in *' --block 100 '*) ;; *) echo unpinned >&2; exit 1 ;; esac\n"
+        } else {
+            ":\n"
+        };
         let write_cast = |chain_id: u64,
                           observed_vault_code: &str,
                           old_vault_balance: u64,
                           current_vault_balance: u64,
                           deposit_seen: bool,
                           withdrawal_claimed: bool| {
+            let header = format!(
+                "#!/bin/sh\nif [ \"$1\" = block ]; then\n  if [ \"$2\" = finalized ]; then echo 100; else echo {block_hash}; fi\n  exit 0\nfi\nif [ \"$1\" != chain-id ]; then\n{snapshot_guard}fi\n"
+            );
             std::fs::write(
                 &cast,
-                format!(
+                header + &format!(
                     "#!/bin/sh\nif [ \"$1\" = chain-id ]; then echo {chain_id}; exit 0; fi\nif [ \"$1\" = code ] && [ \"$2\" = '{}' ]; then echo 0x{observed_vault_code}; exit 0; fi\nif [ \"$1\" = code ] && [ \"$2\" = '{}' ]; then echo 0x6001; exit 0; fi\nif [ \"$1\" = code ] && [ \"$2\" = '{}' ]; then echo 0x6002; exit 0; fi\nif [ \"$1\" = call ] && [ \"$3\" = 'balanceOf(address)(uint256)' ] && [ \"$4\" = '{}' ]; then echo {old_vault_balance}; exit 0; fi\nif [ \"$1\" = call ] && [ \"$3\" = 'balanceOf(address)(uint256)' ] && [ \"$4\" = '{}' ]; then echo {current_vault_balance}; exit 0; fi\nif [ \"$1\" = call ] && [ \"$3\" = 'deposit_seen(bytes32)(bool)' ]; then echo {deposit_seen}; exit 0; fi\nif [ \"$1\" = call ] && [ \"$3\" = 'claimed_withdrawal_id(bytes32)(bool)' ]; then echo {withdrawal_claimed}; exit 0; fi\necho unexpected >&2; exit 1\n",
                     route.vault_address,
                     current_route.vault_address,
@@ -1741,7 +1887,7 @@ mod tests {
         store.write_ledger(&ledger).expect("restore fixture ledger");
 
         write_cast(42_161, "6001", 81, 15, true, true);
-        let report = vault_bridge_conservation_audit(options)
+        let report = vault_bridge_conservation_audit(options.clone())
             .expect("audit must return the non-conserved report");
         let error = report
             .verify()
@@ -1750,6 +1896,30 @@ mod tests {
             error.to_string().contains("unexplained_delta=1"),
             "unexpected error: {error}"
         );
+        if require_snapshot {
+            write_cast(42_161, "6001", 80, 15, true, true);
+            let marker = root.join("block-read");
+            let script = std::fs::read_to_string(&cast).expect("cast stub");
+            std::fs::write(
+                &cast,
+                script.replace(
+                    &format!("echo {block_hash}"),
+                    &format!(
+                        "if [ -f '{}' ]; then echo 0x{}; else touch '{}'; echo {block_hash}; fi",
+                        marker.display(),
+                        "33".repeat(32),
+                        marker.display()
+                    ),
+                ),
+            )
+            .expect("simulate changed source hash");
+            let error = vault_bridge_conservation_audit(options)
+                .expect_err("changed source snapshot must fail");
+            assert!(
+                error.to_string().contains("source snapshot changed"),
+                "{error}"
+            );
+        }
         let _ = std::fs::remove_dir_all(root);
     }
 }
