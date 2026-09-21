@@ -5,14 +5,16 @@ A1 began at `6ae06356` on clean `burn6-work` in `/tmp/burn6-20260921`,
 after `git pull --rebase origin release/combined-devnet-20260915`, within a
 25-minute time box beginning at approximately 10:12 UTC.
 
-**Status:** closed. A1–A4 and B are complete within their recorded limits;
-optional A5 is closed without review under the B-only closeout instruction.
-Burn 6 recorded 11 findings: seven repaired P2s and four unrepaired P3s.
-B added all 11 inventory rows and passed the first complete 15-review Text
-Improvement Harness gate at **87.33/100**; no rewrite or rescore.
-All three repair commits retain a full Rust suite verdict pending.
+**Status:** closed after A5's focused review, with the unreviewed ranges
+explicitly retained below. Burn 6 now records 15 findings: nine repaired P2s
+and six unrepaired P3s. A5 findings `d3608838` and repairs `87c992c3` are pushed;
+no A5 repair is consensus-affecting. B's **87.33/100** gate predates A5's four
+added inventory rows; the current 141-row inventory was not rescored.
+All four repair commits retain a full Rust suite verdict pending.
 NAV-03 and SWX-01 require release-tip re-qualification before deployment.
-No Task Node or fleet action. Work stops after this closeout.
+The earlier A1–A4/B narratives, Scores and Final summary are retained as their
+historical closeout record; this Status, current totals and A5 section supersede
+their statements that A5 was skipped. No Task Node or fleet action. Stop here.
 
 ## Campaign state
 
@@ -22,11 +24,11 @@ No Task Node or fleet action. Work stops after this closeout.
 | A2 | NAV and reserve verification | done | 0 | 3 | 0 | [Review](nav-reserve-verification-review-20260921.md); findings `4bc6d98d`; all P2 repaired in `e9ccdeda`; NAV-03 consensus-affecting: release-tip re-qualification required before deployment |
 | A3 | Swap and settlement execution in depth | done | 0 | 1 | 0 | [Review](swap-settlement-execution-review-20260921.md); findings `6d495f43`; SWX-01 repaired in `043b9d69`; consensus-affecting: release-tip re-qualification required before deployment |
 | A4 | Bridge workflows | done | 0 | 3 | 3 | [Review](bridge-workflows-review-20260921.md); findings `66a68624`; BRW-01/02/03 repaired in `10bb5655`; BRW-04/05/06 recorded without repair; no consensus-affecting change |
-| A5 | Optional remaining node files | closed — skipped | — | — | — | Not started; outside the requested B-only closeout; no review document or inventory rows |
+| A5 | Optional remaining node files | closed — focused review | 0 | 2 | 2 | [Review](node-remaining-review-20260921.md); findings `d3608838`; NOD-01/02 repaired in `87c992c3`; NOD-03/04 recorded; remaining ranges explicitly unreviewed; no consensus-affecting repair |
 | B | Defect inventory and TIH gate | done | — | — | — | [Inventory](defect-inventory-20260910.md) extended to 137 rows in `eba04faf`; first complete gate **87.33/100**; run group `qa-defect-inventory-burn6-20260921`; scored SHA-256 `e6c409eabed23c17fbacec8857d8c6a90d5ecd590a6da5e493c3847b8ba293c0` |
 
-Current finding totals: **0 P1, 7 P2, 4 P3** (A1–A4; all seven P2 repaired,
-four P3 recorded without repair).
+Current finding totals: **0 P1, 9 P2, 6 P3** (A1–A5 within recorded review
+limits; all nine P2 repaired, six P3 recorded without repair).
 
 The A1–A4 sections retain each unit's scope, decisions and verification at its
 closeout. The Status, campaign table and Final summary give the cumulative result.
@@ -178,8 +180,53 @@ and gate below; optional A5 was not started.
 
 ## Remaining node files review result
 
-Closed without review. Optional A5 is outside the requested B-only closeout;
-no review document or NOD- inventory rows were created.
+The [A5 review](node-remaining-review-20260921.md) began at `0e2ae50c` on
+clean `burn6-work` after the required pull, at approximately 11:39 UTC with
+a 25-minute limit. Findings `d3608838` and repairs `87c992c3` were separately
+gated and pushed. This is a focused review, not a whole-file audit.
+
+| Finding | Result | Consensus impact |
+| --- | --- | --- |
+| NOD-01 — P2, duplicate acknowledgments invent accepted outcomes | Stored outcomes determine counts; missing/conflicting evidence and invalid totals fail closed; three regressions | No; transport reporting only |
+| NOD-02 — P2, wallet key output overwrites backup | Resolved key/backup aliases reject before writing, including restore; two regressions | No; local wallet-file interlock only |
+| NOD-03 — P3, transport file reads collect unbounded input | Recorded without repair | No change |
+| NOD-04 — P3, manifests reopen after verification | Recorded without repair | No change |
+
+Reviewed ranges at the starting revision, all in `crates/node/src/`:
+
+- `transport_protocol.rs`: production `1–1792` and duplicate-ack fixtures
+  `2523–2642`. Other test bodies received selection/context inspection only.
+- `block_replay_wallet.rs`: `1–610`, `793–1614`, `1765–2320`, `2664–2815`,
+  `3068–3585`. Unreviewed: compatibility tables/root helpers `611–792` and
+  `1615–1764`, FastPay replay remainder `2321–2663`, accounting/receipt
+  comparison remainder `2816–3067`.
+- `rpc_dispatch.rs`: `1–400` and `2500–3102`. Unreviewed: method arms
+  `401–2499` and remaining test bodies `3103–3674`; selected test assertions
+  and names supplied context only.
+
+Those limits reserve the time box for repair and verification; compiler and
+temporary-storage failures also consumed the window. No full-file review or
+unreviewed-path safety claim is made. Selected wallet writer/existence helpers,
+receipt/option shapes and test registration supplied dependency context only.
+No other implementation received a correctness review. All established A5
+P1/P2 work is complete; no established repair was skipped.
+
+Only `block_replay_wallet.rs` and `transport_protocol.rs` changed as source.
+**36 focused tests passed** and workspace checking passed. The repairs change
+neither consensus/state-transition results, replay, storage formats nor signed
+or hashed bytes. No new release re-qualification requirement arises from A5;
+the existing NAV-03/SWX-01 requirement remains. The wallet check does not claim
+concurrent-writer or two-file crash atomicity. Ambiguous receipt histories now
+refuse an acknowledgment instead of inventing successful outcomes.
+
+B had already completed. This closeout adds all four NOD- rows and updates
+inventory counts to **141 rows: 26 P1, 77 P2, 38 P3**, preserving every prior
+finding row verbatim. **B's 87.33/100 gate and recorded hash predate A5**;
+no rescore occurred. No Task Node, fleet action, live RPC, spend, installation,
+deployment or qualification; git was the only network use. Frozen artifacts,
+excluded crates and the protected release checkout were untouched. Full
+Rust/Orchard suites, exact archived-chain replay and CI queries were omitted.
+The socket test named in Verification was skipped. Stop after this closeout.
 
 ## Skips and boundary decisions
 
@@ -509,6 +556,45 @@ No push to main, full-suite result or CI success is claimed. Stop after A4.
   the A2 Python tests), with one existing A1 supplied-proof test ignored and
   two A4 socket tests not invoked. These are earlier results, not new runs.
   **Full Rust suite verdict pending** for `e9ccdeda`, `043b9d69` and `10bb5655`.
+
+### A5 verification
+
+Cargo commands used the prefix
+`env PATH="/usr/bin:$PATH" CARGO_NET_OFFLINE=true CARGO_TARGET_DIR=/tmp/integrate-20260918-target CARGO_BUILD_JOBS=1`.
+Dependency compilation does not constitute another source review or excluded
+test-suite run. Fixtures use local temporary files and deterministic test keys.
+
+| Command | Final result |
+| --- | --- |
+| `cargo test -p postfiat-node block_replay_wallet:: --lib --locked` | 3 passed, 0 failed, 0 ignored, 385 filtered |
+| `cargo test -p postfiat-node transport_protocol::transport_cli_tests --bin postfiat-node --locked -- --skip transport_listener_mode_failure_prevents_ready_report` | 30 passed, 0 failed, 0 ignored, 146 filtered |
+| `cargo test -p postfiat-node wallet_keygen_restore_round_trips_without_report_secret_leakage --lib --locked` | 1 passed, 0 failed, 0 ignored, 387 filtered |
+| `cargo test -p postfiat-node wallet_sign_transfer_emits_submit_ready_redacted_transfer --lib --locked` | 1 passed, 0 failed, 0 ignored, 387 filtered |
+| `cargo test -p postfiat-node wallet_test_vector_is_deterministic_and_redacted --lib --locked` | 1 passed, 0 failed, 0 ignored, 387 filtered |
+| `cargo check --workspace --locked` | Passed |
+| `cargo fmt --all -- --check` (without prefix) | Passed |
+
+Unique total: **36 passed, 0 failed, 0 ignored**. The socket test was explicitly
+filtered out, not passed. Before repair,
+`cargo test -p postfiat-node --lib --bin postfiat-node --locked --no-fail-fast burn6_nod_`
+failed all five new tests at their intended assertions: **0 passed, 2 failed,
+386 filtered** in the library; **0 passed, 3 failed, 173 filtered** in the binary.
+Earlier compiler-wrapper aborts, linker failures and tmpfs user-quota failures
+executed no tests. Existing system `cc` and disk-backed temporary cache storage
+resolved those build failures; `/tmp/integrate-20260918-target` now links to
+`/var/tmp/burn6-a5-target`. No toolchain installation or repository build-config
+change occurred. **Full Rust suite verdict pending** for `87c992c3`.
+
+Before each A5 commit, staged changes passed `.venv-docs/bin/mkdocs build --strict`,
+`PATH="$PWD/.venv-docs/bin:$PATH" scripts/public-doc-links` (**470 files**),
+`scripts/public-secret-scan` (**tracked-tree**) and `git diff --cached --check`.
+The initial pull was current at `0e2ae50c`; findings and repairs each completed
+the required pull/rebase and `git push origin HEAD:release/combined-devnet-20260915`
+with a clean tree between units. This documentation-only closeout uses the same
+gates and pull/push sequence; no Rust test rerun or inventory scoring is needed.
+The inventory audit preserves all 137 previous rows and adds exactly four NOD-
+IDs; severity, classification, disposition and completeness counts sum to 141.
+No push to main, full-suite result, CI pass or deployment qualification is claimed.
 
 ## Scores
 

@@ -1,18 +1,19 @@
 # QA defect inventory — 2026-09-10
 
 Status: burn 2 inventory reconciled; burn 3–6 findings appended; P3 sweep recorded.
-The inventory has 137 rows: 26 P1, 75 P2 and 36 P3. The burn 2
+The inventory has 141 rows: 26 P1, 77 P2 and 38 P3. The burn 2
 Text Improvement Harness result is in the [2026-09-10 campaign log](qa-campaign-20260910.md);
 the burn 3 gate is in the [2026-09-11 campaign log](qa-campaign-20260911.md);
 the burn 4 gate is in the [2026-09-15 campaign log](qa-campaign-20260915.md);
 the burn 5 gate is in the [2026-09-16 campaign log](qa-campaign-20260916.md);
 the burn 6 gate is recorded in the [2026-09-21 campaign log](qa-campaign-20260921.md#scores).
+That gate predates the four A5/NOD- additions; this extension was not rescored.
 
 This inventory separates demonstrated failures from missing evidence, operating
 assumptions, and capabilities that have not been built or activated. A
 **reproduced defect** has an observed failing case. A **code-observed defect**
 has a concrete failure scenario established by source review without an executed
-reproduction; this includes burn 5's seven and burn 6's four recorded P3 findings.
+reproduction; this includes burn 5's seven and burn 6's six recorded P3 findings.
 An **evidence gap** means the
 available record cannot establish the claim. An **economic assumption** is a
 load or incentive premise rather than a code result. A **proposed capability**
@@ -132,12 +133,12 @@ Consensus-affecting repairs remain source-only and were not activated or deploye
 
 ## Burn 6 campaign findings
 
-These 11 findings are from the [burn 6 campaign](qa-campaign-20260921.md):
-seven repaired P2s and four P3s recorded without repair. No repair was blocked
-by the release candidate. All three repair commits retain a full Rust suite
+These 15 findings are from the [burn 6 campaign](qa-campaign-20260921.md):
+nine repaired P2s and six P3s recorded without repair. No repair was blocked
+by the release candidate. All four repair commits retain a full Rust suite
 verdict pending. NAV-03 and SWX-01 are consensus-affecting: release-tip
 re-qualification is required before deployment; neither was deployed.
-The optional A5 review was not started and contributes no rows.
+The focused A5 review contributes four rows; its unreviewed ranges remain explicit.
 
 | ID | Classification | Severity | Status | Source and reproduction |
 | --- | --- | --- | --- | --- |
@@ -152,6 +153,15 @@ The optional A5 review was not started and contributes no rows.
 | BRW-04 | Code-observed defect | P3 | Recorded, not fixed | [Bridge review](bridge-workflows-review-20260921.md#findings): file and child-output limits follow unbounded collection; lineage files lack a byte cap and stalled children lack deadlines. Oversized or growing inputs can exhaust operator resources. |
 | BRW-05 | Code-observed defect | P3 | Recorded, not fixed | [Bridge review](bridge-workflows-review-20260921.md#findings): checkpoint RPC parsing treats malformed Content-Length as absent and checks only the first parsable length. Ambiguous framing can pass; no wrong checkpoint signature was demonstrated. |
 | BRW-06 | Code-observed defect | P3 | Recorded, not fixed | [Bridge review](bridge-workflows-review-20260921.md#findings): the V2 recipient decoder accepts offset 192 inside its 224-byte head because it uses the V1 bound. Later identity checks still apply; no receipt-proof bypass was established. |
+
+### A5 addition after the inventory gate
+
+| ID | Classification | Severity | Status | Source and reproduction |
+| --- | --- | --- | --- | --- |
+| NOD-01 | Reproduced defect | P2 | Fixed — `87c992c3`; not consensus-affecting | [Remaining node review](node-remaining-review-20260921.md#findings): duplicate delivery reported every block receipt as accepted without reading outcomes. Stored outcomes now determine counts; missing/conflicting evidence and inconsistent count totals reject. |
+| NOD-02 | Reproduced defect | P2 | Fixed — `87c992c3`; not consensus-affecting | [Remaining node review](node-remaining-review-20260921.md#findings): key generation or restore could overwrite its backup with the key file. Resolved destination aliases now reject before writing; concurrent filesystem replacement remains outside the interlock. |
+| NOD-03 | Code-observed defect | P3 | Recorded, not fixed | [Remaining node review](node-remaining-review-20260921.md#findings): transport JSON readers collect local files without a byte cap; payload reads enforce only a prior metadata limit, permitting growth between check and read. |
+| NOD-04 | Code-observed defect | P3 | Recorded, not fixed | [Remaining node review](node-remaining-review-20260921.md#findings): manifest reporting reopens the bundle after verification, so concurrent replacement can mix verified hash/count metadata with different manifest bytes. |
 
 ## Storage, Cobalt, and Task Node review
 
@@ -234,27 +244,27 @@ and its frozen [qualification receipt](https://github.com/postfiatorg/postfiatl1
 
 ## Final disposition
 
-The inventory contains 137 unique rows, including 28 burn 3 findings (6 P1,
+The inventory contains 141 unique rows, including 28 burn 3 findings (6 P1,
 14 P2, 8 P3), 15 burn 4 findings (0 P1, 10 P2, 5 P3), 22 burn 5 findings
-(1 P1, 14 P2, 7 P3), and 11 burn 6 findings (0 P1, 7 P2, 4 P3).
+(1 P1, 14 P2, 7 P3), and 15 burn 6 findings (0 P1, 9 P2, 6 P3).
 Classification and severity describe what the cited evidence
 establishes; status describes the bounded disposition in that row, not a
 broader production claim.
 
 | Measure | Count |
 | --- | ---: |
-| Reproduced defects | 99 |
-| Code-observed defects (burn 5–6 P3) | 11 |
+| Reproduced defects | 101 |
+| Code-observed defects (burn 5–6 P3) | 13 |
 | Evidence gaps | 22 |
 | Economic assumptions | 1 |
 | Proposed capabilities | 4 |
 | P1 | 26 |
-| P2 | 75 |
-| P3 | 36 |
-| Fixed | 91 |
+| P2 | 77 |
+| P3 | 38 |
+| Fixed | 93 |
 | Dispositioned | 16 |
 | Reproduced and retained (prior campaigns) | 5 |
-| Recorded, not fixed (burn 3–6 P3) | 12 |
+| Recorded, not fixed (burn 3–6 P3) | 14 |
 | Recorded, repair blocked by A4 scope (SMG-07) | 1 |
 | Needs live environment | 6 |
 | Needs operator decision | 6 |
@@ -295,14 +305,15 @@ have a full Rust suite verdict pending. SMG-07 requires the shared retention-pat
 resolver outside A4; the append fix does not qualify the blocked prune path.
 No burn 5 finding is documented as blocked specifically by the release candidate.
 
-Burn 6 added seven repaired P2s and four code-observed P3s recorded without
-repair: PFV-01 and BRW-04/05/06. The consensus-affecting repairs are NAV-03
+Burn 6 added nine repaired P2s and six code-observed P3s recorded without
+repair: PFV-01, BRW-04/05/06 and NOD-03/04. The consensus-affecting repairs are NAV-03
 (`e9ccdeda`, rejected local-transition persistence) and SWX-01 (`043b9d69`,
 policy-stale public redemption rejection). The release tip requires
 re-qualification before deployment. Both commits and the bridge repairs
-(`10bb5655`) retain a full Rust suite verdict pending; focused tests do not
+(`10bb5655`) and node repairs (`87c992c3`) retain a full Rust suite verdict pending; focused tests do not
 establish deployment qualification. No burn 6 repair is blocked by the release
-candidate, and no optional A5 review was performed.
+candidate. A5 is a focused review with explicit unreviewed ranges; its two
+repairs are not consensus-affecting. The retained inventory score predates A5.
 
 “Fixed” remains scoped by the row. In particular, the RPC supervisor repair is
 not deployed, StakeHub fixes are local and unpublished, the Arc controller
@@ -340,7 +351,8 @@ or StakeHub write.
 | Burn 6 NAV and reserve verification (NAV-) | 3 |
 | Burn 6 swap and settlement execution (SWX-) | 1 |
 | Burn 6 bridge workflows (BRW-) | 6 |
-| **Total** | **137** |
+| Burn 6 remaining node files (NOD-) | 4 |
+| **Total** | **141** |
 
 Campaign review and repair commits are recorded in the
 [campaign log](qa-campaign-20260910.md). The inventory preserves open design,
