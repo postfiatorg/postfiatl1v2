@@ -2371,13 +2371,18 @@ fn read_pftl_uniswap_bridge_receipts(
     Ok(receipts)
 }
 
-fn append_pftl_uniswap_bridge_receipt(
-    data_dir: &Path,
+fn prepare_pftl_uniswap_bridge_receipt(
+    mut receipts: Vec<PftlUniswapTransitionReceipt>,
     receipt: PftlUniswapTransitionReceipt,
-) -> io::Result<String> {
+) -> io::Result<(String, String)> {
+    if receipts.len() >= PFTL_UNISWAP_STATUS_MAX_ROWS.saturating_mul(16) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "PFTL-to-Uniswap bridge receipt file exceeds bounded local history limit",
+        ));
+    }
     let receipt_hash = pftl_uniswap_transition_receipt_hash(&receipt)
         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-    let mut receipts = read_pftl_uniswap_bridge_receipts(data_dir)?;
     for existing in &receipts {
         let existing_hash = pftl_uniswap_transition_receipt_hash(existing)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
@@ -2389,9 +2394,15 @@ fn append_pftl_uniswap_bridge_receipt(
         }
     }
     receipts.push(receipt);
-    let path = data_dir.join(PFTL_UNISWAP_BRIDGE_RECEIPTS_FILE);
-    vault_bridge_write_json_file(&path, &receipts)?;
-    Ok(receipt_hash)
+    let json = serde_json::to_string_pretty(&receipts).map_err(invalid_data)?;
+    let encoded = format!("{json}\n");
+    if encoded.len() > MAX_LOCAL_JSON_FILE_BYTES as usize {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "PFTL-to-Uniswap bridge receipt file exceeds bounded local history limit in bytes",
+        ));
+    }
+    Ok((receipt_hash, encoded))
 }
 
 fn validate_pftl_uniswap_bridge_receipts(
@@ -2430,6 +2441,7 @@ where
 {
     validate_navcoin_bridge_route_id(route_id)?;
     let mut ledgers = read_pftl_uniswap_bridge_ledgers(data_dir)?;
+    let receipts = read_pftl_uniswap_bridge_receipts(data_dir)?;
     let index = ledgers
         .iter()
         .position(|ledger| ledger.route_id == route_id)
@@ -2447,14 +2459,21 @@ where
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
         (result, receipt, ledger_hash)
     };
-    write_pftl_uniswap_bridge_ledgers(data_dir, &mut ledgers)?;
-    let receipt_hash = append_pftl_uniswap_bridge_receipt(data_dir, receipt.clone())?;
+    let (receipt_hash, receipts_json) =
+        prepare_pftl_uniswap_bridge_receipt(receipts, receipt.clone())?;
     let result = serde_json::to_value(result).map_err(|error| {
         io::Error::new(
             io::ErrorKind::InvalidData,
             format!("PFTL-to-Uniswap transition result serialization failed: {error}"),
         )
     })?;
+    // Reject known-invalid or unreadable prospective history before publishing
+    // the local ledger. The two file writes are not a crash-atomic transaction.
+    write_pftl_uniswap_bridge_ledgers(data_dir, &mut ledgers)?;
+    atomic_write(
+        &data_dir.join(PFTL_UNISWAP_BRIDGE_RECEIPTS_FILE),
+        receipts_json,
+    )?;
     Ok(NavcoinBridgeTransitionApplyReport {
         schema: "postfiat-navcoin-bridge-transition-apply-v1".to_string(),
         route_id: route_id.to_string(),
@@ -2625,4 +2644,183 @@ fn validate_navcoin_bridge_route_id(route_id: &str) -> io::Result<()> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod burn6_tests {
+    use super::*;
+    use postfiat_bridge::PrimarySubscriptionQuoteInput;
+
+    struct Fixture {
+        directory: PathBuf,
+        ledger: PftlUniswapBridgeLedger,
+    }
+
+    impl Fixture {
+        fn new(label: &str) -> Self {
+            let directory = std::env::temp_dir().join(format!(
+                "postfiat-burn6-{label}-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("clock")
+                    .as_nanos()
+            ));
+            std::fs::create_dir_all(&directory).expect("fixture directory");
+            let config = PftlUniswapRouteConfig {
+                schema: "postfiat-pftl-uniswap-route-config-v1".to_string(),
+                route_id: "burn6-local-route".to_string(),
+                route_family: "primary_pftl_mint".to_string(),
+                native_nav_asset_id: "11".repeat(48),
+                settlement_asset_id: "22".repeat(48),
+                wrapped_navcoin_token: format!("0x{}", "33".repeat(20)),
+                handoff_controller: format!("0x{}", "44".repeat(20)),
+                settlement_adapter: format!("0x{}", "45".repeat(20)),
+                verifier_mode: "controlled_threshold_v1".to_string(),
+                route_trust_class: "CONTROLLED".to_string(),
+                uniswap_pool_id_or_path: format!("0x{}", "55".repeat(32)),
+                router: format!("0x{}", "66".repeat(20)),
+                failure_behavior: "refund_unconsumed_pftl_packet".to_string(),
+                route_supply_cap_atoms: 1_000_000_000,
+                packet_notional_cap_atoms: 100_000_000,
+                seed_nav_epoch: 7,
+                seed_usdc_atoms: 1_000_000,
+                seed_wrapped_navcoin_atoms: 1_000_000,
+                lp_recipient: format!("0x{}", "77".repeat(20)),
+                lp_custody_policy: "controlled_launch_multisig".to_string(),
+            };
+            let ledger = pftl_uniswap_bridge_ledger_from_config(&config, 42_161, 7, 64)
+                .expect("fixture ledger");
+            write_pftl_uniswap_bridge_ledgers(&directory, &mut vec![ledger.clone()])
+                .expect("write initial ledger");
+            Self { directory, ledger }
+        }
+
+        fn request(&self, nonce: usize) -> PftlUniswapPrimarySubscriptionRequest {
+            PftlUniswapPrimarySubscriptionRequest {
+                route_id: self.ledger.route_id.clone(),
+                source_wallet: "pfsourcewallet".to_string(),
+                settlement_asset_id: self.ledger.settlement_asset_id.clone(),
+                subscription_nonce: format!("{nonce:064x}"),
+                quote: PrimarySubscriptionQuoteInput {
+                    settlement_value_atoms: 200,
+                    nav_price_settlement_atoms_per_nav_atom: 2,
+                    pricing_nav_epoch: 7,
+                    pricing_reserve_packet_hash: "99".repeat(48),
+                },
+            }
+        }
+
+        fn apply(&self, nonce: usize) -> io::Result<NavcoinBridgeTransitionApplyReport> {
+            pftl_uniswap_apply_transition(&self.directory, &self.ledger.route_id, |ledger| {
+                pftl_uniswap_apply_primary_subscription_with_receipt(ledger, self.request(nonce))
+            })
+        }
+
+        fn receipt(&self, nonce: usize) -> PftlUniswapTransitionReceipt {
+            pftl_uniswap_apply_primary_subscription_with_receipt(
+                &mut self.ledger.clone(),
+                self.request(nonce),
+            )
+            .expect("fixture receipt")
+            .1
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.directory);
+        }
+    }
+
+    #[test]
+    fn navcoin_bridge_invalid_history_rejects_without_persisting_subscription() {
+        for malformed in [true, false] {
+            let fixture = Fixture::new(if malformed { "malformed" } else { "duplicate" });
+            let ledger_path = fixture.directory.join(PFTL_UNISWAP_BRIDGE_LEDGER_FILE);
+            let receipts_path = fixture.directory.join(PFTL_UNISWAP_BRIDGE_RECEIPTS_FILE);
+            let history = if malformed {
+                b"[invalid JSON".to_vec()
+            } else {
+                serde_json::to_vec(&vec![fixture.receipt(1), fixture.receipt(1)])
+                    .expect("duplicate receipt JSON")
+            };
+            std::fs::write(&receipts_path, &history).expect("write invalid history");
+            let before = std::fs::read(&ledger_path).expect("before ledger");
+            fixture.apply(2).expect_err("invalid history must reject");
+            assert!(
+                std::fs::read(&ledger_path).unwrap() == before,
+                "ledger changed on rejection"
+            );
+            assert_eq!(std::fs::read(&receipts_path).unwrap(), history);
+        }
+    }
+
+    #[test]
+    fn navcoin_bridge_history_capacity_accepts_last_slot_then_rejects_without_mutation() {
+        let fixture = Fixture::new("capacity");
+        let row_limit = PFTL_UNISWAP_STATUS_MAX_ROWS.saturating_mul(16);
+        // Individually valid, distinct receipts isolate the history admission
+        // bound. This is not an archived-chain or chained-replay fixture.
+        let sample_bytes = serde_json::to_string_pretty(&vec![fixture.receipt(1)])
+            .unwrap()
+            .len();
+        let count =
+            (MAX_LOCAL_JSON_FILE_BYTES as usize / (sample_bytes - 4) + 2).min(row_limit - 1);
+        let mut receipts = (1..=count)
+            .map(|nonce| fixture.receipt(nonce))
+            .collect::<Vec<_>>();
+        while serde_json::to_string_pretty(&receipts).unwrap().len() + 1
+            > MAX_LOCAL_JSON_FILE_BYTES as usize
+        {
+            receipts.pop();
+        }
+        let limit = receipts.len();
+        assert!(limit > 1 && limit < row_limit);
+        receipts.pop(); // Leave exactly one readable receipt slot.
+        let receipts_path = fixture.directory.join(PFTL_UNISWAP_BRIDGE_RECEIPTS_FILE);
+        let ledger_path = fixture.directory.join(PFTL_UNISWAP_BRIDGE_LEDGER_FILE);
+        vault_bridge_write_json_file(&receipts_path, &receipts).expect("near-full history");
+        fixture
+            .apply(limit)
+            .expect("last slot accepts subscription");
+        assert_eq!(
+            read_pftl_uniswap_bridge_receipts(&fixture.directory)
+                .unwrap()
+                .len(),
+            limit
+        );
+        let ledger_before = std::fs::read(&ledger_path).unwrap();
+        let receipts_before = std::fs::read(&receipts_path).unwrap();
+        let result = fixture.apply(limit + 1);
+        assert!(result.is_err(), "oversized history was accepted");
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("history limit"), "{error}");
+        assert!(
+            std::fs::read(&ledger_path).unwrap() == ledger_before,
+            "ledger changed on rejection"
+        );
+        assert!(
+            std::fs::read(&receipts_path).unwrap() == receipts_before,
+            "history changed on rejection"
+        );
+    }
+
+    #[test]
+    fn navcoin_bridge_prospective_history_enforces_row_limit_before_encoding() {
+        let fixture = Fixture::new("row-limit");
+        let receipt = fixture.receipt(1);
+        let (_, prepared) = prepare_pftl_uniswap_bridge_receipt(Vec::new(), receipt.clone())
+            .expect("prepare one receipt");
+        let path = fixture.directory.join("existing-writer.json");
+        vault_bridge_write_json_file(&path, &vec![receipt.clone()])
+            .expect("existing receipt encoding");
+        assert_eq!(std::fs::read_to_string(path).unwrap(), prepared);
+        // The byte limit normally binds first. Exercise the independent row
+        // bound directly, without publishing an unreadable fixture file.
+        let receipts = vec![receipt; PFTL_UNISWAP_STATUS_MAX_ROWS.saturating_mul(16)];
+        let error = prepare_pftl_uniswap_bridge_receipt(receipts, fixture.receipt(2))
+            .expect_err("row limit rejects before publication");
+        assert!(error.to_string().contains("history limit"), "{error}");
+    }
 }

@@ -188,3 +188,40 @@ replay are not established. The full Rust/Orchard suites and CI status queries
 are deferred; full-suite verdict belongs to CI on the pushed branch. Exact
 repair, test and gate results are recorded in the
 [campaign log](qa-campaign-20260921.md#verification).
+
+## Repair result
+
+- **NAV-01 repaired:** reject repeated bucket, receipt and allocation IDs
+  before indexing or summing the vault snapshot. Regressions cover duplicated
+  backing/allocation rows, conflicting receipt identity and a unique
+  subscription allocation counted once. **Not consensus-affecting.**
+- **NAV-02 repaired:** reject a mismatched optional operation tag and assign
+  the fixed reserve-submit tag after packet expansion. Regressions cover four
+  invalid tags, both builder input paths, normal untagged packets and an
+  explicitly tagged reserve submission. **Not consensus-affecting.**
+- **NAV-03 repaired:** read and validate existing receipt history before
+  applying the in-memory transition; prepare/hash/serialize its next history
+  and result before either persistent write. Enforce both the row cap and the
+  actual reader's 8 MiB JSON cap. Malformed/duplicate history and a prospective
+  oversized history now leave both files byte-for-byte unchanged. Tests cover
+  the last readable append, the next rejected append, the independent row cap,
+  and byte-for-byte compatibility with the existing JSON writer.
+  **Consensus-affecting under the brief's state-transition-result rule;
+  release-tip re-qualification is required before deployment.** This changes
+  rejected local-transition persistence, not the consensus execution rules.
+
+The Python regressions failed against the original builder (15 test methods,
+11 passing and four failing, with seven failing assertions including subtests).
+The corrected Rust regressions failed against the original implementation
+(0 passed, 2 failed: changed ledger on rejection and accepted oversized
+history). An initial capacity fixture hit the reader byte cap before the
+intended row-cap scenario; it was replaced with the actual byte-boundary test.
+The separate row-cap test exercises the prospective-history helper directly.
+
+Final focused verification: **49 passed, 0 failed, 0 ignored** across the
+reserve-protocol, public-value codec, reserve-status, local bridge and two
+Python builder commands listed in the campaign log. The workspace check,
+format check and proof-input inventory check passed. No broad test suite or
+deployment qualification was run. The local history fixture isolates bounded
+admission; it is not an archived-chain replay. Cross-file I/O/crash recovery
+and concurrent writers remain outside this repair's guarantee.

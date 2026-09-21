@@ -33,10 +33,13 @@ class LiveNavMarkBuilderTests(unittest.TestCase):
         *,
         nav_profile: str = PROFILE_ID,
         route_overrides: dict[str, object] | None = None,
+        vault_overrides: dict[str, object] | None = None,
+        packet_overrides: dict[str, object] | None = None,
     ) -> tuple[subprocess.CompletedProcess[str], Path]:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
+        write_json(root / "packet-overrides.json", packet_overrides or {})
         proof_cli = root / "proof-cli"
         proof_cli.write_text(
             """#!/usr/bin/env python3
@@ -80,6 +83,7 @@ elif sys.argv[1:3] == ["packet", "build"]:
         "reserve_accounts": [],
         "sp1_proof_bytes": [1],
         "sp1_public_values": [0] * 584,
+        **json.loads(Path(__file__).with_name("packet-overrides.json").read_text()),
     }))
 else:
     raise SystemExit("unexpected command")
@@ -120,6 +124,7 @@ else:
                 ],
                 "receipts": [],
                 "allocations": [],
+                **(vault_overrides or {}),
             },
         )
         write_json(
@@ -245,6 +250,98 @@ else:
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("live-value mode is not enabled", result.stderr)
+
+    def test_rejects_duplicate_bucket_backing(self) -> None:
+        bucket = {
+            "bucket_id": "bucket-1", "status": "active",
+            "outstanding_vault_bridge_atoms": 10,
+        }
+        result, output = self.run_builder(
+            route_overrides={"settlement_reserve_atoms": 20},
+            vault_overrides={"buckets": [bucket, dict(bucket)]},
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("duplicate bucket_id", result.stderr)
+        self.assertFalse((output / "01-reserve-submit.ops.json").exists())
+
+    def test_rejects_conflicting_receipt_identity(self) -> None:
+        result, _ = self.run_builder(vault_overrides={"receipts": [
+            {"receipt_id": "receipt-1", "status": "counted"},
+            {"receipt_id": "receipt-1", "status": "expired"},
+        ]})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("duplicate receipt_id", result.stderr)
+
+    def subscription_vault(self) -> dict[str, object]:
+        return {
+            "buckets": [{
+                "bucket_id": "bucket-1", "status": "active",
+                "outstanding_vault_bridge_atoms": 0,
+                "source_domain": "fixture", "policy_hash": "11" * 48,
+                "gross_receipt_atoms": 10, "counted_value_atoms": 10,
+                "nav_subscription_allocations_atoms": 10,
+                "redemption_queue_atoms": 0,
+            }],
+            "receipts": [{"receipt_id": "receipt-1", "status": "counted"}],
+            "allocations": [{
+                "allocation_id": "allocation-1", "bucket_id": "bucket-1",
+                "receipt_id": "receipt-1", "purpose": "nav_subscription",
+                "consumer_id": f"nav_subscription:{ASSET_ID}",
+                "retired_at_height": 700, "remaining_atoms": 10,
+                "amount_atoms": 10, "released_atoms": 0,
+            }],
+        }
+
+    def test_unique_subscription_allocation_counts_once(self) -> None:
+        result, output = self.run_builder(vault_overrides=self.subscription_vault())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        overlay = json.loads((output / "finalized-subscription-overlay.json").read_text())
+        self.assertEqual(overlay["overlay"]["value_nav_units"], 1_000)
+
+    def test_rejects_duplicate_subscription_allocation(self) -> None:
+        vault = self.subscription_vault()
+        vault["allocations"].append(dict(vault["allocations"][0]))
+        result, output = self.run_builder(vault_overrides=vault)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("duplicate allocation_id", result.stderr)
+        self.assertFalse((output / "01-reserve-submit.ops.json").exists())
+
+    def test_rejects_packet_operation_override_before_writing_operations(self) -> None:
+        for operation in ("nav_epoch_finalize", "nav_halt", "", None):
+            with self.subTest(operation=operation):
+                result, output = self.run_builder(packet_overrides={"operation": operation})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("packet operation must be nav_reserve_submit", result.stderr)
+                self.assertFalse((output / "01-reserve-submit.ops.json").exists())
+                self.assertFalse((output / "02-epoch-finalize.ops.json").exists())
+
+    def test_accepts_explicit_reserve_submit_operation(self) -> None:
+        result, output = self.run_builder(packet_overrides={"operation": "nav_reserve_submit"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        request = json.loads((output / "01-reserve-submit.ops.json").read_text())
+        self.assertEqual(request["operations"][0]["operation"]["operation"], "nav_reserve_submit")
+
+    def test_supplied_packet_rejects_operation_override(self) -> None:
+        result, output = self.run_builder()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        root = output.parent
+        packet_path = output / "reserve-packet.operation.json"
+        packet = json.loads(packet_path.read_text())
+        packet["operation"] = "nav_epoch_finalize"
+        write_json(packet_path, packet)
+        rejected_output = root / "rejected-output"
+        result = subprocess.run([
+            sys.executable, str(PROGRAM),
+            "--packet-operation", str(packet_path),
+            "--pftl-status", str(root / "status.json"),
+            "--issuer-key-file", str(root / "issuer.key"),
+            "--reserve-key-file", str(root / "reserve.key"),
+            "--output-dir", str(rejected_output),
+        ], text=True, capture_output=True, check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("packet operation must be nav_reserve_submit", result.stderr)
+        self.assertFalse((rejected_output / "01-reserve-submit.ops.json").exists())
+        self.assertFalse((rejected_output / "02-epoch-finalize.ops.json").exists())
 
 
 if __name__ == "__main__":
