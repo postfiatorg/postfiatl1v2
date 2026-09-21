@@ -168,3 +168,39 @@ test fixtures. Nothing was deployed; the fleet still runs
   [053e5210](https://github.com/postfiatorg/postfiatl1v2/commit/053e5210).
 - Scan allowlist: [14127221 on main](https://github.com/postfiatorg/postfiatl1v2/commit/14127221)
   and [b1201bc9 on the release branch](https://github.com/postfiatorg/postfiatl1v2/commit/b1201bc9).
+
+## End of session
+
+The [Z3 dry-run record](../status/z3-dry-run-20260921.md) captures the release-build
+first run (`77314538`), tooling fix (`d825b4fb` on main, `048d23df` on the
+release branch), and second run (`61bcbaba`). The first run stopped before
+printing any command because manifest validation rejected cycle 0; row 5 also
+carried a flag the node does not accept. Both were fixed with tests: cycle 0
+is accepted only on the explicit dry-run path, and the skeleton is marked
+`dry_run` and not counted as a live cycle. The second run printed and resolved
+**39/39 commands** and wrote the skeleton. **Dry-run tooling: PASS.**
+
+The live cycle remains **BLOCKED** on the record's
+[Remaining live-cycle preconditions](../status/z3-dry-run-20260921.md#remaining-live-cycle-preconditions):
+17 execution inputs still unknown (current primary policy, anchor code hash,
+NAV program and source-manifest binding, PFTL signer roles, predecessor
+artifacts), signer bindings, qualified deployment and prover provenance,
+fresh state read-backs, G5 monitoring, and live authorization.
+
+**Next shift — this lane's plan:** after deployment of
+`combined-devnet-20260921`, insert **cycle-1 preparation** before the first
+live cycle: collect the 17 inputs by read-back on the deployed release and
+pin prover provenance. Only then proceed to the first authorized live cycle
+with the remaining preconditions satisfied.
+
+Branch tips before this append: main **`61bcbaba`**;
+`release/combined-devnet-20260915` **`048d23df`**.
+At write time (`2026-09-21T12:57:17Z`), `gh run list` showed:
+
+| Tip | CI at capture time |
+| --- | --- |
+| Main `61bcbaba` | [docs-build](https://github.com/postfiatorg/postfiatl1v2/actions/runs/35602039425) passed; [rust-ci](https://github.com/postfiatorg/postfiatl1v2/actions/runs/35602039340) and [product-security-ci](https://github.com/postfiatorg/postfiatl1v2/actions/runs/35602039605) in progress. |
+| Release `048d23df` | [docs-build](https://github.com/postfiatorg/postfiatl1v2/actions/runs/35602058863) passed; [rust-ci](https://github.com/postfiatorg/postfiatl1v2/actions/runs/35602058991), [product-security-ci](https://github.com/postfiatorg/postfiatl1v2/actions/runs/35602058785), and [arc-proof-identities](https://github.com/postfiatorg/postfiatl1v2/actions/runs/35602058661) in progress. |
+
+No fleet action, no signature, no transaction, and no Task Node action in this
+session.
