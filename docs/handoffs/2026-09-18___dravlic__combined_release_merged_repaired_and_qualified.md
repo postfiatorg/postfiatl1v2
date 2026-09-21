@@ -3,6 +3,11 @@
 - **Operator:** Domagoj Ravlić (`dravlic`)
 - **Date:** 2026-09-18 UTC
 
+**Update:** The [September 21 handoff](2026-09-21___dravlic__deploy_prepared_and_navcoin_audit.md)
+records green CI for `a5b1e757`, deployment preparation awaiting publisher
+signatures, burn 6 repairs reserved for the next release, and the cleared
+history secret-scan blocker. Nothing has been deployed.
+
 ## BLUF
 
 This lane merged main into the combined release candidate (draft PR #41),
