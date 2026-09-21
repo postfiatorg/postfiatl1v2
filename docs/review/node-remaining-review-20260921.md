@@ -110,4 +110,48 @@ without rescoring, and B's retained score predates this addition.
 
 ## Repair result
 
-Pending the separately committed repair unit and focused regression results.
+Findings were separately gated and pushed as `d3608838` before repairs.
+Only `transport_protocol.rs` and `block_replay_wallet.rs` change as source.
+
+- **NOD-01:** duplicate acknowledgments count the selected receipt IDs using
+  persisted outcomes. Missing or conflicting outcomes return an error;
+  repeated identical evidence is not counted as another transaction. Receiver
+  validation requires the checked accepted/rejected sum to equal receipt count.
+  Three regressions cover mixed/all-rejected batches at current and later
+  heights, unrelated and duplicate evidence, missing/conflicting outcomes,
+  invalid totals and overflow. **Consensus-affecting: no.**
+- **NOD-02:** key generation and restore compare resolved output destinations
+  before writing. Existing ancestors resolve directory symlinks; distinct new
+  directories remain supported. Two regressions cover identical, normalized
+  and symlink-parent aliases, preservation of the restore backup, and valid
+  distinct outputs. **Consensus-affecting: no.** This is a preflight interlock,
+  not a guarantee against concurrent filesystem replacement or two-file crashes.
+- **NOD-03/04:** recorded P3 findings remain unfixed.
+
+All five new regressions failed against the original implementation:
+`cargo test -p postfiat-node --lib --bin postfiat-node --locked --no-fail-fast burn6_nod_`
+reported **0 passed, 2 failed** in the library (386 filtered) and **0 passed,
+3 failed** in the binary (173 filtered). These were the intended assertions,
+not fixture or compilation errors. Earlier linking/quota failures ran no tests.
+
+Final commands used
+`env PATH="/usr/bin:$PATH" CARGO_NET_OFFLINE=true CARGO_TARGET_DIR=/tmp/integrate-20260918-target CARGO_BUILD_JOBS=1`:
+
+| Command | Result |
+| --- | --- |
+| `cargo test -p postfiat-node block_replay_wallet:: --lib --locked` | 3 passed; 385 filtered |
+| `cargo test -p postfiat-node transport_protocol::transport_cli_tests --bin postfiat-node --locked -- --skip transport_listener_mode_failure_prevents_ready_report` | 30 passed; 146 filtered |
+| `cargo test -p postfiat-node wallet_keygen_restore_round_trips_without_report_secret_leakage --lib --locked` | 1 passed; 387 filtered |
+| `cargo test -p postfiat-node wallet_sign_transfer_emits_submit_ready_redacted_transfer --lib --locked` | 1 passed; 387 filtered |
+| `cargo test -p postfiat-node wallet_test_vector_is_deterministic_and_redacted --lib --locked` | 1 passed; 387 filtered |
+| `cargo check --workspace --locked` | Passed |
+
+**36 unique focused tests passed, 0 failed, 0 ignored.** The named socket
+test was explicitly skipped, not passed. The other transport fixtures use
+local files, in-memory simulation and injected closures; no fleet or network
+test ran. `cargo fmt --all -- --check` and `git diff --check` passed.
+The system compiler and disk-backed temporary build cache avoided the local
+compiler-wrapper aborts and tmpfs user quota; no toolchain was installed.
+The original target path now links to `/var/tmp/burn6-a5-target`.
+**Full Rust suite verdict pending.** No A5 repair requires release-tip
+re-qualification; the earlier NAV-03/SWX-01 requirement remains in force.

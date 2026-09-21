@@ -3069,6 +3069,49 @@ pub fn faucet_key(options: NodeOptions) -> io::Result<DevKeyFile> {
     read_key_file(&options.data_dir.join(FAUCET_KEY_FILE))
 }
 
+fn ensure_wallet_output_paths_distinct(key_file: &Path, backup_file: &Path) -> io::Result<()> {
+    // Resolve existing ancestors too, so new output files reached through a
+    // symlinked directory compare equal. Do not create anything during preflight.
+    fn resolve(path: &Path) -> io::Result<PathBuf> {
+        let absolute = std::path::absolute(path)?;
+        let mut ancestor = absolute.as_path();
+        let mut missing = Vec::new();
+        loop {
+            match std::fs::canonicalize(ancestor) {
+                Ok(mut resolved) => {
+                    for component in missing.into_iter().rev() {
+                        resolved.push(component);
+                    }
+                    return Ok(resolved);
+                }
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    let name = ancestor.file_name().ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            "unresolvable wallet output path",
+                        )
+                    })?;
+                    missing.push(name.to_os_string());
+                    ancestor = ancestor.parent().ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            "wallet output path has no parent",
+                        )
+                    })?;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+    if resolve(key_file)? == resolve(backup_file)? {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "wallet key and backup paths must be distinct",
+        ));
+    }
+    Ok(())
+}
+
 pub fn wallet_keygen(options: WalletKeygenOptions) -> io::Result<WalletKeyReport> {
     if options.chain_id.trim().is_empty() {
         return Err(io::Error::new(
@@ -3076,6 +3119,7 @@ pub fn wallet_keygen(options: WalletKeygenOptions) -> io::Result<WalletKeyReport
             "wallet chain id must not be empty",
         ));
     }
+    ensure_wallet_output_paths_distinct(&options.key_file, &options.backup_file)?;
     ensure_output_can_be_written(&options.key_file, options.overwrite, "wallet key file")?;
     ensure_output_can_be_written(
         &options.backup_file,
@@ -3108,6 +3152,7 @@ pub fn wallet_keygen(options: WalletKeygenOptions) -> io::Result<WalletKeyReport
 }
 
 pub fn wallet_restore(options: WalletRestoreOptions) -> io::Result<WalletKeyReport> {
+    ensure_wallet_output_paths_distinct(&options.key_file, &options.backup_file)?;
     ensure_output_can_be_written(&options.key_file, options.overwrite, "wallet key file")?;
     let backup = read_wallet_backup_file(&options.backup_file)?;
     let key_file = derive_wallet_dev_key_file(&backup)?;
@@ -3514,6 +3559,86 @@ pub fn wallet_test_vector(options: WalletTestVectorOptions) -> io::Result<Wallet
         signature_verified,
         private_key_material_redacted: true,
     })
+}
+
+#[cfg(test)]
+mod burn6_wallet_tests {
+    use super::*;
+
+    fn root(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "postfiat-burn6-wallet-{label}-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
+
+    fn options(key_file: PathBuf, backup_file: PathBuf) -> WalletKeygenOptions {
+        WalletKeygenOptions {
+            chain_id: "postfiat-local".to_string(),
+            master_seed_hex: "03".repeat(32),
+            account_index: 0,
+            key_file,
+            backup_file,
+            overwrite: false,
+        }
+    }
+
+    #[test]
+    fn burn6_nod_wallet_keygen_rejects_aliased_outputs_before_writing() {
+        let root = root("keygen");
+        let path = root.join("nested/wallet.json");
+        let result = wallet_keygen(options(path.clone(), path.clone()));
+        assert!(
+            result.is_err(),
+            "key generation must not replace its backup"
+        );
+        assert!(!path.exists());
+        std::fs::create_dir_all(root.join("nested")).unwrap();
+        let alias = root.join("nested/../nested/./wallet.json");
+        assert!(wallet_keygen(options(path.clone(), alias)).is_err());
+        assert!(!path.exists());
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(root.join("nested"), root.join("alias")).unwrap();
+            assert!(wallet_keygen(options(path.clone(), root.join("alias/wallet.json"))).is_err());
+            assert!(!path.exists());
+        }
+        wallet_keygen(options(
+            root.join("new/key.json"),
+            root.join("new/backup.json"),
+        ))
+        .expect("distinct outputs under a new directory remain supported");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn burn6_nod_wallet_restore_preserves_backup_on_output_alias() {
+        let root = root("restore");
+        let backup = root.join("backup.json");
+        wallet_keygen(options(root.join("key.json"), backup.clone())).unwrap();
+        let before = std::fs::read(&backup).unwrap();
+        let result = wallet_restore(WalletRestoreOptions {
+            backup_file: backup.clone(),
+            key_file: root.join("./backup.json"),
+            overwrite: true,
+        });
+        assert!(
+            result.is_err(),
+            "restore must not overwrite its recovery input"
+        );
+        assert_eq!(std::fs::read(&backup).unwrap(), before);
+        wallet_restore(WalletRestoreOptions {
+            backup_file: backup,
+            key_file: root.join("restored.json"),
+            overwrite: false,
+        })
+        .expect("distinct restore destination");
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }
 
 #[cfg(test)]

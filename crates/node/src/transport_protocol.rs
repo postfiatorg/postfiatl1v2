@@ -1045,6 +1045,9 @@ pub(super) fn validate_transport_batch_ack(
     if !ack.applied || ack.receipt_count == 0 {
         return Err("transport batch ack did not apply payload".to_string());
     }
+    if ack.accepted_count.checked_add(ack.rejected_count) != Some(ack.receipt_count) {
+        return Err("transport batch ack receipt outcome counts mismatch".to_string());
+    }
     validate_transport_hello(&ack.state, topology, local_status)?;
     if ack.state.node_id != to {
         return Err(format!(
@@ -1539,6 +1542,30 @@ pub(super) fn transport_already_applied_ack(
             "already-applied batch `{batch_id}` has no recorded receipts"
         ));
     }
+    let receipts = postfiat_storage::NodeStore::new(data_dir)
+        .read_receipts()
+        .map_err(|error| format!("already-applied receipt read failed: {error}"))?;
+    let wanted = block.receipt_ids.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    let mut outcomes = std::collections::BTreeMap::new();
+    for receipt in &receipts {
+        if wanted.contains(receipt.tx_id.as_str())
+            && outcomes
+                .insert(receipt.tx_id.as_str(), receipt.accepted)
+                .is_some_and(|previous| previous != receipt.accepted)
+        {
+            return Err(format!(
+                "already-applied receipt `{}` has conflicting outcomes",
+                receipt.tx_id
+            ));
+        }
+    }
+    let mut accepted_count = 0;
+    for receipt_id in &block.receipt_ids {
+        let accepted = outcomes.get(receipt_id.as_str()).ok_or_else(|| {
+            format!("already-applied receipt `{receipt_id}` is missing")
+        })?;
+        accepted_count += u64::from(*accepted);
+    }
     let certified_state = TransportHello {
         schema: TRANSPORT_HELLO_SCHEMA.to_string(),
         topology_id: topology.topology_id.clone(),
@@ -1560,8 +1587,8 @@ pub(super) fn transport_already_applied_ack(
         applied: true,
         already_applied: true,
         receipt_count,
-        accepted_count: receipt_count,
-        rejected_count: 0,
+        accepted_count,
+        rejected_count: receipt_count - accepted_count,
         certificate_attached: true,
         certified_state: Some(certified_state),
         storage: state_after.storage.clone(),
@@ -2552,6 +2579,12 @@ mod transport_cli_tests {
         postfiat_storage::NodeStore::new(&root)
             .write_blocks(&blocks)
             .expect("write block log fixture");
+        postfiat_storage::NodeStore::new(&root)
+            .write_receipts(&[serde_json::from_value(serde_json::json!({
+                "tx_id": "receipt-1", "accepted": true, "code": "accepted", "message": "fixture"
+            }))
+            .expect("parse receipt fixture")])
+            .expect("write receipt fixture");
         let certificate = serde_json::json!({
             "schema": "postfiat-block-certificate-v1",
             "chain_id": "postfiat-wan-devnet",
@@ -2637,6 +2670,87 @@ mod transport_cli_tests {
             "{error}"
         );
         std::fs::remove_dir_all(root).expect("cleanup conflicting ack fixture");
+    }
+
+    #[test]
+    fn burn6_nod_duplicate_ack_preserves_mixed_receipt_outcomes() {
+        let (root, topology, mut status, envelope) = already_applied_test_fixture(10);
+        let store = postfiat_storage::NodeStore::new(&root);
+        let mut blocks = store.read_blocks().unwrap();
+        blocks.blocks[0].receipt_ids.push("receipt-2".to_string());
+        blocks.blocks[0].header.receipt_count = 2;
+        store.write_blocks(&blocks).unwrap();
+        let mut receipts = store.read_receipts().unwrap();
+        let mut rejected = receipts[0].clone();
+        rejected.tx_id = "receipt-2".to_string();
+        rejected.accepted = false;
+        rejected.code = "rejected".to_string();
+        receipts.push(rejected);
+        // An unrelated receipt must not affect the selected block's totals.
+        let mut unrelated = receipts[0].clone();
+        unrelated.tx_id = "unrelated".to_string();
+        receipts.push(unrelated);
+        store.write_receipts(&receipts).unwrap();
+        for height in [10, 12] {
+            status.block_height = height;
+            let ack = transport_already_applied_ack(
+                &root, &topology, "validator-0", &envelope, &status,
+            )
+            .unwrap();
+            assert_eq!((ack.receipt_count, ack.accepted_count, ack.rejected_count), (2, 1, 1));
+        }
+        receipts[0].accepted = false;
+        store.write_receipts(&receipts).unwrap();
+        let ack = transport_already_applied_ack(
+            &root, &topology, "validator-0", &envelope, &status,
+        )
+        .unwrap();
+        assert_eq!((ack.accepted_count, ack.rejected_count), (0, 2));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn burn6_nod_duplicate_ack_rejects_missing_or_ambiguous_outcomes() {
+        let (root, topology, status, envelope) = already_applied_test_fixture(10);
+        let store = postfiat_storage::NodeStore::new(&root);
+        let mut receipts = store.read_receipts().unwrap();
+        store.write_receipts(&[]).unwrap();
+        assert!(transport_already_applied_ack(
+            &root, &topology, "validator-0", &envelope, &status,
+        ).is_err(), "missing receipt outcomes must not become success counts");
+        receipts.push(receipts[0].clone());
+        store.write_receipts(&receipts).unwrap();
+        let ack = transport_already_applied_ack(
+            &root, &topology, "validator-0", &envelope, &status,
+        ).unwrap();
+        assert_eq!(ack.accepted_count, 1, "duplicate evidence is not another transaction");
+        receipts[1].accepted = false;
+        store.write_receipts(&receipts).unwrap();
+        assert!(transport_already_applied_ack(
+            &root, &topology, "validator-0", &envelope, &status,
+        ).is_err(), "conflicting outcomes cannot be guessed");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn burn6_nod_batch_ack_rejects_inconsistent_or_overflowing_counts() {
+        let (root, topology, status, envelope) = already_applied_test_fixture(10);
+        let mut ack = transport_already_applied_ack(
+            &root, &topology, "validator-0", &envelope, &status,
+        ).unwrap();
+        let sender = test_status("validator-1");
+        for (accepted, rejected) in [(0, 0), (1, 1), (u64::MAX, 2)] {
+            ack.accepted_count = accepted;
+            ack.rejected_count = rejected;
+            assert!(validate_transport_batch_ack(
+                &ack, &topology, &sender, "validator-0", &envelope,
+            ).is_err(), "invalid counts {accepted}/{rejected} must fail");
+        }
+        ack.accepted_count = 0;
+        ack.rejected_count = 1;
+        validate_transport_batch_ack(&ack, &topology, &sender, "validator-0", &envelope)
+            .expect("an applied block may contain only rejected transactions");
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
