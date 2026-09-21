@@ -5,12 +5,14 @@ A1 began at `6ae06356` on clean `burn6-work` in `/tmp/burn6-20260921`,
 after `git pull --rebase origin release/combined-devnet-20260915`, within a
 25-minute time box beginning at approximately 10:12 UTC.
 
-**Status:** A1, A2 and A3 closed within their recorded limits. A3 found and
-repaired one P2; its 34 focused tests passed. All four campaign P2 findings
-are repaired; A1's one P3 remains recorded. NAV-03 and SWX-01 are
-consensus-affecting: the release tip requires re-qualification before
-deployment. A4, A5 and B remain pending and were not started. No Task Node
-or fleet action. Stop after A3.
+**Status:** A1 Portfolio verification, A2 NAV and reserve verification,
+A3 Swap and settlement execution, and A4 Bridge workflows are closed within
+their recorded limits. A4 repaired three P2 findings, recorded three P3 findings,
+and passed 13 focused tests. All seven campaign P2 findings are repaired;
+four P3 findings remain recorded. A4 has no consensus-affecting repair;
+NAV-03 and SWX-01 still require release-tip re-qualification before deployment.
+A5 Remaining node files and B Defect inventory/TIH remain pending and were
+not started. No Task Node or fleet action. Stop after A4.
 
 ## Campaign state
 
@@ -19,12 +21,12 @@ or fleet action. Stop after A3.
 | A1 | Portfolio verification | done | 0 | 0 | 1 | [Review](portfolio-verification-review-20260921.md); findings `21459c8a`; PFV-01 recorded without repair; repair unit skipped (no P1/P2); no consensus-affecting change |
 | A2 | NAV and reserve verification | done | 0 | 3 | 0 | [Review](nav-reserve-verification-review-20260921.md); findings `4bc6d98d`; all P2 repaired in `e9ccdeda`; NAV-03 consensus-affecting: release-tip re-qualification required before deployment |
 | A3 | Swap and settlement execution in depth | done | 0 | 1 | 0 | [Review](swap-settlement-execution-review-20260921.md); findings `6d495f43`; SWX-01 repaired in `043b9d69`; consensus-affecting: release-tip re-qualification required before deployment |
-| A4 | Bridge workflows | pending | — | — | — | Not started |
+| A4 | Bridge workflows | done | 0 | 3 | 3 | [Review](bridge-workflows-review-20260921.md); findings `66a68624`; BRW-01/02/03 repaired in `10bb5655`; BRW-04/05/06 recorded without repair; no consensus-affecting change |
 | A5 | Optional remaining node files | pending | — | — | — | Not started |
 | B | Defect inventory and TIH gate | pending | — | — | — | Not started |
 
-Current finding totals: **0 P1, 4 P2, 1 P3** (A1–A3; all four P2 repaired,
-one P3 recorded without repair).
+Current finding totals: **0 P1, 7 P2, 4 P3** (A1–A4; all seven P2 repaired,
+four P3 recorded without repair).
 
 ## Portfolio verification review result
 
@@ -133,7 +135,48 @@ Status, campaign table and this section give the current disposition.
 
 ## Bridge workflows review result
 
-Pending; not started.
+The [A4 review](bridge-workflows-review-20260921.md) read all 8,624 lines of
+the four permitted files at `acfda116`, after the required pull on clean
+`burn6-work`. Work began at approximately 11:03 UTC with a 25-minute limit.
+Findings `66a68624` and repairs `10bb5655` were separately gated and pushed
+before this log closeout.
+
+| Finding | Result | Consensus impact |
+| --- | --- | --- |
+| BRW-01 — P2, conservation verification trusts cached success | Recompute checked claim/deposit sums and vault identity; reject inconsistent totals and impossible releases | No; local report verification only |
+| BRW-02 — P2, deposit receipts contradict selected logs | Require RPC success status, reject explicit supplied-receipt failure, bind enclosing/log hash aliases, reject removed or malformed removal flags | No; unsigned local workflow validation only |
+| BRW-03 — P2, conservation reads mix source blocks | Pin every source-state query to one finalized height per chain and reject a changed block hash | No; local source observation policy only |
+| BRW-04 — P3, limits follow unbounded file/child reads | Recorded; not repaired | No change |
+| BRW-05 — P3, malformed HTTP lengths treated as absent | Recorded; not repaired | No change |
+| BRW-06 — P3, V2 recipient offset uses V1 head size | Recorded; not repaired | No change |
+
+Reviewed in full, all under `crates/node/src/`:
+`vault_bridge_workflows.rs` (3,918 lines), `vault_bridge_conservation.rs`
+(1,755), `ethereum_checkpoint_signing.rs` (2,325), and `pfusdc_tier4.rs` (626),
+including in-file tests. Only the first two changed as source. Module/test
+registration and test names supplied selection context, without another
+implementation review. No permitted file or P1/P2 repair was skipped.
+
+All A4 P1/P2 work is complete: **0 P1, 3 P2 repaired, 3 P3 recorded**.
+**13 focused A4 tests passed, 0 failed, 0 ignored**; workspace checking passed.
+Each repaired finding has a regression that failed against the original
+implementation. The source audit now requires finalized historical RPC reads;
+unsupported or unavailable history fails closed. Tests use temporary local
+stores and fake cast processes. No real RPC, withdrawal, proof, crash,
+historical replay or deployment qualification is established. Global supply
+semantics remain delegated; the summary repair validates arithmetic and does
+not authenticate a supplied report or its rows. Separate chains and PFTL are
+not one atomic snapshot.
+
+**Consensus-affecting A4 repairs: none.** No ledger transition, storage schema,
+validator signing/hash encoding, proof or Orchard accounting rule changed.
+Existing NAV-03/SWX-01 release-tip re-qualification requirements remain in
+force. No qualification or deployment occurred; full-suite verdict belongs
+to CI on the pushed branch, with no CI success claimed.
+
+A4 closes here; A5 and B remain pending. Earlier closeout wording and the
+A1-only Final summary below are retained historical records; the top Status,
+campaign table and this section give the current disposition. Stop after A4.
 
 ## Remaining node files review result
 
@@ -217,6 +260,32 @@ Pending; not started.
 - No Task Node, fleet, live RPC, spend, signup, installation or deployment
   action. Frozen artifacts and the excluded release checkout were untouched.
   All edits/commits used the campaign worktree; git was the only network use.
+
+### A4 decisions
+
+- A5 and B were not started; no inventory edit or TIH scoring. P3 findings
+  BRW-04/05/06 remain unfixed as required. No time or usage limit curtailed
+  the four-file review or its three repairs.
+- Not reviewed: delegated canonical type/supply validation, execution/rollback,
+  storage, historical registry replay, finality verification, RPC dispatch,
+  or any excluded proof/contract implementation. Specifically, no review or
+  repair in `crates/privacy_orchard`, `crates/privacy`, `crates/bridge`,
+  `crates/ethereum-contracts`, `crates/pfusdc_proofs`,
+  `crates/pftl_uniswap_proofs`, `crates/proofs`, or `programs/`.
+- The two `ethereum_checkpoint_signing::tests` tests bind sockets and were
+  not invoked under the brief's git/TIH-only network boundary. No Anvil,
+  live RPC, fork, full workspace/Orchard suite, archived-chain replay,
+  physical crash test or CI query. These skips are not passes or ignored
+  Rust test results. Local `cast --help` confirmed the existing block options;
+  no generated chain command was executed.
+- Legacy manually supplied receipts without status remain permitted as
+  unproven input. Actual receipt proof verification, withdrawal consumption
+  and replay protection are delegated to unreviewed execution/contracts.
+  Source RPC honesty and a coherent PFTL/cross-chain snapshot remain limits.
+- No Task Node, fleet action of any kind, spend, signup, install, deployment
+  or activation. Frozen artifacts and the protected release checkout were
+  untouched. All edits and commits used the campaign worktree; network use
+  was git only. No other surface follows A4.
 
 ## Verification
 
@@ -347,6 +416,52 @@ already current at `cf12b64f`. Findings and repair commits each completed
 `git push origin HEAD:release/combined-devnet-20260915`, with clean trees
 between units. This log closeout uses the identical pull/push sequence.
 No push to main, full-suite result or CI success is claimed. Stop after A3.
+
+### A4 verification
+
+Every Cargo test/check below used the exact prefix
+`env CARGO_NET_OFFLINE=true CARGO_TARGET_DIR=/tmp/integrate-20260918-target`.
+Dependency compilation does not expand the source review or run excluded
+test suites. Source-observation regressions use executable local stubs, with
+no sockets, validator/RPC access or retained qualification artifacts.
+
+| Command | Final result |
+| --- | --- |
+| `cargo test -p postfiat-node vault_bridge_workflows::tests --lib --locked` | 4 passed, 0 failed, 0 ignored, 382 filtered |
+| `cargo test -p postfiat-node vault_bridge_conservation::tests --lib --locked` | 8 passed, 0 failed, 0 ignored, 378 filtered |
+| `cargo test -p postfiat-node pfusdc_tier4::tests --lib --locked` | 1 passed, 0 failed, 0 ignored, 385 filtered |
+| `cargo check --workspace --locked` | Passed |
+| `cargo fmt --all -- --check` (no environment prefix) | Passed; existing stable-toolchain configuration warnings only |
+
+Unique focused A4 total: **13 passed, 0 failed, 0 ignored**. The workflow
+module also passed **3/3**, 380 filtered, before adding regressions. Test
+selection used `cargo test -p postfiat-node vault_bridge_ --lib --locked -- --list`
+(26 tests listed; none executed by that listing).
+
+The pre-repair command `cargo test -p postfiat-node burn6_ --lib --locked`
+produced **3 passed, 3 failed, 0 ignored, 380 filtered**. Its three new A4
+regressions failed on an accepted altered source balance, accepted conflicting
+block hash, and unpinned state read. The filter also matched three existing
+A2 regressions, which passed without additional review or changes; they are
+excluded from the 13-test A4 total. Final cases cover altered summary fields,
+overflow and impossible releases, valid non-wrapped allocations, failed and
+missing-status receipts, contradictory coordinates, removed/malformed flags,
+inherited coordinates, pinned source calls and simulated block-hash drift.
+
+Before **each** A4 commit (findings `66a68624`, repairs `10bb5655`, and this
+log closeout), the staged changes passed all three gates:
+`.venv-docs/bin/mkdocs build --strict`,
+`PATH="$PWD/.venv-docs/bin:$PATH" scripts/public-doc-links` (**469 files**),
+and `scripts/public-secret-scan` (**tracked-tree**).
+`git diff --cached --check` also passed. Findings wording was narrowed before
+its commit and all three gates reran on that final staged text. No source
+test rerun is needed for the documentation-only closeout.
+
+The initial `git pull --rebase origin release/combined-devnet-20260915` was
+already current at `acfda116`. Findings and repairs each completed that pull
+followed by `git push origin HEAD:release/combined-devnet-20260915`, with clean
+trees between units. This closeout uses the identical pull/push sequence.
+No push to main, full-suite result or CI success is claimed. Stop after A4.
 
 ## Scores
 
