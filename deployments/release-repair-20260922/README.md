@@ -1,20 +1,26 @@
 # Combined release tip qualification — September 22, 2026
 
-**Local result: FAIL. Nothing was deployed.** Source tip: `048d23df95929b1d544c8c13825e59844eb70e26`.
-This packet follows the [September 16 operator procedure](../release-repair-20260916/README.md).
-All database operations and service processes used new disposable local copies and six-peer loopback networking.
-The captured databases are logical-history copies, not an atomic fleet backup.
-No validator host, live service, or live transaction was touched. Nothing was deployed. No source repair was made.
-Task Node task: `task_5aa885411809aacca14a5ae2b2f47840`; status: **Rewarded**. [Lifecycle receipt](task-node.json).
-The 80-minute checkpoint was pushed as `a2b37ebc492579754cfcd611a5eafb1f86dc9cc4` at 2026-09-22T09:07:49.488301+00:00. [Push receipt](checkpoint-push.json).
+**Requested repair follow-up: PASS. Nothing was deployed. CI verdicts remain unconfirmed.**
+Build source: `1a0989ad6c35b7ea3eb6418f864958563233945a`; runtime build revision: `1a0989ad`.
+The final packet commit records this source and adds evidence only.
 
-Executable SHA-256, build 1: `3bffb105c9d5d9c3487b2b0e0758bd2ffdf557be5118b583d760d58006f5ffd1`.
-Executable SHA-256, build 2: `3bffb105c9d5d9c3487b2b0e0758bd2ffdf557be5118b583d760d58006f5ffd1`.
-Reproducibility: **PASS**. Separate clean source trees and separate copies of existing dependency caches;
-these are not claimed as builds from empty caches. Both builds pin the GCC Rust linker and use identical remaps;
-ELF dynamic sections are checked for RPATH/RUNPATH. All candidate history and service checks use build 1.
-The requested September 22 reference packet did not exist at the fetched tip; this packet follows
-September 18's successful build settings and September 16's operator procedure.
+The original qualification at `048d23df95929b1d544c8c13825e59844eb70e26`
+passed reproducibility, history, rotation and rollback, but failed the inventory and Clippy gates.
+This follow-up closes those two failures. It uses local disposable builds only, with no fleet or Task Node action.
+The original Task Node task `task_5aa885411809aacca14a5ae2b2f47840` remains
+**Rewarded**; its [lifecycle receipt](task-node.json) is unchanged.
+The protected release checkout was not accessed.
+
+Executable SHA-256, build 1: `e7bb1afa17b4c6322ac8eadabdab570595ad778a5173a5516c09ba966ed9e4b1`.
+Executable SHA-256, build 2: `e7bb1afa17b4c6322ac8eadabdab570595ad778a5173a5516c09ba966ed9e4b1`.
+Reproducibility: **PASS**, byte comparison exit 0.
+Separate clean source trees and separate copies of existing dependency caches were used;
+these are not empty-cache builds. Both builds use the GCC Rust linker, identical path remaps,
+and `SOURCE_DATE_EPOCH=1789514690`; neither executable has RPATH/RUNPATH.
+The two superseded `048d23df` build records and hashes remain in [node-builds.json](node-builds.json).
+
+History, rotation, rollback and software checks not rerun below remain evidence for
+`048d23df`, using that revision's original build 1. No new replay or service run is claimed.
 
 | Check | Result | Evidence |
 |---|---|---|
@@ -25,19 +31,20 @@ September 18's successful build settings and September 16's operator procedure.
 | Local governed rotation, both startup orders, convergence and restart | PASS | [Gate log](logs/governance-gate.stdout) |
 | Pre-activation rollback: six old checkpoints/restarts plus new full replay | PASS | [Rollback log](logs/rollback-services.stdout) |
 | Workspace check | PASS | [Log](logs/workspace-check.stdout) |
-| Rust formatting | PASS | [Log](logs/format.stdout) |
-| proof-input-inventory | FAIL | [Log](logs/proof-input-inventory.stdout) |
+| Rust formatting | PASS at `1a0989ad` | [Receipt](receipts/fix-format.json) |
+| proof-input-inventory | PASS at `85eee166` | [Reviewed hash and gate receipt](receipts/fix-proof-input-inventory.json) |
 | fastpay-types | PASS | [Log](logs/fastpay-types.stdout) |
 | fastpay-execution | PASS | [Log](logs/fastpay-execution.stdout) |
 | node-fastpay | DEFERRED_TO_CI | [Log](logs/node-fastpay.stdout) |
 | live-replay-supply | PASS | [Log](logs/live-replay-supply.stdout) |
 | warm-latency | PASS | [Log](logs/warm-latency.stdout) |
-| workspace-clippy | FAIL | [Log](logs/workspace-clippy.stdout) |
+| workspace-clippy | PASS at `1a0989ad` | [Receipt](receipts/fix-workspace-clippy.json), [compiler log](logs/fix-workspace-clippy.stderr) |
+| node `navcoin_bridge` tests | PASS at `1a0989ad`: 14 passed | [Log](logs/fix-navcoin-bridge.stdout) |
 | cobalt-handoff-tests | PASS | [Log](logs/cobalt-handoff-tests.stdout) |
 | Full workspace test suite | LEFT TO CI | Not run locally |
-| strict-docs | PASS | [Log](logs/strict-docs.stdout) |
-| public-doc-links | PASS | [Log](logs/public-doc-links.stdout) |
-| public-secret-scan | TIMEOUT | [Log](logs/public-secret-scan.stdout) |
+| strict-docs | PASS after repairs | [Receipt](receipts/fix-strict-docs.json) |
+| public-doc-links | PASS after repairs | [Receipt](receipts/fix-public-doc-links.json) |
+| public-secret-scan | PASS, complete tracked-tree scan | [Receipt](receipts/fix-public-secret-scan.json), [log](logs/fix-public-secret-scan.stdout) |
 
 | Captured validator | Original height 1020 | Saved V2 height 1021 | Fresh V2 height 1021 |
 |---|---|---|---|
@@ -72,40 +79,51 @@ Rollback covers its certified-checkpoint verification and local service restart 
 paired with the new executable’s full replay of restored validator-0. The old executable’s known historical
 full-replay bug is not represented as repaired. This is pre-activation rollback only.
 
-## CI and incomplete work
+## CI and deployment prerequisites
 
-Full workspace tests remain CI’s responsibility on the pushed release branch. Additional uncompleted local gates: node-fastpay. No PASS is claimed for them.
-Historical proof-reproduction, retained-commitment size measurements, and unrelated earlier release obligations
-are not requalified here. Prior evidence is not attributed to this source tip.
+Required CI verdicts must pass on the pushed release tip, including full workspace tests
+and the deferred node-fastpay coverage. No fresh CI success is claimed here.
+The [September 21 deployment preparation](../combined-devnet-20260921/README.md)
+pins an older executable and must be updated for this binary.
+Its [key-holder handoff](../combined-devnet-20260921/SIGNING.md) still requires the
+**existing trusted deployment publisher key** to sign the new manifest; no replacement
+key may be generated. Deployment-day signed backup and operator preflight remain separate.
+No deployment, manifest signing, backup export, or fleet action was performed.
 
-## Failures
+Historical proof reproduction, retained-commitment size measurements and unrelated
+earlier release obligations are not requalified by this repair follow-up.
 
-The source remains unchanged; any failing check is retained below with raw logs.
+## Closed failures and retained evidence
 
-Clippy reported `needless_borrows_for_generic_args` at `crates/node/src/market_bridge.rs:2474`; no source repair was made.
+- `85eee16656231f31976e71b7be49534fffc6567f` regenerates one reviewed source pin:
+  `crates/execution/src/nav_vault_asset_execution.rs`, changed by `043b9d69`.
+  The old hash matches that repair's parent; the new hash matches its source bytes.
+  The other 93 hashes, proof-system metadata and all frozen proof artifacts are unchanged.
+  The gate passes with seven systems, 150 public fields and 94 source hashes.
+- `1a0989ad6c35b7ea3eb6418f864958563233945a` removes only the needless `&` at
+  `crates/node/src/market_bridge.rs:2474`. Workspace Clippy with `-D warnings`,
+  all 14 selected bridge tests, and formatting pass.
+- The full `scripts/public-secret-scan` run completes with exit 0 after staging
+  the updated packet. This supersedes the original final scan timeout.
 
-The proof-input inventory reported source-hash drift in `crates/execution/src/nav_vault_asset_execution.rs`. No source repair was made.
-
-- **FAIL proof-input-inventory**: [logs/proof-input-inventory.stdout](logs/proof-input-inventory.stdout); [stderr](logs/proof-input-inventory.stderr)
-- **TIMEOUT public-secret-scan**: [logs/public-secret-scan.stdout](logs/public-secret-scan.stdout); [stderr](logs/public-secret-scan.stderr)
-- **FAIL workspace-clippy**: [logs/workspace-clippy.stdout](logs/workspace-clippy.stdout); [stderr](logs/workspace-clippy.stderr)
+Original evidence remains byte-for-byte:
+[inventory failure](logs/proof-input-inventory.stderr),
+[Clippy failure](logs/workspace-clippy.stderr),
+[secret-scan timeout receipt](receipts/public-secret-scan.json).
+The original qualification is retained under `prior_qualification` in
+[qualification.json](qualification.json); original software and publication records
+remain under `superseded` in their respective JSON files.
 
 ## Resource limits and evidence retention
 
-One Cargo process at a time, one history copy at a time, two build/test workers, and a 20 GiB address-space limit
-per verifier process. Replays require at least 8 GiB available at startup and stop below 4 GiB.
-Temporary files and databases live on disk under `/home/postfiatchad/.cache/release-repair-20260922`; `/tmp` is used only for the source worktree.
-Private keys, signed batches, databases and executables remain outside Git.
-An extra publication whitespace check returned exit 2 for blank EOF lines in raw test logs
-([driver log](logs/results-publication-driver.log)); those logs are preserved byte-for-byte.
-The three requested publication gates passed. No source or test output was rewritten.
-`SHA256SUMS` covers every packet file except the checksum manifest itself.
-Packet updated: 2026-09-22T09:38:37.072052+00:00.
+One Cargo process at a time, `CARGO_BUILD_JOBS=2`, two test workers, and a 20 GiB
+address-space limit apply to all follow-up commands. Commands require 8 GiB available
+at startup and stop below 4 GiB. Temporary and build files live on disk under
+`/home/postfiatchad/.cache/qualify-fix-20260922`; the edit worktree is
+`/tmp/qualify-fix-20260922`.
+The existing September 18 disposable test cache was reused; release builds use
+separate new copies of the September 22 caches. Executables remain outside Git.
 
-## Closing time limit
-
-The repeated final secret scan was stopped at the 110-minute cutoff, with no finding reported.
-The complete scan passed before the results publication; its retained receipt is
-[here](receipts/public-secret-scan-results-publication.json). The final metadata update
-records this timeout rather than claiming another scan pass. Publication and worktree
-cleanup extended beyond the requested time box; no further software checks were run.
+The original 110-minute qualification and its overrun remain in the archived receipt.
+This follow-up has a separate 40-minute limit. All three publication gates pass.
+`SHA256SUMS` covers every packet file except itself.

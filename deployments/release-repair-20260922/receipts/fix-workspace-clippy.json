@@ -1,0 +1,41 @@
+{
+  "name": "fix-workspace-clippy",
+  "command": [
+    "cargo",
+    "clippy",
+    "--workspace",
+    "--all-targets",
+    "--locked",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "cwd": "/tmp/qualify-fix-20260922",
+  "started_at": "2026-09-22T10:37:02.743159+00:00",
+  "status": "PASS",
+  "stdout": "logs/fix-workspace-clippy.stdout",
+  "stderr": "logs/fix-workspace-clippy.stderr",
+  "environment_overrides": {
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TERM_COLOR": "never",
+    "TMPDIR": "/home/postfiatchad/.cache/qualify-fix-20260922/tmp",
+    "RUST_TEST_THREADS": "2",
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "CARGO_TARGET_DIR": "/home/postfiatchad/.cache/release-repair-20260918/test-target"
+  },
+  "address_space_limit_bytes": 21474836480,
+  "minimum_available_memory_bytes": 4294967296,
+  "source_commit": "85eee16656231f31976e71b7be49534fffc6567f",
+  "pid": 3389814,
+  "exit_code": 0,
+  "completed_at": "2026-09-22T10:38:22.780762+00:00",
+  "elapsed_seconds": 80.0,
+  "minimum_available_memory_observed_bytes": 24225857536,
+  "validated_commit": "1a0989ad6c35b7ea3eb6418f864958563233945a",
+  "working_tree_at_run": "inventory fix commit plus the one-character market_bridge.rs borrow removal, committed unchanged as validated_commit",
+  "tested_market_bridge_sha256": "9b5a9f919c5e8529118ea70aff7669c9989060fa759bd4cd5468b36ebbdb74ad"
+}
