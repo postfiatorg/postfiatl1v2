@@ -100,4 +100,12 @@ An extra publication whitespace check returned exit 2 for blank EOF lines in raw
 ([driver log](logs/results-publication-driver.log)); those logs are preserved byte-for-byte.
 The three requested publication gates passed. No source or test output was rewritten.
 `SHA256SUMS` covers every packet file except the checksum manifest itself.
-Packet updated: 2026-09-22T09:38:15.781843+00:00.
+Packet updated: 2026-09-22T09:38:37.072052+00:00.
+
+## Closing time limit
+
+The repeated final secret scan was stopped at the 110-minute cutoff, with no finding reported.
+The complete scan passed before the results publication; its retained receipt is
+[here](receipts/public-secret-scan-results-publication.json). The final metadata update
+records this timeout rather than claiming another scan pass. Publication and worktree
+cleanup extended beyond the requested time box; no further software checks were run.

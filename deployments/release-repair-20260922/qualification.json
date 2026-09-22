@@ -3,7 +3,7 @@
   "source_commit": "048d23df95929b1d544c8c13825e59844eb70e26",
   "source_tree": "57a2f563559c67f4d50dd98fcb2afe39066907b9",
   "started_at": "2026-09-22T07:47:09+00:00",
-  "updated_at": "2026-09-22T09:38:15.781843+00:00",
+  "updated_at": "2026-09-22T09:38:37.072052+00:00",
   "timebox_minutes": 110,
   "checkpoint_minutes": 80,
   "scope": "burn 6 release tip qualification; disposable local copies only",
@@ -126,7 +126,7 @@
       }
     ]
   },
-  "elapsed_minutes": 111.11,
+  "elapsed_minutes": 111.47,
   "checkpoint_commit": "a2b37ebc492579754cfcd611a5eafb1f86dc9cc4",
   "checkpoint_push_completed_at": "2026-09-22T09:07:49.488301+00:00",
   "ci_workspace_test_job": {
