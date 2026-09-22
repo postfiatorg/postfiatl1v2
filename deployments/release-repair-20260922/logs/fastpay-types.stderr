@@ -1,1 +1,3 @@
    Compiling postfiat-types v0.1.0 (/tmp/qualify-20260922/crates/types)
+    Finished `test` profile [optimized + debuginfo] target(s) in 58.00s
+     Running unittests src/lib.rs (/home/postfiatchad/.cache/release-repair-20260918/test-target/debug/deps/postfiat_types-449a1448f84a1995)

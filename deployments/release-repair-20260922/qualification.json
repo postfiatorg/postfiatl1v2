@@ -3,7 +3,7 @@
   "source_commit": "048d23df95929b1d544c8c13825e59844eb70e26",
   "source_tree": "57a2f563559c67f4d50dd98fcb2afe39066907b9",
   "started_at": "2026-09-22T07:47:09+00:00",
-  "updated_at": "2026-09-22T09:07:45.396006+00:00",
+  "updated_at": "2026-09-22T09:29:53.060516+00:00",
   "timebox_minutes": 110,
   "checkpoint_minutes": 80,
   "scope": "burn 6 release tip qualification; disposable local copies only",
@@ -60,13 +60,13 @@
     "format": "PASS",
     "proof-input-inventory": "FAIL",
     "workspace-check": "PASS",
-    "fastpay-types": "RUNNING",
-    "fastpay-execution": "PENDING",
-    "node-fastpay": "PENDING",
-    "live-replay-supply": "PENDING",
-    "warm-latency": "PENDING",
-    "workspace-clippy": "PENDING",
-    "cobalt-handoff-tests": "PENDING"
+    "fastpay-types": "PASS",
+    "fastpay-execution": "PASS",
+    "node-fastpay": "DEFERRED_TO_CI",
+    "live-replay-supply": "PASS",
+    "warm-latency": "PASS",
+    "workspace-clippy": "FAIL",
+    "cobalt-handoff-tests": "PASS"
   },
   "publication_gates": {
     "strict-docs": "PASS",
@@ -89,6 +89,12 @@
       "status": "FAIL",
       "log": "logs/proof-input-inventory.stdout",
       "stderr": "logs/proof-input-inventory.stderr"
+    },
+    {
+      "check": "workspace-clippy",
+      "status": "FAIL",
+      "log": "logs/workspace-clippy.stdout",
+      "stderr": "logs/workspace-clippy.stderr"
     }
   ],
   "task_node": {
@@ -100,7 +106,9 @@
     "proposal_review": "Complete generated task inspected; objective, constraints, steps, 3.5 PFT offer, time box and verification requirements matched the user request",
     "requested_at": "2026-09-22T07:47:59.871Z"
   },
-  "elapsed_minutes": 80.61,
+  "elapsed_minutes": 102.73,
+  "checkpoint_commit": "a2b37ebc492579754cfcd611a5eafb1f86dc9cc4",
+  "checkpoint_push_completed_at": "2026-09-22T09:07:49.488301+00:00",
   "ci_workspace_test_job": {
     "result": "NOT_CONFIRMED",
     "source_commit": null,

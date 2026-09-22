@@ -6,7 +6,7 @@ All database operations and service processes used new disposable local copies a
 The captured databases are logical-history copies, not an atomic fleet backup.
 No validator host, live service, or live transaction was touched. Nothing was deployed. No source repair was made.
 Task Node task: `task_5aa885411809aacca14a5ae2b2f47840`; lifecycle status is recorded in [task-node.json](task-node.json).
-
+The 80-minute checkpoint was pushed as `a2b37ebc492579754cfcd611a5eafb1f86dc9cc4` at 2026-09-22T09:07:49.488301+00:00. [Push receipt](checkpoint-push.json).
 
 Executable SHA-256, build 1: `3bffb105c9d5d9c3487b2b0e0758bd2ffdf557be5118b583d760d58006f5ffd1`.
 Executable SHA-256, build 2: `3bffb105c9d5d9c3487b2b0e0758bd2ffdf557be5118b583d760d58006f5ffd1`.
@@ -27,13 +27,13 @@ September 18's successful build settings and September 16's operator procedure.
 | Workspace check | PASS | [Log](logs/workspace-check.stdout) |
 | Rust formatting | PASS | [Log](logs/format.stdout) |
 | proof-input-inventory | FAIL | [Log](logs/proof-input-inventory.stdout) |
-| fastpay-types | RUNNING | [Log](logs/fastpay-types.stdout) |
-| fastpay-execution | PENDING | Pending |
-| node-fastpay | PENDING | Pending |
-| live-replay-supply | PENDING | Pending |
-| warm-latency | PENDING | Pending |
-| workspace-clippy | PENDING | Pending |
-| cobalt-handoff-tests | PENDING | Pending |
+| fastpay-types | PASS | [Log](logs/fastpay-types.stdout) |
+| fastpay-execution | PASS | [Log](logs/fastpay-execution.stdout) |
+| node-fastpay | DEFERRED_TO_CI | [Log](logs/node-fastpay.stdout) |
+| live-replay-supply | PASS | [Log](logs/live-replay-supply.stdout) |
+| warm-latency | PASS | [Log](logs/warm-latency.stdout) |
+| workspace-clippy | FAIL | [Log](logs/workspace-clippy.stdout) |
+| cobalt-handoff-tests | PASS | [Log](logs/cobalt-handoff-tests.stdout) |
 | Full workspace test suite | LEFT TO CI | Not run locally |
 | strict-docs | PASS | [Log](logs/strict-docs.stdout) |
 | public-doc-links | PASS | [Log](logs/public-doc-links.stdout) |
@@ -74,7 +74,7 @@ full-replay bug is not represented as repaired. This is pre-activation rollback 
 
 ## CI and incomplete work
 
-Full workspace tests remain CI’s responsibility on the pushed release branch. Additional uncompleted local gates: fastpay-execution, node-fastpay, live-replay-supply, warm-latency, workspace-clippy, cobalt-handoff-tests. No PASS is claimed for them.
+Full workspace tests remain CI’s responsibility on the pushed release branch. Additional uncompleted local gates: node-fastpay. No PASS is claimed for them.
 Historical proof-reproduction, retained-commitment size measurements, and unrelated earlier release obligations
 are not requalified here. Prior evidence is not attributed to this source tip.
 
@@ -82,7 +82,12 @@ are not requalified here. Prior evidence is not attributed to this source tip.
 
 The source remains unchanged; any failing check is retained below with raw logs.
 
+Clippy reported `needless_borrows_for_generic_args` at `crates/node/src/market_bridge.rs:2474`; no source repair was made.
+
+The proof-input inventory reported source-hash drift in `crates/execution/src/nav_vault_asset_execution.rs`. No source repair was made.
+
 - **FAIL proof-input-inventory**: [logs/proof-input-inventory.stdout](logs/proof-input-inventory.stdout); [stderr](logs/proof-input-inventory.stderr)
+- **FAIL workspace-clippy**: [logs/workspace-clippy.stdout](logs/workspace-clippy.stdout); [stderr](logs/workspace-clippy.stderr)
 
 ## Resource limits and evidence retention
 
@@ -91,4 +96,4 @@ per verifier process. Replays require at least 8 GiB available at startup and st
 Temporary files and databases live on disk under `/home/postfiatchad/.cache/release-repair-20260922`; `/tmp` is used only for the source worktree.
 Private keys, signed batches, databases and executables remain outside Git.
 `SHA256SUMS` covers every packet file except the checksum manifest itself.
-Packet updated: 2026-09-22T09:07:45.396006+00:00.
+Packet updated: 2026-09-22T09:29:53.060516+00:00.

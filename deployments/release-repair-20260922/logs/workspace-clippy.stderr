@@ -1,0 +1,36 @@
+    Checking postfiat-types v0.1.0 (/tmp/qualify-20260922/crates/types)
+    Checking postfiat-crypto-provider v0.1.0 (/tmp/qualify-20260922/crates/crypto_provider)
+    Checking postfiat-proofs v0.1.0 (/tmp/qualify-20260922/crates/proofs)
+    Checking postfiat-privacy-orchard v0.1.0 (/tmp/qualify-20260922/crates/privacy_orchard)
+   Compiling postfiat-node v0.1.0 (/tmp/qualify-20260922/crates/node)
+    Checking postfiat-network v0.1.0 (/tmp/qualify-20260922/crates/network)
+   Compiling postfiat-bench v0.1.0 (/tmp/qualify-20260922/crates/bench_harness)
+    Checking arc-conformance v0.1.0 (/tmp/qualify-20260922/crates/arc-conformance)
+    Checking postfiat-cobalt-adversarial-oracle v0.1.0 (/tmp/qualify-20260922/crates/cobalt_adversarial_oracle)
+    Checking postfiat-cobalt-decision-oracle v0.1.0 (/tmp/qualify-20260922/crates/cobalt_decision_oracle)
+    Checking postfiat-fastswap-model v0.1.0 (/tmp/qualify-20260922/crates/fastswap_model)
+    Checking postfiat-bridge v0.1.0 (/tmp/qualify-20260922/crates/bridge)
+    Checking postfiat-nav-reserve-protocol v0.1.0 (/tmp/qualify-20260922/crates/nav_reserve_protocol)
+    Checking postfiat-execution v0.1.0 (/tmp/qualify-20260922/crates/execution)
+    Checking postfiat-mempool-dag v0.1.0 (/tmp/qualify-20260922/crates/mempool_dag)
+    Checking postfiat-consensus-cobalt v0.1.0 (/tmp/qualify-20260922/crates/consensus_cobalt)
+    Checking postfiat-rpc-sdk v0.1.0 (/tmp/qualify-20260922/crates/rpc_sdk)
+    Checking postfiat-ordering-fast v0.1.0 (/tmp/qualify-20260922/crates/ordering_fast)
+    Checking postfiat-storage v0.1.0 (/tmp/qualify-20260922/crates/storage)
+    Checking postfiat-privacy v0.1.0 (/tmp/qualify-20260922/crates/privacy)
+    Checking postfiat-pfusdc-proofs v0.1.0 (/tmp/qualify-20260922/crates/pfusdc_proofs)
+    Checking postfiat-pftl-uniswap-proofs v0.1.0 (/tmp/qualify-20260922/crates/pftl_uniswap_proofs)
+    Checking postfiat-fastpay-prototype v0.1.0 (/tmp/qualify-20260922/crates/fastpay-prototype)
+error: the borrowed expression implements the required traits
+    --> crates/node/src/market_bridge.rs:2474:9
+     |
+2474 |         &data_dir.join(PFTL_UNISWAP_BRIDGE_RECEIPTS_FILE),
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: change this to: `data_dir.join(PFTL_UNISWAP_BRIDGE_RECEIPTS_FILE)`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#needless_borrows_for_generic_args
+     = note: `-D clippy::needless-borrows-for-generic-args` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::needless_borrows_for_generic_args)]`
+
+error: could not compile `postfiat-node` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `postfiat-node` (lib test) due to 1 previous error

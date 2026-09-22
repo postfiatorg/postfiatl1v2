@@ -1,21 +1,25 @@
 {
-  "name": "fastpay-types",
+  "name": "warm-latency",
   "command": [
     "cargo",
     "test",
     "--locked",
     "-p",
-    "postfiat-types",
-    "--lib",
-    "fastpay_recovery_type_tests",
+    "postfiat-node",
+    "--bin",
+    "postfiat-node",
+    "fastswap_service::tests::persistent_wallet_driver_meets_isolated_warm_latency_gate",
     "--",
+    "--ignored",
+    "--exact",
+    "--nocapture",
     "--test-threads=2"
   ],
   "cwd": "/tmp/qualify-20260922",
-  "started_at": "2026-09-22T09:07:43.787768+00:00",
+  "started_at": "2026-09-22T09:19:04.147445+00:00",
   "status": "PASS",
-  "stdout": "logs/fastpay-types.stdout",
-  "stderr": "logs/fastpay-types.stderr",
+  "stdout": "logs/warm-latency.stdout",
+  "stderr": "logs/warm-latency.stderr",
   "environment_overrides": {
     "CARGO_BUILD_JOBS": "2",
     "CARGO_INCREMENTAL": "0",
@@ -33,10 +37,10 @@
   },
   "address_space_limit_bytes": 21474836480,
   "minimum_available_memory_bytes": 4294967296,
-  "pid": 3344777,
+  "pid": 3350260,
   "exit_code": 0,
-  "completed_at": "2026-09-22T09:08:42.815871+00:00",
-  "elapsed_seconds": 59.0,
-  "minimum_available_memory_observed_bytes": 25612808192,
-  "tests_passed": 9
+  "completed_at": "2026-09-22T09:24:03.276021+00:00",
+  "elapsed_seconds": 299.1,
+  "minimum_available_memory_observed_bytes": 23298498560,
+  "tests_passed": 1
 }

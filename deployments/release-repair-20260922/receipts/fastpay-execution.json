@@ -1,21 +1,21 @@
 {
-  "name": "fastpay-types",
+  "name": "fastpay-execution",
   "command": [
     "cargo",
     "test",
     "--locked",
     "-p",
-    "postfiat-types",
+    "postfiat-execution",
     "--lib",
-    "fastpay_recovery_type_tests",
+    "owned_transfer_recovery_tests",
     "--",
     "--test-threads=2"
   ],
   "cwd": "/tmp/qualify-20260922",
-  "started_at": "2026-09-22T09:07:43.787768+00:00",
+  "started_at": "2026-09-22T09:08:42.828829+00:00",
   "status": "PASS",
-  "stdout": "logs/fastpay-types.stdout",
-  "stderr": "logs/fastpay-types.stderr",
+  "stdout": "logs/fastpay-execution.stdout",
+  "stderr": "logs/fastpay-execution.stderr",
   "environment_overrides": {
     "CARGO_BUILD_JOBS": "2",
     "CARGO_INCREMENTAL": "0",
@@ -33,10 +33,10 @@
   },
   "address_space_limit_bytes": 21474836480,
   "minimum_available_memory_bytes": 4294967296,
-  "pid": 3344777,
+  "pid": 3345371,
   "exit_code": 0,
-  "completed_at": "2026-09-22T09:08:42.815871+00:00",
-  "elapsed_seconds": 59.0,
-  "minimum_available_memory_observed_bytes": 25612808192,
-  "tests_passed": 9
+  "completed_at": "2026-09-22T09:10:04.867939+00:00",
+  "elapsed_seconds": 82.0,
+  "minimum_available_memory_observed_bytes": 25723273216,
+  "tests_passed": 11
 }

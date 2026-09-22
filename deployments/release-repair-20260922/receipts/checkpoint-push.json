@@ -1,13 +1,16 @@
 {
-  "name": "publication-final-secret-scan",
+  "name": "checkpoint-push",
   "command": [
-    "scripts/public-secret-scan"
+    "git",
+    "push",
+    "origin",
+    "HEAD:release/combined-devnet-20260915"
   ],
   "cwd": "/tmp/qualify-20260922",
-  "started_at": "2026-09-22T09:29:39.981383+00:00",
+  "started_at": "2026-09-22T09:07:46.480934+00:00",
   "status": "PASS",
-  "stdout": "logs/publication-final-secret-scan.stdout",
-  "stderr": "logs/publication-final-secret-scan.stderr",
+  "stdout": "logs/checkpoint-push.stdout",
+  "stderr": "logs/checkpoint-push.stderr",
   "environment_overrides": {
     "CARGO_BUILD_JOBS": "2",
     "CARGO_INCREMENTAL": "0",
@@ -21,9 +24,9 @@
   },
   "address_space_limit_bytes": 21474836480,
   "minimum_available_memory_bytes": 4294967296,
-  "pid": 3355178,
+  "pid": 3344851,
   "exit_code": 0,
-  "completed_at": "2026-09-22T09:29:52.991760+00:00",
-  "elapsed_seconds": 13.0,
-  "minimum_available_memory_observed_bytes": 27397021696
+  "completed_at": "2026-09-22T09:07:49.488301+00:00",
+  "elapsed_seconds": 3.0,
+  "minimum_available_memory_observed_bytes": 26654310400
 }
