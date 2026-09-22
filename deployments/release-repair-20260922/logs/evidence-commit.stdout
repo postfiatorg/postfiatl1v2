@@ -1,0 +1,29 @@
+[detached HEAD 8c2f926e] Qualify the release tip with the burn 6 repairs
+ 43 files changed, 1199 insertions(+), 68 deletions(-)
+ create mode 100644 deployments/release-repair-20260922/checkpoint-push.json
+ create mode 100644 deployments/release-repair-20260922/logs/checkpoint-commit.stderr
+ create mode 100644 deployments/release-repair-20260922/logs/checkpoint-commit.stdout
+ create mode 100644 deployments/release-repair-20260922/logs/checkpoint-push.stderr
+ create mode 100644 deployments/release-repair-20260922/logs/checkpoint-push.stdout
+ create mode 100644 deployments/release-repair-20260922/logs/cobalt-handoff-tests.stderr
+ create mode 100644 deployments/release-repair-20260922/logs/cobalt-handoff-tests.stdout
+ create mode 100644 deployments/release-repair-20260922/logs/fastpay-execution.stderr
+ create mode 100644 deployments/release-repair-20260922/logs/fastpay-execution.stdout
+ create mode 100644 deployments/release-repair-20260922/logs/live-replay-supply.stderr
+ create mode 100644 deployments/release-repair-20260922/logs/live-replay-supply.stdout
+ create mode 100644 deployments/release-repair-20260922/logs/node-fastpay.stderr
+ create mode 100644 deployments/release-repair-20260922/logs/node-fastpay.stdout
+ create mode 100644 deployments/release-repair-20260922/logs/results-publication-driver.log
+ create mode 100644 deployments/release-repair-20260922/logs/warm-latency.stderr
+ create mode 100644 deployments/release-repair-20260922/logs/warm-latency.stdout
+ create mode 100644 deployments/release-repair-20260922/logs/workspace-clippy.stderr
+ create mode 100644 deployments/release-repair-20260922/logs/workspace-clippy.stdout
+ create mode 100644 deployments/release-repair-20260922/receipts/checkpoint-commit.json
+ create mode 100644 deployments/release-repair-20260922/receipts/checkpoint-push.json
+ create mode 100644 deployments/release-repair-20260922/receipts/cobalt-handoff-tests.json
+ create mode 100644 deployments/release-repair-20260922/receipts/fastpay-execution.json
+ create mode 100644 deployments/release-repair-20260922/receipts/live-replay-supply.json
+ create mode 100644 deployments/release-repair-20260922/receipts/node-fastpay.json
+ create mode 100644 deployments/release-repair-20260922/receipts/warm-latency.json
+ create mode 100644 deployments/release-repair-20260922/receipts/workspace-clippy.json
+ create mode 100644 deployments/release-repair-20260922/sequence-complete.json

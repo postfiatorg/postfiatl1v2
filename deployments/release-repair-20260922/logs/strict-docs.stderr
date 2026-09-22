@@ -249,4 +249,4 @@ INFO    -  Doc file 'plans/completed/release-blocker-repairs-20260916.md' contai
 INFO    -  Doc file 'plans/completed/tasknode-unl-amendment-v2-milestone.md' contains a link to 'review/tasknode-unl-amendment-v2-lock-20260907.md' which is excluded from the built site.
 INFO    -  Doc file 'runbooks/z3-cycle-dry-run.md' contains a link to 'review/z3-g2-route-compatibility-20260917.md' which is excluded from the built site.
 INFO    -  Doc file 'runbooks/z3-cycle-dry-run.md' contains a link to 'review/z3-g5-failure-rehearsal-20260917.md' which is excluded from the built site.
-INFO    -  Documentation built in 4.40 seconds
+INFO    -  Documentation built in 4.23 seconds

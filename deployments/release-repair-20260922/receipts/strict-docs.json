@@ -8,7 +8,7 @@
     "/home/postfiatchad/.cache/release-repair-20260922/docs-site"
   ],
   "cwd": "/tmp/qualify-20260922",
-  "started_at": "2026-09-22T09:29:16.816606+00:00",
+  "started_at": "2026-09-22T09:36:53.922565+00:00",
   "status": "PASS",
   "stdout": "logs/strict-docs.stdout",
   "stderr": "logs/strict-docs.stderr",
@@ -26,9 +26,9 @@
   },
   "address_space_limit_bytes": 21474836480,
   "minimum_available_memory_bytes": 4294967296,
-  "pid": 3354966,
+  "pid": 3358539,
   "exit_code": 0,
-  "completed_at": "2026-09-22T09:29:21.824008+00:00",
+  "completed_at": "2026-09-22T09:36:58.929378+00:00",
   "elapsed_seconds": 5.0,
-  "minimum_available_memory_observed_bytes": 27393073152
+  "minimum_available_memory_observed_bytes": 27392524288
 }

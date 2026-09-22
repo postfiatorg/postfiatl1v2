@@ -1,9 +1,23 @@
 {
   "request_id": "req_f387d09cb179491ded4223f6da9d19b7b2dcb99a9e515731a015776b1eddf51a",
   "task_id": "task_5aa885411809aacca14a5ae2b2f47840",
-  "status": "ACCEPTED",
+  "status": "Rewarded",
   "skipped": false,
   "scope": "One personal task covering the September 22 local qualification and publication",
   "proposal_review": "Complete generated task inspected; objective, constraints, steps, 3.5 PFT offer, time box and verification requirements matched the user request",
-  "requested_at": "2026-09-22T07:47:59.871Z"
+  "requested_at": "2026-09-22T07:47:59.871Z",
+  "completion_confirmed": true,
+  "initial_evidence_event": "task_evt_a530cd72-76d9-46b2-b0ac-3e7c5f9c45b1",
+  "verification_event": "task_evt_b5534aa1-b9d4-4d67-afea-3a9e0e3e8e56",
+  "reward_outcome": null,
+  "evidence_commit": "8c2f926e7ea8790c16431cd1e6cdd94e8cddd758",
+  "updated_at": "2026-09-22T09:36:07.220085+00:00",
+  "backend_rejections": [
+    {
+      "error": "request_body_field_too_long",
+      "field": "body.summary",
+      "recovered": true,
+      "remedy": "shortened initial evidence; accepted retry"
+    }
+  ]
 }
