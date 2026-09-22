@@ -2471,7 +2471,7 @@ where
     // the local ledger. The two file writes are not a crash-atomic transaction.
     write_pftl_uniswap_bridge_ledgers(data_dir, &mut ledgers)?;
     atomic_write(
-        &data_dir.join(PFTL_UNISWAP_BRIDGE_RECEIPTS_FILE),
+        data_dir.join(PFTL_UNISWAP_BRIDGE_RECEIPTS_FILE),
         receipts_json,
     )?;
     Ok(NavcoinBridgeTransitionApplyReport {
