@@ -1,0 +1,10 @@
+{"packet": "/tmp/qualify-20260922/deployments/release-repair-20260922", "result": "INCOMPLETE", "files": 244, "updated_at": "2026-09-22T09:07:09.087515+00:00"}
+2026-09-22T09:07:09.132610+00:00 START strict-docs
+2026-09-22T09:07:14.140051+00:00 PASS strict-docs (5.0s)
+2026-09-22T09:07:14.141070+00:00 START public-doc-links
+2026-09-22T09:07:19.148950+00:00 PASS public-doc-links (5.0s)
+2026-09-22T09:07:19.149756+00:00 START public-secret-scan
+2026-09-22T09:07:32.158609+00:00 PASS public-secret-scan (13.0s)
+{"packet": "/tmp/qualify-20260922/deployments/release-repair-20260922", "result": "FAIL", "files": 257, "updated_at": "2026-09-22T09:07:32.255777+00:00"}
+2026-09-22T09:07:32.292165+00:00 START publication-final-secret-scan
+2026-09-22T09:07:45.301846+00:00 PASS publication-final-secret-scan (13.0s)

@@ -1,0 +1,267 @@
+{
+  "source_commit": "048d23df95929b1d544c8c13825e59844eb70e26",
+  "binary_sha256": "3bffb105c9d5d9c3487b2b0e0758bd2ffdf557be5118b583d760d58006f5ffd1",
+  "scope": "full replay of six freshly rotated local copies; exact newly certified tip and root",
+  "checks": [
+    {
+      "name": "fresh-v2-validator-0",
+      "command": [
+        "/home/postfiatchad/.cache/release-repair-20260922/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-repair-20260922/working/validator-0"
+      ],
+      "cwd": "/tmp/qualify-20260922",
+      "started_at": "2026-09-22T08:47:51.761518+00:00",
+      "status": "PASS",
+      "stdout": "logs/fresh-v2-validator-0.stdout",
+      "stderr": "logs/fresh-v2-validator-0.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260922/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 3337461,
+      "exit_code": 0,
+      "completed_at": "2026-09-22T08:51:03.844944+00:00",
+      "elapsed_seconds": 192.1,
+      "minimum_available_memory_observed_bytes": 26693042176,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "f1f2d333873f4b64471e2469cd8555ca42a626d34e2f4f505157cde08c7e66e2d8df11f7aea859f3af288adc8e8d5d9e",
+        "state_root": "1ee1b661e4093c5a389aa34e4d265f7b0ecc5b637dedd2870cb31f61a2520fa457e452befe67d62cd3bc708865610f75"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "f1f2d333873f4b64471e2469cd8555ca42a626d34e2f4f505157cde08c7e66e2d8df11f7aea859f3af288adc8e8d5d9e",
+        "state_root": "1ee1b661e4093c5a389aa34e4d265f7b0ecc5b637dedd2870cb31f61a2520fa457e452befe67d62cd3bc708865610f75"
+      }
+    },
+    {
+      "name": "fresh-v2-validator-1",
+      "command": [
+        "/home/postfiatchad/.cache/release-repair-20260922/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-repair-20260922/working/validator-1"
+      ],
+      "cwd": "/tmp/qualify-20260922",
+      "started_at": "2026-09-22T08:51:03.914208+00:00",
+      "status": "PASS",
+      "stdout": "logs/fresh-v2-validator-1.stdout",
+      "stderr": "logs/fresh-v2-validator-1.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260922/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 3338566,
+      "exit_code": 0,
+      "completed_at": "2026-09-22T08:54:16.998307+00:00",
+      "elapsed_seconds": 193.1,
+      "minimum_available_memory_observed_bytes": 26710523904,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "f1f2d333873f4b64471e2469cd8555ca42a626d34e2f4f505157cde08c7e66e2d8df11f7aea859f3af288adc8e8d5d9e",
+        "state_root": "1ee1b661e4093c5a389aa34e4d265f7b0ecc5b637dedd2870cb31f61a2520fa457e452befe67d62cd3bc708865610f75"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "f1f2d333873f4b64471e2469cd8555ca42a626d34e2f4f505157cde08c7e66e2d8df11f7aea859f3af288adc8e8d5d9e",
+        "state_root": "1ee1b661e4093c5a389aa34e4d265f7b0ecc5b637dedd2870cb31f61a2520fa457e452befe67d62cd3bc708865610f75"
+      }
+    },
+    {
+      "name": "fresh-v2-validator-2",
+      "command": [
+        "/home/postfiatchad/.cache/release-repair-20260922/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-repair-20260922/working/validator-2"
+      ],
+      "cwd": "/tmp/qualify-20260922",
+      "started_at": "2026-09-22T08:54:17.067282+00:00",
+      "status": "PASS",
+      "stdout": "logs/fresh-v2-validator-2.stdout",
+      "stderr": "logs/fresh-v2-validator-2.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260922/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 3339707,
+      "exit_code": 0,
+      "completed_at": "2026-09-22T08:57:28.149312+00:00",
+      "elapsed_seconds": 191.1,
+      "minimum_available_memory_observed_bytes": 26697678848,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "f1f2d333873f4b64471e2469cd8555ca42a626d34e2f4f505157cde08c7e66e2d8df11f7aea859f3af288adc8e8d5d9e",
+        "state_root": "1ee1b661e4093c5a389aa34e4d265f7b0ecc5b637dedd2870cb31f61a2520fa457e452befe67d62cd3bc708865610f75"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "f1f2d333873f4b64471e2469cd8555ca42a626d34e2f4f505157cde08c7e66e2d8df11f7aea859f3af288adc8e8d5d9e",
+        "state_root": "1ee1b661e4093c5a389aa34e4d265f7b0ecc5b637dedd2870cb31f61a2520fa457e452befe67d62cd3bc708865610f75"
+      }
+    },
+    {
+      "name": "fresh-v2-validator-3",
+      "command": [
+        "/home/postfiatchad/.cache/release-repair-20260922/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-repair-20260922/working/validator-3"
+      ],
+      "cwd": "/tmp/qualify-20260922",
+      "started_at": "2026-09-22T08:57:28.219520+00:00",
+      "status": "PASS",
+      "stdout": "logs/fresh-v2-validator-3.stdout",
+      "stderr": "logs/fresh-v2-validator-3.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260922/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 3340697,
+      "exit_code": 0,
+      "completed_at": "2026-09-22T09:00:41.302671+00:00",
+      "elapsed_seconds": 193.1,
+      "minimum_available_memory_observed_bytes": 26705944576,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "f1f2d333873f4b64471e2469cd8555ca42a626d34e2f4f505157cde08c7e66e2d8df11f7aea859f3af288adc8e8d5d9e",
+        "state_root": "1ee1b661e4093c5a389aa34e4d265f7b0ecc5b637dedd2870cb31f61a2520fa457e452befe67d62cd3bc708865610f75"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "f1f2d333873f4b64471e2469cd8555ca42a626d34e2f4f505157cde08c7e66e2d8df11f7aea859f3af288adc8e8d5d9e",
+        "state_root": "1ee1b661e4093c5a389aa34e4d265f7b0ecc5b637dedd2870cb31f61a2520fa457e452befe67d62cd3bc708865610f75"
+      }
+    },
+    {
+      "name": "fresh-v2-validator-4",
+      "command": [
+        "/home/postfiatchad/.cache/release-repair-20260922/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-repair-20260922/working/validator-4"
+      ],
+      "cwd": "/tmp/qualify-20260922",
+      "started_at": "2026-09-22T09:00:41.373021+00:00",
+      "status": "PASS",
+      "stdout": "logs/fresh-v2-validator-4.stdout",
+      "stderr": "logs/fresh-v2-validator-4.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260922/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 3341833,
+      "exit_code": 0,
+      "completed_at": "2026-09-22T09:03:53.454629+00:00",
+      "elapsed_seconds": 192.1,
+      "minimum_available_memory_observed_bytes": 26708316160,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "f1f2d333873f4b64471e2469cd8555ca42a626d34e2f4f505157cde08c7e66e2d8df11f7aea859f3af288adc8e8d5d9e",
+        "state_root": "1ee1b661e4093c5a389aa34e4d265f7b0ecc5b637dedd2870cb31f61a2520fa457e452befe67d62cd3bc708865610f75"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "f1f2d333873f4b64471e2469cd8555ca42a626d34e2f4f505157cde08c7e66e2d8df11f7aea859f3af288adc8e8d5d9e",
+        "state_root": "1ee1b661e4093c5a389aa34e4d265f7b0ecc5b637dedd2870cb31f61a2520fa457e452befe67d62cd3bc708865610f75"
+      }
+    },
+    {
+      "name": "fresh-v2-validator-5",
+      "command": [
+        "/home/postfiatchad/.cache/release-repair-20260922/binaries/candidate-1",
+        "verify-state",
+        "--data-dir",
+        "/home/postfiatchad/.cache/release-repair-20260922/working/validator-5"
+      ],
+      "cwd": "/tmp/qualify-20260922",
+      "started_at": "2026-09-22T09:03:53.522738+00:00",
+      "status": "PASS",
+      "stdout": "logs/fresh-v2-validator-5.stdout",
+      "stderr": "logs/fresh-v2-validator-5.stderr",
+      "environment_overrides": {
+        "CARGO_BUILD_JOBS": "2",
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_TERM_COLOR": "never",
+        "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260922/tmp",
+        "RUST_TEST_THREADS": "2",
+        "RAYON_NUM_THREADS": "2",
+        "OMP_NUM_THREADS": "2",
+        "MALLOC_ARENA_MAX": "2",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "address_space_limit_bytes": 21474836480,
+      "minimum_available_memory_bytes": 4294967296,
+      "pid": 3342991,
+      "exit_code": 0,
+      "completed_at": "2026-09-22T09:07:06.603865+00:00",
+      "elapsed_seconds": 193.1,
+      "minimum_available_memory_observed_bytes": 26705080320,
+      "verified": true,
+      "observed": {
+        "block_height": 1021,
+        "block_tip_hash": "f1f2d333873f4b64471e2469cd8555ca42a626d34e2f4f505157cde08c7e66e2d8df11f7aea859f3af288adc8e8d5d9e",
+        "state_root": "1ee1b661e4093c5a389aa34e4d265f7b0ecc5b637dedd2870cb31f61a2520fa457e452befe67d62cd3bc708865610f75"
+      },
+      "expected": {
+        "block_height": 1021,
+        "block_tip_hash": "f1f2d333873f4b64471e2469cd8555ca42a626d34e2f4f505157cde08c7e66e2d8df11f7aea859f3af288adc8e8d5d9e",
+        "state_root": "1ee1b661e4093c5a389aa34e4d265f7b0ecc5b637dedd2870cb31f61a2520fa457e452befe67d62cd3bc708865610f75"
+      }
+    }
+  ],
+  "updated_at": "2026-09-22T09:07:06.672195+00:00",
+  "live_mutations": false
+}

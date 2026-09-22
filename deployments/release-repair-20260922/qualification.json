@@ -1,0 +1,111 @@
+{
+  "schema": "postfiat.release-repair-qualification.v1",
+  "source_commit": "048d23df95929b1d544c8c13825e59844eb70e26",
+  "source_tree": "57a2f563559c67f4d50dd98fcb2afe39066907b9",
+  "started_at": "2026-09-22T07:47:09+00:00",
+  "updated_at": "2026-09-22T09:07:45.396006+00:00",
+  "timebox_minutes": 110,
+  "checkpoint_minutes": 80,
+  "scope": "burn 6 release tip qualification; disposable local copies only",
+  "live_mutations": false,
+  "task_node_actions": true,
+  "source_modified": false,
+  "result": "FAIL",
+  "node_reproducibility": "PASS",
+  "candidate_binary_sha256": [
+    "3bffb105c9d5d9c3487b2b0e0758bd2ffdf557be5118b583d760d58006f5ffd1",
+    "3bffb105c9d5d9c3487b2b0e0758bd2ffdf557be5118b583d760d58006f5ffd1"
+  ],
+  "history": [
+    {
+      "validator": 0,
+      "original": "PASS",
+      "post_v2": "PASS",
+      "fresh_v2": "PASS"
+    },
+    {
+      "validator": 1,
+      "original": "PASS",
+      "post_v2": "PASS",
+      "fresh_v2": "PASS"
+    },
+    {
+      "validator": 2,
+      "original": "PASS",
+      "post_v2": "PASS",
+      "fresh_v2": "PASS"
+    },
+    {
+      "validator": 3,
+      "original": "PASS",
+      "post_v2": "PASS",
+      "fresh_v2": "PASS"
+    },
+    {
+      "validator": 4,
+      "original": "PASS",
+      "post_v2": "PASS",
+      "fresh_v2": "PASS"
+    },
+    {
+      "validator": 5,
+      "original": "PASS",
+      "post_v2": "PASS",
+      "fresh_v2": "PASS"
+    }
+  ],
+  "governed_v2_continuation_and_restart": "PASS",
+  "pre_activation_rollback": "PASS",
+  "software_gates": {
+    "format": "PASS",
+    "proof-input-inventory": "FAIL",
+    "workspace-check": "PASS",
+    "fastpay-types": "RUNNING",
+    "fastpay-execution": "PENDING",
+    "node-fastpay": "PENDING",
+    "live-replay-supply": "PENDING",
+    "warm-latency": "PENDING",
+    "workspace-clippy": "PENDING",
+    "cobalt-handoff-tests": "PENDING"
+  },
+  "publication_gates": {
+    "strict-docs": "PASS",
+    "public-doc-links": "PASS",
+    "public-secret-scan": "PASS"
+  },
+  "workspace_tests": "LEFT_TO_CI: full workspace test suite was not run locally",
+  "resource_policy": {
+    "max_cargo_builds": 1,
+    "build_and_test_workers": 2,
+    "history_copies_in_parallel": 1,
+    "verifier_address_space_limit_bytes": 21474836480,
+    "minimum_available_memory_at_replay_start_bytes": 8589934592,
+    "stop_if_available_memory_below_bytes": 4294967296,
+    "temporary_directory": "/home/postfiatchad/.cache/release-repair-20260922/tmp"
+  },
+  "failures": [
+    {
+      "check": "proof-input-inventory",
+      "status": "FAIL",
+      "log": "logs/proof-input-inventory.stdout",
+      "stderr": "logs/proof-input-inventory.stderr"
+    }
+  ],
+  "task_node": {
+    "request_id": "req_f387d09cb179491ded4223f6da9d19b7b2dcb99a9e515731a015776b1eddf51a",
+    "task_id": "task_5aa885411809aacca14a5ae2b2f47840",
+    "status": "ACCEPTED",
+    "skipped": false,
+    "scope": "One personal task covering the September 22 local qualification and publication",
+    "proposal_review": "Complete generated task inspected; objective, constraints, steps, 3.5 PFT offer, time box and verification requirements matched the user request",
+    "requested_at": "2026-09-22T07:47:59.871Z"
+  },
+  "elapsed_minutes": 80.61,
+  "ci_workspace_test_job": {
+    "result": "NOT_CONFIRMED",
+    "source_commit": null,
+    "url": null,
+    "observed_at": null,
+    "local_execution": false
+  }
+}
