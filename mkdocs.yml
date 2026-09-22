@@ -118,6 +118,7 @@ nav:
       - Completed P0 Remediation: plans/completed/P0-COMPLETE-REMEDIATION-PLAN-20260716.md
       - Completed Capability Restoration: plans/completed/OPEN-SOURCE-CAPABILITY-RESTORATION-PLAN-20260716.md
   - Handoffs:
+      - Overnight Release And NAVCoin Preparation: handoffs/2026-09-22___codex__overnight_release_and_navcoin_preparation.md
       - Deploy Prepared And NAVCoin Audit: handoffs/2026-09-21___dravlic__deploy_prepared_and_navcoin_audit.md
       - Combined Release Merged, Repaired, And Qualified: handoffs/2026-09-18___dravlic__combined_release_merged_repaired_and_qualified.md
       - Arc Test Wallet And Z3 Offline Gates: handoffs/2026-09-17___dravlic__arc_test_wallet_and_z3_offline_gates.md
