@@ -165,6 +165,7 @@ G3 is offline and creates no live transaction.
 
 Read-only preflight reference: [2026-09-17 fleet, Arc pairs, wallet, and missing operator inputs](../../status/z3-preflight-20260917.md).
 Dry-run reference: [2026-09-21 release wrapper: cycle 0 blocked; command interface review](../../status/z3-dry-run-20260921.md).
+Cycle-1 input inventory: [2026-09-22 values, provenance, signer/prover bindings and remaining prerequisites](../../status/z3-cycle1-inputs-20260922.md).
 
 - [ ] The operator reviews the G2 compatibility result, G3 tests, dry-run amounts, stop conditions, and exact wallet cap.
 - [ ] The operator explicitly authorizes one Arc-testnet/PFTL-devnet integrated cycle.
