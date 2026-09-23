@@ -80,7 +80,9 @@ file reads and `Command::output()` collect bytes before the advertised limit;
 lineage files have no byte cap. **Expected:** enforce limits while reading and
 bound subprocess duration/output, including stderr. **Suggested minimal change:**
 bounded file handles and bounded child pipes with a deadline and cleanup.
-Operator-tool resource exposure; recorded without repair as required for P3.
+Operator-tool resource exposure. **Repaired 2026-09-23 in `0b9c6715`:** bounded
+file handles and a bounded, deadline-limited cast runner.
+Repairs land after the qualified tip and ship in the release after next.
 
 ### 5. BRW-05 — P3 — malformed HTTP lengths are treated as absent
 
@@ -91,8 +93,10 @@ conflicting lengths. **Observed:** invalid lengths are discarded by `.ok()`;
 only the first parsable length is checked, so otherwise valid JSON can pass.
 **Expected:** reject malformed or ambiguous framing. **Suggested minimal change:**
 parse each length strictly and reject duplicate/conflicting framing, while
-retaining the response byte cap. No wrong checkpoint signature is demonstrated;
-recorded without repair as required for P3.
+retaining the response byte cap. No wrong checkpoint signature is demonstrated.
+**Repaired 2026-09-23 in `0b9c6715`:** each length parses strictly; duplicates are
+rejected.
+Repairs land after the qualified tip and ship in the release after next.
 
 ### 6. BRW-06 — P3 — V2 recipient offset uses the V1 head bound
 
@@ -105,8 +109,9 @@ string length. **Observed:** the shared decoder checks only the six-word V1
 minimum. **Expected:** use the selected event version's head size before
 decoding its recipient. **Suggested minimal change:** pass the computed head
 length or require the canonical recipient offset in the caller. Later identity
-checks still apply; no receipt-proof bypass is established. Recorded without
-repair as required for P3.
+checks still apply; no receipt-proof bypass is established. **Repaired
+2026-09-23 in `0b9c6715`:** the decoder receives the selected version's head length.
+Repairs land after the qualified tip and ship in the release after next.
 
 ## Areas with no findings
 
@@ -177,7 +182,8 @@ source, with three added in-file regression tests.
   Local cast stubs enforce pinned arguments and reject simulated hash drift;
   no live RPC behavior or cross-chain/PFTL atomic snapshot is claimed.
   **Consensus-affecting: no.**
-- **BRW-04/05/06:** recorded P3 findings remain unfixed.
+- **BRW-04/05/06:** repaired 2026-09-23 in `0b9c6715`, after the qualified tip;
+  they ship in the release after next. **Consensus-affecting: no.**
 
 Before repair, `cargo test -p postfiat-node burn6_ --lib --locked` produced
 **3 passed, 3 failed, 0 ignored, 380 filtered**: the three new A4 tests failed

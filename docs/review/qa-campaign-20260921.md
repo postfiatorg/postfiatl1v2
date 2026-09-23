@@ -7,7 +7,7 @@ after `git pull --rebase origin release/combined-devnet-20260915`, within a
 
 **Status:** closed after A5's focused review, with the unreviewed ranges
 explicitly retained below. Burn 6 now records 15 findings: nine repaired P2s
-and six unrepaired P3s. A5 findings `d3608838` and repairs `87c992c3` are pushed;
+and six P3s, left unrepaired at closeout. A5 findings `d3608838` and repairs `87c992c3` are pushed;
 no A5 repair is consensus-affecting. B's **87.33/100** gate predates A5's four
 added inventory rows; the current 141-row inventory was not rescored.
 All four repair commits retain a full Rust suite verdict pending.
@@ -16,19 +16,25 @@ The earlier A1–A4/B narratives, Scores and Final summary are retained as their
 historical closeout record; this Status, current totals and A5 section supersede
 their statements that A5 was skipped. No Task Node or fleet action. Stop here.
 
+**2026-09-23 update:** all six P3s are repaired in `0b9c6715`, after the
+qualified tip; see [September 23 P3 repairs](#september-23-p3-repairs). That
+section supersedes the historical P3 statements below. The deployed candidate
+is unchanged.
+
 ## Campaign state
 
 | Order | Surface | Status | P1 | P2 | P3 | Evidence or fixes |
 | --- | --- | --- | ---: | ---: | ---: | --- |
-| A1 | Portfolio verification | done | 0 | 0 | 1 | [Review](portfolio-verification-review-20260921.md); findings `21459c8a`; PFV-01 recorded without repair; repair unit skipped (no P1/P2); no consensus-affecting change |
+| A1 | Portfolio verification | done | 0 | 0 | 1 | [Review](portfolio-verification-review-20260921.md); findings `21459c8a`; PFV-01 repaired 2026-09-23, `0b9c6715`; repair unit skipped (no P1/P2); no consensus-affecting change |
 | A2 | NAV and reserve verification | done | 0 | 3 | 0 | [Review](nav-reserve-verification-review-20260921.md); findings `4bc6d98d`; all P2 repaired in `e9ccdeda`; NAV-03 consensus-affecting: release-tip re-qualification required before deployment |
 | A3 | Swap and settlement execution in depth | done | 0 | 1 | 0 | [Review](swap-settlement-execution-review-20260921.md); findings `6d495f43`; SWX-01 repaired in `043b9d69`; consensus-affecting: release-tip re-qualification required before deployment |
-| A4 | Bridge workflows | done | 0 | 3 | 3 | [Review](bridge-workflows-review-20260921.md); findings `66a68624`; BRW-01/02/03 repaired in `10bb5655`; BRW-04/05/06 recorded without repair; no consensus-affecting change |
-| A5 | Optional remaining node files | closed — focused review | 0 | 2 | 2 | [Review](node-remaining-review-20260921.md); findings `d3608838`; NOD-01/02 repaired in `87c992c3`; NOD-03/04 recorded; remaining ranges explicitly unreviewed; no consensus-affecting repair |
+| A4 | Bridge workflows | done | 0 | 3 | 3 | [Review](bridge-workflows-review-20260921.md); findings `66a68624`; BRW-01/02/03 repaired in `10bb5655`; BRW-04/05/06 repaired 2026-09-23, `0b9c6715`; no consensus-affecting change |
+| A5 | Optional remaining node files | closed — focused review | 0 | 2 | 2 | [Review](node-remaining-review-20260921.md); findings `d3608838`; NOD-01/02 repaired in `87c992c3`; NOD-03/04 repaired 2026-09-23, `0b9c6715`; remaining ranges explicitly unreviewed; no consensus-affecting repair |
 | B | Defect inventory and TIH gate | done | — | — | — | [Inventory](defect-inventory-20260910.md) extended to 137 rows in `eba04faf`; first complete gate **87.33/100**; run group `qa-defect-inventory-burn6-20260921`; scored SHA-256 `e6c409eabed23c17fbacec8857d8c6a90d5ecd590a6da5e493c3847b8ba293c0` |
 
 Current finding totals: **0 P1, 9 P2, 6 P3** (A1–A5 within recorded review
-limits; all nine P2 repaired, six P3 recorded without repair).
+limits; all nine P2 repaired; six P3 repaired 2026-09-23 in `0b9c6715`, after
+the qualified tip, shipping in the release after next).
 
 The A1–A4 sections retain each unit's scope, decisions and verification at its
 closeout. The Status, campaign table and Final summary give the cumulative result.
@@ -147,9 +153,9 @@ before this log closeout.
 | BRW-01 — P2, conservation verification trusts cached success | Recompute checked claim/deposit sums and vault identity; reject inconsistent totals and impossible releases | No; local report verification only |
 | BRW-02 — P2, deposit receipts contradict selected logs | Require RPC success status, reject explicit supplied-receipt failure, bind enclosing/log hash aliases, reject removed or malformed removal flags | No; unsigned local workflow validation only |
 | BRW-03 — P2, conservation reads mix source blocks | Pin every source-state query to one finalized height per chain and reject a changed block hash | No; local source observation policy only |
-| BRW-04 — P3, limits follow unbounded file/child reads | Recorded; not repaired | No change |
-| BRW-05 — P3, malformed HTTP lengths treated as absent | Recorded; not repaired | No change |
-| BRW-06 — P3, V2 recipient offset uses V1 head size | Recorded; not repaired | No change |
+| BRW-04 — P3, limits follow unbounded file/child reads | Repaired 2026-09-23, `0b9c6715` | No; ships in the release after next |
+| BRW-05 — P3, malformed HTTP lengths treated as absent | Repaired 2026-09-23, `0b9c6715` | No; ships in the release after next |
+| BRW-06 — P3, V2 recipient offset uses V1 head size | Repaired 2026-09-23, `0b9c6715` | No; ships in the release after next |
 
 Reviewed in full, all under `crates/node/src/`:
 `vault_bridge_workflows.rs` (3,918 lines), `vault_bridge_conservation.rs`
@@ -189,8 +195,8 @@ gated and pushed. This is a focused review, not a whole-file audit.
 | --- | --- | --- |
 | NOD-01 — P2, duplicate acknowledgments invent accepted outcomes | Stored outcomes determine counts; missing/conflicting evidence and invalid totals fail closed; three regressions | No; transport reporting only |
 | NOD-02 — P2, wallet key output overwrites backup | Resolved key/backup aliases reject before writing, including restore; two regressions | No; local wallet-file interlock only |
-| NOD-03 — P3, transport file reads collect unbounded input | Recorded without repair | No change |
-| NOD-04 — P3, manifests reopen after verification | Recorded without repair | No change |
+| NOD-03 — P3, transport file reads collect unbounded input | Repaired 2026-09-23, `0b9c6715` | No; ships in the release after next |
+| NOD-04 — P3, manifests reopen after verification | Repaired 2026-09-23, `0b9c6715` | No; ships in the release after next |
 
 Reviewed ranges at the starting revision, all in `crates/node/src/`:
 
@@ -691,3 +697,40 @@ One invalid-output slot was resumed; no document rewrite or rescore occurred.
 The inventory and this log closeout are separately gated and pushed to
 `release/combined-devnet-20260915`. No Task Node or fleet action occurred;
 the protected release checkout was untouched. Stop after this closeout.
+
+## September 23 P3 repairs
+
+The six burn 6 P3s were repaired on 2026-09-23 in `0b9c6715` from a
+detached worktree of `release/combined-devnet-20260915` at `129d70ff`.
+**The deployed candidate is unchanged.** The deployment candidate is pinned to
+the qualified executable `e7bb1afa…`, built from `1a0989ad`
+(`deployments/release-repair-20260922/`, `deployments/combined-devnet-20260923/`).
+These commits land after that tip, do not change what is deployed, and ship in
+the release after next.
+
+| Finding | Repair | Regression |
+| --- | --- | --- |
+| PFV-01 | Test-only: each of the nine digests and the snapshot count is mismatched individually, with its specific error | `collection_context_binds_every_public_value` |
+| BRW-04 | Proof and lineage files are capped on the opened handle; each `cast` child has bounded stdout, stderr and a 120 s deadline, and is killed and reaped on overflow or timeout | `bounded_file_reads_cap_the_open_handle`, `bounded_cast_output_caps_pipes_and_duration` |
+| BRW-05 | Each `Content-Length` is parsed strictly; malformed, empty or duplicate lengths are rejected | `rpc_content_length_framing_is_strict` |
+| BRW-06 | The recipient decoder takes the selected event version's head length | `v2_deposit_log_recipient_offset_uses_v2_head` |
+| NOD-03 | Topology, registry and key reads (8 MiB) and payload reads (frame cap) are capped on the opened handle | `transport_local_file_reads_are_bounded_on_the_open_handle` |
+| NOD-04 | `verify_governance_genesis_bundle_snapshot` returns the report and manifests from one verified read; `rpc --method manifests` no longer rereads the file | `governance_genesis_bundle_binds_registry_and_operator_manifests` |
+
+No repair is consensus-affecting: the changes cover local operator tooling,
+RPC reporting and tests only. All six findings are repaired; none remains open.
+
+Verification at `0b9c6715` (`-j 2`, `RUST_TEST_THREADS=2`):
+
+- `cargo check -p postfiat-execution -p postfiat-node`: pass.
+- Focused tests, all passing: execution `yolo_collection_verifier_tests` 2;
+  node library `vault_bridge` 30 (2 ignored, pre-existing),
+  `ethereum_checkpoint_signing::` 3, `governance_genesis_bundle` 2; node
+  binary `transport_protocol::` 32.
+- `cargo fmt --all -- --check`: pass. `cargo clippy -p postfiat-execution
+  -p postfiat-node --lib --bins --tests`: no warnings.
+- `mkdocs build --strict`, `scripts/public-doc-links` and
+  `scripts/public-secret-scan`: pass.
+
+No Orchard boundary is crossed, so no Orchard, workspace or archived-chain
+replay run applies. No Task Node, fleet or deployment action occurred.

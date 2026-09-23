@@ -48,7 +48,9 @@ including an otherwise valid count and a stale/different epoch.
 **Suggested minimal change:** extend the existing test with one validly encoded
 mismatch per digest and a different in-range snapshot count, checking each
 specific error and retaining the matching-context case. No production change
-is suggested. **Recorded without repair** as required for P3 findings.
+is suggested. **Repaired 2026-09-23 in `0b9c6715`:** the test now covers every
+digest and the count; test-only.
+Repairs land after the qualified tip and ship in the release after next.
 
 No P1 or P2 finding was established within the permitted surface.
 
@@ -127,7 +129,8 @@ is distinct from archived-chain re-qualification.
 ## Repair disposition and verification
 
 There are **0 P1, 0 P2 and 1 P3** findings. The repair unit is skipped because
-there is no P1/P2 finding. PFV-01 remains recorded without repair. No source or
+there is no P1/P2 finding. PFV-01 was later repaired (test-only) on 2026-09-23
+in `0b9c6715`, after the qualified tip. At this review no source or
 test change, consensus-affecting repair or new deployment qualification is
 claimed. Exact focused test results, gate results and unit commit references
 are recorded in the [campaign log](qa-campaign-20260921.md#verification).

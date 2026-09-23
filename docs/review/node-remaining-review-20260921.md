@@ -53,7 +53,9 @@ the entire file; the generic readers have no byte cap and the payload limit
 is checked only before opening. **Expected:** enforce appropriate limits
 while reading the opened handle. **Suggested minimal change:** bounded reads
 with an extra-byte overflow check. This is local file/resource exposure;
-network frame reads have their own caps. Recorded without repair as required.
+network frame reads have their own caps. **Repaired 2026-09-23 in `0b9c6715`:**
+reads are capped on the opened handle.
+Repairs land after the qualified tip and ship in the release after next.
 
 ### NOD-04. P3 — manifest reporting reopens the file after verification
 
@@ -65,7 +67,9 @@ verified hash/count with `operator_manifests` parsed from later bytes.
 **Expected:** reported manifests and verification metadata describe the same
 snapshot. **Suggested minimal change:** obtain both from one verified input
 snapshot or reject a changed file before returning. No signature bypass or
-governance mutation is established. Recorded without repair as required.
+governance mutation is established. **Repaired 2026-09-23 in `0b9c6715`:** one
+verified read supplies both.
+Repairs land after the qualified tip and ship in the release after next.
 
 ## Areas with no additional findings
 
@@ -105,7 +109,8 @@ No Task Node, fleet action, live RPC, spend, installation or deployment.
 Network use is git only. Socket tests, full Rust/Orchard suites, archived-chain
 replay and CI queries are omitted. Repairs do not alter replay, shielded
 execution, proof verification, native accounting or state commitments.
-P3 findings remain unfixed. B already ran; A5 inventory rows will be appended
+P3 findings remained unfixed at this review (repaired 2026-09-23).
+B already ran; A5 inventory rows will be appended
 without rescoring, and B's retained score predates this addition.
 
 ## Repair result
@@ -126,7 +131,8 @@ Only `transport_protocol.rs` and `block_replay_wallet.rs` change as source.
   and symlink-parent aliases, preservation of the restore backup, and valid
   distinct outputs. **Consensus-affecting: no.** This is a preflight interlock,
   not a guarantee against concurrent filesystem replacement or two-file crashes.
-- **NOD-03/04:** recorded P3 findings remain unfixed.
+- **NOD-03/04:** repaired 2026-09-23 in `0b9c6715`, after the qualified tip; they
+  ship in the release after next. **Consensus-affecting: no.**
 
 All five new regressions failed against the original implementation:
 `cargo test -p postfiat-node --lib --bin postfiat-node --locked --no-fail-fast burn6_nod_`
