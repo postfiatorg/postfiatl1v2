@@ -984,9 +984,8 @@ fn available_disk_bytes(path: &Path) -> io::Result<u64> {
     }
     // SAFETY: statvfs returned success and initialized the output structure.
     let stats = unsafe { stats.assume_init() };
-    stats
-        .f_bavail
-        .checked_mul(stats.f_frsize)
+    u64::from(stats.f_bavail)
+        .checked_mul(u64::from(stats.f_frsize))
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "available disk overflow"))
 }
 
