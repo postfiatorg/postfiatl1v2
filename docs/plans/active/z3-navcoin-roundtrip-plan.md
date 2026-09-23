@@ -123,19 +123,19 @@ Each cycle packet must contain:
 - [x] Read the full deferred NRRS specification and apply section 2.2 precedence.
 - [x] Reconcile the 2026-09-02 Arc deposit, mint, burn, release, and replay evidence without merging its branch.
 - [x] Record that the Arc packet proves one bridge cycle but no NAVCoin swap and no repeatability.
-- [ ] Freeze a manifest of the exact evidence files and hashes used as the regression baseline.
-- [ ] Confirm that no evidence artifact contains a secret or forbidden field.
+- [x] Freeze a manifest of the exact evidence files and hashes used as the regression baseline. 2026-09-23: 133 files, 23 in-repo blobs at their cited commits and 110 server-only files, with size and SHA-256 ([manifest](../../status/z3-g0-evidence-manifest-20260923.md#manifest)).
+- [x] Confirm that no evidence artifact contains a secret or forbidden field. 2026-09-23: `scripts/public-secret-scan` passed and the targeted scan found no secret or key material. The plan and NRRS name no forbidden-field list, and only path or placeholder references were found ([scan](../../status/z3-g0-evidence-manifest-20260923.md#secret-and-forbidden-field-scan)).
 
 G0 performs no network call and no chain mutation.
 
 ### Gate G1 — operator authorizes the bounded SHADOW envelope
 
-- [ ] The operator gives an explicit go for preparation and names the qualified PFTL release lineage.
-- [ ] The operator names the exact Arc testnet pair after full contract and route read-back.
-- [ ] The operator confirms the existing A666 primary route or an existing-operation-only testnet configuration that may accept the Arc source-labeled pfUSDC.
-- [ ] The operator sets the per-cycle faucet/test value cap and the seven-day campaign window.
-- [ ] The operator provides or controls the funded test wallet and signing flow without disclosing key material to evidence.
-- [ ] The operator confirms that this authorization covers testnet/devnet only and does not authorize mainnet or production value.
+- [x] The operator gives an explicit go for preparation and names the qualified PFTL release lineage. 2026-09-23, decided by this lane; the other lane is informed in the 2026-09-23 handoff: preparation may proceed. The lineage is the qualified September 22 build: executable build source `1a0989ad` and node executable SHA-256 `e7bb1afa17b4c6322ac8eadabdab570595ad778a5173a5516c09ba966ed9e4b1`. Its qualification packet is `deployments/release-repair-20260922/` on `release/combined-devnet-20260915`. The deployment directory `deployments/combined-devnet-20260923/` is being prepared today; the build is not yet deployed.
+- [x] The operator names the exact Arc testnet pair after full contract and route read-back. 2026-09-23, decided by this lane; the other lane is informed in the 2026-09-23 handoff. These are the values read back on 2026-09-22 in the [cycle-1 inputs](../../status/z3-cycle1-inputs-20260922.md#fixed-identities-and-remaining-envelope-inputs): chain `5042002`; anchor `0x92390d3a2102cb74e4746c05b4d91f61093475d0`; vault `0x160307f3efead79b6a3629c4b8d90e8301fc250f`; verifier `0x1d436908516d15e3c55a936899b47a885e047f27`; USDC `0x3600000000000000000000000000000000000000`; route `pfusdc-arc-testnet-tier4-epoch9`, EVM binding `0xd9e0cd409c5d1e118d65c78ee059adcbba937616353e9675e350d52ee8d498b2`. Re-read them at preflight on the cycle day.
+- [x] The operator confirms the existing A666 primary route or an existing-operation-only testnet configuration that may accept the Arc source-labeled pfUSDC. 2026-09-23, decided by this lane; the other lane is informed in the 2026-09-23 handoff: use the existing A666 primary route `pftl-a666-ethereum-wA666-usdc-v1`, with no new testnet configuration. The NAV-profile compatibility blocker in the [cycle-1 inputs](../../status/z3-cycle1-inputs-20260922.md#fixed-identities-and-remaining-envelope-inputs) stays with the other lane, which owns the governed profile and the fresh proofs.
+- [x] The operator sets the per-cycle faucet/test value cap and the seven-day campaign window. 2026-09-23, decided by this lane; the other lane is informed in the 2026-09-23 handoff: the per-cycle cap is 2,000,000 source atoms of testnet USDC (2 USDC), the amount already used by the dry runs and the inputs record. The seven-day campaign window opens on the UTC day of the first live cycle and is stamped in the cycle-1 packet on that day. The seed window 2026-09-18–2026-09-25 lapses because the deployment is blocked.
+- [ ] The operator provides or controls the funded test wallet and signing flow without disclosing key material to evidence. 2026-09-23: the Arc side is the server wallet `0xC75Bf05Ce82d6f4b6139dd9446D6De5F5994a4CB`, with keystore `~/.foundry/keystores/arc-testnet-server` and password file `~/.postfiat/arc-testnet-server.password` (paths only, never contents), funded with 20 testnet USDC on 2026-09-17. On the PFTL side, the holder/owner, pfUSDC issuer, A666 issuer/NAV finalizer and NAV reserve submitter keys are only on the other lane's machine ([signer table](../../status/z3-cycle1-inputs-20260922.md#signer-bindings-and-file-presence)). This item stays with the other lane (first asked 2026-09-22) and remains open.
+- [x] The operator confirms that this authorization covers testnet/devnet only and does not authorize mainnet or production value. 2026-09-23, decided by this lane; the other lane is informed in the 2026-09-23 handoff: confirmed for Arc testnet chain `5042002` and `postfiat-wan-devnet-2` only. This lane authorizes no mainnet or production value.
 
 G1 is the first required operator authorization.
 Nothing after G0 begins without it.
@@ -166,6 +166,7 @@ G3 is offline and creates no live transaction.
 Read-only preflight reference: [2026-09-17 fleet, Arc pairs, wallet, and missing operator inputs](../../status/z3-preflight-20260917.md).
 Dry-run reference: [2026-09-21 release wrapper: cycle 0 blocked; command interface review](../../status/z3-dry-run-20260921.md).
 Cycle-1 input inventory: [2026-09-22 values, provenance, signer/prover bindings and remaining prerequisites](../../status/z3-cycle1-inputs-20260922.md).
+Evidence baseline manifest: [2026-09-23 file hashes and secret/forbidden-field scan](../../status/z3-g0-evidence-manifest-20260923.md).
 
 - [ ] The operator reviews the G2 compatibility result, G3 tests, dry-run amounts, stop conditions, and exact wallet cap.
 - [ ] The operator explicitly authorizes one Arc-testnet/PFTL-devnet integrated cycle.
@@ -180,7 +181,7 @@ One clean G4 cycle proves integration, not repeatability and not Z3 completion.
 - [x] Rehearse stale NAV, stale Arc proof, wrong route, wrong asset, duplicate deposit, duplicate subscription nonce, active entitlement, duplicate burn, and duplicate Arc release cases with fixtures or no-value tests. 2026-09-17, `b150b14e`; nine wrapper/driver boundary cases and independent verifier negatives ([G5 scenarios](../../review/z3-g5-failure-rehearsal-20260917.md#failure-scenarios)).
 - [x] Rehearse recovery after process interruption using exact request identity. 2026-09-17, `9269278b`; four confirmed-step interruptions reject exact replay without resubmission; pre-submission environmental interruption preserves the count ([recovery](../../review/z3-g5-failure-rehearsal-20260917.md#recovery-scenarios)).
 - [x] Prove failures leave balances, supply, reserves, reservations, entitlements, and withdrawals unchanged or in their specified recoverable state. 2026-09-17; `b150b14e`/`9269278b` rehearsals extended with 23-field and itemized-state assertions in the [G5 record commit](../../review/z3-g5-failure-rehearsal-20260917.md#invariants-and-retained-evidence). Synthetic tooling/no-value scope only.
-- [ ] Record declared latency bounds and a pause threshold for each cycle stage. 2026-09-17: [nine proposed stage limits](../../review/z3-g5-failure-rehearsal-20260917.md#latency-bounds-and-pause-thresholds) recorded; no elapsed September 2 stage measurements in plan/G2. Remains open pending operator confirmation.
+- [x] Record declared latency bounds and a pause threshold for each cycle stage. 2026-09-17: [nine proposed stage limits](../../review/z3-g5-failure-rehearsal-20260917.md#latency-bounds-and-pause-thresholds) recorded; no elapsed September 2 stage measurements in plan/G2. 2026-09-23, decided by this lane: the nine proposed limits are adopted as the declared bounds for cycle 1. They will be revised from measured cycle-1 timings.
 - [x] Resolve every failure without a consensus change before asking to start the sustained window. 2026-09-17, `b150b14e`, `9269278b` and this record's focused assertions: [no scenario required a consensus change](../../review/z3-g5-failure-rehearsal-20260917.md#resolution-and-validation). Python tooling only; no sustained-window request or live recovery is authorized.
 
 ### Gate G6 — operator authorizes the sustained testnet window
