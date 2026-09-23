@@ -1,5 +1,7 @@
 # Combined devnet deployment preparation — 2026-09-21
 
+**Superseded as deploy candidate:** [combined-devnet-20260923](../combined-devnet-20260923/README.md) is now the deploy candidate; this release is retained unchanged as the fallback.
+
 **Unsigned preparation only. No deployment, signing, backup export, restart,
 service change, or Task Node action was performed.**
 

@@ -1,0 +1,123 @@
+{
+  "schema": "postfiat.deployment_preparation_input.v1",
+  "status": "UNSIGNED_INPUT_NOT_A_DEPLOYMENT_MANIFEST",
+  "deployment_id": "combined-devnet-20260923",
+  "qualified_source_tip": "d75356f6cf1a1686cd129805ae9e3b1414341000",
+  "git_revision": "1a0989ad",
+  "build_source_commit": "1a0989ad6c35b7ea3eb6418f864958563233945a",
+  "binary_sha256": "e7bb1afa17b4c6322ac8eadabdab570595ad778a5173a5516c09ba966ed9e4b1",
+  "build_profile": "release",
+  "build_features": [
+    "privacy",
+    "rpc",
+    "transport"
+  ],
+  "chain_id": "postfiat-wan-devnet-2",
+  "genesis_hash": "ce22ca8c932da0998b484483a09647138a30e0bf44408dd49a8d6d452787ad25521aff3ed334da07e150a7233a3e90a9",
+  "protocol_version": 1,
+  "rpc_schema": "postfiat-local-rpc-v1",
+  "valid_from_unix": "OPERATOR_SET_AT_SIGNING",
+  "valid_until_unix": "OPERATOR_SET_AT_SIGNING",
+  "service_unit_sha256": "89c5109d32c51854d7bfc469a2a86a8d8ca460bbe1048d9d6961f213d7c31e28",
+  "environment_sha256": "8639b4040ab63fd58b47bf20b6c4426f5b95b95c76898cbc840046129eaca1b8",
+  "validator_bindings": [
+    {
+      "validator_id": "validator-0",
+      "services": [
+        {
+          "service_id": "rpc",
+          "service_unit_sha256": "bf4ec673625a2231d5745cab0130484ffc1af63f3e3a332fca84139401235e99",
+          "environment_sha256": "efa5cb348aaed034ac25d5b84ec4af357488fc939bf0826fedcf5f71f8d659a8"
+        },
+        {
+          "service_id": "transport",
+          "service_unit_sha256": "f8611f419a72c6f1427504c95034a60c0899be7350c0ef0f0f7a543735a253d9",
+          "environment_sha256": "9b0aa1b48f48be06f84e915272ee8c8936c11f76ebe9c0a4bd20a7145b1a1025"
+        }
+      ]
+    },
+    {
+      "validator_id": "validator-1",
+      "services": [
+        {
+          "service_id": "rpc",
+          "service_unit_sha256": "161d3fa69f00c2672bf710828702f600fd25e71e2d76a3b50269ab0adeed143e",
+          "environment_sha256": "30110ac895edb4ec8b53b3a0ffcafb08632bc80685c1654ff52221b865452972"
+        },
+        {
+          "service_id": "transport",
+          "service_unit_sha256": "99fb19af13f54c949122c6332165ae4c7437983e89e25c78863948a82e3c3668",
+          "environment_sha256": "31385a99f3fa5f3327107f943cce1febe63358af56b445ad7110c794f81afa87"
+        }
+      ]
+    },
+    {
+      "validator_id": "validator-2",
+      "services": [
+        {
+          "service_id": "rpc",
+          "service_unit_sha256": "2131cc66a92ee16724e65170a6035001d4075d6cf70c6af47645f01ea5b640ed",
+          "environment_sha256": "523e71fd1387e613eb3a861e26a02e2eda8dadcff3fba875148007be22a13351"
+        },
+        {
+          "service_id": "transport",
+          "service_unit_sha256": "c2d95ca2d394fcea9c382b9e2db20a386a71e21aa7adc195d72b6e233210b741",
+          "environment_sha256": "b6a627f6c82da4629f9baaa6255e5e92319ce06ce36b9968d964c300f83742e5"
+        }
+      ]
+    },
+    {
+      "validator_id": "validator-3",
+      "services": [
+        {
+          "service_id": "rpc",
+          "service_unit_sha256": "3de8c758344c2a6f1bbb6eb544c7c285e69fea8a91b0862ba8c8efd133006dcc",
+          "environment_sha256": "3b0d03383f32d64a28778bcaf637947a69c057ae5ce1c06cace8591fed97d2d1"
+        },
+        {
+          "service_id": "transport",
+          "service_unit_sha256": "9a36ac1209ca50c22a2109487ea10078bb6508ec8986f9298af85319a5b95a7f",
+          "environment_sha256": "979adeec3fe1940cf170297aea338a0911d8488a96c15cd866b6eed929cdf073"
+        }
+      ]
+    },
+    {
+      "validator_id": "validator-4",
+      "services": [
+        {
+          "service_id": "rpc",
+          "service_unit_sha256": "b62aef5b521aa34b4b5574aab3ee16406243053b89f84b0ce4cb80e5b9cb740b",
+          "environment_sha256": "45db960e2f73f1623776f445bd2c28620c800c26543da83cf294c3ed7006063c"
+        },
+        {
+          "service_id": "transport",
+          "service_unit_sha256": "eb558df012a23f0b1ebfe106c9aea1a81a684641c3fe1561de6519645c34a8f9",
+          "environment_sha256": "0fefcca350a37277bde8966f828b9a363b350a986e69dc62682ff736600d2eeb"
+        }
+      ]
+    },
+    {
+      "validator_id": "validator-5",
+      "services": [
+        {
+          "service_id": "rpc",
+          "service_unit_sha256": "1b0a5103d769f40ad66ca3a67ac6d3999a8c5840e3613967fc6fcd42d462153a",
+          "environment_sha256": "140ab841c4679fe2befbd0197afe116ad0b61a5034eeee0d9d221052dc173167"
+        },
+        {
+          "service_id": "transport",
+          "service_unit_sha256": "43139dfedb4147ceaff76026a152044736b9e481a0c7c63c228a7c6f5af80022",
+          "environment_sha256": "e9963988071091ebb122b87195e1f8507bf0609cf71ed434b480da4c6c0341a6"
+        }
+      ]
+    }
+  ],
+  "topology_sha256": "4df248e0b8a7c19f4d92e946b9d20b97ceb070d6310096ab05ad6a0e605161a2",
+  "swap_circuit_metadata_sha256": "3750cda7d1c4e03a8d6d2c0c6435bf8dea7d9cee6f94472b4d9d940cae06e351",
+  "private_egress_circuit_metadata_sha256": "d371570a90707d70421389b39a57ae555eaefd9b1b2312eb8856b89ea43a6081",
+  "trusted_publisher_file_sha256": "66304dfca0b5893b156eb78e10d65a7b788c262043e85f26eadc82ea86a0314a",
+  "publisher": "pf70522c56aebb1ba9dcdc3e7b569a7357c345a85a",
+  "algorithm_id": "ML-DSA-65",
+  "publisher_key_file": "OPERATOR_EXISTING_PRIVATE_KEY_PATH_ONLY",
+  "expected_output": "@STAGE@/rootfs/etc/postfiat/releases/combined-devnet-20260923/deployment-manifest.json"
+}
