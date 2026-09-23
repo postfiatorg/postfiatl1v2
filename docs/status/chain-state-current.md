@@ -1,8 +1,38 @@
 # PostFiat L1 Current State
 
-Updated: `2026-09-14T11:32:29Z`
+Updated: `2026-09-23T09:20:00Z` (restart cause); latest fleet observation `2026-09-14T11:32:29Z`
 
 Status: **canonical operational-state reference**
+
+!!! note "2026-09-23: the September 11 fleet-wide service restart was Ubuntu's unattended security upgrade"
+
+    Read-only checks on all six hosts on 2026-09-23 (`/var/log/apt/history.log`,
+    `/var/log/unattended-upgrades/unattended-upgrades.log` and
+    `unattended-upgrades-dpkg.log`, and the systemd journal) found the cause of
+    the September 11 `06:01`–`06:47Z` rolling restart. `apt-daily-upgrade.timer`
+    started `unattended-upgrade` on validator-2 at `06:01:04Z`, validator-0
+    `06:15:29Z`, validator-4 `06:24:38Z`, validator-5 `06:25:47Z`, validator-1
+    `06:26:17Z`, and validator-3 `06:46:15Z`. Each run upgraded `libc6`
+    `2.39-0ubuntu8.8` → `2.39-0ubuntu8.9` (with `libc-bin`, `locales` and the
+    other glibc packages) and `python3.12` `3.12.3-1ubuntu0.15` →
+    `3.12.3-1ubuntu0.17`; validator-1 also took `wireless-regdb`. `needrestart`
+    (installed on all six hosts with its default configuration) then logged
+    `Restarting services...` and restarted every service linked against the
+    upgraded C library, including the validator, RPC, Cobalt shadow and NAVCoin
+    Ethereum RPC services, which is why the four PostFiat services on each host
+    entered active seconds after each upgrade ended (validator-2 `06:01:47`–`50Z`,
+    validator-0 `06:16:06`–`08Z`, validator-4 `06:25:15`–`17Z`, validator-5
+    `06:26:15`–`18Z`, validator-1 `06:26:48`–`50Z`, validator-3 `06:46:42`–`44Z`,
+    re-read on 2026-09-23). No person, deployment tool or session acted; the
+    "actor unknown" statements below are superseded. The same timer runs daily on
+    each host at a randomized time between roughly `06:00` and `07:00Z`: on
+    2026-09-22 (validator-0, `libexpat1`/`rsyslog`/`glib` upgrades, `06:54:50Z`)
+    and 2026-09-23 (validator-1, `libxml2`/`glib`/`sudo` upgrades, `06:48:49Z`)
+    it restarted only the NAVCoin Ethereum RPC proxy services; the validator,
+    RPC and Cobalt shadow services on all six hosts still show the September 11
+    start times. Until `needrestart` is told not to restart the PostFiat
+    services automatically, any future C-library or Python security upgrade will
+    restart them again at an unplanned time.
 
 !!! warning "2026-09-14: fresh read-only fleet observation, not repair"
 
@@ -158,7 +188,7 @@ binary to the running services.
 | --- | --- | --- | --- | --- |
 | Validator-0 RPC diagnosis | The September 9 timeouts were an exhausted 10,000-connection accept budget combined with a still-active keep-alive connection. An out-of-campaign restart restored responses but did not repair the recurrence condition. | Affected event sequence ended at request index 10,000; current process had accepted 3,404 connections versus 121–124 on each peer. | `2026-09-10T10:24:20Z`–`10:40:22Z` | Read-only RPC, event-log, journal, socket, process, and sysstat inspection. Diagnosis only; no restart or write. |
 | Running devnet, latest read-only observation | All six answered all three health reads and agreed at height 1020 with empty mempools; validator-2 answered on retry after one timeout. This is zero blocks beyond September 11. | Chain `postfiat-wan-devnet-2`; genesis `ce22ca8c…e90a9`; tip `9d02b8ee…b1768feb`; state `587c6526…d39bead6` on all six. | `2026-09-14T11:30:24Z`–`11:32:29Z` | Authenticated SSH forwarding to loopback RPC plus read-only process identity; point in time. |
-| Deployed runtime, latest identity | All 12 validator and RPC service processes are active/running from one release and one executable hash. All four PostFiat services on each host entered active on September 11 in an out-of-lane rolling restart of unknown origin; no host reboot or deployment was observed. Validator-0 RPC's latest completed event index was 5,655 of 10,000. | Release `a666-source-route-20260907`; node SHA-256 `57b0f4d1d42d66878d7dbb8c33919c7fa0f87c6cc1a4b9cc1a85d75b634eec83`. | `2026-09-14`, event tail at `11:31:36Z` | Read-only systemd and `/proc` executable SHA-256 checks on all six hosts; validator-0 event-log tail and earlier operator reboot/journal checks. |
+| Deployed runtime, latest identity | All 12 validator and RPC service processes are active/running from one release and one executable hash. All four PostFiat services on each host entered active on September 11 in a rolling restart caused by Ubuntu's unattended security upgrade of glibc and Python (`needrestart`; see the 2026-09-23 note); no host reboot or deployment was observed. Validator-0 RPC's latest completed event index was 5,655 of 10,000. | Release `a666-source-route-20260907`; node SHA-256 `57b0f4d1d42d66878d7dbb8c33919c7fa0f87c6cc1a4b9cc1a85d75b634eec83`. | `2026-09-14`, event tail at `11:31:36Z` | Read-only systemd and `/proc` executable SHA-256 checks on all six hosts; validator-0 event-log tail and earlier operator reboot/journal checks. |
 | Running devnet, historical 2026-08-30 observation | Six validators converged at height 924 with empty mempools after validator-1 was rolled back from the failed storage canary; all validator, RPC, and advisory shadow services were active. | Chain `postfiat-wan-devnet-2`; genesis `ce22ca8c…e90a9`; tip `ebeb0e1e…a7649fbef`; state `0854bc47…1ee6f413e`. | `2026-08-30T23:00:24Z`–`23:00:39Z` | Authenticated post-rollback fleet observation; point in time, not a current network query. |
 | Validator-trust authority | Cobalt remains active for validator-registry and trust-graph ratification. The final signed drill rollback committed at 922, return to Cobalt at 923, and legitimate validator-5 rotation at 924. Consensus v2 remains block finality. | Registry root `08a451e0…2b9b1d`; trust root `89f18aef…08f0307`; ratification anchor sequence 2, ID `5eada38d…c21153c8`. | Accepted history through height 924; fleet-audited through `2026-08-30T23:00:39Z`. | The recovery probe found authority mode 1 and identical registry/trust roots on all six. |
 | Deployed runtime | Every validator uses the pre-storage node binary again; every validator, RPC, and shadow service is active. Validator-1 briefly ran successor transport while its RPC failed, then returned to the signed `8cc7d15e` deployment. | Node SHA-256 `d5e5ef630155e61b001b84edb404a4def7d29a9205f23d33d2ad9c37c2696caf`; stopped candidate `0cc664a3…ad4183` is inactive. | `2026-08-30T23:00:24Z`–`23:00:39Z` | Direct process, binary, status, service, signed-unit, and post-rollback storage comparisons. |
