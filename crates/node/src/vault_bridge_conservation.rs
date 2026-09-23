@@ -328,7 +328,12 @@ fn resolve_lineage_source_manifest(
 fn load_vault_interface_lineage(
     lineage_manifest_path: &Path,
 ) -> io::Result<BTreeMap<String, VaultInterfaceLineageEntry>> {
-    let bytes = std::fs::read(lineage_manifest_path).map_err(|error| {
+    let bytes = vault_bridge_read_bounded_file(
+        lineage_manifest_path,
+        MAX_LOCAL_JSON_FILE_BYTES,
+        "vault interface lineage manifest",
+    )
+    .map_err(|error| {
         invalid_vault_interface_lineage(format!(
             "vault interface lineage manifest `{}` is unreadable: {error}",
             lineage_manifest_path.display()
@@ -387,7 +392,12 @@ fn load_vault_interface_lineage(
         }
         let resolved_source_path =
             resolve_lineage_source_manifest(lineage_manifest_path, source_path)?;
-        let source_bytes = std::fs::read(&resolved_source_path).map_err(|error| {
+        let source_bytes = vault_bridge_read_bounded_file(
+            &resolved_source_path,
+            MAX_LOCAL_JSON_FILE_BYTES,
+            "vault interface lineage source manifest",
+        )
+        .map_err(|error| {
             invalid_vault_interface_lineage(format!(
                 "vault interface lineage source manifest `{}` is unreadable: {error}",
                 resolved_source_path.display()
@@ -1111,15 +1121,12 @@ fn cast_output(cast_binary: &Path, args: &[&str], description: &str) -> io::Resu
     let mut last_failure = None;
     let mut successful_output = None;
     for attempt in 1..=MAX_ATTEMPTS {
-        let output = Command::new(cast_binary)
-            .args(args)
-            .output()
-            .map_err(|error| {
-                io::Error::new(
-                    error.kind(),
-                    format!("failed to run cast for {description}: {error}"),
-                )
-            })?;
+        let output = vault_bridge_bounded_command_output(
+            Command::new(cast_binary).args(args),
+            1024 * 1024,
+            VAULT_BRIDGE_CAST_TIMEOUT,
+            &format!("cast for {description}"),
+        )?;
         if output.status.success() {
             successful_output = Some(output);
             break;

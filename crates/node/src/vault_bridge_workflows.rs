@@ -908,19 +908,157 @@ fn read_optional_bounded_bridge_proof_file(
             format!("{label} must be a regular file no larger than {max_bytes} bytes"),
         ));
     }
-    let bytes = std::fs::read(path).map_err(|error| {
-        io::Error::new(
-            error.kind(),
-            format!("failed to read {label} `{}`: {error}", path.display()),
-        )
-    })?;
-    if bytes.len() as u64 > max_bytes || bytes.len() as u64 != metadata.len() {
+    let bytes = vault_bridge_read_bounded_file(path, max_bytes, label)?;
+    if bytes.len() as u64 != metadata.len() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!("{label} changed while being read or exceeded its size limit"),
         ));
     }
     Ok(bytes)
+}
+
+/// Reads a regular file through one handle without buffering more than
+/// `max_bytes + 1`, so growth after inspection cannot bypass the cap.
+pub(crate) fn vault_bridge_read_bounded_file(
+    path: &Path,
+    max_bytes: u64,
+    label: &str,
+) -> io::Result<Vec<u8>> {
+    use std::io::Read as _;
+    let read_error = |error: io::Error| {
+        io::Error::new(
+            error.kind(),
+            format!("failed to read {label} `{}`: {error}", path.display()),
+        )
+    };
+    if !std::fs::metadata(path).map_err(read_error)?.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("{label} `{}` must be a regular file", path.display()),
+        ));
+    }
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)
+        .map_err(read_error)?
+        .take(max_bytes.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(read_error)?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("{label} changed while being read or exceeded its size limit"),
+        ));
+    }
+    Ok(bytes)
+}
+
+/// Wall-clock bound for one `cast` subprocess.
+pub(crate) const VAULT_BRIDGE_CAST_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(120);
+/// Diagnostic stderr retained from one `cast` subprocess.
+pub(crate) const VAULT_BRIDGE_CAST_MAX_STDERR_BYTES: u64 = 64 * 1024;
+
+/// Runs a child with bounded stdout/stderr collection and a deadline. The
+/// child is killed and reaped when either pipe overflows or time runs out.
+pub(crate) fn vault_bridge_bounded_command_output(
+    command: &mut Command,
+    max_stdout_bytes: u64,
+    timeout: std::time::Duration,
+    description: &str,
+) -> io::Result<std::process::Output> {
+    fn spawn_reader<R: std::io::Read + Send + 'static>(
+        pipe: Option<R>,
+        limit: u64,
+        index: usize,
+        sender: std::sync::mpsc::Sender<(usize, io::Result<Vec<u8>>)>,
+    ) {
+        std::thread::spawn(move || {
+            let mut bytes = Vec::new();
+            let result = match pipe {
+                Some(pipe) => pipe
+                    .take(limit.saturating_add(1))
+                    .read_to_end(&mut bytes)
+                    .map(|_| bytes),
+                None => Ok(bytes),
+            };
+            let _ = sender.send((index, result));
+        });
+    }
+    use std::io::Read as _;
+
+    let deadline = std::time::Instant::now() + timeout;
+    let mut child = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| {
+            io::Error::new(
+                error.kind(),
+                format!("{description} failed to start: {error}"),
+            )
+        })?;
+    let limits = [max_stdout_bytes, VAULT_BRIDGE_CAST_MAX_STDERR_BYTES];
+    let (sender, receiver) = std::sync::mpsc::channel();
+    spawn_reader(child.stdout.take(), limits[0], 0, sender.clone());
+    spawn_reader(child.stderr.take(), limits[1], 1, sender);
+    let mut pipes: [Option<Vec<u8>>; 2] = [None, None];
+    let mut failure = None;
+    while failure.is_none() && pipes.iter().any(Option::is_none) {
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        match receiver.recv_timeout(remaining) {
+            Ok((index, Ok(bytes))) if bytes.len() as u64 > limits[index] => {
+                failure = Some(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "{description} {} exceeded {} bytes",
+                        ["stdout", "stderr"][index],
+                        limits[index]
+                    ),
+                ));
+            }
+            Ok((index, Ok(bytes))) => pipes[index] = Some(bytes),
+            Ok((_, Err(error))) => failure = Some(error),
+            Err(_) => {
+                failure = Some(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("{description} exceeded {} s", timeout.as_secs()),
+                ));
+            }
+        }
+    }
+    let status = loop {
+        if failure.is_some() {
+            break None;
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if std::time::Instant::now() >= deadline => {
+                failure = Some(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("{description} exceeded {} s", timeout.as_secs()),
+                ));
+            }
+            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(10)),
+            Err(error) => failure = Some(error),
+        }
+    };
+    match (status, failure) {
+        (Some(status), None) => {
+            let [stdout, stderr] = pipes;
+            Ok(std::process::Output {
+                status,
+                stdout: stdout.unwrap_or_default(),
+                stderr: stderr.unwrap_or_default(),
+            })
+        }
+        (_, failure) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            Err(failure.unwrap_or_else(|| io::Error::other(format!("{description} failed"))))
+        }
+    }
 }
 
 pub fn vault_bridge_withdrawal_plan(
@@ -1764,20 +1902,17 @@ fn vault_bridge_fetch_cast_receipt(
     source_rpc_url: &str,
     tx_hash: &str,
 ) -> io::Result<serde_json::Value> {
-    let output = Command::new(cast_binary)
-        .arg("receipt")
-        .arg("--rpc-url")
-        .arg(source_rpc_url)
-        .arg("--json")
-        .arg(vault_bridge_0x_hex(tx_hash))
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|error| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("cast receipt failed to start: {error}"),
-            )
-        })?;
+    let output = vault_bridge_bounded_command_output(
+        Command::new(cast_binary)
+            .arg("receipt")
+            .arg("--rpc-url")
+            .arg(source_rpc_url)
+            .arg("--json")
+            .arg(vault_bridge_0x_hex(tx_hash)),
+        MAX_VAULT_BRIDGE_RPC_RECEIPT_JSON_BYTES as u64,
+        VAULT_BRIDGE_CAST_TIMEOUT,
+        "cast receipt",
+    )?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(io::Error::new(
@@ -1814,20 +1949,17 @@ fn vault_bridge_fetch_cast_block(
     source_rpc_url: &str,
     block_hash: &str,
 ) -> io::Result<serde_json::Value> {
-    let output = Command::new(cast_binary)
-        .arg("block")
-        .arg("--rpc-url")
-        .arg(source_rpc_url)
-        .arg(vault_bridge_0x_hex(block_hash))
-        .arg("--json")
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|error| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("cast block failed to start: {error}"),
-            )
-        })?;
+    let output = vault_bridge_bounded_command_output(
+        Command::new(cast_binary)
+            .arg("block")
+            .arg("--rpc-url")
+            .arg(source_rpc_url)
+            .arg(vault_bridge_0x_hex(block_hash))
+            .arg("--json"),
+        MAX_VAULT_BRIDGE_RPC_RECEIPT_JSON_BYTES as u64,
+        VAULT_BRIDGE_CAST_TIMEOUT,
+        "cast block",
+    )?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(io::Error::new(
@@ -1862,18 +1994,15 @@ fn vault_bridge_fetch_cast_block_number(
     cast_binary: &str,
     source_rpc_url: &str,
 ) -> io::Result<u64> {
-    let output = Command::new(cast_binary)
-        .arg("block-number")
-        .arg("--rpc-url")
-        .arg(source_rpc_url)
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|error| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("cast block-number failed to start: {error}"),
-            )
-        })?;
+    let output = vault_bridge_bounded_command_output(
+        Command::new(cast_binary)
+            .arg("block-number")
+            .arg("--rpc-url")
+            .arg(source_rpc_url),
+        256,
+        VAULT_BRIDGE_CAST_TIMEOUT,
+        "cast block-number",
+    )?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(io::Error::new(
@@ -2497,8 +2626,12 @@ fn parse_vault_bridge_vault_deposit_log(
     }
 
     let recipient_offset = vault_bridge_abi_word_u64(&data, 0, "data.pftl_recipient_offset")?;
-    let pftl_recipient =
-        vault_bridge_abi_dynamic_string(&data, recipient_offset, "data.pftl_recipient")?;
+    let pftl_recipient = vault_bridge_abi_dynamic_string(
+        &data,
+        recipient_offset,
+        minimum_head,
+        "data.pftl_recipient",
+    )?;
     let amount_atoms = vault_bridge_abi_word_u64(&data, 1, "data.amount")?;
     let nonce = vault_bridge_abi_word_hex(&data, 2, "data.nonce")?;
     let route_binding = if is_v2 {
@@ -2747,14 +2880,14 @@ fn vault_bridge_abi_word_address(data: &[u8], index: usize, field: &str) -> Resu
 fn vault_bridge_abi_dynamic_string(
     data: &[u8],
     offset: u64,
+    head_bytes: usize,
     field: &str,
 ) -> Result<String, String> {
     let offset = usize::try_from(offset).map_err(|_| format!("{field} offset too large"))?;
     if !offset.is_multiple_of(EVM_ABI_WORD_BYTES) {
         return Err(format!("{field} offset is not word-aligned"));
     }
-    let minimum_head = VAULT_BRIDGE_VAULT_DEPOSIT_ABI_HEAD_WORDS * EVM_ABI_WORD_BYTES;
-    if offset < minimum_head {
+    if offset < head_bytes {
         return Err(format!("{field} offset points into ABI head"));
     }
     let length_index = offset
@@ -3942,6 +4075,76 @@ mod tests {
         let mut raw = selected;
         raw["removed"] = serde_json::json!(true);
         assert!(parse_vault_bridge_vault_deposit_log(&raw).is_err());
+    }
+
+    #[test]
+    fn bounded_file_reads_cap_the_open_handle() {
+        let dir = std::env::temp_dir().join(format!(
+            "postfiat-vault-bridge-bounded-read-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("test clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).expect("create test dir");
+        let file = dir.join("proof.bin");
+        std::fs::write(&file, [7_u8; 16]).expect("write proof");
+        assert_eq!(
+            vault_bridge_read_bounded_file(&file, 16, "proof").expect("at cap"),
+            vec![7_u8; 16]
+        );
+        let error = vault_bridge_read_bounded_file(&file, 15, "proof").expect_err("over cap");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(vault_bridge_read_bounded_file(&dir, 16, "proof").is_err());
+        std::fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn bounded_cast_output_caps_pipes_and_duration() {
+        let run = |script: &str, max_stdout: u64, timeout_ms: u64| {
+            vault_bridge_bounded_command_output(
+                Command::new("sh").arg("-c").arg(script),
+                max_stdout,
+                std::time::Duration::from_millis(timeout_ms),
+                "test child",
+            )
+        };
+        let output = run("printf ok; printf warn >&2", 2, 10_000).expect("bounded success");
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"ok");
+        assert_eq!(output.stderr, b"warn");
+        let stdout = run("head -c 4096 /dev/zero", 1024, 10_000).expect_err("stdout cap");
+        assert!(stdout.to_string().contains("stdout exceeded"), "{stdout}");
+        let stderr = run(
+            &format!(
+                "head -c {} /dev/zero >&2",
+                VAULT_BRIDGE_CAST_MAX_STDERR_BYTES + 1
+            ),
+            1024,
+            10_000,
+        )
+        .expect_err("stderr cap");
+        assert!(stderr.to_string().contains("stderr exceeded"), "{stderr}");
+        let started = std::time::Instant::now();
+        let stalled = run("sleep 30", 1024, 200).expect_err("deadline");
+        assert_eq!(stalled.kind(), io::ErrorKind::TimedOut);
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    }
+
+    #[test]
+    fn v2_deposit_log_recipient_offset_uses_v2_head() {
+        let receipt = burn6_deposit_receipt();
+        let log = &receipt["logs"][0];
+        parse_vault_bridge_vault_deposit_log(log).expect("canonical V2 log");
+        let data = log["data"].as_str().unwrap();
+        for offset in [0, 6 * 32] {
+            let mut altered = log.clone();
+            altered["data"] =
+                serde_json::json!(format!("0x{}{}", abi_word_u64(offset), &data[66..]));
+            let error = parse_vault_bridge_vault_deposit_log(&altered).unwrap_err();
+            assert!(error.contains("points into ABI head"), "{offset}: {error}");
+        }
     }
 
     #[test]

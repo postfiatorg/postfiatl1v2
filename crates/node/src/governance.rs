@@ -2365,6 +2365,17 @@ pub fn create_governance_genesis_bundle(
 pub fn verify_governance_genesis_bundle(
     options: GovernanceGenesisVerifyOptions,
 ) -> io::Result<GovernanceGenesisVerifyReport> {
+    verify_governance_genesis_bundle_snapshot(options).map(|(report, _)| report)
+}
+
+/// Verifies one read of the bundle and returns its operator manifest
+/// references, so callers never pair the report with a later file read.
+pub fn verify_governance_genesis_bundle_snapshot(
+    options: GovernanceGenesisVerifyOptions,
+) -> io::Result<(
+    GovernanceGenesisVerifyReport,
+    Vec<GovernanceGenesisOperatorManifestRef>,
+)> {
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
     let expected_genesis_hash = genesis_hash(&genesis);
@@ -2459,7 +2470,7 @@ pub fn verify_governance_genesis_bundle(
         validate_governance_genesis_manifest_ref(&manifest, manifest_ref)?;
     }
 
-    Ok(GovernanceGenesisVerifyReport {
+    let report = GovernanceGenesisVerifyReport {
         schema: GOVERNANCE_GENESIS_VERIFY_REPORT_SCHEMA.to_string(),
         verified: true,
         bundle_file: options.bundle_file.display().to_string(),
@@ -2474,7 +2485,8 @@ pub fn verify_governance_genesis_bundle(
         registry_root: bundle.registry_root,
         operator_manifest_count: bundle.operator_manifests.len(),
         operator_manifests_verified: true,
-    })
+    };
+    Ok((report, bundle.operator_manifests))
 }
 
 pub fn apply_governance_batch(options: ApplyBatchOptions) -> io::Result<Vec<Receipt>> {

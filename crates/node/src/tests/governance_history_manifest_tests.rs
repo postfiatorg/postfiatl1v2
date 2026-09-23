@@ -2854,6 +2854,14 @@
         assert_eq!(report.bundle_hash, bundle.bundle_hash);
         assert_eq!(report.validator_count, 3);
         assert!(report.operator_manifests_verified);
+        let (snapshot_report, snapshot_manifests) =
+            verify_governance_genesis_bundle_snapshot(GovernanceGenesisVerifyOptions {
+                data_dir: data_dir.clone(),
+                bundle_file: bundle_file.clone(),
+            })
+            .expect("verify governance genesis bundle snapshot");
+        assert_eq!(snapshot_report, report);
+        assert_eq!(snapshot_manifests, bundle.operator_manifests);
 
         let replacement = signed_test_operator_manifest(
             "postfiat-local",

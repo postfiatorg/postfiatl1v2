@@ -11,9 +11,35 @@ pub(super) fn transport_unix_time_nanos_saturating() -> u128 {
         .unwrap_or(0)
 }
 
+/// Cap for local topology, registry and key JSON files read by transport.
+pub(super) const MAX_TRANSPORT_LOCAL_JSON_BYTES: u64 = 8 * 1024 * 1024;
+
+/// Reads at most `max_bytes` from the opened handle, rejecting any file that
+/// still has data past the cap, so growth after inspection cannot bypass it.
+pub(super) fn read_bounded_transport_text(
+    path: &Path,
+    max_bytes: u64,
+    label: &str,
+) -> Result<String, String> {
+    use std::io::Read as _;
+    let file = std::fs::File::open(path)
+        .map_err(|error| format!("{label} read `{}` failed: {error}", path.display()))?;
+    let mut bytes = Vec::new();
+    file.take(max_bytes.saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("{label} read `{}` failed: {error}", path.display()))?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(format!(
+            "{label} `{}` is too large: exceeds {max_bytes} bytes",
+            path.display()
+        ));
+    }
+    String::from_utf8(bytes)
+        .map_err(|error| format!("{label} read `{}` failed: {error}", path.display()))
+}
+
 pub(super) fn read_topology_file(path: &PathBuf) -> Result<NetworkTopology, String> {
-    let raw = std::fs::read_to_string(path)
-        .map_err(|error| format!("topology read `{}` failed: {error}", path.display()))?;
+    let raw = read_bounded_transport_text(path, MAX_TRANSPORT_LOCAL_JSON_BYTES, "topology")?;
     serde_json::from_str(&raw)
         .map_err(|error| format!("topology parse `{}` failed: {error}", path.display()))
 }
@@ -22,8 +48,7 @@ pub(super) fn read_transport_json_file<T: DeserializeOwned>(
     path: &Path,
     label: &str,
 ) -> Result<T, String> {
-    let raw = std::fs::read_to_string(path)
-        .map_err(|error| format!("{label} read `{}` failed: {error}", path.display()))?;
+    let raw = read_bounded_transport_text(path, MAX_TRANSPORT_LOCAL_JSON_BYTES, label)?;
     serde_json::from_str(&raw)
         .map_err(|error| format!("{label} parse `{}` failed: {error}", path.display()))
 }
@@ -396,12 +421,7 @@ pub(super) fn read_transport_payload_file(path: &PathBuf) -> Result<String, Stri
             metadata.len()
         ));
     }
-    std::fs::read_to_string(path).map_err(|error| {
-        format!(
-            "transport payload read `{}` failed: {error}",
-            path.display()
-        )
-    })
+    read_bounded_transport_text(path, MAX_TRANSPORT_FRAME_BYTES, "transport payload")
 }
 
 pub(super) fn transport_batch_frame_payload(
@@ -1830,6 +1850,28 @@ mod transport_cli_tests {
             "postfiat-transport-protocol-{label}-{}-{nanos}",
             std::process::id()
         ))
+    }
+
+    #[test]
+    fn transport_local_file_reads_are_bounded_on_the_open_handle() {
+        let dir = unique_transport_protocol_test_dir("bounded-read");
+        std::fs::create_dir_all(&dir).expect("create test dir");
+        let file = dir.join("input.json");
+        std::fs::write(&file, "0123456789").expect("write input");
+        assert_eq!(
+            read_bounded_transport_text(&file, 10, "input").expect("at cap"),
+            "0123456789"
+        );
+        let error = read_bounded_transport_text(&file, 9, "input").expect_err("over cap");
+        assert!(error.contains("too large"), "{error}");
+        std::fs::write(&file, vec![b' '; MAX_TRANSPORT_LOCAL_JSON_BYTES as usize + 1])
+            .expect("write oversized json");
+        let error = read_transport_json_file::<serde_json::Value>(&file, "registry")
+            .expect_err("oversized registry");
+        assert!(error.contains("too large"), "{error}");
+        let error = read_topology_file(&file).expect_err("oversized topology");
+        assert!(error.contains("too large"), "{error}");
+        std::fs::remove_dir_all(dir).expect("cleanup");
     }
 
     fn test_status(node_id: &str) -> StatusReport {
