@@ -189,6 +189,19 @@ class MonitorSnapshotTest(unittest.TestCase):
         )
         self.assertIn("validator_clock_skew_critical", clock_report["criticals"])
 
+    def test_proof_latency_distinguishes_no_history_from_unavailable(self) -> None:
+        no_history = self.checks(
+            self.monitor(
+                proofs={"last_verify_micros": 0, "last_observed_unix_ms": 0}
+            )
+        )
+        self.assertEqual(no_history["status"], "ok")
+        self.assertNotIn("proof_latency_unavailable", no_history["warnings"])
+
+        unavailable = self.checks(self.monitor(proofs={}))
+        self.assertEqual(unavailable["status"], "warning")
+        self.assertIn("proof_latency_unavailable", unavailable["warnings"])
+
     def test_endpoint_monitor_reads_metrics_from_their_actual_sections(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
