@@ -1,6 +1,6 @@
 # PostFiat L1 Current State
 
-Updated: `2026-09-23T09:20:00Z` (restart cause); latest fleet observation `2026-09-14T11:32:29Z`
+Updated: `2026-09-23T09:15:00Z` (restart cause and manual-restart setting); latest fleet observation `2026-09-14T11:32:29Z`
 
 Status: **canonical operational-state reference**
 
@@ -30,9 +30,17 @@ Status: **canonical operational-state reference**
     and 2026-09-23 (validator-1, `libxml2`/`glib`/`sudo` upgrades, `06:48:49Z`)
     it restarted only the NAVCoin Ethereum RPC proxy services; the validator,
     RPC and Cobalt shadow services on all six hosts still show the September 11
-    start times. Until `needrestart` is told not to restart the PostFiat
-    services automatically, any future C-library or Python security upgrade will
-    restart them again at an unplanned time.
+    start times. On 2026-09-23 at `09:13Z` the operator installed
+    `/etc/needrestart/conf.d/50-postfiat-manual-restart.conf` on all six hosts
+    (identical file, SHA-256 `305836ca…`), which sets `override_rc` to `0` for
+    every `postfiat-*` and `navcoin-*` unit: security upgrades keep installing,
+    and `needrestart` now lists those services as needing a restart instead of
+    restarting them, so they are restarted only in a planned window. Before the
+    install the file was tested on a temporary copy (it matches the validator,
+    RPC, Cobalt shadow and NAVCoin RPC proxy units and not `cron`); after it,
+    `needrestart -r l -b` exits 0 with no error, and all PostFiat services are
+    active with unchanged start times, so nothing was restarted. Rollback:
+    delete that file on each host.
 
 !!! warning "2026-09-14: fresh read-only fleet observation, not repair"
 
