@@ -22,13 +22,16 @@ checked below a point the committee vouched for".
 Old NEAR stake can therefore be counted after it has been withdrawn
 (finding N1, reproduced).
 
+**Aave has a similar gap:** only debts named in the policy are subtracted. A
+debt in any other asset is not seen (A1).
+
 | Source | Proven by mathematics in the guest | Vouched for only by a signature | Taken from the manifest/policy without verification |
 | --- | --- | --- | --- |
 | NEAR stake | The reader contract's receipt reporting staked + unstaked yoctoNEAR is in a NEAR block that is an ancestor of the committee-signed head (Merkle paths). The event, payload hash, account, pool and salt agree. | Committee: the head is real and final, and the reader and pool code hashes match at that head. Reserve owner's Ed25519 key, which is the NEAR account's own key and so the issuer side, authorises the use. | Account, pool (`astro-stakers.poolv1.near`), reader account and code hashes, committee, and the NEAR/USD Chainlink feed |
 | Solana stake | The owner's withdraw-authority signature is valid, and the reader output is recomputed from the supplied stake-account bytes. | Committee: signs a commitment to the exact stake-account state at the slot. Solana has no state root to prove against, so the committee attests the quantity. | Stake-account set, wallet, committee |
 | Hyperliquid | Reader-contract receipt in the **exact** committee-signed HyperEVM block (receipt trie) | Committee: HyperEVM block. Hyperliquid's own validators: the HyperCore balances and prices exposed to HyperEVM. | Reader contract and code, venue positions |
 | Monero | Outputs belong to the reserve: key-image signatures, RingCT amounts, and transactions linked to the certified head | Committee: the Monero head and "each key image is unspent" | Address and keys in the policy |
-| Aave v3 (Arbitrum) | Collateral, debt, indices and oracle storage via Merkle-Patricia proofs against the committee-signed state root | Committee: Arbitrum state root | Contract addresses and code hashes |
+| Aave v3 (Arbitrum) | Collateral, debt, indices and oracle storage via Merkle-Patricia proofs against the committee-signed state root | Committee: Arbitrum state root | Contract addresses and code hashes. The assumption that the listed debt (USDC) is the owner's only debt is not verified (A1). |
 | EVM spot | Native and ERC-20 balances via Merkle-Patricia proofs under committee-signed roots | Committee: each chain's state root | Token set and decimals |
 
 **Trust class in the A666 manifests.**
@@ -87,8 +90,8 @@ reproduction. In order, it covered:
 - the L1 decoder and its consumer, `nav_sp1_verifier.rs` and
   `nft_escrow_asset_execution.rs`.
 
-Other adapters were read only far enough to classify their trust and
-freshness. Paths under `tools/nav-reserve-proof/crates/reserve-proof-types/src/`
+Other adapters were read only far enough to classify their trust, freshness
+and position completeness. Paths under `tools/nav-reserve-proof/crates/reserve-proof-types/src/`
 are shortened to the file name.
 
 ## 3. Findings
@@ -96,6 +99,7 @@ are shortened to the file name.
 | ID | Sev | Location | Summary |
 | --- | --- | --- | --- |
 | N1 | P1 | `near_receipt.rs:492–649` (ancestor check at 544) | A NEAR snapshot receipt of any age is accepted under a fresh certified head. Reproduced. |
+| A1 | P1 | `aave_v3.rs:364–392` | Aave debt completeness is not proven. Borrowing in an unlisted reserve is invisible. |
 | G1 | P1 | `crates/execution/src/nav_sp1_verifier.rs:344–432`; `nft_escrow_asset_execution.rs:1297–1342` | The live `sp1-groth16` reserve path binds no genesis, asset, epoch or observation time. |
 | N2 | P2 | `near_receipt.rs:476–490, 559–563`; CLI `near_adapter.rs:849–865` | Reader and pool code hashes are committee-checked at the head only. The reader is a redeployable implicit account. |
 | N3 | P2 | `near_receipt.rs:500–525, 548–558, 1077` | The NEAR head is trusted on committee signatures only but is counted as cryptographic. |
@@ -106,7 +110,7 @@ are shortened to the file name.
 | L1 | P3 | `nav_sp1_verifier.rs:255` | `max_snapshot_age_blocks=0` silently disables the staleness check. |
 | L2 | P3 | `nav_sp1_verifier.rs:216–295` | Public-values `valuation_scale` is not compared with the profile. |
 
-Counts: **P1 2, P2 5, P3 3.**
+Counts: **P1 3, P2 5, P3 3.**
 
 ## 4. Finding detail
 
@@ -136,6 +140,25 @@ Counts: **P1 2, P2 5, P3 3.**
 - *Governance:* this changes the guest ELF, the policy commitment and the
   source-manifest hash. It **requires a new program identity and governance
   registration**, so it was not made.
+
+**A1 — Aave debt completeness (P1).**
+
+- *Condition:* the verifier sums only the positions listed in the policy. The
+  A666 policy lists WETH collateral and USDC variable debt. Nothing proves
+  the owner's Aave `UserConfigurationMap` (the per-reserve "borrowing" bits in
+  Pool storage).
+- *Observed (code reading):* after registration, the owner can borrow another
+  asset against the listed collateral and move it away. The proof still
+  reports full collateral minus USDC debt only, so net assets are overstated
+  by the unlisted debt.
+- *Expected:* the proof shows that the owner has no borrowing bit set for any
+  reserve outside the policy.
+- *Change:* add a storage proof of `_usersConfig[owner]`, and require its
+  borrowing bits to match the policy's debt reserves. Reserve IDs come from
+  the already-proven `ReserveData`. This is a guest change: it **requires a
+  new program identity and governance registration**. Hyperliquid already
+  has an equivalent completeness check (account `ntl_pos` must equal the sum
+  of the governed perps).
 
 **G1 — live legacy path has no freshness binding (P1).**
 
@@ -240,6 +263,11 @@ be more conservative.
   assets for each source.
 - Monero status-set checks imply unique key images.
 - The Hyperliquid receipt must be in the certified block.
+- Aave rounds collateral down and debt up.
+- Hyperliquid spot rows must exactly equal the governed token list, and perp
+  notional must equal the account total.
+- EVM spot rejects duplicate chains, tokens and positions.
+- The A666 Aave and spot token sets do not overlap (checked).
 - The 584-byte decoder enforces the exact length, magic, version, no trailing
   bytes and the value identities.
 
@@ -264,8 +292,10 @@ need an operational bound that is not yet known.
 ## 7. What to do next, by risk
 
 1. **Before A666 relies on the open-kit NEAR leg:** build a successor identity
-   with the N1 receipt-age bound and the B1 and M1 validation rules. Register
-   it through governance, and re-qualify the successor epochs.
+   with the N1 receipt-age bound, the A1 debt-completeness proof and the B1
+   and M1 validation rules. Register it through governance, and re-qualify
+   the successor epochs. Until then, check off-chain that the reserve account
+   has no Aave debt outside USDC.
 2. **Retire the legacy `sp1-groth16` reserve path for A666** (G1) by
    migrating to the `sp1-nav-reserve-v1` successor. Until then, check each
    live packet's proof against its epoch off-chain.
@@ -276,5 +306,10 @@ need an operational bound that is not yet known.
 5. **Coverage:** add negative tests for receipt age and ancestor distance with
    the N1 fix.
 
-Not reached: line-by-line review of the Solana, Hyperliquid, Monero, Aave and
-EVM spot internals, beyond trust and freshness classification.
+Not reached, beyond the trust, freshness and completeness checks above:
+
+- line-by-line review of the Solana reader parser and
+  `verify_reader_transaction`;
+- Monero RingCT and transaction-tree code;
+- Chainlink feed-proof internals;
+- the remaining CLI adapters.
