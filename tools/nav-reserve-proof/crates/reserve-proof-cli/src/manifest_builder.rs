@@ -706,6 +706,7 @@ mod tests {
     // The tracked A666 policies are the registered identity's inputs. The
     // successor types reject them until governance sets the new fields
     // (values proposed in docs/review/nav-reserve-proof-successor-proposal-20260924.md).
+    const SUCCESSOR_AAVE_USER_CONFIG_SLOT_INDEX: u64 = 53;
     const SUCCESSOR_NEAR_MAX_RECEIPT_AGE_NS: u64 = 1_800_000_000_000;
     const SUCCESSOR_NEAR_MAX_RECEIPT_AGE_BLOCKS: u64 = 3_000;
 
@@ -879,10 +880,12 @@ mod tests {
         )
         .unwrap();
         let root = committee_root(&committee).unwrap();
-        let aave: AaveV3PolicyV1 = serde_json::from_slice(
-            &std::fs::read(manifest_dir.join("aave-arbitrum-policy.json")).unwrap(),
-        )
-        .unwrap();
+        let aave: AaveV3PolicyV1 = tracked_policy_for_successor(
+            &manifest_dir.join("aave-arbitrum-policy.json"),
+            serde_json::json!({
+                "user_config_mapping_slot_index": SUCCESSOR_AAVE_USER_CONFIG_SLOT_INDEX
+            }),
+        );
         let spot: EvmSpotPolicyV1 = serde_json::from_slice(
             &std::fs::read(manifest_dir.join("evm-spot-policy.json")).unwrap(),
         )
@@ -1023,7 +1026,8 @@ mod tests {
             commitments["checkpoint_committee_root"].as_str(),
             Some(root.as_str())
         );
-        assert_eq!(
+        // The debt-completeness field changes the registered commitment.
+        assert_ne!(
             commitments["policies"][0]["quantity_and_valuation_verifier_commitment"].as_str(),
             Some(aave_commitment.as_str())
         );

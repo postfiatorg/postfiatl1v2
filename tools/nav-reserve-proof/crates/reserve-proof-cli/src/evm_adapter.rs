@@ -1515,12 +1515,27 @@ fn aave_v3_collect(args: AaveV3CollectArgs) -> Result<()> {
             &client, &rpc_url, &block_tag, &policy, position, owner,
         )?);
     }
+    let user_config_key =
+        mapping_slot_address(owner, U256::from(policy.user_config_mapping_slot_index));
+    let (_, mut pool_storage) = rpc_account_with_storage(
+        &client,
+        &rpc_url,
+        policy.pool_address,
+        &[user_config_key],
+        &block_tag,
+    )?;
+    let user_configuration = take_storage(
+        &mut pool_storage,
+        user_config_key,
+        "Aave user configuration",
+    )?;
     let proof = AaveV3ProofV1 {
         policy,
         checkpoint_certificate: certificate,
         owner,
         ownership_signature: decode_hex("ownership_signature", &args.ownership_signature, 65)?,
         positions,
+        user_configuration,
     };
     let evidence_commitment = proof
         .commitment()
