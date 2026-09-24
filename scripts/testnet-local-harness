@@ -156,11 +156,15 @@ for ((i = 0; i < VALIDATORS; i++)); do
     cp "$bundle_dir/$state_file" "$node_dir/$state_file"
   done
   cp "$bundle_dir/remote-topology.json" "$node_dir/remote-topology.json"
+  copy_private_file "$key_material_dir/source-node/.integrity.key" "$node_dir/.integrity.key"
   copy_private_file "$key_material_dir/source-node/validator_keys.json" "$node_dir/validator_keys.json"
   copy_private_file "$key_material_dir/source-node/faucet_key.json" "$node_dir/faucet_key.json"
   write_node_state "$node_dir/node_state.json" "$node_id"
 
-  "$POSTFIAT_NODE_BIN" run \
+  "$POSTFIAT_NODE_BIN" storage-integrity-migrate-legacy \
+    --data-dir "$node_dir" \
+    --offline-confirmed >"$node_log_dir/storage-integrity-migrate-legacy.json"
+  "$POSTFIAT_NODE_BIN" run --unsafe-devnet-json-storage \
     --data-dir "$node_dir" >"$node_log_dir/run.json"
   "$POSTFIAT_NODE_BIN" status \
     --data-dir "$node_dir" >"$node_log_dir/status.json"

@@ -984,8 +984,11 @@ fn available_disk_bytes(path: &Path) -> io::Result<u64> {
     }
     // SAFETY: statvfs returned success and initialized the output structure.
     let stats = unsafe { stats.assume_init() };
-    stats
-        .f_bavail
+    #[cfg(target_vendor = "apple")]
+    let available_blocks = u64::from(stats.f_bavail);
+    #[cfg(not(target_vendor = "apple"))]
+    let available_blocks = stats.f_bavail;
+    available_blocks
         .checked_mul(stats.f_frsize)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "available disk overflow"))
 }

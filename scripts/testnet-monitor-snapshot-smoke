@@ -109,6 +109,7 @@ timeout "$TIMEOUT_SECONDS" target/debug/postfiat-node rpc-serve --unsafe-devnet-
   --port "$rpc_port" \
   --max-requests "$max_requests" \
   --timeout-ms "$RPC_TIMEOUT_MS" \
+  --disable-owned-lane \
   --event-log "$server_event_log" >"$server_report" 2>"$server_err" &
 server_pid="$!"
 server_running=1

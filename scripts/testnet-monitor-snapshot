@@ -628,7 +628,12 @@ def monitor_checks(
         if isinstance(monitor.get("proofs", {}).get("last_verify_micros"), int)
         and monitor["proofs"]["last_verify_micros"] > 0
     ]
-    if not proof_samples:
+    proof_history_absent = all(
+        monitor.get("proofs", {}).get("last_verify_micros") == 0
+        and monitor.get("proofs", {}).get("last_observed_unix_ms") == 0
+        for monitor in monitors
+    )
+    if not proof_samples and not proof_history_absent:
         warnings.append("proof_latency_unavailable")
     elif any(sample / 1_000.0 > args.critical_proof_verify_ms for sample in proof_samples):
         criticals.append("proof_verify_latency_critical")
