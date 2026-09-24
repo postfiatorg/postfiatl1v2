@@ -291,6 +291,9 @@ need an operational bound that is not yet known.
 
 ## 7. What to do next, by risk
 
+The N1, A1, B1 and M1 repairs are prepared, unmerged, in the
+[successor proposal](nav-reserve-proof-successor-proposal-20260924.md).
+
 1. **Before A666 relies on the open-kit NEAR leg:** build a successor identity
    with the N1 receipt-age bound, the A1 debt-completeness proof and the B1
    and M1 validation rules. Register it through governance, and re-qualify
