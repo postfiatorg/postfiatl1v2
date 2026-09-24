@@ -7,6 +7,7 @@ use postfiat_crypto_provider::{
 };
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_384};
+use std::collections::BTreeSet;
 
 pub const BFT_SOURCE_CHECKPOINT_SIGNATURE_CONTEXT_V1: &[u8] =
     b"postfiat-l1-v2/reserve-source-checkpoint/v1";
@@ -85,10 +86,14 @@ impl BftCheckpointCommitteeV1 {
             ));
         }
         let mut previous = None;
+        let mut public_keys = BTreeSet::new();
         for validator in &self.validators {
             validate_identifier("source checkpoint validator", &validator.validator_id)?;
             if validator.public_key.len() != ML_DSA_65_PUBLIC_KEY_BYTES {
                 return Err("source checkpoint validator key length is invalid".to_string());
+            }
+            if !public_keys.insert(validator.public_key.as_slice()) {
+                return Err("source checkpoint validator public keys must be unique".to_string());
             }
             if previous >= Some(validator.validator_id.as_str()) {
                 return Err(
@@ -379,5 +384,47 @@ mod tests {
         oversized.committee.validators =
             vec![oversized.committee.validators[0].clone(); MAX_BFT_CHECKPOINT_VALIDATORS + 1];
         assert!(oversized.verify().is_err());
+    }
+
+    #[test]
+    fn rejects_one_public_key_registered_under_two_validator_ids() {
+        let (mut certificate, keys) = fixture();
+        certificate.committee.validators[1].public_key = keys[0].public_key.clone();
+        assert_eq!(
+            certificate.committee.validate().unwrap_err(),
+            "source checkpoint validator public keys must be unique"
+        );
+
+        // One key holder signing as validator-0 and validator-1 must not
+        // count as two of the three quorum votes.
+        let signer = [0usize, 0, 2];
+        let mut forged = certificate;
+        forged.checkpoint.committee_root = committee_root_unchecked(&forged.committee);
+        for (vote, key_index) in forged.votes.iter_mut().zip(signer) {
+            let statement = forged
+                .checkpoint
+                .vote_signing_statement(&vote.validator_id)
+                .unwrap();
+            vote.signature = ml_dsa_65_sign_with_context_seed(
+                &keys[key_index].private_key,
+                &statement,
+                BFT_SOURCE_CHECKPOINT_SIGNATURE_CONTEXT_V1,
+                &[0xc0; 32],
+            )
+            .unwrap();
+        }
+        assert!(forged.verify().is_err());
+    }
+
+    fn committee_root_unchecked(committee: &BftCheckpointCommitteeV1) -> String {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&committee.epoch.to_be_bytes());
+        bytes.extend_from_slice(&committee.quorum.to_be_bytes());
+        append_u32(&mut bytes, committee.validators.len()).unwrap();
+        for validator in &committee.validators {
+            append_bytes(&mut bytes, validator.validator_id.as_bytes()).unwrap();
+            append_bytes(&mut bytes, &validator.public_key).unwrap();
+        }
+        hash48(COMMITTEE_ROOT_DOMAIN, &[&bytes])
     }
 }
