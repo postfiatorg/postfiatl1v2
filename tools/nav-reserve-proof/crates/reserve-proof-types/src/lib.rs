@@ -393,6 +393,7 @@ impl SourceManifestV1 {
             ));
         }
         let mut previous: Option<&str> = None;
+        let mut owners = std::collections::BTreeSet::new();
         for source in &self.sources {
             validate_identifier("source_id", &source.source_id)?;
             validate_identifier("adapter_kind", &source.adapter_kind)?;
@@ -442,6 +443,16 @@ impl SourceManifestV1 {
                 }
             }
             previous = Some(&source.source_id);
+            // One reserve owner in one source domain is one position set.
+            // Listing it under two source IDs would count it twice.
+            if !owners.insert((
+                source.source_domain.as_str(),
+                source.reserve_owner_commitment.as_str(),
+            )) {
+                return Err(
+                    "reserve manifest lists one reserve owner twice in a source domain".to_string(),
+                );
+            }
         }
         Ok(())
     }
@@ -1636,7 +1647,7 @@ mod tests {
             adapter_kind: "controlled-fixture-v1".to_string(),
             source_domain: "fixture".to_string(),
             asset_or_position_id: format!("position:{id}"),
-            reserve_owner_commitment: "11".repeat(48),
+            reserve_owner_commitment: opaque_commitment("reserve-owner", id.as_bytes()).unwrap(),
             quantity_verifier_commitment: "00".repeat(48),
             valuation_verifier_commitment: "00".repeat(48),
             quantity_evidence_class: TrustClassV1::Controlled,
@@ -1754,6 +1765,29 @@ mod tests {
         let mut witness = fixture();
         witness.observations[0].gross_assets = u64::MAX;
         assert!(execute_reserve_proof(&witness).is_err());
+    }
+
+    #[test]
+    fn rejects_one_reserve_owner_listed_under_two_source_ids() {
+        // Same account and domain under a second source ID and position:
+        // before the rule, both entries verified and both were counted.
+        let mut witness = fixture();
+        witness.manifest.sources[1].reserve_owner_commitment =
+            witness.manifest.sources[0].reserve_owner_commitment.clone();
+        assert_eq!(
+            witness.manifest.validate().unwrap_err(),
+            "reserve manifest lists one reserve owner twice in a source domain"
+        );
+        assert!(witness.manifest.hash().is_err());
+        assert!(execute_reserve_proof(&witness).is_err());
+
+        // The same owner in a different source domain is a different position.
+        let mut witness = fixture();
+        witness.manifest.sources[1].reserve_owner_commitment =
+            witness.manifest.sources[0].reserve_owner_commitment.clone();
+        witness.manifest.sources[1].source_domain = "fixture-other".to_string();
+        witness.context.source_manifest_hash = witness.manifest.hash().unwrap();
+        assert_eq!(execute_reserve_proof(&witness).unwrap().gross_assets, 1_400);
     }
 
     #[test]
