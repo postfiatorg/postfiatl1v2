@@ -118,6 +118,7 @@ nav:
       - Completed P0 Remediation: plans/completed/P0-COMPLETE-REMEDIATION-PLAN-20260716.md
       - Completed Capability Restoration: plans/completed/OPEN-SOURCE-CAPABILITY-RESTORATION-PLAN-20260716.md
   - Handoffs:
+      - Merged FastPay And Combined Lines Qualified, Deployment Prepared: handoffs/2026-09-25___dravlic__merged_fastpay_and_combined_lines_qualified_and_deployed.md
       - Wallet Reviewed And Merged, Reserve-Proof Gaps, And Demo Runbook: handoffs/2026-09-24___dravlic__wallet_reviewed_and_merged_reserve_proof_gaps_and_demo_runbook.md
       - StakeHub Money Path Repaired, Deploy Candidate, And Restart Cause: handoffs/2026-09-23___dravlic__stakehub_money_path_repaired_deploy_candidate_and_restart_cause.md
       - Key Custody, Next Release Qualified, And Cycle Inputs: handoffs/2026-09-22___dravlic__key_custody_next_release_qualified_and_cycle_inputs.md

@@ -2,6 +2,8 @@
 
 - **Operator:** Domagoj Ravlić (`dravlic`)
 - **Date:** 2026-09-24 UTC
+- **Superseded:** the fleet and deploy candidate are updated in the
+  [2026-09-25 handoff](2026-09-25___dravlic__merged_fastpay_and_combined_lines_qualified_and_deployed.md).
 
 ## BLUF
 
