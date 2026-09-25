@@ -3205,6 +3205,18 @@ fn key_imported_snapshot_state(data_dir: &Path) -> io::Result<NodeStore> {
     Ok(store)
 }
 
+// A sealed capability for the fresh destination created by snapshot import.
+// Other modules can consume it, but cannot construct one for a live directory.
+pub(super) struct FreshCheckpointImport {
+    data_dir: PathBuf,
+}
+
+impl FreshCheckpointImport {
+    pub(super) fn data_dir(&self) -> &Path {
+        &self.data_dir
+    }
+}
+
 fn import_snapshot_with_basis(
     options: SnapshotImportOptions,
     basis: SnapshotVerificationBasis,
@@ -3330,13 +3342,24 @@ fn import_snapshot_with_basis(
         .is_some_and(|height| imported_tip.height >= height)
     {
         let transactional_generation = data_dir.join("transactional-snapshot-generation-v1");
-        rebuild_transactional_storage(StorageMigrationOptions {
+        let migration = StorageMigrationOptions {
             data_dir: data_dir.clone(),
             output_dir: transactional_generation,
             expected_tip: imported_tip.block_hash,
             expected_state_root: imported_tip.state_root,
             verify_only: false,
-        })?;
+        };
+        match basis {
+            SnapshotVerificationBasis::FullHistory => rebuild_transactional_storage(migration)?,
+            SnapshotVerificationBasis::FinalizedCheckpoint => {
+                super::storage_migration::restore_transactional_checkpoint(
+                    migration,
+                    FreshCheckpointImport {
+                        data_dir: data_dir.clone(),
+                    },
+                )?
+            }
+        };
     }
 
     let restored = status(NodeOptions {
