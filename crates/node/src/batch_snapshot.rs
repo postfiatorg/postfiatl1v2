@@ -510,7 +510,7 @@ fn apply_batch_with_timings_inner(
 
     let stage_start = std::time::Instant::now();
     let genesis = store.read_genesis()?;
-    let mut ledger = store.read_ledger()?;
+    let mut ledger = read_fastpay_ledger(&store)?;
     let mut governance = store.read_governance()?;
     let read_core_state_ms = apply_batch_elapsed_ms(stage_start);
 
@@ -961,7 +961,7 @@ pub fn apply_bridge_batch_with_replay(
     let batch = read_bridge_action_batch_file(&options.batch_file)?;
     verify_bridge_action_batch_id(&genesis, &batch)?;
 
-    let mut ledger = store.read_ledger()?;
+    let mut ledger = read_fastpay_ledger(&store)?;
     let shielded = store.read_shielded()?;
     let chain_tip = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?;
     let block_height = chain_tip

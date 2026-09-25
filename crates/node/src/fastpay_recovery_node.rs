@@ -18,6 +18,99 @@ struct FastPaySpeculativeEffectV1 {
     prior_objects: Vec<FastPayPriorObjectV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     prior_unwrap_account: Option<postfiat_types::Account>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    retained_tip: Option<FastPaySpeculativeTipV1>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FastPaySpeculativeTipV1 {
+    height: u64,
+    block_hash: String,
+    state_root: String,
+    application_sequence: u64,
+}
+
+/// Business-state view. The transactional database remains the finalized base;
+/// pending, certified FastPay effects live in the existing durable journal.
+pub(super) fn read_fastpay_ledger(store: &NodeStore) -> io::Result<LedgerState> {
+    if !store.transactional_storage_active()? {
+        return store.read_ledger();
+    }
+    for _ in 0..3 {
+        let tip = store.read_chain_tip()?;
+        let mut ledger = store.read_ledger()?;
+        let journal = read_fastpay_speculative_journal(store.data_dir())?;
+        let mut pending = Vec::new();
+        let mut legacy_pending = 0;
+        for record in &journal.effects {
+            // Finalized ordered recovery/cancellation always wins over an old
+            // local certificate retained for recovery and audit.
+            if ledger
+                .fastpay_version_fences
+                .iter()
+                .any(|f| f.lock_id == record.fence.lock_id)
+            {
+                continue;
+            }
+            let (height, sequence) = match &record.retained_tip {
+                Some(base) => {
+                    if base.height == tip.height
+                        && (base.block_hash != tip.block_hash || base.state_root != tip.state_root)
+                    {
+                        return Err(fastpay_invalid_data(
+                            "FastPay journal is bound to a different finalized tip",
+                        ));
+                    }
+                    (base.height, base.application_sequence)
+                }
+                None => (record.fence.decided_at_height, 0),
+            };
+            if height > tip.height {
+                return Err(fastpay_invalid_data(
+                    "FastPay journal is ahead of the finalized tip",
+                ));
+            }
+            if height < tip.height {
+                // An intervening certified block omitted this minority effect.
+                // Keep its certificate retrievable, but never resurrect it.
+                continue;
+            }
+            if record.retained_tip.is_none() {
+                legacy_pending += 1;
+            }
+            pending.push((sequence, record.fence.clone()));
+        }
+        if pending.len() > postfiat_types::MAX_FASTPAY_PRE_STATE_EFFECTS_PER_BLOCK
+            || legacy_pending > 1
+        {
+            return Err(fastpay_invalid_data(
+                "FastPay pending journal is oversized or has ambiguous legacy application order",
+            ));
+        }
+        pending.sort_by_key(|(sequence, _)| *sequence);
+        if pending.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+            return Err(fastpay_invalid_data(
+                "FastPay journal has duplicate application sequence",
+            ));
+        }
+        let effects = pending
+            .into_iter()
+            .map(|(_, fence)| fence)
+            .collect::<Vec<_>>();
+        let shielded = store.read_shielded()?;
+        if store.read_chain_tip()? != tip {
+            continue;
+        }
+        replay_confirmed_fastpay_fences_dependency_ordered(&mut ledger, &shielded, &effects)?;
+        if store.read_chain_tip()? == tip {
+            return Ok(ledger);
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::WouldBlock,
+        "finalized tip changed while reading FastPay state",
+    ))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -129,8 +222,17 @@ fn prior_objects_for_fastpay_inputs(
 fn retain_fastpay_speculative_effect(
     store: &NodeStore,
     ledger: &LedgerState,
-    effect: FastPaySpeculativeEffectV1,
+    mut effect: FastPaySpeculativeEffectV1,
 ) -> io::Result<()> {
+    if store.transactional_storage_active()? {
+        let tip = store.read_chain_tip()?;
+        effect.retained_tip = Some(FastPaySpeculativeTipV1 {
+            height: tip.height,
+            block_hash: tip.block_hash,
+            state_root: tip.state_root,
+            application_sequence: ledger.fastpay_version_fences.len() as u64,
+        });
+    }
     let mut journal = read_fastpay_speculative_journal(store.data_dir())?;
     if let Some(existing) = journal
         .effects
@@ -307,7 +409,7 @@ pub fn owned_certificate_domain_v3(
 ) -> io::Result<postfiat_types::OwnedCertificateDomain> {
     let store = NodeStore::new(data_dir);
     let genesis = store.read_genesis()?;
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let committee = active_fastpay_recovery_committee(&ledger, fastpay_height(&store)?)?;
     let domain = committee.certificate_domain();
     if domain.chain_id != genesis.chain_id
@@ -341,7 +443,7 @@ fn fastpay_domain_for_committee(
 pub fn owned_recovery_capabilities_v3(options: NodeOptions) -> io::Result<String> {
     let store = NodeStore::new(&options.data_dir);
     let _read_lock = store.lock_ordered_commit()?;
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     ensure_fastpay_unanchored_capacity(&store, &ledger)?;
     let height = fastpay_height(&store)?;
     let committee = active_fastpay_recovery_committee(&ledger, height)?;
@@ -372,7 +474,7 @@ pub fn owned_sign_v3(
         })?;
     let store = NodeStore::new(&options.data_dir);
     let _mutation_lock = store.lock_ordered_commit()?;
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     ensure_fastpay_unanchored_capacity(&store, &ledger)?;
     let height = fastpay_height(&store)?;
     let committee = fastpay_recovery_committee(
@@ -452,7 +554,7 @@ pub fn owned_unwrap_sign_v3(
         })?;
     let store = NodeStore::new(&options.data_dir);
     let _mutation_lock = store.lock_ordered_commit()?;
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let height = fastpay_height(&store)?;
     let committee = fastpay_recovery_committee(
         &ledger,
@@ -802,7 +904,7 @@ pub fn owned_apply_v3(
     .map_err(|error| fastpay_invalid_data(format!("FastPay v3 certificate digest: {error:?}")))?;
     let store = NodeStore::new(&options.data_dir);
     let _mutation_lock = store.lock_ordered_commit()?;
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let height = fastpay_height(&store)?;
     let committee = fastpay_recovery_committee(
         &ledger,
@@ -854,9 +956,12 @@ pub fn owned_apply_v3(
                 fence: fence.clone(),
                 prior_objects,
                 prior_unwrap_account: None,
+                retained_tip: None,
             },
         )?;
-        store.write_ledger(&next_ledger)?;
+        if !store.transactional_storage_active()? {
+            store.write_ledger(&next_ledger)?;
+        }
         acknowledgement
     };
     serde_json::to_string(&acknowledgement).map_err(invalid_data)
@@ -880,7 +985,7 @@ pub fn owned_unwrap_apply_v3(
         })?;
     let store = NodeStore::new(&options.data_dir);
     let _mutation_lock = store.lock_ordered_commit()?;
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let height = fastpay_height(&store)?;
     let committee = fastpay_recovery_committee(
         &ledger,
@@ -931,9 +1036,12 @@ pub fn owned_unwrap_apply_v3(
                 fence: fence.clone(),
                 prior_objects,
                 prior_unwrap_account,
+                retained_tip: None,
             },
         )?;
-        store.write_ledger(&next_ledger)?;
+        if !store.transactional_storage_active()? {
+            store.write_ledger(&next_ledger)?;
+        }
         acknowledgement
     };
     serde_json::to_string(&acknowledgement).map_err(invalid_data)
@@ -986,7 +1094,7 @@ pub fn owned_certificate_v3(options: NodeOptions, selector: &str) -> io::Result<
 
 pub fn owned_recovery_status_v3(options: NodeOptions, lock_id: &str) -> io::Result<String> {
     validate_hex_string("FastPay lock ID", lock_id, Some(96))?;
-    let ledger = NodeStore::new(&options.data_dir).read_ledger()?;
+    let ledger = read_fastpay_ledger(&NodeStore::new(&options.data_dir))?;
     let fence = ledger
         .fastpay_version_fences
         .iter()

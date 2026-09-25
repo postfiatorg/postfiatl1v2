@@ -2681,7 +2681,7 @@ pub fn account_assets(options: AccountAssetsOptions) -> io::Result<AccountAssets
     let limit = bounded_read_query_limit(options.limit, "account_assets")?;
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let mut assets = issued_asset_line_reports(&ledger, |line| {
         line.account == options.account
             && line.balance > 0
@@ -2729,7 +2729,7 @@ pub fn owned_objects(options: OwnedObjectsOptions) -> io::Result<OwnedObjectsRep
     )?;
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let mut objects = ledger
         .owned_objects
         .iter()

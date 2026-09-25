@@ -368,19 +368,8 @@ pub fn apply_owned_transfer(
         ledger.owned_objects.swap_remove(idx);
     }
     // Mint outputs at fresh content-addressed ids.
-    let mut created = Vec::new();
-    for (i, spec) in order.outputs.iter().enumerate() {
-        let id = owned_output_id(owner_pubkey_hex, order.nonce, i, spec);
-        let obj = postfiat_types::OwnedObject {
-            id,
-            version: 1,
-            owner_pubkey_hex: spec.owner_pubkey_hex.clone(),
-            value: spec.value,
-            asset: spec.asset.clone(),
-        };
-        ledger.owned_objects.push(obj.clone());
-        created.push(obj);
-    }
+    let created = owned_transfer_output_objects(owner_pubkey_hex, order.nonce, &order.outputs);
+    ledger.owned_objects.extend(created.iter().cloned());
     Ok(OwnedTransferOutcome {
         consumed: order.inputs.len(),
         created,
@@ -618,6 +607,26 @@ fn validate_owned_memos(
     Ok(())
 }
 
+/// Construct the exact content-addressed outputs of an authenticated transfer.
+/// This is deterministic construction only; callers must verify authorization.
+pub fn owned_transfer_output_objects(
+    owner: &str,
+    nonce: u64,
+    outputs: &[postfiat_types::OwnedOutputSpec],
+) -> Vec<postfiat_types::OwnedObject> {
+    outputs
+        .iter()
+        .enumerate()
+        .map(|(index, spec)| postfiat_types::OwnedObject {
+            id: owned_output_id(owner, nonce, index, spec),
+            version: 1,
+            owner_pubkey_hex: spec.owner_pubkey_hex.clone(),
+            value: spec.value,
+            asset: spec.asset.clone(),
+        })
+        .collect()
+}
+
 fn owned_output_id(owner: &str, nonce: u64, index: usize, spec: &postfiat_types::OwnedOutputSpec) -> String {
     let mut material = Vec::new();
     material.extend_from_slice(owner.as_bytes());
@@ -845,6 +854,28 @@ mod owned_transfer_tests {
         let out = apply_owned_transfer(&mut ledger, &order, "ownerA").expect("apply");
         assert_eq!(out.consumed, 1);
         assert_eq!(out.created.len(), 2);
+        // Frozen IDs from the pre-extraction implementation. Output order,
+        // owner, amount, asset, nonce and version must remain wire compatible.
+        assert_eq!(out.created[0].id, "04d5cbf9e4bbd9403688f1c4ab1556eaac70ef35a692abbf28abb4d74d534d98");
+        assert_eq!(out.created[1].id, "78392faf369acb000e0ced2d43b6542e081a8a10b63bd250df38424eb55f4ed3");
+        assert_eq!(out.created, owned_transfer_output_objects("ownerA", 1, &order.outputs));
+        for (object, spec) in out.created.iter().zip(&order.outputs) {
+            assert_eq!(object.version, 1);
+            assert_eq!(object.owner_pubkey_hex, spec.owner_pubkey_hex);
+            assert_eq!(object.value, spec.value);
+            assert_eq!(object.asset, spec.asset);
+        }
+        // Frozen IDs from the pre-extraction implementation. Output order,
+        // owner, amount, asset, nonce and version must remain wire compatible.
+        assert_eq!(out.created[0].id, "04d5cbf9e4bbd9403688f1c4ab1556eaac70ef35a692abbf28abb4d74d534d98");
+        assert_eq!(out.created[1].id, "78392faf369acb000e0ced2d43b6542e081a8a10b63bd250df38424eb55f4ed3");
+        assert_eq!(out.created, owned_transfer_output_objects("ownerA", 1, &order.outputs));
+        for (object, spec) in out.created.iter().zip(&order.outputs) {
+            assert_eq!(object.version, 1);
+            assert_eq!(object.owner_pubkey_hex, spec.owner_pubkey_hex);
+            assert_eq!(object.value, spec.value);
+            assert_eq!(object.asset, spec.asset);
+        }
         assert_eq!(out.created.iter().map(|o| o.value).sum::<u64>(), 99);
         assert!(ledger.owned_objects.iter().all(|o| o.id != "aa"));
         assert_eq!(ledger.owned_objects.len(), 2);

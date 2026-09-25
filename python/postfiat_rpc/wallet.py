@@ -1005,7 +1005,7 @@ def unwrap_fastpay(
     )
     timings["apply_ms"] = _elapsed_ms(started)
     started = time.monotonic()
-    authenticated_acknowledgements = _verify_fastpay_apply_v3(
+    verification = _verify_fastpay_apply_v3(
         operation="unwrap",
         certificate=certificate,
         apply_response=apply_result,
@@ -1018,8 +1018,11 @@ def unwrap_fastpay(
         operation="unwrap",
         owner_public_key_hex=wallet.public_key_hex,
         result={
+            # Preserve the public apply-result fields consumed by wallet clients.
+            **apply_result,
             "apply": apply_result,
-            "authenticated_acknowledgements": list(authenticated_acknowledgements),
+            **verification["verified_effects"],
+            "authenticated_acknowledgements": verification["authenticated_acknowledgements"],
         },
         object_id=str(selected_inputs[0]["id"]),
         objects_snapshot=objects_snapshot,
@@ -1143,7 +1146,7 @@ def send_fastpay(
     apply_result = client.owned_apply_v3(json.dumps(certificate, separators=(",", ":")))
     timings["apply_ms"] = _elapsed_ms(started)
     started = time.monotonic()
-    authenticated_acknowledgements = _verify_fastpay_apply_v3(
+    verification = _verify_fastpay_apply_v3(
         operation="transfer",
         certificate=certificate,
         apply_response=apply_result,
@@ -1156,8 +1159,11 @@ def send_fastpay(
         operation="send",
         owner_public_key_hex=wallet.public_key_hex,
         result={
+            # Preserve the public apply-result fields consumed by wallet clients.
+            **apply_result,
             "apply": apply_result,
-            "authenticated_acknowledgements": list(authenticated_acknowledgements),
+            **verification["verified_effects"],
+            "authenticated_acknowledgements": verification["authenticated_acknowledgements"],
         },
         object_id=str(input_object["id"]),
         objects_snapshot=objects_snapshot,
@@ -4168,7 +4174,7 @@ def _verify_fastpay_apply_v3(
     capabilities: dict[str, Any],
     validators: Sequence[dict[str, Any]],
     work_dir: Path,
-) -> tuple[dict[str, Any], ...]:
+) -> dict[str, Any]:
     certificate_file = work_dir / f"fastpay-v3-{operation}-certificate-{secrets.token_hex(8)}.json"
     response_file = work_dir / f"fastpay-v3-{operation}-apply-{secrets.token_hex(8)}.json"
     capabilities_file = work_dir / f"fastpay-v3-{operation}-capabilities-{secrets.token_hex(8)}.json"
@@ -4206,6 +4212,7 @@ def _verify_fastpay_apply_v3(
         or not isinstance(acknowledgements, list)
         or not isinstance(quorum, int)
         or len(acknowledgements) < quorum
+        or not isinstance(verification.get("verified_effects"), dict)
     ):
         raise WalletCommandError("FastPay v3 apply verification omitted an authenticated quorum")
-    return tuple(item for item in acknowledgements if isinstance(item, dict))
+    return verification
