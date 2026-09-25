@@ -1,0 +1,21 @@
+52G	/var
+27G	/var/lib
+15G	/var/log
+10G	/var/backups
+140M	/var/cache
+72K	/var/tmp
+16K	/var/spool
+4.0K	/var/snap
+--var/lib
+27G	/var/lib/postfiat
+27G	/var/lib
+199M	/var/lib/apt
+38M	/var/lib/dpkg
+6.7M	/var/lib/ubuntu-advantage
+3.8M	/var/lib/command-not-found
+--var/log
+15G	/var/log
+13G	/var/log/postfiat
+1.8G	/var/log/journal
+5.4M	/var/log/sysstat
+160K	/var/log/apt

@@ -1,0 +1,23 @@
+2026-09-25T11:52:44.010471+00:00 START merged-import-signed
+2026-09-25T11:53:21.706476+00:00 PASS merged-import-signed exit=0 37.7s
+2026-09-25T11:53:21.706532+00:00 START merged-verify-checkpoint-signed
+2026-09-25T11:53:24.983615+00:00 PASS merged-verify-checkpoint-signed exit=0 3.3s
+2026-09-25T11:53:24.983722+00:00 START merged-status-signed
+2026-09-25T11:53:25.102433+00:00 PASS merged-status-signed exit=0 0.1s
+2026-09-25T11:53:25.102497+00:00 START merged-import-remote-unsigned
+2026-09-25T11:54:03.046364+00:00 PASS merged-import-remote-unsigned exit=0 37.9s
+2026-09-25T11:54:03.046474+00:00 START merged-verify-checkpoint-remote
+2026-09-25T11:54:06.324689+00:00 PASS merged-verify-checkpoint-remote exit=0 3.3s
+2026-09-25T11:54:06.324744+00:00 START merged-status-remote
+2026-09-25T11:54:06.392031+00:00 PASS merged-status-remote exit=0 0.1s
+2026-09-25T11:54:06.392128+00:00 START merged-verify-state-remote
+2026-09-25T11:57:21.828233+00:00 PASS merged-verify-state-remote exit=0 195.4s
+2026-09-25T11:57:21.828433+00:00 START merged-import-wrong-key
+2026-09-25T11:57:21.840860+00:00 PASS merged-import-wrong-key exit=1 0.0s
+2026-09-25T11:57:21.840978+00:00 START r4-import-signed
+2026-09-25T11:58:00.140730+00:00 PASS r4-import-signed exit=0 38.3s
+2026-09-25T11:58:00.140832+00:00 START r4-verify-checkpoint-signed
+2026-09-25T11:58:03.521961+00:00 PASS r4-verify-checkpoint-signed exit=0 3.4s
+2026-09-25T11:58:03.522059+00:00 START merged-verify-state-signed
+2026-09-25T12:01:24.041922+00:00 PASS merged-verify-state-signed exit=0 200.5s
+2026-09-25T12:01:24.041960+00:00 DONE

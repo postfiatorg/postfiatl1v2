@@ -1,0 +1,40 @@
+created directory remote-unsigned
+cd+++++++++ ./
+>f+++++++++ batch_archive.json
+>f+++++++++ blocks.json
+>f+++++++++ bridge.json
+>f+++++++++ consensus_v2_qcs.snapshot.json
+>f+++++++++ consensus_v2_safety.snapshot.json
+>f+++++++++ fastpay_speculative_effects_v1.json
+>f+++++++++ faucet_account.json
+>f+++++++++ genesis.json
+>f+++++++++ governance.json
+>f+++++++++ history_checkpoint.json
+>f+++++++++ ledger.json
+>f+++++++++ mempool.json
+>f+++++++++ node_state.json
+>f+++++++++ ordered_batches.json
+>f+++++++++ owned_locks.json
+>f+++++++++ owned_locks.wal
+>f+++++++++ receipts.json
+>f+++++++++ shielded.json
+>f+++++++++ snapshot_manifest.json
+>f+++++++++ validator_registry.json
+>f+++++++++ validator_registry_genesis.json
+
+Number of files: 22 (reg: 21, dir: 1)
+Number of created files: 22 (reg: 21, dir: 1)
+Number of deleted files: 0
+Number of regular files transferred: 21
+Total file size: 229,276,689 bytes
+Total transferred file size: 229,276,689 bytes
+Literal data: 229,276,689 bytes
+Matched data: 0 bytes
+File list size: 708
+File list generation time: 0.001 seconds
+File list transfer time: 0.000 seconds
+Total bytes sent: 426
+Total bytes received: 229,334,242
+
+sent 426 bytes  received 229,334,242 bytes  50,963,259.56 bytes/sec
+total size is 229,276,689  speedup is 1.00

@@ -1,0 +1,180 @@
+=== validator-0 64.176.220.75
+/dev/vda2        75G   64G  7.4G  90% /
+/dev/vda2      79941234688 68552257536 7891574784  90% /
+--releases
+4.2G	/opt/postfiat/releases
+401M	/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e
+206M	/opt/postfiat/releases/pfusdc-eth-l1-f30d368
+103M	/opt/postfiat/releases/a666-finalized-checkpoint-8949759
+84M	/opt/postfiat/releases/fastswap-v1-c545d100
+59M	/opt/postfiat/releases/rpc-status-cache-20260906
+59M	/opt/postfiat/releases/pfeth-route-v3-707e006f
+59M	/opt/postfiat/releases/pfeth-route-v2-1bcd0f0d
+59M	/opt/postfiat/releases/pfeth-route-v1-ef2dec31
+--snapshots
+274M	/var/lib/postfiat/pre-rollout-snapshots
+219M	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-retained-payment
+56M	/var/lib/postfiat/pre-rollout-snapshots/atomic-swap-w6-395e28e5-validator-0
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-validator-0-rollback
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r4-validator-0-storage-migration.json
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-0-storage-migration.json
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-0-rollback
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-0-storage-migration.json
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-0-rollback
+--varlib
+5.6G	/var/lib/postfiat/gate931
+4.2G	/var/lib/postfiat/gate926
+3.2G	/var/lib/postfiat/validator-0
+2.6G	/var/lib/postfiat/pre-arc-current-v2-a699d560-raw
+1.7G	/var/lib/postfiat/pre-storage-lease-af9b83c3-raw
+1.1G	/var/lib/postfiat/arc-qualification-20260902T023300Z
+=== validator-1 95.179.184.122
+/dev/vda2        75G   68G  3.5G  96% /
+/dev/vda2      79941234688 72708182016 3735650304  96% /
+--releases
+4.1G	/opt/postfiat/releases
+357M	/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e
+206M	/opt/postfiat/releases/pfusdc-eth-l1-f30d368
+103M	/opt/postfiat/releases/a666-finalized-checkpoint-8949759
+84M	/opt/postfiat/releases/fastswap-v1-c545d100
+59M	/opt/postfiat/releases/rpc-status-cache-20260906
+59M	/opt/postfiat/releases/pfeth-route-v3-707e006f
+59M	/opt/postfiat/releases/pfeth-route-v2-1bcd0f0d
+59M	/opt/postfiat/releases/pfeth-route-v1-ef2dec31
+--snapshots
+9.0G	/var/lib/postfiat/pre-rollout-snapshots
+460M	/var/lib/postfiat/pre-rollout-snapshots/.a666-checkpoint-verifier-experimental.incoming3
+460M	/var/lib/postfiat/pre-rollout-snapshots/.a666-checkpoint-verifier-experimental.incoming2
+460M	/var/lib/postfiat/pre-rollout-snapshots/.a666-checkpoint-verifier-experimental.incoming
+317M	/var/lib/postfiat/pre-rollout-snapshots/a666-nav-overlay-cbbf53e-validator-1-finalized-checkpoint
+279M	/var/lib/postfiat/pre-rollout-snapshots/pnok-private-fix-2246d25-orchard1-validator-1-finalized-checkpoint
+251M	/var/lib/postfiat/pre-rollout-snapshots/pnok-private-fix-2246d25-validator-1-finalized-checkpoint
+219M	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r4-validator-1-finalized-checkpoint
+195M	/var/lib/postfiat/pre-rollout-snapshots/cobalt-adversarial-8cc7d15e-validator-1-finalized-checkpoint
+--varlib
+9.0G	/var/lib/postfiat/pre-rollout-snapshots
+5.7G	/var/lib/postfiat/gate931
+4.3G	/var/lib/postfiat/gate926
+2.7G	/var/lib/postfiat/validator-1
+2.6G	/var/lib/postfiat/pre-arc-current-v2-a699d560-raw
+1.7G	/var/lib/postfiat/pre-storage-lease-af9b83c3-raw
+=== validator-2 66.42.48.39
+/dev/vda2        75G   49G   24G  68% /
+/dev/vda2      79941234688 51658936320 24784896000  68% /
+--releases
+4.1G	/opt/postfiat/releases
+357M	/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e
+206M	/opt/postfiat/releases/pfusdc-eth-l1-f30d368
+103M	/opt/postfiat/releases/a666-finalized-checkpoint-8949759
+84M	/opt/postfiat/releases/fastswap-v1-c545d100
+59M	/opt/postfiat/releases/rpc-status-cache-20260906
+59M	/opt/postfiat/releases/pfeth-route-v3-707e006f
+59M	/opt/postfiat/releases/pfeth-route-v2-1bcd0f0d
+59M	/opt/postfiat/releases/pfeth-route-v1-ef2dec31
+--snapshots
+124K	/var/lib/postfiat/pre-rollout-snapshots
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-validator-2-rollback
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r4-validator-2-storage-migration.json
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-2-storage-migration.json
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-2-rollback
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-2-storage-migration.json
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-2-rollback
+8.0K	/var/lib/postfiat/pre-rollout-snapshots/cobalt-verifier-92b63f5a-validator-2-storage-migration.json
+8.0K	/var/lib/postfiat/pre-rollout-snapshots/cobalt-adversarial-8cc7d15e-validator-2-storage-migration.json
+--varlib
+6.1G	/var/lib/postfiat/gate931
+4.7G	/var/lib/postfiat/gate926
+2.9G	/var/lib/postfiat/validator-2
+2.8G	/var/lib/postfiat/pre-arc-current-v2-a699d560-raw
+1.9G	/var/lib/postfiat/pre-storage-lease-af9b83c3-raw
+202M	/var/lib/postfiat/pre-rollout-raw
+=== validator-3 149.28.63.106
+/dev/vda2        75G   53G   19G  75% /
+/dev/vda2      79941234688 56738119680 19705712640  75% /
+--releases
+4.0G	/opt/postfiat/releases
+357M	/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e
+206M	/opt/postfiat/releases/pfusdc-eth-l1-f30d368
+103M	/opt/postfiat/releases/a666-finalized-checkpoint-8949759
+84M	/opt/postfiat/releases/fastswap-v1-c545d100
+59M	/opt/postfiat/releases/rpc-status-cache-20260906
+59M	/opt/postfiat/releases/pfeth-route-v3-707e006f
+59M	/opt/postfiat/releases/pfeth-route-v2-1bcd0f0d
+59M	/opt/postfiat/releases/pfeth-route-v1-ef2dec31
+--snapshots
+124K	/var/lib/postfiat/pre-rollout-snapshots
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-validator-3-rollback
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r4-validator-3-storage-migration.json
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-3-storage-migration.json
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-3-rollback
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-3-storage-migration.json
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-3-rollback
+8.0K	/var/lib/postfiat/pre-rollout-snapshots/cobalt-verifier-92b63f5a-validator-3-storage-migration.json
+8.0K	/var/lib/postfiat/pre-rollout-snapshots/cobalt-adversarial-8cc7d15e-validator-3-storage-migration.json
+--varlib
+4.7G	/var/lib/postfiat/gate931
+3.3G	/var/lib/postfiat/gate926
+2.2G	/var/lib/postfiat/validator-3
+2.1G	/var/lib/postfiat/pre-arc-current-v2-a699d560-raw
+1.2G	/var/lib/postfiat/pre-storage-lease-af9b83c3-raw
+203M	/var/lib/postfiat/pre-rollout-raw
+=== validator-4 95.179.179.206
+/dev/vda2        75G   58G   14G  81% /
+/dev/vda2      79941234688 61644058624 14799773696  81% /
+--releases
+4.1G	/opt/postfiat/releases
+357M	/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e
+206M	/opt/postfiat/releases/pfusdc-eth-l1-f30d368
+103M	/opt/postfiat/releases/a666-finalized-checkpoint-8949759
+84M	/opt/postfiat/releases/fastswap-v1-c545d100
+59M	/opt/postfiat/releases/rpc-status-cache-20260906
+59M	/opt/postfiat/releases/pfeth-route-v3-707e006f
+59M	/opt/postfiat/releases/pfeth-route-v2-1bcd0f0d
+59M	/opt/postfiat/releases/pfeth-route-v1-ef2dec31
+--snapshots
+124K	/var/lib/postfiat/pre-rollout-snapshots
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-validator-4-rollback
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r4-validator-4-storage-migration.json
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-4-storage-migration.json
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-4-rollback
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-4-storage-migration.json
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-4-rollback
+8.0K	/var/lib/postfiat/pre-rollout-snapshots/cobalt-verifier-92b63f5a-validator-4-storage-migration.json
+8.0K	/var/lib/postfiat/pre-rollout-snapshots/cobalt-adversarial-8cc7d15e-validator-4-storage-migration.json
+--varlib
+5.0G	/var/lib/postfiat/gate931
+3.7G	/var/lib/postfiat/gate926
+2.4G	/var/lib/postfiat/validator-4
+2.3G	/var/lib/postfiat/pre-arc-current-v2-a699d560-raw
+1.4G	/var/lib/postfiat/pre-storage-lease-af9b83c3-raw
+202M	/var/lib/postfiat/pre-rollout-raw
+=== validator-5 45.32.110.170
+/dev/vda2        75G   54G   18G  76% /
+/dev/vda2      79941234688 57595572224 18848260096  76% /
+--releases
+4.0G	/opt/postfiat/releases
+357M	/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e
+206M	/opt/postfiat/releases/pfusdc-eth-l1-f30d368
+103M	/opt/postfiat/releases/a666-finalized-checkpoint-8949759
+84M	/opt/postfiat/releases/fastswap-v1-c545d100
+59M	/opt/postfiat/releases/rpc-status-cache-20260906
+59M	/opt/postfiat/releases/pfeth-route-v3-707e006f
+59M	/opt/postfiat/releases/pfeth-route-v2-1bcd0f0d
+59M	/opt/postfiat/releases/pfeth-route-v1-ef2dec31
+--snapshots
+830M	/var/lib/postfiat/pre-rollout-snapshots
+219M	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-5-finalized-checkpoint
+218M	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-validator-5-finalized-checkpoint
+218M	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-5-finalized-checkpoint
+59M	/var/lib/postfiat/pre-rollout-snapshots/.fastpay-committee-20260925-validator-5.candidate-postfiat-node
+59M	/var/lib/postfiat/pre-rollout-snapshots/.fastpay-committee-20260925-r3-validator-5.candidate-postfiat-node
+59M	/var/lib/postfiat/pre-rollout-snapshots/.fastpay-committee-20260925-r2-validator-5.candidate-postfiat-node
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-validator-5-rollback
+12K	/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r4-validator-5-storage-migration.json
+--varlib
+4.3G	/var/lib/postfiat/gate931
+2.5G	/var/lib/postfiat/gate926
+2.3G	/var/lib/postfiat/validator-5
+2.2G	/var/lib/postfiat/pre-arc-current-v2-a699d560-raw
+1.3G	/var/lib/postfiat/pre-storage-lease-af9b83c3-raw
+830M	/var/lib/postfiat/pre-rollout-snapshots

@@ -19,5 +19,19 @@
   },
   "strict-docs": "PASS",
   "public-doc-links": "PASS",
-  "public-secret-scan": "PASS"
+  "public-secret-scan": "PASS",
+  "addendum_canary_backup_1036": {
+    "results": {
+      "strict-docs": "PASS",
+      "public-doc-links": "PASS",
+      "public-secret-scan": "PASS"
+    },
+    "completed_at": "2026-09-25T12:02:28.669150+00:00",
+    "scope": "tracked tree with the addendum staged, before the gate logs and SHA256SUMS were added",
+    "logs": [
+      "canary-backup-1036/logs/gate-strict-docs.stdout",
+      "canary-backup-1036/logs/gate-public-doc-links.stdout",
+      "canary-backup-1036/logs/gate-public-secret-scan.stdout"
+    ]
+  }
 }

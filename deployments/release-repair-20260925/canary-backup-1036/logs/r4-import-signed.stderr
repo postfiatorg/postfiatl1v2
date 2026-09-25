@@ -1,0 +1,11 @@
+warning: genesis `/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/r4-signed-import/genesis.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: node state `/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/r4-signed-import/node_state.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/r4-signed-import/governance.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/r4-signed-import/ledger.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/r4-signed-import/receipts.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/r4-signed-import/blocks.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/r4-signed-import/batch_archive.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/r4-signed-import/ordered_batches.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/r4-signed-import/mempool.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/r4-signed-import/shielded.json` has no integrity tag (legacy format); upgrading it to the keyed format
+warning: state file `/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/r4-signed-import/bridge.json` has no integrity tag (legacy format); upgrading it to the keyed format

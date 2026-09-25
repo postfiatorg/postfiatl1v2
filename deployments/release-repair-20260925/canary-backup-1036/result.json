@@ -1,0 +1,99 @@
+{
+  "schema": "postfiat.release-repair.canary-backup-1036.v1",
+  "status": "PASS",
+  "source": "validator-1 (95.179.184.122) /var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r4-validator-1-finalized-checkpoint",
+  "source_kind": "unsigned finalized-checkpoint export written by the r4 safe-rollout backup step before r4 was applied",
+  "remote_size": "219M",
+  "remote_bytes": 229276689,
+  "remote_files": 21,
+  "copy": "rsync -a over ssh, pull only, no --delete; local copy made read-only (chmod -R a-w); kept under ~/.cache/release-repair-20260925/canary-backup-1036/, not in git",
+  "copy_matches_r4_evidence_unsigned": "IDENTICAL: sha256 of all 21 files equal ~/.postfiat/deployments/fastpay-committee-20260925-r4/evidence/pre-rollout-backup/backup-unsigned",
+  "signed_copy": "r4 evidence backup-signed (the rollout tool signs locally). Its 21 data files equal the validator-1 copy; only snapshot_manifest.json differs because the signed export rewrites it.",
+  "signed_manifest_sha256": "ee2ca6c68b45778ebaedf3081681401d20226304b639740ac50627933d3feb1a",
+  "r4_state_signed_manifest_sha256": "ee2ca6c68b45778ebaedf3081681401d20226304b639740ac50627933d3feb1a",
+  "trusted_publisher_key": {
+    "path": "/home/postfiatchad/.postfiat/deployments/cobalt-activation-8694b99d/snapshot-keys/snapshot-publisher.public.json",
+    "sha256": "adb52f49537ec65cb417ca1a8cd3debff1eb0d318790bc2f40bb5837855cea20",
+    "publisher": "pf4ebb800c5a985cfca61e3833c40ea60b6767644a",
+    "schema": "postfiat.snapshot_publisher_key.v1",
+    "note": "Public key only. It matches the publisher in the signed manifest. The r4 release files carry deployment.public.json (deployment publisher pfc531e0...), which the node rejects as a snapshot key; validator-1 has no /etc/postfiat/snapshot-publisher.public.json."
+  },
+  "binaries": {
+    "/home/postfiatchad/.cache/release-repair-20260925/binaries/candidate-1": {
+      "expected": "d66cecc36426ce05ced8730b2439a27285c6b404688acd13dc23594b884eabd6",
+      "actual": "d66cecc36426ce05ced8730b2439a27285c6b404688acd13dc23594b884eabd6",
+      "match": true
+    },
+    "/home/postfiatchad/.cache/release-repair-20260925/binaries/rollback": {
+      "expected": "44b6794f2f8eab577713dffb6e59880f8ee8c811863e99ed96ed1b0f4ec66bab",
+      "actual": "44b6794f2f8eab577713dffb6e59880f8ee8c811863e99ed96ed1b0f4ec66bab",
+      "match": true
+    }
+  },
+  "signature_verification": {
+    "merged_import_signed": "PASS",
+    "tampered_signature_rejected": "PASS",
+    "deployment_key_rejected": "PASS"
+  },
+  "merged_checkpoint_verification": {
+    "signed_import": true,
+    "validator_1_copy": true,
+    "height": 1036,
+    "tip": "4d04d29027e8988712f6de07ec07dfbd8a8a4a650661bb0b31521454ee4b66d727d5b052ed5edb48977ed55c9c4b3d67",
+    "state_root": "ba7cc0125d5503bdbc76ba4ab11a0199036e8232f4aa75e5a6f52eba306fab561547f1ae2ef6dc7e31cf47c44f3bd330",
+    "certificate_id": "47bdfdfb6fe28c9f5f6512e1478eebac851b450fc910c33f1634f030cfbe732c690a12c6a99d7162602f83da41a7f85f",
+    "committee_epoch": 3
+  },
+  "merged_full_history_verify_state": {
+    "data": "validator-1 copy imported with snapshot-import-finalized-checkpoint",
+    "verified": true,
+    "block_log_verified": true,
+    "block_count": 1036,
+    "tip": "4d04d29027e8988712f6de07ec07dfbd8a8a4a650661bb0b31521454ee4b66d727d5b052ed5edb48977ed55c9c4b3d67",
+    "state_root": "ba7cc0125d5503bdbc76ba4ab11a0199036e8232f4aa75e5a6f52eba306fab561547f1ae2ef6dc7e31cf47c44f3bd330",
+    "elapsed_seconds": 195.4,
+    "matches_r4_recorded_backup": true
+  },
+  "merged_full_history_verify_state_signed_import": {
+    "verified": true,
+    "block_count": 1036,
+    "tip": "4d04d29027e8988712f6de07ec07dfbd8a8a4a650661bb0b31521454ee4b66d727d5b052ed5edb48977ed55c9c4b3d67",
+    "state_root": "ba7cc0125d5503bdbc76ba4ab11a0199036e8232f4aa75e5a6f52eba306fab561547f1ae2ef6dc7e31cf47c44f3bd330"
+  },
+  "block_1034": {
+    "replayed": true,
+    "contents": "transparent batch fd775fa6..., proposer validator-2, one accepted transparent_transfer receipt (835a03d7...), block state root 509b0a0d...",
+    "fastpay_state_at_1036": "fastpay_speculative_effects_v1 holds one consensusless transfer effect (committee epoch 1) retained at tip 1036"
+  },
+  "r4_contrast": {
+    "executable": "44b6794f2f8eab577713dffb6e59880f8ee8c811863e99ed96ed1b0f4ec66bab",
+    "mode": "checkpoint verification only, separate import",
+    "import_signed": "PASS",
+    "verified": true,
+    "height": 1036,
+    "tip": "4d04d29027e8988712f6de07ec07dfbd8a8a4a650661bb0b31521454ee4b66d727d5b052ed5edb48977ed55c9c4b3d67",
+    "state_root": "ba7cc0125d5503bdbc76ba4ab11a0199036e8232f4aa75e5a6f52eba306fab561547f1ae2ef6dc7e31cf47c44f3bd330"
+  },
+  "storage_status": {
+    "integrity_status": "full_verification_current",
+    "ordered_batch_count": 1036,
+    "last_full_verification_height": 1036
+  },
+  "not_covered": "Blocks after 1036 (1037 to the current tip, including 1042 and 1043) are not in this backup and were not replayed.",
+  "fleet_actions": "read-only ssh to validator-1: du, find, df, sha256sum of a missing key path, ls of the r4 release dir, rsync sender. Nothing written, deleted or restarted.",
+  "receipts": [
+    "receipts/preflight.json",
+    "receipts/merged-import-signed.json",
+    "receipts/merged-verify-checkpoint-signed.json",
+    "receipts/merged-status-signed.json",
+    "receipts/merged-import-remote-unsigned.json",
+    "receipts/merged-verify-checkpoint-remote.json",
+    "receipts/merged-status-remote.json",
+    "receipts/merged-verify-state-remote.json",
+    "receipts/merged-import-wrong-key.json",
+    "receipts/merged-import-tampered-signature.json",
+    "receipts/r4-import-signed.json",
+    "receipts/r4-verify-checkpoint-signed.json",
+    "receipts/merged-verify-state-signed.json"
+  ]
+}

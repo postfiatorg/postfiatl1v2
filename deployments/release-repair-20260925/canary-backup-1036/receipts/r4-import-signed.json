@@ -1,0 +1,32 @@
+{
+  "name": "r4-import-signed",
+  "command": [
+    "/home/postfiatchad/.cache/release-repair-20260925/binaries/rollback",
+    "snapshot-import-signed-finalized-checkpoint",
+    "--data-dir",
+    "/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/r4-signed-import",
+    "--snapshot-dir",
+    "/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/r4-signed",
+    "--trusted-publisher-key-file",
+    "/home/postfiatchad/.postfiat/deployments/cobalt-activation-8694b99d/snapshot-keys/snapshot-publisher.public.json",
+    "--node-id",
+    "validator-1"
+  ],
+  "started_at": "2026-09-25T11:57:21.840968+00:00",
+  "address_space_limit_bytes": 21474836480,
+  "environment_overrides": {
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260925/tmp"
+  },
+  "exit_code": 0,
+  "completed_at": "2026-09-25T11:58:00.139749+00:00",
+  "elapsed_seconds": 38.3,
+  "expected": "exit 0",
+  "status": "PASS",
+  "stdout_sha256": "a81b708957b932f69b8bde0b7b13a11e304262908bea9ffe66e3221db4c33588",
+  "stderr_sha256": "3a57b90775283cfb262d5404feba6097dace475056ddc982948ca662d4eed7e0",
+  "stdout": "logs/r4-import-signed.stdout",
+  "stderr": "logs/r4-import-signed.stderr"
+}

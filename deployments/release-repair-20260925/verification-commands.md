@@ -105,3 +105,22 @@ The full workspace suite and the long Orchard suite were not run locally.
 scripts/public-doc-links
 scripts/public-secret-scan
 ```
+
+## Addendum: existing height-1036 canary backup
+
+Read-only toward the fleet. The copy and the imports stay under `~/.cache/release-repair-20260925/canary-backup-1036/`.
+
+```sh
+ssh root@95.179.184.122 du -sh /var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r4-validator-1-finalized-checkpoint
+rsync -a -e ssh root@95.179.184.122:<that directory>/ remote-unsigned/     # no --delete
+candidate-1 snapshot-import-signed-finalized-checkpoint --snapshot-dir r4-signed --trusted-publisher-key-file snapshot-publisher.public.json --node-id validator-1 ...
+candidate-1 verify-finalized-checkpoint --data-dir merged-signed-import
+candidate-1 snapshot-import-finalized-checkpoint --snapshot-dir remote-unsigned --node-id validator-1 --data-dir merged-unsigned-import
+candidate-1 verify-finalized-checkpoint --data-dir merged-unsigned-import
+candidate-1 verify-state --data-dir merged-unsigned-import                  # and merged-signed-import
+rollback    snapshot-import-signed-finalized-checkpoint ... && rollback verify-finalized-checkpoint --data-dir r4-signed-import
+```
+
+Exact commands, timings and exit codes are in [`canary-backup-1036/receipts/`](canary-backup-1036/receipts/),
+and the driver is [`run_1036.py`](canary-backup-1036/run_1036.py). The fleet disk report ran
+[`fleet_disk.sh`](canary-backup-1036/fleet_disk.sh) over SSH on each validator.

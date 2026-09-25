@@ -1,0 +1,26 @@
+{
+  "name": "merged-status-remote",
+  "command": [
+    "/home/postfiatchad/.cache/release-repair-20260925/binaries/candidate-1",
+    "status",
+    "--data-dir",
+    "/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/merged-unsigned-import"
+  ],
+  "started_at": "2026-09-25T11:54:06.324740+00:00",
+  "address_space_limit_bytes": 21474836480,
+  "environment_overrides": {
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260925/tmp"
+  },
+  "exit_code": 0,
+  "completed_at": "2026-09-25T11:54:06.391102+00:00",
+  "elapsed_seconds": 0.1,
+  "expected": "exit 0",
+  "status": "PASS",
+  "stdout_sha256": "1389449fffecd0b5ce4853e8053c288c9698b7d075cc66bc1b9bb42e15bc2c74",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout": "logs/merged-status-remote.stdout",
+  "stderr": "logs/merged-status-remote.stderr"
+}

@@ -1,0 +1,18 @@
+drwxrwxr-x 11 root     syslog   4096 Sep 23 06:49 ..
+drwxr-xr-x  5 root     root     4096 Sep  2 18:36 .
+drwxr-xr-x  3 postfiat postfiat 4096 Sep  2 18:37 gate931
+drwxr-xr-x  3 postfiat postfiat 4096 Aug 31 01:21 gate926
+drwx------  2 postfiat postfiat 4096 Jul 17 06:11 validator-1
+total 20
+--backups
+10G	/var/backups/postfiat
+10G	/var/backups
+13G	/var/log/postfiat/validator-1
+13G	/var/log/postfiat
+1.3M	/var/log/postfiat/gate926
+936K	/var/log/postfiat/gate931
+--backups/postfiat
+10G	/var/backups/postfiat
+3.4G	/var/backups/postfiat/rpc-status-cache-20260906-validator-1-1788724534
+3.4G	/var/backups/postfiat/a666-source-route-20260907-validator-1-1788743461
+3.3G	/var/backups/postfiat/pfeth-replay-v4-20260905-validator-1-1788631637

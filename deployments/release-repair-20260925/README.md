@@ -1,7 +1,7 @@
 # Merged combined and FastPay release tip qualification, September 25, 2026
 
 **Final. Nothing was deployed. No source was repaired.**
-Every check that ran locally passed. The new canary backup was SKIPPED, `warm-latency` was deferred to CI, and there is no CI verdict yet.
+Every check that ran locally passed. The new canary backup was SKIPPED (the existing height-1036 backup replayed in the addendum), `warm-latency` was deferred to CI, and there is no CI verdict yet.
 
 Source tip: `f60e9639f83649769f29276a9de14f5f16271877` (`f60e9639`). It is the test-only pre-step commit on top of the
 merge record `a2dfa94735a1182551931b0de92da701898312b4` (`a2dfa947`). That merge brings the deployed FastPay line r4
@@ -23,7 +23,8 @@ the same remap arguments and `SOURCE_DATE_EPOCH=1789514690`. Neither has RPATH o
 | Six saved V2 full-history checks, height 1021 | PASS | [History run](history-run.json) |
 | Six fresh V2 full-history checks, height 1021 | PASS | [Fresh V2 history](fresh-v2-history-run.json) |
 | r4 full replay of one original, contrast probe | FAILS AT 1011 (expected) | [Probe stderr](history/r4-full-replay-probe-validator-0.stderr.log) |
-| Current-chain replay from a new validator-1 canary backup | SKIPPED | [Reason](canary-backup.json) |
+| Current-chain replay from the existing r4 validator-1 canary backup, height 1036 (addendum) | PASS: checkpoint verified, full history replayed to 1036, root `ba7cc012…` | [Result](canary-backup-1036/result.json), [replay log](canary-backup-1036/logs/merged-verify-state-remote.stdout) |
+| New validator-1 canary backup | SKIPPED | [Reason](canary-backup.json) |
 | Local governed rotation: both startup orders, convergence, restart | PASS | [Gate log](logs/governance-gate.stdout), [receipt](v2-service-receipt.json) |
 | Rollback: six r4 checkpoint verifications | PASS | [History run](history-run.json) |
 | Rollback: r4 services start and restart on six copies | PASS_STARTUP_AND_RESTART_ONLY | [Log](logs/rollback-services.stdout), [receipt](old-binary-service-receipt.json) |
@@ -78,7 +79,7 @@ So the merge keeps the combined line's history repair. The r4 line alone fails a
 
 ## Current-chain replay
 
-**SKIPPED.** No new validator-1 canary backup was taken.
+**Addendum: PASS through height 1036** (see below). No new validator-1 canary backup was taken.
 The authorized exception covered only the safe-rollout `backup` step, and that step cannot run by itself here:
 
 - scripts/postfiat-safe-rollout backup refuses the r4 rollout state: all six validators are applied (state.applied) and a verified backup is already recorded (state.backup.verified). A fresh preflight state would be needed.
@@ -87,8 +88,33 @@ The authorized exception covered only the safe-rollout `backup` step, and that s
 
 The only fleet contact was three read-only SSH listings of validator-1's snapshot directory and its disk usage
 ([probe](logs/canary-backup-readonly-probe.stdout)). As instructed, the saved 1020 and 1021 copies are the
-only history evidence. The chain past height 1044 has not been replayed on this build, including the
-FastPay effects at 1034, 1042 and 1043. That replay is still needed before deployment.
+only history evidence at that point.
+
+### Addendum: existing height-1036 canary backup
+
+The r4 rollout's own validator-1 backup, taken at height 1036 before r4 was applied, was copied and replayed.
+Nothing on any validator was written, deleted or restarted.
+
+- Copy: `rsync -a` pull over SSH, no `--delete`, 219M (229,276,689 bytes, 21 files). All 21 files match
+  the r4 rollout's local `backup-unsigned` by SHA-256 ([rsync log](canary-backup-1036/logs/rsync.stdout),
+  [hashes](canary-backup-1036/logs/remote-unsigned.sha256)). The copy stays under `~/.cache`; git holds only receipts and logs.
+- Signature: the rollout tool signs the backup locally, so its signed copy (`backup-signed`, the same 21 data files)
+  was imported the way `_verify_and_record_backup` does it, trusting the snapshot publisher public key
+  `pf4ebb80…`. The merged build accepted it. A copy with a changed signature was rejected, and so was
+  the r4 release's `deployment.public.json`, which is a deployment key, not a snapshot key.
+- Merged build `d66cecc3…` (hash checked): finalized-checkpoint verification PASS on both the signed import
+  and the direct validator-1 copy. Full-history `verify-state` of the validator-1 copy: `verified: true`,
+  `block_count: 1036`, tip `4d04d290…`, state root `ba7cc0125d5503bd…`, 195 s. These match the r4 rollout's
+  recorded backup, so block 1034 (one transparent transfer) replayed. The signed import replayed to the same tip and root.
+- r4 contrast `44b6794f…` (hash checked), checkpoint verification on its own import: PASS, same tip and root.
+- Not covered: blocks after 1036, including 1042 and 1043. They are not in this backup.
+
+[Result](canary-backup-1036/result.json), [receipts](canary-backup-1036/receipts/),
+[driver](canary-backup-1036/run_1036.py).
+Fleet disk use, read-only: [fleet-disk.json](fleet-disk.json). validator-1 is at 96% (3.5G free).
+Its largest users are `/var/log/postfiat/validator-1` (13G), `/var/backups/postfiat` (10G),
+`pre-rollout-snapshots` (9.0G: 33 checkpoint exports and 36 staged binaries), `gate931` (5.7G), `gate926` (4.3G)
+and `/opt/postfiat/releases` (4.1G).
 
 ## Merge behaviours
 

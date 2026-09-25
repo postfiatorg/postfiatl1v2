@@ -13,6 +13,15 @@
   "fresh_v2_1021": "PASS",
   "r4_full_replay_probe": "EXPECTED_FAIL_AT_BLOCK_1011",
   "canary_backup": "SKIPPED",
+  "current_chain_replay_existing_backup_1036": {
+    "status": "PASS",
+    "height": 1036,
+    "tip": "4d04d29027e8988712f6de07ec07dfbd8a8a4a650661bb0b31521454ee4b66d727d5b052ed5edb48977ed55c9c4b3d67",
+    "state_root": "ba7cc0125d5503bdbc76ba4ab11a0199036e8232f4aa75e5a6f52eba306fab561547f1ae2ef6dc7e31cf47c44f3bd330",
+    "block_1034_replayed": true,
+    "r4_checkpoint_contrast": "PASS",
+    "evidence": "canary-backup-1036/result.json"
+  },
   "governance_gate": "PASS",
   "rollback": {
     "checkpoints": "PASS",

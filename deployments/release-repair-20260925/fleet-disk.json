@@ -1,0 +1,708 @@
+{
+  "schema": "postfiat.release-repair.fleet-disk.v1",
+  "collected_at": "2026-09-25T11:53:39Z",
+  "mode": "read-only: df -h /, df -B1 /, du -sh on /opt/postfiat/releases and /var/lib/postfiat/pre-rollout-snapshots (top entries); nothing written, deleted or restarted",
+  "hosts": [
+    {
+      "validator": "validator-0",
+      "host": "64.176.220.75",
+      "releases_top": [
+        {
+          "size": "401M",
+          "path": "/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e"
+        },
+        {
+          "size": "206M",
+          "path": "/opt/postfiat/releases/pfusdc-eth-l1-f30d368"
+        },
+        {
+          "size": "103M",
+          "path": "/opt/postfiat/releases/a666-finalized-checkpoint-8949759"
+        },
+        {
+          "size": "84M",
+          "path": "/opt/postfiat/releases/fastswap-v1-c545d100"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/rpc-status-cache-20260906"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v3-707e006f"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v2-1bcd0f0d"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v1-ef2dec31"
+        }
+      ],
+      "snapshots_top": [
+        {
+          "size": "219M",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-retained-payment"
+        },
+        {
+          "size": "56M",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/atomic-swap-w6-395e28e5-validator-0"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-validator-0-rollback"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r4-validator-0-storage-migration.json"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-0-storage-migration.json"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-0-rollback"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-0-storage-migration.json"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-0-rollback"
+        }
+      ],
+      "var_lib_postfiat_top": [
+        {
+          "size": "5.6G",
+          "path": "/var/lib/postfiat/gate931"
+        },
+        {
+          "size": "4.2G",
+          "path": "/var/lib/postfiat/gate926"
+        },
+        {
+          "size": "3.2G",
+          "path": "/var/lib/postfiat/validator-0"
+        },
+        {
+          "size": "2.6G",
+          "path": "/var/lib/postfiat/pre-arc-current-v2-a699d560-raw"
+        },
+        {
+          "size": "1.7G",
+          "path": "/var/lib/postfiat/pre-storage-lease-af9b83c3-raw"
+        },
+        {
+          "size": "1.1G",
+          "path": "/var/lib/postfiat/arc-qualification-20260902T023300Z"
+        }
+      ],
+      "size": "75G",
+      "used": "64G",
+      "avail": "7.4G",
+      "use_percent": "90%",
+      "size_bytes": 79941234688,
+      "used_bytes": 68552257536,
+      "avail_bytes": 7891574784,
+      "releases_total": "4.2G",
+      "snapshots_total": "274M"
+    },
+    {
+      "validator": "validator-1",
+      "host": "95.179.184.122",
+      "releases_top": [
+        {
+          "size": "357M",
+          "path": "/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e"
+        },
+        {
+          "size": "206M",
+          "path": "/opt/postfiat/releases/pfusdc-eth-l1-f30d368"
+        },
+        {
+          "size": "103M",
+          "path": "/opt/postfiat/releases/a666-finalized-checkpoint-8949759"
+        },
+        {
+          "size": "84M",
+          "path": "/opt/postfiat/releases/fastswap-v1-c545d100"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/rpc-status-cache-20260906"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v3-707e006f"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v2-1bcd0f0d"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v1-ef2dec31"
+        }
+      ],
+      "snapshots_top": [
+        {
+          "size": "460M",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/.a666-checkpoint-verifier-experimental.incoming3"
+        },
+        {
+          "size": "460M",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/.a666-checkpoint-verifier-experimental.incoming2"
+        },
+        {
+          "size": "460M",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/.a666-checkpoint-verifier-experimental.incoming"
+        },
+        {
+          "size": "317M",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/a666-nav-overlay-cbbf53e-validator-1-finalized-checkpoint"
+        },
+        {
+          "size": "279M",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/pnok-private-fix-2246d25-orchard1-validator-1-finalized-checkpoint"
+        },
+        {
+          "size": "251M",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/pnok-private-fix-2246d25-validator-1-finalized-checkpoint"
+        },
+        {
+          "size": "219M",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r4-validator-1-finalized-checkpoint"
+        },
+        {
+          "size": "195M",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/cobalt-adversarial-8cc7d15e-validator-1-finalized-checkpoint"
+        }
+      ],
+      "var_lib_postfiat_top": [
+        {
+          "size": "9.0G",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots"
+        },
+        {
+          "size": "5.7G",
+          "path": "/var/lib/postfiat/gate931"
+        },
+        {
+          "size": "4.3G",
+          "path": "/var/lib/postfiat/gate926"
+        },
+        {
+          "size": "2.7G",
+          "path": "/var/lib/postfiat/validator-1"
+        },
+        {
+          "size": "2.6G",
+          "path": "/var/lib/postfiat/pre-arc-current-v2-a699d560-raw"
+        },
+        {
+          "size": "1.7G",
+          "path": "/var/lib/postfiat/pre-storage-lease-af9b83c3-raw"
+        }
+      ],
+      "size": "75G",
+      "used": "68G",
+      "avail": "3.5G",
+      "use_percent": "96%",
+      "size_bytes": 79941234688,
+      "used_bytes": 72708182016,
+      "avail_bytes": 3735650304,
+      "releases_total": "4.1G",
+      "snapshots_total": "9.0G"
+    },
+    {
+      "validator": "validator-2",
+      "host": "66.42.48.39",
+      "releases_top": [
+        {
+          "size": "357M",
+          "path": "/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e"
+        },
+        {
+          "size": "206M",
+          "path": "/opt/postfiat/releases/pfusdc-eth-l1-f30d368"
+        },
+        {
+          "size": "103M",
+          "path": "/opt/postfiat/releases/a666-finalized-checkpoint-8949759"
+        },
+        {
+          "size": "84M",
+          "path": "/opt/postfiat/releases/fastswap-v1-c545d100"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/rpc-status-cache-20260906"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v3-707e006f"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v2-1bcd0f0d"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v1-ef2dec31"
+        }
+      ],
+      "snapshots_top": [
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-validator-2-rollback"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r4-validator-2-storage-migration.json"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-2-storage-migration.json"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-2-rollback"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-2-storage-migration.json"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-2-rollback"
+        },
+        {
+          "size": "8.0K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/cobalt-verifier-92b63f5a-validator-2-storage-migration.json"
+        },
+        {
+          "size": "8.0K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/cobalt-adversarial-8cc7d15e-validator-2-storage-migration.json"
+        }
+      ],
+      "var_lib_postfiat_top": [
+        {
+          "size": "6.1G",
+          "path": "/var/lib/postfiat/gate931"
+        },
+        {
+          "size": "4.7G",
+          "path": "/var/lib/postfiat/gate926"
+        },
+        {
+          "size": "2.9G",
+          "path": "/var/lib/postfiat/validator-2"
+        },
+        {
+          "size": "2.8G",
+          "path": "/var/lib/postfiat/pre-arc-current-v2-a699d560-raw"
+        },
+        {
+          "size": "1.9G",
+          "path": "/var/lib/postfiat/pre-storage-lease-af9b83c3-raw"
+        },
+        {
+          "size": "202M",
+          "path": "/var/lib/postfiat/pre-rollout-raw"
+        }
+      ],
+      "size": "75G",
+      "used": "49G",
+      "avail": "24G",
+      "use_percent": "68%",
+      "size_bytes": 79941234688,
+      "used_bytes": 51658936320,
+      "avail_bytes": 24784896000,
+      "releases_total": "4.1G",
+      "snapshots_total": "124K"
+    },
+    {
+      "validator": "validator-3",
+      "host": "149.28.63.106",
+      "releases_top": [
+        {
+          "size": "357M",
+          "path": "/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e"
+        },
+        {
+          "size": "206M",
+          "path": "/opt/postfiat/releases/pfusdc-eth-l1-f30d368"
+        },
+        {
+          "size": "103M",
+          "path": "/opt/postfiat/releases/a666-finalized-checkpoint-8949759"
+        },
+        {
+          "size": "84M",
+          "path": "/opt/postfiat/releases/fastswap-v1-c545d100"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/rpc-status-cache-20260906"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v3-707e006f"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v2-1bcd0f0d"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v1-ef2dec31"
+        }
+      ],
+      "snapshots_top": [
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-validator-3-rollback"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r4-validator-3-storage-migration.json"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-3-storage-migration.json"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-3-rollback"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-3-storage-migration.json"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-3-rollback"
+        },
+        {
+          "size": "8.0K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/cobalt-verifier-92b63f5a-validator-3-storage-migration.json"
+        },
+        {
+          "size": "8.0K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/cobalt-adversarial-8cc7d15e-validator-3-storage-migration.json"
+        }
+      ],
+      "var_lib_postfiat_top": [
+        {
+          "size": "4.7G",
+          "path": "/var/lib/postfiat/gate931"
+        },
+        {
+          "size": "3.3G",
+          "path": "/var/lib/postfiat/gate926"
+        },
+        {
+          "size": "2.2G",
+          "path": "/var/lib/postfiat/validator-3"
+        },
+        {
+          "size": "2.1G",
+          "path": "/var/lib/postfiat/pre-arc-current-v2-a699d560-raw"
+        },
+        {
+          "size": "1.2G",
+          "path": "/var/lib/postfiat/pre-storage-lease-af9b83c3-raw"
+        },
+        {
+          "size": "203M",
+          "path": "/var/lib/postfiat/pre-rollout-raw"
+        }
+      ],
+      "size": "75G",
+      "used": "53G",
+      "avail": "19G",
+      "use_percent": "75%",
+      "size_bytes": 79941234688,
+      "used_bytes": 56738119680,
+      "avail_bytes": 19705712640,
+      "releases_total": "4.0G",
+      "snapshots_total": "124K"
+    },
+    {
+      "validator": "validator-4",
+      "host": "95.179.179.206",
+      "releases_top": [
+        {
+          "size": "357M",
+          "path": "/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e"
+        },
+        {
+          "size": "206M",
+          "path": "/opt/postfiat/releases/pfusdc-eth-l1-f30d368"
+        },
+        {
+          "size": "103M",
+          "path": "/opt/postfiat/releases/a666-finalized-checkpoint-8949759"
+        },
+        {
+          "size": "84M",
+          "path": "/opt/postfiat/releases/fastswap-v1-c545d100"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/rpc-status-cache-20260906"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v3-707e006f"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v2-1bcd0f0d"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v1-ef2dec31"
+        }
+      ],
+      "snapshots_top": [
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-validator-4-rollback"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r4-validator-4-storage-migration.json"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-4-storage-migration.json"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-4-rollback"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-4-storage-migration.json"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-4-rollback"
+        },
+        {
+          "size": "8.0K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/cobalt-verifier-92b63f5a-validator-4-storage-migration.json"
+        },
+        {
+          "size": "8.0K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/cobalt-adversarial-8cc7d15e-validator-4-storage-migration.json"
+        }
+      ],
+      "var_lib_postfiat_top": [
+        {
+          "size": "5.0G",
+          "path": "/var/lib/postfiat/gate931"
+        },
+        {
+          "size": "3.7G",
+          "path": "/var/lib/postfiat/gate926"
+        },
+        {
+          "size": "2.4G",
+          "path": "/var/lib/postfiat/validator-4"
+        },
+        {
+          "size": "2.3G",
+          "path": "/var/lib/postfiat/pre-arc-current-v2-a699d560-raw"
+        },
+        {
+          "size": "1.4G",
+          "path": "/var/lib/postfiat/pre-storage-lease-af9b83c3-raw"
+        },
+        {
+          "size": "202M",
+          "path": "/var/lib/postfiat/pre-rollout-raw"
+        }
+      ],
+      "size": "75G",
+      "used": "58G",
+      "avail": "14G",
+      "use_percent": "81%",
+      "size_bytes": 79941234688,
+      "used_bytes": 61644058624,
+      "avail_bytes": 14799773696,
+      "releases_total": "4.1G",
+      "snapshots_total": "124K"
+    },
+    {
+      "validator": "validator-5",
+      "host": "45.32.110.170",
+      "releases_top": [
+        {
+          "size": "357M",
+          "path": "/opt/postfiat/releases/open-source-consensus-viewlock-b04c595e"
+        },
+        {
+          "size": "206M",
+          "path": "/opt/postfiat/releases/pfusdc-eth-l1-f30d368"
+        },
+        {
+          "size": "103M",
+          "path": "/opt/postfiat/releases/a666-finalized-checkpoint-8949759"
+        },
+        {
+          "size": "84M",
+          "path": "/opt/postfiat/releases/fastswap-v1-c545d100"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/rpc-status-cache-20260906"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v3-707e006f"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v2-1bcd0f0d"
+        },
+        {
+          "size": "59M",
+          "path": "/opt/postfiat/releases/pfeth-route-v1-ef2dec31"
+        }
+      ],
+      "snapshots_top": [
+        {
+          "size": "219M",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r3-validator-5-finalized-checkpoint"
+        },
+        {
+          "size": "218M",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-validator-5-finalized-checkpoint"
+        },
+        {
+          "size": "218M",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r2-validator-5-finalized-checkpoint"
+        },
+        {
+          "size": "59M",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/.fastpay-committee-20260925-validator-5.candidate-postfiat-node"
+        },
+        {
+          "size": "59M",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/.fastpay-committee-20260925-r3-validator-5.candidate-postfiat-node"
+        },
+        {
+          "size": "59M",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/.fastpay-committee-20260925-r2-validator-5.candidate-postfiat-node"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-validator-5-rollback"
+        },
+        {
+          "size": "12K",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r4-validator-5-storage-migration.json"
+        }
+      ],
+      "var_lib_postfiat_top": [
+        {
+          "size": "4.3G",
+          "path": "/var/lib/postfiat/gate931"
+        },
+        {
+          "size": "2.5G",
+          "path": "/var/lib/postfiat/gate926"
+        },
+        {
+          "size": "2.3G",
+          "path": "/var/lib/postfiat/validator-5"
+        },
+        {
+          "size": "2.2G",
+          "path": "/var/lib/postfiat/pre-arc-current-v2-a699d560-raw"
+        },
+        {
+          "size": "1.3G",
+          "path": "/var/lib/postfiat/pre-storage-lease-af9b83c3-raw"
+        },
+        {
+          "size": "830M",
+          "path": "/var/lib/postfiat/pre-rollout-snapshots"
+        }
+      ],
+      "size": "75G",
+      "used": "54G",
+      "avail": "18G",
+      "use_percent": "76%",
+      "size_bytes": 79941234688,
+      "used_bytes": 57595572224,
+      "avail_bytes": 18848260096,
+      "releases_total": "4.0G",
+      "snapshots_total": "830M"
+    }
+  ],
+  "validator_1_detail": {
+    "note": "Read-only du of validator-1. Explains the 96% root use: /var/log/postfiat/validator-1 13G, /var/backups/postfiat 10G, pre-rollout-snapshots 9.0G (33 finalized-checkpoint exports, 36 staged candidate binaries, three 460M .a666-checkpoint-verifier-experimental.incoming* entries), gate931 5.7G, gate926 4.3G, /opt/postfiat/releases 4.1G.",
+    "root_top": [
+      "68G\t/",
+      "52G\t/var",
+      "4.2G\t/opt",
+      "3.3G\t/usr"
+    ],
+    "var_top": [
+      "52G\t/var",
+      "27G\t/var/lib",
+      "15G\t/var/log",
+      "10G\t/var/backups",
+      "140M\t/var/cache",
+      "72K\t/var/tmp",
+      "16K\t/var/spool",
+      "4.0K\t/var/snap",
+      "--var/lib",
+      "27G\t/var/lib/postfiat",
+      "27G\t/var/lib",
+      "199M\t/var/lib/apt",
+      "38M\t/var/lib/dpkg",
+      "6.7M\t/var/lib/ubuntu-advantage",
+      "3.8M\t/var/lib/command-not-found",
+      "--var/log",
+      "15G\t/var/log",
+      "13G\t/var/log/postfiat",
+      "1.8G\t/var/log/journal",
+      "5.4M\t/var/log/sysstat",
+      "160K\t/var/log/apt"
+    ],
+    "log_and_backups": [
+      "drwxrwxr-x 11 root     syslog   4096 Sep 23 06:49 ..",
+      "drwxr-xr-x  5 root     root     4096 Sep  2 18:36 .",
+      "drwxr-xr-x  3 postfiat postfiat 4096 Sep  2 18:37 gate931",
+      "drwxr-xr-x  3 postfiat postfiat 4096 Aug 31 01:21 gate926",
+      "drwx------  2 postfiat postfiat 4096 Jul 17 06:11 validator-1",
+      "total 20",
+      "--backups",
+      "10G\t/var/backups/postfiat",
+      "10G\t/var/backups",
+      "13G\t/var/log/postfiat/validator-1",
+      "13G\t/var/log/postfiat",
+      "1.3M\t/var/log/postfiat/gate926",
+      "936K\t/var/log/postfiat/gate931",
+      "--backups/postfiat",
+      "10G\t/var/backups/postfiat",
+      "3.4G\t/var/backups/postfiat/rpc-status-cache-20260906-validator-1-1788724534",
+      "3.4G\t/var/backups/postfiat/a666-source-route-20260907-validator-1-1788743461",
+      "3.3G\t/var/backups/postfiat/pfeth-replay-v4-20260905-validator-1-1788631637"
+    ],
+    "snapshot_entries": 98
+  },
+  "raw_logs": [
+    "canary-backup-1036/logs/fleet-disk.stdout",
+    "canary-backup-1036/logs/validator-1-detail.stdout",
+    "canary-backup-1036/logs/validator-1-var.stdout",
+    "canary-backup-1036/logs/validator-1-logs-backups.stdout"
+  ]
+}

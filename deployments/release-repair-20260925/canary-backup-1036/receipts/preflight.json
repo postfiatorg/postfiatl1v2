@@ -1,0 +1,18 @@
+{
+  "checked_at": "2026-09-25T11:52:43.832600+00:00",
+  "binaries": {
+    "/home/postfiatchad/.cache/release-repair-20260925/binaries/candidate-1": {
+      "expected": "d66cecc36426ce05ced8730b2439a27285c6b404688acd13dc23594b884eabd6",
+      "actual": "d66cecc36426ce05ced8730b2439a27285c6b404688acd13dc23594b884eabd6",
+      "match": true
+    },
+    "/home/postfiatchad/.cache/release-repair-20260925/binaries/rollback": {
+      "expected": "44b6794f2f8eab577713dffb6e59880f8ee8c811863e99ed96ed1b0f4ec66bab",
+      "actual": "44b6794f2f8eab577713dffb6e59880f8ee8c811863e99ed96ed1b0f4ec66bab",
+      "match": true
+    }
+  },
+  "trusted_public_key": "/home/postfiatchad/.postfiat/deployments/cobalt-activation-8694b99d/snapshot-keys/snapshot-publisher.public.json",
+  "trusted_public_key_sha256": "adb52f49537ec65cb417ca1a8cd3debff1eb0d318790bc2f40bb5837855cea20",
+  "signed_manifest_sha256": "ee2ca6c68b45778ebaedf3081681401d20226304b639740ac50627933d3feb1a"
+}

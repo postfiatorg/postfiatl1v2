@@ -1,0 +1,32 @@
+{
+  "name": "merged-import-wrong-key",
+  "command": [
+    "/home/postfiatchad/.cache/release-repair-20260925/binaries/candidate-1",
+    "snapshot-import-signed-finalized-checkpoint",
+    "--data-dir",
+    "/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/negative-import",
+    "--snapshot-dir",
+    "/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/r4-signed",
+    "--trusted-publisher-key-file",
+    "/home/postfiatchad/.postfiat/deployments/fastpay-committee-20260925-r4/stage/rootfs/etc/postfiat/releases/fastpay-committee-20260925-r4/deployment.public.json",
+    "--node-id",
+    "validator-1"
+  ],
+  "started_at": "2026-09-25T11:57:21.828425+00:00",
+  "address_space_limit_bytes": 21474836480,
+  "environment_overrides": {
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260925/tmp"
+  },
+  "exit_code": 1,
+  "completed_at": "2026-09-25T11:57:21.839894+00:00",
+  "elapsed_seconds": 0.0,
+  "expected": "nonzero exit (rejection)",
+  "status": "PASS",
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_sha256": "2060eda058b316ddf0ba846dfa8cdaa569753fcefa391603d8523f1dd6fc14d7",
+  "stdout": "logs/merged-import-wrong-key.stdout",
+  "stderr": "logs/merged-import-wrong-key.stderr"
+}

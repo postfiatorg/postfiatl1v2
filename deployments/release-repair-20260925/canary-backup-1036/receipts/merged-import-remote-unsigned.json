@@ -1,0 +1,30 @@
+{
+  "name": "merged-import-remote-unsigned",
+  "command": [
+    "/home/postfiatchad/.cache/release-repair-20260925/binaries/candidate-1",
+    "snapshot-import-finalized-checkpoint",
+    "--data-dir",
+    "/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/merged-unsigned-import",
+    "--snapshot-dir",
+    "/home/postfiatchad/.cache/release-repair-20260925/canary-backup-1036/remote-unsigned",
+    "--node-id",
+    "validator-1"
+  ],
+  "started_at": "2026-09-25T11:53:25.102493+00:00",
+  "address_space_limit_bytes": 21474836480,
+  "environment_overrides": {
+    "RAYON_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "2",
+    "MALLOC_ARENA_MAX": "2",
+    "TMPDIR": "/home/postfiatchad/.cache/release-repair-20260925/tmp"
+  },
+  "exit_code": 0,
+  "completed_at": "2026-09-25T11:54:03.045379+00:00",
+  "elapsed_seconds": 37.9,
+  "expected": "exit 0",
+  "status": "PASS",
+  "stdout_sha256": "1389449fffecd0b5ce4853e8053c288c9698b7d075cc66bc1b9bb42e15bc2c74",
+  "stderr_sha256": "5bc45a8e77dfb427b50db179c302bf9249568d5bf1efe97f8e016d8edf96ccda",
+  "stdout": "logs/merged-import-remote-unsigned.stdout",
+  "stderr": "logs/merged-import-remote-unsigned.stderr"
+}
