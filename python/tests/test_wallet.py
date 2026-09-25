@@ -3153,7 +3153,7 @@ class FastPayFlowTests(unittest.TestCase):
                 mock.patch.object(
                     wallet_module,
                     "_verify_fastpay_apply_v3",
-                    return_value=tuple({"validator_id": f"validator-{i}"} for i in range(5)),
+                    return_value={"authenticated_acknowledgements": [{"validator_id": f"validator-{i}"} for i in range(5)], "verified_effects": {}},
                 ),
                 mock.patch.object(client, "validators", return_value={"validators": validators}),
                 mock.patch.object(
@@ -3236,7 +3236,7 @@ class FastPayFlowTests(unittest.TestCase):
                 mock.patch.object(
                     wallet_module,
                     "_verify_fastpay_apply_v3",
-                    return_value=tuple({"validator_id": f"validator-{i}"} for i in range(5)),
+                    return_value={"authenticated_acknowledgements": [{"validator_id": f"validator-{i}"} for i in range(5)], "verified_effects": {}},
                 ),
                 mock.patch.object(client, "validators", return_value={"validators": validators}),
                 mock.patch.object(
@@ -3301,7 +3301,11 @@ class FastPayFlowTests(unittest.TestCase):
             self.assertEqual(signed["order"]["recovery"]["lock_id"], lock_id)
             return {"validator_id": validator_id, "signature_hex": f"vote-{validator_id}"}
 
+        verified_effects = {"consumed_count": 1, "credited": 6, "credited_to": "pf-owner"}
         apply_result = {
+            "credited": 999,
+            "credited_to": "forged-proxy-address",
+            "authenticated_acknowledgements": [{"validator_id": "unverified-response-value"}],
             "validators": [
                 {
                     "validator_id": f"validator-{index}",
@@ -3341,7 +3345,7 @@ class FastPayFlowTests(unittest.TestCase):
                 mock.patch.object(
                     wallet_module,
                     "_verify_fastpay_apply_v3",
-                    return_value=authenticated,
+                    return_value={"authenticated_acknowledgements": list(authenticated), "verified_effects": verified_effects},
                 ) as verify_apply,
                 mock.patch.object(
                     client,
@@ -3363,6 +3367,9 @@ class FastPayFlowTests(unittest.TestCase):
                 )
 
         self.assertEqual(result.order["recovery"]["lock_id"], lock_id)
+        self.assertEqual(result.result["credited"], 6)
+        self.assertEqual(result.result["credited_to"], "pf-owner")
+        self.assertEqual(result.result["apply"], apply_result)
         self.assertEqual(result.result["authenticated_acknowledgements"], list(authenticated))
         self.assertGreaterEqual(sign_rpc.call_count, 5)
         apply_rpc.assert_called_once()
@@ -3407,7 +3414,7 @@ class FastPayFlowTests(unittest.TestCase):
                 mock.patch.object(
                     wallet_module,
                     "_verify_fastpay_apply_v3",
-                    return_value=tuple({"validator_id": f"validator-{i}"} for i in range(5)),
+                    return_value={"authenticated_acknowledgements": [{"validator_id": f"validator-{i}"} for i in range(5)], "verified_effects": {}},
                 ),
                 mock.patch.object(client, "validators", return_value={"validators": validators}),
                 mock.patch.object(
@@ -3474,7 +3481,10 @@ class FastPayFlowTests(unittest.TestCase):
             self.assertEqual(signed["order"]["recovery"]["lock_id"], lock_id)
             return {"validator_id": validator_id, "signature_hex": f"vote-{validator_id}"}
 
+        created_objects = [{"id": "recipient-output", "owner_pubkey_hex": "recipient_pk", "value": 50, "asset": "PFT"}]
         apply_result = {
+            "created_objects": [],
+            "authenticated_acknowledgements": [{"validator_id": "unverified-response-value"}],
             "validators": [
                 {
                     "validator_id": f"validator-{index}",
@@ -3507,7 +3517,7 @@ class FastPayFlowTests(unittest.TestCase):
                     wallet_module,
                     "_verify_fastpay_apply_v3",
                     create=True,
-                    return_value=authenticated,
+                    return_value={"authenticated_acknowledgements": list(authenticated), "verified_effects": {"created_objects": created_objects}},
                 ) as verify_apply,
                 mock.patch.object(
                     client,
@@ -3531,6 +3541,8 @@ class FastPayFlowTests(unittest.TestCase):
 
         self.assertEqual(len(result.votes), 5)
         self.assertEqual(result.order["recovery"]["lock_id"], lock_id)
+        self.assertEqual(result.result["created_objects"], created_objects)
+        self.assertEqual(result.result["apply"], apply_result)
         self.assertEqual(result.result["authenticated_acknowledgements"], list(authenticated))
         self.assertGreaterEqual(owned_sign_v3.call_count, 5)
         owned_apply_v3.assert_called_once()

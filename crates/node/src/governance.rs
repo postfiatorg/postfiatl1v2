@@ -2468,7 +2468,7 @@ fn apply_governance_batch_internal(
     verify_governance_action_batch_id(&genesis, &batch)?;
 
     let mut governance = store.read_governance()?;
-    let mut ledger = store.read_ledger()?;
+    let mut ledger = read_fastpay_ledger(&store)?;
     let shielded = store.read_shielded()?;
     let bridge = store.read_bridge()?;
     let chain_tip = read_chain_tip_or_reconstruct_for_genesis(&store, &genesis)?;

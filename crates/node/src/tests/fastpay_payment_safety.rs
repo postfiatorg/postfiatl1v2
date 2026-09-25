@@ -2661,3 +2661,753 @@ fn fastpay_replay_schedules_same_block_object_dependencies_before_lock_id_order(
         "missing or cyclic dependencies must fail closed"
     );
 }
+
+// Activated storage is essential here: legacy JSON fixtures cannot detect a
+// signed acknowledgement whose effect never reaches the business read view.
+fn active_fastpay_certify(
+    data_dir: &Path,
+    root: &Path,
+    batch_file: PathBuf,
+) -> (PathBuf, BlockProposalFile) {
+    let data_dir = data_dir.to_path_buf();
+    let validators = local_validator_ids(6).unwrap();
+    let height = NodeStore::new(&data_dir).read_chain_tip().unwrap().height + 1;
+    let proposer = block_proposer(BlockProposerOptions {
+        data_dir: data_dir.clone(),
+        block_height: height,
+        view: 0,
+    })
+    .unwrap()
+    .proposer;
+    let proposal_file = root.join("proposal.json");
+    let proposal = propose_batch(BatchProposalOptions {
+        data_dir: data_dir.clone(),
+        verify_block_log: false,
+        batch_kind: None,
+        batch_file: batch_file.clone(),
+        proposal_file: proposal_file.clone(),
+        view: Some(0),
+        timeout_certificate_file: None,
+        key_file: Some(data_dir.join(VALIDATOR_KEYS_FILE)),
+        validator_id: Some(proposer.clone()),
+    })
+    .expect("propose anomaly-bearing state");
+    let mut vote_files = Vec::new();
+    for validator in &validators {
+        let vote_file = root.join(format!("{validator}.vote.json"));
+        create_block_vote(BlockVoteOptions {
+            data_dir: data_dir.clone(),
+            verify_block_log: false,
+            key_file: data_dir.join(VALIDATOR_KEYS_FILE),
+            validator_id: Some(validator.clone()),
+            batch_file: Some(batch_file.clone()),
+            proposal_file: Some(proposal_file.clone()),
+            timeout_certificate_file: None,
+            block_height: Some(proposal.block_height),
+            vote_file: vote_file.clone(),
+        })
+        .expect("create transport certificate vote");
+        vote_files.push(vote_file);
+    }
+    let certificate_file = root.join("certificate.json");
+    let mut certificate = aggregate_block_certificate(BlockCertificateOptions {
+        data_dir: data_dir.clone(),
+        verify_block_log: false,
+        batch_file: Some(batch_file.clone()),
+        proposal_file: Some(proposal_file),
+        timeout_certificate_file: None,
+        block_height: Some(proposal.block_height),
+        vote_files,
+        certificate_file: certificate_file.clone(),
+    })
+    .expect("aggregate transport certificate");
+
+    let consensus_proposal = create_consensus_v2_proposal_for_block(
+        &data_dir,
+        &proposal,
+        None,
+        &data_dir.join(VALIDATOR_KEYS_FILE),
+    )
+    .expect("create consensus v2 proposal");
+    // The fixture holds all test keys. Construct all six cryptographic votes;
+    // production local anti-double-vote state deliberately authorizes one key.
+    let sign_votes = |phase| {
+        read_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE))
+            .unwrap()
+            .validators
+            .iter()
+            .map(|key| {
+                let mut vote = postfiat_types::ConsensusV2Vote {
+                    schema: postfiat_types::CONSENSUS_V2_VOTE_SCHEMA.into(),
+                    domain: consensus_proposal.domain.clone(),
+                    round: consensus_proposal.round,
+                    phase,
+                    block: Some(consensus_proposal.block.clone()),
+                    validator: key.node_id.clone(),
+                    signature: postfiat_types::ConsensusV2Signature {
+                        algorithm_id: ML_DSA_65_ALGORITHM.into(),
+                        signer: key.node_id.clone(),
+                        public_key_hex: key.public_key_hex.clone(),
+                        signature_hex: "00".into(),
+                    },
+                };
+                vote.signature.signature_hex = bytes_to_hex(
+                    &ml_dsa_65_sign_with_context(
+                        &hex_to_bytes(&key.private_key_hex).unwrap(),
+                        &postfiat_ordering_fast::consensus_v2_vote_signing_bytes(&vote).unwrap(),
+                        postfiat_ordering_fast::CONSENSUS_V2_VOTE_CONTEXT,
+                    )
+                    .unwrap(),
+                );
+                vote
+            })
+            .collect()
+    };
+    let prepare_votes = sign_votes(postfiat_types::ConsensusV2Phase::Prepare);
+    let prepare_qc = certify_and_persist_consensus_v2_votes(
+        &data_dir,
+        consensus_proposal.round,
+        postfiat_types::ConsensusV2Phase::Prepare,
+        Some(consensus_proposal.block.clone()),
+        prepare_votes,
+    )
+    .expect("prepare QC");
+    let precommit_votes = sign_votes(postfiat_types::ConsensusV2Phase::Precommit);
+    let precommit_qc = certify_and_persist_consensus_v2_votes(
+        &data_dir,
+        consensus_proposal.round,
+        postfiat_types::ConsensusV2Phase::Precommit,
+        Some(consensus_proposal.block.clone()),
+        precommit_votes,
+    )
+    .expect("precommit QC");
+    certificate.consensus_v2_commit = Some(
+        assemble_consensus_v2_commit(
+            &data_dir,
+            &proposal,
+            consensus_proposal,
+            None,
+            prepare_qc,
+            precommit_qc,
+        )
+        .expect("assemble consensus v2 commit"),
+    );
+    write_block_certificate_file(&certificate_file, &certificate)
+        .expect("write complete external certificate");
+    (certificate_file, proposal)
+}
+
+fn active_fastpay_fixture() -> (
+    PathBuf,
+    Vec<PathBuf>,
+    postfiat_crypto_provider::MlDsa65KeyPair,
+) {
+    let root = unique_test_dir("postfiat-fastpay-active-storage");
+    let data_dir = root.join("validator-0");
+    init_consensus_v2(InitConsensusV2Options {
+        data_dir: data_dir.clone(),
+        chain_id: "fastpay-active-storage-test".into(),
+        node_id: "validator-0".into(),
+        validator_count: 6,
+        activation_height: 1,
+        storage_activation_height: Some(1),
+    })
+    .unwrap();
+    let store = NodeStore::new(&data_dir);
+    let genesis = store.read_genesis().unwrap();
+    let governance = store.read_governance().unwrap();
+    let mut ledger = store.read_ledger().unwrap();
+    let mut keys = read_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE)).unwrap();
+    ledger.fastpay_recovery_policy = Some(postfiat_types::FastPayRecoveryPolicyV1 {
+        schema: postfiat_types::FASTPAY_RECOVERY_POLICY_SCHEMA_V1.into(),
+        activation_height: 1,
+        max_validity_blocks: 20,
+        max_recovery_blocks: 20,
+    });
+    ledger.fastpay_recovery_committees.push(
+        postfiat_types::FastPayRecoveryCommitteeV1::from_public_keys(
+            genesis.chain_id.clone(),
+            genesis_hash(&genesis),
+            genesis.protocol_version,
+            1,
+            1,
+            100,
+            keys.validators
+                .iter()
+                .map(|v| (v.node_id.clone(), v.public_key_hex.clone()))
+                .collect(),
+        )
+        .unwrap(),
+    );
+    let replacement = ml_dsa_65_keygen_from_seed(&[91; 32]);
+    let mut registry =
+        read_validator_registry_file(&data_dir.join(VALIDATOR_REGISTRY_FILE)).unwrap();
+    registry
+        .validators
+        .iter_mut()
+        .find(|v| v.node_id == "validator-5")
+        .unwrap()
+        .public_key_hex = bytes_to_hex(&replacement.public_key);
+    let key = keys
+        .validators
+        .iter_mut()
+        .find(|v| v.node_id == "validator-5")
+        .unwrap();
+    key.public_key_hex = bytes_to_hex(&replacement.public_key);
+    key.private_key_hex = bytes_to_hex(&replacement.private_key);
+    write_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE), &keys).unwrap();
+    write_validator_registry_file(&data_dir.join(VALIDATOR_REGISTRY_FILE), &registry).unwrap();
+    let owner = ml_dsa_65_keygen_from_seed(&[80; 32]);
+    ledger
+        .accounts
+        .iter_mut()
+        .find(|a| a.balance >= 100)
+        .unwrap()
+        .balance -= 100;
+    ledger.owned_objects.push(postfiat_types::OwnedObject {
+        id: "active-fastpay-input".into(),
+        version: 1,
+        owner_pubkey_hex: bytes_to_hex(&owner.public_key),
+        value: 100,
+        asset: "PFT".into(),
+    });
+    store.write_ledger(&ledger).unwrap();
+    let fixture_dir = data_dir.join("fastpay-fixture-generation");
+    let target = store.open_transactional_store_at(&fixture_dir).unwrap();
+    let initial = store.transactional_store().unwrap();
+    let tip = store.read_chain_tip().unwrap();
+    let commitment = postfiat_storage::OrderedHistoryCommitment::genesis(
+        &genesis.chain_id,
+        &genesis_hash(&genesis),
+        genesis.protocol_version,
+    )
+    .unwrap();
+
+    let shielded = store.read_shielded().unwrap();
+    let bridge = store.read_bridge().unwrap();
+    let node_state = store.read_node_state().unwrap();
+
+    drop(initial);
+    let additional = [postfiat_storage::transactional::NamedStateValue {
+        domain: "validator_registry".to_owned(),
+        canonical_bytes: serde_json::to_vec(&registry).unwrap(),
+    }];
+    target
+        .initialize_with_activation(
+            &tip,
+            &commitment,
+            postfiat_storage::CurrentStateUpdate {
+                ledger: Some(&ledger),
+                governance: Some(&governance),
+                shielded: Some(&shielded),
+                bridge: Some(&bridge),
+                node_state: Some(&node_state),
+                additional: &additional,
+            },
+            Some(1),
+        )
+        .unwrap();
+    let packet = hash_hex("postfiat.test.historical-fixture", b"checkpoint");
+    target.verify_and_bind_migration(&packet).unwrap();
+    drop(target);
+    store
+        .publish_transactional_generation(&fixture_dir, &packet)
+        .unwrap();
+    let batch_file = root.join("initial-batch.json");
+    create_transfer_batch(BatchTransferOptions {
+        data_dir: data_dir.clone(),
+        key_file: None,
+        to: "pffastpayanchor00000000000000000000000001".into(),
+        amount: 1,
+        batch_file: batch_file.clone(),
+    })
+    .unwrap();
+    let (certificate_file, _) = active_fastpay_certify(&data_dir, &root, batch_file.clone());
+    apply_batch(ApplyBatchOptions {
+        data_dir: data_dir.clone(),
+        batch_file,
+        certificate_file: Some(certificate_file),
+    })
+    .unwrap();
+    assert!(store.transactional_storage_active().unwrap());
+    verify_finalized_checkpoint(NodeOptions {
+        data_dir: data_dir.clone(),
+    })
+    .unwrap();
+    let snapshot_dir = root.join("initial-snapshot");
+    export_snapshot_from_finalized_checkpoint(SnapshotExportOptions {
+        data_dir: data_dir.clone(),
+        snapshot_dir: snapshot_dir.clone(),
+    })
+    .unwrap();
+    let mut dirs = vec![data_dir.clone()];
+    for index in 1..6 {
+        let dir = root.join(format!("validator-{index}"));
+        import_snapshot_from_finalized_checkpoint(SnapshotImportOptions {
+            data_dir: dir.clone(),
+            snapshot_dir: snapshot_dir.clone(),
+            node_id: Some(format!("validator-{index}")),
+        })
+        .unwrap();
+        write_validator_key_file(&dir.join(VALIDATOR_KEYS_FILE), &keys).unwrap();
+        dirs.push(dir);
+    }
+    (root, dirs, owner)
+}
+
+fn active_fastpay_transfer(
+    dirs: &[PathBuf],
+    owner: &postfiat_crypto_provider::MlDsa65KeyPair,
+) -> postfiat_types::OwnedTransferCertificateV3 {
+    let ledger = NodeStore::new(&dirs[0]).read_ledger().unwrap();
+    let committee = &ledger.fastpay_recovery_committees[0];
+    let mut order = postfiat_types::OwnedTransferOrderV3 {
+        domain: committee.certificate_domain(),
+        recovery: postfiat_types::FastPayOrderRecoveryV1 {
+            schema: postfiat_types::FASTPAY_ORDER_RECOVERY_SCHEMA_V1.into(),
+            committee_epoch: 1,
+            lock_id: "00".repeat(48),
+            valid_from_height: 1,
+            expires_at_height: 10,
+            recovery_closes_at_height: 20,
+        },
+        inputs: vec![postfiat_types::OwnedObjectRef {
+            id: "active-fastpay-input".into(),
+            version: 1,
+        }],
+        outputs: vec![postfiat_types::OwnedOutputSpec {
+            owner_pubkey_hex: bytes_to_hex(&ml_dsa_65_keygen_from_seed(&[81; 32]).public_key),
+            value: 99,
+            asset: "PFT".into(),
+        }],
+        fee: 1,
+        nonce: 42,
+        memos: Vec::new(),
+    };
+    order.recovery.lock_id = postfiat_types::fastpay_transfer_lock_id_v1(&order);
+    let signed = postfiat_types::SignedOwnedTransferOrderV3 {
+        owner_pubkey_hex: bytes_to_hex(&owner.public_key),
+        owner_signature_hex: bytes_to_hex(
+            &ml_dsa_65_sign_with_context(
+                &owner.private_key,
+                &postfiat_execution::owned_transfer_v3_signing_bytes(&order),
+                postfiat_execution::OWNED_TRANSFER_CONTEXT_V3,
+            )
+            .unwrap(),
+        ),
+        order: order.clone(),
+    };
+    let json = serde_json::to_string(&signed).unwrap();
+    let votes = dirs
+        .iter()
+        .take(5)
+        .enumerate()
+        .map(|(i, dir)| {
+            serde_json::from_str(
+                &owned_sign_v3(
+                    NodeOptions {
+                        data_dir: dir.clone(),
+                    },
+                    &json,
+                    &format!("validator-{i}"),
+                )
+                .unwrap(),
+            )
+            .unwrap()
+        })
+        .collect();
+    assert!(
+        owned_sign_v3(
+            NodeOptions {
+                data_dir: dirs[5].clone()
+            },
+            &json,
+            "validator-5"
+        )
+        .is_err()
+    );
+    postfiat_types::OwnedTransferCertificateV3 {
+        order,
+        owner_pubkey_hex: signed.owner_pubkey_hex,
+        owner_signature_hex: signed.owner_signature_hex,
+        votes,
+    }
+}
+
+#[test]
+fn fastpay_active_storage_transfer_restart_and_six_validator_anchor() {
+    let (root, dirs, owner) = active_fastpay_fixture();
+    let certificate = active_fastpay_transfer(&dirs, &owner);
+    let cert_json = serde_json::to_string(&certificate).unwrap();
+    let mut expected = postfiat_execution::owned_transfer_output_objects(
+        &certificate.owner_pubkey_hex,
+        certificate.order.nonce,
+        &certificate.order.outputs,
+    );
+    for (index, dir) in dirs.iter().take(5).enumerate() {
+        let store = NodeStore::new(dir);
+        let canonical = store.read_ledger().unwrap();
+        let tip = store.read_chain_tip().unwrap();
+        let options = NodeOptions {
+            data_dir: dir.clone(),
+        };
+        let ack =
+            owned_apply_v3(options.clone(), &cert_json, &format!("validator-{index}")).unwrap();
+        assert_same_fastpay_ack_effect(
+            &ack,
+            &owned_apply_v3(options.clone(), &cert_json, &format!("validator-{index}")).unwrap(),
+        );
+        let view = read_fastpay_ledger(&NodeStore::new(dir)).unwrap();
+        assert_eq!(view.owned_objects, expected);
+        assert_eq!(store.read_ledger().unwrap(), canonical);
+        assert_eq!(store.read_chain_tip().unwrap(), tip);
+        assert_eq!(
+            owned_objects(OwnedObjectsOptions {
+                data_dir: dir.clone(),
+                owner_public_key_hex: expected[0].owner_pubkey_hex.clone(),
+                asset: None,
+                limit: None
+            })
+            .unwrap()
+            .objects,
+            expected
+        );
+        verify_finalized_checkpoint(options).unwrap();
+    }
+    // Missing/forged evidence and a journal from another tip cannot publish a
+    // partial view. Old-format single-effect journals remain recoverable.
+    let journal_path = dirs[0].join(FASTPAY_SPECULATIVE_JOURNAL_FILE);
+    let original = std::fs::read(&journal_path).unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&original).unwrap();
+    for attack in ["future", "different-root", "forged-vote", "missing-input"] {
+        let mut tampered = value.clone();
+        match attack {
+            "future" => tampered["effects"][0]["retained_tip"]["height"] = 2.into(),
+            "different-root" => {
+                tampered["effects"][0]["retained_tip"]["state_root"] = "00".repeat(48).into()
+            }
+            "forged-vote" => {
+                tampered["effects"][0]["fence"]["certificate"]["certificate"]["votes"][0]["signature_hex"] =
+                    "00".into()
+            }
+            _ => {
+                tampered["effects"][0]["fence"]["certificate"]["certificate"]["order"]["inputs"]
+                    [0]["id"] = "missing".into()
+            }
+        }
+        atomic_write(&journal_path, serde_json::to_vec(&tampered).unwrap()).unwrap();
+        assert!(
+            read_fastpay_ledger(&NodeStore::new(&dirs[0])).is_err(),
+            "{attack}"
+        );
+    }
+    let mut legacy = value;
+    legacy["effects"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("retained_tip");
+    atomic_write(&journal_path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+    assert_eq!(
+        read_fastpay_ledger(&NodeStore::new(&dirs[0]))
+            .unwrap()
+            .owned_objects,
+        expected
+    );
+    atomic_write(&journal_path, original).unwrap();
+    let snapshot_dir = root.join("pending-snapshot");
+    export_snapshot_from_finalized_checkpoint(SnapshotExportOptions {
+        data_dir: dirs[0].clone(),
+        snapshot_dir: snapshot_dir.clone(),
+    })
+    .unwrap();
+    let restored = root.join("restored-pending");
+    import_snapshot_from_finalized_checkpoint(SnapshotImportOptions {
+        data_dir: restored.clone(),
+        snapshot_dir,
+        node_id: None,
+    })
+    .unwrap();
+    assert_eq!(
+        read_fastpay_ledger(&NodeStore::new(&restored))
+            .unwrap()
+            .owned_objects,
+        expected
+    );
+    // A dependent transfer intentionally sorts before its producer in the
+    // canonical journal. Replay must follow dependencies and preserve undo order.
+    let child_owner = ml_dsa_65_keygen_from_seed(&[81; 32]);
+    let mut child = certificate.order.clone();
+    child.inputs = vec![postfiat_types::OwnedObjectRef {
+        id: expected[0].id.clone(),
+        version: 1,
+    }];
+    child.outputs[0].value = 98;
+    child.outputs[0].owner_pubkey_hex = bytes_to_hex(&owner.public_key);
+    for nonce in 100..10_000 {
+        child.nonce = nonce;
+        child.recovery.lock_id = postfiat_types::fastpay_transfer_lock_id_v1(&child);
+        if child.recovery.lock_id < certificate.order.recovery.lock_id {
+            break;
+        }
+    }
+    assert!(child.recovery.lock_id < certificate.order.recovery.lock_id);
+    let signed = postfiat_types::SignedOwnedTransferOrderV3 {
+        owner_pubkey_hex: bytes_to_hex(&child_owner.public_key),
+        owner_signature_hex: bytes_to_hex(
+            &ml_dsa_65_sign_with_context(
+                &child_owner.private_key,
+                &postfiat_execution::owned_transfer_v3_signing_bytes(&child),
+                postfiat_execution::OWNED_TRANSFER_CONTEXT_V3,
+            )
+            .unwrap(),
+        ),
+        order: child.clone(),
+    };
+    let votes = dirs
+        .iter()
+        .take(5)
+        .enumerate()
+        .map(|(index, dir)| {
+            serde_json::from_str(
+                &owned_sign_v3(
+                    NodeOptions {
+                        data_dir: dir.clone(),
+                    },
+                    &serde_json::to_string(&signed).unwrap(),
+                    &format!("validator-{index}"),
+                )
+                .unwrap(),
+            )
+            .unwrap()
+        })
+        .collect();
+    let child = postfiat_types::OwnedTransferCertificateV3 {
+        order: child,
+        owner_pubkey_hex: signed.owner_pubkey_hex,
+        owner_signature_hex: signed.owner_signature_hex,
+        votes,
+    };
+    expected = postfiat_execution::owned_transfer_output_objects(
+        &child.owner_pubkey_hex,
+        child.order.nonce,
+        &child.order.outputs,
+    );
+    for (index, dir) in dirs.iter().take(5).enumerate() {
+        owned_apply_v3(
+            NodeOptions {
+                data_dir: dir.clone(),
+            },
+            &serde_json::to_string(&child).unwrap(),
+            &format!("validator-{index}"),
+        )
+        .unwrap();
+        assert_eq!(
+            read_fastpay_ledger(&NodeStore::new(dir))
+                .unwrap()
+                .owned_objects,
+            expected
+        );
+    }
+    let original = std::fs::read(&journal_path).unwrap();
+    let mut missing: serde_json::Value = serde_json::from_slice(&original).unwrap();
+    assert_eq!(
+        missing["effects"][0]["fence"]["lock_id"],
+        child.order.recovery.lock_id
+    );
+    missing["effects"].as_array_mut().unwrap().pop();
+    atomic_write(&journal_path, serde_json::to_vec(&missing).unwrap()).unwrap();
+    assert!(read_fastpay_ledger(&NodeStore::new(&dirs[0])).is_err());
+    atomic_write(&journal_path, original).unwrap();
+    let batch_file = root.join("anchor-batch.json");
+    create_transfer_batch(BatchTransferOptions {
+        data_dir: dirs[0].clone(),
+        key_file: None,
+        to: "pffastpayanchor00000000000000000000000001".into(),
+        amount: 1,
+        batch_file: batch_file.clone(),
+    })
+    .unwrap();
+    let (cert_file, proposal) = active_fastpay_certify(&dirs[0], &root, batch_file.clone());
+    assert_eq!(proposal.fastpay_pre_state_effects.len(), 2);
+    for dir in &dirs {
+        apply_batch(ApplyBatchOptions {
+            data_dir: dir.clone(),
+            batch_file: batch_file.clone(),
+            certificate_file: Some(cert_file.clone()),
+        })
+        .unwrap();
+        let store = NodeStore::new(dir);
+        assert_eq!(store.read_ledger().unwrap().owned_objects, expected);
+        assert_eq!(
+            read_fastpay_ledger(&store).unwrap(),
+            store.read_ledger().unwrap()
+        );
+        assert_eq!(
+            store.read_chain_tip().unwrap(),
+            NodeStore::new(&dirs[0]).read_chain_tip().unwrap()
+        );
+        verify_finalized_checkpoint(NodeOptions {
+            data_dir: dir.clone(),
+        })
+        .unwrap();
+    }
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn fastpay_active_storage_minority_omission_then_unwrap_at_later_height() {
+    let (root, dirs, owner) = active_fastpay_fixture();
+    let certificate = active_fastpay_transfer(&dirs, &owner);
+    let batch_file = root.join("omitting-batch.json");
+    create_transfer_batch(BatchTransferOptions {
+        data_dir: dirs[0].clone(),
+        key_file: None,
+        to: "pffastpayanchor00000000000000000000000001".into(),
+        amount: 1,
+        batch_file: batch_file.clone(),
+    })
+    .unwrap();
+    let (cert_file, proposal) = active_fastpay_certify(&dirs[5], &root, batch_file.clone());
+    assert!(proposal.fastpay_pre_state_effects.is_empty());
+    owned_apply_v3(
+        NodeOptions {
+            data_dir: dirs[0].clone(),
+        },
+        &serde_json::to_string(&certificate).unwrap(),
+        "validator-0",
+    )
+    .unwrap();
+    assert!(
+        create_block_vote(BlockVoteOptions {
+            data_dir: dirs[0].clone(),
+            verify_block_log: false,
+            key_file: dirs[0].join(VALIDATOR_KEYS_FILE),
+            validator_id: Some("validator-0".into()),
+            batch_file: Some(batch_file.clone()),
+            proposal_file: Some(root.join("proposal.json")),
+            timeout_certificate_file: None,
+            block_height: Some(2),
+            vote_file: root.join("must-reject.vote.json"),
+        })
+        .is_err()
+    );
+    for dir in &dirs {
+        apply_batch(ApplyBatchOptions {
+            data_dir: dir.clone(),
+            batch_file: batch_file.clone(),
+            certificate_file: Some(cert_file.clone()),
+        })
+        .unwrap();
+        let store = NodeStore::new(dir);
+        assert_eq!(
+            read_fastpay_ledger(&store).unwrap(),
+            store.read_ledger().unwrap()
+        );
+        assert_eq!(
+            store.read_ledger().unwrap().owned_objects[0].id,
+            "active-fastpay-input"
+        );
+    }
+    // A later local application must use its real retained tip, not valid_from.
+    // Use the untouched input on other nodes: node 0 retains the competing lock.
+    let mut order = postfiat_types::OwnedUnwrapOrderV3 {
+        domain: certificate.order.domain.clone(),
+        recovery: certificate.order.recovery.clone(),
+        inputs: certificate.order.inputs.clone(),
+        to_address: "pfactiveunwraprecipient00000000000000001".into(),
+        amount: 99,
+        fee: 1,
+        asset: "PFT".into(),
+        nonce: 43,
+        memos: Vec::new(),
+    };
+    order.recovery.lock_id = postfiat_types::fastpay_unwrap_lock_id_v1(&order);
+    let signature = bytes_to_hex(
+        &ml_dsa_65_sign_with_context(
+            &owner.private_key,
+            &postfiat_execution::owned_unwrap_v3_signing_bytes(&order),
+            postfiat_execution::OWNED_UNWRAP_CONTEXT_V3,
+        )
+        .unwrap(),
+    );
+    let signed = postfiat_types::SignedOwnedUnwrapOrderV3 {
+        order: order.clone(),
+        owner_pubkey_hex: bytes_to_hex(&owner.public_key),
+        owner_signature_hex: signature.clone(),
+    };
+    // The existing transfer locks correctly prohibit signing a conflicting unwrap.
+    assert!(
+        owned_unwrap_sign_v3(
+            NodeOptions {
+                data_dir: dirs[0].clone()
+            },
+            &serde_json::to_string(&signed).unwrap(),
+            "validator-0"
+        )
+        .is_err()
+    );
+    // Build fixture votes directly to test certified execution independently of
+    // the previously established local signing locks.
+    let keys = read_validator_key_file(&dirs[0].join(VALIDATOR_KEYS_FILE)).unwrap();
+    let votes = keys
+        .validators
+        .iter()
+        .take(5)
+        .map(|key| {
+            let signature = ml_dsa_65_sign_with_context(
+                &hex_to_bytes(&key.private_key_hex).unwrap(),
+                &postfiat_execution::owned_unwrap_v3_signing_bytes(&order),
+                postfiat_execution::OWNED_UNWRAP_CONTEXT_V3,
+            )
+            .unwrap();
+            postfiat_types::OwnedUnwrapVote {
+                validator_id: key.node_id.clone(),
+                signature_hex: bytes_to_hex(&signature),
+            }
+        })
+        .collect();
+    let unwrap = postfiat_types::OwnedUnwrapCertificateV3 {
+        order,
+        owner_pubkey_hex: signed.owner_pubkey_hex,
+        owner_signature_hex: signature,
+        votes,
+    };
+    let store = NodeStore::new(&dirs[1]);
+    let before = store.read_ledger().unwrap();
+    let options = NodeOptions {
+        data_dir: dirs[1].clone(),
+    };
+    let json = serde_json::to_string(&unwrap).unwrap();
+    let ack = owned_unwrap_apply_v3(options.clone(), &json, "validator-1").unwrap();
+    assert_same_fastpay_ack_effect(
+        &ack,
+        &owned_unwrap_apply_v3(options.clone(), &json, "validator-1").unwrap(),
+    );
+    assert_eq!(
+        account(options, &unwrap.order.to_address).unwrap().balance,
+        99
+    );
+    assert!(
+        read_fastpay_ledger(&NodeStore::new(&dirs[1]))
+            .unwrap()
+            .owned_objects
+            .is_empty()
+    );
+    assert_eq!(store.read_ledger().unwrap(), before);
+    let journal: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(dirs[1].join(FASTPAY_SPECULATIVE_JOURNAL_FILE)).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(journal["effects"][0]["retained_tip"]["height"], 2);
+    assert_eq!(journal["effects"][0]["fence"]["decided_at_height"], 1);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+fn assert_same_fastpay_ack_effect(left: &str, right: &str) {
+    let mut left: serde_json::Value = serde_json::from_str(left).unwrap();
+    let mut right: serde_json::Value = serde_json::from_str(right).unwrap();
+    // ML-DSA signatures are randomized; the authenticated terminal fact is stable.
+    left.as_object_mut().unwrap().remove("signature_hex");
+    right.as_object_mut().unwrap().remove("signature_hex");
+    assert_eq!(left, right);
+}

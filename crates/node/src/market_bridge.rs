@@ -2,7 +2,7 @@ use super::*;
 
 pub fn account(options: NodeOptions, address: &str) -> io::Result<Account> {
     let store = NodeStore::new(options.data_dir);
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     Ok(ledger
         .account(address)
         .cloned()

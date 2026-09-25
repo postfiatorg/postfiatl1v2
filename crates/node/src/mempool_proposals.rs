@@ -4,7 +4,7 @@ use super::*;
 pub fn transfer(options: TransferOptions) -> io::Result<Receipt> {
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
-    let mut ledger = store.read_ledger()?;
+    let mut ledger = read_fastpay_ledger(&store)?;
     let signed = build_signed_transfer(
         &genesis,
         &ledger,
@@ -25,7 +25,7 @@ pub fn transfer(options: TransferOptions) -> io::Result<Receipt> {
 pub fn create_transfer_batch(options: BatchTransferOptions) -> io::Result<TransactionBatch> {
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let signed = build_signed_transfer(
         &genesis,
         &ledger,
@@ -45,7 +45,7 @@ pub fn create_transfer_batch(options: BatchTransferOptions) -> io::Result<Transa
 pub fn submit_transfer_to_mempool(options: TransferOptions) -> io::Result<MempoolEntry> {
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let key_file = read_transfer_key_file(&options.data_dir, options.key_file)?;
     let sender = ledger.account(&key_file.address).ok_or_else(|| {
         io::Error::new(
@@ -178,7 +178,7 @@ fn admit_signed_transfer_to_mempool(
             "signed transfer chain domain does not match local node",
         ));
     }
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let mempool = store.read_mempool()?;
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
@@ -330,7 +330,7 @@ fn admit_signed_payment_v2_to_mempool(
             "signed payment_v2 chain domain does not match local node",
         ));
     }
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let mempool = store.read_mempool()?;
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
@@ -488,7 +488,7 @@ fn admit_signed_asset_transaction_to_mempool(
             "signed asset transaction chain domain does not match local node",
         ));
     }
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let shielded = store.read_shielded()?;
     let orchard_balances = shielded
         .orchard
@@ -685,7 +685,7 @@ pub(super) fn admit_signed_atomic_swap_to_mempool(
         ));
     }
 
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let mempool = store.read_mempool()?;
     let tx_id = atomic_swap_transaction_tx_id(&signed);
     if mempool_has_tx_id(&mempool, &tx_id) {
@@ -751,7 +751,7 @@ pub fn admit_fastlane_primary_to_mempool(
     }
     let store = NodeStore::new(data_dir);
     let genesis = store.read_genesis()?;
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let shielded = store.read_shielded()?;
     let mempool = store.read_mempool()?;
     if mempool.len() >= MAX_MEMPOOL_PENDING_TRANSACTIONS {
@@ -852,7 +852,7 @@ fn admit_signed_escrow_transaction_to_mempool(
             "signed escrow transaction chain domain does not match local node",
         ));
     }
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let mempool = store.read_mempool()?;
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
@@ -1005,7 +1005,7 @@ fn admit_signed_nft_transaction_to_mempool(
             "signed nft transaction chain domain does not match local node",
         ));
     }
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let mempool = store.read_mempool()?;
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
@@ -1068,7 +1068,7 @@ fn admit_signed_offer_transaction_to_mempool(
             "signed offer transaction chain domain does not match local node",
         ));
     }
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let mempool = store.read_mempool()?;
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
@@ -1496,7 +1496,7 @@ pub fn reconcile_terminal_mempool_entries(data_dir: &Path) -> io::Result<usize> 
 pub fn verify_mempool(options: NodeOptions) -> io::Result<MempoolVerificationReport> {
     let store = NodeStore::new(options.data_dir);
     let genesis = store.read_genesis()?;
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let shielded = store.read_shielded()?;
     let mempool = store.read_mempool()?;
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
@@ -2344,7 +2344,7 @@ pub fn create_mempool_batch(options: MempoolBatchOptions) -> io::Result<Transact
 
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let mut mempool = store.read_mempool()?;
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
@@ -2614,7 +2614,7 @@ pub fn create_signed_asset_transaction_batch(
 
     let store = NodeStore::new(&options.data_dir);
     let genesis = store.read_genesis()?;
-    let ledger = store.read_ledger()?;
+    let ledger = read_fastpay_ledger(&store)?;
     let block_height = next_block_height_from_chain_tip(&store, &genesis)?;
     let asset_execution_compatibility = asset_execution_compatibility_from_store(&store)?;
     let mut dry_run_ledger = ledger;
@@ -2951,7 +2951,7 @@ fn build_transparent_batch_proposal(
     supplied_fastpay_effects: Option<&[postfiat_types::FastPayVersionFenceV1]>,
 ) -> io::Result<BlockProposalFile> {
     let genesis = store.read_genesis()?;
-    let mut ledger = store.read_ledger()?;
+    let mut ledger = read_fastpay_ledger(&store)?;
     let mut governance = store.read_governance()?;
     let batch = read_batch_file(batch_file)?;
     let batch_domain = mempool_batch_domain(&genesis);
@@ -3030,7 +3030,7 @@ fn build_governance_batch_proposal(
     supplied_fastpay_effects: Option<&[postfiat_types::FastPayVersionFenceV1]>,
 ) -> io::Result<BlockProposalFile> {
     let genesis = store.read_genesis()?;
-    let mut ledger = store.read_ledger()?;
+    let mut ledger = read_fastpay_ledger(&store)?;
     let mut governance = store.read_governance()?;
     let batch = read_governance_action_batch_file(batch_file)?;
     verify_governance_action_batch_id(&genesis, &batch)?;
@@ -3113,7 +3113,7 @@ fn build_shielded_batch_proposal_with_timings(
     timings.read_genesis_ms = node_timing_elapsed_ms(stage_start);
 
     let stage_start = std::time::Instant::now();
-    let mut ledger = store.read_ledger()?;
+    let mut ledger = read_fastpay_ledger(&store)?;
     timings.read_ledger_ms = node_timing_elapsed_ms(stage_start);
 
     let stage_start = std::time::Instant::now();
@@ -3231,7 +3231,7 @@ fn build_bridge_batch_proposal(
     supplied_fastpay_effects: Option<&[postfiat_types::FastPayVersionFenceV1]>,
 ) -> io::Result<BlockProposalFile> {
     let genesis = store.read_genesis()?;
-    let mut ledger = store.read_ledger()?;
+    let mut ledger = read_fastpay_ledger(&store)?;
     let mut governance = store.read_governance()?;
     let shielded = store.read_shielded()?;
     let mut bridge = store.read_bridge()?;
