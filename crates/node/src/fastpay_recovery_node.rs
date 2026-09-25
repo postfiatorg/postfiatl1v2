@@ -250,19 +250,45 @@ fn active_fastpay_recovery_committee(
     Ok(committee)
 }
 
-fn validate_local_fastpay_committee(
+fn local_fastpay_signer_public_key(
     data_dir: &std::path::Path,
     committee: &postfiat_types::FastPayRecoveryCommitteeV1,
-) -> io::Result<()> {
-    let mut local = load_validator_pubkeys(data_dir)?;
-    local.sort_by(|left, right| left.0.cmp(&right.0));
-    if local != committee.validator_public_keys() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "local validator registry does not match the replicated FastPay committee",
+    validator_id: &str,
+) -> io::Result<Vec<u8>> {
+    // The replicated epoch pins certificate authority. The current registry can
+    // revoke this signer, but rotating another member must not revoke this one.
+    let expected = committee
+        .validator_public_keys()
+        .into_iter()
+        .find(|(id, _)| id == validator_id)
+        .ok_or_else(|| fastpay_invalid_data("local signer is not in the FastPay committee"))?;
+    if !load_validator_pubkeys(data_dir)?.contains(&expected) {
+        return Err(fastpay_invalid_data(
+            "local signer key does not match the replicated FastPay committee",
         ));
     }
-    Ok(())
+    hex_to_bytes(&expected.1).map_err(invalid_data)
+}
+
+fn sign_for_fastpay_committee(
+    data_dir: &std::path::Path,
+    committee: &postfiat_types::FastPayRecoveryCommitteeV1,
+    validator_id: &str,
+    message: &[u8],
+    context: &[u8],
+) -> io::Result<Vec<u8>> {
+    let public_key = local_fastpay_signer_public_key(data_dir, committee, validator_id)?;
+    let secret_key = load_owned_validator_secret_key(data_dir, validator_id)?;
+    let signature = ml_dsa_65_sign_with_context(&secret_key, message, context)
+        .map_err(|error| io::Error::other(format!("FastPay committee sign failed: {error}")))?;
+    // Public metadata in validator_keys.json does not prove the private key's
+    // identity. Verify the actual signature before reserving locks or applying.
+    if !ml_dsa_65_verify_with_context(&public_key, message, &signature, context) {
+        return Err(fastpay_invalid_data(
+            "local signing key cannot sign for the replicated FastPay committee",
+        ));
+    }
+    Ok(signature)
 }
 
 fn ensure_fastpay_unanchored_capacity(store: &NodeStore, ledger: &LedgerState) -> io::Result<()> {
@@ -319,7 +345,6 @@ pub fn owned_recovery_capabilities_v3(options: NodeOptions) -> io::Result<String
     ensure_fastpay_unanchored_capacity(&store, &ledger)?;
     let height = fastpay_height(&store)?;
     let committee = active_fastpay_recovery_committee(&ledger, height)?;
-    validate_local_fastpay_committee(&options.data_dir, &committee)?;
     let report = postfiat_types::FastPayRecoveryCapabilitiesV1 {
         schema: postfiat_types::FASTPAY_RECOVERY_CAPABILITIES_SCHEMA_V1.to_string(),
         domain: owned_certificate_domain_v3(&options.data_dir)?,
@@ -355,7 +380,6 @@ pub fn owned_sign_v3(
         signed.order.recovery.committee_epoch,
         &signed.order.domain.registry_id,
     )?;
-    validate_local_fastpay_committee(&options.data_dir, &committee)?;
     if height < committee.valid_from_height
         || height > committee.new_orders_through_height
         || signed.order.recovery.valid_from_height > committee.new_orders_through_height
@@ -387,6 +411,19 @@ pub fn owned_sign_v3(
         FASTPAY_V3_TRANSFER_ORDER_HASH_DOMAIN,
         &signing_bytes,
     ));
+    if order_digest != postfiat_execution::fastpay_transfer_order_digest_v3(&signed.order) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "FastPay v3 transfer order digest mismatch",
+        ));
+    }
+    let signature = sign_for_fastpay_committee(
+        &options.data_dir,
+        &committee,
+        validator_id,
+        &signing_bytes,
+        postfiat_execution::OWNED_TRANSFER_CONTEXT_V3,
+    )?;
     reserve_owned_input_locks(
         &options.data_dir,
         &signed.order.inputs,
@@ -394,19 +431,6 @@ pub fn owned_sign_v3(
         &signed.order.recovery.lock_id,
         "owned-sign-v3",
     )?;
-    if order_digest != postfiat_execution::fastpay_transfer_order_digest_v3(&signed.order) {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "FastPay v3 transfer order digest mismatch",
-        ));
-    }
-    let secret_key = load_owned_validator_secret_key(&options.data_dir, validator_id)?;
-    let signature = ml_dsa_65_sign_with_context(
-        &secret_key,
-        &signing_bytes,
-        postfiat_execution::OWNED_TRANSFER_CONTEXT_V3,
-    )
-    .map_err(|error| io::Error::other(format!("FastPay v3 transfer sign failed: {error}")))?;
     serde_json::to_string(&postfiat_types::OwnedTransferVote {
         validator_id: validator_id.to_string(),
         signature_hex: bytes_to_hex(&signature),
@@ -435,7 +459,6 @@ pub fn owned_unwrap_sign_v3(
         signed.order.recovery.committee_epoch,
         &signed.order.domain.registry_id,
     )?;
-    validate_local_fastpay_committee(&options.data_dir, &committee)?;
     if height < committee.valid_from_height
         || height > committee.new_orders_through_height
         || signed.order.recovery.valid_from_height > committee.new_orders_through_height
@@ -467,6 +490,19 @@ pub fn owned_unwrap_sign_v3(
         FASTPAY_V3_UNWRAP_ORDER_HASH_DOMAIN,
         &signing_bytes,
     ));
+    if order_digest != postfiat_execution::fastpay_unwrap_order_digest_v3(&signed.order) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "FastPay v3 unwrap order digest mismatch",
+        ));
+    }
+    let signature = sign_for_fastpay_committee(
+        &options.data_dir,
+        &committee,
+        validator_id,
+        &signing_bytes,
+        postfiat_execution::OWNED_UNWRAP_CONTEXT_V3,
+    )?;
     reserve_owned_input_locks(
         &options.data_dir,
         &signed.order.inputs,
@@ -474,19 +510,6 @@ pub fn owned_unwrap_sign_v3(
         &signed.order.recovery.lock_id,
         "owned-unwrap-sign-v3",
     )?;
-    if order_digest != postfiat_execution::fastpay_unwrap_order_digest_v3(&signed.order) {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "FastPay v3 unwrap order digest mismatch",
-        ));
-    }
-    let secret_key = load_owned_validator_secret_key(&options.data_dir, validator_id)?;
-    let signature = ml_dsa_65_sign_with_context(
-        &secret_key,
-        &signing_bytes,
-        postfiat_execution::OWNED_UNWRAP_CONTEXT_V3,
-    )
-    .map_err(|error| io::Error::other(format!("FastPay v3 unwrap sign failed: {error}")))?;
     serde_json::to_string(&postfiat_types::OwnedUnwrapVote {
         validator_id: validator_id.to_string(),
         signature_hex: bytes_to_hex(&signature),
@@ -496,6 +519,7 @@ pub fn owned_unwrap_sign_v3(
 
 fn fastpay_ack_for_fence(
     options: &NodeOptions,
+    committee: &postfiat_types::FastPayRecoveryCommitteeV1,
     validator_id: &str,
     domain: postfiat_types::OwnedCertificateDomain,
     fence: &postfiat_types::FastPayVersionFenceV1,
@@ -531,14 +555,14 @@ fn fastpay_ack_for_fence(
     };
     let signing_bytes = postfiat_execution::fastpay_apply_ack_signing_bytes_v1(&acknowledgement)
         .map_err(|error| fastpay_invalid_data(format!("FastPay apply ack encoding: {error:?}")))?;
-    let secret_key = load_owned_validator_secret_key(&options.data_dir, validator_id)?;
     acknowledgement.signature_hex = bytes_to_hex(
-        &ml_dsa_65_sign_with_context(
-            &secret_key,
+        &sign_for_fastpay_committee(
+            &options.data_dir,
+            committee,
+            validator_id,
             &signing_bytes,
             postfiat_execution::FASTPAY_APPLY_ACK_CONTEXT_V1,
-        )
-        .map_err(|error| io::Error::other(format!("FastPay apply ack sign failed: {error}")))?,
+        )?,
     );
     acknowledgement
         .validate_shape()
@@ -789,22 +813,22 @@ pub fn owned_apply_v3(
     .map_err(|error| fastpay_invalid_data(format!("FastPay v3 certificate digest: {error:?}")))?;
     let store = NodeStore::new(&options.data_dir);
     let _mutation_lock = store.lock_ordered_commit()?;
-    let mut ledger = store.read_ledger()?;
+    let ledger = store.read_ledger()?;
     let height = fastpay_height(&store)?;
     let committee = fastpay_recovery_committee(
         &ledger,
         certificate.order.recovery.committee_epoch,
         &certificate.order.domain.registry_id,
     )?;
-    validate_local_fastpay_committee(&options.data_dir, &committee)?;
+    local_fastpay_signer_public_key(&options.data_dir, &committee, validator_id)?;
     let domain = fastpay_domain_for_committee(&options.data_dir, &committee)?;
     let policy = fastpay_recovery_policy(&ledger)?;
-    let fence = if let Some(existing) = matching_confirmed_fence(
+    let acknowledgement = if let Some(existing) = matching_confirmed_fence(
         &ledger,
         &certificate.order.recovery.lock_id,
         &certificate_digest,
     ) {
-        existing.clone()
+        fastpay_ack_for_fence(&options, &committee, validator_id, domain, existing)?
     } else {
         ensure_fastpay_unanchored_capacity(&store, &ledger)?;
         let validator_pks = committee.validator_public_keys();
@@ -831,6 +855,9 @@ pub fn owned_apply_v3(
             .last()
             .cloned()
             .ok_or_else(|| fastpay_invalid_data("FastPay v3 transfer apply omitted its fence"))?;
+        // Construct and verify the acknowledgement before any durable writes.
+        let acknowledgement =
+            fastpay_ack_for_fence(&options, &committee, validator_id, domain, &fence)?;
         retain_fastpay_speculative_effect(
             &store,
             &next_ledger,
@@ -840,11 +867,9 @@ pub fn owned_apply_v3(
                 prior_unwrap_account: None,
             },
         )?;
-        ledger = next_ledger;
-        store.write_ledger(&ledger)?;
-        fence
+        store.write_ledger(&next_ledger)?;
+        acknowledgement
     };
-    let acknowledgement = fastpay_ack_for_fence(&options, validator_id, domain, &fence)?;
     serde_json::to_string(&acknowledgement).map_err(invalid_data)
 }
 
@@ -866,22 +891,22 @@ pub fn owned_unwrap_apply_v3(
         })?;
     let store = NodeStore::new(&options.data_dir);
     let _mutation_lock = store.lock_ordered_commit()?;
-    let mut ledger = store.read_ledger()?;
+    let ledger = store.read_ledger()?;
     let height = fastpay_height(&store)?;
     let committee = fastpay_recovery_committee(
         &ledger,
         certificate.order.recovery.committee_epoch,
         &certificate.order.domain.registry_id,
     )?;
-    validate_local_fastpay_committee(&options.data_dir, &committee)?;
+    local_fastpay_signer_public_key(&options.data_dir, &committee, validator_id)?;
     let domain = fastpay_domain_for_committee(&options.data_dir, &committee)?;
     let policy = fastpay_recovery_policy(&ledger)?;
-    let fence = if let Some(existing) = matching_confirmed_fence(
+    let acknowledgement = if let Some(existing) = matching_confirmed_fence(
         &ledger,
         &certificate.order.recovery.lock_id,
         &certificate_digest,
     ) {
-        existing.clone()
+        fastpay_ack_for_fence(&options, &committee, validator_id, domain, existing)?
     } else {
         ensure_fastpay_unanchored_capacity(&store, &ledger)?;
         let validator_pks = committee.validator_public_keys();
@@ -907,6 +932,9 @@ pub fn owned_unwrap_apply_v3(
             .last()
             .cloned()
             .ok_or_else(|| fastpay_invalid_data("FastPay v3 unwrap apply omitted its fence"))?;
+        // Construct and verify the acknowledgement before any durable writes.
+        let acknowledgement =
+            fastpay_ack_for_fence(&options, &committee, validator_id, domain, &fence)?;
         retain_fastpay_speculative_effect(
             &store,
             &next_ledger,
@@ -916,11 +944,9 @@ pub fn owned_unwrap_apply_v3(
                 prior_unwrap_account,
             },
         )?;
-        ledger = next_ledger;
-        store.write_ledger(&ledger)?;
-        fence
+        store.write_ledger(&next_ledger)?;
+        acknowledgement
     };
-    let acknowledgement = fastpay_ack_for_fence(&options, validator_id, domain, &fence)?;
     serde_json::to_string(&acknowledgement).map_err(invalid_data)
 }
 

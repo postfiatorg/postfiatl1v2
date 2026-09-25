@@ -766,17 +766,20 @@ fn owned_safe_unlock_is_structurally_disabled_and_preserves_old_locks() {
     let _ = std::fs::remove_dir_all(data_dir);
 }
 
-#[test]
-fn fastpay_v3_real_store_persists_certificate_effect_fence_before_signed_ack() {
+fn fastpay_committee_fixture(count: usize) -> (
+    std::path::PathBuf,
+    postfiat_crypto_provider::MlDsa65KeyPair,
+    Vec<(String, postfiat_crypto_provider::MlDsa65KeyPair)>,
+) {
     let data_dir = unique_test_dir("postfiat-fastpay-v3-atomic-apply");
     std::fs::create_dir_all(&data_dir).expect("create data dir");
-    let owner = postfiat_crypto_provider::ml_dsa_65_keygen().expect("owner keygen");
+    let owner = postfiat_crypto_provider::ml_dsa_65_keygen_from_seed(&[80; 32]);
     let owner_pubkey_hex = postfiat_crypto_provider::bytes_to_hex(&owner.public_key);
-    let validators = (0..4)
+    let validators = (0..count)
         .map(|index| {
             (
                 format!("validator-{index}"),
-                postfiat_crypto_provider::ml_dsa_65_keygen().expect("validator keygen"),
+                postfiat_crypto_provider::ml_dsa_65_keygen_from_seed(&[index as u8 + 1; 32]),
             )
         })
         .collect::<Vec<_>>();
@@ -812,12 +815,13 @@ fn fastpay_v3_real_store_persists_certificate_effect_fence_before_signed_ack() {
         ),
     )
     .expect("write validator keys");
+    set_private_file_permissions(&data_dir.join(VALIDATOR_KEYS_FILE)).unwrap();
 
-    let genesis = postfiat_types::Genesis::new_with_validator_count("fastpay-v3-node-test", 4);
+    let genesis = postfiat_types::Genesis::new_with_validator_count("fastpay-v3-node-test", count as u32);
     let store = NodeStore::new(&data_dir);
     store.write_genesis(&genesis).expect("write genesis");
     store
-        .write_governance(&postfiat_types::GovernanceState::new(4))
+        .write_governance(&postfiat_types::GovernanceState::new(count as u32))
         .expect("write governance");
     store
         .write_chain_tip(&postfiat_types::ChainTipState {
@@ -868,6 +872,15 @@ fn fastpay_v3_real_store_persists_certificate_effect_fence_before_signed_ack() {
         asset: "PFT".to_string(),
     });
     store.write_ledger(&ledger).expect("write ledger");
+
+    (data_dir, owner, validators)
+}
+
+#[test]
+fn fastpay_v3_real_store_persists_certificate_effect_fence_before_signed_ack() {
+    let (data_dir, owner, validators) = fastpay_committee_fixture(4);
+    let owner_pubkey_hex = postfiat_crypto_provider::bytes_to_hex(&owner.public_key);
+    let store = NodeStore::new(&data_dir);
 
     let mut order = postfiat_types::OwnedTransferOrderV3 {
         domain: owned_certificate_domain_v3(&data_dir).expect("v3 domain"),
@@ -989,6 +1002,148 @@ fn fastpay_v3_real_store_persists_certificate_effect_fence_before_signed_ack() {
         postfiat_types::FastPayCertificateV1::Transfer(certificate)
     );
     let _ = std::fs::remove_dir_all(data_dir);
+}
+
+#[test]
+fn fastpay_v3_rotated_registry_preserves_five_signers_without_unauthorized_mutation() {
+    for unwrap in [false, true] {
+        let (data_dir, owner, validators) = fastpay_committee_fixture(6);
+        let options = || NodeOptions { data_dir: data_dir.clone() };
+        let store = NodeStore::new(&data_dir);
+        let before = store.read_ledger().expect("fixture ledger");
+        let committee = &before.fastpay_recovery_committees[0];
+        let replacement = ml_dsa_65_keygen_from_seed(&[90; 32]);
+        let mut registry = read_validator_registry_file(&data_dir.join(VALIDATOR_REGISTRY_FILE))
+            .expect("fixture registry");
+        registry.validators[5].public_key_hex = bytes_to_hex(&replacement.public_key);
+        write_validator_registry_file(&data_dir.join(VALIDATOR_REGISTRY_FILE), &registry)
+            .expect("rotate registry member five");
+        let original_keys = read_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE))
+            .expect("fixture keys");
+        let capabilities: postfiat_types::FastPayRecoveryCapabilitiesV1 =
+            serde_json::from_str(&owned_recovery_capabilities_v3(options()).expect("capabilities after rotation"))
+                .expect("capabilities JSON");
+        assert_eq!(capabilities.quorum, 5);
+        assert_eq!(capabilities.validator_count, 6);
+        assert_eq!(capabilities.domain, committee.certificate_domain());
+
+        let recovery = postfiat_types::FastPayOrderRecoveryV1 {
+            schema: postfiat_types::FASTPAY_ORDER_RECOVERY_SCHEMA_V1.to_string(),
+            committee_epoch: 1,
+            lock_id: "00".repeat(48),
+            valid_from_height: 100,
+            expires_at_height: 110,
+            recovery_closes_at_height: 120,
+        };
+        let inputs = vec![postfiat_types::OwnedObjectRef { id: "v3-node-input".into(), version: 7 }];
+        let (order, signing_bytes, context) = if unwrap {
+            let mut order = postfiat_types::OwnedUnwrapOrderV3 {
+                domain: committee.certificate_domain(), recovery, inputs,
+                to_address: "unwrap-recipient".into(), amount: 99, fee: 1, asset: "PFT".into(),
+                nonce: 1, memos: Vec::new(),
+            };
+            order.recovery.lock_id = postfiat_types::fastpay_unwrap_lock_id_v1(&order);
+            (serde_json::to_value(&order).unwrap(),
+             postfiat_execution::owned_unwrap_v3_signing_bytes(&order),
+             postfiat_execution::OWNED_UNWRAP_CONTEXT_V3)
+        } else {
+            let mut order = postfiat_types::OwnedTransferOrderV3 {
+                domain: committee.certificate_domain(), recovery, inputs,
+                outputs: vec![postfiat_types::OwnedOutputSpec {
+                    owner_pubkey_hex: "transfer-recipient".into(), value: 99, asset: "PFT".into(),
+                }], fee: 1, nonce: 1, memos: Vec::new(),
+            };
+            order.recovery.lock_id = postfiat_types::fastpay_transfer_lock_id_v1(&order);
+            (serde_json::to_value(&order).unwrap(),
+             postfiat_execution::owned_transfer_v3_signing_bytes(&order),
+             postfiat_execution::OWNED_TRANSFER_CONTEXT_V3)
+        };
+        let signed = serde_json::json!({
+            "order": order,
+            "owner_pubkey_hex": bytes_to_hex(&owner.public_key),
+            "owner_signature_hex": bytes_to_hex(&ml_dsa_65_sign_with_context(
+                &owner.private_key, &signing_bytes, context).expect("owner signature")),
+        });
+        let signed_json = signed.to_string();
+        let sign: fn(NodeOptions, &str, &str) -> io::Result<String> =
+            if unwrap { owned_unwrap_sign_v3 } else { owned_sign_v3 };
+        let apply: fn(NodeOptions, &str, &str) -> io::Result<String> =
+            if unwrap { owned_unwrap_apply_v3 } else { owned_apply_v3 };
+        let assert_no_locks = || {
+            assert!(super::super::consensus_artifacts::load_owned_input_locks_for_test(&data_dir)
+                .expect("read durable locks").is_empty());
+            assert_eq!(store.read_ledger().expect("unchanged ledger"), before);
+        };
+        for use_replacement in [false, true] {
+            let mut keys = original_keys.clone();
+            if use_replacement {
+                keys.validators[5].private_key_hex = bytes_to_hex(&replacement.private_key);
+                keys.validators[5].public_key_hex = bytes_to_hex(&replacement.public_key);
+            }
+            write_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE), &keys).unwrap();
+            let error = sign(options(), &signed_json, "validator-5").expect_err("rotated signer rejected");
+            assert!(error.to_string().contains("local signer key"), "{error}");
+            assert_no_locks();
+        }
+        assert!(sign(options(), &signed_json, "absent-validator").is_err());
+        assert_no_locks();
+        let mut wrong_keys = original_keys.clone();
+        wrong_keys.validators[0].private_key_hex = bytes_to_hex(&replacement.private_key);
+        atomic_write(data_dir.join(VALIDATOR_KEYS_FILE), serde_json::to_vec(&wrong_keys).unwrap()).unwrap();
+        set_private_file_permissions(&data_dir.join(VALIDATOR_KEYS_FILE)).unwrap();
+        let error = sign(options(), &signed_json, "validator-0").expect_err("wrong private key rejected");
+        assert!(error.to_string().contains("local signing key"), "{error}");
+        assert_no_locks();
+        write_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE), &original_keys).unwrap();
+
+        let votes = (0..5).map(|i| {
+            serde_json::from_str::<serde_json::Value>(
+                &sign(options(), &signed_json, &format!("validator-{i}")).expect("unchanged signer vote")
+            ).unwrap()
+        }).collect::<Vec<_>>();
+        let mut certificate = signed.clone();
+        certificate["votes"] = serde_json::json!(votes);
+        let assert_no_apply = || {
+            assert_eq!(store.read_ledger().expect("unchanged apply ledger"), before);
+            assert!(!data_dir.join(FASTPAY_SPECULATIVE_JOURNAL_FILE).exists());
+        };
+        assert!(apply(options(), &certificate.to_string(), "validator-5").is_err());
+        assert_no_apply();
+        atomic_write(data_dir.join(VALIDATOR_KEYS_FILE), serde_json::to_vec(&wrong_keys).unwrap()).unwrap();
+        set_private_file_permissions(&data_dir.join(VALIDATOR_KEYS_FILE)).unwrap();
+        assert!(apply(options(), &certificate.to_string(), "validator-0").is_err());
+        assert_no_apply();
+        write_validator_key_file(&data_dir.join(VALIDATOR_KEYS_FILE), &original_keys).unwrap();
+        for attack in ["four-votes", "duplicate", "forged", "cross-domain"] {
+            let mut invalid = certificate.clone();
+            match attack {
+                "four-votes" => { invalid["votes"].as_array_mut().unwrap().pop(); }
+                "duplicate" => { invalid["votes"][4] = invalid["votes"][0].clone(); }
+                "forged" => { invalid["votes"][4]["signature_hex"] = "00".into(); }
+                _ => { invalid["order"]["domain"]["chain_id"] = "different-chain".into(); }
+            }
+            assert!(apply(options(), &invalid.to_string(), "validator-0").is_err(), "{attack}");
+            assert_no_apply();
+        }
+        let cert_json = certificate.to_string();
+        for (id, key) in validators.iter().take(5) {
+            let ack: postfiat_types::FastPayApplyAckV1 =
+                serde_json::from_str(&apply(options(), &cert_json, id).expect("eligible apply and replay"))
+                    .expect("ack JSON");
+            assert!(postfiat_execution::verify_fastpay_apply_ack_v1(&ack, &bytes_to_hex(&key.public_key)));
+        }
+        let after = store.read_ledger().expect("applied ledger");
+        assert_eq!(after.fastpay_version_fences.len(), 1);
+        assert!(after.owned_objects.iter().all(|o| o.id != "v3-node-input"));
+        if unwrap {
+            assert_eq!(after.account("unwrap-recipient").expect("credited account").balance, 99);
+        } else {
+            assert_eq!(after.owned_objects.iter().map(|o| o.value).sum::<u64>(), 99);
+        }
+        assert!(apply(options(), &cert_json, "validator-5").is_err());
+        assert_eq!(store.read_ledger().unwrap(), after);
+        std::fs::remove_dir_all(data_dir).unwrap();
+    }
 }
 
 #[test]
@@ -1523,6 +1678,15 @@ fn ordered_fastpay_recovery_cancels_partial_and_withheld_certificates_and_replay
 
 #[test]
 fn six_validators_certify_anchor_and_catch_up_one_missing_fastpay_effect() {
+    six_validator_fastpay_anchor_fixture(false);
+}
+
+#[test]
+fn fastpay_rotated_sixth_validator_converges_through_certified_anchor() {
+    six_validator_fastpay_anchor_fixture(true);
+}
+
+fn six_validator_fastpay_anchor_fixture(rotate_member_five: bool) {
     let root = unique_test_dir("postfiat-fastpay-v3-six-validator-anchor");
     let source_dir = root.join("validator-0");
     init(InitOptions {
@@ -1592,6 +1756,53 @@ fn six_validators_certify_anchor_and_catch_up_one_missing_fastpay_effect() {
         .expect("apply six-validator FastPay bootstrap");
     assert_eq!(bootstrap_receipts.len(), 1);
     assert!(bootstrap_receipts[0].accepted, "{bootstrap_receipts:?}");
+
+    if rotate_member_five {
+        let registry_path = source_dir.join(VALIDATOR_REGISTRY_FILE);
+        let registry = read_validator_registry_file(&registry_path).unwrap();
+        let mut rotated = registry.clone();
+        let replacement = ml_dsa_65_keygen_from_seed(&[91; 32]);
+        let previous = rotated.validators.iter_mut().find(|v| v.node_id == "validator-5").unwrap();
+        let old_entry = ValidatorRegistryEntry {
+            node_id: previous.node_id.clone(), algorithm_id: previous.algorithm_id.clone(),
+            public_key_hex: previous.public_key_hex.clone(), active: true,
+        };
+        previous.public_key_hex = bytes_to_hex(&replacement.public_key);
+        let new_entry = ValidatorRegistryEntry {
+            public_key_hex: previous.public_key_hex.clone(), ..old_entry.clone()
+        };
+        let previous_entry_file = root.join("previous-entry.json");
+        let new_entry_file = root.join("replacement-entry.json");
+        atomic_write(&previous_entry_file, serde_json::to_vec(&old_entry).unwrap()).unwrap();
+        atomic_write(&new_entry_file, serde_json::to_vec(&new_entry).unwrap()).unwrap();
+        let update_file = root.join("rotation-update.json");
+        create_validator_registry_update(ValidatorRegistryUpdateOptions {
+            data_dir: source_dir.clone(), validators: validators.clone(), support: validators.clone(),
+            activation_height: 2,
+            previous_registry_root: validator_registry_root(&registry, &validators).unwrap(),
+            new_registry_root: validator_registry_root(&rotated, &validators).unwrap(),
+            previous_validators: validators.clone(), new_validators: validators.clone(),
+            operation: VALIDATOR_REGISTRY_OP_ROTATE_KEY.to_string(),
+            subject_node_id: "validator-5".to_string(),
+            previous_record_file: Some(previous_entry_file), new_record_file: Some(new_entry_file),
+            update_file: update_file.clone(),
+        }).expect("certify current-registry key rotation");
+        let batch_file = root.join("rotation-batch.json");
+        create_governance_batch(GovernanceBatchOptions {
+            data_dir: source_dir.clone(), amendment_file: None,
+            registry_update_file: Some(update_file), batch_file: batch_file.clone(),
+        }).unwrap();
+        let receipts = apply_unsigned_governance_fixture_for_test(ApplyBatchOptions {
+            data_dir: source_dir.clone(), batch_file, certificate_file: None,
+        }).expect("commit governed key rotation");
+        assert!(receipts.iter().any(|receipt| receipt.accepted), "{receipts:?}");
+        assert_eq!(read_validator_registry_file(&registry_path).unwrap(), rotated);
+        let mut keys = validator_keys.clone();
+        let member = keys.validators.iter_mut().find(|v| v.node_id == "validator-5").unwrap();
+        member.public_key_hex = bytes_to_hex(&replacement.public_key);
+        member.private_key_hex = bytes_to_hex(&replacement.private_key);
+        write_validator_key_file(&source_dir.join(VALIDATOR_KEYS_FILE), &keys).unwrap();
+    }
 
     let owner = postfiat_crypto_provider::ml_dsa_65_keygen().expect("six-validator owner");
     let owner_pubkey_hex = postfiat_crypto_provider::bytes_to_hex(&owner.public_key);
@@ -1704,6 +1915,16 @@ fn six_validators_certify_anchor_and_catch_up_one_missing_fastpay_effect() {
         .fastpay_version_fences
         .is_empty());
 
+    if rotate_member_five {
+        for data_dir in &data_dirs {
+            owned_recovery_capabilities_v3(NodeOptions { data_dir: data_dir.clone() })
+                .expect("all six nodes expose committee capabilities");
+        }
+        let sixth = NodeOptions { data_dir: data_dirs[5].clone() };
+        assert!(owned_sign_v3(sixth.clone(), &signed_json, "validator-5").is_err());
+        assert!(owned_apply_v3(sixth, &certificate_json, "validator-5").is_err());
+    }
+
     let anchor_transaction = signed_owned_deposit_for_test(
         &genesis,
         &source,
@@ -1814,6 +2035,11 @@ fn six_validators_certify_anchor_and_catch_up_one_missing_fastpay_effect() {
             && pair[0].block_tip_hash == pair[1].block_tip_hash
             && pair[0].state_root == pair[1].state_root
     }));
+
+    if rotate_member_five {
+        std::fs::remove_dir_all(root).unwrap();
+        return;
+    }
 
     // A certificate applied by fewer than q validators is not product final.
     // The other q validators can therefore certify a canonical block without
