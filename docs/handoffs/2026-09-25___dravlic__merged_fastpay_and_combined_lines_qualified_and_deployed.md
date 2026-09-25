@@ -5,6 +5,9 @@
 
 ## BLUF
 
+**Update, 14:30 UTC: the rollout was completed.** All six validators run `combined-fastpay-20260925` (executable `d66cecc3…`, signed manifest `7a682ffe…`) since 13:37–14:14Z, agree at height 1050 (root `13d9e652…`), and never diverged; each validator was switched one at a time and confirmed with one 1 PFT devnet faucet grant to the `testing` wallet (heights 1045–1050; the faucet went from 91.995592 to 85.995400 PFT). Records: release branch `c5f24646`, main `13d9265e` (the 2026-09-25 note in [Current State](../status/chain-state-current.md)). The "not applied" statements further down describe the state at 13:20 UTC and are superseded by the end-of-session section.
+
+
 What happened, and why this lane merged the two release lines:
 
 1. **FastPay was repaired and deployed overnight.** The other lane's releases
@@ -224,6 +227,12 @@ The publisher-key item (first asked 2026-09-21) is closed by his new key.
 [sh-pay]: https://github.com/postfiatorg/StakeHub/tree/wallet/pay-transfer-fastpay-20260925
 [sh-registry]: https://github.com/postfiatorg/StakeHub/tree/wallet/pft-registry-20260924
 
-## End of session (13:30 UTC)
+## End of session (14:35 UTC)
 
-The local full workspace test run that gated the first apply finished at 13:26Z after the rollout had been stopped: 84 test-result groups, 1,486 passed, 0 failed, 39 ignored (summary recorded on the release branch in `deployments/release-repair-20260925/logs/full-workspace-tests.summary.txt`, commit noted in the release README). The step-6 gate is therefore met. The fleet is unchanged (r4 at height 1044). The rollout can resume by the "to resume" rule in `deployments/combined-fastpay-20260925/DEPLOY-SHEET.md`: recreate the worktree `~/repos/postfiatl1v2-combined-fastpay-deploy` from `release/combined-fastpay-20260925`, then `apply-next` with the existing rollout state if the chain is still at 1044, otherwise a fresh before reading, preflight and signed backup first; one devnet transaction is needed for the canary to certify a new block. Either lane may run it; this lane plans it as the first step of 2026-09-26.
+The local full workspace test run that gated the first apply finished green at 13:26Z (84 test-result groups, 1,486 passed, 0 failed, 39 ignored; summary on the release branch, `0e437b15`), so the rollout resumed at 13:30Z with the existing rollout state (the chain was still at 1044 with the same root; the deploy worktree was recreated and the inventory hash matched).
+
+- Rollout: `apply-next` validator-1 (canary) 13:37:58Z, validator-0 13:48:32Z, validator-2 13:55:50Z, validator-3 14:01:52Z, validator-4 14:07:28Z, validator-5 14:14:09Z; every apply exited 0; a health and six-node agreement check passed after each; one devnet faucet grant per validator produced blocks 1045–1050, each signed by five of six validators.
+- After state (14:18:53Z): all six on `combined-fastpay-20260925`, all 12 validator and RPC processes on `d66cecc3…`, height 1050, tip `03a24230…`, root `13d9e652…`, empty mempools. Rollback remains the r4 executable and unit files with the data in place, or the signed 1044 backup.
+- Caveats: the canary's own vote on block 1045 came from r4 code because the StakeHub node commands in `~/.pft/config.toml` still point at the r4 executable (`runtime_binary`, `local_node_binary`) — that configuration is the other lane's to switch to the new release; validator-2 signed two of the six blocks (five of six suffice; it agreed on every block); the FastPay stall trigger is unchanged; the unsigned 221 MB snapshot and the executable copy left by the backup step remain on validator-1 (3.37 GB free); nothing was deleted on any host.
+- Task Node: task_ccac6023e24336892d1dc2511bc91a94 Rewarded (3.6 PFT).
+- Commits: release branch `c5f24646` (deployment README status DEPLOYED, deploy sheet, RELEASE-ID, `observed/after.json`, per-validator checks, `observed/rollout-record.json`); main `13d9265e` (chain-state note). Next for this lane: the other lane's two StakeHub wallet branches, then the first Z3 cycle once the NAVCoin signer keys arrive; the FastPay stall trigger in its own release.
