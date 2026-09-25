@@ -9,12 +9,14 @@ clean builds, rechecked before staging). Rollback release:
 
 ## Status
 
-**Prepared and signed, not applied** (`status=PREPARED_SIGNED_NOT_APPLIED`).
-Steps 1–5 were done on 2026-09-25: before state at height 1044, staging, signed
-manifest `7a682ffe…`, rollout preflight PASS, signed canary backup at 1044 with
-root `8f22d40f…`. No apply was run. The step-6 gate (full workspace test run)
-was not met in the time available. All six validators still run r4 at height
-1044 ([at stop](observed/at-stop.json)).
+**Deployed** (`status=DEPLOYED`, 2026-09-25 14:18:53Z). All six validators run
+`combined-fastpay-20260925` (executable `d66cecc3…`, build `f60e9639`, signed
+manifest `7a682ffe…`) and agree at height 1050, tip `03a24230…`, root
+`13d9e652…` ([after.json](observed/after.json)). Steps 1–5 were done in the
+morning; the step-6 gate passed at 13:26Z. The rollout resumed at 13:30Z: the
+fleet was still at 1044 with the same tip and root
+([resume-before.json](observed/resume-before.json)), so the existing rollout
+state, preflight and signed backup were used (no fresh preflight or backup).
 
 | Step | Result | Evidence |
 |---|---|---|
@@ -23,32 +25,53 @@ was not met in the time available. All six validators still run r4 at height
 | 3. Sign, verify locally ×6 | PASS: manifest SHA-256 `7a682ffe…`, publisher `pfc531e0…`, `deployment-manifest-verify` passes for all six | DEPLOY-SHEET §3 |
 | 4. `postfiat-safe-rollout preflight` | PASS: Vultr reconciled, six-way convergence at 1044, six signer rosters valid, 0 deletions, order 1, 0, 2, 3, 4, 5 | local `rollout-state.json` (`e00b3158…`) |
 | 5. Signed canary backup, validator-1 | PASS: height 1044, root `8f22d40f…`, finalized-checkpoint verified, signed manifest `9b6c885f…`, snapshot publisher `pf4ebb80…` | local `pre-rollout-backup/` |
-| 6. Gate: local full workspace test run | **NOT FINISHED after 45 minutes → STOP.** 793 tests passed and none failed so far; one Orchard swap-proof test in the `postfiat_node` library was still running, with the other test binaries still to come | [gate record](observed/workspace-test-gate.json) |
-| 6. Applies | not run | — |
+| 6. Gate: local full workspace test run | PASS at 13:26Z: 84 groups, 1,486 passed, 0 failed, 39 ignored (the morning's 45-minute attempt had stopped the rollout) | [gate record](observed/workspace-test-gate.json), `../release-repair-20260925/logs/full-workspace-tests.summary.txt` |
+| 6. Applies, one at a time | PASS: six `apply-next` runs, exit 0, each followed by one faucet grant and a full observer check | table below, [rollout-record.json](observed/rollout-record.json), local `rollout-state.json` (`25ad45b0…`) |
 
-## To resume
+## Rollout, 2026-09-25
 
-Only after the step-6 gate passes:
+Each `apply-next` verified the signed manifest on the host, restarted the
+validator and RPC units on the new executable and checked six-way convergence.
+Then one faucet grant of 1 PFT (fee 32 atoms) from the faucet account
+`pfcd4cc8…` to the `testing` wallet (`pf6395ef…`) made the next block, through
+StakeHub's `pft faucet` (`send_pft`); all six grants landed at view 0 and were
+verified on all six. After each grant, [observe-fleet.py](observe-fleet.py)
+checked units, running executables, the manifest signature on every host and
+six-node agreement.
 
-- **Chain still at 1044:** run `apply-next` with the existing rollout state
-  under `~/.postfiat/deployments/combined-fastpay-20260925/` (DEPLOY-SHEET §6).
-  That state reads `inventory.txt` from
-  `~/repos/postfiatl1v2-combined-fastpay-deploy/deployments/combined-fastpay-20260925/`
-  and checks its SHA-256 (`6c11341d…`), so first recreate that worktree from
-  branch `release/combined-fastpay-20260925`.
-- **Chain has moved:** a fresh before read, preflight and backup first; do not
-  reuse the 1044 state.
+| Validator | Applied (UTC) | Grant height, proposer | Certificate voters (quorum 5) | Check after grant |
+|---|---|---|---|---|
+| validator-1 (canary) | 13:37:58 | 1045, validator-1 | 0, 1, 3, 4, 5 | PASS, root `8dcd52dc…` ([after-validator-1](observed/after-validator-1.json)) |
+| validator-0 | 13:48:32 | 1046, validator-2 | 1, 2, 3, 4, 5 | PASS, root `0cea99a5…` ([after-validator-0](observed/after-validator-0.json)) |
+| validator-2 | 13:55:50 | 1047, validator-3 | 0, 1, 3, 4, 5 | PASS, root `f2db80ff…` ([after-validator-2](observed/after-validator-2.json)) |
+| validator-3 | 14:01:52 | 1048, validator-4 | 0, 1, 3, 4, 5 | PASS, root `87376902…` ([after-validator-3](observed/after-validator-3.json)) |
+| validator-4 | 14:07:28 | 1049, validator-5 | 0, 1, 2, 4, 5 | PASS, root `e5ca3a4b…` ([after-validator-4](observed/after-validator-4.json)) |
+| validator-5 | 14:14:09 | 1050, validator-0 | 0, 1, 3, 4, 5 | PASS, root `13d9e652…` ([after.json](observed/after.json)) |
+
+Faucet grants used as block triggers: six, 1 PFT each at heights 1045–1050
+(6 PFT plus 192 atoms of fees; faucet 91.995592 → 85.995400 PFT). Nothing
+else moved. The canary's health read before its grant is in
+[after-validator-1-apply.json](observed/after-validator-1-apply.json).
+
+Notes:
+
+- StakeHub's `~/.pft/config.toml` still names the r4 executable as
+  `runtime_binary`, so the proposer-side round of each grant ran the r4 CLI
+  on the proposer host. At 1045 the proposer was the canary itself, so its vote
+  on 1045 came from that CLI; its new services then served 1045, and they voted
+  as a non-proposer on 1046–1049. Pointing StakeHub at the new release is left
+  to the StakeHub lane.
+- The FastPay stall trigger is unchanged (validator-5 holds no FastPay
+  effects; a FastPay payment followed by validator-5's turn needs a view change).
 
 ## Caveats
 
-1. **Canary check needs a transaction.** After the canary apply, the check
-   requires the canary to certify a new block. The chain makes blocks only for
-   transactions and has been idle at 1044, so one devnet transaction is needed.
-2. **No per-host data copies.** The rollout tool does not copy validator data.
+1. **No per-host data copies.** The rollout tool does not copy validator data.
    Rollback is the r4 executable and unit files with the data in place, verified
    by r4 first ([rollback-one.sh](rollback-one.sh)). The signed 1044 backup is
-   the fallback. validator-1 has about 3.3 GB free.
-3. **Leftovers on validator-1.** The backup step left an unsigned snapshot
+   the fallback. Rollback was not needed. validator-1 had 3.37 GB free after
+   the rollout.
+2. **Leftovers on validator-1.** The backup step left an unsigned snapshot
    (221 MB, under `/var/lib/postfiat/pre-rollout-snapshots/`) and a copy of the
    new executable on validator-1. Nothing was deleted.
 
@@ -78,7 +101,3 @@ Only after the step-6 gate passes:
 Not in Git: private keys, the signed stage, rollout state and backup under
 `~/.postfiat/deployments/combined-fastpay-20260925/` on the signing workstation.
 No key material is in this directory.
-
-## Gate update, 2026-09-25 13:26Z
-
-The local full workspace test run that gated step 6 finished after the rollout was stopped: 84 test-result groups, 1,486 passed, 0 failed, 39 ignored (summary in `../release-repair-20260925/logs/full-workspace-tests.summary.txt`). The step-6 gate is therefore met; the rollout can resume per the "to resume" rule (recreate the worktree first; fresh before reading, preflight and backup if the chain moved past 1044).

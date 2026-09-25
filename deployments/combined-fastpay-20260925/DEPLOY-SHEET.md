@@ -5,11 +5,10 @@ rollout ([handoff](../../docs/handoffs/2026-09-25___postfiatchad__r4_view_recove
 [runbook](../../docs/runbooks/safe-validator-rollout.md)). Keys are used by path
 only; no key material is printed, copied to a host or committed.
 
-**Status: prepared and signed, not applied** (`status=PREPARED_SIGNED_NOT_APPLIED`).
-Steps 1–5 were done on 2026-09-25: before state at height 1044, staging, signed
-manifest `7a682ffe…`, rollout preflight PASS, signed canary backup at 1044 with
-root `8f22d40f…`. No apply was run. The step-6 gate (full workspace test run)
-was not met in the time available.
+**Status: deployed** (`status=DEPLOYED`, 2026-09-25 14:18:53Z). Steps 1–5 were
+done in the morning; the step-6 gate passed at 13:26Z; the six applies ran
+13:37–14:14Z with the existing 1044 rollout state (results in the
+[README](README.md#rollout-2026-09-25)).
 
 ```bash
 D=~/.postfiat/deployments/combined-fastpay-20260925   # local, not in Git
@@ -93,7 +92,8 @@ scripts/postfiat-safe-rollout backup --state-file $E/rollout-state.json \
 
 Gate: `~/.cache/release-repair-20260925/logs/full-workspace-tests.log` must end
 with the cargo summary and have no failure outside the known flaky family. Not
-met on 2026-09-25 ([gate record](observed/workspace-test-gate.json)).
+met in the morning ([gate record](observed/workspace-test-gate.json)); met at
+13:26Z (1,486 passed, 0 failed).
 
 To resume after the gate passes:
 
@@ -109,10 +109,15 @@ chain is idle at 1044, so send one devnet transaction. Then, one at a time, each
 only after the previous check passed:
 
 ```bash
+python3 $PACKET/observe-fleet.py --output $PACKET/observed/resume-before.json   # still 1044, same root
 scripts/postfiat-safe-rollout apply-next --state-file $E/rollout-state.json > $E/apply-N.json
+(cd ~/repos/StakeHub && .venv/bin/pft faucet testing --asset PFT --amount 1000000) > $E/grant-*.out
 python3 $PACKET/observe-fleet.py --stage $S --applied validator-1[,validator-0,...] \
   --output $PACKET/observed/after-<validator>.json
 ```
+
+The last observation is `observed/after.json`; per-grant receipts and
+certificate voters are summarized in `observed/rollout-record.json`.
 
 ## Rollback (one validator, emergency only)
 
