@@ -1,0 +1,122 @@
+{
+  "schema": "postfiat-transport-validator-serve-v1",
+  "node_id": "validator-1",
+  "topology_id": "443bb57f32f0843b0bfebd377fa86dbd45c9ef6908c69d7d6c7851ca672298530839b19df49fe2174247e584c71d709e",
+  "bind_address": "127.0.0.1:31002",
+  "event_log": "/home/postfiatchad/.cache/release-repair-20260925/old-binary-services/logs/validator-1.transport.ndjson",
+  "require_signed_proposal": true,
+  "shielded_verifier_prewarm": {
+    "schema": "postfiat-transport-shielded-verifier-prewarm-v1",
+    "requested": true,
+    "total_ms": 647.281164,
+    "asset_orchard_swap_verifier_warm": true,
+    "asset_orchard_swap_verifier_ms": 624.971587,
+    "asset_orchard_private_egress_verifier_warm": true,
+    "asset_orchard_private_egress_verifier_ms": 22.268936,
+    "asset_orchard_private_egress_verifier_breakdown": {
+      "schema": "postfiat.asset_orchard_private_egress.timings.v1",
+      "action_builds": [],
+      "vk_builds": [
+        {
+          "schema": "postfiat.asset_orchard_private_egress.vk_build_timing.v1",
+          "artifact_mode": "embedded",
+          "total_ms": 22.265931,
+          "params_new_ms": 1.148914,
+          "full_shape_ms": 0.0,
+          "artifact_read_ms": 0.0,
+          "artifact_decode_ms": 6.126841,
+          "artifact_vk_reconstruct_ms": 12.910454,
+          "keygen_vk_ms": 0.0,
+          "metadata_ms": 1.4937850000000001,
+          "release_pin_validation_ms": 0.000751,
+          "artifact_write_ms": 0.0,
+          "result": "ok"
+        }
+      ],
+      "vk_cached_calls": [
+        {
+          "schema": "postfiat.asset_orchard_private_egress.vk_cached_timing.v1",
+          "total_ms": 22.268254000000002,
+          "cache_was_populated": false,
+          "build_triggered": true,
+          "result": "ok"
+        }
+      ],
+      "proof_verifications": [],
+      "action_verifications": []
+    }
+  },
+  "connection_count": 0,
+  "accepted_batch_count": 0,
+  "accepted_block_vote_count": 0,
+  "accepted_block_proposal_count": 0,
+  "accepted_health_count": 0,
+  "rejected_count": 0,
+  "batch_acks": [],
+  "block_vote_responses": [],
+  "block_proposal_responses": [],
+  "health_responses": [],
+  "rejected": [],
+  "verified": true
+}
+{
+  "schema": "postfiat-transport-validator-serve-v1",
+  "node_id": "validator-1",
+  "topology_id": "443bb57f32f0843b0bfebd377fa86dbd45c9ef6908c69d7d6c7851ca672298530839b19df49fe2174247e584c71d709e",
+  "bind_address": "127.0.0.1:31002",
+  "event_log": "/home/postfiatchad/.cache/release-repair-20260925/old-binary-services/logs/validator-1.transport.ndjson",
+  "require_signed_proposal": true,
+  "shielded_verifier_prewarm": {
+    "schema": "postfiat-transport-shielded-verifier-prewarm-v1",
+    "requested": true,
+    "total_ms": 653.093841,
+    "asset_orchard_swap_verifier_warm": true,
+    "asset_orchard_swap_verifier_ms": 630.621008,
+    "asset_orchard_private_egress_verifier_warm": true,
+    "asset_orchard_private_egress_verifier_ms": 22.438192,
+    "asset_orchard_private_egress_verifier_breakdown": {
+      "schema": "postfiat.asset_orchard_private_egress.timings.v1",
+      "action_builds": [],
+      "vk_builds": [
+        {
+          "schema": "postfiat.asset_orchard_private_egress.vk_build_timing.v1",
+          "artifact_mode": "embedded",
+          "total_ms": 22.434736,
+          "params_new_ms": 1.159741,
+          "full_shape_ms": 0.0,
+          "artifact_read_ms": 0.0,
+          "artifact_decode_ms": 6.036645999999999,
+          "artifact_vk_reconstruct_ms": 13.030204999999999,
+          "keygen_vk_ms": 0.0,
+          "metadata_ms": 1.591193,
+          "release_pin_validation_ms": 0.000721,
+          "artifact_write_ms": 0.0,
+          "result": "ok"
+        }
+      ],
+      "vk_cached_calls": [
+        {
+          "schema": "postfiat.asset_orchard_private_egress.vk_cached_timing.v1",
+          "total_ms": 22.437441,
+          "cache_was_populated": false,
+          "build_triggered": true,
+          "result": "ok"
+        }
+      ],
+      "proof_verifications": [],
+      "action_verifications": []
+    }
+  },
+  "connection_count": 0,
+  "accepted_batch_count": 0,
+  "accepted_block_vote_count": 0,
+  "accepted_block_proposal_count": 0,
+  "accepted_health_count": 0,
+  "rejected_count": 0,
+  "batch_acks": [],
+  "block_vote_responses": [],
+  "block_proposal_responses": [],
+  "health_responses": [],
+  "rejected": [],
+  "verified": true
+}

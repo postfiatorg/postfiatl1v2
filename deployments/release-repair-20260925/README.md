@@ -1,6 +1,7 @@
 # Merged combined and FastPay release tip qualification, September 25, 2026
 
-**Checkpoint at 75 minutes; results still running are marked PENDING or IN PROGRESS. Nothing was deployed. No source was repaired.**
+**Final. Nothing was deployed. No source was repaired.**
+Every check that ran locally passed. The new canary backup was SKIPPED, `warm-latency` was deferred to CI, and there is no CI verdict yet.
 
 Source tip: `f60e9639f83649769f29276a9de14f5f16271877` (`f60e9639`). It is the test-only pre-step commit on top of the
 merge record `a2dfa94735a1182551931b0de92da701898312b4` (`a2dfa947`). That merge brings the deployed FastPay line r4
@@ -20,13 +21,13 @@ the same remap arguments and `SOURCE_DATE_EPOCH=1789514690`. Neither has RPATH o
 | Two matching node executables | PASS | [Build records](node-builds.json) |
 | Six original full-history checks, height 1020 | PASS | [History run](history-run.json) |
 | Six saved V2 full-history checks, height 1021 | PASS | [History run](history-run.json) |
-| Six fresh V2 full-history checks, height 1021 | PENDING | [Fresh V2 history](fresh-v2-history-run.json) |
+| Six fresh V2 full-history checks, height 1021 | PASS | [Fresh V2 history](fresh-v2-history-run.json) |
 | r4 full replay of one original, contrast probe | FAILS AT 1011 (expected) | [Probe stderr](history/r4-full-replay-probe-validator-0.stderr.log) |
 | Current-chain replay from a new validator-1 canary backup | SKIPPED | [Reason](canary-backup.json) |
 | Local governed rotation: both startup orders, convergence, restart | PASS | [Gate log](logs/governance-gate.stdout), [receipt](v2-service-receipt.json) |
-| Rollback: six r4 checkpoint verifications | PENDING | [History run](history-run.json) |
-| Rollback: r4 services start and restart on six copies | PENDING | Log (pending), receipt (pending) |
-| Rollback: new build full replay of restored validator-0 | PENDING | Receipt (pending) |
+| Rollback: six r4 checkpoint verifications | PASS | [History run](history-run.json) |
+| Rollback: r4 services start and restart on six copies | PASS_STARTUP_AND_RESTART_ONLY | [Log](logs/rollback-services.stdout), [receipt](old-binary-service-receipt.json) |
+| Rollback: new build full replay of restored validator-0 | PASS | [Receipt](receipts/final-candidate-on-rollback-validator-0.json) |
 | Timeout vote and view recovery, node bin tests | PASS: 4 passed | [Log](logs/view-recovery-bin.stdout) |
 | Timeout votes form a timeout certificate, node lib test | PASS: 1 passed | [Log](logs/timeout-votes-lib.stdout) |
 | FastPay committee, recovery and checkpoint restore, node lib tests | PASS: 21 passed | [Log](logs/fastpay-committee-lib.stdout) |
@@ -42,18 +43,18 @@ the same remap arguments and `SOURCE_DATE_EPOCH=1789514690`. Neither has RPATH o
 | node-fastpay (all node lib `fastpay` tests) | PASS: 23 passed | [Log](logs/node-fastpay.stdout) |
 | Python wallet tests (pre-step) | PASS: 67 passed | [Log](logs/pre-step-wallet-tests.log) |
 | Full workspace test suite | LEFT TO CI | Not run locally; no CI run exists for the branch |
-| mkdocs build --strict | PENDING | Log (pending) |
-| public-doc-links | PENDING | Log (pending) |
-| public-secret-scan | PENDING | Log (pending) |
+| mkdocs build --strict | PASS | [Log](logs/strict-docs.stdout) |
+| public-doc-links | PASS | [Log](logs/public-doc-links.stdout) |
+| public-secret-scan | PASS | [Log](logs/public-secret-scan.stdout) |
 
 | Validator copy | Original, 1020 | Saved V2, 1021 | Fresh V2, 1021 | r4 checkpoint |
 |---|---|---|---|---|
-| validator-0 | PASS | PASS | PASS | PENDING |
-| validator-1 | PASS | PASS | PASS | PENDING |
-| validator-2 | PASS | PASS | PASS | PENDING |
-| validator-3 | PASS | PASS | PASS | PENDING |
-| validator-4 | PASS | PASS | IN PROGRESS | PENDING |
-| validator-5 | PASS | PASS | PENDING | PENDING |
+| validator-0 | PASS | PASS | PASS | PASS |
+| validator-1 | PASS | PASS | PASS | PASS |
+| validator-2 | PASS | PASS | PASS | PASS |
+| validator-3 | PASS | PASS | PASS | PASS |
+| validator-4 | PASS | PASS | PASS | PASS |
+| validator-5 | PASS | PASS | PASS | PASS |
 
 Per-node verifier stdout and stderr are in `history/`. Commands, timings, memory limits and
 exit codes are in `receipts/`. See also [qualification.json](qualification.json) and
@@ -84,7 +85,7 @@ The authorized exception covered only the safe-rollout `backup` step, and that s
 - The backup destination comes from the stage release id. validator-1 already has /var/lib/postfiat/pre-rollout-snapshots/fastpay-committee-20260925-r4-validator-1-finalized-checkpoint (read-only probe: logs/canary-backup-readonly-probe.stdout), and the backup script requires that path to be absent. A new staged release id would be needed.
 - A fresh preflight also needs a Vultr API key file, and validator-1 has 3.5 GB free on its root disk (96% used). An extra snapshot export would add to that.
 
-The only fleet contact was a read-only SSH listing of validator-1's snapshot directory and its disk usage
+The only fleet contact was three read-only SSH listings of validator-1's snapshot directory and its disk usage
 ([probe](logs/canary-backup-readonly-probe.stdout)). As instructed, the saved 1020 and 1021 copies are the
 only history evidence. The chain past height 1044 has not been replayed on this build, including the
 FastPay effects at 1034, 1042 and 1043. That replay is still needed before deployment.
@@ -126,6 +127,9 @@ On six restored originals it ran checkpoint verification and a service start and
 The new build then fully replayed restored validator-0. This is pre-activation rollback only.
 The r4 full-replay failure at 1011 is its known historical defect and is not treated as repaired.
 
+`warm-latency` hit its five-minute local budget while the history replays were running.
+It is deferred to CI and makes no passing claim. On September 22 it passed in 299 seconds.
+
 ## CI
 
 `gh run list --branch release/combined-fastpay-20260925` returns no runs
@@ -149,4 +153,5 @@ or a manual dispatch.
 - Limits: one Cargo process at a time, `CARGO_BUILD_JOBS=2`, two test threads, a 20 GiB address-space
   limit and a disk-backed `TMPDIR`. Disposable copies stay under `/home/postfiatchad/.cache/release-repair-20260925`.
   The protected release checkout was not accessed.
+- Checkpoint pushes: `bf9d22a7` at 11:21Z and `99a4b2d5` at 11:32Z (75 minutes). The final commit supersedes both.
 - `SHA256SUMS` covers every packet file except itself.

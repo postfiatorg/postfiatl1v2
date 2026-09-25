@@ -21,7 +21,7 @@
   "r4_state_backup_height": 1036,
   "r4_state_release_id": "fastpay-committee-20260925-r4",
   "fleet_actions": [
-    "one read-only SSH listing of /var/lib/postfiat/pre-rollout-snapshots on validator-1 and df of its root filesystem"
+    "three read-only SSH commands to validator-1: listings of /var/lib/postfiat/pre-rollout-snapshots and df of its root filesystem"
   ],
   "fallback": "Saved 1020 original and 1021 V2 copies only, as the task instructs; the current chain (past 1044) was not replayed"
 }

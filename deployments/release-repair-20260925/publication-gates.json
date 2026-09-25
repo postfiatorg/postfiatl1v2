@@ -7,5 +7,17 @@
     },
     "completed_at": "2026-09-25T11:21:13.434122+00:00",
     "scope": "tracked tree with the packet staged"
-  }
+  },
+  "final": {
+    "results": {
+      "strict-docs": "PASS",
+      "public-doc-links": "PASS",
+      "public-secret-scan": "PASS"
+    },
+    "completed_at": "2026-09-25T11:42:09.853932+00:00",
+    "scope": "tracked tree with the packet staged"
+  },
+  "strict-docs": "PASS",
+  "public-doc-links": "PASS",
+  "public-secret-scan": "PASS"
 }

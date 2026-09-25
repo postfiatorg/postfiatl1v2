@@ -1,0 +1,10 @@
+{
+  "command": "gh run list --branch release/combined-fastpay-20260925",
+  "observed_at": "2026-09-25T11:38:27.579560+00:00",
+  "runs": [],
+  "verdict": "NONE: no workflow run exists for this branch; rust-ci, docs-build and product-security-ci trigger on push to main and on pull_request only",
+  "left_to_ci": [
+    "full workspace test suite",
+    "long Orchard suite"
+  ]
+}

@@ -1,0 +1,38 @@
+{
+ "source_commit": "f60e9639f83649769f29276a9de14f5f16271877",
+ "pre_step_parent": "a2dfa94735a1182551931b0de92da701898312b4",
+ "updated_at": "2026-09-25T11:41:46.692546+00:00",
+ "deployed": false,
+ "executables": [
+  "d66cecc36426ce05ced8730b2439a27285c6b404688acd13dc23594b884eabd6",
+  "d66cecc36426ce05ced8730b2439a27285c6b404688acd13dc23594b884eabd6"
+ ],
+ "reproducibility": "PASS",
+ "original_1020": "PASS",
+ "saved_v2_1021": "PASS",
+ "fresh_v2_1021": "PASS",
+ "r4_full_replay_probe": "FAIL",
+ "canary_backup": "SKIPPED",
+ "governance_gate": "PASS",
+ "rollback": {
+  "checkpoints": "PASS",
+  "services": "PASS_STARTUP_AND_RESTART_ONLY",
+  "candidate_full_replay": "PASS"
+ },
+ "software": {
+  "format": "PASS",
+  "proof-input-inventory": "PASS",
+  "workspace-check": "PASS",
+  "view-recovery-bin": "PASS",
+  "timeout-votes-lib": "PASS",
+  "fastpay-committee-lib": "PASS",
+  "workspace-clippy": "PASS",
+  "fastpay-types": "PASS",
+  "fastpay-execution": "PASS",
+  "cobalt-handoff-tests": "PASS",
+  "live-replay-supply": "PASS",
+  "warm-latency": "DEFERRED_TO_CI",
+  "node-fastpay": "PASS"
+ },
+ "left_to_ci": "full workspace test suite and long Orchard suite"
+}

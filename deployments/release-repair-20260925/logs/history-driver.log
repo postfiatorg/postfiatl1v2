@@ -37,3 +37,23 @@
 2026-09-25T11:27:24.557070+00:00 START fresh-v2-validator-3
 2026-09-25T11:30:41.642053+00:00 PASS fresh-v2-validator-3 (197.1s)
 2026-09-25T11:30:41.729914+00:00 START fresh-v2-validator-4
+2026-09-25T11:33:56.812628+00:00 PASS fresh-v2-validator-4 (195.1s)
+2026-09-25T11:33:56.925154+00:00 START fresh-v2-validator-5
+2026-09-25T11:37:12.007225+00:00 PASS fresh-v2-validator-5 (195.1s)
+2026-09-25T11:37:12.097723+00:00 START old-binary-checkpoint-0
+2026-09-25T11:37:16.103902+00:00 PASS old-binary-checkpoint-0 (4.0s)
+2026-09-25T11:37:16.206833+00:00 START old-binary-checkpoint-1
+2026-09-25T11:37:20.212979+00:00 PASS old-binary-checkpoint-1 (4.0s)
+2026-09-25T11:37:20.324887+00:00 START old-binary-checkpoint-2
+2026-09-25T11:37:24.331851+00:00 PASS old-binary-checkpoint-2 (4.0s)
+2026-09-25T11:37:24.419302+00:00 START old-binary-checkpoint-3
+2026-09-25T11:37:28.424151+00:00 PASS old-binary-checkpoint-3 (4.0s)
+2026-09-25T11:37:28.511474+00:00 START old-binary-checkpoint-4
+2026-09-25T11:37:32.517058+00:00 PASS old-binary-checkpoint-4 (4.0s)
+2026-09-25T11:37:32.631130+00:00 START old-binary-checkpoint-5
+2026-09-25T11:37:36.636447+00:00 PASS old-binary-checkpoint-5 (4.0s)
+2026-09-25T11:37:36.750106+00:00 START rollback-services
+2026-09-25T11:38:04.766138+00:00 PASS rollback-services (28.0s)
+2026-09-25T11:38:04.766618+00:00 START final-candidate-on-rollback-validator-0
+2026-09-25T11:41:20.848940+00:00 PASS final-candidate-on-rollback-validator-0 (196.1s)
+2026-09-25T11:41:20.936951+00:00 operational sequence complete
