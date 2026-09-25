@@ -43,7 +43,7 @@ the same remap arguments and `SOURCE_DATE_EPOCH=1789514690`. Neither has RPATH o
 | warm-latency | DEFERRED_TO_CI | [Log](logs/warm-latency.stdout) |
 | node-fastpay (all node lib `fastpay` tests) | PASS: 23 passed | [Log](logs/node-fastpay.stdout) |
 | Python wallet tests (pre-step) | PASS: 67 passed | [Log](logs/pre-step-wallet-tests.log) |
-| Full workspace test suite | LEFT TO CI | Not run locally; no CI run exists for the branch |
+| Full workspace test suite | PASS (local, 2026-09-25 13:26Z): 84 groups, 1,486 passed, 0 failed, 39 ignored | [Summary](logs/full-workspace-tests.summary.txt) |
 | mkdocs build --strict | PASS | [Log](logs/strict-docs.stdout) |
 | public-doc-links | PASS | [Log](logs/public-doc-links.stdout) |
 | public-secret-scan | PASS | [Log](logs/public-secret-scan.stdout) |

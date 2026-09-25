@@ -78,3 +78,7 @@ Only after the step-6 gate passes:
 Not in Git: private keys, the signed stage, rollout state and backup under
 `~/.postfiat/deployments/combined-fastpay-20260925/` on the signing workstation.
 No key material is in this directory.
+
+## Gate update, 2026-09-25 13:26Z
+
+The local full workspace test run that gated step 6 finished after the rollout was stopped: 84 test-result groups, 1,486 passed, 0 failed, 39 ignored (summary in `../release-repair-20260925/logs/full-workspace-tests.summary.txt`). The step-6 gate is therefore met; the rollout can resume per the "to resume" rule (recreate the worktree first; fresh before reading, preflight and backup if the chain moved past 1044).
